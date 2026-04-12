@@ -1,0 +1,134 @@
+#ifndef SYMBOLIC_EXPRESSION_H
+#define SYMBOLIC_EXPRESSION_H
+
+#include <memory>
+#include <string>
+#include <vector>
+
+/**
+ * @file symbolic_expression.h
+ * @brief 符号表达式库
+ *
+ * 提供符号数学表达式的表示、解析和操作功能。
+ * 支持符号微分、积分、简化和多项式分析。
+ *
+ * 使用共享指针实现表达式树的共享和惰性求值。
+ */
+
+/**
+ * @class SymbolicExpression
+ * @brief 符号表达式类
+ *
+ * 表示一个数学表达式的符号形式，可以包含：
+ * - 数字常量
+ * - 变量
+ * - 二元运算（+、-、*、/、^）
+ * - 函数调用（sin、cos、exp、ln 等）
+ */
+class SymbolicExpression {
+public:
+    /** @brief 表达式节点的前向声明（Pimpl 模式） */
+    struct Node;
+
+    /** @brief 默认构造函数，创建空表达式 */
+    SymbolicExpression();
+
+    /**
+     * @brief 从字符串解析表达式
+     * @param text 表达式字符串，如 "x^2 + 2*x + 1"
+     * @return 解析后的符号表达式
+     * @throw std::runtime_error 当解析失败时抛出
+     */
+    static SymbolicExpression parse(const std::string& text);
+
+    /**
+     * @brief 创建数字常量表达式
+     * @param value 数值
+     * @return 常量表达式
+     */
+    static SymbolicExpression number(double value);
+
+    /**
+     * @brief 创建变量表达式
+     * @param name 变量名
+     * @return 变量表达式
+     */
+    static SymbolicExpression variable(const std::string& name);
+
+    /**
+     * @brief 转换为字符串表示
+     * @return 表达式字符串，如 "x ^ 2 + 2 * x + 1"
+     */
+    std::string to_string() const;
+
+    /**
+     * @brief 计算符号导数
+     * @param variable_name 求导变量名
+     * @return 导数表达式
+     *
+     * 使用符号微分规则（链式法则、乘积法则等）。
+     */
+    SymbolicExpression derivative(const std::string& variable_name) const;
+
+    /**
+     * @brief 计算符号积分
+     * @param variable_name 积分变量名
+     * @return 积分表达式（不含常数 C）
+     *
+     * 支持基本积分规则和简单替换。
+     */
+    SymbolicExpression integral(const std::string& variable_name) const;
+
+    /**
+     * @brief 简化表达式
+     * @return 简化后的表达式
+     *
+     * 执行代数简化：
+     * - 常数折叠（如 2 + 3 → 5）
+     * - 恒等式消去（如 x + 0 → x, x * 1 → x）
+     * - 幂运算简化
+     */
+    SymbolicExpression simplify() const;
+
+    /**
+     * @brief 检查表达式是否不依赖于指定变量
+     * @param variable_name 变量名
+     * @return true 如果表达式中不包含该变量
+     */
+    bool is_constant(const std::string& variable_name) const;
+
+    /**
+     * @brief 检查表达式是否为纯数字
+     * @param value 可选的输出参数，用于获取数值
+     * @return true 如果表达式是数字常量
+     */
+    bool is_number(double* value = nullptr) const;
+
+    /**
+     * @brief 检查表达式是否为指定变量
+     * @param variable_name 变量名
+     * @return true 如果表达式就是该变量
+     */
+    bool is_variable_named(const std::string& variable_name) const;
+
+    /**
+     * @brief 提取多项式系数
+     * @param variable_name 多项式变量名
+     * @param coefficients 输出参数，系数向量（低次到高次）
+     * @return true 如果表达式是关于该变量的多项式
+     *
+     * 例如：x^2 + 2x + 1 的系数为 [1, 2, 1]
+     */
+    bool polynomial_coefficients(const std::string& variable_name,
+                                 std::vector<double>* coefficients) const;
+
+    /**
+     * @brief 从现有节点构造表达式（内部使用）
+     * @param node 表达式节点
+     */
+    explicit SymbolicExpression(std::shared_ptr<Node> node);
+
+    std::shared_ptr<Node> node_;  ///< 表达式树根节点
+};
+
+#endif

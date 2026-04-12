@@ -1,0 +1,10 @@
+# test_control_flow.calc
+# Test control flow statements
+
+# If statement
+x = 10;
+result = 0;
+if (x > 5) {
+    result = 1;
+}
+result;

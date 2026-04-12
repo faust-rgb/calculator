@@ -1,0 +1,97 @@
+#ifndef POLYNOMIAL_H
+#define POLYNOMIAL_H
+
+#include <string>
+#include <vector>
+
+/**
+ * @file polynomial.h
+ * @brief 多项式运算库
+ *
+ * 多项式使用系数向量表示，索引 i 对应 x^i 的系数。
+ * 例如：x^2 + 2x + 1 表示为 [1, 2, 1]
+ *
+ * 所有运算自动处理尾随零系数，确保结果的最简形式。
+ */
+
+/**
+ * @struct PolynomialDivisionResult
+ * @brief 多项式除法结果
+ *
+ * 包含商式和余式，满足：被除数 = 除数 × 商 + 余
+ */
+struct PolynomialDivisionResult {
+    std::vector<double> quotient;   ///< 商式系数
+    std::vector<double> remainder;  ///< 余式系数（次数严格小于除数）
+};
+
+/**
+ * @brief 多项式加法
+ * @param lhs 左操作数
+ * @param rhs 右操作数
+ * @return lhs + rhs
+ */
+std::vector<double> polynomial_add(const std::vector<double>& lhs,
+                                   const std::vector<double>& rhs);
+
+/**
+ * @brief 多项式减法
+ * @param lhs 左操作数
+ * @param rhs 右操作数
+ * @return lhs - rhs
+ */
+std::vector<double> polynomial_subtract(const std::vector<double>& lhs,
+                                        const std::vector<double>& rhs);
+
+/**
+ * @brief 多项式乘法
+ * @param lhs 左操作数
+ * @param rhs 右操作数
+ * @return lhs × rhs
+ *
+ * 使用直接卷积算法，时间复杂度 O(n×m)。
+ */
+std::vector<double> polynomial_multiply(const std::vector<double>& lhs,
+                                        const std::vector<double>& rhs);
+
+/**
+ * @brief 多项式除法
+ * @param dividend 被除数
+ * @param divisor 除数
+ * @return 包含商和余的除法结果
+ * @throw std::runtime_error 当除数为零时抛出
+ *
+ * 使用标准的多项式长除法算法。
+ */
+PolynomialDivisionResult polynomial_divide(const std::vector<double>& dividend,
+                                           const std::vector<double>& divisor);
+
+/**
+ * @brief 计算多项式的所有实根
+ * @param coefficients 多项式系数
+ * @return 按升序排列的实根列表
+ * @throw std::runtime_error 当多项式为常数时抛出
+ *
+ * 算法步骤：
+ * 1. 计算导数的实根（临界点）
+ * 2. 使用柯西根界定出搜索区间
+ * 3. 用临界点将区间分段，每段内多项式单调
+ * 4. 在符号变化的区间使用二分法求根
+ */
+std::vector<double> polynomial_real_roots(const std::vector<double>& coefficients);
+
+/**
+ * @brief 将多项式转换为可读字符串
+ * @param coefficients 多项式系数
+ * @param variable_name 变量名，默认为 "x"
+ * @return 格式化后的多项式字符串，如 "-3 * x ^ 2 + 2 * x + 1"
+ *
+ * 自动处理：
+ * - 系数为 1 或 -1 时的简化（如 "x" 而非 "1 * x"）
+ * - 整数系数的格式化
+ * - 符号连接（使用 "+" 和 "-"）
+ */
+std::string polynomial_to_string(const std::vector<double>& coefficients,
+                                 const std::string& variable_name = "x");
+
+#endif
