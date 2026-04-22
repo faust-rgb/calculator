@@ -15,7 +15,9 @@
 #include "mymath.h"
 
 #include <cctype>
+#include <cmath>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -26,10 +28,10 @@ namespace {
 constexpr double kDerivativeStep = 1e-5;
 
 /** @brief 极限计算的初始步长 */
-constexpr double kLimitInitialStep = 1e-2;
+constexpr double kLimitInitialStep = 1e-1;
 
 /** @brief 极限计算的收敛容差 */
-constexpr double kLimitTolerance = 1e-5;
+constexpr double kLimitTolerance = 1e-10;
 
 /** @brief 根查找的收敛容差 */
 constexpr double kRootTolerance = 1e-7;
@@ -42,13 +44,15 @@ constexpr int kMaxIntegralDepth = 18;
 
 std::string format_double(double value) {
     std::ostringstream out;
-    out << std::fixed << std::setprecision(17) << value;
+    out << std::setprecision(17) << value;
     std::string text = out.str();
-    while (!text.empty() && text.back() == '0') {
-        text.pop_back();
-    }
-    if (!text.empty() && text.back() == '.') {
-        text.pop_back();
+    if (text.find_first_of("eE") == std::string::npos) {
+        while (!text.empty() && text.back() == '0') {
+            text.pop_back();
+        }
+        if (!text.empty() && text.back() == '.') {
+            text.pop_back();
+        }
     }
     if (text.empty() || text == "-0") {
         return "0";
@@ -110,21 +114,46 @@ double FunctionAnalysis::limit(double x, int direction) const {
 
     auto one_sided_limit = [this, x](int side) {
         double previous = 0.0;
+        double best = 0.0;
+        double best_delta = std::numeric_limits<double>::infinity();
         bool has_previous = false;
 
-        for (int i = 0; i < 20; ++i) {
+        for (int i = 0; i < 32; ++i) {
             const double step =
                 kLimitInitialStep / mymath::pow(2.0, static_cast<double>(i));
             const double sample_x = x + static_cast<double>(side) * step;
-            const double current = evaluate_with_variable(sample_x);
+            double current = 0.0;
+            try {
+                current = evaluate_with_variable(sample_x);
+            } catch (const std::exception&) {
+                continue;
+            }
+            if (!std::isfinite(current)) {
+                continue;
+            }
 
-            if (has_previous &&
-                mymath::abs(current - previous) <= kLimitTolerance) {
-                return current;
+            if (has_previous) {
+                const double extrapolated = 2.0 * current - previous;
+                const double delta = mymath::abs(extrapolated - best);
+                if (delta < best_delta) {
+                    best_delta = delta;
+                    best = extrapolated;
+                }
+                if (delta <= kLimitTolerance) {
+                    return extrapolated;
+                }
+            } else {
+                best = current;
             }
 
             previous = current;
             has_previous = true;
+        }
+
+        if (has_previous &&
+            std::isfinite(best) &&
+            best_delta <= kLimitTolerance * 100.0) {
+            return best;
         }
 
         throw std::runtime_error("limit did not converge");

@@ -6,6 +6,29 @@ The project has evolved from a minimal C++ hello-world style setup into a
 feature-rich command-line calculator with exact rational mode, programmable
 helpers, interactive terminal UX, and project documentation.
 
+## Latest Numerical Work
+
+- Added scientific-notation parsing for decimal, exact, and high-precision
+  decimal paths
+- Stabilized large-angle trigonometric reduction to avoid overflow-prone integer
+  casts
+- Switched `gamma`/`beta` critical paths to log-space evaluation and tightened
+  special-function behavior for large arguments
+- Reworked `bessel` evaluation to avoid the previous overflow/`nan` failures on
+  large inputs
+- Improved one-variable `limit(...)` sampling so removable singularities such as
+  `sin(x)/x` and `(1-cos(x))/x^2` converge much more accurately
+- Replaced the old rank-sensitive QR path with a Householder-based
+  implementation and rebuilt reduced SVD/pseudo-inverse/least-squares support
+  on top of it
+- `pinv(...)`, `cond(...)`, `least_squares(...)`, `null(...)`, `svd_*`, and
+  `eigvals(...)` now behave correctly on a wider set of singular and wide
+  matrices
+- Split oversized numeric implementation files by extracting
+  `src/math/mymath_special_functions.inc` and
+  `src/matrix/matrix_linear_algebra.inc` from the previous monolithic sources
+- Expanded regression coverage for the reported numerical edge cases
+
 ## Major Additions Implemented
 
 - Interactive command-line calculator REPL

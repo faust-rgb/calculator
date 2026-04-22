@@ -2,8 +2,6 @@
 
 ## Parsing
 
-- Scientific notation is not supported yet
-  - example: `1e-3` is not valid input
 - The parser is expression-oriented and not a full symbolic algebra parser
 - Function argument handling is intentionally simple and explicit
 
@@ -30,11 +28,14 @@
 - Internal decimal calculations use `double`
 - Arbitrary precision is not supported
 - Some operations are approximate by nature and rely on tolerance handling
-- Near-zero values are normalized to `0` for readability
-- Decimal display also simplifies values that are within `1e-10` of the nearest
-  integer
-- In practice, this means values with `abs(value) <= 1e-10` display as `0`, and
-  values with `abs(value - round(value)) <= 1e-10` display as that integer
+- Scientific notation inputs such as `1e-3` and `1e20` are supported, but they
+  still evaluate through `double`
+- Decimal display prefers readability for near-integer values, while preserving
+  very small non-zero magnitudes instead of collapsing them all to `0`
+- ODE solving still uses fixed-step RK4 and does not provide adaptive step-size
+  control for stiff problems
+- Polynomial fitting still uses the normal equations path and can be sensitive
+  on ill-conditioned datasets
 
 ## Persistence
 

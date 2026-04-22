@@ -125,6 +125,27 @@ double cosh(double x);
 double tanh(double x);
 
 /**
+ * @brief 计算反双曲正弦
+ * @param x 输入值
+ * @return asinh(x)
+ */
+double asinh(double x);
+
+/**
+ * @brief 计算反双曲余弦
+ * @param x 输入值，必须 >= 1
+ * @return acosh(x)
+ */
+double acosh(double x);
+
+/**
+ * @brief 计算反双曲正切
+ * @param x 输入值，必须满足 |x| < 1
+ * @return atanh(x)
+ */
+double atanh(double x);
+
+/**
  * @brief 计算伽马函数 Γ(x)
  * @param x 输入值
  * @return Γ(x)
@@ -191,6 +212,48 @@ double asin(double x);
  */
 double acos(double x);
 
+/**
+ * @brief 计算正割
+ * @param x 角度（弧度）
+ * @return sec(x) = 1 / cos(x)
+ */
+double sec(double x);
+
+/**
+ * @brief 计算余割
+ * @param x 角度（弧度）
+ * @return csc(x) = 1 / sin(x)
+ */
+double csc(double x);
+
+/**
+ * @brief 计算余切
+ * @param x 角度（弧度）
+ * @return cot(x) = cos(x) / sin(x)
+ */
+double cot(double x);
+
+/**
+ * @brief 计算反正割
+ * @param x 输入值，必须满足 |x| >= 1
+ * @return asec(x)
+ */
+double asec(double x);
+
+/**
+ * @brief 计算反余割
+ * @param x 输入值，必须满足 |x| >= 1
+ * @return acsc(x)
+ */
+double acsc(double x);
+
+/**
+ * @brief 计算反余切
+ * @param x 输入值
+ * @return acot(x)
+ */
+double acot(double x);
+
 // ============================================================================
 // 幂函数和根函数
 // ============================================================================
@@ -238,6 +301,43 @@ double root(double value, double degree);
  * - 一般情况使用 a^b = e^(b*ln(a))
  */
 double pow(double base, double exponent);
+
+/**
+ * @brief 计算误差函数
+ * @param x 输入值
+ * @return erf(x)
+ */
+double erf(double x);
+
+/**
+ * @brief 计算互补误差函数
+ * @param x 输入值
+ * @return erfc(x) = 1 - erf(x)
+ */
+double erfc(double x);
+
+/**
+ * @brief 计算贝塔函数
+ * @param a 参数 a
+ * @param b 参数 b
+ * @return B(a, b)
+ */
+double beta(double a, double b);
+
+/**
+ * @brief 计算黎曼 ζ 函数（实数输入）
+ * @param s 输入值，s = 1 处无定义
+ * @return zeta(s)
+ */
+double zeta(double s);
+
+/**
+ * @brief 计算第一类整数阶贝塞尔函数 J_n(x)
+ * @param order 阶数（整数）
+ * @param x 输入值
+ * @return J_order(x)
+ */
+double bessel_j(int order, double x);
 
 }  // namespace mymath
 

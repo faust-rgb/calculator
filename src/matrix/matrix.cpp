@@ -9,10 +9,12 @@
 #include "matrix.h"
 
 #include "mymath.h"
+#include "polynomial.h"
 
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -156,43 +158,75 @@ double vector_entry(const Matrix& matrix, std::size_t index) {
 }
 
 std::pair<Matrix, Matrix> qr_decompose(const Matrix& matrix) {
-    if (!matrix.is_square()) {
-        throw std::runtime_error("QR decomposition requires a square matrix");
+    const std::size_t m = matrix.rows;
+    const std::size_t n = matrix.cols;
+    Matrix q = Matrix::identity(m);
+    Matrix r = matrix;
+
+    const std::size_t limit = m < n ? m : n;
+    for (std::size_t col = 0; col < limit; ++col) {
+        std::vector<double> householder(m - col, 0.0);
+        for (std::size_t row = col; row < m; ++row) {
+            householder[row - col] = r.at(row, col);
+        }
+
+        double norm_x = mymath::sqrt(vector_norm_squared(householder));
+        if (mymath::is_near_zero(norm_x, kMatrixEps)) {
+            continue;
+        }
+
+        householder[0] += householder[0] >= 0.0 ? norm_x : -norm_x;
+        const double norm_v = mymath::sqrt(vector_norm_squared(householder));
+        if (mymath::is_near_zero(norm_v, kMatrixEps)) {
+            continue;
+        }
+        for (double& value : householder) {
+            value /= norm_v;
+        }
+
+        for (std::size_t current_col = col; current_col < n; ++current_col) {
+            double projection = 0.0;
+            for (std::size_t row = col; row < m; ++row) {
+                projection += householder[row - col] * r.at(row, current_col);
+            }
+            projection *= 2.0;
+            for (std::size_t row = col; row < m; ++row) {
+                r.at(row, current_col) -= projection * householder[row - col];
+                if (mymath::is_near_zero(r.at(row, current_col), kMatrixEps)) {
+                    r.at(row, current_col) = 0.0;
+                }
+            }
+        }
+
+        for (std::size_t row = 0; row < m; ++row) {
+            double projection = 0.0;
+            for (std::size_t index = col; index < m; ++index) {
+                projection += q.at(row, index) * householder[index - col];
+            }
+            projection *= 2.0;
+            for (std::size_t index = col; index < m; ++index) {
+                q.at(row, index) -= projection * householder[index - col];
+                if (mymath::is_near_zero(q.at(row, index), kMatrixEps)) {
+                    q.at(row, index) = 0.0;
+                }
+            }
+        }
     }
 
-    // 使用经典 Gram-Schmidt 正交化，把 A 分解成 Q * R。
-    // 当前精度目标下这已经足够支撑后面的 QR 迭代求特征值。
-    const std::size_t n = matrix.rows;
-    Matrix q(n, n, 0.0);
-    Matrix r(n, n, 0.0);
-    std::vector<std::vector<double>> q_columns(n, std::vector<double>(n, 0.0));
-
-    for (std::size_t col = 0; col < n; ++col) {
-        std::vector<double> v(n, 0.0);
-        for (std::size_t row = 0; row < n; ++row) {
-            v[row] = matrix.at(row, col);
-        }
-
-        for (std::size_t prev = 0; prev < col; ++prev) {
-            double projection = 0.0;
-            for (std::size_t row = 0; row < n; ++row) {
-                projection += q_columns[prev][row] * matrix.at(row, col);
+    for (std::size_t diag = 0; diag < limit; ++diag) {
+        if (r.at(diag, diag) < 0.0) {
+            for (std::size_t row = 0; row < m; ++row) {
+                q.at(row, diag) = -q.at(row, diag);
+                if (mymath::is_near_zero(q.at(row, diag), kMatrixEps)) {
+                    q.at(row, diag) = 0.0;
+                }
             }
-            r.at(prev, col) = projection;
-            for (std::size_t row = 0; row < n; ++row) {
-                v[row] -= projection * q_columns[prev][row];
+            for (std::size_t col = 0; col < n; ++col) {
+                r.at(diag, col) = -r.at(diag, col);
+                if (mymath::is_near_zero(r.at(diag, col), kMatrixEps)) {
+                    r.at(diag, col) = 0.0;
+                }
             }
-        }
-
-        const double magnitude = mymath::sqrt(vector_norm_squared(v));
-        if (mymath::is_near_zero(magnitude, kMatrixEps)) {
-            throw std::runtime_error("QR decomposition failed for a rank-deficient basis");
-        }
-
-        r.at(col, col) = magnitude;
-        for (std::size_t row = 0; row < n; ++row) {
-            q_columns[col][row] = v[row] / magnitude;
-            q.at(row, col) = q_columns[col][row];
         }
     }
 
@@ -354,6 +388,10 @@ Matrix nullspace_basis(const Matrix& matrix) {
         }
     }
 
+    if (free_columns.empty()) {
+        return Matrix(0, 0, 0.0);
+    }
+
     Matrix basis(reduced.cols, free_columns.size(), 0.0);
     for (std::size_t basis_col = 0; basis_col < free_columns.size(); ++basis_col) {
         const std::size_t free_col = free_columns[basis_col];
@@ -413,11 +451,447 @@ std::vector<double> standard_basis_vector(std::size_t size, std::size_t index) {
     return values;
 }
 
+std::vector<double> as_vector_values(const Matrix& matrix, const std::string& func_name) {
+    const std::size_t length = vector_length(matrix, func_name);
+    std::vector<double> values(length, 0.0);
+    for (std::size_t i = 0; i < length; ++i) {
+        values[i] = vector_entry(matrix, i);
+    }
+    return values;
+}
+
+void require_nonempty_values(const std::vector<double>& values,
+                             const std::string& func_name) {
+    if (values.empty()) {
+        throw std::runtime_error(func_name + " requires at least one value");
+    }
+}
+
+std::vector<double> sort_values(std::vector<double> values) {
+    std::sort(values.begin(), values.end());
+    return values;
+}
+
+double mean_values(const std::vector<double>& values) {
+    require_nonempty_values(values, "mean");
+    double total = 0.0;
+    for (double value : values) {
+        total += value;
+    }
+    return total / static_cast<double>(values.size());
+}
+
+double median_values(const std::vector<double>& values) {
+    require_nonempty_values(values, "median");
+    std::vector<double> sorted = sort_values(values);
+    const std::size_t middle = sorted.size() / 2;
+    if (sorted.size() % 2 == 1) {
+        return sorted[middle];
+    }
+    return (sorted[middle - 1] + sorted[middle]) * 0.5;
+}
+
+double mode_values(const std::vector<double>& values) {
+    require_nonempty_values(values, "mode");
+    std::vector<double> sorted = sort_values(values);
+    double best_value = sorted.front();
+    int best_count = 1;
+    double current_value = sorted.front();
+    int current_count = 1;
+
+    for (std::size_t i = 1; i < sorted.size(); ++i) {
+        if (mymath::is_near_zero(sorted[i] - current_value, 1e-10)) {
+            ++current_count;
+            continue;
+        }
+        if (current_count > best_count) {
+            best_count = current_count;
+            best_value = current_value;
+        }
+        current_value = sorted[i];
+        current_count = 1;
+    }
+    if (current_count > best_count) {
+        best_value = current_value;
+    }
+    return best_value;
+}
+
+double variance_values(const std::vector<double>& values) {
+    require_nonempty_values(values, "var");
+    const double mean = mean_values(values);
+    double sum = 0.0;
+    for (double value : values) {
+        const double delta = value - mean;
+        sum += delta * delta;
+    }
+    return sum / static_cast<double>(values.size());
+}
+
+double covariance_values(const std::vector<double>& lhs,
+                         const std::vector<double>& rhs) {
+    if (lhs.size() != rhs.size() || lhs.empty()) {
+        throw std::runtime_error("cov requires vectors of the same non-zero length");
+    }
+    const double lhs_mean = mean_values(lhs);
+    const double rhs_mean = mean_values(rhs);
+    double sum = 0.0;
+    for (std::size_t i = 0; i < lhs.size(); ++i) {
+        sum += (lhs[i] - lhs_mean) * (rhs[i] - rhs_mean);
+    }
+    return sum / static_cast<double>(lhs.size());
+}
+
+double correlation_values(const std::vector<double>& lhs,
+                          const std::vector<double>& rhs) {
+    const double covariance = covariance_values(lhs, rhs);
+    const double lhs_std = mymath::sqrt(variance_values(lhs));
+    const double rhs_std = mymath::sqrt(variance_values(rhs));
+    if (mymath::is_near_zero(lhs_std, kMatrixEps) ||
+        mymath::is_near_zero(rhs_std, kMatrixEps)) {
+        throw std::runtime_error("corr requires non-constant vectors");
+    }
+    return covariance / (lhs_std * rhs_std);
+}
+
+double lagrange_interpolate(const std::vector<double>& x,
+                            const std::vector<double>& y,
+                            double xi) {
+    if (x.size() != y.size() || x.empty()) {
+        throw std::runtime_error("lagrange requires sample vectors of the same non-zero length");
+    }
+    double result = 0.0;
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        double basis = 1.0;
+        for (std::size_t j = 0; j < x.size(); ++j) {
+            if (i == j) {
+                continue;
+            }
+            const double denominator = x[i] - x[j];
+            if (mymath::is_near_zero(denominator, 1e-12)) {
+                throw std::runtime_error("lagrange requires distinct x values");
+            }
+            basis *= (xi - x[j]) / denominator;
+        }
+        result += y[i] * basis;
+    }
+    return result;
+}
+
+double spline_interpolate(const std::vector<double>& x,
+                          const std::vector<double>& y,
+                          double xi) {
+    if (x.size() != y.size() || x.size() < 2) {
+        throw std::runtime_error("spline requires sample vectors of the same length with at least two points");
+    }
+
+    for (std::size_t i = 1; i < x.size(); ++i) {
+        if (!(x[i] > x[i - 1])) {
+            throw std::runtime_error("spline requires strictly increasing x values");
+        }
+    }
+
+    const std::size_t n = x.size();
+    std::vector<double> a = y;
+    std::vector<double> h(n - 1, 0.0);
+    for (std::size_t i = 0; i + 1 < n; ++i) {
+        h[i] = x[i + 1] - x[i];
+    }
+
+    std::vector<double> alpha(n, 0.0);
+    for (std::size_t i = 1; i + 1 < n; ++i) {
+        alpha[i] =
+            (3.0 / h[i]) * (a[i + 1] - a[i]) -
+            (3.0 / h[i - 1]) * (a[i] - a[i - 1]);
+    }
+
+    std::vector<double> l(n, 0.0);
+    std::vector<double> mu(n, 0.0);
+    std::vector<double> z(n, 0.0);
+    std::vector<double> c(n, 0.0);
+    std::vector<double> b(n - 1, 0.0);
+    std::vector<double> d(n - 1, 0.0);
+
+    l[0] = 1.0;
+    for (std::size_t i = 1; i + 1 < n; ++i) {
+        l[i] = 2.0 * (x[i + 1] - x[i - 1]) - h[i - 1] * mu[i - 1];
+        mu[i] = h[i] / l[i];
+        z[i] = (alpha[i] - h[i - 1] * z[i - 1]) / l[i];
+    }
+    l[n - 1] = 1.0;
+
+    for (std::size_t j = n - 1; j-- > 0;) {
+        c[j] = z[j] - mu[j] * c[j + 1];
+        b[j] = (a[j + 1] - a[j]) / h[j] -
+               h[j] * (c[j + 1] + 2.0 * c[j]) / 3.0;
+        d[j] = (c[j + 1] - c[j]) / (3.0 * h[j]);
+    }
+
+    std::size_t interval = 0;
+    if (xi <= x.front()) {
+        interval = 0;
+    } else if (xi >= x.back()) {
+        interval = n - 2;
+    } else {
+        for (std::size_t i = 0; i + 1 < n; ++i) {
+            if (xi >= x[i] && xi <= x[i + 1]) {
+                interval = i;
+                break;
+            }
+        }
+    }
+
+    const double dx = xi - x[interval];
+    return a[interval] +
+           b[interval] * dx +
+           c[interval] * dx * dx +
+           d[interval] * dx * dx * dx;
+}
+
+std::pair<double, double> linear_regression_fit(const std::vector<double>& x,
+                                                const std::vector<double>& y) {
+    if (x.size() != y.size() || x.empty()) {
+        throw std::runtime_error("linear_regression requires sample vectors of the same non-zero length");
+    }
+    const double x_mean = mean_values(x);
+    const double y_mean = mean_values(y);
+    double numerator = 0.0;
+    double denominator = 0.0;
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        numerator += (x[i] - x_mean) * (y[i] - y_mean);
+        denominator += (x[i] - x_mean) * (x[i] - x_mean);
+    }
+    if (mymath::is_near_zero(denominator, 1e-12)) {
+        throw std::runtime_error("linear_regression requires x values with non-zero variance");
+    }
+    const double slope = numerator / denominator;
+    const double intercept = y_mean - slope * x_mean;
+    return {slope, intercept};
+}
+
+bool is_complex_vector(const Matrix& matrix) {
+    return matrix.is_vector() && vector_length(matrix, "complex") == 2;
+}
+
+double complex_real(const Matrix& matrix) {
+    return vector_entry(matrix, 0);
+}
+
+double complex_imag(const Matrix& matrix) {
+    return vector_entry(matrix, 1);
+}
+
+Matrix complex_value(double real, double imag) {
+    return Matrix::vector({real, imag});
+}
+
+struct ComplexSample {
+    double real = 0.0;
+    double imag = 0.0;
+};
+
+ComplexSample add_complex(ComplexSample lhs, ComplexSample rhs) {
+    lhs.real += rhs.real;
+    lhs.imag += rhs.imag;
+    return lhs;
+}
+
+ComplexSample multiply_complex(ComplexSample lhs, ComplexSample rhs) {
+    return {
+        lhs.real * rhs.real - lhs.imag * rhs.imag,
+        lhs.real * rhs.imag + lhs.imag * rhs.real,
+    };
+}
+
+bool is_complex_sequence_matrix(const Matrix& matrix) {
+    return matrix.cols == 2;
+}
+
+std::vector<ComplexSample> as_complex_sequence(const Matrix& matrix,
+                                               const std::string& func_name) {
+    std::vector<ComplexSample> values;
+    if (matrix.is_vector()) {
+        const std::vector<double> real_values = as_vector_values(matrix, func_name);
+        values.reserve(real_values.size());
+        for (double value : real_values) {
+            values.push_back({value, 0.0});
+        }
+        return values;
+    }
+
+    if (!is_complex_sequence_matrix(matrix)) {
+        throw std::runtime_error(func_name +
+                                 " expects a real vector or an N x 2 complex matrix");
+    }
+
+    values.reserve(matrix.rows);
+    for (std::size_t row = 0; row < matrix.rows; ++row) {
+        values.push_back({matrix.at(row, 0), matrix.at(row, 1)});
+    }
+    return values;
+}
+
+Matrix complex_sequence_to_matrix(const std::vector<ComplexSample>& values,
+                                  bool prefer_real_vector) {
+    if (prefer_real_vector) {
+        bool all_real = true;
+        for (const ComplexSample& value : values) {
+            if (!mymath::is_near_zero(value.imag, kMatrixEps)) {
+                all_real = false;
+                break;
+            }
+        }
+        if (all_real) {
+            std::vector<double> real_values;
+            real_values.reserve(values.size());
+            for (const ComplexSample& value : values) {
+                real_values.push_back(mymath::is_near_zero(value.real, kMatrixEps)
+                                          ? 0.0
+                                          : value.real);
+            }
+            return Matrix::vector(real_values);
+        }
+    }
+
+    Matrix result(values.size(), 2, 0.0);
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        result.at(i, 0) = mymath::is_near_zero(values[i].real, kMatrixEps)
+                              ? 0.0
+                              : values[i].real;
+        result.at(i, 1) = mymath::is_near_zero(values[i].imag, kMatrixEps)
+                              ? 0.0
+                              : values[i].imag;
+    }
+    return result;
+}
+
+std::vector<ComplexSample> discrete_fourier_transform(const std::vector<ComplexSample>& input,
+                                                      bool inverse) {
+    if (input.empty()) {
+        return {};
+    }
+
+    const double sign = inverse ? 1.0 : -1.0;
+    const double scale = inverse ? 1.0 / static_cast<double>(input.size()) : 1.0;
+    std::vector<ComplexSample> output(input.size(), {0.0, 0.0});
+
+    for (std::size_t k = 0; k < input.size(); ++k) {
+        ComplexSample sum;
+        for (std::size_t n = 0; n < input.size(); ++n) {
+            const double angle =
+                2.0 * mymath::kPi * static_cast<double>(k * n) /
+                static_cast<double>(input.size());
+            const ComplexSample twiddle = {
+                mymath::cos(angle),
+                sign * mymath::sin(angle),
+            };
+            sum = add_complex(sum, multiply_complex(input[n], twiddle));
+        }
+        output[k] = {sum.real * scale, sum.imag * scale};
+    }
+
+    return output;
+}
+
+std::vector<ComplexSample> convolve_sequences(const std::vector<ComplexSample>& lhs,
+                                              const std::vector<ComplexSample>& rhs) {
+    if (lhs.empty() || rhs.empty()) {
+        return {};
+    }
+
+    std::vector<ComplexSample> result(lhs.size() + rhs.size() - 1, {0.0, 0.0});
+    for (std::size_t i = 0; i < lhs.size(); ++i) {
+        for (std::size_t j = 0; j < rhs.size(); ++j) {
+            result[i + j] =
+                add_complex(result[i + j], multiply_complex(lhs[i], rhs[j]));
+        }
+    }
+    return result;
+}
+
 struct ReducedSvd {
     Matrix u;
     Matrix s;
     Matrix vt;
 };
+
+struct SymmetricEigenDecomposition {
+    std::vector<double> values;
+    Matrix vectors;
+};
+
+SymmetricEigenDecomposition jacobi_symmetric_eigendecomposition(
+    const Matrix& matrix) {
+    if (!matrix.is_square()) {
+        throw std::runtime_error("Jacobi eigendecomposition requires a square matrix");
+    }
+
+    const std::size_t n = matrix.rows;
+    Matrix current = matrix;
+    Matrix vectors = Matrix::identity(n);
+
+    for (int iteration = 0; iteration < 128 * static_cast<int>(n + 1); ++iteration) {
+        std::size_t pivot_row = 0;
+        std::size_t pivot_col = 0;
+        double pivot_value = 0.0;
+        for (std::size_t row = 0; row < n; ++row) {
+            for (std::size_t col = row + 1; col < n; ++col) {
+                const double current_value = mymath::abs(current.at(row, col));
+                if (current_value > pivot_value) {
+                    pivot_value = current_value;
+                    pivot_row = row;
+                    pivot_col = col;
+                }
+            }
+        }
+
+        if (pivot_value < 1e-12) {
+            break;
+        }
+
+        const double app = current.at(pivot_row, pivot_row);
+        const double aqq = current.at(pivot_col, pivot_col);
+        const double apq = current.at(pivot_row, pivot_col);
+        const double tau = (aqq - app) / (2.0 * apq);
+        const double t =
+            (tau >= 0.0 ? 1.0 : -1.0) /
+            (mymath::abs(tau) + mymath::sqrt(1.0 + tau * tau));
+        const double cosine = 1.0 / mymath::sqrt(1.0 + t * t);
+        const double sine = t * cosine;
+
+        for (std::size_t col = 0; col < n; ++col) {
+            if (col == pivot_row || col == pivot_col) {
+                continue;
+            }
+            const double aip = current.at(col, pivot_row);
+            const double aiq = current.at(col, pivot_col);
+            const double new_aip = cosine * aip - sine * aiq;
+            const double new_aiq = sine * aip + cosine * aiq;
+            current.at(col, pivot_row) = new_aip;
+            current.at(pivot_row, col) = new_aip;
+            current.at(col, pivot_col) = new_aiq;
+            current.at(pivot_col, col) = new_aiq;
+        }
+
+        current.at(pivot_row, pivot_row) = app - t * apq;
+        current.at(pivot_col, pivot_col) = aqq + t * apq;
+        current.at(pivot_row, pivot_col) = 0.0;
+        current.at(pivot_col, pivot_row) = 0.0;
+
+        for (std::size_t row = 0; row < n; ++row) {
+            const double vip = vectors.at(row, pivot_row);
+            const double viq = vectors.at(row, pivot_col);
+            vectors.at(row, pivot_row) = cosine * vip - sine * viq;
+            vectors.at(row, pivot_col) = sine * vip + cosine * viq;
+        }
+    }
+
+    std::vector<double> values(n, 0.0);
+    for (std::size_t i = 0; i < n; ++i) {
+        values[i] = current.at(i, i);
+    }
+    return {values, vectors};
+}
 
 ReducedSvd compute_reduced_svd(const Matrix& matrix) {
     const std::size_t m = matrix.rows;
@@ -433,16 +907,17 @@ ReducedSvd compute_reduced_svd(const Matrix& matrix) {
     }
 
     const Matrix ata = multiply(transpose(matrix), matrix);
-    Matrix eigvals = eigenvalues(ata);
-    Matrix eigvecs = eigenvectors(ata);
+    const SymmetricEigenDecomposition eig =
+        jacobi_symmetric_eigendecomposition(ata);
 
-    std::vector<std::size_t> order(eigvals.cols, 0);
+    std::vector<std::size_t> order(eig.values.size(), 0);
     for (std::size_t i = 0; i < order.size(); ++i) {
         order[i] = i;
     }
-    std::sort(order.begin(), order.end(),
-              [&eigvals](std::size_t lhs, std::size_t rhs) {
-                  return eigvals.at(0, lhs) > eigvals.at(0, rhs);
+    std::sort(order.begin(),
+              order.end(),
+              [&eig](std::size_t lhs, std::size_t rhs) {
+                  return eig.values[lhs] > eig.values[rhs];
               });
 
     std::vector<std::vector<double>> v_basis;
@@ -451,12 +926,10 @@ ReducedSvd compute_reduced_svd(const Matrix& matrix) {
     u_basis.reserve(k);
 
     for (std::size_t out_col = 0; out_col < k; ++out_col) {
-        std::vector<double> v;
-        if (out_col < order.size()) {
-            v = matrix_column(eigvecs, order[out_col]);
-        } else {
-            v = standard_basis_vector(n, out_col % n);
-        }
+        std::vector<double> v =
+            out_col < order.size()
+                ? matrix_column(eig.vectors, order[out_col])
+                : standard_basis_vector(n, out_col % n);
 
         if (!orthonormalize(&v, v_basis)) {
             for (std::size_t basis_idx = 0; basis_idx < n; ++basis_idx) {
@@ -470,7 +943,7 @@ ReducedSvd compute_reduced_svd(const Matrix& matrix) {
 
         double lambda = 0.0;
         if (out_col < order.size()) {
-            lambda = eigvals.at(0, order[out_col]);
+            lambda = eig.values[order[out_col]];
         }
         const double sigma =
             mymath::sqrt(lambda < 0.0 && mymath::abs(lambda) < kMatrixEps ? 0.0 : lambda);
@@ -715,6 +1188,9 @@ private:
         expect(')');
 
         if (name == "vec") {
+            if (arguments.size() == 1) {
+                return Value::from_matrix(vectorize(require_matrix(arguments[0], "vec")));
+            }
             if (arguments.empty()) {
                 throw std::runtime_error("vec expects at least one element");
             }
@@ -818,6 +1294,13 @@ private:
             return Value::from_matrix(inverse(require_matrix(arguments[0], "inverse")));
         }
 
+        if (name == "pinv") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("pinv expects exactly one argument");
+            }
+            return Value::from_matrix(pseudo_inverse(require_matrix(arguments[0], "pinv")));
+        }
+
         if (name == "dot") {
             if (arguments.size() != 2) {
                 throw std::runtime_error("dot expects exactly two arguments");
@@ -834,6 +1317,24 @@ private:
             return Value::from_matrix(
                 outer(require_matrix(arguments[0], "outer"),
                       require_matrix(arguments[1], "outer")));
+        }
+
+        if (name == "kron") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("kron expects exactly two arguments");
+            }
+            return Value::from_matrix(
+                kronecker(require_matrix(arguments[0], "kron"),
+                          require_matrix(arguments[1], "kron")));
+        }
+
+        if (name == "hadamard") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("hadamard expects exactly two arguments");
+            }
+            return Value::from_matrix(
+                hadamard(require_matrix(arguments[0], "hadamard"),
+                         require_matrix(arguments[1], "hadamard")));
         }
 
         if (name == "null") {
@@ -953,6 +1454,14 @@ private:
             return Value::from_scalar(norm(require_matrix(arguments[0], "norm")));
         }
 
+        if (name == "cond") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("cond expects exactly one argument");
+            }
+            return Value::from_scalar(
+                condition_number(require_matrix(arguments[0], "cond")));
+        }
+
         if (name == "trace") {
             if (arguments.size() != 1) {
                 throw std::runtime_error("trace expects exactly one argument");
@@ -993,6 +1502,407 @@ private:
                 throw std::runtime_error("eigvecs expects exactly one argument");
             }
             return Value::from_matrix(eigenvectors(require_matrix(arguments[0], "eigvecs")));
+        }
+
+        if (name == "reshape") {
+            if (arguments.size() != 3) {
+                throw std::runtime_error("reshape expects exactly three arguments");
+            }
+            return Value::from_matrix(
+                reshape(require_matrix(arguments[0], "reshape"),
+                        parse_size_argument(arguments[1], *scalar_evaluator_),
+                        parse_size_argument(arguments[2], *scalar_evaluator_)));
+        }
+
+        if (name == "diag") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("diag expects exactly one argument");
+            }
+            return Value::from_matrix(diag(require_matrix(arguments[0], "diag")));
+        }
+
+        if (name == "cholesky") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("cholesky expects exactly one argument");
+            }
+            return Value::from_matrix(cholesky(require_matrix(arguments[0], "cholesky")));
+        }
+
+        if (name == "hessenberg") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("hessenberg expects exactly one argument");
+            }
+            return Value::from_matrix(hessenberg(require_matrix(arguments[0], "hessenberg")));
+        }
+
+        if (name == "schur") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("schur expects exactly one argument");
+            }
+            return Value::from_matrix(schur(require_matrix(arguments[0], "schur")));
+        }
+
+        if (name == "mean") {
+            if (arguments.empty()) {
+                throw std::runtime_error("mean expects at least one argument");
+            }
+            std::vector<double> values;
+            if (arguments.size() == 1) {
+                Value value;
+                if (try_evaluate_expression(arguments[0],
+                                            *scalar_evaluator_,
+                                            *matrix_lookup_,
+                                            &value) &&
+                    value.is_matrix) {
+                    values = as_vector_values(value.matrix, "mean");
+                } else {
+                    values.push_back((*scalar_evaluator_)(arguments[0]));
+                }
+            } else {
+                values.reserve(arguments.size());
+                for (const std::string& argument : arguments) {
+                    values.push_back((*scalar_evaluator_)(argument));
+                }
+            }
+            return Value::from_scalar(mean_values(values));
+        }
+
+        if (name == "median") {
+            if (arguments.empty()) {
+                throw std::runtime_error("median expects at least one argument");
+            }
+            std::vector<double> values;
+            if (arguments.size() == 1) {
+                Value value;
+                if (try_evaluate_expression(arguments[0],
+                                            *scalar_evaluator_,
+                                            *matrix_lookup_,
+                                            &value) &&
+                    value.is_matrix) {
+                    values = as_vector_values(value.matrix, "median");
+                } else {
+                    values.push_back((*scalar_evaluator_)(arguments[0]));
+                }
+            } else {
+                values.reserve(arguments.size());
+                for (const std::string& argument : arguments) {
+                    values.push_back((*scalar_evaluator_)(argument));
+                }
+            }
+            return Value::from_scalar(median_values(values));
+        }
+
+        if (name == "mode") {
+            if (arguments.empty()) {
+                throw std::runtime_error("mode expects at least one argument");
+            }
+            std::vector<double> values;
+            if (arguments.size() == 1) {
+                Value value;
+                if (try_evaluate_expression(arguments[0],
+                                            *scalar_evaluator_,
+                                            *matrix_lookup_,
+                                            &value) &&
+                    value.is_matrix) {
+                    values = as_vector_values(value.matrix, "mode");
+                } else {
+                    values.push_back((*scalar_evaluator_)(arguments[0]));
+                }
+            } else {
+                values.reserve(arguments.size());
+                for (const std::string& argument : arguments) {
+                    values.push_back((*scalar_evaluator_)(argument));
+                }
+            }
+            return Value::from_scalar(mode_values(values));
+        }
+
+        if (name == "var") {
+            if (arguments.empty()) {
+                throw std::runtime_error("var expects at least one argument");
+            }
+            std::vector<double> values;
+            if (arguments.size() == 1) {
+                Value value;
+                if (try_evaluate_expression(arguments[0],
+                                            *scalar_evaluator_,
+                                            *matrix_lookup_,
+                                            &value) &&
+                    value.is_matrix) {
+                    values = as_vector_values(value.matrix, "var");
+                } else {
+                    values.push_back((*scalar_evaluator_)(arguments[0]));
+                }
+            } else {
+                values.reserve(arguments.size());
+                for (const std::string& argument : arguments) {
+                    values.push_back((*scalar_evaluator_)(argument));
+                }
+            }
+            return Value::from_scalar(variance_values(values));
+        }
+
+        if (name == "std") {
+            if (arguments.empty()) {
+                throw std::runtime_error("std expects at least one argument");
+            }
+            std::vector<double> values;
+            if (arguments.size() == 1) {
+                Value value;
+                if (try_evaluate_expression(arguments[0],
+                                            *scalar_evaluator_,
+                                            *matrix_lookup_,
+                                            &value) &&
+                    value.is_matrix) {
+                    values = as_vector_values(value.matrix, "std");
+                } else {
+                    values.push_back((*scalar_evaluator_)(arguments[0]));
+                }
+            } else {
+                values.reserve(arguments.size());
+                for (const std::string& argument : arguments) {
+                    values.push_back((*scalar_evaluator_)(argument));
+                }
+            }
+            return Value::from_scalar(mymath::sqrt(variance_values(values)));
+        }
+
+        if (name == "cov") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("cov expects exactly two vector arguments");
+            }
+            return Value::from_scalar(covariance_values(
+                as_vector_values(require_matrix(arguments[0], "cov"), "cov"),
+                as_vector_values(require_matrix(arguments[1], "cov"), "cov")));
+        }
+
+        if (name == "corr") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("corr expects exactly two vector arguments");
+            }
+            return Value::from_scalar(correlation_values(
+                as_vector_values(require_matrix(arguments[0], "corr"), "corr"),
+                as_vector_values(require_matrix(arguments[1], "corr"), "corr")));
+        }
+
+        if (name == "lagrange") {
+            if (arguments.size() != 3) {
+                throw std::runtime_error("lagrange expects x samples, y samples, and xi");
+            }
+            return Value::from_scalar(lagrange_interpolate(
+                as_vector_values(require_matrix(arguments[0], "lagrange"), "lagrange"),
+                as_vector_values(require_matrix(arguments[1], "lagrange"), "lagrange"),
+                (*scalar_evaluator_)(arguments[2])));
+        }
+
+        if (name == "spline") {
+            if (arguments.size() != 3) {
+                throw std::runtime_error("spline expects x samples, y samples, and xi");
+            }
+            return Value::from_scalar(spline_interpolate(
+                as_vector_values(require_matrix(arguments[0], "spline"), "spline"),
+                as_vector_values(require_matrix(arguments[1], "spline"), "spline"),
+                (*scalar_evaluator_)(arguments[2])));
+        }
+
+        if (name == "linear_regression") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("linear_regression expects exactly two vector arguments");
+            }
+            const auto fit = linear_regression_fit(
+                as_vector_values(require_matrix(arguments[0], "linear_regression"),
+                                 "linear_regression"),
+                as_vector_values(require_matrix(arguments[1], "linear_regression"),
+                                 "linear_regression"));
+            return Value::from_matrix(Matrix::vector({fit.first, fit.second}));
+        }
+
+        if (name == "poly_fit" || name == "polynomial_fit") {
+            if (arguments.size() != 3) {
+                throw std::runtime_error(name + " expects x samples, y samples, and degree");
+            }
+            const double degree_value = (*scalar_evaluator_)(arguments[2]);
+            if (!mymath::is_integer(degree_value) || degree_value < 0.0) {
+                throw std::runtime_error(name + " degree must be a non-negative integer");
+            }
+            return Value::from_matrix(Matrix::vector(polynomial_fit(
+                as_vector_values(require_matrix(arguments[0], name), name),
+                as_vector_values(require_matrix(arguments[1], name), name),
+                static_cast<int>(degree_value + 0.5))));
+        }
+
+        if (name == "dft" || name == "fft") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error(name + " expects exactly one sequence argument");
+            }
+            return Value::from_matrix(complex_sequence_to_matrix(
+                discrete_fourier_transform(
+                    as_complex_sequence(require_matrix(arguments[0], name), name),
+                    false),
+                false));
+        }
+
+        if (name == "idft" || name == "ifft") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error(name + " expects exactly one sequence argument");
+            }
+            return Value::from_matrix(complex_sequence_to_matrix(
+                discrete_fourier_transform(
+                    as_complex_sequence(require_matrix(arguments[0], name), name),
+                    true),
+                true));
+        }
+
+        if (name == "convolve" || name == "conv") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error(name + " expects exactly two sequence arguments");
+            }
+            return Value::from_matrix(complex_sequence_to_matrix(
+                convolve_sequences(
+                    as_complex_sequence(require_matrix(arguments[0], name), name),
+                    as_complex_sequence(require_matrix(arguments[1], name), name)),
+                true));
+        }
+
+        if (name == "poly_eval") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("poly_eval expects coefficient vector and x");
+            }
+            return Value::from_scalar(polynomial_evaluate(
+                as_vector_values(require_matrix(arguments[0], "poly_eval"), "poly_eval"),
+                (*scalar_evaluator_)(arguments[1])));
+        }
+
+        if (name == "poly_deriv") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("poly_deriv expects exactly one coefficient vector");
+            }
+            return Value::from_matrix(Matrix::vector(polynomial_derivative(
+                as_vector_values(require_matrix(arguments[0], "poly_deriv"), "poly_deriv"))));
+        }
+
+        if (name == "poly_integ") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("poly_integ expects exactly one coefficient vector");
+            }
+            return Value::from_matrix(Matrix::vector(polynomial_integral(
+                as_vector_values(require_matrix(arguments[0], "poly_integ"), "poly_integ"))));
+        }
+
+        if (name == "poly_compose") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("poly_compose expects exactly two coefficient vectors");
+            }
+            return Value::from_matrix(Matrix::vector(polynomial_compose(
+                as_vector_values(require_matrix(arguments[0], "poly_compose"), "poly_compose"),
+                as_vector_values(require_matrix(arguments[1], "poly_compose"), "poly_compose"))));
+        }
+
+        if (name == "poly_gcd") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("poly_gcd expects exactly two coefficient vectors");
+            }
+            return Value::from_matrix(Matrix::vector(polynomial_gcd(
+                as_vector_values(require_matrix(arguments[0], "poly_gcd"), "poly_gcd"),
+                as_vector_values(require_matrix(arguments[1], "poly_gcd"), "poly_gcd"))));
+        }
+
+        if (name == "complex") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("complex expects exactly two scalar arguments");
+            }
+            return Value::from_matrix(
+                complex_value((*scalar_evaluator_)(arguments[0]),
+                              (*scalar_evaluator_)(arguments[1])));
+        }
+
+        if (name == "polar") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("polar expects exactly two scalar arguments");
+            }
+            const double radius = (*scalar_evaluator_)(arguments[0]);
+            const double theta = (*scalar_evaluator_)(arguments[1]);
+            return Value::from_matrix(
+                complex_value(radius * mymath::cos(theta),
+                              radius * mymath::sin(theta)));
+        }
+
+        if (name == "real") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("real expects exactly one argument");
+            }
+            const Matrix value = require_matrix(arguments[0], "real");
+            if (!is_complex_vector(value)) {
+                throw std::runtime_error("real expects a complex value");
+            }
+            return Value::from_scalar(complex_real(value));
+        }
+
+        if (name == "imag") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("imag expects exactly one argument");
+            }
+            const Matrix value = require_matrix(arguments[0], "imag");
+            if (!is_complex_vector(value)) {
+                throw std::runtime_error("imag expects a complex value");
+            }
+            return Value::from_scalar(complex_imag(value));
+        }
+
+        if (name == "arg") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("arg expects exactly one argument");
+            }
+            const Matrix value = require_matrix(arguments[0], "arg");
+            if (!is_complex_vector(value)) {
+                throw std::runtime_error("arg expects a complex value");
+            }
+            const double real = complex_real(value);
+            const double imag = complex_imag(value);
+            if (mymath::is_near_zero(real, kMatrixEps)) {
+                if (mymath::is_near_zero(imag, kMatrixEps)) {
+                    return Value::from_scalar(0.0);
+                }
+                return Value::from_scalar(imag > 0.0 ? mymath::kPi / 2.0
+                                                     : -mymath::kPi / 2.0);
+            }
+            double angle = mymath::atan(imag / real);
+            if (real < 0.0) {
+                angle += imag >= 0.0 ? mymath::kPi : -mymath::kPi;
+            }
+            return Value::from_scalar(angle);
+        }
+
+        if (name == "conj") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("conj expects exactly one argument");
+            }
+            const Matrix value = require_matrix(arguments[0], "conj");
+            if (!is_complex_vector(value)) {
+                throw std::runtime_error("conj expects a complex value");
+            }
+            return Value::from_matrix(complex_value(complex_real(value),
+                                                    -complex_imag(value)));
+        }
+
+        if (name == "abs") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("abs expects exactly one argument");
+            }
+            Value value;
+            if (try_evaluate_expression(arguments[0],
+                                        *scalar_evaluator_,
+                                        *matrix_lookup_,
+                                        &value) &&
+                value.is_matrix) {
+                if (!is_complex_vector(value.matrix)) {
+                    throw std::runtime_error("matrix abs only supports complex values");
+                }
+                const double real = complex_real(value.matrix);
+                const double imag = complex_imag(value.matrix);
+                return Value::from_scalar(mymath::sqrt(real * real + imag * imag));
+            }
+            return Value::from_scalar((*scalar_evaluator_)("abs(" + arguments[0] + ")"));
         }
 
         throw std::runtime_error("unknown matrix function: " + name);
@@ -1122,14 +2032,31 @@ private:
                name == "eye" || name == "identity" || name == "resize" ||
                name == "append_row" || name == "append_col" ||
                name == "transpose" || name == "inverse" ||
-               name == "dot" || name == "outer" || name == "null" ||
+               name == "pinv" ||
+               name == "dot" || name == "outer" || name == "kron" ||
+               name == "hadamard" || name == "null" ||
                name == "least_squares" || name == "qr_q" || name == "qr_r" ||
                name == "lu_l" || name == "lu_u" ||
                name == "svd_u" || name == "svd_s" || name == "svd_vt" ||
                name == "solve" ||
                name == "get" || name == "set" || name == "norm" ||
-               name == "trace" || name == "det" || name == "rank" ||
-               name == "rref" || name == "eigvals" || name == "eigvecs";
+               name == "cond" || name == "trace" || name == "det" ||
+               name == "rank" || name == "rref" || name == "eigvals" ||
+               name == "eigvecs" || name == "reshape" || name == "diag" ||
+               name == "cholesky" || name == "schur" || name == "hessenberg" ||
+               name == "mean" || name == "median" || name == "mode" ||
+               name == "var" || name == "std" || name == "cov" ||
+               name == "corr" || name == "lagrange" || name == "spline" ||
+               name == "linear_regression" || name == "poly_fit" ||
+               name == "polynomial_fit" || name == "poly_eval" ||
+               name == "poly_deriv" || name == "poly_integ" ||
+               name == "poly_compose" || name == "poly_gcd" ||
+               name == "dft" || name == "fft" ||
+               name == "idft" || name == "ifft" ||
+               name == "conv" || name == "convolve" ||
+               name == "complex" || name == "real" || name == "imag" ||
+               name == "arg" || name == "conj" || name == "polar" ||
+               name == "abs";
     }
 
     static Value add_values(const Value& lhs, const Value& rhs) {
@@ -1515,393 +2442,74 @@ Matrix outer(const Matrix& lhs, const Matrix& rhs) {
     return result;
 }
 
-Matrix inverse(const Matrix& matrix) {
-    if (!matrix.is_square()) {
-        throw std::runtime_error("inverse requires a square matrix");
-    }
-
-    // 通过对 [A | I] 做 Gauss-Jordan 消元，把左半边化成 I，
-    // 右半边就会变成 A 的逆矩阵。
-    const std::size_t n = matrix.rows;
-    Matrix augmented(n, n * 2, 0.0);
-    for (std::size_t row = 0; row < n; ++row) {
-        for (std::size_t col = 0; col < n; ++col) {
-            augmented.at(row, col) = matrix.at(row, col);
-            augmented.at(row, n + col) = row == col ? 1.0 : 0.0;
-        }
-    }
-
-    for (std::size_t col = 0; col < n; ++col) {
-        std::size_t best_row = col;
-        double best_value = mymath::abs(augmented.at(best_row, col));
-        for (std::size_t row = col + 1; row < n; ++row) {
-            const double current = mymath::abs(augmented.at(row, col));
-            if (current > best_value) {
-                best_value = current;
-                best_row = row;
-            }
-        }
-
-        if (mymath::is_near_zero(best_value, kMatrixEps)) {
-            throw std::runtime_error("matrix is singular and cannot be inverted");
-        }
-
-        swap_rows(&augmented, col, best_row);
-        const double pivot = augmented.at(col, col);
-        for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
-            augmented.at(col, current_col) /= pivot;
-        }
-
-        for (std::size_t row = 0; row < n; ++row) {
-            if (row == col) {
-                continue;
-            }
-            const double factor = augmented.at(row, col);
-            if (mymath::is_near_zero(factor, kMatrixEps)) {
-                continue;
-            }
-            for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
-                augmented.at(row, current_col) -= factor * augmented.at(col, current_col);
-                if (mymath::is_near_zero(augmented.at(row, current_col), kMatrixEps)) {
-                    augmented.at(row, current_col) = 0.0;
+Matrix kronecker(const Matrix& lhs, const Matrix& rhs) {
+    Matrix result(lhs.rows * rhs.rows, lhs.cols * rhs.cols, 0.0);
+    for (std::size_t row = 0; row < lhs.rows; ++row) {
+        for (std::size_t col = 0; col < lhs.cols; ++col) {
+            const double scale = lhs.at(row, col);
+            for (std::size_t rhs_row = 0; rhs_row < rhs.rows; ++rhs_row) {
+                for (std::size_t rhs_col = 0; rhs_col < rhs.cols; ++rhs_col) {
+                    result.at(row * rhs.rows + rhs_row,
+                              col * rhs.cols + rhs_col) =
+                        scale * rhs.at(rhs_row, rhs_col);
                 }
             }
         }
     }
+    return result;
+}
 
-    Matrix result(n, n, 0.0);
-    for (std::size_t row = 0; row < n; ++row) {
-        for (std::size_t col = 0; col < n; ++col) {
-            result.at(row, col) = augmented.at(row, n + col);
+Matrix hadamard(const Matrix& lhs, const Matrix& rhs) {
+    require_same_shape(lhs, rhs, "hadamard");
+    Matrix result(lhs.rows, lhs.cols, 0.0);
+    for (std::size_t i = 0; i < lhs.data.size(); ++i) {
+        result.data[i] = lhs.data[i] * rhs.data[i];
+    }
+    return result;
+}
+
+#include "matrix_linear_algebra.inc"
+
+Matrix reshape(const Matrix& matrix, std::size_t rows, std::size_t cols) {
+    if (rows * cols != matrix.rows * matrix.cols) {
+        throw std::runtime_error("reshape requires the element count to stay unchanged");
+    }
+    Matrix result(rows, cols, 0.0);
+    result.data = matrix.data;
+    return result;
+}
+
+Matrix vectorize(const Matrix& matrix) {
+    if (matrix.is_vector()) {
+        return matrix.rows == 1 ? transpose(matrix) : matrix;
+    }
+    Matrix result(matrix.rows * matrix.cols, 1, 0.0);
+    std::size_t index = 0;
+    for (std::size_t col = 0; col < matrix.cols; ++col) {
+        for (std::size_t row = 0; row < matrix.rows; ++row) {
+            result.at(index, 0) = matrix.at(row, col);
+            ++index;
         }
     }
     return result;
 }
 
-Matrix nullspace(const Matrix& matrix) {
-    return nullspace_basis(matrix);
-}
-
-Matrix least_squares(const Matrix& coefficients, const Matrix& rhs) {
-    if (rhs.cols != 1 && rhs.rows != 1) {
-        throw std::runtime_error("least_squares currently requires the right-hand side to be a vector");
-    }
-
-    const std::size_t rhs_size = rhs.rows == 1 ? rhs.cols : rhs.rows;
-    if (rhs_size != coefficients.rows) {
-        throw std::runtime_error("least_squares requires rhs to match the number of rows in A");
-    }
-
-    // 这里走正规方程 x = (A^T A)^(-1) A^T b。
-    // 这要求 A 列满秩；否则 (A^T A) 不可逆，会在 inverse 中报错。
-    const Matrix transposed = transpose(coefficients);
-    const Matrix normal_matrix = multiply(transposed, coefficients);
-    Matrix rhs_column(coefficients.rows, 1, 0.0);
-    for (std::size_t row = 0; row < coefficients.rows; ++row) {
-        rhs_column.at(row, 0) = rhs.rows == 1 ? rhs.at(0, row) : rhs.at(row, 0);
-    }
-    const Matrix normal_rhs = multiply(transposed, rhs_column);
-    return multiply(inverse(normal_matrix), normal_rhs);
-}
-
-Matrix qr_q(const Matrix& matrix) {
-    return qr_decompose(matrix).first;
-}
-
-Matrix qr_r(const Matrix& matrix) {
-    return qr_decompose(matrix).second;
-}
-
-Matrix lu_l(const Matrix& matrix) {
-    return lu_decompose(matrix).first;
-}
-
-Matrix lu_u(const Matrix& matrix) {
-    return lu_decompose(matrix).second;
-}
-
-Matrix svd_u(const Matrix& matrix) {
-    return compute_reduced_svd(matrix).u;
-}
-
-Matrix svd_s(const Matrix& matrix) {
-    return compute_reduced_svd(matrix).s;
-}
-
-Matrix svd_vt(const Matrix& matrix) {
-    return compute_reduced_svd(matrix).vt;
-}
-
-Matrix solve(const Matrix& coefficients, const Matrix& rhs) {
-    if (!coefficients.is_square()) {
-        throw std::runtime_error("solve requires a square coefficient matrix");
-    }
-    if (rhs.cols != 1 && rhs.rows != 1) {
-        throw std::runtime_error("solve currently requires the right-hand side to be a vector");
-    }
-
-    const std::size_t n = coefficients.rows;
-    const std::size_t rhs_size = rhs.rows == 1 ? rhs.cols : rhs.rows;
-    if (rhs_size != n) {
-        throw std::runtime_error("solve requires rhs to match the coefficient matrix dimension");
-    }
-
-    // 对增广矩阵 [A | b] 做 Gauss-Jordan 消元，右端最终就是解向量。
-    Matrix augmented(n, n + 1, 0.0);
-    for (std::size_t row = 0; row < n; ++row) {
-        for (std::size_t col = 0; col < n; ++col) {
-            augmented.at(row, col) = coefficients.at(row, col);
+Matrix diag(const Matrix& matrix) {
+    if (matrix.is_vector()) {
+        const std::vector<double> values = as_vector_values(matrix, "diag");
+        Matrix result(values.size(), values.size(), 0.0);
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            result.at(i, i) = values[i];
         }
-        augmented.at(row, n) = rhs.rows == 1 ? rhs.at(0, row) : rhs.at(row, 0);
+        return result;
     }
 
-    for (std::size_t col = 0; col < n; ++col) {
-        std::size_t best_row = col;
-        double best_value = mymath::abs(augmented.at(best_row, col));
-        for (std::size_t row = col + 1; row < n; ++row) {
-            const double current = mymath::abs(augmented.at(row, col));
-            if (current > best_value) {
-                best_value = current;
-                best_row = row;
-            }
-        }
-
-        if (mymath::is_near_zero(best_value, kMatrixEps)) {
-            throw std::runtime_error("linear system has no unique solution");
-        }
-
-        swap_rows(&augmented, col, best_row);
-        const double pivot = augmented.at(col, col);
-        for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
-            augmented.at(col, current_col) /= pivot;
-        }
-
-        for (std::size_t row = 0; row < n; ++row) {
-            if (row == col) {
-                continue;
-            }
-            const double factor = augmented.at(row, col);
-            if (mymath::is_near_zero(factor, kMatrixEps)) {
-                continue;
-            }
-            for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
-                augmented.at(row, current_col) -= factor * augmented.at(col, current_col);
-                if (mymath::is_near_zero(augmented.at(row, current_col), kMatrixEps)) {
-                    augmented.at(row, current_col) = 0.0;
-                }
-            }
-        }
-    }
-
-    Matrix result(n, 1, 0.0);
-    for (std::size_t row = 0; row < n; ++row) {
-        result.at(row, 0) = augmented.at(row, n);
+    const std::size_t diagonal = matrix.rows < matrix.cols ? matrix.rows : matrix.cols;
+    Matrix result(diagonal, 1, 0.0);
+    for (std::size_t i = 0; i < diagonal; ++i) {
+        result.at(i, 0) = matrix.at(i, i);
     }
     return result;
-}
-
-Matrix power(Matrix base, long long exponent) {
-    if (!base.is_square()) {
-        throw std::runtime_error("matrix powers require a square matrix");
-    }
-
-    if (exponent < 0) {
-        base = inverse(base);
-        exponent = -exponent;
-    }
-
-    Matrix result = Matrix::identity(base.rows);
-    while (exponent > 0) {
-        if ((exponent & 1LL) != 0) {
-            result = multiply(result, base);
-        }
-        base = multiply(base, base);
-        exponent >>= 1LL;
-    }
-    return result;
-}
-
-double get(const Matrix& matrix, std::size_t row, std::size_t col) {
-    return matrix.at(row, col);
-}
-
-double get(const Matrix& matrix, std::size_t index) {
-    if (!matrix.is_vector()) {
-        throw std::runtime_error("single-index get only works on vectors");
-    }
-    if (matrix.rows == 1) {
-        return matrix.at(0, index);
-    }
-    return matrix.at(index, 0);
-}
-
-Matrix set(Matrix matrix, std::size_t row, std::size_t col, double value) {
-    if (row >= matrix.rows || col >= matrix.cols) {
-        const std::size_t new_rows = row < matrix.rows ? matrix.rows : row + 1;
-        const std::size_t new_cols = col < matrix.cols ? matrix.cols : col + 1;
-        matrix.resize(new_rows, new_cols, 0.0);
-    }
-    matrix.at(row, col) = value;
-    return matrix;
-}
-
-Matrix set(Matrix matrix, std::size_t index, double value) {
-    if (!matrix.is_vector()) {
-        throw std::runtime_error("single-index set only works on vectors");
-    }
-    if (matrix.rows == 1) {
-        if (index >= matrix.cols) {
-            matrix.resize(1, index + 1, 0.0);
-        }
-        matrix.at(0, index) = value;
-    } else {
-        if (index >= matrix.rows) {
-            matrix.resize(index + 1, 1, 0.0);
-        }
-        matrix.at(index, 0) = value;
-    }
-    return matrix;
-}
-
-double norm(const Matrix& matrix) {
-    double sum = 0.0;
-    for (double value : matrix.data) {
-        sum += value * value;
-    }
-    return mymath::sqrt(sum);
-}
-
-double trace(const Matrix& matrix) {
-    if (!matrix.is_square()) {
-        throw std::runtime_error("trace requires a square matrix");
-    }
-    double sum = 0.0;
-    for (std::size_t i = 0; i < matrix.rows; ++i) {
-        sum += matrix.at(i, i);
-    }
-    return sum;
-}
-
-double determinant(const Matrix& matrix) {
-    if (!matrix.is_square()) {
-        throw std::runtime_error("determinant requires a square matrix");
-    }
-
-    // 通过带部分主元选取的上三角消元求行列式。
-    // 行交换会翻转符号，对角线乘积给出最终结果。
-    Matrix reduced = matrix;
-    double result = 1.0;
-    int swap_count = 0;
-
-    for (std::size_t col = 0; col < reduced.cols; ++col) {
-        std::size_t best_row = col;
-        double best_value = mymath::abs(reduced.at(best_row, col));
-        for (std::size_t row = col + 1; row < reduced.rows; ++row) {
-            const double current = mymath::abs(reduced.at(row, col));
-            if (current > best_value) {
-                best_value = current;
-                best_row = row;
-            }
-        }
-
-        if (mymath::is_near_zero(best_value, kMatrixEps)) {
-            return 0.0;
-        }
-
-        if (best_row != col) {
-            swap_rows(&reduced, best_row, col);
-            ++swap_count;
-        }
-
-        const double pivot = reduced.at(col, col);
-        result *= pivot;
-        for (std::size_t row = col + 1; row < reduced.rows; ++row) {
-            const double factor = reduced.at(row, col) / pivot;
-            for (std::size_t current_col = col; current_col < reduced.cols; ++current_col) {
-                reduced.at(row, current_col) -= factor * reduced.at(col, current_col);
-            }
-        }
-    }
-
-    return (swap_count % 2 == 0 ? 1.0 : -1.0) * result;
-}
-
-double rank(const Matrix& matrix) {
-    Matrix reduced = matrix;
-    return static_cast<double>(rref_in_place(&reduced).size());
-}
-
-Matrix rref(Matrix matrix) {
-    rref_in_place(&matrix);
-    return matrix;
-}
-
-Matrix eigenvalues(const Matrix& matrix) {
-    if (!matrix.is_square()) {
-        throw std::runtime_error("eigvals requires a square matrix");
-    }
-
-    if (matrix.rows == 0) {
-        return Matrix::vector(std::vector<double>());
-    }
-
-    if (matrix.rows == 1) {
-        return Matrix::vector({matrix.at(0, 0)});
-    }
-
-    if (matrix.rows == 2) {
-        // 2x2 情况直接用特征多项式闭式解，结果更稳定也更快。
-        const double a = 1.0;
-        const double b = -(matrix.at(0, 0) + matrix.at(1, 1));
-        const double c = determinant(matrix);
-        const double discriminant = b * b - 4.0 * a * c;
-        if (discriminant < -kMatrixEps) {
-            throw std::runtime_error("eigvals only supports matrices with real eigenvalues");
-        }
-        const double root = mymath::sqrt(discriminant < 0.0 ? 0.0 : discriminant);
-        return Matrix::vector({(-b + root) / 2.0, (-b - root) / 2.0});
-    }
-
-    Matrix current = matrix;
-    // 更高阶情况走未移位的 QR 迭代。
-    // 这不是最强健的工业实现，但足够覆盖当前项目里的中小型实矩阵场景。
-    for (int iteration = 0; iteration < 128; ++iteration) {
-        const auto qr = qr_decompose(current);
-        current = multiply(qr.second, qr.first);
-        if (off_diagonal_magnitude(current) < 1e-8) {
-            break;
-        }
-    }
-
-    std::vector<double> values;
-    values.reserve(current.rows);
-    for (std::size_t i = 0; i < current.rows; ++i) {
-        values.push_back(current.at(i, i));
-    }
-    return Matrix::vector(values);
-}
-
-Matrix eigenvectors(const Matrix& matrix) {
-    if (!matrix.is_square()) {
-        throw std::runtime_error("eigvecs requires a square matrix");
-    }
-
-    // 先求特征值，再逐个解 (A - lambda I)v = 0。
-    // 返回结果按“列向量矩阵”组织：每一列是一个特征向量。
-    const Matrix values = eigenvalues(matrix);
-    Matrix vectors(matrix.rows, matrix.cols, 0.0);
-    for (std::size_t col = 0; col < values.cols; ++col) {
-        Matrix shifted = matrix;
-        for (std::size_t i = 0; i < shifted.rows; ++i) {
-            shifted.at(i, i) -= values.at(0, col);
-        }
-
-        const std::vector<double> basis = nullspace_vector(shifted);
-        for (std::size_t row = 0; row < basis.size(); ++row) {
-            vectors.at(row, col) = basis[row];
-        }
-    }
-    return vectors;
 }
 
 bool try_evaluate_expression(const std::string& expression,
@@ -1911,6 +2519,8 @@ bool try_evaluate_expression(const std::string& expression,
     const std::string trimmed = trim_copy(expression);
     const bool looks_like_matrix_expression =
         trimmed.find("vec(") != std::string::npos ||
+        trimmed.find("complex(") != std::string::npos ||
+        trimmed.find("polar(") != std::string::npos ||
         trimmed.find("mat(") != std::string::npos ||
         trimmed.find("zeros(") != std::string::npos ||
         trimmed.find("eye(") != std::string::npos ||
@@ -1920,8 +2530,11 @@ bool try_evaluate_expression(const std::string& expression,
         trimmed.find("append_col(") != std::string::npos ||
         trimmed.find("transpose(") != std::string::npos ||
         trimmed.find("inverse(") != std::string::npos ||
+        trimmed.find("pinv(") != std::string::npos ||
         trimmed.find("dot(") != std::string::npos ||
         trimmed.find("outer(") != std::string::npos ||
+        trimmed.find("kron(") != std::string::npos ||
+        trimmed.find("hadamard(") != std::string::npos ||
         trimmed.find("null(") != std::string::npos ||
         trimmed.find("least_squares(") != std::string::npos ||
         trimmed.find("qr_q(") != std::string::npos ||
@@ -1935,11 +2548,45 @@ bool try_evaluate_expression(const std::string& expression,
         trimmed.find("get(") != std::string::npos ||
         trimmed.find("set(") != std::string::npos ||
         trimmed.find("norm(") != std::string::npos ||
+        trimmed.find("cond(") != std::string::npos ||
         trimmed.find("trace(") != std::string::npos ||
         trimmed.find("det(") != std::string::npos ||
         trimmed.find("rank(") != std::string::npos ||
         trimmed.find("rref(") != std::string::npos ||
         trimmed.find("eigvals(") != std::string::npos ||
+        trimmed.find("reshape(") != std::string::npos ||
+        trimmed.find("diag(") != std::string::npos ||
+        trimmed.find("cholesky(") != std::string::npos ||
+        trimmed.find("schur(") != std::string::npos ||
+        trimmed.find("hessenberg(") != std::string::npos ||
+        trimmed.find("mean(") != std::string::npos ||
+        trimmed.find("median(") != std::string::npos ||
+        trimmed.find("mode(") != std::string::npos ||
+        trimmed.find("var(") != std::string::npos ||
+        trimmed.find("std(") != std::string::npos ||
+        trimmed.find("cov(") != std::string::npos ||
+        trimmed.find("corr(") != std::string::npos ||
+        trimmed.find("lagrange(") != std::string::npos ||
+        trimmed.find("spline(") != std::string::npos ||
+        trimmed.find("linear_regression(") != std::string::npos ||
+        trimmed.find("poly_fit(") != std::string::npos ||
+        trimmed.find("polynomial_fit(") != std::string::npos ||
+        trimmed.find("dft(") != std::string::npos ||
+        trimmed.find("fft(") != std::string::npos ||
+        trimmed.find("idft(") != std::string::npos ||
+        trimmed.find("ifft(") != std::string::npos ||
+        trimmed.find("conv(") != std::string::npos ||
+        trimmed.find("convolve(") != std::string::npos ||
+        trimmed.find("poly_eval(") != std::string::npos ||
+        trimmed.find("poly_deriv(") != std::string::npos ||
+        trimmed.find("poly_integ(") != std::string::npos ||
+        trimmed.find("poly_compose(") != std::string::npos ||
+        trimmed.find("poly_gcd(") != std::string::npos ||
+        trimmed.find("real(") != std::string::npos ||
+        trimmed.find("imag(") != std::string::npos ||
+        trimmed.find("arg(") != std::string::npos ||
+        trimmed.find("conj(") != std::string::npos ||
+        trimmed.find("abs(") != std::string::npos ||
         trimmed.find("eigvecs(") != std::string::npos ||
         trimmed.find('[') != std::string::npos;
     const bool mentions_matrix_variable =

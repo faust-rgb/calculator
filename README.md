@@ -40,13 +40,17 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 
 - Basic arithmetic: `+`, `-`, `*`, `/`
 - Power operator: `^`
+- Scientific notation input such as `1e-3`, `1e20`, and `1e-300`
 - Functions: `sin(x)`, `cos(x)`, `tan(x)`, `asin(x)`, `acos(x)`, `atan(x)`,
-  `sinh(x)`, `cosh(x)`, `tanh(x)`, `exp(x)`, `ln(x)`, `log10(x)`,
-  `gamma(x)`, `sqrt(x)`, `cbrt(x)`, `root(a, n)`, `abs(x)`, `sign(x)`,
-  `floor(x)`, `ceil(x)`, `pow(a, b)`
-- Comparison and integer utilities: `min(a, b)`, `max(a, b)`, `gcd(a, b)`, `lcm(a, b)`, `mod(a, b)`, `factorial(n)`, `nCr(n, r)`, `nPr(n, r)`
-- Aggregate helpers: `sum(...)`, `avg(...)`, `median(...)`
-- Unit conversion helpers: `deg2rad(x)`, `rad2deg(x)`, `celsius(f)`, `fahrenheit(c)`, `kelvin(c)`
+  `sec(x)`, `csc(x)`, `cot(x)`, `asec(x)`, `acsc(x)`, `acot(x)`,
+  `sinh(x)`, `cosh(x)`, `tanh(x)`, `asinh(x)`, `acosh(x)`, `atanh(x)`,
+  `exp(x)`, `ln(x)`, `log10(x)`, `gamma(x)`, `beta(a, b)`, `zeta(s)`,
+  `erf(x)`, `erfc(x)`, `bessel(n, x)`, `sqrt(x)`, `cbrt(x)`, `root(a, n)`,
+  `abs(x)`, `sign(x)`, `floor(x)`, `ceil(x)`, `pow(a, b)`
+- Comparison and integer utilities: `min(a, b)`, `max(a, b)`, `gcd(a, b)`, `lcm(a, b)`, `mod(a, b)`, `factorial(n)`, `nCr(n, r)`, `binom(n, r)`, `nPr(n, r)`, `fib(n)`, `is_prime(n)`, `next_prime(n)`
+- Aggregate helpers: `sum(...)`, `mean(...)`, `avg(...)`, `median(...)`, `mode(...)`, `var(...)`, `std(...)`
+- Probability helpers: `rand()`, `randn()`, `randint(a, b)`, `pdf_normal(x, mu, sigma)`, `cdf_normal(x, mu, sigma)`
+- Unit conversion helpers: `deg(x)`, `rad(x)`, `deg2rad(x)`, `rad2deg(x)`, `sin_deg(x)`, `cos_deg(x)`, `celsius(f)`, `fahrenheit(c)`, `kelvin(c)`, `c2f(c)`, `f2c(f)`
 - Prime factorization with `factor(n)`
 - Base conversion with `bin(n)`, `oct(n)`, `hex(n)`, `base(n, b)`
 - Hex formatting controls with `:hexprefix` and `:hexcase`
@@ -55,12 +59,18 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - Matrix editing with `resize(...)`, `append_row(...)`, `append_col(...)`, `get(...)`, `set(...)`
 - Matrix transpose with `transpose(...)`
 - Matrix explicit inverse with `inverse(...)`
+- Matrix pseudo-inverse, condition number, and structured products with `pinv(...)`, `cond(...)`, `kron(...)`, `hadamard(...)`
 - Matrix operations with matrix/matrix and matrix/scalar `+`, `-`, `*`, `/`, `^`
 - Invertible matrices support negative integer powers such as `A ^ -1`
-- Matrix analysis with `norm(...)`, `trace(...)`, `det(...)`, `rank(...)`, `rref(...)`, `eigvals(...)`, `eigvecs(...)`
+- Matrix analysis with `norm(...)`, `trace(...)`, `det(...)`, `rank(...)`, `rref(...)`, `eigvals(...)`, `eigvecs(...)`, `eig(...)`, `svd(...)`
 - Linear system solving with `solve(A, b)` for `Ax = b`
-- Vector/matrix helpers with `dot(...)`, `outer(...)`, `null(...)`, `least_squares(...)`, `qr_q(...)`, `qr_r(...)`
+- Vector/matrix helpers with `dot(...)`, `outer(...)`, `null(...)`, `least_squares(...)`, `qr_q(...)`, `qr_r(...)`, `diag(...)`, `reshape(...)`, `vec(m)`
 - Reduced singular value decomposition with `svd_u(...)`, `svd_s(...)`, `svd_vt(...)`
+- Wide-matrix QR/SVD support, SVD-based pseudo-inverse for singular matrices,
+  and minimum-norm `least_squares(...)` solutions for underdetermined systems
+- Matrix decompositions with `cholesky(...)`, `schur(...)`, `hessenberg(...)`
+- Vector statistics and fitting with `cov(...)`, `corr(...)`, `lagrange(...)`, `spline(...)`, `linear_regression(...)`, `poly_fit(...)`
+- Lightweight complex helpers with `complex(re, im)`, `real(z)`, `imag(z)`, `abs(z)`, `arg(z)`, `conj(z)`, `polar(r, theta)`
 - Constants: `pi`, `e`
 - Symbolic constants display mode with `:symbolic on` and `:symbolic off`
 - Parentheses and unary plus/minus
@@ -77,7 +87,10 @@ using the standard math library implementations from `<cmath>` or `math.h`.
   derivative, definite integral, indefinite integral value, interval
   extrema solving, polynomial arithmetic, Taylor expansion, polynomial roots,
   first-order ODE initial-value solving with `ode(...)` / `ode_table(...)`,
+  root-finding with `solve(...)`, `bisect(...)`, `secant(...)`, `fixed_point(...)`,
   and multi-variable integration in Cartesian, cylindrical, and spherical coordinates
+- Improved numerical stability for large-angle trigonometric reduction, `beta`,
+  `gamma`, `bessel`, and removable-singularity style `limit(...)` evaluations
 
 ## Build
 
@@ -92,7 +105,7 @@ The regression suite lives in `test/tests.cpp`.
 Current validation status:
 
 - `make test`
-- expected summary: `Passed: 466, Failed: 0`
+- expected summary: `Passed: 610, Failed: 0`
 
 ## Run
 

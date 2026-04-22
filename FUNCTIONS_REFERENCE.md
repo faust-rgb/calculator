@@ -15,12 +15,20 @@
 - `ln(x)`
 - `log10(x)`
 - `gamma(x)`
+- `beta(a, b)`
+- `zeta(s)`
+- `erf(x)`
+- `erfc(x)`
+- `bessel(n, x)`
 
 ## Hyperbolic
 
 - `sinh(x)`
 - `cosh(x)`
 - `tanh(x)`
+- `asinh(x)`
+- `acosh(x)`
+- `atanh(x)`
 
 ## Roots
 
@@ -38,9 +46,19 @@ Notes:
 - `sin(x)`
 - `cos(x)`
 - `tan(x)`
+- `sec(x)`
+- `csc(x)`
+- `cot(x)`
 - `asin(x)`
 - `acos(x)`
 - `atan(x)`
+- `asec(x)`
+- `acsc(x)`
+- `acot(x)`
+- `deg(x)`
+- `rad(x)`
+- `sin_deg(x)`
+- `cos_deg(x)`
 
 Notes:
 
@@ -50,16 +68,38 @@ Notes:
 
 - `abs(x)`
 - `sign(x)`
+- `step(x)`
+- `delta(x)`
+- `heaviside(x)`
+- `impulse(x)`
 - `floor(x)`
 - `ceil(x)`
 - `min(a, b)`
 - `max(a, b)`
 - `sum(a, b, c, ...)`
+- `mean(a, b, c, ...)`
 - `avg(a, b, c, ...)`
 - `median(a, b, c, ...)`
+- `mode(a, b, c, ...)`
+- `var(a, b, c, ...)`
+- `std(a, b, c, ...)`
 - `factorial(n)`
 - `nCr(n, r)`
+- `binom(n, r)`
 - `nPr(n, r)`
+- `fib(n)`
+- `is_prime(n)`
+- `next_prime(n)`
+- `rand()`
+- `randn()`
+- `randint(a, b)`
+- `pdf_normal(x, mu, sigma)`
+- `cdf_normal(x, mu, sigma)`
+
+Notes:
+
+- `step(x)` / `heaviside(x)` return `1` for `x >= 0`, otherwise `0`
+- `delta(x)` / `impulse(x)` are engineering shorthands; in numeric mode they return `1` at `0` and `0` elsewhere
 
 ## Matrix Creation
 
@@ -76,10 +116,14 @@ Notes:
 - `append_col(m, values...)`
 - `transpose(m)`
 - `inverse(m)`
+- `pinv(m)`
 - `get(m, row, col)`
 - `set(m, row, col, value)`
 - `get(v, index)`
 - `set(v, index, value)`
+- `reshape(m, rows, cols)`
+- `diag(m)`
+- `diag(v)`
 
 Notes:
 
@@ -95,6 +139,8 @@ Notes:
 - `A ^ n`
 - `dot(a, b)`
 - `outer(a, b)`
+- `kron(a, b)`
+- `hadamard(a, b)`
 
 Notes:
 
@@ -107,12 +153,14 @@ Notes:
 ## Matrix Analysis
 
 - `norm(m)`
+- `cond(m)`
 - `trace(m)`
 - `det(m)`
 - `rank(m)`
 - `rref(m)`
 - `eigvals(m)`
 - `eigvecs(m)`
+- `eig(m)`
 - `null(m)`
 - `least_squares(A, b)`
 - `qr_q(A)`
@@ -120,7 +168,40 @@ Notes:
 - `svd_u(A)`
 - `svd_s(A)`
 - `svd_vt(A)`
+- `svd(A)`
 - `solve(A, b)`
+- `cholesky(A)`
+- `schur(A)`
+- `hessenberg(A)`
+- `mean(v)`
+- `median(v)`
+- `mode(v)`
+- `var(v)`
+- `std(v)`
+- `cov(a, b)`
+- `corr(a, b)`
+- `linear_regression(x, y)`
+- `lagrange(x, y, xi)`
+- `spline(x, y, xi)`
+- `dft(x)`
+- `fft(x)`
+- `idft(X)`
+- `ifft(X)`
+- `conv(a, b)`
+- `convolve(a, b)`
+- `poly_fit(x, y, degree)`
+- `polynomial_fit(x, y, degree)`
+- `poly_eval(p, x)`
+- `poly_deriv(p)`
+- `poly_integ(p)`
+- `poly_compose(p, q)`
+- `poly_gcd(p, q)`
+- `complex(re, im)`
+- `real(z)`
+- `imag(z)`
+- `arg(z)`
+- `conj(z)`
+- `polar(r, theta)`
 
 Notes:
 
@@ -132,6 +213,9 @@ Notes:
 - `null(m)` returns a basis matrix whose columns span the nullspace
 - `svd_u(A)`, `svd_s(A)`, and `svd_vt(A)` return the reduced SVD factors
 - `solve(A, b)` solves `Ax = b` for square `A` and vector `b`
+- `dft` / `fft` return an `N x 2` matrix whose rows are `[real, imag]`
+- `idft` / `ifft` accept a real vector or an `N x 2` complex matrix
+- `conv` / `convolve` perform linear convolution on real vectors or `N x 2` complex sequences
 
 ## Function Analysis And ODE
 
@@ -140,7 +224,25 @@ Notes:
 - `integral(f)`
 - `integral(f, x0)`
 - `integral(f, a, b)`
-- `taylor(f, a, n)`
+- `taylor(expr, a, n)`
+- `pade(expr, m, n)`
+- `pade(expr, a, m, n)`
+- `puiseux(expr, degree, denominator)`
+- `puiseux(expr, a, degree, denominator)`
+- `series_sum(expr, n, lower, upper)`
+- `summation(expr, n, lower, upper)`
+- `fourier(expr)`
+- `fourier(expr, t, w)`
+- `ifourier(expr)`
+- `ifourier(expr, w, t)`
+- `laplace(expr)`
+- `laplace(expr, t, s)`
+- `ilaplace(expr)`
+- `ilaplace(expr, s, t)`
+- `ztrans(expr)`
+- `ztrans(expr, n, z)`
+- `iztrans(expr)`
+- `iztrans(expr, z, n)`
 - `limit(f, x0)`
 - `limit(f, x0, direction)`
 - `extrema(f, a, b)`
@@ -160,11 +262,22 @@ Notes:
 - `ode(rhs, x0, y0, x1, steps)`
 - `ode_table(rhs, x0, y0, x1)`
 - `ode_table(rhs, x0, y0, x1, steps)`
+- `solve(expr, x0)`
+- `bisect(expr, a, b)`
+- `secant(expr, x0, x1)`
+- `fixed_point(expr, x0)`
 
 Notes:
 
 - `diff`, `integral`, `taylor`, `limit`, and `extrema` operate on one-variable functions
 - symbolic `diff(expr)` and `integral(expr)` also accept raw one-variable expressions and infer the variable name automatically
+- `taylor` also accepts raw one-variable symbolic expressions, not only named custom functions
+- `pade` builds a rational approximant from the local Taylor coefficients of `expr`
+- `puiseux` uses a denominator grid; for example `denominator = 2` allows half-integer powers
+- `series_sum` / `summation` currently cover polynomial summands up to degree 3 and common geometric series
+- use `inf`, `oo`, or `infinity` as the upper bound for supported infinite geometric sums
+- symbolic transform commands default to `(t, w)` for Fourier, `(t, s)` for Laplace, and `(n, z)` for z transforms when variables are omitted
+- current symbolic Fourier/Laplace/z support is rule-based and focuses on common signal-analysis forms such as constants, exponentials, `sin/cos`, `step`, and `delta`
 - symbolic `simplify(expr)` may be used on multi-variable expressions, but symbolic `diff/integral/taylor/limit/extrema` still require a one-variable input
 - `double_integral` and `triple_integral` use Cartesian coordinates
 - `double_integral_cyl` / `double_integral_polar` use the planar polar Jacobian `r`
@@ -187,7 +300,11 @@ Notes:
 - `factor(n)`
 - `factorial(n)`
 - `nCr(n, r)`
+- `binom(n, r)`
 - `nPr(n, r)`
+- `fib(n)`
+- `is_prime(n)`
+- `next_prime(n)`
 
 Notes:
 
@@ -200,9 +317,15 @@ Notes:
 
 - `deg2rad(x)`
 - `rad2deg(x)`
+- `deg(x)`
+- `rad(x)`
+- `sin_deg(x)`
+- `cos_deg(x)`
 - `celsius(f)`
 - `fahrenheit(c)`
 - `kelvin(c)`
+- `c2f(c)`
+- `f2c(f)`
 
 Notes:
 

@@ -81,6 +81,57 @@ PolynomialDivisionResult polynomial_divide(const std::vector<double>& dividend,
 std::vector<double> polynomial_real_roots(const std::vector<double>& coefficients);
 
 /**
+ * @brief 使用 Horner 法计算多项式在 x 处的值
+ * @param coefficients 系数向量，低次到高次
+ * @param x 求值点
+ * @return p(x)
+ */
+double polynomial_evaluate(const std::vector<double>& coefficients, double x);
+
+/**
+ * @brief 计算多项式导数系数
+ * @param coefficients 原多项式系数
+ * @return 导数系数
+ */
+std::vector<double> polynomial_derivative(const std::vector<double>& coefficients);
+
+/**
+ * @brief 计算多项式积分系数，积分常数取 0
+ * @param coefficients 原多项式系数
+ * @return 不定积分系数
+ */
+std::vector<double> polynomial_integral(const std::vector<double>& coefficients);
+
+/**
+ * @brief 计算多项式复合 p(q(x))
+ * @param outer 外层多项式 p
+ * @param inner 内层多项式 q
+ * @return 复合后的多项式系数
+ */
+std::vector<double> polynomial_compose(const std::vector<double>& outer,
+                                       const std::vector<double>& inner);
+
+/**
+ * @brief 计算多项式最大公因式
+ * @param lhs 左多项式
+ * @param rhs 右多项式
+ * @return 单位首项化后的最大公因式
+ */
+std::vector<double> polynomial_gcd(const std::vector<double>& lhs,
+                                   const std::vector<double>& rhs);
+
+/**
+ * @brief 使用最小二乘做多项式拟合
+ * @param x_samples x 样本
+ * @param y_samples y 样本
+ * @param degree 多项式次数
+ * @return 拟合得到的系数向量（低次到高次）
+ */
+std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
+                                   const std::vector<double>& y_samples,
+                                   int degree);
+
+/**
  * @brief 将多项式转换为可读字符串
  * @param coefficients 多项式系数
  * @param variable_name 变量名，默认为 "x"
