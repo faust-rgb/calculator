@@ -13,6 +13,8 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator.cpp \
 	$(SRC_DIR)/math/mymath.cpp \
 	$(SRC_DIR)/matrix/matrix.cpp \
 	$(SRC_DIR)/analysis/function_analysis.cpp \
+	$(SRC_DIR)/analysis/multivariable_integrator.cpp \
+	$(SRC_DIR)/analysis/ode_solver.cpp \
 	$(SRC_DIR)/symbolic/symbolic_expression.cpp \
 	$(SRC_DIR)/algebra/polynomial.cpp \
 	$(SRC_DIR)/script/script_parser.cpp
@@ -20,6 +22,8 @@ COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/math/mymath.h \
 	$(SRC_DIR)/matrix/matrix.h \
 	$(SRC_DIR)/analysis/function_analysis.h \
+	$(SRC_DIR)/analysis/multivariable_integrator.h \
+	$(SRC_DIR)/analysis/ode_solver.h \
 	$(SRC_DIR)/symbolic/symbolic_expression.h \
 	$(SRC_DIR)/algebra/polynomial.h \
 	$(SRC_DIR)/script/script_parser.h \

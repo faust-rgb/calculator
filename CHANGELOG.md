@@ -20,13 +20,30 @@ helpers, interactive terminal UX, and project documentation.
 - Mathematical functions:
   - `sin`, `cos`, `tan`
   - `asin`, `acos`, `atan`
+  - `sinh`, `cosh`, `tanh`
   - `exp`, `ln`, `log10`
+  - `gamma`
   - `sqrt`, `cbrt`, `root`
   - `pow`
+  - first-order ODE solving with `ode` and `ode_table`
+  - multi-variable integration in Cartesian, cylindrical, and spherical coordinates
+- Combinatorics helpers:
+  - `factorial`
+  - `nCr`
+  - `nPr`
+- Aggregate helpers:
+  - `sum`
+  - `avg`
+  - `median`
+- Unit conversion helpers:
+  - `deg2rad`, `rad2deg`
+  - `celsius`, `fahrenheit`, `kelvin`
 - Result normalization for near-zero floating-point noise
 - Terminal UX improvements:
   - up/down history navigation
   - `Tab` autocomplete
+  - double-Tab completion candidate listing
+  - context-aware completion for commands, help topics, variables, and custom functions
 - Exact rational mode:
   - `:exact on`
   - `:exact off`
@@ -39,6 +56,14 @@ helpers, interactive terminal UX, and project documentation.
   - common simplifications such as `sin(pi / 2)`, `sin(pi / 6)`, `sin(pi / 3)`,
     `cos(pi)`, `cos(pi / 3)`, `cos(pi / 6)`, `tan(pi / 4)`, `tan(pi / 6)`,
     `tan(pi / 3)`, `ln(e)`, and `exp(ln(pi))`
+- Symbolic differentiation and integration improvements:
+  - raw one-variable expressions such as `diff(x ^ 2)` and `integral(1 / x)` now infer the variable automatically
+  - added symbolic derivative rules for `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `abs`, and `cbrt`
+  - added symbolic integral rules for `sqrt`, `cbrt`, `tan`, `1 / (a*x + b)`, linear powers `(a*x + b)^n`, and polynomial-times-`exp/sin/cos`
+  - `integral(1 / x)` now returns `ln(abs(x)) + C`
+  - `simplify(ln(exp(x)))` now reduces to `x`, while `exp(ln(x))` is only collapsed when the argument is known positive
+  - multi-variable `simplify(...)` expressions continue to work without being mistaken for one-variable analysis input
+  - replaced parse-based polynomial canonicalization with direct expression rebuilding to avoid recursive simplify stack overflows
 - Display normalization for near-integer floating-point results
 - Integer / utility functions:
   - `gcd`, `lcm`, `mod`
@@ -52,6 +77,7 @@ helpers, interactive terminal UX, and project documentation.
   - `help`
   - `:help`
   - topic help for commands/functions/examples
+  - dedicated help for exact mode, variables, persistence, and programmer tools
 - Persistence:
   - `:save file`
   - `:load file`
@@ -59,6 +85,7 @@ helpers, interactive terminal UX, and project documentation.
   - `factor(n)`
 - Base conversion:
   - `bin`, `oct`, `hex`, `base`
+  - configurable `0x` prefix and uppercase/lowercase output
 - Prefixed integer literal parsing:
   - `0b`
   - `0o`
@@ -72,4 +99,4 @@ helpers, interactive terminal UX, and project documentation.
 
 - `make test` currently passes
 - Expected test summary:
-  - `Passed: 339, Failed: 0`
+  - `Passed: 466, Failed: 0`

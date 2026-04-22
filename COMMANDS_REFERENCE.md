@@ -8,6 +8,10 @@
 - `:help functions`
 - `:help matrix`
 - `:help examples`
+- `:help exact`
+- `:help variables`
+- `:help persistence`
+- `:help programmer`
 - `exit`
 - `quit`
 
@@ -28,6 +32,21 @@
   Return to normal numeric display
 - `:symbolic`
   Show current symbolic constants mode status
+
+## Programmer Formatting
+
+- `:hexprefix on`
+  Show hex results with a `0x` prefix
+- `:hexprefix off`
+  Hide the `0x` prefix
+- `:hexprefix`
+  Show current hex prefix mode status
+- `:hexcase upper`
+  Use uppercase hex digits such as `0xFF`
+- `:hexcase lower`
+  Use lowercase hex digits such as `0xff`
+- `:hexcase`
+  Show current hex letter-case mode
 
 ## Variables
 
@@ -87,13 +106,17 @@ Notes:
 ## Autocomplete
 
 - `Tab`
-  Autocomplete common commands and function names
+  Autocomplete commands, functions, variables, and custom functions
+- double `Tab`
+  Show the current candidate list when multiple completions match
 
 Examples:
 
 - type `:he` then press `Tab` -> `:help`
 - type `sq` then press `Tab` -> `sqrt(`
 - type `:help ma` then press `Tab` -> `:help matrix`
+- type `:help ` then double `Tab` -> show help topics
+- type `g` inside `diff(g` then press `Tab` -> complete a matching custom function
 
 ## Prefixed Integer Literals
 

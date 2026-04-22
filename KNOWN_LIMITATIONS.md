@@ -54,3 +54,15 @@ This project is now a capable calculator and mini CAS-style tool, but it is not:
 - a full computer algebra system
 - a big-number arbitrary-precision engine
 - a full programming language REPL
+
+## Symbolic Algebra
+
+- Symbolic `diff`, `integral`, `taylor`, `limit`, and `extrema` are still limited to one-variable inputs
+- Symbolic integration is rule-based rather than complete
+  - many textbook forms now work, but integration by parts, substitutions, and identities are not exhaustive
+- Simplification is algebraic and heuristic
+  - mathematically equivalent expressions may print in a different but still correct form, such as reordered products or `1 - x ^ 2` vs `-(x ^ 2) + 1`
+- Domain-aware simplification is still partial
+  - some expressions are intentionally not collapsed unless positivity is known, and full condition-tracking is not implemented
+- Internal symbolic coefficients still rely on `double`
+  - this keeps the implementation lightweight, but it can limit robustness for more advanced exact algebra

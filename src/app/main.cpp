@@ -12,6 +12,7 @@
 
 #include "calculator.h"
 
+#include <algorithm>
 #include <cctype>
 #include <exception>
 #include <fstream>
@@ -99,19 +100,38 @@ std::string format_history(const std::vector<std::string>& history) {
     return out.str();
 }
 
-const std::vector<std::string>& completion_words() {
-    // 这是一个固定的“轻量补全词典”。
-    // 目前只覆盖高频命令和函数名，不尝试做上下文感知补全。
+const std::vector<std::string>& help_topics() {
+    static const std::vector<std::string> topics = {
+        "commands", "functions", "matrix", "examples",
+        "exact", "variables", "persistence", "programmer"
+    };
+    return topics;
+}
+
+const std::vector<std::string>& command_completion_words() {
     static const std::vector<std::string> words = {
-        "help", ":help", ":help commands", ":help functions", ":help matrix", ":help examples",
+        ":help", ":help commands", ":help functions", ":help matrix", ":help examples",
+        ":help exact", ":help variables", ":help persistence", ":help programmer",
         ":exact", ":exact on", ":exact off",
         ":symbolic", ":symbolic on", ":symbolic off",
-        ":vars", ":funcs", ":history", ":clear", ":clearfunc", ":clearfuncs", ":save", ":load",
-        ":run",
+        ":hexprefix", ":hexprefix on", ":hexprefix off",
+        ":hexcase", ":hexcase upper", ":hexcase lower",
+        ":vars", ":funcs", ":history", ":clear", ":clearfunc", ":clearfuncs",
+        ":save", ":load", ":run"
+    };
+    return words;
+}
+
+const std::vector<std::string>& builtin_expression_completion_words() {
+    static const std::vector<std::string> words = {
+        "help", "exit", "quit",
         "sin(", "cos(", "tan(", "asin(", "acos(", "atan(",
-        "exp(", "ln(", "log10(", "sqrt(", "cbrt(", "root(",
+        "sinh(", "cosh(", "tanh(",
+        "exp(", "ln(", "log10(", "gamma(", "sqrt(", "cbrt(", "root(",
         "abs(", "sign(", "floor(", "ceil(",
-        "min(", "max(", "gcd(", "lcm(", "mod(", "pow(", "factor(",
+        "min(", "max(", "sum(", "avg(", "median(", "factorial(", "nCr(", "nPr(",
+        "gcd(", "lcm(", "mod(", "pow(", "factor(",
+        "deg2rad(", "rad2deg(", "celsius(", "fahrenheit(", "kelvin(",
         "poly_add(", "poly_sub(", "poly_mul(", "poly_div(", "roots(",
         "diff(", "limit(", "integral(", "taylor(", "extrema(", "simplify(",
         "vec(", "mat(", "zeros(", "eye(", "identity(",
@@ -121,8 +141,7 @@ const std::vector<std::string>& completion_words() {
         "solve(", "get(", "set(",
         "norm(", "trace(", "det(", "rank(", "rref(", "eigvals(", "eigvecs(",
         "bin(", "oct(", "hex(", "base(",
-        "and(", "or(", "xor(", "not(", "shl(", "shr(",
-        "exit", "quit"
+        "and(", "or(", "xor(", "not(", "shl(", "shr("
     };
     return words;
 }
@@ -134,7 +153,7 @@ std::pair<std::size_t, std::string> current_token(const std::string& line) {
     while (start > 0) {
         const char ch = line[start - 1];
         if (std::isalnum(static_cast<unsigned char>(ch)) ||
-            ch == ':' || ch == '_' || ch == '(') {
+            ch == ':' || ch == '_') {
             --start;
         } else {
             break;
@@ -164,38 +183,81 @@ std::string common_prefix(const std::vector<std::string>& matches) {
     return prefix;
 }
 
-bool apply_completion(std::string* line) {
-    // 补全策略：
-    // 1. 找到当前 token
-    // 2. 用固定词典做前缀匹配
-    // 3. 单候选则直接补全，多候选则补到它们的最长公共前缀
-    const auto [start, token] = current_token(*line);
-    if (token.empty()) {
-        return false;
+std::vector<std::string> gather_completion_words(const Calculator& calculator,
+                                                 const std::string& line,
+                                                 const std::string& token) {
+    if (line.rfind(":help ", 0) == 0 && token.find(':') == std::string::npos) {
+        return help_topics();
     }
 
+    if (!token.empty() && token.front() == ':') {
+        return command_completion_words();
+    }
+
+    std::vector<std::string> words = builtin_expression_completion_words();
+    const std::vector<std::string> variable_names = calculator.variable_names();
+    words.insert(words.end(), variable_names.begin(), variable_names.end());
+
+    const std::vector<std::string> function_names = calculator.custom_function_names();
+    for (const std::string& name : function_names) {
+        words.push_back(name + "(");
+    }
+
+    std::sort(words.begin(), words.end());
+    words.erase(std::unique(words.begin(), words.end()), words.end());
+    return words;
+}
+
+std::string format_completion_candidates(const std::vector<std::string>& matches) {
+    std::ostringstream out;
+    out << "Candidates:\n";
+    for (const std::string& match : matches) {
+        out << "  " << match << '\n';
+    }
+    return out.str();
+}
+
+struct CompletionResult {
+    bool has_matches = false;
+    bool applied = false;
+    bool ambiguous = false;
     std::vector<std::string> matches;
-    for (const std::string& word : completion_words()) {
+};
+
+CompletionResult apply_completion(const Calculator& calculator, std::string* line) {
+    CompletionResult result;
+
+    const auto [start, token] = current_token(*line);
+    if (token.empty()) {
+        return result;
+    }
+
+    const std::vector<std::string> words =
+        gather_completion_words(calculator, *line, token);
+    for (const std::string& word : words) {
         if (word.rfind(token, 0) == 0) {
-            matches.push_back(word);
+            result.matches.push_back(word);
         }
     }
 
-    if (matches.empty()) {
-        return false;
+    if (result.matches.empty()) {
+        return result;
     }
+
+    result.has_matches = true;
+    result.ambiguous = result.matches.size() > 1;
 
     const std::string replacement =
-        matches.size() == 1 ? matches.front() : common_prefix(matches);
-    if (replacement.size() <= token.size()) {
-        return false;
+        result.matches.size() == 1 ? result.matches.front() : common_prefix(result.matches);
+    if (replacement.size() > token.size()) {
+        line->replace(start, token.size(), replacement);
+        result.applied = true;
     }
-
-    line->replace(start, token.size(), replacement);
-    return true;
+    return result;
 }
 
-std::string read_line_with_history(const std::string& prompt,
+std::string read_line_with_history(Calculator& calculator,
+                                   const std::string& prompt,
                                    const std::vector<std::string>& history) {
     std::cout << prompt << std::flush;
 
@@ -215,6 +277,8 @@ std::string read_line_with_history(const std::string& prompt,
 
     std::string line;
     std::size_t history_index = history.size();
+    std::string last_tab_line;
+    bool last_tab_was_ambiguous = false;
 
     while (true) {
         // 逐字符读取，这样才能自己处理方向键、Tab 和退格。
@@ -241,16 +305,27 @@ std::string read_line_with_history(const std::string& prompt,
                 line.pop_back();
                 redraw_input(prompt, line);
             }
+            last_tab_was_ambiguous = false;
             continue;
         }
 
         if (ch == '\t') {
-            // Tab 只负责就地补全，不自动执行输入。
-            if (apply_completion(&line)) {
+            const CompletionResult result = apply_completion(calculator, &line);
+            if (result.applied) {
                 redraw_input(prompt, line);
+            }
+            if (result.ambiguous && last_tab_was_ambiguous && last_tab_line == line) {
+                std::cout << '\n' << format_completion_candidates(result.matches);
+                redraw_input(prompt, line);
+                last_tab_was_ambiguous = false;
+            } else {
+                last_tab_was_ambiguous = result.ambiguous;
+                last_tab_line = line;
             }
             continue;
         }
+
+        last_tab_was_ambiguous = false;
 
         if (ch == '\33') {
             // 方向键通常会发出 ESC [ A / B / C / D 这样的序列。
@@ -352,7 +427,7 @@ std::string execute_repl_line(Calculator& calculator,
         return calculator.help_text();
     }
     if (line.rfind(":help ", 0) == 0) {
-        return calculator.help_topic(line.substr(6));
+        return calculator.help_topic(trim_copy(line.substr(6)));
     }
     if (line == ":exact on") {
         *exact_mode = true;
@@ -374,6 +449,26 @@ std::string execute_repl_line(Calculator& calculator,
     if (line == ":symbolic") {
         return std::string("Symbolic constants mode: ") +
                (calculator.symbolic_constants_mode() ? "ON" : "OFF");
+    }
+    if (line == ":hexprefix on") {
+        return calculator.set_hex_prefix_mode(true);
+    }
+    if (line == ":hexprefix off") {
+        return calculator.set_hex_prefix_mode(false);
+    }
+    if (line == ":hexprefix") {
+        return std::string("Hex prefix mode: ") +
+               (calculator.hex_prefix_mode() ? "ON" : "OFF");
+    }
+    if (line == ":hexcase upper" || line == ":hexcase uppercase") {
+        return calculator.set_hex_uppercase_mode(true);
+    }
+    if (line == ":hexcase lower" || line == ":hexcase lowercase") {
+        return calculator.set_hex_uppercase_mode(false);
+    }
+    if (line == ":hexcase") {
+        return std::string("Hex letter case: ") +
+               (calculator.hex_uppercase_mode() ? "UPPER" : "LOWER");
     }
     if (line == ":vars") {
         return calculator.list_variables();
@@ -501,7 +596,7 @@ int main() {
 
     while (true) {
         // 自定义输入函数支持按上方向键回填历史命令。
-        std::string line = read_line_with_history("> ", history);
+        std::string line = read_line_with_history(calculator, "> ", history);
         if (!std::cin && line.empty()) {
             break;
         }

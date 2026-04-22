@@ -123,6 +123,12 @@ public:
                                  std::vector<double>* coefficients) const;
 
     /**
+     * @brief 获取表达式中出现的普通标识符变量名（不含 pi/e）
+     * @return 去重后的变量名列表
+     */
+    std::vector<std::string> identifier_variables() const;
+
+    /**
      * @brief 从现有节点构造表达式（内部使用）
      * @param node 表达式节点
      */

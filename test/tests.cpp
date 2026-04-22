@@ -1,6 +1,9 @@
 #include "calculator.h"
 #include "function_analysis.h"
+#include "multivariable_integrator.h"
 #include "mymath.h"
+#include "ode_solver.h"
+#include "symbolic_expression.h"
 
 #include <exception>
 #include <filesystem>
@@ -40,6 +43,10 @@ int main() {
     const std::vector<SuccessCase> success_cases = {
         {"1 + 2 * 3", 7.0},
         {"(1 + 2) * 3", 9.0},
+        {"0.1 + 0.2", 0.3},
+        {"0.3 - 0.2", 0.1},
+        {"0.1 * 0.2", 0.02},
+        {"0.3 / 0.1", 3.0},
         {"2 ^ 10", 1024.0},
         {"2 ^ 3 ^ 2", 512.0},
         {"2 ^ -2", 0.25},
@@ -59,7 +66,12 @@ int main() {
         {"root(-8, 3)", -2.0},
         {"root(16, -2)", 0.25},
         {"root(0, 3)", 0.0},
+        {"sinh(0)", 0.0},
+        {"cosh(0)", 1.0},
+        {"tanh(0)", 0.0},
         {"exp(1)", mymath::kE},
+        {"gamma(5)", 24.0},
+        {"gamma(0.5)", mymath::sqrt(mymath::kPi)},
         {"ln(e)", 1.0},
         {"log10(1000)", 3.0},
         {"sin(pi / 2)", 1.0},
@@ -94,6 +106,18 @@ int main() {
         {"ceil(-7/3)", -2.0},
         {"min(4, 9)", 4.0},
         {"max(4, 9)", 9.0},
+        {"sum(1, 2, 3, 4)", 10.0},
+        {"avg(1, 2, 3, 4)", 2.5},
+        {"median(9, 1, 5, 2)", 3.5},
+        {"median(9, 1, 5)", 5.0},
+        {"factorial(5)", 120.0},
+        {"nCr(5, 2)", 10.0},
+        {"nPr(5, 2)", 20.0},
+        {"deg2rad(180)", mymath::kPi},
+        {"rad2deg(pi / 2)", 90.0},
+        {"celsius(212)", 100.0},
+        {"fahrenheit(100)", 212.0},
+        {"kelvin(0)", 273.15},
         {"pow(3, 4)", 81.0},
         {"and(6, 3)", 2.0},
         {"or(6, 3)", 7.0},
@@ -141,6 +165,17 @@ int main() {
         {"root(-16, 2)"},
         {"sqrt(-1)"},
         {"pow(2)"},
+        {"sum()"},
+        {"avg()"},
+        {"median()"},
+        {"gamma(0)"},
+        {"gamma(-2)"},
+        {"factorial(-1)"},
+        {"factorial(5.5)"},
+        {"nCr(5.5, 2)"},
+        {"nCr(3, 5)"},
+        {"nPr(5.5, 2)"},
+        {"nPr(3, 5)"},
         {"0b102"},
         {"0xFG"},
         {"bin(10.5)"},
@@ -169,6 +204,11 @@ int main() {
         {"1/3 + 1/4", true, "7/12"},
         {"2/4 + 2/4", true, "1"},
         {"(2/3) * (9/4)", true, "3/2"},
+        {"0.1 + 0.2", false, "0.3"},
+        {"0.3 - 0.2", false, "0.1"},
+        {"0.1 * 0.2", false, "0.02"},
+        {"0.3 / 0.1", false, "3"},
+        {"sin(pi / 2) + 0.2", false, "1.2"},
         {"gcd(48, 18)", true, "6"},
         {"lcm(12, 18)", true, "36"},
         {"mod(17, 5)", true, "2"},
@@ -182,6 +222,12 @@ int main() {
         {"ceil(-7/3)", true, "-2"},
         {"min(7/3, 5/2)", true, "7/3"},
         {"max(7/3, 5/2)", true, "5/2"},
+        {"sum(1/3, 1/6, 1/2)", true, "1"},
+        {"avg(1/3, 5/3)", true, "1"},
+        {"median(7/2, 1/2, 5/2, 3/2)", true, "2"},
+        {"factorial(5)", true, "120"},
+        {"nCr(5, 2)", true, "10"},
+        {"nPr(5, 2)", true, "20"},
         {"pow(3, 4)", true, "81"},
         {"cbrt(27)", true, "3"},
         {"root(16, 2)", true, "4"},
@@ -223,12 +269,18 @@ int main() {
     const std::vector<DisplayCase> assignment_cases = {
         {"x = 1/3 + 1/4", true, "x = 7/12"},
         {"x + 1/6", true, "3/4"},
+        {"d = 0.1", false, "d = 0.1"},
+        {"d + 0.2", false, "0.3"},
+        {"d = d * 3", false, "d = 0.3"},
+        {"d / 0.1", false, "3"},
         {"n = gcd(48, 18)", true, "n = 6"},
         {"n + 3", true, "9"},
         {"m = mod(17, 5)", true, "m = 2"},
         {"m + 8", true, "10"},
         {"p = min(7/3, 5/2)", true, "p = 7/3"},
         {"q = max(7/3, 5/2)", true, "q = 5/2"},
+        {"agg = sum(1, 2, 3)", true, "agg = 6"},
+        {"avg(agg, 0)", true, "3"},
         {"s = sign(-7/3)", true, "s = -1"},
         {"y = sin(pi / 2)", true, "y = 1"},
         {"y + 1/2", true, "1.5"},
@@ -256,7 +308,7 @@ int main() {
 
     try {
         const std::string vars_output = calculator.list_variables();
-        if (vars_output == "m = 2\nn = 6\np = 7/3\nq = 5/2\ns = -1\nx = 7/12\ny = 1\nz = 2.5") {
+        if (vars_output == "agg = 6\nd = 0.3\nm = 2\nn = 6\np = 7/3\nq = 5/2\ns = -1\nx = 7/12\ny = 1\nz = 2.5") {
             ++passed;
         } else {
             ++failed;
@@ -573,6 +625,10 @@ int main() {
             help.find(":help functions") != std::string::npos &&
             help.find(":help matrix") != std::string::npos &&
             help.find(":help examples") != std::string::npos &&
+            help.find(":help exact") != std::string::npos &&
+            help.find(":help variables") != std::string::npos &&
+            help.find(":help persistence") != std::string::npos &&
+            help.find(":help programmer") != std::string::npos &&
             help.find(":exact on|off") != std::string::npos &&
             help.find(":symbolic on|off") != std::string::npos &&
             help.find(":funcs") != std::string::npos &&
@@ -599,6 +655,8 @@ int main() {
             help.find(":clear") != std::string::npos &&
             help.find(":clearfunc") != std::string::npos &&
             help.find(":symbolic on|off") != std::string::npos &&
+            help.find(":hexprefix on|off") != std::string::npos &&
+            help.find(":hexcase upper|lower") != std::string::npos &&
             help.find(":run file") != std::string::npos &&
             help.find(":load file") != std::string::npos;
         if (ok) {
@@ -617,12 +675,20 @@ int main() {
         const std::string help = calculator.help_topic("functions");
         const bool ok =
             help.find("sqrt cbrt root") != std::string::npos &&
+            help.find("sinh cosh tanh") != std::string::npos &&
+            help.find("gamma") != std::string::npos &&
             help.find("inverse dot outer null least_squares qr_q qr_r lu_l lu_u svd_u svd_s svd_vt") != std::string::npos &&
             help.find("gcd lcm mod factor") != std::string::npos &&
+            help.find("factorial nCr nPr") != std::string::npos &&
+            help.find("deg2rad rad2deg celsius fahrenheit kelvin") != std::string::npos &&
             help.find("bin oct hex base") != std::string::npos &&
+            help.find("sum avg median") != std::string::npos &&
             help.find("fn if else while for return break continue print") != std::string::npos &&
             help.find("poly_add poly_sub poly_mul poly_div roots") != std::string::npos &&
-            help.find("symbolic/numeric diff integral taylor limit extrema") != std::string::npos &&
+            help.find("double_integral") != std::string::npos &&
+            help.find("triple_integral") != std::string::npos &&
+            help.find("triple_integral_sph") != std::string::npos &&
+            help.find("symbolic/numeric diff integral taylor limit extrema ode ode_table") != std::string::npos &&
             help.find("and or xor not shl shr") != std::string::npos;
         if (ok) {
             ++passed;
@@ -662,6 +728,16 @@ int main() {
         const bool ok =
             help.find("x = 1/3 + 1/4") != std::string::npos &&
             help.find("pow(3, 4)") != std::string::npos &&
+            help.find("factorial(5)") != std::string::npos &&
+            help.find("nCr(5, 2)") != std::string::npos &&
+            help.find("nPr(5, 2)") != std::string::npos &&
+            help.find("sum(1, 2, 3, 4)") != std::string::npos &&
+            help.find("avg(1, 2, 3, 4)") != std::string::npos &&
+            help.find("median(1, 5, 2, 9)") != std::string::npos &&
+            help.find("sinh(1)") != std::string::npos &&
+            help.find("gamma(5)") != std::string::npos &&
+            help.find("deg2rad(180)") != std::string::npos &&
+            help.find("fahrenheit(25)") != std::string::npos &&
             help.find("f(x) = sin(x)+x^2") != std::string::npos &&
             help.find("poly_add(p, q)") != std::string::npos &&
             help.find("simplify(x^2 + x^2)") != std::string::npos &&
@@ -671,7 +747,13 @@ int main() {
             help.find("integral(f)") != std::string::npos &&
             help.find("taylor(f, 0, 5)") != std::string::npos &&
             help.find("limit(f, 0)") != std::string::npos &&
+            help.find("double_integral(x + y, 0, 1, 0, 2)") != std::string::npos &&
+            help.find("triple_integral_sph(1, 0, 1, 0, 2 * pi, 0, pi)") != std::string::npos &&
+            help.find("ode(y - x, 0, 1, 2)") != std::string::npos &&
+            help.find("ode_table(y, 0, 1, 1, 4)") != std::string::npos &&
             help.find(":symbolic on") != std::string::npos &&
+            help.find(":hexprefix on") != std::string::npos &&
+            help.find(":hexcase lower") != std::string::npos &&
             help.find(":run script.calc") != std::string::npos &&
             help.find("m = mat(2, 2, 1, 2, 3, 4)") != std::string::npos &&
             help.find("hex(255)") != std::string::npos &&
@@ -690,11 +772,108 @@ int main() {
     }
 
     try {
+        const std::string help = calculator.help_topic("exact");
+        const bool ok =
+            help.find(":exact on") != std::string::npos &&
+            help.find("Prefer rational results") != std::string::npos &&
+            help.find("sum avg median") != std::string::npos;
+        if (ok) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: help_topic(exact) missing expected entries\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: help_topic(exact) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const std::string help = calculator.help_topic("variables");
+        const bool ok =
+            help.find(":vars") != std::string::npos &&
+            help.find(":clearfuncs") != std::string::npos &&
+            help.find("f(x) = x^2 + 1") != std::string::npos;
+        if (ok) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: help_topic(variables) missing expected entries\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: help_topic(variables) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const std::string help = calculator.help_topic("persistence");
+        const bool ok =
+            help.find(":save state.txt") != std::string::npos &&
+            help.find(":load state.txt") != std::string::npos &&
+            help.find("matrix variables are not saved yet") != std::string::npos;
+        if (ok) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: help_topic(persistence) missing expected entries\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: help_topic(persistence) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const std::string help = calculator.help_topic("programmer");
+        const bool ok =
+            help.find("bin oct hex base") != std::string::npos &&
+            help.find(":hexprefix on|off") != std::string::npos &&
+            help.find(":hexcase upper|lower") != std::string::npos &&
+            help.find("shl(5, 2)") != std::string::npos;
+        if (ok) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: help_topic(programmer) missing expected entries\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: help_topic(programmer) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
         (void)calculator.help_topic("unknown");
         ++failed;
         std::cout << "FAIL: help_topic(unknown) expected error but succeeded\n";
     } catch (const std::exception&) {
         ++passed;
+    }
+
+    try {
+        const std::vector<std::string> variable_names = calculator.variable_names();
+        bool has_x = false;
+        bool has_agg = false;
+        for (const std::string& name : variable_names) {
+            if (name == "x") {
+                has_x = true;
+            }
+            if (name == "agg") {
+                has_agg = true;
+            }
+        }
+        if (has_x && has_agg) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: variable_names missing expected variables\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: variable_names threw unexpected error: "
+                  << ex.what() << '\n';
     }
 
     try {
@@ -806,6 +985,54 @@ int main() {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: base_conversion_expression negative threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const std::string status = calculator.set_hex_prefix_mode(true);
+        const std::string converted = calculator.base_conversion_expression("hex(255)");
+        if (status == "Hex prefix mode: ON" && converted == "0xFF") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: hex prefix mode expected 0xFF got "
+                      << converted << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: hex prefix mode threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const std::string status = calculator.set_hex_uppercase_mode(false);
+        const std::string converted = calculator.base_conversion_expression("base(-31, 16)");
+        if (status == "Hex letter case: LOWER" && converted == "-0x1f") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: lowercase hex mode expected -0x1f got "
+                      << converted << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: lowercase hex mode threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const bool ok = calculator.hex_prefix_mode() && !calculator.hex_uppercase_mode();
+        calculator.set_hex_prefix_mode(false);
+        calculator.set_hex_uppercase_mode(true);
+        if (ok) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: hex format getter state mismatch\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: hex format getters threw unexpected error: "
                   << ex.what() << '\n';
     }
 
@@ -1076,6 +1303,58 @@ int main() {
     try {
         std::string output;
         const bool handled =
+            calculator.try_process_function_command("diff(x ^ 2)", &output);
+        if (handled && output == "2 * x") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic diff(x ^ 2) expected 2 * x got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic diff(x ^ 2) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("diff(abs(x))", &output);
+        if (handled && output == "sign(x)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic diff(abs(x)) expected sign(x) got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic diff(abs(x)) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("diff(asin(x))", &output);
+        if (handled && (output == "1 / sqrt(1 - x ^ 2)" ||
+                        output == "1 / sqrt(-(x ^ 2) + 1)")) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic diff(asin(x)) expected 1 / sqrt(1 - x ^ 2) got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic diff(asin(x)) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
             calculator.try_process_function_command("diff(diff(f))", &output);
         if (handled && output == "-sin(x) + 2") {
             ++passed;
@@ -1124,6 +1403,30 @@ int main() {
     }
 
     try {
+        const std::vector<std::string> function_names = calculator.custom_function_names();
+        bool has_f = false;
+        bool has_g2 = false;
+        for (const std::string& name : function_names) {
+            if (name == "f") {
+                has_f = true;
+            }
+            if (name == "g2") {
+                has_g2 = true;
+            }
+        }
+        if (has_f && has_g2) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: custom_function_names missing expected functions\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: custom_function_names threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("simplify(x * x / x)", &output);
@@ -1137,6 +1440,40 @@ int main() {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: simplify(x * x / x) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("simplify(ln(exp(x)))", &output);
+        if (handled && output == "x") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: simplify(ln(exp(x))) expected x got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: simplify(ln(exp(x))) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("simplify(exp(ln(x)))", &output);
+        if (handled && output == "exp(ln(x))") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: simplify(exp(ln(x))) expected exp(ln(x)) got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: simplify(exp(ln(x))) threw unexpected error: "
                   << ex.what() << '\n';
     }
 
@@ -1171,6 +1508,108 @@ int main() {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: simplify(diff(diff(g2))) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("simplify(x ^ 3 / x ^ 2)", &output);
+        if (handled && output == "x") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: simplify(x ^ 3 / x ^ 2) expected x got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: simplify(x ^ 3 / x ^ 2) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("simplify(2 * x + 2 * y)", &output);
+        if (handled && output == "2 * (x + y)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: simplify(2 * x + 2 * y) expected 2 * (x + y) got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: simplify(2 * x + 2 * y) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("simplify(a * b + a * c)", &output);
+        if (handled && output == "a * (b + c)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: simplify(a * b + a * c) expected a * (b + c) got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: simplify(a * b + a * c) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("simplify(x + x ^ 2 + 1)", &output);
+        if (handled && output == "x ^ 2 + x + 1") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: simplify(x + x ^ 2 + 1) expected x ^ 2 + x + 1 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: simplify(x + x ^ 2 + 1) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("simplify((x ^ 2 - 1) / (x - 1))", &output);
+        if (handled && output == "x + 1") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: simplify((x ^ 2 - 1) / (x - 1)) expected x + 1 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: simplify((x ^ 2 - 1) / (x - 1)) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("simplify(sin(x) ^ 2 + cos(x) ^ 2)", &output);
+        if (handled && output == "1") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: simplify(sin(x) ^ 2 + cos(x) ^ 2) expected 1 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: simplify(sin(x) ^ 2 + cos(x) ^ 2) threw unexpected error: "
                   << ex.what() << '\n';
     }
 
@@ -1543,6 +1982,57 @@ int main() {
     try {
         std::string output;
         const bool handled =
+            calculator.try_process_function_command("integral(x ^ 2)", &output);
+        if (handled && output == "x ^ 3 / 3 + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic integral(x ^ 2) expected x ^ 3 / 3 + C got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic integral(x ^ 2) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(1 / x)", &output);
+        if (handled && output == "ln(abs(x)) + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic integral(1 / x) expected ln(abs(x)) + C got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic integral(1 / x) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(x * exp(x))", &output);
+        if (handled && output.find("+ C") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic integral(x * exp(x)) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic integral(x * exp(x)) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
             calculator.try_process_function_command("taylor(f, 0, 3)", &output);
         if (handled && output == "x + x ^ 2 - 0.166666666667 * x ^ 3") {
             ++passed;
@@ -1641,6 +2131,118 @@ int main() {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: inline integral difference threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "double_integral(x + y, 0, 1, 0, 2, 24, 24)", &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 3.0, 1e-6)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: double_integral(x + y, 0, 1, 0, 2, 24, 24) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: double_integral command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "double_integral_cyl(x ^ 2 + y ^ 2, 0, 1, 0, 2 * pi, 24, 24)", &output);
+        if (handled && nearly_equal(calculator.evaluate(output), mymath::kPi / 2.0, 1e-5)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: double_integral_cyl(x ^ 2 + y ^ 2, 0, 1, 0, 2 * pi, 24, 24) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: double_integral_cyl command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "triple_integral(x * y * z, 0, 1, 0, 1, 0, 1, 12, 12, 12)", &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 0.125, 1e-6)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: triple_integral(x * y * z, 0, 1, 0, 1, 0, 1, 12, 12, 12) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: triple_integral command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "triple_integral_sph(x ^ 2 + y ^ 2 + z ^ 2, 0, 1, 0, 2 * pi, 0, pi, 12, 12, 12)",
+                &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 4.0 * mymath::kPi / 5.0, 2e-4)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: triple_integral_sph(x ^ 2 + y ^ 2 + z ^ 2, 0, 1, 0, 2 * pi, 0, pi, 12, 12, 12) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: triple_integral_sph command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "ode(y - x ^ 2 + 1, 0, 0.5, 2, 20)", &output);
+        const double expected = 9.0 - 0.5 * mymath::exp(2.0);
+        if (handled && nearly_equal(calculator.evaluate(output), expected, 1e-4)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ode(y - x ^ 2 + 1, 0, 0.5, 2, 20) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: ode command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const std::string assigned =
+            calculator.process_line("traj = ode_table(y, 0, 1, 1, 4)", false);
+        const double end_x = calculator.evaluate("get(traj, 4, 0)");
+        const double end_y = calculator.evaluate("get(traj, 4, 1)");
+        if (assigned.find("traj = [[0, 1]") == 0 &&
+            nearly_equal(end_x, 1.0, 1e-8) &&
+            nearly_equal(end_y, mymath::exp(1.0), 3e-3)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ode_table assignment returned unexpected output "
+                      << assigned << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: ode_table assignment threw unexpected error: "
                   << ex.what() << '\n';
     }
 
@@ -1995,6 +2597,114 @@ int main() {
     }
 
     try {
+        ODESolver solver([](double x, double y) {
+            return y - x * x + 1.0;
+        });
+        const double actual = solver.solve(0.0, 0.5, 2.0, 20);
+        const double expected = 9.0 - 0.5 * mymath::exp(2.0);
+        if (nearly_equal(actual, expected, 1e-4)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ODE solver expected " << expected << " got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: ODE solver threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const SymbolicExpression derivative =
+            SymbolicExpression::parse("asin(x)").derivative("x").simplify();
+        if (derivative.to_string() == "1 / sqrt(1 - x ^ 2)" ||
+            derivative.to_string() == "1 / sqrt(-(x ^ 2) + 1)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: SymbolicExpression asin derivative expected 1 / sqrt(1 - x ^ 2) got "
+                      << derivative.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: SymbolicExpression asin derivative threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const SymbolicExpression antiderivative =
+            SymbolicExpression::parse("x * exp(x)").integral("x").simplify();
+        const SymbolicExpression recovered =
+            antiderivative.derivative("x").simplify();
+        if (recovered.to_string() == "x * exp(x)" ||
+            recovered.to_string() == "exp(x) * x") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: SymbolicExpression integral derivative round-trip expected x * exp(x) got "
+                      << recovered.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: SymbolicExpression x * exp(x) integral threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const SymbolicExpression simplified =
+            SymbolicExpression::parse("ln(exp(x))").simplify();
+        if (simplified.to_string() == "x") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: SymbolicExpression ln(exp(x)) expected x got "
+                      << simplified.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: SymbolicExpression ln(exp(x)) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        MultivariableIntegrator integrator([](const std::vector<double>& point) {
+            return point[0] + point[1];
+        });
+        const double actual = integrator.integrate({{0.0, 1.0}, {0.0, 2.0}}, {24, 24});
+        if (nearly_equal(actual, 3.0, 1e-6)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: multivariable double integral expected 3 got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: multivariable double integral threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        MultivariableIntegrator integrator([](const std::vector<double>& point) {
+            return point[0] * point[1] * point[2];
+        });
+        const double actual =
+            integrator.integrate({{0.0, 1.0}, {0.0, 1.0}, {0.0, 1.0}}, {12, 12, 12});
+        if (nearly_equal(actual, 0.125, 1e-6)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: multivariable triple integral expected 0.125 got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: multivariable triple integral threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
         FunctionAnalysis function("x");
         function.define("ln(x)");
         const double actual = function.evaluate(mymath::kE);
@@ -2280,7 +2990,7 @@ int main() {
 
     try {
         const std::string vars_output = calculator.list_variables();
-        if (vars_output == "b = [[1, 2, 0, 0], [3, 0, 0, 0], [0, 0, 0, 7]]\nm = [[1, 2], [8, 4]]\nn = [[2, 2], [3, 5]]\nv = [-3, 6]") {
+        if (vars_output == "b = [[1, 2, 0, 0], [3, 0, 0, 0], [0, 0, 0, 7]]\nm = [[1, 2], [8, 4]]\nn = [[2, 2], [3, 5]]\ntraj = [[0, 1], [0.25, 1.28401692708], [0.5, 1.64869946904], [0.75, 2.11695802592], [1, 2.7182099392]]\nv = [-3, 6]") {
             ++passed;
         } else {
             ++failed;

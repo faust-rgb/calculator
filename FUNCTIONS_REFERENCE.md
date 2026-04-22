@@ -14,6 +14,13 @@
 - `exp(x)`
 - `ln(x)`
 - `log10(x)`
+- `gamma(x)`
+
+## Hyperbolic
+
+- `sinh(x)`
+- `cosh(x)`
+- `tanh(x)`
 
 ## Roots
 
@@ -47,6 +54,12 @@ Notes:
 - `ceil(x)`
 - `min(a, b)`
 - `max(a, b)`
+- `sum(a, b, c, ...)`
+- `avg(a, b, c, ...)`
+- `median(a, b, c, ...)`
+- `factorial(n)`
+- `nCr(n, r)`
+- `nPr(n, r)`
 
 ## Matrix Creation
 
@@ -120,17 +133,84 @@ Notes:
 - `svd_u(A)`, `svd_s(A)`, and `svd_vt(A)` return the reduced SVD factors
 - `solve(A, b)` solves `Ax = b` for square `A` and vector `b`
 
+## Function Analysis And ODE
+
+- `diff(f)`
+- `diff(f, x0)`
+- `integral(f)`
+- `integral(f, x0)`
+- `integral(f, a, b)`
+- `taylor(f, a, n)`
+- `limit(f, x0)`
+- `limit(f, x0, direction)`
+- `extrema(f, a, b)`
+- `double_integral(expr, x0, x1, y0, y1)`
+- `double_integral(expr, x0, x1, y0, y1, nx, ny)`
+- `double_integral_cyl(expr, r0, r1, theta0, theta1)`
+- `double_integral_cyl(expr, r0, r1, theta0, theta1, nr, ntheta)`
+- `double_integral_polar(expr, r0, r1, theta0, theta1)`
+- `double_integral_polar(expr, r0, r1, theta0, theta1, nr, ntheta)`
+- `triple_integral(expr, x0, x1, y0, y1, z0, z1)`
+- `triple_integral(expr, x0, x1, y0, y1, z0, z1, nx, ny, nz)`
+- `triple_integral_cyl(expr, r0, r1, theta0, theta1, z0, z1)`
+- `triple_integral_cyl(expr, r0, r1, theta0, theta1, z0, z1, nr, ntheta, nz)`
+- `triple_integral_sph(expr, rho0, rho1, theta0, theta1, phi0, phi1)`
+- `triple_integral_sph(expr, rho0, rho1, theta0, theta1, phi0, phi1, nrho, ntheta, nphi)`
+- `ode(rhs, x0, y0, x1)`
+- `ode(rhs, x0, y0, x1, steps)`
+- `ode_table(rhs, x0, y0, x1)`
+- `ode_table(rhs, x0, y0, x1, steps)`
+
+Notes:
+
+- `diff`, `integral`, `taylor`, `limit`, and `extrema` operate on one-variable functions
+- symbolic `diff(expr)` and `integral(expr)` also accept raw one-variable expressions and infer the variable name automatically
+- symbolic `simplify(expr)` may be used on multi-variable expressions, but symbolic `diff/integral/taylor/limit/extrema` still require a one-variable input
+- `double_integral` and `triple_integral` use Cartesian coordinates
+- `double_integral_cyl` / `double_integral_polar` use the planar polar Jacobian `r`
+- `triple_integral_cyl` uses cylindrical coordinates `(r, theta, z)` with Jacobian `r`
+- `triple_integral_sph` uses spherical coordinates `(rho, theta, phi)` with Jacobian `rho^2 sin(phi)`
+- in cylindrical and spherical modes, Cartesian variables such as `x`, `y`, and `z` are also available inside the integrand
+- `ode` solves the first-order initial value problem `y' = rhs(x, y)` with the classical RK4 method
+- `ode` returns the approximated value at `x1`
+- `ode_table` returns a two-column matrix whose rows are sampled `(x, y)` pairs
+- the ODE step count must be a positive integer
+- integration subdivision counts must be positive integers; odd counts are rounded up internally for Simpson integration
+- `ode` defaults to `100` steps and `ode_table` defaults to `10` steps
+- current symbolic integration rules cover common powers, `1/(ax+b)`, `sin/cos/tan`, `exp/ln`, `sqrt/cbrt`, `asin/acos/atan`, `abs`, and some polynomial-times-`exp/sin/cos` products
+
 ## Integer / Number Theory
 
 - `gcd(a, b)`
 - `lcm(a, b)`
 - `mod(a, b)`
 - `factor(n)`
+- `factorial(n)`
+- `nCr(n, r)`
+- `nPr(n, r)`
 
 Notes:
 
 - `gcd`, `lcm`, and `mod` require integer arguments
 - `factor(n)` returns a factorization string, not a plain numeric value
+- `factorial(n)` requires an integer `n >= 0`
+- `nCr(n, r)` and `nPr(n, r)` require integer inputs with `0 <= r <= n`
+
+## Unit Conversion
+
+- `deg2rad(x)`
+- `rad2deg(x)`
+- `celsius(f)`
+- `fahrenheit(c)`
+- `kelvin(c)`
+
+Notes:
+
+- `deg2rad(x)` converts degrees to radians
+- `rad2deg(x)` converts radians to degrees
+- `celsius(f)` converts Fahrenheit to Celsius
+- `fahrenheit(c)` converts Celsius to Fahrenheit
+- `kelvin(c)` converts Celsius to Kelvin
 
 ## Base Conversion
 
@@ -144,12 +224,15 @@ Notes:
 - these are display-oriented conversion functions
 - arguments must be integers
 - supported bases for `base(n, b)` are `2..16`
+- `:hexprefix` and `:hexcase` control how hexadecimal output is displayed
 
 Examples:
 
 - `bin(10)` -> `1010`
 - `oct(83)` -> `123`
 - `hex(255)` -> `FF`
+- with `:hexprefix on`, `hex(255)` -> `0xFF`
+- with `:hexprefix on` and `:hexcase lower`, `hex(255)` -> `0xff`
 - `base(-31, 16)` -> `-1F`
 
 ## Bitwise

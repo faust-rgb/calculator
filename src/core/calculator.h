@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 /**
  * @class Calculator
@@ -135,6 +136,32 @@ public:
     std::string load_state(const std::string& path);
 
     /**
+     * @brief 设置十六进制输出是否带 0x/0X 前缀
+     * @param enabled 是否启用前缀
+     * @return 操作结果消息
+     */
+    std::string set_hex_prefix_mode(bool enabled);
+
+    /**
+     * @brief 查询十六进制输出前缀模式
+     * @return true 如果启用了前缀
+     */
+    bool hex_prefix_mode() const;
+
+    /**
+     * @brief 设置十六进制字母是否使用大写
+     * @param enabled true 表示大写，false 表示小写
+     * @return 操作结果消息
+     */
+    std::string set_hex_uppercase_mode(bool enabled);
+
+    /**
+     * @brief 查询十六进制大小写模式
+     * @return true 如果使用大写字母
+     */
+    bool hex_uppercase_mode() const;
+
+    /**
      * @brief 设置符号常量模式
      * @param enabled 是否启用符号常量（如 pi, e 以符号形式保留）
      * @return 操作结果消息
@@ -146,6 +173,18 @@ public:
      * @return true 如果符号常量模式已启用
      */
     bool symbolic_constants_mode() const;
+
+    /**
+     * @brief 列出当前会话可补全的变量名
+     * @return 变量名列表
+     */
+    std::vector<std::string> variable_names() const;
+
+    /**
+     * @brief 列出当前会话可补全的自定义函数名
+     * @return 函数名列表
+     */
+    std::vector<std::string> custom_function_names() const;
 
 private:
     /** @brief Pimpl 模式的实现指针 */

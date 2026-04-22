@@ -41,10 +41,15 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - Basic arithmetic: `+`, `-`, `*`, `/`
 - Power operator: `^`
 - Functions: `sin(x)`, `cos(x)`, `tan(x)`, `asin(x)`, `acos(x)`, `atan(x)`,
-  `exp(x)`, `ln(x)`, `log10(x)`, `sqrt(x)`, `cbrt(x)`, `root(a, n)`, `abs(x)`, `sign(x)`, `floor(x)`, `ceil(x)`, `pow(a, b)`
-- Comparison and integer utilities: `min(a, b)`, `max(a, b)`, `gcd(a, b)`, `lcm(a, b)`, `mod(a, b)`
+  `sinh(x)`, `cosh(x)`, `tanh(x)`, `exp(x)`, `ln(x)`, `log10(x)`,
+  `gamma(x)`, `sqrt(x)`, `cbrt(x)`, `root(a, n)`, `abs(x)`, `sign(x)`,
+  `floor(x)`, `ceil(x)`, `pow(a, b)`
+- Comparison and integer utilities: `min(a, b)`, `max(a, b)`, `gcd(a, b)`, `lcm(a, b)`, `mod(a, b)`, `factorial(n)`, `nCr(n, r)`, `nPr(n, r)`
+- Aggregate helpers: `sum(...)`, `avg(...)`, `median(...)`
+- Unit conversion helpers: `deg2rad(x)`, `rad2deg(x)`, `celsius(f)`, `fahrenheit(c)`, `kelvin(c)`
 - Prime factorization with `factor(n)`
 - Base conversion with `bin(n)`, `oct(n)`, `hex(n)`, `base(n, b)`
+- Hex formatting controls with `:hexprefix` and `:hexcase`
 - Bitwise operations with `and(a, b)`, `or(a, b)`, `xor(a, b)`, `not(a)`, `shl(a, n)`, `shr(a, n)`
 - Matrix creation with `vec(...)`, `mat(...)`, `zeros(...)`, `eye(...)`
 - Matrix editing with `resize(...)`, `append_row(...)`, `append_col(...)`, `get(...)`, `set(...)`
@@ -64,12 +69,15 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - Variable management commands: `:vars`, `:clear name`, `:clear`
 - Custom function commands: `:funcs`, `:clearfunc name`, `:clearfuncs`
 - Session history command: `:history`
+- Interactive help topics for exact mode, variables, persistence, and programmer tools
 - State persistence commands: `:save file`, `:load file`
 - Script execution with `:run file` or redirected stdin
 - Script language support for `fn`, `if/else`, `while`, `for`, `return`, `break`, `continue`, strings, and `print(...)`
 - Separate one-variable custom function analysis module with evaluation,
   derivative, definite integral, indefinite integral value, interval
-  extrema solving, polynomial arithmetic, Taylor expansion, and polynomial roots
+  extrema solving, polynomial arithmetic, Taylor expansion, polynomial roots,
+  first-order ODE initial-value solving with `ode(...)` / `ode_table(...)`,
+  and multi-variable integration in Cartesian, cylindrical, and spherical coordinates
 
 ## Build
 
@@ -80,6 +88,11 @@ make
 This generates the executable `calculator`.
 
 The regression suite lives in `test/tests.cpp`.
+
+Current validation status:
+
+- `make test`
+- expected summary: `Passed: 466, Failed: 0`
 
 ## Run
 
@@ -172,10 +185,16 @@ x ^ 3 + x ^ 2 - x - 1
 -1
 > diff(f)
 cos(x) + 2 * x
+> diff(abs(x))
+sign(x)
 > diff(f, 0)
 1
 > integral(f)
 -cos(x) + x ^ 3 / 3 + C
+> integral(1 / x)
+ln(abs(x)) + C
+> integral(x * exp(x))
+exp(x) * x - exp(x) + C
 > taylor(f, 0, 3)
 x + x ^ 2 - 0.166666666667 * x ^ 3
 > h(x) = sin(x) / x
@@ -184,6 +203,14 @@ h(x) = sin(x) / x
 1
 > integral(f, 0, 1)
 0.793031027466
+> double_integral(x + y, 0, 1, 0, 2)
+3
+> triple_integral_sph(1, 0, 1, 0, 2 * pi, 0, pi)
+4.18879020479
+> ode(y - x ^ 2 + 1, 0, 0.5, 2, 20)
+5.30536300069
+> ode_table(y, 0, 1, 1, 4)
+[0, 1; 0.25, 1.28401692708; 0.5, 1.64869946904; 0.75, 2.11695802592; 1, 2.7182099392]
 > extrema(f, -1, 1)
 min: x = -0.450183689594, f(x) = -0.232465575151
 > exit
@@ -207,8 +234,21 @@ ceil(7/3)
 min(7/3, 5/2)
 max(7/3, 5/2)
 pow(3, 4)
+sinh(1)
+gamma(5)
+factorial(5)
+nCr(5, 2)
+nPr(5, 2)
+sum(1, 2, 3, 4)
+avg(1, 2, 3, 4)
+median(9, 1, 5, 2)
 cbrt(-8)
 root(27, 3)
+deg2rad(180)
+rad2deg(pi / 2)
+celsius(212)
+fahrenheit(100)
+kelvin(0)
 factor(360)
 bin(10)
 oct(83)
@@ -265,6 +305,12 @@ taylor(f, 0, 3)
 limit(f, 0)
 integral(f, 0, 3)
 integral(f, 3)
+double_integral(x + y, 0, 1, 0, 2)
+double_integral_cyl(1, 0, 1, 0, 2*pi)
+triple_integral(x * y * z, 0, 1, 0, 1, 0, 1)
+triple_integral_sph(1, 0, 1, 0, 2*pi, 0, pi)
+ode(y - x, 0, 1, 2)
+ode_table(y, 0, 1, 1, 4)
 extrema(f, -2, 2)
 ```
 
@@ -391,8 +437,19 @@ can be recognized as one-variable polynomials. `roots(p)` returns real roots
 only. `diff(f)` returns a symbolic derivative expression, while `diff(f, value)`
 returns the numeric derivative at a point. `integral(f)` returns a symbolic
 indefinite integral, while `integral(...)` with more arguments keeps the
-existing numeric integration behavior. `taylor(f, a, n)` returns the Taylor
-polynomial around `a` up to degree `n`.
+existing numeric integration behavior. Symbolic `diff(...)` and `integral(...)`
+also accept raw one-variable expressions such as `diff(x ^ 2)` or
+`integral(1 / x)`, and infer the variable automatically. Current symbolic rules
+cover common algebraic powers, `sin/cos/tan`, `exp/ln`, `sqrt/cbrt`, `abs`, the
+inverse trigonometric basics `asin/acos/atan`, and some polynomial-times-
+`exp/sin/cos` cases such as `integral(x * exp(x))`. `taylor(f, a, n)` returns
+the Taylor polynomial around `a` up to degree `n`. `ode(rhs, x0, y0, x1[, steps])`
+solves the first-order initial value problem `y' = rhs(x, y)` with RK4 and
+returns `y(x1)`, while `ode_table(...)` returns the sampled `(x, y)` trajectory
+as a two-column matrix. `double_integral(...)` / `triple_integral(...)` compute
+Cartesian multi-integrals, `double_integral_cyl(...)` / `triple_integral_cyl(...)`
+use cylindrical coordinates, and `triple_integral_sph(...)` uses spherical
+coordinates.
 
 ## Scripting
 

@@ -103,6 +103,35 @@ double ln(double x);
  */
 double log10(double x);
 
+/**
+ * @brief 计算双曲正弦
+ * @param x 输入值
+ * @return sinh(x)
+ */
+double sinh(double x);
+
+/**
+ * @brief 计算双曲余弦
+ * @param x 输入值
+ * @return cosh(x)
+ */
+double cosh(double x);
+
+/**
+ * @brief 计算双曲正切
+ * @param x 输入值
+ * @return tanh(x)
+ */
+double tanh(double x);
+
+/**
+ * @brief 计算伽马函数 Γ(x)
+ * @param x 输入值
+ * @return Γ(x)
+ * @throw std::domain_error 当 x 为非正整数时抛出
+ */
+double gamma(double x);
+
 // ============================================================================
 // 三角函数
 // ============================================================================

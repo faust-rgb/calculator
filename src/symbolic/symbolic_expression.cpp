@@ -9,6 +9,7 @@
 #include "symbolic_expression.h"
 
 #include "mymath.h"
+#include "polynomial.h"
 
 #include <cctype>
 #include <memory>
@@ -451,6 +452,18 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
             if (!try_evaluate_numeric_node(node->left, &argument)) {
                 return false;
             }
+            if (node->text == "asin") {
+                *value = mymath::asin(argument);
+                return true;
+            }
+            if (node->text == "acos") {
+                *value = mymath::acos(argument);
+                return true;
+            }
+            if (node->text == "atan") {
+                *value = mymath::atan(argument);
+                return true;
+            }
             if (node->text == "sin") {
                 *value = mymath::sin(argument);
                 return true;
@@ -465,6 +478,18 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
             }
             if (node->text == "exp") {
                 *value = mymath::exp(argument);
+                return true;
+            }
+            if (node->text == "sinh") {
+                *value = mymath::sinh(argument);
+                return true;
+            }
+            if (node->text == "cosh") {
+                *value = mymath::cosh(argument);
+                return true;
+            }
+            if (node->text == "tanh") {
+                *value = mymath::tanh(argument);
                 return true;
             }
             if (node->text == "ln") {
@@ -1002,6 +1027,533 @@ SymbolicExpression make_function(const std::string& name, SymbolicExpression arg
     return SymbolicExpression(make_unary(NodeType::kFunction, argument.node_, name));
 }
 
+SymbolicExpression build_polynomial_expression_from_coefficients(
+    const std::vector<double>& coefficients,
+    const std::string& variable_name) {
+    std::vector<double> normalized = coefficients;
+    trim_polynomial_coefficients(&normalized);
+
+    SymbolicExpression result = SymbolicExpression::number(0.0);
+    bool has_term = false;
+    for (std::size_t index = normalized.size(); index > 0; --index) {
+        const std::size_t degree = index - 1;
+        const double coefficient = normalized[degree];
+        if (mymath::is_near_zero(coefficient, kFormatEps)) {
+            continue;
+        }
+
+        const bool negative = coefficient < 0.0;
+        const double magnitude = negative ? -coefficient : coefficient;
+
+        SymbolicExpression term;
+        if (degree == 0) {
+            term = SymbolicExpression::number(magnitude);
+        } else {
+            term = degree == 1
+                       ? SymbolicExpression::variable(variable_name)
+                       : make_power(SymbolicExpression::variable(variable_name),
+                                    SymbolicExpression::number(
+                                        static_cast<double>(degree)));
+            if (!mymath::is_near_zero(magnitude - 1.0, kFormatEps)) {
+                term = make_multiply(SymbolicExpression::number(magnitude), term);
+            }
+        }
+
+        if (!has_term) {
+            result = negative ? make_negate(term) : term;
+            has_term = true;
+            continue;
+        }
+
+        result = negative ? make_subtract(result, term) : make_add(result, term);
+    }
+
+    return has_term ? result : SymbolicExpression::number(0.0);
+}
+
+bool expressions_match(const SymbolicExpression& lhs, const SymbolicExpression& rhs) {
+    return node_structural_key(lhs.node_) == node_structural_key(rhs.node_);
+}
+
+bool is_known_positive_expression(const SymbolicExpression& expression) {
+    double numeric = 0.0;
+    if (expression.is_number(&numeric)) {
+        return numeric > 0.0;
+    }
+
+    const auto& node = expression.node_;
+    if (node->type == NodeType::kVariable) {
+        return node->text == "e" || node->text == "pi";
+    }
+    if (node->type == NodeType::kFunction) {
+        return node->text == "exp" || node->text == "sqrt" || node->text == "abs";
+    }
+    return false;
+}
+
+bool polynomial_expression(const SymbolicExpression& expression,
+                           const std::string& variable_name,
+                           SymbolicExpression* polynomial) {
+    std::vector<double> coefficients;
+    if (!expression.polynomial_coefficients(variable_name, &coefficients)) {
+        return false;
+    }
+    *polynomial = build_polynomial_expression_from_coefficients(coefficients,
+                                                                variable_name);
+    return true;
+}
+
+bool is_linear_function_argument(const SymbolicExpression& argument,
+                                 const std::string& variable_name,
+                                 double* a) {
+    double b = 0.0;
+    return decompose_linear(argument, variable_name, a, &b) &&
+           !mymath::is_near_zero(*a, kFormatEps);
+}
+
+bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
+                                         const std::string& function_name,
+                                         const SymbolicExpression& argument,
+                                         const std::string& variable_name,
+                                         SymbolicExpression* integrated) {
+    double a = 0.0;
+    if (!is_linear_function_argument(argument, variable_name, &a)) {
+        return false;
+    }
+
+    double constant = 0.0;
+    if (polynomial.is_number(&constant)) {
+        if (function_name == "exp") {
+            *integrated = make_multiply(
+                              SymbolicExpression::number(constant),
+                              make_divide(make_function("exp", argument),
+                                          SymbolicExpression::number(a)))
+                              .simplify();
+            return true;
+        }
+        if (function_name == "sin") {
+            *integrated = make_multiply(
+                              SymbolicExpression::number(constant),
+                              make_divide(make_negate(make_function("cos", argument)),
+                                          SymbolicExpression::number(a)))
+                              .simplify();
+            return true;
+        }
+        if (function_name == "cos") {
+            *integrated = make_multiply(
+                              SymbolicExpression::number(constant),
+                              make_divide(make_function("sin", argument),
+                                          SymbolicExpression::number(a)))
+                              .simplify();
+            return true;
+        }
+        return false;
+    }
+
+    const SymbolicExpression derivative = polynomial.derivative(variable_name).simplify();
+    SymbolicExpression recursive;
+    if (!integrate_polynomial_times_function(derivative,
+                                             function_name,
+                                             argument,
+                                             variable_name,
+                                             &recursive)) {
+        return false;
+    }
+
+    if (function_name == "exp") {
+        *integrated = make_subtract(
+                          make_divide(make_multiply(polynomial,
+                                                    make_function("exp", argument)),
+                                      SymbolicExpression::number(a)),
+                          make_divide(recursive, SymbolicExpression::number(a)))
+                          .simplify();
+        return true;
+    }
+    if (function_name == "sin") {
+        *integrated = make_add(
+                          make_divide(make_negate(make_multiply(polynomial,
+                                                                make_function("cos", argument))),
+                                      SymbolicExpression::number(a)),
+                          make_divide(recursive, SymbolicExpression::number(a)))
+                          .simplify();
+        return true;
+    }
+    if (function_name == "cos") {
+        *integrated = make_subtract(
+                          make_divide(make_multiply(polynomial,
+                                                    make_function("sin", argument)),
+                                      SymbolicExpression::number(a)),
+                          make_divide(recursive, SymbolicExpression::number(a)))
+                          .simplify();
+        return true;
+    }
+    return false;
+}
+
+bool decompose_power_factor(const SymbolicExpression& expression,
+                            SymbolicExpression* base,
+                            double* exponent) {
+    if (expression.node_->type == NodeType::kPower &&
+        SymbolicExpression(expression.node_->right).is_number(exponent)) {
+        *base = SymbolicExpression(expression.node_->left).simplify();
+        return true;
+    }
+
+    *base = expression;
+    *exponent = 1.0;
+    return true;
+}
+
+SymbolicExpression rebuild_power_difference(const SymbolicExpression& base, double exponent) {
+    if (mymath::is_near_zero(exponent, kFormatEps)) {
+        return SymbolicExpression::number(1.0);
+    }
+    if (mymath::is_near_zero(exponent - 1.0, kFormatEps)) {
+        return base;
+    }
+    if (mymath::is_near_zero(exponent + 1.0, kFormatEps)) {
+        return make_divide(SymbolicExpression::number(1.0), base).simplify();
+    }
+    if (exponent < 0.0) {
+        return make_divide(SymbolicExpression::number(1.0),
+                           make_power(base, SymbolicExpression::number(-exponent)))
+            .simplify();
+    }
+    return make_power(base, SymbolicExpression::number(exponent)).simplify();
+}
+
+double common_numeric_factor(double lhs, double rhs) {
+    const double lhs_abs = mymath::abs(lhs);
+    const double rhs_abs = mymath::abs(rhs);
+    if (mymath::is_near_zero(lhs_abs, kFormatEps) ||
+        mymath::is_near_zero(rhs_abs, kFormatEps)) {
+        return 0.0;
+    }
+    if (mymath::is_integer(lhs_abs, 1e-10) && mymath::is_integer(rhs_abs, 1e-10)) {
+        long long a = static_cast<long long>(lhs_abs + 0.5);
+        long long b = static_cast<long long>(rhs_abs + 0.5);
+        while (b != 0) {
+            const long long next = a % b;
+            a = b;
+            b = next;
+        }
+        return static_cast<double>(a);
+    }
+    if (mymath::is_near_zero(lhs_abs - rhs_abs, kFormatEps)) {
+        return lhs_abs;
+    }
+    return 1.0;
+}
+
+bool try_factor_common_terms(const SymbolicExpression& left,
+                             const SymbolicExpression& right,
+                             double right_sign,
+                             SymbolicExpression* combined) {
+    double left_coefficient = 1.0;
+    double right_coefficient = 1.0;
+    std::vector<SymbolicExpression> left_factors;
+    std::vector<SymbolicExpression> right_factors;
+    collect_multiplicative_terms(left, &left_coefficient, &left_factors);
+    collect_multiplicative_terms(right, &right_coefficient, &right_factors);
+
+    std::vector<bool> right_used(right_factors.size(), false);
+    std::vector<SymbolicExpression> common_factors;
+    std::vector<SymbolicExpression> left_remaining;
+    for (const SymbolicExpression& left_factor : left_factors) {
+        bool matched = false;
+        for (std::size_t i = 0; i < right_factors.size(); ++i) {
+            if (right_used[i] || !expressions_match(left_factor, right_factors[i])) {
+                continue;
+            }
+            right_used[i] = true;
+            common_factors.push_back(left_factor);
+            matched = true;
+            break;
+        }
+        if (!matched) {
+            left_remaining.push_back(left_factor);
+        }
+    }
+
+    std::vector<SymbolicExpression> right_remaining;
+    for (std::size_t i = 0; i < right_factors.size(); ++i) {
+        if (!right_used[i]) {
+            right_remaining.push_back(right_factors[i]);
+        }
+    }
+
+    const double numeric_factor = common_numeric_factor(left_coefficient, right_coefficient);
+    if (common_factors.empty() &&
+        mymath::is_near_zero(numeric_factor - 1.0, kFormatEps)) {
+        return false;
+    }
+
+    if (mymath::is_near_zero(numeric_factor, kFormatEps)) {
+        return false;
+    }
+
+    const SymbolicExpression outer =
+        rebuild_product_expression(numeric_factor, common_factors);
+    const SymbolicExpression left_inner =
+        rebuild_product_expression(left_coefficient / numeric_factor, left_remaining);
+    const SymbolicExpression right_inner =
+        rebuild_product_expression(right_coefficient / numeric_factor, right_remaining);
+    const SymbolicExpression inner =
+        right_sign > 0.0 ? make_add(left_inner, right_inner).simplify()
+                         : make_subtract(left_inner, right_inner).simplify();
+
+    if (expr_is_one(outer)) {
+        *combined = inner;
+        return true;
+    }
+
+    *combined = make_multiply(outer, inner).simplify();
+    return true;
+}
+
+bool is_squared_function(const SymbolicExpression& expression,
+                         const std::string& function_name,
+                         std::string* argument_key) {
+    if (expression.node_->type != NodeType::kPower) {
+        return false;
+    }
+
+    double exponent = 0.0;
+    if (!SymbolicExpression(expression.node_->right).is_number(&exponent) ||
+        !mymath::is_near_zero(exponent - 2.0, kFormatEps)) {
+        return false;
+    }
+
+    const SymbolicExpression base(expression.node_->left);
+    if (base.node_->type != NodeType::kFunction || base.node_->text != function_name) {
+        return false;
+    }
+
+    *argument_key = node_structural_key(base.node_->left);
+    return true;
+}
+
+bool is_identifier_variable_name(const std::string& name) {
+    if (name.empty() ||
+        !std::isalpha(static_cast<unsigned char>(name.front()))) {
+        return false;
+    }
+
+    for (char ch : name) {
+        if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_') {
+            return false;
+        }
+    }
+    return true;
+}
+
+void collect_identifier_variables(const SymbolicExpression& expression,
+                                  std::vector<std::string>* names) {
+    const auto& node = expression.node_;
+    switch (node->type) {
+        case NodeType::kVariable:
+            if (node->text != "pi" && node->text != "e" &&
+                is_identifier_variable_name(node->text)) {
+                names->push_back(node->text);
+            }
+            return;
+        case NodeType::kNumber:
+            return;
+        case NodeType::kNegate:
+        case NodeType::kFunction:
+            collect_identifier_variables(SymbolicExpression(node->left), names);
+            return;
+        case NodeType::kAdd:
+        case NodeType::kSubtract:
+        case NodeType::kMultiply:
+        case NodeType::kDivide:
+        case NodeType::kPower:
+            collect_identifier_variables(SymbolicExpression(node->left), names);
+            collect_identifier_variables(SymbolicExpression(node->right), names);
+            return;
+    }
+}
+
+std::string unique_identifier_variable(const SymbolicExpression& expression) {
+    std::vector<std::string> names;
+    collect_identifier_variables(expression, &names);
+    std::sort(names.begin(), names.end());
+    names.erase(std::unique(names.begin(), names.end()), names.end());
+    return names.size() == 1 ? names.front() : "";
+}
+
+bool polynomial_coefficients_from_simplified(const SymbolicExpression& expression,
+                                             const std::string& variable_name,
+                                             std::vector<double>* coefficients) {
+    double numeric = 0.0;
+    if (expression.is_number(&numeric)) {
+        *coefficients = {numeric};
+        return true;
+    }
+    if (expression.is_variable_named(variable_name)) {
+        *coefficients = {0.0, 1.0};
+        return true;
+    }
+    if (expression.is_constant(variable_name)) {
+        if (expression.is_number(&numeric)) {
+            *coefficients = {numeric};
+            return true;
+        }
+        return false;
+    }
+
+    const auto& node = expression.node_;
+    if (node->type == NodeType::kNegate) {
+        if (!polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
+                                                     variable_name,
+                                                     coefficients)) {
+            return false;
+        }
+        for (double& value : *coefficients) {
+            value = -value;
+        }
+        trim_polynomial_coefficients(coefficients);
+        return true;
+    }
+
+    std::vector<double> left;
+    std::vector<double> right;
+    switch (node->type) {
+        case NodeType::kAdd:
+            return polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
+                                                           variable_name,
+                                                           &left) &&
+                   polynomial_coefficients_from_simplified(SymbolicExpression(node->right),
+                                                           variable_name,
+                                                           &right) &&
+                   ((*coefficients = polynomial_add_impl(left, right)), true);
+        case NodeType::kSubtract:
+            return polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
+                                                           variable_name,
+                                                           &left) &&
+                   polynomial_coefficients_from_simplified(SymbolicExpression(node->right),
+                                                           variable_name,
+                                                           &right) &&
+                   ((*coefficients = polynomial_subtract_impl(left, right)), true);
+        case NodeType::kMultiply:
+            return polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
+                                                           variable_name,
+                                                           &left) &&
+                   polynomial_coefficients_from_simplified(SymbolicExpression(node->right),
+                                                           variable_name,
+                                                           &right) &&
+                   ((*coefficients = polynomial_multiply_impl(left, right)), true);
+        case NodeType::kDivide: {
+            if (!polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
+                                                         variable_name,
+                                                         &left)) {
+                return false;
+            }
+            double divisor = 0.0;
+            if (!SymbolicExpression(node->right).is_number(&divisor) ||
+                mymath::is_near_zero(divisor, kFormatEps)) {
+                return false;
+            }
+            for (double& value : left) {
+                value /= divisor;
+            }
+            trim_polynomial_coefficients(&left);
+            *coefficients = left;
+            return true;
+        }
+        case NodeType::kPower: {
+            double exponent = 0.0;
+            if (!SymbolicExpression(node->right).is_number(&exponent) ||
+                !mymath::is_integer(exponent, 1e-10) || exponent < 0.0) {
+                return false;
+            }
+            if (!polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
+                                                         variable_name,
+                                                         &left)) {
+                return false;
+            }
+            std::vector<double> result = {1.0};
+            for (int i = 0; i < static_cast<int>(exponent + 0.5); ++i) {
+                result = polynomial_multiply_impl(result, left);
+            }
+            *coefficients = result;
+            return true;
+        }
+        case NodeType::kNumber:
+        case NodeType::kVariable:
+        case NodeType::kFunction:
+        case NodeType::kNegate:
+            return false;
+    }
+    return false;
+}
+
+bool polynomial_is_zero_remainder(const std::vector<double>& coefficients) {
+    for (double coefficient : coefficients) {
+        if (!mymath::is_near_zero(coefficient, kFormatEps)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool try_reduce_polynomial_quotient(const SymbolicExpression& left,
+                                    const SymbolicExpression& right,
+                                    SymbolicExpression* reduced) {
+    const std::string variable_name = unique_identifier_variable(make_add(left, right));
+    if (variable_name.empty()) {
+        return false;
+    }
+
+    std::vector<double> numerator;
+    std::vector<double> denominator;
+    if (!polynomial_coefficients_from_simplified(left, variable_name, &numerator) ||
+        !polynomial_coefficients_from_simplified(right, variable_name, &denominator)) {
+        return false;
+    }
+    trim_polynomial_coefficients(&denominator);
+    if (denominator.size() <= 1) {
+        return false;
+    }
+
+    const PolynomialDivisionResult division = polynomial_divide(numerator, denominator);
+    if (!polynomial_is_zero_remainder(division.remainder)) {
+        return false;
+    }
+
+    *reduced = build_polynomial_expression_from_coefficients(division.quotient,
+                                                             variable_name);
+    return true;
+}
+
+bool is_single_variable_polynomial(const SymbolicExpression& expression) {
+    const std::string variable_name = unique_identifier_variable(expression);
+    if (variable_name.empty()) {
+        return false;
+    }
+
+    std::vector<double> coefficients;
+    return polynomial_coefficients_from_simplified(expression, variable_name, &coefficients);
+}
+
+SymbolicExpression maybe_canonicalize_polynomial(const SymbolicExpression& expression) {
+    const std::string variable_name = unique_identifier_variable(expression);
+    if (variable_name.empty()) {
+        return expression;
+    }
+
+    std::vector<double> coefficients;
+    if (!polynomial_coefficients_from_simplified(expression, variable_name, &coefficients)) {
+        return expression;
+    }
+
+    const std::string canonical = polynomial_to_string(coefficients, variable_name);
+    if (canonical == to_string_impl(expression.node_, 0)) {
+        return expression;
+    }
+    return build_polynomial_expression_from_coefficients(coefficients, variable_name);
+}
+
 SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
     const auto& node = expression.node_;
     switch (node->type) {
@@ -1012,6 +1564,15 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
             const SymbolicExpression argument = SymbolicExpression(node->left).simplify();
             double numeric = 0.0;
             if (argument.is_number(&numeric)) {
+                if (node->text == "asin") {
+                    return SymbolicExpression::number(mymath::asin(numeric));
+                }
+                if (node->text == "acos") {
+                    return SymbolicExpression::number(mymath::acos(numeric));
+                }
+                if (node->text == "atan") {
+                    return SymbolicExpression::number(mymath::atan(numeric));
+                }
                 if (node->text == "sin") {
                     return SymbolicExpression::number(mymath::sin(numeric));
                 }
@@ -1023,6 +1584,15 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
                 }
                 if (node->text == "exp") {
                     return SymbolicExpression::number(mymath::exp(numeric));
+                }
+                if (node->text == "sinh") {
+                    return SymbolicExpression::number(mymath::sinh(numeric));
+                }
+                if (node->text == "cosh") {
+                    return SymbolicExpression::number(mymath::cosh(numeric));
+                }
+                if (node->text == "tanh") {
+                    return SymbolicExpression::number(mymath::tanh(numeric));
                 }
                 if (node->text == "ln") {
                     return SymbolicExpression::number(mymath::ln(numeric));
@@ -1062,7 +1632,14 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
             }
             if (node->text == "exp" &&
                 argument.node_->type == NodeType::kFunction &&
-                argument.node_->text == "ln") {
+                argument.node_->text == "ln" &&
+                is_known_positive_expression(
+                    SymbolicExpression(argument.node_->left).simplify())) {
+                return SymbolicExpression(argument.node_->left).simplify();
+            }
+            if (node->text == "ln" &&
+                argument.node_->type == NodeType::kFunction &&
+                argument.node_->text == "exp") {
                 return SymbolicExpression(argument.node_->left).simplify();
             }
 
@@ -1186,9 +1763,33 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
                 return left;
             }
             {
+                std::string left_argument;
+                std::string right_argument;
+                if ((is_squared_function(left, "sin", &left_argument) &&
+                     is_squared_function(right, "cos", &right_argument) &&
+                     left_argument == right_argument) ||
+                    (is_squared_function(left, "cos", &left_argument) &&
+                     is_squared_function(right, "sin", &right_argument) &&
+                     left_argument == right_argument)) {
+                    return SymbolicExpression::number(1.0);
+                }
+            }
+            {
                 SymbolicExpression combined;
                 if (try_combine_like_terms(left, right, 1.0, &combined)) {
                     return combined;
+                }
+            }
+            {
+                const SymbolicExpression sum = make_add(left, right);
+                if (is_single_variable_polynomial(sum)) {
+                    return maybe_canonicalize_polynomial(sum);
+                }
+            }
+            {
+                SymbolicExpression factored;
+                if (try_factor_common_terms(left, right, 1.0, &factored)) {
+                    return factored;
                 }
             }
             return make_add(left, right);
@@ -1206,6 +1807,18 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
                 SymbolicExpression combined;
                 if (try_combine_like_terms(left, right, -1.0, &combined)) {
                     return combined;
+                }
+            }
+            {
+                const SymbolicExpression difference = make_subtract(left, right);
+                if (is_single_variable_polynomial(difference)) {
+                    return maybe_canonicalize_polynomial(difference);
+                }
+            }
+            {
+                SymbolicExpression factored;
+                if (try_factor_common_terms(left, right, -1.0, &factored)) {
+                    return factored;
                 }
             }
             return make_subtract(left, right);
@@ -1227,6 +1840,18 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
             }
             if (expr_is_minus_one(right)) {
                 return make_negate(left).simplify();
+            }
+            {
+                SymbolicExpression left_base;
+                SymbolicExpression right_base;
+                double left_exponent = 0.0;
+                double right_exponent = 0.0;
+                decompose_power_factor(left, &left_base, &left_exponent);
+                decompose_power_factor(right, &right_base, &right_exponent);
+                if (expressions_match(left_base, right_base)) {
+                    return rebuild_power_difference(left_base,
+                                                    left_exponent + right_exponent);
+                }
             }
             {
                 double numeric_factor = 1.0;
@@ -1269,6 +1894,24 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
             }
             if (expr_is_one(right)) {
                 return left;
+            }
+            {
+                SymbolicExpression reduced;
+                if (try_reduce_polynomial_quotient(left, right, &reduced)) {
+                    return reduced;
+                }
+            }
+            {
+                SymbolicExpression left_base;
+                SymbolicExpression right_base;
+                double left_exponent = 0.0;
+                double right_exponent = 0.0;
+                decompose_power_factor(left, &left_base, &left_exponent);
+                decompose_power_factor(right, &right_base, &right_exponent);
+                if (expressions_match(left_base, right_base)) {
+                    return rebuild_power_difference(left_base,
+                                                    left_exponent - right_exponent);
+                }
             }
             {
                 double numerator_coefficient = 1.0;
@@ -1425,102 +2068,16 @@ bool SymbolicExpression::is_variable_named(const std::string& variable_name) con
 bool SymbolicExpression::polynomial_coefficients(
     const std::string& variable_name,
     std::vector<double>* coefficients) const {
-    // 这个函数尝试把任意符号表达式折叠成一元多项式系数。
-    //
-    // 允许的结构包括：
-    // - 常数
-    // - x
-    // - + - * /常数
-    // - 非负整数次幂
-    //
-    // 一旦遇到 sin、exp、ln 或带变量的除法等结构，就返回 false，
-    // 交给上层提示“这不是多项式”。
     const SymbolicExpression simplified = simplify();
-    double numeric = 0.0;
-    if (simplified.is_number(&numeric)) {
-        *coefficients = {numeric};
-        return true;
-    }
-    if (simplified.is_variable_named(variable_name)) {
-        *coefficients = {0.0, 1.0};
-        return true;
-    }
-    if (simplified.is_constant(variable_name)) {
-        // 这里只把纯数值常量视为多项式系数；其他符号常量仍交给调用方拒绝。
-        if (simplified.is_number(&numeric)) {
-            *coefficients = {numeric};
-            return true;
-        }
-        return false;
-    }
+    return polynomial_coefficients_from_simplified(simplified, variable_name, coefficients);
+}
 
-    const auto& node = simplified.node_;
-    if (node->type == NodeType::kNegate) {
-        if (!SymbolicExpression(node->left).polynomial_coefficients(variable_name,
-                                                                    coefficients)) {
-            return false;
-        }
-        for (double& value : *coefficients) {
-            value = -value;
-        }
-        trim_polynomial_coefficients(coefficients);
-        return true;
-    }
-
-    std::vector<double> left;
-    std::vector<double> right;
-    switch (node->type) {
-        case NodeType::kAdd:
-            return SymbolicExpression(node->left).polynomial_coefficients(variable_name, &left) &&
-                   SymbolicExpression(node->right).polynomial_coefficients(variable_name, &right) &&
-                   ((*coefficients = polynomial_add_impl(left, right)), true);
-        case NodeType::kSubtract:
-            return SymbolicExpression(node->left).polynomial_coefficients(variable_name, &left) &&
-                   SymbolicExpression(node->right).polynomial_coefficients(variable_name, &right) &&
-                   ((*coefficients = polynomial_subtract_impl(left, right)), true);
-        case NodeType::kMultiply:
-            return SymbolicExpression(node->left).polynomial_coefficients(variable_name, &left) &&
-                   SymbolicExpression(node->right).polynomial_coefficients(variable_name, &right) &&
-                   ((*coefficients = polynomial_multiply_impl(left, right)), true);
-        case NodeType::kDivide: {
-            if (!SymbolicExpression(node->left).polynomial_coefficients(variable_name, &left)) {
-                return false;
-            }
-            double divisor = 0.0;
-            if (!SymbolicExpression(node->right).is_number(&divisor) ||
-                mymath::is_near_zero(divisor, kFormatEps)) {
-                return false;
-            }
-            for (double& value : left) {
-                value /= divisor;
-            }
-            trim_polynomial_coefficients(&left);
-            *coefficients = left;
-            return true;
-        }
-        case NodeType::kPower: {
-            double exponent = 0.0;
-            if (!SymbolicExpression(node->right).is_number(&exponent) ||
-                !mymath::is_integer(exponent, 1e-10) || exponent < 0.0) {
-                return false;
-            }
-            if (!SymbolicExpression(node->left).polynomial_coefficients(variable_name, &left)) {
-                return false;
-            }
-            std::vector<double> result = {1.0};
-            for (int i = 0; i < static_cast<int>(exponent + 0.5); ++i) {
-                result = polynomial_multiply_impl(result, left);
-            }
-            *coefficients = result;
-            return true;
-        }
-        case NodeType::kNumber:
-        case NodeType::kVariable:
-        case NodeType::kFunction:
-        case NodeType::kNegate:
-            return false;
-    }
-    return false;
+std::vector<std::string> SymbolicExpression::identifier_variables() const {
+    std::vector<std::string> names;
+    collect_identifier_variables(simplify(), &names);
+    std::sort(names.begin(), names.end());
+    names.erase(std::unique(names.begin(), names.end()), names.end());
+    return names;
 }
 
 SymbolicExpression SymbolicExpression::simplify() const {
@@ -1593,6 +2150,29 @@ SymbolicExpression SymbolicExpression::derivative(const std::string& variable_na
         case NodeType::kFunction: {
             const SymbolicExpression argument(node_->left);
             const SymbolicExpression inner = argument.derivative(variable_name);
+            if (node_->text == "asin") {
+                return make_divide(
+                           inner,
+                           make_function("sqrt",
+                                         make_subtract(number(1.0),
+                                                       make_power(argument, number(2.0)))))
+                    .simplify();
+            }
+            if (node_->text == "acos") {
+                return make_negate(
+                           make_divide(
+                               inner,
+                               make_function("sqrt",
+                                             make_subtract(number(1.0),
+                                                           make_power(argument, number(2.0))))))
+                    .simplify();
+            }
+            if (node_->text == "atan") {
+                return make_divide(
+                           inner,
+                           make_add(number(1.0), make_power(argument, number(2.0))))
+                    .simplify();
+            }
             if (node_->text == "sin") {
                 return make_multiply(make_function("cos", argument), inner).simplify();
             }
@@ -1609,6 +2189,18 @@ SymbolicExpression SymbolicExpression::derivative(const std::string& variable_na
             if (node_->text == "exp") {
                 return make_multiply(make_function("exp", argument), inner).simplify();
             }
+            if (node_->text == "sinh") {
+                return make_multiply(make_function("cosh", argument), inner).simplify();
+            }
+            if (node_->text == "cosh") {
+                return make_multiply(make_function("sinh", argument), inner).simplify();
+            }
+            if (node_->text == "tanh") {
+                return make_divide(inner,
+                                   make_power(make_function("cosh", argument),
+                                              number(2.0)))
+                    .simplify();
+            }
             if (node_->text == "ln") {
                 return make_divide(inner, argument).simplify();
             }
@@ -1616,6 +2208,16 @@ SymbolicExpression SymbolicExpression::derivative(const std::string& variable_na
                 return make_divide(inner,
                                    make_multiply(number(2.0), make_function("sqrt", argument)))
                     .simplify();
+            }
+            if (node_->text == "cbrt") {
+                return make_divide(inner,
+                                   make_multiply(number(3.0),
+                                                 make_power(make_function("cbrt", argument),
+                                                            number(2.0))))
+                    .simplify();
+            }
+            if (node_->text == "abs") {
+                return make_multiply(make_function("sign", argument), inner).simplify();
             }
             throw std::runtime_error("symbolic derivative does not support function: " + node_->text);
         }
@@ -1661,6 +2263,28 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             if (decompose_constant_times_expression(*this, variable_name, &constant, &rest)) {
                 return make_multiply(number(constant), rest.integral(variable_name)).simplify();
             }
+            const SymbolicExpression left(node_->left);
+            const SymbolicExpression right(node_->right);
+            SymbolicExpression polynomial;
+            SymbolicExpression integrated;
+            if (polynomial_expression(left, variable_name, &polynomial) &&
+                right.node_->type == NodeType::kFunction &&
+                integrate_polynomial_times_function(polynomial,
+                                                    right.node_->text,
+                                                    SymbolicExpression(right.node_->left),
+                                                    variable_name,
+                                                    &integrated)) {
+                return integrated.simplify();
+            }
+            if (polynomial_expression(right, variable_name, &polynomial) &&
+                left.node_->type == NodeType::kFunction &&
+                integrate_polynomial_times_function(polynomial,
+                                                    left.node_->text,
+                                                    SymbolicExpression(left.node_->left),
+                                                    variable_name,
+                                                    &integrated)) {
+                return integrated.simplify();
+            }
             throw std::runtime_error("symbolic integral does not support this product");
         }
         case NodeType::kPower:
@@ -1677,7 +2301,9 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             double b = 0.0;
             if (decompose_linear(right, variable_name, &a, &b) &&
                 !mymath::is_near_zero(a, kFormatEps)) {
-                return make_divide(make_function("ln", right), number(a)).simplify();
+                return make_divide(make_function("ln", make_function("abs", right)),
+                                   number(a))
+                    .simplify();
             }
         }
         throw std::runtime_error("symbolic integral does not support this quotient");
@@ -1687,12 +2313,18 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
         const SymbolicExpression base(node_->left);
         const SymbolicExpression exponent(node_->right);
         double exponent_value = 0.0;
-        if (base.is_variable_named(variable_name) && exponent.is_number(&exponent_value)) {
+        double a = 0.0;
+        double b = 0.0;
+        if (exponent.is_number(&exponent_value) &&
+            decompose_linear(base, variable_name, &a, &b) &&
+            !mymath::is_near_zero(a, kFormatEps)) {
             if (mymath::is_near_zero(exponent_value + 1.0, kFormatEps)) {
-                return make_function("ln", base);
+                return make_divide(make_function("ln", make_function("abs", base)),
+                                   number(a))
+                    .simplify();
             }
             return make_divide(make_power(base, number(exponent_value + 1.0)),
-                               number(exponent_value + 1.0))
+                               number(a * (exponent_value + 1.0)))
                 .simplify();
         }
         throw std::runtime_error("symbolic integral only supports powers of the integration variable");
@@ -1714,6 +2346,28 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
         }
         if (node_->text == "exp" && linear) {
             return make_divide(make_function("exp", argument), number(a)).simplify();
+        }
+        if (node_->text == "sqrt" && linear) {
+            return make_divide(make_multiply(number(2.0),
+                                             make_power(make_function("sqrt", argument),
+                                                        number(3.0))),
+                               number(3.0 * a))
+                .simplify();
+        }
+        if (node_->text == "cbrt" && linear) {
+            return make_divide(make_multiply(number(3.0),
+                                             make_power(make_function("cbrt", argument),
+                                                        number(4.0))),
+                               number(4.0 * a))
+                .simplify();
+        }
+        if (node_->text == "tan" && linear) {
+            return make_divide(make_negate(make_function("ln",
+                                                         make_function("abs",
+                                                                       make_function("cos",
+                                                                                     argument)))),
+                               number(a))
+                .simplify();
         }
         throw std::runtime_error("symbolic integral does not support function: " + node_->text);
     }

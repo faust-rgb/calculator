@@ -184,6 +184,63 @@ double log10(double x) {
     return ln(x) / ln(10.0);
 }
 
+double sinh(double x) {
+    const double positive = exp(x);
+    const double negative = exp(-x);
+    return 0.5 * (positive - negative);
+}
+
+double cosh(double x) {
+    const double positive = exp(x);
+    const double negative = exp(-x);
+    return 0.5 * (positive + negative);
+}
+
+double tanh(double x) {
+    const double denominator = cosh(x);
+    if (abs(denominator) < kEps) {
+        throw std::domain_error("tanh is undefined when cosh(x) is zero");
+    }
+    return sinh(x) / denominator;
+}
+
+double gamma(double x) {
+    if (is_integer(x) && x <= 0.0) {
+        throw std::domain_error("gamma is undefined for non-positive integers");
+    }
+
+    if (x < 0.5) {
+        const double reflected_sine = sin(kPi * x);
+        if (abs(reflected_sine) < kEps) {
+            throw std::domain_error("gamma is undefined at this input");
+        }
+        return kPi / (reflected_sine * gamma(1.0 - x));
+    }
+
+    static const double coefficients[] = {
+        0.99999999999980993,
+        676.5203681218851,
+        -1259.1392167224028,
+        771.32342877765313,
+        -176.61502916214059,
+        12.507343278686905,
+        -0.13857109526572012,
+        9.9843695780195716e-6,
+        1.5056327351493116e-7
+    };
+    constexpr double g = 7.0;
+
+    const double z = x - 1.0;
+    double series = coefficients[0];
+    for (int i = 1; i < 9; ++i) {
+        series += coefficients[i] / (z + static_cast<double>(i));
+    }
+
+    const double t = z + g + 0.5;
+    const double sqrt_two_pi = sqrt(2.0 * kPi);
+    return sqrt_two_pi * pow(t, z + 0.5) * exp(-t) * series;
+}
+
 double sin(double x) {
     x = normalize_angle(x);
 
