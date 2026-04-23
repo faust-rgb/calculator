@@ -10,6 +10,7 @@ INCLUDES := $(addprefix -I,$(SRC_DIRS))
 
 MAIN_SRC := $(SRC_DIR)/app/main.cpp
 COMMON_SRCS := $(SRC_DIR)/core/calculator.cpp \
+	$(SRC_DIR)/core/calculator_help.cpp \
 	$(SRC_DIR)/math/mymath.cpp \
 	$(SRC_DIR)/matrix/matrix.cpp \
 	$(SRC_DIR)/analysis/function_analysis.cpp \

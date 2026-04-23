@@ -8,6 +8,13 @@ helpers, interactive terminal UX, and project documentation.
 
 ## Latest Numerical Work
 
+- Added `round`, `trunc`, `clamp`, `log(x, base)`, `log2`, and `exp2`
+- Added programmer helpers:
+  - `rol`, `ror`
+  - `popcount`, `bitlen`, `ctz`, `clz`, `parity`, `reverse_bits`
+- Added `percentile(...)` and `quartile(...)` in both scalar-aggregate and vector forms
+- Extracted calculator help generation into `src/core/calculator_help.cpp` so the
+  main calculator implementation no longer carries the full help-text payload
 - Added scientific-notation parsing for decimal, exact, and high-precision
   decimal paths
 - Stabilized large-angle trigonometric reduction to avoid overflow-prone integer
@@ -58,6 +65,12 @@ helpers, interactive terminal UX, and project documentation.
   - `sum`
   - `avg`
   - `median`
+  - `mean`
+  - `mode`
+  - `var`
+  - `std`
+  - `percentile`
+  - `quartile`
 - Unit conversion helpers:
   - `deg2rad`, `rad2deg`
   - `celsius`, `fahrenheit`, `kelvin`
@@ -90,8 +103,9 @@ helpers, interactive terminal UX, and project documentation.
 - Display normalization for near-integer floating-point results
 - Integer / utility functions:
   - `gcd`, `lcm`, `mod`
-  - `abs`, `sign`, `floor`, `ceil`
-  - `min`, `max`
+  - `abs`, `sign`, `floor`, `ceil`, `round`, `trunc`
+  - `min`, `max`, `clamp`
+  - `log`, `log2`, `exp2`
 - Variable system:
   - assignments
   - variable reuse
@@ -115,6 +129,7 @@ helpers, interactive terminal UX, and project documentation.
   - `0x`
 - Bitwise functions:
   - `and`, `or`, `xor`, `not`, `shl`, `shr`
+  - `rol`, `ror`, `popcount`, `bitlen`, `ctz`, `clz`, `parity`, `reverse_bits`
 - Expanded regression tests
 - Handoff and architecture documentation
 
@@ -122,4 +137,4 @@ helpers, interactive terminal UX, and project documentation.
 
 - `make test` currently passes
 - Expected test summary:
-  - `Passed: 466, Failed: 0`
+  - `Passed: 671, Failed: 0`

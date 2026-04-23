@@ -44,18 +44,19 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - Functions: `sin(x)`, `cos(x)`, `tan(x)`, `asin(x)`, `acos(x)`, `atan(x)`,
   `sec(x)`, `csc(x)`, `cot(x)`, `asec(x)`, `acsc(x)`, `acot(x)`,
   `sinh(x)`, `cosh(x)`, `tanh(x)`, `asinh(x)`, `acosh(x)`, `atanh(x)`,
-  `exp(x)`, `ln(x)`, `log10(x)`, `gamma(x)`, `beta(a, b)`, `zeta(s)`,
-  `erf(x)`, `erfc(x)`, `bessel(n, x)`, `sqrt(x)`, `cbrt(x)`, `root(a, n)`,
-  `abs(x)`, `sign(x)`, `floor(x)`, `ceil(x)`, `pow(a, b)`
-- Comparison and integer utilities: `min(a, b)`, `max(a, b)`, `gcd(a, b)`, `lcm(a, b)`, `mod(a, b)`, `factorial(n)`, `nCr(n, r)`, `binom(n, r)`, `nPr(n, r)`, `fib(n)`, `is_prime(n)`, `next_prime(n)`
+  `exp(x)`, `exp2(x)`, `ln(x)`, `log(x, base)`, `log2(x)`, `log10(x)`,
+  `gamma(x)`, `beta(a, b)`, `zeta(s)`, `erf(x)`, `erfc(x)`, `bessel(n, x)`,
+  `sqrt(x)`, `cbrt(x)`, `root(a, n)`, `abs(x)`, `sign(x)`, `floor(x)`,
+  `ceil(x)`, `round(x)`, `trunc(x)`, `pow(a, b)`
+- Comparison and integer utilities: `min(a, b)`, `max(a, b)`, `clamp(x, min, max)`, `gcd(a, b)`, `lcm(a, b)`, `mod(a, b)`, `factorial(n)`, `nCr(n, r)`, `binom(n, r)`, `nPr(n, r)`, `fib(n)`, `is_prime(n)`, `next_prime(n)`
 - Rational approximation helper: `rat(x)` and `rat(x, max_denominator)`
-- Aggregate helpers: `sum(...)`, `mean(...)`, `avg(...)`, `median(...)`, `mode(...)`, `var(...)`, `std(...)`
+- Aggregate helpers: `sum(...)`, `mean(...)`, `avg(...)`, `median(...)`, `mode(...)`, `percentile(...)`, `quartile(...)`, `var(...)`, `std(...)`
 - Probability helpers: `rand()`, `randn()`, `randint(a, b)`, `pdf_normal(x, mu, sigma)`, `cdf_normal(x, mu, sigma)`
 - Unit conversion helpers: `deg(x)`, `rad(x)`, `deg2rad(x)`, `rad2deg(x)`, `sin_deg(x)`, `cos_deg(x)`, `celsius(f)`, `fahrenheit(c)`, `kelvin(c)`, `c2f(c)`, `f2c(f)`
 - Prime factorization with `factor(n)`
 - Base conversion with `bin(n)`, `oct(n)`, `hex(n)`, `base(n, b)`
 - Hex formatting controls with `:hexprefix` and `:hexcase`
-- Bitwise operations with `and(a, b)`, `or(a, b)`, `xor(a, b)`, `not(a)`, `shl(a, n)`, `shr(a, n)`
+- Bitwise operations with `and(a, b)`, `or(a, b)`, `xor(a, b)`, `not(a)`, `shl(a, n)`, `shr(a, n)`, `rol(a, n)`, `ror(a, n)`, `popcount(n)`, `bitlen(n)`, `ctz(n)`, `clz(n)`, `parity(n)`, `reverse_bits(n)`
 - Matrix creation with `vec(...)`, `mat(...)`, `zeros(...)`, `eye(...)`
 - Matrix editing with `resize(...)`, `append_row(...)`, `append_col(...)`, `get(...)`, `set(...)`
 - Matrix transpose with `transpose(...)`

@@ -82,7 +82,10 @@ int main() {
         {"zeta(2)", (mymath::kPi * mymath::kPi) / 6.0},
         {"bessel(0, 0)", 1.0},
         {"ln(e)", 1.0},
+        {"log(8, 2)", 3.0},
+        {"log2(8)", 3.0},
         {"log10(1000)", 3.0},
+        {"exp2(5)", 32.0},
         {"sin(pi / 2)", 1.0},
         {"sin(pi)", 0.0},
         {"cos(pi)", -1.0},
@@ -124,8 +127,19 @@ int main() {
         {"floor(-7/3)", -3.0},
         {"ceil(7/3)", 3.0},
         {"ceil(-7/3)", -2.0},
+        {"round(2.5)", 3.0},
+        {"round(-2.5)", -3.0},
+        {"trunc(7/3)", 2.0},
+        {"trunc(-7/3)", -2.0},
         {"min(4, 9)", 4.0},
         {"max(4, 9)", 9.0},
+        {"clamp(12, 0, 10)", 10.0},
+        {"clamp(-3, 0, 10)", 0.0},
+        {"clamp(4, 10, 0)", 4.0},
+        {"percentile(75, 1, 2, 3, 4, 5)", 4.0},
+        {"quartile(1, 1, 2, 3, 4, 5)", 2.0},
+        {"percentile(vec(1, 2, 3, 4, 5), 25)", 2.0},
+        {"quartile(vec(1, 2, 3, 4, 5), 3)", 4.0},
         {"sum(1, 2, 3, 4)", 10.0},
         {"mean(1, 2, 3, 4)", 2.5},
         {"avg(1, 2, 3, 4)", 2.5},
@@ -163,6 +177,14 @@ int main() {
         {"not(0)", -1.0},
         {"shl(3, 2)", 12.0},
         {"shr(16, 2)", 4.0},
+        {"rol(1, 3)", 8.0},
+        {"ror(8, 3)", 1.0},
+        {"popcount(0xF0)", 4.0},
+        {"bitlen(255)", 8.0},
+        {"ctz(40)", 3.0},
+        {"clz(1)", 63.0},
+        {"parity(0xF0)", 0.0},
+        {"reverse_bits(1)", -9223372036854775808.0},
     };
 
     int passed = 0;
@@ -250,6 +272,9 @@ int main() {
         {"1 / 0"},
         {"ln(0)"},
         {"log10(-1)"},
+        {"log(8, 1)"},
+        {"percentile(101, 1, 2, 3)"},
+        {"quartile(5, 1, 2, 3)"},
         {"tan(pi / 2)"},
         {"asin(2)"},
         {"acos(-2)"},
@@ -296,6 +321,8 @@ int main() {
         {"and(5.5, 2)"},
         {"not(1.5)"},
         {"shl(2, -1)"},
+        {"rol(1, -1)"},
+        {"popcount(1.5)"},
         {"foo(1)"},
         {"(1 + 2"},
         {"(-2) ^ 0.5"},
@@ -334,8 +361,19 @@ int main() {
         {"floor(-7/3)", true, "-3"},
         {"ceil(7/3)", true, "3"},
         {"ceil(-7/3)", true, "-2"},
+        {"round(5/2)", true, "3"},
+        {"round(-5/2)", true, "-3"},
+        {"trunc(7/3)", true, "2"},
+        {"trunc(-7/3)", true, "-2"},
         {"min(7/3, 5/2)", true, "7/3"},
         {"max(7/3, 5/2)", true, "5/2"},
+        {"clamp(7/3, 2, 5/2)", true, "7/3"},
+        {"clamp(9/2, 2, 5/2)", true, "5/2"},
+        {"log(8, 2)", false, "3"},
+        {"log2(8)", false, "3"},
+        {"exp2(5)", false, "32"},
+        {"percentile(75, 1, 2, 3, 4, 5)", false, "4"},
+        {"quartile(1, 1, 2, 3, 4, 5)", false, "2"},
         {"sum(1/3, 1/6, 1/2)", true, "1"},
         {"mean(1/3, 5/3)", true, "1"},
         {"avg(1/3, 5/3)", true, "1"},
@@ -363,6 +401,13 @@ int main() {
         {"not(0)", true, "-1"},
         {"shl(3, 2)", true, "12"},
         {"shr(16, 2)", true, "4"},
+        {"rol(1, 3)", true, "8"},
+        {"ror(8, 3)", true, "1"},
+        {"popcount(0xF0)", true, "4"},
+        {"bitlen(255)", true, "8"},
+        {"ctz(40)", true, "3"},
+        {"clz(1)", true, "63"},
+        {"parity(0xF0)", true, "0"},
         {"step(-1)", true, "0"},
         {"step(0)", true, "1"},
         {"delta(0)", true, "1"},
@@ -834,6 +879,7 @@ int main() {
             help.find("deg2rad rad2deg celsius fahrenheit kelvin") != std::string::npos &&
             help.find("bin oct hex base") != std::string::npos &&
             help.find("sum avg median") != std::string::npos &&
+            help.find("percentile quartile") != std::string::npos &&
             help.find("fn if else while for return break continue print") != std::string::npos &&
             help.find("poly_add poly_sub poly_mul poly_div roots") != std::string::npos &&
             help.find("double_integral") != std::string::npos &&
@@ -844,7 +890,7 @@ int main() {
             help.find("fourier ifourier laplace ilaplace ztrans iztrans") != std::string::npos &&
             help.find("dft fft idft ifft conv convolve") != std::string::npos &&
             help.find("taylor pade puiseux series_sum summation") != std::string::npos &&
-            help.find("and or xor not shl shr") != std::string::npos;
+            help.find("and or xor not shl shr rol ror popcount bitlen ctz clz parity reverse_bits") != std::string::npos;
         if (ok) {
             ++passed;
         } else {
@@ -865,6 +911,7 @@ int main() {
             help.find("transpose") != std::string::npos &&
             help.find("inverse dot outer null least_squares qr_q qr_r lu_l lu_u svd_u svd_s svd_vt") != std::string::npos &&
             help.find("norm trace det rank rref eigvals eigvecs solve") != std::string::npos &&
+            help.find("percentile quartile") != std::string::npos &&
             help.find("indices are zero-based") != std::string::npos;
         if (ok) {
             ++passed;
@@ -921,6 +968,8 @@ int main() {
             help.find("m = mat(2, 2, 1, 2, 3, 4)") != std::string::npos &&
             help.find("hex(255)") != std::string::npos &&
             help.find("and(6, 3)") != std::string::npos &&
+            help.find("rol(1, 3)") != std::string::npos &&
+            help.find("quartile(vec(1, 2, 3, 4), 1)") != std::string::npos &&
             help.find(":save state.txt") != std::string::npos;
         if (ok) {
             ++passed;
@@ -939,7 +988,8 @@ int main() {
         const bool ok =
             help.find(":exact on") != std::string::npos &&
             help.find("Prefer rational results") != std::string::npos &&
-            help.find("sum avg median") != std::string::npos;
+            help.find("sum avg median") != std::string::npos &&
+            help.find("programmer bitwise helpers") != std::string::npos;
         if (ok) {
             ++passed;
         } else {
@@ -994,7 +1044,9 @@ int main() {
             help.find("bin oct hex base") != std::string::npos &&
             help.find(":hexprefix on|off") != std::string::npos &&
             help.find(":hexcase upper|lower") != std::string::npos &&
-            help.find("shl(5, 2)") != std::string::npos;
+            help.find("shl(5, 2)") != std::string::npos &&
+            help.find("rol(1, 3)") != std::string::npos &&
+            help.find("popcount(15)") != std::string::npos;
         if (ok) {
             ++passed;
         } else {

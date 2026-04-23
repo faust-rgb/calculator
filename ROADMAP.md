@@ -2,38 +2,28 @@
 
 ## Short Term
 
-- Scientific notation parsing such as `1e-3`
 - More programmer-style functions:
-  - `rol`
-  - `ror`
-  - `popcount`
-  - `bitlen`
-- More numeric helpers:
-  - `round`
-  - `trunc`
-  - `clamp`
-- More logarithm helpers:
-  - `log(x, base)`
-  - `log2`
-  - `exp2`
+  - bit-mask helpers
+  - signed/unsigned display helpers
+- More statistical helpers:
+  - `skewness`
+  - `kurtosis`
+  - `histogram`
+- More matrix reporting helpers:
+  - decomposition summary commands
+  - richer formatting for factorized results
 
 ## Medium Term
 
 - Better autocomplete:
-  - show candidates on double-Tab
   - more context-sensitive completion
-- More help topics:
-  - `:help exact`
-  - `:help variables`
-  - `:help persistence`
-  - `:help programmer`
 - Better output formatting options:
-  - prefixed hex output like `0xFF`
-  - lowercase/uppercase hex mode
+  - configurable digit grouping like `1,000,000`
+  - scientific notation display toggles
+  - aligned tabular matrix/vector output
 - More aggregate helpers:
-  - `sum`
-  - `avg`
-  - `median`
+  - weighted statistics
+  - streaming summaries
 
 ## Long Term
 

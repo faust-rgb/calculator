@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <fstream>
 #include <functional>
 #include <iomanip>
@@ -66,6 +67,10 @@ bool is_integer_double(double x, double eps = 1e-10) {
 
 long long round_to_long_long(double x) {
     return static_cast<long long>(x >= 0.0 ? x + 0.5 : x - 0.5);
+}
+
+long long trunc_to_long_long(double x) {
+    return static_cast<long long>(x);
 }
 
 long long floor_to_long_long(double x) {
@@ -212,6 +217,93 @@ double fibonacci_value(long long n) {
         b = next;
     }
     return static_cast<double>(b);
+}
+
+constexpr unsigned kProgrammerBitWidth = 64;
+
+std::uint64_t to_unsigned_bits(long long value) {
+    return static_cast<std::uint64_t>(value);
+}
+
+long long from_unsigned_bits(std::uint64_t value) {
+    return static_cast<long long>(value);
+}
+
+unsigned normalize_rotation_count(long long count) {
+    if (count < 0) {
+        throw std::runtime_error("rotate count cannot be negative");
+    }
+    return static_cast<unsigned>(count % static_cast<long long>(kProgrammerBitWidth));
+}
+
+std::uint64_t rotate_left_bits(std::uint64_t value, unsigned count) {
+    if (count == 0) {
+        return value;
+    }
+    return (value << count) | (value >> (kProgrammerBitWidth - count));
+}
+
+std::uint64_t rotate_right_bits(std::uint64_t value, unsigned count) {
+    if (count == 0) {
+        return value;
+    }
+    return (value >> count) | (value << (kProgrammerBitWidth - count));
+}
+
+int popcount_bits(std::uint64_t value) {
+    int count = 0;
+    while (value != 0) {
+        value &= (value - 1);
+        ++count;
+    }
+    return count;
+}
+
+int bit_length_bits(std::uint64_t value) {
+    int length = 0;
+    while (value != 0) {
+        ++length;
+        value >>= 1;
+    }
+    return length;
+}
+
+int trailing_zero_count_bits(std::uint64_t value) {
+    if (value == 0) {
+        return static_cast<int>(kProgrammerBitWidth);
+    }
+    int count = 0;
+    while ((value & 1ULL) == 0ULL) {
+        ++count;
+        value >>= 1;
+    }
+    return count;
+}
+
+int leading_zero_count_bits(std::uint64_t value) {
+    if (value == 0) {
+        return static_cast<int>(kProgrammerBitWidth);
+    }
+    int count = 0;
+    std::uint64_t mask = 1ULL << (kProgrammerBitWidth - 1);
+    while ((value & mask) == 0ULL) {
+        ++count;
+        mask >>= 1;
+    }
+    return count;
+}
+
+int parity_bits(std::uint64_t value) {
+    return popcount_bits(value) % 2;
+}
+
+std::uint64_t reverse_bits(std::uint64_t value) {
+    std::uint64_t reversed = 0ULL;
+    for (unsigned i = 0; i < kProgrammerBitWidth; ++i) {
+        reversed = (reversed << 1) | (value & 1ULL);
+        value >>= 1;
+    }
+    return reversed;
 }
 
 std::string factor_integer(long long value) {
@@ -1839,29 +1931,31 @@ bool is_reserved_function_name(const std::string& name) {
     static const std::vector<std::string> names = {
         "abs", "acos", "acosh", "acot", "acsc", "and", "asec", "asin",
         "asinh", "atan", "atanh", "base", "beta", "bin", "binom",
-        "bessel", "c2f", "cbrt", "cdf_normal",
-        "ceil", "cholesky", "complex", "cond", "conj", "corr", "cos",
+        "bessel", "bitlen", "c2f", "cbrt", "cdf_normal",
+        "ceil", "cholesky", "clamp", "complex", "cond", "conj", "corr", "cos",
         "cos_deg", "cosh", "cot", "cov", "deg", "deg2rad", "diag",
         "diff", "double_integral",
-        "double_integral_cyl", "double_integral_polar", "exp", "extrema",
+        "double_integral_cyl", "double_integral_polar", "exp", "exp2", "extrema",
         "f2c", "factor", "factorial", "fahrenheit", "fib", "fixed_point",
         "floor", "gamma", "gcd", "get", "hadamard", "hessenberg",
         "hex", "identity", "imag", "integral", "inverse", "is_prime",
         "kelvin", "kron", "lagrange", "lcm", "least_squares",
-        "linear_regression", "ln", "log10", "lu_l", "lu_u", "mat", "max",
+        "linear_regression", "ln", "log", "log10", "log2", "lu_l", "lu_u", "mat", "max",
         "mean", "median", "min", "mod", "mode", "nCr", "nPr", "next_prime",
         "norm", "not", "null", "oct", "ode", "ode_table", "or", "outer",
-        "pdf_normal", "pinv", "polar", "poly_add", "poly_compose",
+        "parity", "pdf_normal", "percentile", "pinv", "polar", "poly_add", "poly_compose",
         "poly_deriv", "poly_div", "poly_eval", "poly_fit", "poly_gcd",
         "poly_integ", "poly_mul", "poly_sub", "polynomial_fit", "pow",
         "qr_q", "qr_r", "rad", "rad2deg", "rand", "randint", "randn",
-        "rank", "rat", "real", "reshape", "resize", "rref", "root", "roots",
+        "rank", "rat", "real", "reshape", "resize", "rref", "rol", "root", "roots",
+        "ror", "round",
         "schur", "sec", "secant", "set", "shl", "shr", "sign", "sin",
         "sin_deg", "sinh", "solve", "spline", "sqrt", "std", "sum",
         "svd", "svd_s", "svd_u", "svd_vt", "tan", "tanh", "taylor",
         "trace", "transpose", "triple_integral", "triple_integral_cyl",
-        "triple_integral_sph", "avg", "var", "vec", "xor", "zeta",
+        "triple_integral_sph", "trunc", "avg", "var", "vec", "xor", "zeta",
         "celsius", "delta", "heaviside", "impulse", "step",
+        "quartile", "popcount", "ctz", "clz", "reverse_bits",
         "fourier", "ifourier", "inverse_fourier",
         "laplace", "ilaplace", "inverse_laplace",
         "ztrans", "iztrans", "z_transform", "inverse_z",
@@ -2155,6 +2249,12 @@ private:
         if (name == "shr") {
             return apply_shr(arguments);
         }
+        if (name == "rol") {
+            return apply_rol(arguments);
+        }
+        if (name == "ror") {
+            return apply_ror(arguments);
+        }
         if (name == "gcd") {
             return apply_gcd(arguments);
         }
@@ -2169,6 +2269,12 @@ private:
         }
         if (name == "max") {
             return apply_max(arguments);
+        }
+        if (name == "clamp") {
+            return apply_clamp(arguments);
+        }
+        if (name == "log") {
+            return apply_log(arguments);
         }
         if (name == "sum") {
             return apply_sum(arguments);
@@ -2190,6 +2296,12 @@ private:
         }
         if (name == "std") {
             return apply_stddev(arguments);
+        }
+        if (name == "percentile") {
+            return apply_percentile(arguments);
+        }
+        if (name == "quartile") {
+            return apply_quartile(arguments);
         }
         if (name == "factorial") {
             return apply_factorial(arguments);
@@ -2235,6 +2347,24 @@ private:
         }
         if (name == "cdf_normal") {
             return apply_cdf_normal(arguments);
+        }
+        if (name == "popcount") {
+            return apply_popcount(arguments);
+        }
+        if (name == "bitlen") {
+            return apply_bitlen(arguments);
+        }
+        if (name == "ctz") {
+            return apply_ctz(arguments);
+        }
+        if (name == "clz") {
+            return apply_clz(arguments);
+        }
+        if (name == "parity") {
+            return apply_parity(arguments);
+        }
+        if (name == "reverse_bits") {
+            return apply_reverse_bits(arguments);
         }
 
         const auto function_it = functions_->find(name);
@@ -2288,6 +2418,12 @@ private:
         }
         if (name == "ceil") {
             return static_cast<double>(ceil_to_long_long(argument));
+        }
+        if (name == "round") {
+            return static_cast<double>(round_to_long_long(argument));
+        }
+        if (name == "trunc") {
+            return static_cast<double>(trunc_to_long_long(argument));
         }
         if (name == "cbrt") {
             return mymath::cbrt(argument);
@@ -2349,11 +2485,17 @@ private:
         if (name == "ln") {
             return mymath::ln(argument);
         }
+        if (name == "log2") {
+            return mymath::ln(argument) / mymath::ln(2.0);
+        }
         if (name == "log10") {
             return mymath::log10(argument);
         }
         if (name == "exp") {
             return mymath::exp(argument);
+        }
+        if (name == "exp2") {
+            return mymath::exp(argument * mymath::ln(2.0));
         }
         if (name == "gamma") {
             return mymath::gamma(argument);
@@ -2476,6 +2618,34 @@ private:
         return arguments[0] > arguments[1] ? arguments[0] : arguments[1];
     }
 
+    static double apply_clamp(const std::vector<double>& arguments) {
+        if (arguments.size() != 3) {
+            throw std::runtime_error("clamp expects exactly three arguments");
+        }
+        double lower = arguments[1];
+        double upper = arguments[2];
+        if (lower > upper) {
+            std::swap(lower, upper);
+        }
+        if (arguments[0] < lower) {
+            return lower;
+        }
+        if (arguments[0] > upper) {
+            return upper;
+        }
+        return arguments[0];
+    }
+
+    static double apply_log(const std::vector<double>& arguments) {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("log expects exactly two arguments");
+        }
+        if (mymath::is_near_zero(arguments[1] - 1.0)) {
+            throw std::runtime_error("log base cannot be 1");
+        }
+        return mymath::ln(arguments[0]) / mymath::ln(arguments[1]);
+    }
+
     static double apply_sum(const std::vector<double>& arguments) {
         if (arguments.empty()) {
             throw std::runtime_error("sum expects at least one argument");
@@ -2558,6 +2728,52 @@ private:
 
     static double apply_stddev(const std::vector<double>& arguments) {
         return mymath::sqrt(apply_variance(arguments));
+    }
+
+    static double apply_percentile(const std::vector<double>& arguments) {
+        if (arguments.size() < 2) {
+            throw std::runtime_error("percentile expects p followed by at least one value");
+        }
+        const double p = arguments[0];
+        if (p < 0.0 || p > 100.0) {
+            throw std::runtime_error("percentile p must be in [0, 100]");
+        }
+        std::vector<double> values(arguments.begin() + 1, arguments.end());
+        std::sort(values.begin(), values.end());
+        if (values.size() == 1) {
+            return values.front();
+        }
+        const double position =
+            p * static_cast<double>(values.size() - 1) / 100.0;
+        const long long lower_index = floor_to_long_long(position);
+        const long long upper_index = ceil_to_long_long(position);
+        if (lower_index == upper_index) {
+            return values[static_cast<std::size_t>(lower_index)];
+        }
+        const double fraction = position - static_cast<double>(lower_index);
+        const double lower = values[static_cast<std::size_t>(lower_index)];
+        const double upper = values[static_cast<std::size_t>(upper_index)];
+        return lower + (upper - lower) * fraction;
+    }
+
+    static double apply_quartile(const std::vector<double>& arguments) {
+        if (arguments.size() < 2) {
+            throw std::runtime_error("quartile expects q followed by at least one value");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("quartile q must be an integer");
+        }
+        const long long q = round_to_long_long(arguments[0]);
+        if (q < 0 || q > 4) {
+            throw std::runtime_error("quartile q must be between 0 and 4");
+        }
+        std::vector<double> percentile_arguments;
+        percentile_arguments.reserve(arguments.size());
+        percentile_arguments.push_back(static_cast<double>(q * 25));
+        percentile_arguments.insert(percentile_arguments.end(),
+                                    arguments.begin() + 1,
+                                    arguments.end());
+        return apply_percentile(percentile_arguments);
     }
 
     static double apply_factorial(const std::vector<double>& arguments) {
@@ -2753,6 +2969,96 @@ private:
             throw std::runtime_error("shift count cannot be negative");
         }
         return static_cast<double>(round_to_long_long(arguments[0]) >> shift);
+    }
+
+    static double apply_rol(const std::vector<double>& arguments) {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("rol expects exactly two arguments");
+        }
+        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
+            throw std::runtime_error("rol only accepts integers");
+        }
+        const std::uint64_t value = to_unsigned_bits(round_to_long_long(arguments[0]));
+        const unsigned count = normalize_rotation_count(round_to_long_long(arguments[1]));
+        return static_cast<double>(from_unsigned_bits(rotate_left_bits(value, count)));
+    }
+
+    static double apply_ror(const std::vector<double>& arguments) {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("ror expects exactly two arguments");
+        }
+        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
+            throw std::runtime_error("ror only accepts integers");
+        }
+        const std::uint64_t value = to_unsigned_bits(round_to_long_long(arguments[0]));
+        const unsigned count = normalize_rotation_count(round_to_long_long(arguments[1]));
+        return static_cast<double>(from_unsigned_bits(rotate_right_bits(value, count)));
+    }
+
+    static double apply_popcount(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("popcount expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("popcount only accepts integers");
+        }
+        return static_cast<double>(
+            popcount_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
+    }
+
+    static double apply_bitlen(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("bitlen expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("bitlen only accepts integers");
+        }
+        return static_cast<double>(
+            bit_length_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
+    }
+
+    static double apply_ctz(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("ctz expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("ctz only accepts integers");
+        }
+        return static_cast<double>(
+            trailing_zero_count_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
+    }
+
+    static double apply_clz(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("clz expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("clz only accepts integers");
+        }
+        return static_cast<double>(
+            leading_zero_count_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
+    }
+
+    static double apply_parity(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("parity expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("parity only accepts integers");
+        }
+        return static_cast<double>(
+            parity_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
+    }
+
+    static double apply_reverse_bits(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("reverse_bits expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("reverse_bits only accepts integers");
+        }
+        return static_cast<double>(
+            from_unsigned_bits(reverse_bits(to_unsigned_bits(round_to_long_long(arguments[0])))));
     }
 
     double lookup_variable(const std::string& name) const {
@@ -3217,6 +3523,32 @@ private:
             }
             return Rational(arguments[0].numerator % arguments[1].numerator, 1);
         }
+        if (name == "rol") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("rol expects exactly two arguments");
+            }
+            if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
+                throw std::runtime_error("rol only accepts integers");
+            }
+            const unsigned count = normalize_rotation_count(arguments[1].numerator);
+            return Rational(
+                from_unsigned_bits(rotate_left_bits(
+                    to_unsigned_bits(arguments[0].numerator), count)),
+                1);
+        }
+        if (name == "ror") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("ror expects exactly two arguments");
+            }
+            if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
+                throw std::runtime_error("ror only accepts integers");
+            }
+            const unsigned count = normalize_rotation_count(arguments[1].numerator);
+            return Rational(
+                from_unsigned_bits(rotate_right_bits(
+                    to_unsigned_bits(arguments[0].numerator), count)),
+                1);
+        }
         if (name == "floor") {
             if (arguments.size() != 1) {
                 throw std::runtime_error("floor expects exactly one argument");
@@ -3228,6 +3560,18 @@ private:
                 throw std::runtime_error("ceil expects exactly one argument");
             }
             return Rational(ceil_to_long_long(rational_to_double(arguments[0])), 1);
+        }
+        if (name == "round") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("round expects exactly one argument");
+            }
+            return Rational(round_to_long_long(rational_to_double(arguments[0])), 1);
+        }
+        if (name == "trunc") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("trunc expects exactly one argument");
+            }
+            return Rational(trunc_to_long_long(rational_to_double(arguments[0])), 1);
         }
         if (name == "min") {
             if (arguments.size() != 2) {
@@ -3244,6 +3588,23 @@ private:
             return rational_to_double(arguments[0]) > rational_to_double(arguments[1])
                        ? arguments[0]
                        : arguments[1];
+        }
+        if (name == "clamp") {
+            if (arguments.size() != 3) {
+                throw std::runtime_error("clamp expects exactly three arguments");
+            }
+            Rational lower = arguments[1];
+            Rational upper = arguments[2];
+            if (rational_to_double(lower) > rational_to_double(upper)) {
+                std::swap(lower, upper);
+            }
+            if (rational_to_double(arguments[0]) < rational_to_double(lower)) {
+                return lower;
+            }
+            if (rational_to_double(arguments[0]) > rational_to_double(upper)) {
+                return upper;
+            }
+            return arguments[0];
         }
         if (name == "sum") {
             if (arguments.empty()) {
@@ -3325,6 +3686,62 @@ private:
                 throw std::runtime_error("nPr only accepts integers");
             }
             return permutation_rational(arguments[0].numerator, arguments[1].numerator);
+        }
+        if (name == "popcount") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("popcount expects exactly one argument");
+            }
+            if (!arguments[0].is_integer()) {
+                throw std::runtime_error("popcount only accepts integers");
+            }
+            return Rational(popcount_bits(to_unsigned_bits(arguments[0].numerator)), 1);
+        }
+        if (name == "bitlen") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("bitlen expects exactly one argument");
+            }
+            if (!arguments[0].is_integer()) {
+                throw std::runtime_error("bitlen only accepts integers");
+            }
+            return Rational(bit_length_bits(to_unsigned_bits(arguments[0].numerator)), 1);
+        }
+        if (name == "ctz") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("ctz expects exactly one argument");
+            }
+            if (!arguments[0].is_integer()) {
+                throw std::runtime_error("ctz only accepts integers");
+            }
+            return Rational(trailing_zero_count_bits(to_unsigned_bits(arguments[0].numerator)), 1);
+        }
+        if (name == "clz") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("clz expects exactly one argument");
+            }
+            if (!arguments[0].is_integer()) {
+                throw std::runtime_error("clz only accepts integers");
+            }
+            return Rational(leading_zero_count_bits(to_unsigned_bits(arguments[0].numerator)), 1);
+        }
+        if (name == "parity") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("parity expects exactly one argument");
+            }
+            if (!arguments[0].is_integer()) {
+                throw std::runtime_error("parity only accepts integers");
+            }
+            return Rational(parity_bits(to_unsigned_bits(arguments[0].numerator)), 1);
+        }
+        if (name == "reverse_bits") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("reverse_bits expects exactly one argument");
+            }
+            if (!arguments[0].is_integer()) {
+                throw std::runtime_error("reverse_bits only accepts integers");
+            }
+            return Rational(
+                from_unsigned_bits(reverse_bits(to_unsigned_bits(arguments[0].numerator))),
+                1);
         }
         if (name == "and") {
             if (arguments.size() != 2) {
@@ -4685,260 +5102,6 @@ std::string Calculator::execute_script(const std::string& source, bool exact_mod
         }
     }
     return last_output.empty() ? "OK" : last_output;
-}
-
-std::string Calculator::help_text() const {
-    return
-        "Help topics:\n"
-        "  :help commands      Show command reference\n"
-        "  :help functions     Show supported functions\n"
-        "  :help matrix        Show matrix usage guide\n"
-        "  :help examples      Show example inputs\n"
-        "  :help exact         Show exact fraction mode help\n"
-        "  :help variables     Show variable and function usage help\n"
-        "  :help persistence   Show save/load help\n"
-        "  :help programmer    Show bitwise/base-conversion help\n"
-        "\n" +
-        help_topic("commands") + "\n\n" +
-        help_topic("matrix");
-}
-
-std::string Calculator::help_topic(const std::string& topic) const {
-    if (topic == "commands") {
-        return
-        "Commands:\n"
-        "  help, :help         Show this help message\n"
-        "  :exact on|off       Toggle exact fraction mode\n"
-        "  :exact              Show current exact mode status\n"
-        "  :symbolic on|off    Preserve pi/e in scalar display results\n"
-        "  :symbolic           Show current symbolic constants mode\n"
-        "  :hexprefix on|off   Toggle 0x/0X prefix for hex output\n"
-        "  :hexprefix          Show current hex prefix mode\n"
-        "  :hexcase upper|lower Set hex letter case\n"
-        "  :hexcase            Show current hex letter case\n"
-        "  :vars               List stored variables\n"
-        "  :funcs              List custom functions\n"
-        "  :clear name         Clear one variable\n"
-        "  :clearfunc name     Clear one custom function\n"
-        "  :clear              Clear all variables\n"
-        "  :clearfuncs         Clear all custom functions\n"
-        "  :history            Show session input history\n"
-        "  :save file          Save variables to a file\n"
-        "  :load file          Load variables from a file\n"
-        "  :run file           Execute a script file\n"
-        "  exit, quit          Exit the calculator";
-    }
-
-    if (topic == "examples") {
-        return
-        "Examples:\n"
-        "  x = 1/3 + 1/4       Assign a variable\n"
-        "  2 ^ 10              Power operator\n"
-        "  pow(3, 4)           Function-style power\n"
-        "  v = vec(1, 2, 3)    Create a vector\n"
-        "  m = mat(2, 2, 1, 2, 3, 4)  Create a matrix\n"
-        "  m + eye(2)          Add matrices directly\n"
-        "  2 * m               Matrix-scalar multiplication\n"
-        "  transpose(m)        Matrix transpose\n"
-        "  inverse(m)          Matrix inverse\n"
-        "  dot(a, b)           Vector dot product\n"
-        "  outer(a, b)         Vector outer product\n"
-        "  null(m)             Nullspace basis\n"
-        "  least_squares(A, b) Least-squares solution\n"
-        "  qr_q(A), qr_r(A)    QR decomposition parts\n"
-        "  lu_l(A), lu_u(A)    LU decomposition parts\n"
-        "  svd_u/s/vt(A)       Reduced SVD factors\n"
-        "  solve(A, b)         Solve Ax = b\n"
-        "  get(m, 1, 0)        Read one element\n"
-        "  m = set(m, 1, 0, 8) Update one element\n"
-        "  det(m)              Determinant\n"
-        "  rref(m)             Reduced row echelon form\n"
-        "  resize(m, 3, 3)     Resize with zero-fill\n"
-        "  factor(360)         Prime factorization\n"
-        "  factorial(5)        Integer factorial\n"
-        "  nCr(5, 2)           Combination count\n"
-        "  nPr(5, 2)           Permutation count\n"
-        "  rat(pi, 1000)       Best rational approximation with bounded denominator\n"
-        "  sum(1, 2, 3, 4)     Aggregate sum\n"
-        "  mean(1, 2, 3, 4)    Aggregate mean\n"
-        "  avg(1, 2, 3, 4)     Aggregate average\n"
-        "  median(1, 5, 2, 9)  Aggregate median\n"
-        "  mode(1, 2, 2, 3)    Aggregate mode\n"
-        "  sinh(1)             Hyperbolic sine\n"
-        "  asinh(1)            Inverse hyperbolic sine\n"
-        "  sec(pi/3)           Reciprocal trig function\n"
-        "  gamma(5)            Gamma function\n"
-        "  erf(1)              Error function\n"
-        "  beta(2, 3)          Beta function\n"
-        "  zeta(2)             Riemann zeta function\n"
-        "  fib(10)             Fibonacci number\n"
-        "  is_prime(17)        Prime test\n"
-        "  deg2rad(180)        Angle conversion\n"
-        "  sin_deg(30)         Degree-based sine\n"
-        "  fahrenheit(25)      Celsius to Fahrenheit\n"
-        "  c2f(100)            Celsius to Fahrenheit alias\n"
-        "  f(x) = sin(x)+x^2   Define a custom unary function\n"
-        "  f(2)                Evaluate a custom function\n"
-        "  :symbolic on        Preserve pi/e symbolically in scalar output\n"
-        "  :hexprefix on       Show hex results like 0xFF\n"
-        "  :hexcase lower      Show hex results like 0xff\n"
-        "  pi / 2 + e          Symbolic constants mode example\n"
-        "  :run demo.calc      Run a script file\n"
-        "  fn fact(n) { ... }  Define a script function in a script\n"
-        "  print(a, b, c)      Print script values, including strings\n"
-        "  poly_add(p, q)      Polynomial addition\n"
-        "  poly_sub(p, q)      Polynomial subtraction\n"
-        "  poly_mul(p, q)      Polynomial multiplication\n"
-        "  poly_div(p, q)      Polynomial division\n"
-        "  roots(p)            Real roots of a polynomial\n"
-        "  simplify(x^2 + x^2) Simplify a symbolic expression\n"
-        "  simplify(expr)      Simplify a symbolic expression\n"
-        "  diff(f)             Symbolic derivative expression\n"
-        "  diff(f, 2)          Derivative at x = 2\n"
-        "  integral(f)         Symbolic indefinite integral expression\n"
-        "  step(t - 1)         Unit step / Heaviside function\n"
-        "  delta(t - 1)        Unit impulse / Dirac delta shorthand\n"
-        "  laplace(exp(-2*t), t, s)  Symbolic Laplace transform\n"
-        "  ilaplace(1 / (s + 2), s, t)  Symbolic inverse Laplace transform\n"
-        "  fourier(delta(t - 1), t, w)  Symbolic Fourier transform\n"
-        "  ifourier(delta(w - 3), w, t) Symbolic inverse Fourier transform\n"
-        "  ztrans(step(n), n, z)  Symbolic z transform\n"
-        "  iztrans(z / (z - 1), z, n)  Symbolic inverse z transform\n"
-        "  dft([1, 0, 0, 0])   Discrete Fourier transform\n"
-        "  idft([[1, 0], [1, 0], [1, 0], [1, 0]])  Inverse DFT\n"
-        "  convolve([1, 2], [3, 4, 5])  Linear convolution\n"
-        "  pade(exp(x), 0, 2, 2)  Pade approximant around a point\n"
-        "  puiseux((1 + x) ^ (1 / 2), 0, 4, 2)  Puiseux-style local series\n"
-        "  series_sum(n^2, n, 1, N)  Symbolic finite series sum\n"
-        "  taylor(f, 0, 5)     Taylor expansion up to degree 5\n"
-        "  limit(f, 0)         Two-sided limit as x -> 0\n"
-        "  integral(f, 0, 3)   Definite integral on [0, 3]\n"
-        "  integral(f, 3)      Indefinite integral value at x = 3\n"
-        "  double_integral(x + y, 0, 1, 0, 2)  Cartesian double integral\n"
-        "  double_integral_cyl(x^2 + y^2, 0, 1, 0, 2*pi)  Polar/cylindrical double integral\n"
-        "  triple_integral(x*y*z, 0, 1, 0, 1, 0, 1)  Cartesian triple integral\n"
-        "  triple_integral_sph(1, 0, 1, 0, 2 * pi, 0, pi)  Spherical triple integral\n"
-        "  ode(y - x, 0, 1, 2) Solve y' = y - x with y(0) = 1\n"
-        "  ode_table(y, 0, 1, 1, 4)  Return sampled ODE trajectory\n"
-        "  solve(x^2 - 2, 1)   Newton root solve\n"
-        "  bisect(x^2 - 2, 1, 2)  Bisection root solve\n"
-        "  extrema(f, -2, 2)   Solve extrema on an interval\n"
-        "  :run script.calc    Execute a script file\n"
-        "  root(27, 3)         General root\n"
-        "  cbrt(-8)            Cube root\n"
-        "  hex(255)            Base conversion\n"
-        "  and(6, 3)           Bitwise and\n"
-        "  min(7/3, 5/2)       Smaller of two values\n"
-        "  :save state.txt     Save variables";
-    }
-
-    if (topic == "matrix") {
-        return
-        "Matrix guide:\n"
-        "  Create:  [a,b;c,d] vec mat zeros eye identity\n"
-        "  Shape:   resize append_row append_col transpose\n"
-        "  Elem:    get set\n"
-        "  Extra:   inverse dot outer null least_squares qr_q qr_r lu_l lu_u svd_u svd_s svd_vt pinv kron hadamard\n"
-        "  Ops:     + - * / ^ with scalars and matrices\n"
-        "  Anal.:   norm trace det rank rref eigvals eigvecs solve cond diag reshape cholesky schur hessenberg\n"
-        "  Signal:  dft fft idft ifft conv convolve\n"
-        "  Notes:   indices are zero-based\n"
-        "  Notes:   dft/idft accept a real vector or an N x 2 complex matrix\n"
-        "  Notes:   matrix literals pad missing elements with 0\n"
-        "  Notes:   append_row/append_col also pad or expand with 0\n"
-        "  Example: m = mat(2, 2, 1, 2, 3, 4)\n"
-        "  Example: [1, 2; 3]\n"
-        "  Example: get(m, 1, 0)\n"
-        "  Example: m = set(m, 1, 0, 8)\n"
-        "  Example: append_row([1, 2], 3)\n"
-        "  Example: transpose(m)\n"
-        "  Example: inverse(m)\n"
-        "  Example: dot(vec(1, 2), vec(3, 4))\n"
-        "  Example: lu_l(mat(2, 2, 4, 3, 6, 3))\n"
-        "  Example: svd_s(mat(3, 2, 3, 0, 0, 2, 0, 0))\n"
-        "  Example: solve(mat(2, 2, 2, 1, 5, 3), vec(1, 2))\n"
-        "  Example: det(m)\n"
-        "  Example: rref(m)";
-    }
-
-    if (topic == "functions") {
-        return
-        "Common functions:\n"
-        "  Trigonometric: sin cos tan sec csc cot asin acos atan asec acsc acot sinh cosh tanh asinh acosh atanh\n"
-        "  Exponential:   exp ln log10 pow gamma beta zeta erf erfc bessel\n"
-        "  Roots:         sqrt cbrt root\n"
-        "  Numeric:       abs sign floor ceil min max sum mean avg median mode var std factorial nCr binom nPr fib is_prime next_prime rand randn randint\n"
-        "  Legacy nums:   factorial nCr nPr\n"
-        "  Signals:       step delta heaviside impulse fourier ifourier laplace ilaplace ztrans iztrans\n"
-        "  Discrete sig:  dft fft idft ifft conv convolve\n"
-        "  Series:        taylor pade puiseux series_sum summation\n"
-        "  Convert:       deg rad deg2rad rad2deg sin_deg cos_deg celsius fahrenheit kelvin c2f f2c\n"
-        "  Legacy conv:   deg2rad rad2deg celsius fahrenheit kelvin\n"
-        "  Matrix create: vec mat zeros eye identity\n"
-        "  Matrix shape:  resize append_row append_col transpose\n"
-        "  Matrix elem:   get set\n"
-        "  Matrix extra:  inverse dot outer null least_squares qr_q qr_r lu_l lu_u svd_u svd_s svd_vt pinv kron hadamard\n"
-        "  Matrix ops:    + - * / ^ with scalars and matrices\n"
-        "  Matrix anal.:  norm trace det rank rref eigvals eigvecs solve cond diag reshape cholesky schur hessenberg\n"
-        "  Integer:       gcd lcm mod factor\n"
-        "  Base convert:  bin oct hex base\n"
-        "  Aggregate:     sum mean avg median mode var std cov corr\n"
-        "  Legacy aggr:   sum avg median\n"
-        "  Multi-var:     double_integral double_integral_cyl double_integral_polar triple_integral triple_integral_cyl triple_integral_sph\n"
-        "  Bitwise:       and or xor not shl shr\n"
-        "  Script:        fn if else while for return break continue print strings\n"
-        "  Custom:        f(x)=...  poly_add poly_sub poly_mul poly_div roots poly_eval poly_deriv poly_integ poly_fit poly_compose poly_gcd "
-        "simplify symbolic/numeric diff integral taylor limit extrema ode ode_table solve bisect secant fixed_point eig svd";
-    }
-
-    if (topic == "exact") {
-        return
-        "Exact mode:\n"
-        "  :exact on           Prefer rational results like 7/12 over decimals\n"
-        "  :exact off          Return to normal decimal-first display\n"
-        "  :exact              Show the current exact mode status\n"
-        "  Works best with:    + - * / pow integer-exponent min max sum avg median mean factorial nCr binom nPr\n"
-        "  Integer helpers:    gcd lcm mod and programmer bitwise helpers stay exact when possible\n"
-        "  Falls back to decimal display for non-rational functions like sin, cos, exp, ln, sqrt";
-    }
-
-    if (topic == "variables") {
-        return
-        "Variables and functions:\n"
-        "  x = 3/4             Assign a scalar variable\n"
-        "  v = vec(1, 2, 3)    Assign a matrix/vector value\n"
-        "  :vars               List all stored variables\n"
-        "  :clear x            Clear one variable\n"
-        "  :clear              Clear all variables\n"
-        "  f(x) = x^2 + 1      Define a custom expression function\n"
-        "  :funcs              List custom expression/script functions\n"
-        "  :clearfunc f        Clear one custom function\n"
-        "  :clearfuncs         Clear all custom functions\n"
-        "  Custom functions are available in expressions, analysis commands, and scripts";
-    }
-
-    if (topic == "persistence") {
-        return
-        "Persistence:\n"
-        "  :save state.txt     Save current scalar variables and custom functions\n"
-        "  :load state.txt     Load a previously saved state file\n"
-        "  Save/load keeps:    scalar variables, exact values, string values, custom functions, script functions\n"
-        "  Current limit:      matrix variables are not saved yet\n"
-        "  Tip:                use separate files for different sessions or experiments";
-    }
-
-    if (topic == "programmer") {
-        return
-        "Programmer tools:\n"
-        "  Base convert:       bin oct hex base\n"
-        "  Bitwise:            and or xor not shl shr\n"
-        "  Hex formatting:     :hexprefix on|off, :hexcase upper|lower\n"
-        "  Examples:           hex(255), base(255, 16), and(6, 3), shl(5, 2)\n"
-        "  Notes:              base conversion only accepts integers and bases 2..16\n"
-        "  Notes:              hex formatting applies to hex(...) and base(..., 16)";
-    }
-
-    throw std::runtime_error("unknown help topic: " + topic);
 }
 
 std::string Calculator::list_variables() const {

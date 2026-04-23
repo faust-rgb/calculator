@@ -127,9 +127,9 @@ const std::vector<std::string>& builtin_expression_completion_words() {
         "help", "exit", "quit",
         "sin(", "cos(", "tan(", "asin(", "acos(", "atan(",
         "sinh(", "cosh(", "tanh(",
-        "exp(", "ln(", "log10(", "gamma(", "sqrt(", "cbrt(", "root(",
-        "abs(", "sign(", "floor(", "ceil(",
-        "min(", "max(", "sum(", "avg(", "median(", "factorial(", "nCr(", "nPr(",
+        "exp(", "exp2(", "ln(", "log(", "log2(", "log10(", "gamma(", "sqrt(", "cbrt(", "root(",
+        "abs(", "sign(", "floor(", "ceil(", "round(", "trunc(", "clamp(",
+        "min(", "max(", "clamp(", "sum(", "avg(", "mean(", "median(", "mode(", "var(", "std(", "percentile(", "quartile(", "factorial(", "nCr(", "nPr(",
         "gcd(", "lcm(", "mod(", "pow(", "rat(", "factor(",
         "deg2rad(", "rad2deg(", "celsius(", "fahrenheit(", "kelvin(",
         "poly_add(", "poly_sub(", "poly_mul(", "poly_div(", "roots(",
@@ -144,7 +144,8 @@ const std::vector<std::string>& builtin_expression_completion_words() {
         "solve(", "get(", "set(",
         "norm(", "trace(", "det(", "rank(", "rref(", "eigvals(", "eigvecs(",
         "bin(", "oct(", "hex(", "base(",
-        "and(", "or(", "xor(", "not(", "shl(", "shr("
+        "and(", "or(", "xor(", "not(", "shl(", "shr(", "rol(", "ror(",
+        "popcount(", "bitlen(", "ctz(", "clz(", "parity(", "reverse_bits("
     };
     return words;
 }
@@ -522,7 +523,7 @@ std::string execute_repl_line(Calculator& calculator,
     if (calculator.try_process_function_command(line, &function_output)) {
         return function_output;
     }
-    if (line.rfind("factor", 0) == 0) {
+    if (line.rfind("factor(", 0) == 0) {
         return calculator.factor_expression(line);
     }
     return calculator.process_line(line, *exact_mode);

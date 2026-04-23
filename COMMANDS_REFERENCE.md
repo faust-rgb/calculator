@@ -131,3 +131,5 @@ They can be mixed directly into expressions:
 
 - `0b1010 + 0xF`
 - `and(0xF, 0b1010)`
+- `rol(1, 3)`
+- `popcount(0xF0)`

@@ -12,7 +12,10 @@
 ## Exponential And Logarithmic
 
 - `exp(x)`
+- `exp2(x)`
 - `ln(x)`
+- `log(x, base)`
+- `log2(x)`
 - `log10(x)`
 - `gamma(x)`
 - `beta(a, b)`
@@ -74,13 +77,18 @@ Notes:
 - `impulse(x)`
 - `floor(x)`
 - `ceil(x)`
+- `round(x)`
+- `trunc(x)`
 - `min(a, b)`
 - `max(a, b)`
+- `clamp(x, min, max)`
 - `sum(a, b, c, ...)`
 - `mean(a, b, c, ...)`
 - `avg(a, b, c, ...)`
 - `median(a, b, c, ...)`
 - `mode(a, b, c, ...)`
+- `percentile(p, a, b, c, ...)`
+- `quartile(q, a, b, c, ...)`
 - `var(a, b, c, ...)`
 - `std(a, b, c, ...)`
 - `factorial(n)`
@@ -176,6 +184,8 @@ Notes:
 - `mean(v)`
 - `median(v)`
 - `mode(v)`
+- `percentile(v, p)`
+- `quartile(v, q)`
 - `var(v)`
 - `std(v)`
 - `cov(a, b)`
@@ -366,6 +376,14 @@ Examples:
 - `not(a)`
 - `shl(a, n)`
 - `shr(a, n)`
+- `rol(a, n)`
+- `ror(a, n)`
+- `popcount(n)`
+- `bitlen(n)`
+- `ctz(n)`
+- `clz(n)`
+- `parity(n)`
+- `reverse_bits(n)`
 
 Notes:
 

@@ -547,6 +547,39 @@ double variance_values(const std::vector<double>& values) {
     return static_cast<double>(sum / static_cast<long double>(values.size()));
 }
 
+double percentile_values(const std::vector<double>& values, double p) {
+    require_nonempty_values(values, "percentile");
+    if (p < 0.0 || p > 100.0) {
+        throw std::runtime_error("percentile p must be in [0, 100]");
+    }
+    std::vector<double> sorted = sort_values(values);
+    if (sorted.size() == 1) {
+        return sorted.front();
+    }
+    const double position =
+        p * static_cast<double>(sorted.size() - 1) / 100.0;
+    const std::size_t lower =
+        static_cast<std::size_t>(std::floor(position));
+    const std::size_t upper =
+        static_cast<std::size_t>(std::ceil(position));
+    if (lower == upper) {
+        return sorted[lower];
+    }
+    const double fraction = position - static_cast<double>(lower);
+    return sorted[lower] + (sorted[upper] - sorted[lower]) * fraction;
+}
+
+double quartile_values(const std::vector<double>& values, double q) {
+    if (!mymath::is_integer(q)) {
+        throw std::runtime_error("quartile q must be an integer");
+    }
+    const int quartile = static_cast<int>(q);
+    if (quartile < 0 || quartile > 4) {
+        throw std::runtime_error("quartile q must be between 0 and 4");
+    }
+    return percentile_values(values, static_cast<double>(quartile * 25));
+}
+
 double covariance_values(const std::vector<double>& lhs,
                          const std::vector<double>& rhs) {
     if (lhs.size() != rhs.size() || lhs.empty()) {
@@ -1715,6 +1748,56 @@ private:
             return Value::from_scalar(mymath::sqrt(variance_values(values)));
         }
 
+        if (name == "percentile") {
+            if (arguments.size() < 2) {
+                throw std::runtime_error("percentile expects vector,p or p,value...");
+            }
+            if (arguments.size() == 2) {
+                Value value;
+                if (try_evaluate_expression(arguments[0],
+                                            *scalar_evaluator_,
+                                            *matrix_lookup_,
+                                            &value) &&
+                    value.is_matrix) {
+                    return Value::from_scalar(percentile_values(
+                        as_vector_values(value.matrix, "percentile"),
+                        (*scalar_evaluator_)(arguments[1])));
+                }
+            }
+            std::vector<double> values;
+            values.reserve(arguments.size() - 1);
+            const double p = (*scalar_evaluator_)(arguments[0]);
+            for (std::size_t i = 1; i < arguments.size(); ++i) {
+                values.push_back((*scalar_evaluator_)(arguments[i]));
+            }
+            return Value::from_scalar(percentile_values(values, p));
+        }
+
+        if (name == "quartile") {
+            if (arguments.size() < 2) {
+                throw std::runtime_error("quartile expects vector,q or q,value...");
+            }
+            if (arguments.size() == 2) {
+                Value value;
+                if (try_evaluate_expression(arguments[0],
+                                            *scalar_evaluator_,
+                                            *matrix_lookup_,
+                                            &value) &&
+                    value.is_matrix) {
+                    return Value::from_scalar(quartile_values(
+                        as_vector_values(value.matrix, "quartile"),
+                        (*scalar_evaluator_)(arguments[1])));
+                }
+            }
+            std::vector<double> values;
+            values.reserve(arguments.size() - 1);
+            const double q = (*scalar_evaluator_)(arguments[0]);
+            for (std::size_t i = 1; i < arguments.size(); ++i) {
+                values.push_back((*scalar_evaluator_)(arguments[i]));
+            }
+            return Value::from_scalar(quartile_values(values, q));
+        }
+
         if (name == "cov") {
             if (arguments.size() != 2) {
                 throw std::runtime_error("cov expects exactly two vector arguments");
@@ -2093,6 +2176,7 @@ private:
                name == "eigvecs" || name == "reshape" || name == "diag" ||
                name == "cholesky" || name == "schur" || name == "hessenberg" ||
                name == "mean" || name == "median" || name == "mode" ||
+               name == "percentile" || name == "quartile" ||
                name == "var" || name == "std" || name == "cov" ||
                name == "corr" || name == "lagrange" || name == "spline" ||
                name == "linear_regression" || name == "poly_fit" ||
@@ -2610,6 +2694,8 @@ bool try_evaluate_expression(const std::string& expression,
         trimmed.find("mean(") != std::string::npos ||
         trimmed.find("median(") != std::string::npos ||
         trimmed.find("mode(") != std::string::npos ||
+        trimmed.find("percentile(") != std::string::npos ||
+        trimmed.find("quartile(") != std::string::npos ||
         trimmed.find("var(") != std::string::npos ||
         trimmed.find("std(") != std::string::npos ||
         trimmed.find("cov(") != std::string::npos ||
