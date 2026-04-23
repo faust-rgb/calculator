@@ -48,6 +48,7 @@ using the standard math library implementations from `<cmath>` or `math.h`.
   `erf(x)`, `erfc(x)`, `bessel(n, x)`, `sqrt(x)`, `cbrt(x)`, `root(a, n)`,
   `abs(x)`, `sign(x)`, `floor(x)`, `ceil(x)`, `pow(a, b)`
 - Comparison and integer utilities: `min(a, b)`, `max(a, b)`, `gcd(a, b)`, `lcm(a, b)`, `mod(a, b)`, `factorial(n)`, `nCr(n, r)`, `binom(n, r)`, `nPr(n, r)`, `fib(n)`, `is_prime(n)`, `next_prime(n)`
+- Rational approximation helper: `rat(x)` and `rat(x, max_denominator)`
 - Aggregate helpers: `sum(...)`, `mean(...)`, `avg(...)`, `median(...)`, `mode(...)`, `var(...)`, `std(...)`
 - Probability helpers: `rand()`, `randn()`, `randint(a, b)`, `pdf_normal(x, mu, sigma)`, `cdf_normal(x, mu, sigma)`
 - Unit conversion helpers: `deg(x)`, `rad(x)`, `deg2rad(x)`, `rad2deg(x)`, `sin_deg(x)`, `cos_deg(x)`, `celsius(f)`, `fahrenheit(c)`, `kelvin(c)`, `c2f(c)`, `f2c(f)`
@@ -138,6 +139,8 @@ Exact fraction mode: ON
 -1
 > factor(360)
 2^3 * 3^2 * 5
+> rat(pi)
+355/113
 > hex(255)
 FF
 > m = mat(2, 2, 1, 2, 3, 4)

@@ -14,6 +14,7 @@
 #include "calculator.h"
 #include "mymath.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <iomanip>
@@ -24,8 +25,8 @@
 
 namespace {
 
-/** @brief 数值微分步长 */
-constexpr double kDerivativeStep = 1e-5;
+/** @brief 数值微分基准步长 */
+constexpr double kDerivativeBaseStep = 1e-5;
 
 /** @brief 极限计算的初始步长 */
 constexpr double kLimitInitialStep = 1e-1;
@@ -58,6 +59,23 @@ std::string format_double(double value) {
         return "0";
     }
     return text;
+}
+
+long double to_long_double(double value) {
+    return static_cast<long double>(value);
+}
+
+double scale_aware_step(double x) {
+    const double scale = std::max(1.0, mymath::abs(x));
+    return kDerivativeBaseStep * scale;
+}
+
+double relative_tolerance(double baseline, double scale) {
+    return baseline * std::max(1.0, scale);
+}
+
+double limit_step_scale(double x) {
+    return kLimitInitialStep * std::max(1.0, mymath::abs(x));
 }
 
 bool same_extremum_x(double lhs, double rhs) {
@@ -101,10 +119,22 @@ double FunctionAnalysis::evaluate(double x) const {
 }
 
 double FunctionAnalysis::derivative(double x) const {
-    const double step = kDerivativeStep * (1.0 + mymath::abs(x));
-    const double forward = evaluate_with_variable(x + step);
-    const double backward = evaluate_with_variable(x - step);
-    return (forward - backward) / (2.0 * step);
+    const double step = scale_aware_step(x);
+    const double half_step = step * 0.5;
+
+    const long double forward = to_long_double(evaluate_with_variable(x + step));
+    const long double backward = to_long_double(evaluate_with_variable(x - step));
+    const long double coarse =
+        (forward - backward) / (2.0L * to_long_double(step));
+
+    const long double half_forward =
+        to_long_double(evaluate_with_variable(x + half_step));
+    const long double half_backward =
+        to_long_double(evaluate_with_variable(x - half_step));
+    const long double refined =
+        (half_forward - half_backward) / (2.0L * to_long_double(half_step));
+
+    return static_cast<double>((4.0L * refined - coarse) / 3.0L);
 }
 
 double FunctionAnalysis::limit(double x, int direction) const {
@@ -113,34 +143,40 @@ double FunctionAnalysis::limit(double x, int direction) const {
     }
 
     auto one_sided_limit = [this, x](int side) {
-        double previous = 0.0;
-        double best = 0.0;
-        double best_delta = std::numeric_limits<double>::infinity();
+        long double previous = 0.0L;
+        long double best = 0.0L;
+        long double best_delta = std::numeric_limits<long double>::infinity();
         bool has_previous = false;
 
         for (int i = 0; i < 32; ++i) {
-            const double step =
-                kLimitInitialStep / mymath::pow(2.0, static_cast<double>(i));
-            const double sample_x = x + static_cast<double>(side) * step;
-            double current = 0.0;
+            const long double step =
+                static_cast<long double>(limit_step_scale(x)) /
+                static_cast<long double>(mymath::pow(2.0, static_cast<double>(i)));
+            const long double sample_x =
+                to_long_double(x) + static_cast<long double>(side) * step;
+            long double current = 0.0L;
             try {
-                current = evaluate_with_variable(sample_x);
+                current = to_long_double(
+                    evaluate_with_variable(static_cast<double>(sample_x)));
             } catch (const std::exception&) {
                 continue;
             }
-            if (!std::isfinite(current)) {
+            if (!std::isfinite(static_cast<double>(current))) {
                 continue;
             }
 
             if (has_previous) {
-                const double extrapolated = 2.0 * current - previous;
-                const double delta = mymath::abs(extrapolated - best);
+                const long double extrapolated = 2.0L * current - previous;
+                const long double delta = std::abs(extrapolated - best);
                 if (delta < best_delta) {
                     best_delta = delta;
                     best = extrapolated;
                 }
-                if (delta <= kLimitTolerance) {
-                    return extrapolated;
+                const long double scale =
+                    std::max({1.0L, std::abs(extrapolated), std::abs(current), std::abs(previous)});
+                if (delta <= static_cast<long double>(relative_tolerance(kLimitTolerance,
+                                                                         static_cast<double>(scale)))) {
+                    return static_cast<double>(extrapolated);
                 }
             } else {
                 best = current;
@@ -151,9 +187,11 @@ double FunctionAnalysis::limit(double x, int direction) const {
         }
 
         if (has_previous &&
-            std::isfinite(best) &&
-            best_delta <= kLimitTolerance * 100.0) {
-            return best;
+            std::isfinite(static_cast<double>(best)) &&
+            best_delta <= static_cast<long double>(
+                              relative_tolerance(kLimitTolerance * 100.0,
+                                                 static_cast<double>(std::abs(best)))) ) {
+            return static_cast<double>(best);
         }
 
         throw std::runtime_error("limit did not converge");
@@ -182,9 +220,12 @@ double FunctionAnalysis::definite_integral(double lower_bound,
     if (lower_bound > upper_bound) {
         return -definite_integral(upper_bound, lower_bound);
     }
+    const double span = mymath::abs(upper_bound - lower_bound);
+    const double scaled_eps =
+        relative_tolerance(kIntegralTolerance, span + mymath::abs(lower_bound) + mymath::abs(upper_bound));
     return adaptive_simpson(lower_bound,
                             upper_bound,
-                            kIntegralTolerance,
+                            scaled_eps,
                             kMaxIntegralDepth);
 }
 
@@ -278,15 +319,17 @@ double FunctionAnalysis::evaluate_with_variable(double x) const {
 
     Calculator calculator;
     calculator.process_line(variable_name_ + " = " + format_double(x), false);
-    return calculator.evaluate(expression_);
+    return calculator.evaluate_raw(expression_);
 }
 
 double FunctionAnalysis::second_derivative(double x) const {
-    const double step = kDerivativeStep * (1.0 + mymath::abs(x));
-    const double center = evaluate_with_variable(x);
-    const double left = evaluate_with_variable(x - step);
-    const double right = evaluate_with_variable(x + step);
-    return (left - 2.0 * center + right) / (step * step);
+    const double step = scale_aware_step(x);
+    const long double center = to_long_double(evaluate_with_variable(x));
+    const long double left = to_long_double(evaluate_with_variable(x - step));
+    const long double right = to_long_double(evaluate_with_variable(x + step));
+    const long double step_ld = to_long_double(step);
+    return static_cast<double>(
+        (left - 2.0L * center + right) / (step_ld * step_ld));
 }
 
 double FunctionAnalysis::bisect_stationary_point(double left, double right) const {
@@ -296,7 +339,9 @@ double FunctionAnalysis::bisect_stationary_point(double left, double right) cons
         const double mid = (left + right) * 0.5;
         const double mid_derivative = derivative(mid);
         if (mymath::abs(mid_derivative) <= kRootTolerance ||
-            mymath::abs(right - left) <= kRootTolerance) {
+            mymath::abs(right - left) <=
+                relative_tolerance(kRootTolerance,
+                                   std::max(mymath::abs(left), mymath::abs(right)))) {
             return mid;
         }
 
@@ -348,10 +393,18 @@ double FunctionAnalysis::adaptive_simpson_recursive(double left,
 
     const double left_area = simpson(left, mid, f_left, f_left_mid, f_mid);
     const double right_area = simpson(mid, right, f_mid, f_right_mid, f_right);
-    const double delta = left_area + right_area - whole;
+    const long double delta =
+        to_long_double(left_area) + to_long_double(right_area) - to_long_double(whole);
 
-    if (depth <= 0 || mymath::abs(delta) <= 15.0 * eps) {
-        return left_area + right_area + delta / 15.0;
+    if (depth <= 0 ||
+        std::abs(delta) <= 15.0L *
+                               static_cast<long double>(
+                                   relative_tolerance(eps,
+                                                      std::max({mymath::abs(left_area),
+                                                                mymath::abs(right_area),
+                                                                mymath::abs(whole)})))) {
+        return static_cast<double>(
+            to_long_double(left_area) + to_long_double(right_area) + delta / 15.0L);
     }
 
     return adaptive_simpson_recursive(left,
@@ -377,5 +430,8 @@ double FunctionAnalysis::simpson(double left,
                                  double f_left,
                                  double f_mid,
                                  double f_right) const {
-    return (right - left) * (f_left + 4.0 * f_mid + f_right) / 6.0;
+    return static_cast<double>(
+        (to_long_double(right) - to_long_double(left)) *
+        (to_long_double(f_left) + 4.0L * to_long_double(f_mid) + to_long_double(f_right)) /
+        6.0L);
 }

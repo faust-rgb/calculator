@@ -12,6 +12,7 @@
 #include "polynomial.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cctype>
 #include <iomanip>
 #include <limits>
@@ -62,6 +63,10 @@ std::string format_number(double value) {
     std::ostringstream out;
     out << std::setprecision(12) << value;
     return out.str();
+}
+
+long double abs_ld(long double value) {
+    return std::abs(value);
 }
 
 void require_same_shape(const Matrix& lhs, const Matrix& rhs, const std::string& op_name) {
@@ -139,11 +144,12 @@ void swap_rows(Matrix* matrix, std::size_t lhs, std::size_t rhs) {
 }
 
 double vector_norm_squared(const std::vector<double>& values) {
-    double sum = 0.0;
+    long double sum = 0.0L;
     for (double value : values) {
-        sum += value * value;
+        const long double value_ld = static_cast<long double>(value);
+        sum += value_ld * value_ld;
     }
-    return sum;
+    return static_cast<double>(sum);
 }
 
 std::size_t vector_length(const Matrix& matrix, const std::string& func_name) {
@@ -170,13 +176,17 @@ std::pair<Matrix, Matrix> qr_decompose(const Matrix& matrix) {
             householder[row - col] = r.at(row, col);
         }
 
-        double norm_x = mymath::sqrt(vector_norm_squared(householder));
+        const long double norm_x_ld =
+            std::sqrt(static_cast<long double>(vector_norm_squared(householder)));
+        const double norm_x = static_cast<double>(norm_x_ld);
         if (mymath::is_near_zero(norm_x, kMatrixEps)) {
             continue;
         }
 
         householder[0] += householder[0] >= 0.0 ? norm_x : -norm_x;
-        const double norm_v = mymath::sqrt(vector_norm_squared(householder));
+        const long double norm_v_ld =
+            std::sqrt(static_cast<long double>(vector_norm_squared(householder)));
+        const double norm_v = static_cast<double>(norm_v_ld);
         if (mymath::is_near_zero(norm_v, kMatrixEps)) {
             continue;
         }
@@ -185,13 +195,15 @@ std::pair<Matrix, Matrix> qr_decompose(const Matrix& matrix) {
         }
 
         for (std::size_t current_col = col; current_col < n; ++current_col) {
-            double projection = 0.0;
+            long double projection = 0.0L;
             for (std::size_t row = col; row < m; ++row) {
-                projection += householder[row - col] * r.at(row, current_col);
+                projection += static_cast<long double>(householder[row - col]) *
+                              static_cast<long double>(r.at(row, current_col));
             }
-            projection *= 2.0;
+            projection *= 2.0L;
             for (std::size_t row = col; row < m; ++row) {
-                r.at(row, current_col) -= projection * householder[row - col];
+                r.at(row, current_col) -= static_cast<double>(
+                    projection * static_cast<long double>(householder[row - col]));
                 if (mymath::is_near_zero(r.at(row, current_col), kMatrixEps)) {
                     r.at(row, current_col) = 0.0;
                 }
@@ -199,13 +211,15 @@ std::pair<Matrix, Matrix> qr_decompose(const Matrix& matrix) {
         }
 
         for (std::size_t row = 0; row < m; ++row) {
-            double projection = 0.0;
+            long double projection = 0.0L;
             for (std::size_t index = col; index < m; ++index) {
-                projection += q.at(row, index) * householder[index - col];
+                projection += static_cast<long double>(q.at(row, index)) *
+                              static_cast<long double>(householder[index - col]);
             }
-            projection *= 2.0;
+            projection *= 2.0L;
             for (std::size_t index = col; index < m; ++index) {
-                q.at(row, index) -= projection * householder[index - col];
+                q.at(row, index) -= static_cast<double>(
+                    projection * static_cast<long double>(householder[index - col]));
                 if (mymath::is_near_zero(q.at(row, index), kMatrixEps)) {
                     q.at(row, index) = 0.0;
                 }
@@ -271,15 +285,15 @@ std::pair<Matrix, Matrix> lu_decompose(const Matrix& matrix) {
 }
 
 double off_diagonal_magnitude(const Matrix& matrix) {
-    double sum = 0.0;
+    long double sum = 0.0L;
     for (std::size_t row = 0; row < matrix.rows; ++row) {
         for (std::size_t col = 0; col < matrix.cols; ++col) {
             if (row != col) {
-                sum += mymath::abs(matrix.at(row, col));
+                sum += static_cast<long double>(mymath::abs(matrix.at(row, col)));
             }
         }
     }
-    return sum;
+    return static_cast<double>(sum);
 }
 
 std::vector<std::size_t> rref_in_place(Matrix* matrix) {
@@ -304,21 +318,25 @@ std::vector<std::size_t> rref_in_place(Matrix* matrix) {
         }
 
         swap_rows(matrix, pivot_row, best_row);
-        const double pivot = matrix->at(pivot_row, col);
+        const long double pivot = static_cast<long double>(matrix->at(pivot_row, col));
         for (std::size_t current_col = 0; current_col < matrix->cols; ++current_col) {
-            matrix->at(pivot_row, current_col) /= pivot;
+            matrix->at(pivot_row, current_col) = static_cast<double>(
+                static_cast<long double>(matrix->at(pivot_row, current_col)) / pivot);
         }
 
         for (std::size_t row = 0; row < matrix->rows; ++row) {
             if (row == pivot_row) {
                 continue;
             }
-            const double factor = matrix->at(row, col);
+            const long double factor = static_cast<long double>(matrix->at(row, col));
             if (mymath::is_near_zero(factor, kMatrixEps)) {
                 continue;
             }
             for (std::size_t current_col = 0; current_col < matrix->cols; ++current_col) {
-                matrix->at(row, current_col) -= factor * matrix->at(pivot_row, current_col);
+                matrix->at(row, current_col) = static_cast<double>(
+                    static_cast<long double>(matrix->at(row, current_col)) -
+                    factor *
+                        static_cast<long double>(matrix->at(pivot_row, current_col)));
                 if (mymath::is_near_zero(matrix->at(row, current_col), kMatrixEps)) {
                     matrix->at(row, current_col) = 0.0;
                 }
@@ -419,11 +437,11 @@ void set_matrix_column(Matrix* matrix, std::size_t col, const std::vector<double
 }
 
 double dot_vectors(const std::vector<double>& lhs, const std::vector<double>& rhs) {
-    double sum = 0.0;
+    long double sum = 0.0L;
     for (std::size_t i = 0; i < lhs.size(); ++i) {
-        sum += lhs[i] * rhs[i];
+        sum += static_cast<long double>(lhs[i]) * static_cast<long double>(rhs[i]);
     }
-    return sum;
+    return static_cast<double>(sum);
 }
 
 bool orthonormalize(std::vector<double>* values,
@@ -474,11 +492,11 @@ std::vector<double> sort_values(std::vector<double> values) {
 
 double mean_values(const std::vector<double>& values) {
     require_nonempty_values(values, "mean");
-    double total = 0.0;
+    long double total = 0.0L;
     for (double value : values) {
-        total += value;
+        total += static_cast<long double>(value);
     }
-    return total / static_cast<double>(values.size());
+    return static_cast<double>(total / static_cast<long double>(values.size()));
 }
 
 double median_values(const std::vector<double>& values) {
@@ -520,12 +538,13 @@ double mode_values(const std::vector<double>& values) {
 double variance_values(const std::vector<double>& values) {
     require_nonempty_values(values, "var");
     const double mean = mean_values(values);
-    double sum = 0.0;
+    long double sum = 0.0L;
     for (double value : values) {
-        const double delta = value - mean;
+        const long double delta =
+            static_cast<long double>(value) - static_cast<long double>(mean);
         sum += delta * delta;
     }
-    return sum / static_cast<double>(values.size());
+    return static_cast<double>(sum / static_cast<long double>(values.size()));
 }
 
 double covariance_values(const std::vector<double>& lhs,
@@ -535,11 +554,12 @@ double covariance_values(const std::vector<double>& lhs,
     }
     const double lhs_mean = mean_values(lhs);
     const double rhs_mean = mean_values(rhs);
-    double sum = 0.0;
+    long double sum = 0.0L;
     for (std::size_t i = 0; i < lhs.size(); ++i) {
-        sum += (lhs[i] - lhs_mean) * (rhs[i] - rhs_mean);
+        sum += (static_cast<long double>(lhs[i]) - static_cast<long double>(lhs_mean)) *
+               (static_cast<long double>(rhs[i]) - static_cast<long double>(rhs_mean));
     }
-    return sum / static_cast<double>(lhs.size());
+    return static_cast<double>(sum / static_cast<long double>(lhs.size()));
 }
 
 double correlation_values(const std::vector<double>& lhs,
@@ -560,9 +580,9 @@ double lagrange_interpolate(const std::vector<double>& x,
     if (x.size() != y.size() || x.empty()) {
         throw std::runtime_error("lagrange requires sample vectors of the same non-zero length");
     }
-    double result = 0.0;
+    long double result = 0.0L;
     for (std::size_t i = 0; i < x.size(); ++i) {
-        double basis = 1.0;
+        long double basis = 1.0L;
         for (std::size_t j = 0; j < x.size(); ++j) {
             if (i == j) {
                 continue;
@@ -571,11 +591,12 @@ double lagrange_interpolate(const std::vector<double>& x,
             if (mymath::is_near_zero(denominator, 1e-12)) {
                 throw std::runtime_error("lagrange requires distinct x values");
             }
-            basis *= (xi - x[j]) / denominator;
+            basis *= (static_cast<long double>(xi) - static_cast<long double>(x[j])) /
+                     static_cast<long double>(denominator);
         }
-        result += y[i] * basis;
+        result += static_cast<long double>(y[i]) * basis;
     }
-    return result;
+    return static_cast<double>(result);
 }
 
 double spline_interpolate(const std::vector<double>& x,
@@ -600,9 +621,11 @@ double spline_interpolate(const std::vector<double>& x,
 
     std::vector<double> alpha(n, 0.0);
     for (std::size_t i = 1; i + 1 < n; ++i) {
-        alpha[i] =
-            (3.0 / h[i]) * (a[i + 1] - a[i]) -
-            (3.0 / h[i - 1]) * (a[i] - a[i - 1]);
+        alpha[i] = static_cast<double>(
+            (3.0L / static_cast<long double>(h[i])) *
+                (static_cast<long double>(a[i + 1]) - static_cast<long double>(a[i])) -
+            (3.0L / static_cast<long double>(h[i - 1])) *
+                (static_cast<long double>(a[i]) - static_cast<long double>(a[i - 1])));
     }
 
     std::vector<double> l(n, 0.0);
@@ -614,17 +637,31 @@ double spline_interpolate(const std::vector<double>& x,
 
     l[0] = 1.0;
     for (std::size_t i = 1; i + 1 < n; ++i) {
-        l[i] = 2.0 * (x[i + 1] - x[i - 1]) - h[i - 1] * mu[i - 1];
-        mu[i] = h[i] / l[i];
-        z[i] = (alpha[i] - h[i - 1] * z[i - 1]) / l[i];
+        l[i] = static_cast<double>(
+            2.0L * (static_cast<long double>(x[i + 1]) - static_cast<long double>(x[i - 1])) -
+            static_cast<long double>(h[i - 1]) * static_cast<long double>(mu[i - 1]));
+        mu[i] = static_cast<double>(
+            static_cast<long double>(h[i]) / static_cast<long double>(l[i]));
+        z[i] = static_cast<double>(
+            (static_cast<long double>(alpha[i]) -
+             static_cast<long double>(h[i - 1]) * static_cast<long double>(z[i - 1])) /
+            static_cast<long double>(l[i]));
     }
     l[n - 1] = 1.0;
 
     for (std::size_t j = n - 1; j-- > 0;) {
-        c[j] = z[j] - mu[j] * c[j + 1];
-        b[j] = (a[j + 1] - a[j]) / h[j] -
-               h[j] * (c[j + 1] + 2.0 * c[j]) / 3.0;
-        d[j] = (c[j + 1] - c[j]) / (3.0 * h[j]);
+        c[j] = static_cast<double>(
+            static_cast<long double>(z[j]) -
+            static_cast<long double>(mu[j]) * static_cast<long double>(c[j + 1]));
+        b[j] = static_cast<double>(
+            (static_cast<long double>(a[j + 1]) - static_cast<long double>(a[j])) /
+                static_cast<long double>(h[j]) -
+            static_cast<long double>(h[j]) *
+                (static_cast<long double>(c[j + 1]) + 2.0L * static_cast<long double>(c[j])) /
+                3.0L);
+        d[j] = static_cast<double>(
+            (static_cast<long double>(c[j + 1]) - static_cast<long double>(c[j])) /
+            (3.0L * static_cast<long double>(h[j])));
     }
 
     std::size_t interval = 0;
@@ -641,11 +678,13 @@ double spline_interpolate(const std::vector<double>& x,
         }
     }
 
-    const double dx = xi - x[interval];
-    return a[interval] +
-           b[interval] * dx +
-           c[interval] * dx * dx +
-           d[interval] * dx * dx * dx;
+    const long double dx =
+        static_cast<long double>(xi) - static_cast<long double>(x[interval]);
+    return static_cast<double>(
+        static_cast<long double>(a[interval]) +
+        static_cast<long double>(b[interval]) * dx +
+        static_cast<long double>(c[interval]) * dx * dx +
+        static_cast<long double>(d[interval]) * dx * dx * dx);
 }
 
 std::pair<double, double> linear_regression_fit(const std::vector<double>& x,
@@ -655,17 +694,22 @@ std::pair<double, double> linear_regression_fit(const std::vector<double>& x,
     }
     const double x_mean = mean_values(x);
     const double y_mean = mean_values(y);
-    double numerator = 0.0;
-    double denominator = 0.0;
+    long double numerator = 0.0L;
+    long double denominator = 0.0L;
     for (std::size_t i = 0; i < x.size(); ++i) {
-        numerator += (x[i] - x_mean) * (y[i] - y_mean);
-        denominator += (x[i] - x_mean) * (x[i] - x_mean);
+        const long double dx =
+            static_cast<long double>(x[i]) - static_cast<long double>(x_mean);
+        const long double dy =
+            static_cast<long double>(y[i]) - static_cast<long double>(y_mean);
+        numerator += dx * dy;
+        denominator += dx * dx;
     }
-    if (mymath::is_near_zero(denominator, 1e-12)) {
+    if (std::abs(denominator) <= 1e-12L) {
         throw std::runtime_error("linear_regression requires x values with non-zero variance");
     }
-    const double slope = numerator / denominator;
-    const double intercept = y_mean - slope * x_mean;
+    const double slope = static_cast<double>(numerator / denominator);
+    const double intercept = static_cast<double>(
+        static_cast<long double>(y_mean) - static_cast<long double>(slope) * static_cast<long double>(x_mean));
     return {slope, intercept};
 }
 
@@ -689,12 +733,6 @@ struct ComplexSample {
     double real = 0.0;
     double imag = 0.0;
 };
-
-ComplexSample add_complex(ComplexSample lhs, ComplexSample rhs) {
-    lhs.real += rhs.real;
-    lhs.imag += rhs.imag;
-    return lhs;
-}
 
 ComplexSample multiply_complex(ComplexSample lhs, ComplexSample rhs) {
     return {
@@ -776,7 +814,8 @@ std::vector<ComplexSample> discrete_fourier_transform(const std::vector<ComplexS
     std::vector<ComplexSample> output(input.size(), {0.0, 0.0});
 
     for (std::size_t k = 0; k < input.size(); ++k) {
-        ComplexSample sum;
+        long double sum_real = 0.0L;
+        long double sum_imag = 0.0L;
         for (std::size_t n = 0; n < input.size(); ++n) {
             const double angle =
                 2.0 * mymath::kPi * static_cast<double>(k * n) /
@@ -785,9 +824,12 @@ std::vector<ComplexSample> discrete_fourier_transform(const std::vector<ComplexS
                 mymath::cos(angle),
                 sign * mymath::sin(angle),
             };
-            sum = add_complex(sum, multiply_complex(input[n], twiddle));
+            const ComplexSample term = multiply_complex(input[n], twiddle);
+            sum_real += static_cast<long double>(term.real);
+            sum_imag += static_cast<long double>(term.imag);
         }
-        output[k] = {sum.real * scale, sum.imag * scale};
+        output[k] = {static_cast<double>(sum_real * static_cast<long double>(scale)),
+                     static_cast<double>(sum_imag * static_cast<long double>(scale))};
     }
 
     return output;
@@ -802,8 +844,13 @@ std::vector<ComplexSample> convolve_sequences(const std::vector<ComplexSample>& 
     std::vector<ComplexSample> result(lhs.size() + rhs.size() - 1, {0.0, 0.0});
     for (std::size_t i = 0; i < lhs.size(); ++i) {
         for (std::size_t j = 0; j < rhs.size(); ++j) {
-            result[i + j] =
-                add_complex(result[i + j], multiply_complex(lhs[i], rhs[j]));
+            const ComplexSample product = multiply_complex(lhs[i], rhs[j]);
+            result[i + j].real = static_cast<double>(
+                static_cast<long double>(result[i + j].real) +
+                static_cast<long double>(product.real));
+            result[i + j].imag = static_cast<double>(
+                static_cast<long double>(result[i + j].imag) +
+                static_cast<long double>(product.imag));
         }
     }
     return result;
@@ -833,10 +880,11 @@ SymmetricEigenDecomposition jacobi_symmetric_eigendecomposition(
     for (int iteration = 0; iteration < 128 * static_cast<int>(n + 1); ++iteration) {
         std::size_t pivot_row = 0;
         std::size_t pivot_col = 0;
-        double pivot_value = 0.0;
+        long double pivot_value = 0.0L;
         for (std::size_t row = 0; row < n; ++row) {
             for (std::size_t col = row + 1; col < n; ++col) {
-                const double current_value = mymath::abs(current.at(row, col));
+                const long double current_value =
+                    static_cast<long double>(mymath::abs(current.at(row, col)));
                 if (current_value > pivot_value) {
                     pivot_value = current_value;
                     pivot_row = row;
@@ -849,40 +897,40 @@ SymmetricEigenDecomposition jacobi_symmetric_eigendecomposition(
             break;
         }
 
-        const double app = current.at(pivot_row, pivot_row);
-        const double aqq = current.at(pivot_col, pivot_col);
-        const double apq = current.at(pivot_row, pivot_col);
-        const double tau = (aqq - app) / (2.0 * apq);
-        const double t =
-            (tau >= 0.0 ? 1.0 : -1.0) /
-            (mymath::abs(tau) + mymath::sqrt(1.0 + tau * tau));
-        const double cosine = 1.0 / mymath::sqrt(1.0 + t * t);
-        const double sine = t * cosine;
+        const long double app = static_cast<long double>(current.at(pivot_row, pivot_row));
+        const long double aqq = static_cast<long double>(current.at(pivot_col, pivot_col));
+        const long double apq = static_cast<long double>(current.at(pivot_row, pivot_col));
+        const long double tau = (aqq - app) / (2.0L * apq);
+        const long double t =
+            (tau >= 0.0L ? 1.0L : -1.0L) /
+            (abs_ld(tau) + std::sqrt(1.0L + tau * tau));
+        const long double cosine = 1.0L / std::sqrt(1.0L + t * t);
+        const long double sine = t * cosine;
 
         for (std::size_t col = 0; col < n; ++col) {
             if (col == pivot_row || col == pivot_col) {
                 continue;
             }
-            const double aip = current.at(col, pivot_row);
-            const double aiq = current.at(col, pivot_col);
-            const double new_aip = cosine * aip - sine * aiq;
-            const double new_aiq = sine * aip + cosine * aiq;
-            current.at(col, pivot_row) = new_aip;
-            current.at(pivot_row, col) = new_aip;
-            current.at(col, pivot_col) = new_aiq;
-            current.at(pivot_col, col) = new_aiq;
+            const long double aip = static_cast<long double>(current.at(col, pivot_row));
+            const long double aiq = static_cast<long double>(current.at(col, pivot_col));
+            const long double new_aip = cosine * aip - sine * aiq;
+            const long double new_aiq = sine * aip + cosine * aiq;
+            current.at(col, pivot_row) = static_cast<double>(new_aip);
+            current.at(pivot_row, col) = static_cast<double>(new_aip);
+            current.at(col, pivot_col) = static_cast<double>(new_aiq);
+            current.at(pivot_col, col) = static_cast<double>(new_aiq);
         }
 
-        current.at(pivot_row, pivot_row) = app - t * apq;
-        current.at(pivot_col, pivot_col) = aqq + t * apq;
+        current.at(pivot_row, pivot_row) = static_cast<double>(app - t * apq);
+        current.at(pivot_col, pivot_col) = static_cast<double>(aqq + t * apq);
         current.at(pivot_row, pivot_col) = 0.0;
         current.at(pivot_col, pivot_row) = 0.0;
 
         for (std::size_t row = 0; row < n; ++row) {
-            const double vip = vectors.at(row, pivot_row);
-            const double viq = vectors.at(row, pivot_col);
-            vectors.at(row, pivot_row) = cosine * vip - sine * viq;
-            vectors.at(row, pivot_col) = sine * vip + cosine * viq;
+            const long double vip = static_cast<long double>(vectors.at(row, pivot_row));
+            const long double viq = static_cast<long double>(vectors.at(row, pivot_col));
+            vectors.at(row, pivot_row) = static_cast<double>(cosine * vip - sine * viq);
+            vectors.at(row, pivot_col) = static_cast<double>(sine * vip + cosine * viq);
         }
     }
 

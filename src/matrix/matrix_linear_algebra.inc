@@ -30,21 +30,24 @@ Matrix inverse(const Matrix& matrix) {
         }
 
         swap_rows(&augmented, col, best_row);
-        const double pivot = augmented.at(col, col);
+        const long double pivot = static_cast<long double>(augmented.at(col, col));
         for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
-            augmented.at(col, current_col) /= pivot;
+            augmented.at(col, current_col) = static_cast<double>(
+                static_cast<long double>(augmented.at(col, current_col)) / pivot);
         }
 
         for (std::size_t row = 0; row < n; ++row) {
             if (row == col) {
                 continue;
             }
-            const double factor = augmented.at(row, col);
+            const long double factor = static_cast<long double>(augmented.at(row, col));
             if (mymath::is_near_zero(factor, kMatrixEps)) {
                 continue;
             }
             for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
-                augmented.at(row, current_col) -= factor * augmented.at(col, current_col);
+                augmented.at(row, current_col) = static_cast<double>(
+                    static_cast<long double>(augmented.at(row, current_col)) -
+                    factor * static_cast<long double>(augmented.at(col, current_col)));
                 if (mymath::is_near_zero(augmented.at(row, current_col), kMatrixEps)) {
                     augmented.at(row, current_col) = 0.0;
                 }
@@ -163,21 +166,24 @@ Matrix solve(const Matrix& coefficients, const Matrix& rhs) {
         }
 
         swap_rows(&augmented, col, best_row);
-        const double pivot = augmented.at(col, col);
+        const long double pivot = static_cast<long double>(augmented.at(col, col));
         for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
-            augmented.at(col, current_col) /= pivot;
+            augmented.at(col, current_col) = static_cast<double>(
+                static_cast<long double>(augmented.at(col, current_col)) / pivot);
         }
 
         for (std::size_t row = 0; row < n; ++row) {
             if (row == col) {
                 continue;
             }
-            const double factor = augmented.at(row, col);
+            const long double factor = static_cast<long double>(augmented.at(row, col));
             if (mymath::is_near_zero(factor, kMatrixEps)) {
                 continue;
             }
             for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
-                augmented.at(row, current_col) -= factor * augmented.at(col, current_col);
+                augmented.at(row, current_col) = static_cast<double>(
+                    static_cast<long double>(augmented.at(row, current_col)) -
+                    factor * static_cast<long double>(augmented.at(col, current_col)));
                 if (mymath::is_near_zero(augmented.at(row, current_col), kMatrixEps)) {
                     augmented.at(row, current_col) = 0.0;
                 }
@@ -251,7 +257,10 @@ Matrix cholesky(const Matrix& matrix) {
         for (std::size_t j = 0; j <= i; ++j) {
             double sum = matrix.at(i, j);
             for (std::size_t k = 0; k < j; ++k) {
-                sum -= result.at(i, k) * result.at(j, k);
+                sum = static_cast<double>(
+                    static_cast<long double>(sum) -
+                    static_cast<long double>(result.at(i, k)) *
+                        static_cast<long double>(result.at(j, k)));
             }
             if (i == j) {
                 if (sum <= 0.0) {
@@ -278,52 +287,54 @@ Matrix hessenberg(const Matrix& matrix) {
     }
 
     for (std::size_t k = 0; k + 2 < n; ++k) {
-        std::vector<double> x(n - k - 1, 0.0);
+        std::vector<long double> x(n - k - 1, 0.0L);
         for (std::size_t i = k + 1; i < n; ++i) {
-            x[i - k - 1] = h.at(i, k);
+            x[i - k - 1] = static_cast<long double>(h.at(i, k));
         }
 
-        double norm_x = 0.0;
-        for (double value : x) {
+        long double norm_x = 0.0L;
+        for (long double value : x) {
             norm_x += value * value;
         }
-        norm_x = mymath::sqrt(norm_x);
-        if (mymath::is_near_zero(norm_x, kMatrixEps)) {
+        norm_x = mymath::sqrt(static_cast<double>(norm_x));
+        if (norm_x <= static_cast<long double>(kMatrixEps)) {
             continue;
         }
 
-        x[0] += (x[0] >= 0.0 ? norm_x : -norm_x);
-        double norm_v = 0.0;
-        for (double value : x) {
+        x[0] += (x[0] >= 0.0L ? norm_x : -norm_x);
+        long double norm_v = 0.0L;
+        for (long double value : x) {
             norm_v += value * value;
         }
-        norm_v = mymath::sqrt(norm_v);
-        if (mymath::is_near_zero(norm_v, kMatrixEps)) {
+        norm_v = mymath::sqrt(static_cast<double>(norm_v));
+        if (norm_v <= static_cast<long double>(kMatrixEps)) {
             continue;
         }
-        for (double& value : x) {
+        for (long double& value : x) {
             value /= norm_v;
         }
 
         for (std::size_t j = k; j < n; ++j) {
-            double projection = 0.0;
+            long double projection = 0.0L;
             for (std::size_t i = 0; i < x.size(); ++i) {
-                projection += x[i] * h.at(k + 1 + i, j);
+                projection += x[i] * static_cast<long double>(h.at(k + 1 + i, j));
             }
-            projection *= 2.0;
+            projection *= 2.0L;
             for (std::size_t i = 0; i < x.size(); ++i) {
-                h.at(k + 1 + i, j) -= projection * x[i];
+                h.at(k + 1 + i, j) = static_cast<double>(
+                    static_cast<long double>(h.at(k + 1 + i, j)) - projection * x[i]);
             }
         }
 
         for (std::size_t i = 0; i < n; ++i) {
-            double projection = 0.0;
+            long double projection = 0.0L;
             for (std::size_t j = 0; j < x.size(); ++j) {
-                projection += h.at(i, k + 1 + j) * x[j];
+                projection += static_cast<long double>(h.at(i, k + 1 + j)) * x[j];
             }
-            projection *= 2.0;
+            projection *= 2.0L;
             for (std::size_t j = 0; j < x.size(); ++j) {
-                h.at(i, k + 1 + j) -= projection * x[j];
+                h.at(i, k + 1 + j) = static_cast<double>(
+                    static_cast<long double>(h.at(i, k + 1 + j)) - projection * x[j]);
             }
         }
 
@@ -344,7 +355,9 @@ Matrix schur(const Matrix& matrix) {
     for (int iteration = 0; iteration < 256; ++iteration) {
         const auto qr = qr_decompose(current);
         current = multiply(qr.second, qr.first);
-        if (off_diagonal_magnitude(current) < 1e-8) {
+        const long double diagonal_scale =
+            static_cast<long double>(norm(current)) + 1.0L;
+        if (off_diagonal_magnitude(current) <= 1e-10L * diagonal_scale) {
             break;
         }
     }
@@ -416,44 +429,68 @@ double determinant(const Matrix& matrix) {
     if (!matrix.is_square()) {
         throw std::runtime_error("determinant requires a square matrix");
     }
+    if (matrix.rows == 0) {
+        return 1.0;
+    }
+    if (matrix.rows == 1) {
+        return matrix.at(0, 0);
+    }
+    if (matrix.rows == 2) {
+        return static_cast<double>(
+            static_cast<long double>(matrix.at(0, 0)) *
+                static_cast<long double>(matrix.at(1, 1)) -
+            static_cast<long double>(matrix.at(0, 1)) *
+                static_cast<long double>(matrix.at(1, 0)));
+    }
 
     // 通过带部分主元选取的上三角消元求行列式。
     // 行交换会翻转符号，对角线乘积给出最终结果。
-    Matrix reduced = matrix;
-    double result = 1.0;
+    std::vector<std::vector<long double>> reduced(
+        matrix.rows, std::vector<long double>(matrix.cols, 0.0L));
+    for (std::size_t row = 0; row < matrix.rows; ++row) {
+        for (std::size_t col = 0; col < matrix.cols; ++col) {
+            reduced[row][col] = static_cast<long double>(matrix.at(row, col));
+        }
+    }
+    long double result = 1.0L;
     int swap_count = 0;
 
-    for (std::size_t col = 0; col < reduced.cols; ++col) {
+    for (std::size_t col = 0; col < matrix.cols; ++col) {
         std::size_t best_row = col;
-        double best_value = mymath::abs(reduced.at(best_row, col));
-        for (std::size_t row = col + 1; row < reduced.rows; ++row) {
-            const double current = mymath::abs(reduced.at(row, col));
+        long double best_value = reduced[best_row][col] < 0.0L
+                                     ? -reduced[best_row][col]
+                                     : reduced[best_row][col];
+        for (std::size_t row = col + 1; row < matrix.rows; ++row) {
+            const long double current = reduced[row][col] < 0.0L
+                                            ? -reduced[row][col]
+                                            : reduced[row][col];
             if (current > best_value) {
                 best_value = current;
                 best_row = row;
             }
         }
 
-        if (mymath::is_near_zero(best_value, kMatrixEps)) {
+        if (best_value <= static_cast<long double>(kMatrixEps)) {
             return 0.0;
         }
 
         if (best_row != col) {
-            swap_rows(&reduced, best_row, col);
+            std::swap(reduced[best_row], reduced[col]);
             ++swap_count;
         }
 
-        const double pivot = reduced.at(col, col);
+        const long double pivot = reduced[col][col];
         result *= pivot;
-        for (std::size_t row = col + 1; row < reduced.rows; ++row) {
-            const double factor = reduced.at(row, col) / pivot;
-            for (std::size_t current_col = col; current_col < reduced.cols; ++current_col) {
-                reduced.at(row, current_col) -= factor * reduced.at(col, current_col);
+        for (std::size_t row = col + 1; row < matrix.rows; ++row) {
+            const long double factor = reduced[row][col] / pivot;
+            for (std::size_t current_col = col; current_col < matrix.cols; ++current_col) {
+                reduced[row][current_col] -= factor * reduced[col][current_col];
             }
         }
     }
 
-    return (swap_count % 2 == 0 ? 1.0 : -1.0) * result;
+    const long double sign = swap_count % 2 == 0 ? 1.0L : -1.0L;
+    return static_cast<double>(sign * result);
 }
 
 double rank(const Matrix& matrix) {

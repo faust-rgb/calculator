@@ -59,6 +59,38 @@ bool is_near_zero(double x, double eps = kEps);
 bool is_integer(double x, double eps = 1e-10);
 
 /**
+ * @brief 将浮点数识别为“足够接近”的简单分数
+ * @param value 输入值
+ * @param numerator 输出分子
+ * @param denominator 输出分母
+ * @param max_denominator 最大分母
+ * @param eps 允许误差
+ * @return true 表示成功识别为简单分数
+ *
+ * 适合做显示优化或识别原本就应当是分数的值，例如 0.3333333333 -> 1/3。
+ */
+bool approximate_fraction(double value,
+                          long long* numerator,
+                          long long* denominator,
+                          int max_denominator = 999,
+                          double eps = 1e-10);
+
+/**
+ * @brief 计算给定最大分母约束下的最佳有理逼近
+ * @param value 输入值
+ * @param numerator 输出分子
+ * @param denominator 输出分母
+ * @param max_denominator 最大分母，必须 > 0
+ * @return true 表示成功求得有理逼近
+ *
+ * 使用连分数方法，为显式的“有理逼近”功能提供结果，例如 pi -> 355/113。
+ */
+bool best_rational_approximation(double value,
+                                 long long* numerator,
+                                 long long* denominator,
+                                 long long max_denominator = 999);
+
+/**
  * @brief 将角度归约到 [-π, π] 区间
  * @param x 输入角度（弧度）
  * @return 归约后的角度

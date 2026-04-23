@@ -29,22 +29,37 @@ std::vector<ODEPoint> ODESolver::solve_trajectory(double x0,
         return points;
     }
 
-    const double h = (x1 - x0) / static_cast<double>(steps);
-    double x = x0;
-    double y = y0;
+    const long double h =
+        (static_cast<long double>(x1) - static_cast<long double>(x0)) /
+        static_cast<long double>(steps);
+    long double x = static_cast<long double>(x0);
+    long double y = static_cast<long double>(y0);
     for (int i = 0; i < steps; ++i) {
-        y = rk4_step(x, y, h);
+        y = static_cast<long double>(
+            rk4_step(static_cast<double>(x),
+                     static_cast<double>(y),
+                     static_cast<double>(h)));
         x += h;
-        points.push_back({x, y});
+        points.push_back({static_cast<double>(x), static_cast<double>(y)});
     }
 
     return points;
 }
 
 double ODESolver::rk4_step(double x, double y, double h) const {
-    const double k1 = rhs_(x, y);
-    const double k2 = rhs_(x + 0.5 * h, y + 0.5 * h * k1);
-    const double k3 = rhs_(x + 0.5 * h, y + 0.5 * h * k2);
-    const double k4 = rhs_(x + h, y + h * k3);
-    return y + h * (k1 + 2.0 * k2 + 2.0 * k3 + k4) / 6.0;
+    const long double x_ld = static_cast<long double>(x);
+    const long double y_ld = static_cast<long double>(y);
+    const long double h_ld = static_cast<long double>(h);
+    const long double k1 = static_cast<long double>(rhs_(x, y));
+    const long double k2 = static_cast<long double>(
+        rhs_(static_cast<double>(x_ld + 0.5L * h_ld),
+             static_cast<double>(y_ld + 0.5L * h_ld * k1)));
+    const long double k3 = static_cast<long double>(
+        rhs_(static_cast<double>(x_ld + 0.5L * h_ld),
+             static_cast<double>(y_ld + 0.5L * h_ld * k2)));
+    const long double k4 = static_cast<long double>(
+        rhs_(static_cast<double>(x_ld + h_ld),
+             static_cast<double>(y_ld + h_ld * k3)));
+    return static_cast<double>(
+        y_ld + h_ld * (k1 + 2.0L * k2 + 2.0L * k3 + k4) / 6.0L);
 }

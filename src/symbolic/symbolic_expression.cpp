@@ -67,6 +67,19 @@ std::string format_number(double value) {
         return std::to_string(rounded);
     }
 
+    long long numerator = 0;
+    long long denominator = 1;
+    if (mymath::approximate_fraction(value,
+                                     &numerator,
+                                     &denominator,
+                                     999,
+                                     1e-10)) {
+        if (denominator == 1) {
+            return std::to_string(numerator);
+        }
+        return std::to_string(numerator) + "/" + std::to_string(denominator);
+    }
+
     std::ostringstream out;
     out.precision(12);
     out << value;
@@ -164,6 +177,12 @@ std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node
             text = to_string_impl(node->left, precedence(node)) + " ^ " +
                    to_string_impl(node->right, precedence(node));
             break;
+    }
+
+    if (node->type == NodeType::kNumber &&
+        text.find('/') != std::string::npos &&
+        parent_precedence >= 3) {
+        return "(" + text + ")";
     }
 
     if (precedence(node) < parent_precedence) {

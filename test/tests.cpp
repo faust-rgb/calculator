@@ -349,6 +349,9 @@ int main() {
         {"root(16, 2)", true, "4"},
         {"root(16, -2)", true, "0.25"},
         {"root(-8, 3)", true, "-2"},
+        {"rat(0.333333333333)", false, "1/3"},
+        {"rat(pi)", false, "355/113"},
+        {"rat(pi, 100)", false, "311/99"},
         {"bin(10)", true, "1010"},
         {"oct(83)", true, "123"},
         {"hex(255)", true, "FF"},
@@ -1606,6 +1609,23 @@ int main() {
     try {
         std::string output;
         const bool handled =
+            calculator.try_process_function_command("simplify(0.5 * x)", &output);
+        if (handled && output == "1/2 * x") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: simplify(0.5 * x) expected 1/2 * x got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: simplify(0.5 * x) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
             calculator.try_process_function_command("simplify(x * x / x)", &output);
         if (handled && output == "x") {
             ++passed;
@@ -2228,7 +2248,7 @@ int main() {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("taylor(f, 0, 3)", &output);
-        if (handled && output == "x + x ^ 2 - 0.166666666667 * x ^ 3") {
+        if (handled && output == "x + x ^ 2 - 1/6 * x ^ 3") {
             ++passed;
         } else {
             ++failed;
@@ -2559,6 +2579,39 @@ int main() {
     try {
         std::string output;
         const bool handled =
+            calculator.try_process_function_command("ecl(x) = (exp(x) - 1) / x", &output);
+        if (handled) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: define ecl(x) was not handled\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: define ecl(x) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("limit(ecl, 0)", &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 1.0, 1e-8)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: exp cancellation limit command expected 1 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: exp cancellation limit command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
             calculator.try_process_function_command("limit(u, 1)", &output);
         if (handled && output == "2") {
             ++passed;
@@ -2611,6 +2664,40 @@ int main() {
         std::cout << "FAIL: limit(k, 0) expected non-existent two-sided limit error\n";
     } catch (const std::exception&) {
         ++passed;
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("solve(exp(x) - 2, 0.5)", &output);
+        if (handled && nearly_equal(calculator.evaluate(output), mymath::ln(2.0), 1e-8)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: solve(exp(x) - 2, 0.5) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: solve(exp(x) - 2, 0.5) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("fixed_point(exp(-x), 0.5)", &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 0.56714329041, 1e-8)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: fixed_point(exp(-x), 0.5) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: fixed_point(exp(-x), 0.5) threw unexpected error: "
+                  << ex.what() << '\n';
     }
 
     try {
@@ -2764,6 +2851,22 @@ int main() {
 
     try {
         FunctionAnalysis function("x");
+        function.define("sin(x)");
+        const double actual = function.derivative(1e-8);
+        if (nearly_equal(actual, 1.0, 1e-6)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: small-x derivative expected 1 got " << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: small-x derivative threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        FunctionAnalysis function("x");
         function.define("x ^ 2");
         const double actual = function.definite_integral(0.0, 3.0);
         if (nearly_equal(actual, 9.0, 1e-6)) {
@@ -2776,6 +2879,23 @@ int main() {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: definite integral threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        FunctionAnalysis function("x");
+        function.define("1 / (1 + x ^ 2)");
+        const double actual = function.definite_integral(-1.0, 1.0);
+        if (nearly_equal(actual, mymath::kPi / 2.0, 1e-7)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: arctan integral expected pi/2 got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: arctan integral threw unexpected error: "
                   << ex.what() << '\n';
     }
 
@@ -2832,6 +2952,23 @@ int main() {
 
     try {
         FunctionAnalysis function("x");
+        function.define("(exp(x) - 1) / x");
+        const double actual = function.limit(0.0);
+        if (nearly_equal(actual, 1.0, 1e-8)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: exp cancellation limit expected 1 got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: exp cancellation limit threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        FunctionAnalysis function("x");
         function.define("x ^ 3 - 3 * x");
         const std::vector<ExtremumPoint> extrema = function.solve_extrema(-2.0, 2.0);
         const bool count_ok = extrema.size() == 2;
@@ -2877,6 +3014,24 @@ int main() {
     }
 
     try {
+        ODESolver solver([](double, double y) {
+            return y;
+        });
+        const double actual = solver.solve(0.0, 1.0, 1.0, 100);
+        if (nearly_equal(actual, mymath::exp(1.0), 1e-6)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: exponential ODE solver expected e got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: exponential ODE solver threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
         const SymbolicExpression derivative =
             SymbolicExpression::parse("asin(x)").derivative("x").simplify();
         if (derivative.to_string() == "1 / sqrt(1 - x ^ 2)" ||
@@ -2891,6 +3046,32 @@ int main() {
         ++failed;
         std::cout << "FAIL: SymbolicExpression asin derivative threw unexpected error: "
                   << ex.what() << '\n';
+    }
+
+    try {
+        const std::string actual = calculator.process_line(
+            "near_singular_solution = solve(mat(2, 2, 1, 1, 1, 1.0000001), vec(2, 2.0000001))",
+            false);
+        const double x0 = calculator.evaluate("get(near_singular_solution, 0, 0)");
+        const double x1 = calculator.evaluate("get(near_singular_solution, 1, 0)");
+        if (actual.find("near_singular_solution = [[") == 0 &&
+            nearly_equal(x0, 1.0, 1e-7) &&
+            nearly_equal(x1, 1.0, 1e-7)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: near-singular matrix solve expected [[1], [1]] got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: near-singular matrix solve threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        (void)calculator.clear_variable("near_singular_solution");
+    } catch (const std::exception&) {
     }
 
     try {
@@ -3030,6 +3211,25 @@ int main() {
     }
 
     try {
+        MultivariableIntegrator integrator([](const std::vector<double>& point) {
+            return point[0] * point[0] + point[1] * point[1];
+        });
+        const double actual =
+            integrator.integrate({{-1.0, 1.0}, {-1.0, 1.0}}, {24, 24});
+        if (nearly_equal(actual, 8.0 / 3.0, 1e-6)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: multivariable quadratic integral expected 8/3 got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: multivariable quadratic integral threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
         FunctionAnalysis function("x");
         function.define("ln(x)");
         const double actual = function.evaluate(mymath::kE);
@@ -3155,6 +3355,9 @@ int main() {
         {"poly_gcd(vec(-1, 0, 1), vec(-1, 1))", false, "[-1, 1]"},
         {"poly_fit(vec(0, 1, 2), vec(1, 2, 5), 2)", false, "[1, 0, 1]"},
         {"polynomial_fit(vec(0, 1, 2), vec(1, 2, 5), 2)", false, "[1, 0, 1]"},
+        {"poly_fit(vec(1000, 1001, 1002), vec(1, 4, 9), 2)",
+         false,
+         "[998001, -1998, 1]"},
         {"lagrange(vec(0, 1, 2), vec(1, 2, 5), 1.5)", false, "3.25"},
         {"linear_regression(vec(0, 1, 2), vec(1, 3, 5))", false, "[2, 1]"},
         {"dft(mat(1, 4, 1, 0, 0, 0))", false, "[[1, 0], [1, 0], [1, 0], [1, 0]]"},
@@ -3192,6 +3395,22 @@ int main() {
             std::cout << "FAIL: matrix display " << test.expression
                       << " threw unexpected error: " << ex.what() << '\n';
         }
+    }
+
+    try {
+        const double actual =
+            calculator.evaluate("det(mat(2, 2, 100001, 100000, 100000, 99999))");
+        if (nearly_equal(actual, -1.0, 1e-5)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: cancellation-sensitive determinant expected about -1 got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: cancellation-sensitive determinant threw unexpected error: "
+                  << ex.what() << '\n';
     }
 
     try {
@@ -3501,8 +3720,8 @@ int main() {
         {"bisect(x^2 - 2, 1, 2)", false, "1.41421356238"},
         {"secant(x^2 - 2, 1, 2)", false, "1.41421356237"},
         {"fixed_point(cos(x), 0.5)", false, "0.73908513325"},
-        {"pade(exp(x), 0, 2, 2)", false, "(0.083333 * x ^ 2 + 0.5 * x + 1) / (0.083333 * x ^ 2 - 0.5 * x + 1)"},
-        {"puiseux((1 + x) ^ (1 / 2), 0, 4, 2)", false, "1 + 0.5 * x - 0.125 * x ^ 2"},
+        {"pade(exp(x), 0, 2, 2)", false, "(1/12 * x ^ 2 + 1/2 * x + 1) / (1/12 * x ^ 2 - 1/2 * x + 1)"},
+        {"puiseux((1 + x) ^ (1 / 2), 0, 4, 2)", false, "1 + 1/2 * x - 1/8 * x ^ 2"},
         {"series_sum(n^2, n, 1, N)", false, "N * (N + 1) * (2 * N + 1) / 6"},
         {"summation(0.5^n, n, 0, inf)", false, "2"},
         {"laplace(step(t))", false, "1 / s"},

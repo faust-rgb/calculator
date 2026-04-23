@@ -130,7 +130,7 @@ const std::vector<std::string>& builtin_expression_completion_words() {
         "exp(", "ln(", "log10(", "gamma(", "sqrt(", "cbrt(", "root(",
         "abs(", "sign(", "floor(", "ceil(",
         "min(", "max(", "sum(", "avg(", "median(", "factorial(", "nCr(", "nPr(",
-        "gcd(", "lcm(", "mod(", "pow(", "factor(",
+        "gcd(", "lcm(", "mod(", "pow(", "rat(", "factor(",
         "deg2rad(", "rad2deg(", "celsius(", "fahrenheit(", "kelvin(",
         "poly_add(", "poly_sub(", "poly_mul(", "poly_div(", "roots(",
         "diff(", "limit(", "integral(", "taylor(", "extrema(", "simplify(",

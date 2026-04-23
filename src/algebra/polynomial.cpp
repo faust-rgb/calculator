@@ -48,6 +48,19 @@ std::string format_coefficient(double value) {
         return std::to_string(rounded);
     }
 
+    long long numerator = 0;
+    long long denominator = 1;
+    if (mymath::approximate_fraction(value,
+                                     &numerator,
+                                     &denominator,
+                                     999,
+                                     1e-10)) {
+        if (denominator == 1) {
+            return std::to_string(numerator);
+        }
+        return std::to_string(numerator) + "/" + std::to_string(denominator);
+    }
+
     std::string text = std::to_string(value);
     while (!text.empty() && text.back() == '0') {
         text.pop_back();
@@ -365,17 +378,26 @@ std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
 
     const std::size_t n = x_samples.size();
     const std::size_t m = static_cast<std::size_t>(degree + 1);
-    std::vector<std::vector<double>> normal(m, std::vector<double>(m, 0.0));
-    std::vector<double> rhs(m, 0.0);
+    long double center = 0.0L;
+    for (double sample : x_samples) {
+        center += static_cast<long double>(sample);
+    }
+    center /= static_cast<long double>(n);
+
+    std::vector<std::vector<long double>> normal(
+        m, std::vector<long double>(m, 0.0L));
+    std::vector<long double> rhs(m, 0.0L);
 
     for (std::size_t row = 0; row < n; ++row) {
-        std::vector<double> powers(m, 1.0);
+        std::vector<long double> powers(m, 1.0L);
+        const long double shifted_x =
+            static_cast<long double>(x_samples[row]) - center;
         for (std::size_t i = 1; i < m; ++i) {
-            powers[i] = powers[i - 1] * x_samples[row];
+            powers[i] = powers[i - 1] * shifted_x;
         }
 
         for (std::size_t i = 0; i < m; ++i) {
-            rhs[i] += powers[i] * y_samples[row];
+            rhs[i] += powers[i] * static_cast<long double>(y_samples[row]);
             for (std::size_t j = 0; j < m; ++j) {
                 normal[i][j] += powers[i] * powers[j];
             }
@@ -384,15 +406,19 @@ std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
 
     for (std::size_t pivot = 0; pivot < m; ++pivot) {
         std::size_t best_row = pivot;
-        double best_value = mymath::abs(normal[pivot][pivot]);
+        long double best_value = normal[pivot][pivot] < 0.0L
+                                     ? -normal[pivot][pivot]
+                                     : normal[pivot][pivot];
         for (std::size_t row = pivot + 1; row < m; ++row) {
-            const double current = mymath::abs(normal[row][pivot]);
+            const long double current = normal[row][pivot] < 0.0L
+                                            ? -normal[row][pivot]
+                                            : normal[row][pivot];
             if (current > best_value) {
                 best_value = current;
                 best_row = row;
             }
         }
-        if (mymath::is_near_zero(best_value, 1e-12)) {
+        if (best_value <= 1e-18L) {
             throw std::runtime_error("polynomial_fit normal equation is singular");
         }
         if (best_row != pivot) {
@@ -400,7 +426,7 @@ std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
             std::swap(rhs[pivot], rhs[best_row]);
         }
 
-        const double pivot_value = normal[pivot][pivot];
+        const long double pivot_value = normal[pivot][pivot];
         for (std::size_t col = pivot; col < m; ++col) {
             normal[pivot][col] /= pivot_value;
         }
@@ -410,8 +436,8 @@ std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
             if (row == pivot) {
                 continue;
             }
-            const double factor = normal[row][pivot];
-            if (mymath::is_near_zero(factor, 1e-12)) {
+            const long double factor = normal[row][pivot];
+            if ((factor < 0.0L ? -factor : factor) <= 1e-18L) {
                 continue;
             }
             for (std::size_t col = pivot; col < m; ++col) {
@@ -421,8 +447,29 @@ std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
         }
     }
 
-    trim_trailing_zeros(&rhs);
-    return rhs;
+    std::vector<long double> unshifted(m, 0.0L);
+    std::vector<long double> shifted_basis(1, 1.0L);
+    for (std::size_t degree_index = 0; degree_index < m; ++degree_index) {
+        for (std::size_t term_index = 0; term_index < shifted_basis.size(); ++term_index) {
+            unshifted[term_index] += rhs[degree_index] * shifted_basis[term_index];
+        }
+        if (degree_index + 1 < m) {
+            std::vector<long double> next_basis(shifted_basis.size() + 1, 0.0L);
+            for (std::size_t term_index = 0; term_index < shifted_basis.size(); ++term_index) {
+                next_basis[term_index] -= center * shifted_basis[term_index];
+                next_basis[term_index + 1] += shifted_basis[term_index];
+            }
+            shifted_basis = next_basis;
+        }
+    }
+
+    std::vector<double> coefficients;
+    coefficients.reserve(unshifted.size());
+    for (long double value : unshifted) {
+        coefficients.push_back(static_cast<double>(value));
+    }
+    trim_trailing_zeros(&coefficients);
+    return coefficients;
 }
 
 std::string polynomial_to_string(const std::vector<double>& coefficients,

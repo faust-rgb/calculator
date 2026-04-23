@@ -30,20 +30,21 @@ double sin(double x) {
     //
     // 这里用递推式生成每一项：
     // term_{n+1} = term_n * ( -x^2 / ((2n)(2n+1)) )
-    double term = x;
-    double sum = x;
+    const long double x_ld = static_cast<long double>(x);
+    long double term = x_ld;
+    long double sum = x_ld;
 
     for (int n = 1; n <= 20; ++n) {
-        const double a = static_cast<double>(2 * n);
-        const double b = static_cast<double>(2 * n + 1);
-        term *= -x * x / (a * b);
+        const long double a = static_cast<long double>(2 * n);
+        const long double b = static_cast<long double>(2 * n + 1);
+        term *= -(x_ld * x_ld) / (a * b);
         sum += term;
-        if (abs(term) < kEps) {
+        if (std::abs(term) < static_cast<long double>(kEps)) {
             break;
         }
     }
 
-    return sum;
+    return static_cast<double>(sum);
 }
 
 double cos(double x) {
@@ -62,20 +63,21 @@ double cos(double x) {
     // 1 - x^2/2! + x^4/4! - ...
     //
     // 和 sin 一样，使用相邻项递推来减少重复乘法。
-    double term = 1.0;
-    double sum = 1.0;
+    const long double x_ld = static_cast<long double>(x);
+    long double term = 1.0L;
+    long double sum = 1.0L;
 
     for (int n = 1; n <= 20; ++n) {
-        const double a = static_cast<double>(2 * n - 1);
-        const double b = static_cast<double>(2 * n);
-        term *= -x * x / (a * b);
+        const long double a = static_cast<long double>(2 * n - 1);
+        const long double b = static_cast<long double>(2 * n);
+        term *= -(x_ld * x_ld) / (a * b);
         sum += term;
-        if (abs(term) < kEps) {
+        if (std::abs(term) < static_cast<long double>(kEps)) {
             break;
         }
     }
 
-    return sum;
+    return static_cast<double>(sum);
 }
 
 double tan(double x) {
@@ -115,20 +117,21 @@ double atan(double x) {
 
     // atan(x) 的级数展开：
     // x - x^3/3 + x^5/5 - ...
-    double term = x;
-    double sum = x;
-    const double x2 = x * x;
+    const long double x_ld = static_cast<long double>(x);
+    long double term = x_ld;
+    long double sum = x_ld;
+    const long double x2 = x_ld * x_ld;
 
     for (int n = 1; n <= 2000; ++n) {
         term *= -x2;
-        const double add = term / static_cast<double>(2 * n + 1);
+        const long double add = term / static_cast<long double>(2 * n + 1);
         sum += add;
-        if (abs(add) < kEps) {
+        if (std::abs(add) < static_cast<long double>(kEps)) {
             break;
         }
     }
 
-    return sum;
+    return static_cast<double>(sum);
 }
 
 double asin(double x) {
@@ -149,22 +152,23 @@ double asin(double x) {
     //
     // 选择 guess = x 作为初始值，是因为在 [-1, 1] 区间内
     // sin(theta) 和 theta 接近，足够作为一个简单起点。
-    double guess = x;
+    long double guess = static_cast<long double>(x);
     for (int i = 0; i < 60; ++i) {
-        const double s = sin(guess);
-        const double c = cos(guess);
-        if (abs(c) < 1e-10) {
+        const long double s = static_cast<long double>(sin(static_cast<double>(guess)));
+        const long double c = static_cast<long double>(cos(static_cast<double>(guess)));
+        if (std::abs(c) < 1e-10L) {
             break;
         }
 
-        const double next = guess - (s - x) / c;
-        if (abs(next - guess) < kEps) {
-            return next;
+        const long double next =
+            guess - (s - static_cast<long double>(x)) / c;
+        if (std::abs(next - guess) < static_cast<long double>(kEps)) {
+            return static_cast<double>(next);
         }
         guess = next;
     }
 
-    return guess;
+    return static_cast<double>(guess);
 }
 
 double acos(double x) {
@@ -236,15 +240,16 @@ double sqrt(double x) {
     // next = (guess + x / guess) / 2
     //
     // 这相当于对 f(g) = g^2 - x 做 Newton-Raphson。
-    double guess = x >= 1.0 ? x : 1.0;
+    long double guess = x >= 1.0 ? static_cast<long double>(x) : 1.0L;
+    const long double target = static_cast<long double>(x);
     for (int i = 0; i < 100; ++i) {
-        const double next = 0.5 * (guess + x / guess);
-        if (abs(next - guess) < kEps) {
-            return next;
+        const long double next = 0.5L * (guess + target / guess);
+        if (std::abs(next - guess) < static_cast<long double>(kEps)) {
+            return static_cast<double>(next);
         }
         guess = next;
     }
-    return guess;
+    return static_cast<double>(guess);
 }
 
 double cbrt(double x) {
@@ -316,16 +321,17 @@ static double int_pow(double base, long long exponent) {
                                    ? static_cast<unsigned long long>(-exponent)
                                    : static_cast<unsigned long long>(exponent);
 
-    double result = 1.0;
+    long double result = 1.0L;
+    long double base_ld = static_cast<long double>(base);
     while (power > 0) {
         if (power & 1ULL) {
-            result *= base;
+            result *= base_ld;
         }
-        base *= base;
+        base_ld *= base_ld;
         power >>= 1ULL;
     }
 
-    return negative ? 1.0 / result : result;
+    return static_cast<double>(negative ? 1.0L / result : result);
 }
 
 double pow(double base, double exponent) {
@@ -374,20 +380,23 @@ double erf(double x) {
         return 1.0 - erfc(x);
     }
 
-    double sum = 0.0;
-    double term = x;
-    double factorial = 1.0;
+    const long double x_ld = static_cast<long double>(x);
+    long double sum = 0.0L;
+    long double term = x_ld;
+    long double factorial = 1.0L;
     for (int n = 0; n < 80; ++n) {
-        const double denominator = factorial * static_cast<double>(2 * n + 1);
-        const double add = term / denominator;
+        const long double denominator =
+            factorial * static_cast<long double>(2 * n + 1);
+        const long double add = term / denominator;
         sum += (n % 2 == 0 ? add : -add);
-        if (abs(add) < 1e-14) {
+        if (std::abs(add) < 1e-14L) {
             break;
         }
-        term *= x * x;
-        factorial *= static_cast<double>(n + 1);
+        term *= x_ld * x_ld;
+        factorial *= static_cast<long double>(n + 1);
     }
-    return 2.0 * sum / sqrt(kPi);
+    return static_cast<double>(2.0L * sum /
+                               static_cast<long double>(sqrt(kPi)));
 }
 
 double erfc(double x) {
@@ -445,15 +454,16 @@ double zeta(double s) {
         throw std::domain_error("zeta is numerically unstable near s = 1");
     }
 
-    double eta = 0.0;
+    long double eta = 0.0L;
     for (int n = 1; n <= 200000; ++n) {
-        const double term = 1.0 / pow(static_cast<double>(n), s);
+        const long double term =
+            static_cast<long double>(1.0 / pow(static_cast<double>(n), s));
         eta += (n % 2 == 1 ? term : -term);
-        if (term < 1e-12) {
+        if (term < 1e-12L) {
             break;
         }
     }
-    return eta / denominator;
+    return static_cast<double>(eta / static_cast<long double>(denominator));
 }
 
 double bessel_j(int order, double x) {
@@ -475,20 +485,22 @@ double bessel_j(int order, double x) {
         return (x < 0.0 && order % 2 != 0) ? -asymptotic : asymptotic;
     }
 
-    double sum = 0.0;
-    const double half_x = x * 0.5;
-    double term = pow(half_x, static_cast<double>(order)) /
+    long double sum = 0.0L;
+    const long double half_x = static_cast<long double>(x) * 0.5L;
+    long double term = static_cast<long double>(
+                           pow(static_cast<double>(half_x),
+                               static_cast<double>(order))) /
                   finite_or_infinity_from_log(
                       log_gamma_positive(static_cast<double>(order + 1)));
     for (int k = 0; k < 200; ++k) {
-        const double add = term;
+        const long double add = term;
         sum += add;
-        if (abs(add) <= 1e-14 * (1.0 + abs(sum))) {
+        if (std::abs(add) <= 1e-14L * (1.0L + std::abs(sum))) {
             break;
         }
         term *= -(half_x * half_x) /
-                (static_cast<double>(k + 1) *
-                 static_cast<double>(k + order + 1));
+                (static_cast<long double>(k + 1) *
+                 static_cast<long double>(k + order + 1));
     }
-    return sum;
+    return static_cast<double>(sum);
 }

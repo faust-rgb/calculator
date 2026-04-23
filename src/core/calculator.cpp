@@ -9,6 +9,7 @@
 #include "script_parser.h"
 #include "symbolic_expression.h"
 
+#include <algorithm>
 #include <cctype>
 #include <fstream>
 #include <functional>
@@ -418,6 +419,54 @@ std::string format_decimal(double value) {
     std::ostringstream out;
     out << std::setprecision(12) << value;
     return out.str();
+}
+
+bool try_make_simple_rational(double value,
+                              int max_denominator,
+                              Rational* rational) {
+    if (rational == nullptr || !std::isfinite(value)) {
+        return false;
+    }
+
+    long long numerator = 0;
+    long long denominator = 1;
+    if (!mymath::approximate_fraction(value,
+                                      &numerator,
+                                      &denominator,
+                                      max_denominator,
+                                      1e-10)) {
+        return false;
+    }
+
+    *rational = Rational(numerator, denominator);
+    return true;
+}
+
+std::string format_symbolic_number(double value) {
+    value = mymath::is_near_zero(value, kDisplayZeroEps) ? 0.0 : value;
+    if (mymath::abs(value) > kDisplayIntegerEps &&
+        is_integer_double(value, kDisplayIntegerEps)) {
+        return std::to_string(round_to_long_long(value));
+    }
+
+    Rational rational;
+    if (try_make_simple_rational(value, 999, &rational)) {
+        return rational.to_string();
+    }
+
+    return format_decimal(value);
+}
+
+double root_position_tolerance(double value) {
+    return 1e-10 * std::max(1.0, mymath::abs(value));
+}
+
+double root_function_tolerance(double value) {
+    return 1e-10 * std::max(1.0, mymath::abs(value));
+}
+
+double root_derivative_step(double value) {
+    return 1e-6 * std::max(1.0, mymath::abs(value));
 }
 
 constexpr int kPreciseDecimalDivisionDigits = 40;
@@ -1502,12 +1551,7 @@ std::string format_print_value(const StoredValue& value, bool symbolic_constants
 }
 
 std::string format_symbolic_scalar(double value) {
-    value = mymath::is_near_zero(value, kDisplayZeroEps) ? 0.0 : value;
-    if (mymath::abs(value) > kDisplayIntegerEps &&
-        is_integer_double(value, kDisplayIntegerEps)) {
-        return std::to_string(round_to_long_long(value));
-    }
-    return format_decimal(value);
+    return format_symbolic_number(value);
 }
 
 double factorial_int(int n) {
@@ -1733,46 +1777,61 @@ std::vector<double> solve_dense_linear_system(std::vector<std::vector<double>> m
         }
     }
 
+    std::vector<std::vector<long double>> high_precision_matrix(
+        n, std::vector<long double>(n, 0.0L));
+    std::vector<long double> high_precision_rhs(n, 0.0L);
+    for (std::size_t row = 0; row < n; ++row) {
+        for (std::size_t col = 0; col < n; ++col) {
+            high_precision_matrix[row][col] =
+                static_cast<long double>(matrix[row][col]);
+        }
+        high_precision_rhs[row] = static_cast<long double>(rhs[row]);
+    }
+
     for (std::size_t pivot = 0; pivot < n; ++pivot) {
         std::size_t best_row = pivot;
-        double best_value = mymath::abs(matrix[pivot][pivot]);
+        long double best_value = std::abs(high_precision_matrix[pivot][pivot]);
         for (std::size_t row = pivot + 1; row < n; ++row) {
-            const double current = mymath::abs(matrix[row][pivot]);
+            const long double current = std::abs(high_precision_matrix[row][pivot]);
             if (current > best_value) {
                 best_value = current;
                 best_row = row;
             }
         }
 
-        if (mymath::is_near_zero(best_value, 1e-12)) {
+        if (std::abs(best_value) <= 1e-12L) {
             throw std::runtime_error(context + " system is singular");
         }
         if (best_row != pivot) {
-            std::swap(matrix[pivot], matrix[best_row]);
-            std::swap(rhs[pivot], rhs[best_row]);
+            std::swap(high_precision_matrix[pivot], high_precision_matrix[best_row]);
+            std::swap(high_precision_rhs[pivot], high_precision_rhs[best_row]);
         }
 
-        const double pivot_value = matrix[pivot][pivot];
+        const long double pivot_value = high_precision_matrix[pivot][pivot];
         for (std::size_t col = pivot; col < n; ++col) {
-            matrix[pivot][col] /= pivot_value;
+            high_precision_matrix[pivot][col] /= pivot_value;
         }
-        rhs[pivot] /= pivot_value;
+        high_precision_rhs[pivot] /= pivot_value;
 
         for (std::size_t row = 0; row < n; ++row) {
             if (row == pivot) {
                 continue;
             }
-            const double factor = matrix[row][pivot];
-            if (mymath::is_near_zero(factor, 1e-12)) {
+            const long double factor = high_precision_matrix[row][pivot];
+            if (std::abs(factor) <= 1e-12L) {
                 continue;
             }
             for (std::size_t col = pivot; col < n; ++col) {
-                matrix[row][col] -= factor * matrix[pivot][col];
+                high_precision_matrix[row][col] -=
+                    factor * high_precision_matrix[pivot][col];
             }
-            rhs[row] -= factor * rhs[pivot];
+            high_precision_rhs[row] -= factor * high_precision_rhs[pivot];
         }
     }
 
+    for (std::size_t i = 0; i < n; ++i) {
+        rhs[i] = static_cast<double>(high_precision_rhs[i]);
+    }
     return rhs;
 }
 
@@ -1796,7 +1855,7 @@ bool is_reserved_function_name(const std::string& name) {
         "poly_deriv", "poly_div", "poly_eval", "poly_fit", "poly_gcd",
         "poly_integ", "poly_mul", "poly_sub", "polynomial_fit", "pow",
         "qr_q", "qr_r", "rad", "rad2deg", "rand", "randint", "randn",
-        "rank", "real", "reshape", "resize", "rref", "root", "roots",
+        "rank", "rat", "real", "reshape", "resize", "rref", "root", "roots",
         "schur", "sec", "secant", "set", "shl", "shr", "sign", "sin",
         "sin_deg", "sinh", "solve", "spline", "sqrt", "std", "sum",
         "svd", "svd_s", "svd_u", "svd_vt", "tan", "tanh", "taylor",
@@ -4196,6 +4255,61 @@ StoredValue evaluate_expression_value(Calculator* calculator,
         };
 
     StoredValue stored;
+    std::vector<std::string> rational_arguments;
+    if (split_named_call_with_arguments(trimmed, "rat", &rational_arguments)) {
+        if (rational_arguments.size() != 1 && rational_arguments.size() != 2) {
+            throw std::runtime_error(
+                "rat expects one argument or expression plus max_denominator");
+        }
+
+        const StoredValue value =
+            evaluate_expression_value(calculator, impl, rational_arguments[0], false);
+        if (value.is_matrix) {
+            throw std::runtime_error("rat cannot approximate a matrix value");
+        }
+        if (value.is_string) {
+            throw std::runtime_error("rat cannot approximate a string value");
+        }
+
+        long long max_denominator = 999;
+        if (rational_arguments.size() == 2) {
+            const StoredValue max_denominator_value =
+                evaluate_expression_value(calculator, impl, rational_arguments[1], false);
+            if (max_denominator_value.is_matrix || max_denominator_value.is_string) {
+                throw std::runtime_error("rat max_denominator must be a positive integer");
+            }
+            const double scalar =
+                max_denominator_value.exact
+                    ? rational_to_double(max_denominator_value.rational)
+                    : max_denominator_value.decimal;
+            if (!is_integer_double(scalar) || scalar <= 0.0) {
+                throw std::runtime_error("rat max_denominator must be a positive integer");
+            }
+            max_denominator = round_to_long_long(scalar);
+        }
+
+        if (value.exact && value.rational.denominator <= max_denominator) {
+            return value;
+        }
+
+        const double decimal_value = value.exact
+                                         ? rational_to_double(value.rational)
+                                         : value.decimal;
+        long long numerator = 0;
+        long long denominator = 1;
+        if (!mymath::best_rational_approximation(decimal_value,
+                                                 &numerator,
+                                                 &denominator,
+                                                 max_denominator)) {
+            throw std::runtime_error("rat could not compute a rational approximation");
+        }
+
+        stored.exact = true;
+        stored.rational = Rational(numerator, denominator);
+        stored.decimal = rational_to_double(stored.rational);
+        return stored;
+    }
+
     if (exact_mode) {
         try {
             ExactParser parser(trimmed, &variables, &impl->functions, has_script_function);
@@ -4498,11 +4612,15 @@ Calculator::Calculator() : impl_(new Impl()) {}
 Calculator::~Calculator() = default;
 
 double Calculator::evaluate(const std::string& expression) {
+    return normalize_result(evaluate_raw(expression));
+}
+
+double Calculator::evaluate_raw(const std::string& expression) {
     const StoredValue value = evaluate_expression_value(this, impl_.get(), expression, false);
     if (value.is_matrix) {
         throw std::runtime_error("matrix expression cannot be used as a scalar");
     }
-    return normalize_result(value.decimal);
+    return value.decimal;
 }
 
 std::string Calculator::evaluate_for_display(const std::string& expression, bool exact_mode) {
@@ -4640,6 +4758,7 @@ std::string Calculator::help_topic(const std::string& topic) const {
         "  factorial(5)        Integer factorial\n"
         "  nCr(5, 2)           Combination count\n"
         "  nPr(5, 2)           Permutation count\n"
+        "  rat(pi, 1000)       Best rational approximation with bounded denominator\n"
         "  sum(1, 2, 3, 4)     Aggregate sum\n"
         "  mean(1, 2, 3, 4)    Aggregate mean\n"
         "  avg(1, 2, 3, 4)     Aggregate average\n"
@@ -6105,20 +6224,23 @@ bool Calculator::try_process_function_command(const std::string& expression,
                 double x = parse_decimal_argument(arguments[1]);
                 for (int iteration = 0; iteration < 64; ++iteration) {
                     const double fx = evaluate_expression({{"x", x}});
-                    if (mymath::is_near_zero(fx, 1e-10)) {
+                    if (mymath::abs(fx) <= root_function_tolerance(fx)) {
                         *output = format_decimal(normalize_result(x));
                         return true;
                     }
-                    const double h = 1e-6 * (1.0 + mymath::abs(x));
-                    const double derivative =
-                        (evaluate_expression({{"x", x + h}}) -
-                         evaluate_expression({{"x", x - h}})) /
-                        (2.0 * h);
-                    if (mymath::is_near_zero(derivative, 1e-12)) {
+                    const double h = root_derivative_step(x);
+                    const long double derivative =
+                        (static_cast<long double>(evaluate_expression({{"x", x + h}})) -
+                         static_cast<long double>(evaluate_expression({{"x", x - h}}))) /
+                        (2.0L * static_cast<long double>(h));
+                    if (std::abs(derivative) <= 1e-12L * std::max(1.0L, std::abs(static_cast<long double>(fx)))) {
                         throw std::runtime_error("solve failed because the derivative vanished");
                     }
-                    const double next = x - fx / derivative;
-                    if (mymath::abs(next - x) < 1e-10) {
+                    const double next = static_cast<double>(
+                        static_cast<long double>(x) -
+                        static_cast<long double>(fx) / derivative);
+                    if (mymath::abs(next - x) <=
+                        root_position_tolerance(std::max(mymath::abs(next), mymath::abs(x)))) {
                         *output = format_decimal(normalize_result(next));
                         return true;
                     }
@@ -6146,8 +6268,9 @@ bool Calculator::try_process_function_command(const std::string& expression,
             for (int iteration = 0; iteration < 100; ++iteration) {
                 const double mid = 0.5 * (left + right);
                 const double mid_value = evaluate_expression({{"x", mid}});
-                if (mymath::is_near_zero(mid_value, 1e-10) ||
-                    mymath::abs(right - left) < 1e-10) {
+                if (mymath::abs(mid_value) <= root_function_tolerance(mid_value) ||
+                    mymath::abs(right - left) <=
+                        root_position_tolerance(std::max(mymath::abs(left), mymath::abs(right)))) {
                     *output = format_decimal(normalize_result(mid));
                     return true;
                 }
@@ -6173,12 +6296,21 @@ bool Calculator::try_process_function_command(const std::string& expression,
             for (int iteration = 0; iteration < 64; ++iteration) {
                 const double f0 = evaluate_expression({{"x", x0}});
                 const double f1 = evaluate_expression({{"x", x1}});
-                const double denominator = f1 - f0;
-                if (mymath::is_near_zero(denominator, 1e-12)) {
+                const long double denominator =
+                    static_cast<long double>(f1) - static_cast<long double>(f0);
+                if (std::abs(denominator) <=
+                    1e-12L * std::max({1.0L,
+                                       std::abs(static_cast<long double>(f0)),
+                                       std::abs(static_cast<long double>(f1))})) {
                     throw std::runtime_error("secant failed because consecutive function values matched");
                 }
-                const double next = x1 - f1 * (x1 - x0) / denominator;
-                if (mymath::abs(next - x1) < 1e-10) {
+                const double next = static_cast<double>(
+                    static_cast<long double>(x1) -
+                    static_cast<long double>(f1) *
+                        (static_cast<long double>(x1) - static_cast<long double>(x0)) /
+                        denominator);
+                if (mymath::abs(next - x1) <=
+                    root_position_tolerance(std::max(mymath::abs(next), mymath::abs(x1)))) {
                     *output = format_decimal(normalize_result(next));
                     return true;
                 }
@@ -6196,7 +6328,8 @@ bool Calculator::try_process_function_command(const std::string& expression,
             double x = parse_decimal_argument(arguments[1]);
             for (int iteration = 0; iteration < 128; ++iteration) {
                 const double next = evaluate_expression({{"x", x}});
-                if (mymath::abs(next - x) < 1e-10) {
+                if (mymath::abs(next - x) <=
+                    root_position_tolerance(std::max(mymath::abs(next), mymath::abs(x)))) {
                     *output = format_decimal(normalize_result(next));
                     return true;
                 }
