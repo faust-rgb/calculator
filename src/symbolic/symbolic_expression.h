@@ -71,6 +71,32 @@ public:
     SymbolicExpression derivative(const std::string& variable_name) const;
 
     /**
+     * @brief 计算多个变量上的梯度
+     * @param variable_names 求导变量名列表
+     * @return 按变量顺序排列的一阶偏导表达式
+     */
+    std::vector<SymbolicExpression> gradient(
+        const std::vector<std::string>& variable_names) const;
+
+    /**
+     * @brief 计算多个变量上的 Hessian 矩阵
+     * @param variable_names 求导变量名列表
+     * @return Hessian 矩阵表达式
+     */
+    std::vector<std::vector<SymbolicExpression>> hessian(
+        const std::vector<std::string>& variable_names) const;
+
+    /**
+     * @brief 计算表达式列表对变量列表的 Jacobian 矩阵
+     * @param expressions 表达式列表
+     * @param variable_names 求导变量名列表
+     * @return Jacobian 矩阵表达式
+     */
+    static std::vector<std::vector<SymbolicExpression>> jacobian(
+        const std::vector<SymbolicExpression>& expressions,
+        const std::vector<std::string>& variable_names);
+
+    /**
      * @brief 计算符号积分
      * @param variable_name 积分变量名
      * @return 积分表达式（不含常数 C）

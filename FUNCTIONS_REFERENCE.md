@@ -103,6 +103,8 @@ Notes:
 - `randint(a, b)`
 - `pdf_normal(x, mu, sigma)`
 - `cdf_normal(x, mu, sigma)`
+- `rat(x)`
+- `rat(x, max_denominator)`
 
 Notes:
 
@@ -130,6 +132,7 @@ Notes:
 - `get(v, index)`
 - `set(v, index, value)`
 - `reshape(m, rows, cols)`
+- `vec(m)`
 - `diag(m)`
 - `diag(v)`
 
@@ -181,6 +184,8 @@ Notes:
 - `cholesky(A)`
 - `schur(A)`
 - `hessenberg(A)`
+- `lu_l(A)`
+- `lu_u(A)`
 - `mean(v)`
 - `median(v)`
 - `mode(v)`
@@ -206,9 +211,15 @@ Notes:
 - `poly_integ(p)`
 - `poly_compose(p, q)`
 - `poly_gcd(p, q)`
+- `poly_add(p, q)`
+- `poly_sub(p, q)`
+- `poly_mul(p, q)`
+- `poly_div(p, q)`
+- `roots(p)`
 - `complex(re, im)`
 - `real(z)`
 - `imag(z)`
+- `abs(z)`
 - `arg(z)`
 - `conj(z)`
 - `polar(r, theta)`
@@ -220,20 +231,28 @@ Notes:
 - `eigvals` and `eigvecs` currently support real-valued results
 - `dot(a, b)` and `outer(a, b)` require vector arguments
 - `qr_q(A)` and `qr_r(A)` currently require square matrices
+- `lu_l(A)` and `lu_u(A)` currently require square matrices and use LU decomposition without pivoting
 - `null(m)` returns a basis matrix whose columns span the nullspace
 - `svd_u(A)`, `svd_s(A)`, and `svd_vt(A)` return the reduced SVD factors
 - `solve(A, b)` solves `Ax = b` for square `A` and vector `b`
 - `dft` / `fft` return an `N x 2` matrix whose rows are `[real, imag]`
 - `idft` / `ifft` accept a real vector or an `N x 2` complex matrix
 - `conv` / `convolve` perform linear convolution on real vectors or `N x 2` complex sequences
+- `abs(z)` returns the magnitude of a complex number
 
 ## Function Analysis And ODE
 
 - `diff(f)`
 - `diff(f, x0)`
+- `diff(expr, variable)`
+- `diff(expr, variable1, variable2, ...)`
 - `integral(f)`
+- `integral(expr, variable)`
 - `integral(f, x0)`
 - `integral(f, a, b)`
+- `gradient(expr, variable1, variable2, ...)`
+- `jacobian([expr1; expr2; ...], variable1, variable2, ...)`
+- `hessian(expr, variable1, variable2, ...)`
 - `taylor(expr, a, n)`
 - `pade(expr, m, n)`
 - `pade(expr, a, m, n)`
@@ -253,6 +272,7 @@ Notes:
 - `ztrans(expr, n, z)`
 - `iztrans(expr)`
 - `iztrans(expr, z, n)`
+- `simplify(expr)`
 - `limit(f, x0)`
 - `limit(f, x0, direction)`
 - `extrema(f, a, b)`

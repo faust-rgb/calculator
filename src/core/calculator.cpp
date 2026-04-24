@@ -16,7 +16,6 @@
 #include <fstream>
 #include <functional>
 #include <iomanip>
-#include <limits>
 #include <map>
 #include <memory>
 #include <random>
@@ -28,7 +27,7 @@
 
 namespace {
 
-constexpr double kDisplayZeroEps = std::numeric_limits<double>::denorm_min();
+constexpr double kDisplayZeroEps = mymath::kDoubleDenormMin;
 constexpr double kDisplayIntegerEps = 1e-9;
 
 class ExactModeUnsupported : public std::runtime_error {
@@ -517,7 +516,7 @@ std::string format_decimal(double value) {
 bool try_make_simple_rational(double value,
                               int max_denominator,
                               Rational* rational) {
-    if (rational == nullptr || !std::isfinite(value)) {
+    if (rational == nullptr || !mymath::isfinite(value)) {
         return false;
     }
 
@@ -1885,16 +1884,16 @@ std::vector<double> solve_dense_linear_system(std::vector<std::vector<double>> m
 
     for (std::size_t pivot = 0; pivot < n; ++pivot) {
         std::size_t best_row = pivot;
-        long double best_value = std::abs(high_precision_matrix[pivot][pivot]);
+        long double best_value = mymath::abs_long_double(high_precision_matrix[pivot][pivot]);
         for (std::size_t row = pivot + 1; row < n; ++row) {
-            const long double current = std::abs(high_precision_matrix[row][pivot]);
+            const long double current = mymath::abs_long_double(high_precision_matrix[row][pivot]);
             if (current > best_value) {
                 best_value = current;
                 best_row = row;
             }
         }
 
-        if (std::abs(best_value) <= 1e-12L) {
+        if (mymath::abs_long_double(best_value) <= 1e-12L) {
             throw std::runtime_error(context + " system is singular");
         }
         if (best_row != pivot) {
@@ -1913,7 +1912,7 @@ std::vector<double> solve_dense_linear_system(std::vector<std::vector<double>> m
                 continue;
             }
             const long double factor = high_precision_matrix[row][pivot];
-            if (std::abs(factor) <= 1e-12L) {
+            if (mymath::abs_long_double(factor) <= 1e-12L) {
                 continue;
             }
             for (std::size_t col = pivot; col < n; ++col) {
@@ -5313,31 +5312,56 @@ bool Calculator::try_process_function_command(const std::string& expression,
                 if (split_named_call(trimmed_argument, "diff", &nested_inside)) {
                     const std::vector<std::string> nested_arguments =
                         split_top_level_arguments(nested_inside);
-                    if (nested_arguments.size() != 1) {
+                    if (nested_arguments.empty()) {
                         throw std::runtime_error(
-                            "nested symbolic diff expects exactly one argument");
+                            "nested symbolic diff expects at least one argument");
                     }
                     SymbolicExpression nested_expression;
                     resolve_symbolic_expression(nested_arguments[0],
-                                                true,
+                                                nested_arguments.size() == 1,
                                                 variable_name,
                                                 &nested_expression);
-                    *expression =
-                        nested_expression.derivative(*variable_name).simplify();
+                    if (nested_arguments.size() == 1) {
+                        *expression =
+                            nested_expression.derivative(*variable_name).simplify();
+                    } else {
+                        SymbolicExpression differentiated = nested_expression;
+                        for (std::size_t i = 1; i < nested_arguments.size(); ++i) {
+                            const std::string derivative_variable =
+                                trim_copy(nested_arguments[i]);
+                            if (!is_identifier_text(derivative_variable)) {
+                                throw std::runtime_error(
+                                    "nested symbolic diff variable arguments must be identifiers");
+                            }
+                            differentiated =
+                                differentiated.derivative(derivative_variable).simplify();
+                        }
+                        *variable_name = trim_copy(nested_arguments[1]);
+                        *expression = differentiated;
+                    }
                     return;
                 }
                 if (split_named_call(trimmed_argument, "integral", &nested_inside)) {
                     const std::vector<std::string> nested_arguments =
                         split_top_level_arguments(nested_inside);
-                    if (nested_arguments.size() != 1) {
+                    if (nested_arguments.size() != 1 && nested_arguments.size() != 2) {
                         throw std::runtime_error(
-                            "nested symbolic integral expects exactly one argument");
+                            "nested symbolic integral expects expression and optional variable");
                     }
                     SymbolicExpression nested_expression;
                     resolve_symbolic_expression(nested_arguments[0],
-                                                true,
+                                                nested_arguments.size() == 1,
                                                 variable_name,
                                                 &nested_expression);
+                    if (nested_arguments.size() == 2) {
+                        const std::string integral_variable =
+                            trim_copy(nested_arguments[1]);
+                        if (!is_identifier_text(integral_variable)) {
+                            throw std::runtime_error(
+                                "nested symbolic integral variable must be an identifier");
+                        }
+                        *variable_name = integral_variable;
+                    }
                     *expression =
                         nested_expression.integral(*variable_name).simplify();
                     return;
@@ -5646,7 +5670,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                         total += static_cast<long double>(equality_matrix.at(row, col)) *
                                  static_cast<long double>(x[col]);
                     }
-                    if (std::abs(static_cast<double>(total - equality_rhs[row])) >
+                    if (mymath::abs(static_cast<double>(total - equality_rhs[row])) >
                         planning_tolerance) {
                         return false;
                     }
@@ -5842,6 +5866,111 @@ bool Calculator::try_process_function_command(const std::string& expression,
 
     auto simplify_symbolic_text = [&](const std::string& text) {
         return SymbolicExpression::parse(text).simplify().to_string();
+    };
+
+    auto symbolic_vector_to_string =
+        [](const std::vector<SymbolicExpression>& values) {
+            std::ostringstream out;
+            out << "[";
+            for (std::size_t i = 0; i < values.size(); ++i) {
+                if (i != 0) {
+                    out << ", ";
+                }
+                out << values[i].simplify().to_string();
+            }
+            out << "]";
+            return out.str();
+        };
+
+    auto symbolic_matrix_to_string =
+        [](const std::vector<std::vector<SymbolicExpression>>& values) {
+            std::ostringstream out;
+            out << "[";
+            for (std::size_t row = 0; row < values.size(); ++row) {
+                if (row != 0) {
+                    out << ", ";
+                }
+                out << "[";
+                for (std::size_t col = 0; col < values[row].size(); ++col) {
+                    if (col != 0) {
+                        out << ", ";
+                    }
+                    out << values[row][col].simplify().to_string();
+                }
+                out << "]";
+            }
+            out << "]";
+            return out.str();
+        };
+
+    auto parse_symbolic_variable_arguments =
+        [](const std::vector<std::string>& arguments,
+           std::size_t start_index,
+           const std::vector<std::string>& fallback_variables) {
+            std::vector<std::string> variables;
+            for (std::size_t i = start_index; i < arguments.size(); ++i) {
+                const std::string variable = trim_copy(arguments[i]);
+                if (!is_identifier_text(variable)) {
+                    throw std::runtime_error(
+                        "symbolic variable arguments must be identifiers");
+                }
+                variables.push_back(variable);
+            }
+            if (variables.empty()) {
+                variables = fallback_variables;
+            }
+            if (variables.empty()) {
+                variables.push_back("x");
+            }
+            return variables;
+        };
+
+    auto parse_symbolic_expression_list = [&](const std::string& argument) {
+        std::string text = trim_copy(argument);
+        if (text.size() < 2 || text.front() != '[' || text.back() != ']') {
+            throw std::runtime_error(
+                "jacobian expects its first argument to be a bracketed expression list");
+        }
+        text = trim_copy(text.substr(1, text.size() - 2));
+
+        std::vector<std::string> expression_texts;
+        int paren_depth = 0;
+        int bracket_depth = 0;
+        std::size_t start = 0;
+        for (std::size_t i = 0; i < text.size(); ++i) {
+            const char ch = text[i];
+            if (ch == '(') {
+                ++paren_depth;
+            } else if (ch == ')') {
+                --paren_depth;
+            } else if (ch == '[') {
+                ++bracket_depth;
+            } else if (ch == ']') {
+                --bracket_depth;
+            } else if ((ch == ';' || ch == ',') &&
+                       paren_depth == 0 &&
+                       bracket_depth == 0) {
+                expression_texts.push_back(trim_copy(text.substr(start, i - start)));
+                start = i + 1;
+            }
+        }
+        if (!text.empty()) {
+            expression_texts.push_back(trim_copy(text.substr(start)));
+        }
+        if (expression_texts.empty()) {
+            throw std::runtime_error("jacobian expression list cannot be empty");
+        }
+
+        std::vector<SymbolicExpression> expressions;
+        expressions.reserve(expression_texts.size());
+        for (const std::string& expression_text : expression_texts) {
+            if (expression_text.empty()) {
+                throw std::runtime_error("jacobian expression list cannot contain empty items");
+            }
+            expressions.push_back(SymbolicExpression::parse(
+                expand_inline_function_commands(this, expression_text)));
+        }
+        return expressions;
     };
 
     std::string inside;
@@ -6370,18 +6499,108 @@ bool Calculator::try_process_function_command(const std::string& expression,
         return true;
     }
 
+    if (split_named_call(trimmed, "gradient", &inside)) {
+        const std::vector<std::string> arguments = split_top_level_arguments(inside);
+        if (arguments.empty()) {
+            throw std::runtime_error(
+                "gradient expects a symbolic expression and optional variable names");
+        }
+
+        std::string variable_name;
+        SymbolicExpression expression;
+        resolve_symbolic_expression(arguments[0], false, &variable_name, &expression);
+        const std::vector<std::string> variables =
+            parse_symbolic_variable_arguments(arguments,
+                                              1,
+                                              expression.identifier_variables());
+        *output = symbolic_vector_to_string(expression.gradient(variables));
+        return true;
+    }
+
+    if (split_named_call(trimmed, "hessian", &inside)) {
+        const std::vector<std::string> arguments = split_top_level_arguments(inside);
+        if (arguments.empty()) {
+            throw std::runtime_error(
+                "hessian expects a symbolic expression and optional variable names");
+        }
+
+        std::string variable_name;
+        SymbolicExpression expression;
+        resolve_symbolic_expression(arguments[0], false, &variable_name, &expression);
+        const std::vector<std::string> variables =
+            parse_symbolic_variable_arguments(arguments,
+                                              1,
+                                              expression.identifier_variables());
+        *output = symbolic_matrix_to_string(expression.hessian(variables));
+        return true;
+    }
+
+    if (split_named_call(trimmed, "jacobian", &inside)) {
+        const std::vector<std::string> arguments = split_top_level_arguments(inside);
+        if (arguments.size() < 2) {
+            throw std::runtime_error(
+                "jacobian expects a bracketed expression list and variable names");
+        }
+
+        const std::vector<SymbolicExpression> expressions =
+            parse_symbolic_expression_list(arguments[0]);
+        std::vector<std::string> fallback_variables;
+        for (const SymbolicExpression& expression_item : expressions) {
+            const std::vector<std::string> identifiers =
+                expression_item.identifier_variables();
+            fallback_variables.insert(fallback_variables.end(),
+                                      identifiers.begin(),
+                                      identifiers.end());
+        }
+        std::sort(fallback_variables.begin(), fallback_variables.end());
+        fallback_variables.erase(std::unique(fallback_variables.begin(),
+                                             fallback_variables.end()),
+                                 fallback_variables.end());
+        const std::vector<std::string> variables =
+            parse_symbolic_variable_arguments(arguments, 1, fallback_variables);
+        *output = symbolic_matrix_to_string(
+            SymbolicExpression::jacobian(expressions, variables));
+        return true;
+    }
+
     if (split_named_call(trimmed, "diff", &inside)) {
         const std::vector<std::string> arguments = split_top_level_arguments(inside);
-        if (arguments.size() != 1 && arguments.size() != 2) {
+        if (arguments.empty()) {
             throw std::runtime_error(
-                "diff expects one argument for symbolic differentiation or two for numeric evaluation");
+                "diff expects a symbolic expression and optional variable names");
         }
-        if (arguments.size() == 1) {
+        bool symbolic_derivative = arguments.size() == 1;
+        for (std::size_t i = 1; i < arguments.size(); ++i) {
+            symbolic_derivative =
+                symbolic_derivative || is_identifier_text(trim_copy(arguments[i]));
+        }
+        if (symbolic_derivative) {
             std::string variable_name;
             SymbolicExpression expression;
-            resolve_symbolic_expression(arguments[0], true, &variable_name, &expression);
-            *output = expression.derivative(variable_name).simplify().to_string();
+            resolve_symbolic_expression(arguments[0],
+                                        arguments.size() == 1,
+                                        &variable_name,
+                                        &expression);
+            SymbolicExpression differentiated = expression;
+            if (arguments.size() == 1) {
+                differentiated = differentiated.derivative(variable_name).simplify();
+            } else {
+                for (std::size_t i = 1; i < arguments.size(); ++i) {
+                    const std::string derivative_variable = trim_copy(arguments[i]);
+                    if (!is_identifier_text(derivative_variable)) {
+                        throw std::runtime_error(
+                            "diff variable arguments must be identifiers");
+                    }
+                    differentiated =
+                        differentiated.derivative(derivative_variable).simplify();
+                }
+            }
+            *output = differentiated.simplify().to_string();
             return true;
+        }
+        if (arguments.size() != 2) {
+            throw std::runtime_error(
+                "diff numeric evaluation expects exactly two arguments");
         }
         const FunctionAnalysis analysis = build_analysis(arguments[0]);
         DecimalParser parser(arguments[1], &impl_->variables, &impl_->functions);
@@ -6423,10 +6642,17 @@ bool Calculator::try_process_function_command(const std::string& expression,
                 "3 for definite integral, or 4 for anchor and constant");
         }
 
-        if (arguments.size() == 1) {
+        if (arguments.size() == 1 ||
+            (arguments.size() == 2 && is_identifier_text(trim_copy(arguments[1])))) {
             std::string variable_name;
             SymbolicExpression expression;
-            resolve_symbolic_expression(arguments[0], true, &variable_name, &expression);
+            resolve_symbolic_expression(arguments[0],
+                                        arguments.size() == 1,
+                                        &variable_name,
+                                        &expression);
+            if (arguments.size() == 2) {
+                variable_name = trim_copy(arguments[1]);
+            }
             *output = expression.integral(variable_name).simplify().to_string() + " + C";
             return true;
         }
@@ -7225,7 +7451,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                                 total += static_cast<long double>(equality_matrix.at(row, col)) *
                                          static_cast<long double>(candidate[col]);
                             }
-                            if (std::abs(static_cast<double>(total - equality_rhs[row])) >
+                            if (mymath::abs(static_cast<double>(total - equality_rhs[row])) >
                                 planning_tolerance) {
                                 feasible = false;
                                 break;
@@ -7394,7 +7620,8 @@ bool Calculator::try_process_function_command(const std::string& expression,
                         (static_cast<long double>(evaluate_expression({{"x", x + h}})) -
                          static_cast<long double>(evaluate_expression({{"x", x - h}}))) /
                         (2.0L * static_cast<long double>(h));
-                    if (std::abs(derivative) <= 1e-12L * std::max(1.0L, std::abs(static_cast<long double>(fx)))) {
+                    if (mymath::abs_long_double(derivative) <=
+                        1e-12L * std::max(1.0L, mymath::abs_long_double(static_cast<long double>(fx)))) {
                         throw std::runtime_error("solve failed because the derivative vanished");
                     }
                     const double next = static_cast<double>(
@@ -7459,10 +7686,10 @@ bool Calculator::try_process_function_command(const std::string& expression,
                 const double f1 = evaluate_expression({{"x", x1}});
                 const long double denominator =
                     static_cast<long double>(f1) - static_cast<long double>(f0);
-                if (std::abs(denominator) <=
+                if (mymath::abs_long_double(denominator) <=
                     1e-12L * std::max({1.0L,
-                                       std::abs(static_cast<long double>(f0)),
-                                       std::abs(static_cast<long double>(f1))})) {
+                                       mymath::abs_long_double(static_cast<long double>(f0)),
+                                       mymath::abs_long_double(static_cast<long double>(f1))})) {
                     throw std::runtime_error("secant failed because consecutive function values matched");
                 }
                 const double next = static_cast<double>(

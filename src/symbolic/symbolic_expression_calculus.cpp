@@ -6,6 +6,40 @@
 
 using namespace symbolic_expression_internal;
 
+namespace {
+
+bool is_one_plus_variable_squared(const SymbolicExpression& expression,
+                                  const std::string& variable_name) {
+    std::vector<double> coefficients;
+    return expression.polynomial_coefficients(variable_name, &coefficients) &&
+           coefficients.size() == 3 &&
+           mymath::is_near_zero(coefficients[0] - 1.0, kFormatEps) &&
+           mymath::is_near_zero(coefficients[1], kFormatEps) &&
+           mymath::is_near_zero(coefficients[2] - 1.0, kFormatEps);
+}
+
+bool is_one_minus_variable_squared(const SymbolicExpression& expression,
+                                   const std::string& variable_name) {
+    std::vector<double> coefficients;
+    return expression.polynomial_coefficients(variable_name, &coefficients) &&
+           coefficients.size() == 3 &&
+           mymath::is_near_zero(coefficients[0] - 1.0, kFormatEps) &&
+           mymath::is_near_zero(coefficients[1], kFormatEps) &&
+           mymath::is_near_zero(coefficients[2] + 1.0, kFormatEps);
+}
+
+bool is_sqrt_one_minus_variable_squared(const SymbolicExpression& expression,
+                                        const std::string& variable_name) {
+    if (expression.node_->type != NodeType::kFunction ||
+        expression.node_->text != "sqrt") {
+        return false;
+    }
+    return is_one_minus_variable_squared(SymbolicExpression(expression.node_->left),
+                                         variable_name);
+}
+
+}  // namespace
+
 SymbolicExpression SymbolicExpression::derivative(const std::string& variable_name) const {
     switch (node_->type) {
         case NodeType::kNumber:
@@ -140,6 +174,44 @@ SymbolicExpression SymbolicExpression::derivative(const std::string& variable_na
     throw std::runtime_error("unsupported symbolic derivative");
 }
 
+std::vector<SymbolicExpression> SymbolicExpression::gradient(
+    const std::vector<std::string>& variable_names) const {
+    std::vector<SymbolicExpression> result;
+    result.reserve(variable_names.size());
+    for (const std::string& variable_name : variable_names) {
+        result.push_back(derivative(variable_name).simplify());
+    }
+    return result;
+}
+
+std::vector<std::vector<SymbolicExpression>> SymbolicExpression::hessian(
+    const std::vector<std::string>& variable_names) const {
+    std::vector<std::vector<SymbolicExpression>> result;
+    result.reserve(variable_names.size());
+    for (const std::string& outer_variable : variable_names) {
+        std::vector<SymbolicExpression> row;
+        row.reserve(variable_names.size());
+        const SymbolicExpression outer_derivative =
+            derivative(outer_variable).simplify();
+        for (const std::string& inner_variable : variable_names) {
+            row.push_back(outer_derivative.derivative(inner_variable).simplify());
+        }
+        result.push_back(row);
+    }
+    return result;
+}
+
+std::vector<std::vector<SymbolicExpression>> SymbolicExpression::jacobian(
+    const std::vector<SymbolicExpression>& expressions,
+    const std::vector<std::string>& variable_names) {
+    std::vector<std::vector<SymbolicExpression>> result;
+    result.reserve(expressions.size());
+    for (const SymbolicExpression& expression : expressions) {
+        result.push_back(expression.gradient(variable_names));
+    }
+    return result;
+}
+
 SymbolicExpression SymbolicExpression::integral(const std::string& variable_name) const {
     double numeric_value = 0.0;
     if (is_constant(variable_name) && is_number(&numeric_value)) {
@@ -204,6 +276,12 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
         const SymbolicExpression left(node_->left);
         const SymbolicExpression right(node_->right);
         if (left.is_number(&numeric_value) && mymath::is_near_zero(numeric_value - 1.0, kFormatEps)) {
+            if (is_one_plus_variable_squared(right, variable_name)) {
+                return make_function("atan", variable(variable_name)).simplify();
+            }
+            if (is_sqrt_one_minus_variable_squared(right, variable_name)) {
+                return make_function("asin", variable(variable_name)).simplify();
+            }
             double a = 0.0;
             double b = 0.0;
             if (decompose_linear(right, variable_name, &a, &b) &&
@@ -266,6 +344,15 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                                              make_power(make_function("cbrt", argument),
                                                         number(4.0))),
                                number(4.0 * a))
+                .simplify();
+        }
+        if (node_->text == "sqrt" &&
+            is_one_minus_variable_squared(argument, variable_name)) {
+            const SymbolicExpression x = variable(variable_name);
+            return make_divide(
+                       make_add(make_multiply(x, make_function("sqrt", argument)),
+                                make_function("asin", x)),
+                       number(2.0))
                 .simplify();
         }
         if (node_->text == "tan" && linear) {

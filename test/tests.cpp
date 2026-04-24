@@ -2311,6 +2311,126 @@ int main() {
     try {
         std::string output;
         const bool handled =
+            calculator.try_process_function_command("integral(1 / (1 + x ^ 2))", &output);
+        if (handled && output == "atan(x) + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic integral arctan rule expected atan(x) + C got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic integral arctan rule threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(1 / sqrt(1 - x ^ 2))", &output);
+        if (handled && output == "asin(x) + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic integral asin rule expected asin(x) + C got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic integral asin rule threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(sqrt(1 - x ^ 2))", &output);
+        if (handled &&
+            output == "(asin(x) + sqrt(-(x ^ 2) + 1) * x) / 2 + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic integral semicircle rule returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic integral semicircle rule threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("diff(x ^ 2 * y + y ^ 3, y)", &output);
+        if (handled && output == "3 * y ^ 2 + x ^ 2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic partial diff expected 3 * y ^ 2 + x ^ 2 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic partial diff threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("gradient(x ^ 2 * y + y ^ 3, x, y)", &output);
+        if (handled && output == "[2 * x * y, 3 * y ^ 2 + x ^ 2]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic gradient returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic gradient threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("hessian(x ^ 2 * y + y ^ 3, x, y)", &output);
+        if (handled && output == "[[2 * y, 2 * x], [2 * x, 6 * y]]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic hessian returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic hessian threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("jacobian([x * y; x ^ 2 + y ^ 2], x, y)", &output);
+        if (handled && output == "[[y, x], [2 * x, 2 * y]]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic jacobian returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic jacobian threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
             calculator.try_process_function_command("taylor(f, 0, 3)", &output);
         if (handled && output == "x + x ^ 2 - 1/6 * x ^ 3") {
             ++passed;

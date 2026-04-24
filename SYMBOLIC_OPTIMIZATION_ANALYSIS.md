@@ -2,11 +2,11 @@
 
 ## 执行摘要
 
-当前符号计算模块已实现了基础的微积分、简化、变换等功能。通过对代码和文档的分析，识别出 5 个核心优化方向，按优先级分为3个阶段。本分析基于已实现功能的边界和现有限制。
+当前符号计算模块已实现了基础的微积分、简化、变换等功能。通过对代码和文档的分析，识别出 8 个核心优化方向，按优先级分为 3 个阶段。本分析基于已实现功能的边界和现有限制。
 
 ## 本次落地结果（2026-04-24）
 
-本轮已优先完成文档中“在现有架构下可直接实现”的部分，并补齐回归测试，重点落在第一阶段的规范化与化简稳定性：
+本轮已优先完成文档中“在现有架构下可直接实现”的部分，并补齐回归测试，重点落在第一阶段的规范化与化简稳定性，以及第二阶段的符号微积分和多变量符号操作：
 
 - 已完成：乘法因子按幂次归并，支持 `x * x * x -> x ^ 3`、`x ^ 3 / x ^ 2 -> x`
 - 已完成：公因子提取，支持 `2 * x + 2 * y -> 2 * (x + y)`、`a * b + a * c -> a * (b + c)`
@@ -14,12 +14,16 @@
 - 已完成：单变量多项式规范输出，改善 `x + x ^ 2 + 1` 这类表达式的稳定顺序
 - 已完成：安全的 `exp(ln(...))` 简化，只在已知正值表达式上折叠，避免把 `exp(ln(x))` 误化简为 `x`
 - 已完成：输出规范收敛，优先保留 `pi / 2`、`x ^ 3 / 3` 这类“纯数分母”形式，并修正因式顺序
+- 已完成：反三角积分规则，支持 `integral(1 / (1 + x ^ 2)) -> atan(x) + C` 和 `integral(1 / sqrt(1 - x ^ 2)) -> asin(x) + C`
+- 已完成：平方根特殊积分，支持 `integral(sqrt(1 - x ^ 2))`
+- 已完成：显式多变量偏导入口，支持 `diff(expr, x)` 与 `diff(expr, x, y)` 这类连续偏导
+- 已完成：多变量符号 API 与命令入口，支持 `gradient(expr, vars...)`、`jacobian([exprs], vars...)`、`hessian(expr, vars...)`
 
 仍保留为后续工作：
 
 - 有理函数的 GCD/部分分式体系
-- 更广的积分规则（反三角、分部积分、特殊根式）
-- 多变量符号 API（gradient/jacobian/hessian）
+- 更广的积分规则（分部积分、通用替换、部分分式）
+- 多变量符号积分、极值 critical point 分析和更完整的替换安全检查
 - simplify/derivative 的记忆化与结构缓存
 
 ---
@@ -157,12 +161,12 @@
 
 #### 4. **符号积分规则扩展**
 
-**当前状态：部分完成，未扩展到分析文档列出的高级规则**
+**当前状态：已完成反三角和特殊根式基础规则，未实现通用分部积分/部分分式**
 
 **现状：**
-- 基于规则而非完整
-- 支持：基本多项式、三角、指数、分段函数
-- 不支持：分部积分、替换、高级恒等式
+- 基于规则而非完整 CAS
+- 支持：基本多项式、三角、指数、分段函数、部分反三角形式、平方根特殊形式
+- 不支持：通用分部积分、通用替换、部分分式
 - 局限于 `a*x + b` 形式的线性替换
 
 **优化空间：**
@@ -174,11 +178,14 @@
 - ∫ (polynomial) * exp(...) dx
 - ∫ (polynomial) * sin(...) dx
 
-需要支持的形式 ✗：
+新增支持的形式 ✓：
+- ∫ 1/(1+x^2) dx                       (反三角)
+- ∫ 1/sqrt(1-x^2) dx                   (反三角)
+- ∫ sqrt(1-x^2) dx                     (平方根特殊形式)
+
+仍需支持的形式 ✗：
 - ∫ (polynomial)/(polynomial) dx      (有理函数)
 - ∫ x*sin(x) dx                        (分部积分)
-- ∫ 1/(1+x^2) dx                       (反三角)
-- ∫ sqrt(1-x^2) dx                     (平方根特殊形式)
 ```
 
 **实现策略：**
@@ -199,20 +206,25 @@
 **本次相关修正：**
 - 维持已有 `polynomial * exp/sin/cos` 递推积分
 - 配合规范输出，积分结果更稳定地显示为 `x ^ 3 / 3 + C` 这类形式
+- 新增 `1 / (1 + x ^ 2)`、`1 / sqrt(1 - x ^ 2)`、`sqrt(1 - x ^ 2)` 的符号原函数规则
 
 ---
 
 #### 5. **多变量符号操作（Multi-variable Symbolic Support）**
 
+**当前状态：已完成基础偏导和矩阵型符号 API**
+
 **现状：**
-- `diff()`, `integral()`, `taylor()`, `limit()`, `extrema()` 都仅限单变量
-- 部分导数功能不存在
-- 无梯度、Jacobian、Hessian 辅助函数
-- 无多变量替换和自由变量分析
+- `diff(expr, var)` 支持显式按变量求偏导
+- `diff(expr, var1, var2, ...)` 支持连续混合偏导
+- `gradient(expr, vars...)`、`jacobian([exprs], vars...)`、`hessian(expr, vars...)` 已提供命令入口
+- `integral(expr, var)` 支持显式积分变量
+- `taylor()`, `limit()`, `extrema()` 仍以单变量工作流为主
+- 自由变量分析已有 `identifier_variables()` 基础能力，但多变量替换安全检查仍有限
 
 **优化空间：**
 ```
-需要支持的操作：
+已支持的操作：
 
 1. 按变量的显式偏导数：
    - derivative(expr, var1) vs derivative(expr, var2)
@@ -222,6 +234,8 @@
    - gradient(expr, [x, y, z]) → [∂f/∂x, ∂f/∂y, ∂f/∂z]
    - jacobian(expr_list, var_list) → 矩阵
    - hessian(expr, var_list) → 对称矩阵
+
+仍需完善的操作：
 
 3. 安全的多变量替换：
    - 自由变量分析（哪些变量未被绑定）
@@ -248,6 +262,12 @@
 - `src/symbolic/symbolic_expression_calculus.cpp` - 核心微积分
 - `src/symbolic/symbolic_expression_core.cpp` - 变量分析
 - 核心 API - `symbolic_expression.h` 中的新函数
+
+**本次已落地：**
+- `SymbolicExpression::gradient()`、`SymbolicExpression::hessian()`、`SymbolicExpression::jacobian()`
+- 命令层 `gradient(...)`、`jacobian(...)`、`hessian(...)`
+- `diff(expr, var...)` 支持显式变量和连续偏导
+- `integral(expr, var)` 支持显式积分变量
 
 ---
 
@@ -388,7 +408,7 @@ unified_transform(expr, rules_table, variable_mappings)
 
 **现有基准状态：**
 ```
-Passed: 373 (最新简化工作后)
+Passed: 696 (符号微积分与多变量符号操作扩展后)
 关键测试区域：
   ✓ 基础算术简化
   ✓ 相似项合并
@@ -413,6 +433,14 @@ Passed: 373 (最新简化工作后)
   - 多项式GCD测试
   - 长除法验证
 
+优化 4 - 符号积分：
+  - 反三角积分规则
+  - 平方根特殊形式
+
+优化 5 - 多变量符号操作：
+  - 显式偏导和混合偏导
+  - gradient/jacobian/hessian 输出
+
 等等...
 ```
 
@@ -433,8 +461,8 @@ Passed: 373 (最新简化工作后)
 - [ ] 读取 `src/symbolic/symbolic_expression_core.cpp`
 - [ ] 搜索关键函数：`simplify()`, `try_combine_like_terms()`, `collect_division_factors()`
 - [ ] 运行 `make test` 确认基准
-- [ ] 为选中的优化项创建回归测试
-- [ ] 实现单个简化规则（避免一次做太多）
+- [ ] 为新的优化项创建回归测试
+- [ ] 实现单个优化规则（避免一次做太多）
 - [ ] 定期检查 `SIMPLIFY_IMPROVEMENTS.md` 中的风险区域
 
 ---
@@ -451,4 +479,4 @@ Passed: 373 (最新简化工作后)
 
 **文档创建时间：** 2026-04-24  
 **版本：** 1.0  
-**状态：** 概念验证 (未实现任何建议)
+**状态：** 阶段 1 已落地，阶段 2 的积分扩展和多变量符号操作基础能力已落地
