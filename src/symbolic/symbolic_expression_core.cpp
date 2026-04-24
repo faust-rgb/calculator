@@ -732,17 +732,17 @@ void collect_multiplicative_terms(const SymbolicExpression& expression,
     const auto& node = expression.node_;
     if (node->type == NodeType::kNegate) {
         *numeric_factor *= -1.0;
-        collect_multiplicative_terms(SymbolicExpression(node->left).simplify(),
+        collect_multiplicative_terms(SymbolicExpression(node->left),
                                      numeric_factor,
                                      symbolic_factors);
         return;
     }
 
     if (node->type == NodeType::kMultiply) {
-        collect_multiplicative_terms(SymbolicExpression(node->left).simplify(),
+        collect_multiplicative_terms(SymbolicExpression(node->left),
                                      numeric_factor,
                                      symbolic_factors);
-        collect_multiplicative_terms(SymbolicExpression(node->right).simplify(),
+        collect_multiplicative_terms(SymbolicExpression(node->right),
                                      numeric_factor,
                                      symbolic_factors);
         return;
@@ -763,16 +763,16 @@ void collect_division_factors(const SymbolicExpression& expression,
     const auto& node = expression.node_;
     if (node->type == NodeType::kNegate) {
         *numeric_factor *= -1.0;
-        collect_division_factors(SymbolicExpression(node->left).simplify(),
+        collect_division_factors(SymbolicExpression(node->left),
                                  numeric_factor,
                                  symbolic_factors);
         return;
     }
     if (node->type == NodeType::kMultiply) {
-        collect_division_factors(SymbolicExpression(node->left).simplify(),
+        collect_division_factors(SymbolicExpression(node->left),
                                  numeric_factor,
                                  symbolic_factors);
-        collect_division_factors(SymbolicExpression(node->right).simplify(),
+        collect_division_factors(SymbolicExpression(node->right),
                                  numeric_factor,
                                  symbolic_factors);
         return;
@@ -783,7 +783,7 @@ void collect_division_factors(const SymbolicExpression& expression,
             mymath::is_integer(exponent, 1e-10) &&
             exponent > 0.0) {
             const int count = static_cast<int>(exponent + 0.5);
-            const SymbolicExpression base = SymbolicExpression(node->left).simplify();
+            const SymbolicExpression base = SymbolicExpression(node->left);
             for (int i = 0; i < count; ++i) {
                 symbolic_factors->push_back(base);
             }
@@ -831,10 +831,9 @@ SymbolicExpression rebuild_product_expression(double numeric_factor,
 bool decompose_numeric_factor(const SymbolicExpression& expression,
                               double* coefficient,
                               SymbolicExpression* rest) {
-    const SymbolicExpression simplified = expression.simplify();
     double numeric_factor = 1.0;
     std::vector<SymbolicExpression> symbolic_factors;
-    collect_multiplicative_terms(simplified, &numeric_factor, &symbolic_factors);
+    collect_multiplicative_terms(expression, &numeric_factor, &symbolic_factors);
 
     *coefficient = numeric_factor;
     if (symbolic_factors.empty()) {
@@ -847,15 +846,14 @@ bool decompose_numeric_factor(const SymbolicExpression& expression,
         combined = SymbolicExpression(
             make_binary(NodeType::kMultiply, combined.node_, symbolic_factors[i].node_));
     }
-    *rest = combined.simplify();
+    *rest = combined;
     return true;
 }
 
 std::string canonical_multiplicative_key(const SymbolicExpression& expression) {
     double ignored = 1.0;
-    const SymbolicExpression simplified = expression.simplify();
     std::vector<SymbolicExpression> symbolic_factors;
-    collect_multiplicative_terms(simplified, &ignored, &symbolic_factors);
+    collect_multiplicative_terms(expression, &ignored, &symbolic_factors);
     std::vector<std::string> parts;
     parts.reserve(symbolic_factors.size());
     for (const SymbolicExpression& factor : symbolic_factors) {
@@ -877,8 +875,8 @@ void collect_additive_terms(const SymbolicExpression& expression,
                             std::vector<std::string>* parts) {
     const auto& node = expression.node_;
     if (node->type == NodeType::kAdd) {
-        collect_additive_terms(SymbolicExpression(node->left).simplify(), parts);
-        collect_additive_terms(SymbolicExpression(node->right).simplify(), parts);
+        collect_additive_terms(SymbolicExpression(node->left), parts);
+        collect_additive_terms(SymbolicExpression(node->right), parts);
         return;
     }
 
@@ -889,8 +887,8 @@ void collect_additive_expressions(const SymbolicExpression& expression,
                                   std::vector<SymbolicExpression>* terms) {
     const auto& node = expression.node_;
     if (node->type == NodeType::kAdd) {
-        collect_additive_expressions(SymbolicExpression(node->left).simplify(), terms);
-        collect_additive_expressions(SymbolicExpression(node->right).simplify(), terms);
+        collect_additive_expressions(SymbolicExpression(node->left), terms);
+        collect_additive_expressions(SymbolicExpression(node->right), terms);
         return;
     }
     terms->push_back(expression);
@@ -929,10 +927,9 @@ SymbolicExpression make_sorted_sum(std::vector<SymbolicExpression> terms) {
 }
 
 std::string canonical_expression_key(const SymbolicExpression& expression) {
-    const SymbolicExpression simplified = expression.simplify();
-    if (simplified.node_->type == NodeType::kAdd) {
+    if (expression.node_->type == NodeType::kAdd) {
         std::vector<std::string> parts;
-        collect_additive_terms(simplified, &parts);
+        collect_additive_terms(expression, &parts);
         std::sort(parts.begin(), parts.end());
         std::ostringstream out;
         for (std::size_t i = 0; i < parts.size(); ++i) {
@@ -943,7 +940,7 @@ std::string canonical_expression_key(const SymbolicExpression& expression) {
         }
         return out.str();
     }
-    return canonical_multiplicative_key(simplified);
+    return canonical_multiplicative_key(expression);
 }
 
 bool try_combine_like_terms(const SymbolicExpression& left,
@@ -1293,7 +1290,7 @@ bool decompose_power_factor(const SymbolicExpression& expression,
                             double* exponent) {
     if (expression.node_->type == NodeType::kPower &&
         SymbolicExpression(expression.node_->right).is_number(exponent)) {
-        *base = SymbolicExpression(expression.node_->left).simplify();
+        *base = SymbolicExpression(expression.node_->left);
         return true;
     }
 
@@ -1306,12 +1303,12 @@ bool decompose_power_factor_expression(const SymbolicExpression& expression,
                                        SymbolicExpression* base,
                                        SymbolicExpression* exponent) {
     if (expression.node_->type == NodeType::kPower) {
-        *base = SymbolicExpression(expression.node_->left).simplify();
-        *exponent = SymbolicExpression(expression.node_->right).simplify();
+        *base = SymbolicExpression(expression.node_->left);
+        *exponent = SymbolicExpression(expression.node_->right);
         return true;
     }
 
-    *base = expression.simplify();
+    *base = expression;
     *exponent = SymbolicExpression::number(1.0);
     return true;
 }

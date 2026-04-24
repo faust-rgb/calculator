@@ -3994,7 +3994,13 @@ int main() {
                 test.expression == "ztrans(step(n - 2))" &&
                 (output == "z ^ -1 / (z - 1)" ||
                  output == "1 / (z * (z - 1))");
-            if (handled && (output == test.expected || z_transform_equivalent)) {
+            const bool series_sum_equivalent =
+                test.expression == "series_sum(n^2, n, 1, N)" &&
+                (output == "N * (N + 1) * (2 * N + 1) / 6" ||
+                 output == "N * (2 * N + 1) * (N + 1) / 6");
+            if (handled && (output == test.expected ||
+                            z_transform_equivalent ||
+                            series_sum_equivalent)) {
                 ++passed;
             } else {
                 ++failed;
