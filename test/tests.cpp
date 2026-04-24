@@ -9,7 +9,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <cmath>
 #include <string>
 #include <vector>
 
@@ -213,7 +212,7 @@ int main() {
 
     try {
         const double actual = calculator.evaluate("gamma(170)");
-        if (std::isfinite(actual) && actual > 1e304 && actual < 1e305) {
+        if (mymath::isfinite(actual) && actual > 1e304 && actual < 1e305) {
             ++passed;
         } else {
             ++failed;
@@ -228,7 +227,7 @@ int main() {
 
     try {
         const double actual = calculator.evaluate("beta(100, 100)");
-        if (std::isfinite(actual) && actual > 0.0 && actual < 1e-40) {
+        if (mymath::isfinite(actual) && actual > 0.0 && actual < 1e-40) {
             ++passed;
         } else {
             ++failed;
@@ -243,7 +242,7 @@ int main() {
 
     try {
         const double actual = calculator.evaluate("bessel(0, 100)");
-        if (std::isfinite(actual) && mymath::abs(actual) <= 1.0) {
+        if (mymath::isfinite(actual) && mymath::abs(actual) <= 1.0) {
             ++passed;
         } else {
             ++failed;
@@ -258,7 +257,7 @@ int main() {
 
     try {
         const double actual = calculator.evaluate("sin(100000000000000000000)");
-        if (std::isfinite(actual) && mymath::abs(actual) <= 1.0) {
+        if (mymath::isfinite(actual) && mymath::abs(actual) <= 1.0) {
             ++passed;
         } else {
             ++failed;
@@ -343,6 +342,7 @@ int main() {
         }
     }
 
+    std::cerr << "MARK display cases\n";
     const std::vector<DisplayCase> display_cases = {
         {"1/3 + 1/4", true, "7/12"},
         {"2/4 + 2/4", true, "1"},
@@ -1668,6 +1668,7 @@ int main() {
                   << ex.what() << '\n';
     }
 
+    std::cerr << "MARK symbolic commands\n";
     try {
         std::string output;
         const bool handled =
@@ -2221,6 +2222,7 @@ int main() {
                   << ex.what() << '\n';
     }
 
+    std::cerr << "MARK symbolic integrals\n";
     try {
         std::string output;
         const bool handled =
@@ -2609,7 +2611,7 @@ int main() {
         const double end_x = calculator.evaluate("get(evt, 28, 0)");
         const double end_y = calculator.evaluate("get(evt, 28, 1)");
         if (assigned.find("evt = [[0, 1]") == 0 &&
-            nearly_equal(end_x, std::log(2.0), 2e-2) &&
+            nearly_equal(end_x, mymath::ln(2.0), 2e-2) &&
             nearly_equal(end_y, 2.0, 2e-3)) {
             ++passed;
         } else {
@@ -3272,6 +3274,7 @@ int main() {
                   << ex.what() << '\n';
     }
 
+    std::cerr << "MARK low-level symbolic\n";
     try {
         const SymbolicExpression derivative =
             SymbolicExpression::parse("asin(x)").derivative("x").simplify();
@@ -3366,7 +3369,8 @@ int main() {
     try {
         const SymbolicExpression transformed =
             SymbolicExpression::parse("step(n - 2)").z_transform("n", "z").simplify();
-        if (transformed.to_string() == "z ^ -1 / (z - 1)") {
+        if (transformed.to_string() == "z ^ -1 / (z - 1)" ||
+            transformed.to_string() == "1 / (z * (z - 1))") {
             ++passed;
         } else {
             ++failed;
@@ -3414,6 +3418,7 @@ int main() {
                   << ex.what() << '\n';
     }
 
+    std::cerr << "MARK multivariable\n";
     try {
         MultivariableIntegrator integrator([](const std::vector<double>& point) {
             return point[0] + point[1];
@@ -3515,6 +3520,7 @@ int main() {
                   << ex.what() << '\n';
     }
 
+    std::cerr << "MARK matrix display\n";
     const std::vector<DisplayCase> matrix_display_cases = {
         {"vec(1, 2, 3)", false, "[1, 2, 3]"},
         {"[1, 2, 3]", false, "[1, 2, 3]"},
@@ -3673,7 +3679,7 @@ int main() {
     try {
         const double actual =
             calculator.evaluate("cond(mat(2, 2, 1, 1, 1, 1))");
-        if (std::isinf(actual)) {
+        if (!mymath::isfinite(actual) && actual > 0.0) {
             ++passed;
         } else {
             ++failed;
@@ -3960,6 +3966,7 @@ int main() {
         std::cout << "FAIL: randint(2, 4) threw unexpected error: " << ex.what() << '\n';
     }
 
+    std::cerr << "MARK command display\n";
     const std::vector<DisplayCase> command_display_cases = {
         {"solve(x^2 - 2, 1)", false, "1.41421356237"},
         {"bisect(x^2 - 2, 1, 2)", false, "1.41421356238"},
@@ -3979,10 +3986,15 @@ int main() {
 
     for (const auto& test : command_display_cases) {
         try {
+            std::cerr << "MARK command case " << test.expression << '\n';
             std::string output;
             const bool handled =
                 calculator.try_process_function_command(test.expression, &output);
-            if (handled && output == test.expected) {
+            const bool z_transform_equivalent =
+                test.expression == "ztrans(step(n - 2))" &&
+                (output == "z ^ -1 / (z - 1)" ||
+                 output == "1 / (z * (z - 1))");
+            if (handled && (output == test.expected || z_transform_equivalent)) {
                 ++passed;
             } else {
                 ++failed;
@@ -3996,6 +4008,8 @@ int main() {
                       << " threw unexpected error: " << ex.what() << '\n';
         }
     }
+
+    std::cerr << "MARK post command display\n";
 
     try {
         std::string output;
@@ -4035,6 +4049,7 @@ int main() {
                   << ex.what() << '\n';
     }
 
+    std::cerr << "MARK scripts\n";
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
@@ -4494,7 +4509,7 @@ int main() {
     try {
         const double actual = calculator.evaluate(
             "ode(-1000*(y-sin(x))+cos(x), 0, 0, 0.1, 20)");
-        if (std::isfinite(actual) && nearly_equal(actual, std::sin(0.1), 1e-6)) {
+        if (mymath::isfinite(actual) && nearly_equal(actual, mymath::sin(0.1), 1e-6)) {
             ++passed;
         } else {
             ++failed;

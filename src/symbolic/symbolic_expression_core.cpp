@@ -14,6 +14,7 @@
 #include <cctype>
 #include <memory>
 #include <algorithm>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -125,8 +126,13 @@ std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node
             text = node->text + "(" + to_string_impl(node->left, 0) + ")";
             break;
         case NodeType::kAdd:
-            text = to_string_impl(node->left, precedence(node)) + " + " +
-                   to_string_impl(node->right, precedence(node));
+            if (node->right->type == NodeType::kNegate) {
+                text = to_string_impl(node->left, precedence(node)) + " - " +
+                       to_string_impl(node->right->left, precedence(node) + 1);
+            } else {
+                text = to_string_impl(node->left, precedence(node)) + " + " +
+                       to_string_impl(node->right, precedence(node));
+            }
             break;
         case NodeType::kSubtract:
             text = to_string_impl(node->left, precedence(node)) + " - " +
@@ -381,6 +387,7 @@ private:
 bool expr_is_number(const SymbolicExpression& expression, double* value = nullptr);
 
 SymbolicExpression simplify_impl(const SymbolicExpression& expression);
+SymbolicExpression simplify_once(const SymbolicExpression& expression);
 
 SymbolicExpression substitute_impl(const SymbolicExpression& expression,
                                   const std::string& variable_name,
@@ -878,6 +885,49 @@ void collect_additive_terms(const SymbolicExpression& expression,
     parts->push_back(node_structural_key(node));
 }
 
+void collect_additive_expressions(const SymbolicExpression& expression,
+                                  std::vector<SymbolicExpression>* terms) {
+    const auto& node = expression.node_;
+    if (node->type == NodeType::kAdd) {
+        collect_additive_expressions(SymbolicExpression(node->left).simplify(), terms);
+        collect_additive_expressions(SymbolicExpression(node->right).simplify(), terms);
+        return;
+    }
+    terms->push_back(expression);
+}
+
+SymbolicExpression make_sorted_sum(std::vector<SymbolicExpression> terms) {
+    std::sort(terms.begin(), terms.end(),
+              [](const SymbolicExpression& lhs, const SymbolicExpression& rhs) {
+                  const bool lhs_number = lhs.is_number();
+                  const bool rhs_number = rhs.is_number();
+                  if (lhs_number != rhs_number) {
+                      return !lhs_number;
+                  }
+                  const bool lhs_negative = lhs.node_->type == NodeType::kNegate;
+                  const bool rhs_negative = rhs.node_->type == NodeType::kNegate;
+                  if (lhs_negative != rhs_negative) {
+                      return lhs_negative;
+                  }
+                  return node_structural_key(lhs.node_) < node_structural_key(rhs.node_);
+              });
+
+    SymbolicExpression combined;
+    bool has_combined = false;
+    for (const SymbolicExpression& term : terms) {
+        if (expr_is_zero(term)) {
+            continue;
+        }
+        if (!has_combined) {
+            combined = term;
+            has_combined = true;
+        } else {
+            combined = make_add(combined, term);
+        }
+    }
+    return has_combined ? combined : SymbolicExpression::number(0.0);
+}
+
 std::string canonical_expression_key(const SymbolicExpression& expression) {
     const SymbolicExpression simplified = expression.simplify();
     if (simplified.node_->type == NodeType::kAdd) {
@@ -1252,6 +1302,20 @@ bool decompose_power_factor(const SymbolicExpression& expression,
     return true;
 }
 
+bool decompose_power_factor_expression(const SymbolicExpression& expression,
+                                       SymbolicExpression* base,
+                                       SymbolicExpression* exponent) {
+    if (expression.node_->type == NodeType::kPower) {
+        *base = SymbolicExpression(expression.node_->left).simplify();
+        *exponent = SymbolicExpression(expression.node_->right).simplify();
+        return true;
+    }
+
+    *base = expression.simplify();
+    *exponent = SymbolicExpression::number(1.0);
+    return true;
+}
+
 SymbolicExpression rebuild_power_difference(const SymbolicExpression& base, double exponent) {
     if (mymath::is_near_zero(exponent, kFormatEps)) {
         return SymbolicExpression::number(1.0);
@@ -1268,6 +1332,176 @@ SymbolicExpression rebuild_power_difference(const SymbolicExpression& base, doub
             .simplify();
     }
     return make_power(base, SymbolicExpression::number(exponent)).simplify();
+}
+
+SymbolicExpression rebuild_power_expression(const SymbolicExpression& base,
+                                            const SymbolicExpression& exponent) {
+    double numeric_exponent = 0.0;
+    if (exponent.is_number(&numeric_exponent)) {
+        return rebuild_power_difference(base, numeric_exponent);
+    }
+    return make_power(base, exponent);
+}
+
+SymbolicExpression make_sorted_product(double numeric_factor,
+                                      std::vector<SymbolicExpression> factors) {
+    if (mymath::is_near_zero(numeric_factor, kFormatEps)) {
+        return SymbolicExpression::number(0.0);
+    }
+
+    struct PowerGroup {
+        SymbolicExpression base;
+        SymbolicExpression exponent;
+    };
+
+    std::map<std::string, PowerGroup> grouped;
+    for (const SymbolicExpression& factor : factors) {
+        SymbolicExpression base;
+        SymbolicExpression exponent;
+        decompose_power_factor_expression(factor, &base, &exponent);
+        const std::string key = node_structural_key(base.node_);
+        auto found = grouped.find(key);
+        if (found == grouped.end()) {
+            grouped.emplace(key, PowerGroup{base, exponent});
+        } else {
+            found->second.exponent =
+                make_add(found->second.exponent, exponent).simplify();
+        }
+    }
+
+    std::vector<SymbolicExpression> merged;
+    for (const auto& item : grouped) {
+        const SymbolicExpression factor =
+            rebuild_power_expression(item.second.base,
+                                     item.second.exponent.simplify()).simplify();
+        if (!expr_is_one(factor)) {
+            merged.push_back(factor);
+        }
+    }
+
+    std::sort(merged.begin(), merged.end(),
+              [](const SymbolicExpression& lhs, const SymbolicExpression& rhs) {
+                  const bool lhs_additive = lhs.node_->type == NodeType::kAdd ||
+                                            lhs.node_->type == NodeType::kSubtract;
+                  const bool rhs_additive = rhs.node_->type == NodeType::kAdd ||
+                                            rhs.node_->type == NodeType::kSubtract;
+                  if (lhs_additive != rhs_additive) {
+                      return !lhs_additive;
+                  }
+                  return node_structural_key(lhs.node_) < node_structural_key(rhs.node_);
+              });
+
+    SymbolicExpression combined;
+    bool has_combined = false;
+    for (const SymbolicExpression& factor : merged) {
+        if (!has_combined) {
+            combined = factor;
+            has_combined = true;
+        } else {
+            combined = make_multiply(combined, factor);
+        }
+    }
+
+    if (!has_combined) {
+        return SymbolicExpression::number(numeric_factor);
+    }
+    if (mymath::is_near_zero(numeric_factor - 1.0, kFormatEps)) {
+        return combined;
+    }
+    if (mymath::is_near_zero(numeric_factor + 1.0, kFormatEps)) {
+        return make_negate(combined).simplify();
+    }
+    return make_multiply(SymbolicExpression::number(numeric_factor), combined);
+}
+
+bool try_canonical_factor_quotient(const SymbolicExpression& numerator,
+                                   const SymbolicExpression& denominator,
+                                   SymbolicExpression* quotient) {
+    double numerator_coefficient = 1.0;
+    double denominator_coefficient = 1.0;
+    std::vector<SymbolicExpression> numerator_factors;
+    std::vector<SymbolicExpression> denominator_factors;
+    collect_multiplicative_terms(numerator, &numerator_coefficient, &numerator_factors);
+    collect_multiplicative_terms(denominator, &denominator_coefficient, &denominator_factors);
+    if (mymath::is_near_zero(denominator_coefficient, kFormatEps)) {
+        return false;
+    }
+
+    struct PowerGroup {
+        SymbolicExpression base;
+        SymbolicExpression exponent;
+    };
+    std::map<std::string, PowerGroup> grouped;
+    auto add_factor = [&grouped](const SymbolicExpression& factor, double sign) {
+        SymbolicExpression base;
+        SymbolicExpression exponent;
+        decompose_power_factor_expression(factor, &base, &exponent);
+        if (sign < 0.0) {
+            exponent = make_negate(exponent).simplify();
+        }
+        const std::string key = node_structural_key(base.node_);
+        auto found = grouped.find(key);
+        if (found == grouped.end()) {
+            grouped.emplace(key, PowerGroup{base, exponent});
+        } else {
+            found->second.exponent =
+                make_add(found->second.exponent, exponent).simplify();
+        }
+    };
+
+    for (const SymbolicExpression& factor : numerator_factors) {
+        add_factor(factor, 1.0);
+    }
+    for (const SymbolicExpression& factor : denominator_factors) {
+        add_factor(factor, -1.0);
+    }
+
+    // 对“符号式 / 纯数字”这类简单分数，保留除法结构给后续规则处理，
+    // 这样输出更接近用户输入，例如 pi / 2、x ^ 3 / 3。
+    if (denominator_factors.empty() &&
+        mymath::is_near_zero(numerator_coefficient - 1.0, kFormatEps) &&
+        !mymath::is_near_zero(denominator_coefficient - 1.0, kFormatEps)) {
+        return false;
+    }
+
+    std::vector<SymbolicExpression> rebuilt_numerator;
+    std::vector<SymbolicExpression> rebuilt_denominator;
+    bool changed = numerator_factors.size() + denominator_factors.size() != grouped.size();
+    for (const auto& item : grouped) {
+        const SymbolicExpression exponent = item.second.exponent.simplify();
+        double numeric_exponent = 0.0;
+        if (exponent.is_number(&numeric_exponent)) {
+            if (mymath::is_near_zero(numeric_exponent, kFormatEps)) {
+                changed = true;
+                continue;
+            }
+            if (numeric_exponent > 0.0) {
+                rebuilt_numerator.push_back(
+                    rebuild_power_difference(item.second.base, numeric_exponent));
+            } else {
+                rebuilt_denominator.push_back(
+                    rebuild_power_difference(item.second.base, -numeric_exponent));
+                changed = true;
+            }
+        } else {
+            rebuilt_numerator.push_back(
+                rebuild_power_expression(item.second.base, exponent));
+            changed = true;
+        }
+    }
+
+    const double coefficient = numerator_coefficient / denominator_coefficient;
+    const SymbolicExpression numerator_expression =
+        make_sorted_product(coefficient, rebuilt_numerator).simplify();
+    const SymbolicExpression denominator_expression =
+        make_sorted_product(1.0, rebuilt_denominator).simplify();
+
+    if (expr_is_one(denominator_expression)) {
+        *quotient = numerator_expression;
+    } else {
+        *quotient = make_divide(numerator_expression, denominator_expression);
+    }
+    return changed || !mymath::is_near_zero(denominator_coefficient - 1.0, kFormatEps);
 }
 
 double common_numeric_factor(double lhs, double rhs) {
@@ -1602,7 +1836,7 @@ SymbolicExpression maybe_canonicalize_polynomial(const SymbolicExpression& expre
     return build_polynomial_expression_from_coefficients(coefficients, variable_name);
 }
 
-SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
+SymbolicExpression simplify_once(const SymbolicExpression& expression) {
     const auto& node = expression.node_;
     switch (node->type) {
         case NodeType::kNumber:
@@ -1680,15 +1914,32 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
             }
             if (node->text == "exp" &&
                 argument.node_->type == NodeType::kFunction &&
-                argument.node_->text == "ln" &&
-                is_known_positive_expression(
-                    SymbolicExpression(argument.node_->left).simplify())) {
-                return SymbolicExpression(argument.node_->left).simplify();
+                argument.node_->text == "ln") {
+                const SymbolicExpression inner(argument.node_->left);
+                if (is_known_positive_expression(inner.simplify())) {
+                    return inner.simplify();
+                }
+                return make_function(node->text, argument);
             }
             if (node->text == "ln" &&
                 argument.node_->type == NodeType::kFunction &&
                 argument.node_->text == "exp") {
                 return SymbolicExpression(argument.node_->left).simplify();
+            }
+            if ((node->text == "sin" || node->text == "tan" ||
+                 node->text == "sinh" || node->text == "tanh") &&
+                argument.node_->type == NodeType::kNegate) {
+                return make_negate(
+                           make_function(node->text,
+                                         SymbolicExpression(argument.node_->left)))
+                    .simplify();
+            }
+            if ((node->text == "cos" || node->text == "cosh" ||
+                 node->text == "abs") &&
+                argument.node_->type == NodeType::kNegate) {
+                return make_function(node->text,
+                                     SymbolicExpression(argument.node_->left))
+                    .simplify();
             }
 
             double pi_multiple = 0.0;
@@ -1840,6 +2091,15 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
                     return factored;
                 }
             }
+            {
+                std::vector<SymbolicExpression> terms;
+                collect_additive_expressions(make_add(left, right), &terms);
+                const SymbolicExpression sorted = make_sorted_sum(terms);
+                if (node_structural_key(sorted.node_) !=
+                    node_structural_key(make_add(left, right).node_)) {
+                    return sorted;
+                }
+            }
             return make_add(left, right);
         case NodeType::kSubtract:
             if (left.is_number(&left_value) && right.is_number(&right_value)) {
@@ -1906,32 +2166,7 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
                 std::vector<SymbolicExpression> symbolic_factors;
                 collect_multiplicative_terms(left, &numeric_factor, &symbolic_factors);
                 collect_multiplicative_terms(right, &numeric_factor, &symbolic_factors);
-
-                if (mymath::is_near_zero(numeric_factor, kFormatEps)) {
-                    return SymbolicExpression::number(0.0);
-                }
-
-                SymbolicExpression combined;
-                bool has_combined = false;
-                for (const SymbolicExpression& factor : symbolic_factors) {
-                    if (!has_combined) {
-                        combined = factor;
-                        has_combined = true;
-                    } else {
-                        combined = make_multiply(combined, factor);
-                    }
-                }
-
-                if (!has_combined) {
-                    return SymbolicExpression::number(numeric_factor);
-                }
-                if (mymath::is_near_zero(numeric_factor - 1.0, kFormatEps)) {
-                    return combined;
-                }
-                if (mymath::is_near_zero(numeric_factor + 1.0, kFormatEps)) {
-                    return make_negate(combined).simplify();
-                }
-                return make_multiply(SymbolicExpression::number(numeric_factor), combined);
+                return make_sorted_product(numeric_factor, symbolic_factors);
             }
         case NodeType::kDivide:
             if (left.is_number(&left_value) && right.is_number(&right_value)) {
@@ -1959,6 +2194,12 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
                 if (expressions_match(left_base, right_base)) {
                     return rebuild_power_difference(left_base,
                                                     left_exponent - right_exponent);
+                }
+            }
+            {
+                SymbolicExpression quotient;
+                if (try_canonical_factor_quotient(left, right, &quotient)) {
+                    return quotient;
                 }
             }
             {
@@ -2061,6 +2302,37 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
             break;
     }
     return expression;
+}
+
+SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
+    static thread_local int simplify_depth = 0;
+    struct SimplifyDepthGuard {
+        int* depth;
+        explicit SimplifyDepthGuard(int* value) : depth(value) {
+            ++(*depth);
+        }
+        ~SimplifyDepthGuard() {
+            --(*depth);
+        }
+    };
+
+    if (simplify_depth > 0) {
+        SimplifyDepthGuard guard(&simplify_depth);
+        return simplify_once(expression);
+    }
+
+    SimplifyDepthGuard guard(&simplify_depth);
+    SymbolicExpression current = expression;
+    constexpr int kMaxSimplifyPasses = 3;
+    for (int pass = 0; pass < kMaxSimplifyPasses; ++pass) {
+        SymbolicExpression next = simplify_once(current);
+        const std::string next_key = node_structural_key(next.node_);
+        if (next_key == node_structural_key(current.node_)) {
+            return next;
+        }
+        current = next;
+    }
+    return current;
 }
 
 double factorial_double(int exponent) {
