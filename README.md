@@ -10,9 +10,9 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - `src/core`
   Calculator API and main expression/script execution logic
 - `src/math`
-  Custom numeric helpers and math primitives
+  Custom numeric helpers and math primitives, split into standard `.cpp` translation units
 - `src/matrix`
-  Matrix types and operations
+  Matrix types and operations, including a dedicated linear-algebra implementation unit
 - `src/analysis`
   One-variable function analysis
 - `src/algebra`
@@ -35,6 +35,23 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - `CHANGELOG.md`
 - `ROADMAP.md`
 - `KNOWN_LIMITATIONS.md`
+
+## Source Organization
+
+Large subsystems are now split across normal `.cpp` files instead of implementation
+fragments:
+
+- `src/math/mymath.cpp` and `src/math/mymath_special_functions.cpp`
+- `src/matrix/matrix.cpp` and `src/matrix/matrix_linear_algebra.cpp`
+- `src/core/calculator.cpp` and `src/core/calculator_lifecycle.cpp`
+- `src/symbolic/symbolic_expression_core.cpp`,
+  `src/symbolic/symbolic_expression_calculus.cpp`, and
+  `src/symbolic/symbolic_expression_transforms.cpp`
+
+Shared internal declarations for these splits live in private headers such as
+`src/math/mymath_internal.h`, `src/matrix/matrix_internal.h`,
+`src/core/calculator_internal_types.h`, and
+`src/symbolic/symbolic_expression_internal.h`.
 
 ## Features
 
@@ -89,8 +106,13 @@ using the standard math library implementations from `<cmath>` or `math.h`.
   derivative, definite integral, indefinite integral value, interval
   extrema solving, polynomial arithmetic, Taylor expansion, polynomial roots,
   first-order ODE initial-value solving with `ode(...)` / `ode_table(...)`,
+  nonlinear ODE system solving with `ode_system(...)` / `ode_system_table(...)`,
+  optional ODE event stopping and parameter passing,
   root-finding with `solve(...)`, `bisect(...)`, `secant(...)`, `fixed_point(...)`,
   and multi-variable integration in Cartesian, cylindrical, and spherical coordinates
+- Box-constrained linear and integer planning with `lp_max(...)`, `lp_min(...)`,
+  `ilp_max(...)`, mixed-integer planning with `milp_max(...)` / `milp_min(...)`,
+  optional equality constraints `Aeq * x = beq`, and binary shortcuts `bip_max(...)` / `bip_min(...)`
 - Improved numerical stability for large-angle trigonometric reduction, `beta`,
   `gamma`, `bessel`, and removable-singularity style `limit(...)` evaluations
 
@@ -107,7 +129,7 @@ The regression suite lives in `test/tests.cpp`.
 Current validation status:
 
 - `make test`
-- expected summary: `Passed: 610, Failed: 0`
+- expected result: `Failed: 0`
 
 ## Run
 
@@ -225,9 +247,14 @@ h(x) = sin(x) / x
 > triple_integral_sph(1, 0, 1, 0, 2 * pi, 0, pi)
 4.18879020479
 > ode(y - x ^ 2 + 1, 0, 0.5, 2, 20)
-5.30536300069
+5.30547195055
 > ode_table(y, 0, 1, 1, 4)
-[0, 1; 0.25, 1.28401692708; 0.5, 1.64869946904; 0.75, 2.11695802592; 1, 2.7182099392]
+[0, 1; 0.25, 1.28402541668; 0.5, 1.64872127069; 0.75, 2.11700001658; 1, 2.7182818284]
+> ode_system(vec(y2, -y1), 0, vec(0, 1), pi / 2, 40)
+[1, 0]
+> lp_max(vec(3, 2), mat(3, 2, 1, 1, 1, 0, 0, 1), vec(4, 2, 3), vec(0, 0), vec(10, 10))
+x = [2, 2]
+objective = 10
 > extrema(f, -1, 1)
 min: x = -0.450183689594, f(x) = -0.232465575151
 > exit
@@ -328,6 +355,9 @@ triple_integral(x * y * z, 0, 1, 0, 1, 0, 1)
 triple_integral_sph(1, 0, 1, 0, 2*pi, 0, pi)
 ode(y - x, 0, 1, 2)
 ode_table(y, 0, 1, 1, 4)
+ode_system(vec(y2, -y1), 0, vec(0, 1), pi / 2, 40)
+lp_max(vec(3, 2), mat(3, 2, 1, 1, 1, 0, 0, 1), vec(4, 2, 3), vec(0, 0), vec(10, 10))
+ilp_max(vec(3, 2), mat(3, 2, 1, 1, 1, 0, 0, 1), vec(4, 2, 3), vec(0, 0), vec(10, 10))
 extrema(f, -2, 2)
 ```
 
@@ -461,11 +491,15 @@ cover common algebraic powers, `sin/cos/tan`, `exp/ln`, `sqrt/cbrt`, `abs`, the
 inverse trigonometric basics `asin/acos/atan`, and some polynomial-times-
 `exp/sin/cos` cases such as `integral(x * exp(x))`. `taylor(f, a, n)` returns
 the Taylor polynomial around `a` up to degree `n`. `ode(rhs, x0, y0, x1[, steps])`
-solves the first-order initial value problem `y' = rhs(x, y)` with RK4 and
-returns `y(x1)`, while `ode_table(...)` returns the sampled `(x, y)` trajectory
-as a two-column matrix. `double_integral(...)` / `triple_integral(...)` compute
-Cartesian multi-integrals, `double_integral_cyl(...)` / `triple_integral_cyl(...)`
-use cylindrical coordinates, and `triple_integral_sph(...)` uses spherical
+solves the first-order initial value problem `y' = rhs(x, y)`, while
+`ode_system(rhs_vec, x0, y0_vec, x1[, steps])` solves nonlinear ODE systems
+using state names such as `y1`, `y2`, and `y3`. `ode_table(...)` and
+`ode_system_table(...)` return sampled trajectories. Planning helpers
+`lp_max/lp_min` and `ilp_max/ilp_min` solve box-constrained linear and integer
+programs of the form `A * x <= b` with explicit lower and upper bounds.
+`double_integral(...)` / `triple_integral(...)` compute Cartesian
+multi-integrals, `double_integral_cyl(...)` / `triple_integral_cyl(...)` use
+cylindrical coordinates, and `triple_integral_sph(...)` uses spherical
 coordinates.
 
 ## Scripting
@@ -475,24 +509,26 @@ or redirect a file into stdin with `./calculator < file.calc`.
 
 Runnable script-related inputs are provided in `test/script/`:
 
-- `test/script/repl_input.calc`
-  Non-interactive multi-line REPL-style input
-- `test/script/script_functions.calc`
-  Script functions, loops, and `print(...)`
-- `test/script/matrix_workflow.calc`
+- `test/script/test_variables.calc`
+  Non-interactive variable and expression workflow
+- `test/script/test_function.calc`
+  Script functions and return values
+- `test/script/test_control_flow.calc`
+  `if`, `for`, and `while` control flow examples
+- `test/script/test_matrix_basic.calc`
   Matrix creation, analysis, and solving via redirected input
-- `test/script/SCRIPTING.md`
-  Detailed scripting rules and stdin behavior
+- `test/script/SYNTAX_GUIDE.md`
+  Detailed scripting syntax notes
 
 Example commands:
 
 ```bash
-./calculator < test/script/repl_input.calc
-./calculator < test/script/script_functions.calc
-./calculator < test/script/matrix_workflow.calc
+./calculator < test/script/test_variables.calc
+./calculator < test/script/test_function.calc
+./calculator < test/script/test_matrix_basic.calc
 ```
 
-For a dedicated syntax and behavior guide, see `test/script/SCRIPTING.md`.
+For a dedicated syntax and behavior guide, see `test/script/SYNTAX_GUIDE.md`.
 
 Supported script constructs:
 

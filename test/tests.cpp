@@ -20,6 +20,10 @@ bool nearly_equal(double actual, double expected, double eps = 1e-8) {
     return mymath::abs(actual - expected) <= eps;
 }
 
+std::filesystem::path make_test_path(const std::string& filename) {
+    return std::filesystem::temp_directory_path() / filename;
+}
+
 struct SuccessCase {
     std::string expression;
     double expected;
@@ -885,7 +889,8 @@ int main() {
             help.find("double_integral") != std::string::npos &&
             help.find("triple_integral") != std::string::npos &&
             help.find("triple_integral_sph") != std::string::npos &&
-            help.find("symbolic/numeric diff integral taylor limit extrema ode ode_table") != std::string::npos &&
+            help.find("symbolic/numeric diff integral taylor limit extrema ode ode_table ode_system ode_system_table") != std::string::npos &&
+            help.find("lp_max lp_min ilp_max ilp_min milp_max milp_min bip_max bip_min") != std::string::npos &&
             help.find("step delta heaviside impulse") != std::string::npos &&
             help.find("fourier ifourier laplace ilaplace ztrans iztrans") != std::string::npos &&
             help.find("dft fft idft ifft conv convolve") != std::string::npos &&
@@ -961,6 +966,11 @@ int main() {
             help.find("triple_integral_sph(1, 0, 1, 0, 2 * pi, 0, pi)") != std::string::npos &&
             help.find("ode(y - x, 0, 1, 2)") != std::string::npos &&
             help.find("ode_table(y, 0, 1, 1, 4)") != std::string::npos &&
+            help.find("ode_system(vec(y2, -y1), 0, vec(0, 1), 1)") != std::string::npos &&
+            help.find("lp_max(vec(3, 2)") != std::string::npos &&
+            help.find("ilp_max(vec(3, 2)") != std::string::npos &&
+            help.find("milp_max(vec(3, 1)") != std::string::npos &&
+            help.find("bip_max(vec(5, 4, 3)") != std::string::npos &&
             help.find(":symbolic on") != std::string::npos &&
             help.find(":hexprefix on") != std::string::npos &&
             help.find(":hexcase lower") != std::string::npos &&
@@ -2532,6 +2542,185 @@ int main() {
     try {
         std::string output;
         const bool handled =
+            calculator.try_process_function_command(
+                "ode_system(vec(y2, -y1), 0, vec(0, 1), 1.57079632679, 40)",
+                &output);
+        if (handled && output == "[1, 0]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ode_system harmonic oscillator returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: ode_system command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const std::string assigned =
+            calculator.process_line(
+                "sys = ode_system_table(vec(y2, -y1), 0, vec(0, 1), 1.57079632679, 4)",
+                false);
+        const double end_x = calculator.evaluate("get(sys, 4, 0)");
+        const double end_y1 = calculator.evaluate("get(sys, 4, 1)");
+        const double end_y2 = calculator.evaluate("get(sys, 4, 2)");
+        if (assigned.find("sys = [[0, 0, 1]") == 0 &&
+            nearly_equal(end_x, 1.57079632679, 1e-8) &&
+            nearly_equal(end_y1, 1.0, 5e-4) &&
+            nearly_equal(end_y2, 0.0, 5e-4)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ode_system_table assignment returned unexpected output "
+                      << assigned << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: ode_system_table assignment threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "ode(p1 * y, 0, 1, 1, 60, mat(1, 1, 2))",
+                &output);
+        if (handled && nearly_equal(calculator.evaluate(output), mymath::exp(2.0), 2e-3)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ode with parameter vector returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: ode parameter command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const std::string assigned =
+            calculator.process_line(
+                "evt = ode_system_table(mat(1, 1, p1 * y1), 0, mat(1, 1, 1), 2, 80, y1 - 2, mat(1, 1, 1))",
+                false);
+        const double end_x = calculator.evaluate("get(evt, 28, 0)");
+        const double end_y = calculator.evaluate("get(evt, 28, 1)");
+        if (assigned.find("evt = [[0, 1]") == 0 &&
+            nearly_equal(end_x, std::log(2.0), 2e-2) &&
+            nearly_equal(end_y, 2.0, 2e-3)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ode_system_table event stop returned unexpected output "
+                      << assigned << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: ode_system_table event command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "lp_max(vec(3, 2), mat(3, 2, 1, 1, 1, 0, 0, 1), vec(4, 2, 3), vec(0, 0), vec(10, 10))",
+                &output);
+        if (handled && output == "x = [2, 2]\nobjective = 10") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: lp_max returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: lp_max command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "ilp_max(vec(3, 2), mat(3, 2, 1, 1, 1, 0, 0, 1), vec(4, 2, 3), vec(0, 0), vec(10, 10))",
+                &output);
+        if (handled && output == "x = [2, 2]\nobjective = 10") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ilp_max returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: ilp_max command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "lp_max(vec(2, 1), mat(1, 2, 1, 2), mat(1, 1, 4), mat(1, 2, 1, 1), mat(1, 1, 3), vec(0, 0), vec(10, 10))",
+                &output);
+        if (handled && output == "x = [3, 0]\nobjective = 6") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: lp_max with equality constraints returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: lp_max equality command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "milp_max(vec(3, 1), mat(1, 2, 2, 1), mat(1, 1, 5), vec(0, 0), vec(2, 10), vec(1, 0))",
+                &output);
+        if (handled && output == "x = [2, 1]\nobjective = 7") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: milp_max returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: milp_max command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "bip_max(vec(5, 4, 3), mat(1, 3, 2, 1, 1), mat(1, 1, 2), mat(1, 3, 1, 1, 0), mat(1, 1, 1))",
+                &output);
+        if (handled && output == "x = [0, 1, 1]\nobjective = 7") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: bip_max returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: bip_max command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
             calculator.try_process_function_command("h(x) = sin(x) / x", &output);
         if (handled) {
             ++passed;
@@ -3656,7 +3845,7 @@ int main() {
 
     try {
         const std::string vars_output = calculator.list_variables();
-        if (vars_output == "b = [[1, 2, 0, 0], [3, 0, 0, 0], [0, 0, 0, 7]]\nm = [[1, 2], [8, 4]]\nn = [[2, 2], [3, 5]]\ntraj = [[0, 1], [0.25, 1.28401692708], [0.5, 1.64869946904], [0.75, 2.11695802592], [1, 2.7182099392]]\nv = [-3, 6]") {
+        if (vars_output == "b = [[1, 2, 0, 0], [3, 0, 0, 0], [0, 0, 0, 7]]\nevt = [[0, 1], [0.025, 1.02531512052], [0.05, 1.05127109638], [0.075, 1.07788415088], [0.1, 1.10517091808], [0.125, 1.13314845307], [0.15, 1.16183424273], [0.175, 1.19124621661], [0.2, 1.22140275816], [0.225, 1.25232271619], [0.25, 1.28402541669], [0.275, 1.31653067487], [0.3, 1.34985880758], [0.325, 1.38403064598], [0.35, 1.41906754859], [0.375, 1.45499141462], [0.4, 1.49182469764], [0.425, 1.52959041966], [0.45, 1.56831218549], [0.475, 1.60801419749], [0.5, 1.6487212707], [0.525, 1.69045884838], [0.55, 1.73325301787], [0.575, 1.77713052691], [0.6, 1.82211880039], [0.625, 1.86824595743], [0.65, 1.91554082901], [0.675, 1.96403297597], [0.693147180974, 2]]\nm = [[1, 2], [8, 4]]\nn = [[2, 2], [3, 5]]\nsys = [[0, 0, 1], [0.392699081698, 0.382683432366, 0.923879532518], [0.785398163395, 0.707106781194, 0.707106781198], [1.17809724509, 0.923879532531, 0.382683432378], [1.57079632679, 1, 0]]\ntraj = [[0, 1], [0.25, 1.28402541668], [0.5, 1.64872127069], [0.75, 2.11700001658], [1, 2.7182818284]]\nv = [-3, 6]") {
             ++passed;
         } else {
             ++failed;
@@ -3716,6 +3905,10 @@ int main() {
         {"eigvals(mat(2, 2, 0, -1, 1, 0))"},
         {"eigvecs(mat(2, 2, 0, -1, 1, 0))"},
         {"eigvecs(mat(2, 3, 1, 2, 3, 4, 5, 6))"},
+        {"ode_system(vec(y2), 0, vec(1, 2), 1)"},
+        {"lp_max(vec(1, 2), mat(1, 3, 1, 2, 3), vec(4), vec(0, 0), vec(1, 1))"},
+        {"ilp_max(vec(1), mat(1, 1, 1), vec(2), vec(0.5), vec(3))"},
+        {"milp_max(vec(1, 2), mat(1, 2, 1, 1), mat(1, 1, 3), vec(0, 0), vec(1, 1), mat(1, 1, 1))"},
         {"reshape(mat(2, 2, 1, 2, 3, 4), 3, 2)"},
         {"diag(3)"},
         {"cholesky(mat(2, 2, 1, 2, 2, 1))"},
@@ -4140,7 +4333,8 @@ int main() {
                   << ex.what() << '\n';
     }
 
-    const std::string matrix_save_path = "/home/roselia/code/.matrix_state_should_fail.txt";
+    const std::string matrix_save_path =
+        make_test_path("calculator_matrix_state_should_fail.txt").string();
 
     try {
         Calculator matrix_save;
@@ -4173,7 +4367,8 @@ int main() {
                   << ex.what() << '\n';
     }
 
-    const std::string save_path = "/home/roselia/code/.calculator_state_test.txt";
+    const std::string save_path =
+        make_test_path("calculator_state_test.txt").string();
     try {
         (void)calculator.process_line("a = 5/6", true);
         (void)calculator.process_line("b = max(4, 9)", false);
@@ -4245,14 +4440,15 @@ int main() {
 
     try {
         Calculator missing;
-        (void)missing.load_state("/home/roselia/code/.no_such_state_file.txt");
+        (void)missing.load_state(make_test_path("calculator_no_such_state_file.txt").string());
         ++failed;
         std::cout << "FAIL: load missing file expected an error but succeeded\n";
     } catch (const std::exception&) {
         ++passed;
     }
 
-    const std::string bad_save_path = "/home/roselia/code/.calculator_bad_state_test.txt";
+    const std::string bad_save_path =
+        make_test_path("calculator_bad_state_test.txt").string();
     {
         std::ofstream bad_file(bad_save_path);
         bad_file << "not\ta\tvalid\tstate\n";
@@ -4267,9 +4463,98 @@ int main() {
         ++passed;
     }
 
-    std::filesystem::remove(matrix_save_path);
-    std::filesystem::remove(save_path);
-    std::filesystem::remove(bad_save_path);
+    try {
+        Calculator symbolic_persisted;
+        (void)symbolic_persisted.set_symbolic_constants_mode(true);
+        (void)symbolic_persisted.process_line("sym = pi / 2", false);
+        const std::string symbolic_path =
+            make_test_path("calculator_symbolic_state_test.txt").string();
+        (void)symbolic_persisted.save_state(symbolic_path);
+
+        Calculator symbolic_loaded;
+        (void)symbolic_loaded.set_symbolic_constants_mode(true);
+        (void)symbolic_loaded.load_state(symbolic_path);
+        const std::string vars_output = symbolic_loaded.list_variables();
+        if (vars_output == "sym = pi / 2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic persisted vars expected sym = pi / 2 got "
+                      << vars_output << '\n';
+        }
+
+        std::error_code cleanup_error;
+        std::filesystem::remove(symbolic_path, cleanup_error);
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic persistence threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const double actual = calculator.evaluate(
+            "ode(-1000*(y-sin(x))+cos(x), 0, 0, 0.1, 20)");
+        if (std::isfinite(actual) && nearly_equal(actual, std::sin(0.1), 1e-6)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: adaptive stiff ODE expected approximately sin(0.1) got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: adaptive stiff ODE threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const std::string actual =
+            calculator.evaluate_for_display(
+                "solve(mat(2,2,1,1,1,1.000000000001), vec(2,2.000000000001))",
+                false);
+        if (actual == "[[1], [1]]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: near-singular solve expected [[1], [1]] got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: near-singular solve threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const double actual =
+            calculator.evaluate("rank(mat(2,2,1,1,1,1.000000000001))");
+        if (nearly_equal(actual, 2.0)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: near-singular rank expected 2 got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: near-singular rank threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        (void)calculator.evaluate("eigvals(mat(3,3,0,-1,0,1,0,0,0,0,2))");
+        ++failed;
+        std::cout << "FAIL: complex eigenvalue case expected an error but succeeded\n";
+    } catch (const std::exception&) {
+        ++passed;
+    }
+
+    std::error_code cleanup_error;
+    std::filesystem::remove(matrix_save_path, cleanup_error);
+    cleanup_error.clear();
+    std::filesystem::remove(save_path, cleanup_error);
+    cleanup_error.clear();
+    std::filesystem::remove(bad_save_path, cleanup_error);
 
     std::cout << "Passed: " << passed << '\n';
     std::cout << "Failed: " << failed << '\n';

@@ -1,3 +1,19 @@
+/**
+ * @file mymath_special_functions.cpp
+ * @brief 特殊函数与三角函数实现
+ */
+
+#include "mymath.h"
+#include "mymath_internal.h"
+
+#include <cmath>
+#include <stdexcept>
+
+namespace mymath {
+
+using internal::finite_or_infinity_from_log;
+using internal::log_gamma_positive;
+
 double gamma(double x) {
     if (is_integer(x) && x <= 0.0) {
         throw std::domain_error("gamma is undefined for non-positive integers");
@@ -504,3 +520,5 @@ double bessel_j(int order, double x) {
     }
     return static_cast<double>(sum);
 }
+
+}  // namespace mymath

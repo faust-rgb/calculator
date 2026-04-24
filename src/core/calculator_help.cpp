@@ -129,7 +129,14 @@ std::string build_help_topic(const std::string& topic) {
         "  triple_integral(x*y*z, 0, 1, 0, 1, 0, 1)  Cartesian triple integral\n"
         "  triple_integral_sph(1, 0, 1, 0, 2 * pi, 0, pi)  Spherical triple integral\n"
         "  ode(y - x, 0, 1, 2) Solve y' = y - x with y(0) = 1\n"
+        "  ode(p1 * y, 0, 1, 1, 50, mat(1, 1, 2))  ODE with parameter vector p\n"
         "  ode_table(y, 0, 1, 1, 4)  Return sampled ODE trajectory\n"
+        "  ode_system(vec(y2, -y1), 0, vec(0, 1), 1)  Solve a nonlinear ODE system\n"
+        "  ode_system_table(mat(1, 1, p1 * y1), 0, mat(1, 1, 1), 2, 40, y1 - 2, mat(1, 1, 1))  Stop on an event\n"
+        "  lp_max(vec(3, 2), mat(3, 2, 1, 1, 1, 0, 0, 1), vec(4, 2, 3), vec(0, 0), vec(10, 10))  Box-constrained linear planning\n"
+        "  ilp_max(vec(3, 2), mat(3, 2, 1, 1, 1, 0, 0, 1), vec(4, 2, 3), vec(0, 0), vec(10, 10))  Integer planning\n"
+        "  milp_max(vec(3, 1), mat(1, 2, 2, 1), vec(5), vec(0, 0), vec(2, 10), vec(1, 0))  Mixed-integer planning\n"
+        "  bip_max(vec(5, 4, 3), mat(1, 3, 2, 1, 1), vec(2))  Binary planning shortcut\n"
         "  solve(x^2 - 2, 1)   Newton root solve\n"
         "  bisect(x^2 - 2, 1, 2)  Bisection root solve\n"
         "  extrema(f, -2, 2)   Solve extrema on an interval\n"
@@ -198,7 +205,8 @@ std::string build_help_topic(const std::string& topic) {
         "  Bitwise:       and or xor not shl shr rol ror popcount bitlen ctz clz parity reverse_bits\n"
         "  Script:        fn if else while for return break continue print strings\n"
         "  Custom:        f(x)=...  poly_add poly_sub poly_mul poly_div roots poly_eval poly_deriv poly_integ poly_fit poly_compose poly_gcd "
-        "simplify symbolic/numeric diff integral taylor limit extrema ode ode_table solve bisect secant fixed_point eig svd";
+        "simplify symbolic/numeric diff integral taylor limit extrema ode ode_table ode_system ode_system_table "
+        "lp_max lp_min ilp_max ilp_min milp_max milp_min bip_max bip_min solve bisect secant fixed_point eig svd";
     }
 
     if (topic == "exact") {

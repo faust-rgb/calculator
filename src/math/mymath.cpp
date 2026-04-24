@@ -1,4 +1,5 @@
 #include "mymath.h"
+#include "mymath_internal.h"
 
 #include <cmath>
 #include <limits>
@@ -6,7 +7,7 @@
 
 namespace mymath {
 
-namespace {
+namespace internal {
 
 double log_gamma_positive(double x) {
     if (x <= 0.0) {
@@ -34,7 +35,11 @@ long long gcd(long long a, long long b) {
     return a < 0 ? -a : a;
 }
 
-}  // namespace
+}  // namespace internal
+
+using internal::finite_or_infinity_from_log;
+using internal::gcd;
+using internal::log_gamma_positive;
 
 bool approximate_fraction(double value,
                           long long* numerator,
@@ -273,7 +278,5 @@ double atanh(double x) {
     }
     return 0.5 * ln((1.0 + x) / (1.0 - x));
 }
-
-#include "mymath_special_functions.inc"
 
 }  // namespace mymath

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iomanip>
@@ -1221,7 +1222,9 @@ bool is_inline_function_command_name(const std::string& name) {
            name == "integral" ||
            name == "limit" ||
            name == "ode" ||
+           name == "ode_system" ||
            name == "ode_table" ||
+           name == "ode_system_table" ||
            name == "taylor" ||
            name == "triple_integral" ||
            name == "triple_integral_cyl" ||
@@ -1942,7 +1945,7 @@ bool is_reserved_function_name(const std::string& name) {
         "kelvin", "kron", "lagrange", "lcm", "least_squares",
         "linear_regression", "ln", "log", "log10", "log2", "lu_l", "lu_u", "mat", "max",
         "mean", "median", "min", "mod", "mode", "nCr", "nPr", "next_prime",
-        "norm", "not", "null", "oct", "ode", "ode_table", "or", "outer",
+        "norm", "not", "null", "oct", "ode", "ode_table", "ode_system", "ode_system_table", "or", "outer",
         "parity", "pdf_normal", "percentile", "pinv", "polar", "poly_add", "poly_compose",
         "poly_deriv", "poly_div", "poly_eval", "poly_fit", "poly_gcd",
         "poly_integ", "poly_mul", "poly_sub", "polynomial_fit", "pow",
@@ -1961,7 +1964,9 @@ bool is_reserved_function_name(const std::string& name) {
         "ztrans", "iztrans", "z_transform", "inverse_z",
         "dft", "idft", "fft", "ifft", "conv", "convolve",
         "pade", "puiseux", "series_sum", "summation",
-        "eig", "eigvals", "eigvecs"
+        "eig", "eigvals", "eigvecs",
+        "lp_max", "lp_min", "ilp_max", "ilp_min",
+        "milp_max", "milp_min", "bip_max", "bip_min", "binary_max", "binary_min"
     };
 
     for (const std::string& builtin : names) {
@@ -5024,10 +5029,6 @@ ScriptSignal execute_script_block(Calculator* calculator,
     }
 }
 
-Calculator::Calculator() : impl_(new Impl()) {}
-
-Calculator::~Calculator() = default;
-
 double Calculator::evaluate(const std::string& expression) {
     return normalize_result(evaluate_raw(expression));
 }
@@ -5120,20 +5121,6 @@ std::string Calculator::list_variables() const {
         out << name << " = " << format_stored_value(value, impl_->symbolic_constants_mode);
     }
     return out.str();
-}
-
-std::string Calculator::clear_variable(const std::string& name) {
-    const auto it = impl_->variables.find(name);
-    if (it == impl_->variables.end()) {
-        throw std::runtime_error("unknown variable: " + name);
-    }
-    impl_->variables.erase(it);
-    return "Cleared variable: " + name;
-}
-
-std::string Calculator::clear_all_variables() {
-    impl_->variables.clear();
-    return "Cleared all variables.";
 }
 
 std::string Calculator::factor_expression(const std::string& expression) const {
@@ -5429,17 +5416,84 @@ bool Calculator::try_process_function_command(const std::string& expression,
         };
     };
 
-    auto build_ode_solver = [&](const std::string& argument) {
-        const auto evaluate_expression = build_scoped_decimal_evaluator(argument);
-        return ODESolver(
-            [evaluate_expression](double x_value, double y_value) {
-                return evaluate_expression({{"x", x_value}, {"y", y_value}});
-            });
+    auto build_scoped_matrix_evaluator = [&](const std::string& argument) {
+        const std::string scoped_expression =
+            trim_copy(expand_inline_function_commands(this, argument));
+        return [this, scoped_expression](
+                   const std::vector<std::pair<std::string, StoredValue>>& assignments) {
+            std::map<std::string, StoredValue> scoped_variables =
+                visible_variables(impl_.get());
+            for (const auto& [name, value] : assignments) {
+                scoped_variables[name] = value;
+            }
+
+            const HasScriptFunctionCallback has_script_function =
+                [this](const std::string& name) {
+                    return has_visible_script_function(impl_.get(), name);
+                };
+            const InvokeScriptFunctionDecimalCallback invoke_script_function =
+                [this](const std::string& name,
+                       const std::vector<double>& arguments) {
+                    return invoke_script_function_decimal(
+                        this, impl_.get(), name, arguments);
+                };
+
+            matrix::Value value;
+            if (!try_evaluate_matrix_expression(scoped_expression,
+                                               &scoped_variables,
+                                               &impl_->functions,
+                                               has_script_function,
+                                               invoke_script_function,
+                                               &value) ||
+                !value.is_matrix) {
+                throw std::runtime_error("expected a matrix-valued expression");
+            }
+            return value.matrix;
+        };
+    };
+
+    auto build_scoped_scalar_evaluator = [&](const std::string& argument) {
+        const std::string scoped_expression =
+            trim_copy(expand_inline_function_commands(this, argument));
+        return [this, scoped_expression](
+                   const std::vector<std::pair<std::string, StoredValue>>& assignments) {
+            std::map<std::string, StoredValue> frame;
+            for (const auto& [name, value] : assignments) {
+                frame[name] = value;
+            }
+
+            impl_->local_scopes.push_back(frame);
+            try {
+                const StoredValue value =
+                    evaluate_expression_value(this, impl_.get(), scoped_expression, false);
+                impl_->local_scopes.pop_back();
+
+                if (value.is_matrix || value.is_string) {
+                    throw std::runtime_error("expected a scalar-valued expression");
+                }
+                return normalize_result(value.exact
+                                            ? rational_to_double(value.rational)
+                                            : value.decimal);
+            } catch (...) {
+                impl_->local_scopes.pop_back();
+                throw;
+            }
+        };
     };
 
     auto parse_decimal_argument = [&](const std::string& argument) {
         DecimalParser parser(argument, &impl_->variables, &impl_->functions);
         return parser.parse();
+    };
+
+    auto parse_matrix_argument = [&](const std::string& argument,
+                                     const std::string& context) {
+        const StoredValue value =
+            evaluate_expression_value(this, impl_.get(), argument, false);
+        if (!value.is_matrix) {
+            throw std::runtime_error(context + " expects a matrix or vector argument");
+        }
+        return value.matrix;
     };
 
     auto is_matrix_argument = [&](const std::string& argument) {
@@ -5461,6 +5515,254 @@ bool Calculator::try_process_function_command(const std::string& expression,
                                              &value) &&
                value.is_matrix;
     };
+
+    auto matrix_to_vector_values = [&](const matrix::Matrix& value,
+                                       const std::string& context) {
+        if (!value.is_vector()) {
+            throw std::runtime_error(context + " expects vector arguments");
+        }
+        const std::size_t size = value.rows == 1 ? value.cols : value.rows;
+        std::vector<double> result(size, 0.0);
+        for (std::size_t i = 0; i < size; ++i) {
+            result[i] = value.rows == 1 ? value.at(0, i) : value.at(i, 0);
+        }
+        return result;
+    };
+
+    auto vector_to_column_matrix = [&](const std::vector<double>& values) {
+        matrix::Matrix result(values.size(), 1, 0.0);
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            result.at(i, 0) = normalize_result(values[i]);
+        }
+        return result;
+    };
+
+    auto make_scalar_stored = [&](double value) {
+        StoredValue stored;
+        stored.decimal = normalize_result(value);
+        return stored;
+    };
+
+    auto append_parameter_assignments =
+        [&](const StoredValue& parameter_value,
+            std::vector<std::pair<std::string, StoredValue>>* assignments) {
+            assignments->push_back({"p", parameter_value});
+            if (!parameter_value.is_matrix || !parameter_value.matrix.is_vector()) {
+                return;
+            }
+
+            const std::size_t size =
+                parameter_value.matrix.rows == 1
+                    ? parameter_value.matrix.cols
+                    : parameter_value.matrix.rows;
+            for (std::size_t i = 0; i < size; ++i) {
+                const double component_value =
+                    parameter_value.matrix.rows == 1
+                        ? parameter_value.matrix.at(0, i)
+                        : parameter_value.matrix.at(i, 0);
+                assignments->push_back({"p" + std::to_string(i + 1),
+                                        make_scalar_stored(component_value)});
+            }
+        };
+
+    auto try_parse_positive_step_argument = [&](const std::string& argument,
+                                                int* steps) {
+        try {
+            const double value = parse_decimal_argument(argument);
+            if (!is_integer_double(value) || value <= 0.0) {
+                return false;
+            }
+            *steps = static_cast<int>(round_to_long_long(value));
+            return true;
+        } catch (const std::exception&) {
+            return false;
+        }
+    };
+
+    auto dot_product = [](const std::vector<double>& lhs,
+                          const std::vector<double>& rhs) {
+        if (lhs.size() != rhs.size()) {
+            throw std::runtime_error("objective and solution dimension mismatch");
+        }
+        long double total = 0.0L;
+        for (std::size_t i = 0; i < lhs.size(); ++i) {
+            total += static_cast<long double>(lhs[i]) *
+                     static_cast<long double>(rhs[i]);
+        }
+        return static_cast<double>(total);
+    };
+
+    auto format_planning_result = [&](const std::vector<double>& solution,
+                                      double objective) {
+        return "x = " + matrix::Matrix::vector(solution).to_string() +
+               "\nobjective = " + format_decimal(normalize_result(objective));
+    };
+
+    auto solve_linear_box_problem =
+        [&](const std::vector<double>& objective,
+            const matrix::Matrix& inequality_matrix,
+            const std::vector<double>& inequality_rhs,
+            const matrix::Matrix& equality_matrix,
+            const std::vector<double>& equality_rhs,
+            const std::vector<double>& lower_bounds,
+            const std::vector<double>& upper_bounds,
+            double planning_tolerance,
+            std::vector<double>* solution,
+            double* objective_value) {
+            const std::size_t variable_count = objective.size();
+            if (inequality_matrix.cols != variable_count ||
+                inequality_rhs.size() != inequality_matrix.rows ||
+                equality_matrix.cols != variable_count ||
+                equality_rhs.size() != equality_matrix.rows ||
+                lower_bounds.size() != variable_count ||
+                upper_bounds.size() != variable_count) {
+                throw std::runtime_error("planning dimension mismatch");
+            }
+
+            auto feasible_solution = [&](const std::vector<double>& x) {
+                if (x.size() != variable_count) {
+                    return false;
+                }
+                for (std::size_t col = 0; col < variable_count; ++col) {
+                    if (x[col] < lower_bounds[col] - planning_tolerance ||
+                        x[col] > upper_bounds[col] + planning_tolerance) {
+                        return false;
+                    }
+                }
+                for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
+                    long double total = 0.0L;
+                    for (std::size_t col = 0; col < variable_count; ++col) {
+                        total += static_cast<long double>(inequality_matrix.at(row, col)) *
+                                 static_cast<long double>(x[col]);
+                    }
+                    if (total >
+                        static_cast<long double>(inequality_rhs[row]) + planning_tolerance) {
+                        return false;
+                    }
+                }
+                for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
+                    long double total = 0.0L;
+                    for (std::size_t col = 0; col < variable_count; ++col) {
+                        total += static_cast<long double>(equality_matrix.at(row, col)) *
+                                 static_cast<long double>(x[col]);
+                    }
+                    if (std::abs(static_cast<double>(total - equality_rhs[row])) >
+                        planning_tolerance) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+
+            if (variable_count == 0) {
+                const std::vector<double> empty_solution;
+                if (!feasible_solution(empty_solution)) {
+                    return false;
+                }
+                *solution = empty_solution;
+                *objective_value = 0.0;
+                return true;
+            }
+
+            std::vector<std::vector<double>> all_rows;
+            std::vector<double> all_rhs;
+            all_rows.reserve(inequality_matrix.rows + 2 * equality_matrix.rows +
+                             2 * variable_count);
+            all_rhs.reserve(inequality_matrix.rows + 2 * equality_matrix.rows +
+                            2 * variable_count);
+
+            for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
+                std::vector<double> coefficients(variable_count, 0.0);
+                for (std::size_t col = 0; col < variable_count; ++col) {
+                    coefficients[col] = inequality_matrix.at(row, col);
+                }
+                all_rows.push_back(coefficients);
+                all_rhs.push_back(inequality_rhs[row]);
+            }
+            for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
+                std::vector<double> positive_row(variable_count, 0.0);
+                std::vector<double> negative_row(variable_count, 0.0);
+                for (std::size_t col = 0; col < variable_count; ++col) {
+                    positive_row[col] = equality_matrix.at(row, col);
+                    negative_row[col] = -equality_matrix.at(row, col);
+                }
+                all_rows.push_back(positive_row);
+                all_rhs.push_back(equality_rhs[row]);
+                all_rows.push_back(negative_row);
+                all_rhs.push_back(-equality_rhs[row]);
+            }
+            for (std::size_t col = 0; col < variable_count; ++col) {
+                std::vector<double> upper_row(variable_count, 0.0);
+                upper_row[col] = 1.0;
+                all_rows.push_back(upper_row);
+                all_rhs.push_back(upper_bounds[col]);
+
+                std::vector<double> lower_row(variable_count, 0.0);
+                lower_row[col] = -1.0;
+                all_rows.push_back(lower_row);
+                all_rhs.push_back(-lower_bounds[col]);
+            }
+
+            bool found = false;
+            std::vector<double> best_solution(variable_count, 0.0);
+            double best_value = 0.0;
+            std::vector<std::size_t> selection(variable_count, 0);
+
+            std::function<void(std::size_t, std::size_t)> enumerate_bases =
+                [&](std::size_t start, std::size_t depth) {
+                    if (depth == variable_count) {
+                        matrix::Matrix basis(variable_count, variable_count, 0.0);
+                        matrix::Matrix basis_rhs(variable_count, 1, 0.0);
+                        for (std::size_t row = 0; row < variable_count; ++row) {
+                            basis_rhs.at(row, 0) = all_rhs[selection[row]];
+                            for (std::size_t col = 0; col < variable_count; ++col) {
+                                basis.at(row, col) = all_rows[selection[row]][col];
+                            }
+                        }
+
+                        try {
+                            const matrix::Matrix solved = matrix::solve(basis, basis_rhs);
+                            std::vector<double> candidate(variable_count, 0.0);
+                            for (std::size_t i = 0; i < variable_count; ++i) {
+                                const double value = solved.at(i, 0);
+                                candidate[i] =
+                                    mymath::abs(value) <= planning_tolerance ? 0.0 : value;
+                            }
+                            if (!feasible_solution(candidate)) {
+                                return;
+                            }
+
+                            const double candidate_objective =
+                                dot_product(objective, candidate);
+                            if (!found ||
+                                candidate_objective > best_value + planning_tolerance) {
+                                found = true;
+                                best_value = candidate_objective;
+                                best_solution = candidate;
+                            }
+                        } catch (const std::exception&) {
+                        }
+                        return;
+                    }
+
+                    const std::size_t remaining = variable_count - depth;
+                    for (std::size_t index = start;
+                         index + remaining <= all_rows.size();
+                         ++index) {
+                        selection[depth] = index;
+                        enumerate_bases(index + 1, depth + 1);
+                    }
+                };
+
+            enumerate_bases(0, 0);
+            if (!found) {
+                return false;
+            }
+
+            *solution = best_solution;
+            *objective_value = best_value;
+            return true;
+        };
 
     auto parse_subdivisions = [&](const std::vector<std::string>& arguments,
                                   std::size_t offset,
@@ -6324,26 +6626,96 @@ bool Calculator::try_process_function_command(const std::string& expression,
     }
     if (!ode_command_name.empty()) {
         const std::vector<std::string> arguments = split_top_level_arguments(ode_inside);
-        if (arguments.size() != 4 && arguments.size() != 5) {
+        if (arguments.size() < 4 || arguments.size() > 7) {
             throw std::runtime_error(
                 ode_command_name +
-                " expects rhs, x0, y0, x1, and an optional positive integer step count");
+                " expects rhs, x0, y0, x1, optional steps, optional event, and optional params");
         }
 
         DecimalParser x0_parser(arguments[1], &impl_->variables, &impl_->functions);
         DecimalParser y0_parser(arguments[2], &impl_->variables, &impl_->functions);
         DecimalParser x1_parser(arguments[3], &impl_->variables, &impl_->functions);
         int steps = ode_command_name == "ode" ? 100 : 10;
-        if (arguments.size() == 5) {
-            DecimalParser step_parser(arguments[4], &impl_->variables, &impl_->functions);
-            const double step_value = step_parser.parse();
-            if (!is_integer_double(step_value) || step_value <= 0.0) {
-                throw std::runtime_error("ODE step count must be a positive integer");
-            }
-            steps = static_cast<int>(round_to_long_long(step_value));
+
+        std::size_t optional_index = 4;
+        int parsed_steps = steps;
+        if (optional_index < arguments.size() &&
+            try_parse_positive_step_argument(arguments[optional_index], &parsed_steps)) {
+            steps = parsed_steps;
+            ++optional_index;
         }
 
-        const ODESolver solver = build_ode_solver(arguments[0]);
+        std::string event_expression;
+        bool has_event = false;
+        StoredValue parameter_value;
+        bool has_parameter = false;
+        if (optional_index < arguments.size()) {
+            if (optional_index + 1 == arguments.size()) {
+                if (is_matrix_argument(arguments[optional_index])) {
+                    parameter_value = evaluate_expression_value(this,
+                                                               impl_.get(),
+                                                               arguments[optional_index],
+                                                               false);
+                    has_parameter = true;
+                } else {
+                    event_expression = arguments[optional_index];
+                    has_event = true;
+                }
+                ++optional_index;
+            } else {
+                event_expression = arguments[optional_index];
+                has_event = true;
+                ++optional_index;
+                parameter_value =
+                    evaluate_expression_value(this, impl_.get(), arguments[optional_index], false);
+                has_parameter = true;
+                ++optional_index;
+            }
+        }
+
+        if (optional_index != arguments.size()) {
+            throw std::runtime_error(
+                ode_command_name +
+                " received too many optional arguments");
+        }
+
+        const auto evaluate_rhs = build_scoped_scalar_evaluator(arguments[0]);
+        std::function<double(const std::vector<std::pair<std::string, StoredValue>>&)> evaluate_event;
+        if (has_event) {
+            evaluate_event = build_scoped_scalar_evaluator(event_expression);
+        }
+        const ODESolver solver(
+            [evaluate_rhs,
+             has_parameter,
+             parameter_value,
+             &make_scalar_stored,
+             &append_parameter_assignments](double x_value, double y_value) {
+                std::vector<std::pair<std::string, StoredValue>> assignments;
+                assignments.reserve(has_parameter ? 4 : 2);
+                assignments.push_back({"x", make_scalar_stored(x_value)});
+                assignments.push_back({"y", make_scalar_stored(y_value)});
+                if (has_parameter) {
+                    append_parameter_assignments(parameter_value, &assignments);
+                }
+                return evaluate_rhs(assignments);
+            },
+            has_event
+                ? ODESolver::EventFunction(
+                      [evaluate_event,
+                       has_parameter,
+                       parameter_value,
+                       &make_scalar_stored,
+                       &append_parameter_assignments](double x_value, double y_value) {
+                          std::vector<std::pair<std::string, StoredValue>> assignments;
+                          assignments.reserve(has_parameter ? 4 : 2);
+                          assignments.push_back({"x", make_scalar_stored(x_value)});
+                          assignments.push_back({"y", make_scalar_stored(y_value)});
+                          if (has_parameter) {
+                              append_parameter_assignments(parameter_value, &assignments);
+                          }
+                          return evaluate_event(assignments);
+                      })
+                : ODESolver::EventFunction());
         const double x0 = x0_parser.parse();
         const double y0 = y0_parser.parse();
         const double x1 = x1_parser.parse();
@@ -6362,6 +6734,632 @@ bool Calculator::try_process_function_command(const std::string& expression,
             table.at(i, 1) = normalize_result(points[i].y);
         }
         *output = matrix_literal_expression(table);
+        return true;
+    }
+
+    std::string ode_system_inside;
+    std::string ode_system_command_name;
+    if (split_named_call(trimmed, "ode_system", &ode_system_inside)) {
+        ode_system_command_name = "ode_system";
+    } else if (split_named_call(trimmed, "ode_system_table", &ode_system_inside)) {
+        ode_system_command_name = "ode_system_table";
+    }
+    if (!ode_system_command_name.empty()) {
+        const std::vector<std::string> arguments =
+            split_top_level_arguments(ode_system_inside);
+        if (arguments.size() < 4 || arguments.size() > 7) {
+            throw std::runtime_error(
+                ode_system_command_name +
+                " expects rhs_vector, x0, y0_vector, x1, optional steps, optional event, and optional params");
+        }
+
+        int steps = ode_system_command_name == "ode_system" ? 100 : 10;
+        std::size_t optional_index = 4;
+        int parsed_steps = steps;
+        if (optional_index < arguments.size() &&
+            try_parse_positive_step_argument(arguments[optional_index], &parsed_steps)) {
+            steps = parsed_steps;
+            ++optional_index;
+        }
+
+        std::string event_expression;
+        bool has_event = false;
+        StoredValue parameter_value;
+        bool has_parameter = false;
+        if (optional_index < arguments.size()) {
+            if (optional_index + 1 == arguments.size()) {
+                if (is_matrix_argument(arguments[optional_index])) {
+                    parameter_value = evaluate_expression_value(this,
+                                                               impl_.get(),
+                                                               arguments[optional_index],
+                                                               false);
+                    has_parameter = true;
+                } else {
+                    event_expression = arguments[optional_index];
+                    has_event = true;
+                }
+                ++optional_index;
+            } else {
+                event_expression = arguments[optional_index];
+                has_event = true;
+                ++optional_index;
+                parameter_value =
+                    evaluate_expression_value(this, impl_.get(), arguments[optional_index], false);
+                has_parameter = true;
+                ++optional_index;
+            }
+        }
+
+        if (optional_index != arguments.size()) {
+            throw std::runtime_error(
+                ode_system_command_name +
+                " received too many optional arguments");
+        }
+
+        const double x0 = parse_decimal_argument(arguments[1]);
+        const double x1 = parse_decimal_argument(arguments[3]);
+        const std::vector<double> initial_state =
+            matrix_to_vector_values(parse_matrix_argument(arguments[2], ode_system_command_name),
+                                    ode_system_command_name);
+        const auto evaluate_rhs_matrix =
+            build_scoped_matrix_evaluator(arguments[0]);
+        std::function<double(const std::vector<std::pair<std::string, StoredValue>>&)> evaluate_event;
+        if (has_event) {
+            evaluate_event = build_scoped_scalar_evaluator(event_expression);
+        }
+
+        const ODESystemSolver solver(
+            [evaluate_rhs_matrix,
+             has_parameter,
+             parameter_value,
+             &make_scalar_stored,
+             &vector_to_column_matrix,
+             &append_parameter_assignments](double x_value,
+                                            const std::vector<double>& y_value) {
+                std::vector<std::pair<std::string, StoredValue>> assignments;
+                assignments.reserve(y_value.size() + (has_parameter ? 4 : 2));
+
+                assignments.push_back({"x", make_scalar_stored(x_value)});
+
+                StoredValue y_matrix_stored;
+                y_matrix_stored.is_matrix = true;
+                y_matrix_stored.matrix = vector_to_column_matrix(y_value);
+                assignments.push_back({"y", y_matrix_stored});
+
+                for (std::size_t i = 0; i < y_value.size(); ++i) {
+                    assignments.push_back({"y" + std::to_string(i + 1),
+                                           make_scalar_stored(y_value[i])});
+                }
+                if (has_parameter) {
+                    append_parameter_assignments(parameter_value, &assignments);
+                }
+
+                const matrix::Matrix rhs_matrix = evaluate_rhs_matrix(assignments);
+                if (!rhs_matrix.is_vector()) {
+                    throw std::runtime_error("ODE system right-hand side must evaluate to a vector");
+                }
+                const std::size_t result_size =
+                    rhs_matrix.rows == 1 ? rhs_matrix.cols : rhs_matrix.rows;
+                if (result_size != y_value.size()) {
+                    throw std::runtime_error("ODE system right-hand side dimension mismatch");
+                }
+
+                std::vector<double> result(result_size, 0.0);
+                for (std::size_t i = 0; i < result_size; ++i) {
+                    result[i] = rhs_matrix.rows == 1 ? rhs_matrix.at(0, i) : rhs_matrix.at(i, 0);
+                }
+                return result;
+            },
+            has_event
+                ? ODESystemSolver::EventFunction(
+                      [evaluate_event,
+                       has_parameter,
+                       parameter_value,
+                       &make_scalar_stored,
+                       &vector_to_column_matrix,
+                       &append_parameter_assignments](double x_value,
+                                                      const std::vector<double>& y_value) {
+                          std::vector<std::pair<std::string, StoredValue>> assignments;
+                          assignments.reserve(y_value.size() + (has_parameter ? 4 : 2));
+                          assignments.push_back({"x", make_scalar_stored(x_value)});
+
+                          StoredValue y_matrix_stored;
+                          y_matrix_stored.is_matrix = true;
+                          y_matrix_stored.matrix = vector_to_column_matrix(y_value);
+                          assignments.push_back({"y", y_matrix_stored});
+
+                          for (std::size_t i = 0; i < y_value.size(); ++i) {
+                              assignments.push_back({"y" + std::to_string(i + 1),
+                                                     make_scalar_stored(y_value[i])});
+                          }
+                          if (has_parameter) {
+                              append_parameter_assignments(parameter_value, &assignments);
+                          }
+                          return evaluate_event(assignments);
+                      })
+                : ODESystemSolver::EventFunction());
+
+        if (ode_system_command_name == "ode_system") {
+            const std::vector<double> final_state =
+                solver.solve(x0, initial_state, x1, steps);
+            *output = matrix::Matrix::vector(final_state).to_string();
+            return true;
+        }
+
+        const std::vector<ODESystemPoint> points =
+            solver.solve_trajectory(x0, initial_state, x1, steps);
+        matrix::Matrix table(points.size(), initial_state.size() + 1, 0.0);
+        for (std::size_t row = 0; row < points.size(); ++row) {
+            table.at(row, 0) = normalize_result(points[row].x);
+            for (std::size_t col = 0; col < points[row].y.size(); ++col) {
+                table.at(row, col + 1) = normalize_result(points[row].y[col]);
+            }
+        }
+        *output = matrix_literal_expression(table);
+        return true;
+    }
+
+    std::string planning_inside;
+    std::string planning_command;
+    if (split_named_call(trimmed, "lp_max", &planning_inside)) {
+        planning_command = "lp_max";
+    } else if (split_named_call(trimmed, "lp_min", &planning_inside)) {
+        planning_command = "lp_min";
+    } else if (split_named_call(trimmed, "ilp_max", &planning_inside)) {
+        planning_command = "ilp_max";
+    } else if (split_named_call(trimmed, "ilp_min", &planning_inside)) {
+        planning_command = "ilp_min";
+    } else if (split_named_call(trimmed, "milp_max", &planning_inside)) {
+        planning_command = "milp_max";
+    } else if (split_named_call(trimmed, "milp_min", &planning_inside)) {
+        planning_command = "milp_min";
+    } else if (split_named_call(trimmed, "bip_max", &planning_inside) ||
+               split_named_call(trimmed, "binary_max", &planning_inside)) {
+        planning_command = "bip_max";
+    } else if (split_named_call(trimmed, "bip_min", &planning_inside) ||
+               split_named_call(trimmed, "binary_min", &planning_inside)) {
+        planning_command = "bip_min";
+    }
+    if (!planning_command.empty()) {
+        const std::vector<std::string> arguments =
+            split_top_level_arguments(planning_inside);
+        const std::vector<double> objective = matrix_to_vector_values(
+            parse_matrix_argument(arguments[0], planning_command), planning_command);
+        const std::size_t variable_count = objective.size();
+        const double planning_tolerance = 1e-8;
+        const bool is_binary_program =
+            planning_command == "bip_max" || planning_command == "bip_min";
+        const bool is_mixed_integer =
+            planning_command == "milp_max" || planning_command == "milp_min";
+        const bool is_integer_program =
+            planning_command == "ilp_max" || planning_command == "ilp_min";
+        const bool maximize =
+            planning_command == "lp_max" || planning_command == "ilp_max" ||
+            planning_command == "milp_max" || planning_command == "bip_max";
+
+        std::size_t argument_index = 1;
+        const matrix::Matrix inequality_matrix =
+            parse_matrix_argument(arguments[argument_index++], planning_command);
+        const std::vector<double> inequality_rhs = matrix_to_vector_values(
+            parse_matrix_argument(arguments[argument_index++], planning_command), planning_command);
+
+        matrix::Matrix equality_matrix(0, variable_count, 0.0);
+        std::vector<double> equality_rhs;
+        std::vector<double> lower_bounds(variable_count, 0.0);
+        std::vector<double> upper_bounds(variable_count, 0.0);
+        std::vector<double> integrality(variable_count, 0.0);
+
+        if (is_binary_program) {
+            if (arguments.size() != 3 && arguments.size() != 5) {
+                throw std::runtime_error(
+                    planning_command +
+                    " expects objective_vector, A, b, and optional Aeq, beq");
+            }
+            if (arguments.size() == 5) {
+                equality_matrix =
+                    parse_matrix_argument(arguments[argument_index++], planning_command);
+                equality_rhs = matrix_to_vector_values(
+                    parse_matrix_argument(arguments[argument_index++], planning_command),
+                    planning_command);
+            }
+            std::fill(lower_bounds.begin(), lower_bounds.end(), 0.0);
+            std::fill(upper_bounds.begin(), upper_bounds.end(), 1.0);
+            std::fill(integrality.begin(), integrality.end(), 1.0);
+        } else if (is_mixed_integer) {
+            if (arguments.size() != 6 && arguments.size() != 8) {
+                throw std::runtime_error(
+                    planning_command +
+                    " expects objective_vector, A, b, lower_bounds, upper_bounds, integrality, and optional Aeq, beq");
+            }
+            if (arguments.size() == 8) {
+                equality_matrix =
+                    parse_matrix_argument(arguments[argument_index++], planning_command);
+                equality_rhs = matrix_to_vector_values(
+                    parse_matrix_argument(arguments[argument_index++], planning_command),
+                    planning_command);
+            }
+            lower_bounds = matrix_to_vector_values(
+                parse_matrix_argument(arguments[argument_index++], planning_command),
+                planning_command);
+            upper_bounds = matrix_to_vector_values(
+                parse_matrix_argument(arguments[argument_index++], planning_command),
+                planning_command);
+            integrality = matrix_to_vector_values(
+                parse_matrix_argument(arguments[argument_index++], planning_command),
+                planning_command);
+        } else {
+            if (arguments.size() != 5 && arguments.size() != 7) {
+                throw std::runtime_error(
+                    planning_command +
+                    " expects objective_vector, A, b, lower_bounds, upper_bounds, and optional Aeq, beq");
+            }
+            if (arguments.size() == 7) {
+                equality_matrix =
+                    parse_matrix_argument(arguments[argument_index++], planning_command);
+                equality_rhs = matrix_to_vector_values(
+                    parse_matrix_argument(arguments[argument_index++], planning_command),
+                    planning_command);
+            }
+            lower_bounds = matrix_to_vector_values(
+                parse_matrix_argument(arguments[argument_index++], planning_command),
+                planning_command);
+            upper_bounds = matrix_to_vector_values(
+                parse_matrix_argument(arguments[argument_index++], planning_command),
+                planning_command);
+            if (is_integer_program) {
+                std::fill(integrality.begin(), integrality.end(), 1.0);
+            }
+        }
+
+        if (argument_index != arguments.size()) {
+            throw std::runtime_error(planning_command + " received an invalid argument count");
+        }
+
+        if (inequality_matrix.cols != variable_count ||
+            inequality_rhs.size() != inequality_matrix.rows ||
+            equality_matrix.cols != variable_count ||
+            equality_rhs.size() != equality_matrix.rows ||
+            lower_bounds.size() != variable_count ||
+            upper_bounds.size() != variable_count ||
+            integrality.size() != variable_count) {
+            throw std::runtime_error(planning_command + " dimension mismatch");
+        }
+
+        for (std::size_t i = 0; i < variable_count; ++i) {
+            if (lower_bounds[i] > upper_bounds[i]) {
+                throw std::runtime_error(planning_command + " requires lower_bounds <= upper_bounds");
+            }
+            if (integrality[i] != 0.0 && !is_integer_double(lower_bounds[i])) {
+                throw std::runtime_error(planning_command + " requires integer lower bounds for integer variables");
+            }
+            if (integrality[i] != 0.0 && !is_integer_double(upper_bounds[i])) {
+                throw std::runtime_error(planning_command + " requires integer upper bounds for integer variables");
+            }
+        }
+
+        std::vector<double> transformed_objective = objective;
+        if (!maximize) {
+            for (double& value : transformed_objective) {
+                value = -value;
+            }
+        }
+
+        std::vector<std::size_t> integer_indices;
+        std::vector<std::size_t> continuous_indices;
+        for (std::size_t i = 0; i < variable_count; ++i) {
+            if (mymath::is_near_zero(integrality[i], planning_tolerance)) {
+                continuous_indices.push_back(i);
+            } else {
+                integer_indices.push_back(i);
+            }
+        }
+
+        if (integer_indices.empty()) {
+            std::vector<double> best_solution;
+            double best_value = 0.0;
+            if (!solve_linear_box_problem(transformed_objective,
+                                          inequality_matrix,
+                                          inequality_rhs,
+                                          equality_matrix,
+                                          equality_rhs,
+                                          lower_bounds,
+                                          upper_bounds,
+                                          planning_tolerance,
+                                          &best_solution,
+                                          &best_value)) {
+                throw std::runtime_error(planning_command + " found no feasible bounded solution");
+            }
+            *output = format_planning_result(best_solution,
+                                             dot_product(objective, best_solution));
+            return true;
+        }
+
+        std::vector<long long> integer_lower(variable_count, 0);
+        std::vector<long long> integer_upper(variable_count, 0);
+        for (std::size_t index : integer_indices) {
+            integer_lower[index] = round_to_long_long(lower_bounds[index]);
+            integer_upper[index] = round_to_long_long(upper_bounds[index]);
+        }
+
+        bool found = false;
+        double best_value = 0.0;
+        std::vector<double> best_solution(variable_count, 0.0);
+        std::vector<long long> current_integer_values(variable_count, 0);
+
+        std::function<void(std::size_t, long double)> search_integer =
+            [&](std::size_t depth, long double current_objective) {
+                for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
+                    long double assigned_total = 0.0L;
+                    for (std::size_t assigned_depth = 0; assigned_depth < depth; ++assigned_depth) {
+                        const std::size_t col = integer_indices[assigned_depth];
+                        assigned_total += static_cast<long double>(inequality_matrix.at(row, col)) *
+                                          static_cast<long double>(current_integer_values[col]);
+                    }
+
+                    long double minimum_possible = assigned_total;
+                    for (std::size_t remaining_depth = depth;
+                         remaining_depth < integer_indices.size();
+                         ++remaining_depth) {
+                        const std::size_t col = integer_indices[remaining_depth];
+                        const long double coefficient =
+                            static_cast<long double>(inequality_matrix.at(row, col));
+                        minimum_possible +=
+                            coefficient >= 0.0L
+                                ? coefficient * static_cast<long double>(integer_lower[col])
+                                : coefficient * static_cast<long double>(integer_upper[col]);
+                    }
+                    for (std::size_t col : continuous_indices) {
+                        const long double coefficient =
+                            static_cast<long double>(inequality_matrix.at(row, col));
+                        minimum_possible +=
+                            coefficient >= 0.0L
+                                ? coefficient * static_cast<long double>(lower_bounds[col])
+                                : coefficient * static_cast<long double>(upper_bounds[col]);
+                    }
+                    if (minimum_possible >
+                        static_cast<long double>(inequality_rhs[row]) + planning_tolerance) {
+                        return;
+                    }
+                }
+
+                for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
+                    long double assigned_total = 0.0L;
+                    for (std::size_t assigned_depth = 0; assigned_depth < depth; ++assigned_depth) {
+                        const std::size_t col = integer_indices[assigned_depth];
+                        assigned_total += static_cast<long double>(equality_matrix.at(row, col)) *
+                                          static_cast<long double>(current_integer_values[col]);
+                    }
+
+                    long double minimum_possible = assigned_total;
+                    long double maximum_possible = assigned_total;
+                    for (std::size_t remaining_depth = depth;
+                         remaining_depth < integer_indices.size();
+                         ++remaining_depth) {
+                        const std::size_t col = integer_indices[remaining_depth];
+                        const long double coefficient =
+                            static_cast<long double>(equality_matrix.at(row, col));
+                        minimum_possible +=
+                            coefficient >= 0.0L
+                                ? coefficient * static_cast<long double>(integer_lower[col])
+                                : coefficient * static_cast<long double>(integer_upper[col]);
+                        maximum_possible +=
+                            coefficient >= 0.0L
+                                ? coefficient * static_cast<long double>(integer_upper[col])
+                                : coefficient * static_cast<long double>(integer_lower[col]);
+                    }
+                    for (std::size_t col : continuous_indices) {
+                        const long double coefficient =
+                            static_cast<long double>(equality_matrix.at(row, col));
+                        minimum_possible +=
+                            coefficient >= 0.0L
+                                ? coefficient * static_cast<long double>(lower_bounds[col])
+                                : coefficient * static_cast<long double>(upper_bounds[col]);
+                        maximum_possible +=
+                            coefficient >= 0.0L
+                                ? coefficient * static_cast<long double>(upper_bounds[col])
+                                : coefficient * static_cast<long double>(lower_bounds[col]);
+                    }
+
+                    const long double target = static_cast<long double>(equality_rhs[row]);
+                    if (target < minimum_possible - planning_tolerance ||
+                        target > maximum_possible + planning_tolerance) {
+                        return;
+                    }
+                }
+
+                long double optimistic_objective = current_objective;
+                for (std::size_t remaining_depth = depth;
+                     remaining_depth < integer_indices.size();
+                     ++remaining_depth) {
+                    const std::size_t col = integer_indices[remaining_depth];
+                    const long double coefficient =
+                        static_cast<long double>(transformed_objective[col]);
+                    optimistic_objective +=
+                        coefficient >= 0.0L
+                            ? coefficient * static_cast<long double>(integer_upper[col])
+                            : coefficient * static_cast<long double>(integer_lower[col]);
+                }
+                for (std::size_t col : continuous_indices) {
+                    const long double coefficient =
+                        static_cast<long double>(transformed_objective[col]);
+                    optimistic_objective +=
+                        coefficient >= 0.0L
+                            ? coefficient * static_cast<long double>(upper_bounds[col])
+                            : coefficient * static_cast<long double>(lower_bounds[col]);
+                }
+                if (found &&
+                    optimistic_objective <=
+                        static_cast<long double>(best_value) + planning_tolerance) {
+                    return;
+                }
+
+                if (depth == integer_indices.size()) {
+                    std::vector<double> candidate(variable_count, 0.0);
+                    for (std::size_t col = 0; col < variable_count; ++col) {
+                        candidate[col] = lower_bounds[col];
+                    }
+                    for (std::size_t col : integer_indices) {
+                        candidate[col] = static_cast<double>(current_integer_values[col]);
+                    }
+
+                    if (continuous_indices.empty()) {
+                        bool feasible = true;
+                        for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
+                            long double total = 0.0L;
+                            for (std::size_t col = 0; col < variable_count; ++col) {
+                                total += static_cast<long double>(inequality_matrix.at(row, col)) *
+                                         static_cast<long double>(candidate[col]);
+                            }
+                            if (total >
+                                static_cast<long double>(inequality_rhs[row]) + planning_tolerance) {
+                                feasible = false;
+                                break;
+                            }
+                        }
+                        if (!feasible) {
+                            return;
+                        }
+                        for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
+                            long double total = 0.0L;
+                            for (std::size_t col = 0; col < variable_count; ++col) {
+                                total += static_cast<long double>(equality_matrix.at(row, col)) *
+                                         static_cast<long double>(candidate[col]);
+                            }
+                            if (std::abs(static_cast<double>(total - equality_rhs[row])) >
+                                planning_tolerance) {
+                                feasible = false;
+                                break;
+                            }
+                        }
+                        if (!feasible) {
+                            return;
+                        }
+
+                        const double objective_value = dot_product(transformed_objective, candidate);
+                        if (!found || objective_value > best_value + planning_tolerance) {
+                            found = true;
+                            best_value = objective_value;
+                            best_solution = candidate;
+                        }
+                        return;
+                    }
+
+                    matrix::Matrix reduced_inequality(inequality_matrix.rows,
+                                                      continuous_indices.size(),
+                                                      0.0);
+                    std::vector<double> reduced_inequality_rhs(inequality_rhs.size(), 0.0);
+                    for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
+                        long double rhs_adjustment = static_cast<long double>(inequality_rhs[row]);
+                        for (std::size_t col : integer_indices) {
+                            rhs_adjustment -=
+                                static_cast<long double>(inequality_matrix.at(row, col)) *
+                                static_cast<long double>(candidate[col]);
+                        }
+                        reduced_inequality_rhs[row] = static_cast<double>(rhs_adjustment);
+                        for (std::size_t reduced_col = 0;
+                             reduced_col < continuous_indices.size();
+                             ++reduced_col) {
+                            reduced_inequality.at(row, reduced_col) =
+                                inequality_matrix.at(row, continuous_indices[reduced_col]);
+                        }
+                    }
+
+                    matrix::Matrix reduced_equality(equality_matrix.rows,
+                                                    continuous_indices.size(),
+                                                    0.0);
+                    std::vector<double> reduced_equality_rhs(equality_rhs.size(), 0.0);
+                    for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
+                        long double rhs_adjustment = static_cast<long double>(equality_rhs[row]);
+                        for (std::size_t col : integer_indices) {
+                            rhs_adjustment -=
+                                static_cast<long double>(equality_matrix.at(row, col)) *
+                                static_cast<long double>(candidate[col]);
+                        }
+                        reduced_equality_rhs[row] = static_cast<double>(rhs_adjustment);
+                        for (std::size_t reduced_col = 0;
+                             reduced_col < continuous_indices.size();
+                             ++reduced_col) {
+                            reduced_equality.at(row, reduced_col) =
+                                equality_matrix.at(row, continuous_indices[reduced_col]);
+                        }
+                    }
+
+                    std::vector<double> reduced_objective(continuous_indices.size(), 0.0);
+                    std::vector<double> reduced_lower(continuous_indices.size(), 0.0);
+                    std::vector<double> reduced_upper(continuous_indices.size(), 0.0);
+                    for (std::size_t reduced_col = 0;
+                         reduced_col < continuous_indices.size();
+                         ++reduced_col) {
+                        const std::size_t original_col = continuous_indices[reduced_col];
+                        reduced_objective[reduced_col] = transformed_objective[original_col];
+                        reduced_lower[reduced_col] = lower_bounds[original_col];
+                        reduced_upper[reduced_col] = upper_bounds[original_col];
+                    }
+
+                    std::vector<double> reduced_solution;
+                    double reduced_objective_value = 0.0;
+                    if (!solve_linear_box_problem(reduced_objective,
+                                                  reduced_inequality,
+                                                  reduced_inequality_rhs,
+                                                  reduced_equality,
+                                                  reduced_equality_rhs,
+                                                  reduced_lower,
+                                                  reduced_upper,
+                                                  planning_tolerance,
+                                                  &reduced_solution,
+                                                  &reduced_objective_value)) {
+                        return;
+                    }
+
+                    for (std::size_t reduced_col = 0;
+                         reduced_col < continuous_indices.size();
+                         ++reduced_col) {
+                        candidate[continuous_indices[reduced_col]] = reduced_solution[reduced_col];
+                    }
+
+                    const double objective_value = dot_product(transformed_objective, candidate);
+                    if (!found || objective_value > best_value + planning_tolerance) {
+                        found = true;
+                        best_value = objective_value;
+                        best_solution = candidate;
+                    }
+                    return;
+                }
+
+                const std::size_t current_col = integer_indices[depth];
+                const bool descending = transformed_objective[current_col] >= 0.0;
+                if (descending) {
+                    for (long long value = integer_upper[current_col];
+                         value >= integer_lower[current_col];
+                         --value) {
+                        current_integer_values[current_col] = value;
+                        search_integer(
+                            depth + 1,
+                            current_objective +
+                                static_cast<long double>(transformed_objective[current_col]) *
+                                    static_cast<long double>(value));
+                    }
+                } else {
+                    for (long long value = integer_lower[current_col];
+                         value <= integer_upper[current_col];
+                         ++value) {
+                        current_integer_values[current_col] = value;
+                        search_integer(
+                            depth + 1,
+                            current_objective +
+                                static_cast<long double>(transformed_objective[current_col]) *
+                                    static_cast<long double>(value));
+                    }
+                }
+            };
+
+        search_integer(0, 0.0L);
+        if (!found) {
+            throw std::runtime_error(planning_command + " found no feasible mixed-integer solution");
+        }
+
+        *output = format_planning_result(best_solution,
+                                         dot_product(objective, best_solution));
         return true;
     }
 
@@ -6592,17 +7590,25 @@ bool Calculator::try_process_function_command(const std::string& expression,
 }
 
 std::string Calculator::save_state(const std::string& path) const {
-    std::ofstream out(path);
+    for (const auto& [name, value] : impl_->variables) {
+        (void)name;
+        if (value.is_matrix) {
+            throw std::runtime_error("save_state does not yet support matrix variables");
+        }
+    }
+
+    const std::filesystem::path target_path(path);
+    const std::filesystem::path temp_path =
+        target_path.parent_path() /
+        (target_path.filename().string() + ".tmp-save");
+    std::ofstream out(temp_path);
     if (!out) {
         throw std::runtime_error("unable to open file for writing: " + path);
     }
 
-    out << "STATE_V2\n";
+    out << "STATE_V3\n";
 
     for (const auto& [name, value] : impl_->variables) {
-        if (value.is_matrix) {
-            throw std::runtime_error("save_state does not yet support matrix variables");
-        }
         if (value.is_string) {
             out << "VAR\t" << encode_state_field(name)
                 << "\tSTRING\t" << encode_state_field(value.string_value) << '\n';
@@ -6613,11 +7619,15 @@ std::string Calculator::save_state(const std::string& path) const {
                 << '\t' << std::setprecision(17) << value.decimal << '\n';
         } else {
             out << "VAR\t" << encode_state_field(name)
-                << "\tDECIMAL\t" << std::setprecision(17) << value.decimal;
-            if (value.has_precise_decimal_text) {
-                out << '\t' << encode_state_field(value.precise_decimal_text);
-            }
-            out << '\n';
+                << "\tDECIMAL\t" << std::setprecision(17) << value.decimal << '\n';
+        }
+        if (value.has_precise_decimal_text) {
+            out << "PRECISE\t" << encode_state_field(name)
+                << '\t' << encode_state_field(value.precise_decimal_text) << '\n';
+        }
+        if (value.has_symbolic_text) {
+            out << "SYMBOLIC\t" << encode_state_field(name)
+                << '\t' << encode_state_field(value.symbolic_text) << '\n';
         }
     }
 
@@ -6641,6 +7651,27 @@ std::string Calculator::save_state(const std::string& path) const {
         out << "SCRIPT\t" << encode_state_field(source.str()) << '\n';
     }
 
+    out.close();
+    if (!out) {
+        std::error_code remove_error;
+        std::filesystem::remove(temp_path, remove_error);
+        throw std::runtime_error("unable to finish writing state file: " + path);
+    }
+
+    std::error_code rename_error;
+    std::filesystem::rename(temp_path, target_path, rename_error);
+    if (rename_error) {
+        std::error_code remove_existing_error;
+        std::filesystem::remove(target_path, remove_existing_error);
+        rename_error.clear();
+        std::filesystem::rename(temp_path, target_path, rename_error);
+    }
+    if (rename_error) {
+        std::error_code remove_error;
+        std::filesystem::remove(temp_path, remove_error);
+        throw std::runtime_error("unable to replace state file: " + path);
+    }
+
     return "Saved variables to: " + path;
 }
 
@@ -6654,7 +7685,7 @@ std::string Calculator::load_state(const std::string& path) {
     std::map<std::string, CustomFunction> loaded_functions;
     std::map<std::string, ScriptFunction> loaded_script_functions;
     std::string line;
-    bool is_v2 = false;
+    int state_version = 1;
 
     auto split_tab_fields = [](const std::string& row_text) {
         std::vector<std::string> parts;
@@ -6673,13 +7704,17 @@ std::string Calculator::load_state(const std::string& path) {
             continue;
         }
 
-        if (!is_v2 && line == "STATE_V2") {
-            is_v2 = true;
+        if (line == "STATE_V2") {
+            state_version = 2;
+            continue;
+        }
+        if (line == "STATE_V3") {
+            state_version = 3;
             continue;
         }
 
         const std::vector<std::string> parts = split_tab_fields(line);
-        if (is_v2) {
+        if (state_version >= 2) {
             if (parts.empty()) {
                 continue;
             }
@@ -6704,11 +7739,12 @@ std::string Calculator::load_state(const std::string& path) {
                     value.rational = Rational(std::stoll(parts[3]), std::stoll(parts[4]));
                     value.decimal = std::stod(parts[5]);
                 } else if (parts[2] == "DECIMAL") {
-                    if (parts.size() != 4 && parts.size() != 5) {
+                    if ((state_version == 2 && parts.size() != 4 && parts.size() != 5) ||
+                        (state_version >= 3 && parts.size() != 4)) {
                         throw std::runtime_error("invalid save file format");
                     }
                     value.decimal = std::stod(parts[3]);
-                    if (parts.size() == 5) {
+                    if (state_version == 2 && parts.size() == 5) {
                         value.has_precise_decimal_text = true;
                         value.precise_decimal_text = decode_state_field(parts[4]);
                     }
@@ -6716,6 +7752,34 @@ std::string Calculator::load_state(const std::string& path) {
                     throw std::runtime_error("invalid save file format");
                 }
                 loaded[name] = value;
+                continue;
+            }
+
+            if (state_version >= 3 && parts[0] == "PRECISE") {
+                if (parts.size() != 3) {
+                    throw std::runtime_error("invalid save file format");
+                }
+                const std::string name = decode_state_field(parts[1]);
+                auto it = loaded.find(name);
+                if (it == loaded.end() || it->second.is_matrix || it->second.is_string) {
+                    throw std::runtime_error("invalid save file format");
+                }
+                it->second.has_precise_decimal_text = true;
+                it->second.precise_decimal_text = decode_state_field(parts[2]);
+                continue;
+            }
+
+            if (state_version >= 3 && parts[0] == "SYMBOLIC") {
+                if (parts.size() != 3) {
+                    throw std::runtime_error("invalid save file format");
+                }
+                const std::string name = decode_state_field(parts[1]);
+                auto it = loaded.find(name);
+                if (it == loaded.end() || it->second.is_matrix || it->second.is_string) {
+                    throw std::runtime_error("invalid save file format");
+                }
+                it->second.has_symbolic_text = true;
+                it->second.symbolic_text = decode_state_field(parts[2]);
                 continue;
             }
 
@@ -6764,74 +7828,9 @@ std::string Calculator::load_state(const std::string& path) {
     }
 
     impl_->variables = loaded;
-    if (is_v2) {
+    if (state_version >= 2) {
         impl_->functions = loaded_functions;
         impl_->script_functions = loaded_script_functions;
     }
     return "Loaded variables from: " + path;
-}
-
-std::string Calculator::set_hex_prefix_mode(bool enabled) {
-    impl_->hex_prefix_mode = enabled;
-    return std::string("Hex prefix mode: ") + (enabled ? "ON" : "OFF");
-}
-
-bool Calculator::hex_prefix_mode() const {
-    return impl_->hex_prefix_mode;
-}
-
-std::string Calculator::set_hex_uppercase_mode(bool enabled) {
-    impl_->hex_uppercase_mode = enabled;
-    return std::string("Hex letter case: ") + (enabled ? "UPPER" : "LOWER");
-}
-
-bool Calculator::hex_uppercase_mode() const {
-    return impl_->hex_uppercase_mode;
-}
-
-std::string Calculator::set_symbolic_constants_mode(bool enabled) {
-    impl_->symbolic_constants_mode = enabled;
-    return std::string("Symbolic constants mode: ") + (enabled ? "ON" : "OFF");
-}
-
-bool Calculator::symbolic_constants_mode() const {
-    return impl_->symbolic_constants_mode;
-}
-
-std::vector<std::string> Calculator::variable_names() const {
-    std::vector<std::string> names;
-    names.reserve(impl_->variables.size());
-    for (const auto& [name, value] : impl_->variables) {
-        (void)value;
-        names.push_back(name);
-    }
-    return names;
-}
-
-std::vector<std::string> Calculator::custom_function_names() const {
-    std::vector<std::string> names;
-    names.reserve(impl_->functions.size() + impl_->script_functions.size());
-    for (const auto& [name, function] : impl_->functions) {
-        (void)function;
-        names.push_back(name);
-    }
-    for (const auto& [name, function] : impl_->script_functions) {
-        (void)function;
-        names.push_back(name);
-    }
-    return names;
-}
-
-double Calculator::normalize_result(double value) {
-    if (!std::isfinite(value)) {
-        return value;
-    }
-    if (mymath::abs(value) < std::numeric_limits<double>::denorm_min()) {
-        return 0.0;
-    }
-    if (mymath::abs(value) > kDisplayIntegerEps &&
-        is_integer_double(value, kDisplayIntegerEps)) {
-        return static_cast<double>(round_to_long_long(value));
-    }
-    return value;
 }

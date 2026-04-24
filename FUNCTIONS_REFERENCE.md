@@ -270,8 +270,40 @@ Notes:
 - `triple_integral_sph(expr, rho0, rho1, theta0, theta1, phi0, phi1, nrho, ntheta, nphi)`
 - `ode(rhs, x0, y0, x1)`
 - `ode(rhs, x0, y0, x1, steps)`
+- `ode(rhs, x0, y0, x1, steps, params_vec)`
+- `ode(rhs, x0, y0, x1, steps, event_expr)`
+- `ode(rhs, x0, y0, x1, steps, event_expr, params_vec)`
 - `ode_table(rhs, x0, y0, x1)`
 - `ode_table(rhs, x0, y0, x1, steps)`
+- `ode_table(rhs, x0, y0, x1, steps, params_vec)`
+- `ode_table(rhs, x0, y0, x1, steps, event_expr)`
+- `ode_table(rhs, x0, y0, x1, steps, event_expr, params_vec)`
+- `ode_system(rhs_vec, x0, y0_vec, x1)`
+- `ode_system(rhs_vec, x0, y0_vec, x1, steps)`
+- `ode_system(rhs_vec, x0, y0_vec, x1, steps, params_vec)`
+- `ode_system(rhs_vec, x0, y0_vec, x1, steps, event_expr)`
+- `ode_system(rhs_vec, x0, y0_vec, x1, steps, event_expr, params_vec)`
+- `ode_system_table(rhs_vec, x0, y0_vec, x1)`
+- `ode_system_table(rhs_vec, x0, y0_vec, x1, steps)`
+- `ode_system_table(rhs_vec, x0, y0_vec, x1, steps, params_vec)`
+- `ode_system_table(rhs_vec, x0, y0_vec, x1, steps, event_expr)`
+- `ode_system_table(rhs_vec, x0, y0_vec, x1, steps, event_expr, params_vec)`
+- `lp_max(c, A, b, lower, upper)`
+- `lp_max(c, A, b, Aeq, beq, lower, upper)`
+- `lp_min(c, A, b, lower, upper)`
+- `lp_min(c, A, b, Aeq, beq, lower, upper)`
+- `ilp_max(c, A, b, lower, upper)`
+- `ilp_max(c, A, b, Aeq, beq, lower, upper)`
+- `ilp_min(c, A, b, lower, upper)`
+- `ilp_min(c, A, b, Aeq, beq, lower, upper)`
+- `milp_max(c, A, b, lower, upper, integrality)`
+- `milp_max(c, A, b, Aeq, beq, lower, upper, integrality)`
+- `milp_min(c, A, b, lower, upper, integrality)`
+- `milp_min(c, A, b, Aeq, beq, lower, upper, integrality)`
+- `bip_max(c, A, b)`
+- `bip_max(c, A, b, Aeq, beq)`
+- `bip_min(c, A, b)`
+- `bip_min(c, A, b, Aeq, beq)`
 - `solve(expr, x0)`
 - `bisect(expr, a, b)`
 - `secant(expr, x0, x1)`
@@ -297,9 +329,20 @@ Notes:
 - `ode` solves the first-order initial value problem `y' = rhs(x, y)` with the classical RK4 method
 - `ode` returns the approximated value at `x1`
 - `ode_table` returns a two-column matrix whose rows are sampled `(x, y)` pairs
+- `ode_system` solves nonlinear ODE systems whose right-hand side evaluates to a vector
+- inside `ode_system`, the state is available as `y1`, `y2`, ... and also as the vector variable `y`
+- `ode_system_table` returns a matrix with columns `[x, y1, y2, ...]`
+- optional ODE parameters are exposed as `p`, and vector parameters also expose `p1`, `p2`, ...
+- optional ODE event expressions are scalar expressions; integration stops when the event crosses zero
 - the ODE step count must be a positive integer
 - integration subdivision counts must be positive integers; odd counts are rounded up internally for Simpson integration
 - `ode` defaults to `100` steps and `ode_table` defaults to `10` steps
+- `ode_system` defaults to `100` steps and `ode_system_table` defaults to `10` steps
+- `lp_max/lp_min` solve box-constrained linear programs with `A * x <= b`, optional `Aeq * x = beq`, and explicit lower/upper bounds
+- `ilp_max/ilp_min` solve bounded integer programs and require integer bounds
+- `milp_max/milp_min` use an `integrality` vector where nonzero entries mark integer variables
+- `bip_max/bip_min` are binary-program shortcuts with implicit bounds `0 <= x <= 1`
+- the current planning solvers are intended for small problems and favor reliability over scale
 - current symbolic integration rules cover common powers, `1/(ax+b)`, `sin/cos/tan`, `exp/ln`, `sqrt/cbrt`, `asin/acos/atan`, `abs`, and some polynomial-times-`exp/sin/cos` products
 
 ## Integer / Number Theory

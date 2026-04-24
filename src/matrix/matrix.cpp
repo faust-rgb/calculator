@@ -7,6 +7,7 @@
  */
 
 #include "matrix.h"
+#include "matrix_internal.h"
 
 #include "mymath.h"
 #include "polynomial.h"
@@ -22,11 +23,9 @@
 
 namespace matrix {
 
-namespace {
+namespace internal {
 
 /** @brief 矩阵运算的数值精度阈值 */
-constexpr double kMatrixEps = 1e-10;
-
 /**
  * @brief 去除字符串首尾空白字符
  * @param text 输入字符串
@@ -150,6 +149,25 @@ double vector_norm_squared(const std::vector<double>& values) {
         sum += value_ld * value_ld;
     }
     return static_cast<double>(sum);
+}
+
+double max_abs_entry(const Matrix& matrix) {
+    double max_value = 0.0;
+    for (double value : matrix.data) {
+        const double magnitude = mymath::abs(value);
+        if (magnitude > max_value) {
+            max_value = magnitude;
+        }
+    }
+    return max_value;
+}
+
+double matrix_tolerance(double scale) {
+    return std::max(kMatrixPivotAbsoluteEps, scale * kMatrixPivotRelativeEps);
+}
+
+double matrix_tolerance(const Matrix& matrix) {
+    return matrix_tolerance(max_abs_entry(matrix));
 }
 
 std::size_t vector_length(const Matrix& matrix, const std::string& func_name) {
@@ -302,6 +320,8 @@ std::vector<std::size_t> rref_in_place(Matrix* matrix) {
     std::vector<std::size_t> pivot_columns;
     std::size_t pivot_row = 0;
 
+    const double tolerance = matrix_tolerance(*matrix);
+
     for (std::size_t col = 0; col < matrix->cols && pivot_row < matrix->rows; ++col) {
         std::size_t best_row = pivot_row;
         double best_value = mymath::abs(matrix->at(best_row, col));
@@ -313,7 +333,7 @@ std::vector<std::size_t> rref_in_place(Matrix* matrix) {
             }
         }
 
-        if (mymath::is_near_zero(best_value, kMatrixEps)) {
+        if (best_value <= tolerance) {
             continue;
         }
 
@@ -329,7 +349,7 @@ std::vector<std::size_t> rref_in_place(Matrix* matrix) {
                 continue;
             }
             const long double factor = static_cast<long double>(matrix->at(row, col));
-            if (mymath::is_near_zero(factor, kMatrixEps)) {
+            if (mymath::abs(static_cast<double>(factor)) <= tolerance) {
                 continue;
             }
             for (std::size_t current_col = 0; current_col < matrix->cols; ++current_col) {
@@ -337,7 +357,7 @@ std::vector<std::size_t> rref_in_place(Matrix* matrix) {
                     static_cast<long double>(matrix->at(row, current_col)) -
                     factor *
                         static_cast<long double>(matrix->at(pivot_row, current_col)));
-                if (mymath::is_near_zero(matrix->at(row, current_col), kMatrixEps)) {
+                if (mymath::abs(matrix->at(row, current_col)) <= tolerance) {
                     matrix->at(row, current_col) = 0.0;
                 }
             }
@@ -381,7 +401,7 @@ std::vector<double> nullspace_vector(const Matrix& matrix) {
     }
 
     const double magnitude = mymath::sqrt(vector_norm_squared(vector));
-    if (mymath::is_near_zero(magnitude, kMatrixEps)) {
+    if (magnitude <= matrix_tolerance(magnitude)) {
         throw std::runtime_error("failed to normalize eigenvector");
     }
     for (double& value : vector) {
@@ -454,7 +474,7 @@ bool orthonormalize(std::vector<double>* values,
     }
 
     const double magnitude = mymath::sqrt(vector_norm_squared(*values));
-    if (mymath::is_near_zero(magnitude, kMatrixEps)) {
+    if (magnitude <= matrix_tolerance(magnitude)) {
         return false;
     }
     for (double& value : *values) {
@@ -889,12 +909,6 @@ std::vector<ComplexSample> convolve_sequences(const std::vector<ComplexSample>& 
     return result;
 }
 
-struct ReducedSvd {
-    Matrix u;
-    Matrix s;
-    Matrix vt;
-};
-
 struct SymmetricEigenDecomposition {
     std::vector<double> values;
     Matrix vectors;
@@ -1027,11 +1041,12 @@ ReducedSvd compute_reduced_svd(const Matrix& matrix) {
             lambda = eig.values[order[out_col]];
         }
         const double sigma =
-            mymath::sqrt(lambda < 0.0 && mymath::abs(lambda) < kMatrixEps ? 0.0 : lambda);
+            mymath::sqrt(lambda < 0.0 && mymath::abs(lambda) < matrix_tolerance(matrix) ? 0.0
+                                                                                        : lambda);
         s.at(out_col, out_col) = sigma;
 
         std::vector<double> u_col(m, 0.0);
-        if (!mymath::is_near_zero(sigma, kMatrixEps)) {
+        if (sigma > matrix_tolerance(matrix)) {
             for (std::size_t row = 0; row < m; ++row) {
                 for (std::size_t inner = 0; inner < n; ++inner) {
                     u_col[row] += matrix.at(row, inner) * v[inner];
@@ -1043,7 +1058,7 @@ ReducedSvd compute_reduced_svd(const Matrix& matrix) {
             }
         }
 
-        if (mymath::is_near_zero(vector_norm_squared(u_col), kMatrixEps)) {
+        if (vector_norm_squared(u_col) <= matrix_tolerance(matrix)) {
             for (std::size_t basis_idx = 0; basis_idx < m; ++basis_idx) {
                 u_col = standard_basis_vector(m, basis_idx);
                 if (orthonormalize(&u_col, u_basis)) {
@@ -2306,7 +2321,9 @@ private:
     const MatrixLookup* matrix_lookup_;
 };
 
-}  // namespace
+}  // namespace internal
+
+using namespace internal;
 
 Matrix::Matrix(std::size_t row_count, std::size_t col_count, double fill_value)
     : rows(row_count),
@@ -2599,8 +2616,6 @@ Matrix hadamard(const Matrix& lhs, const Matrix& rhs) {
     }
     return result;
 }
-
-#include "matrix_linear_algebra.inc"
 
 Matrix reshape(const Matrix& matrix, std::size_t rows, std::size_t cols) {
     if (rows * cols != matrix.rows * matrix.cols) {

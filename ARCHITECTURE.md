@@ -18,12 +18,24 @@ the main functions.
   Terminal interaction, history, autocomplete, and command dispatch
 - `/home/roselia/code/src/core/calculator.cpp`
   Expression parsing, exact mode, symbolic constants mode, variables, display-only features, persistence
+- `/home/roselia/code/src/core/calculator_lifecycle.cpp`
+  Calculator construction, mode toggles, completion lists, and lightweight runtime helpers
 - `/home/roselia/code/src/core/calculator.h`
   Public calculator API
-- `/home/roselia/code/src/symbolic/symbolic_expression.cpp`
-  Symbolic expression parsing, simplification, and rendering
+- `/home/roselia/code/src/symbolic/symbolic_expression_core.cpp`
+  Symbolic expression parsing, simplification, substitution, and rendering infrastructure
+- `/home/roselia/code/src/symbolic/symbolic_expression_calculus.cpp`
+  Symbolic differentiation and integration rules
+- `/home/roselia/code/src/symbolic/symbolic_expression_transforms.cpp`
+  Fourier/Laplace/z transform entry points
 - `/home/roselia/code/src/math/mymath.cpp`
-  Numerical algorithms and domain handling
+  Core numerical algorithms and domain handling
+- `/home/roselia/code/src/math/mymath_special_functions.cpp`
+  Trigonometric, inverse-trigonometric, gamma, and Bessel-related implementations
+- `/home/roselia/code/src/matrix/matrix.cpp`
+  Matrix storage, parsing, expression evaluation, and non-decomposition helpers
+- `/home/roselia/code/src/matrix/matrix_linear_algebra.cpp`
+  Inversion, decompositions, eigensolvers, RREF, and related linear-algebra routines
 - `/home/roselia/code/src/math/mymath.h`
   Math declarations and shared constants
 - `/home/roselia/code/test/tests.cpp`
@@ -49,6 +61,14 @@ the main functions.
   Script AST and parser
 - `test`
   Regression tests and runnable example scripts
+
+Large implementation areas are split with private internal headers rather than
+`*.inc` fragments. Current internal split headers include:
+
+- `src/core/calculator_internal_types.h`
+- `src/math/mymath_internal.h`
+- `src/matrix/matrix_internal.h`
+- `src/symbolic/symbolic_expression_internal.h`
 
 ## Execution Flow
 
@@ -123,7 +143,7 @@ The current implementation lives mainly in:
 
 - `src/core/calculator.cpp`
   mode flag, storage, and display dispatch
-- `src/symbolic/symbolic_expression.cpp`
+- `src/symbolic/symbolic_expression_core.cpp`
   symbolic parsing and simplification rules
 
 ## Display-only Features
@@ -182,5 +202,5 @@ For future work, the fastest way to rebuild context is:
 2. `/home/roselia/code/README.md`
 3. `/home/roselia/code/test/tests.cpp`
 4. `/home/roselia/code/src/core/calculator.cpp`
-5. `/home/roselia/code/src/symbolic/symbolic_expression.cpp`
+5. `/home/roselia/code/src/symbolic/symbolic_expression_core.cpp`
 6. `/home/roselia/code/src/math/mymath.cpp`

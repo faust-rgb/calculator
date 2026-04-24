@@ -1,3 +1,20 @@
+/**
+ * @file matrix_linear_algebra.cpp
+ * @brief 矩阵线性代数与分解实现
+ */
+
+#include "matrix_internal.h"
+
+#include "mymath.h"
+
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+
+namespace matrix {
+
+using namespace internal;
+
 Matrix inverse(const Matrix& matrix) {
     if (!matrix.is_square()) {
         throw std::runtime_error("inverse requires a square matrix");
@@ -14,6 +31,8 @@ Matrix inverse(const Matrix& matrix) {
         }
     }
 
+    const double tolerance = matrix_tolerance(matrix);
+
     for (std::size_t col = 0; col < n; ++col) {
         std::size_t best_row = col;
         double best_value = mymath::abs(augmented.at(best_row, col));
@@ -25,7 +44,7 @@ Matrix inverse(const Matrix& matrix) {
             }
         }
 
-        if (mymath::is_near_zero(best_value, kMatrixEps)) {
+        if (best_value <= tolerance) {
             throw std::runtime_error("matrix is singular and cannot be inverted");
         }
 
@@ -41,14 +60,14 @@ Matrix inverse(const Matrix& matrix) {
                 continue;
             }
             const long double factor = static_cast<long double>(augmented.at(row, col));
-            if (mymath::is_near_zero(factor, kMatrixEps)) {
+            if (mymath::abs(static_cast<double>(factor)) <= tolerance) {
                 continue;
             }
             for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
                 augmented.at(row, current_col) = static_cast<double>(
                     static_cast<long double>(augmented.at(row, current_col)) -
                     factor * static_cast<long double>(augmented.at(col, current_col)));
-                if (mymath::is_near_zero(augmented.at(row, current_col), kMatrixEps)) {
+                if (mymath::abs(augmented.at(row, current_col)) <= tolerance) {
                     augmented.at(row, current_col) = 0.0;
                 }
             }
@@ -66,12 +85,13 @@ Matrix inverse(const Matrix& matrix) {
 
 Matrix pseudo_inverse(const Matrix& matrix) {
     const ReducedSvd svd = compute_reduced_svd(matrix);
+    const double tolerance = matrix_tolerance(matrix);
     Matrix sigma_pinv(svd.s.cols, svd.s.rows, 0.0);
     const std::size_t diagonal =
         svd.s.rows < svd.s.cols ? svd.s.rows : svd.s.cols;
     for (std::size_t i = 0; i < diagonal; ++i) {
         const double sigma = svd.s.at(i, i);
-        if (!mymath::is_near_zero(sigma, kMatrixEps)) {
+        if (sigma > tolerance) {
             sigma_pinv.at(i, i) = 1.0 / sigma;
         }
     }
@@ -140,6 +160,7 @@ Matrix solve(const Matrix& coefficients, const Matrix& rhs) {
     if (rhs_size != n) {
         throw std::runtime_error("solve requires rhs to match the coefficient matrix dimension");
     }
+    const double tolerance = matrix_tolerance(coefficients);
 
     // 对增广矩阵 [A | b] 做 Gauss-Jordan 消元，右端最终就是解向量。
     Matrix augmented(n, n + 1, 0.0);
@@ -161,7 +182,7 @@ Matrix solve(const Matrix& coefficients, const Matrix& rhs) {
             }
         }
 
-        if (mymath::is_near_zero(best_value, kMatrixEps)) {
+        if (best_value <= tolerance) {
             throw std::runtime_error("linear system has no unique solution");
         }
 
@@ -177,14 +198,14 @@ Matrix solve(const Matrix& coefficients, const Matrix& rhs) {
                 continue;
             }
             const long double factor = static_cast<long double>(augmented.at(row, col));
-            if (mymath::is_near_zero(factor, kMatrixEps)) {
+            if (mymath::abs(static_cast<double>(factor)) <= tolerance) {
                 continue;
             }
             for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
                 augmented.at(row, current_col) = static_cast<double>(
                     static_cast<long double>(augmented.at(row, current_col)) -
                     factor * static_cast<long double>(augmented.at(col, current_col)));
-                if (mymath::is_near_zero(augmented.at(row, current_col), kMatrixEps)) {
+                if (mymath::abs(augmented.at(row, current_col)) <= tolerance) {
                     augmented.at(row, current_col) = 0.0;
                 }
             }
@@ -227,6 +248,7 @@ double condition_number(const Matrix& matrix) {
         return std::numeric_limits<double>::infinity();
     }
 
+    const double tolerance = matrix_tolerance(matrix);
     const Matrix singular_values = svd_s(matrix);
     double largest = 0.0;
     double smallest = std::numeric_limits<double>::infinity();
@@ -237,11 +259,11 @@ double condition_number(const Matrix& matrix) {
         if (sigma > largest) {
             largest = sigma;
         }
-        if (!mymath::is_near_zero(sigma, kMatrixEps) && sigma < smallest) {
+        if (sigma > tolerance && sigma < smallest) {
             smallest = sigma;
         }
     }
-    if (mymath::is_near_zero(largest, kMatrixEps) ||
+    if (largest <= tolerance ||
         smallest == std::numeric_limits<double>::infinity()) {
         return std::numeric_limits<double>::infinity();
     }
@@ -530,20 +552,68 @@ Matrix eigenvalues(const Matrix& matrix) {
     }
 
     Matrix current = matrix;
-    // 更高阶情况走未移位的 QR 迭代。
-    // 这不是最强健的工业实现，但足够覆盖当前项目里的中小型实矩阵场景。
-    for (int iteration = 0; iteration < 128; ++iteration) {
-        const auto qr = qr_decompose(current);
+    const double tolerance = matrix_tolerance(matrix);
+    // 更高阶情况走带 Wilkinson 位移的实 QR 迭代，并在收尾时识别 2x2 实块。
+    for (int iteration = 0; iteration < 256; ++iteration) {
+        const std::size_t n = current.rows;
+        const double a = current.at(n - 2, n - 2);
+        const double b = current.at(n - 2, n - 1);
+        const double c = current.at(n - 1, n - 2);
+        const double d = current.at(n - 1, n - 1);
+        const double trace = a + d;
+        const double determinant = a * d - b * c;
+        const double half_trace = trace * 0.5;
+        const double discriminant = half_trace * half_trace - determinant;
+        const double root = discriminant < 0.0 ? 0.0 : mymath::sqrt(discriminant);
+        const double candidate1 = half_trace + root;
+        const double candidate2 = half_trace - root;
+        const double mu =
+            mymath::abs(candidate1 - d) < mymath::abs(candidate2 - d) ? candidate1 : candidate2;
+
+        Matrix shifted = current;
+        for (std::size_t i = 0; i < n; ++i) {
+            shifted.at(i, i) -= mu;
+        }
+
+        const auto qr = qr_decompose(shifted);
         current = multiply(qr.second, qr.first);
-        if (off_diagonal_magnitude(current) < 1e-8) {
+        for (std::size_t i = 0; i < n; ++i) {
+            current.at(i, i) += mu;
+        }
+        for (std::size_t row = 1; row < n; ++row) {
+            if (mymath::abs(current.at(row, row - 1)) <= tolerance) {
+                current.at(row, row - 1) = 0.0;
+            }
+        }
+        if (off_diagonal_magnitude(current) <= tolerance * static_cast<double>(n * n)) {
             break;
         }
     }
 
     std::vector<double> values;
     values.reserve(current.rows);
-    for (std::size_t i = 0; i < current.rows; ++i) {
+    for (std::size_t i = 0; i < current.rows;) {
+        if (i + 1 < current.rows && mymath::abs(current.at(i + 1, i)) > tolerance) {
+            const double block_a = current.at(i, i);
+            const double block_b = current.at(i, i + 1);
+            const double block_c = current.at(i + 1, i);
+            const double block_d = current.at(i + 1, i + 1);
+            const double block_trace = block_a + block_d;
+            const double block_determinant = block_a * block_d - block_b * block_c;
+            const double block_discriminant =
+                block_trace * block_trace - 4.0 * block_determinant;
+            if (block_discriminant < -tolerance) {
+                throw std::runtime_error("eigvals only supports matrices with real eigenvalues");
+            }
+            const double block_root =
+                mymath::sqrt(block_discriminant < 0.0 ? 0.0 : block_discriminant);
+            values.push_back((block_trace + block_root) * 0.5);
+            values.push_back((block_trace - block_root) * 0.5);
+            i += 2;
+            continue;
+        }
         values.push_back(current.at(i, i));
+        ++i;
     }
     return Matrix::vector(values);
 }
@@ -570,3 +640,5 @@ Matrix eigenvectors(const Matrix& matrix) {
     }
     return vectors;
 }
+
+}  // namespace matrix
