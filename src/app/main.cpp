@@ -19,6 +19,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <termios.h>
 #include <unistd.h>
 #include <utility>
@@ -375,45 +376,35 @@ std::string read_all(std::istream& in) {
     return out.str();
 }
 
-bool looks_like_script(const std::string& input) {
-    return input.find('{') != std::string::npos ||
-           input.find("fn ") != std::string::npos ||
-           input.find("if ") != std::string::npos ||
-           input.find("while ") != std::string::npos ||
-           input.find("for ") != std::string::npos;
+bool has_calc_extension(const std::string& path) {
+    constexpr std::string_view extension = ".calc";
+    return path.size() >= extension.size() &&
+           path.compare(path.size() - extension.size(), extension.size(), extension) == 0;
 }
 
-bool line_requires_script_mode(const std::string& line) {
-    const std::string trimmed = trim_copy(line);
-    if (trimmed.empty()) {
-        return false;
-    }
-    return trimmed.back() == ';' ||
-           trimmed.find('{') != std::string::npos ||
-           trimmed.find('}') != std::string::npos ||
-           trimmed.rfind("fn ", 0) == 0 ||
-           trimmed.rfind("if ", 0) == 0 ||
-           trimmed.rfind("while ", 0) == 0 ||
-           trimmed.rfind("for ", 0) == 0 ||
-           trimmed == "break" ||
-           trimmed == "continue" ||
-           trimmed.rfind("return", 0) == 0 ||
-           trimmed.rfind("print(", 0) == 0;
-}
-
-bool should_execute_as_script(const std::string& input) {
-    if (looks_like_script(input)) {
-        return true;
+int run_script_file(Calculator& calculator, const std::string& script_path, bool exact_mode) {
+    if (!has_calc_extension(script_path)) {
+        std::cerr << "Error: script file must use .calc extension\n";
+        return 1;
     }
 
-    std::istringstream stream(input);
-    std::string line;
-    while (std::getline(stream, line)) {
-        if (line_requires_script_mode(line)) {
-            return true;
+    std::ifstream in(script_path);
+    if (!in) {
+        std::cerr << "Error: unable to open script file: " << script_path << '\n';
+        return 1;
+    }
+
+    try {
+        const std::string output = calculator.execute_script(read_all(in), exact_mode);
+        if (!output.empty()) {
+            std::cout << output << '\n';
         }
+    } catch (const std::exception& ex) {
+        std::cerr << "Error: " << ex.what() << '\n';
+        return 1;
     }
-    return false;
+
+    return 0;
 }
 
 std::string execute_repl_line(Calculator& calculator,
@@ -497,9 +488,13 @@ std::string execute_repl_line(Calculator& calculator,
         return calculator.load_state(line.substr(6));
     }
     if (line.rfind(":run ", 0) == 0) {
-        std::ifstream in(line.substr(5));
+        const std::string script_path = trim_copy(line.substr(5));
+        if (!has_calc_extension(script_path)) {
+            throw std::runtime_error(":run only accepts .calc script files");
+        }
+        std::ifstream in(script_path);
         if (!in) {
-            throw std::runtime_error("unable to open script file: " + line.substr(5));
+            throw std::runtime_error("unable to open script file: " + script_path);
         }
         return calculator.execute_script(read_all(in), *exact_mode);
     }
@@ -534,11 +529,6 @@ std::string execute_repl_line(Calculator& calculator,
 }
 
 int run_non_interactive_input(Calculator& calculator, const std::string& input) {
-    if (should_execute_as_script(input)) {
-        std::cout << calculator.execute_script(input, false) << '\n';
-        return 0;
-    }
-
     std::istringstream stream(input);
     std::string line;
     std::vector<std::string> history;
@@ -574,11 +564,20 @@ int run_non_interactive_input(Calculator& calculator, const std::string& input) 
 
 }  // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
     // Calculator 封装了解析和求值逻辑，main 只负责与用户交互。
     Calculator calculator;
     std::vector<std::string> history;
     bool exact_mode = false;
+
+    if (argc > 2) {
+        std::cerr << "Usage: " << argv[0] << " [script.calc]\n";
+        return 1;
+    }
+
+    if (argc == 2) {
+        return run_script_file(calculator, argv[1], exact_mode);
+    }
 
     if (!isatty(STDIN_FILENO)) {
         const std::string input = read_all(std::cin);
@@ -600,7 +599,7 @@ int main() {
     std::cout << "Use ':symbolic on' or ':symbolic off' to preserve pi/e in scalar results.\n";
     std::cout << "Use ':vars', ':clear name', or ':clear' to manage variables.\n";
     std::cout << "Use 'f(x) = ...', 'poly_*', 'diff(...)', 'taylor(...)', 'limit(...)', 'integral(...)', and 'extrema(...)' for custom functions.\n";
-    std::cout << "Use ':save file', ':load file', or ':run file' for files and scripts.\n";
+    std::cout << "Use ':save file', ':load file', or ':run file.calc' for files and scripts.\n";
 
     while (true) {
         // 自定义输入函数支持按上方向键回填历史命令。

@@ -10,6 +10,7 @@
 
 #include <cctype>
 #include <stdexcept>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -38,6 +39,265 @@ std::string trim_copy(const std::string& text) {
     return text.substr(start, end - start);
 }
 
+std::vector<std::string> split_top_level_text(const std::string& text, char delimiter) {
+    std::vector<std::string> parts;
+    int paren_depth = 0;
+    int bracket_depth = 0;
+    bool in_string = false;
+    bool escaping = false;
+    std::size_t start = 0;
+
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        const char ch = text[i];
+        if (in_string) {
+            if (escaping) {
+                escaping = false;
+            } else if (ch == '\\') {
+                escaping = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+        } else if (ch == '(') {
+            ++paren_depth;
+        } else if (ch == ')') {
+            --paren_depth;
+        } else if (ch == '[') {
+            ++bracket_depth;
+        } else if (ch == ']') {
+            --bracket_depth;
+        } else if (ch == delimiter && paren_depth == 0 && bracket_depth == 0) {
+            parts.push_back(text.substr(start, i - start));
+            start = i + 1;
+        }
+    }
+
+    if (!text.empty() || delimiter == ',') {
+        parts.push_back(text.substr(start));
+    }
+    if (text.empty() && delimiter == ',') {
+        parts.clear();
+    }
+    return parts;
+}
+
+std::string strip_hash_comment(const std::string& line) {
+    bool in_string = false;
+    bool escaping = false;
+    for (std::size_t i = 0; i < line.size(); ++i) {
+        const char ch = line[i];
+        if (in_string) {
+            if (escaping) {
+                escaping = false;
+            } else if (ch == '\\') {
+                escaping = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+        } else if (ch == '#') {
+            return line.substr(0, i);
+        }
+    }
+    return line;
+}
+
+int indentation_width(const std::string& line) {
+    int width = 0;
+    for (const char ch : line) {
+        if (ch == ' ') {
+            ++width;
+        } else if (ch == '\t') {
+            width += 4;
+        } else {
+            break;
+        }
+    }
+    return width;
+}
+
+bool starts_with_keyword(const std::string& text, const std::string& keyword) {
+    if (text.compare(0, keyword.size(), keyword) != 0) {
+        return false;
+    }
+    if (text.size() == keyword.size()) {
+        return true;
+    }
+    const char next = text[keyword.size()];
+    return !std::isalnum(static_cast<unsigned char>(next)) && next != '_';
+}
+
+bool has_legacy_block_markers(const std::string& source) {
+    bool in_string = false;
+    bool escaping = false;
+    for (const char ch : source) {
+        if (in_string) {
+            if (escaping) {
+                escaping = false;
+            } else if (ch == '\\') {
+                escaping = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+        } else if (ch == '{' || ch == '}') {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string parenthesize_condition(const std::string& condition) {
+    return "(" + trim_copy(condition) + ")";
+}
+
+std::string translate_range_for(const std::string& header) {
+    const std::size_t in_pos = header.find(" in ");
+    if (in_pos == std::string::npos) {
+        throw std::runtime_error("for expects 'name in range(...)' or a legacy for header");
+    }
+
+    const std::string variable = trim_copy(header.substr(0, in_pos));
+    const std::string range_call = trim_copy(header.substr(in_pos + 4));
+    if (variable.empty() || range_call.rfind("range(", 0) != 0 || range_call.back() != ')') {
+        throw std::runtime_error("for expects 'name in range(...)'");
+    }
+
+    std::vector<std::string> parts =
+        split_top_level_text(range_call.substr(6, range_call.size() - 7), ',');
+    for (std::string& part : parts) {
+        part = trim_copy(part);
+    }
+    if (parts.empty() || parts.size() > 3) {
+        throw std::runtime_error("range expects stop, start/stop, or start/stop/step");
+    }
+
+    std::string start = "0";
+    std::string stop = parts[0];
+    std::string step = "1";
+    if (parts.size() >= 2) {
+        start = parts[0];
+        stop = parts[1];
+    }
+    if (parts.size() == 3) {
+        step = parts[2];
+    }
+    if (stop.empty() || start.empty() || step.empty()) {
+        throw std::runtime_error("range arguments cannot be empty");
+    }
+
+    const std::string comparison = step.front() == '-' ? " > " : " < ";
+    return variable + " = " + start + "; " + variable + comparison + stop + "; " +
+           variable + " = " + variable + " + " + step;
+}
+
+std::string normalize_python_like_script(const std::string& source) {
+    if (has_legacy_block_markers(source)) {
+        return source;
+    }
+
+    std::istringstream input(source);
+    std::ostringstream output;
+    std::vector<int> indent_stack = {0};
+    bool pending_block = false;
+    std::string line;
+
+    while (std::getline(input, line)) {
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+
+        const std::string without_comment = strip_hash_comment(line);
+        const std::string stripped = trim_copy(without_comment);
+        if (stripped.empty()) {
+            continue;
+        }
+
+        const int indent = indentation_width(without_comment);
+        if (indent > indent_stack.back()) {
+            if (!pending_block) {
+                throw std::runtime_error("unexpected indentation");
+            }
+            indent_stack.push_back(indent);
+            pending_block = false;
+        } else {
+            if (pending_block) {
+                throw std::runtime_error("expected an indented block");
+            }
+            while (indent < indent_stack.back()) {
+                output << "}\n";
+                indent_stack.pop_back();
+            }
+            if (indent != indent_stack.back()) {
+                throw std::runtime_error("inconsistent indentation");
+            }
+        }
+
+        if (stripped == "pass") {
+            continue;
+        }
+
+        if (!stripped.empty() && stripped.back() == ':') {
+            const std::string header = trim_copy(stripped.substr(0, stripped.size() - 1));
+            if (starts_with_keyword(header, "def")) {
+                output << "fn " << trim_copy(header.substr(3)) << " {\n";
+            } else if (starts_with_keyword(header, "fn")) {
+                output << "fn " << trim_copy(header.substr(2)) << " {\n";
+            } else if (starts_with_keyword(header, "if")) {
+                output << "if " << parenthesize_condition(header.substr(2)) << " {\n";
+            } else if (starts_with_keyword(header, "elif")) {
+                output << "else if " << parenthesize_condition(header.substr(4)) << " {\n";
+            } else if (header == "else") {
+                output << "else {\n";
+            } else if (starts_with_keyword(header, "while")) {
+                output << "while " << parenthesize_condition(header.substr(5)) << " {\n";
+            } else if (starts_with_keyword(header, "for")) {
+                const std::string for_header = trim_copy(header.substr(3));
+                if (!for_header.empty() && for_header.front() == '(' && for_header.back() == ')') {
+                    output << "for " << for_header << " {\n";
+                } else {
+                    output << "for (" << translate_range_for(for_header) << ") {\n";
+                }
+            } else {
+                throw std::runtime_error("unknown block header: " + header);
+            }
+            pending_block = true;
+            continue;
+        }
+
+        if (starts_with_keyword(stripped, "return")) {
+            output << "return " << trim_copy(stripped.substr(6)) << ";\n";
+        } else if (stripped == "break" || stripped == "continue") {
+            output << stripped << ";\n";
+        } else {
+            output << stripped;
+            if (stripped.back() != ';') {
+                output << ';';
+            }
+            output << '\n';
+        }
+    }
+
+    if (pending_block) {
+        throw std::runtime_error("expected an indented block");
+    }
+    while (indent_stack.size() > 1) {
+        output << "}\n";
+        indent_stack.pop_back();
+    }
+
+    return output.str();
+}
+
 /**
  * @class Parser
  * @brief 递归下降解析器
@@ -47,7 +307,8 @@ std::string trim_copy(const std::string& text) {
  */
 class Parser {
 public:
-    explicit Parser(std::string source) : source_(std::move(source)) {}
+    explicit Parser(std::string source)
+        : source_(normalize_python_like_script(std::move(source))) {}
 
     Program parse() {
         Program program;
@@ -274,48 +535,7 @@ private:
     }
 
     std::vector<std::string> split_top_level(const std::string& text, char delimiter) const {
-        std::vector<std::string> parts;
-        int paren_depth = 0;
-        int bracket_depth = 0;
-        bool in_string = false;
-        bool escaping = false;
-        std::size_t start = 0;
-
-        for (std::size_t i = 0; i < text.size(); ++i) {
-            const char ch = text[i];
-            if (in_string) {
-                if (escaping) {
-                    escaping = false;
-                } else if (ch == '\\') {
-                    escaping = true;
-                } else if (ch == '"') {
-                    in_string = false;
-                }
-                continue;
-            }
-            if (ch == '"') {
-                in_string = true;
-            } else if (ch == '(') {
-                ++paren_depth;
-            } else if (ch == ')') {
-                --paren_depth;
-            } else if (ch == '[') {
-                ++bracket_depth;
-            } else if (ch == ']') {
-                --bracket_depth;
-            } else if (ch == delimiter && paren_depth == 0 && bracket_depth == 0) {
-                parts.push_back(text.substr(start, i - start));
-                start = i + 1;
-            }
-        }
-
-        if (!text.empty() || delimiter == ',') {
-            parts.push_back(text.substr(start));
-        }
-        if (text.empty() && delimiter == ',') {
-            parts.clear();
-        }
-        return parts;
+        return split_top_level_text(text, delimiter);
     }
 
     void skip_ignorable() {

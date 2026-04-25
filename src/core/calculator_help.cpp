@@ -27,7 +27,7 @@ std::string build_help_topic(const std::string& topic) {
         "  :history            Show session input history\n"
         "  :save file          Save variables to a file\n"
         "  :load file          Load variables from a file\n"
-        "  :run file           Execute a script file\n"
+        "  :run file.calc      Execute a .calc script file\n"
         "  exit, quit          Exit the calculator";
     }
 
@@ -94,7 +94,7 @@ std::string build_help_topic(const std::string& topic) {
         "  :hexcase lower      Show hex results like 0xff\n"
         "  pi / 2 + e          Symbolic constants mode example\n"
         "  :run demo.calc      Run a script file\n"
-        "  fn fact(n) { ... }  Define a script function in a script\n"
+        "  def fact(n):        Define a script function in a script\n"
         "  print(a, b, c)      Print script values, including strings\n"
         "  poly_add(p, q)      Polynomial addition\n"
         "  poly_sub(p, q)      Polynomial subtraction\n"
@@ -252,7 +252,7 @@ std::string build_help_topic(const std::string& topic) {
         "  Legacy aggr:   sum avg median\n"
         "  Multi-var:     double_integral double_integral_cyl double_integral_polar triple_integral triple_integral_cyl triple_integral_sph\n"
         "  Bitwise:       and or xor not shl shr rol ror popcount bitlen ctz clz parity reverse_bits\n"
-        "  Script:        fn if else while for return break continue print strings\n"
+        "  Script:        def if elif else while for range return break continue print strings\n"
         "  Custom:        f(x)=...  poly_add poly_sub poly_mul poly_div roots poly_eval poly_deriv poly_integ poly_fit poly_compose poly_gcd\n"
         "  Symbolic:      simplify diff integral gradient jacobian hessian critical taylor pade puiseux series_sum summation\n"
         "  Analysis:      limit extrema ode ode_table ode_system ode_system_table "

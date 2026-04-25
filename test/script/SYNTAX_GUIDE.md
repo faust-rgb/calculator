@@ -1,364 +1,163 @@
 # Calculator Script Syntax Guide
 
-This document describes the syntax for writing calculator scripts (`.calc` files).
-
-## Basic Structure
-
-- Scripts are plain text files with `.calc` extension
-- Each statement ends with a semicolon `;`
-- Whitespace is generally ignored (except within string literals)
-- Comments start with `#` and continue to end of line
-
-## Comments
-
-```calc
-# This is a single-line comment
-x = 10;  # Comments can appear after statements
-```
-
-**Note**: Use `#` for comments, not `//`
-
-## Variables
-
-### Naming Rules
-- Must start with a letter or underscore
-- Can contain letters, digits, and underscores
-- Case-sensitive
-
-### Reserved Names (Cannot be used as variables)
-- `e` - Euler's number (2.71828...)
-- `pi` - Pi (3.14159...)
-- Mathematical function names: `sin`, `cos`, `exp`, `ln`, etc.
-
-### Assignment
-```calc
-x = 10;
-y = 3.14;
-result = x + y;
-```
-
-## Data Types
-
-### Numbers
-- Integers: `42`, `-10`
-- Floating point: `3.14`, `-0.5`
-- Scientific notation: `1.5e3` (1500), `2.5e-2` (0.025)
-
-### Matrices
-```calc
-# Row-major format: [row1; row2; ...]
-m = [1, 2, 3; 4, 5, 6];  # 2x3 matrix
-v = vec(1, 2, 3);         # Column vector
-z = zeros(2, 3);          # 2x3 zero matrix
-i = eye(3);               # 3x3 identity matrix
-```
-
-## Operators
-
-### Arithmetic
-| Operator | Description | Example |
-|----------|-------------|---------|
-| `+` | Addition | `x + y` |
-| `-` | Subtraction | `x - y` |
-| `*` | Multiplication | `x * y` |
-| `/` | Division | `x / y` |
-| `^` | XOR (bitwise) | `x ^ y` |
-| `%` | Not supported | Use `mod(a, b)` |
-
-**Important**: For power/exponentiation, use `pow(base, exponent)` not `^`
-```calc
-# Correct
-result = pow(2, 10);  # 1024
-
-# Wrong - this is XOR!
-result = 2 ^ 10;      # 8 (binary XOR)
-```
-
-### Comparison (for conditions)
-| Operator | Description |
-|----------|-------------|
-| `==` | Equal to |
-| `!=` | Not equal to |
-| `<` | Less than |
-| `>` | Greater than |
-| `<=` | Less than or equal |
-| `>=` | Greater than or equal |
-
-## Control Flow
-
-### If-Else Statement
-```calc
-if (condition) {
-    # then branch
-} else {
-    # else branch
-}
-```
-
-**Important**: Do NOT put a semicolon after the closing brace!
-```calc
-# Correct
-if (x > 0) {
-    result = 1;
-} else {
-    result = 0;
-}
-
-# Wrong - semicolon after if-else
-if (x > 0) {
-    result = 1;
-} else {
-    result = 0;
-};  # ERROR!
-```
-
-### While Loop
-```calc
-while (condition) {
-    # loop body
-}
-```
-
-Example:
-```calc
-sum = 0;
-i = 1;
-while (i <= 10) {
-    sum = sum + i;
-    i = i + 1;
-}
-```
-
-### For Loop
-```calc
-for (initializer; condition; step) {
-    # loop body
-}
-```
-
-Example:
-```calc
-sum = 0;
-for (i = 1; i <= 10; i = i + 1) {
-    sum = sum + i;
-}
-```
-
-### Break and Continue
-```calc
-while (condition) {
-    if (some_condition) {
-        break;      # Exit loop
-    }
-    if (other_condition) {
-        continue;   # Skip to next iteration
-    }
-}
-```
-
-## Functions
-
-### Defining Functions
-```calc
-fn function_name(param1, param2) {
-    # function body
-    return expression;
-}
-```
-
-Example:
-```calc
-fn square(x) {
-    return x * x;
-}
-
-fn hypotenuse(a, b) {
-    return sqrt(a*a + b*b);
-}
-
-fn factorial(n) {
-    if (n <= 1) {
-        return 1;
-    }
-    return n * factorial(n - 1);
-}
-```
-
-**Note**: Function definitions do not need a trailing semicolon.
-
-### Calling Functions
-```calc
-result = square(5);
-h = hypotenuse(3, 4);
-f = factorial(10);
-```
-
-## Mathematical Functions
-
-### Trigonometric
-- `sin(x)`, `cos(x)`, `tan(x)` - Arguments in radians
-- `asin(x)`, `acos(x)`, `atan(x)` - Inverse trig functions
-
-### Exponential and Logarithmic
-- `exp(x)` - e^x
-- `ln(x)` - Natural logarithm
-- `log10(x)` - Base-10 logarithm
-- `sqrt(x)` - Square root
-- `cbrt(x)` - Cube root
-- `root(x, n)` - n-th root
-- `pow(x, y)` - x^y
-
-### Other
-- `abs(x)` - Absolute value
-- `floor(x)` - Floor function
-- `ceil(x)` - Ceiling function
-- `sign(x)` - Sign function (-1, 0, or 1)
-- `gcd(a, b)` - Greatest common divisor
-- `lcm(a, b)` - Least common multiple
-- `mod(a, b)` - Modulo operation
-- `min(a, b)`, `max(a, b)` - Minimum/maximum
-
-## Matrix Operations
-
-### Creation
-```calc
-m = [1, 2; 3, 4];           # Literal
-v = vec(1, 2, 3);           # Column vector
-z = zeros(2, 3);            # Zero matrix
-e = eye(3);                 # Identity matrix
-```
-
-### Operations
-```calc
-# Arithmetic
-m1 + m2;        # Addition
-m1 - m2;        # Subtraction
-m1 * m2;        # Matrix multiplication
-m * 2;          # Scalar multiplication
-
-# Properties
-det(m);         # Determinant
-trace(m);       # Trace
-rank(m);        # Rank
-norm(m);        # Frobenius norm
-
-# Transformations
-transpose(m);   # Transpose
-inverse(m);     # Inverse
-rref(m);        # Row-reduced echelon form
-
-# Decompositions
-qr_q(m);        # QR decomposition: Q matrix
-qr_r(m);        # QR decomposition: R matrix
-lu_l(m);        # LU decomposition: L matrix
-lu_u(m);        # LU decomposition: U matrix
-svd_u(m);       # SVD: U matrix
-svd_s(m);       # SVD: S (singular values) matrix
-svd_vt(m);      # SVD: V^T matrix
-
-# Solving
-solve(A, b);            # Solve Ax = b
-least_squares(A, b);    # Least squares solution
-```
-
-## Variable Scope
-
-Variables defined inside blocks (`{ }`) are not visible outside:
-
-```calc
-# Correct - declare outside, assign inside
-result = 0;
-if (x > 5) {
-    result = 1;
-}
-result;
-
-# Wrong - result is not visible outside
-if (x > 5) {
-    result = 1;  # result only exists here
-}
-result;  # ERROR: unknown variable
-```
-
-## Common Mistakes
-
-### 1. Using `//` for comments
-```calc
-// Wrong - use # instead
-# Correct
-```
-
-### 2. Using `^` for power
-```calc
-# Wrong - this is XOR
-result = 2 ^ 10;  # = 8
-
-# Correct
-result = pow(2, 10);  # = 1024
-```
-
-### 3. Using `e` or `pi` as variables
-```calc
-# Wrong - e is a constant
-e = 10;  # ERROR
-
-# Correct
-my_e = 10;
-```
-
-### 4. Semicolon after if-else
-```calc
-# Wrong
-if (x > 0) { ... } else { ... };  # ERROR
-
-# Correct
-if (x > 0) { ... } else { ... }
-```
-
-### 5. Missing semicolons inside blocks
-```calc
-# Wrong
-if (x > 0) {
-    result = 1  # Missing semicolon!
-}
-
-# Correct
-if (x > 0) {
-    result = 1;
-}
-```
-
-## Complete Example
-
-```calc
-# Calculate factorial using a loop
-fn factorial(n) {
-    result = 1;
-    i = 1;
-    while (i <= n) {
-        result = result * i;
-        i = i + 1;
-    }
-    return result;
-}
-
-# Calculate combination C(n, k)
-fn combination(n, k) {
-    return factorial(n) / (factorial(k) * factorial(n - k));
-}
-
-# Test
-combination(10, 5);  # Returns 252
-```
+This is the single source of truth for `.calc` script syntax. Scripts now use a
+Python-like layout: `#` comments, colon-started blocks, indentation for scope,
+and no statement-ending semicolons.
 
 ## Running Scripts
 
-From the calculator prompt:
-```
-:run filename.calc
+From the project root:
+
+```bash
+./calculator test/script/comprehensive_validation.calc
 ```
 
-From command line:
-```bash
-./calculator <<< ":run filename.calc"
+From the interactive prompt:
+
+```text
+> :run test/script/comprehensive_validation.calc
+```
+
+Script files should use the `.calc` extension.
+
+## File Structure
+
+- Use `#` for line comments.
+- Write one statement per line.
+- Do not end statements with `;`.
+- Start `if`, `elif`, `else`, `while`, `for`, and `def` blocks with `:`.
+- Use consistent indentation to define block bodies. Spaces are recommended.
+- Matrix literals still use `;` inside brackets to separate rows, for example
+  `[1, 2; 3, 4]`.
+
+```calc
+# comment
+x = 10
+print("x = ", x)
+```
+
+## Values And Variables
+
+Scripts can use numbers, strings, scalar variables, expression-style custom
+functions, and matrices.
+
+```calc
+count = 3
+label = "ready"
+m = [1, 2; 3, 4]
+n = mat(2, 2, 5, 6, 7, 8)
+```
+
+Variables are case-sensitive. Constants such as `pi` and `e`, built-in function
+names, and active function names should not be reused as ordinary variables.
+
+When a variable must be read after a block, initialize it before the block and
+assign to it inside the block.
+
+## Expressions
+
+Calculator expressions use the same operators and built-ins as the REPL.
+
+```calc
+total = 1 + 2 * 3
+power = 2 ^ 10
+distance = sqrt(3 ^ 2 + 4 ^ 2)
+ok = abs(sin(pi / 2) - 1) < 0.000001
+```
+
+Use nested `if` statements instead of `&&` or `||` in script conditions.
+
+## Control Flow
+
+```calc
+if score >= 90:
+    grade = "A"
+elif score >= 80:
+    grade = "B"
+else:
+    grade = "other"
+
+i = 1
+sum = 0
+while i <= 10:
+    sum = sum + i
+    i = i + 1
+
+odd_sum = 0
+for j in range(0, 10):
+    if j == 7:
+        break
+    if mod(j, 2) == 0:
+        continue
+    odd_sum = odd_sum + j
+```
+
+`range(stop)`, `range(start, stop)`, and `range(start, stop, step)` are
+supported. The loop stops before `stop`, matching Python's convention.
+
+## Script Functions
+
+Use `def` for script functions. `return` is required when the function is meant
+to produce a value.
+
+```calc
+def fact_script(n):
+    if n <= 1:
+        return 1
+    return n * fact_script(n - 1)
+
+fact_script(6)
+```
+
+Avoid defining script functions with names already used by built-ins.
+
+## Expression-Style Functions
+
+Expression-style functions can be defined in scripts and then used by analysis,
+polynomial, and calculus commands.
+
+```calc
+quad_fn(x) = x ^ 2 + 2 * x + 1
+diff(quad_fn)
+integral(quad_fn, 0, 1)
+taylor(quad_fn, 0, 3)
+```
+
+## Output
+
+`print(...)` accepts script values, strings, and formatted matrices. Symbolic
+commands such as `diff(x ^ 2)` or `laplace(step(t), t, s)` should usually be
+written as standalone statements instead of being nested inside `print(...)`.
+
+```calc
+print("det = ", det([1, 2; 3, 4]))
+laplace(step(t), t, s)
+```
+
+## Compatibility Note
+
+The parser still accepts the older brace-and-semicolon form internally so saved
+state files containing script functions remain loadable. New scripts and
+examples should use the Python-like form described above.
+
+## Feature Coverage Example
+
+Use `test/script/comprehensive_validation.calc` as the broad regression script.
+It covers:
+
+- comments, assignments, strings, arithmetic, and comparisons
+- `if/elif/else`, nested conditionals, `while`, `for range`, `break`, and
+  `continue`
+- recursive `def` functions and expression-style functions
+- numeric math helpers and constants
+- matrices, determinants, trace, rank, inverse, solve, transpose, and rref
+- polynomial vector helpers
+- derivative, integral, limit, Taylor, root solving, simplification, critical
+  points, Pade, Laplace, Fourier, and Z transforms
+- programmer-style bit helpers
+
+The expected final output is:
+
+```text
+11
 ```

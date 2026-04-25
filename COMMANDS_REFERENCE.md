@@ -74,8 +74,8 @@
   Save variables to a file
 - `:load file`
   Load variables from a file
-- `:run file`
-  Execute a script file
+- `:run file.calc`
+  Execute a `.calc` script file
 
 Notes:
 
@@ -84,24 +84,8 @@ Notes:
 
 ## Scripting
 
-- `fn name(args) { ... }`
-  Define a script function
-- `if (cond) { ... } else { ... }`
-  Conditional execution
-- `while (cond) { ... }`
-  Loop while condition is true
-- `for (init; cond; step) { ... }`
-  C-style loop
-- `return expr;`
-  Return from a script function
-- `break;`
-  Exit the current loop
-- `continue;`
-  Skip to the next loop iteration
-- string literals such as `"hello"`
-  Script string value
-- `print(a, b, c);`
-  Emit one or more formatted values inside a script
+Use `./calculator file.calc` or `:run file.calc` to execute scripts. The
+dedicated syntax guide is `test/script/SYNTAX_GUIDE.md`.
 
 ## Autocomplete
 

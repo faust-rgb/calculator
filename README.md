@@ -102,8 +102,8 @@ Shared internal declarations for these splits live in private headers such as
 - Session history command: `:history`
 - Interactive help topics for exact mode, variables, persistence, and programmer tools
 - State persistence commands: `:save file`, `:load file`
-- Script execution with `:run file` or redirected stdin
-- Script language support for `fn`, `if/else`, `while`, `for`, `return`, `break`, `continue`, strings, and `print(...)`
+- Script execution with `./calculator file.calc` or `:run file.calc`
+- Dedicated script syntax guide at `test/script/SYNTAX_GUIDE.md`
 - Separate one-variable custom function analysis module with evaluation,
   derivative, definite integral, indefinite integral value, interval
   extrema solving, polynomial arithmetic, Taylor expansion, polynomial roots,
@@ -132,7 +132,7 @@ Current validation status:
 
 - `make test`
 - expected result: `Passed: 743`, `Failed: 0`
-- merged script check: `./calculator < test/script/test_merged_minimal.calc`
+- comprehensive script check: `./calculator test/script/comprehensive_validation.calc`
 
 ## Run
 
@@ -507,61 +507,26 @@ coordinates.
 
 ## Scripting
 
-The calculator can also execute small scripts. Use `:run file.calc` in the REPL
-or redirect a file into stdin with `./calculator < file.calc`.
+The calculator can also execute small scripts. Pass a `.calc` file directly as
+the first argument, or use `:run file.calc` in the REPL.
 
 Runnable script-related inputs are provided in `test/script/`:
 
-- `test/script/test_merged_minimal.calc`
-  Consolidated non-interactive workflow covering variables, control flow,
-  functions, selected math helpers, matrices, symbolic calculus, and transforms
+- `test/script/comprehensive_validation.calc`
+  Broad script and calculator feature validation; expected final output is `11`
 - `test/script/SYNTAX_GUIDE.md`
-  Detailed scripting syntax notes
+  The dedicated scripting syntax guide
 - `test/script/TEST_REPORT_MERGED.md`
-  Current validation notes for the merged script
+  Historical validation notes for the older merged script
 
 Example commands:
 
 ```bash
-./calculator < test/script/test_merged_minimal.calc
-printf ':run test/script/test_merged_minimal.calc\n' | ./calculator
+./calculator test/script/comprehensive_validation.calc
+printf ':run test/script/comprehensive_validation.calc\n' | ./calculator
 ```
 
-For a dedicated syntax and behavior guide, see `test/script/SYNTAX_GUIDE.md`.
-
-Supported script constructs:
-
-- `fn name(args) { ... }`
-- `if (cond) { ... } else { ... }`
-- `while (cond) { ... }`
-- `for (init; cond; step) { ... }`
-- `return expr;`
-- `break;`
-- `continue;`
-- string literals such as `"hello"`
-- `print(a, b, c);`
-
-Example:
-
-```text
-fn fact(n) {
-  if (n <= 1) {
-    return 1;
-  } else {
-    return n * fact(n - 1);
-  }
-}
-
-x = 0;
-sum = 0;
-while (x < 5) {
-  sum = sum + x;
-  x = x + 1;
-}
-
-print(sum);
-fact(5);
-```
+For syntax and behavior details, see `test/script/SYNTAX_GUIDE.md`.
 
 `save/load` now persists scalar variables, string variables, expression-style
 custom functions, and script functions. Matrix variables are still excluded.

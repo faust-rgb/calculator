@@ -53,18 +53,16 @@ Current expected summary:
 
 Runnable example inputs are stored in `test/script/`:
 
-- `test/script/test_merged_minimal.calc`
-  Consolidated non-interactive workflow for variables, control flow, script
-  functions, selected math helpers, matrix arithmetic, symbolic calculus, and
-  transforms
+- `test/script/comprehensive_validation.calc`
+  Broad script and calculator feature validation
 - `test/script/SYNTAX_GUIDE.md`
-  Script syntax notes and redirected-stdin behavior
+  The dedicated script syntax guide
 - `test/script/TEST_REPORT_MERGED.md`
-  Validation notes for the merged script
+  Historical validation notes for the older merged script
 
 You can run them with:
 
 ```bash
-./calculator < test/script/test_merged_minimal.calc
-printf ':run test/script/test_merged_minimal.calc\n' | ./calculator
+./calculator test/script/comprehensive_validation.calc
+printf ':run test/script/comprehensive_validation.calc\n' | ./calculator
 ```
