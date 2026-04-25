@@ -32,8 +32,8 @@ helpers, interactive terminal UX, and project documentation.
   `eigvals(...)` now behave correctly on a wider set of singular and wide
   matrices
 - Split oversized numeric implementation files by extracting
-  `src/math/mymath_special_functions.inc` and
-  `src/matrix/matrix_linear_algebra.inc` from the previous monolithic sources
+  `src/math/mymath_special_functions.cpp` and
+  `src/matrix/matrix_linear_algebra.cpp` from the previous monolithic sources
 - Expanded regression coverage for the reported numerical edge cases
 
 ## Major Additions Implemented
@@ -137,4 +137,4 @@ helpers, interactive terminal UX, and project documentation.
 
 - `make test` currently passes
 - Expected test summary:
-  - `Passed: 671, Failed: 0`
+  - `Passed: 689, Failed: 0`

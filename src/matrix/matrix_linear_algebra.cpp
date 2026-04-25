@@ -7,8 +7,6 @@
 
 #include "mymath.h"
 
-#include <cmath>
-#include <limits>
 #include <stdexcept>
 
 namespace matrix {
@@ -245,13 +243,13 @@ double condition_number(const Matrix& matrix) {
         static_cast<std::size_t>(rank(matrix));
     const std::size_t full_rank = matrix.rows < matrix.cols ? matrix.rows : matrix.cols;
     if (effective_rank < full_rank) {
-        return std::numeric_limits<double>::infinity();
+        return mymath::infinity();
     }
 
     const double tolerance = matrix_tolerance(matrix);
     const Matrix singular_values = svd_s(matrix);
     double largest = 0.0;
-    double smallest = std::numeric_limits<double>::infinity();
+    double smallest = mymath::infinity();
     const std::size_t diagonal =
         singular_values.rows < singular_values.cols ? singular_values.rows : singular_values.cols;
     for (std::size_t i = 0; i < diagonal; ++i) {
@@ -264,8 +262,8 @@ double condition_number(const Matrix& matrix) {
         }
     }
     if (largest <= tolerance ||
-        smallest == std::numeric_limits<double>::infinity()) {
-        return std::numeric_limits<double>::infinity();
+        smallest == mymath::infinity()) {
+        return mymath::infinity();
     }
     return largest / smallest;
 }

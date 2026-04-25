@@ -22,6 +22,10 @@ constexpr double kPi = 3.14159265358979323846;
 
 /** @brief 自然对数的底 e，精确到小数点后20位 */
 constexpr double kE = 2.71828182845904523536;
+constexpr double kDoubleMax = 1.7976931348623157e308;
+constexpr double kDoubleDenormMin = 4.9406564584124654e-324;
+constexpr double kLnDoubleMax = 709.78271289338397;
+constexpr double kLnDoubleDenormMin = -744.44007192138122;
 
 /**
  * @brief 默认数值精度阈值
@@ -41,6 +45,12 @@ constexpr double kEps = 1e-12;
  * @return |x|
  */
 double abs(double x);
+long double abs_long_double(long double x);
+bool isfinite(double x);
+double clamp(double value, double low, double high);
+double remainder(double x, double y);
+double infinity();
+long long gcd(long long a, long long b);
 
 /**
  * @brief 判断数值是否接近零

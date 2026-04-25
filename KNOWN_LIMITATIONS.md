@@ -45,7 +45,6 @@
 ## Terminal UX
 
 - Autocomplete uses a fixed word list
-- Double-Tab candidate listing is not implemented
 - Interactive editing is intentionally minimal and does not provide full shell-like editing
 
 ## Scope
@@ -58,9 +57,9 @@ This project is now a capable calculator and mini CAS-style tool, but it is not:
 
 ## Symbolic Algebra
 
-- Symbolic `diff`, `integral`, `taylor`, `limit`, and `extrema` are still limited to one-variable inputs
+- Symbolic `diff`, `gradient`, `jacobian`, `hessian`, chained `integral`, and `critical` support multi-variable workflows; `critical` uses exact linear solving for affine gradients and bounded Newton search for nonlinear gradients
 - Symbolic integration is rule-based rather than complete
-  - many textbook forms now work, but integration by parts, substitutions, and identities are not exhaustive
+  - many textbook forms now work, including basic rational partial fractions, repeated linear factors, the common `(x^2+1)^2` irreducible quadratic case, and chain-rule substitutions, but trigonometric identities and full Risch-style integration are not exhaustive
 - Simplification is algebraic and heuristic
   - mathematically equivalent expressions may print in a different but still correct form, such as reordered products or `1 - x ^ 2` vs `-(x ^ 2) + 1`
 - Domain-aware simplification is still partial

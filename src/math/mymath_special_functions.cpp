@@ -6,7 +6,6 @@
 #include "mymath.h"
 #include "mymath_internal.h"
 
-#include <cmath>
 #include <stdexcept>
 
 namespace mymath {
@@ -55,7 +54,7 @@ double sin(double x) {
         const long double b = static_cast<long double>(2 * n + 1);
         term *= -(x_ld * x_ld) / (a * b);
         sum += term;
-        if (std::abs(term) < static_cast<long double>(kEps)) {
+        if (abs_long_double(term) < static_cast<long double>(kEps)) {
             break;
         }
     }
@@ -88,7 +87,7 @@ double cos(double x) {
         const long double b = static_cast<long double>(2 * n);
         term *= -(x_ld * x_ld) / (a * b);
         sum += term;
-        if (std::abs(term) < static_cast<long double>(kEps)) {
+        if (abs_long_double(term) < static_cast<long double>(kEps)) {
             break;
         }
     }
@@ -142,7 +141,7 @@ double atan(double x) {
         term *= -x2;
         const long double add = term / static_cast<long double>(2 * n + 1);
         sum += add;
-        if (std::abs(add) < static_cast<long double>(kEps)) {
+        if (abs_long_double(add) < static_cast<long double>(kEps)) {
             break;
         }
     }
@@ -172,13 +171,13 @@ double asin(double x) {
     for (int i = 0; i < 60; ++i) {
         const long double s = static_cast<long double>(sin(static_cast<double>(guess)));
         const long double c = static_cast<long double>(cos(static_cast<double>(guess)));
-        if (std::abs(c) < 1e-10L) {
+        if (abs_long_double(c) < 1e-10L) {
             break;
         }
 
         const long double next =
             guess - (s - static_cast<long double>(x)) / c;
-        if (std::abs(next - guess) < static_cast<long double>(kEps)) {
+        if (abs_long_double(next - guess) < static_cast<long double>(kEps)) {
             return static_cast<double>(next);
         }
         guess = next;
@@ -260,7 +259,7 @@ double sqrt(double x) {
     const long double target = static_cast<long double>(x);
     for (int i = 0; i < 100; ++i) {
         const long double next = 0.5L * (guess + target / guess);
-        if (std::abs(next - guess) < static_cast<long double>(kEps)) {
+        if (abs_long_double(next - guess) < static_cast<long double>(kEps)) {
             return static_cast<double>(next);
         }
         guess = next;
@@ -405,7 +404,7 @@ double erf(double x) {
             factorial * static_cast<long double>(2 * n + 1);
         const long double add = term / denominator;
         sum += (n % 2 == 0 ? add : -add);
-        if (std::abs(add) < 1e-14L) {
+        if (abs_long_double(add) < 1e-14L) {
             break;
         }
         term *= x_ld * x_ld;
@@ -511,7 +510,7 @@ double bessel_j(int order, double x) {
     for (int k = 0; k < 200; ++k) {
         const long double add = term;
         sum += add;
-        if (std::abs(add) <= 1e-14L * (1.0L + std::abs(sum))) {
+        if (abs_long_double(add) <= 1e-14L * (1.0L + abs_long_double(sum))) {
             break;
         }
         term *= -(half_x * half_x) /

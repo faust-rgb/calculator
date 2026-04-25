@@ -384,90 +384,87 @@ std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
     }
     center /= static_cast<long double>(n);
 
-    std::vector<std::vector<long double>> normal(
+    long double scale = 0.0L;
+    for (double sample : x_samples) {
+        const long double shifted = static_cast<long double>(sample) - center;
+        const long double magnitude = shifted < 0.0L ? -shifted : shifted;
+        if (magnitude > scale) {
+            scale = magnitude;
+        }
+    }
+    if (scale == 0.0L) {
+        scale = 1.0L;
+    }
+
+    std::vector<std::vector<long double>> q_columns(
+        m, std::vector<long double>(n, 0.0L));
+    std::vector<std::vector<long double>> r(
         m, std::vector<long double>(m, 0.0L));
-    std::vector<long double> rhs(m, 0.0L);
+    std::vector<long double> qty(m, 0.0L);
 
-    for (std::size_t row = 0; row < n; ++row) {
-        std::vector<long double> powers(m, 1.0L);
-        const long double shifted_x =
-            static_cast<long double>(x_samples[row]) - center;
-        for (std::size_t i = 1; i < m; ++i) {
-            powers[i] = powers[i - 1] * shifted_x;
+    for (std::size_t col = 0; col < m; ++col) {
+        std::vector<long double> column(n, 1.0L);
+        for (std::size_t row = 0; row < n; ++row) {
+            const long double shifted_x =
+                (static_cast<long double>(x_samples[row]) - center) / scale;
+            long double power = 1.0L;
+            for (std::size_t degree_idx = 0; degree_idx < col; ++degree_idx) {
+                power *= shifted_x;
+            }
+            column[row] = power;
         }
 
-        for (std::size_t i = 0; i < m; ++i) {
-            rhs[i] += powers[i] * static_cast<long double>(y_samples[row]);
-            for (std::size_t j = 0; j < m; ++j) {
-                normal[i][j] += powers[i] * powers[j];
+        for (std::size_t prev = 0; prev < col; ++prev) {
+            long double projection = 0.0L;
+            for (std::size_t row = 0; row < n; ++row) {
+                projection += q_columns[prev][row] * column[row];
+            }
+            r[prev][col] = projection;
+            for (std::size_t row = 0; row < n; ++row) {
+                column[row] -= projection * q_columns[prev][row];
             }
         }
+
+        long double norm_squared = 0.0L;
+        for (long double value : column) {
+            norm_squared += value * value;
+        }
+        const long double norm = mymath::sqrt(norm_squared);
+        if (norm <= 1e-18L) {
+            throw std::runtime_error("polynomial_fit design matrix is rank deficient");
+        }
+        r[col][col] = norm;
+        for (std::size_t row = 0; row < n; ++row) {
+            q_columns[col][row] = column[row] / norm;
+        }
+
+        long double projected_rhs = 0.0L;
+        for (std::size_t row = 0; row < n; ++row) {
+            projected_rhs +=
+                q_columns[col][row] * static_cast<long double>(y_samples[row]);
+        }
+        qty[col] = projected_rhs;
     }
 
-    for (std::size_t pivot = 0; pivot < m; ++pivot) {
-        std::size_t best_row = pivot;
-        long double best_value = normal[pivot][pivot] < 0.0L
-                                     ? -normal[pivot][pivot]
-                                     : normal[pivot][pivot];
-        for (std::size_t row = pivot + 1; row < m; ++row) {
-            const long double current = normal[row][pivot] < 0.0L
-                                            ? -normal[row][pivot]
-                                            : normal[row][pivot];
-            if (current > best_value) {
-                best_value = current;
-                best_row = row;
-            }
+    std::vector<long double> scaled_coefficients(m, 0.0L);
+    for (std::size_t row = m; row-- > 0;) {
+        long double value = qty[row];
+        for (std::size_t col = row + 1; col < m; ++col) {
+            value -= r[row][col] * scaled_coefficients[col];
         }
-        if (best_value <= 1e-18L) {
-            throw std::runtime_error("polynomial_fit normal equation is singular");
-        }
-        if (best_row != pivot) {
-            std::swap(normal[pivot], normal[best_row]);
-            std::swap(rhs[pivot], rhs[best_row]);
-        }
-
-        const long double pivot_value = normal[pivot][pivot];
-        for (std::size_t col = pivot; col < m; ++col) {
-            normal[pivot][col] /= pivot_value;
-        }
-        rhs[pivot] /= pivot_value;
-
-        for (std::size_t row = 0; row < m; ++row) {
-            if (row == pivot) {
-                continue;
-            }
-            const long double factor = normal[row][pivot];
-            if ((factor < 0.0L ? -factor : factor) <= 1e-18L) {
-                continue;
-            }
-            for (std::size_t col = pivot; col < m; ++col) {
-                normal[row][col] -= factor * normal[pivot][col];
-            }
-            rhs[row] -= factor * rhs[pivot];
-        }
+        scaled_coefficients[row] = value / r[row][row];
     }
 
-    std::vector<long double> unshifted(m, 0.0L);
-    std::vector<long double> shifted_basis(1, 1.0L);
-    for (std::size_t degree_index = 0; degree_index < m; ++degree_index) {
-        for (std::size_t term_index = 0; term_index < shifted_basis.size(); ++term_index) {
-            unshifted[term_index] += rhs[degree_index] * shifted_basis[term_index];
-        }
-        if (degree_index + 1 < m) {
-            std::vector<long double> next_basis(shifted_basis.size() + 1, 0.0L);
-            for (std::size_t term_index = 0; term_index < shifted_basis.size(); ++term_index) {
-                next_basis[term_index] -= center * shifted_basis[term_index];
-                next_basis[term_index + 1] += shifted_basis[term_index];
-            }
-            shifted_basis = next_basis;
-        }
+    std::vector<double> scaled_polynomial;
+    scaled_polynomial.reserve(m);
+    for (long double value : scaled_coefficients) {
+        scaled_polynomial.push_back(static_cast<double>(value));
     }
-
-    std::vector<double> coefficients;
-    coefficients.reserve(unshifted.size());
-    for (long double value : unshifted) {
-        coefficients.push_back(static_cast<double>(value));
-    }
+    const std::vector<double> linear_map = {
+        static_cast<double>(-center / scale),
+        static_cast<double>(1.0L / scale)};
+    std::vector<double> coefficients =
+        polynomial_compose(scaled_polynomial, linear_map);
     trim_trailing_zeros(&coefficients);
     return coefficients;
 }

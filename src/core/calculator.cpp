@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -1934,7 +1935,7 @@ bool is_reserved_function_name(const std::string& name) {
         "abs", "acos", "acosh", "acot", "acsc", "and", "asec", "asin",
         "asinh", "atan", "atanh", "base", "beta", "bin", "binom",
         "bessel", "bitlen", "c2f", "cbrt", "cdf_normal",
-        "ceil", "cholesky", "clamp", "complex", "cond", "conj", "corr", "cos",
+        "ceil", "cholesky", "clamp", "complex", "cond", "conj", "corr", "cos", "critical",
         "cos_deg", "cosh", "cot", "cov", "deg", "deg2rad", "diag",
         "diff", "double_integral",
         "double_integral_cyl", "double_integral_polar", "exp", "exp2", "extrema",
@@ -5903,6 +5904,62 @@ bool Calculator::try_process_function_command(const std::string& expression,
             return out.str();
         };
 
+    auto evaluate_symbolic_at_point =
+        [](SymbolicExpression expression,
+           const std::vector<std::string>& variables,
+           const std::vector<double>& values,
+           double* result) {
+            for (std::size_t i = 0; i < variables.size(); ++i) {
+                expression = expression.substitute(
+                    variables[i], SymbolicExpression::number(values[i]));
+            }
+            return expression.simplify().is_number(result);
+        };
+
+    auto solve_linear_system =
+        [](std::vector<std::vector<double>> matrix,
+           std::vector<double> rhs,
+           std::vector<double>* solution) {
+            const std::size_t size = rhs.size();
+            for (std::size_t col = 0; col < size; ++col) {
+                std::size_t pivot = col;
+                for (std::size_t row = col + 1; row < size; ++row) {
+                    if (std::abs(matrix[row][col]) > std::abs(matrix[pivot][col])) {
+                        pivot = row;
+                    }
+                }
+                if (std::abs(matrix[pivot][col]) < 1e-12) {
+                    return false;
+                }
+                if (pivot != col) {
+                    std::swap(matrix[pivot], matrix[col]);
+                    std::swap(rhs[pivot], rhs[col]);
+                }
+
+                const double pivot_value = matrix[col][col];
+                for (std::size_t j = col; j < size; ++j) {
+                    matrix[col][j] /= pivot_value;
+                }
+                rhs[col] /= pivot_value;
+
+                for (std::size_t row = 0; row < size; ++row) {
+                    if (row == col) {
+                        continue;
+                    }
+                    const double factor = matrix[row][col];
+                    if (std::abs(factor) < 1e-12) {
+                        continue;
+                    }
+                    for (std::size_t j = col; j < size; ++j) {
+                        matrix[row][j] -= factor * matrix[col][j];
+                    }
+                    rhs[row] -= factor * rhs[col];
+                }
+            }
+            *solution = rhs;
+            return true;
+        };
+
     auto parse_symbolic_variable_arguments =
         [](const std::vector<std::string>& arguments,
            std::size_t start_index,
@@ -6535,6 +6592,231 @@ bool Calculator::try_process_function_command(const std::string& expression,
         return true;
     }
 
+    if (split_named_call(trimmed, "critical", &inside)) {
+        const std::vector<std::string> arguments = split_top_level_arguments(inside);
+        if (arguments.empty()) {
+            throw std::runtime_error(
+                "critical expects a symbolic expression and optional variable names");
+        }
+
+        std::string variable_name;
+        SymbolicExpression expression;
+        resolve_symbolic_expression(arguments[0], false, &variable_name, &expression);
+        const std::vector<std::string> variables =
+            parse_symbolic_variable_arguments(arguments,
+                                              1,
+                                              expression.identifier_variables());
+        const std::vector<SymbolicExpression> gradient =
+            expression.gradient(variables);
+        auto format_critical_solution =
+            [&](const std::vector<double>& values) {
+                std::ostringstream out;
+                out << "[";
+                for (std::size_t i = 0; i < variables.size(); ++i) {
+                    if (i != 0) {
+                        out << ", ";
+                    }
+                    out << variables[i] << " = "
+                        << format_decimal(normalize_result(values[i]));
+                }
+                out << "]";
+                return out.str();
+            };
+        std::vector<std::vector<double>> coefficients(
+            variables.size(), std::vector<double>(variables.size(), 0.0));
+        std::vector<double> rhs(variables.size(), 0.0);
+        const std::vector<double> zeros(variables.size(), 0.0);
+        bool affine_gradient = true;
+
+        for (std::size_t row = 0; row < gradient.size(); ++row) {
+            double constant = 0.0;
+            if (!evaluate_symbolic_at_point(gradient[row], variables, zeros, &constant)) {
+                affine_gradient = false;
+                break;
+            }
+            rhs[row] = -constant;
+
+            for (std::size_t col = 0; col < variables.size(); ++col) {
+                std::vector<double> sample = zeros;
+                sample[col] = 1.0;
+                double value = 0.0;
+                if (!evaluate_symbolic_at_point(gradient[row],
+                                                variables,
+                                                sample,
+                                                &value)) {
+                    affine_gradient = false;
+                    break;
+                }
+                coefficients[row][col] = value - constant;
+            }
+            if (!affine_gradient) {
+                break;
+            }
+
+            std::vector<std::vector<double>> validation_samples;
+            validation_samples.push_back(std::vector<double>(variables.size(), 1.0));
+            for (std::size_t col = 0; col < variables.size(); ++col) {
+                std::vector<double> sample = zeros;
+                sample[col] = 2.0;
+                validation_samples.push_back(sample);
+            }
+            for (const std::vector<double>& sample : validation_samples) {
+                double actual = 0.0;
+                if (!evaluate_symbolic_at_point(gradient[row],
+                                                variables,
+                                                sample,
+                                                &actual)) {
+                    affine_gradient = false;
+                    break;
+                }
+                double predicted = constant;
+                for (std::size_t col = 0; col < variables.size(); ++col) {
+                    predicted += coefficients[row][col] * sample[col];
+                }
+                if (!mymath::is_near_zero(actual - predicted, 1e-8)) {
+                    affine_gradient = false;
+                    break;
+                }
+            }
+            if (!affine_gradient) {
+                break;
+            }
+        }
+
+        if (affine_gradient) {
+            std::vector<double> solution;
+            if (!solve_linear_system(coefficients, rhs, &solution)) {
+                *output = "No isolated critical point.";
+                return true;
+            }
+            *output = format_critical_solution(solution);
+            return true;
+        }
+
+        if (variables.size() > 3) {
+            throw std::runtime_error(
+                "critical nonlinear search supports up to 3 variables");
+        }
+
+        const std::vector<std::vector<SymbolicExpression>> hessian =
+            expression.hessian(variables);
+        std::vector<std::vector<double>> starts = {std::vector<double>(variables.size(), 0.0)};
+        const std::vector<double> seeds = {-2.0, -1.0, 1.0, 2.0};
+        for (std::size_t dimension = 0; dimension < variables.size(); ++dimension) {
+            std::vector<std::vector<double>> next = starts;
+            for (const std::vector<double>& start : starts) {
+                for (double seed : seeds) {
+                    std::vector<double> candidate = start;
+                    candidate[dimension] = seed;
+                    next.push_back(candidate);
+                }
+            }
+            starts.swap(next);
+        }
+
+        std::vector<std::vector<double>> solutions;
+        for (std::vector<double> current : starts) {
+            bool converged = false;
+            for (int iteration = 0; iteration < 40; ++iteration) {
+                std::vector<double> gradient_values(variables.size(), 0.0);
+                double gradient_norm = 0.0;
+                bool numeric_ok = true;
+                for (std::size_t row = 0; row < variables.size(); ++row) {
+                    if (!evaluate_symbolic_at_point(gradient[row],
+                                                    variables,
+                                                    current,
+                                                    &gradient_values[row])) {
+                        numeric_ok = false;
+                        break;
+                    }
+                    gradient_norm += gradient_values[row] * gradient_values[row];
+                }
+                if (!numeric_ok) {
+                    break;
+                }
+                if (gradient_norm < 1e-16) {
+                    converged = true;
+                    break;
+                }
+
+                std::vector<std::vector<double>> jacobian(
+                    variables.size(), std::vector<double>(variables.size(), 0.0));
+                for (std::size_t row = 0; row < variables.size() && numeric_ok; ++row) {
+                    for (std::size_t col = 0; col < variables.size(); ++col) {
+                        if (!evaluate_symbolic_at_point(hessian[row][col],
+                                                        variables,
+                                                        current,
+                                                        &jacobian[row][col])) {
+                            numeric_ok = false;
+                            break;
+                        }
+                    }
+                }
+                if (!numeric_ok) {
+                    break;
+                }
+
+                for (double& value : gradient_values) {
+                    value = -value;
+                }
+                std::vector<double> step;
+                if (!solve_linear_system(jacobian, gradient_values, &step)) {
+                    break;
+                }
+                double step_norm = 0.0;
+                for (std::size_t i = 0; i < current.size(); ++i) {
+                    current[i] += step[i];
+                    step_norm += step[i] * step[i];
+                }
+                if (step_norm < 1e-18) {
+                    converged = true;
+                    break;
+                }
+            }
+
+            if (!converged) {
+                continue;
+            }
+
+            bool duplicate = false;
+            for (const std::vector<double>& existing : solutions) {
+                double distance = 0.0;
+                for (std::size_t i = 0; i < existing.size(); ++i) {
+                    const double diff = existing[i] - current[i];
+                    distance += diff * diff;
+                }
+                if (distance < 1e-10) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) {
+                solutions.push_back(current);
+            }
+        }
+
+        if (solutions.empty()) {
+            *output = "No isolated critical point.";
+            return true;
+        }
+        std::sort(solutions.begin(), solutions.end());
+        std::ostringstream out;
+        if (solutions.size() == 1) {
+            *output = format_critical_solution(solutions.front());
+            return true;
+        }
+        out << "[";
+        for (std::size_t i = 0; i < solutions.size(); ++i) {
+            if (i != 0) {
+                out << ", ";
+            }
+            out << format_critical_solution(solutions[i]);
+        }
+        out << "]";
+        *output = out.str();
+        return true;
+    }
+
     if (split_named_call(trimmed, "jacobian", &inside)) {
         const std::vector<std::string> arguments = split_top_level_arguments(inside);
         if (arguments.size() < 2) {
@@ -6638,12 +6920,17 @@ bool Calculator::try_process_function_command(const std::string& expression,
             arguments.size() != 3 && arguments.size() != 4) {
             throw std::runtime_error(
                 "integral expects 1 argument for symbolic indefinite integral, "
+                "identifier arguments for chained symbolic integrals, "
                 "2 arguments for indefinite value, "
                 "3 for definite integral, or 4 for anchor and constant");
         }
 
-        if (arguments.size() == 1 ||
-            (arguments.size() == 2 && is_identifier_text(trim_copy(arguments[1])))) {
+        bool symbolic_integral = true;
+        for (std::size_t i = 1; i < arguments.size(); ++i) {
+            symbolic_integral =
+                symbolic_integral && is_identifier_text(trim_copy(arguments[i]));
+        }
+        if (symbolic_integral) {
             std::string variable_name;
             SymbolicExpression expression;
             resolve_symbolic_expression(arguments[0],
@@ -6653,7 +6940,16 @@ bool Calculator::try_process_function_command(const std::string& expression,
             if (arguments.size() == 2) {
                 variable_name = trim_copy(arguments[1]);
             }
-            *output = expression.integral(variable_name).simplify().to_string() + " + C";
+            SymbolicExpression integrated = expression;
+            if (arguments.size() == 1) {
+                integrated = integrated.integral(variable_name).simplify();
+            } else {
+                for (std::size_t i = 1; i < arguments.size(); ++i) {
+                    integrated =
+                        integrated.integral(trim_copy(arguments[i])).simplify();
+                }
+            }
+            *output = integrated.simplify().to_string() + " + C";
             return true;
         }
         const FunctionAnalysis analysis = build_analysis(arguments[0]);

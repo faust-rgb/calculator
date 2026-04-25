@@ -43,26 +43,27 @@ The automated regression source is `test/tests.cpp`.
 
 Current expected summary:
 
-- `Passed: 339`
 - `Failed: 0`
 
 ## Example Scripts
 
 Runnable example inputs are stored in `test/script/`:
 
-- `test/script/repl_input.calc`
+- `test/script/test_variables.calc`
   Multi-line non-interactive REPL-style input
-- `test/script/script_functions.calc`
-  Script functions, loops, and printing
-- `test/script/matrix_workflow.calc`
+- `test/script/test_function.calc`
+  Script functions and return values
+- `test/script/test_control_flow.calc`
+  Loops and conditional control flow
+- `test/script/test_matrix_basic.calc`
   Matrix-oriented redirected-input workflow examples
-- `test/script/SCRIPTING.md`
+- `test/script/SYNTAX_GUIDE.md`
   Script syntax notes and redirected-stdin behavior
 
 You can run them with:
 
 ```bash
-./calculator < test/script/repl_input.calc
-./calculator < test/script/script_functions.calc
-./calculator < test/script/matrix_workflow.calc
+./calculator < test/script/test_variables.calc
+./calculator < test/script/test_function.calc
+./calculator < test/script/test_matrix_basic.calc
 ```

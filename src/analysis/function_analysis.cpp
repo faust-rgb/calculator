@@ -16,9 +16,7 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cmath>
 #include <iomanip>
-#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -145,7 +143,7 @@ double FunctionAnalysis::limit(double x, int direction) const {
     auto one_sided_limit = [this, x](int side) {
         long double previous = 0.0L;
         long double best = 0.0L;
-        long double best_delta = std::numeric_limits<long double>::infinity();
+        long double best_delta = static_cast<long double>(mymath::infinity());
         bool has_previous = false;
 
         for (int i = 0; i < 32; ++i) {
@@ -161,19 +159,22 @@ double FunctionAnalysis::limit(double x, int direction) const {
             } catch (const std::exception&) {
                 continue;
             }
-            if (!std::isfinite(static_cast<double>(current))) {
+            if (!mymath::isfinite(static_cast<double>(current))) {
                 continue;
             }
 
             if (has_previous) {
                 const long double extrapolated = 2.0L * current - previous;
-                const long double delta = std::abs(extrapolated - best);
+                const long double delta = mymath::abs_long_double(extrapolated - best);
                 if (delta < best_delta) {
                     best_delta = delta;
                     best = extrapolated;
                 }
                 const long double scale =
-                    std::max({1.0L, std::abs(extrapolated), std::abs(current), std::abs(previous)});
+                    std::max({1.0L,
+                              mymath::abs_long_double(extrapolated),
+                              mymath::abs_long_double(current),
+                              mymath::abs_long_double(previous)});
                 if (delta <= static_cast<long double>(relative_tolerance(kLimitTolerance,
                                                                          static_cast<double>(scale)))) {
                     return static_cast<double>(extrapolated);
@@ -187,10 +188,10 @@ double FunctionAnalysis::limit(double x, int direction) const {
         }
 
         if (has_previous &&
-            std::isfinite(static_cast<double>(best)) &&
+            mymath::isfinite(static_cast<double>(best)) &&
             best_delta <= static_cast<long double>(
                               relative_tolerance(kLimitTolerance * 100.0,
-                                                 static_cast<double>(std::abs(best)))) ) {
+                                                 static_cast<double>(mymath::abs_long_double(best)))) ) {
             return static_cast<double>(best);
         }
 
@@ -397,7 +398,7 @@ double FunctionAnalysis::adaptive_simpson_recursive(double left,
         to_long_double(left_area) + to_long_double(right_area) - to_long_double(whole);
 
     if (depth <= 0 ||
-        std::abs(delta) <= 15.0L *
+        mymath::abs_long_double(delta) <= 15.0L *
                                static_cast<long double>(
                                    relative_tolerance(eps,
                                                       std::max({mymath::abs(left_area),

@@ -1,8 +1,8 @@
 #include "ode_solver.h"
 
+#include "mymath.h"
+
 #include <algorithm>
-#include <cmath>
-#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -12,8 +12,8 @@ constexpr double kEventValueTolerance = 1e-10;
 constexpr double kEventPositionTolerance = 1e-10;
 
 bool event_triggered(double left, double right) {
-    if (std::abs(left) <= kEventValueTolerance ||
-        std::abs(right) <= kEventValueTolerance) {
+    if (mymath::abs(left) <= kEventValueTolerance ||
+        mymath::abs(right) <= kEventValueTolerance) {
         return true;
     }
     return (left < 0.0 && right > 0.0) || (left > 0.0 && right < 0.0);
@@ -22,7 +22,7 @@ bool event_triggered(double left, double right) {
 double max_abs_component(const std::vector<double>& values) {
     double max_value = 0.0;
     for (double value : values) {
-        const double magnitude = std::abs(value);
+        const double magnitude = mymath::abs(value);
         if (magnitude > max_value) {
             max_value = magnitude;
         }
@@ -52,7 +52,7 @@ double difference_norm(const std::vector<double>& lhs,
 
     double max_difference = 0.0;
     for (std::size_t i = 0; i < lhs.size(); ++i) {
-        const double difference = std::abs(lhs[i] - rhs[i]);
+        const double difference = mymath::abs(lhs[i] - rhs[i]);
         if (difference > max_difference) {
             max_difference = difference;
         }
@@ -99,7 +99,7 @@ std::vector<ODEPoint> ODESolver::solve_trajectory(double x0,
     points.reserve(static_cast<std::size_t>(steps + 1));
     points.push_back({x0, y0});
 
-    if (event_ && std::abs(event_(x0, y0)) <= kEventValueTolerance) {
+    if (event_ && mymath::abs(event_(x0, y0)) <= kEventValueTolerance) {
         return points;
     }
 
@@ -137,11 +137,11 @@ double ODESolver::integrate_segment(double x0, double y0, double x1) const {
     }
 
     const double direction = segment > 0.0 ? 1.0 : -1.0;
-    const double segment_abs = std::abs(segment);
+    const double segment_abs = mymath::abs(segment);
     const double min_step = std::max(1e-12, segment_abs * 1e-9);
     const double max_step = segment_abs;
     const double tolerance =
-        1e-9 * std::max({1.0, std::abs(y0), std::abs(segment), std::abs(x0), std::abs(x1)});
+        1e-9 * std::max({1.0, mymath::abs(y0), mymath::abs(segment), mymath::abs(x0), mymath::abs(x1)});
 
     double x = x0;
     double y = y0;
@@ -160,29 +160,29 @@ double ODESolver::integrate_segment(double x0, double y0, double x1) const {
         const double full = rk4_step(x, y, h);
         const double half = rk4_step(x, y, h * 0.5);
         const double refined = rk4_step(x + h * 0.5, half, h * 0.5);
-        const double error = std::abs(refined - full);
-        const double scale = std::max({1.0, std::abs(y), std::abs(full), std::abs(refined)});
+        const double error = mymath::abs(refined - full);
+        const double scale = std::max({1.0, mymath::abs(y), mymath::abs(full), mymath::abs(refined)});
 
-        if (error <= tolerance * scale || std::abs(h) <= min_step) {
+        if (error <= tolerance * scale || mymath::abs(h) <= min_step) {
             x += h;
             y = refined + (refined - full) / 15.0;
-            if (!std::isfinite(y)) {
+            if (!mymath::isfinite(y)) {
                 throw std::runtime_error("ODE solver produced a non-finite value");
             }
 
             const double growth =
-                error == 0.0 ? 2.0 : std::clamp(0.9 * std::pow((tolerance * scale) / error, 0.2),
-                                                0.5,
-                                                2.0);
+                error == 0.0 ? 2.0 : mymath::clamp(0.9 * mymath::pow((tolerance * scale) / error, 0.2),
+                                                   0.5,
+                                                   2.0);
             h = direction *
-                std::min(max_step, std::max(min_step, std::abs(h) * growth));
+                std::min(max_step, std::max(min_step, mymath::abs(h) * growth));
             continue;
         }
 
-        const double shrink = std::clamp(0.9 * std::pow((tolerance * scale) / error, 0.25),
-                                         0.1,
-                                         0.5);
-        h = direction * std::max(min_step, std::abs(h) * shrink);
+        const double shrink = mymath::clamp(0.9 * mymath::pow((tolerance * scale) / error, 0.25),
+                                            0.1,
+                                            0.5);
+        h = direction * std::max(min_step, mymath::abs(h) * shrink);
     }
 
     return y;
@@ -198,7 +198,7 @@ ODEPoint ODESolver::integrate_segment_with_event(double x0,
     }
 
     const double initial_event = event_(x0, y0);
-    if (std::abs(initial_event) <= kEventValueTolerance) {
+    if (mymath::abs(initial_event) <= kEventValueTolerance) {
         *stopped = true;
         return {x0, y0};
     }
@@ -209,11 +209,11 @@ ODEPoint ODESolver::integrate_segment_with_event(double x0,
     }
 
     const double direction = segment > 0.0 ? 1.0 : -1.0;
-    const double segment_abs = std::abs(segment);
+    const double segment_abs = mymath::abs(segment);
     const double min_step = std::max(1e-12, segment_abs * 1e-9);
     const double max_step = segment_abs;
     const double tolerance =
-        1e-9 * std::max({1.0, std::abs(y0), std::abs(segment), std::abs(x0), std::abs(x1)});
+        1e-9 * std::max({1.0, mymath::abs(y0), mymath::abs(segment), mymath::abs(x0), mymath::abs(x1)});
 
     double x = x0;
     double y = y0;
@@ -233,20 +233,20 @@ ODEPoint ODESolver::integrate_segment_with_event(double x0,
         const double full = rk4_step(x, y, h);
         const double half = rk4_step(x, y, h * 0.5);
         const double refined = rk4_step(x + h * 0.5, half, h * 0.5);
-        const double error = std::abs(refined - full);
-        const double scale = std::max({1.0, std::abs(y), std::abs(full), std::abs(refined)});
+        const double error = mymath::abs(refined - full);
+        const double scale = std::max({1.0, mymath::abs(y), mymath::abs(full), mymath::abs(refined)});
 
-        if (error > tolerance * scale && std::abs(h) > min_step) {
-            const double shrink = std::clamp(0.9 * std::pow((tolerance * scale) / error, 0.25),
-                                             0.1,
-                                             0.5);
-            h = direction * std::max(min_step, std::abs(h) * shrink);
+        if (error > tolerance * scale && mymath::abs(h) > min_step) {
+            const double shrink = mymath::clamp(0.9 * mymath::pow((tolerance * scale) / error, 0.25),
+                                                0.1,
+                                                0.5);
+            h = direction * std::max(min_step, mymath::abs(h) * shrink);
             continue;
         }
 
         const double candidate_x = x + h;
         const double candidate_y = refined + (refined - full) / 15.0;
-        if (!std::isfinite(candidate_y)) {
+        if (!mymath::isfinite(candidate_y)) {
             throw std::runtime_error("ODE solver produced a non-finite value");
         }
 
@@ -258,14 +258,14 @@ ODEPoint ODESolver::integrate_segment_with_event(double x0,
             double right_x = candidate_x;
             double right_y = candidate_y;
             for (int i = 0; i < 80; ++i) {
-                if (std::abs(right_x - left_x) <=
-                    kEventPositionTolerance * std::max(1.0, std::max(std::abs(left_x), std::abs(right_x)))) {
+                if (mymath::abs(right_x - left_x) <=
+                    kEventPositionTolerance * std::max(1.0, std::max(mymath::abs(left_x), mymath::abs(right_x)))) {
                     break;
                 }
                 const double mid_x = 0.5 * (left_x + right_x);
                 const double mid_y = integrate_segment(left_x, left_y, mid_x);
                 const double mid_event = event_(mid_x, mid_y);
-                if (std::abs(mid_event) <= kEventValueTolerance) {
+                if (mymath::abs(mid_event) <= kEventValueTolerance) {
                     left_x = mid_x;
                     left_y = mid_y;
                     right_x = mid_x;
@@ -283,7 +283,7 @@ ODEPoint ODESolver::integrate_segment_with_event(double x0,
             }
 
             *stopped = true;
-            if (std::abs(left_event) <= kEventValueTolerance) {
+            if (mymath::abs(left_event) <= kEventValueTolerance) {
                 return {left_x, left_y};
             }
             return {right_x, right_y};
@@ -294,11 +294,11 @@ ODEPoint ODESolver::integrate_segment_with_event(double x0,
         current_event = next_event;
 
         const double growth =
-            error == 0.0 ? 2.0 : std::clamp(0.9 * std::pow((tolerance * scale) / error, 0.2),
-                                            0.5,
-                                            2.0);
+            error == 0.0 ? 2.0 : mymath::clamp(0.9 * mymath::pow((tolerance * scale) / error, 0.2),
+                                               0.5,
+                                               2.0);
         h = direction *
-            std::min(max_step, std::max(min_step, std::abs(h) * growth));
+            std::min(max_step, std::max(min_step, mymath::abs(h) * growth));
     }
 
     return {x, y};
@@ -352,7 +352,7 @@ std::vector<ODESystemPoint> ODESystemSolver::solve_trajectory(double x0,
     points.reserve(static_cast<std::size_t>(steps + 1));
     points.push_back({x0, y0});
 
-    if (event_ && std::abs(event_(x0, y0)) <= kEventValueTolerance) {
+    if (event_ && mymath::abs(event_(x0, y0)) <= kEventValueTolerance) {
         return points;
     }
 
@@ -393,11 +393,11 @@ std::vector<double> ODESystemSolver::integrate_segment(double x0,
     }
 
     const double direction = segment > 0.0 ? 1.0 : -1.0;
-    const double segment_abs = std::abs(segment);
+    const double segment_abs = mymath::abs(segment);
     const double min_step = std::max(1e-12, segment_abs * 1e-9);
     const double max_step = segment_abs;
     const double tolerance =
-        1e-9 * std::max({1.0, max_abs_component(y0), std::abs(segment), std::abs(x0), std::abs(x1)});
+        1e-9 * std::max({1.0, max_abs_component(y0), mymath::abs(segment), mymath::abs(x0), mymath::abs(x1)});
 
     double x = x0;
     std::vector<double> y = y0;
@@ -419,28 +419,28 @@ std::vector<double> ODESystemSolver::integrate_segment(double x0,
         const double error = difference_norm(refined, full);
         const double scale = std::max({1.0, max_abs_component(y), max_abs_component(full), max_abs_component(refined)});
 
-        if (error <= tolerance * scale || std::abs(h) <= min_step) {
+        if (error <= tolerance * scale || mymath::abs(h) <= min_step) {
             x += h;
             y = corrected_solution(full, refined);
             for (double value : y) {
-                if (!std::isfinite(value)) {
+                if (!mymath::isfinite(value)) {
                     throw std::runtime_error("ODE system solver produced a non-finite value");
                 }
             }
 
             const double growth =
-                error == 0.0 ? 2.0 : std::clamp(0.9 * std::pow((tolerance * scale) / error, 0.2),
-                                                0.5,
-                                                2.0);
+                error == 0.0 ? 2.0 : mymath::clamp(0.9 * mymath::pow((tolerance * scale) / error, 0.2),
+                                                   0.5,
+                                                   2.0);
             h = direction *
-                std::min(max_step, std::max(min_step, std::abs(h) * growth));
+                std::min(max_step, std::max(min_step, mymath::abs(h) * growth));
             continue;
         }
 
-        const double shrink = std::clamp(0.9 * std::pow((tolerance * scale) / error, 0.25),
-                                         0.1,
-                                         0.5);
-        h = direction * std::max(min_step, std::abs(h) * shrink);
+        const double shrink = mymath::clamp(0.9 * mymath::pow((tolerance * scale) / error, 0.25),
+                                            0.1,
+                                            0.5);
+        h = direction * std::max(min_step, mymath::abs(h) * shrink);
     }
 
     return y;
@@ -456,7 +456,7 @@ ODESystemPoint ODESystemSolver::integrate_segment_with_event(double x0,
     }
 
     const double initial_event = event_(x0, y0);
-    if (std::abs(initial_event) <= kEventValueTolerance) {
+    if (mymath::abs(initial_event) <= kEventValueTolerance) {
         *stopped = true;
         return {x0, y0};
     }
@@ -467,11 +467,11 @@ ODESystemPoint ODESystemSolver::integrate_segment_with_event(double x0,
     }
 
     const double direction = segment > 0.0 ? 1.0 : -1.0;
-    const double segment_abs = std::abs(segment);
+    const double segment_abs = mymath::abs(segment);
     const double min_step = std::max(1e-12, segment_abs * 1e-9);
     const double max_step = segment_abs;
     const double tolerance =
-        1e-9 * std::max({1.0, max_abs_component(y0), std::abs(segment), std::abs(x0), std::abs(x1)});
+        1e-9 * std::max({1.0, max_abs_component(y0), mymath::abs(segment), mymath::abs(x0), mymath::abs(x1)});
 
     double x = x0;
     std::vector<double> y = y0;
@@ -494,18 +494,18 @@ ODESystemPoint ODESystemSolver::integrate_segment_with_event(double x0,
         const double error = difference_norm(refined, full);
         const double scale = std::max({1.0, max_abs_component(y), max_abs_component(full), max_abs_component(refined)});
 
-        if (error > tolerance * scale && std::abs(h) > min_step) {
-            const double shrink = std::clamp(0.9 * std::pow((tolerance * scale) / error, 0.25),
-                                             0.1,
-                                             0.5);
-            h = direction * std::max(min_step, std::abs(h) * shrink);
+        if (error > tolerance * scale && mymath::abs(h) > min_step) {
+            const double shrink = mymath::clamp(0.9 * mymath::pow((tolerance * scale) / error, 0.25),
+                                                0.1,
+                                                0.5);
+            h = direction * std::max(min_step, mymath::abs(h) * shrink);
             continue;
         }
 
         const double candidate_x = x + h;
         const std::vector<double> candidate_y = corrected_solution(full, refined);
         for (double value : candidate_y) {
-            if (!std::isfinite(value)) {
+            if (!mymath::isfinite(value)) {
                 throw std::runtime_error("ODE system solver produced a non-finite value");
             }
         }
@@ -518,14 +518,14 @@ ODESystemPoint ODESystemSolver::integrate_segment_with_event(double x0,
             double right_x = candidate_x;
             std::vector<double> right_y = candidate_y;
             for (int i = 0; i < 80; ++i) {
-                if (std::abs(right_x - left_x) <=
-                    kEventPositionTolerance * std::max(1.0, std::max(std::abs(left_x), std::abs(right_x)))) {
+                if (mymath::abs(right_x - left_x) <=
+                    kEventPositionTolerance * std::max(1.0, std::max(mymath::abs(left_x), mymath::abs(right_x)))) {
                     break;
                 }
                 const double mid_x = 0.5 * (left_x + right_x);
                 const std::vector<double> mid_y = integrate_segment(left_x, left_y, mid_x);
                 const double mid_event = event_(mid_x, mid_y);
-                if (std::abs(mid_event) <= kEventValueTolerance) {
+                if (mymath::abs(mid_event) <= kEventValueTolerance) {
                     left_x = mid_x;
                     left_y = mid_y;
                     right_x = mid_x;
@@ -543,7 +543,7 @@ ODESystemPoint ODESystemSolver::integrate_segment_with_event(double x0,
             }
 
             *stopped = true;
-            if (std::abs(left_event) <= kEventValueTolerance) {
+            if (mymath::abs(left_event) <= kEventValueTolerance) {
                 return {left_x, left_y};
             }
             return {right_x, right_y};
@@ -554,11 +554,11 @@ ODESystemPoint ODESystemSolver::integrate_segment_with_event(double x0,
         current_event = next_event;
 
         const double growth =
-            error == 0.0 ? 2.0 : std::clamp(0.9 * std::pow((tolerance * scale) / error, 0.2),
-                                            0.5,
-                                            2.0);
+            error == 0.0 ? 2.0 : mymath::clamp(0.9 * mymath::pow((tolerance * scale) / error, 0.2),
+                                               0.5,
+                                               2.0);
         h = direction *
-            std::min(max_step, std::max(min_step, std::abs(h) * growth));
+            std::min(max_step, std::max(min_step, mymath::abs(h) * growth));
     }
 
     return {x, y};

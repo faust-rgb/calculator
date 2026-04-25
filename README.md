@@ -35,6 +35,7 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - `CHANGELOG.md`
 - `ROADMAP.md`
 - `KNOWN_LIMITATIONS.md`
+- `SIMPLIFY_IMPROVEMENTS.md`
 
 ## Source Organization
 

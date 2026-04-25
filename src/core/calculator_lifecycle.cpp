@@ -3,13 +3,11 @@
 #include "mymath.h"
 
 #include <algorithm>
-#include <cmath>
-#include <limits>
 #include <stdexcept>
 
 namespace {
 
-constexpr double kDisplayZeroEps = std::numeric_limits<double>::denorm_min();
+constexpr double kDisplayZeroEps = mymath::kDoubleDenormMin;
 constexpr double kDisplayIntegerEps = 1e-9;
 
 bool is_integer_double(double x, double eps = 1e-10) {
@@ -86,7 +84,7 @@ std::vector<std::string> Calculator::custom_function_names() const {
 }
 
 double Calculator::normalize_result(double value) {
-    if (!std::isfinite(value)) {
+    if (!mymath::isfinite(value)) {
         return value;
     }
     if (mymath::abs(value) < kDisplayZeroEps) {

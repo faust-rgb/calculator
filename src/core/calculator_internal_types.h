@@ -4,11 +4,11 @@
 #include "calculator.h"
 
 #include "matrix.h"
+#include "mymath.h"
 #include "script_ast.h"
 
 #include <map>
 #include <memory>
-#include <numeric>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -32,7 +32,7 @@ struct Rational {
             denominator = -denominator;
         }
 
-        const long long divisor = std::gcd(numerator, denominator);
+        const long long divisor = mymath::gcd(numerator, denominator);
         numerator /= divisor;
         denominator /= divisor;
     }

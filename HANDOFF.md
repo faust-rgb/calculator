@@ -2,7 +2,7 @@
 
 ## Project
 
-This is a C++ command-line calculator / mini CAS in `/home/roselia/code`.
+This is a C++ command-line calculator / mini CAS in `/home/roselia/ai-code/calculator`.
 
 Main capabilities already implemented:
 
@@ -28,29 +28,33 @@ Main capabilities already implemented:
 Current test status:
 
 - `make test`
-- Expected: `Passed: 373, Failed: 0`
+- Expected: `Failed: 0`
 
 ## Important Files
 
-- `/home/roselia/code/src/app/main.cpp`
+- `/home/roselia/ai-code/calculator/src/app/main.cpp`
   REPL / terminal UX / commands / history / autocomplete
-- `/home/roselia/code/src/core/calculator.cpp`
+- `/home/roselia/ai-code/calculator/src/core/calculator.cpp`
   Core parser + exact mode + symbolic constants mode + variables + help + factor/base conversion + persistence
-- `/home/roselia/code/src/core/calculator.h`
+- `/home/roselia/ai-code/calculator/src/core/calculator.h`
   Public calculator interface
-- `/home/roselia/code/src/symbolic/symbolic_expression.cpp`
+- `/home/roselia/ai-code/calculator/src/symbolic/symbolic_expression_core.cpp`
   Symbolic expression parsing, rendering, and symbolic-constants simplification rules
-- `/home/roselia/code/src/math/mymath.cpp`
+- `/home/roselia/ai-code/calculator/src/symbolic/symbolic_expression_calculus.cpp`
+  Symbolic differentiation and integration rules
+- `/home/roselia/ai-code/calculator/src/symbolic/symbolic_expression_transforms.cpp`
+  Fourier/Laplace/z transform entry points
+- `/home/roselia/ai-code/calculator/src/math/mymath.cpp`
   Custom math implementations, no standard math core dependency for main functions
-- `/home/roselia/code/src/math/mymath.h`
+- `/home/roselia/ai-code/calculator/src/math/mymath.h`
   Math declarations
-- `/home/roselia/code/test/tests.cpp`
+- `/home/roselia/ai-code/calculator/test/tests.cpp`
   Main regression suite and best overview of supported behavior
-- `/home/roselia/code/SIMPLIFY_IMPROVEMENTS.md`
+- `/home/roselia/ai-code/calculator/SIMPLIFY_IMPROVEMENTS.md`
   Current simplification boundary, support matrix, and next-step roadmap
-- `/home/roselia/code/README.md`
+- `/home/roselia/ai-code/calculator/README.md`
   User-facing usage doc
-- `/home/roselia/code/TESTING.md`
+- `/home/roselia/ai-code/calculator/test/TESTING.md`
   Testing summary
 
 ## Directory Layout
@@ -148,12 +152,11 @@ Important boundary:
 
 - this is primarily a display mode for scalar expressions
 - unsupported symbolic forms fall back to the normal numeric result
-- save/load currently persists numeric/exact/string/function state, but not the
-  extra symbolic display text for scalar variables
+- save/load now persists scalar symbolic display text as well as exact/decimal/string/function state
 
 ## Important Behavioral Notes
 
-- Scientific notation like `1e-3` is **not** supported by the parser currently.
+- Scientific notation like `1e-3` is supported by the parser.
 - Prefixed literals support integers only: `0b`, `0o`, `0x`.
 - Bitwise functions only accept integers.
 - Base conversion currently supports bases `2..16`.
@@ -174,11 +177,11 @@ make
 
 If continuing work on another machine/session:
 
-1. Read `/home/roselia/code/HANDOFF.md`
-2. Read `/home/roselia/code/README.md`
-3. Read `/home/roselia/code/test/tests.cpp`
-4. Read `/home/roselia/code/src/core/calculator.cpp`
-5. Read `/home/roselia/code/src/symbolic/symbolic_expression.cpp`
+1. Read `/home/roselia/ai-code/calculator/HANDOFF.md`
+2. Read `/home/roselia/ai-code/calculator/README.md`
+3. Read `/home/roselia/ai-code/calculator/test/tests.cpp`
+4. Read `/home/roselia/ai-code/calculator/src/core/calculator.cpp`
+5. Read `/home/roselia/ai-code/calculator/src/symbolic/symbolic_expression_core.cpp`
 6. Run `make test`
 
 ## Good Next Extensions

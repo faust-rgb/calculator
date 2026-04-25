@@ -106,6 +106,8 @@ std::string build_help_topic(const std::string& topic) {
         "  diff(f)             Symbolic derivative expression\n"
         "  diff(f, 2)          Derivative at x = 2\n"
         "  integral(f)         Symbolic indefinite integral expression\n"
+        "  integral(f, x, y)   Chained symbolic integral over x then y\n"
+        "  critical(f, x, y)   Symbolic critical point search\n"
         "  step(t - 1)         Unit step / Heaviside function\n"
         "  delta(t - 1)        Unit impulse / Dirac delta shorthand\n"
         "  laplace(exp(-2*t), t, s)  Symbolic Laplace transform\n"
@@ -205,7 +207,7 @@ std::string build_help_topic(const std::string& topic) {
         "  Bitwise:       and or xor not shl shr rol ror popcount bitlen ctz clz parity reverse_bits\n"
         "  Script:        fn if else while for return break continue print strings\n"
         "  Custom:        f(x)=...  poly_add poly_sub poly_mul poly_div roots poly_eval poly_deriv poly_integ poly_fit poly_compose poly_gcd "
-        "simplify symbolic/numeric diff integral taylor limit extrema ode ode_table ode_system ode_system_table "
+        "simplify symbolic/numeric diff integral critical taylor limit extrema ode ode_table ode_system ode_system_table "
         "lp_max lp_min ilp_max ilp_min milp_max milp_min bip_max bip_min solve bisect secant fixed_point eig svd";
     }
 

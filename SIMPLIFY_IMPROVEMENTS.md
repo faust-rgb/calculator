@@ -134,7 +134,7 @@ validity can depend on domains and branch behavior.
 ## Suggested Re-entry Plan
 
 1. Read this file
-2. Read `src/symbolic/symbolic_expression.cpp`
+2. Read `src/symbolic/symbolic_expression_core.cpp`
 3. Search for:
    - `simplify(expr)`
    - `canonical_expression_key`

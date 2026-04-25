@@ -13,10 +13,8 @@
 #include "polynomial.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cctype>
 #include <iomanip>
-#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -65,7 +63,27 @@ std::string format_number(double value) {
 }
 
 long double abs_ld(long double value) {
-    return std::abs(value);
+    return mymath::abs_long_double(value);
+}
+
+long double sqrt_ld(long double value) {
+    return static_cast<long double>(mymath::sqrt(static_cast<double>(value)));
+}
+
+std::size_t floor_to_size_t(double value) {
+    const long long truncated = static_cast<long long>(value);
+    if (value < 0.0 && static_cast<double>(truncated) != value) {
+        return static_cast<std::size_t>(truncated - 1);
+    }
+    return static_cast<std::size_t>(truncated);
+}
+
+std::size_t ceil_to_size_t(double value) {
+    const long long truncated = static_cast<long long>(value);
+    if (value > 0.0 && static_cast<double>(truncated) != value) {
+        return static_cast<std::size_t>(truncated + 1);
+    }
+    return static_cast<std::size_t>(truncated);
 }
 
 void require_same_shape(const Matrix& lhs, const Matrix& rhs, const std::string& op_name) {
@@ -195,7 +213,7 @@ std::pair<Matrix, Matrix> qr_decompose(const Matrix& matrix) {
         }
 
         const long double norm_x_ld =
-            std::sqrt(static_cast<long double>(vector_norm_squared(householder)));
+            sqrt_ld(static_cast<long double>(vector_norm_squared(householder)));
         const double norm_x = static_cast<double>(norm_x_ld);
         if (mymath::is_near_zero(norm_x, kMatrixEps)) {
             continue;
@@ -203,7 +221,7 @@ std::pair<Matrix, Matrix> qr_decompose(const Matrix& matrix) {
 
         householder[0] += householder[0] >= 0.0 ? norm_x : -norm_x;
         const long double norm_v_ld =
-            std::sqrt(static_cast<long double>(vector_norm_squared(householder)));
+            sqrt_ld(static_cast<long double>(vector_norm_squared(householder)));
         const double norm_v = static_cast<double>(norm_v_ld);
         if (mymath::is_near_zero(norm_v, kMatrixEps)) {
             continue;
@@ -579,9 +597,9 @@ double percentile_values(const std::vector<double>& values, double p) {
     const double position =
         p * static_cast<double>(sorted.size() - 1) / 100.0;
     const std::size_t lower =
-        static_cast<std::size_t>(std::floor(position));
+        floor_to_size_t(position);
     const std::size_t upper =
-        static_cast<std::size_t>(std::ceil(position));
+        ceil_to_size_t(position);
     if (lower == upper) {
         return sorted[lower];
     }
@@ -757,7 +775,7 @@ std::pair<double, double> linear_regression_fit(const std::vector<double>& x,
         numerator += dx * dy;
         denominator += dx * dx;
     }
-    if (std::abs(denominator) <= 1e-12L) {
+    if (abs_ld(denominator) <= 1e-12L) {
         throw std::runtime_error("linear_regression requires x values with non-zero variance");
     }
     const double slope = static_cast<double>(numerator / denominator);
@@ -950,8 +968,8 @@ SymmetricEigenDecomposition jacobi_symmetric_eigendecomposition(
         const long double tau = (aqq - app) / (2.0L * apq);
         const long double t =
             (tau >= 0.0L ? 1.0L : -1.0L) /
-            (abs_ld(tau) + std::sqrt(1.0L + tau * tau));
-        const long double cosine = 1.0L / std::sqrt(1.0L + t * t);
+            (abs_ld(tau) + sqrt_ld(1.0L + tau * tau));
+        const long double cosine = 1.0L / sqrt_ld(1.0L + t * t);
         const long double sine = t * cosine;
 
         for (std::size_t col = 0; col < n; ++col) {

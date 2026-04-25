@@ -253,6 +253,7 @@ Notes:
 - `gradient(expr, variable1, variable2, ...)`
 - `jacobian([expr1; expr2; ...], variable1, variable2, ...)`
 - `hessian(expr, variable1, variable2, ...)`
+- `critical(expr, variable1, variable2, ...)`
 - `taylor(expr, a, n)`
 - `pade(expr, m, n)`
 - `pade(expr, a, m, n)`
