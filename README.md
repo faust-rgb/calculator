@@ -31,7 +31,8 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - `MATRIX_GUIDE.md`
 - `COMMANDS_REFERENCE.md`
 - `HANDOFF.md`
-- `TESTING.md`
+- `TEST_REPORT.md`
+- `test/TESTING.md`
 - `CHANGELOG.md`
 - `ROADMAP.md`
 - `KNOWN_LIMITATIONS.md`
@@ -130,7 +131,8 @@ The regression suite lives in `test/tests.cpp`.
 Current validation status:
 
 - `make test`
-- expected result: `Failed: 0`
+- expected result: `Passed: 743`, `Failed: 0`
+- merged script check: `./calculator < test/script/test_merged_minimal.calc`
 
 ## Run
 
@@ -510,23 +512,19 @@ or redirect a file into stdin with `./calculator < file.calc`.
 
 Runnable script-related inputs are provided in `test/script/`:
 
-- `test/script/test_variables.calc`
-  Non-interactive variable and expression workflow
-- `test/script/test_function.calc`
-  Script functions and return values
-- `test/script/test_control_flow.calc`
-  `if`, `for`, and `while` control flow examples
-- `test/script/test_matrix_basic.calc`
-  Matrix creation, analysis, and solving via redirected input
+- `test/script/test_merged_minimal.calc`
+  Consolidated non-interactive workflow covering variables, control flow,
+  functions, selected math helpers, matrices, symbolic calculus, and transforms
 - `test/script/SYNTAX_GUIDE.md`
   Detailed scripting syntax notes
+- `test/script/TEST_REPORT_MERGED.md`
+  Current validation notes for the merged script
 
 Example commands:
 
 ```bash
-./calculator < test/script/test_variables.calc
-./calculator < test/script/test_function.calc
-./calculator < test/script/test_matrix_basic.calc
+./calculator < test/script/test_merged_minimal.calc
+printf ':run test/script/test_merged_minimal.calc\n' | ./calculator
 ```
 
 For a dedicated syntax and behavior guide, see `test/script/SYNTAX_GUIDE.md`.

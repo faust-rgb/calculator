@@ -137,4 +137,6 @@ helpers, interactive terminal UX, and project documentation.
 
 - `make test` currently passes
 - Expected test summary:
-  - `Passed: 689, Failed: 0`
+  - `Passed: 743, Failed: 0`
+- Added comprehensive symbolic-computing coverage for calculus, limits,
+  matrices, and equation solving, plus a current `TEST_REPORT.md`

@@ -28,7 +28,8 @@ Main capabilities already implemented:
 Current test status:
 
 - `make test`
-- Expected: `Failed: 0`
+- Expected: `Passed: 743, Failed: 0`
+- Merged script validation: `./calculator < test/script/test_merged_minimal.calc`
 
 ## Important Files
 
@@ -56,6 +57,8 @@ Current test status:
   User-facing usage doc
 - `/home/roselia/ai-code/calculator/test/TESTING.md`
   Testing summary
+- `/home/roselia/ai-code/calculator/TEST_REPORT.md`
+  Latest comprehensive validation report
 
 ## Directory Layout
 

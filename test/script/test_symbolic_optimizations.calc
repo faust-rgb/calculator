@@ -1,9 +1,0 @@
-integral(1 / ((x - 1) * (x ^ 2 + 1) ^ 2));
-integral(sin(x) ^ 3);
-integral(cos(x) ^ 3);
-integral(sin(x) * cos(x));
-critical(x ^ 2 + y ^ 2, x, y);
-critical(x ^ 2 - y ^ 2, x, y);
-taylor(exp(x), 0, 4);
-pade(exp(x), 2, 2);
-simplify(sqrt(x ^ 2));

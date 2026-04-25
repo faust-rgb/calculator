@@ -102,7 +102,7 @@ std::string format_history(const std::vector<std::string>& history) {
 
 const std::vector<std::string>& help_topics() {
     static const std::vector<std::string> topics = {
-        "commands", "functions", "matrix", "examples",
+        "commands", "functions", "matrix", "symbolic", "analysis", "planning", "examples",
         "exact", "variables", "persistence", "programmer"
     };
     return topics;
@@ -111,6 +111,7 @@ const std::vector<std::string>& help_topics() {
 const std::vector<std::string>& command_completion_words() {
     static const std::vector<std::string> words = {
         ":help", ":help commands", ":help functions", ":help matrix", ":help examples",
+        ":help symbolic", ":help analysis", ":help planning",
         ":help exact", ":help variables", ":help persistence", ":help programmer",
         ":exact", ":exact on", ":exact off",
         ":symbolic", ":symbolic on", ":symbolic off",
@@ -125,26 +126,27 @@ const std::vector<std::string>& command_completion_words() {
 const std::vector<std::string>& builtin_expression_completion_words() {
     static const std::vector<std::string> words = {
         "help", "exit", "quit",
-        "sin(", "cos(", "tan(", "asin(", "acos(", "atan(",
-        "sinh(", "cosh(", "tanh(",
-        "exp(", "exp2(", "ln(", "log(", "log2(", "log10(", "gamma(", "sqrt(", "cbrt(", "root(",
+        "sin(", "cos(", "tan(", "sec(", "csc(", "cot(", "asin(", "acos(", "atan(", "asec(", "acsc(", "acot(",
+        "sinh(", "cosh(", "tanh(", "asinh(", "acosh(", "atanh(",
+        "exp(", "exp2(", "ln(", "log(", "log2(", "log10(", "gamma(", "beta(", "zeta(", "erf(", "erfc(", "bessel(", "sqrt(", "cbrt(", "root(",
         "abs(", "sign(", "floor(", "ceil(", "round(", "trunc(", "clamp(",
         "min(", "max(", "clamp(", "sum(", "avg(", "mean(", "median(", "mode(", "var(", "std(", "percentile(", "quartile(", "factorial(", "nCr(", "nPr(",
-        "gcd(", "lcm(", "mod(", "pow(", "rat(", "factor(",
-        "deg2rad(", "rad2deg(", "celsius(", "fahrenheit(", "kelvin(",
-        "poly_add(", "poly_sub(", "poly_mul(", "poly_div(", "roots(",
-        "diff(", "limit(", "integral(", "critical(", "taylor(", "extrema(", "simplify(",
+        "cov(", "corr(", "rand(", "randn(", "randint(", "cdf_normal(", "pdf_normal(",
+        "gcd(", "lcm(", "mod(", "pow(", "rat(", "factor(", "fib(", "is_prime(", "next_prime(",
+        "deg(", "rad(", "deg2rad(", "rad2deg(", "sin_deg(", "cos_deg(", "celsius(", "fahrenheit(", "kelvin(", "c2f(", "f2c(",
+        "poly_add(", "poly_sub(", "poly_mul(", "poly_div(", "roots(", "poly_eval(", "poly_deriv(", "poly_integ(", "poly_fit(", "poly_compose(", "poly_gcd(",
+        "diff(", "limit(", "integral(", "gradient(", "jacobian(", "hessian(", "critical(", "taylor(", "extrema(", "simplify(",
         "ode(", "ode_table(", "ode_system(", "ode_system_table(",
-        "lp_max(", "lp_min(", "ilp_max(", "ilp_min(",
-        "step(", "delta(", "laplace(", "ilaplace(", "fourier(", "ifourier(",
-        "ztrans(", "iztrans(", "dft(", "idft(", "convolve(",
+        "lp_max(", "lp_min(", "ilp_max(", "ilp_min(", "milp_max(", "milp_min(", "bip_max(", "bip_min(", "binary_max(", "binary_min(",
+        "step(", "delta(", "heaviside(", "impulse(", "laplace(", "ilaplace(", "inverse_laplace(", "fourier(", "ifourier(", "inverse_fourier(",
+        "ztrans(", "iztrans(", "z_transform(", "inverse_z(", "dft(", "fft(", "idft(", "ifft(", "conv(", "convolve(",
         "pade(", "puiseux(", "series_sum(", "summation(",
         "vec(", "mat(", "zeros(", "eye(", "identity(",
         "resize(", "append_row(", "append_col(", "transpose(", "inverse(",
         "dot(", "outer(", "null(", "least_squares(", "qr_q(", "qr_r(",
-        "svd_u(", "svd_s(", "svd_vt(",
+        "lu_l(", "lu_u(", "svd(", "svd_u(", "svd_s(", "svd_vt(", "pinv(", "kron(", "hadamard(",
         "solve(", "get(", "set(",
-        "norm(", "trace(", "det(", "rank(", "rref(", "eigvals(", "eigvecs(",
+        "norm(", "trace(", "det(", "rank(", "rref(", "eig(", "eigvals(", "eigvecs(", "cond(", "diag(", "reshape(", "cholesky(", "schur(", "hessenberg(",
         "bin(", "oct(", "hex(", "base(",
         "and(", "or(", "xor(", "not(", "shl(", "shr(", "rol(", "ror(",
         "popcount(", "bitlen(", "ctz(", "clz(", "parity(", "reverse_bits("

@@ -180,6 +180,53 @@ std::string build_help_topic(const std::string& topic) {
         "  Example: rref(m)";
     }
 
+    if (topic == "symbolic") {
+        return
+        "Symbolic tools:\n"
+        "  Simplify:       simplify(expr)\n"
+        "  Derivative:     diff(expr), diff(expr, x), diff(expr, x, y)\n"
+        "  Integral:       integral(expr), integral(expr, x), integral(expr, x, y)\n"
+        "  Vector calc:    gradient(expr, x, y), jacobian([f; g], x, y), hessian(expr, x, y)\n"
+        "  Critical:       critical(expr, x, y) with Hessian classification when available\n"
+        "  Series:         taylor(expr, a, n), pade(expr, m, n), pade(expr, a, m, n), puiseux(expr, a, degree, denominator)\n"
+        "  Sums:           series_sum(expr, n, lower, upper), summation(expr, n, lower, upper)\n"
+        "  Signals:        step(t), delta(t), heaviside(t), impulse(t)\n"
+        "  Transforms:     laplace(expr, t, s), ilaplace(expr, s, t), fourier(expr, t, w), ifourier(expr, w, t)\n"
+        "  Z-transform:    ztrans(expr, n, z), iztrans(expr, z, n)\n"
+        "  Examples:       integral(1 / (s + 2), s), ilaplace(1 / (s + 2), s, t)\n"
+        "  Examples:       gradient(x ^ 2 + y ^ 2, x, y), critical(x ^ 2 - y ^ 2, x, y)\n"
+        "  Notes:          symbolic integration is rule-based, not a full Risch integrator";
+    }
+
+    if (topic == "analysis") {
+        return
+        "Analysis and solving:\n"
+        "  Roots:          solve(expr, guess), bisect(expr, left, right), secant(expr, x0, x1), fixed_point(expr, x0)\n"
+        "  Limits:         limit(expr, x0), limit(expr, x0, direction)\n"
+        "  Extrema:        extrema(f, left, right[, scan_segments])\n"
+        "  Integrals:      integral(f, x0), integral(f, a, b)\n"
+        "  Multi-var:      double_integral, double_integral_polar, double_integral_cyl\n"
+        "  Multi-var:      triple_integral, triple_integral_cyl, triple_integral_sph\n"
+        "  ODE scalar:     ode(rhs, x0, y0, x1[, steps]), ode_table(rhs, x0, y0, x1[, steps])\n"
+        "  ODE system:     ode_system(rhs_vec, x0, y0_vec, x1[, steps]), ode_system_table(...)\n"
+        "  Events/params:  ODE commands accept optional parameter vectors and event expressions\n"
+        "  Examples:       solve(x ^ 2 - 2, 1), limit(sin(x) / x, 0)\n"
+        "  Examples:       ode(y - x, 0, 1, 2), ode_system(vec(y2, -y1), 0, vec(0, 1), 1)";
+    }
+
+    if (topic == "planning") {
+        return
+        "Planning and optimization:\n"
+        "  Linear:         lp_max(c, A, b, lo, hi), lp_min(c, A, b, lo, hi)\n"
+        "  Integer:        ilp_max(c, A, b, lo, hi), ilp_min(c, A, b, lo, hi)\n"
+        "  Mixed integer:  milp_max(c, A, b, lo, hi, integrality), milp_min(...)\n"
+        "  Binary:         bip_max(c, A, b), bip_min(c, A, b)\n"
+        "  Binary aliases: binary_max(c, A, b), binary_min(c, A, b)\n"
+        "  Optional args:  equality constraints can be supplied as Aeq and beq\n"
+        "  Examples:       lp_max(vec(3, 2), mat(3, 2, 1, 1, 1, 0, 0, 1), vec(4, 2, 3), vec(0, 0), vec(10, 10))\n"
+        "  Examples:       bip_max(vec(5, 4, 3), mat(1, 3, 2, 1, 1), vec(2))";
+    }
+
     if (topic == "functions") {
         return
         "Common functions:\n"
@@ -206,8 +253,9 @@ std::string build_help_topic(const std::string& topic) {
         "  Multi-var:     double_integral double_integral_cyl double_integral_polar triple_integral triple_integral_cyl triple_integral_sph\n"
         "  Bitwise:       and or xor not shl shr rol ror popcount bitlen ctz clz parity reverse_bits\n"
         "  Script:        fn if else while for return break continue print strings\n"
-        "  Custom:        f(x)=...  poly_add poly_sub poly_mul poly_div roots poly_eval poly_deriv poly_integ poly_fit poly_compose poly_gcd "
-        "simplify symbolic/numeric diff integral critical taylor limit extrema ode ode_table ode_system ode_system_table "
+        "  Custom:        f(x)=...  poly_add poly_sub poly_mul poly_div roots poly_eval poly_deriv poly_integ poly_fit poly_compose poly_gcd\n"
+        "  Symbolic:      simplify diff integral gradient jacobian hessian critical taylor pade puiseux series_sum summation\n"
+        "  Analysis:      limit extrema ode ode_table ode_system ode_system_table "
         "lp_max lp_min ilp_max ilp_min milp_max milp_min bip_max bip_min solve bisect secant fixed_point eig svd";
     }
 
@@ -271,6 +319,9 @@ std::string Calculator::help_text() const {
         "  :help commands      Show command reference\n"
         "  :help functions     Show supported functions\n"
         "  :help matrix        Show matrix usage guide\n"
+        "  :help symbolic      Show symbolic algebra and transform help\n"
+        "  :help analysis      Show calculus, root solving, and ODE help\n"
+        "  :help planning      Show linear/integer planning help\n"
         "  :help examples      Show example inputs\n"
         "  :help exact         Show exact fraction mode help\n"
         "  :help variables     Show variable and function usage help\n"

@@ -1,9 +1,0 @@
-# test_variables.calc
-# Test variable assignment and expressions
-
-a = 10;
-b = 20;
-c = a + b;
-d = (a * b) / (a + b);
-result = pow(a, 2) + pow(b, 2);
-result;

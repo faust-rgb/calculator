@@ -2322,6 +2322,12 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (expr_is_zero(left)) {
                 return make_negate(right).simplify();
             }
+            if (right.node_->type == NodeType::kNegate) {
+                return make_add(left, SymbolicExpression(right.node_->left)).simplify();
+            }
+            if (right.is_number(&right_value) && right_value < 0.0) {
+                return make_add(left, SymbolicExpression::number(-right_value)).simplify();
+            }
             {
                 SymbolicExpression combined;
                 if (try_combine_like_terms(left, right, -1.0, &combined)) {
@@ -2495,6 +2501,14 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             return make_divide(left, right);
         case NodeType::kPower:
+            if (left.is_number(&left_value)) {
+                if (mymath::is_near_zero(left_value, kFormatEps)) {
+                    return SymbolicExpression::number(0.0);
+                }
+                if (mymath::is_near_zero(left_value - 1.0, kFormatEps)) {
+                    return SymbolicExpression::number(1.0);
+                }
+            }
             if (right.is_number(&right_value)) {
                 if (mymath::is_near_zero(right_value, kFormatEps)) {
                     return SymbolicExpression::number(1.0);
@@ -3181,6 +3195,14 @@ SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expr
     if (simplified.node_->type == NodeType::kDivide) {
         const SymbolicExpression numerator(simplified.node_->left);
         const SymbolicExpression denominator = SymbolicExpression(simplified.node_->right).simplify();
+        double numerator_factor = 1.0;
+        SymbolicExpression numerator_base = numerator.simplify();
+        if (decompose_constant_times_expression(numerator_base,
+                                                transform_variable,
+                                                &numerator_factor,
+                                                &numerator_base)) {
+            numerator_base = numerator_base.simplify();
+        }
 
         if (numerator.is_number(&numeric) &&
             mymath::is_near_zero(numeric - 1.0, kFormatEps)) {
@@ -3227,6 +3249,39 @@ SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expr
             }
         }
 
+        if (numerator_base.is_number(&numeric) &&
+            !mymath::is_near_zero(numeric, kFormatEps)) {
+            numerator_factor *= numeric;
+            numerator_base = SymbolicExpression::number(1.0);
+        }
+
+        if (numerator_base.is_number(&numeric) &&
+            mymath::is_near_zero(numeric - 1.0, kFormatEps) &&
+            denominator.node_->type == NodeType::kPower &&
+            SymbolicExpression(denominator.node_->left).is_variable_named(transform_variable)) {
+            double exponent = 0.0;
+            if (SymbolicExpression(denominator.node_->right).is_number(&exponent) &&
+                mymath::is_integer(exponent, 1e-10) &&
+                exponent >= 1.0) {
+                const int order = static_cast<int>(exponent + 0.5) - 1;
+                SymbolicExpression result;
+                if (order == 0) {
+                    result = SymbolicExpression::number(1.0);
+                } else {
+                    result = make_divide(
+                                 make_power(SymbolicExpression::variable(time_variable),
+                                            SymbolicExpression::number(
+                                                static_cast<double>(order))),
+                                 SymbolicExpression::number(factorial_double(order)))
+                                 .simplify();
+                }
+                return make_multiply(SymbolicExpression::number(numerator_factor),
+                                     make_multiply(result,
+                                                   make_step_expression(time_variable, 0.0)))
+                    .simplify();
+            }
+        }
+
         double numerator_scale = 0.0;
         double linear_slope = 0.0;
         double linear_intercept = 0.0;
@@ -3262,23 +3317,27 @@ SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expr
             SymbolicExpression(denominator.node_->right).is_number(&sine_frequency) &&
             sine_frequency > 0.0) {
             const double frequency = mymath::sqrt(sine_frequency);
-            if (numerator.is_variable_named(transform_variable)) {
-                return make_multiply(make_function("cos",
-                                                   make_multiply(
-                                                       SymbolicExpression::number(frequency),
-                                                       SymbolicExpression::variable(
-                                                           time_variable))),
-                                     make_step_expression(time_variable, 0.0))
+            if (numerator_base.is_variable_named(transform_variable)) {
+                return make_multiply(
+                           SymbolicExpression::number(numerator_factor),
+                           make_multiply(make_function("cos",
+                                                       make_multiply(
+                                                           SymbolicExpression::number(frequency),
+                                                           SymbolicExpression::variable(
+                                                               time_variable))),
+                                         make_step_expression(time_variable, 0.0)))
                     .simplify();
             }
-            if (numerator.is_number(&numeric) &&
-                mymath::is_near_zero(numeric - frequency, 1e-10)) {
-                return make_multiply(make_function("sin",
-                                                   make_multiply(
-                                                       SymbolicExpression::number(frequency),
-                                                       SymbolicExpression::variable(
-                                                           time_variable))),
-                                     make_step_expression(time_variable, 0.0))
+            if (numerator_base.is_number(&numeric) &&
+                mymath::is_near_zero(numeric - 1.0, kFormatEps)) {
+                return make_multiply(
+                           SymbolicExpression::number(numerator_factor / frequency),
+                           make_multiply(make_function("sin",
+                                                       make_multiply(
+                                                           SymbolicExpression::number(frequency),
+                                                           SymbolicExpression::variable(
+                                                               time_variable))),
+                                         make_step_expression(time_variable, 0.0)))
                     .simplify();
             }
         }
@@ -3357,15 +3416,46 @@ SymbolicExpression fourier_transform_impl(const SymbolicExpression& expression,
             double shift = 0.0;
             if (match_step_shift(left, time_variable, &shift) &&
                 mymath::is_near_zero(shift, kFormatEps)) {
+                if (right.node_->type == NodeType::kAdd ||
+                    right.node_->type == NodeType::kSubtract) {
+                    const SymbolicExpression lhs_term =
+                        make_multiply(left, SymbolicExpression(right.node_->left));
+                    const SymbolicExpression rhs_term =
+                        make_multiply(left, SymbolicExpression(right.node_->right));
+                    if (right.node_->type == NodeType::kAdd) {
+                        return make_add(fourier_transform_impl(lhs_term,
+                                                               time_variable,
+                                                               frequency_variable),
+                                        fourier_transform_impl(rhs_term,
+                                                               time_variable,
+                                                               frequency_variable))
+                            .simplify();
+                    }
+                    return make_subtract(fourier_transform_impl(lhs_term,
+                                                                time_variable,
+                                                                frequency_variable),
+                                         fourier_transform_impl(rhs_term,
+                                                                time_variable,
+                                                                frequency_variable))
+                        .simplify();
+                }
                 double exponent = 0.0;
                 double intercept = 0.0;
-                if (match_exponential_linear(right,
+                double factor = 1.0;
+                SymbolicExpression exponential = right;
+                if (decompose_constant_times_expression(right,
+                                                        time_variable,
+                                                        &factor,
+                                                        &exponential)) {
+                    exponential = exponential.simplify();
+                }
+                if (match_exponential_linear(exponential,
                                              time_variable,
                                              &exponent,
                                              &intercept) &&
                     !mymath::is_near_zero(exponent, kFormatEps)) {
                     return make_divide(
-                               SymbolicExpression::number(mymath::exp(intercept)),
+                               SymbolicExpression::number(factor * mymath::exp(intercept)),
                                make_subtract(
                                    make_multiply(SymbolicExpression::variable("i"),
                                                  SymbolicExpression::variable(
@@ -3376,15 +3466,46 @@ SymbolicExpression fourier_transform_impl(const SymbolicExpression& expression,
             }
             if (match_step_shift(right, time_variable, &shift) &&
                 mymath::is_near_zero(shift, kFormatEps)) {
+                if (left.node_->type == NodeType::kAdd ||
+                    left.node_->type == NodeType::kSubtract) {
+                    const SymbolicExpression lhs_term =
+                        make_multiply(SymbolicExpression(left.node_->left), right);
+                    const SymbolicExpression rhs_term =
+                        make_multiply(SymbolicExpression(left.node_->right), right);
+                    if (left.node_->type == NodeType::kAdd) {
+                        return make_add(fourier_transform_impl(lhs_term,
+                                                               time_variable,
+                                                               frequency_variable),
+                                        fourier_transform_impl(rhs_term,
+                                                               time_variable,
+                                                               frequency_variable))
+                            .simplify();
+                    }
+                    return make_subtract(fourier_transform_impl(lhs_term,
+                                                                time_variable,
+                                                                frequency_variable),
+                                         fourier_transform_impl(rhs_term,
+                                                                time_variable,
+                                                                frequency_variable))
+                        .simplify();
+                }
                 double exponent = 0.0;
                 double intercept = 0.0;
-                if (match_exponential_linear(left,
+                double factor = 1.0;
+                SymbolicExpression exponential = left;
+                if (decompose_constant_times_expression(left,
+                                                        time_variable,
+                                                        &factor,
+                                                        &exponential)) {
+                    exponential = exponential.simplify();
+                }
+                if (match_exponential_linear(exponential,
                                              time_variable,
                                              &exponent,
                                              &intercept) &&
                     !mymath::is_near_zero(exponent, kFormatEps)) {
                     return make_divide(
-                               SymbolicExpression::number(mymath::exp(intercept)),
+                               SymbolicExpression::number(factor * mymath::exp(intercept)),
                                make_subtract(
                                    make_multiply(SymbolicExpression::variable("i"),
                                                  SymbolicExpression::variable(
@@ -3800,19 +3921,52 @@ SymbolicExpression inverse_z_transform_impl(const SymbolicExpression& expression
     if (simplified.node_->type == NodeType::kDivide) {
         const SymbolicExpression numerator = SymbolicExpression(simplified.node_->left).simplify();
         const SymbolicExpression denominator = SymbolicExpression(simplified.node_->right).simplify();
+        double numerator_factor = 1.0;
+        SymbolicExpression numerator_base = numerator;
+        if (decompose_constant_times_expression(numerator_base,
+                                                transform_variable,
+                                                &numerator_factor,
+                                                &numerator_base)) {
+            numerator_base = numerator_base.simplify();
+        }
 
-        if (numerator.is_variable_named(transform_variable) &&
+        if (numerator_base.is_number(&numeric) &&
+            !mymath::is_near_zero(numeric, kFormatEps)) {
+            numerator_factor *= numeric;
+            numerator_base = SymbolicExpression::number(1.0);
+        }
+
+        if (numerator_base.is_number(&numeric) &&
+            mymath::is_near_zero(numeric - 1.0, kFormatEps) &&
+            denominator.node_->type == NodeType::kPower &&
+            SymbolicExpression(denominator.node_->left).is_variable_named(transform_variable)) {
+            double exponent = 0.0;
+            if (SymbolicExpression(denominator.node_->right).is_number(&exponent) &&
+                mymath::is_integer(exponent, 1e-10) &&
+                exponent >= 0.0) {
+                return make_multiply(
+                           SymbolicExpression::number(numerator_factor),
+                           make_delta_expression(index_variable,
+                                                 static_cast<double>(
+                                                     static_cast<int>(exponent + 0.5))))
+                    .simplify();
+            }
+        }
+
+        if (numerator_base.is_variable_named(transform_variable) &&
             denominator.node_->type == NodeType::kSubtract &&
             SymbolicExpression(denominator.node_->left).is_variable_named(transform_variable) &&
             SymbolicExpression(denominator.node_->right).is_number(&numeric)) {
             return make_multiply(
-                       make_power(SymbolicExpression::number(numeric),
-                                  SymbolicExpression::variable(index_variable)),
-                       make_step_expression(index_variable, 0.0))
+                       SymbolicExpression::number(numerator_factor),
+                       make_multiply(
+                           make_power(SymbolicExpression::number(numeric),
+                                      SymbolicExpression::variable(index_variable)),
+                           make_step_expression(index_variable, 0.0)))
                 .simplify();
         }
 
-        if (numerator.is_variable_named(transform_variable) &&
+        if (numerator_base.is_variable_named(transform_variable) &&
             denominator.node_->type == NodeType::kPower &&
             SymbolicExpression(denominator.node_->left).node_->type == NodeType::kSubtract &&
             SymbolicExpression(
@@ -3824,8 +3978,10 @@ SymbolicExpression inverse_z_transform_impl(const SymbolicExpression& expression
             mymath::is_near_zero(numeric - 1.0, kFormatEps) &&
             SymbolicExpression(denominator.node_->right).is_number(&numeric) &&
             mymath::is_near_zero(numeric - 2.0, kFormatEps)) {
-            return make_multiply(SymbolicExpression::variable(index_variable),
-                                 make_step_expression(index_variable, 0.0))
+            return make_multiply(
+                       SymbolicExpression::number(numerator_factor),
+                       make_multiply(SymbolicExpression::variable(index_variable),
+                                     make_step_expression(index_variable, 0.0)))
                 .simplify();
         }
     }

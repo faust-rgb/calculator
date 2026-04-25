@@ -823,6 +823,9 @@ int main() {
             help.find(":help commands") != std::string::npos &&
             help.find(":help functions") != std::string::npos &&
             help.find(":help matrix") != std::string::npos &&
+            help.find(":help symbolic") != std::string::npos &&
+            help.find(":help analysis") != std::string::npos &&
+            help.find(":help planning") != std::string::npos &&
             help.find(":help examples") != std::string::npos &&
             help.find(":help exact") != std::string::npos &&
             help.find(":help variables") != std::string::npos &&
@@ -888,7 +891,8 @@ int main() {
             help.find("double_integral") != std::string::npos &&
             help.find("triple_integral") != std::string::npos &&
             help.find("triple_integral_sph") != std::string::npos &&
-            help.find("symbolic/numeric diff integral critical taylor limit extrema ode ode_table ode_system ode_system_table") != std::string::npos &&
+            help.find("simplify diff integral gradient jacobian hessian critical") != std::string::npos &&
+            help.find("limit extrema ode ode_table ode_system ode_system_table") != std::string::npos &&
             help.find("lp_max lp_min ilp_max ilp_min milp_max milp_min bip_max bip_min") != std::string::npos &&
             help.find("step delta heaviside impulse") != std::string::npos &&
             help.find("fourier ifourier laplace ilaplace ztrans iztrans") != std::string::npos &&
@@ -904,6 +908,64 @@ int main() {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: help_topic(functions) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const std::string help = calculator.help_topic("symbolic");
+        const bool ok =
+            help.find("gradient(expr, x, y)") != std::string::npos &&
+            help.find("jacobian([f; g], x, y)") != std::string::npos &&
+            help.find("hessian(expr, x, y)") != std::string::npos &&
+            help.find("ilaplace(expr, s, t)") != std::string::npos &&
+            help.find("ztrans(expr, n, z)") != std::string::npos;
+        if (ok) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: help_topic(symbolic) missing expected entries\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: help_topic(symbolic) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const std::string help = calculator.help_topic("analysis");
+        const bool ok =
+            help.find("solve(expr, guess)") != std::string::npos &&
+            help.find("limit(expr, x0)") != std::string::npos &&
+            help.find("ode(rhs, x0, y0, x1") != std::string::npos &&
+            help.find("ode_system(rhs_vec") != std::string::npos;
+        if (ok) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: help_topic(analysis) missing expected entries\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: help_topic(analysis) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const std::string help = calculator.help_topic("planning");
+        const bool ok =
+            help.find("lp_max(c, A, b, lo, hi)") != std::string::npos &&
+            help.find("ilp_max(c, A, b, lo, hi)") != std::string::npos &&
+            help.find("milp_max(c, A, b, lo, hi, integrality)") != std::string::npos &&
+            help.find("binary_max(c, A, b)") != std::string::npos;
+        if (ok) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: help_topic(planning) missing expected entries\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: help_topic(planning) threw unexpected error: "
                   << ex.what() << '\n';
     }
 
@@ -1644,6 +1706,40 @@ int main() {
     }
 
     try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("diff(sin(x) * exp(x), x)", &output);
+        if (handled && output == "exp(x) * (cos(x) + sin(x))") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic product/chain diff expected exp(x) * (cos(x) + sin(x)) got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic product/chain diff threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("diff(x ^ 2 * y + sin(y), x, y)", &output);
+        if (handled && output == "2 * x") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: chained mixed partial diff expected 2 * x got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: chained mixed partial diff threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
         const std::vector<std::string> function_names = calculator.custom_function_names();
         bool has_f = false;
         bool has_g2 = false;
@@ -2293,6 +2389,57 @@ int main() {
     try {
         std::string output;
         const bool handled =
+            calculator.try_process_function_command("integral(cos(3 * x), x)", &output);
+        if (handled && output == "sin(3 * x) / 3 + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic linear-chain integral expected sin(3 * x) / 3 + C got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic linear-chain integral threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(3 * x ^ 2 * exp(x ^ 3), x)", &output);
+        if (handled && output == "exp(x ^ 3) + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic substitution exponential integral expected exp(x ^ 3) + C got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic substitution exponential integral threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(1 / (x + 2), x)", &output);
+        if (handled && output == "ln(abs(x + 2)) + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic shifted logarithmic integral expected ln(abs(x + 2)) + C got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic shifted logarithmic integral threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
             calculator.try_process_function_command("integral(1 / x)", &output);
         if (handled && output == "ln(abs(x)) + C") {
             ++passed;
@@ -2698,6 +2845,77 @@ int main() {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: symbolic jacobian threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "gradient(x ^ 2 + x * y + y ^ 2, x, y)", &output);
+        if (handled && output == "[2 * x + y, 2 * y + x]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic quadratic gradient returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic quadratic gradient threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "hessian(x ^ 2 + x * y + y ^ 2, x, y)", &output);
+        if (handled && output == "[[2, 1], [1, 2]]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic quadratic hessian returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic quadratic hessian threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "jacobian([x ^ 2 + y; sin(x * y)], x, y)", &output);
+        if (handled && output == "[[2 * x, 1], [cos(x * y) * y, cos(x * y) * x]]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic nonlinear jacobian returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic nonlinear jacobian threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("critical(x ^ 2 - y ^ 2, x, y)", &output);
+        if (handled && output == "[x = 0, y = 0] (saddle)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic saddle critical returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic saddle critical threw unexpected error: "
                   << ex.what() << '\n';
     }
 
@@ -3263,6 +3481,57 @@ int main() {
     }
 
     try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("limit((x ^ 3 - 1) / (x - 1), 1)", &output);
+        if (handled && output == "3") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: cubic removable-singularity limit expected 3 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: cubic removable-singularity limit threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("limit(abs(x) / x, 0, 1)", &output);
+        if (handled && output == "1") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: right absolute-value limit expected 1 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: right absolute-value limit threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("limit(abs(x) / x, 0, -1)", &output);
+        if (handled && output == "-1") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: left absolute-value limit expected -1 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: left absolute-value limit threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
         const std::string output = calculator.evaluate_for_display("2.00000000005", false);
         if (output == "2") {
             ++passed;
@@ -3316,6 +3585,57 @@ int main() {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: solve(exp(x) - 2, 0.5) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("solve(cos(x) - x, 0.5)", &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 0.739085133215, 1e-10)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: solve(cos(x) - x, 0.5) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: solve(cos(x) - x, 0.5) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("bisect(x ^ 3 - x - 2, 1, 2)", &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 1.5213797068, 1e-10)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: bisect(x ^ 3 - x - 2, 1, 2) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: bisect(x ^ 3 - x - 2, 1, 2) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("secant(x ^ 3 - x - 2, 1, 2)", &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 1.5213797068, 1e-10)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: secant(x ^ 3 - x - 2, 1, 2) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: secant(x ^ 3 - x - 2, 1, 2) threw unexpected error: "
                   << ex.what() << '\n';
     }
 
@@ -3951,6 +4271,7 @@ int main() {
         {"mat(2, 2, 1, 1, 0, 1) ^ -2", false, "[[1, -2], [0, 1]]"},
         {"transpose(mat(2, 3, 1, 2, 3, 4, 5, 6))", false, "[[1, 4], [2, 5], [3, 6]]"},
         {"inverse(mat(2, 2, 1, 2, 3, 4))", false, "[[-2, 1], [1.5, -0.5]]"},
+        {"inverse(mat(3, 3, 1, 2, 3, 0, 1, 4, 5, 6, 0))", false, "[[-24, 18, 5], [20, -15, -4], [-5, 4, 1]]"},
         {"pinv(mat(2, 2, 1, 2, 3, 4))", false, "[[-2, 1], [1.5, -0.5]]"},
         {"dot(vec(1, 2, 3), vec(4, 5, 6))", false, "32"},
         {"outer(vec(1, 2), vec(3, 4, 5))", false, "[[3, 4, 5], [6, 8, 10]]"},
@@ -3972,6 +4293,7 @@ int main() {
         {"svd_vt(mat(3, 2, 3, 0, 0, 2, 0, 0))", false, "[[1, 0], [0, 1]]"},
         {"solve(mat(2, 2, 2, 1, 5, 3), vec(1, 2))", false, "[[1], [-1]]"},
         {"solve(mat(2, 2, 2, 1, 5, 3), mat(2, 1, 1, 2))", false, "[[1], [-1]]"},
+        {"solve(mat(3, 3, 3, 2, -1, 2, -2, 4, -1, 0.5, -1), vec(1, -2, 0))", false, "[[1], [-2], [-2]]"},
         {"get([1, 2; 3, 4], 1, 0)", false, "3"},
         {"get(mat(2, 2, 1, 2, 3, 4), 1, 0)", false, "3"},
         {"get(vec(5, 6, 7), 2)", false, "7"},
@@ -3985,8 +4307,10 @@ int main() {
         {"pinv(mat(2, 2, 1, 2, 2, 4))", false, "[[0.04, 0.08], [0.08, 0.16]]"},
         {"trace(mat(2, 2, 1, 2, 3, 4))", false, "5"},
         {"det(mat(2, 2, 1, 2, 3, 4))", false, "-2"},
+        {"det(mat(3, 3, 1, 2, 3, 0, 1, 4, 5, 6, 0))", false, "1"},
         {"rank(mat(2, 2, 1, 2, 2, 4))", false, "1"},
         {"rref(mat(2, 3, 1, 2, 3, 2, 4, 6))", false, "[[1, 2, 3], [0, 0, 0]]"},
+        {"rref(mat(3, 4, 1, 2, -1, -4, 2, 3, -1, -11, -2, 0, -3, 22))", false, "[[1, 0, 0, -8], [0, 1, 0, 1], [0, 0, 1, -2]]"},
         {"eigvals(mat(2, 2, 2, 0, 0, 3))", false, "[3, 2]"},
         {"eigvecs(mat(2, 2, 2, 0, 0, 3))", false, "[[0, 1], [1, 0]]"},
         {"diag(vec(1, 2, 3))", false, "[[1, 0, 0], [0, 2, 0], [0, 0, 3]]"},
@@ -4378,10 +4702,16 @@ int main() {
         {"ilaplace(1 / s)", false, "step(t)"},
         {"ilaplace(1 / (s + 2), s, t)", false, "exp(-2 * t) * step(t)"},
         {"ilaplace(3 / (2 * s + 4), s, t)", false, "3/2 * exp(-2 * t) * step(t)"},
+        {"fourier(exp(-2 * t) * step(t), t, w)", false, "1 / (i * w + 2)"},
+        {"fourier(exp(-2 * t) * step(t) + 3 * exp(-4 * t) * step(t), t, w)", false, "1 / (i * w + 2) + 3 * 1 / (i * w + 4)"},
         {"fourier(delta(t - 2))", false, "exp(-2 * i * w)"},
         {"ifourier(delta(w - 3))", false, "0.159154943092 * exp(3 * i * t)"},
         {"ztrans(step(n - 2))", false, "z ^ -1 / (z - 1)"},
         {"iztrans(z ^ -2)", false, "delta(n - 2)"},
+        {"iztrans(z / (z - 1), z, n)", false, "step(n)"},
+        {"iztrans(3 * z / (z - 1), z, n)", false, "3 * step(n)"},
+        {"iztrans(2 * z / (z - 1) ^ 2, z, n)", false, "2 * step(n) * n"},
+        {"iztrans(5 * z / (z - 3) - 2 * z ^ -2 + z / (z - 1), z, n)", false, "step(n) + 5 * step(n) * 3 ^ n - 2 * delta(n - 2)"},
     };
 
     for (const auto& test : command_display_cases) {

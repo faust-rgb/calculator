@@ -235,6 +235,8 @@ Notes:
 - `null(m)` returns a basis matrix whose columns span the nullspace
 - `svd_u(A)`, `svd_s(A)`, and `svd_vt(A)` return the reduced SVD factors
 - `solve(A, b)` solves `Ax = b` for square `A` and vector `b`
+- 3x3 inverse, determinant, RREF, and linear solve workflows are covered by the
+  regression suite in addition to the smaller examples below
 - `dft` / `fft` return an `N x 2` matrix whose rows are `[real, imag]`
 - `idft` / `ifft` accept a real vector or an `N x 2` complex matrix
 - `conv` / `convolve` perform linear convolution on real vectors or `N x 2` complex sequences
@@ -334,6 +336,10 @@ Notes:
 
 - `diff`, `integral`, `taylor`, `limit`, and `extrema` operate on one-variable functions
 - symbolic `diff(expr)` and `integral(expr)` also accept raw one-variable expressions and infer the variable name automatically
+- symbolic `diff(expr, variable1, variable2, ...)` applies chained partial
+  differentiation in the provided variable order
+- symbolic `gradient`, `jacobian`, and `hessian` accept multi-variable
+  expressions and return vector/matrix displays
 - `taylor` also accepts raw one-variable symbolic expressions, not only named custom functions
 - `pade` builds a rational approximant from the local Taylor coefficients of `expr`
 - `critical` appends a Hessian-based classification (`local min`, `local max`, `saddle`, or `degenerate`) for isolated 1-3 variable points
