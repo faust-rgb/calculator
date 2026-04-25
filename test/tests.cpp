@@ -859,7 +859,7 @@ int main() {
             help.find(":symbolic on|off") != std::string::npos &&
             help.find(":hexprefix on|off") != std::string::npos &&
             help.find(":hexcase upper|lower") != std::string::npos &&
-            help.find(":run file") != std::string::npos &&
+            help.find(":run file.calc") != std::string::npos &&
             help.find(":load file") != std::string::npos;
         if (ok) {
             ++passed;
@@ -886,7 +886,7 @@ int main() {
             help.find("bin oct hex base") != std::string::npos &&
             help.find("sum avg median") != std::string::npos &&
             help.find("percentile quartile") != std::string::npos &&
-            help.find("fn if else while for return break continue print") != std::string::npos &&
+            help.find("def if elif else while for range return break continue print") != std::string::npos &&
             help.find("poly_add poly_sub poly_mul poly_div roots") != std::string::npos &&
             help.find("double_integral") != std::string::npos &&
             help.find("triple_integral") != std::string::npos &&
@@ -4785,8 +4785,8 @@ int main() {
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
-            "greeting = \"hello\";\n"
-            "print(greeting, \"world\", 2 + 3);\n",
+            "greeting = \"hello\"\n"
+            "print(greeting, \"world\", 2 + 3)\n",
             false);
         if (output == "hello world 5") {
             ++passed;
@@ -4845,8 +4845,8 @@ int main() {
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
-            "message = \"done\";\n"
-            "message;\n",
+            "message = \"done\"\n"
+            "message\n",
             false);
         if (output == "\"done\"") {
             ++passed;
@@ -4864,13 +4864,12 @@ int main() {
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
-            "x = 0;\n"
-            "sum = 0;\n"
-            "while (x < 5) {\n"
-            "  sum = sum + x;\n"
-            "  x = x + 1;\n"
-            "}\n"
-            "sum;\n",
+            "x = 0\n"
+            "sum = 0\n"
+            "while x < 5:\n"
+            "  sum = sum + x\n"
+            "  x = x + 1\n"
+            "sum\n",
             false);
         if (output == "10") {
             ++passed;
@@ -4888,13 +4887,14 @@ int main() {
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
-            "flag = 0;\n"
-            "if (2 > 3) {\n"
-            "  flag = 1;\n"
-            "} else {\n"
-            "  flag = 7;\n"
-            "}\n"
-            "flag;\n",
+            "flag = 0\n"
+            "if 2 > 3:\n"
+            "  flag = 1\n"
+            "elif 3 > 4:\n"
+            "  flag = 2\n"
+            "else:\n"
+            "  flag = 7\n"
+            "flag\n",
             false);
         if (output == "7") {
             ++passed;
@@ -4912,17 +4912,14 @@ int main() {
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
-            "sum = 0;\n"
-            "for (i = 0; i < 6; i = i + 1) {\n"
-            "  if (i == 2) {\n"
-            "    continue;\n"
-            "  }\n"
-            "  if (i == 5) {\n"
-            "    break;\n"
-            "  }\n"
-            "  sum = sum + i;\n"
-            "}\n"
-            "sum;\n",
+            "sum = 0\n"
+            "for i in range(0, 6):\n"
+            "  if i == 2:\n"
+            "    continue\n"
+            "  if i == 5:\n"
+            "    break\n"
+            "  sum = sum + i\n"
+            "sum\n",
             false);
         if (output == "8") {
             ++passed;
@@ -4940,14 +4937,12 @@ int main() {
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
-            "fn fact(n) {\n"
-            "  if (n <= 1) {\n"
-            "    return 1;\n"
-            "  } else {\n"
-            "    return n * fact(n - 1);\n"
-            "  }\n"
-            "}\n"
-            "fact(5);\n",
+            "def fact(n):\n"
+            "  if n <= 1:\n"
+            "    return 1\n"
+            "  else:\n"
+            "    return n * fact(n - 1)\n"
+            "fact(5)\n",
             false);
         if (output == "120") {
             ++passed;
@@ -4966,12 +4961,11 @@ int main() {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
             "# leading comment\n"
-            "fn add(a, b) {\n"
+            "def add(a, b):\n"
             "  # comment inside function body\n"
-            "  return a + b;\n"
-            "}\n"
+            "  return a + b\n"
             "# comment before print\n"
-            "print(add(2, 5));\n",
+            "print(add(2, 5))\n",
             false);
         if (output == "7") {
             ++passed;

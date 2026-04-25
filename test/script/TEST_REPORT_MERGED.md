@@ -1,31 +1,27 @@
-# Merged Script Test Report
+# Comprehensive Script Test Report
 
 Date: 2026-04-25
 
 ## Scope
 
-`test_merged_minimal.calc` consolidates representative examples from the older
-standalone script inputs. It covers variable assignment, control flow, script
-functions, selected math helpers, matrix arithmetic, symbolic calculus, critical
-points, transforms, and simplification.
+`comprehensive_validation.calc` covers representative script syntax and
+calculator features in one executable regression script.
 
 ## Validation
 
 ```bash
-./calculator < test/script/test_merged_minimal.calc
-printf ':run test/script/test_merged_minimal.calc\n' | ./calculator
+./calculator test/script/comprehensive_validation.calc
+printf ':run test/script/comprehensive_validation.calc\n' | ./calculator
 ```
 
-Both execution modes passed. The script's final expression is
-`laplace(step(t), t, s)`, so the expected final output is:
+Both execution modes passed. The script uses an internal score counter; the
+expected final output is:
 
 ```text
-1 / s
+11
 ```
 
 ## Notes
 
-- The script uses `fact(n)` for recursion because `factorial` is a built-in
-  reserved function name.
-- Symbolic integration examples are intentionally limited to expressions
-  supported by the current rule-based integrator.
+- Detailed syntax rules are maintained only in `test/script/SYNTAX_GUIDE.md`.
+- The script keeps command-only symbolic expressions as standalone statements.

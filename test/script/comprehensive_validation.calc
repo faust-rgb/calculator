@@ -1,0 +1,183 @@
+# Comprehensive calculator script validation.
+# Python-like .calc syntax: indentation defines blocks and statements do not end with semicolons.
+
+score = 0
+expected = 0
+
+print("== calculator comprehensive script validation ==")
+
+# Basic values, arithmetic, comparisons, comments, and strings.
+a = 10
+b = 20
+c = a + b
+expected = expected + 1
+if c == 30:
+    score = score + 1
+else:
+    print("FAIL arithmetic: ", c)
+
+label = "script strings work"
+print(label)
+
+# If / elif / else with nested branches.
+grade = 0
+if c > 40:
+    grade = -1
+elif c == 30:
+    grade = 1
+else:
+    grade = 0
+
+expected = expected + 1
+if grade == 1:
+    score = score + 1
+else:
+    print("FAIL if/elif/else: ", grade)
+
+# While loop.
+while_sum = 0
+i = 1
+while i <= 10:
+    while_sum = while_sum + i
+    i = i + 1
+
+expected = expected + 1
+if while_sum == 55:
+    score = score + 1
+else:
+    print("FAIL while loop: ", while_sum)
+
+# Python-like range loop with break and continue.
+odd_before_seven = 0
+for j in range(0, 10):
+    if j == 7:
+        break
+    if mod(j, 2) == 0:
+        continue
+    odd_before_seven = odd_before_seven + j
+
+expected = expected + 1
+if odd_before_seven == 9:
+    score = score + 1
+else:
+    print("FAIL for/break/continue: ", odd_before_seven)
+
+# Recursive and multi-argument script functions.
+def fact_script(n):
+    if n <= 1:
+        return 1
+    return n * fact_script(n - 1)
+
+def fib_script(n):
+    if n <= 1:
+        return n
+    else:
+        return fib_script(n - 1) + fib_script(n - 2)
+
+def choose_script(n, k):
+    return fact_script(n) / (fact_script(k) * fact_script(n - k))
+
+recursive_check = fact_script(6) + fib_script(8) + choose_script(6, 2)
+expected = expected + 1
+if recursive_check == 756:
+    score = score + 1
+else:
+    print("FAIL recursion/functions: ", recursive_check)
+
+# Numeric math functions and constants.
+math_check = abs(sin(pi / 2) - 1) + abs(cos(0) - 1) + abs(tan(pi / 4) - 1) + abs(ln(e) - 1) + abs(sqrt(81) - 9) + abs(root(27, 3) - 3)
+expected = expected + 1
+if math_check < 0.000001:
+    score = score + 1
+else:
+    print("FAIL math functions: ", math_check)
+
+# Integer helpers, rounding, and statistics.
+helper_check = gcd(84, 30) + lcm(6, 8) + mod(29, 5) + floor(3.9) + ceil(3.1)
+stats_check = sum(1, 2, 3, 4) + avg(2, 4, 6, 8) + min(7, 3) + max(7, 3)
+expected = expected + 1
+if helper_check == 41:
+    if stats_check == 25:
+        score = score + 1
+    else:
+        print("FAIL statistics: ", stats_check)
+else:
+    print("FAIL helpers/statistics: ", helper_check, " ", stats_check)
+
+# Matrices: literals, constructors, determinant, trace, rank, inverse, solve,
+# transpose, rref, and arithmetic are all exercised here.
+m = [1, 2; 3, 4]
+n = mat(2, 2, 5, 6, 7, 8)
+matrix_sum = m + n
+identity_check = m * inverse(m)
+linear_solution = solve(mat(2, 2, 2, 1, 5, 3), vec(1, 2))
+print("matrix sum: ", matrix_sum)
+print("matrix inverse product: ", identity_check)
+print("linear solution: ", linear_solution)
+print("transpose: ", transpose(m))
+print("rref: ", rref(mat(2, 3, 1, 2, 3, 2, 4, 6)))
+matrix_det = det(m)
+matrix_trace = trace(m)
+matrix_rank = rank(m)
+expected = expected + 1
+if matrix_det == -2:
+    if matrix_trace == 5:
+        if matrix_rank == 2:
+            score = score + 1
+        else:
+            print("FAIL matrix rank: ", matrix_rank)
+    else:
+        print("FAIL matrix trace: ", matrix_trace)
+else:
+    print("FAIL matrix scalar checks: ", matrix_det, " ", matrix_trace, " ", matrix_rank)
+
+# Polynomial vector helpers.
+poly_value = poly_eval(vec(1, 2, 3), 2)
+poly_derivative = poly_deriv(vec(1, 2, 3))
+poly_integral = poly_integ(vec(2, 6))
+print("poly_deriv: ", poly_derivative)
+print("poly_integ: ", poly_integral)
+expected = expected + 1
+if poly_value == 17:
+    score = score + 1
+else:
+    print("FAIL polynomial value: ", poly_value)
+
+# Numeric and symbolic analysis commands.
+quad_fn(x) = x ^ 2 + 2 * x + 1
+sinc_fn(x) = sin(x) / x
+analysis_check = diff(quad_fn, 2) + integral(quad_fn, 0, 1) + limit(sinc_fn, 0)
+diff(quad_fn)
+integral(quad_fn)
+taylor(quad_fn, 0, 3)
+solve(x ^ 2 - 2, 1)
+expected = expected + 1
+analysis_delta = abs(analysis_check - 9.3333333333)
+if analysis_delta < 0.000001:
+    score = score + 1
+else:
+    print("FAIL analysis numeric checks: ", analysis_check)
+
+# Symbolic simplification, calculus, critical points, and transforms.
+simplify(sin(x) ^ 2 + cos(x) ^ 2)
+diff(x ^ 3 + 2 * x, x)
+integral(1 / x)
+critical(x ^ 2 + y ^ 2, x, y)
+pade(exp(x), 2, 2)
+laplace(step(t), t, s)
+ilaplace(1 / s, s, t)
+fourier(delta(t - 2), t, w)
+ifourier(delta(w - 3), w, t)
+ztrans(step(n - 2), n, z)
+iztrans(z / (z - 1), z, n)
+
+# Programmer-style bit helpers.
+bit_check = and(12, 10) + or(12, 3) + xor(12, 10) + shl(3, 2) + shr(16, 2)
+expected = expected + 1
+if bit_check == 45:
+    score = score + 1
+else:
+    print("FAIL programmer helpers: ", bit_check)
+
+print("score: ", score, "/", expected)
+score

@@ -3,39 +3,26 @@
 This directory contains runnable calculator script examples and script syntax
 notes.
 
-## Running The Merged Script
+## Running The Comprehensive Script
 
 From the project root:
 
 ```bash
-./calculator < test/script/test_merged_minimal.calc
-printf ':run test/script/test_merged_minimal.calc\n' | ./calculator
+./calculator test/script/comprehensive_validation.calc
+printf ':run test/script/comprehensive_validation.calc\n' | ./calculator
 ```
 
 The expected final output is:
 
 ```text
-1 / s
+11
 ```
 
 ## Files
 
-- `test_merged_minimal.calc`
-  Consolidated representative workflow covering variables, `if`, `for`,
-  `while`, recursive script functions, selected math helpers, matrix arithmetic,
-  supported symbolic calculus examples, critical points, transforms, and
-  simplification.
+- `comprehensive_validation.calc`
+  Broad script and calculator feature validation.
 - `SYNTAX_GUIDE.md`
-  Script syntax and redirected-stdin behavior notes.
+  The dedicated script syntax guide.
 - `TEST_REPORT_MERGED.md`
-  Current validation notes for the merged script.
-
-## Script Syntax Notes
-
-1. Use `#` for line comments.
-2. End simple statements with `;`.
-3. Use `^` for exponentiation in calculator expressions.
-4. Do not define script functions with built-in reserved names such as
-   `factorial`, `sin`, or `solve`.
-5. Do not put `;` after the closing brace of `if`, `while`, `for`, or `fn`
-   blocks.
+  Historical validation notes for the older merged script.

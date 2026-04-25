@@ -29,7 +29,7 @@ Current test status:
 
 - `make test`
 - Expected: `Passed: 743, Failed: 0`
-- Merged script validation: `./calculator < test/script/test_merged_minimal.calc`
+- Comprehensive script validation: `./calculator test/script/comprehensive_validation.calc`
 
 ## Important Files
 
@@ -121,8 +121,7 @@ These are not plain numeric evaluation features; they are handled specially:
 - REPL commands for exact mode and symbolic constants mode
 
 Non-interactive input still falls back to `getline`.
-Multi-line redirected stdin now behaves like REPL input unless the content
-clearly looks like script syntax.
+Script files can be run directly with `./calculator file.calc`.
 
 ### Symbolic Constants Mode
 
