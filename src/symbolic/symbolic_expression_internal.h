@@ -51,12 +51,17 @@ SymbolicExpression make_function(const std::string& name,
                                  SymbolicExpression argument);
 std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node,
                            int parent_precedence);
+std::string node_structural_key(
+    const std::shared_ptr<SymbolicExpression::Node>& node);
 bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& node,
                                double* value);
 bool polynomial_coefficients_from_simplified(
     const SymbolicExpression& expression,
     const std::string& variable_name,
     std::vector<double>* coefficients);
+SymbolicExpression build_polynomial_expression_from_coefficients(
+    const std::vector<double>& coefficients,
+    const std::string& variable_name);
 void collect_identifier_variables(const SymbolicExpression& expression,
                                   std::vector<std::string>* names);
 SymbolicExpression simplify_impl(const SymbolicExpression& expression);

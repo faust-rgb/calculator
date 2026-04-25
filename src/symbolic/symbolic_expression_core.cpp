@@ -14,10 +14,12 @@
 #include <cctype>
 #include <memory>
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -42,6 +44,9 @@ std::string format_number(double value) {
                                      &denominator,
                                      999,
                                      1e-10)) {
+        if (value < 0.0) {
+            numerator = -numerator;
+        }
         if (denominator == 1) {
             return std::to_string(numerator);
         }
@@ -1805,6 +1810,58 @@ bool try_reduce_polynomial_quotient(const SymbolicExpression& left,
     return true;
 }
 
+bool try_reduce_polynomial_gcd_quotient(const SymbolicExpression& left,
+                                        const SymbolicExpression& right,
+                                        SymbolicExpression* reduced) {
+    const std::string variable_name = unique_identifier_variable(make_add(left, right));
+    if (variable_name.empty()) {
+        return false;
+    }
+
+    std::vector<double> numerator;
+    std::vector<double> denominator;
+    if (!polynomial_coefficients_from_simplified(left, variable_name, &numerator) ||
+        !polynomial_coefficients_from_simplified(right, variable_name, &denominator)) {
+        return false;
+    }
+    trim_polynomial_coefficients(&numerator);
+    trim_polynomial_coefficients(&denominator);
+    if (denominator.size() <= 1) {
+        return false;
+    }
+
+    std::vector<double> gcd = polynomial_gcd(numerator, denominator);
+    trim_polynomial_coefficients(&gcd);
+    if (gcd.size() <= 1) {
+        return false;
+    }
+
+    const PolynomialDivisionResult numerator_division =
+        polynomial_divide(numerator, gcd);
+    const PolynomialDivisionResult denominator_division =
+        polynomial_divide(denominator, gcd);
+    if (!polynomial_is_zero_remainder(numerator_division.remainder) ||
+        !polynomial_is_zero_remainder(denominator_division.remainder)) {
+        return false;
+    }
+
+    const SymbolicExpression reduced_numerator =
+        build_polynomial_expression_from_coefficients(numerator_division.quotient,
+                                                      variable_name)
+            .simplify();
+    const SymbolicExpression reduced_denominator =
+        build_polynomial_expression_from_coefficients(denominator_division.quotient,
+                                                      variable_name)
+            .simplify();
+
+    if (expr_is_one(reduced_denominator)) {
+        *reduced = reduced_numerator;
+    } else {
+        *reduced = make_divide(reduced_numerator, reduced_denominator);
+    }
+    return true;
+}
+
 bool is_single_variable_polynomial(const SymbolicExpression& expression) {
     const std::string variable_name = unique_identifier_variable(expression);
     if (variable_name.empty()) {
@@ -2175,9 +2232,19 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (expr_is_one(right)) {
                 return left;
             }
+            if (left.is_number(&left_value) && left_value < 0.0) {
+                return make_negate(make_divide(SymbolicExpression::number(-left_value),
+                                               right));
+            }
             {
                 SymbolicExpression reduced;
                 if (try_reduce_polynomial_quotient(left, right, &reduced)) {
+                    return reduced;
+                }
+            }
+            {
+                SymbolicExpression reduced;
+                if (try_reduce_polynomial_gcd_quotient(left, right, &reduced)) {
                     return reduced;
                 }
             }
@@ -2578,6 +2645,53 @@ SymbolicExpression inverse_z_transform_impl(const SymbolicExpression& expression
                                             const std::string& transform_variable,
                                             const std::string& index_variable);
 
+bool apply_linear_transform_rules(
+    const SymbolicExpression& simplified,
+    const std::string& variable_name,
+    const std::function<SymbolicExpression(const SymbolicExpression&)>& recurse,
+    SymbolicExpression* transformed) {
+    switch (simplified.node_->type) {
+        case NodeType::kAdd:
+            *transformed =
+                make_add(recurse(SymbolicExpression(simplified.node_->left)),
+                         recurse(SymbolicExpression(simplified.node_->right)))
+                    .simplify();
+            return true;
+        case NodeType::kSubtract:
+            *transformed =
+                make_subtract(recurse(SymbolicExpression(simplified.node_->left)),
+                              recurse(SymbolicExpression(simplified.node_->right)))
+                    .simplify();
+            return true;
+        case NodeType::kNegate:
+            *transformed =
+                make_negate(recurse(SymbolicExpression(simplified.node_->left)))
+                    .simplify();
+            return true;
+        case NodeType::kMultiply: {
+            double constant = 0.0;
+            SymbolicExpression rest;
+            if (decompose_constant_times_expression(simplified,
+                                                    variable_name,
+                                                    &constant,
+                                                    &rest)) {
+                *transformed =
+                    make_multiply(SymbolicExpression::number(constant), recurse(rest))
+                        .simplify();
+                return true;
+            }
+            return false;
+        }
+        case NodeType::kNumber:
+        case NodeType::kVariable:
+        case NodeType::kDivide:
+        case NodeType::kPower:
+        case NodeType::kFunction:
+            return false;
+    }
+    return false;
+}
+
 SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
                                           const std::string& time_variable,
                                           const std::string& transform_variable) {
@@ -2587,6 +2701,16 @@ SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
         return make_divide(SymbolicExpression::number(numeric),
                            SymbolicExpression::variable(transform_variable))
             .simplify();
+    }
+    SymbolicExpression linear_result;
+    if (apply_linear_transform_rules(
+            simplified,
+            time_variable,
+            [&](const SymbolicExpression& item) {
+                return laplace_transform_impl(item, time_variable, transform_variable);
+            },
+            &linear_result)) {
+        return linear_result;
     }
 
     switch (simplified.node_->type) {
@@ -2780,6 +2904,18 @@ SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expr
         return make_multiply(SymbolicExpression::number(numeric),
                              make_delta_expression(time_variable, 0.0))
             .simplify();
+    }
+    SymbolicExpression linear_result;
+    if (apply_linear_transform_rules(
+            simplified,
+            transform_variable,
+            [&](const SymbolicExpression& item) {
+                return inverse_laplace_transform_impl(item,
+                                                      transform_variable,
+                                                      time_variable);
+            },
+            &linear_result)) {
+        return linear_result;
     }
 
     switch (simplified.node_->type) {
@@ -2993,6 +3129,16 @@ SymbolicExpression fourier_transform_impl(const SymbolicExpression& expression,
                    make_delta_expression(frequency_variable, 0.0))
             .simplify();
     }
+    SymbolicExpression linear_result;
+    if (apply_linear_transform_rules(
+            simplified,
+            time_variable,
+            [&](const SymbolicExpression& item) {
+                return fourier_transform_impl(item, time_variable, frequency_variable);
+            },
+            &linear_result)) {
+        return linear_result;
+    }
 
     switch (simplified.node_->type) {
         case NodeType::kAdd:
@@ -3150,6 +3296,18 @@ SymbolicExpression inverse_fourier_transform_impl(const SymbolicExpression& expr
                              make_delta_expression(time_variable, 0.0))
             .simplify();
     }
+    SymbolicExpression linear_result;
+    if (apply_linear_transform_rules(
+            simplified,
+            frequency_variable,
+            [&](const SymbolicExpression& item) {
+                return inverse_fourier_transform_impl(item,
+                                                      frequency_variable,
+                                                      time_variable);
+            },
+            &linear_result)) {
+        return linear_result;
+    }
 
     switch (simplified.node_->type) {
         case NodeType::kAdd:
@@ -3256,6 +3414,16 @@ SymbolicExpression z_transform_impl(const SymbolicExpression& expression,
                    make_subtract(SymbolicExpression::variable(transform_variable),
                                  SymbolicExpression::number(1.0)))
             .simplify();
+    }
+    SymbolicExpression linear_result;
+    if (apply_linear_transform_rules(
+            simplified,
+            index_variable,
+            [&](const SymbolicExpression& item) {
+                return z_transform_impl(item, index_variable, transform_variable);
+            },
+            &linear_result)) {
+        return linear_result;
     }
 
     switch (simplified.node_->type) {
@@ -3379,6 +3547,16 @@ SymbolicExpression inverse_z_transform_impl(const SymbolicExpression& expression
         return make_multiply(SymbolicExpression::number(numeric),
                              make_delta_expression(index_variable, 0.0))
             .simplify();
+    }
+    SymbolicExpression linear_result;
+    if (apply_linear_transform_rules(
+            simplified,
+            transform_variable,
+            [&](const SymbolicExpression& item) {
+                return inverse_z_transform_impl(item, transform_variable, index_variable);
+            },
+            &linear_result)) {
+        return linear_result;
     }
 
     switch (simplified.node_->type) {
@@ -3553,11 +3731,30 @@ std::vector<std::string> SymbolicExpression::identifier_variables() const {
 }
 
 SymbolicExpression SymbolicExpression::simplify() const {
-    return simplify_impl(*this);
+    static thread_local std::unordered_map<std::string, SymbolicExpression> cache;
+    static constexpr std::size_t kMaxSimplifyCacheSize = 4096;
+
+    const std::string key = node_structural_key(node_);
+    const auto found = cache.find(key);
+    if (found != cache.end()) {
+        return found->second;
+    }
+
+    SymbolicExpression simplified = simplify_impl(*this);
+    if (cache.size() >= kMaxSimplifyCacheSize) {
+        cache.clear();
+    }
+    cache.emplace(key, simplified);
+    return simplified;
 }
 
 SymbolicExpression SymbolicExpression::substitute(
     const std::string& variable_name,
     const SymbolicExpression& replacement) const {
+    if (!is_identifier_variable_name(variable_name) ||
+        variable_name == "pi" || variable_name == "e" || variable_name == "i") {
+        throw std::runtime_error(
+            "symbolic substitution variable must be a non-reserved identifier");
+    }
     return substitute_impl(*this, variable_name, replacement).simplify();
 }

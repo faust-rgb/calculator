@@ -342,7 +342,6 @@ int main() {
         }
     }
 
-    std::cerr << "MARK display cases\n";
     const std::vector<DisplayCase> display_cases = {
         {"1/3 + 1/4", true, "7/12"},
         {"2/4 + 2/4", true, "1"},
@@ -889,7 +888,7 @@ int main() {
             help.find("double_integral") != std::string::npos &&
             help.find("triple_integral") != std::string::npos &&
             help.find("triple_integral_sph") != std::string::npos &&
-            help.find("symbolic/numeric diff integral taylor limit extrema ode ode_table ode_system ode_system_table") != std::string::npos &&
+            help.find("symbolic/numeric diff integral critical taylor limit extrema ode ode_table ode_system ode_system_table") != std::string::npos &&
             help.find("lp_max lp_min ilp_max ilp_min milp_max milp_min bip_max bip_min") != std::string::npos &&
             help.find("step delta heaviside impulse") != std::string::npos &&
             help.find("fourier ifourier laplace ilaplace ztrans iztrans") != std::string::npos &&
@@ -1668,7 +1667,6 @@ int main() {
                   << ex.what() << '\n';
     }
 
-    std::cerr << "MARK symbolic commands\n";
     try {
         std::string output;
         const bool handled =
@@ -1853,6 +1851,42 @@ int main() {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: simplify((x ^ 2 - 1) / (x - 1)) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "simplify((x ^ 3 - x) / (x ^ 2 - 1))", &output);
+        if (handled && output == "x") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: simplify polynomial GCD exact reduction expected x got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: simplify polynomial GCD exact reduction threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "simplify((x ^ 3 - x) / (x ^ 2 - 2 * x + 1))", &output);
+        if (handled && output == "(x ^ 2 + x) / (x - 1)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: simplify polynomial GCD partial reduction got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: simplify polynomial GCD partial reduction threw unexpected error: "
                   << ex.what() << '\n';
     }
 
@@ -2222,7 +2256,6 @@ int main() {
                   << ex.what() << '\n';
     }
 
-    std::cerr << "MARK symbolic integrals\n";
     try {
         std::string output;
         const bool handled =
@@ -2363,6 +2396,212 @@ int main() {
     try {
         std::string output;
         const bool handled =
+            calculator.try_process_function_command("integral(x / (1 + x ^ 2))", &output);
+        if (handled && output == "1/2 * ln(abs(x ^ 2 + 1)) + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic rational integral log-derivative rule got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic rational integral log-derivative rule threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral((x ^ 2 + 1) / (x + 1))", &output);
+        if (handled && output == "2 * ln(abs(x + 1)) + 1/2 * x ^ 2 - x + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic rational integral long-division rule got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic rational integral long-division rule threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(1 / (x ^ 2 - 1))", &output);
+        if (handled && output == "1/2 * ln(abs((2 * x - 2) / (2 * x + 2))) + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic rational integral partial-fraction form got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic rational integral partial-fraction form threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(1 / (x ^ 3 - x))", &output);
+        if (handled &&
+            output == "-ln(abs(x)) + 1/2 * ln(abs(x + 1)) + 1/2 * ln(abs(x - 1)) + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic rational integral distinct partial fractions got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic rational integral distinct partial fractions threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(1 / (x - 1) ^ 2)", &output);
+        if (handled && output == "-(1 / (x - 1)) + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic rational integral repeated linear factor got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic rational integral repeated linear factor threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(1 / ((x - 1) ^ 2 * (x + 1)))", &output);
+        if (handled &&
+            output == "-(1/2 * 1 / (x - 1)) + 1/4 * (-ln(abs(x - 1)) + ln(abs(x + 1))) + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic rational integral mixed repeated linear factors got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic rational integral mixed repeated linear factors threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(1 / (x ^ 2 + 1) ^ 2)", &output);
+        if (handled && output == "atan(x) / 2 + 1/2 * x / (x ^ 2 + 1) + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic rational integral repeated quadratic factor got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic rational integral repeated quadratic factor threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(sin(x) ^ 2)", &output);
+        if (handled && output == "x / 2 - sin(2 * x) / 4 + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic trig identity integral sin^2 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic trig identity integral sin^2 threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(cos(x) ^ 2)", &output);
+        if (handled && output == "sin(2 * x) / 4 + x / 2 + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic trig identity integral cos^2 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic trig identity integral cos^2 threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(tan(x) ^ 2)", &output);
+        if (handled && output == "tan(x) - x + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic trig identity integral tan^2 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic trig identity integral tan^2 threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(2 * x * cos(x ^ 2))", &output);
+        if (handled && output == "sin(x ^ 2) + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic substitution integral got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic substitution integral threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("integral(x + y, x, y)", &output);
+        if (handled && output == "x ^ 2 / 2 * y + y ^ 2 / 2 * x + C") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: chained symbolic multivariable integral got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: chained symbolic multivariable integral threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
             calculator.try_process_function_command("diff(x ^ 2 * y + y ^ 3, y)", &output);
         if (handled && output == "3 * y ^ 2 + x ^ 2") {
             ++passed;
@@ -2408,6 +2647,40 @@ int main() {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: symbolic hessian threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("critical(x ^ 2 + y ^ 2, x, y)", &output);
+        if (handled && output == "[x = 0, y = 0]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic critical returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic critical threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("critical(x ^ 3 - 3 * x, x)", &output);
+        if (handled && output == "[[x = -1], [x = 1]]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic nonlinear critical returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic nonlinear critical threw unexpected error: "
                   << ex.what() << '\n';
     }
 
@@ -3394,7 +3667,6 @@ int main() {
                   << ex.what() << '\n';
     }
 
-    std::cerr << "MARK low-level symbolic\n";
     try {
         const SymbolicExpression derivative =
             SymbolicExpression::parse("asin(x)").derivative("x").simplify();
@@ -3538,7 +3810,15 @@ int main() {
                   << ex.what() << '\n';
     }
 
-    std::cerr << "MARK multivariable\n";
+    try {
+        const SymbolicExpression expression = SymbolicExpression::parse("x + pi");
+        (void)expression.substitute("pi", SymbolicExpression::number(3.0));
+        ++failed;
+        std::cout << "FAIL: reserved symbolic substitution did not throw\n";
+    } catch (const std::exception&) {
+        ++passed;
+    }
+
     try {
         MultivariableIntegrator integrator([](const std::vector<double>& point) {
             return point[0] + point[1];
@@ -3640,7 +3920,6 @@ int main() {
                   << ex.what() << '\n';
     }
 
-    std::cerr << "MARK matrix display\n";
     const std::vector<DisplayCase> matrix_display_cases = {
         {"vec(1, 2, 3)", false, "[1, 2, 3]"},
         {"[1, 2, 3]", false, "[1, 2, 3]"},
@@ -4086,7 +4365,6 @@ int main() {
         std::cout << "FAIL: randint(2, 4) threw unexpected error: " << ex.what() << '\n';
     }
 
-    std::cerr << "MARK command display\n";
     const std::vector<DisplayCase> command_display_cases = {
         {"solve(x^2 - 2, 1)", false, "1.41421356237"},
         {"bisect(x^2 - 2, 1, 2)", false, "1.41421356238"},
@@ -4106,7 +4384,6 @@ int main() {
 
     for (const auto& test : command_display_cases) {
         try {
-            std::cerr << "MARK command case " << test.expression << '\n';
             std::string output;
             const bool handled =
                 calculator.try_process_function_command(test.expression, &output);
@@ -4134,8 +4411,6 @@ int main() {
                       << " threw unexpected error: " << ex.what() << '\n';
         }
     }
-
-    std::cerr << "MARK post command display\n";
 
     try {
         std::string output;
@@ -4175,7 +4450,6 @@ int main() {
                   << ex.what() << '\n';
     }
 
-    std::cerr << "MARK scripts\n";
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
