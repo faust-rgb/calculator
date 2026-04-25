@@ -4,6 +4,7 @@
 #include "polynomial.h"
 
 #include <algorithm>
+#include <list>
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
@@ -11,6 +12,45 @@
 using namespace symbolic_expression_internal;
 
 namespace {
+
+class SymbolicExpressionLruCache {
+public:
+    explicit SymbolicExpressionLruCache(std::size_t capacity)
+        : capacity_(capacity) {}
+
+    bool get(const std::string& key, SymbolicExpression* value) {
+        const auto found = index_.find(key);
+        if (found == index_.end()) {
+            return false;
+        }
+        entries_.splice(entries_.begin(), entries_, found->second);
+        *value = found->second->second;
+        return true;
+    }
+
+    void put(const std::string& key, const SymbolicExpression& value) {
+        const auto found = index_.find(key);
+        if (found != index_.end()) {
+            found->second->second = value;
+            entries_.splice(entries_.begin(), entries_, found->second);
+            return;
+        }
+
+        entries_.push_front({key, value});
+        index_[key] = entries_.begin();
+        while (entries_.size() > capacity_) {
+            index_.erase(entries_.back().first);
+            entries_.pop_back();
+        }
+    }
+
+private:
+    std::size_t capacity_ = 0;
+    std::list<std::pair<std::string, SymbolicExpression>> entries_;
+    std::unordered_map<std::string,
+                       std::list<std::pair<std::string, SymbolicExpression>>::iterator>
+        index_;
+};
 
 bool is_one_plus_variable_squared(const SymbolicExpression& expression,
                                   const std::string& variable_name) {
@@ -195,6 +235,24 @@ struct LinearFactorMultiplicity {
     int multiplicity = 0;
 };
 
+struct QuadraticFactorMultiplicity {
+    std::vector<double> coefficients;
+    int multiplicity = 0;
+};
+
+struct RationalPartialFractionTerm {
+    enum class Kind {
+        kLinear,
+        kQuadratic,
+    };
+
+    Kind kind = Kind::kLinear;
+    double root = 0.0;
+    std::vector<double> quadratic;
+    int power = 0;
+    int numerator_degree = 0;
+};
+
 bool extract_real_linear_factorization(const std::vector<double>& denominator,
                                        std::vector<LinearFactorMultiplicity>* factors) {
     std::vector<double> remaining = denominator;
@@ -227,6 +285,381 @@ bool extract_real_linear_factorization(const std::vector<double>& denominator,
 
     trim_coefficients(&remaining);
     return remaining.size() == 1 && !factors->empty();
+}
+
+bool polynomial_close(const std::vector<double>& lhs,
+                      const std::vector<double>& rhs,
+                      double eps = 1e-8) {
+    std::vector<double> left = lhs;
+    std::vector<double> right = rhs;
+    trim_coefficients(&left);
+    trim_coefficients(&right);
+    if (left.size() != right.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i < left.size(); ++i) {
+        if (!mymath::is_near_zero(left[i] - right[i], eps)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool divide_exact_polynomial(std::vector<double>* remaining,
+                             const std::vector<double>& divisor) {
+    const PolynomialDivisionResult division = polynomial_divide(*remaining, divisor);
+    if (!polynomial_is_zero(division.remainder)) {
+        return false;
+    }
+    *remaining = division.quotient;
+    trim_coefficients(remaining);
+    return true;
+}
+
+bool extract_linear_and_one_quadratic_factorization(
+    const std::vector<double>& denominator,
+    std::vector<LinearFactorMultiplicity>* linear_factors,
+    QuadraticFactorMultiplicity* quadratic_factor) {
+    linear_factors->clear();
+    quadratic_factor->coefficients.clear();
+    quadratic_factor->multiplicity = 0;
+
+    std::vector<double> remaining = denominator;
+    trim_coefficients(&remaining);
+    std::vector<double> roots;
+    try {
+        roots = polynomial_real_roots(remaining);
+    } catch (const std::exception&) {
+        roots.clear();
+    }
+
+    for (double root : roots) {
+        root = clean_symbolic_constant(root);
+        const std::vector<double> factor = {-root, 1.0};
+        int multiplicity = 0;
+        while (remaining.size() > 1 && divide_exact_polynomial(&remaining, factor)) {
+            ++multiplicity;
+        }
+        if (multiplicity > 0) {
+            linear_factors->push_back(LinearFactorMultiplicity{root, multiplicity});
+        }
+    }
+
+    trim_coefficients(&remaining);
+    if (remaining.size() == 1) {
+        return !linear_factors->empty();
+    }
+
+    if ((remaining.size() - 1) % 2 != 0) {
+        return false;
+    }
+    const int quadratic_power = static_cast<int>((remaining.size() - 1) / 2);
+    if (quadratic_power <= 0) {
+        return false;
+    }
+
+    if (quadratic_power == 1) {
+        const double a = remaining[2];
+        const double b = remaining[1];
+        const double c = remaining[0];
+        if (mymath::is_near_zero(a, kFormatEps) ||
+            b * b - 4.0 * a * c >= -1e-8) {
+            return false;
+        }
+        quadratic_factor->coefficients = remaining;
+        quadratic_factor->multiplicity = 1;
+        return true;
+    }
+
+    const double leading_root =
+        mymath::pow(mymath::abs(remaining.back()), 1.0 / quadratic_power);
+    const double leading =
+        remaining.back() < 0.0 && quadratic_power % 2 == 1 ? -leading_root : leading_root;
+    const double sum_roots = remaining[remaining.size() - 2] / remaining.back();
+    const double b = leading * sum_roots / static_cast<double>(quadratic_power);
+
+    std::vector<double> best_quadratic;
+    bool found = false;
+    for (double sign : {-1.0, 1.0}) {
+        const double constant_root =
+            mymath::pow(mymath::abs(remaining[0]), 1.0 / quadratic_power);
+        const double c = sign * constant_root;
+        std::vector<double> candidate = {c, b, leading};
+        std::vector<double> powered = polynomial_power_coefficients(candidate, quadratic_power);
+        if (polynomial_close(powered, remaining, 1e-6)) {
+            best_quadratic = candidate;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        return false;
+    }
+
+    const double a = best_quadratic[2];
+    const double best_b = best_quadratic[1];
+    const double best_c = best_quadratic[0];
+    if (mymath::is_near_zero(a, kFormatEps) ||
+        best_b * best_b - 4.0 * a * best_c >= -1e-8) {
+        return false;
+    }
+
+    quadratic_factor->coefficients = best_quadratic;
+    quadratic_factor->multiplicity = quadratic_power;
+    return true;
+}
+
+SymbolicExpression integrate_inverse_quadratic_power(
+    const std::vector<double>& quadratic,
+    int power,
+    const std::string& variable_name) {
+    const double c = quadratic[0];
+    const double b = quadratic[1];
+    const double a = quadratic[2];
+    const double delta = 4.0 * a * c - b * b;
+    if (power <= 0 || mymath::is_near_zero(a, kFormatEps) || delta <= kFormatEps) {
+        throw std::runtime_error("unsupported quadratic power integral");
+    }
+
+    const SymbolicExpression x = SymbolicExpression::variable(variable_name);
+    const SymbolicExpression u =
+        make_add(x, SymbolicExpression::number(b / (2.0 * a))).simplify();
+    const double d = delta / (4.0 * a * a);
+    const SymbolicExpression shifted_quadratic =
+        make_add(make_power(u, SymbolicExpression::number(2.0)),
+                 SymbolicExpression::number(d))
+            .simplify();
+
+    SymbolicExpression integral =
+        make_multiply(SymbolicExpression::number(1.0 / mymath::sqrt(d)),
+                      make_function("atan",
+                                    make_divide(u,
+                                                SymbolicExpression::number(mymath::sqrt(d)))))
+            .simplify();
+
+    for (int n = 2; n <= power; ++n) {
+        const SymbolicExpression recurrence_term =
+            make_divide(u,
+                        make_multiply(
+                            SymbolicExpression::number(2.0 * d * (n - 1)),
+                            make_power(shifted_quadratic,
+                                       SymbolicExpression::number(n - 1))))
+                .simplify();
+        integral =
+            make_add(recurrence_term,
+                     make_multiply(
+                         SymbolicExpression::number(
+                             static_cast<double>(2 * n - 3) /
+                             static_cast<double>(2 * (n - 1)) / d),
+                         integral))
+                .simplify();
+    }
+
+    return make_multiply(SymbolicExpression::number(1.0 / mymath::pow(a, power)),
+                         integral)
+        .simplify();
+}
+
+SymbolicExpression integrate_quadratic_partial_fraction_term(
+    const std::vector<double>& quadratic,
+    double slope,
+    double constant,
+    int power,
+    const std::string& variable_name) {
+    const double a = quadratic[2];
+    const double b = quadratic[1];
+    const double derivative_scale = slope / (2.0 * a);
+    const double inverse_scale = constant - derivative_scale * b;
+    const SymbolicExpression quadratic_expression =
+        build_polynomial_expression_from_coefficients(quadratic, variable_name)
+            .simplify();
+    SymbolicExpression result = SymbolicExpression::number(0.0);
+
+    if (!mymath::is_near_zero(derivative_scale, kFormatEps)) {
+        SymbolicExpression derivative_part;
+        if (power == 1) {
+            derivative_part =
+                make_multiply(SymbolicExpression::number(derivative_scale),
+                              make_function("ln",
+                                            make_function("abs", quadratic_expression)))
+                    .simplify();
+        } else {
+            derivative_part =
+                make_multiply(SymbolicExpression::number(
+                                  derivative_scale / static_cast<double>(1 - power)),
+                              make_power(quadratic_expression,
+                                         SymbolicExpression::number(1 - power)))
+                    .simplify();
+        }
+        result = make_add(result, derivative_part).simplify();
+    }
+
+    if (!mymath::is_near_zero(inverse_scale, kFormatEps)) {
+        result =
+            make_add(result,
+                     make_multiply(SymbolicExpression::number(inverse_scale),
+                                   integrate_inverse_quadratic_power(quadratic,
+                                                                    power,
+                                                                    variable_name)))
+                .simplify();
+    }
+    return result.simplify();
+}
+
+bool integrate_mixed_linear_quadratic_partial_fractions(
+    const std::vector<double>& numerator,
+    const std::vector<double>& denominator,
+    const std::string& variable_name,
+    SymbolicExpression* integrated) {
+    if (denominator.size() <= 3) {
+        return false;
+    }
+
+    std::vector<LinearFactorMultiplicity> linear_factors;
+    QuadraticFactorMultiplicity quadratic_factor;
+    if (!extract_linear_and_one_quadratic_factorization(denominator,
+                                                        &linear_factors,
+                                                        &quadratic_factor) ||
+        quadratic_factor.multiplicity <= 0) {
+        return false;
+    }
+
+    std::vector<RationalPartialFractionTerm> terms;
+    for (const LinearFactorMultiplicity& factor : linear_factors) {
+        for (int power = 1; power <= factor.multiplicity; ++power) {
+            RationalPartialFractionTerm term;
+            term.kind = RationalPartialFractionTerm::Kind::kLinear;
+            term.root = factor.root;
+            term.power = power;
+            term.numerator_degree = 0;
+            terms.push_back(term);
+        }
+    }
+    for (int power = 1; power <= quadratic_factor.multiplicity; ++power) {
+        RationalPartialFractionTerm slope_term;
+        slope_term.kind = RationalPartialFractionTerm::Kind::kQuadratic;
+        slope_term.quadratic = quadratic_factor.coefficients;
+        slope_term.power = power;
+        slope_term.numerator_degree = 1;
+        terms.push_back(slope_term);
+
+        RationalPartialFractionTerm constant_term = slope_term;
+        constant_term.numerator_degree = 0;
+        terms.push_back(constant_term);
+    }
+
+    const int unknown_count = static_cast<int>(terms.size());
+    if (unknown_count != static_cast<int>(denominator.size()) - 1) {
+        return false;
+    }
+
+    std::vector<std::vector<double>> columns;
+    columns.reserve(terms.size());
+    for (const RationalPartialFractionTerm& term : terms) {
+        std::vector<double> divisor;
+        if (term.kind == RationalPartialFractionTerm::Kind::kLinear) {
+            divisor = polynomial_power_coefficients({-term.root, 1.0}, term.power);
+        } else {
+            divisor = polynomial_power_coefficients(term.quadratic, term.power);
+        }
+        PolynomialDivisionResult division = polynomial_divide(denominator, divisor);
+        if (!polynomial_is_zero(division.remainder)) {
+            return false;
+        }
+        std::vector<double> column = division.quotient;
+        if (term.kind == RationalPartialFractionTerm::Kind::kQuadratic &&
+            term.numerator_degree == 1) {
+            column.insert(column.begin(), 0.0);
+        }
+        trim_coefficients(&column);
+        columns.push_back(column);
+    }
+
+    std::vector<std::vector<double>> matrix;
+    std::vector<double> rhs;
+    for (int candidate = -unknown_count * 2;
+         candidate <= unknown_count * 4 &&
+         static_cast<int>(rhs.size()) < unknown_count;
+         ++candidate) {
+        const double sample = static_cast<double>(candidate);
+        bool sample_is_pole = false;
+        for (const LinearFactorMultiplicity& factor : linear_factors) {
+            if (mymath::is_near_zero(sample - factor.root, 1e-8)) {
+                sample_is_pole = true;
+                break;
+            }
+        }
+        if (sample_is_pole) {
+            continue;
+        }
+
+        std::vector<double> row;
+        row.reserve(columns.size());
+        for (const std::vector<double>& column : columns) {
+            row.push_back(polynomial_evaluate(column, sample));
+        }
+        matrix.push_back(row);
+        rhs.push_back(polynomial_evaluate(numerator, sample));
+    }
+    if (static_cast<int>(rhs.size()) != unknown_count) {
+        return false;
+    }
+
+    std::vector<double> coefficients;
+    if (!solve_dense_linear_system(matrix, rhs, &coefficients)) {
+        return false;
+    }
+
+    SymbolicExpression result = SymbolicExpression::number(0.0);
+    bool has_term = false;
+    for (std::size_t i = 0; i < terms.size(); ++i) {
+        const double coefficient = clean_symbolic_constant(coefficients[i]);
+        if (mymath::is_near_zero(coefficient, kFormatEps)) {
+            continue;
+        }
+
+        SymbolicExpression term_integral;
+        if (terms[i].kind == RationalPartialFractionTerm::Kind::kLinear) {
+            const SymbolicExpression shifted_variable =
+                make_subtract(SymbolicExpression::variable(variable_name),
+                              SymbolicExpression::number(terms[i].root))
+                    .simplify();
+            if (terms[i].power == 1) {
+                term_integral =
+                    make_multiply(SymbolicExpression::number(coefficient),
+                                  make_function("ln",
+                                                make_function("abs", shifted_variable)))
+                        .simplify();
+            } else {
+                term_integral =
+                    make_multiply(SymbolicExpression::number(
+                                      coefficient /
+                                      static_cast<double>(1 - terms[i].power)),
+                                  make_power(shifted_variable,
+                                             SymbolicExpression::number(
+                                                 1 - terms[i].power)))
+                        .simplify();
+            }
+        } else {
+            const double slope = terms[i].numerator_degree == 1 ? coefficient : 0.0;
+            const double constant = terms[i].numerator_degree == 0 ? coefficient : 0.0;
+            term_integral =
+                integrate_quadratic_partial_fraction_term(terms[i].quadratic,
+                                                          slope,
+                                                          constant,
+                                                          terms[i].power,
+                                                          variable_name);
+        }
+
+        result = has_term ? make_add(result, term_integral).simplify() : term_integral;
+        has_term = true;
+    }
+
+    if (!has_term) {
+        return false;
+    }
+    *integrated = result.simplify();
+    return true;
 }
 
 bool integrate_real_linear_partial_fractions(
@@ -473,8 +906,7 @@ bool try_integrate_trig_power_identity(const SymbolicExpression& base,
                                        double exponent_value,
                                        const std::string& variable_name,
                                        SymbolicExpression* integrated) {
-    if (!mymath::is_near_zero(exponent_value - 2.0, kFormatEps) ||
-        base.node_->type != NodeType::kFunction) {
+    if (base.node_->type != NodeType::kFunction) {
         return false;
     }
 
@@ -487,9 +919,11 @@ bool try_integrate_trig_power_identity(const SymbolicExpression& base,
     }
 
     const SymbolicExpression x = SymbolicExpression::variable(variable_name);
-    const SymbolicExpression double_argument =
-        make_multiply(SymbolicExpression::number(2.0), argument).simplify();
-    if (base.node_->text == "sin") {
+    const std::string& function_name = base.node_->text;
+    if (mymath::is_near_zero(exponent_value - 2.0, kFormatEps) &&
+        function_name == "sin") {
+        const SymbolicExpression double_argument =
+            make_multiply(SymbolicExpression::number(2.0), argument).simplify();
         *integrated =
             make_subtract(make_divide(x, SymbolicExpression::number(2.0)),
                           make_divide(make_function("sin", double_argument),
@@ -497,7 +931,10 @@ bool try_integrate_trig_power_identity(const SymbolicExpression& base,
                 .simplify();
         return true;
     }
-    if (base.node_->text == "cos") {
+    if (mymath::is_near_zero(exponent_value - 2.0, kFormatEps) &&
+        function_name == "cos") {
+        const SymbolicExpression double_argument =
+            make_multiply(SymbolicExpression::number(2.0), argument).simplify();
         *integrated =
             make_add(make_divide(x, SymbolicExpression::number(2.0)),
                      make_divide(make_function("sin", double_argument),
@@ -505,11 +942,67 @@ bool try_integrate_trig_power_identity(const SymbolicExpression& base,
                 .simplify();
         return true;
     }
-    if (base.node_->text == "tan") {
+    if (mymath::is_near_zero(exponent_value - 2.0, kFormatEps) &&
+        function_name == "tan") {
         *integrated =
             make_subtract(make_divide(make_function("tan", argument),
                                       SymbolicExpression::number(a)),
                           x)
+                .simplify();
+        return true;
+    }
+    if (mymath::is_near_zero(exponent_value - 3.0, kFormatEps) &&
+        function_name == "sin") {
+        *integrated =
+            make_add(make_divide(make_power(make_function("cos", argument),
+                                            SymbolicExpression::number(3.0)),
+                                 SymbolicExpression::number(3.0 * a)),
+                     make_divide(make_negate(make_function("cos", argument)),
+                                 SymbolicExpression::number(a)))
+                .simplify();
+        return true;
+    }
+    if (mymath::is_near_zero(exponent_value - 3.0, kFormatEps) &&
+        function_name == "cos") {
+        *integrated =
+            make_subtract(make_divide(make_function("sin", argument),
+                                      SymbolicExpression::number(a)),
+                          make_divide(make_power(make_function("sin", argument),
+                                                 SymbolicExpression::number(3.0)),
+                                      SymbolicExpression::number(3.0 * a)))
+                .simplify();
+        return true;
+    }
+    return false;
+}
+
+bool try_integrate_trig_product_identity(const SymbolicExpression& left,
+                                         const SymbolicExpression& right,
+                                         const std::string& variable_name,
+                                         SymbolicExpression* integrated) {
+    if (left.node_->type != NodeType::kFunction ||
+        right.node_->type != NodeType::kFunction) {
+        return false;
+    }
+    if (!same_simplified_expression(SymbolicExpression(left.node_->left),
+                                    SymbolicExpression(right.node_->left))) {
+        return false;
+    }
+
+    const SymbolicExpression argument(left.node_->left);
+    double a = 0.0;
+    double b = 0.0;
+    if (!decompose_linear(argument, variable_name, &a, &b) ||
+        mymath::is_near_zero(a, kFormatEps)) {
+        return false;
+    }
+
+    if ((left.node_->text == "sin" && right.node_->text == "cos") ||
+        (left.node_->text == "cos" && right.node_->text == "sin")) {
+        *integrated =
+            make_divide(make_power(make_function("sin", argument),
+                                   SymbolicExpression::number(2.0)),
+                        SymbolicExpression::number(2.0 * a))
                 .simplify();
         return true;
     }
@@ -655,6 +1148,10 @@ bool try_integrate_polynomial_quotient(const SymbolicExpression& numerator,
                                                   denominator_coefficients,
                                                   variable_name,
                                                   &remainder_integral) &&
+            !integrate_mixed_linear_quadratic_partial_fractions(remainder_coefficients,
+                                                                denominator_coefficients,
+                                                                variable_name,
+                                                                &remainder_integral) &&
             !integrate_real_linear_partial_fractions(remainder_coefficients,
                                                      denominator_coefficients,
                                                      variable_name,
@@ -806,20 +1303,17 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
 }  // namespace
 
 SymbolicExpression SymbolicExpression::derivative(const std::string& variable_name) const {
-    static thread_local std::unordered_map<std::string, SymbolicExpression> cache;
     static constexpr std::size_t kMaxDerivativeCacheSize = 4096;
+    static thread_local SymbolicExpressionLruCache cache(kMaxDerivativeCacheSize);
 
     const std::string key = variable_name + "|" + node_structural_key(node_);
-    const auto found = cache.find(key);
-    if (found != cache.end()) {
-        return found->second;
+    SymbolicExpression cached;
+    if (cache.get(key, &cached)) {
+        return cached;
     }
 
     SymbolicExpression derived = derivative_uncached(*this, variable_name);
-    if (cache.size() >= kMaxDerivativeCacheSize) {
-        cache.clear();
-    }
-    cache.emplace(key, derived);
+    cache.put(key, derived);
     return derived;
 }
 
@@ -902,6 +1396,12 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                                                   left,
                                                   variable_name,
                                                   &integrated)) {
+                return integrated.simplify();
+            }
+            if (try_integrate_trig_product_identity(left,
+                                                    right,
+                                                    variable_name,
+                                                    &integrated)) {
                 return integrated.simplify();
             }
             if (decompose_constant_times_expression(*this, variable_name, &constant, &rest)) {

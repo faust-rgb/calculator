@@ -15,6 +15,7 @@
 #include <memory>
 #include <algorithm>
 #include <functional>
+#include <list>
 #include <map>
 #include <sstream>
 #include <stdexcept>
@@ -24,6 +25,77 @@
 #include <vector>
 
 namespace symbolic_expression_internal {
+
+std::shared_ptr<SymbolicExpression::Node> intern_node(
+    std::shared_ptr<SymbolicExpression::Node> node) {
+    static thread_local std::unordered_map<std::string,
+                                           std::weak_ptr<SymbolicExpression::Node>>
+        interned_nodes;
+    static constexpr std::size_t kMaxInternedNodes = 8192;
+
+    const std::string key = node_structural_key(node);
+    const auto found = interned_nodes.find(key);
+    if (found != interned_nodes.end()) {
+        if (std::shared_ptr<SymbolicExpression::Node> existing = found->second.lock()) {
+            return existing;
+        }
+    }
+
+    if (interned_nodes.size() >= kMaxInternedNodes) {
+        for (auto it = interned_nodes.begin(); it != interned_nodes.end();) {
+            if (it->second.expired()) {
+                it = interned_nodes.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        if (interned_nodes.size() >= kMaxInternedNodes) {
+            interned_nodes.clear();
+        }
+    }
+
+    interned_nodes[key] = node;
+    return node;
+}
+
+class SymbolicExpressionLruCache {
+public:
+    explicit SymbolicExpressionLruCache(std::size_t capacity)
+        : capacity_(capacity) {}
+
+    bool get(const std::string& key, SymbolicExpression* value) {
+        const auto found = index_.find(key);
+        if (found == index_.end()) {
+            return false;
+        }
+        entries_.splice(entries_.begin(), entries_, found->second);
+        *value = found->second->second;
+        return true;
+    }
+
+    void put(const std::string& key, const SymbolicExpression& value) {
+        const auto found = index_.find(key);
+        if (found != index_.end()) {
+            found->second->second = value;
+            entries_.splice(entries_.begin(), entries_, found->second);
+            return;
+        }
+
+        entries_.push_front({key, value});
+        index_[key] = entries_.begin();
+        while (entries_.size() > capacity_) {
+            index_.erase(entries_.back().first);
+            entries_.pop_back();
+        }
+    }
+
+private:
+    std::size_t capacity_ = 0;
+    std::list<std::pair<std::string, SymbolicExpression>> entries_;
+    std::unordered_map<std::string,
+                       std::list<std::pair<std::string, SymbolicExpression>>::iterator>
+        index_;
+};
 
 std::string format_number(double value) {
     // 符号输出会频繁生成中间常数。
@@ -60,7 +132,7 @@ std::string format_number(double value) {
 }
 
 std::shared_ptr<SymbolicExpression::Node> make_number(double value) {
-    return std::make_shared<SymbolicExpression::Node>(value);
+    return intern_node(std::make_shared<SymbolicExpression::Node>(value));
 }
 
 std::shared_ptr<SymbolicExpression::Node> make_variable(const std::string& name) {
@@ -68,7 +140,7 @@ std::shared_ptr<SymbolicExpression::Node> make_variable(const std::string& name)
         std::make_shared<SymbolicExpression::Node>();
     node->type = NodeType::kVariable;
     node->text = name;
-    return node;
+    return intern_node(node);
 }
 
 std::shared_ptr<SymbolicExpression::Node> make_unary(NodeType type,
@@ -79,7 +151,7 @@ std::shared_ptr<SymbolicExpression::Node> make_unary(NodeType type,
     node->type = type;
     node->left = std::move(operand);
     node->text = text;
-    return node;
+    return intern_node(node);
 }
 
 std::shared_ptr<SymbolicExpression::Node> make_binary(NodeType type,
@@ -90,7 +162,7 @@ std::shared_ptr<SymbolicExpression::Node> make_binary(NodeType type,
     node->type = type;
     node->left = std::move(left);
     node->right = std::move(right);
-    return node;
+    return intern_node(node);
 }
 
 int precedence(const std::shared_ptr<SymbolicExpression::Node>& node) {
@@ -170,32 +242,47 @@ std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node
 }
 
 std::string node_structural_key(const std::shared_ptr<SymbolicExpression::Node>& node) {
+    if (!node->structural_key_cache.empty()) {
+        return node->structural_key_cache;
+    }
+
+    std::string key;
     switch (node->type) {
         case NodeType::kNumber:
-            return "N(" + format_number(node->number_value) + ")";
+            key = "N(" + format_number(node->number_value) + ")";
+            break;
         case NodeType::kVariable:
-            return "V(" + node->text + ")";
+            key = "V(" + node->text + ")";
+            break;
         case NodeType::kNegate:
-            return "NEG(" + node_structural_key(node->left) + ")";
+            key = "NEG(" + node_structural_key(node->left) + ")";
+            break;
         case NodeType::kFunction:
-            return "F(" + node->text + ":" + node_structural_key(node->left) + ")";
+            key = "F(" + node->text + ":" + node_structural_key(node->left) + ")";
+            break;
         case NodeType::kAdd:
-            return "ADD(" + node_structural_key(node->left) + "," +
-                   node_structural_key(node->right) + ")";
+            key = "ADD(" + node_structural_key(node->left) + "," +
+                  node_structural_key(node->right) + ")";
+            break;
         case NodeType::kSubtract:
-            return "SUB(" + node_structural_key(node->left) + "," +
-                   node_structural_key(node->right) + ")";
+            key = "SUB(" + node_structural_key(node->left) + "," +
+                  node_structural_key(node->right) + ")";
+            break;
         case NodeType::kMultiply:
-            return "MUL(" + node_structural_key(node->left) + "," +
-                   node_structural_key(node->right) + ")";
+            key = "MUL(" + node_structural_key(node->left) + "," +
+                  node_structural_key(node->right) + ")";
+            break;
         case NodeType::kDivide:
-            return "DIV(" + node_structural_key(node->left) + "," +
-                   node_structural_key(node->right) + ")";
+            key = "DIV(" + node_structural_key(node->left) + "," +
+                  node_structural_key(node->right) + ")";
+            break;
         case NodeType::kPower:
-            return "POW(" + node_structural_key(node->left) + "," +
-                   node_structural_key(node->right) + ")";
+            key = "POW(" + node_structural_key(node->left) + "," +
+                  node_structural_key(node->right) + ")";
+            break;
     }
-    return "";
+    node->structural_key_cache = key;
+    return node->structural_key_cache;
 }
 
 class Parser {
@@ -1669,21 +1756,67 @@ std::string unique_identifier_variable(const SymbolicExpression& expression) {
 bool polynomial_coefficients_from_simplified(const SymbolicExpression& expression,
                                              const std::string& variable_name,
                                              std::vector<double>* coefficients) {
+    struct PolynomialCoefficientMemoEntry {
+        bool ok = false;
+        std::vector<double> coefficients;
+    };
+    static thread_local std::unordered_map<std::string, PolynomialCoefficientMemoEntry> memo;
+    static thread_local int recursion_depth = 0;
+    struct MemoScope {
+        int* depth;
+        std::unordered_map<std::string, PolynomialCoefficientMemoEntry>* memo_table;
+        MemoScope(int* depth_value,
+                  std::unordered_map<std::string, PolynomialCoefficientMemoEntry>* table)
+            : depth(depth_value), memo_table(table) {
+            if (*depth == 0) {
+                memo_table->clear();
+            }
+            ++(*depth);
+        }
+        ~MemoScope() {
+            --(*depth);
+            if (*depth == 0) {
+                memo_table->clear();
+            }
+        }
+    } scope(&recursion_depth, &memo);
+
+    const std::string memo_key =
+        variable_name + "|" + node_structural_key(expression.node_);
+    const auto memo_found = memo.find(memo_key);
+    if (memo_found != memo.end()) {
+        if (memo_found->second.ok) {
+            *coefficients = memo_found->second.coefficients;
+        }
+        return memo_found->second.ok;
+    }
+
+    auto finish = [&](bool ok) {
+        if (ok) {
+            trim_polynomial_coefficients(coefficients);
+            memo.emplace(memo_key,
+                         PolynomialCoefficientMemoEntry{true, *coefficients});
+        } else {
+            memo.emplace(memo_key, PolynomialCoefficientMemoEntry{false, {}});
+        }
+        return ok;
+    };
+
     double numeric = 0.0;
     if (expression.is_number(&numeric)) {
         *coefficients = {numeric};
-        return true;
+        return finish(true);
     }
     if (expression.is_variable_named(variable_name)) {
         *coefficients = {0.0, 1.0};
-        return true;
+        return finish(true);
     }
     if (expression.is_constant(variable_name)) {
         if (expression.is_number(&numeric)) {
             *coefficients = {numeric};
-            return true;
+            return finish(true);
         }
-        return false;
+        return finish(false);
     }
 
     const auto& node = expression.node_;
@@ -1691,85 +1824,94 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
         if (!polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
                                                      variable_name,
                                                      coefficients)) {
-            return false;
+            return finish(false);
         }
         for (double& value : *coefficients) {
             value = -value;
         }
         trim_polynomial_coefficients(coefficients);
-        return true;
+        return finish(true);
     }
 
     std::vector<double> left;
     std::vector<double> right;
     switch (node->type) {
         case NodeType::kAdd:
-            return polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
-                                                           variable_name,
-                                                           &left) &&
-                   polynomial_coefficients_from_simplified(SymbolicExpression(node->right),
-                                                           variable_name,
-                                                           &right) &&
-                   ((*coefficients = polynomial_add_impl(left, right)), true);
+            if (!polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
+                                                         variable_name,
+                                                         &left) ||
+                !polynomial_coefficients_from_simplified(SymbolicExpression(node->right),
+                                                         variable_name,
+                                                         &right)) {
+                return finish(false);
+            }
+            *coefficients = polynomial_add_impl(left, right);
+            return finish(true);
         case NodeType::kSubtract:
-            return polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
-                                                           variable_name,
-                                                           &left) &&
-                   polynomial_coefficients_from_simplified(SymbolicExpression(node->right),
-                                                           variable_name,
-                                                           &right) &&
-                   ((*coefficients = polynomial_subtract_impl(left, right)), true);
+            if (!polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
+                                                         variable_name,
+                                                         &left) ||
+                !polynomial_coefficients_from_simplified(SymbolicExpression(node->right),
+                                                         variable_name,
+                                                         &right)) {
+                return finish(false);
+            }
+            *coefficients = polynomial_subtract_impl(left, right);
+            return finish(true);
         case NodeType::kMultiply:
-            return polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
-                                                           variable_name,
-                                                           &left) &&
-                   polynomial_coefficients_from_simplified(SymbolicExpression(node->right),
-                                                           variable_name,
-                                                           &right) &&
-                   ((*coefficients = polynomial_multiply_impl(left, right)), true);
+            if (!polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
+                                                         variable_name,
+                                                         &left) ||
+                !polynomial_coefficients_from_simplified(SymbolicExpression(node->right),
+                                                         variable_name,
+                                                         &right)) {
+                return finish(false);
+            }
+            *coefficients = polynomial_multiply_impl(left, right);
+            return finish(true);
         case NodeType::kDivide: {
             if (!polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
                                                          variable_name,
                                                          &left)) {
-                return false;
+                return finish(false);
             }
             double divisor = 0.0;
             if (!SymbolicExpression(node->right).is_number(&divisor) ||
                 mymath::is_near_zero(divisor, kFormatEps)) {
-                return false;
+                return finish(false);
             }
             for (double& value : left) {
                 value /= divisor;
             }
             trim_polynomial_coefficients(&left);
             *coefficients = left;
-            return true;
+            return finish(true);
         }
         case NodeType::kPower: {
             double exponent = 0.0;
             if (!SymbolicExpression(node->right).is_number(&exponent) ||
                 !mymath::is_integer(exponent, 1e-10) || exponent < 0.0) {
-                return false;
+                return finish(false);
             }
             if (!polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
                                                          variable_name,
                                                          &left)) {
-                return false;
+                return finish(false);
             }
             std::vector<double> result = {1.0};
             for (int i = 0; i < static_cast<int>(exponent + 0.5); ++i) {
                 result = polynomial_multiply_impl(result, left);
             }
             *coefficients = result;
-            return true;
+            return finish(true);
         }
         case NodeType::kNumber:
         case NodeType::kVariable:
         case NodeType::kFunction:
         case NodeType::kNegate:
-            return false;
+            return finish(false);
     }
-    return false;
+    return finish(false);
 }
 
 bool polynomial_is_zero_remainder(const std::vector<double>& coefficients) {
@@ -1979,6 +2121,21 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 argument.node_->type == NodeType::kFunction &&
                 argument.node_->text == "exp") {
                 return SymbolicExpression(argument.node_->left).simplify();
+            }
+            if (node->text == "sqrt" &&
+                argument.node_->type == NodeType::kPower) {
+                double exponent = 0.0;
+                if (SymbolicExpression(argument.node_->right).is_number(&exponent) &&
+                    mymath::is_near_zero(exponent - 2.0, kFormatEps)) {
+                    return make_function("abs",
+                                         SymbolicExpression(argument.node_->left))
+                        .simplify();
+                }
+            }
+            if (node->text == "abs" &&
+                argument.node_->type == NodeType::kFunction &&
+                (argument.node_->text == "abs" || argument.node_->text == "sqrt")) {
+                return argument;
             }
             if ((node->text == "sin" || node->text == "tan" ||
                  node->text == "sinh" || node->text == "tanh") &&
@@ -3070,6 +3227,28 @@ SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expr
             }
         }
 
+        double numerator_scale = 0.0;
+        double linear_slope = 0.0;
+        double linear_intercept = 0.0;
+        if (numerator.is_number(&numerator_scale) &&
+            decompose_linear(denominator,
+                             transform_variable,
+                             &linear_slope,
+                             &linear_intercept) &&
+            !mymath::is_near_zero(linear_slope, kFormatEps)) {
+            SymbolicExpression result =
+                make_multiply(
+                    SymbolicExpression::number(numerator_scale / linear_slope),
+                    make_function(
+                        "exp",
+                        make_multiply(
+                            SymbolicExpression::number(-linear_intercept / linear_slope),
+                            SymbolicExpression::variable(time_variable))))
+                    .simplify();
+            return make_multiply(result, make_step_expression(time_variable, 0.0))
+                .simplify();
+        }
+
         double sine_frequency = 0.0;
         if (denominator.node_->type == NodeType::kAdd &&
             SymbolicExpression(denominator.node_->left).node_->type == NodeType::kPower &&
@@ -3731,20 +3910,17 @@ std::vector<std::string> SymbolicExpression::identifier_variables() const {
 }
 
 SymbolicExpression SymbolicExpression::simplify() const {
-    static thread_local std::unordered_map<std::string, SymbolicExpression> cache;
     static constexpr std::size_t kMaxSimplifyCacheSize = 4096;
+    static thread_local SymbolicExpressionLruCache cache(kMaxSimplifyCacheSize);
 
     const std::string key = node_structural_key(node_);
-    const auto found = cache.find(key);
-    if (found != cache.end()) {
-        return found->second;
+    SymbolicExpression cached;
+    if (cache.get(key, &cached)) {
+        return cached;
     }
 
     SymbolicExpression simplified = simplify_impl(*this);
-    if (cache.size() >= kMaxSimplifyCacheSize) {
-        cache.clear();
-    }
-    cache.emplace(key, simplified);
+    cache.put(key, simplified);
     return simplified;
 }
 

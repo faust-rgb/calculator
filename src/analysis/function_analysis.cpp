@@ -19,6 +19,7 @@
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_map>
 #include <utility>
 
 namespace {
@@ -318,9 +319,23 @@ double FunctionAnalysis::evaluate_with_variable(double x) const {
         throw std::runtime_error("function is not defined");
     }
 
+    static thread_local std::unordered_map<std::string, double> evaluation_cache;
+    static constexpr std::size_t kMaxEvaluationCacheSize = 4096;
+    const std::string cache_key =
+        variable_name_ + "|" + expression_ + "|" + format_double(x);
+    const auto found = evaluation_cache.find(cache_key);
+    if (found != evaluation_cache.end()) {
+        return found->second;
+    }
+
     Calculator calculator;
     calculator.process_line(variable_name_ + " = " + format_double(x), false);
-    return calculator.evaluate_raw(expression_);
+    const double value = calculator.evaluate_raw(expression_);
+    if (evaluation_cache.size() >= kMaxEvaluationCacheSize) {
+        evaluation_cache.clear();
+    }
+    evaluation_cache.emplace(cache_key, value);
+    return value;
 }
 
 double FunctionAnalysis::second_derivative(double x) const {

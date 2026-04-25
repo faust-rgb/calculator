@@ -812,6 +812,18 @@ ComplexSample multiply_complex(ComplexSample lhs, ComplexSample rhs) {
     };
 }
 
+ComplexSample add_complex(ComplexSample lhs, ComplexSample rhs) {
+    return {lhs.real + rhs.real, lhs.imag + rhs.imag};
+}
+
+ComplexSample subtract_complex(ComplexSample lhs, ComplexSample rhs) {
+    return {lhs.real - rhs.real, lhs.imag - rhs.imag};
+}
+
+bool is_power_of_two(std::size_t value) {
+    return value != 0 && (value & (value - 1)) == 0;
+}
+
 bool is_complex_sequence_matrix(const Matrix& matrix) {
     return matrix.cols == 2;
 }
@@ -880,6 +892,50 @@ std::vector<ComplexSample> discrete_fourier_transform(const std::vector<ComplexS
         return {};
     }
 
+    if (is_power_of_two(input.size())) {
+        std::vector<ComplexSample> output = input;
+        std::size_t reversed = 0;
+        for (std::size_t index = 1; index < output.size(); ++index) {
+            std::size_t bit = output.size() >> 1;
+            while ((reversed & bit) != 0) {
+                reversed ^= bit;
+                bit >>= 1;
+            }
+            reversed ^= bit;
+            if (index < reversed) {
+                std::swap(output[index], output[reversed]);
+            }
+        }
+
+        const double sign = inverse ? 1.0 : -1.0;
+        for (std::size_t length = 2; length <= output.size(); length <<= 1) {
+            const double angle =
+                sign * 2.0 * mymath::kPi / static_cast<double>(length);
+            const ComplexSample step = {mymath::cos(angle), mymath::sin(angle)};
+            for (std::size_t start = 0; start < output.size(); start += length) {
+                ComplexSample twiddle = {1.0, 0.0};
+                const std::size_t half = length >> 1;
+                for (std::size_t offset = 0; offset < half; ++offset) {
+                    const ComplexSample even = output[start + offset];
+                    const ComplexSample odd =
+                        multiply_complex(output[start + offset + half], twiddle);
+                    output[start + offset] = add_complex(even, odd);
+                    output[start + offset + half] = subtract_complex(even, odd);
+                    twiddle = multiply_complex(twiddle, step);
+                }
+            }
+        }
+
+        if (inverse) {
+            const double scale = 1.0 / static_cast<double>(output.size());
+            for (ComplexSample& value : output) {
+                value.real *= scale;
+                value.imag *= scale;
+            }
+        }
+        return output;
+    }
+
     const double sign = inverse ? 1.0 : -1.0;
     const double scale = inverse ? 1.0 / static_cast<double>(input.size()) : 1.0;
     std::vector<ComplexSample> output(input.size(), {0.0, 0.0});
@@ -941,15 +997,24 @@ SymmetricEigenDecomposition jacobi_symmetric_eigendecomposition(
     const std::size_t n = matrix.rows;
     Matrix current = matrix;
     Matrix vectors = Matrix::identity(n);
+    long double diagonal_scale = 0.0L;
+    for (std::size_t i = 0; i < n; ++i) {
+        diagonal_scale = std::max(diagonal_scale,
+                                  abs_ld(static_cast<long double>(current.at(i, i))));
+    }
+    const long double convergence_tolerance =
+        std::max(1.0L, diagonal_scale) * 1e-12L;
 
     for (int iteration = 0; iteration < 128 * static_cast<int>(n + 1); ++iteration) {
         std::size_t pivot_row = 0;
         std::size_t pivot_col = 0;
         long double pivot_value = 0.0L;
+        long double off_diagonal_norm = 0.0L;
         for (std::size_t row = 0; row < n; ++row) {
             for (std::size_t col = row + 1; col < n; ++col) {
                 const long double current_value =
                     static_cast<long double>(mymath::abs(current.at(row, col)));
+                off_diagonal_norm += current_value * current_value;
                 if (current_value > pivot_value) {
                     pivot_value = current_value;
                     pivot_row = row;
@@ -958,7 +1023,8 @@ SymmetricEigenDecomposition jacobi_symmetric_eigendecomposition(
             }
         }
 
-        if (pivot_value < 1e-12) {
+        if (pivot_value < convergence_tolerance ||
+            sqrt_ld(off_diagonal_norm) < convergence_tolerance) {
             break;
         }
 
@@ -2537,16 +2603,23 @@ Matrix multiply(const Matrix& lhs, const Matrix& rhs) {
         throw std::runtime_error("matrix multiplication requires lhs.cols == rhs.rows");
     }
 
-    // 直接使用最朴素的三重循环乘法。
-    // 当前项目规模下，这比引入更复杂的块算法更容易维护。
     Matrix result(lhs.rows, rhs.cols, 0.0);
-    for (std::size_t row = 0; row < lhs.rows; ++row) {
-        for (std::size_t col = 0; col < rhs.cols; ++col) {
-            double sum = 0.0;
-            for (std::size_t k = 0; k < lhs.cols; ++k) {
-                sum += lhs.at(row, k) * rhs.at(k, col);
+    constexpr std::size_t kBlockSize = 32;
+    for (std::size_t row_block = 0; row_block < lhs.rows; row_block += kBlockSize) {
+        const std::size_t row_end = std::min(row_block + kBlockSize, lhs.rows);
+        for (std::size_t k_block = 0; k_block < lhs.cols; k_block += kBlockSize) {
+            const std::size_t k_end = std::min(k_block + kBlockSize, lhs.cols);
+            for (std::size_t col_block = 0; col_block < rhs.cols; col_block += kBlockSize) {
+                const std::size_t col_end = std::min(col_block + kBlockSize, rhs.cols);
+                for (std::size_t row = row_block; row < row_end; ++row) {
+                    for (std::size_t k = k_block; k < k_end; ++k) {
+                        const double lhs_value = lhs.at(row, k);
+                        for (std::size_t col = col_block; col < col_end; ++col) {
+                            result.at(row, col) += lhs_value * rhs.at(k, col);
+                        }
+                    }
+                }
             }
-            result.at(row, col) = sum;
         }
     }
     return result;

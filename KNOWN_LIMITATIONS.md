@@ -57,12 +57,14 @@ This project is now a capable calculator and mini CAS-style tool, but it is not:
 
 ## Symbolic Algebra
 
-- Symbolic `diff`, `gradient`, `jacobian`, `hessian`, chained `integral`, and `critical` support multi-variable workflows; `critical` uses exact linear solving for affine gradients and bounded Newton search for nonlinear gradients
+- Symbolic `diff`, `gradient`, `jacobian`, `hessian`, chained `integral`, and `critical` support multi-variable workflows; `critical` uses exact linear solving for affine gradients, bounded Newton search for nonlinear gradients, and Hessian-based classification for isolated 1-3 variable solutions
 - Symbolic integration is rule-based rather than complete
-  - many textbook forms now work, including basic rational partial fractions, repeated linear factors, the common `(x^2+1)^2` irreducible quadratic case, and chain-rule substitutions, but trigonometric identities and full Risch-style integration are not exhaustive
+  - many textbook forms now work, including basic rational partial fractions, repeated linear factors, mixed linear plus repeated irreducible quadratic factors, additional trig power/product identities, and chain-rule substitutions, but full Risch-style integration is not exhaustive
+- Symbolic expression nodes are interned and cached for performance
+  - this reduces repeated allocation and structural-key work inside a session, but it is still an in-process heuristic cache rather than a persistent global CSE system
 - Simplification is algebraic and heuristic
   - mathematically equivalent expressions may print in a different but still correct form, such as reordered products or `1 - x ^ 2` vs `-(x ^ 2) + 1`
 - Domain-aware simplification is still partial
-  - some expressions are intentionally not collapsed unless positivity is known, and full condition-tracking is not implemented
+  - some expressions are intentionally not collapsed unless positivity is known; `sqrt(u ^ 2)` is kept condition-safe as `abs(u)`, but full condition-tracking is not implemented
 - Internal symbolic coefficients still rely on `double`
   - this keeps the implementation lightweight, but it can limit robustness for more advanced exact algebra

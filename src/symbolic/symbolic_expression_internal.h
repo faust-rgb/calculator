@@ -25,6 +25,7 @@ struct SymbolicExpression::Node {
     std::string text;
     std::shared_ptr<Node> left;
     std::shared_ptr<Node> right;
+    mutable std::string structural_key_cache;
 
     Node() = default;
     explicit Node(double value) : type(NodeType::kNumber), number_value(value) {}

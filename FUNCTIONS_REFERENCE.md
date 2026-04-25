@@ -336,6 +336,8 @@ Notes:
 - symbolic `diff(expr)` and `integral(expr)` also accept raw one-variable expressions and infer the variable name automatically
 - `taylor` also accepts raw one-variable symbolic expressions, not only named custom functions
 - `pade` builds a rational approximant from the local Taylor coefficients of `expr`
+- `critical` appends a Hessian-based classification (`local min`, `local max`, `saddle`, or `degenerate`) for isolated 1-3 variable points
+- symbolic `integral` includes rule-based support for mixed real-linear plus repeated irreducible quadratic rational factors and common trig power/product identities
 - `puiseux` uses a denominator grid; for example `denominator = 2` allows half-integer powers
 - `series_sum` / `summation` currently cover polynomial summands up to degree 3 and common geometric series
 - use `inf`, `oo`, or `infinity` as the upper bound for supported infinite geometric sums
@@ -344,6 +346,7 @@ Notes:
 - symbolic `simplify(expr)` may be used on multi-variable expressions, but symbolic `diff/integral/taylor/limit/extrema` still require a one-variable input
 - `double_integral` and `triple_integral` use Cartesian coordinates
 - `double_integral_cyl` / `double_integral_polar` use the planar polar Jacobian `r`
+- `fft`/`ifft` use an FFT path for power-of-two sequence lengths and fall back to direct DFT otherwise
 - `triple_integral_cyl` uses cylindrical coordinates `(r, theta, z)` with Jacobian `r`
 - `triple_integral_sph` uses spherical coordinates `(rho, theta, phi)` with Jacobian `rho^2 sin(phi)`
 - in cylindrical and spherical modes, Cartesian variables such as `x`, `y`, and `z` are also available inside the integrand

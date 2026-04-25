@@ -2654,7 +2654,7 @@ int main() {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("critical(x ^ 2 + y ^ 2, x, y)", &output);
-        if (handled && output == "[x = 0, y = 0]") {
+        if (handled && output == "[x = 0, y = 0] (local min)") {
             ++passed;
         } else {
             ++failed;
@@ -2671,7 +2671,7 @@ int main() {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("critical(x ^ 3 - 3 * x, x)", &output);
-        if (handled && output == "[[x = -1], [x = 1]]") {
+        if (handled && output == "[[x = -1] (local max), [x = 1] (local min)]") {
             ++passed;
         } else {
             ++failed;
@@ -4376,6 +4376,8 @@ int main() {
         {"summation(0.5^n, n, 0, inf)", false, "2"},
         {"laplace(step(t))", false, "1 / s"},
         {"ilaplace(1 / s)", false, "step(t)"},
+        {"ilaplace(1 / (s + 2), s, t)", false, "exp(-2 * t) * step(t)"},
+        {"ilaplace(3 / (2 * s + 4), s, t)", false, "3/2 * exp(-2 * t) * step(t)"},
         {"fourier(delta(t - 2))", false, "exp(-2 * i * w)"},
         {"ifourier(delta(w - 3))", false, "0.159154943092 * exp(3 * i * t)"},
         {"ztrans(step(n - 2))", false, "z ^ -1 / (z - 1)"},

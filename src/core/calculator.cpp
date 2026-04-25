@@ -5851,15 +5851,51 @@ bool Calculator::try_process_function_command(const std::string& expression,
                                          const std::string& variable_name,
                                          double center,
                                          int degree) {
+        struct TaylorDerivativeCacheEntry {
+            SymbolicExpression derivative;
+            double value = 0.0;
+            bool has_value = false;
+        };
+        static thread_local std::map<std::string, TaylorDerivativeCacheEntry> derivative_cache;
+        static constexpr std::size_t kMaxTaylorDerivativeCacheSize = 256;
+
+        const std::string base_key =
+            variable_name + "|" + format_symbolic_scalar(center) + "|" +
+            expression.simplify().to_string();
         std::vector<double> coefficients;
         coefficients.reserve(static_cast<std::size_t>(degree + 1));
         SymbolicExpression current = expression;
         for (int order = 0; order <= degree; ++order) {
-            const double derivative_value =
-                evaluate_symbolic_at(current, variable_name, center);
+            const std::string order_key = base_key + "|" + std::to_string(order);
+            auto found = derivative_cache.find(order_key);
+            if (found == derivative_cache.end()) {
+                if (derivative_cache.size() >= kMaxTaylorDerivativeCacheSize) {
+                    derivative_cache.clear();
+                }
+                TaylorDerivativeCacheEntry entry;
+                entry.derivative = current.simplify();
+                found = derivative_cache.emplace(order_key, entry).first;
+            } else {
+                current = found->second.derivative;
+            }
+
+            if (!found->second.has_value) {
+                found->second.value =
+                    evaluate_symbolic_at(found->second.derivative,
+                                         variable_name,
+                                         center);
+                found->second.has_value = true;
+            }
+            const double derivative_value = found->second.value;
             coefficients.push_back(derivative_value / factorial_int(order));
             if (order != degree) {
-                current = current.derivative(variable_name).simplify();
+                const std::string next_key = base_key + "|" + std::to_string(order + 1);
+                auto next_found = derivative_cache.find(next_key);
+                if (next_found != derivative_cache.end()) {
+                    current = next_found->second.derivative;
+                } else {
+                    current = found->second.derivative.derivative(variable_name).simplify();
+                }
             }
         }
         return coefficients;
@@ -6608,6 +6644,78 @@ bool Calculator::try_process_function_command(const std::string& expression,
                                               expression.identifier_variables());
         const std::vector<SymbolicExpression> gradient =
             expression.gradient(variables);
+        const std::vector<std::vector<SymbolicExpression>> hessian =
+            expression.hessian(variables);
+        auto classify_critical_point =
+            [&](const std::vector<double>& values) {
+                const std::size_t n = variables.size();
+                std::vector<std::vector<double>> evaluated(
+                    n, std::vector<double>(n, 0.0));
+                for (std::size_t row = 0; row < n; ++row) {
+                    for (std::size_t col = 0; col < n; ++col) {
+                        if (!evaluate_symbolic_at_point(hessian[row][col],
+                                                        variables,
+                                                        values,
+                                                        &evaluated[row][col])) {
+                            return std::string("unclassified");
+                        }
+                    }
+                }
+
+                if (n == 1) {
+                    if (evaluated[0][0] > 1e-8) {
+                        return std::string("local min");
+                    }
+                    if (evaluated[0][0] < -1e-8) {
+                        return std::string("local max");
+                    }
+                    return std::string("degenerate");
+                }
+                if (n == 2) {
+                    const double det =
+                        evaluated[0][0] * evaluated[1][1] -
+                        evaluated[0][1] * evaluated[1][0];
+                    if (det > 1e-8 && evaluated[0][0] > 1e-8) {
+                        return std::string("local min");
+                    }
+                    if (det > 1e-8 && evaluated[0][0] < -1e-8) {
+                        return std::string("local max");
+                    }
+                    if (det < -1e-8) {
+                        return std::string("saddle");
+                    }
+                    return std::string("degenerate");
+                }
+                if (n == 3) {
+                    const double d1 = evaluated[0][0];
+                    const double d2 =
+                        evaluated[0][0] * evaluated[1][1] -
+                        evaluated[0][1] * evaluated[1][0];
+                    const double d3 =
+                        evaluated[0][0] *
+                            (evaluated[1][1] * evaluated[2][2] -
+                             evaluated[1][2] * evaluated[2][1]) -
+                        evaluated[0][1] *
+                            (evaluated[1][0] * evaluated[2][2] -
+                             evaluated[1][2] * evaluated[2][0]) +
+                        evaluated[0][2] *
+                            (evaluated[1][0] * evaluated[2][1] -
+                             evaluated[1][1] * evaluated[2][0]);
+                    if (d1 > 1e-8 && d2 > 1e-8 && d3 > 1e-8) {
+                        return std::string("local min");
+                    }
+                    if (d1 < -1e-8 && d2 > 1e-8 && d3 < -1e-8) {
+                        return std::string("local max");
+                    }
+                    if (mymath::abs(d1) <= 1e-8 ||
+                        mymath::abs(d2) <= 1e-8 ||
+                        mymath::abs(d3) <= 1e-8) {
+                        return std::string("degenerate");
+                    }
+                    return std::string("saddle");
+                }
+                return std::string("unclassified");
+            };
         auto format_critical_solution =
             [&](const std::vector<double>& values) {
                 std::ostringstream out;
@@ -6620,6 +6728,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                         << format_decimal(normalize_result(values[i]));
                 }
                 out << "]";
+                out << " (" << classify_critical_point(values) << ")";
                 return out.str();
             };
         std::vector<std::vector<double>> coefficients(
@@ -6698,8 +6807,6 @@ bool Calculator::try_process_function_command(const std::string& expression,
                 "critical nonlinear search supports up to 3 variables");
         }
 
-        const std::vector<std::vector<SymbolicExpression>> hessian =
-            expression.hessian(variables);
         std::vector<std::vector<double>> starts = {std::vector<double>(variables.size(), 0.0)};
         const std::vector<double> seeds = {-2.0, -1.0, 1.0, 2.0};
         for (std::size_t dimension = 0; dimension < variables.size(); ++dimension) {
