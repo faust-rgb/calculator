@@ -11,6 +11,7 @@
 #include "mymath.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <stdexcept>
 #include <string>
 
@@ -47,6 +48,19 @@ std::string format_coefficient(double value) {
         return std::to_string(rounded);
     }
 
+    long long numerator = 0;
+    long long denominator = 1;
+    if (mymath::approximate_fraction(value,
+                                     &numerator,
+                                     &denominator,
+                                     999,
+                                     1e-10)) {
+        if (denominator == 1) {
+            return std::to_string(numerator);
+        }
+        return std::to_string(numerator) + "/" + std::to_string(denominator);
+    }
+
     std::string text = std::to_string(value);
     while (!text.empty() && text.back() == '0') {
         text.pop_back();
@@ -57,7 +71,7 @@ std::string format_coefficient(double value) {
     return text;
 }
 
-double polynomial_evaluate(const std::vector<double>& coefficients, double x) {
+double polynomial_evaluate_impl(const std::vector<double>& coefficients, double x) {
     // 这里使用 Horner 形式求值：
     //   a0 + a1*x + a2*x^2 + ...
     // 可以改写成
@@ -71,8 +85,7 @@ double polynomial_evaluate(const std::vector<double>& coefficients, double x) {
     return result;
 }
 
-std::vector<double> polynomial_derivative_coefficients(
-    const std::vector<double>& coefficients) {
+std::vector<double> polynomial_derivative_impl(const std::vector<double>& coefficients) {
     if (coefficients.size() <= 1) {
         return {0.0};
     }
@@ -105,11 +118,11 @@ double polynomial_root_bound(const std::vector<double>& coefficients) {
 double bisect_root(const std::vector<double>& coefficients, double left, double right) {
     // 进入这个函数前，调用方已经保证 [left, right] 两端函数值异号。
     // 因此直接用二分法做“可靠收敛”的根逼近。
-    double left_value = polynomial_evaluate(coefficients, left);
+    double left_value = polynomial_evaluate_impl(coefficients, left);
 
     for (int i = 0; i < 100; ++i) {
         const double mid = (left + right) * 0.5;
-        const double mid_value = polynomial_evaluate(coefficients, mid);
+        const double mid_value = polynomial_evaluate_impl(coefficients, mid);
         if (mymath::is_near_zero(mid_value, kRootIsolationEps) ||
             mymath::abs(right - left) <= kRootIsolationEps) {
             return mid;
@@ -139,6 +152,14 @@ void add_unique_root(std::vector<double>* roots, double candidate) {
 }
 
 }  // namespace
+
+double polynomial_evaluate(const std::vector<double>& coefficients, double x) {
+    return polynomial_evaluate_impl(coefficients, x);
+}
+
+std::vector<double> polynomial_derivative(const std::vector<double>& coefficients) {
+    return polynomial_derivative_impl(coefficients);
+}
 
 std::vector<double> polynomial_add(const std::vector<double>& lhs,
                                    const std::vector<double>& rhs) {
@@ -245,8 +266,7 @@ std::vector<double> polynomial_real_roots(const std::vector<double>& coefficient
     //
     // 这种“递归导数 + 分段二分”的方式比对整个区间做稠密扫描更稳定，
     // 对当前只返回实根的需求也足够直接。
-    const std::vector<double> derivative =
-        polynomial_derivative_coefficients(normalized);
+    const std::vector<double> derivative = polynomial_derivative(normalized);
     std::vector<double> critical_points = polynomial_real_roots(derivative);
     std::sort(critical_points.begin(), critical_points.end());
 
@@ -290,6 +310,163 @@ std::vector<double> polynomial_real_roots(const std::vector<double>& coefficient
 
     std::sort(roots.begin(), roots.end());
     return roots;
+}
+
+std::vector<double> polynomial_integral(const std::vector<double>& coefficients) {
+    std::vector<double> integral(coefficients.size() + 1, 0.0);
+    for (std::size_t i = 0; i < coefficients.size(); ++i) {
+        integral[i + 1] = coefficients[i] / static_cast<double>(i + 1);
+    }
+    trim_trailing_zeros(&integral);
+    return integral;
+}
+
+std::vector<double> polynomial_compose(const std::vector<double>& outer,
+                                       const std::vector<double>& inner) {
+    std::vector<double> result = {0.0};
+    for (std::size_t i = outer.size(); i > 0; --i) {
+        result = polynomial_multiply(result, inner);
+        if (result.empty()) {
+            result.push_back(0.0);
+        }
+        result[0] += outer[i - 1];
+        trim_trailing_zeros(&result);
+    }
+    return result;
+}
+
+std::vector<double> polynomial_gcd(const std::vector<double>& lhs,
+                                   const std::vector<double>& rhs) {
+    std::vector<double> a = lhs;
+    std::vector<double> b = rhs;
+    trim_trailing_zeros(&a);
+    trim_trailing_zeros(&b);
+
+    while (!(b.size() == 1 && mymath::is_near_zero(b[0], kPolynomialEps))) {
+        const PolynomialDivisionResult division = polynomial_divide(a, b);
+        a = b;
+        b = division.remainder;
+        trim_trailing_zeros(&a);
+        trim_trailing_zeros(&b);
+    }
+
+    if (a.empty()) {
+        return {0.0};
+    }
+    const double leading = a.back();
+    if (!mymath::is_near_zero(leading, kPolynomialEps)) {
+        for (double& coefficient : a) {
+            coefficient /= leading;
+        }
+    }
+    trim_trailing_zeros(&a);
+    return a;
+}
+
+std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
+                                   const std::vector<double>& y_samples,
+                                   int degree) {
+    if (degree < 0) {
+        throw std::runtime_error("polynomial degree must be non-negative");
+    }
+    if (x_samples.size() != y_samples.size() || x_samples.empty()) {
+        throw std::runtime_error("polynomial_fit requires non-empty sample vectors of the same length");
+    }
+    if (x_samples.size() < static_cast<std::size_t>(degree + 1)) {
+        throw std::runtime_error("polynomial_fit requires at least degree + 1 samples");
+    }
+
+    const std::size_t n = x_samples.size();
+    const std::size_t m = static_cast<std::size_t>(degree + 1);
+    long double center = 0.0L;
+    for (double sample : x_samples) {
+        center += static_cast<long double>(sample);
+    }
+    center /= static_cast<long double>(n);
+
+    long double scale = 0.0L;
+    for (double sample : x_samples) {
+        const long double shifted = static_cast<long double>(sample) - center;
+        const long double magnitude = shifted < 0.0L ? -shifted : shifted;
+        if (magnitude > scale) {
+            scale = magnitude;
+        }
+    }
+    if (scale == 0.0L) {
+        scale = 1.0L;
+    }
+
+    std::vector<std::vector<long double>> q_columns(
+        m, std::vector<long double>(n, 0.0L));
+    std::vector<std::vector<long double>> r(
+        m, std::vector<long double>(m, 0.0L));
+    std::vector<long double> qty(m, 0.0L);
+
+    for (std::size_t col = 0; col < m; ++col) {
+        std::vector<long double> column(n, 1.0L);
+        for (std::size_t row = 0; row < n; ++row) {
+            const long double shifted_x =
+                (static_cast<long double>(x_samples[row]) - center) / scale;
+            long double power = 1.0L;
+            for (std::size_t degree_idx = 0; degree_idx < col; ++degree_idx) {
+                power *= shifted_x;
+            }
+            column[row] = power;
+        }
+
+        for (std::size_t prev = 0; prev < col; ++prev) {
+            long double projection = 0.0L;
+            for (std::size_t row = 0; row < n; ++row) {
+                projection += q_columns[prev][row] * column[row];
+            }
+            r[prev][col] = projection;
+            for (std::size_t row = 0; row < n; ++row) {
+                column[row] -= projection * q_columns[prev][row];
+            }
+        }
+
+        long double norm_squared = 0.0L;
+        for (long double value : column) {
+            norm_squared += value * value;
+        }
+        const long double norm = mymath::sqrt(norm_squared);
+        if (norm <= 1e-18L) {
+            throw std::runtime_error("polynomial_fit design matrix is rank deficient");
+        }
+        r[col][col] = norm;
+        for (std::size_t row = 0; row < n; ++row) {
+            q_columns[col][row] = column[row] / norm;
+        }
+
+        long double projected_rhs = 0.0L;
+        for (std::size_t row = 0; row < n; ++row) {
+            projected_rhs +=
+                q_columns[col][row] * static_cast<long double>(y_samples[row]);
+        }
+        qty[col] = projected_rhs;
+    }
+
+    std::vector<long double> scaled_coefficients(m, 0.0L);
+    for (std::size_t row = m; row-- > 0;) {
+        long double value = qty[row];
+        for (std::size_t col = row + 1; col < m; ++col) {
+            value -= r[row][col] * scaled_coefficients[col];
+        }
+        scaled_coefficients[row] = value / r[row][row];
+    }
+
+    std::vector<double> scaled_polynomial;
+    scaled_polynomial.reserve(m);
+    for (long double value : scaled_coefficients) {
+        scaled_polynomial.push_back(static_cast<double>(value));
+    }
+    const std::vector<double> linear_map = {
+        static_cast<double>(-center / scale),
+        static_cast<double>(1.0L / scale)};
+    std::vector<double> coefficients =
+        polynomial_compose(scaled_polynomial, linear_map);
+    trim_trailing_zeros(&coefficients);
+    return coefficients;
 }
 
 std::string polynomial_to_string(const std::vector<double>& coefficients,

@@ -22,6 +22,10 @@ constexpr double kPi = 3.14159265358979323846;
 
 /** @brief 自然对数的底 e，精确到小数点后20位 */
 constexpr double kE = 2.71828182845904523536;
+constexpr double kDoubleMax = 1.7976931348623157e308;
+constexpr double kDoubleDenormMin = 4.9406564584124654e-324;
+constexpr double kLnDoubleMax = 709.78271289338397;
+constexpr double kLnDoubleDenormMin = -744.44007192138122;
 
 /**
  * @brief 默认数值精度阈值
@@ -41,6 +45,12 @@ constexpr double kEps = 1e-12;
  * @return |x|
  */
 double abs(double x);
+long double abs_long_double(long double x);
+bool isfinite(double x);
+double clamp(double value, double low, double high);
+double remainder(double x, double y);
+double infinity();
+long long gcd(long long a, long long b);
 
 /**
  * @brief 判断数值是否接近零
@@ -57,6 +67,38 @@ bool is_near_zero(double x, double eps = kEps);
  * @return true 如果 x 与最近整数的距离 <= eps
  */
 bool is_integer(double x, double eps = 1e-10);
+
+/**
+ * @brief 将浮点数识别为“足够接近”的简单分数
+ * @param value 输入值
+ * @param numerator 输出分子
+ * @param denominator 输出分母
+ * @param max_denominator 最大分母
+ * @param eps 允许误差
+ * @return true 表示成功识别为简单分数
+ *
+ * 适合做显示优化或识别原本就应当是分数的值，例如 0.3333333333 -> 1/3。
+ */
+bool approximate_fraction(double value,
+                          long long* numerator,
+                          long long* denominator,
+                          int max_denominator = 999,
+                          double eps = 1e-10);
+
+/**
+ * @brief 计算给定最大分母约束下的最佳有理逼近
+ * @param value 输入值
+ * @param numerator 输出分子
+ * @param denominator 输出分母
+ * @param max_denominator 最大分母，必须 > 0
+ * @return true 表示成功求得有理逼近
+ *
+ * 使用连分数方法，为显式的“有理逼近”功能提供结果，例如 pi -> 355/113。
+ */
+bool best_rational_approximation(double value,
+                                 long long* numerator,
+                                 long long* denominator,
+                                 long long max_denominator = 999);
 
 /**
  * @brief 将角度归约到 [-π, π] 区间
@@ -125,6 +167,27 @@ double cosh(double x);
 double tanh(double x);
 
 /**
+ * @brief 计算反双曲正弦
+ * @param x 输入值
+ * @return asinh(x)
+ */
+double asinh(double x);
+
+/**
+ * @brief 计算反双曲余弦
+ * @param x 输入值，必须 >= 1
+ * @return acosh(x)
+ */
+double acosh(double x);
+
+/**
+ * @brief 计算反双曲正切
+ * @param x 输入值，必须满足 |x| < 1
+ * @return atanh(x)
+ */
+double atanh(double x);
+
+/**
  * @brief 计算伽马函数 Γ(x)
  * @param x 输入值
  * @return Γ(x)
@@ -191,6 +254,48 @@ double asin(double x);
  */
 double acos(double x);
 
+/**
+ * @brief 计算正割
+ * @param x 角度（弧度）
+ * @return sec(x) = 1 / cos(x)
+ */
+double sec(double x);
+
+/**
+ * @brief 计算余割
+ * @param x 角度（弧度）
+ * @return csc(x) = 1 / sin(x)
+ */
+double csc(double x);
+
+/**
+ * @brief 计算余切
+ * @param x 角度（弧度）
+ * @return cot(x) = cos(x) / sin(x)
+ */
+double cot(double x);
+
+/**
+ * @brief 计算反正割
+ * @param x 输入值，必须满足 |x| >= 1
+ * @return asec(x)
+ */
+double asec(double x);
+
+/**
+ * @brief 计算反余割
+ * @param x 输入值，必须满足 |x| >= 1
+ * @return acsc(x)
+ */
+double acsc(double x);
+
+/**
+ * @brief 计算反余切
+ * @param x 输入值
+ * @return acot(x)
+ */
+double acot(double x);
+
 // ============================================================================
 // 幂函数和根函数
 // ============================================================================
@@ -238,6 +343,43 @@ double root(double value, double degree);
  * - 一般情况使用 a^b = e^(b*ln(a))
  */
 double pow(double base, double exponent);
+
+/**
+ * @brief 计算误差函数
+ * @param x 输入值
+ * @return erf(x)
+ */
+double erf(double x);
+
+/**
+ * @brief 计算互补误差函数
+ * @param x 输入值
+ * @return erfc(x) = 1 - erf(x)
+ */
+double erfc(double x);
+
+/**
+ * @brief 计算贝塔函数
+ * @param a 参数 a
+ * @param b 参数 b
+ * @return B(a, b)
+ */
+double beta(double a, double b);
+
+/**
+ * @brief 计算黎曼 ζ 函数（实数输入）
+ * @param s 输入值，s = 1 处无定义
+ * @return zeta(s)
+ */
+double zeta(double s);
+
+/**
+ * @brief 计算第一类整数阶贝塞尔函数 J_n(x)
+ * @param order 阶数（整数）
+ * @param x 输入值
+ * @return J_order(x)
+ */
+double bessel_j(int order, double x);
 
 }  // namespace mymath
 

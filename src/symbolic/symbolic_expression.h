@@ -71,6 +71,32 @@ public:
     SymbolicExpression derivative(const std::string& variable_name) const;
 
     /**
+     * @brief 计算多个变量上的梯度
+     * @param variable_names 求导变量名列表
+     * @return 按变量顺序排列的一阶偏导表达式
+     */
+    std::vector<SymbolicExpression> gradient(
+        const std::vector<std::string>& variable_names) const;
+
+    /**
+     * @brief 计算多个变量上的 Hessian 矩阵
+     * @param variable_names 求导变量名列表
+     * @return Hessian 矩阵表达式
+     */
+    std::vector<std::vector<SymbolicExpression>> hessian(
+        const std::vector<std::string>& variable_names) const;
+
+    /**
+     * @brief 计算表达式列表对变量列表的 Jacobian 矩阵
+     * @param expressions 表达式列表
+     * @param variable_names 求导变量名列表
+     * @return Jacobian 矩阵表达式
+     */
+    static std::vector<std::vector<SymbolicExpression>> jacobian(
+        const std::vector<SymbolicExpression>& expressions,
+        const std::vector<std::string>& variable_names);
+
+    /**
      * @brief 计算符号积分
      * @param variable_name 积分变量名
      * @return 积分表达式（不含常数 C）
@@ -78,6 +104,71 @@ public:
      * 支持基本积分规则和简单替换。
      */
     SymbolicExpression integral(const std::string& variable_name) const;
+
+    /**
+     * @brief 计算符号 Fourier 变换
+     * @param time_variable 时域变量
+     * @param frequency_variable 频域变量
+     * @return 变换后的表达式
+     */
+    SymbolicExpression fourier_transform(const std::string& time_variable,
+                                         const std::string& frequency_variable) const;
+
+    /**
+     * @brief 计算符号逆 Fourier 变换
+     * @param frequency_variable 频域变量
+     * @param time_variable 时域变量
+     * @return 逆变换后的表达式
+     */
+    SymbolicExpression inverse_fourier_transform(
+        const std::string& frequency_variable,
+        const std::string& time_variable) const;
+
+    /**
+     * @brief 计算符号 Laplace 变换
+     * @param time_variable 时域变量
+     * @param transform_variable 复频域变量
+     * @return 变换后的表达式
+     */
+    SymbolicExpression laplace_transform(const std::string& time_variable,
+                                         const std::string& transform_variable) const;
+
+    /**
+     * @brief 计算符号逆 Laplace 变换
+     * @param transform_variable 复频域变量
+     * @param time_variable 时域变量
+     * @return 逆变换后的表达式
+     */
+    SymbolicExpression inverse_laplace_transform(
+        const std::string& transform_variable,
+        const std::string& time_variable) const;
+
+    /**
+     * @brief 计算符号 z 变换
+     * @param index_variable 序列索引变量
+     * @param transform_variable z 域变量
+     * @return 变换后的表达式
+     */
+    SymbolicExpression z_transform(const std::string& index_variable,
+                                   const std::string& transform_variable) const;
+
+    /**
+     * @brief 计算符号逆 z 变换
+     * @param transform_variable z 域变量
+     * @param index_variable 序列索引变量
+     * @return 逆变换后的表达式
+     */
+    SymbolicExpression inverse_z_transform(const std::string& transform_variable,
+                                           const std::string& index_variable) const;
+
+    /**
+     * @brief 用另一个表达式替换指定变量
+     * @param variable_name 被替换的变量名
+     * @param replacement 替换表达式
+     * @return 代换后的表达式
+     */
+    SymbolicExpression substitute(const std::string& variable_name,
+                                  const SymbolicExpression& replacement) const;
 
     /**
      * @brief 简化表达式

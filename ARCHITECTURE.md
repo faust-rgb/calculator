@@ -14,19 +14,31 @@ the main functions.
 
 ## Main Files
 
-- `/home/roselia/code/src/app/main.cpp`
+- `/home/roselia/ai-code/calculator/src/app/main.cpp`
   Terminal interaction, history, autocomplete, and command dispatch
-- `/home/roselia/code/src/core/calculator.cpp`
+- `/home/roselia/ai-code/calculator/src/core/calculator.cpp`
   Expression parsing, exact mode, symbolic constants mode, variables, display-only features, persistence
-- `/home/roselia/code/src/core/calculator.h`
+- `/home/roselia/ai-code/calculator/src/core/calculator_lifecycle.cpp`
+  Calculator construction, mode toggles, completion lists, and lightweight runtime helpers
+- `/home/roselia/ai-code/calculator/src/core/calculator.h`
   Public calculator API
-- `/home/roselia/code/src/symbolic/symbolic_expression.cpp`
-  Symbolic expression parsing, simplification, and rendering
-- `/home/roselia/code/src/math/mymath.cpp`
-  Numerical algorithms and domain handling
-- `/home/roselia/code/src/math/mymath.h`
+- `/home/roselia/ai-code/calculator/src/symbolic/symbolic_expression_core.cpp`
+  Symbolic expression parsing, simplification, substitution, and rendering infrastructure
+- `/home/roselia/ai-code/calculator/src/symbolic/symbolic_expression_calculus.cpp`
+  Symbolic differentiation and integration rules
+- `/home/roselia/ai-code/calculator/src/symbolic/symbolic_expression_transforms.cpp`
+  Fourier/Laplace/z transform entry points
+- `/home/roselia/ai-code/calculator/src/math/mymath.cpp`
+  Core numerical algorithms and domain handling
+- `/home/roselia/ai-code/calculator/src/math/mymath_special_functions.cpp`
+  Trigonometric, inverse-trigonometric, gamma, and Bessel-related implementations
+- `/home/roselia/ai-code/calculator/src/matrix/matrix.cpp`
+  Matrix storage, parsing, expression evaluation, and non-decomposition helpers
+- `/home/roselia/ai-code/calculator/src/matrix/matrix_linear_algebra.cpp`
+  Inversion, decompositions, eigensolvers, RREF, and related linear-algebra routines
+- `/home/roselia/ai-code/calculator/src/math/mymath.h`
   Math declarations and shared constants
-- `/home/roselia/code/test/tests.cpp`
+- `/home/roselia/ai-code/calculator/test/tests.cpp`
   Regression suite covering supported behavior
 
 ## Directory Layout
@@ -49,6 +61,14 @@ the main functions.
   Script AST and parser
 - `test`
   Regression tests and runnable example scripts
+
+Large implementation areas are split with private internal headers rather than
+`*.inc` fragments. Current internal split headers include:
+
+- `src/core/calculator_internal_types.h`
+- `src/math/mymath_internal.h`
+- `src/matrix/matrix_internal.h`
+- `src/symbolic/symbolic_expression_internal.h`
 
 ## Execution Flow
 
@@ -123,7 +143,7 @@ The current implementation lives mainly in:
 
 - `src/core/calculator.cpp`
   mode flag, storage, and display dispatch
-- `src/symbolic/symbolic_expression.cpp`
+- `src/symbolic/symbolic_expression_core.cpp`
   symbolic parsing and simplification rules
 
 ## Display-only Features
@@ -168,7 +188,7 @@ Important numeric behavior:
 - near-zero results are normalized to `0`
 - decimal results within `1e-10` of the nearest integer are displayed as that integer
 - exact mode does not try symbolic algebra beyond rational arithmetic
-- scientific notation input such as `1e-3` is not currently supported
+- scientific notation input such as `1e-3`, `1e20`, and `1e-300` is supported
 - negative-base fractional powers are supported only when they correspond to a
   real odd-denominator rational exponent
 - base conversion output supports bases `2..16`
@@ -178,9 +198,9 @@ Important numeric behavior:
 
 For future work, the fastest way to rebuild context is:
 
-1. `/home/roselia/code/HANDOFF.md`
-2. `/home/roselia/code/README.md`
-3. `/home/roselia/code/test/tests.cpp`
-4. `/home/roselia/code/src/core/calculator.cpp`
-5. `/home/roselia/code/src/symbolic/symbolic_expression.cpp`
-6. `/home/roselia/code/src/math/mymath.cpp`
+1. `/home/roselia/ai-code/calculator/HANDOFF.md`
+2. `/home/roselia/ai-code/calculator/README.md`
+3. `/home/roselia/ai-code/calculator/test/tests.cpp`
+4. `/home/roselia/ai-code/calculator/src/core/calculator.cpp`
+5. `/home/roselia/ai-code/calculator/src/symbolic/symbolic_expression_core.cpp`
+6. `/home/roselia/ai-code/calculator/src/math/mymath.cpp`

@@ -40,6 +40,13 @@ public:
     double evaluate(const std::string& expression);
 
     /**
+     * @brief 计算表达式的原始数值结果，不做显示层归整
+     * @param expression 数学表达式字符串
+     * @return 原始浮点结果
+     */
+    double evaluate_raw(const std::string& expression);
+
+    /**
      * @brief 计算表达式并以字符串形式返回，支持精确模式
      * @param expression 数学表达式字符串
      * @param exact_mode 是否使用精确模式（尝试保留分数形式）

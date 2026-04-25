@@ -9,12 +9,17 @@
 #include "script_parser.h"
 #include "symbolic_expression.h"
 
+#include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iomanip>
 #include <map>
 #include <memory>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -23,7 +28,8 @@
 
 namespace {
 
-constexpr double kDisplaySimplifyEps = 1e-10;
+constexpr double kDisplayZeroEps = mymath::kDoubleDenormMin;
+constexpr double kDisplayIntegerEps = 1e-9;
 
 class ExactModeUnsupported : public std::runtime_error {
 public:
@@ -64,6 +70,10 @@ long long round_to_long_long(double x) {
     return static_cast<long long>(x >= 0.0 ? x + 0.5 : x - 0.5);
 }
 
+long long trunc_to_long_long(double x) {
+    return static_cast<long long>(x);
+}
+
 long long floor_to_long_long(double x) {
     long long truncated = static_cast<long long>(x);
     if (x < 0.0 && static_cast<double>(truncated) != x) {
@@ -81,13 +91,220 @@ long long ceil_to_long_long(double x) {
 }
 
 double normalize_display_decimal(double value) {
-    if (mymath::is_near_zero(value, kDisplaySimplifyEps)) {
+    if (mymath::is_near_zero(value, kDisplayZeroEps)) {
         return 0.0;
     }
-    if (is_integer_double(value, kDisplaySimplifyEps)) {
+    if (mymath::abs(value) > kDisplayIntegerEps &&
+        is_integer_double(value, kDisplayIntegerEps)) {
         return static_cast<double>(round_to_long_long(value));
     }
     return value;
+}
+
+std::mt19937_64& global_rng() {
+    static std::mt19937_64 engine(std::random_device{}());
+    return engine;
+}
+
+bool lookup_builtin_constant(const std::string& name, double* value) {
+    if (name == "pi") {
+        *value = mymath::kPi;
+        return true;
+    }
+    if (name == "e") {
+        *value = mymath::kE;
+        return true;
+    }
+    if (name == "c") {
+        *value = 299792458.0;
+        return true;
+    }
+    if (name == "G") {
+        *value = 6.67430e-11;
+        return true;
+    }
+    if (name == "h") {
+        *value = 6.62607015e-34;
+        return true;
+    }
+    if (name == "k") {
+        *value = 1.380649e-23;
+        return true;
+    }
+    if (name == "NA") {
+        *value = 6.02214076e23;
+        return true;
+    }
+    return false;
+}
+
+double degrees_to_radians(double value) {
+    return value * mymath::kPi / 180.0;
+}
+
+double radians_to_degrees(double value) {
+    return value * 180.0 / mymath::kPi;
+}
+
+double celsius_to_fahrenheit(double value) {
+    return value * 9.0 / 5.0 + 32.0;
+}
+
+double fahrenheit_to_celsius(double value) {
+    return (value - 32.0) * 5.0 / 9.0;
+}
+
+double normal_pdf(double x, double mean, double sigma) {
+    if (sigma <= 0.0) {
+        throw std::runtime_error("normal distribution sigma must be positive");
+    }
+    const double z = (x - mean) / sigma;
+    return mymath::exp(-0.5 * z * z) /
+           (sigma * mymath::sqrt(2.0 * mymath::kPi));
+}
+
+double normal_cdf(double x, double mean, double sigma) {
+    if (sigma <= 0.0) {
+        throw std::runtime_error("normal distribution sigma must be positive");
+    }
+    return 0.5 * (1.0 + mymath::erf((x - mean) /
+                                    (sigma * mymath::sqrt(2.0))));
+}
+
+bool is_prime_ll(long long value) {
+    if (value <= 1) {
+        return false;
+    }
+    if (value <= 3) {
+        return true;
+    }
+    if (value % 2 == 0 || value % 3 == 0) {
+        return false;
+    }
+    for (long long i = 5; i * i <= value; i += 6) {
+        if (value % i == 0 || value % (i + 2) == 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+long long next_prime_ll(long long value) {
+    long long candidate = value <= 2 ? 2 : value + 1;
+    if (candidate % 2 == 0 && candidate != 2) {
+        ++candidate;
+    }
+    while (!is_prime_ll(candidate)) {
+        candidate += (candidate == 2 ? 1 : 2);
+    }
+    return candidate;
+}
+
+double fibonacci_value(long long n) {
+    if (n < 0) {
+        throw std::runtime_error("fib only accepts non-negative integers");
+    }
+    if (n > 186) {
+        throw std::runtime_error("fib is limited to n <= 186 to avoid overflow");
+    }
+    if (n == 0) {
+        return 0.0;
+    }
+    long long a = 0;
+    long long b = 1;
+    for (long long i = 1; i < n; ++i) {
+        const long long next = a + b;
+        a = b;
+        b = next;
+    }
+    return static_cast<double>(b);
+}
+
+constexpr unsigned kProgrammerBitWidth = 64;
+
+std::uint64_t to_unsigned_bits(long long value) {
+    return static_cast<std::uint64_t>(value);
+}
+
+long long from_unsigned_bits(std::uint64_t value) {
+    return static_cast<long long>(value);
+}
+
+unsigned normalize_rotation_count(long long count) {
+    if (count < 0) {
+        throw std::runtime_error("rotate count cannot be negative");
+    }
+    return static_cast<unsigned>(count % static_cast<long long>(kProgrammerBitWidth));
+}
+
+std::uint64_t rotate_left_bits(std::uint64_t value, unsigned count) {
+    if (count == 0) {
+        return value;
+    }
+    return (value << count) | (value >> (kProgrammerBitWidth - count));
+}
+
+std::uint64_t rotate_right_bits(std::uint64_t value, unsigned count) {
+    if (count == 0) {
+        return value;
+    }
+    return (value >> count) | (value << (kProgrammerBitWidth - count));
+}
+
+int popcount_bits(std::uint64_t value) {
+    int count = 0;
+    while (value != 0) {
+        value &= (value - 1);
+        ++count;
+    }
+    return count;
+}
+
+int bit_length_bits(std::uint64_t value) {
+    int length = 0;
+    while (value != 0) {
+        ++length;
+        value >>= 1;
+    }
+    return length;
+}
+
+int trailing_zero_count_bits(std::uint64_t value) {
+    if (value == 0) {
+        return static_cast<int>(kProgrammerBitWidth);
+    }
+    int count = 0;
+    while ((value & 1ULL) == 0ULL) {
+        ++count;
+        value >>= 1;
+    }
+    return count;
+}
+
+int leading_zero_count_bits(std::uint64_t value) {
+    if (value == 0) {
+        return static_cast<int>(kProgrammerBitWidth);
+    }
+    int count = 0;
+    std::uint64_t mask = 1ULL << (kProgrammerBitWidth - 1);
+    while ((value & mask) == 0ULL) {
+        ++count;
+        mask >>= 1;
+    }
+    return count;
+}
+
+int parity_bits(std::uint64_t value) {
+    return popcount_bits(value) % 2;
+}
+
+std::uint64_t reverse_bits(std::uint64_t value) {
+    std::uint64_t reversed = 0ULL;
+    for (unsigned i = 0; i < kProgrammerBitWidth; ++i) {
+        reversed = (reversed << 1) | (value & 1ULL);
+        value >>= 1;
+    }
+    return reversed;
 }
 
 std::string factor_integer(long long value) {
@@ -297,6 +514,54 @@ std::string format_decimal(double value) {
     return out.str();
 }
 
+bool try_make_simple_rational(double value,
+                              int max_denominator,
+                              Rational* rational) {
+    if (rational == nullptr || !mymath::isfinite(value)) {
+        return false;
+    }
+
+    long long numerator = 0;
+    long long denominator = 1;
+    if (!mymath::approximate_fraction(value,
+                                      &numerator,
+                                      &denominator,
+                                      max_denominator,
+                                      1e-10)) {
+        return false;
+    }
+
+    *rational = Rational(numerator, denominator);
+    return true;
+}
+
+std::string format_symbolic_number(double value) {
+    value = mymath::is_near_zero(value, kDisplayZeroEps) ? 0.0 : value;
+    if (mymath::abs(value) > kDisplayIntegerEps &&
+        is_integer_double(value, kDisplayIntegerEps)) {
+        return std::to_string(round_to_long_long(value));
+    }
+
+    Rational rational;
+    if (try_make_simple_rational(value, 999, &rational)) {
+        return rational.to_string();
+    }
+
+    return format_decimal(value);
+}
+
+double root_position_tolerance(double value) {
+    return 1e-10 * std::max(1.0, mymath::abs(value));
+}
+
+double root_function_tolerance(double value) {
+    return 1e-10 * std::max(1.0, mymath::abs(value));
+}
+
+double root_derivative_step(double value) {
+    return 1e-6 * std::max(1.0, mymath::abs(value));
+}
+
 constexpr int kPreciseDecimalDivisionDigits = 40;
 
 class PreciseDecimalUnsupported : public std::runtime_error {
@@ -448,6 +713,10 @@ struct PreciseDecimal {
 
     void normalize() {
         digits = trim_leading_zeros(digits);
+        if (scale < 0) {
+            digits.append(static_cast<std::size_t>(-scale), '0');
+            scale = 0;
+        }
         while (scale > 0 && digits.size() > 1 && digits.back() == '0') {
             digits.pop_back();
             --scale;
@@ -513,16 +782,25 @@ struct PreciseDecimal {
     }
 
     static PreciseDecimal from_decimal_literal(const std::string& token) {
-        const std::size_t dot_pos = token.find('.');
-        if (dot_pos == std::string::npos) {
-            return from_digits(token, 0, false);
+        std::string significand = token;
+        int exponent_adjust = 0;
+        const std::size_t exponent_pos = token.find_first_of("eE");
+        if (exponent_pos != std::string::npos) {
+            significand = token.substr(0, exponent_pos);
+            exponent_adjust = std::stoi(token.substr(exponent_pos + 1));
         }
 
-        std::string digits_only = token.substr(0, dot_pos);
-        digits_only += token.substr(dot_pos + 1);
-        return from_digits(digits_only,
-                           static_cast<int>(token.size() - dot_pos - 1),
-                           false);
+        const std::size_t dot_pos = significand.find('.');
+        if (dot_pos == std::string::npos) {
+            return from_digits(significand, -exponent_adjust, false);
+        }
+
+        std::string digits_only = significand.substr(0, dot_pos);
+        digits_only += significand.substr(dot_pos + 1);
+        return from_digits(
+            digits_only,
+            static_cast<int>(significand.size() - dot_pos - 1) - exponent_adjust,
+            false);
     }
 };
 
@@ -944,7 +1222,9 @@ bool is_inline_function_command_name(const std::string& name) {
            name == "integral" ||
            name == "limit" ||
            name == "ode" ||
+           name == "ode_system" ||
            name == "ode_table" ||
+           name == "ode_system_table" ||
            name == "taylor" ||
            name == "triple_integral" ||
            name == "triple_integral_cyl" ||
@@ -1233,6 +1513,22 @@ private:
             }
         }
 
+        if (!is_at_end() && (source_[pos_] == 'e' || source_[pos_] == 'E')) {
+            const std::size_t exponent_pos = pos_;
+            ++pos_;
+            if (!is_at_end() && (source_[pos_] == '+' || source_[pos_] == '-')) {
+                ++pos_;
+            }
+            const std::size_t exponent_digits = pos_;
+            while (!is_at_end() &&
+                   std::isdigit(static_cast<unsigned char>(source_[pos_]))) {
+                ++pos_;
+            }
+            if (exponent_digits == pos_) {
+                pos_ = exponent_pos;
+            }
+        }
+
         if (!has_digit) {
             throw std::runtime_error("expected number");
         }
@@ -1329,8 +1625,17 @@ std::string format_stored_value(const StoredValue& value, bool symbolic_constant
     if (symbolic_constants_mode && value.has_symbolic_text) {
         return value.symbolic_text;
     }
-    return value.exact ? value.rational.to_string()
-                       : format_decimal(normalize_display_decimal(value.decimal));
+    if (value.exact) {
+        return value.rational.to_string();
+    }
+    const double normalized_decimal = normalize_display_decimal(value.decimal);
+    if (value.has_precise_decimal_text) {
+        if (normalized_decimal != value.decimal) {
+            return format_decimal(normalized_decimal);
+        }
+        return value.precise_decimal_text;
+    }
+    return format_decimal(normalized_decimal);
 }
 
 std::string format_print_value(const StoredValue& value, bool symbolic_constants_mode) {
@@ -1341,11 +1646,7 @@ std::string format_print_value(const StoredValue& value, bool symbolic_constants
 }
 
 std::string format_symbolic_scalar(double value) {
-    value = mymath::is_near_zero(value, kDisplaySimplifyEps) ? 0.0 : value;
-    if (is_integer_double(value, kDisplaySimplifyEps)) {
-        return std::to_string(round_to_long_long(value));
-    }
-    return format_decimal(value);
+    return format_symbolic_number(value);
 }
 
 double factorial_int(int n) {
@@ -1360,6 +1661,9 @@ double factorial_value(long long n) {
     if (n < 0) {
         throw std::runtime_error("factorial only accepts non-negative integers");
     }
+    if (n > 170) {
+        throw std::runtime_error("factorial is limited to n <= 170 to avoid overflow");
+    }
     double result = 1.0;
     for (long long i = 2; i <= n; ++i) {
         result *= static_cast<double>(i);
@@ -1370,6 +1674,9 @@ double factorial_value(long long n) {
 Rational factorial_rational(long long n) {
     if (n < 0) {
         throw std::runtime_error("factorial only accepts non-negative integers");
+    }
+    if (n > 170) {
+        throw std::runtime_error("factorial is limited to n <= 170 to avoid overflow");
     }
     Rational result(1, 1);
     for (long long i = 2; i <= n; ++i) {
@@ -1485,19 +1792,181 @@ std::string taylor_series_to_string(const std::vector<double>& coefficients,
     return first ? "0" : out.str();
 }
 
+std::string shifted_series_base(const std::string& variable_name, double center) {
+    if (mymath::is_near_zero(center, 1e-10)) {
+        return variable_name;
+    }
+
+    std::string base = "(" + variable_name;
+    base += center < 0.0 ? " + " : " - ";
+    base += format_symbolic_scalar(mymath::abs(center)) + ")";
+    return base;
+}
+
+std::string generalized_series_to_string(const std::vector<double>& coefficients,
+                                         const std::string& variable_name,
+                                         double center,
+                                         int denominator) {
+    if (denominator <= 0) {
+        throw std::runtime_error("series denominator must be positive");
+    }
+
+    const std::string base = shifted_series_base(variable_name, center);
+    std::ostringstream out;
+    bool first = true;
+
+    for (std::size_t i = 0; i < coefficients.size(); ++i) {
+        const double coefficient = coefficients[i];
+        if (mymath::is_near_zero(coefficient, 1e-10)) {
+            continue;
+        }
+
+        const bool negative = coefficient < 0.0;
+        const double abs_value = negative ? -coefficient : coefficient;
+        std::string term;
+
+        if (i == 0) {
+            term = format_symbolic_scalar(abs_value);
+        } else {
+            if (!mymath::is_near_zero(abs_value - 1.0, 1e-10)) {
+                term += format_symbolic_scalar(abs_value) + " * ";
+            }
+
+            term += base;
+            if (denominator == 1) {
+                if (i > 1) {
+                    term += " ^ " + std::to_string(i);
+                }
+            } else if (i % static_cast<std::size_t>(denominator) == 0) {
+                const std::size_t exponent = i / static_cast<std::size_t>(denominator);
+                if (exponent > 1) {
+                    term += " ^ " + std::to_string(exponent);
+                }
+            } else {
+                term += " ^ (" + std::to_string(i) + " / " +
+                        std::to_string(denominator) + ")";
+            }
+        }
+
+        if (first) {
+            out << (negative ? "-" : "") << term;
+            first = false;
+        } else {
+            out << (negative ? " - " : " + ") << term;
+        }
+    }
+
+    return first ? "0" : out.str();
+}
+
+std::vector<double> solve_dense_linear_system(std::vector<std::vector<double>> matrix,
+                                              std::vector<double> rhs,
+                                              const std::string& context) {
+    const std::size_t n = matrix.size();
+    if (rhs.size() != n) {
+        throw std::runtime_error(context + " linear system dimension mismatch");
+    }
+    for (const auto& row : matrix) {
+        if (row.size() != n) {
+            throw std::runtime_error(context + " linear system must be square");
+        }
+    }
+
+    std::vector<std::vector<long double>> high_precision_matrix(
+        n, std::vector<long double>(n, 0.0L));
+    std::vector<long double> high_precision_rhs(n, 0.0L);
+    for (std::size_t row = 0; row < n; ++row) {
+        for (std::size_t col = 0; col < n; ++col) {
+            high_precision_matrix[row][col] =
+                static_cast<long double>(matrix[row][col]);
+        }
+        high_precision_rhs[row] = static_cast<long double>(rhs[row]);
+    }
+
+    for (std::size_t pivot = 0; pivot < n; ++pivot) {
+        std::size_t best_row = pivot;
+        long double best_value = mymath::abs_long_double(high_precision_matrix[pivot][pivot]);
+        for (std::size_t row = pivot + 1; row < n; ++row) {
+            const long double current = mymath::abs_long_double(high_precision_matrix[row][pivot]);
+            if (current > best_value) {
+                best_value = current;
+                best_row = row;
+            }
+        }
+
+        if (mymath::abs_long_double(best_value) <= 1e-12L) {
+            throw std::runtime_error(context + " system is singular");
+        }
+        if (best_row != pivot) {
+            std::swap(high_precision_matrix[pivot], high_precision_matrix[best_row]);
+            std::swap(high_precision_rhs[pivot], high_precision_rhs[best_row]);
+        }
+
+        const long double pivot_value = high_precision_matrix[pivot][pivot];
+        for (std::size_t col = pivot; col < n; ++col) {
+            high_precision_matrix[pivot][col] /= pivot_value;
+        }
+        high_precision_rhs[pivot] /= pivot_value;
+
+        for (std::size_t row = 0; row < n; ++row) {
+            if (row == pivot) {
+                continue;
+            }
+            const long double factor = high_precision_matrix[row][pivot];
+            if (mymath::abs_long_double(factor) <= 1e-12L) {
+                continue;
+            }
+            for (std::size_t col = pivot; col < n; ++col) {
+                high_precision_matrix[row][col] -=
+                    factor * high_precision_matrix[pivot][col];
+            }
+            high_precision_rhs[row] -= factor * high_precision_rhs[pivot];
+        }
+    }
+
+    for (std::size_t i = 0; i < n; ++i) {
+        rhs[i] = static_cast<double>(high_precision_rhs[i]);
+    }
+    return rhs;
+}
+
 bool is_reserved_function_name(const std::string& name) {
     static const std::vector<std::string> names = {
-        "abs", "acos", "and", "asin", "atan", "base", "bin", "cbrt",
-        "ceil", "cos", "cosh", "deg2rad", "diff", "double_integral",
-        "double_integral_cyl", "double_integral_polar", "exp", "extrema",
-        "factor", "factorial", "fahrenheit", "floor", "gamma", "gcd",
-        "hex", "integral", "kelvin", "lcm", "ln", "log10", "max", "min",
-        "median", "mod", "nCr", "nPr", "not", "oct", "ode", "ode_table",
-        "or", "poly_add",
-        "poly_div", "poly_mul", "poly_sub", "pow", "rad2deg", "root",
-        "roots", "shl", "shr", "sign", "sin", "sinh", "sqrt", "sum",
-        "tan", "tanh", "taylor", "triple_integral", "triple_integral_cyl",
-        "triple_integral_sph", "avg", "xor", "celsius"
+        "abs", "acos", "acosh", "acot", "acsc", "and", "asec", "asin",
+        "asinh", "atan", "atanh", "base", "beta", "bin", "binom",
+        "bessel", "bitlen", "c2f", "cbrt", "cdf_normal",
+        "ceil", "cholesky", "clamp", "complex", "cond", "conj", "corr", "cos", "critical",
+        "cos_deg", "cosh", "cot", "cov", "deg", "deg2rad", "diag",
+        "diff", "double_integral",
+        "double_integral_cyl", "double_integral_polar", "exp", "exp2", "extrema",
+        "f2c", "factor", "factorial", "fahrenheit", "fib", "fixed_point",
+        "floor", "gamma", "gcd", "get", "hadamard", "hessenberg",
+        "hex", "identity", "imag", "integral", "inverse", "is_prime",
+        "kelvin", "kron", "lagrange", "lcm", "least_squares",
+        "linear_regression", "ln", "log", "log10", "log2", "lu_l", "lu_u", "mat", "max",
+        "mean", "median", "min", "mod", "mode", "nCr", "nPr", "next_prime",
+        "norm", "not", "null", "oct", "ode", "ode_table", "ode_system", "ode_system_table", "or", "outer",
+        "parity", "pdf_normal", "percentile", "pinv", "polar", "poly_add", "poly_compose",
+        "poly_deriv", "poly_div", "poly_eval", "poly_fit", "poly_gcd",
+        "poly_integ", "poly_mul", "poly_sub", "polynomial_fit", "pow",
+        "qr_q", "qr_r", "rad", "rad2deg", "rand", "randint", "randn",
+        "rank", "rat", "real", "reshape", "resize", "rref", "rol", "root", "roots",
+        "ror", "round",
+        "schur", "sec", "secant", "set", "shl", "shr", "sign", "sin",
+        "sin_deg", "sinh", "solve", "spline", "sqrt", "std", "sum",
+        "svd", "svd_s", "svd_u", "svd_vt", "tan", "tanh", "taylor",
+        "trace", "transpose", "triple_integral", "triple_integral_cyl",
+        "triple_integral_sph", "trunc", "avg", "var", "vec", "xor", "zeta",
+        "celsius", "delta", "heaviside", "impulse", "step",
+        "quartile", "popcount", "ctz", "clz", "reverse_bits",
+        "fourier", "ifourier", "inverse_fourier",
+        "laplace", "ilaplace", "inverse_laplace",
+        "ztrans", "iztrans", "z_transform", "inverse_z",
+        "dft", "idft", "fft", "ifft", "conv", "convolve",
+        "pade", "puiseux", "series_sum", "summation",
+        "eig", "eigvals", "eigvecs",
+        "lp_max", "lp_min", "ilp_max", "ilp_min",
+        "milp_max", "milp_min", "bip_max", "bip_min", "binary_max", "binary_min"
     };
 
     for (const std::string& builtin : names) {
@@ -1661,12 +2130,6 @@ private:
 
         if (peek_is_alpha()) {
             const std::string name = parse_identifier();
-            if (name == "pi") {
-                return mymath::kPi;
-            }
-            if (name == "e") {
-                return mymath::kE;
-            }
 
             skip_spaces();
             if (!peek('(')) {
@@ -1740,6 +2203,22 @@ private:
             }
         }
 
+        if (!is_at_end() && (source_[pos_] == 'e' || source_[pos_] == 'E')) {
+            const std::size_t exponent_pos = pos_;
+            ++pos_;
+            if (!is_at_end() && (source_[pos_] == '+' || source_[pos_] == '-')) {
+                ++pos_;
+            }
+            const std::size_t exponent_digits = pos_;
+            while (!is_at_end() &&
+                   std::isdigit(static_cast<unsigned char>(source_[pos_]))) {
+                ++pos_;
+            }
+            if (exponent_digits == pos_) {
+                pos_ = exponent_pos;
+            }
+        }
+
         if (!has_digit) {
             throw std::runtime_error("expected number");
         }
@@ -1748,25 +2227,7 @@ private:
     }
 
     static double parse_decimal(const std::string& token) {
-        double value = 0.0;
-        std::size_t idx = 0;
-
-        while (idx < token.size() && token[idx] != '.') {
-            value = value * 10.0 + static_cast<double>(token[idx] - '0');
-            ++idx;
-        }
-
-        if (idx < token.size() && token[idx] == '.') {
-            ++idx;
-            double place = 0.1;
-            while (idx < token.size()) {
-                value += static_cast<double>(token[idx] - '0') * place;
-                place *= 0.1;
-                ++idx;
-            }
-        }
-
-        return value;
+        return std::stod(token);
     }
 
     double apply_function(const std::string& name, const std::vector<double>& arguments) {
@@ -1793,6 +2254,12 @@ private:
         if (name == "shr") {
             return apply_shr(arguments);
         }
+        if (name == "rol") {
+            return apply_rol(arguments);
+        }
+        if (name == "ror") {
+            return apply_ror(arguments);
+        }
         if (name == "gcd") {
             return apply_gcd(arguments);
         }
@@ -1808,8 +2275,17 @@ private:
         if (name == "max") {
             return apply_max(arguments);
         }
+        if (name == "clamp") {
+            return apply_clamp(arguments);
+        }
+        if (name == "log") {
+            return apply_log(arguments);
+        }
         if (name == "sum") {
             return apply_sum(arguments);
+        }
+        if (name == "mean") {
+            return apply_mean(arguments);
         }
         if (name == "avg") {
             return apply_avg(arguments);
@@ -1817,14 +2293,83 @@ private:
         if (name == "median") {
             return apply_median(arguments);
         }
+        if (name == "mode") {
+            return apply_mode(arguments);
+        }
+        if (name == "var") {
+            return apply_variance(arguments);
+        }
+        if (name == "std") {
+            return apply_stddev(arguments);
+        }
+        if (name == "percentile") {
+            return apply_percentile(arguments);
+        }
+        if (name == "quartile") {
+            return apply_quartile(arguments);
+        }
         if (name == "factorial") {
             return apply_factorial(arguments);
         }
         if (name == "nCr") {
             return apply_ncr(arguments);
         }
+        if (name == "binom") {
+            return apply_ncr(arguments);
+        }
         if (name == "nPr") {
             return apply_npr(arguments);
+        }
+        if (name == "fib") {
+            return apply_fib(arguments);
+        }
+        if (name == "is_prime") {
+            return apply_is_prime(arguments);
+        }
+        if (name == "next_prime") {
+            return apply_next_prime(arguments);
+        }
+        if (name == "rand") {
+            return apply_rand(arguments);
+        }
+        if (name == "randn") {
+            return apply_randn(arguments);
+        }
+        if (name == "randint") {
+            return apply_randint(arguments);
+        }
+        if (name == "beta") {
+            return apply_beta(arguments);
+        }
+        if (name == "zeta") {
+            return apply_zeta(arguments);
+        }
+        if (name == "bessel") {
+            return apply_bessel(arguments);
+        }
+        if (name == "pdf_normal") {
+            return apply_pdf_normal(arguments);
+        }
+        if (name == "cdf_normal") {
+            return apply_cdf_normal(arguments);
+        }
+        if (name == "popcount") {
+            return apply_popcount(arguments);
+        }
+        if (name == "bitlen") {
+            return apply_bitlen(arguments);
+        }
+        if (name == "ctz") {
+            return apply_ctz(arguments);
+        }
+        if (name == "clz") {
+            return apply_clz(arguments);
+        }
+        if (name == "parity") {
+            return apply_parity(arguments);
+        }
+        if (name == "reverse_bits") {
+            return apply_reverse_bits(arguments);
         }
 
         const auto function_it = functions_->find(name);
@@ -1879,8 +2424,23 @@ private:
         if (name == "ceil") {
             return static_cast<double>(ceil_to_long_long(argument));
         }
+        if (name == "round") {
+            return static_cast<double>(round_to_long_long(argument));
+        }
+        if (name == "trunc") {
+            return static_cast<double>(trunc_to_long_long(argument));
+        }
         if (name == "cbrt") {
             return mymath::cbrt(argument);
+        }
+        if (name == "asinh") {
+            return mymath::asinh(argument);
+        }
+        if (name == "acosh") {
+            return mymath::acosh(argument);
+        }
+        if (name == "atanh") {
+            return mymath::atanh(argument);
         }
         if (name == "sinh") {
             return mymath::sinh(argument);
@@ -1890,6 +2450,15 @@ private:
         }
         if (name == "tanh") {
             return mymath::tanh(argument);
+        }
+        if (name == "sec") {
+            return mymath::sec(argument);
+        }
+        if (name == "csc") {
+            return mymath::csc(argument);
+        }
+        if (name == "cot") {
+            return mymath::cot(argument);
         }
         if (name == "sin") {
             return mymath::sin(argument);
@@ -1909,8 +2478,20 @@ private:
         if (name == "acos") {
             return mymath::acos(argument);
         }
+        if (name == "asec") {
+            return mymath::asec(argument);
+        }
+        if (name == "acsc") {
+            return mymath::acsc(argument);
+        }
+        if (name == "acot") {
+            return mymath::acot(argument);
+        }
         if (name == "ln") {
             return mymath::ln(argument);
+        }
+        if (name == "log2") {
+            return mymath::ln(argument) / mymath::ln(2.0);
         }
         if (name == "log10") {
             return mymath::log10(argument);
@@ -1918,26 +2499,59 @@ private:
         if (name == "exp") {
             return mymath::exp(argument);
         }
+        if (name == "exp2") {
+            return mymath::exp(argument * mymath::ln(2.0));
+        }
         if (name == "gamma") {
             return mymath::gamma(argument);
+        }
+        if (name == "erf") {
+            return mymath::erf(argument);
+        }
+        if (name == "erfc") {
+            return mymath::erfc(argument);
         }
         if (name == "sqrt") {
             return mymath::sqrt(argument);
         }
+        if (name == "step" || name == "u" || name == "heaviside") {
+            return argument >= 0.0 ? 1.0 : 0.0;
+        }
+        if (name == "delta" || name == "impulse") {
+            return mymath::is_near_zero(argument, 1e-10) ? 1.0 : 0.0;
+        }
+        if (name == "deg") {
+            return radians_to_degrees(argument);
+        }
+        if (name == "rad") {
+            return degrees_to_radians(argument);
+        }
         if (name == "deg2rad") {
-            return argument * mymath::kPi / 180.0;
+            return degrees_to_radians(argument);
         }
         if (name == "rad2deg") {
-            return argument * 180.0 / mymath::kPi;
+            return radians_to_degrees(argument);
+        }
+        if (name == "sin_deg") {
+            return mymath::sin(degrees_to_radians(argument));
+        }
+        if (name == "cos_deg") {
+            return mymath::cos(degrees_to_radians(argument));
         }
         if (name == "celsius") {
-            return (argument - 32.0) * 5.0 / 9.0;
+            return fahrenheit_to_celsius(argument);
         }
         if (name == "fahrenheit") {
-            return argument * 9.0 / 5.0 + 32.0;
+            return celsius_to_fahrenheit(argument);
         }
         if (name == "kelvin") {
             return argument + 273.15;
+        }
+        if (name == "c2f") {
+            return celsius_to_fahrenheit(argument);
+        }
+        if (name == "f2c") {
+            return fahrenheit_to_celsius(argument);
         }
 
         throw std::runtime_error("unknown function: " + name);
@@ -2009,6 +2623,34 @@ private:
         return arguments[0] > arguments[1] ? arguments[0] : arguments[1];
     }
 
+    static double apply_clamp(const std::vector<double>& arguments) {
+        if (arguments.size() != 3) {
+            throw std::runtime_error("clamp expects exactly three arguments");
+        }
+        double lower = arguments[1];
+        double upper = arguments[2];
+        if (lower > upper) {
+            std::swap(lower, upper);
+        }
+        if (arguments[0] < lower) {
+            return lower;
+        }
+        if (arguments[0] > upper) {
+            return upper;
+        }
+        return arguments[0];
+    }
+
+    static double apply_log(const std::vector<double>& arguments) {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("log expects exactly two arguments");
+        }
+        if (mymath::is_near_zero(arguments[1] - 1.0)) {
+            throw std::runtime_error("log base cannot be 1");
+        }
+        return mymath::ln(arguments[0]) / mymath::ln(arguments[1]);
+    }
+
     static double apply_sum(const std::vector<double>& arguments) {
         if (arguments.empty()) {
             throw std::runtime_error("sum expects at least one argument");
@@ -2027,6 +2669,13 @@ private:
         return apply_sum(arguments) / static_cast<double>(arguments.size());
     }
 
+    static double apply_mean(const std::vector<double>& arguments) {
+        if (arguments.empty()) {
+            throw std::runtime_error("mean expects at least one argument");
+        }
+        return apply_sum(arguments) / static_cast<double>(arguments.size());
+    }
+
     static double apply_median(const std::vector<double>& arguments) {
         if (arguments.empty()) {
             throw std::runtime_error("median expects at least one argument");
@@ -2039,6 +2688,97 @@ private:
             return sorted[middle];
         }
         return (sorted[middle - 1] + sorted[middle]) / 2.0;
+    }
+
+    static double apply_mode(const std::vector<double>& arguments) {
+        if (arguments.empty()) {
+            throw std::runtime_error("mode expects at least one argument");
+        }
+        std::vector<double> sorted = arguments;
+        std::sort(sorted.begin(), sorted.end());
+        double best_value = sorted.front();
+        int best_count = 1;
+        double current_value = sorted.front();
+        int current_count = 1;
+        for (std::size_t i = 1; i < sorted.size(); ++i) {
+            if (mymath::is_near_zero(sorted[i] - current_value, 1e-10)) {
+                ++current_count;
+                continue;
+            }
+            if (current_count > best_count) {
+                best_count = current_count;
+                best_value = current_value;
+            }
+            current_value = sorted[i];
+            current_count = 1;
+        }
+        if (current_count > best_count) {
+            best_value = current_value;
+        }
+        return best_value;
+    }
+
+    static double apply_variance(const std::vector<double>& arguments) {
+        if (arguments.empty()) {
+            throw std::runtime_error("var expects at least one argument");
+        }
+        const double mean = apply_mean(arguments);
+        double sum = 0.0;
+        for (double value : arguments) {
+            const double delta = value - mean;
+            sum += delta * delta;
+        }
+        return sum / static_cast<double>(arguments.size());
+    }
+
+    static double apply_stddev(const std::vector<double>& arguments) {
+        return mymath::sqrt(apply_variance(arguments));
+    }
+
+    static double apply_percentile(const std::vector<double>& arguments) {
+        if (arguments.size() < 2) {
+            throw std::runtime_error("percentile expects p followed by at least one value");
+        }
+        const double p = arguments[0];
+        if (p < 0.0 || p > 100.0) {
+            throw std::runtime_error("percentile p must be in [0, 100]");
+        }
+        std::vector<double> values(arguments.begin() + 1, arguments.end());
+        std::sort(values.begin(), values.end());
+        if (values.size() == 1) {
+            return values.front();
+        }
+        const double position =
+            p * static_cast<double>(values.size() - 1) / 100.0;
+        const long long lower_index = floor_to_long_long(position);
+        const long long upper_index = ceil_to_long_long(position);
+        if (lower_index == upper_index) {
+            return values[static_cast<std::size_t>(lower_index)];
+        }
+        const double fraction = position - static_cast<double>(lower_index);
+        const double lower = values[static_cast<std::size_t>(lower_index)];
+        const double upper = values[static_cast<std::size_t>(upper_index)];
+        return lower + (upper - lower) * fraction;
+    }
+
+    static double apply_quartile(const std::vector<double>& arguments) {
+        if (arguments.size() < 2) {
+            throw std::runtime_error("quartile expects q followed by at least one value");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("quartile q must be an integer");
+        }
+        const long long q = round_to_long_long(arguments[0]);
+        if (q < 0 || q > 4) {
+            throw std::runtime_error("quartile q must be between 0 and 4");
+        }
+        std::vector<double> percentile_arguments;
+        percentile_arguments.reserve(arguments.size());
+        percentile_arguments.push_back(static_cast<double>(q * 25));
+        percentile_arguments.insert(percentile_arguments.end(),
+                                    arguments.begin() + 1,
+                                    arguments.end());
+        return apply_percentile(percentile_arguments);
     }
 
     static double apply_factorial(const std::vector<double>& arguments) {
@@ -2071,6 +2811,107 @@ private:
         }
         return permutation_value(round_to_long_long(arguments[0]),
                                  round_to_long_long(arguments[1]));
+    }
+
+    static double apply_fib(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("fib expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("fib only accepts integers");
+        }
+        return fibonacci_value(round_to_long_long(arguments[0]));
+    }
+
+    static double apply_is_prime(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("is_prime expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("is_prime only accepts integers");
+        }
+        return is_prime_ll(round_to_long_long(arguments[0])) ? 1.0 : 0.0;
+    }
+
+    static double apply_next_prime(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("next_prime expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("next_prime only accepts integers");
+        }
+        return static_cast<double>(next_prime_ll(round_to_long_long(arguments[0])));
+    }
+
+    static double apply_rand(const std::vector<double>& arguments) {
+        if (!arguments.empty()) {
+            throw std::runtime_error("rand expects no arguments");
+        }
+        std::uniform_real_distribution<double> distribution(0.0, 1.0);
+        return distribution(global_rng());
+    }
+
+    static double apply_randn(const std::vector<double>& arguments) {
+        if (!arguments.empty()) {
+            throw std::runtime_error("randn expects no arguments");
+        }
+        std::normal_distribution<double> distribution(0.0, 1.0);
+        return distribution(global_rng());
+    }
+
+    static double apply_randint(const std::vector<double>& arguments) {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("randint expects exactly two arguments");
+        }
+        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
+            throw std::runtime_error("randint only accepts integers");
+        }
+        long long left = round_to_long_long(arguments[0]);
+        long long right = round_to_long_long(arguments[1]);
+        if (left > right) {
+            std::swap(left, right);
+        }
+        std::uniform_int_distribution<long long> distribution(left, right);
+        return static_cast<double>(distribution(global_rng()));
+    }
+
+    static double apply_beta(const std::vector<double>& arguments) {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("beta expects exactly two arguments");
+        }
+        return mymath::beta(arguments[0], arguments[1]);
+    }
+
+    static double apply_zeta(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("zeta expects exactly one argument");
+        }
+        return mymath::zeta(arguments[0]);
+    }
+
+    static double apply_bessel(const std::vector<double>& arguments) {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("bessel expects exactly two arguments");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("bessel order must be an integer");
+        }
+        return mymath::bessel_j(static_cast<int>(round_to_long_long(arguments[0])),
+                                arguments[1]);
+    }
+
+    static double apply_pdf_normal(const std::vector<double>& arguments) {
+        if (arguments.size() != 3) {
+            throw std::runtime_error("pdf_normal expects exactly three arguments");
+        }
+        return normal_pdf(arguments[0], arguments[1], arguments[2]);
+    }
+
+    static double apply_cdf_normal(const std::vector<double>& arguments) {
+        if (arguments.size() != 3) {
+            throw std::runtime_error("cdf_normal expects exactly three arguments");
+        }
+        return normal_cdf(arguments[0], arguments[1], arguments[2]);
     }
 
     static double apply_and(const std::vector<double>& arguments) {
@@ -2135,9 +2976,103 @@ private:
         return static_cast<double>(round_to_long_long(arguments[0]) >> shift);
     }
 
+    static double apply_rol(const std::vector<double>& arguments) {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("rol expects exactly two arguments");
+        }
+        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
+            throw std::runtime_error("rol only accepts integers");
+        }
+        const std::uint64_t value = to_unsigned_bits(round_to_long_long(arguments[0]));
+        const unsigned count = normalize_rotation_count(round_to_long_long(arguments[1]));
+        return static_cast<double>(from_unsigned_bits(rotate_left_bits(value, count)));
+    }
+
+    static double apply_ror(const std::vector<double>& arguments) {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("ror expects exactly two arguments");
+        }
+        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
+            throw std::runtime_error("ror only accepts integers");
+        }
+        const std::uint64_t value = to_unsigned_bits(round_to_long_long(arguments[0]));
+        const unsigned count = normalize_rotation_count(round_to_long_long(arguments[1]));
+        return static_cast<double>(from_unsigned_bits(rotate_right_bits(value, count)));
+    }
+
+    static double apply_popcount(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("popcount expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("popcount only accepts integers");
+        }
+        return static_cast<double>(
+            popcount_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
+    }
+
+    static double apply_bitlen(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("bitlen expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("bitlen only accepts integers");
+        }
+        return static_cast<double>(
+            bit_length_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
+    }
+
+    static double apply_ctz(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("ctz expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("ctz only accepts integers");
+        }
+        return static_cast<double>(
+            trailing_zero_count_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
+    }
+
+    static double apply_clz(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("clz expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("clz only accepts integers");
+        }
+        return static_cast<double>(
+            leading_zero_count_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
+    }
+
+    static double apply_parity(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("parity expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("parity only accepts integers");
+        }
+        return static_cast<double>(
+            parity_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
+    }
+
+    static double apply_reverse_bits(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("reverse_bits expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("reverse_bits only accepts integers");
+        }
+        return static_cast<double>(
+            from_unsigned_bits(reverse_bits(to_unsigned_bits(round_to_long_long(arguments[0])))));
+    }
+
     double lookup_variable(const std::string& name) const {
         const auto it = variables_->find(name);
         if (it == variables_->end()) {
+            double constant_value = 0.0;
+            if (lookup_builtin_constant(name, &constant_value)) {
+                return constant_value;
+            }
             throw std::runtime_error("unknown variable: " + name);
         }
         if (it->second.is_matrix) {
@@ -2154,8 +3089,7 @@ private:
         const std::size_t start = pos_;
         while (!is_at_end()) {
             const char ch = source_[pos_];
-            if (std::isalpha(static_cast<unsigned char>(ch)) ||
-                std::isdigit(static_cast<unsigned char>(ch))) {
+            if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_') {
                 ++pos_;
             } else {
                 break;
@@ -2372,10 +3306,6 @@ private:
 
         if (peek_is_alpha()) {
             const std::string name = parse_identifier();
-            if (name == "pi" || name == "e") {
-                throw ExactModeUnsupported("constants pi and e are not rational");
-            }
-
             skip_spaces();
             if (!peek('(')) {
                 return lookup_variable(name);
@@ -2448,6 +3378,22 @@ private:
             }
         }
 
+        if (!is_at_end() && (source_[pos_] == 'e' || source_[pos_] == 'E')) {
+            const std::size_t exponent_pos = pos_;
+            ++pos_;
+            if (!is_at_end() && (source_[pos_] == '+' || source_[pos_] == '-')) {
+                ++pos_;
+            }
+            const std::size_t exponent_digits = pos_;
+            while (!is_at_end() &&
+                   std::isdigit(static_cast<unsigned char>(source_[pos_]))) {
+                ++pos_;
+            }
+            if (exponent_digits == pos_) {
+                pos_ = exponent_pos;
+            }
+        }
+
         if (!has_digit) {
             throw std::runtime_error("expected number");
         }
@@ -2456,22 +3402,41 @@ private:
     }
 
     static Rational parse_rational_literal(const std::string& token) {
+        std::string significand = token;
+        long long exponent_adjust = 0;
+        const std::size_t exponent_pos = token.find_first_of("eE");
+        if (exponent_pos != std::string::npos) {
+            significand = token.substr(0, exponent_pos);
+            exponent_adjust = std::stoll(token.substr(exponent_pos + 1));
+        }
+
         long long numerator = 0;
         long long denominator = 1;
         std::size_t idx = 0;
 
-        while (idx < token.size() && token[idx] != '.') {
-            numerator = numerator * 10 + static_cast<long long>(token[idx] - '0');
+        while (idx < significand.size() && significand[idx] != '.') {
+            numerator =
+                numerator * 10 + static_cast<long long>(significand[idx] - '0');
             ++idx;
         }
 
-        if (idx < token.size() && token[idx] == '.') {
+        if (idx < significand.size() && significand[idx] == '.') {
             ++idx;
-            while (idx < token.size()) {
-                numerator = numerator * 10 + static_cast<long long>(token[idx] - '0');
+            while (idx < significand.size()) {
+                numerator =
+                    numerator * 10 + static_cast<long long>(significand[idx] - '0');
                 denominator *= 10;
                 ++idx;
             }
+        }
+
+        while (exponent_adjust > 0) {
+            numerator *= 10;
+            --exponent_adjust;
+        }
+        while (exponent_adjust < 0) {
+            denominator *= 10;
+            ++exponent_adjust;
         }
 
         return Rational(numerator, denominator);
@@ -2502,6 +3467,18 @@ private:
                 throw std::runtime_error("abs expects exactly one argument");
             }
             return abs_rational(arguments[0]);
+        }
+        if (name == "step" || name == "u" || name == "heaviside") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("step expects exactly one argument");
+            }
+            return Rational(arguments[0].numerator >= 0 ? 1 : 0, 1);
+        }
+        if (name == "delta" || name == "impulse") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("delta expects exactly one argument");
+            }
+            return Rational(arguments[0].numerator == 0 ? 1 : 0, 1);
         }
         if (name == "not") {
             if (arguments.size() != 1) {
@@ -2551,6 +3528,32 @@ private:
             }
             return Rational(arguments[0].numerator % arguments[1].numerator, 1);
         }
+        if (name == "rol") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("rol expects exactly two arguments");
+            }
+            if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
+                throw std::runtime_error("rol only accepts integers");
+            }
+            const unsigned count = normalize_rotation_count(arguments[1].numerator);
+            return Rational(
+                from_unsigned_bits(rotate_left_bits(
+                    to_unsigned_bits(arguments[0].numerator), count)),
+                1);
+        }
+        if (name == "ror") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("ror expects exactly two arguments");
+            }
+            if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
+                throw std::runtime_error("ror only accepts integers");
+            }
+            const unsigned count = normalize_rotation_count(arguments[1].numerator);
+            return Rational(
+                from_unsigned_bits(rotate_right_bits(
+                    to_unsigned_bits(arguments[0].numerator), count)),
+                1);
+        }
         if (name == "floor") {
             if (arguments.size() != 1) {
                 throw std::runtime_error("floor expects exactly one argument");
@@ -2562,6 +3565,18 @@ private:
                 throw std::runtime_error("ceil expects exactly one argument");
             }
             return Rational(ceil_to_long_long(rational_to_double(arguments[0])), 1);
+        }
+        if (name == "round") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("round expects exactly one argument");
+            }
+            return Rational(round_to_long_long(rational_to_double(arguments[0])), 1);
+        }
+        if (name == "trunc") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("trunc expects exactly one argument");
+            }
+            return Rational(trunc_to_long_long(rational_to_double(arguments[0])), 1);
         }
         if (name == "min") {
             if (arguments.size() != 2) {
@@ -2579,6 +3594,23 @@ private:
                        ? arguments[0]
                        : arguments[1];
         }
+        if (name == "clamp") {
+            if (arguments.size() != 3) {
+                throw std::runtime_error("clamp expects exactly three arguments");
+            }
+            Rational lower = arguments[1];
+            Rational upper = arguments[2];
+            if (rational_to_double(lower) > rational_to_double(upper)) {
+                std::swap(lower, upper);
+            }
+            if (rational_to_double(arguments[0]) < rational_to_double(lower)) {
+                return lower;
+            }
+            if (rational_to_double(arguments[0]) > rational_to_double(upper)) {
+                return upper;
+            }
+            return arguments[0];
+        }
         if (name == "sum") {
             if (arguments.empty()) {
                 throw std::runtime_error("sum expects at least one argument");
@@ -2592,6 +3624,16 @@ private:
         if (name == "avg") {
             if (arguments.empty()) {
                 throw std::runtime_error("avg expects at least one argument");
+            }
+            Rational total(0, 1);
+            for (const Rational& value : arguments) {
+                total = total + value;
+            }
+            return total / Rational(static_cast<long long>(arguments.size()), 1);
+        }
+        if (name == "mean") {
+            if (arguments.empty()) {
+                throw std::runtime_error("mean expects at least one argument");
             }
             Rational total(0, 1);
             for (const Rational& value : arguments) {
@@ -2632,6 +3674,15 @@ private:
             }
             return combination_rational(arguments[0].numerator, arguments[1].numerator);
         }
+        if (name == "binom") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("binom expects exactly two arguments");
+            }
+            if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
+                throw std::runtime_error("binom only accepts integers");
+            }
+            return combination_rational(arguments[0].numerator, arguments[1].numerator);
+        }
         if (name == "nPr") {
             if (arguments.size() != 2) {
                 throw std::runtime_error("nPr expects exactly two arguments");
@@ -2640,6 +3691,62 @@ private:
                 throw std::runtime_error("nPr only accepts integers");
             }
             return permutation_rational(arguments[0].numerator, arguments[1].numerator);
+        }
+        if (name == "popcount") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("popcount expects exactly one argument");
+            }
+            if (!arguments[0].is_integer()) {
+                throw std::runtime_error("popcount only accepts integers");
+            }
+            return Rational(popcount_bits(to_unsigned_bits(arguments[0].numerator)), 1);
+        }
+        if (name == "bitlen") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("bitlen expects exactly one argument");
+            }
+            if (!arguments[0].is_integer()) {
+                throw std::runtime_error("bitlen only accepts integers");
+            }
+            return Rational(bit_length_bits(to_unsigned_bits(arguments[0].numerator)), 1);
+        }
+        if (name == "ctz") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("ctz expects exactly one argument");
+            }
+            if (!arguments[0].is_integer()) {
+                throw std::runtime_error("ctz only accepts integers");
+            }
+            return Rational(trailing_zero_count_bits(to_unsigned_bits(arguments[0].numerator)), 1);
+        }
+        if (name == "clz") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("clz expects exactly one argument");
+            }
+            if (!arguments[0].is_integer()) {
+                throw std::runtime_error("clz only accepts integers");
+            }
+            return Rational(leading_zero_count_bits(to_unsigned_bits(arguments[0].numerator)), 1);
+        }
+        if (name == "parity") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("parity expects exactly one argument");
+            }
+            if (!arguments[0].is_integer()) {
+                throw std::runtime_error("parity only accepts integers");
+            }
+            return Rational(parity_bits(to_unsigned_bits(arguments[0].numerator)), 1);
+        }
+        if (name == "reverse_bits") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("reverse_bits expects exactly one argument");
+            }
+            if (!arguments[0].is_integer()) {
+                throw std::runtime_error("reverse_bits only accepts integers");
+            }
+            return Rational(
+                from_unsigned_bits(reverse_bits(to_unsigned_bits(arguments[0].numerator))),
+                1);
         }
         if (name == "and") {
             if (arguments.size() != 2) {
@@ -2699,6 +3806,10 @@ private:
     Rational lookup_variable(const std::string& name) const {
         const auto it = variables_->find(name);
         if (it == variables_->end()) {
+            double constant_value = 0.0;
+            if (lookup_builtin_constant(name, &constant_value)) {
+                throw ExactModeUnsupported("built-in constants are not rational");
+            }
             throw std::runtime_error("unknown variable: " + name);
         }
         if (it->second.is_matrix) {
@@ -2717,8 +3828,7 @@ private:
         const std::size_t start = pos_;
         while (!is_at_end()) {
             const char ch = source_[pos_];
-            if (std::isalpha(static_cast<unsigned char>(ch)) ||
-                std::isdigit(static_cast<unsigned char>(ch))) {
+            if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_') {
                 ++pos_;
             } else {
                 break;
@@ -2913,7 +4023,8 @@ bool is_supported_symbolic_unary_function(const std::string& name) {
            name == "asin" || name == "acos" || name == "atan" ||
            name == "exp" || name == "ln" || name == "log10" ||
            name == "sqrt" || name == "abs" || name == "sign" ||
-           name == "floor" || name == "ceil" || name == "cbrt";
+           name == "floor" || name == "ceil" || name == "cbrt" ||
+           name == "step" || name == "delta";
 }
 
 class SymbolicRenderParser {
@@ -3042,6 +4153,11 @@ private:
             return name;
         }
 
+        double builtin_constant = 0.0;
+        if (lookup_builtin_constant(name, &builtin_constant)) {
+            return format_symbolic_scalar(builtin_constant);
+        }
+
         const auto it = variables_->find(name);
         if (it == variables_->end()) {
             return name;
@@ -3135,10 +4251,25 @@ private:
                 break;
             }
         }
+        if (!is_at_end() && (source_[pos_] == 'e' || source_[pos_] == 'E')) {
+            const std::size_t exponent_pos = pos_;
+            ++pos_;
+            if (!is_at_end() && (source_[pos_] == '+' || source_[pos_] == '-')) {
+                ++pos_;
+            }
+            const std::size_t exponent_digits = pos_;
+            while (!is_at_end() &&
+                   std::isdigit(static_cast<unsigned char>(source_[pos_]))) {
+                ++pos_;
+            }
+            if (exponent_digits == pos_) {
+                pos_ = exponent_pos;
+            }
+        }
         if (!has_digit) {
             throw std::runtime_error("expected number");
         }
-        return source_.substr(start, pos_ - start);
+        return format_decimal(std::stod(source_.substr(start, pos_ - start)));
     }
 
     std::string parse_identifier() {
@@ -3546,20 +4677,58 @@ StoredValue evaluate_expression_value(Calculator* calculator,
         };
 
     StoredValue stored;
-    matrix::Value matrix_value;
-    if (try_evaluate_matrix_expression(trimmed,
-                                       &variables,
-                                       &impl->functions,
-                                       has_script_function,
-                                       invoke_script_function,
-                                       &matrix_value)) {
-        if (matrix_value.is_matrix) {
-            stored.is_matrix = true;
-            stored.matrix = matrix_value.matrix;
-        } else {
-            stored.decimal = normalize_display_decimal(matrix_value.scalar);
-            stored.exact = false;
+    std::vector<std::string> rational_arguments;
+    if (split_named_call_with_arguments(trimmed, "rat", &rational_arguments)) {
+        if (rational_arguments.size() != 1 && rational_arguments.size() != 2) {
+            throw std::runtime_error(
+                "rat expects one argument or expression plus max_denominator");
         }
+
+        const StoredValue value =
+            evaluate_expression_value(calculator, impl, rational_arguments[0], false);
+        if (value.is_matrix) {
+            throw std::runtime_error("rat cannot approximate a matrix value");
+        }
+        if (value.is_string) {
+            throw std::runtime_error("rat cannot approximate a string value");
+        }
+
+        long long max_denominator = 999;
+        if (rational_arguments.size() == 2) {
+            const StoredValue max_denominator_value =
+                evaluate_expression_value(calculator, impl, rational_arguments[1], false);
+            if (max_denominator_value.is_matrix || max_denominator_value.is_string) {
+                throw std::runtime_error("rat max_denominator must be a positive integer");
+            }
+            const double scalar =
+                max_denominator_value.exact
+                    ? rational_to_double(max_denominator_value.rational)
+                    : max_denominator_value.decimal;
+            if (!is_integer_double(scalar) || scalar <= 0.0) {
+                throw std::runtime_error("rat max_denominator must be a positive integer");
+            }
+            max_denominator = round_to_long_long(scalar);
+        }
+
+        if (value.exact && value.rational.denominator <= max_denominator) {
+            return value;
+        }
+
+        const double decimal_value = value.exact
+                                         ? rational_to_double(value.rational)
+                                         : value.decimal;
+        long long numerator = 0;
+        long long denominator = 1;
+        if (!mymath::best_rational_approximation(decimal_value,
+                                                 &numerator,
+                                                 &denominator,
+                                                 max_denominator)) {
+            throw std::runtime_error("rat could not compute a rational approximation");
+        }
+
+        stored.exact = true;
+        stored.rational = Rational(numerator, denominator);
+        stored.decimal = rational_to_double(stored.rational);
         return stored;
     }
 
@@ -3572,11 +4741,30 @@ StoredValue evaluate_expression_value(Calculator* calculator,
             return stored;
         } catch (const ExactModeUnsupported&) {
         }
-    } else {
+    }
+
+    matrix::Value matrix_value;
+    if (try_evaluate_matrix_expression(trimmed,
+                                       &variables,
+                                       &impl->functions,
+                                       has_script_function,
+                                       invoke_script_function,
+                                       &matrix_value)) {
+        if (matrix_value.is_matrix) {
+            stored.is_matrix = true;
+            stored.matrix = matrix_value.matrix;
+        } else {
+            stored.decimal = matrix_value.scalar;
+            stored.exact = false;
+        }
+        return stored;
+    }
+
+    if (!exact_mode) {
         try {
             PreciseDecimalParser parser(trimmed, &variables);
             const PreciseDecimal precise_value = parser.parse();
-            stored.decimal = normalize_display_decimal(precise_value.to_double());
+            stored.decimal = precise_value.to_double();
             stored.exact = false;
             stored.has_precise_decimal_text = true;
             stored.precise_decimal_text = precise_value.to_string();
@@ -3591,7 +4779,7 @@ StoredValue evaluate_expression_value(Calculator* calculator,
                          has_script_function,
                          invoke_script_function);
     const double parsed_value = parser.parse();
-    stored.decimal = normalize_display_decimal(parsed_value);
+    stored.decimal = parsed_value;
     stored.exact = false;
     if (impl->symbolic_constants_mode) {
         std::string symbolic_output;
@@ -3841,16 +5029,16 @@ ScriptSignal execute_script_block(Calculator* calculator,
     }
 }
 
-Calculator::Calculator() : impl_(new Impl()) {}
-
-Calculator::~Calculator() = default;
-
 double Calculator::evaluate(const std::string& expression) {
+    return normalize_result(evaluate_raw(expression));
+}
+
+double Calculator::evaluate_raw(const std::string& expression) {
     const StoredValue value = evaluate_expression_value(this, impl_.get(), expression, false);
     if (value.is_matrix) {
         throw std::runtime_error("matrix expression cannot be used as a scalar");
     }
-    return normalize_result(value.decimal);
+    return value.decimal;
 }
 
 std::string Calculator::evaluate_for_display(const std::string& expression, bool exact_mode) {
@@ -3917,224 +5105,6 @@ std::string Calculator::execute_script(const std::string& source, bool exact_mod
     return last_output.empty() ? "OK" : last_output;
 }
 
-std::string Calculator::help_text() const {
-    return
-        "Help topics:\n"
-        "  :help commands      Show command reference\n"
-        "  :help functions     Show supported functions\n"
-        "  :help matrix        Show matrix usage guide\n"
-        "  :help examples      Show example inputs\n"
-        "  :help exact         Show exact fraction mode help\n"
-        "  :help variables     Show variable and function usage help\n"
-        "  :help persistence   Show save/load help\n"
-        "  :help programmer    Show bitwise/base-conversion help\n"
-        "\n" +
-        help_topic("commands") + "\n\n" +
-        help_topic("matrix");
-}
-
-std::string Calculator::help_topic(const std::string& topic) const {
-    if (topic == "commands") {
-        return
-        "Commands:\n"
-        "  help, :help         Show this help message\n"
-        "  :exact on|off       Toggle exact fraction mode\n"
-        "  :exact              Show current exact mode status\n"
-        "  :symbolic on|off    Preserve pi/e in scalar display results\n"
-        "  :symbolic           Show current symbolic constants mode\n"
-        "  :hexprefix on|off   Toggle 0x/0X prefix for hex output\n"
-        "  :hexprefix          Show current hex prefix mode\n"
-        "  :hexcase upper|lower Set hex letter case\n"
-        "  :hexcase            Show current hex letter case\n"
-        "  :vars               List stored variables\n"
-        "  :funcs              List custom functions\n"
-        "  :clear name         Clear one variable\n"
-        "  :clearfunc name     Clear one custom function\n"
-        "  :clear              Clear all variables\n"
-        "  :clearfuncs         Clear all custom functions\n"
-        "  :history            Show session input history\n"
-        "  :save file          Save variables to a file\n"
-        "  :load file          Load variables from a file\n"
-        "  :run file           Execute a script file\n"
-        "  exit, quit          Exit the calculator";
-    }
-
-    if (topic == "examples") {
-        return
-        "Examples:\n"
-        "  x = 1/3 + 1/4       Assign a variable\n"
-        "  2 ^ 10              Power operator\n"
-        "  pow(3, 4)           Function-style power\n"
-        "  v = vec(1, 2, 3)    Create a vector\n"
-        "  m = mat(2, 2, 1, 2, 3, 4)  Create a matrix\n"
-        "  m + eye(2)          Add matrices directly\n"
-        "  2 * m               Matrix-scalar multiplication\n"
-        "  transpose(m)        Matrix transpose\n"
-        "  inverse(m)          Matrix inverse\n"
-        "  dot(a, b)           Vector dot product\n"
-        "  outer(a, b)         Vector outer product\n"
-        "  null(m)             Nullspace basis\n"
-        "  least_squares(A, b) Least-squares solution\n"
-        "  qr_q(A), qr_r(A)    QR decomposition parts\n"
-        "  lu_l(A), lu_u(A)    LU decomposition parts\n"
-        "  svd_u/s/vt(A)       Reduced SVD factors\n"
-        "  solve(A, b)         Solve Ax = b\n"
-        "  get(m, 1, 0)        Read one element\n"
-        "  m = set(m, 1, 0, 8) Update one element\n"
-        "  det(m)              Determinant\n"
-        "  rref(m)             Reduced row echelon form\n"
-        "  resize(m, 3, 3)     Resize with zero-fill\n"
-        "  factor(360)         Prime factorization\n"
-        "  factorial(5)        Integer factorial\n"
-        "  nCr(5, 2)           Combination count\n"
-        "  nPr(5, 2)           Permutation count\n"
-        "  sum(1, 2, 3, 4)     Aggregate sum\n"
-        "  avg(1, 2, 3, 4)     Aggregate average\n"
-        "  median(1, 5, 2, 9)  Aggregate median\n"
-        "  sinh(1)             Hyperbolic sine\n"
-        "  gamma(5)            Gamma function\n"
-        "  deg2rad(180)        Angle conversion\n"
-        "  fahrenheit(25)      Celsius to Fahrenheit\n"
-        "  f(x) = sin(x)+x^2   Define a custom unary function\n"
-        "  f(2)                Evaluate a custom function\n"
-        "  :symbolic on        Preserve pi/e symbolically in scalar output\n"
-        "  :hexprefix on       Show hex results like 0xFF\n"
-        "  :hexcase lower      Show hex results like 0xff\n"
-        "  pi / 2 + e          Symbolic constants mode example\n"
-        "  :run demo.calc      Run a script file\n"
-        "  fn fact(n) { ... }  Define a script function in a script\n"
-        "  print(a, b, c)      Print script values, including strings\n"
-        "  poly_add(p, q)      Polynomial addition\n"
-        "  poly_sub(p, q)      Polynomial subtraction\n"
-        "  poly_mul(p, q)      Polynomial multiplication\n"
-        "  poly_div(p, q)      Polynomial division\n"
-        "  roots(p)            Real roots of a polynomial\n"
-        "  simplify(x^2 + x^2) Simplify a symbolic expression\n"
-        "  simplify(expr)      Simplify a symbolic expression\n"
-        "  diff(f)             Symbolic derivative expression\n"
-        "  diff(f, 2)          Derivative at x = 2\n"
-        "  integral(f)         Symbolic indefinite integral expression\n"
-        "  taylor(f, 0, 5)     Taylor expansion up to degree 5\n"
-        "  limit(f, 0)         Two-sided limit as x -> 0\n"
-        "  integral(f, 0, 3)   Definite integral on [0, 3]\n"
-        "  integral(f, 3)      Indefinite integral value at x = 3\n"
-        "  double_integral(x + y, 0, 1, 0, 2)  Cartesian double integral\n"
-        "  double_integral_cyl(x^2 + y^2, 0, 1, 0, 2*pi)  Polar/cylindrical double integral\n"
-        "  triple_integral(x*y*z, 0, 1, 0, 1, 0, 1)  Cartesian triple integral\n"
-        "  triple_integral_sph(1, 0, 1, 0, 2 * pi, 0, pi)  Spherical triple integral\n"
-        "  ode(y - x, 0, 1, 2) Solve y' = y - x with y(0) = 1\n"
-        "  ode_table(y, 0, 1, 1, 4)  Return sampled ODE trajectory\n"
-        "  extrema(f, -2, 2)   Solve extrema on an interval\n"
-        "  :run script.calc    Execute a script file\n"
-        "  root(27, 3)         General root\n"
-        "  cbrt(-8)            Cube root\n"
-        "  hex(255)            Base conversion\n"
-        "  and(6, 3)           Bitwise and\n"
-        "  min(7/3, 5/2)       Smaller of two values\n"
-        "  :save state.txt     Save variables";
-    }
-
-    if (topic == "matrix") {
-        return
-        "Matrix guide:\n"
-        "  Create:  [a,b;c,d] vec mat zeros eye identity\n"
-        "  Shape:   resize append_row append_col transpose\n"
-        "  Elem:    get set\n"
-        "  Extra:   inverse dot outer null least_squares qr_q qr_r lu_l lu_u svd_u svd_s svd_vt\n"
-        "  Ops:     + - * / ^ with scalars and matrices\n"
-        "  Anal.:   norm trace det rank rref eigvals eigvecs solve\n"
-        "  Notes:   indices are zero-based\n"
-        "  Notes:   matrix literals pad missing elements with 0\n"
-        "  Notes:   append_row/append_col also pad or expand with 0\n"
-        "  Example: m = mat(2, 2, 1, 2, 3, 4)\n"
-        "  Example: [1, 2; 3]\n"
-        "  Example: get(m, 1, 0)\n"
-        "  Example: m = set(m, 1, 0, 8)\n"
-        "  Example: append_row([1, 2], 3)\n"
-        "  Example: transpose(m)\n"
-        "  Example: inverse(m)\n"
-        "  Example: dot(vec(1, 2), vec(3, 4))\n"
-        "  Example: lu_l(mat(2, 2, 4, 3, 6, 3))\n"
-        "  Example: svd_s(mat(3, 2, 3, 0, 0, 2, 0, 0))\n"
-        "  Example: solve(mat(2, 2, 2, 1, 5, 3), vec(1, 2))\n"
-        "  Example: det(m)\n"
-        "  Example: rref(m)";
-    }
-
-    if (topic == "functions") {
-        return
-        "Common functions:\n"
-        "  Trigonometric: sin cos tan asin acos atan sinh cosh tanh\n"
-        "  Exponential:   exp ln log10 pow gamma\n"
-        "  Roots:         sqrt cbrt root\n"
-        "  Numeric:       abs sign floor ceil min max sum avg median factorial nCr nPr\n"
-        "  Convert:       deg2rad rad2deg celsius fahrenheit kelvin\n"
-        "  Matrix create: vec mat zeros eye identity\n"
-        "  Matrix shape:  resize append_row append_col transpose\n"
-        "  Matrix elem:   get set\n"
-        "  Matrix extra:  inverse dot outer null least_squares qr_q qr_r lu_l lu_u svd_u svd_s svd_vt\n"
-        "  Matrix ops:    + - * / ^ with scalars and matrices\n"
-        "  Matrix anal.:  norm trace det rank rref eigvals eigvecs solve\n"
-        "  Integer:       gcd lcm mod factor\n"
-        "  Base convert:  bin oct hex base\n"
-        "  Aggregate:     sum avg median\n"
-        "  Multi-var:     double_integral double_integral_cyl double_integral_polar triple_integral triple_integral_cyl triple_integral_sph\n"
-        "  Bitwise:       and or xor not shl shr\n"
-        "  Script:        fn if else while for return break continue print strings\n"
-        "  Custom:        f(x)=...  poly_add poly_sub poly_mul poly_div roots "
-        "simplify symbolic/numeric diff integral taylor limit extrema ode ode_table";
-    }
-
-    if (topic == "exact") {
-        return
-        "Exact mode:\n"
-        "  :exact on           Prefer rational results like 7/12 over decimals\n"
-        "  :exact off          Return to normal decimal-first display\n"
-        "  :exact              Show the current exact mode status\n"
-        "  Works best with:    + - * / pow integer-exponent min max sum avg median factorial nCr nPr\n"
-        "  Integer helpers:    gcd lcm mod and programmer bitwise helpers stay exact when possible\n"
-        "  Falls back to decimal display for non-rational functions like sin, cos, exp, ln, sqrt";
-    }
-
-    if (topic == "variables") {
-        return
-        "Variables and functions:\n"
-        "  x = 3/4             Assign a scalar variable\n"
-        "  v = vec(1, 2, 3)    Assign a matrix/vector value\n"
-        "  :vars               List all stored variables\n"
-        "  :clear x            Clear one variable\n"
-        "  :clear              Clear all variables\n"
-        "  f(x) = x^2 + 1      Define a custom expression function\n"
-        "  :funcs              List custom expression/script functions\n"
-        "  :clearfunc f        Clear one custom function\n"
-        "  :clearfuncs         Clear all custom functions\n"
-        "  Custom functions are available in expressions, analysis commands, and scripts";
-    }
-
-    if (topic == "persistence") {
-        return
-        "Persistence:\n"
-        "  :save state.txt     Save current scalar variables and custom functions\n"
-        "  :load state.txt     Load a previously saved state file\n"
-        "  Save/load keeps:    scalar variables, exact values, string values, custom functions, script functions\n"
-        "  Current limit:      matrix variables are not saved yet\n"
-        "  Tip:                use separate files for different sessions or experiments";
-    }
-
-    if (topic == "programmer") {
-        return
-        "Programmer tools:\n"
-        "  Base convert:       bin oct hex base\n"
-        "  Bitwise:            and or xor not shl shr\n"
-        "  Hex formatting:     :hexprefix on|off, :hexcase upper|lower\n"
-        "  Examples:           hex(255), base(255, 16), and(6, 3), shl(5, 2)\n"
-        "  Notes:              base conversion only accepts integers and bases 2..16\n"
-        "  Notes:              hex formatting applies to hex(...) and base(..., 16)";
-    }
-
-    throw std::runtime_error("unknown help topic: " + topic);
-}
-
 std::string Calculator::list_variables() const {
     if (impl_->variables.empty()) {
         return "No variables defined.";
@@ -4151,20 +5121,6 @@ std::string Calculator::list_variables() const {
         out << name << " = " << format_stored_value(value, impl_->symbolic_constants_mode);
     }
     return out.str();
-}
-
-std::string Calculator::clear_variable(const std::string& name) {
-    const auto it = impl_->variables.find(name);
-    if (it == impl_->variables.end()) {
-        throw std::runtime_error("unknown variable: " + name);
-    }
-    impl_->variables.erase(it);
-    return "Cleared variable: " + name;
-}
-
-std::string Calculator::clear_all_variables() {
-    impl_->variables.clear();
-    return "Cleared all variables.";
 }
 
 std::string Calculator::factor_expression(const std::string& expression) const {
@@ -4357,31 +5313,56 @@ bool Calculator::try_process_function_command(const std::string& expression,
                 if (split_named_call(trimmed_argument, "diff", &nested_inside)) {
                     const std::vector<std::string> nested_arguments =
                         split_top_level_arguments(nested_inside);
-                    if (nested_arguments.size() != 1) {
+                    if (nested_arguments.empty()) {
                         throw std::runtime_error(
-                            "nested symbolic diff expects exactly one argument");
+                            "nested symbolic diff expects at least one argument");
                     }
                     SymbolicExpression nested_expression;
                     resolve_symbolic_expression(nested_arguments[0],
-                                                true,
+                                                nested_arguments.size() == 1,
                                                 variable_name,
                                                 &nested_expression);
-                    *expression =
-                        nested_expression.derivative(*variable_name).simplify();
+                    if (nested_arguments.size() == 1) {
+                        *expression =
+                            nested_expression.derivative(*variable_name).simplify();
+                    } else {
+                        SymbolicExpression differentiated = nested_expression;
+                        for (std::size_t i = 1; i < nested_arguments.size(); ++i) {
+                            const std::string derivative_variable =
+                                trim_copy(nested_arguments[i]);
+                            if (!is_identifier_text(derivative_variable)) {
+                                throw std::runtime_error(
+                                    "nested symbolic diff variable arguments must be identifiers");
+                            }
+                            differentiated =
+                                differentiated.derivative(derivative_variable).simplify();
+                        }
+                        *variable_name = trim_copy(nested_arguments[1]);
+                        *expression = differentiated;
+                    }
                     return;
                 }
                 if (split_named_call(trimmed_argument, "integral", &nested_inside)) {
                     const std::vector<std::string> nested_arguments =
                         split_top_level_arguments(nested_inside);
-                    if (nested_arguments.size() != 1) {
+                    if (nested_arguments.size() != 1 && nested_arguments.size() != 2) {
                         throw std::runtime_error(
-                            "nested symbolic integral expects exactly one argument");
+                            "nested symbolic integral expects expression and optional variable");
                     }
                     SymbolicExpression nested_expression;
                     resolve_symbolic_expression(nested_arguments[0],
-                                                true,
+                                                nested_arguments.size() == 1,
                                                 variable_name,
                                                 &nested_expression);
+                    if (nested_arguments.size() == 2) {
+                        const std::string integral_variable =
+                            trim_copy(nested_arguments[1]);
+                        if (!is_identifier_text(integral_variable)) {
+                            throw std::runtime_error(
+                                "nested symbolic integral variable must be an identifier");
+                        }
+                        *variable_name = integral_variable;
+                    }
                     *expression =
                         nested_expression.integral(*variable_name).simplify();
                     return;
@@ -4460,18 +5441,353 @@ bool Calculator::try_process_function_command(const std::string& expression,
         };
     };
 
-    auto build_ode_solver = [&](const std::string& argument) {
-        const auto evaluate_expression = build_scoped_decimal_evaluator(argument);
-        return ODESolver(
-            [evaluate_expression](double x_value, double y_value) {
-                return evaluate_expression({{"x", x_value}, {"y", y_value}});
-            });
+    auto build_scoped_matrix_evaluator = [&](const std::string& argument) {
+        const std::string scoped_expression =
+            trim_copy(expand_inline_function_commands(this, argument));
+        return [this, scoped_expression](
+                   const std::vector<std::pair<std::string, StoredValue>>& assignments) {
+            std::map<std::string, StoredValue> scoped_variables =
+                visible_variables(impl_.get());
+            for (const auto& [name, value] : assignments) {
+                scoped_variables[name] = value;
+            }
+
+            const HasScriptFunctionCallback has_script_function =
+                [this](const std::string& name) {
+                    return has_visible_script_function(impl_.get(), name);
+                };
+            const InvokeScriptFunctionDecimalCallback invoke_script_function =
+                [this](const std::string& name,
+                       const std::vector<double>& arguments) {
+                    return invoke_script_function_decimal(
+                        this, impl_.get(), name, arguments);
+                };
+
+            matrix::Value value;
+            if (!try_evaluate_matrix_expression(scoped_expression,
+                                               &scoped_variables,
+                                               &impl_->functions,
+                                               has_script_function,
+                                               invoke_script_function,
+                                               &value) ||
+                !value.is_matrix) {
+                throw std::runtime_error("expected a matrix-valued expression");
+            }
+            return value.matrix;
+        };
+    };
+
+    auto build_scoped_scalar_evaluator = [&](const std::string& argument) {
+        const std::string scoped_expression =
+            trim_copy(expand_inline_function_commands(this, argument));
+        return [this, scoped_expression](
+                   const std::vector<std::pair<std::string, StoredValue>>& assignments) {
+            std::map<std::string, StoredValue> frame;
+            for (const auto& [name, value] : assignments) {
+                frame[name] = value;
+            }
+
+            impl_->local_scopes.push_back(frame);
+            try {
+                const StoredValue value =
+                    evaluate_expression_value(this, impl_.get(), scoped_expression, false);
+                impl_->local_scopes.pop_back();
+
+                if (value.is_matrix || value.is_string) {
+                    throw std::runtime_error("expected a scalar-valued expression");
+                }
+                return normalize_result(value.exact
+                                            ? rational_to_double(value.rational)
+                                            : value.decimal);
+            } catch (...) {
+                impl_->local_scopes.pop_back();
+                throw;
+            }
+        };
     };
 
     auto parse_decimal_argument = [&](const std::string& argument) {
         DecimalParser parser(argument, &impl_->variables, &impl_->functions);
         return parser.parse();
     };
+
+    auto parse_matrix_argument = [&](const std::string& argument,
+                                     const std::string& context) {
+        const StoredValue value =
+            evaluate_expression_value(this, impl_.get(), argument, false);
+        if (!value.is_matrix) {
+            throw std::runtime_error(context + " expects a matrix or vector argument");
+        }
+        return value.matrix;
+    };
+
+    auto is_matrix_argument = [&](const std::string& argument) {
+        const std::map<std::string, StoredValue> visible = visible_variables(impl_.get());
+        const HasScriptFunctionCallback has_script_function =
+            [this](const std::string& name) {
+                return has_visible_script_function(impl_.get(), name);
+            };
+        const InvokeScriptFunctionDecimalCallback invoke_script_function =
+            [this](const std::string& name, const std::vector<double>& arguments) {
+                return invoke_script_function_decimal(this, impl_.get(), name, arguments);
+            };
+        matrix::Value value;
+        return try_evaluate_matrix_expression(trim_copy(argument),
+                                             &visible,
+                                             &impl_->functions,
+                                             has_script_function,
+                                             invoke_script_function,
+                                             &value) &&
+               value.is_matrix;
+    };
+
+    auto matrix_to_vector_values = [&](const matrix::Matrix& value,
+                                       const std::string& context) {
+        if (!value.is_vector()) {
+            throw std::runtime_error(context + " expects vector arguments");
+        }
+        const std::size_t size = value.rows == 1 ? value.cols : value.rows;
+        std::vector<double> result(size, 0.0);
+        for (std::size_t i = 0; i < size; ++i) {
+            result[i] = value.rows == 1 ? value.at(0, i) : value.at(i, 0);
+        }
+        return result;
+    };
+
+    auto vector_to_column_matrix = [&](const std::vector<double>& values) {
+        matrix::Matrix result(values.size(), 1, 0.0);
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            result.at(i, 0) = normalize_result(values[i]);
+        }
+        return result;
+    };
+
+    auto make_scalar_stored = [&](double value) {
+        StoredValue stored;
+        stored.decimal = normalize_result(value);
+        return stored;
+    };
+
+    auto append_parameter_assignments =
+        [&](const StoredValue& parameter_value,
+            std::vector<std::pair<std::string, StoredValue>>* assignments) {
+            assignments->push_back({"p", parameter_value});
+            if (!parameter_value.is_matrix || !parameter_value.matrix.is_vector()) {
+                return;
+            }
+
+            const std::size_t size =
+                parameter_value.matrix.rows == 1
+                    ? parameter_value.matrix.cols
+                    : parameter_value.matrix.rows;
+            for (std::size_t i = 0; i < size; ++i) {
+                const double component_value =
+                    parameter_value.matrix.rows == 1
+                        ? parameter_value.matrix.at(0, i)
+                        : parameter_value.matrix.at(i, 0);
+                assignments->push_back({"p" + std::to_string(i + 1),
+                                        make_scalar_stored(component_value)});
+            }
+        };
+
+    auto try_parse_positive_step_argument = [&](const std::string& argument,
+                                                int* steps) {
+        try {
+            const double value = parse_decimal_argument(argument);
+            if (!is_integer_double(value) || value <= 0.0) {
+                return false;
+            }
+            *steps = static_cast<int>(round_to_long_long(value));
+            return true;
+        } catch (const std::exception&) {
+            return false;
+        }
+    };
+
+    auto dot_product = [](const std::vector<double>& lhs,
+                          const std::vector<double>& rhs) {
+        if (lhs.size() != rhs.size()) {
+            throw std::runtime_error("objective and solution dimension mismatch");
+        }
+        long double total = 0.0L;
+        for (std::size_t i = 0; i < lhs.size(); ++i) {
+            total += static_cast<long double>(lhs[i]) *
+                     static_cast<long double>(rhs[i]);
+        }
+        return static_cast<double>(total);
+    };
+
+    auto format_planning_result = [&](const std::vector<double>& solution,
+                                      double objective) {
+        return "x = " + matrix::Matrix::vector(solution).to_string() +
+               "\nobjective = " + format_decimal(normalize_result(objective));
+    };
+
+    auto solve_linear_box_problem =
+        [&](const std::vector<double>& objective,
+            const matrix::Matrix& inequality_matrix,
+            const std::vector<double>& inequality_rhs,
+            const matrix::Matrix& equality_matrix,
+            const std::vector<double>& equality_rhs,
+            const std::vector<double>& lower_bounds,
+            const std::vector<double>& upper_bounds,
+            double planning_tolerance,
+            std::vector<double>* solution,
+            double* objective_value) {
+            const std::size_t variable_count = objective.size();
+            if (inequality_matrix.cols != variable_count ||
+                inequality_rhs.size() != inequality_matrix.rows ||
+                equality_matrix.cols != variable_count ||
+                equality_rhs.size() != equality_matrix.rows ||
+                lower_bounds.size() != variable_count ||
+                upper_bounds.size() != variable_count) {
+                throw std::runtime_error("planning dimension mismatch");
+            }
+
+            auto feasible_solution = [&](const std::vector<double>& x) {
+                if (x.size() != variable_count) {
+                    return false;
+                }
+                for (std::size_t col = 0; col < variable_count; ++col) {
+                    if (x[col] < lower_bounds[col] - planning_tolerance ||
+                        x[col] > upper_bounds[col] + planning_tolerance) {
+                        return false;
+                    }
+                }
+                for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
+                    long double total = 0.0L;
+                    for (std::size_t col = 0; col < variable_count; ++col) {
+                        total += static_cast<long double>(inequality_matrix.at(row, col)) *
+                                 static_cast<long double>(x[col]);
+                    }
+                    if (total >
+                        static_cast<long double>(inequality_rhs[row]) + planning_tolerance) {
+                        return false;
+                    }
+                }
+                for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
+                    long double total = 0.0L;
+                    for (std::size_t col = 0; col < variable_count; ++col) {
+                        total += static_cast<long double>(equality_matrix.at(row, col)) *
+                                 static_cast<long double>(x[col]);
+                    }
+                    if (mymath::abs(static_cast<double>(total - equality_rhs[row])) >
+                        planning_tolerance) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+
+            if (variable_count == 0) {
+                const std::vector<double> empty_solution;
+                if (!feasible_solution(empty_solution)) {
+                    return false;
+                }
+                *solution = empty_solution;
+                *objective_value = 0.0;
+                return true;
+            }
+
+            std::vector<std::vector<double>> all_rows;
+            std::vector<double> all_rhs;
+            all_rows.reserve(inequality_matrix.rows + 2 * equality_matrix.rows +
+                             2 * variable_count);
+            all_rhs.reserve(inequality_matrix.rows + 2 * equality_matrix.rows +
+                            2 * variable_count);
+
+            for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
+                std::vector<double> coefficients(variable_count, 0.0);
+                for (std::size_t col = 0; col < variable_count; ++col) {
+                    coefficients[col] = inequality_matrix.at(row, col);
+                }
+                all_rows.push_back(coefficients);
+                all_rhs.push_back(inequality_rhs[row]);
+            }
+            for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
+                std::vector<double> positive_row(variable_count, 0.0);
+                std::vector<double> negative_row(variable_count, 0.0);
+                for (std::size_t col = 0; col < variable_count; ++col) {
+                    positive_row[col] = equality_matrix.at(row, col);
+                    negative_row[col] = -equality_matrix.at(row, col);
+                }
+                all_rows.push_back(positive_row);
+                all_rhs.push_back(equality_rhs[row]);
+                all_rows.push_back(negative_row);
+                all_rhs.push_back(-equality_rhs[row]);
+            }
+            for (std::size_t col = 0; col < variable_count; ++col) {
+                std::vector<double> upper_row(variable_count, 0.0);
+                upper_row[col] = 1.0;
+                all_rows.push_back(upper_row);
+                all_rhs.push_back(upper_bounds[col]);
+
+                std::vector<double> lower_row(variable_count, 0.0);
+                lower_row[col] = -1.0;
+                all_rows.push_back(lower_row);
+                all_rhs.push_back(-lower_bounds[col]);
+            }
+
+            bool found = false;
+            std::vector<double> best_solution(variable_count, 0.0);
+            double best_value = 0.0;
+            std::vector<std::size_t> selection(variable_count, 0);
+
+            std::function<void(std::size_t, std::size_t)> enumerate_bases =
+                [&](std::size_t start, std::size_t depth) {
+                    if (depth == variable_count) {
+                        matrix::Matrix basis(variable_count, variable_count, 0.0);
+                        matrix::Matrix basis_rhs(variable_count, 1, 0.0);
+                        for (std::size_t row = 0; row < variable_count; ++row) {
+                            basis_rhs.at(row, 0) = all_rhs[selection[row]];
+                            for (std::size_t col = 0; col < variable_count; ++col) {
+                                basis.at(row, col) = all_rows[selection[row]][col];
+                            }
+                        }
+
+                        try {
+                            const matrix::Matrix solved = matrix::solve(basis, basis_rhs);
+                            std::vector<double> candidate(variable_count, 0.0);
+                            for (std::size_t i = 0; i < variable_count; ++i) {
+                                const double value = solved.at(i, 0);
+                                candidate[i] =
+                                    mymath::abs(value) <= planning_tolerance ? 0.0 : value;
+                            }
+                            if (!feasible_solution(candidate)) {
+                                return;
+                            }
+
+                            const double candidate_objective =
+                                dot_product(objective, candidate);
+                            if (!found ||
+                                candidate_objective > best_value + planning_tolerance) {
+                                found = true;
+                                best_value = candidate_objective;
+                                best_solution = candidate;
+                            }
+                        } catch (const std::exception&) {
+                        }
+                        return;
+                    }
+
+                    const std::size_t remaining = variable_count - depth;
+                    for (std::size_t index = start;
+                         index + remaining <= all_rows.size();
+                         ++index) {
+                        selection[depth] = index;
+                        enumerate_bases(index + 1, depth + 1);
+                    }
+                };
+
+            enumerate_bases(0, 0);
+            if (!found) {
+                return false;
+            }
+
+            *solution = best_solution;
+            *objective_value = best_value;
+            return true;
+        };
 
     auto parse_subdivisions = [&](const std::vector<std::string>& arguments,
                                   std::size_t offset,
@@ -4529,6 +5845,189 @@ bool Calculator::try_process_function_command(const std::string& expression,
             }
             throw;
         }
+    };
+
+    auto build_taylor_coefficients = [&](const SymbolicExpression& expression,
+                                         const std::string& variable_name,
+                                         double center,
+                                         int degree) {
+        std::vector<double> coefficients;
+        coefficients.reserve(static_cast<std::size_t>(degree + 1));
+        SymbolicExpression current = expression;
+        for (int order = 0; order <= degree; ++order) {
+            const double derivative_value =
+                evaluate_symbolic_at(current, variable_name, center);
+            coefficients.push_back(derivative_value / factorial_int(order));
+            if (order != degree) {
+                current = current.derivative(variable_name).simplify();
+            }
+        }
+        return coefficients;
+    };
+
+    auto simplify_symbolic_text = [&](const std::string& text) {
+        return SymbolicExpression::parse(text).simplify().to_string();
+    };
+
+    auto symbolic_vector_to_string =
+        [](const std::vector<SymbolicExpression>& values) {
+            std::ostringstream out;
+            out << "[";
+            for (std::size_t i = 0; i < values.size(); ++i) {
+                if (i != 0) {
+                    out << ", ";
+                }
+                out << values[i].simplify().to_string();
+            }
+            out << "]";
+            return out.str();
+        };
+
+    auto symbolic_matrix_to_string =
+        [](const std::vector<std::vector<SymbolicExpression>>& values) {
+            std::ostringstream out;
+            out << "[";
+            for (std::size_t row = 0; row < values.size(); ++row) {
+                if (row != 0) {
+                    out << ", ";
+                }
+                out << "[";
+                for (std::size_t col = 0; col < values[row].size(); ++col) {
+                    if (col != 0) {
+                        out << ", ";
+                    }
+                    out << values[row][col].simplify().to_string();
+                }
+                out << "]";
+            }
+            out << "]";
+            return out.str();
+        };
+
+    auto evaluate_symbolic_at_point =
+        [](SymbolicExpression expression,
+           const std::vector<std::string>& variables,
+           const std::vector<double>& values,
+           double* result) {
+            for (std::size_t i = 0; i < variables.size(); ++i) {
+                expression = expression.substitute(
+                    variables[i], SymbolicExpression::number(values[i]));
+            }
+            return expression.simplify().is_number(result);
+        };
+
+    auto solve_linear_system =
+        [](std::vector<std::vector<double>> matrix,
+           std::vector<double> rhs,
+           std::vector<double>* solution) {
+            const std::size_t size = rhs.size();
+            for (std::size_t col = 0; col < size; ++col) {
+                std::size_t pivot = col;
+                for (std::size_t row = col + 1; row < size; ++row) {
+                    if (std::abs(matrix[row][col]) > std::abs(matrix[pivot][col])) {
+                        pivot = row;
+                    }
+                }
+                if (std::abs(matrix[pivot][col]) < 1e-12) {
+                    return false;
+                }
+                if (pivot != col) {
+                    std::swap(matrix[pivot], matrix[col]);
+                    std::swap(rhs[pivot], rhs[col]);
+                }
+
+                const double pivot_value = matrix[col][col];
+                for (std::size_t j = col; j < size; ++j) {
+                    matrix[col][j] /= pivot_value;
+                }
+                rhs[col] /= pivot_value;
+
+                for (std::size_t row = 0; row < size; ++row) {
+                    if (row == col) {
+                        continue;
+                    }
+                    const double factor = matrix[row][col];
+                    if (std::abs(factor) < 1e-12) {
+                        continue;
+                    }
+                    for (std::size_t j = col; j < size; ++j) {
+                        matrix[row][j] -= factor * matrix[col][j];
+                    }
+                    rhs[row] -= factor * rhs[col];
+                }
+            }
+            *solution = rhs;
+            return true;
+        };
+
+    auto parse_symbolic_variable_arguments =
+        [](const std::vector<std::string>& arguments,
+           std::size_t start_index,
+           const std::vector<std::string>& fallback_variables) {
+            std::vector<std::string> variables;
+            for (std::size_t i = start_index; i < arguments.size(); ++i) {
+                const std::string variable = trim_copy(arguments[i]);
+                if (!is_identifier_text(variable)) {
+                    throw std::runtime_error(
+                        "symbolic variable arguments must be identifiers");
+                }
+                variables.push_back(variable);
+            }
+            if (variables.empty()) {
+                variables = fallback_variables;
+            }
+            if (variables.empty()) {
+                variables.push_back("x");
+            }
+            return variables;
+        };
+
+    auto parse_symbolic_expression_list = [&](const std::string& argument) {
+        std::string text = trim_copy(argument);
+        if (text.size() < 2 || text.front() != '[' || text.back() != ']') {
+            throw std::runtime_error(
+                "jacobian expects its first argument to be a bracketed expression list");
+        }
+        text = trim_copy(text.substr(1, text.size() - 2));
+
+        std::vector<std::string> expression_texts;
+        int paren_depth = 0;
+        int bracket_depth = 0;
+        std::size_t start = 0;
+        for (std::size_t i = 0; i < text.size(); ++i) {
+            const char ch = text[i];
+            if (ch == '(') {
+                ++paren_depth;
+            } else if (ch == ')') {
+                --paren_depth;
+            } else if (ch == '[') {
+                ++bracket_depth;
+            } else if (ch == ']') {
+                --bracket_depth;
+            } else if ((ch == ';' || ch == ',') &&
+                       paren_depth == 0 &&
+                       bracket_depth == 0) {
+                expression_texts.push_back(trim_copy(text.substr(start, i - start)));
+                start = i + 1;
+            }
+        }
+        if (!text.empty()) {
+            expression_texts.push_back(trim_copy(text.substr(start)));
+        }
+        if (expression_texts.empty()) {
+            throw std::runtime_error("jacobian expression list cannot be empty");
+        }
+
+        std::vector<SymbolicExpression> expressions;
+        expressions.reserve(expression_texts.size());
+        for (const std::string& expression_text : expression_texts) {
+            if (expression_text.empty()) {
+                throw std::runtime_error("jacobian expression list cannot contain empty items");
+            }
+            expressions.push_back(SymbolicExpression::parse(
+                expand_inline_function_commands(this, expression_text)));
+        }
+        return expressions;
     };
 
     std::string inside;
@@ -4629,7 +6128,8 @@ bool Calculator::try_process_function_command(const std::string& expression,
         }
 
         std::string variable_name;
-        SymbolicExpression current = build_symbolic_expression(arguments[0], &variable_name);
+        SymbolicExpression expression;
+        resolve_symbolic_expression(arguments[0], true, &variable_name, &expression);
         DecimalParser center_parser(arguments[1], &impl_->variables, &impl_->functions);
         DecimalParser degree_parser(arguments[2], &impl_->variables, &impl_->functions);
         const double center = center_parser.parse();
@@ -4639,19 +6139,323 @@ bool Calculator::try_process_function_command(const std::string& expression,
         }
 
         const int degree = static_cast<int>(round_to_long_long(degree_value));
-        std::vector<double> coefficients;
-        coefficients.reserve(static_cast<std::size_t>(degree + 1));
+        const std::vector<double> coefficients =
+            build_taylor_coefficients(expression, variable_name, center, degree);
+        *output = taylor_series_to_string(coefficients, variable_name, center);
+        return true;
+    }
 
-        for (int order = 0; order <= degree; ++order) {
-            const double derivative_value =
-                evaluate_symbolic_at(current, variable_name, center);
-            coefficients.push_back(derivative_value / factorial_int(order));
-            if (order != degree) {
-                current = current.derivative(variable_name).simplify();
+    if (split_named_call(trimmed, "pade", &inside)) {
+        const std::vector<std::string> arguments = split_top_level_arguments(inside);
+        if (arguments.size() != 3 && arguments.size() != 4) {
+            throw std::runtime_error(
+                "pade expects expr, m, n or expr, center, m, n");
+        }
+
+        std::string variable_name;
+        SymbolicExpression expression;
+        resolve_symbolic_expression(arguments[0], true, &variable_name, &expression);
+
+        const bool explicit_center = arguments.size() == 4;
+        const double center = explicit_center
+                                  ? parse_decimal_argument(arguments[1])
+                                  : 0.0;
+        const double numerator_degree_value = parse_decimal_argument(
+            arguments[explicit_center ? 2 : 1]);
+        const double denominator_degree_value = parse_decimal_argument(
+            arguments[explicit_center ? 3 : 2]);
+        if (!is_integer_double(numerator_degree_value) ||
+            numerator_degree_value < 0.0 ||
+            !is_integer_double(denominator_degree_value) ||
+            denominator_degree_value < 0.0) {
+            throw std::runtime_error(
+                "pade degrees must be non-negative integers");
+        }
+
+        const int numerator_degree =
+            static_cast<int>(round_to_long_long(numerator_degree_value));
+        const int denominator_degree =
+            static_cast<int>(round_to_long_long(denominator_degree_value));
+        if (numerator_degree == 0 && denominator_degree == 0) {
+            throw std::runtime_error("pade requires at least one non-zero degree");
+        }
+
+        const std::vector<double> coefficients = build_taylor_coefficients(
+            expression,
+            variable_name,
+            center,
+            numerator_degree + denominator_degree);
+        auto coefficient_at = [&](int index) {
+            if (index < 0 ||
+                index >= static_cast<int>(coefficients.size())) {
+                return 0.0;
+            }
+            return coefficients[static_cast<std::size_t>(index)];
+        };
+
+        std::vector<double> denominator(denominator_degree + 1, 0.0);
+        denominator[0] = 1.0;
+        if (denominator_degree > 0) {
+            std::vector<std::vector<double>> matrix(
+                static_cast<std::size_t>(denominator_degree),
+                std::vector<double>(static_cast<std::size_t>(denominator_degree), 0.0));
+            std::vector<double> rhs(static_cast<std::size_t>(denominator_degree), 0.0);
+            for (int row = 0; row < denominator_degree; ++row) {
+                for (int col = 0; col < denominator_degree; ++col) {
+                    matrix[static_cast<std::size_t>(row)]
+                          [static_cast<std::size_t>(col)] =
+                        coefficient_at(numerator_degree + row - col);
+                }
+                rhs[static_cast<std::size_t>(row)] =
+                    -coefficient_at(numerator_degree + row + 1);
+            }
+            const std::vector<double> solved = solve_dense_linear_system(
+                matrix, rhs, "pade");
+            for (int i = 0; i < denominator_degree; ++i) {
+                denominator[static_cast<std::size_t>(i + 1)] =
+                    solved[static_cast<std::size_t>(i)];
             }
         }
 
-        *output = taylor_series_to_string(coefficients, variable_name, center);
+        std::vector<double> numerator(numerator_degree + 1, 0.0);
+        for (int i = 0; i <= numerator_degree; ++i) {
+            double value = 0.0;
+            for (int j = 0; j <= denominator_degree && j <= i; ++j) {
+                value += denominator[static_cast<std::size_t>(j)] *
+                         coefficient_at(i - j);
+            }
+            numerator[static_cast<std::size_t>(i)] = value;
+        }
+
+        const std::string base = shifted_series_base(variable_name, center);
+        const std::string numerator_text =
+            polynomial_to_string(numerator, base);
+        const std::string denominator_text =
+            polynomial_to_string(denominator, base);
+        if (denominator_text == "1") {
+            *output = simplify_symbolic_text(numerator_text);
+        } else {
+            *output = simplify_symbolic_text(
+                "(" + numerator_text + ") / (" + denominator_text + ")");
+        }
+        return true;
+    }
+
+    if (split_named_call(trimmed, "puiseux", &inside)) {
+        const std::vector<std::string> arguments = split_top_level_arguments(inside);
+        if (arguments.size() != 3 && arguments.size() != 4) {
+            throw std::runtime_error(
+                "puiseux expects expr, degree, denominator or expr, center, degree, denominator");
+        }
+
+        std::string variable_name;
+        SymbolicExpression expression;
+        resolve_symbolic_expression(arguments[0], true, &variable_name, &expression);
+
+        const bool explicit_center = arguments.size() == 4;
+        const double center = explicit_center
+                                  ? parse_decimal_argument(arguments[1])
+                                  : 0.0;
+        const double degree_value = parse_decimal_argument(
+            arguments[explicit_center ? 2 : 1]);
+        const double denominator_value = parse_decimal_argument(
+            arguments[explicit_center ? 3 : 2]);
+        if (!is_integer_double(degree_value) || degree_value < 0.0) {
+            throw std::runtime_error(
+                "puiseux degree must be a non-negative integer");
+        }
+        if (!is_integer_double(denominator_value) || denominator_value <= 0.0) {
+            throw std::runtime_error(
+                "puiseux denominator must be a positive integer");
+        }
+
+        const int degree = static_cast<int>(round_to_long_long(degree_value));
+        const int denominator =
+            static_cast<int>(round_to_long_long(denominator_value));
+        const std::string auxiliary_variable = "puiseux_t";
+        const std::string replacement_text =
+            mymath::is_near_zero(center, 1e-10)
+                ? auxiliary_variable + " ^ " + std::to_string(denominator)
+                : format_symbolic_scalar(center) + " + " +
+                      auxiliary_variable + " ^ " +
+                      std::to_string(denominator);
+        const SymbolicExpression substituted = expression.substitute(
+            variable_name,
+            SymbolicExpression::parse(replacement_text));
+        const std::vector<double> coefficients = build_taylor_coefficients(
+            substituted, auxiliary_variable, 0.0, degree);
+        *output = generalized_series_to_string(
+            coefficients, variable_name, center, denominator);
+        return true;
+    }
+
+    if (split_named_call(trimmed, "series_sum", &inside) ||
+        split_named_call(trimmed, "summation", &inside)) {
+        const std::vector<std::string> arguments = split_top_level_arguments(inside);
+        if (arguments.size() != 4) {
+            throw std::runtime_error(
+                "series_sum expects expr, index, lower, upper");
+        }
+
+        const std::string index_name = trim_copy(arguments[1]);
+        if (!is_identifier_text(index_name)) {
+            throw std::runtime_error("series_sum index must be an identifier");
+        }
+
+        SymbolicExpression summand =
+            SymbolicExpression::parse(expand_inline_function_commands(this, arguments[0]));
+        SymbolicExpression upper_expression;
+        SymbolicExpression lower_expression;
+        const std::string upper_text = trim_copy(arguments[3]);
+        const bool upper_is_infinite =
+            upper_text == "inf" || upper_text == "oo" ||
+            upper_text == "infinity";
+        if (!upper_is_infinite) {
+            upper_expression = SymbolicExpression::parse(
+                expand_inline_function_commands(this, upper_text));
+        }
+        lower_expression = SymbolicExpression::parse(
+            expand_inline_function_commands(this, arguments[2]));
+
+        auto make_polynomial_sum_primitive =
+            [&](const std::vector<double>& coefficients) {
+                if (coefficients.size() > 4) {
+                    throw std::runtime_error(
+                        "series_sum polynomial summands are currently supported up to degree 3");
+                }
+
+                std::vector<std::string> pieces;
+                if (coefficients.size() >= 1 &&
+                    !mymath::is_near_zero(coefficients[0], 1e-10)) {
+                    pieces.push_back("(" + format_symbolic_scalar(coefficients[0]) +
+                                     ") * (" + index_name + " + 1)");
+                }
+                if (coefficients.size() >= 2 &&
+                    !mymath::is_near_zero(coefficients[1], 1e-10)) {
+                    pieces.push_back("(" + format_symbolic_scalar(coefficients[1]) +
+                                     ") * (" + index_name + " * (" + index_name +
+                                     " + 1) / 2)");
+                }
+                if (coefficients.size() >= 3 &&
+                    !mymath::is_near_zero(coefficients[2], 1e-10)) {
+                    pieces.push_back("(" + format_symbolic_scalar(coefficients[2]) +
+                                     ") * (" + index_name + " * (" + index_name +
+                                     " + 1) * (2 * " + index_name + " + 1) / 6)");
+                }
+                if (coefficients.size() >= 4 &&
+                    !mymath::is_near_zero(coefficients[3], 1e-10)) {
+                    pieces.push_back("(" + format_symbolic_scalar(coefficients[3]) +
+                                     ") * ((" + index_name + " * (" + index_name +
+                                     " + 1) / 2) ^ 2)");
+                }
+
+                if (pieces.empty()) {
+                    return SymbolicExpression::number(0.0);
+                }
+                std::ostringstream out;
+                for (std::size_t i = 0; i < pieces.size(); ++i) {
+                    if (i != 0) {
+                        out << " + ";
+                    }
+                    out << pieces[i];
+                }
+                return SymbolicExpression::parse(out.str()).simplify();
+            };
+
+        auto finite_sum_from_primitive =
+            [&](const SymbolicExpression& primitive) {
+                const SymbolicExpression lower_minus_one =
+                    SymbolicExpression::parse("(" + arguments[2] + ") - 1").simplify();
+                return SymbolicExpression::parse(
+                           "(" +
+                           primitive.substitute(index_name, upper_expression)
+                               .to_string() +
+                           ") - (" +
+                           primitive.substitute(index_name, lower_minus_one)
+                               .to_string() +
+                           ")")
+                    .simplify()
+                    .to_string();
+            };
+
+        std::vector<double> polynomial_coefficients;
+        if (summand.polynomial_coefficients(index_name, &polynomial_coefficients)) {
+            if (upper_is_infinite) {
+                bool all_zero = true;
+                for (double coefficient : polynomial_coefficients) {
+                    if (!mymath::is_near_zero(coefficient, 1e-10)) {
+                        all_zero = false;
+                        break;
+                    }
+                }
+                if (!all_zero) {
+                    throw std::runtime_error(
+                        "series_sum does not support infinite polynomial sums");
+                }
+                *output = "0";
+                return true;
+            }
+
+            const SymbolicExpression primitive =
+                make_polynomial_sum_primitive(polynomial_coefficients);
+            *output = finite_sum_from_primitive(primitive);
+            return true;
+        }
+
+        auto geometric_ratio = [&](double* coefficient, double* ratio) {
+            const double s0 = evaluate_symbolic_at(summand, index_name, 0.0);
+            const double s1 = evaluate_symbolic_at(summand, index_name, 1.0);
+            const double s2 = evaluate_symbolic_at(summand, index_name, 2.0);
+            const double s3 = evaluate_symbolic_at(summand, index_name, 3.0);
+            if (mymath::is_near_zero(s0, 1e-10)) {
+                return false;
+            }
+            const double candidate = s1 / s0;
+            if (!mymath::is_near_zero(s2 - s1 * candidate, 1e-8) ||
+                !mymath::is_near_zero(s3 - s2 * candidate, 1e-8)) {
+                return false;
+            }
+            *coefficient = s0;
+            *ratio = candidate;
+            return true;
+        };
+
+        double geometric_coefficient = 0.0;
+        double geometric_ratio_value = 0.0;
+        if (!geometric_ratio(&geometric_coefficient, &geometric_ratio_value)) {
+            throw std::runtime_error(
+                "series_sum currently supports polynomial summands up to degree 3 and common geometric series");
+        }
+
+        const std::string coefficient_text =
+            format_symbolic_scalar(geometric_coefficient);
+        const std::string ratio_text =
+            format_symbolic_scalar(geometric_ratio_value);
+
+        if (upper_is_infinite) {
+            if (mymath::abs(geometric_ratio_value) >= 1.0 - 1e-10) {
+                throw std::runtime_error(
+                    "series_sum infinite geometric series requires |r| < 1");
+            }
+            if (mymath::is_near_zero(geometric_ratio_value - 1.0, 1e-10)) {
+                throw std::runtime_error(
+                    "series_sum infinite geometric series diverges for r = 1");
+            }
+            *output = simplify_symbolic_text(
+                "(" + coefficient_text + ") * (" + ratio_text + ") ^ (" +
+                arguments[2] + ") / (1 - (" + ratio_text + "))");
+            return true;
+        }
+
+        const std::string geometric_primitive_text =
+            mymath::is_near_zero(geometric_ratio_value - 1.0, 1e-10)
+                ? "(" + coefficient_text + ") * (" + index_name + " + 1)"
+                : "(" + coefficient_text + ") * (1 - (" + ratio_text +
+                      ") ^ (" + index_name + " + 1)) / (1 - (" +
+                      ratio_text + "))";
+        const SymbolicExpression primitive =
+            SymbolicExpression::parse(geometric_primitive_text).simplify();
+        *output = finite_sum_from_primitive(primitive);
         return true;
     }
 
@@ -4664,18 +6468,421 @@ bool Calculator::try_process_function_command(const std::string& expression,
         return true;
     }
 
+    std::string transform_inside;
+    std::string transform_command;
+    if (split_named_call(trimmed, "fourier", &transform_inside)) {
+        transform_command = "fourier";
+    } else if (split_named_call(trimmed, "ifourier", &transform_inside) ||
+               split_named_call(trimmed, "inverse_fourier", &transform_inside)) {
+        transform_command = "ifourier";
+    } else if (split_named_call(trimmed, "laplace", &transform_inside)) {
+        transform_command = "laplace";
+    } else if (split_named_call(trimmed, "ilaplace", &transform_inside) ||
+               split_named_call(trimmed, "inverse_laplace", &transform_inside)) {
+        transform_command = "ilaplace";
+    } else if (split_named_call(trimmed, "ztrans", &transform_inside) ||
+               split_named_call(trimmed, "z_transform", &transform_inside)) {
+        transform_command = "ztrans";
+    } else if (split_named_call(trimmed, "iztrans", &transform_inside) ||
+               split_named_call(trimmed, "inverse_z", &transform_inside)) {
+        transform_command = "iztrans";
+    }
+    if (!transform_command.empty()) {
+        const std::vector<std::string> arguments =
+            split_top_level_arguments(transform_inside);
+        if (arguments.size() != 1 && arguments.size() != 3) {
+            throw std::runtime_error(
+                transform_command +
+                " expects either one symbolic expression or expression plus input/output variable names");
+        }
+
+        std::string variable_name;
+        SymbolicExpression expression;
+        resolve_symbolic_expression(arguments[0], false, &variable_name, &expression);
+
+        std::string input_variable;
+        std::string output_variable;
+        if (arguments.size() == 3) {
+            input_variable = trim_copy(arguments[1]);
+            output_variable = trim_copy(arguments[2]);
+            if (!is_identifier_text(input_variable) || !is_identifier_text(output_variable)) {
+                throw std::runtime_error(transform_command + " variable names must be identifiers");
+            }
+        } else if (transform_command == "fourier") {
+            input_variable = variable_name.empty() ? "t" : variable_name;
+            output_variable = "w";
+        } else if (transform_command == "ifourier") {
+            input_variable = variable_name.empty() ? "w" : variable_name;
+            output_variable = "t";
+        } else if (transform_command == "laplace") {
+            input_variable = variable_name.empty() ? "t" : variable_name;
+            output_variable = "s";
+        } else if (transform_command == "ilaplace") {
+            input_variable = variable_name.empty() ? "s" : variable_name;
+            output_variable = "t";
+        } else if (transform_command == "ztrans") {
+            input_variable = variable_name.empty() ? "n" : variable_name;
+            output_variable = "z";
+        } else {
+            input_variable = variable_name.empty() ? "z" : variable_name;
+            output_variable = "n";
+        }
+
+        if (transform_command == "fourier") {
+            *output = expression.fourier_transform(input_variable, output_variable)
+                          .simplify()
+                          .to_string();
+        } else if (transform_command == "ifourier") {
+            *output = expression.inverse_fourier_transform(input_variable, output_variable)
+                          .simplify()
+                          .to_string();
+        } else if (transform_command == "laplace") {
+            *output = expression.laplace_transform(input_variable, output_variable)
+                          .simplify()
+                          .to_string();
+        } else if (transform_command == "ilaplace") {
+            *output = expression.inverse_laplace_transform(input_variable, output_variable)
+                          .simplify()
+                          .to_string();
+        } else if (transform_command == "ztrans") {
+            *output = expression.z_transform(input_variable, output_variable)
+                          .simplify()
+                          .to_string();
+        } else {
+            *output = expression.inverse_z_transform(input_variable, output_variable)
+                          .simplify()
+                          .to_string();
+        }
+        return true;
+    }
+
+    if (split_named_call(trimmed, "gradient", &inside)) {
+        const std::vector<std::string> arguments = split_top_level_arguments(inside);
+        if (arguments.empty()) {
+            throw std::runtime_error(
+                "gradient expects a symbolic expression and optional variable names");
+        }
+
+        std::string variable_name;
+        SymbolicExpression expression;
+        resolve_symbolic_expression(arguments[0], false, &variable_name, &expression);
+        const std::vector<std::string> variables =
+            parse_symbolic_variable_arguments(arguments,
+                                              1,
+                                              expression.identifier_variables());
+        *output = symbolic_vector_to_string(expression.gradient(variables));
+        return true;
+    }
+
+    if (split_named_call(trimmed, "hessian", &inside)) {
+        const std::vector<std::string> arguments = split_top_level_arguments(inside);
+        if (arguments.empty()) {
+            throw std::runtime_error(
+                "hessian expects a symbolic expression and optional variable names");
+        }
+
+        std::string variable_name;
+        SymbolicExpression expression;
+        resolve_symbolic_expression(arguments[0], false, &variable_name, &expression);
+        const std::vector<std::string> variables =
+            parse_symbolic_variable_arguments(arguments,
+                                              1,
+                                              expression.identifier_variables());
+        *output = symbolic_matrix_to_string(expression.hessian(variables));
+        return true;
+    }
+
+    if (split_named_call(trimmed, "critical", &inside)) {
+        const std::vector<std::string> arguments = split_top_level_arguments(inside);
+        if (arguments.empty()) {
+            throw std::runtime_error(
+                "critical expects a symbolic expression and optional variable names");
+        }
+
+        std::string variable_name;
+        SymbolicExpression expression;
+        resolve_symbolic_expression(arguments[0], false, &variable_name, &expression);
+        const std::vector<std::string> variables =
+            parse_symbolic_variable_arguments(arguments,
+                                              1,
+                                              expression.identifier_variables());
+        const std::vector<SymbolicExpression> gradient =
+            expression.gradient(variables);
+        auto format_critical_solution =
+            [&](const std::vector<double>& values) {
+                std::ostringstream out;
+                out << "[";
+                for (std::size_t i = 0; i < variables.size(); ++i) {
+                    if (i != 0) {
+                        out << ", ";
+                    }
+                    out << variables[i] << " = "
+                        << format_decimal(normalize_result(values[i]));
+                }
+                out << "]";
+                return out.str();
+            };
+        std::vector<std::vector<double>> coefficients(
+            variables.size(), std::vector<double>(variables.size(), 0.0));
+        std::vector<double> rhs(variables.size(), 0.0);
+        const std::vector<double> zeros(variables.size(), 0.0);
+        bool affine_gradient = true;
+
+        for (std::size_t row = 0; row < gradient.size(); ++row) {
+            double constant = 0.0;
+            if (!evaluate_symbolic_at_point(gradient[row], variables, zeros, &constant)) {
+                affine_gradient = false;
+                break;
+            }
+            rhs[row] = -constant;
+
+            for (std::size_t col = 0; col < variables.size(); ++col) {
+                std::vector<double> sample = zeros;
+                sample[col] = 1.0;
+                double value = 0.0;
+                if (!evaluate_symbolic_at_point(gradient[row],
+                                                variables,
+                                                sample,
+                                                &value)) {
+                    affine_gradient = false;
+                    break;
+                }
+                coefficients[row][col] = value - constant;
+            }
+            if (!affine_gradient) {
+                break;
+            }
+
+            std::vector<std::vector<double>> validation_samples;
+            validation_samples.push_back(std::vector<double>(variables.size(), 1.0));
+            for (std::size_t col = 0; col < variables.size(); ++col) {
+                std::vector<double> sample = zeros;
+                sample[col] = 2.0;
+                validation_samples.push_back(sample);
+            }
+            for (const std::vector<double>& sample : validation_samples) {
+                double actual = 0.0;
+                if (!evaluate_symbolic_at_point(gradient[row],
+                                                variables,
+                                                sample,
+                                                &actual)) {
+                    affine_gradient = false;
+                    break;
+                }
+                double predicted = constant;
+                for (std::size_t col = 0; col < variables.size(); ++col) {
+                    predicted += coefficients[row][col] * sample[col];
+                }
+                if (!mymath::is_near_zero(actual - predicted, 1e-8)) {
+                    affine_gradient = false;
+                    break;
+                }
+            }
+            if (!affine_gradient) {
+                break;
+            }
+        }
+
+        if (affine_gradient) {
+            std::vector<double> solution;
+            if (!solve_linear_system(coefficients, rhs, &solution)) {
+                *output = "No isolated critical point.";
+                return true;
+            }
+            *output = format_critical_solution(solution);
+            return true;
+        }
+
+        if (variables.size() > 3) {
+            throw std::runtime_error(
+                "critical nonlinear search supports up to 3 variables");
+        }
+
+        const std::vector<std::vector<SymbolicExpression>> hessian =
+            expression.hessian(variables);
+        std::vector<std::vector<double>> starts = {std::vector<double>(variables.size(), 0.0)};
+        const std::vector<double> seeds = {-2.0, -1.0, 1.0, 2.0};
+        for (std::size_t dimension = 0; dimension < variables.size(); ++dimension) {
+            std::vector<std::vector<double>> next = starts;
+            for (const std::vector<double>& start : starts) {
+                for (double seed : seeds) {
+                    std::vector<double> candidate = start;
+                    candidate[dimension] = seed;
+                    next.push_back(candidate);
+                }
+            }
+            starts.swap(next);
+        }
+
+        std::vector<std::vector<double>> solutions;
+        for (std::vector<double> current : starts) {
+            bool converged = false;
+            for (int iteration = 0; iteration < 40; ++iteration) {
+                std::vector<double> gradient_values(variables.size(), 0.0);
+                double gradient_norm = 0.0;
+                bool numeric_ok = true;
+                for (std::size_t row = 0; row < variables.size(); ++row) {
+                    if (!evaluate_symbolic_at_point(gradient[row],
+                                                    variables,
+                                                    current,
+                                                    &gradient_values[row])) {
+                        numeric_ok = false;
+                        break;
+                    }
+                    gradient_norm += gradient_values[row] * gradient_values[row];
+                }
+                if (!numeric_ok) {
+                    break;
+                }
+                if (gradient_norm < 1e-16) {
+                    converged = true;
+                    break;
+                }
+
+                std::vector<std::vector<double>> jacobian(
+                    variables.size(), std::vector<double>(variables.size(), 0.0));
+                for (std::size_t row = 0; row < variables.size() && numeric_ok; ++row) {
+                    for (std::size_t col = 0; col < variables.size(); ++col) {
+                        if (!evaluate_symbolic_at_point(hessian[row][col],
+                                                        variables,
+                                                        current,
+                                                        &jacobian[row][col])) {
+                            numeric_ok = false;
+                            break;
+                        }
+                    }
+                }
+                if (!numeric_ok) {
+                    break;
+                }
+
+                for (double& value : gradient_values) {
+                    value = -value;
+                }
+                std::vector<double> step;
+                if (!solve_linear_system(jacobian, gradient_values, &step)) {
+                    break;
+                }
+                double step_norm = 0.0;
+                for (std::size_t i = 0; i < current.size(); ++i) {
+                    current[i] += step[i];
+                    step_norm += step[i] * step[i];
+                }
+                if (step_norm < 1e-18) {
+                    converged = true;
+                    break;
+                }
+            }
+
+            if (!converged) {
+                continue;
+            }
+
+            bool duplicate = false;
+            for (const std::vector<double>& existing : solutions) {
+                double distance = 0.0;
+                for (std::size_t i = 0; i < existing.size(); ++i) {
+                    const double diff = existing[i] - current[i];
+                    distance += diff * diff;
+                }
+                if (distance < 1e-10) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) {
+                solutions.push_back(current);
+            }
+        }
+
+        if (solutions.empty()) {
+            *output = "No isolated critical point.";
+            return true;
+        }
+        std::sort(solutions.begin(), solutions.end());
+        std::ostringstream out;
+        if (solutions.size() == 1) {
+            *output = format_critical_solution(solutions.front());
+            return true;
+        }
+        out << "[";
+        for (std::size_t i = 0; i < solutions.size(); ++i) {
+            if (i != 0) {
+                out << ", ";
+            }
+            out << format_critical_solution(solutions[i]);
+        }
+        out << "]";
+        *output = out.str();
+        return true;
+    }
+
+    if (split_named_call(trimmed, "jacobian", &inside)) {
+        const std::vector<std::string> arguments = split_top_level_arguments(inside);
+        if (arguments.size() < 2) {
+            throw std::runtime_error(
+                "jacobian expects a bracketed expression list and variable names");
+        }
+
+        const std::vector<SymbolicExpression> expressions =
+            parse_symbolic_expression_list(arguments[0]);
+        std::vector<std::string> fallback_variables;
+        for (const SymbolicExpression& expression_item : expressions) {
+            const std::vector<std::string> identifiers =
+                expression_item.identifier_variables();
+            fallback_variables.insert(fallback_variables.end(),
+                                      identifiers.begin(),
+                                      identifiers.end());
+        }
+        std::sort(fallback_variables.begin(), fallback_variables.end());
+        fallback_variables.erase(std::unique(fallback_variables.begin(),
+                                             fallback_variables.end()),
+                                 fallback_variables.end());
+        const std::vector<std::string> variables =
+            parse_symbolic_variable_arguments(arguments, 1, fallback_variables);
+        *output = symbolic_matrix_to_string(
+            SymbolicExpression::jacobian(expressions, variables));
+        return true;
+    }
+
     if (split_named_call(trimmed, "diff", &inside)) {
         const std::vector<std::string> arguments = split_top_level_arguments(inside);
-        if (arguments.size() != 1 && arguments.size() != 2) {
+        if (arguments.empty()) {
             throw std::runtime_error(
-                "diff expects one argument for symbolic differentiation or two for numeric evaluation");
+                "diff expects a symbolic expression and optional variable names");
         }
-        if (arguments.size() == 1) {
+        bool symbolic_derivative = arguments.size() == 1;
+        for (std::size_t i = 1; i < arguments.size(); ++i) {
+            symbolic_derivative =
+                symbolic_derivative || is_identifier_text(trim_copy(arguments[i]));
+        }
+        if (symbolic_derivative) {
             std::string variable_name;
             SymbolicExpression expression;
-            resolve_symbolic_expression(arguments[0], true, &variable_name, &expression);
-            *output = expression.derivative(variable_name).simplify().to_string();
+            resolve_symbolic_expression(arguments[0],
+                                        arguments.size() == 1,
+                                        &variable_name,
+                                        &expression);
+            SymbolicExpression differentiated = expression;
+            if (arguments.size() == 1) {
+                differentiated = differentiated.derivative(variable_name).simplify();
+            } else {
+                for (std::size_t i = 1; i < arguments.size(); ++i) {
+                    const std::string derivative_variable = trim_copy(arguments[i]);
+                    if (!is_identifier_text(derivative_variable)) {
+                        throw std::runtime_error(
+                            "diff variable arguments must be identifiers");
+                    }
+                    differentiated =
+                        differentiated.derivative(derivative_variable).simplify();
+                }
+            }
+            *output = differentiated.simplify().to_string();
             return true;
+        }
+        if (arguments.size() != 2) {
+            throw std::runtime_error(
+                "diff numeric evaluation expects exactly two arguments");
         }
         const FunctionAnalysis analysis = build_analysis(arguments[0]);
         DecimalParser parser(arguments[1], &impl_->variables, &impl_->functions);
@@ -4713,15 +6920,36 @@ bool Calculator::try_process_function_command(const std::string& expression,
             arguments.size() != 3 && arguments.size() != 4) {
             throw std::runtime_error(
                 "integral expects 1 argument for symbolic indefinite integral, "
+                "identifier arguments for chained symbolic integrals, "
                 "2 arguments for indefinite value, "
                 "3 for definite integral, or 4 for anchor and constant");
         }
 
-        if (arguments.size() == 1) {
+        bool symbolic_integral = true;
+        for (std::size_t i = 1; i < arguments.size(); ++i) {
+            symbolic_integral =
+                symbolic_integral && is_identifier_text(trim_copy(arguments[i]));
+        }
+        if (symbolic_integral) {
             std::string variable_name;
             SymbolicExpression expression;
-            resolve_symbolic_expression(arguments[0], true, &variable_name, &expression);
-            *output = expression.integral(variable_name).simplify().to_string() + " + C";
+            resolve_symbolic_expression(arguments[0],
+                                        arguments.size() == 1,
+                                        &variable_name,
+                                        &expression);
+            if (arguments.size() == 2) {
+                variable_name = trim_copy(arguments[1]);
+            }
+            SymbolicExpression integrated = expression;
+            if (arguments.size() == 1) {
+                integrated = integrated.integral(variable_name).simplify();
+            } else {
+                for (std::size_t i = 1; i < arguments.size(); ++i) {
+                    integrated =
+                        integrated.integral(trim_copy(arguments[i])).simplify();
+                }
+            }
+            *output = integrated.simplify().to_string() + " + C";
             return true;
         }
         const FunctionAnalysis analysis = build_analysis(arguments[0]);
@@ -4920,26 +7148,96 @@ bool Calculator::try_process_function_command(const std::string& expression,
     }
     if (!ode_command_name.empty()) {
         const std::vector<std::string> arguments = split_top_level_arguments(ode_inside);
-        if (arguments.size() != 4 && arguments.size() != 5) {
+        if (arguments.size() < 4 || arguments.size() > 7) {
             throw std::runtime_error(
                 ode_command_name +
-                " expects rhs, x0, y0, x1, and an optional positive integer step count");
+                " expects rhs, x0, y0, x1, optional steps, optional event, and optional params");
         }
 
         DecimalParser x0_parser(arguments[1], &impl_->variables, &impl_->functions);
         DecimalParser y0_parser(arguments[2], &impl_->variables, &impl_->functions);
         DecimalParser x1_parser(arguments[3], &impl_->variables, &impl_->functions);
         int steps = ode_command_name == "ode" ? 100 : 10;
-        if (arguments.size() == 5) {
-            DecimalParser step_parser(arguments[4], &impl_->variables, &impl_->functions);
-            const double step_value = step_parser.parse();
-            if (!is_integer_double(step_value) || step_value <= 0.0) {
-                throw std::runtime_error("ODE step count must be a positive integer");
-            }
-            steps = static_cast<int>(round_to_long_long(step_value));
+
+        std::size_t optional_index = 4;
+        int parsed_steps = steps;
+        if (optional_index < arguments.size() &&
+            try_parse_positive_step_argument(arguments[optional_index], &parsed_steps)) {
+            steps = parsed_steps;
+            ++optional_index;
         }
 
-        const ODESolver solver = build_ode_solver(arguments[0]);
+        std::string event_expression;
+        bool has_event = false;
+        StoredValue parameter_value;
+        bool has_parameter = false;
+        if (optional_index < arguments.size()) {
+            if (optional_index + 1 == arguments.size()) {
+                if (is_matrix_argument(arguments[optional_index])) {
+                    parameter_value = evaluate_expression_value(this,
+                                                               impl_.get(),
+                                                               arguments[optional_index],
+                                                               false);
+                    has_parameter = true;
+                } else {
+                    event_expression = arguments[optional_index];
+                    has_event = true;
+                }
+                ++optional_index;
+            } else {
+                event_expression = arguments[optional_index];
+                has_event = true;
+                ++optional_index;
+                parameter_value =
+                    evaluate_expression_value(this, impl_.get(), arguments[optional_index], false);
+                has_parameter = true;
+                ++optional_index;
+            }
+        }
+
+        if (optional_index != arguments.size()) {
+            throw std::runtime_error(
+                ode_command_name +
+                " received too many optional arguments");
+        }
+
+        const auto evaluate_rhs = build_scoped_scalar_evaluator(arguments[0]);
+        std::function<double(const std::vector<std::pair<std::string, StoredValue>>&)> evaluate_event;
+        if (has_event) {
+            evaluate_event = build_scoped_scalar_evaluator(event_expression);
+        }
+        const ODESolver solver(
+            [evaluate_rhs,
+             has_parameter,
+             parameter_value,
+             &make_scalar_stored,
+             &append_parameter_assignments](double x_value, double y_value) {
+                std::vector<std::pair<std::string, StoredValue>> assignments;
+                assignments.reserve(has_parameter ? 4 : 2);
+                assignments.push_back({"x", make_scalar_stored(x_value)});
+                assignments.push_back({"y", make_scalar_stored(y_value)});
+                if (has_parameter) {
+                    append_parameter_assignments(parameter_value, &assignments);
+                }
+                return evaluate_rhs(assignments);
+            },
+            has_event
+                ? ODESolver::EventFunction(
+                      [evaluate_event,
+                       has_parameter,
+                       parameter_value,
+                       &make_scalar_stored,
+                       &append_parameter_assignments](double x_value, double y_value) {
+                          std::vector<std::pair<std::string, StoredValue>> assignments;
+                          assignments.reserve(has_parameter ? 4 : 2);
+                          assignments.push_back({"x", make_scalar_stored(x_value)});
+                          assignments.push_back({"y", make_scalar_stored(y_value)});
+                          if (has_parameter) {
+                              append_parameter_assignments(parameter_value, &assignments);
+                          }
+                          return evaluate_event(assignments);
+                      })
+                : ODESolver::EventFunction());
         const double x0 = x0_parser.parse();
         const double y0 = y0_parser.parse();
         const double x1 = x1_parser.parse();
@@ -4959,6 +7257,820 @@ bool Calculator::try_process_function_command(const std::string& expression,
         }
         *output = matrix_literal_expression(table);
         return true;
+    }
+
+    std::string ode_system_inside;
+    std::string ode_system_command_name;
+    if (split_named_call(trimmed, "ode_system", &ode_system_inside)) {
+        ode_system_command_name = "ode_system";
+    } else if (split_named_call(trimmed, "ode_system_table", &ode_system_inside)) {
+        ode_system_command_name = "ode_system_table";
+    }
+    if (!ode_system_command_name.empty()) {
+        const std::vector<std::string> arguments =
+            split_top_level_arguments(ode_system_inside);
+        if (arguments.size() < 4 || arguments.size() > 7) {
+            throw std::runtime_error(
+                ode_system_command_name +
+                " expects rhs_vector, x0, y0_vector, x1, optional steps, optional event, and optional params");
+        }
+
+        int steps = ode_system_command_name == "ode_system" ? 100 : 10;
+        std::size_t optional_index = 4;
+        int parsed_steps = steps;
+        if (optional_index < arguments.size() &&
+            try_parse_positive_step_argument(arguments[optional_index], &parsed_steps)) {
+            steps = parsed_steps;
+            ++optional_index;
+        }
+
+        std::string event_expression;
+        bool has_event = false;
+        StoredValue parameter_value;
+        bool has_parameter = false;
+        if (optional_index < arguments.size()) {
+            if (optional_index + 1 == arguments.size()) {
+                if (is_matrix_argument(arguments[optional_index])) {
+                    parameter_value = evaluate_expression_value(this,
+                                                               impl_.get(),
+                                                               arguments[optional_index],
+                                                               false);
+                    has_parameter = true;
+                } else {
+                    event_expression = arguments[optional_index];
+                    has_event = true;
+                }
+                ++optional_index;
+            } else {
+                event_expression = arguments[optional_index];
+                has_event = true;
+                ++optional_index;
+                parameter_value =
+                    evaluate_expression_value(this, impl_.get(), arguments[optional_index], false);
+                has_parameter = true;
+                ++optional_index;
+            }
+        }
+
+        if (optional_index != arguments.size()) {
+            throw std::runtime_error(
+                ode_system_command_name +
+                " received too many optional arguments");
+        }
+
+        const double x0 = parse_decimal_argument(arguments[1]);
+        const double x1 = parse_decimal_argument(arguments[3]);
+        const std::vector<double> initial_state =
+            matrix_to_vector_values(parse_matrix_argument(arguments[2], ode_system_command_name),
+                                    ode_system_command_name);
+        const auto evaluate_rhs_matrix =
+            build_scoped_matrix_evaluator(arguments[0]);
+        std::function<double(const std::vector<std::pair<std::string, StoredValue>>&)> evaluate_event;
+        if (has_event) {
+            evaluate_event = build_scoped_scalar_evaluator(event_expression);
+        }
+
+        const ODESystemSolver solver(
+            [evaluate_rhs_matrix,
+             has_parameter,
+             parameter_value,
+             &make_scalar_stored,
+             &vector_to_column_matrix,
+             &append_parameter_assignments](double x_value,
+                                            const std::vector<double>& y_value) {
+                std::vector<std::pair<std::string, StoredValue>> assignments;
+                assignments.reserve(y_value.size() + (has_parameter ? 4 : 2));
+
+                assignments.push_back({"x", make_scalar_stored(x_value)});
+
+                StoredValue y_matrix_stored;
+                y_matrix_stored.is_matrix = true;
+                y_matrix_stored.matrix = vector_to_column_matrix(y_value);
+                assignments.push_back({"y", y_matrix_stored});
+
+                for (std::size_t i = 0; i < y_value.size(); ++i) {
+                    assignments.push_back({"y" + std::to_string(i + 1),
+                                           make_scalar_stored(y_value[i])});
+                }
+                if (has_parameter) {
+                    append_parameter_assignments(parameter_value, &assignments);
+                }
+
+                const matrix::Matrix rhs_matrix = evaluate_rhs_matrix(assignments);
+                if (!rhs_matrix.is_vector()) {
+                    throw std::runtime_error("ODE system right-hand side must evaluate to a vector");
+                }
+                const std::size_t result_size =
+                    rhs_matrix.rows == 1 ? rhs_matrix.cols : rhs_matrix.rows;
+                if (result_size != y_value.size()) {
+                    throw std::runtime_error("ODE system right-hand side dimension mismatch");
+                }
+
+                std::vector<double> result(result_size, 0.0);
+                for (std::size_t i = 0; i < result_size; ++i) {
+                    result[i] = rhs_matrix.rows == 1 ? rhs_matrix.at(0, i) : rhs_matrix.at(i, 0);
+                }
+                return result;
+            },
+            has_event
+                ? ODESystemSolver::EventFunction(
+                      [evaluate_event,
+                       has_parameter,
+                       parameter_value,
+                       &make_scalar_stored,
+                       &vector_to_column_matrix,
+                       &append_parameter_assignments](double x_value,
+                                                      const std::vector<double>& y_value) {
+                          std::vector<std::pair<std::string, StoredValue>> assignments;
+                          assignments.reserve(y_value.size() + (has_parameter ? 4 : 2));
+                          assignments.push_back({"x", make_scalar_stored(x_value)});
+
+                          StoredValue y_matrix_stored;
+                          y_matrix_stored.is_matrix = true;
+                          y_matrix_stored.matrix = vector_to_column_matrix(y_value);
+                          assignments.push_back({"y", y_matrix_stored});
+
+                          for (std::size_t i = 0; i < y_value.size(); ++i) {
+                              assignments.push_back({"y" + std::to_string(i + 1),
+                                                     make_scalar_stored(y_value[i])});
+                          }
+                          if (has_parameter) {
+                              append_parameter_assignments(parameter_value, &assignments);
+                          }
+                          return evaluate_event(assignments);
+                      })
+                : ODESystemSolver::EventFunction());
+
+        if (ode_system_command_name == "ode_system") {
+            const std::vector<double> final_state =
+                solver.solve(x0, initial_state, x1, steps);
+            *output = matrix::Matrix::vector(final_state).to_string();
+            return true;
+        }
+
+        const std::vector<ODESystemPoint> points =
+            solver.solve_trajectory(x0, initial_state, x1, steps);
+        matrix::Matrix table(points.size(), initial_state.size() + 1, 0.0);
+        for (std::size_t row = 0; row < points.size(); ++row) {
+            table.at(row, 0) = normalize_result(points[row].x);
+            for (std::size_t col = 0; col < points[row].y.size(); ++col) {
+                table.at(row, col + 1) = normalize_result(points[row].y[col]);
+            }
+        }
+        *output = matrix_literal_expression(table);
+        return true;
+    }
+
+    std::string planning_inside;
+    std::string planning_command;
+    if (split_named_call(trimmed, "lp_max", &planning_inside)) {
+        planning_command = "lp_max";
+    } else if (split_named_call(trimmed, "lp_min", &planning_inside)) {
+        planning_command = "lp_min";
+    } else if (split_named_call(trimmed, "ilp_max", &planning_inside)) {
+        planning_command = "ilp_max";
+    } else if (split_named_call(trimmed, "ilp_min", &planning_inside)) {
+        planning_command = "ilp_min";
+    } else if (split_named_call(trimmed, "milp_max", &planning_inside)) {
+        planning_command = "milp_max";
+    } else if (split_named_call(trimmed, "milp_min", &planning_inside)) {
+        planning_command = "milp_min";
+    } else if (split_named_call(trimmed, "bip_max", &planning_inside) ||
+               split_named_call(trimmed, "binary_max", &planning_inside)) {
+        planning_command = "bip_max";
+    } else if (split_named_call(trimmed, "bip_min", &planning_inside) ||
+               split_named_call(trimmed, "binary_min", &planning_inside)) {
+        planning_command = "bip_min";
+    }
+    if (!planning_command.empty()) {
+        const std::vector<std::string> arguments =
+            split_top_level_arguments(planning_inside);
+        const std::vector<double> objective = matrix_to_vector_values(
+            parse_matrix_argument(arguments[0], planning_command), planning_command);
+        const std::size_t variable_count = objective.size();
+        const double planning_tolerance = 1e-8;
+        const bool is_binary_program =
+            planning_command == "bip_max" || planning_command == "bip_min";
+        const bool is_mixed_integer =
+            planning_command == "milp_max" || planning_command == "milp_min";
+        const bool is_integer_program =
+            planning_command == "ilp_max" || planning_command == "ilp_min";
+        const bool maximize =
+            planning_command == "lp_max" || planning_command == "ilp_max" ||
+            planning_command == "milp_max" || planning_command == "bip_max";
+
+        std::size_t argument_index = 1;
+        const matrix::Matrix inequality_matrix =
+            parse_matrix_argument(arguments[argument_index++], planning_command);
+        const std::vector<double> inequality_rhs = matrix_to_vector_values(
+            parse_matrix_argument(arguments[argument_index++], planning_command), planning_command);
+
+        matrix::Matrix equality_matrix(0, variable_count, 0.0);
+        std::vector<double> equality_rhs;
+        std::vector<double> lower_bounds(variable_count, 0.0);
+        std::vector<double> upper_bounds(variable_count, 0.0);
+        std::vector<double> integrality(variable_count, 0.0);
+
+        if (is_binary_program) {
+            if (arguments.size() != 3 && arguments.size() != 5) {
+                throw std::runtime_error(
+                    planning_command +
+                    " expects objective_vector, A, b, and optional Aeq, beq");
+            }
+            if (arguments.size() == 5) {
+                equality_matrix =
+                    parse_matrix_argument(arguments[argument_index++], planning_command);
+                equality_rhs = matrix_to_vector_values(
+                    parse_matrix_argument(arguments[argument_index++], planning_command),
+                    planning_command);
+            }
+            std::fill(lower_bounds.begin(), lower_bounds.end(), 0.0);
+            std::fill(upper_bounds.begin(), upper_bounds.end(), 1.0);
+            std::fill(integrality.begin(), integrality.end(), 1.0);
+        } else if (is_mixed_integer) {
+            if (arguments.size() != 6 && arguments.size() != 8) {
+                throw std::runtime_error(
+                    planning_command +
+                    " expects objective_vector, A, b, lower_bounds, upper_bounds, integrality, and optional Aeq, beq");
+            }
+            if (arguments.size() == 8) {
+                equality_matrix =
+                    parse_matrix_argument(arguments[argument_index++], planning_command);
+                equality_rhs = matrix_to_vector_values(
+                    parse_matrix_argument(arguments[argument_index++], planning_command),
+                    planning_command);
+            }
+            lower_bounds = matrix_to_vector_values(
+                parse_matrix_argument(arguments[argument_index++], planning_command),
+                planning_command);
+            upper_bounds = matrix_to_vector_values(
+                parse_matrix_argument(arguments[argument_index++], planning_command),
+                planning_command);
+            integrality = matrix_to_vector_values(
+                parse_matrix_argument(arguments[argument_index++], planning_command),
+                planning_command);
+        } else {
+            if (arguments.size() != 5 && arguments.size() != 7) {
+                throw std::runtime_error(
+                    planning_command +
+                    " expects objective_vector, A, b, lower_bounds, upper_bounds, and optional Aeq, beq");
+            }
+            if (arguments.size() == 7) {
+                equality_matrix =
+                    parse_matrix_argument(arguments[argument_index++], planning_command);
+                equality_rhs = matrix_to_vector_values(
+                    parse_matrix_argument(arguments[argument_index++], planning_command),
+                    planning_command);
+            }
+            lower_bounds = matrix_to_vector_values(
+                parse_matrix_argument(arguments[argument_index++], planning_command),
+                planning_command);
+            upper_bounds = matrix_to_vector_values(
+                parse_matrix_argument(arguments[argument_index++], planning_command),
+                planning_command);
+            if (is_integer_program) {
+                std::fill(integrality.begin(), integrality.end(), 1.0);
+            }
+        }
+
+        if (argument_index != arguments.size()) {
+            throw std::runtime_error(planning_command + " received an invalid argument count");
+        }
+
+        if (inequality_matrix.cols != variable_count ||
+            inequality_rhs.size() != inequality_matrix.rows ||
+            equality_matrix.cols != variable_count ||
+            equality_rhs.size() != equality_matrix.rows ||
+            lower_bounds.size() != variable_count ||
+            upper_bounds.size() != variable_count ||
+            integrality.size() != variable_count) {
+            throw std::runtime_error(planning_command + " dimension mismatch");
+        }
+
+        for (std::size_t i = 0; i < variable_count; ++i) {
+            if (lower_bounds[i] > upper_bounds[i]) {
+                throw std::runtime_error(planning_command + " requires lower_bounds <= upper_bounds");
+            }
+            if (integrality[i] != 0.0 && !is_integer_double(lower_bounds[i])) {
+                throw std::runtime_error(planning_command + " requires integer lower bounds for integer variables");
+            }
+            if (integrality[i] != 0.0 && !is_integer_double(upper_bounds[i])) {
+                throw std::runtime_error(planning_command + " requires integer upper bounds for integer variables");
+            }
+        }
+
+        std::vector<double> transformed_objective = objective;
+        if (!maximize) {
+            for (double& value : transformed_objective) {
+                value = -value;
+            }
+        }
+
+        std::vector<std::size_t> integer_indices;
+        std::vector<std::size_t> continuous_indices;
+        for (std::size_t i = 0; i < variable_count; ++i) {
+            if (mymath::is_near_zero(integrality[i], planning_tolerance)) {
+                continuous_indices.push_back(i);
+            } else {
+                integer_indices.push_back(i);
+            }
+        }
+
+        if (integer_indices.empty()) {
+            std::vector<double> best_solution;
+            double best_value = 0.0;
+            if (!solve_linear_box_problem(transformed_objective,
+                                          inequality_matrix,
+                                          inequality_rhs,
+                                          equality_matrix,
+                                          equality_rhs,
+                                          lower_bounds,
+                                          upper_bounds,
+                                          planning_tolerance,
+                                          &best_solution,
+                                          &best_value)) {
+                throw std::runtime_error(planning_command + " found no feasible bounded solution");
+            }
+            *output = format_planning_result(best_solution,
+                                             dot_product(objective, best_solution));
+            return true;
+        }
+
+        std::vector<long long> integer_lower(variable_count, 0);
+        std::vector<long long> integer_upper(variable_count, 0);
+        for (std::size_t index : integer_indices) {
+            integer_lower[index] = round_to_long_long(lower_bounds[index]);
+            integer_upper[index] = round_to_long_long(upper_bounds[index]);
+        }
+
+        bool found = false;
+        double best_value = 0.0;
+        std::vector<double> best_solution(variable_count, 0.0);
+        std::vector<long long> current_integer_values(variable_count, 0);
+
+        std::function<void(std::size_t, long double)> search_integer =
+            [&](std::size_t depth, long double current_objective) {
+                for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
+                    long double assigned_total = 0.0L;
+                    for (std::size_t assigned_depth = 0; assigned_depth < depth; ++assigned_depth) {
+                        const std::size_t col = integer_indices[assigned_depth];
+                        assigned_total += static_cast<long double>(inequality_matrix.at(row, col)) *
+                                          static_cast<long double>(current_integer_values[col]);
+                    }
+
+                    long double minimum_possible = assigned_total;
+                    for (std::size_t remaining_depth = depth;
+                         remaining_depth < integer_indices.size();
+                         ++remaining_depth) {
+                        const std::size_t col = integer_indices[remaining_depth];
+                        const long double coefficient =
+                            static_cast<long double>(inequality_matrix.at(row, col));
+                        minimum_possible +=
+                            coefficient >= 0.0L
+                                ? coefficient * static_cast<long double>(integer_lower[col])
+                                : coefficient * static_cast<long double>(integer_upper[col]);
+                    }
+                    for (std::size_t col : continuous_indices) {
+                        const long double coefficient =
+                            static_cast<long double>(inequality_matrix.at(row, col));
+                        minimum_possible +=
+                            coefficient >= 0.0L
+                                ? coefficient * static_cast<long double>(lower_bounds[col])
+                                : coefficient * static_cast<long double>(upper_bounds[col]);
+                    }
+                    if (minimum_possible >
+                        static_cast<long double>(inequality_rhs[row]) + planning_tolerance) {
+                        return;
+                    }
+                }
+
+                for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
+                    long double assigned_total = 0.0L;
+                    for (std::size_t assigned_depth = 0; assigned_depth < depth; ++assigned_depth) {
+                        const std::size_t col = integer_indices[assigned_depth];
+                        assigned_total += static_cast<long double>(equality_matrix.at(row, col)) *
+                                          static_cast<long double>(current_integer_values[col]);
+                    }
+
+                    long double minimum_possible = assigned_total;
+                    long double maximum_possible = assigned_total;
+                    for (std::size_t remaining_depth = depth;
+                         remaining_depth < integer_indices.size();
+                         ++remaining_depth) {
+                        const std::size_t col = integer_indices[remaining_depth];
+                        const long double coefficient =
+                            static_cast<long double>(equality_matrix.at(row, col));
+                        minimum_possible +=
+                            coefficient >= 0.0L
+                                ? coefficient * static_cast<long double>(integer_lower[col])
+                                : coefficient * static_cast<long double>(integer_upper[col]);
+                        maximum_possible +=
+                            coefficient >= 0.0L
+                                ? coefficient * static_cast<long double>(integer_upper[col])
+                                : coefficient * static_cast<long double>(integer_lower[col]);
+                    }
+                    for (std::size_t col : continuous_indices) {
+                        const long double coefficient =
+                            static_cast<long double>(equality_matrix.at(row, col));
+                        minimum_possible +=
+                            coefficient >= 0.0L
+                                ? coefficient * static_cast<long double>(lower_bounds[col])
+                                : coefficient * static_cast<long double>(upper_bounds[col]);
+                        maximum_possible +=
+                            coefficient >= 0.0L
+                                ? coefficient * static_cast<long double>(upper_bounds[col])
+                                : coefficient * static_cast<long double>(lower_bounds[col]);
+                    }
+
+                    const long double target = static_cast<long double>(equality_rhs[row]);
+                    if (target < minimum_possible - planning_tolerance ||
+                        target > maximum_possible + planning_tolerance) {
+                        return;
+                    }
+                }
+
+                long double optimistic_objective = current_objective;
+                for (std::size_t remaining_depth = depth;
+                     remaining_depth < integer_indices.size();
+                     ++remaining_depth) {
+                    const std::size_t col = integer_indices[remaining_depth];
+                    const long double coefficient =
+                        static_cast<long double>(transformed_objective[col]);
+                    optimistic_objective +=
+                        coefficient >= 0.0L
+                            ? coefficient * static_cast<long double>(integer_upper[col])
+                            : coefficient * static_cast<long double>(integer_lower[col]);
+                }
+                for (std::size_t col : continuous_indices) {
+                    const long double coefficient =
+                        static_cast<long double>(transformed_objective[col]);
+                    optimistic_objective +=
+                        coefficient >= 0.0L
+                            ? coefficient * static_cast<long double>(upper_bounds[col])
+                            : coefficient * static_cast<long double>(lower_bounds[col]);
+                }
+                if (found &&
+                    optimistic_objective <=
+                        static_cast<long double>(best_value) + planning_tolerance) {
+                    return;
+                }
+
+                if (depth == integer_indices.size()) {
+                    std::vector<double> candidate(variable_count, 0.0);
+                    for (std::size_t col = 0; col < variable_count; ++col) {
+                        candidate[col] = lower_bounds[col];
+                    }
+                    for (std::size_t col : integer_indices) {
+                        candidate[col] = static_cast<double>(current_integer_values[col]);
+                    }
+
+                    if (continuous_indices.empty()) {
+                        bool feasible = true;
+                        for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
+                            long double total = 0.0L;
+                            for (std::size_t col = 0; col < variable_count; ++col) {
+                                total += static_cast<long double>(inequality_matrix.at(row, col)) *
+                                         static_cast<long double>(candidate[col]);
+                            }
+                            if (total >
+                                static_cast<long double>(inequality_rhs[row]) + planning_tolerance) {
+                                feasible = false;
+                                break;
+                            }
+                        }
+                        if (!feasible) {
+                            return;
+                        }
+                        for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
+                            long double total = 0.0L;
+                            for (std::size_t col = 0; col < variable_count; ++col) {
+                                total += static_cast<long double>(equality_matrix.at(row, col)) *
+                                         static_cast<long double>(candidate[col]);
+                            }
+                            if (mymath::abs(static_cast<double>(total - equality_rhs[row])) >
+                                planning_tolerance) {
+                                feasible = false;
+                                break;
+                            }
+                        }
+                        if (!feasible) {
+                            return;
+                        }
+
+                        const double objective_value = dot_product(transformed_objective, candidate);
+                        if (!found || objective_value > best_value + planning_tolerance) {
+                            found = true;
+                            best_value = objective_value;
+                            best_solution = candidate;
+                        }
+                        return;
+                    }
+
+                    matrix::Matrix reduced_inequality(inequality_matrix.rows,
+                                                      continuous_indices.size(),
+                                                      0.0);
+                    std::vector<double> reduced_inequality_rhs(inequality_rhs.size(), 0.0);
+                    for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
+                        long double rhs_adjustment = static_cast<long double>(inequality_rhs[row]);
+                        for (std::size_t col : integer_indices) {
+                            rhs_adjustment -=
+                                static_cast<long double>(inequality_matrix.at(row, col)) *
+                                static_cast<long double>(candidate[col]);
+                        }
+                        reduced_inequality_rhs[row] = static_cast<double>(rhs_adjustment);
+                        for (std::size_t reduced_col = 0;
+                             reduced_col < continuous_indices.size();
+                             ++reduced_col) {
+                            reduced_inequality.at(row, reduced_col) =
+                                inequality_matrix.at(row, continuous_indices[reduced_col]);
+                        }
+                    }
+
+                    matrix::Matrix reduced_equality(equality_matrix.rows,
+                                                    continuous_indices.size(),
+                                                    0.0);
+                    std::vector<double> reduced_equality_rhs(equality_rhs.size(), 0.0);
+                    for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
+                        long double rhs_adjustment = static_cast<long double>(equality_rhs[row]);
+                        for (std::size_t col : integer_indices) {
+                            rhs_adjustment -=
+                                static_cast<long double>(equality_matrix.at(row, col)) *
+                                static_cast<long double>(candidate[col]);
+                        }
+                        reduced_equality_rhs[row] = static_cast<double>(rhs_adjustment);
+                        for (std::size_t reduced_col = 0;
+                             reduced_col < continuous_indices.size();
+                             ++reduced_col) {
+                            reduced_equality.at(row, reduced_col) =
+                                equality_matrix.at(row, continuous_indices[reduced_col]);
+                        }
+                    }
+
+                    std::vector<double> reduced_objective(continuous_indices.size(), 0.0);
+                    std::vector<double> reduced_lower(continuous_indices.size(), 0.0);
+                    std::vector<double> reduced_upper(continuous_indices.size(), 0.0);
+                    for (std::size_t reduced_col = 0;
+                         reduced_col < continuous_indices.size();
+                         ++reduced_col) {
+                        const std::size_t original_col = continuous_indices[reduced_col];
+                        reduced_objective[reduced_col] = transformed_objective[original_col];
+                        reduced_lower[reduced_col] = lower_bounds[original_col];
+                        reduced_upper[reduced_col] = upper_bounds[original_col];
+                    }
+
+                    std::vector<double> reduced_solution;
+                    double reduced_objective_value = 0.0;
+                    if (!solve_linear_box_problem(reduced_objective,
+                                                  reduced_inequality,
+                                                  reduced_inequality_rhs,
+                                                  reduced_equality,
+                                                  reduced_equality_rhs,
+                                                  reduced_lower,
+                                                  reduced_upper,
+                                                  planning_tolerance,
+                                                  &reduced_solution,
+                                                  &reduced_objective_value)) {
+                        return;
+                    }
+
+                    for (std::size_t reduced_col = 0;
+                         reduced_col < continuous_indices.size();
+                         ++reduced_col) {
+                        candidate[continuous_indices[reduced_col]] = reduced_solution[reduced_col];
+                    }
+
+                    const double objective_value = dot_product(transformed_objective, candidate);
+                    if (!found || objective_value > best_value + planning_tolerance) {
+                        found = true;
+                        best_value = objective_value;
+                        best_solution = candidate;
+                    }
+                    return;
+                }
+
+                const std::size_t current_col = integer_indices[depth];
+                const bool descending = transformed_objective[current_col] >= 0.0;
+                if (descending) {
+                    for (long long value = integer_upper[current_col];
+                         value >= integer_lower[current_col];
+                         --value) {
+                        current_integer_values[current_col] = value;
+                        search_integer(
+                            depth + 1,
+                            current_objective +
+                                static_cast<long double>(transformed_objective[current_col]) *
+                                    static_cast<long double>(value));
+                    }
+                } else {
+                    for (long long value = integer_lower[current_col];
+                         value <= integer_upper[current_col];
+                         ++value) {
+                        current_integer_values[current_col] = value;
+                        search_integer(
+                            depth + 1,
+                            current_objective +
+                                static_cast<long double>(transformed_objective[current_col]) *
+                                    static_cast<long double>(value));
+                    }
+                }
+            };
+
+        search_integer(0, 0.0L);
+        if (!found) {
+            throw std::runtime_error(planning_command + " found no feasible mixed-integer solution");
+        }
+
+        *output = format_planning_result(best_solution,
+                                         dot_product(objective, best_solution));
+        return true;
+    }
+
+    std::string root_inside;
+    std::string root_command_name;
+    if (split_named_call(trimmed, "solve", &root_inside)) {
+        root_command_name = "solve";
+    } else if (split_named_call(trimmed, "bisect", &root_inside)) {
+        root_command_name = "bisect";
+    } else if (split_named_call(trimmed, "secant", &root_inside)) {
+        root_command_name = "secant";
+    } else if (split_named_call(trimmed, "fixed_point", &root_inside)) {
+        root_command_name = "fixed_point";
+    }
+    if (!root_command_name.empty()) {
+        const std::vector<std::string> arguments = split_top_level_arguments(root_inside);
+        if (root_command_name == "solve") {
+            if (arguments.size() == 2 &&
+                !is_matrix_argument(arguments[0]) &&
+                !is_matrix_argument(arguments[1])) {
+                const auto evaluate_expression =
+                    build_scoped_decimal_evaluator(arguments[0]);
+                double x = parse_decimal_argument(arguments[1]);
+                for (int iteration = 0; iteration < 64; ++iteration) {
+                    const double fx = evaluate_expression({{"x", x}});
+                    if (mymath::abs(fx) <= root_function_tolerance(fx)) {
+                        *output = format_decimal(normalize_result(x));
+                        return true;
+                    }
+                    const double h = root_derivative_step(x);
+                    const long double derivative =
+                        (static_cast<long double>(evaluate_expression({{"x", x + h}})) -
+                         static_cast<long double>(evaluate_expression({{"x", x - h}}))) /
+                        (2.0L * static_cast<long double>(h));
+                    if (mymath::abs_long_double(derivative) <=
+                        1e-12L * std::max(1.0L, mymath::abs_long_double(static_cast<long double>(fx)))) {
+                        throw std::runtime_error("solve failed because the derivative vanished");
+                    }
+                    const double next = static_cast<double>(
+                        static_cast<long double>(x) -
+                        static_cast<long double>(fx) / derivative);
+                    if (mymath::abs(next - x) <=
+                        root_position_tolerance(std::max(mymath::abs(next), mymath::abs(x)))) {
+                        *output = format_decimal(normalize_result(next));
+                        return true;
+                    }
+                    x = next;
+                }
+                *output = format_decimal(normalize_result(x));
+                return true;
+            }
+        } else if (root_command_name == "bisect") {
+            if (arguments.size() != 3 || is_matrix_argument(arguments[0])) {
+                throw std::runtime_error("bisect expects expression, a, b");
+            }
+            const auto evaluate_expression =
+                build_scoped_decimal_evaluator(arguments[0]);
+            double left = parse_decimal_argument(arguments[1]);
+            double right = parse_decimal_argument(arguments[2]);
+            if (left > right) {
+                std::swap(left, right);
+            }
+            double left_value = evaluate_expression({{"x", left}});
+            double right_value = evaluate_expression({{"x", right}});
+            if (left_value * right_value > 0.0) {
+                throw std::runtime_error("bisect requires f(a) and f(b) to have opposite signs");
+            }
+            for (int iteration = 0; iteration < 100; ++iteration) {
+                const double mid = 0.5 * (left + right);
+                const double mid_value = evaluate_expression({{"x", mid}});
+                if (mymath::abs(mid_value) <= root_function_tolerance(mid_value) ||
+                    mymath::abs(right - left) <=
+                        root_position_tolerance(std::max(mymath::abs(left), mymath::abs(right)))) {
+                    *output = format_decimal(normalize_result(mid));
+                    return true;
+                }
+                if ((left_value < 0.0 && mid_value > 0.0) ||
+                    (left_value > 0.0 && mid_value < 0.0)) {
+                    right = mid;
+                    right_value = mid_value;
+                } else {
+                    left = mid;
+                    left_value = mid_value;
+                }
+            }
+            *output = format_decimal(normalize_result(0.5 * (left + right)));
+            return true;
+        } else if (root_command_name == "secant") {
+            if (arguments.size() != 3 || is_matrix_argument(arguments[0])) {
+                throw std::runtime_error("secant expects expression, x0, x1");
+            }
+            const auto evaluate_expression =
+                build_scoped_decimal_evaluator(arguments[0]);
+            double x0 = parse_decimal_argument(arguments[1]);
+            double x1 = parse_decimal_argument(arguments[2]);
+            for (int iteration = 0; iteration < 64; ++iteration) {
+                const double f0 = evaluate_expression({{"x", x0}});
+                const double f1 = evaluate_expression({{"x", x1}});
+                const long double denominator =
+                    static_cast<long double>(f1) - static_cast<long double>(f0);
+                if (mymath::abs_long_double(denominator) <=
+                    1e-12L * std::max({1.0L,
+                                       mymath::abs_long_double(static_cast<long double>(f0)),
+                                       mymath::abs_long_double(static_cast<long double>(f1))})) {
+                    throw std::runtime_error("secant failed because consecutive function values matched");
+                }
+                const double next = static_cast<double>(
+                    static_cast<long double>(x1) -
+                    static_cast<long double>(f1) *
+                        (static_cast<long double>(x1) - static_cast<long double>(x0)) /
+                        denominator);
+                if (mymath::abs(next - x1) <=
+                    root_position_tolerance(std::max(mymath::abs(next), mymath::abs(x1)))) {
+                    *output = format_decimal(normalize_result(next));
+                    return true;
+                }
+                x0 = x1;
+                x1 = next;
+            }
+            *output = format_decimal(normalize_result(x1));
+            return true;
+        } else if (root_command_name == "fixed_point") {
+            if (arguments.size() != 2 || is_matrix_argument(arguments[0])) {
+                throw std::runtime_error("fixed_point expects expression, x0");
+            }
+            const auto evaluate_expression =
+                build_scoped_decimal_evaluator(arguments[0]);
+            double x = parse_decimal_argument(arguments[1]);
+            for (int iteration = 0; iteration < 128; ++iteration) {
+                const double next = evaluate_expression({{"x", x}});
+                if (mymath::abs(next - x) <=
+                    root_position_tolerance(std::max(mymath::abs(next), mymath::abs(x)))) {
+                    *output = format_decimal(normalize_result(next));
+                    return true;
+                }
+                x = next;
+            }
+            *output = format_decimal(normalize_result(x));
+            return true;
+        }
+    }
+
+    std::string decomposition_inside;
+    std::string decomposition_command;
+    if (split_named_call(trimmed, "eig", &decomposition_inside)) {
+        decomposition_command = "eig";
+    } else if (split_named_call(trimmed, "svd", &decomposition_inside)) {
+        decomposition_command = "svd";
+    }
+    if (!decomposition_command.empty()) {
+        const std::vector<std::string> arguments = split_top_level_arguments(decomposition_inside);
+        if (arguments.size() != 1 || !is_matrix_argument(arguments[0])) {
+            throw std::runtime_error(decomposition_command + " expects exactly one matrix argument");
+        }
+
+        const matrix::Matrix matrix_value = evaluate_expression_value(this,
+                                                                      impl_.get(),
+                                                                      arguments[0],
+                                                                      false).matrix;
+        if (decomposition_command == "svd") {
+            *output = "U: " + matrix::svd_u(matrix_value).to_string() +
+                      "\nS: " + matrix::svd_s(matrix_value).to_string() +
+                      "\nVt: " + matrix::svd_vt(matrix_value).to_string();
+            return true;
+        }
+
+        try {
+            *output = "values: " + matrix::eigenvalues(matrix_value).to_string() +
+                      "\nvectors: " + matrix::eigenvectors(matrix_value).to_string();
+            return true;
+        } catch (const std::exception&) {
+            if (matrix_value.rows == 2 && matrix_value.cols == 2) {
+                const double trace = matrix_value.at(0, 0) + matrix_value.at(1, 1);
+                const double det = matrix::determinant(matrix_value);
+                const double discriminant = trace * trace - 4.0 * det;
+                if (discriminant < 0.0) {
+                    const double real = trace * 0.5;
+                    const double imag = mymath::sqrt(-discriminant) * 0.5;
+                    std::ostringstream out;
+                    out << "values: [complex(" << format_decimal(real) << ", "
+                        << format_decimal(imag) << "), complex("
+                        << format_decimal(real) << ", " << format_decimal(-imag)
+                        << ")]\nvectors: unavailable for complex eigenvalues";
+                    *output = out.str();
+                    return true;
+                }
+            }
+            throw;
+        }
     }
 
     if (split_named_call(trimmed, "extrema", &inside)) {
@@ -5001,17 +8113,25 @@ bool Calculator::try_process_function_command(const std::string& expression,
 }
 
 std::string Calculator::save_state(const std::string& path) const {
-    std::ofstream out(path);
+    for (const auto& [name, value] : impl_->variables) {
+        (void)name;
+        if (value.is_matrix) {
+            throw std::runtime_error("save_state does not yet support matrix variables");
+        }
+    }
+
+    const std::filesystem::path target_path(path);
+    const std::filesystem::path temp_path =
+        target_path.parent_path() /
+        (target_path.filename().string() + ".tmp-save");
+    std::ofstream out(temp_path);
     if (!out) {
         throw std::runtime_error("unable to open file for writing: " + path);
     }
 
-    out << "STATE_V2\n";
+    out << "STATE_V3\n";
 
     for (const auto& [name, value] : impl_->variables) {
-        if (value.is_matrix) {
-            throw std::runtime_error("save_state does not yet support matrix variables");
-        }
         if (value.is_string) {
             out << "VAR\t" << encode_state_field(name)
                 << "\tSTRING\t" << encode_state_field(value.string_value) << '\n';
@@ -5023,6 +8143,14 @@ std::string Calculator::save_state(const std::string& path) const {
         } else {
             out << "VAR\t" << encode_state_field(name)
                 << "\tDECIMAL\t" << std::setprecision(17) << value.decimal << '\n';
+        }
+        if (value.has_precise_decimal_text) {
+            out << "PRECISE\t" << encode_state_field(name)
+                << '\t' << encode_state_field(value.precise_decimal_text) << '\n';
+        }
+        if (value.has_symbolic_text) {
+            out << "SYMBOLIC\t" << encode_state_field(name)
+                << '\t' << encode_state_field(value.symbolic_text) << '\n';
         }
     }
 
@@ -5046,6 +8174,27 @@ std::string Calculator::save_state(const std::string& path) const {
         out << "SCRIPT\t" << encode_state_field(source.str()) << '\n';
     }
 
+    out.close();
+    if (!out) {
+        std::error_code remove_error;
+        std::filesystem::remove(temp_path, remove_error);
+        throw std::runtime_error("unable to finish writing state file: " + path);
+    }
+
+    std::error_code rename_error;
+    std::filesystem::rename(temp_path, target_path, rename_error);
+    if (rename_error) {
+        std::error_code remove_existing_error;
+        std::filesystem::remove(target_path, remove_existing_error);
+        rename_error.clear();
+        std::filesystem::rename(temp_path, target_path, rename_error);
+    }
+    if (rename_error) {
+        std::error_code remove_error;
+        std::filesystem::remove(temp_path, remove_error);
+        throw std::runtime_error("unable to replace state file: " + path);
+    }
+
     return "Saved variables to: " + path;
 }
 
@@ -5059,7 +8208,7 @@ std::string Calculator::load_state(const std::string& path) {
     std::map<std::string, CustomFunction> loaded_functions;
     std::map<std::string, ScriptFunction> loaded_script_functions;
     std::string line;
-    bool is_v2 = false;
+    int state_version = 1;
 
     auto split_tab_fields = [](const std::string& row_text) {
         std::vector<std::string> parts;
@@ -5078,13 +8227,17 @@ std::string Calculator::load_state(const std::string& path) {
             continue;
         }
 
-        if (!is_v2 && line == "STATE_V2") {
-            is_v2 = true;
+        if (line == "STATE_V2") {
+            state_version = 2;
+            continue;
+        }
+        if (line == "STATE_V3") {
+            state_version = 3;
             continue;
         }
 
         const std::vector<std::string> parts = split_tab_fields(line);
-        if (is_v2) {
+        if (state_version >= 2) {
             if (parts.empty()) {
                 continue;
             }
@@ -5109,14 +8262,47 @@ std::string Calculator::load_state(const std::string& path) {
                     value.rational = Rational(std::stoll(parts[3]), std::stoll(parts[4]));
                     value.decimal = std::stod(parts[5]);
                 } else if (parts[2] == "DECIMAL") {
-                    if (parts.size() != 4) {
+                    if ((state_version == 2 && parts.size() != 4 && parts.size() != 5) ||
+                        (state_version >= 3 && parts.size() != 4)) {
                         throw std::runtime_error("invalid save file format");
                     }
                     value.decimal = std::stod(parts[3]);
+                    if (state_version == 2 && parts.size() == 5) {
+                        value.has_precise_decimal_text = true;
+                        value.precise_decimal_text = decode_state_field(parts[4]);
+                    }
                 } else {
                     throw std::runtime_error("invalid save file format");
                 }
                 loaded[name] = value;
+                continue;
+            }
+
+            if (state_version >= 3 && parts[0] == "PRECISE") {
+                if (parts.size() != 3) {
+                    throw std::runtime_error("invalid save file format");
+                }
+                const std::string name = decode_state_field(parts[1]);
+                auto it = loaded.find(name);
+                if (it == loaded.end() || it->second.is_matrix || it->second.is_string) {
+                    throw std::runtime_error("invalid save file format");
+                }
+                it->second.has_precise_decimal_text = true;
+                it->second.precise_decimal_text = decode_state_field(parts[2]);
+                continue;
+            }
+
+            if (state_version >= 3 && parts[0] == "SYMBOLIC") {
+                if (parts.size() != 3) {
+                    throw std::runtime_error("invalid save file format");
+                }
+                const std::string name = decode_state_field(parts[1]);
+                auto it = loaded.find(name);
+                if (it == loaded.end() || it->second.is_matrix || it->second.is_string) {
+                    throw std::runtime_error("invalid save file format");
+                }
+                it->second.has_symbolic_text = true;
+                it->second.symbolic_text = decode_state_field(parts[2]);
                 continue;
             }
 
@@ -5165,64 +8351,9 @@ std::string Calculator::load_state(const std::string& path) {
     }
 
     impl_->variables = loaded;
-    if (is_v2) {
+    if (state_version >= 2) {
         impl_->functions = loaded_functions;
         impl_->script_functions = loaded_script_functions;
     }
     return "Loaded variables from: " + path;
-}
-
-std::string Calculator::set_hex_prefix_mode(bool enabled) {
-    impl_->hex_prefix_mode = enabled;
-    return std::string("Hex prefix mode: ") + (enabled ? "ON" : "OFF");
-}
-
-bool Calculator::hex_prefix_mode() const {
-    return impl_->hex_prefix_mode;
-}
-
-std::string Calculator::set_hex_uppercase_mode(bool enabled) {
-    impl_->hex_uppercase_mode = enabled;
-    return std::string("Hex letter case: ") + (enabled ? "UPPER" : "LOWER");
-}
-
-bool Calculator::hex_uppercase_mode() const {
-    return impl_->hex_uppercase_mode;
-}
-
-std::string Calculator::set_symbolic_constants_mode(bool enabled) {
-    impl_->symbolic_constants_mode = enabled;
-    return std::string("Symbolic constants mode: ") + (enabled ? "ON" : "OFF");
-}
-
-bool Calculator::symbolic_constants_mode() const {
-    return impl_->symbolic_constants_mode;
-}
-
-std::vector<std::string> Calculator::variable_names() const {
-    std::vector<std::string> names;
-    names.reserve(impl_->variables.size());
-    for (const auto& [name, value] : impl_->variables) {
-        (void)value;
-        names.push_back(name);
-    }
-    return names;
-}
-
-std::vector<std::string> Calculator::custom_function_names() const {
-    std::vector<std::string> names;
-    names.reserve(impl_->functions.size() + impl_->script_functions.size());
-    for (const auto& [name, function] : impl_->functions) {
-        (void)function;
-        names.push_back(name);
-    }
-    for (const auto& [name, function] : impl_->script_functions) {
-        (void)function;
-        names.push_back(name);
-    }
-    return names;
-}
-
-double Calculator::normalize_result(double value) {
-    return normalize_display_decimal(value);
 }

@@ -149,11 +149,20 @@ Matrix transpose(const Matrix& matrix);
 /** @brief 矩阵求逆 */
 Matrix inverse(const Matrix& matrix);
 
+/** @brief Moore-Penrose 伪逆 */
+Matrix pseudo_inverse(const Matrix& matrix);
+
 /** @brief 向量点积 */
 double dot(const Matrix& lhs, const Matrix& rhs);
 
 /** @brief 向量外积 */
 Matrix outer(const Matrix& lhs, const Matrix& rhs);
+
+/** @brief Kronecker 积 */
+Matrix kronecker(const Matrix& lhs, const Matrix& rhs);
+
+/** @brief Hadamard 积（逐元素乘） */
+Matrix hadamard(const Matrix& lhs, const Matrix& rhs);
 
 // ============================================================================
 // 高级线性代数运算
@@ -192,6 +201,18 @@ Matrix solve(const Matrix& coefficients, const Matrix& rhs);
 /** @brief 矩阵幂运算 */
 Matrix power(Matrix base, long long exponent);
 
+/** @brief 2-范数条件数 */
+double condition_number(const Matrix& matrix);
+
+/** @brief Cholesky 分解（返回下三角矩阵） */
+Matrix cholesky(const Matrix& matrix);
+
+/** @brief Hessenberg 形式 */
+Matrix hessenberg(const Matrix& matrix);
+
+/** @brief 实 Schur 近似形式 */
+Matrix schur(const Matrix& matrix);
+
 // ============================================================================
 // 元素访问和属性
 // ============================================================================
@@ -228,6 +249,15 @@ Matrix eigenvalues(const Matrix& matrix);
 
 /** @brief 计算特征向量（每列是一个特征向量） */
 Matrix eigenvectors(const Matrix& matrix);
+
+/** @brief 行优先 reshape */
+Matrix reshape(const Matrix& matrix, std::size_t rows, std::size_t cols);
+
+/** @brief 矩阵向量化 */
+Matrix vectorize(const Matrix& matrix);
+
+/** @brief 提取或构造对角矩阵 */
+Matrix diag(const Matrix& matrix);
 
 // ============================================================================
 // 表达式求值

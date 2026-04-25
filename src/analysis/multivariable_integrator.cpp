@@ -20,7 +20,7 @@ double MultivariableIntegrator::integrate(
         throw std::runtime_error("integration bounds and subdivision counts must match");
     }
 
-    double scale = 1.0;
+    long double scale = 1.0L;
     std::vector<int> normalized_subdivisions;
     normalized_subdivisions.reserve(subdivisions.size());
     for (std::size_t i = 0; i < bounds.size(); ++i) {
@@ -31,15 +31,17 @@ double MultivariableIntegrator::integrate(
         if (width == 0.0) {
             return 0.0;
         }
-        scale *= width / static_cast<double>(normalized) / 3.0;
+        scale *= static_cast<long double>(width) /
+                 static_cast<long double>(normalized) / 3.0L;
     }
 
     std::vector<double> point(bounds.size(), 0.0);
-    return scale * integrate_recursive(bounds,
-                                       normalized_subdivisions,
-                                       &point,
-                                       0,
-                                       1.0);
+    return static_cast<double>(
+        scale * static_cast<long double>(integrate_recursive(bounds,
+                                                             normalized_subdivisions,
+                                                             &point,
+                                                             0,
+                                                             1.0)));
 }
 
 double MultivariableIntegrator::simpson_weight(int index, int subdivisions) {
@@ -71,15 +73,16 @@ double MultivariableIntegrator::integrate_recursive(
     const int subdivision_count = subdivisions[dimension];
     const double step = (upper - lower) / static_cast<double>(subdivision_count);
 
-    double sum = 0.0;
+    long double sum = 0.0L;
     for (int i = 0; i <= subdivision_count; ++i) {
         (*point)[dimension] = lower + step * static_cast<double>(i);
-        sum += integrate_recursive(bounds,
-                                   subdivisions,
-                                   point,
-                                   dimension + 1,
-                                   accumulated_weight *
-                                       simpson_weight(i, subdivision_count));
+        sum += static_cast<long double>(
+            integrate_recursive(bounds,
+                                subdivisions,
+                                point,
+                                dimension + 1,
+                                accumulated_weight *
+                                    simpson_weight(i, subdivision_count)));
     }
-    return sum;
+    return static_cast<double>(sum);
 }

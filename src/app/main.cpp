@@ -127,13 +127,18 @@ const std::vector<std::string>& builtin_expression_completion_words() {
         "help", "exit", "quit",
         "sin(", "cos(", "tan(", "asin(", "acos(", "atan(",
         "sinh(", "cosh(", "tanh(",
-        "exp(", "ln(", "log10(", "gamma(", "sqrt(", "cbrt(", "root(",
-        "abs(", "sign(", "floor(", "ceil(",
-        "min(", "max(", "sum(", "avg(", "median(", "factorial(", "nCr(", "nPr(",
-        "gcd(", "lcm(", "mod(", "pow(", "factor(",
+        "exp(", "exp2(", "ln(", "log(", "log2(", "log10(", "gamma(", "sqrt(", "cbrt(", "root(",
+        "abs(", "sign(", "floor(", "ceil(", "round(", "trunc(", "clamp(",
+        "min(", "max(", "clamp(", "sum(", "avg(", "mean(", "median(", "mode(", "var(", "std(", "percentile(", "quartile(", "factorial(", "nCr(", "nPr(",
+        "gcd(", "lcm(", "mod(", "pow(", "rat(", "factor(",
         "deg2rad(", "rad2deg(", "celsius(", "fahrenheit(", "kelvin(",
         "poly_add(", "poly_sub(", "poly_mul(", "poly_div(", "roots(",
-        "diff(", "limit(", "integral(", "taylor(", "extrema(", "simplify(",
+        "diff(", "limit(", "integral(", "critical(", "taylor(", "extrema(", "simplify(",
+        "ode(", "ode_table(", "ode_system(", "ode_system_table(",
+        "lp_max(", "lp_min(", "ilp_max(", "ilp_min(",
+        "step(", "delta(", "laplace(", "ilaplace(", "fourier(", "ifourier(",
+        "ztrans(", "iztrans(", "dft(", "idft(", "convolve(",
+        "pade(", "puiseux(", "series_sum(", "summation(",
         "vec(", "mat(", "zeros(", "eye(", "identity(",
         "resize(", "append_row(", "append_col(", "transpose(", "inverse(",
         "dot(", "outer(", "null(", "least_squares(", "qr_q(", "qr_r(",
@@ -141,7 +146,8 @@ const std::vector<std::string>& builtin_expression_completion_words() {
         "solve(", "get(", "set(",
         "norm(", "trace(", "det(", "rank(", "rref(", "eigvals(", "eigvecs(",
         "bin(", "oct(", "hex(", "base(",
-        "and(", "or(", "xor(", "not(", "shl(", "shr("
+        "and(", "or(", "xor(", "not(", "shl(", "shr(", "rol(", "ror(",
+        "popcount(", "bitlen(", "ctz(", "clz(", "parity(", "reverse_bits("
     };
     return words;
 }
@@ -519,7 +525,7 @@ std::string execute_repl_line(Calculator& calculator,
     if (calculator.try_process_function_command(line, &function_output)) {
         return function_output;
     }
-    if (line.rfind("factor", 0) == 0) {
+    if (line.rfind("factor(", 0) == 0) {
         return calculator.factor_expression(line);
     }
     return calculator.process_line(line, *exact_mode);

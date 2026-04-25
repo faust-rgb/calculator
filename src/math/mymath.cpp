@@ -1,10 +1,113 @@
 #include "mymath.h"
+#include "mymath_internal.h"
 
 #include <stdexcept>
 
 namespace mymath {
 
-namespace {
+namespace internal {
+
+double log_gamma_positive(double x) {
+    if (x <= 0.0) {
+        throw std::domain_error("log-gamma is only defined for positive inputs");
+    }
+
+    static const double kLanczosCoefficients[] = {
+        0.99999999999980993,
+        676.5203681218851,
+        -1259.1392167224028,
+        771.32342877765313,
+        -176.61502916214059,
+        12.507343278686905,
+        -0.13857109526572012,
+        9.9843695780195716e-6,
+        1.5056327351493116e-7,
+    };
+
+    const double z = x - 1.0;
+    double series = kLanczosCoefficients[0];
+    for (int i = 1; i < 9; ++i) {
+        series += kLanczosCoefficients[i] / (z + static_cast<double>(i));
+    }
+
+    const double t = z + 7.5;
+    return 0.5 * ln(2.0 * kPi) + (z + 0.5) * ln(t) - t + ln(series);
+}
+
+double finite_or_infinity_from_log(double log_value) {
+    if (log_value >= kLnDoubleMax) {
+        return infinity();
+    }
+    if (log_value <= kLnDoubleDenormMin) {
+        return 0.0;
+    }
+    return exp(log_value);
+}
+
+}  // namespace internal
+
+using internal::finite_or_infinity_from_log;
+using internal::log_gamma_positive;
+
+double abs(double x) {
+    return x < 0.0 ? -x : x;
+}
+
+long double abs_long_double(long double x) {
+    return x < 0.0L ? -x : x;
+}
+
+bool isfinite(double x) {
+    return x == x && x <= kDoubleMax && x >= -kDoubleMax;
+}
+
+double clamp(double value, double low, double high) {
+    if (high < low) {
+        const double temp = low;
+        low = high;
+        high = temp;
+    }
+    if (value < low) {
+        return low;
+    }
+    if (value > high) {
+        return high;
+    }
+    return value;
+}
+
+double remainder(double x, double y) {
+    if (is_near_zero(y)) {
+        throw std::domain_error("remainder divisor cannot be zero");
+    }
+    if (!isfinite(x) || !isfinite(y)) {
+        return infinity();
+    }
+    const long double quotient =
+        static_cast<long double>(x) / static_cast<long double>(y);
+    long double nearest = quotient;
+    if (abs_long_double(quotient) < 9.22e18L) {
+        const long long truncated = static_cast<long long>(quotient);
+        const long double lower = static_cast<long double>(truncated);
+        const long double upper =
+            static_cast<long double>(quotient >= 0.0L ? truncated + 1 : truncated - 1);
+        const long double distance_lower = abs_long_double(quotient - lower);
+        const long double distance_upper = abs_long_double(quotient - upper);
+        if (distance_lower < distance_upper) {
+            nearest = lower;
+        } else if (distance_upper < distance_lower) {
+            nearest = upper;
+        } else {
+            nearest = (truncated % 2 == 0) ? lower : upper;
+        }
+    }
+    return static_cast<double>(
+        static_cast<long double>(x) - nearest * static_cast<long double>(y));
+}
+
+double infinity() {
+    return kDoubleMax * kDoubleMax;
+}
 
 long long gcd(long long a, long long b) {
     while (b != 0) {
@@ -18,27 +121,17 @@ long long gcd(long long a, long long b) {
 bool approximate_fraction(double value,
                           long long* numerator,
                           long long* denominator,
-                          int max_denominator = 999,
-                          double eps = 1e-10) {
-    // 这个函数的用途不是“高精度有理逼近”，而是：
-    // 当幂指数本来就应该是一个简单分数时，例如 1/3、2/3、5/2，
-    // 把浮点数重新识别回分数形式，以便处理负底数的分数次幂。
-    //
-    // 例如：
-    //   expression = (-8) ^ (1 / 3)
-    // 在解析后指数通常会先变成一个 double，大约是 0.333333...
-    // 这里会尝试把它恢复成 1/3，再据此判断“奇数分母实根是否存在”。
+                          int max_denominator,
+                          double eps) {
     const double positive = value < 0.0 ? -value : value;
 
     for (int den = 1; den <= max_denominator; ++den) {
-        // 固定分母逐个尝试，把 value * den 四舍五入成候选分子。
         const double scaled = positive * static_cast<double>(den);
         const long long num = static_cast<long long>(scaled + 0.5);
         const double candidate =
             static_cast<double>(num) / static_cast<double>(den);
 
         if (abs(candidate - positive) <= eps) {
-            // 找到足够接近的简单分数后再约分，得到最简形式。
             const long long divisor = gcd(num, den);
             *numerator = num / divisor;
             *denominator = den / divisor;
@@ -49,91 +142,144 @@ bool approximate_fraction(double value,
     return false;
 }
 
-}  // namespace
+bool best_rational_approximation(double value,
+                                 long long* numerator,
+                                 long long* denominator,
+                                 long long max_denominator) {
+    if (numerator == nullptr || denominator == nullptr || max_denominator <= 0) {
+        return false;
+    }
+    if (!isfinite(value)) {
+        return false;
+    }
+    if (value == 0.0) {
+        *numerator = 0;
+        *denominator = 1;
+        return true;
+    }
 
-double abs(double x) {
-    return x < 0.0 ? -x : x;
+    const bool negative = value < 0.0;
+    double target = negative ? -value : value;
+
+    long long h0 = 0;
+    long long k0 = 1;
+    long long h1 = 1;
+    long long k1 = 0;
+    double x = target;
+
+    while (true) {
+        const long long a = static_cast<long long>(x);
+        const long long h2 = a * h1 + h0;
+        const long long k2 = a * k1 + k0;
+
+        if (k2 > max_denominator) {
+            break;
+        }
+
+        h0 = h1;
+        k0 = k1;
+        h1 = h2;
+        k1 = k2;
+
+        const double fractional = x - static_cast<double>(a);
+        if (is_near_zero(fractional)) {
+            break;
+        }
+        x = 1.0 / fractional;
+    }
+
+    long long best_num = h1;
+    long long best_den = k1;
+
+    if (k1 != 0 && k1 < max_denominator &&
+        !is_near_zero(x - static_cast<double>(static_cast<long long>(x)))) {
+        const long long remaining = max_denominator - k0;
+        const long long step = k1 == 0 ? 0 : remaining / k1;
+        const long long candidate_step = step > 0 ? step : 0;
+        const long long num2 = h0 + candidate_step * h1;
+        const long long den2 = k0 + candidate_step * k1;
+
+        const double error1 =
+            abs(target - static_cast<double>(best_num) / static_cast<double>(best_den));
+        const double error2 = den2 > 0
+                                  ? abs(target - static_cast<double>(num2) / static_cast<double>(den2))
+                                  : infinity();
+        if (den2 > 0 && error2 <= error1) {
+            best_num = num2;
+            best_den = den2;
+        }
+    }
+
+    if (best_den == 0) {
+        return false;
+    }
+
+    const long long divisor = gcd(best_num, best_den);
+    *numerator = (negative ? -best_num : best_num) / divisor;
+    *denominator = best_den / divisor;
+    return true;
 }
 
 bool is_near_zero(double x, double eps) {
-    // 许多数值算法都不适合直接做 == 0 比较，因此统一走误差判断。
     return abs(x) <= eps;
 }
 
 bool is_integer(double x, double eps) {
-    // 将浮点数视为整数时允许一个微小误差，避免 2.0000000001 这种情况。
     long long truncated = static_cast<long long>(x);
     return abs(x - static_cast<double>(truncated)) <= eps ||
            abs(x - static_cast<double>(truncated + (x >= 0 ? 1 : -1))) <= eps;
 }
 
 double normalize_angle(double x) {
-    // 三角函数先做角度归约，把输入缩到 [-pi, pi]。
-    // 这样泰勒展开在更小区间内收敛更快、误差更可控。
-    //
-    // 这里没有继续缩到更小区间（例如 [-pi/2, pi/2]），
-    // 因为当前精度目标下缩到一个周期内已经足够稳定、实现也更简单。
+    if (!isfinite(x)) {
+        return x;
+    }
     const double period = 2.0 * kPi;
-    long long turns = static_cast<long long>(x / period);
-    x -= static_cast<double>(turns) * period;
-
-    while (x > kPi) {
-        x -= period;
+    const double reduced = remainder(x, period);
+    if (reduced > kPi) {
+        return reduced - period;
     }
-    while (x < -kPi) {
-        x += period;
+    if (reduced < -kPi) {
+        return reduced + period;
     }
-    return x;
+    return reduced;
 }
 
-static double exp_series(double x) {
-    // 这里计算 e^x 的泰勒级数：
-    // e^x = 1 + x + x^2/2! + x^3/3! + ...
-    // term 每轮在上一项的基础上递推，避免重复求幂和阶乘。
-    double sum = 1.0;
-    double term = 1.0;
+double exp(double x) {
+    if (x >= kLnDoubleMax) {
+        return infinity();
+    }
+    if (x <= kLnDoubleDenormMin) {
+        return 0.0;
+    }
+    if (x < 0.0) {
+        return 1.0 / exp(-x);
+    }
 
-    for (int n = 1; n <= 60; ++n) {
-        // term_n = term_(n-1) * x / n
-        // 利用递推避免显式计算 x^n 和 n!。
-        term *= x / static_cast<double>(n);
+    int halvings = 0;
+    while (x > 0.5) {
+        x *= 0.5;
+        ++halvings;
+    }
+
+    long double term = 1.0L;
+    long double sum = 1.0L;
+    for (int n = 1; n <= 80; ++n) {
+        term *= static_cast<long double>(x) / static_cast<long double>(n);
         sum += term;
-        if (abs(term) < kEps) {
+        if (abs_long_double(term) < 1e-18L) {
             break;
         }
     }
 
-    return sum;
-}
-
-double exp(double x) {
-    if (is_near_zero(x)) {
-        return 1.0;
-    }
-
-    // e^(-x) = 1 / e^x，先把负数统一转成正数处理。
-    bool negative = x < 0.0;
-    if (negative) {
-        x = -x;
-    }
-
-    int halve_count = 0;
-    // 直接对很大的 x 做泰勒展开收敛会变慢。
-    // 先不断把 x 减半，再利用 e^x = (e^(x/2))^2 逐步平方还原。
-    //
-    // 这实际上是在做简单的 range reduction：
-    // 先把问题缩到“小 x 区间”，再用代数恒等式还原结果。
-    while (x > 0.5) {
-        x *= 0.5;
-        ++halve_count;
-    }
-
-    double result = exp_series(x);
-    for (int i = 0; i < halve_count; ++i) {
+    double result = static_cast<double>(sum);
+    for (int i = 0; i < halvings; ++i) {
         result *= result;
+        if (!isfinite(result)) {
+            return infinity();
+        }
     }
-
-    return negative ? 1.0 / result : result;
+    return result;
 }
 
 double ln(double x) {
@@ -142,11 +288,6 @@ double ln(double x) {
     }
 
     int shifts = 0;
-    // 利用 ln(a * e^k) = ln(a) + k，把 x 缩放到更靠近 1 的范围。
-    // 当 x 接近 1 时，后面的级数展开收敛更快。
-    //
-    // 这里选取 [0.75, 1.5] 作为经验上足够稳定的区间，
-    // 不追求最优，只追求实现简单和误差可控。
     while (x > 1.5) {
         x /= kE;
         ++shifts;
@@ -156,18 +297,12 @@ double ln(double x) {
         --shifts;
     }
 
-    // 使用下面这个更稳定的展开式：
-    // ln(x) = 2 * (y + y^3/3 + y^5/5 + ...),
-    // 其中 y = (x - 1) / (x + 1)
-    // 当 x 靠近 1 时，|y| 很小，所以比直接展开 ln(1 + z) 更稳。
     const double y = (x - 1.0) / (x + 1.0);
     const double y2 = y * y;
     double term = y;
     double sum = 0.0;
 
-    // 每次乘上 y^2，就能从 y 跳到 y^3、y^5、y^7...
     for (int n = 1; n <= 199; n += 2) {
-        // add = y^(2k+1) / (2k+1)
         sum += term / static_cast<double>(n);
         term *= y2;
         if (abs(term) < kEps) {
@@ -175,12 +310,10 @@ double ln(double x) {
         }
     }
 
-    // 别忘了把前面缩放掉的 e 的次数补回来。
     return 2.0 * sum + static_cast<double>(shifts);
 }
 
 double log10(double x) {
-    // 换底公式：log10(x) = ln(x) / ln(10)
     return ln(x) / ln(10.0);
 }
 
@@ -204,327 +337,22 @@ double tanh(double x) {
     return sinh(x) / denominator;
 }
 
-double gamma(double x) {
-    if (is_integer(x) && x <= 0.0) {
-        throw std::domain_error("gamma is undefined for non-positive integers");
-    }
-
-    if (x < 0.5) {
-        const double reflected_sine = sin(kPi * x);
-        if (abs(reflected_sine) < kEps) {
-            throw std::domain_error("gamma is undefined at this input");
-        }
-        return kPi / (reflected_sine * gamma(1.0 - x));
-    }
-
-    static const double coefficients[] = {
-        0.99999999999980993,
-        676.5203681218851,
-        -1259.1392167224028,
-        771.32342877765313,
-        -176.61502916214059,
-        12.507343278686905,
-        -0.13857109526572012,
-        9.9843695780195716e-6,
-        1.5056327351493116e-7
-    };
-    constexpr double g = 7.0;
-
-    const double z = x - 1.0;
-    double series = coefficients[0];
-    for (int i = 1; i < 9; ++i) {
-        series += coefficients[i] / (z + static_cast<double>(i));
-    }
-
-    const double t = z + g + 0.5;
-    const double sqrt_two_pi = sqrt(2.0 * kPi);
-    return sqrt_two_pi * pow(t, z + 0.5) * exp(-t) * series;
+double asinh(double x) {
+    return ln(x + sqrt(x * x + 1.0));
 }
 
-double sin(double x) {
-    x = normalize_angle(x);
-
-    // sin(x) 的泰勒展开：
-    // x - x^3/3! + x^5/5! - ...
-    //
-    // 这里用递推式生成每一项：
-    // term_{n+1} = term_n * ( -x^2 / ((2n)(2n+1)) )
-    double term = x;
-    double sum = x;
-
-    for (int n = 1; n <= 20; ++n) {
-        const double a = static_cast<double>(2 * n);
-        const double b = static_cast<double>(2 * n + 1);
-        term *= -x * x / (a * b);
-        sum += term;
-        if (abs(term) < kEps) {
-            break;
-        }
+double acosh(double x) {
+    if (x < 1.0) {
+        throw std::domain_error("acosh is only defined for x >= 1");
     }
-
-    return sum;
+    return ln(x + sqrt(x - 1.0) * sqrt(x + 1.0));
 }
 
-double cos(double x) {
-    x = normalize_angle(x);
-
-    // cos(x) 的泰勒展开：
-    // 1 - x^2/2! + x^4/4! - ...
-    //
-    // 和 sin 一样，使用相邻项递推来减少重复乘法。
-    double term = 1.0;
-    double sum = 1.0;
-
-    for (int n = 1; n <= 20; ++n) {
-        const double a = static_cast<double>(2 * n - 1);
-        const double b = static_cast<double>(2 * n);
-        term *= -x * x / (a * b);
-        sum += term;
-        if (abs(term) < kEps) {
-            break;
-        }
+double atanh(double x) {
+    if (x <= -1.0 || x >= 1.0) {
+        throw std::domain_error("atanh is only defined for values in (-1, 1)");
     }
-
-    return sum;
-}
-
-double tan(double x) {
-    // tan(x) = sin(x) / cos(x)
-    const double cosine = cos(x);
-    if (abs(cosine) < 1e-10) {
-        throw std::domain_error("tan is undefined when cos(x) is zero");
-    }
-    return sin(x) / cosine;
-}
-
-double atan(double x) {
-    if (is_near_zero(x)) {
-        return 0.0;
-    }
-
-    if (x < 0.0) {
-        // 反正切是奇函数：atan(-x) = -atan(x)
-        return -atan(-x);
-    }
-
-    if (x > 1.0) {
-        // 对大输入使用恒等式，把问题变到 (0, 1] 区间。
-        //
-        // atan(x) = pi/2 - atan(1/x), x > 0
-        return kPi / 2.0 - atan(1.0 / x);
-    }
-
-    if (x > 0.5) {
-        // 再进一步利用半角型恒等式把值压得更小，
-        // 这样后面的级数在 x 接近 1 时也能较快收敛。
-        //
-        // atan(x) = 2 * atan( x / (1 + sqrt(1 + x^2)) )
-        const double reduced = x / (1.0 + sqrt(1.0 + x * x));
-        return 2.0 * atan(reduced);
-    }
-
-    // atan(x) 的级数展开：
-    // x - x^3/3 + x^5/5 - ...
-    double term = x;
-    double sum = x;
-    const double x2 = x * x;
-
-    for (int n = 1; n <= 2000; ++n) {
-        term *= -x2;
-        const double add = term / static_cast<double>(2 * n + 1);
-        sum += add;
-        if (abs(add) < kEps) {
-            break;
-        }
-    }
-
-    return sum;
-}
-
-double asin(double x) {
-    if (x < -1.0 || x > 1.0) {
-        throw std::domain_error("asin is only defined for values in [-1, 1]");
-    }
-
-    if (is_near_zero(1.0 - x)) {
-        return kPi / 2.0;
-    }
-    if (is_near_zero(-1.0 - x)) {
-        return -kPi / 2.0;
-    }
-
-    // 通过求解 sin(theta) = x 来反推出 theta。
-    // 这里使用牛顿迭代：
-    // next = guess - (sin(guess) - x) / cos(guess)
-    //
-    // 选择 guess = x 作为初始值，是因为在 [-1, 1] 区间内
-    // sin(theta) 和 theta 接近，足够作为一个简单起点。
-    double guess = x;
-    for (int i = 0; i < 60; ++i) {
-        const double s = sin(guess);
-        const double c = cos(guess);
-        if (abs(c) < 1e-10) {
-            break;
-        }
-
-        const double next = guess - (s - x) / c;
-        if (abs(next - guess) < kEps) {
-            return next;
-        }
-        guess = next;
-    }
-
-    return guess;
-}
-
-double acos(double x) {
-    if (x < -1.0 || x > 1.0) {
-        throw std::domain_error("acos is only defined for values in [-1, 1]");
-    }
-
-    // 利用恒等式 acos(x) = pi/2 - asin(x)
-    return kPi / 2.0 - asin(x);
-}
-
-double sqrt(double x) {
-    if (x < 0.0) {
-        throw std::domain_error("sqrt is only defined for non-negative numbers");
-    }
-    if (is_near_zero(x)) {
-        return 0.0;
-    }
-
-    // 牛顿迭代求平方根：
-    // next = (guess + x / guess) / 2
-    //
-    // 这相当于对 f(g) = g^2 - x 做 Newton-Raphson。
-    double guess = x >= 1.0 ? x : 1.0;
-    for (int i = 0; i < 100; ++i) {
-        const double next = 0.5 * (guess + x / guess);
-        if (abs(next - guess) < kEps) {
-            return next;
-        }
-        guess = next;
-    }
-    return guess;
-}
-
-double cbrt(double x) {
-    if (is_near_zero(x)) {
-        return 0.0;
-    }
-
-    // 立方根对负数仍有实数解，因此单独保留符号处理。
-    // 这里直接使用：
-    //   cbrt(x) = exp(ln(x) / 3)
-    // 对负数则改成先取绝对值、最后再补回负号。
-    if (x < 0.0) {
-        return -exp(ln(-x) / 3.0);
-    }
-    return exp(ln(x) / 3.0);
-}
-
-double root(double value, double degree) {
-    // root(value, degree) 约定只接受“整数次数”的根。
-    // 例如：
-    //   root(16, 2) = 4
-    //   root(27, 3) = 3
-    //   root(16, -2) = 1 / root(16, 2)
-    if (!is_integer(degree)) {
-        throw std::domain_error("root degree must be an integer");
-    }
-
-    const long long n = static_cast<long long>(degree);
-    if (n == 0) {
-        throw std::domain_error("root degree cannot be zero");
-    }
-
-    if (value == 0.0) {
-        if (n < 0) {
-            throw std::domain_error("zero cannot be raised to a negative power");
-        }
-        return 0.0;
-    }
-
-    const long long abs_n = n < 0 ? -n : n;
-    double result = 0.0;
-
-    if (value < 0.0) {
-        // 负数的偶次实根不存在，但奇次实根存在。
-        if (abs_n % 2 == 0) {
-            throw std::domain_error("even root is undefined for negative values");
-        }
-        result = -exp(ln(-value) / static_cast<double>(abs_n));
-    } else {
-        result = exp(ln(value) / static_cast<double>(abs_n));
-    }
-
-    return n < 0 ? 1.0 / result : result;
-}
-
-static double int_pow(double base, long long exponent) {
-    if (exponent == 0) {
-        return 1.0;
-    }
-
-    if (base == 0.0 && exponent < 0) {
-        throw std::domain_error("zero cannot be raised to a negative power");
-    }
-
-    // 整数指数使用快速幂，时间复杂度从 O(n) 降到 O(log n)。
-    // 这里同时兼顾负指数：最后统一取倒数即可。
-    bool negative = exponent < 0;
-    unsigned long long power = negative
-                                   ? static_cast<unsigned long long>(-exponent)
-                                   : static_cast<unsigned long long>(exponent);
-
-    double result = 1.0;
-    while (power > 0) {
-        if (power & 1ULL) {
-            result *= base;
-        }
-        base *= base;
-        power >>= 1ULL;
-    }
-
-    return negative ? 1.0 / result : result;
-}
-
-double pow(double base, double exponent) {
-    if (is_integer(exponent)) {
-        // 整数次幂优先走快速幂，既更快也避免不必要的 ln/exp 误差。
-        return int_pow(base, static_cast<long long>(exponent));
-    }
-
-    if (base <= 0.0) {
-        if (base == 0.0) {
-            throw std::domain_error("zero cannot be raised to a non-integer power");
-        }
-
-        // 负底数的非整数指数只有在“指数能识别成奇数分母分数”时
-        // 才可能存在实数结果，例如：
-        //   (-8)^(1/3) = -2
-        //   (-8)^(2/3) =  4
-        // 否则一律视为不在当前实数计算器的定义域内。
-        long long numerator = 0;
-        long long denominator = 0;
-        const double positive_exponent = exponent < 0.0 ? -exponent : exponent;
-        if (!approximate_fraction(positive_exponent, &numerator, &denominator) ||
-            denominator % 2 == 0) {
-            throw std::domain_error(
-                "non-integer exponent requires a positive base unless the exponent is an odd-denominator fraction");
-        }
-
-        // 先计算正数底的幅值，再根据分子奇偶决定结果符号。
-        const double magnitude = exp(
-            (static_cast<double>(numerator) / static_cast<double>(denominator)) *
-            ln(-base));
-        const double signed_value = (numerator % 2 == 0) ? magnitude : -magnitude;
-        return exponent < 0.0 ? 1.0 / signed_value : signed_value;
-    }
-
-    // 非整数次幂使用：a^b = e^(b * ln(a))
-    return exp(exponent * ln(base));
+    return 0.5 * ln((1.0 + x) / (1.0 - x));
 }
 
 }  // namespace mymath
