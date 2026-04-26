@@ -1,5 +1,7 @@
 #include "calculator_internal_types.h"
 
+#include "line_executor.h"
+
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -17,7 +19,7 @@ std::string Calculator::save_state(const std::string& path) const {
         throw std::runtime_error("unable to open file for writing: " + path);
     }
 
-    out << "STATE_V4\n";
+    out << "STATE_V5\n";
 
     for (const auto& [name, value] : impl_->variables) {
         if (value.is_matrix) {
@@ -70,6 +72,12 @@ std::string Calculator::save_state(const std::string& path) const {
         out << "SCRIPT\t" << encode_state_field(source.str()) << '\n';
     }
 
+    out << "V2PRECISION\t" << impl_->v2_environment.precision().digits << '\n';
+    for (const auto& [name, binding] : impl_->v2_environment.variables()) {
+        out << "V2VAR\t" << encode_state_field(name)
+            << '\t' << encode_state_field(binding.value.to_string()) << '\n';
+    }
+
     out.close();
     if (!out) {
         std::error_code remove_error;
@@ -103,6 +111,7 @@ std::string Calculator::load_state(const std::string& path) {
     std::map<std::string, StoredValue> loaded;
     std::map<std::string, CustomFunction> loaded_functions;
     std::map<std::string, ScriptFunction> loaded_script_functions;
+    runtime::Environment loaded_v2_environment;
     std::string line;
     int state_version = 1;
 
@@ -133,6 +142,10 @@ std::string Calculator::load_state(const std::string& path) {
         }
         if (line == "STATE_V4") {
             state_version = 4;
+            continue;
+        }
+        if (line == "STATE_V5") {
+            state_version = 5;
             continue;
         }
 
@@ -252,6 +265,32 @@ std::string Calculator::load_state(const std::string& path) {
                 continue;
             }
 
+            if (state_version >= 5 && parts[0] == "V2PRECISION") {
+                if (parts.size() != 2) {
+                    throw std::runtime_error("invalid save file format");
+                }
+                const int digits = std::stoi(parts[1]);
+                if (digits <= 0) {
+                    throw std::runtime_error("invalid save file format");
+                }
+                loaded_v2_environment.precision().digits = digits;
+                continue;
+            }
+
+            if (state_version >= 5 && parts[0] == "V2VAR") {
+                if (parts.size() != 3) {
+                    throw std::runtime_error("invalid save file format");
+                }
+                const std::string name = decode_state_field(parts[1]);
+                if (!is_valid_variable_name(name)) {
+                    throw std::runtime_error("invalid save file format");
+                }
+                (void)runtime::evaluate_line(
+                    name + " = " + decode_state_field(parts[2]),
+                    loaded_v2_environment);
+                continue;
+            }
+
             throw std::runtime_error("invalid save file format");
         }
 
@@ -271,5 +310,6 @@ std::string Calculator::load_state(const std::string& path) {
         impl_->functions = loaded_functions;
         impl_->script_functions = loaded_script_functions;
     }
+    impl_->v2_environment = loaded_v2_environment;
     return "Loaded variables from: " + path;
 }

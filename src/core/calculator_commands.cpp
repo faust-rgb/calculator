@@ -103,7 +103,7 @@ std::string Calculator::execute_script(const std::string& source, bool exact_mod
 }
 
 std::string Calculator::list_variables() const {
-    if (impl_->variables.empty()) {
+    if (impl_->variables.empty() && impl_->v2_environment.variables().empty()) {
         return "No variables defined.";
     }
 
@@ -116,6 +116,13 @@ std::string Calculator::list_variables() const {
         }
         first = false;
         out << name << " = " << format_stored_value(value, impl_->symbolic_constants_mode);
+    }
+    for (const auto& [name, binding] : impl_->v2_environment.variables()) {
+        if (!first) {
+            out << '\n';
+        }
+        first = false;
+        out << name << " = " << binding.value.to_string();
     }
     return out.str();
 }

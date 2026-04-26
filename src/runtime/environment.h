@@ -22,6 +22,8 @@ public:
 
     void set(const std::string& name, const Value& value);
     void set(const std::string& name, const Value& value, const expression::Expr& original);
+    bool erase(const std::string& name);
+    void clear();
     bool lookup(const std::string& name, Value* value) const;
     const std::map<std::string, Binding>& variables() const;
 

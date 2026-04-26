@@ -20,6 +20,14 @@ void Environment::set(const std::string& name,
     variables_[name] = {value, original, true};
 }
 
+bool Environment::erase(const std::string& name) {
+    return variables_.erase(name) != 0;
+}
+
+void Environment::clear() {
+    variables_.clear();
+}
+
 bool Environment::lookup(const std::string& name, Value* value) const {
     const auto it = variables_.find(name);
     if (it == variables_.end()) {

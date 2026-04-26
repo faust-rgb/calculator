@@ -52,6 +52,18 @@ bool parse_positive_int(const std::string& text, int* value) {
 
 }  // namespace
 
+bool set_v2_precision(Calculator::Impl* impl,
+                      const std::string& digits_text,
+                      std::string* output) {
+    int digits = 0;
+    if (!parse_positive_int(digits_text, &digits)) {
+        throw std::runtime_error(":precision expects a positive integer");
+    }
+    impl->v2_environment.precision().digits = digits;
+    *output = "2.0 precision: " + std::to_string(digits);
+    return true;
+}
+
 bool try_process_v2_line(Calculator::Impl* impl,
                          const std::string& expression,
                          std::string* output) {
@@ -65,18 +77,15 @@ bool try_process_v2_line(Calculator::Impl* impl,
         return true;
     }
     if (trimmed == ":v2clear") {
-        impl->v2_environment = runtime::Environment();
+        impl->v2_environment.clear();
         *output = "Cleared all 2.0 variables.";
         return true;
     }
     if (trimmed.rfind(":v2precision ", 0) == 0) {
-        int digits = 0;
-        if (!parse_positive_int(trimmed.substr(13), &digits)) {
-            throw std::runtime_error(":v2precision expects a positive integer");
-        }
-        impl->v2_environment.precision().digits = digits;
-        *output = "2.0 precision: " + std::to_string(digits);
-        return true;
+        return set_v2_precision(impl, trimmed.substr(13), output);
+    }
+    if (trimmed.rfind(":precision ", 0) == 0) {
+        return set_v2_precision(impl, trimmed.substr(11), output);
     }
     if (trimmed.rfind(":v2 ", 0) == 0) {
         *output = runtime::evaluate_line(trimmed.substr(4), impl->v2_environment).to_string();

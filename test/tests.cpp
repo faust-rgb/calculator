@@ -5179,6 +5179,33 @@ int main() {
             "  return a + b;\n"
             "}\n",
             false);
+        const std::vector<std::string> names =
+            script_calculator.custom_function_names();
+        bool has_add = false;
+        for (const std::string& name : names) {
+            if (name == "add") {
+                has_add = true;
+            }
+        }
+        if (has_add) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: script functions should be exposed for completion\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: script function completion names threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        Calculator script_calculator;
+        (void)script_calculator.execute_script(
+            "fn add(a, b) {\n"
+            "  return a + b;\n"
+            "}\n",
+            false);
         std::string output;
         const bool handled =
             script_calculator.try_process_function_command(":clearfunc add", &output);
@@ -5872,6 +5899,59 @@ int main() {
     }
 
     try {
+        Calculator v2_calculator;
+        (void)v2_calculator.process_line("a = 2", false);
+        (void)v2_calculator.process_line(":v2 x = 1/3", false);
+        const std::string precision = v2_calculator.process_line(":precision 64", false);
+        const std::string vars = v2_calculator.list_variables();
+        const std::string cleared_x = v2_calculator.clear_variable("x");
+        const std::string after_clear_x = v2_calculator.list_variables();
+        const std::string cleared_all = v2_calculator.clear_all_variables();
+        const std::string empty = v2_calculator.list_variables();
+        if (precision == "2.0 precision: 64" &&
+            vars == "a = 2\nx = 1/3" &&
+            cleared_x == "Cleared variable: x" &&
+            after_clear_x == "a = 2" &&
+            cleared_all == "Cleared all variables." &&
+            empty == "No variables defined.") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: phase7 variable commands got "
+                      << precision << " / "
+                      << vars << " / "
+                      << cleared_x << " / "
+                      << after_clear_x << " / "
+                      << cleared_all << " / "
+                      << empty << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: phase7 variable commands threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        Calculator v2_script;
+        const std::string output = v2_script.execute_script(
+            ":v2 x = 1/3\n"
+            ":v2 y = x + 1/6\n",
+            false);
+        const std::string vars = v2_script.list_variables();
+        if (output == "y = 1/2" && vars == "x = 1/3\ny = 1/2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: phase7 v2 script expected y = 1/2 and vars got "
+                      << output << " / " << vars << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: phase7 v2 script threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
         const runtime::FunctionRegistry& registry = runtime::FunctionRegistry::builtins();
         const runtime::FunctionSpec* ncr = registry.find("nCr");
         const runtime::FunctionSpec* binom = registry.find("binom");
@@ -6090,7 +6170,132 @@ int main() {
                   << ex.what() << '\n';
     }
 
+    try {
+        Calculator v2_calculator;
+        const std::string literal =
+            v2_calculator.process_line(":v2 [[1, 2], [3, 4]]", false);
+        const std::string exact_det =
+            v2_calculator.process_line(":v2 det(mat(2, 2, 1/2, 1/3, 2/5, 3/7))", false);
+        const std::string inverse =
+            v2_calculator.process_line(":v2 inverse(mat(2, 2, 1, 2, 3, 4))", false);
+        const std::string rref =
+            v2_calculator.process_line(":v2 rref(mat(2, 3, 1, 2, 3, 2, 4, 6))", false);
+        if (literal == "[[1, 2], [3, 4]]" &&
+            exact_det == "17/210" &&
+            inverse == "[[-2, 1], [3/2, -1/2]]" &&
+            rref == "[[1, 2, 3], [0, 0, 0]]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 matrix exact workflows got "
+                      << literal << " / "
+                      << exact_det << " / "
+                      << inverse << " / "
+                      << rref << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 matrix exact workflows threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        Calculator v2_calculator;
+        const std::string product =
+            v2_calculator.process_line(":v2 mat(2, 2, 1, i, 2i, 3) * mat(2, 2, 1, 2, 3, 4)", false);
+        const std::string symbolic_det =
+            v2_calculator.process_line(":v2 det([[x, 1], [1, y]])", false);
+        const std::string symbolic_product =
+            v2_calculator.process_line(":v2 [[x, 1], [0, y]] * [[1], [z]]", false);
+        if (product == "[[1 + 3i, 2 + 4i], [9 + 2i, 12 + 4i]]" &&
+            symbolic_det == "-1 + x * y" &&
+            symbolic_product == "[[x + z], [y * z]]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 matrix complex/symbolic workflows got "
+                      << product << " / "
+                      << symbolic_det << " / "
+                      << symbolic_product << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 matrix complex/symbolic workflows threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    const std::string legacy_v4_state_path =
+        make_test_path("calculator_legacy_v4_state_test.txt").string();
+    try {
+        {
+            std::ofstream legacy_state(legacy_v4_state_path);
+            legacy_state << "STATE_V4\n"
+                         << "VAR\tlegacy\tEXACT\t1\t3\t0.33333333333333331\n";
+        }
+        Calculator loaded_legacy;
+        const std::string loaded_message = loaded_legacy.load_state(legacy_v4_state_path);
+        const std::string vars = loaded_legacy.list_variables();
+        if (loaded_message == "Loaded variables from: " + legacy_v4_state_path &&
+            vars == "legacy = 1/3") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: phase7 legacy V4 state load got "
+                      << loaded_message << " / " << vars << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: phase7 legacy V4 state load threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    const std::string v2_state_path =
+        make_test_path("calculator_v2_state_test.txt").string();
+    try {
+        Calculator saved_v2;
+        (void)saved_v2.process_line(":precision 72", false);
+        (void)saved_v2.process_line(":v2 x = 1/3", false);
+        (void)saved_v2.process_line(":v2 z = 3 + 4i", false);
+        (void)saved_v2.process_line(":v2 m = [[1, 2], [3, 4]]", false);
+        (void)saved_v2.save_state(v2_state_path);
+
+        std::ifstream state_file(v2_state_path);
+        const std::string header = [&state_file]() {
+            std::string first_line;
+            std::getline(state_file, first_line);
+            return first_line;
+        }();
+
+        Calculator loaded_v2;
+        const std::string loaded_message = loaded_v2.load_state(v2_state_path);
+        const std::string vars = loaded_v2.list_variables();
+        const std::string value = loaded_v2.process_line(":v2 x + 1/6", false);
+        const std::string precision = loaded_v2.process_line(":v2precision 72", false);
+        if (header == "STATE_V5" &&
+            loaded_message == "Loaded variables from: " + v2_state_path &&
+            vars == "m = [[1, 2], [3, 4]]\nx = 1/3\nz = 3 + 4i" &&
+            value == "1/2" &&
+            precision == "2.0 precision: 72") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: phase7 v2 state persistence got header="
+                      << header << " message=" << loaded_message
+                      << " vars=" << vars
+                      << " value=" << value
+                      << " precision=" << precision << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: phase7 v2 state persistence threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
     std::error_code cleanup_error;
+    std::filesystem::remove(v2_state_path, cleanup_error);
+    cleanup_error.clear();
+    std::filesystem::remove(legacy_v4_state_path, cleanup_error);
+    cleanup_error.clear();
     std::filesystem::remove(matrix_save_path, cleanup_error);
     cleanup_error.clear();
     std::filesystem::remove(save_path, cleanup_error);

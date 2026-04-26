@@ -445,6 +445,15 @@ std::string execute_simple_script_line(Calculator* calculator,
                                        Calculator::Impl* impl,
                                        const std::string& text,
                                        bool exact_mode) {
+    const std::string trimmed_text = trim_copy(text);
+    if (trimmed_text.rfind(":v2", 0) == 0 ||
+        trimmed_text.rfind(":precision ", 0) == 0) {
+        std::string v2_output;
+        if (try_process_v2_line(impl, trimmed_text, &v2_output)) {
+            return v2_output;
+        }
+    }
+
     std::vector<std::string> print_arguments;
     if (split_named_call_with_arguments(text, "print", &print_arguments)) {
         if (print_arguments.empty()) {

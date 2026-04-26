@@ -9,6 +9,7 @@ namespace runtime {
 Value::Value() : value_(numeric::Number()) {}
 Value::Value(const numeric::Number& number) : value_(number) {}
 Value::Value(const expression::Expr& expr) : value_(expr) {}
+Value::Value(const MatrixValue& matrix) : value_(matrix) {}
 Value::Value(const std::string& text) : value_(text) {}
 
 bool Value::is_number() const {
@@ -17,6 +18,10 @@ bool Value::is_number() const {
 
 bool Value::is_expr() const {
     return std::holds_alternative<expression::Expr>(value_);
+}
+
+bool Value::is_matrix() const {
+    return std::holds_alternative<MatrixValue>(value_);
 }
 
 bool Value::is_string() const {
@@ -37,6 +42,13 @@ const expression::Expr& Value::as_expr() const {
     return std::get<expression::Expr>(value_);
 }
 
+const MatrixValue& Value::as_matrix() const {
+    if (!is_matrix()) {
+        throw std::runtime_error("value is not a matrix");
+    }
+    return std::get<MatrixValue>(value_);
+}
+
 const std::string& Value::as_string() const {
     if (!is_string()) {
         throw std::runtime_error("value is not a string");
@@ -50,6 +62,9 @@ std::string Value::to_string() const {
     }
     if (is_expr()) {
         return expression::print(as_expr());
+    }
+    if (is_matrix()) {
+        return as_matrix().to_string();
     }
     return as_string();
 }

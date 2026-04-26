@@ -119,7 +119,8 @@ const std::vector<std::string>& command_completion_words() {
         ":hexprefix", ":hexprefix on", ":hexprefix off",
         ":hexcase", ":hexcase upper", ":hexcase lower",
         ":vars", ":funcs", ":history", ":clear", ":clearfunc", ":clearfuncs",
-        ":save", ":load", ":run"
+        ":save", ":load", ":run", ":precision",
+        ":v2", ":v2vars", ":v2clear", ":v2precision"
     };
     return words;
 }
@@ -448,6 +449,9 @@ std::string execute_repl_line(Calculator& calculator,
     if (line == ":symbolic") {
         return std::string("Symbolic constants mode: ") +
                (calculator.symbolic_constants_mode() ? "ON" : "OFF");
+    }
+    if (line.rfind(":precision ", 0) == 0) {
+        return calculator.process_line(line, *exact_mode);
     }
     if (line == ":hexprefix on") {
         return calculator.set_hex_prefix_mode(true);

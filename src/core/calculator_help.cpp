@@ -14,6 +14,7 @@ std::string build_help_topic(const std::string& topic) {
         "  :exact              Show current exact mode status\n"
         "  :symbolic on|off    Preserve pi/e in scalar display results\n"
         "  :symbolic           Show current symbolic constants mode\n"
+        "  :precision digits   Set 2.0 decimal precision\n"
         "  :hexprefix on|off   Toggle 0x/0X prefix for hex output\n"
         "  :hexprefix          Show current hex prefix mode\n"
         "  :hexcase upper|lower Set hex letter case\n"
@@ -100,6 +101,7 @@ std::string build_help_topic(const std::string& topic) {
         "  :v2 x = 1/3         Assign with the experimental 2.0 exact runtime\n"
         "  z = 3 + 4i          Complex values are routed to the 2.0 runtime\n"
         "  :v2 conj(z)         2.0 complex conjugate\n"
+        "  :precision 80       Set 2.0 decimal precision\n"
         "  :run demo.calc      Run a script file\n"
         "  def fact(n):        Define a script function in a script\n"
         "  print(a, b, c)      Print script values, including strings\n"
@@ -285,6 +287,7 @@ std::string build_help_topic(const std::string& topic) {
         "  :vars               List all stored variables\n"
         "  :clear x            Clear one variable\n"
         "  :clear              Clear all variables\n"
+        "  :precision digits   Set precision for 2.0 decimal evaluation\n"
         "  f(x) = x^2 + 1      Define a custom expression function\n"
         "  :funcs              List custom expression/script functions\n"
         "  :clearfunc f        Clear one custom function\n"
@@ -297,7 +300,8 @@ std::string build_help_topic(const std::string& topic) {
         "Persistence:\n"
         "  :save state.txt     Save current variables and custom functions\n"
         "  :load state.txt     Load a previously saved state file\n"
-        "  Save/load keeps:    scalars, exact values, strings, matrices, custom functions, script functions\n"
+        "  Save/load keeps:    scalars, exact values, strings, matrices, 2.0 variables, custom functions, script functions\n"
+        "  Format:             new saves use STATE_V5; older STATE_V1..V4 files still load\n"
         "  Tip:                use separate files for different sessions or experiments";
     }
 

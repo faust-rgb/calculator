@@ -11,15 +11,19 @@ Calculator::~Calculator() = default;
 
 std::string Calculator::clear_variable(const std::string& name) {
     const auto it = impl_->variables.find(name);
-    if (it == impl_->variables.end()) {
+    const bool removed_v2 = impl_->v2_environment.erase(name);
+    if (it == impl_->variables.end() && !removed_v2) {
         throw std::runtime_error("unknown variable: " + name);
     }
-    impl_->variables.erase(it);
+    if (it != impl_->variables.end()) {
+        impl_->variables.erase(it);
+    }
     return "Cleared variable: " + name;
 }
 
 std::string Calculator::clear_all_variables() {
     impl_->variables.clear();
+    impl_->v2_environment.clear();
     return "Cleared all variables.";
 }
 
@@ -56,15 +60,25 @@ std::vector<std::string> Calculator::variable_names() const {
     for (const auto& [name, _] : impl_->variables) {
         names.push_back(name);
     }
+    for (const auto& [name, _] : impl_->v2_environment.variables()) {
+        names.push_back(name);
+    }
+    std::sort(names.begin(), names.end());
+    names.erase(std::unique(names.begin(), names.end()), names.end());
     return names;
 }
 
 std::vector<std::string> Calculator::custom_function_names() const {
     std::vector<std::string> names;
-    names.reserve(impl_->functions.size());
+    names.reserve(impl_->functions.size() + impl_->script_functions.size());
     for (const auto& [name, _] : impl_->functions) {
         names.push_back(name);
     }
+    for (const auto& [name, _] : impl_->script_functions) {
+        names.push_back(name);
+    }
+    std::sort(names.begin(), names.end());
+    names.erase(std::unique(names.begin(), names.end()), names.end());
     return names;
 }
 

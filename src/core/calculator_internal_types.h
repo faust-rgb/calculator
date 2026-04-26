@@ -289,6 +289,9 @@ StoredValue evaluate_expression_value(Calculator* calculator,
 bool try_process_v2_line(Calculator::Impl* impl,
                          const std::string& expression,
                          std::string* output);
+bool set_v2_precision(Calculator::Impl* impl,
+                      const std::string& digits_text,
+                      std::string* output);
 double invoke_script_function_decimal(Calculator* calculator,
                                       Calculator::Impl* impl,
                                       const std::string& name,

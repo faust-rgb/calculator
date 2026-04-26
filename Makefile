@@ -42,6 +42,7 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/cas/differentiate.cpp \
 	$(SRC_DIR)/cas/integrate.cpp \
 	$(SRC_DIR)/runtime/value.cpp \
+	$(SRC_DIR)/runtime/matrix_value.cpp \
 	$(SRC_DIR)/runtime/environment.cpp \
 	$(SRC_DIR)/runtime/function_registry.cpp \
 	$(SRC_DIR)/runtime/line_executor.cpp \
@@ -78,6 +79,7 @@ COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/cas/differentiate.h \
 	$(SRC_DIR)/cas/integrate.h \
 	$(SRC_DIR)/runtime/value.h \
+	$(SRC_DIR)/runtime/matrix_value.h \
 	$(SRC_DIR)/runtime/environment.h \
 	$(SRC_DIR)/runtime/function_registry.h \
 	$(SRC_DIR)/runtime/line_executor.h \
