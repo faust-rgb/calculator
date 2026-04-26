@@ -1,8 +1,14 @@
 #include "calculator.h"
+#include "environment.h"
+#include "evaluator.h"
 #include "function_analysis.h"
+#include "function_registry.h"
+#include "line_executor.h"
 #include "multivariable_integrator.h"
 #include "mymath.h"
+#include "number.h"
 #include "ode_solver.h"
+#include "parser.h"
 #include "symbolic_expression.h"
 
 #include <exception>
@@ -5430,6 +5436,658 @@ int main() {
         std::cout << "FAIL: complex eigenvalue case expected an error but succeeded\n";
     } catch (const std::exception&) {
         ++passed;
+    }
+
+    try {
+        const numeric::BigInt a =
+            numeric::BigInt::from_string("123456789012345678901234567890");
+        const numeric::BigInt b =
+            numeric::BigInt::from_string("987654321098765432109876543210");
+        if ((a + b).to_string() == "1111111110111111111011111111100" &&
+            (b - a).to_string() == "864197532086419753208641975320" &&
+            (numeric::BigInt::pow(numeric::BigInt(2), 100).to_string() ==
+             "1267650600228229401496703205376")) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 BigInt arithmetic produced unexpected output\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 BigInt arithmetic threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const numeric::Rational third(numeric::BigInt(1), numeric::BigInt(3));
+        const numeric::Rational sixth(numeric::BigInt(1), numeric::BigInt(6));
+        const numeric::Rational exact = third + sixth;
+        const numeric::Rational power = numeric::Rational::pow(
+            numeric::Rational(numeric::BigInt(2), numeric::BigInt(3)), 20);
+        if (exact.to_string() == "1/2" &&
+            power.to_string() == "1048576/3486784401") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 Rational arithmetic expected 1/2 and 1048576/3486784401 got "
+                      << exact.to_string() << " and " << power.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 Rational arithmetic threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        numeric::PrecisionContext context;
+        context.digits = 40;
+        const numeric::BigDecimal decimal = numeric::BigDecimal::from_rational(
+            numeric::Rational(numeric::BigInt(1), numeric::BigInt(3)), context);
+        const numeric::BigDecimal sum =
+            numeric::BigDecimal::from_string("0.1") +
+            numeric::BigDecimal::from_string("0.2");
+        if (decimal.to_string() == "0.3333333333333333333333333333333333333333" &&
+            sum.to_string() == "0.3") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 BigDecimal expected repeating 1/3 and 0.3 got "
+                      << decimal.to_string() << " and " << sum.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 BigDecimal arithmetic threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        numeric::PrecisionContext context;
+        const numeric::Complex i(numeric::BigDecimal(), numeric::BigDecimal(numeric::BigInt(1)));
+        const numeric::Number squared = numeric::multiply(numeric::Number(i),
+                                                          numeric::Number(i),
+                                                          context);
+        const numeric::Number promoted = numeric::add(
+            numeric::Number(numeric::Rational(numeric::BigInt(1), numeric::BigInt(3))),
+            numeric::Number(numeric::Rational(numeric::BigInt(1), numeric::BigInt(6))),
+            context);
+        if (squared.to_string() == "-1" && promoted.to_string() == "1/2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 Number/Complex expected -1 and 1/2 got "
+                      << squared.to_string() << " and " << promoted.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 Number/Complex arithmetic threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        const runtime::Value value =
+            expression::evaluate(expression::parse_expression("1 + 2 * 3"), env);
+        if (value.to_string() == "7") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 expression arithmetic expected 7 got "
+                      << value.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 expression arithmetic threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        const runtime::Value value =
+            expression::evaluate(expression::parse_expression("1/3 + 1/6"), env);
+        if (value.to_string() == "1/2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 expression rational expected 1/2 got "
+                      << value.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 expression rational threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        env.set("x", expression::evaluate(expression::parse_expression("1/3"), env),
+                expression::parse_expression("1/3"));
+        const runtime::Value value =
+            expression::evaluate(expression::parse_expression("x + 1/6"), env);
+        if (value.to_string() == "1/2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 expression variable expected 1/2 got "
+                      << value.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 expression variable threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        const runtime::Value z =
+            expression::evaluate(expression::parse_expression("3 + 4i"), env);
+        const runtime::Value square_i =
+            expression::evaluate(expression::parse_expression("i ^ 2"), env);
+        if (z.to_string() == "3 + 4i" && square_i.to_string() == "-1") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 complex parser expected 3 + 4i and -1 got "
+                      << z.to_string() << " and " << square_i.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 complex parser threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        const runtime::Value value =
+            expression::evaluate(expression::parse_expression("sqrt(2)"), env);
+        if (value.to_string() == "sqrt(2)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 unevaluated function expected sqrt(2) got "
+                      << value.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 unevaluated function threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        const runtime::Value sqrt_value =
+            expression::evaluate(expression::parse_expression("sqrt(144)"), env);
+        const runtime::Value rational_sqrt =
+            expression::evaluate(expression::parse_expression("sqrt(4/9)"), env);
+        const runtime::Value pow_value =
+            expression::evaluate(expression::parse_expression("pow(2/3, 3)"), env);
+        if (sqrt_value.to_string() == "12" &&
+            rational_sqrt.to_string() == "2/3" &&
+            pow_value.to_string() == "8/27") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 function registry expected 12, 2/3, 8/27 got "
+                      << sqrt_value.to_string() << ", "
+                      << rational_sqrt.to_string() << ", "
+                      << pow_value.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 function registry arithmetic threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        const runtime::Value real_value =
+            expression::evaluate(expression::parse_expression("real(3 + 4i)"), env);
+        const runtime::Value imag_value =
+            expression::evaluate(expression::parse_expression("imag(3 + 4i)"), env);
+        const runtime::Value conj_value =
+            expression::evaluate(expression::parse_expression("conj(3 + 4i)"), env);
+        if (real_value.to_string() == "3" &&
+            imag_value.to_string() == "4" &&
+            conj_value.to_string() == "3 - 4i") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 complex functions expected 3, 4, 3 - 4i got "
+                      << real_value.to_string() << ", "
+                      << imag_value.to_string() << ", "
+                      << conj_value.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 complex functions threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        const runtime::Value thousand =
+            expression::evaluate(expression::parse_expression("1e3"), env);
+        const runtime::Value decimal =
+            expression::evaluate(expression::parse_expression("1.5e-2"), env);
+        const runtime::Value imaginary =
+            expression::evaluate(expression::parse_expression("2e3i"), env);
+        if (thousand.to_string() == "1000" &&
+            decimal.to_string() == "0.015" &&
+            imaginary.to_string() == "2000i") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 scientific literals expected 1000, 0.015, 2000i got "
+                      << thousand.to_string() << ", "
+                      << decimal.to_string() << ", "
+                      << imaginary.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 scientific literals threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        const runtime::Value factorial =
+            expression::evaluate(expression::parse_expression("factorial(30)"), env);
+        const runtime::Value combination =
+            expression::evaluate(expression::parse_expression("nCr(50, 6)"), env);
+        const runtime::Value permutation =
+            expression::evaluate(expression::parse_expression("nPr(10, 3)"), env);
+        if (factorial.to_string() == "265252859812191058636308480000000" &&
+            combination.to_string() == "15890700" &&
+            permutation.to_string() == "720") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 combinatorics expected factorial(30), 15890700, 720 got "
+                      << factorial.to_string() << ", "
+                      << combination.to_string() << ", "
+                      << permutation.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 combinatorics threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        const runtime::Value gcd_value =
+            expression::evaluate(expression::parse_expression("gcd(48, 18, 30)"), env);
+        const runtime::Value lcm_value =
+            expression::evaluate(expression::parse_expression("lcm(12, 18, 30)"), env);
+        const runtime::Value abs_value =
+            expression::evaluate(expression::parse_expression("abs(-7/3)"), env);
+        const runtime::Value sign_value =
+            expression::evaluate(expression::parse_expression("sign(-0.25)"), env);
+        if (gcd_value.to_string() == "6" &&
+            lcm_value.to_string() == "180" &&
+            abs_value.to_string() == "7/3" &&
+            sign_value.to_string() == "-1") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 integer helpers expected 6, 180, 7/3, -1 got "
+                      << gcd_value.to_string() << ", "
+                      << lcm_value.to_string() << ", "
+                      << abs_value.to_string() << ", "
+                      << sign_value.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 integer helpers threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        const runtime::LineResult assigned =
+            runtime::evaluate_line("x = 1/3", env);
+        const runtime::LineResult value =
+            runtime::evaluate_line("x + 1/6", env);
+        if (assigned.to_string() == "x = 1/3" &&
+            value.to_string() == "1/2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 line assignment expected x = 1/3 and 1/2 got "
+                      << assigned.to_string() << " and " << value.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 line assignment threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        const runtime::LineResult z =
+            runtime::evaluate_line("z = 3 + 4i", env);
+        const runtime::LineResult conj_z =
+            runtime::evaluate_line("conj(z)", env);
+        if (z.to_string() == "z = 3 + 4i" &&
+            conj_z.to_string() == "3 - 4i") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 complex line assignment expected z = 3 + 4i and 3 - 4i got "
+                      << z.to_string() << " and " << conj_z.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 complex line assignment threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        (void)runtime::evaluate_line("x = sqrt(2)", env);
+        (void)runtime::evaluate_line("z = 3 + 4i", env);
+        const std::string vars = runtime::list_variables(env);
+        if (vars == "x = sqrt(2)\nz = 3 + 4i") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 list variables expected x = sqrt(2)\\nz = 3 + 4i got "
+                      << vars << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 list variables threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        runtime::Environment env;
+        (void)runtime::evaluate_line("x == 1", env);
+        ++failed;
+        std::cout << "FAIL: v2 line executor expected x == 1 to remain unsupported but parse cleanly as non-assignment error\n";
+    } catch (const std::exception&) {
+        ++passed;
+    }
+
+    try {
+        Calculator v2_calculator;
+        const std::string assigned = v2_calculator.process_line(":v2 x = 1/3", false);
+        const std::string value = v2_calculator.process_line(":v2 x + 1/6", false);
+        if (assigned == "x = 1/3" && value == "1/2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: calculator :v2 expected x = 1/3 and 1/2 got "
+                      << assigned << " and " << value << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: calculator :v2 threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        Calculator v2_calculator;
+        const std::string assigned = v2_calculator.process_line("z = 3 + 4i", false);
+        const std::string conjugated = v2_calculator.process_line(":v2 conj(z)", false);
+        const std::string added = v2_calculator.process_line("z + i", false);
+        if (assigned == "z = 3 + 4i" &&
+            conjugated == "3 - 4i" &&
+            added == "3 + 5i") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: calculator v2 complex bridge expected z = 3 + 4i, 3 - 4i, 3 + 5i got "
+                      << assigned << ", " << conjugated << ", " << added << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: calculator v2 complex bridge threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        Calculator v2_calculator;
+        (void)v2_calculator.process_line(":v2 x = sqrt(2)", false);
+        (void)v2_calculator.process_line("z = 3 + 4i", false);
+        const std::string vars = v2_calculator.process_line(":v2vars", false);
+        const std::string precision = v2_calculator.process_line(":v2precision 80", false);
+        const std::string cleared = v2_calculator.process_line(":v2clear", false);
+        const std::string empty_vars = v2_calculator.process_line(":v2vars", false);
+        if (vars == "x = sqrt(2)\nz = 3 + 4i" &&
+            precision == "2.0 precision: 80" &&
+            cleared == "Cleared all 2.0 variables." &&
+            empty_vars == "No variables defined.") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: calculator v2 commands got vars=" << vars
+                      << " precision=" << precision
+                      << " cleared=" << cleared
+                      << " empty=" << empty_vars << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: calculator v2 commands threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const runtime::FunctionRegistry& registry = runtime::FunctionRegistry::builtins();
+        const runtime::FunctionSpec* ncr = registry.find("nCr");
+        const runtime::FunctionSpec* binom = registry.find("binom");
+        if (ncr != nullptr &&
+            binom != nullptr &&
+            ncr->name == "nCr" &&
+            binom->name == "nCr" &&
+            !ncr->category.empty() &&
+            !ncr->help.empty()) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 function registry metadata/alias lookup failed\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 function registry metadata threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        Calculator v2_calculator;
+        const std::string add_zero =
+            v2_calculator.process_line(":v2 simplify(x + 0)", false);
+        const std::string square =
+            v2_calculator.process_line(":v2 simplify(x * x)", false);
+        const std::string inverse =
+            v2_calculator.process_line(":v2 simplify(x * x^-1)", false);
+        const std::string trig =
+            v2_calculator.process_line(":v2 simplify(sin(x)^2 + cos(x)^2)", false);
+        const std::string exp_ln =
+            v2_calculator.process_line(":v2 simplify(exp(ln(x)))", false);
+        if (add_zero == "x" &&
+            square == "x ^ 2" &&
+            inverse == "1" &&
+            trig == "1" &&
+            exp_ln == "x") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 CAS simplify got "
+                      << add_zero << ", "
+                      << square << ", "
+                      << inverse << ", "
+                      << trig << ", "
+                      << exp_ln << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 CAS simplify threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        Calculator v2_calculator;
+        const std::string chain =
+            v2_calculator.process_line(":v2 diff(sin(x^2), x)", false);
+        const std::string self_power =
+            v2_calculator.process_line(":v2 diff(x^x, x)", false);
+        const std::string log_sin =
+            v2_calculator.process_line(":v2 diff(ln(sin(x)), x)", false);
+        const std::string unknown =
+            v2_calculator.process_line(":v2 diff(f(x), x)", false);
+        if (chain == "2 * cos(x ^ 2) * x" &&
+            self_power == "(1 + ln(x)) * x ^ x" &&
+            log_sin == "cot(x)" &&
+            unknown == "Derivative(f(x), x)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 CAS diff got "
+                      << chain << ", "
+                      << self_power << ", "
+                      << log_sin << ", "
+                      << unknown << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 CAS diff threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        Calculator v2_calculator;
+        const std::string helpers =
+            v2_calculator.process_line(":v2 [floor(-7/3), ceil(-7/3), trunc(-7/3), mod(-17, 5)]", false);
+        const std::string exact_scientific =
+            v2_calculator.process_line(":v2 [sin(0), cos(0), tan(0), exp(0), ln(1), sinh(0), cosh(0), tanh(0), asin(0), atan(0)]", false);
+        const std::string aggregates =
+            v2_calculator.process_line(":v2 [sum(1/3, 1/6, 1/2), mean(1, 2, 3), avg(1, 2, 3)]", false);
+        const std::string statistics =
+            v2_calculator.process_line(":v2 [median(9, 1, 5, 2), mode(1, 2, 2, 3), var(1, 2, 3)]", false);
+        const std::string integer_tools =
+            v2_calculator.process_line(":v2 [fib(10), is_prime(17), next_prime(20), prev_prime(20), prime_pi(20), phi(9)]", false);
+        const std::string units =
+            v2_calculator.process_line(":v2 [celsius(212), fahrenheit(100), kelvin(0)]", false);
+        const std::string comparisons =
+            v2_calculator.process_line(":v2 [min(7/3, 5/2), max(7/3, 5/2), clamp(12, 0, 10), heaviside(-1), impulse(0)]", false);
+        if (helpers == "[-3, -2, -2, -2]" &&
+            exact_scientific == "[0, 1, 0, 1, 0, 0, 1, 0, 0, 0]" &&
+            aggregates == "[1, 2, 2]" &&
+            statistics == "[7/2, 2, 2/3]" &&
+            integer_tools == "[55, 1, 23, 19, 8, 6]" &&
+            units == "[100, 212, 5463/20]" &&
+            comparisons == "[7/3, 5/2, 10, 0, 1]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 migrated helpers got "
+                      << helpers << " / "
+                      << exact_scientific << " / "
+                      << aggregates << " / "
+                      << statistics << " / "
+                      << integer_tools << " / "
+                      << units << " / "
+                      << comparisons << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 migrated helpers threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        Calculator v2_calculator;
+        const std::string gradient =
+            v2_calculator.process_line(":v2 gradient(x^2 + x*y + y^2, [x, y])", false);
+        const std::string jacobian =
+            v2_calculator.process_line(":v2 jacobian([x^2 + y, x*y], [x, y])", false);
+        const std::string hessian =
+            v2_calculator.process_line(":v2 hessian(x^2 + x*y + y^2, [x, y])", false);
+        if (gradient == "[2 * x + y, 2 * y + x]" &&
+            jacobian == "[[2 * x, 1], [y, x]]" &&
+            hessian == "[[2, 1], [1, 2]]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 gradient/jacobian/hessian got "
+                      << gradient << " / "
+                      << jacobian << " / "
+                      << hessian << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 gradient/jacobian/hessian threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        Calculator v2_calculator;
+        const std::string polynomial =
+            v2_calculator.process_line(":v2 integrate(x^3 + 2*x, x)", false);
+        const std::string chain =
+            v2_calculator.process_line(":v2 integrate(2*x*cos(x^2), x)", false);
+        const std::string rational =
+            v2_calculator.process_line(":v2 integrate(1/(x^2 + 1), x)", false);
+        const std::string parts =
+            v2_calculator.process_line(":v2 integrate(x*exp(x), x)", false);
+        if (polynomial == "1/4 * x ^ 4 + x ^ 2" &&
+            chain == "sin(x ^ 2)" &&
+            rational == "atan(x)" &&
+            parts == "-1 * exp(x) + exp(x) * x") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 CAS integration acceptance got "
+                      << polynomial << " / "
+                      << chain << " / "
+                      << rational << " / "
+                      << parts << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 CAS integration acceptance threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        Calculator v2_calculator;
+        const std::string table =
+            v2_calculator.process_line(":v2 [integrate(sin(x), x), integrate(cos(x), x), integrate(x^-1, x), integrate(ln(x), x)]", false);
+        const std::string linear =
+            v2_calculator.process_line(":v2 [integrate(exp(2*x + 1), x), integrate(sin(3*x), x), integrate(cos(4*x), x), integrate(tan(x), x), integrate(cot(x), x)]", false);
+        const std::string special =
+            v2_calculator.process_line(":v2 [integrate(exp(-x^2), x), integrate(exp(x^2), x)]", false);
+        const std::string rational =
+            v2_calculator.process_line(":v2 [integrate(1/(2*x + 3), x), integrate(2*x/(x^2 + 1), x)]", false);
+        const std::string product =
+            v2_calculator.process_line(":v2 [integrate(x^2*exp(x), x), integrate(x^2*sin(x), x), integrate(x^2*cos(x), x)]", false);
+        const std::string unresolved =
+            v2_calculator.process_line(":v2 integrate(f(x), x)", false);
+        const std::string partial =
+            v2_calculator.process_line(":v2 integrate(x + f(x), x)", false);
+        if (table == "[-1 * cos(x), sin(x), ln(x), -1 * x + ln(x) * x]" &&
+            linear == "[1/2 * exp(1 + 2 * x), -1/3 * cos(3 * x), 1/4 * sin(4 * x), -1 * ln(cos(x)), ln(sin(x))]" &&
+            special == "[1/2 * erf(x) * sqrt(pi), 1/2 * erfi(x) * sqrt(pi)]" &&
+            rational == "[1/2 * ln(2 * x + 3), ln(1 + x ^ 2)]" &&
+            product == "[(-1 * exp(x) + exp(x) * x) * -2 + exp(x) * x ^ 2, -1 * cos(x) * x ^ 2 + 2 * (cos(x) + sin(x) * x), (-1 * cos(x) * x + sin(x)) * -2 + sin(x) * x ^ 2]" &&
+            unresolved == "integral(f(x), x)" &&
+            partial == "1/2 * x ^ 2 + integral(f(x), x)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: v2 CAS integration table/special/unresolved got "
+                      << table << " / "
+                      << linear << " / "
+                      << special << " / "
+                      << rational << " / "
+                      << product << " / "
+                      << unresolved << " / "
+                      << partial << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: v2 CAS integration table/special/unresolved threw unexpected error: "
+                  << ex.what() << '\n';
     }
 
     std::error_code cleanup_error;

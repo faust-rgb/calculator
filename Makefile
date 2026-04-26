@@ -10,7 +10,7 @@ APP := $(BIN_DIR)/calculator
 TEST_APP := $(BIN_DIR)/calculator_tests
 SRC_DIR := src
 TEST_DIR := test
-SRC_DIRS := $(SRC_DIR)/app $(SRC_DIR)/core $(SRC_DIR)/math $(SRC_DIR)/matrix $(SRC_DIR)/analysis $(SRC_DIR)/algebra $(SRC_DIR)/symbolic $(SRC_DIR)/script
+SRC_DIRS := $(SRC_DIR)/app $(SRC_DIR)/core $(SRC_DIR)/math $(SRC_DIR)/matrix $(SRC_DIR)/analysis $(SRC_DIR)/algebra $(SRC_DIR)/symbolic $(SRC_DIR)/script $(SRC_DIR)/numeric $(SRC_DIR)/expression $(SRC_DIR)/runtime $(SRC_DIR)/compat $(SRC_DIR)/cas
 INCLUDES := $(addprefix -I,$(SRC_DIRS))
 CPPFLAGS += $(INCLUDES) -MMD -MP
 
@@ -29,6 +29,23 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/matrix/matrix.cpp \
 	$(SRC_DIR)/matrix/matrix_expression.cpp \
 	$(SRC_DIR)/matrix/matrix_linear_algebra.cpp \
+	$(SRC_DIR)/numeric/bigint.cpp \
+	$(SRC_DIR)/numeric/rational.cpp \
+	$(SRC_DIR)/numeric/decimal.cpp \
+	$(SRC_DIR)/numeric/complex.cpp \
+	$(SRC_DIR)/numeric/number.cpp \
+	$(SRC_DIR)/expression/expr.cpp \
+	$(SRC_DIR)/expression/parser.cpp \
+	$(SRC_DIR)/expression/printer.cpp \
+	$(SRC_DIR)/expression/evaluator.cpp \
+	$(SRC_DIR)/cas/simplify.cpp \
+	$(SRC_DIR)/cas/differentiate.cpp \
+	$(SRC_DIR)/cas/integrate.cpp \
+	$(SRC_DIR)/runtime/value.cpp \
+	$(SRC_DIR)/runtime/environment.cpp \
+	$(SRC_DIR)/runtime/function_registry.cpp \
+	$(SRC_DIR)/runtime/line_executor.cpp \
+	$(SRC_DIR)/compat/legacy_commands.cpp \
 	$(SRC_DIR)/analysis/function_analysis.cpp \
 	$(SRC_DIR)/analysis/multivariable_integrator.cpp \
 	$(SRC_DIR)/analysis/ode_solver.cpp \
@@ -47,6 +64,23 @@ COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/math/mymath_internal.h \
 	$(SRC_DIR)/matrix/matrix.h \
 	$(SRC_DIR)/matrix/matrix_internal.h \
+	$(SRC_DIR)/numeric/bigint.h \
+	$(SRC_DIR)/numeric/rational.h \
+	$(SRC_DIR)/numeric/decimal.h \
+	$(SRC_DIR)/numeric/complex.h \
+	$(SRC_DIR)/numeric/number.h \
+	$(SRC_DIR)/numeric/precision_context.h \
+	$(SRC_DIR)/expression/expr.h \
+	$(SRC_DIR)/expression/parser.h \
+	$(SRC_DIR)/expression/printer.h \
+	$(SRC_DIR)/expression/evaluator.h \
+	$(SRC_DIR)/cas/simplify.h \
+	$(SRC_DIR)/cas/differentiate.h \
+	$(SRC_DIR)/cas/integrate.h \
+	$(SRC_DIR)/runtime/value.h \
+	$(SRC_DIR)/runtime/environment.h \
+	$(SRC_DIR)/runtime/function_registry.h \
+	$(SRC_DIR)/runtime/line_executor.h \
 	$(SRC_DIR)/analysis/function_analysis.h \
 	$(SRC_DIR)/analysis/multivariable_integrator.h \
 	$(SRC_DIR)/analysis/ode_solver.h \

@@ -29,6 +29,11 @@ double Calculator::evaluate_raw(const std::string& expression) {
 }
 
 std::string Calculator::evaluate_for_display(const std::string& expression, bool exact_mode) {
+    std::string v2_output;
+    if (try_process_v2_line(impl_.get(), expression, &v2_output)) {
+        return v2_output;
+    }
+
     // 显示型功能优先于普通数值/分数显示，例如 hex(255) 应直接得到 "FF"。
     const std::map<std::string, StoredValue> variables = visible_variables(impl_.get());
     std::string converted;
@@ -56,6 +61,11 @@ std::string Calculator::evaluate_for_display(const std::string& expression, bool
 }
 
 std::string Calculator::process_line(const std::string& expression, bool exact_mode) {
+    std::string v2_output;
+    if (try_process_v2_line(impl_.get(), expression, &v2_output)) {
+        return v2_output;
+    }
+
     std::string lhs;
     std::string rhs;
     if (!split_assignment(expression, &lhs, &rhs)) {

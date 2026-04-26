@@ -28,6 +28,10 @@ std::string build_help_topic(const std::string& topic) {
         "  :save file          Save variables to a file\n"
         "  :load file          Load variables from a file\n"
         "  :run file.calc      Execute a .calc script file\n"
+        "  :v2 expr            Evaluate expr with the experimental 2.0 runtime\n"
+        "  :v2vars             List 2.0 runtime variables\n"
+        "  :v2clear            Clear 2.0 runtime variables\n"
+        "  :v2precision digits Set 2.0 decimal precision\n"
         "  exit, quit          Exit the calculator";
     }
 
@@ -93,6 +97,9 @@ std::string build_help_topic(const std::string& topic) {
         "  :hexprefix on       Show hex results like 0xFF\n"
         "  :hexcase lower      Show hex results like 0xff\n"
         "  pi / 2 + e          Symbolic constants mode example\n"
+        "  :v2 x = 1/3         Assign with the experimental 2.0 exact runtime\n"
+        "  z = 3 + 4i          Complex values are routed to the 2.0 runtime\n"
+        "  :v2 conj(z)         2.0 complex conjugate\n"
         "  :run demo.calc      Run a script file\n"
         "  def fact(n):        Define a script function in a script\n"
         "  print(a, b, c)      Print script values, including strings\n"

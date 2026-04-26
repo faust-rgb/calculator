@@ -40,6 +40,8 @@
 # debug information files
 *.dwo
 *.txt
+!test/golden/
+!test/golden/**
 .codex
 COMPLEX_TEST_REPORT.md
 TEST_REPORT.md

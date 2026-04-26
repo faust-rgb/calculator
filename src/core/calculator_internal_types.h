@@ -3,6 +3,7 @@
 
 #include "calculator.h"
 
+#include "environment.h"
 #include "matrix.h"
 #include "mymath.h"
 #include "script_ast.h"
@@ -118,6 +119,7 @@ struct Calculator::Impl {
     bool symbolic_constants_mode = false;
     bool hex_prefix_mode = false;
     bool hex_uppercase_mode = true;
+    runtime::Environment v2_environment;
 };
 
 struct ScriptSignal {
@@ -284,6 +286,9 @@ StoredValue evaluate_expression_value(Calculator* calculator,
                                       Calculator::Impl* impl,
                                       const std::string& expression,
                                       bool exact_mode);
+bool try_process_v2_line(Calculator::Impl* impl,
+                         const std::string& expression,
+                         std::string* output);
 double invoke_script_function_decimal(Calculator* calculator,
                                       Calculator::Impl* impl,
                                       const std::string& name,
