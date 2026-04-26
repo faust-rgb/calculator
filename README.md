@@ -44,11 +44,16 @@ Large subsystems are now split across normal `.cpp` files instead of implementat
 fragments:
 
 - `src/math/mymath.cpp` and `src/math/mymath_special_functions.cpp`
-- `src/matrix/matrix.cpp` and `src/matrix/matrix_linear_algebra.cpp`
-- `src/core/calculator.cpp` and `src/core/calculator_lifecycle.cpp`
-- `src/symbolic/symbolic_expression_core.cpp`,
-  `src/symbolic/symbolic_expression_calculus.cpp`, and
-  `src/symbolic/symbolic_expression_transforms.cpp`
+- `src/matrix/matrix.cpp`, `src/matrix/matrix_expression.cpp`, and
+  `src/matrix/matrix_linear_algebra.cpp`
+- `src/core/calculator_lifecycle.cpp`, `src/core/calculator_help.cpp`,
+  `src/core/decimal_parser.cpp`, `src/core/precise_decimal_parser.cpp`,
+  `src/core/exact_and_symbolic_render.cpp`, `src/core/calculator_commands.cpp`,
+  and `src/core/state_persistence.cpp`
+- `src/symbolic/node_parser.cpp`, `src/symbolic/simplify.cpp`,
+  `src/symbolic/algebra_helpers.cpp`, `src/symbolic/polynomial_helpers.cpp`,
+  `src/symbolic/transforms.cpp`, `src/symbolic/symbolic_expression_calculus.cpp`,
+  and `src/symbolic/symbolic_expression_transforms.cpp`
 
 Shared internal declarations for these splits live in private headers such as
 `src/math/mymath_internal.h`, `src/matrix/matrix_internal.h`,
@@ -102,7 +107,7 @@ Shared internal declarations for these splits live in private headers such as
 - Session history command: `:history`
 - Interactive help topics for exact mode, variables, persistence, and programmer tools
 - State persistence commands: `:save file`, `:load file`
-- Script execution with `./calculator file.calc` or `:run file.calc`
+- Script execution with `bin/calculator file.calc` or `:run file.calc`
 - Dedicated script syntax guide at `test/script/SYNTAX_GUIDE.md`
 - Separate one-variable custom function analysis module with evaluation,
   derivative, definite integral, indefinite integral value, interval
@@ -124,20 +129,22 @@ Shared internal declarations for these splits live in private headers such as
 make
 ```
 
-This generates the executable `calculator`.
+This generates the executable `bin/calculator`.
 
 The regression suite lives in `test/tests.cpp`.
 
 Current validation status:
 
 - `make test`
+- `make script-test`
+- `make check`
 - expected result: `Passed: 743`, `Failed: 0`
-- comprehensive script check: `./calculator test/script/comprehensive_validation.calc`
+- comprehensive script check: `bin/calculator test/script/comprehensive_validation.calc`
 
 ## Run
 
 ```bash
-./calculator
+bin/calculator
 ```
 
 Example session:
@@ -522,14 +529,14 @@ Runnable script-related inputs are provided in `test/script/`:
 Example commands:
 
 ```bash
-./calculator test/script/comprehensive_validation.calc
-printf ':run test/script/comprehensive_validation.calc\n' | ./calculator
+bin/calculator test/script/comprehensive_validation.calc
+printf ':run test/script/comprehensive_validation.calc\n' | bin/calculator
 ```
 
 For syntax and behavior details, see `test/script/SYNTAX_GUIDE.md`.
 
-`save/load` now persists scalar variables, string variables, expression-style
-custom functions, and script functions. Matrix variables are still excluded.
+`save/load` now persists scalar variables, string variables, matrix variables,
+expression-style custom functions, and script functions.
 
 ## Matrices
 
@@ -574,8 +581,8 @@ Indices are zero-based. For a fuller matrix-specific reference, see
 `solve(A, b)` currently expects a square coefficient matrix and a vector-shaped
 right-hand side.
 
-Matrix variables are currently displayable and usable in expressions, but they
-cannot yet be persisted through `:save` / `:load`.
+Matrix variables are displayable, usable in expressions, and persisted through
+`:save` / `:load`.
 
 ## Variable Management
 
@@ -614,6 +621,9 @@ Cleared all variables.
 > :load state.txt
 Loaded variables from: state.txt
 ```
+
+The state file keeps scalar values, exact fractions, precise decimal text,
+strings, matrices, expression functions, and script functions.
 
 ## Notes
 

@@ -2,7 +2,7 @@
 set -u
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CALC="$ROOT_DIR/calculator"
+CALC="$ROOT_DIR/bin/calculator"
 
 passed=0
 failed=0

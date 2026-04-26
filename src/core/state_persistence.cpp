@@ -2,18 +2,12 @@
 
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
 
 std::string Calculator::save_state(const std::string& path) const {
-    for (const auto& [name, value] : impl_->variables) {
-        (void)name;
-        if (value.is_matrix) {
-            throw std::runtime_error("save_state does not yet support matrix variables");
-        }
-    }
-
     const std::filesystem::path target_path(path);
     const std::filesystem::path temp_path =
         target_path.parent_path() /
@@ -23,10 +17,18 @@ std::string Calculator::save_state(const std::string& path) const {
         throw std::runtime_error("unable to open file for writing: " + path);
     }
 
-    out << "STATE_V3\n";
+    out << "STATE_V4\n";
 
     for (const auto& [name, value] : impl_->variables) {
-        if (value.is_string) {
+        if (value.is_matrix) {
+            out << "VAR\t" << encode_state_field(name)
+                << "\tMATRIX\t" << value.matrix.rows
+                << '\t' << value.matrix.cols;
+            for (double element : value.matrix.data) {
+                out << '\t' << std::setprecision(17) << element;
+            }
+            out << '\n';
+        } else if (value.is_string) {
             out << "VAR\t" << encode_state_field(name)
                 << "\tSTRING\t" << encode_state_field(value.string_value) << '\n';
         } else if (value.exact) {
@@ -129,6 +131,10 @@ std::string Calculator::load_state(const std::string& path) {
             state_version = 3;
             continue;
         }
+        if (line == "STATE_V4") {
+            state_version = 4;
+            continue;
+        }
 
         const std::vector<std::string> parts = split_tab_fields(line);
         if (state_version >= 2) {
@@ -148,6 +154,22 @@ std::string Calculator::load_state(const std::string& path) {
                     }
                     value.is_string = true;
                     value.string_value = decode_state_field(parts[3]);
+                } else if (parts[2] == "MATRIX" && state_version >= 4) {
+                    if (parts.size() < 5) {
+                        throw std::runtime_error("invalid save file format");
+                    }
+                    const std::size_t rows =
+                        static_cast<std::size_t>(std::stoull(parts[3]));
+                    const std::size_t cols =
+                        static_cast<std::size_t>(std::stoull(parts[4]));
+                    if (parts.size() != rows * cols + 5) {
+                        throw std::runtime_error("invalid save file format");
+                    }
+                    value.is_matrix = true;
+                    value.matrix = matrix::Matrix(rows, cols, 0.0);
+                    for (std::size_t i = 0; i < value.matrix.data.size(); ++i) {
+                        value.matrix.data[i] = std::stod(parts[i + 5]);
+                    }
                 } else if (parts[2] == "EXACT") {
                     if (parts.size() != 6) {
                         throw std::runtime_error("invalid save file format");

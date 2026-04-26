@@ -14,31 +14,47 @@ the main functions.
 
 ## Main Files
 
-- `/home/roselia/ai-code/calculator/src/app/main.cpp`
+- `src/app/main.cpp`
   Terminal interaction, history, autocomplete, and command dispatch
-- `/home/roselia/ai-code/calculator/src/core/calculator.cpp`
-  Expression parsing, exact mode, symbolic constants mode, variables, display-only features, persistence
-- `/home/roselia/ai-code/calculator/src/core/calculator_lifecycle.cpp`
+- `src/core/decimal_parser.cpp`
+  Standard double-based expression parsing
+- `src/core/precise_decimal_parser.cpp`
+  High precision decimal parsing and arithmetic
+- `src/core/exact_and_symbolic_render.cpp`
+  Exact-mode parsing plus symbolic-constants rendering
+- `src/core/calculator_commands.cpp`
+  Command-style function processing and advanced calculator entry points
+- `src/core/state_persistence.cpp`
+  Save/load format handling
+- `src/core/calculator_lifecycle.cpp`
   Calculator construction, mode toggles, completion lists, and lightweight runtime helpers
-- `/home/roselia/ai-code/calculator/src/core/calculator.h`
+- `src/core/calculator.h`
   Public calculator API
-- `/home/roselia/ai-code/calculator/src/symbolic/symbolic_expression_core.cpp`
-  Symbolic expression parsing, simplification, substitution, and rendering infrastructure
-- `/home/roselia/ai-code/calculator/src/symbolic/symbolic_expression_calculus.cpp`
+- `src/symbolic/node_parser.cpp`
+  Symbolic expression parsing and node construction
+- `src/symbolic/simplify.cpp`
+  Symbolic simplification rules
+- `src/symbolic/algebra_helpers.cpp`
+  Symbolic substitution and algebra support helpers
+- `src/symbolic/polynomial_helpers.cpp`
+  Polynomial-oriented symbolic helpers
+- `src/symbolic/symbolic_expression_calculus.cpp`
   Symbolic differentiation and integration rules
-- `/home/roselia/ai-code/calculator/src/symbolic/symbolic_expression_transforms.cpp`
+- `src/symbolic/symbolic_expression_transforms.cpp`
   Fourier/Laplace/z transform entry points
-- `/home/roselia/ai-code/calculator/src/math/mymath.cpp`
+- `src/math/mymath.cpp`
   Core numerical algorithms and domain handling
-- `/home/roselia/ai-code/calculator/src/math/mymath_special_functions.cpp`
+- `src/math/mymath_special_functions.cpp`
   Trigonometric, inverse-trigonometric, gamma, and Bessel-related implementations
-- `/home/roselia/ai-code/calculator/src/matrix/matrix.cpp`
-  Matrix storage, parsing, expression evaluation, and non-decomposition helpers
-- `/home/roselia/ai-code/calculator/src/matrix/matrix_linear_algebra.cpp`
+- `src/matrix/matrix.cpp`
+  Matrix storage, core operations, statistics, signal helpers, and polynomial helpers
+- `src/matrix/matrix_expression.cpp`
+  Matrix expression parsing, matrix literals, and matrix function dispatch
+- `src/matrix/matrix_linear_algebra.cpp`
   Inversion, decompositions, eigensolvers, RREF, and related linear-algebra routines
-- `/home/roselia/ai-code/calculator/src/math/mymath.h`
+- `src/math/mymath.h`
   Math declarations and shared constants
-- `/home/roselia/ai-code/calculator/test/tests.cpp`
+- `test/tests.cpp`
   Regression suite covering supported behavior
 
 ## Directory Layout
@@ -61,6 +77,10 @@ the main functions.
   Script AST and parser
 - `test`
   Regression tests and runnable example scripts
+- `bin`
+  Ignored build outputs such as `calculator` and `calculator_tests`
+- `build`
+  Ignored object files and generated dependency files for incremental builds
 
 Large implementation areas are split into private implementation `.cpp` files
 with internal headers for shared declarations. Current internal split headers
@@ -85,11 +105,14 @@ User input goes through this rough path:
 
 ## Parsing Model
 
-There are two parser implementations in `src/core/calculator.cpp`.
+Scalar parser implementations are split across focused implementation files
+under `src/core`.
 
 ### `DecimalParser`
 
 Used for standard evaluation with `double`.
+
+Implementation file: `src/core/decimal_parser.cpp`.
 
 This path supports:
 
@@ -102,11 +125,20 @@ This path supports:
 
 Used when exact fraction mode is enabled.
 
+Implementation file: `src/core/exact_and_symbolic_render.cpp`.
+
 This path tries to preserve expressions as `Rational` values.
 
 It supports only operations/functions that still make sense in rational form.
 If a feature cannot stay exact, the code throws `ExactModeUnsupported`, and the
 caller falls back to decimal display.
+
+### `PreciseDecimalParser`
+
+Used for decimal text that needs more precision than `double` display can safely
+preserve.
+
+Implementation file: `src/core/precise_decimal_parser.cpp`.
 
 ## Stored Values
 
@@ -142,10 +174,11 @@ When enabled:
 
 The current implementation lives mainly in:
 
-- `src/core/calculator.cpp`
+- `src/core/calculator_lifecycle.cpp` and `src/core/exact_and_symbolic_render.cpp`
   mode flag, storage, and display dispatch
-- `src/symbolic/symbolic_expression_core.cpp`
-  symbolic parsing and simplification rules
+- `src/symbolic/node_parser.cpp`, `src/symbolic/simplify.cpp`, and
+  `src/symbolic/algebra_helpers.cpp`
+  symbolic parsing, simplification, and substitution rules
 
 ## Display-only Features
 
@@ -181,6 +214,8 @@ Variable state can be saved and restored with:
 
 The persistence format is simple tab-separated text written by
 `Calculator::save_state(...)` and read by `Calculator::load_state(...)`.
+`STATE_V4` adds matrix variables while preserving compatibility with older
+scalar-only state files.
 
 ## Numeric Design Notes
 
@@ -199,9 +234,9 @@ Important numeric behavior:
 
 For future work, the fastest way to rebuild context is:
 
-1. `/home/roselia/ai-code/calculator/HANDOFF.md`
-2. `/home/roselia/ai-code/calculator/README.md`
-3. `/home/roselia/ai-code/calculator/test/tests.cpp`
-4. `/home/roselia/ai-code/calculator/src/core/calculator.cpp`
-5. `/home/roselia/ai-code/calculator/src/symbolic/symbolic_expression_core.cpp`
-6. `/home/roselia/ai-code/calculator/src/math/mymath.cpp`
+1. `HANDOFF.md`
+2. `README.md`
+3. `test/tests.cpp`
+4. `src/core/calculator_commands.cpp`
+5. `src/symbolic/node_parser.cpp`
+6. `src/math/mymath.cpp`

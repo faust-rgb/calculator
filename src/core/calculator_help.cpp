@@ -288,10 +288,9 @@ std::string build_help_topic(const std::string& topic) {
     if (topic == "persistence") {
         return
         "Persistence:\n"
-        "  :save state.txt     Save current scalar variables and custom functions\n"
+        "  :save state.txt     Save current variables and custom functions\n"
         "  :load state.txt     Load a previously saved state file\n"
-        "  Save/load keeps:    scalar variables, exact values, string values, custom functions, script functions\n"
-        "  Current limit:      matrix variables are not saved yet\n"
+        "  Save/load keeps:    scalars, exact values, strings, matrices, custom functions, script functions\n"
         "  Tip:                use separate files for different sessions or experiments";
     }
 

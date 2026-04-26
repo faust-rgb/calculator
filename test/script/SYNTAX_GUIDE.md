@@ -9,7 +9,7 @@ and no statement-ending semicolons.
 From the project root:
 
 ```bash
-./calculator test/script/comprehensive_validation.calc
+bin/calculator test/script/comprehensive_validation.calc
 ```
 
 From the interactive prompt:

@@ -6,9 +6,12 @@
 make test
 ```
 
-The test binary is `calculator_tests`.
+The test binary is `bin/calculator_tests`.
 
 The automated regression source is `test/tests.cpp`.
+
+Use `make script-test` for the CLI script validation, or `make check` to run
+both the C++ regression suite and the script validation.
 
 ## What Is Covered
 
@@ -28,7 +31,7 @@ The automated regression source is `test/tests.cpp`.
 - Symbolic constants mode for scalar expressions using `pi` and `e`
 - Variable listing and clearing commands
 - Session history command
-- Save/load of persisted calculator state
+- Save/load of persisted calculator state, including matrix variables
 - Matrix creation with `vec`, `mat`, `zeros`, and `eye`
 - Matrix reshaping and editing with `resize`, `append_row`, `append_col`, `transpose`, `get`, and `set`
 - Matrix arithmetic including matrix/matrix, matrix/scalar, explicit inverse, positive powers, negative powers for invertible matrices, dot products, and outer products
@@ -63,6 +66,6 @@ Runnable example inputs are stored in `test/script/`:
 You can run them with:
 
 ```bash
-./calculator test/script/comprehensive_validation.calc
-printf ':run test/script/comprehensive_validation.calc\n' | ./calculator
+bin/calculator test/script/comprehensive_validation.calc
+printf ':run test/script/comprehensive_validation.calc\n' | bin/calculator
 ```

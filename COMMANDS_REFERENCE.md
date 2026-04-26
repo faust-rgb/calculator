@@ -84,7 +84,7 @@ Notes:
 
 ## Scripting
 
-Use `./calculator file.calc` or `:run file.calc` to execute scripts. The
+Use `bin/calculator file.calc` or `:run file.calc` to execute scripts. The
 dedicated syntax guide is `test/script/SYNTAX_GUIDE.md`.
 
 ## Autocomplete

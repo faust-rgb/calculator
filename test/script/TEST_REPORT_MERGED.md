@@ -10,8 +10,8 @@ calculator features in one executable regression script.
 ## Validation
 
 ```bash
-./calculator test/script/comprehensive_validation.calc
-printf ':run test/script/comprehensive_validation.calc\n' | ./calculator
+bin/calculator test/script/comprehensive_validation.calc
+printf ':run test/script/comprehensive_validation.calc\n' | bin/calculator
 ```
 
 Both execution modes passed. The script uses an internal score counter; the

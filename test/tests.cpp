@@ -1096,7 +1096,7 @@ int main() {
         const bool ok =
             help.find(":save state.txt") != std::string::npos &&
             help.find(":load state.txt") != std::string::npos &&
-            help.find("matrix variables are not saved yet") != std::string::npos;
+            help.find("matrices") != std::string::npos;
         if (ok) {
             ++passed;
         } else {
@@ -5075,22 +5075,27 @@ int main() {
     }
 
     const std::string matrix_save_path =
-        make_test_path("calculator_matrix_state_should_fail.txt").string();
+        make_test_path("calculator_matrix_state_test.txt").string();
 
     try {
         Calculator matrix_save;
         (void)matrix_save.process_line("a = vec(1, 2)", false);
+        (void)matrix_save.process_line("m = mat(2, 2, 1, 2, 3, 4)", false);
         (void)matrix_save.save_state(matrix_save_path);
-        ++failed;
-        std::cout << "FAIL: save_state with matrix expected an error but succeeded\n";
-    } catch (const std::exception& ex) {
-        if (std::string(ex.what()) == "save_state does not yet support matrix variables") {
+        Calculator matrix_loaded;
+        (void)matrix_loaded.load_state(matrix_save_path);
+        const std::string vars = matrix_loaded.list_variables();
+        if (vars == "a = [1, 2]\nm = [[1, 2], [3, 4]]") {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: save_state with matrix expected specific error got "
-                      << ex.what() << '\n';
+            std::cout << "FAIL: matrix save/load expected persisted variables got "
+                      << vars << '\n';
         }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: matrix save/load threw unexpected error: "
+                  << ex.what() << '\n';
     }
 
     try {

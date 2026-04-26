@@ -8,8 +8,8 @@ notes.
 From the project root:
 
 ```bash
-./calculator test/script/comprehensive_validation.calc
-printf ':run test/script/comprehensive_validation.calc\n' | ./calculator
+bin/calculator test/script/comprehensive_validation.calc
+printf ':run test/script/comprehensive_validation.calc\n' | bin/calculator
 ```
 
 The expected final output is:

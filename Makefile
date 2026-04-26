@@ -1,13 +1,18 @@
-CXX := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -pedantic -O2 -static
+CXX ?= g++
+BASE_CXXFLAGS := -std=c++17 -Wall -Wextra -pedantic
+OPT_CXXFLAGS ?= -O2 -static
+CXXFLAGS ?= $(BASE_CXXFLAGS) $(OPT_CXXFLAGS)
+LDFLAGS ?=
 
 BIN_DIR := bin
+BUILD_DIR := build
 APP := $(BIN_DIR)/calculator
 TEST_APP := $(BIN_DIR)/calculator_tests
 SRC_DIR := src
 TEST_DIR := test
 SRC_DIRS := $(SRC_DIR)/app $(SRC_DIR)/core $(SRC_DIR)/math $(SRC_DIR)/matrix $(SRC_DIR)/analysis $(SRC_DIR)/algebra $(SRC_DIR)/symbolic $(SRC_DIR)/script
 INCLUDES := $(addprefix -I,$(SRC_DIRS))
+CPPFLAGS += $(INCLUDES) -MMD -MP
 
 MAIN_SRC := $(SRC_DIR)/app/main.cpp
 COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
@@ -22,6 +27,7 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/math/mymath.cpp \
 	$(SRC_DIR)/math/mymath_special_functions.cpp \
 	$(SRC_DIR)/matrix/matrix.cpp \
+	$(SRC_DIR)/matrix/matrix_expression.cpp \
 	$(SRC_DIR)/matrix/matrix_linear_algebra.cpp \
 	$(SRC_DIR)/analysis/function_analysis.cpp \
 	$(SRC_DIR)/analysis/multivariable_integrator.cpp \
@@ -49,23 +55,46 @@ COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/algebra/polynomial.h \
 	$(SRC_DIR)/script/script_parser.h \
 	$(SRC_DIR)/script/script_ast.h
-COMMON_PARTS :=
+COMMON_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(COMMON_SRCS))
+MAIN_OBJ := $(BUILD_DIR)/$(MAIN_SRC:.cpp=.o)
+TEST_OBJ := $(BUILD_DIR)/$(TEST_DIR)/tests.o
+DEPS := $(MAIN_OBJ:.o=.d) $(TEST_OBJ:.o=.d) $(COMMON_OBJS:.o=.d)
 
-.PHONY: all test clean
+.PHONY: all test script-test check debug asan ubsan clean
 
 all: $(APP)
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
-$(APP): $(MAIN_SRC) $(COMMON_SRCS) $(COMMON_HDRS) $(COMMON_PARTS) | $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(MAIN_SRC) $(COMMON_SRCS) -o $(APP)
+$(BUILD_DIR)/%.o: %.cpp
+	mkdir -p $(dir $@)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
-$(TEST_APP): $(TEST_DIR)/tests.cpp $(COMMON_SRCS) $(COMMON_HDRS) $(COMMON_PARTS) | $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(TEST_DIR)/tests.cpp $(COMMON_SRCS) -o $(TEST_APP)
+$(APP): $(MAIN_OBJ) $(COMMON_OBJS) | $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(APP)
+
+$(TEST_APP): $(TEST_OBJ) $(COMMON_OBJS) | $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(TEST_APP)
 
 test: $(TEST_APP)
 	$(TEST_APP)
 
+script-test: $(APP)
+	test/script/run_symbolic_cli_validation.sh
+
+check: test script-test
+
+debug:
+	$(MAKE) OPT_CXXFLAGS="-O0 -g"
+
+asan:
+	$(MAKE) OPT_CXXFLAGS="-O1 -g -fsanitize=address,undefined" LDFLAGS="-fsanitize=address,undefined"
+
+ubsan:
+	$(MAKE) OPT_CXXFLAGS="-O1 -g -fsanitize=undefined" LDFLAGS="-fsanitize=undefined"
+
 clean:
-	rm -f $(APP) $(TEST_APP)
+	rm -rf $(BUILD_DIR) $(APP) $(TEST_APP)
+
+-include $(DEPS)

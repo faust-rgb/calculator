@@ -295,7 +295,7 @@ private:
         // unary      -> (+|-) unary | power
         // power      -> primary (^ unary)?
         //
-        // 它和 calculator.cpp 里的数值解析器保持同样的运算优先级，
+        // 它和 src/core/decimal_parser.cpp 里的数值解析器保持同样的运算优先级，
         // 这样符号路径和数值路径看到的是一致的表达式结构。
         SymbolicExpression value = parse_term();
         while (true) {
