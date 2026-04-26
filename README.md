@@ -35,6 +35,7 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - `test/TESTING.md`
 - `CHANGELOG.md`
 - `ROADMAP.md`
+- `VERSION_2_IMPLEMENTATION_PLAN.md`
 - `KNOWN_LIMITATIONS.md`
 - `SIMPLIFY_IMPROVEMENTS.md`
 

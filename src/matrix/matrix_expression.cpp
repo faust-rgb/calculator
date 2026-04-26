@@ -41,6 +41,97 @@ std::size_t parse_index_argument(const std::string& expression,
     return static_cast<std::size_t>(value + 0.5);
 }
 
+long long parse_integer_argument(const std::string& expression,
+                                 const ScalarEvaluator& scalar_evaluator,
+                                 const std::string& name) {
+    const double value = scalar_evaluator(expression);
+    if (!mymath::is_integer(value)) {
+        throw std::runtime_error(name + " requires integer arguments");
+    }
+    return static_cast<long long>(value >= 0.0 ? value + 0.5 : value - 0.5);
+}
+
+Matrix make_window(std::size_t n, const std::string& name) {
+    if (n == 0) {
+        throw std::runtime_error(name + " requires a positive length");
+    }
+    Matrix result(1, n, 0.0);
+    if (n == 1) {
+        result.at(0, 0) = 1.0;
+        return result;
+    }
+
+    for (std::size_t i = 0; i < n; ++i) {
+        const double phase =
+            2.0 * mymath::kPi * static_cast<double>(i) / static_cast<double>(n - 1);
+        if (name == "hann" || name == "hanning") {
+            result.at(0, i) = 0.5 - 0.5 * mymath::cos(phase);
+        } else if (name == "hamming") {
+            result.at(0, i) = 0.54 - 0.46 * mymath::cos(phase);
+        } else if (name == "blackman") {
+            result.at(0, i) = 0.42 - 0.5 * mymath::cos(phase) +
+                              0.08 * mymath::cos(2.0 * phase);
+        }
+    }
+    return result;
+}
+
+long long extended_gcd_local(long long a, long long b, long long* x, long long* y) {
+    long long old_r = a;
+    long long r = b;
+    long long old_s = 1;
+    long long s = 0;
+    long long old_t = 0;
+    long long t = 1;
+    while (r != 0) {
+        const long long quotient = old_r / r;
+        const long long next_r = old_r - quotient * r;
+        old_r = r;
+        r = next_r;
+        const long long next_s = old_s - quotient * s;
+        old_s = s;
+        s = next_s;
+        const long long next_t = old_t - quotient * t;
+        old_t = t;
+        t = next_t;
+    }
+    if (old_r < 0) {
+        old_r = -old_r;
+        old_s = -old_s;
+        old_t = -old_t;
+    }
+    *x = old_s;
+    *y = old_t;
+    return old_r;
+}
+
+Matrix divisors_vector(long long value) {
+    if (value == 0) {
+        throw std::runtime_error("divisors does not accept zero");
+    }
+    const long long n = value < 0 ? -value : value;
+    std::vector<double> small;
+    std::vector<double> large;
+    for (long long d = 1; d * d <= n; ++d) {
+        if (n % d != 0) {
+            continue;
+        }
+        small.push_back(static_cast<double>(d));
+        if (d != n / d) {
+            large.push_back(static_cast<double>(n / d));
+        }
+    }
+    Matrix result(1, small.size() + large.size(), 0.0);
+    std::size_t index = 0;
+    for (double divisor : small) {
+        result.at(0, index++) = divisor;
+    }
+    for (auto it = large.rbegin(); it != large.rend(); ++it) {
+        result.at(0, index++) = *it;
+    }
+    return result;
+}
+
 bool contains_matrix_identifier(const std::string& text,
                                 const MatrixLookup& matrix_lookup) {
     for (std::size_t i = 0; i < text.size();) {
@@ -326,6 +417,41 @@ private:
             }
             return Value::from_matrix(
                 Matrix::identity(parse_size_argument(arguments[0], *scalar_evaluator_)));
+        }
+
+        if (name == "hann" || name == "hanning" ||
+            name == "hamming" || name == "blackman") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error(name + " expects exactly one argument");
+            }
+            return Value::from_matrix(
+                make_window(parse_size_argument(arguments[0], *scalar_evaluator_), name));
+        }
+
+        if (name == "divisors") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("divisors expects exactly one argument");
+            }
+            return Value::from_matrix(
+                divisors_vector(parse_integer_argument(arguments[0], *scalar_evaluator_, "divisors")));
+        }
+
+        if (name == "extended_gcd" || name == "xgcd") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("extended_gcd expects exactly two arguments");
+            }
+            long long x = 0;
+            long long y = 0;
+            const long long gcd =
+                extended_gcd_local(parse_integer_argument(arguments[0], *scalar_evaluator_, "extended_gcd"),
+                                   parse_integer_argument(arguments[1], *scalar_evaluator_, "extended_gcd"),
+                                   &x,
+                                   &y);
+            Matrix result(1, 3, 0.0);
+            result.at(0, 0) = static_cast<double>(gcd);
+            result.at(0, 1) = static_cast<double>(x);
+            result.at(0, 2) = static_cast<double>(y);
+            return Value::from_matrix(result);
         }
 
         if (name == "resize") {
@@ -756,6 +882,48 @@ private:
             return Value::from_scalar(mymath::sqrt(variance_values(values)));
         }
 
+        if (name == "skewness" || name == "skew" || name == "kurtosis") {
+            if (arguments.empty()) {
+                throw std::runtime_error(name + " expects at least one argument");
+            }
+            std::vector<double> values;
+            if (arguments.size() == 1) {
+                Value value;
+                if (try_evaluate_expression(arguments[0],
+                                            *scalar_evaluator_,
+                                            *matrix_lookup_,
+                                            &value) &&
+                    value.is_matrix) {
+                    values = as_vector_values(value.matrix, name);
+                } else {
+                    values.push_back((*scalar_evaluator_)(arguments[0]));
+                }
+            } else {
+                values.reserve(arguments.size());
+                for (const std::string& argument : arguments) {
+                    values.push_back((*scalar_evaluator_)(argument));
+                }
+            }
+            const double mean = mean_values(values);
+            double second_moment = 0.0;
+            double higher_moment = 0.0;
+            for (double value : values) {
+                const double delta = value - mean;
+                const double delta2 = delta * delta;
+                second_moment += delta2;
+                higher_moment += (name == "kurtosis") ? delta2 * delta2 : delta2 * delta;
+            }
+            second_moment /= static_cast<double>(values.size());
+            if (mymath::is_near_zero(second_moment)) {
+                throw std::runtime_error(name + " is undefined for zero variance data");
+            }
+            higher_moment /= static_cast<double>(values.size());
+            if (name == "kurtosis") {
+                return Value::from_scalar(higher_moment / (second_moment * second_moment) - 3.0);
+            }
+            return Value::from_scalar(higher_moment / mymath::pow(second_moment, 1.5));
+        }
+
         if (name == "percentile") {
             if (arguments.size() < 2) {
                 throw std::runtime_error("percentile expects vector,p or p,value...");
@@ -1169,6 +1337,9 @@ private:
     static bool is_matrix_function(const std::string& name) {
         return name == "vec" || name == "mat" || name == "zeros" ||
                name == "eye" || name == "identity" || name == "resize" ||
+               name == "hann" || name == "hanning" ||
+               name == "hamming" || name == "blackman" ||
+               name == "divisors" || name == "extended_gcd" || name == "xgcd" ||
                name == "append_row" || name == "append_col" ||
                name == "transpose" || name == "inverse" ||
                name == "pinv" ||
@@ -1185,7 +1356,9 @@ private:
                name == "cholesky" || name == "schur" || name == "hessenberg" ||
                name == "mean" || name == "median" || name == "mode" ||
                name == "percentile" || name == "quartile" ||
-               name == "var" || name == "std" || name == "cov" ||
+               name == "var" || name == "std" ||
+               name == "skewness" || name == "skew" || name == "kurtosis" ||
+               name == "cov" ||
                name == "corr" || name == "lagrange" || name == "spline" ||
                name == "linear_regression" || name == "poly_fit" ||
                name == "polynomial_fit" || name == "poly_eval" ||
@@ -1332,6 +1505,13 @@ bool try_evaluate_expression(const std::string& expression,
         trimmed.find("zeros(") != std::string::npos ||
         trimmed.find("eye(") != std::string::npos ||
         trimmed.find("identity(") != std::string::npos ||
+        trimmed.find("hann(") != std::string::npos ||
+        trimmed.find("hanning(") != std::string::npos ||
+        trimmed.find("hamming(") != std::string::npos ||
+        trimmed.find("blackman(") != std::string::npos ||
+        trimmed.find("divisors(") != std::string::npos ||
+        trimmed.find("extended_gcd(") != std::string::npos ||
+        trimmed.find("xgcd(") != std::string::npos ||
         trimmed.find("resize(") != std::string::npos ||
         trimmed.find("append_row(") != std::string::npos ||
         trimmed.find("append_col(") != std::string::npos ||
@@ -1373,6 +1553,9 @@ bool try_evaluate_expression(const std::string& expression,
         trimmed.find("quartile(") != std::string::npos ||
         trimmed.find("var(") != std::string::npos ||
         trimmed.find("std(") != std::string::npos ||
+        trimmed.find("skewness(") != std::string::npos ||
+        trimmed.find("skew(") != std::string::npos ||
+        trimmed.find("kurtosis(") != std::string::npos ||
         trimmed.find("cov(") != std::string::npos ||
         trimmed.find("corr(") != std::string::npos ||
         trimmed.find("lagrange(") != std::string::npos ||

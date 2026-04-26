@@ -28,6 +28,9 @@
 - Internal decimal calculations use `double`
 - Arbitrary precision is not supported
 - Some operations are approximate by nature and rely on tolerance handling
+- Finite one-variable integrals use adaptive Gauss-Kronrod G7-K15 and include
+  endpoint-singularity transforms, but infinite integration bounds are not yet
+  exposed through command syntax
 - ODE solving still uses fixed-step RK4 and does not provide adaptive step-size
   control for stiff problems
 - Polynomial fitting still uses the normal equations path and can be sensitive
@@ -56,6 +59,9 @@ This project is now a capable calculator and mini CAS-style tool, but it is not:
 - Symbolic integration is rule-based rather than complete
   - full Risch-style integration is not implemented
   - multiple distinct irreducible quadratic factors, general irreducible high-degree factors, and symbolic-parameter factorization are still limited
+  - reciprocal trigonometric rules cover common `sec`/`csc`/`cot` cases, but
+    general trigonometric reduction and universal tangent substitution are not
+    implemented
 - Nonlinear multi-variable `critical(...)` uses bounded numeric search
   - Hessian-based classification is available for isolated 1-3 variable solutions, but global completeness is not guaranteed
 - Common subexpression elimination is still partial

@@ -170,6 +170,115 @@ long long next_prime_ll(long long value) {
     return candidate;
 }
 
+long long prev_prime_ll(long long value) {
+    if (value <= 2) {
+        throw std::runtime_error("prev_prime requires n > 2");
+    }
+    long long candidate = value - 1;
+    if (candidate % 2 == 0) {
+        --candidate;
+    }
+    while (candidate >= 2 && !is_prime_ll(candidate)) {
+        candidate -= 2;
+    }
+    if (candidate < 2) {
+        throw std::runtime_error("prev_prime requires n > 2");
+    }
+    return candidate;
+}
+
+long long euler_phi_ll(long long value) {
+    if (value <= 0) {
+        throw std::runtime_error("euler_phi only accepts positive integers");
+    }
+    long long n = value;
+    long long result = value;
+    for (long long p = 2; p * p <= n; ++p) {
+        if (n % p != 0) {
+            continue;
+        }
+        while (n % p == 0) {
+            n /= p;
+        }
+        result -= result / p;
+    }
+    if (n > 1) {
+        result -= result / n;
+    }
+    return result;
+}
+
+long long mobius_ll(long long value) {
+    if (value <= 0) {
+        throw std::runtime_error("mobius only accepts positive integers");
+    }
+    long long n = value;
+    int prime_factor_count = 0;
+    for (long long p = 2; p * p <= n; ++p) {
+        if (n % p != 0) {
+            continue;
+        }
+        n /= p;
+        ++prime_factor_count;
+        if (n % p == 0) {
+            return 0;
+        }
+        while (n % p == 0) {
+            n /= p;
+        }
+    }
+    if (n > 1) {
+        ++prime_factor_count;
+    }
+    return prime_factor_count % 2 == 0 ? 1 : -1;
+}
+
+long long prime_pi_ll(long long value) {
+    if (value < 2) {
+        return 0;
+    }
+    long long count = 0;
+    for (long long n = 2; n <= value; ++n) {
+        if (is_prime_ll(n)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+long long extended_gcd_ll(long long a, long long b, long long* x, long long* y) {
+    long long old_r = a;
+    long long r = b;
+    long long old_s = 1;
+    long long s = 0;
+    long long old_t = 0;
+    long long t = 1;
+
+    while (r != 0) {
+        const long long quotient = old_r / r;
+        const long long next_r = old_r - quotient * r;
+        old_r = r;
+        r = next_r;
+
+        const long long next_s = old_s - quotient * s;
+        old_s = s;
+        s = next_s;
+
+        const long long next_t = old_t - quotient * t;
+        old_t = t;
+        t = next_t;
+    }
+
+    if (old_r < 0) {
+        old_r = -old_r;
+        old_s = -old_s;
+        old_t = -old_t;
+    }
+    *x = old_s;
+    *y = old_t;
+    return old_r;
+}
+
 double fibonacci_value(long long n) {
     if (n < 0) {
         throw std::runtime_error("fib only accepts non-negative integers");

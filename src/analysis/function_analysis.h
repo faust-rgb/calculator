@@ -63,7 +63,7 @@ public:
      * @param x 求导点
      * @return f'(x)
      *
-     * 使用中心差分法：f'(x) ≈ (f(x+h) - f(x-h)) / (2h)
+     * 使用自适应步长的中心差分和 4 层 Richardson 外推。
      */
     double derivative(double x) const;
 
@@ -82,7 +82,7 @@ public:
      * @param upper_bound 上限
      * @return ∫[lower, upper] f(x) dx
      *
-     * 使用自适应辛普森积分法。
+     * 使用自适应 Gauss-Kronrod G7-K15 积分法。
      */
     double definite_integral(double lower_bound, double upper_bound) const;
 
@@ -148,39 +148,34 @@ private:
     double bisect_stationary_point(double left, double right) const;
 
     /**
-     * @brief 自适应辛普森积分
+     * @brief 自适应 Gauss-Kronrod G7-K15 积分
      * @param left 左端点
      * @param right 右端点
      * @param eps 精度要求
      * @param max_depth 最大递归深度
      * @return 积分值
      */
-    double adaptive_simpson(double left,
+    double adaptive_gauss_kronrod(double left,
+                                  double right,
+                                  double eps,
+                                  int max_depth) const;
+
+    /**
+     * @brief 自适应 Gauss-Kronrod 积分的递归实现
+     */
+    double adaptive_gauss_kronrod_recursive(double left,
+                                            double right,
+                                            double eps,
+                                            double whole,
+                                            double error,
+                                            int depth) const;
+
+    /**
+     * @brief G7-K15 单区间积分，并输出误差估计
+     */
+    double gauss_kronrod_15(double left,
                             double right,
-                            double eps,
-                            int max_depth) const;
-
-    /**
-     * @brief 自适应辛普森积分的递归实现
-     */
-    double adaptive_simpson_recursive(double left,
-                                      double right,
-                                      double eps,
-                                      double whole,
-                                      double f_left,
-                                      double f_mid,
-                                      double f_right,
-                                      int depth) const;
-
-    /**
-     * @brief 辛普森法则计算积分
-     * @return (right-left) * (f_left + 4*f_mid + f_right) / 6
-     */
-    double simpson(double left,
-                   double right,
-                   double f_left,
-                   double f_mid,
-                   double f_right) const;
+                            double* error_estimate) const;
 
     std::string expression_;      ///< 函数表达式
     std::string variable_name_;   ///< 变量名

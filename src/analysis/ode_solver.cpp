@@ -60,15 +60,27 @@ double difference_norm(const std::vector<double>& lhs,
     return max_difference;
 }
 
-std::vector<double> corrected_solution(const std::vector<double>& full,
-                                       const std::vector<double>& refined) {
-    if (full.size() != refined.size()) {
-        throw std::runtime_error("ODE system state dimension mismatch");
+std::vector<double> combine_rkf_state(const std::vector<double>& y,
+                                      double c1,
+                                      const std::vector<double>& k1,
+                                      double c2,
+                                      const std::vector<double>& k2,
+                                      double c3,
+                                      const std::vector<double>& k3,
+                                      double c4,
+                                      const std::vector<double>& k4,
+                                      double c5,
+                                      const std::vector<double>& k5) {
+    const std::size_t n = y.size();
+    if (k1.size() != n || k2.size() != n || k3.size() != n ||
+        k4.size() != n || k5.size() != n) {
+        throw std::runtime_error("ODE system right-hand side dimension mismatch");
     }
 
-    std::vector<double> result(refined.size(), 0.0);
-    for (std::size_t i = 0; i < refined.size(); ++i) {
-        result[i] = refined[i] + (refined[i] - full[i]) / 15.0;
+    std::vector<double> result(n, 0.0);
+    for (std::size_t i = 0; i < n; ++i) {
+        result[i] = y[i] + c1 * k1[i] + c2 * k2[i] + c3 * k3[i] +
+                    c4 * k4[i] + c5 * k5[i];
     }
     return result;
 }
@@ -157,15 +169,14 @@ double ODESolver::integrate_segment(double x0, double y0, double x1) const {
             h = x1 - x;
         }
 
-        const double full = rk4_step(x, y, h);
-        const double half = rk4_step(x, y, h * 0.5);
-        const double refined = rk4_step(x + h * 0.5, half, h * 0.5);
-        const double error = mymath::abs(refined - full);
-        const double scale = std::max({1.0, mymath::abs(y), mymath::abs(full), mymath::abs(refined)});
+        const auto step = rkf45_step(x, y, h);
+        const double candidate_y = step.first;
+        const double error = step.second;
+        const double scale = std::max({1.0, mymath::abs(y), mymath::abs(candidate_y)});
 
         if (error <= tolerance * scale || mymath::abs(h) <= min_step) {
             x += h;
-            y = refined + (refined - full) / 15.0;
+            y = candidate_y;
             if (!mymath::isfinite(y)) {
                 throw std::runtime_error("ODE solver produced a non-finite value");
             }
@@ -230,11 +241,10 @@ ODEPoint ODESolver::integrate_segment_with_event(double x0,
             h = x1 - x;
         }
 
-        const double full = rk4_step(x, y, h);
-        const double half = rk4_step(x, y, h * 0.5);
-        const double refined = rk4_step(x + h * 0.5, half, h * 0.5);
-        const double error = mymath::abs(refined - full);
-        const double scale = std::max({1.0, mymath::abs(y), mymath::abs(full), mymath::abs(refined)});
+        const auto step = rkf45_step(x, y, h);
+        const double candidate_y = step.first;
+        const double error = step.second;
+        const double scale = std::max({1.0, mymath::abs(y), mymath::abs(candidate_y)});
 
         if (error > tolerance * scale && mymath::abs(h) > min_step) {
             const double shrink = mymath::clamp(0.9 * mymath::pow((tolerance * scale) / error, 0.25),
@@ -245,7 +255,6 @@ ODEPoint ODESolver::integrate_segment_with_event(double x0,
         }
 
         const double candidate_x = x + h;
-        const double candidate_y = refined + (refined - full) / 15.0;
         if (!mymath::isfinite(candidate_y)) {
             throw std::runtime_error("ODE solver produced a non-finite value");
         }
@@ -304,22 +313,44 @@ ODEPoint ODESolver::integrate_segment_with_event(double x0,
     return {x, y};
 }
 
-double ODESolver::rk4_step(double x, double y, double h) const {
+std::pair<double, double> ODESolver::rkf45_step(double x, double y, double h) const {
     const long double x_ld = static_cast<long double>(x);
     const long double y_ld = static_cast<long double>(y);
     const long double h_ld = static_cast<long double>(h);
-    const long double k1 = static_cast<long double>(rhs_(x, y));
+    const long double k1 = h_ld * static_cast<long double>(rhs_(x, y));
     const long double k2 = static_cast<long double>(
-        rhs_(static_cast<double>(x_ld + 0.5L * h_ld),
-             static_cast<double>(y_ld + 0.5L * h_ld * k1)));
+        h_ld * rhs_(static_cast<double>(x_ld + 0.25L * h_ld),
+                    static_cast<double>(y_ld + 0.25L * k1)));
     const long double k3 = static_cast<long double>(
-        rhs_(static_cast<double>(x_ld + 0.5L * h_ld),
-             static_cast<double>(y_ld + 0.5L * h_ld * k2)));
+        h_ld * rhs_(static_cast<double>(x_ld + 3.0L * h_ld / 8.0L),
+                    static_cast<double>(y_ld + 3.0L * k1 / 32.0L + 9.0L * k2 / 32.0L)));
     const long double k4 = static_cast<long double>(
-        rhs_(static_cast<double>(x_ld + h_ld),
-             static_cast<double>(y_ld + h_ld * k3)));
-    return static_cast<double>(
-        y_ld + h_ld * (k1 + 2.0L * k2 + 2.0L * k3 + k4) / 6.0L);
+        h_ld * rhs_(static_cast<double>(x_ld + 12.0L * h_ld / 13.0L),
+                    static_cast<double>(y_ld + 1932.0L * k1 / 2197.0L -
+                                        7200.0L * k2 / 2197.0L +
+                                        7296.0L * k3 / 2197.0L)));
+    const long double k5 = static_cast<long double>(
+        h_ld * rhs_(static_cast<double>(x_ld + h_ld),
+                    static_cast<double>(y_ld + 439.0L * k1 / 216.0L -
+                                        8.0L * k2 +
+                                        3680.0L * k3 / 513.0L -
+                                        845.0L * k4 / 4104.0L)));
+    const long double k6 = static_cast<long double>(
+        h_ld * rhs_(static_cast<double>(x_ld + 0.5L * h_ld),
+                    static_cast<double>(y_ld - 8.0L * k1 / 27.0L +
+                                        2.0L * k2 -
+                                        3544.0L * k3 / 2565.0L +
+                                        1859.0L * k4 / 4104.0L -
+                                        11.0L * k5 / 40.0L)));
+    const long double fourth =
+        y_ld + 25.0L * k1 / 216.0L + 1408.0L * k3 / 2565.0L +
+        2197.0L * k4 / 4104.0L - k5 / 5.0L;
+    const long double fifth =
+        y_ld + 16.0L * k1 / 135.0L + 6656.0L * k3 / 12825.0L +
+        28561.0L * k4 / 56430.0L - 9.0L * k5 / 50.0L +
+        2.0L * k6 / 55.0L;
+    return {static_cast<double>(fifth),
+            mymath::abs(static_cast<double>(fifth - fourth))};
 }
 
 ODESystemSolver::ODESystemSolver(RHSFunction rhs, EventFunction event)
@@ -413,15 +444,14 @@ std::vector<double> ODESystemSolver::integrate_segment(double x0,
             h = x1 - x;
         }
 
-        const std::vector<double> full = rk4_step(x, y, h);
-        const std::vector<double> half = rk4_step(x, y, h * 0.5);
-        const std::vector<double> refined = rk4_step(x + h * 0.5, half, h * 0.5);
-        const double error = difference_norm(refined, full);
-        const double scale = std::max({1.0, max_abs_component(y), max_abs_component(full), max_abs_component(refined)});
+        const auto step = rkf45_step(x, y, h);
+        const std::vector<double>& candidate_y = step.first;
+        const double error = step.second;
+        const double scale = std::max({1.0, max_abs_component(y), max_abs_component(candidate_y)});
 
         if (error <= tolerance * scale || mymath::abs(h) <= min_step) {
             x += h;
-            y = corrected_solution(full, refined);
+            y = candidate_y;
             for (double value : y) {
                 if (!mymath::isfinite(value)) {
                     throw std::runtime_error("ODE system solver produced a non-finite value");
@@ -488,11 +518,10 @@ ODESystemPoint ODESystemSolver::integrate_segment_with_event(double x0,
             h = x1 - x;
         }
 
-        const std::vector<double> full = rk4_step(x, y, h);
-        const std::vector<double> half = rk4_step(x, y, h * 0.5);
-        const std::vector<double> refined = rk4_step(x + h * 0.5, half, h * 0.5);
-        const double error = difference_norm(refined, full);
-        const double scale = std::max({1.0, max_abs_component(y), max_abs_component(full), max_abs_component(refined)});
+        const auto step = rkf45_step(x, y, h);
+        const std::vector<double>& candidate_y = step.first;
+        const double error = step.second;
+        const double scale = std::max({1.0, max_abs_component(y), max_abs_component(candidate_y)});
 
         if (error > tolerance * scale && mymath::abs(h) > min_step) {
             const double shrink = mymath::clamp(0.9 * mymath::pow((tolerance * scale) / error, 0.25),
@@ -503,7 +532,6 @@ ODESystemPoint ODESystemSolver::integrate_segment_with_event(double x0,
         }
 
         const double candidate_x = x + h;
-        const std::vector<double> candidate_y = corrected_solution(full, refined);
         for (double value : candidate_y) {
             if (!mymath::isfinite(value)) {
                 throw std::runtime_error("ODE system solver produced a non-finite value");
@@ -581,4 +609,84 @@ std::vector<double> ODESystemSolver::rk4_step(double x,
         next[i] = y[i] + h * (k1[i] + 2.0 * k2[i] + 2.0 * k3[i] + k4[i]) / 6.0;
     }
     return next;
+}
+
+std::pair<std::vector<double>, double> ODESystemSolver::rkf45_step(
+    double x,
+    const std::vector<double>& y,
+    double h) const {
+    const std::vector<double> f1 = rhs_(x, y);
+    if (f1.size() != y.size()) {
+        throw std::runtime_error("ODE system right-hand side dimension mismatch");
+    }
+
+    std::vector<double> k1(y.size(), 0.0);
+    for (std::size_t i = 0; i < y.size(); ++i) {
+        k1[i] = h * f1[i];
+    }
+
+    const std::vector<double> y2 = combine_rkf_state(y, 1.0 / 4.0, k1, 0.0, k1, 0.0, k1, 0.0, k1, 0.0, k1);
+    const std::vector<double> f2 = rhs_(x + h / 4.0, y2);
+    std::vector<double> k2(y.size(), 0.0);
+    for (std::size_t i = 0; i < y.size(); ++i) {
+        k2[i] = h * f2[i];
+    }
+
+    const std::vector<double> y3 =
+        combine_rkf_state(y, 3.0 / 32.0, k1, 9.0 / 32.0, k2, 0.0, k1, 0.0, k1, 0.0, k1);
+    const std::vector<double> f3 = rhs_(x + 3.0 * h / 8.0, y3);
+    std::vector<double> k3(y.size(), 0.0);
+    for (std::size_t i = 0; i < y.size(); ++i) {
+        k3[i] = h * f3[i];
+    }
+
+    const std::vector<double> y4 =
+        combine_rkf_state(y, 1932.0 / 2197.0, k1, -7200.0 / 2197.0, k2,
+                          7296.0 / 2197.0, k3, 0.0, k1, 0.0, k1);
+    const std::vector<double> f4 = rhs_(x + 12.0 * h / 13.0, y4);
+    std::vector<double> k4(y.size(), 0.0);
+    for (std::size_t i = 0; i < y.size(); ++i) {
+        k4[i] = h * f4[i];
+    }
+
+    const std::vector<double> y5 =
+        combine_rkf_state(y, 439.0 / 216.0, k1, -8.0, k2,
+                          3680.0 / 513.0, k3, -845.0 / 4104.0, k4, 0.0, k1);
+    const std::vector<double> f5 = rhs_(x + h, y5);
+    std::vector<double> k5(y.size(), 0.0);
+    for (std::size_t i = 0; i < y.size(); ++i) {
+        k5[i] = h * f5[i];
+    }
+
+    const std::vector<double> y6 =
+        combine_rkf_state(y, -8.0 / 27.0, k1, 2.0, k2,
+                          -3544.0 / 2565.0, k3, 1859.0 / 4104.0, k4,
+                          -11.0 / 40.0, k5);
+    const std::vector<double> f6 = rhs_(x + h / 2.0, y6);
+    if (f2.size() != y.size() || f3.size() != y.size() ||
+        f4.size() != y.size() || f5.size() != y.size() ||
+        f6.size() != y.size()) {
+        throw std::runtime_error("ODE system right-hand side dimension mismatch");
+    }
+
+    std::vector<double> k6(y.size(), 0.0);
+    for (std::size_t i = 0; i < y.size(); ++i) {
+        k6[i] = h * f6[i];
+    }
+
+    std::vector<double> fourth(y.size(), 0.0);
+    std::vector<double> fifth(y.size(), 0.0);
+    for (std::size_t i = 0; i < y.size(); ++i) {
+        fourth[i] = y[i] + 25.0 * k1[i] / 216.0 +
+                    1408.0 * k3[i] / 2565.0 +
+                    2197.0 * k4[i] / 4104.0 -
+                    k5[i] / 5.0;
+        fifth[i] = y[i] + 16.0 * k1[i] / 135.0 +
+                   6656.0 * k3[i] / 12825.0 +
+                   28561.0 * k4[i] / 56430.0 -
+                   9.0 * k5[i] / 50.0 +
+                   2.0 * k6[i] / 55.0;
+    }
+
+    return {fifth, difference_norm(fifth, fourth)};
 }

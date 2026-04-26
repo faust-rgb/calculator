@@ -856,6 +856,30 @@ bool primitive_for_outer_function(const std::string& function_name,
                          .simplify();
         return true;
     }
+    if (function_name == "sec") {
+        *primitive =
+            make_function("ln",
+                          make_function("abs",
+                                        make_add(make_function("sec", argument),
+                                                 make_function("tan", argument))))
+                .simplify();
+        return true;
+    }
+    if (function_name == "csc") {
+        *primitive =
+            make_function("ln",
+                          make_function("abs",
+                                        make_subtract(make_function("csc", argument),
+                                                      make_function("cot", argument))))
+                .simplify();
+        return true;
+    }
+    if (function_name == "cot") {
+        *primitive =
+            make_function("ln", make_function("abs", make_function("sin", argument)))
+                .simplify();
+        return true;
+    }
     return false;
 }
 
@@ -951,6 +975,29 @@ bool try_integrate_trig_power_identity(const SymbolicExpression& base,
                 .simplify();
         return true;
     }
+    if (mymath::is_near_zero(exponent_value - 2.0, kFormatEps) &&
+        function_name == "sec") {
+        *integrated = make_divide(make_function("tan", argument),
+                                  SymbolicExpression::number(a))
+                          .simplify();
+        return true;
+    }
+    if (mymath::is_near_zero(exponent_value - 2.0, kFormatEps) &&
+        function_name == "csc") {
+        *integrated = make_divide(make_negate(make_function("cot", argument)),
+                                  SymbolicExpression::number(a))
+                          .simplify();
+        return true;
+    }
+    if (mymath::is_near_zero(exponent_value - 2.0, kFormatEps) &&
+        function_name == "cot") {
+        *integrated =
+            make_subtract(make_negate(x),
+                          make_divide(make_function("cot", argument),
+                                      SymbolicExpression::number(a)))
+                .simplify();
+        return true;
+    }
     if (mymath::is_near_zero(exponent_value - 3.0, kFormatEps) &&
         function_name == "sin") {
         *integrated =
@@ -1002,6 +1049,62 @@ bool try_integrate_trig_product_identity(const SymbolicExpression& left,
         *integrated =
             make_divide(make_power(make_function("sin", argument),
                                    SymbolicExpression::number(2.0)),
+                        SymbolicExpression::number(2.0 * a))
+                .simplify();
+        return true;
+    }
+    return false;
+}
+
+bool try_integrate_sec_csc_power_product(const SymbolicExpression& left,
+                                         const SymbolicExpression& right,
+                                         const std::string& variable_name,
+                                         SymbolicExpression* integrated) {
+    const SymbolicExpression* power_factor = nullptr;
+    const SymbolicExpression* function_factor = nullptr;
+    if (left.node_->type == NodeType::kPower &&
+        right.node_->type == NodeType::kFunction) {
+        power_factor = &left;
+        function_factor = &right;
+    } else if (right.node_->type == NodeType::kPower &&
+               left.node_->type == NodeType::kFunction) {
+        power_factor = &right;
+        function_factor = &left;
+    } else {
+        return false;
+    }
+
+    const SymbolicExpression base(power_factor->node_->left);
+    const SymbolicExpression exponent(power_factor->node_->right);
+    double exponent_value = 0.0;
+    if (base.node_->type != NodeType::kFunction ||
+        !exponent.is_number(&exponent_value) ||
+        !mymath::is_near_zero(exponent_value - 2.0, kFormatEps) ||
+        !same_simplified_expression(SymbolicExpression(base.node_->left),
+                                    SymbolicExpression(function_factor->node_->left))) {
+        return false;
+    }
+
+    const SymbolicExpression argument(base.node_->left);
+    double a = 0.0;
+    double b = 0.0;
+    if (!decompose_linear(argument, variable_name, &a, &b) ||
+        mymath::is_near_zero(a, kFormatEps)) {
+        return false;
+    }
+
+    if (base.node_->text == "sec" && function_factor->node_->text == "tan") {
+        *integrated =
+            make_divide(make_power(make_function("sec", argument),
+                                   SymbolicExpression::number(2.0)),
+                        SymbolicExpression::number(2.0 * a))
+                .simplify();
+        return true;
+    }
+    if (base.node_->text == "csc" && function_factor->node_->text == "cot") {
+        *integrated =
+            make_divide(make_negate(make_power(make_function("csc", argument),
+                                               SymbolicExpression::number(2.0))),
                         SymbolicExpression::number(2.0 * a))
                 .simplify();
         return true;
@@ -1258,6 +1361,27 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                                      inner)
                     .simplify();
             }
+            if (node_->text == "sec") {
+                return make_multiply(
+                           make_multiply(make_function("sec", argument),
+                                         make_function("tan", argument)),
+                           inner)
+                    .simplify();
+            }
+            if (node_->text == "csc") {
+                return make_multiply(
+                           make_negate(make_multiply(make_function("csc", argument),
+                                                     make_function("cot", argument))),
+                           inner)
+                    .simplify();
+            }
+            if (node_->text == "cot") {
+                return make_multiply(
+                           make_negate(make_power(make_function("csc", argument),
+                                                  SymbolicExpression::number(2.0))),
+                           inner)
+                    .simplify();
+            }
             if (node_->text == "exp") {
                 return make_multiply(make_function("exp", argument), inner).simplify();
             }
@@ -1404,6 +1528,12 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                                                     &integrated)) {
                 return integrated.simplify();
             }
+            if (try_integrate_sec_csc_power_product(left,
+                                                    right,
+                                                    variable_name,
+                                                    &integrated)) {
+                return integrated.simplify();
+            }
             if (decompose_constant_times_expression(*this, variable_name, &constant, &rest)) {
                 return make_multiply(number(constant), rest.integral(variable_name)).simplify();
             }
@@ -1544,6 +1674,32 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                                                                        make_function("cos",
                                                                                      argument)))),
                                number(a))
+                .simplify();
+        }
+        if (node_->text == "sec" && linear) {
+            return make_divide(
+                       make_function("ln",
+                                     make_function("abs",
+                                                   make_add(make_function("sec", argument),
+                                                            make_function("tan", argument)))),
+                       number(a))
+                .simplify();
+        }
+        if (node_->text == "csc" && linear) {
+            return make_divide(
+                       make_function("ln",
+                                     make_function("abs",
+                                                   make_subtract(make_function("csc", argument),
+                                                                 make_function("cot", argument)))),
+                       number(a))
+                .simplify();
+        }
+        if (node_->text == "cot" && linear) {
+            return make_divide(
+                       make_function("ln",
+                                     make_function("abs",
+                                                   make_function("sin", argument))),
+                       number(a))
                 .simplify();
         }
         if (node_->text == "delta" &&

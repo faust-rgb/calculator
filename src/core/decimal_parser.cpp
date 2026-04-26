@@ -294,6 +294,12 @@ private:
         if (name == "std") {
             return apply_stddev(arguments);
         }
+        if (name == "skewness" || name == "skew") {
+            return apply_skewness(arguments);
+        }
+        if (name == "kurtosis") {
+            return apply_kurtosis(arguments);
+        }
         if (name == "percentile") {
             return apply_percentile(arguments);
         }
@@ -320,6 +326,21 @@ private:
         }
         if (name == "next_prime") {
             return apply_next_prime(arguments);
+        }
+        if (name == "prev_prime") {
+            return apply_prev_prime(arguments);
+        }
+        if (name == "prime_pi") {
+            return apply_prime_pi(arguments);
+        }
+        if (name == "euler_phi" || name == "phi") {
+            return apply_euler_phi(arguments);
+        }
+        if (name == "mobius") {
+            return apply_mobius(arguments);
+        }
+        if (name == "egcd") {
+            return apply_egcd(arguments);
         }
         if (name == "rand") {
             return apply_rand(arguments);
@@ -727,6 +748,48 @@ private:
         return mymath::sqrt(apply_variance(arguments));
     }
 
+    static double apply_skewness(const std::vector<double>& arguments) {
+        if (arguments.empty()) {
+            throw std::runtime_error("skewness expects at least one argument");
+        }
+        const double mean = apply_mean(arguments);
+        double second_moment = 0.0;
+        double third_moment = 0.0;
+        for (double value : arguments) {
+            const double delta = value - mean;
+            const double delta2 = delta * delta;
+            second_moment += delta2;
+            third_moment += delta2 * delta;
+        }
+        second_moment /= static_cast<double>(arguments.size());
+        if (mymath::is_near_zero(second_moment)) {
+            throw std::runtime_error("skewness is undefined for zero variance data");
+        }
+        third_moment /= static_cast<double>(arguments.size());
+        return third_moment / mymath::pow(second_moment, 1.5);
+    }
+
+    static double apply_kurtosis(const std::vector<double>& arguments) {
+        if (arguments.empty()) {
+            throw std::runtime_error("kurtosis expects at least one argument");
+        }
+        const double mean = apply_mean(arguments);
+        double second_moment = 0.0;
+        double fourth_moment = 0.0;
+        for (double value : arguments) {
+            const double delta = value - mean;
+            const double delta2 = delta * delta;
+            second_moment += delta2;
+            fourth_moment += delta2 * delta2;
+        }
+        second_moment /= static_cast<double>(arguments.size());
+        if (mymath::is_near_zero(second_moment)) {
+            throw std::runtime_error("kurtosis is undefined for zero variance data");
+        }
+        fourth_moment /= static_cast<double>(arguments.size());
+        return fourth_moment / (second_moment * second_moment) - 3.0;
+    }
+
     static double apply_percentile(const std::vector<double>& arguments) {
         if (arguments.size() < 2) {
             throw std::runtime_error("percentile expects p followed by at least one value");
@@ -833,6 +896,61 @@ private:
             throw std::runtime_error("next_prime only accepts integers");
         }
         return static_cast<double>(next_prime_ll(round_to_long_long(arguments[0])));
+    }
+
+    static double apply_prev_prime(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("prev_prime expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("prev_prime only accepts integers");
+        }
+        return static_cast<double>(prev_prime_ll(round_to_long_long(arguments[0])));
+    }
+
+    static double apply_prime_pi(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("prime_pi expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("prime_pi only accepts integers");
+        }
+        return static_cast<double>(prime_pi_ll(round_to_long_long(arguments[0])));
+    }
+
+    static double apply_euler_phi(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("euler_phi expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("euler_phi only accepts integers");
+        }
+        return static_cast<double>(euler_phi_ll(round_to_long_long(arguments[0])));
+    }
+
+    static double apply_mobius(const std::vector<double>& arguments) {
+        if (arguments.size() != 1) {
+            throw std::runtime_error("mobius expects exactly one argument");
+        }
+        if (!is_integer_double(arguments[0])) {
+            throw std::runtime_error("mobius only accepts integers");
+        }
+        return static_cast<double>(mobius_ll(round_to_long_long(arguments[0])));
+    }
+
+    static double apply_egcd(const std::vector<double>& arguments) {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("egcd expects exactly two arguments");
+        }
+        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
+            throw std::runtime_error("egcd only accepts integers");
+        }
+        long long x = 0;
+        long long y = 0;
+        return static_cast<double>(extended_gcd_ll(round_to_long_long(arguments[0]),
+                                                  round_to_long_long(arguments[1]),
+                                                  &x,
+                                                  &y));
     }
 
     static double apply_rand(const std::vector<double>& arguments) {

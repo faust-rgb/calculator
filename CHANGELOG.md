@@ -8,6 +8,14 @@ helpers, interactive terminal UX, and project documentation.
 
 ## Latest Numerical Work
 
+- Replaced one-variable definite integration with an adaptive Gauss-Kronrod
+  G7-K15 path, including endpoint-singularity transforms for cases such as
+  `integral(1 / sqrt(x), 0, 1)`
+- Upgraded one-variable numerical differentiation to use adaptive central
+  differences with four Richardson extrapolation layers
+- Added symbolic derivative and integral coverage for reciprocal trigonometric
+  functions including `sec`, `csc`, `cot`, `sec(x)^2`, `csc(x)^2`, and
+  `sec(x)^2 * tan(x)`
 - Added `round`, `trunc`, `clamp`, `log(x, base)`, `log2`, and `exp2`
 - Added programmer helpers:
   - `rol`, `ror`

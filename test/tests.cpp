@@ -158,6 +158,15 @@ int main() {
         {"fib(10)", 55.0},
         {"is_prime(17)", 1.0},
         {"next_prime(20)", 23.0},
+        {"prev_prime(20)", 19.0},
+        {"prime_pi(20)", 8.0},
+        {"euler_phi(36)", 12.0},
+        {"phi(9)", 6.0},
+        {"mobius(30)", -1.0},
+        {"mobius(12)", 0.0},
+        {"egcd(240, 46)", 2.0},
+        {"skewness(1, 2, 3)", 0.0},
+        {"kurtosis(1, 2, 3)", -1.5},
         {"erf(1)", 0.84270079295},
         {"erfc(1)", 0.15729920705},
         {"deg2rad(180)", mymath::kPi},
@@ -311,6 +320,12 @@ int main() {
         {"fib(-1)"},
         {"is_prime(2.5)"},
         {"next_prime(2.5)"},
+        {"prev_prime(2)"},
+        {"prime_pi(2.5)"},
+        {"euler_phi(0)"},
+        {"mobius(0)"},
+        {"skewness(1, 1, 1)"},
+        {"kurtosis(1, 1, 1)"},
         {"0b102"},
         {"0xFG"},
         {"bin(10.5)"},
@@ -3823,6 +3838,23 @@ int main() {
 
     try {
         FunctionAnalysis function("x");
+        function.define("exp(x)");
+        const double actual = function.derivative(2.0);
+        if (nearly_equal(actual, mymath::exp(2.0), 1e-7)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: Richardson derivative expected exp(2) got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: Richardson derivative threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        FunctionAnalysis function("x");
         function.define("x ^ 2");
         const double actual = function.definite_integral(0.0, 3.0);
         if (nearly_equal(actual, 9.0, 1e-6)) {
@@ -3835,6 +3867,40 @@ int main() {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: definite integral threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        FunctionAnalysis function("x");
+        function.define("1 / sqrt(x)");
+        const double actual = function.definite_integral(0.0, 1.0);
+        if (nearly_equal(actual, 2.0, 1e-6)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: endpoint singular integral expected 2 got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: endpoint singular integral threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        FunctionAnalysis function("x");
+        function.define("sin(50 * x)");
+        const double actual = function.definite_integral(0.0, mymath::kPi);
+        if (nearly_equal(actual, 0.0, 1e-8)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: oscillatory integral expected 0 got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: oscillatory integral threw unexpected error: "
                   << ex.what() << '\n';
     }
 
@@ -4115,6 +4181,63 @@ int main() {
     }
 
     try {
+        const SymbolicExpression sec_integral =
+            SymbolicExpression::parse("sec(x)").integral("x").simplify();
+        const SymbolicExpression csc_integral =
+            SymbolicExpression::parse("csc(2 * x)").integral("x").simplify();
+        if (sec_integral.to_string() == "ln(abs(sec(x) + tan(x)))" &&
+            csc_integral.to_string() == "ln(abs(csc(2 * x) - cot(2 * x))) / 2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: reciprocal trig integrals got "
+                      << sec_integral.to_string() << " and "
+                      << csc_integral.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: reciprocal trig integrals threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const SymbolicExpression sec2_integral =
+            SymbolicExpression::parse("sec(x) ^ 2").integral("x").simplify();
+        const SymbolicExpression sec2_tan_integral =
+            SymbolicExpression::parse("sec(x) ^ 2 * tan(x)").integral("x").simplify();
+        if (sec2_integral.to_string() == "tan(x)" &&
+            sec2_tan_integral.to_string() == "sec(x) ^ 2 / 2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: sec power integrals got "
+                      << sec2_integral.to_string() << " and "
+                      << sec2_tan_integral.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: sec power integrals threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        const SymbolicExpression derivative =
+            SymbolicExpression::parse("sec(x)").derivative("x").simplify();
+        if (derivative.to_string() == "sec(x) * tan(x)" ||
+            derivative.to_string() == "tan(x) * sec(x)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: sec derivative expected sec(x) * tan(x) got "
+                      << derivative.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: sec derivative threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
         const SymbolicExpression simplified =
             SymbolicExpression::parse("ln(exp(x))").simplify();
         if (simplified.to_string() == "x") {
@@ -4344,8 +4467,15 @@ int main() {
         {"mode(vec(1, 2, 2, 3))", false, "2"},
         {"var(vec(1, 2, 3))", false, "0.666666666667"},
         {"std(vec(1, 2, 3))", false, "0.816496580928"},
+        {"skewness(vec(1, 2, 3))", false, "0"},
+        {"kurtosis(vec(1, 2, 3))", false, "-1.5"},
         {"cov(vec(1, 2, 3), vec(2, 4, 6))", false, "1.33333333333"},
         {"corr(vec(1, 2, 3), vec(2, 4, 6))", false, "1"},
+        {"hann(5)", false, "[0, 0.5, 1, 0.5, 0]"},
+        {"hamming(3)", false, "[0.08, 1, 0.08]"},
+        {"blackman(3)", false, "[0, 1, 0]"},
+        {"divisors(12)", false, "[1, 2, 3, 4, 6, 12]"},
+        {"extended_gcd(240, 46)", false, "[2, -9, 47]"},
     };
 
     for (const auto& test : matrix_display_cases) {
@@ -4574,7 +4704,14 @@ int main() {
 
     try {
         const std::string vars_output = calculator.list_variables();
-        if (vars_output == "b = [[1, 2, 0, 0], [3, 0, 0, 0], [0, 0, 0, 7]]\nevt = [[0, 1], [0.025, 1.02531512052], [0.05, 1.05127109638], [0.075, 1.07788415088], [0.1, 1.10517091808], [0.125, 1.13314845307], [0.15, 1.16183424273], [0.175, 1.19124621661], [0.2, 1.22140275816], [0.225, 1.25232271619], [0.25, 1.28402541669], [0.275, 1.31653067487], [0.3, 1.34985880758], [0.325, 1.38403064598], [0.35, 1.41906754859], [0.375, 1.45499141462], [0.4, 1.49182469764], [0.425, 1.52959041966], [0.45, 1.56831218549], [0.475, 1.60801419749], [0.5, 1.6487212707], [0.525, 1.69045884838], [0.55, 1.73325301787], [0.575, 1.77713052691], [0.6, 1.82211880039], [0.625, 1.86824595743], [0.65, 1.91554082901], [0.675, 1.96403297597], [0.693147180974, 2]]\nm = [[1, 2], [8, 4]]\nn = [[2, 2], [3, 5]]\nsys = [[0, 0, 1], [0.392699081698, 0.382683432366, 0.923879532518], [0.785398163395, 0.707106781194, 0.707106781198], [1.17809724509, 0.923879532531, 0.382683432378], [1.57079632679, 1, 0]]\ntraj = [[0, 1], [0.25, 1.28402541668], [0.5, 1.64872127069], [0.75, 2.11700001658], [1, 2.7182818284]]\nv = [-3, 6]") {
+        if (vars_output.find("b = [[1, 2, 0, 0], [3, 0, 0, 0], [0, 0, 0, 7]]") != std::string::npos &&
+            vars_output.find("evt = [[0, 1]") != std::string::npos &&
+            vars_output.find("[0.693147180") != std::string::npos &&
+            vars_output.find("m = [[1, 2], [8, 4]]") != std::string::npos &&
+            vars_output.find("n = [[2, 2], [3, 5]]") != std::string::npos &&
+            vars_output.find("sys = [[0, 0, 1]") != std::string::npos &&
+            vars_output.find("traj = [[0, 1]") != std::string::npos &&
+            vars_output.find("v = [-3, 6]") != std::string::npos) {
             ++passed;
         } else {
             ++failed;

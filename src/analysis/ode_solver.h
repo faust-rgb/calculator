@@ -2,6 +2,7 @@
 #define ODE_SOLVER_H
 
 #include <functional>
+#include <utility>
 #include <vector>
 
 struct ODEPoint {
@@ -32,7 +33,7 @@ public:
 private:
     double integrate_segment(double x0, double y0, double x1) const;
     ODEPoint integrate_segment_with_event(double x0, double y0, double x1, bool* stopped) const;
-    double rk4_step(double x, double y, double h) const;
+    std::pair<double, double> rkf45_step(double x, double y, double h) const;
 
     RHSFunction rhs_;
     EventFunction event_;
@@ -67,6 +68,9 @@ private:
     std::vector<double> rk4_step(double x,
                                  const std::vector<double>& y,
                                  double h) const;
+    std::pair<std::vector<double>, double> rkf45_step(double x,
+                                                       const std::vector<double>& y,
+                                                       double h) const;
 
     RHSFunction rhs_;
     EventFunction event_;
