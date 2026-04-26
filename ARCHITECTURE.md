@@ -62,8 +62,9 @@ the main functions.
 - `test`
   Regression tests and runnable example scripts
 
-Large implementation areas are split with private internal headers rather than
-`*.inc` fragments. Current internal split headers include:
+Large implementation areas are split into private implementation `.cpp` files
+with internal headers for shared declarations. Current internal split headers
+include:
 
 - `src/core/calculator_internal_types.h`
 - `src/math/mymath_internal.h`

@@ -5,21 +5,6 @@
 #include <algorithm>
 #include <stdexcept>
 
-namespace {
-
-constexpr double kDisplayZeroEps = mymath::kDoubleDenormMin;
-constexpr double kDisplayIntegerEps = 1e-9;
-
-bool is_integer_double(double x, double eps = 1e-10) {
-    return mymath::is_integer(x, eps);
-}
-
-long long round_to_long_long(double x) {
-    return static_cast<long long>(x >= 0.0 ? x + 0.5 : x - 0.5);
-}
-
-}
-
 Calculator::Calculator() : impl_(new Impl()) {}
 
 Calculator::~Calculator() = default;
