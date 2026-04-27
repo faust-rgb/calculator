@@ -8,6 +8,8 @@
 #include "mymath.h"
 
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 namespace matrix {
 
@@ -145,6 +147,72 @@ Matrix svd_vt(const Matrix& matrix) {
     return compute_reduced_svd(matrix).vt;
 }
 
+Matrix lu_solve_with_partial_pivoting(const Matrix& coefficients,
+                                      const Matrix& rhs_column) {
+    const std::size_t n = coefficients.rows;
+    const double tolerance = matrix_tolerance(coefficients);
+    Matrix lu = coefficients;
+    std::vector<std::size_t> permutation(n, 0);
+    for (std::size_t i = 0; i < n; ++i) {
+        permutation[i] = i;
+    }
+
+    for (std::size_t col = 0; col < n; ++col) {
+        std::size_t pivot_row = col;
+        double pivot_value = mymath::abs(lu.at(col, col));
+        for (std::size_t row = col + 1; row < n; ++row) {
+            const double current = mymath::abs(lu.at(row, col));
+            if (current > pivot_value) {
+                pivot_value = current;
+                pivot_row = row;
+            }
+        }
+        if (pivot_value <= tolerance) {
+            throw std::runtime_error("linear system has no unique solution");
+        }
+
+        if (pivot_row != col) {
+            swap_rows(&lu, col, pivot_row);
+            std::swap(permutation[col], permutation[pivot_row]);
+        }
+
+        for (std::size_t row = col + 1; row < n; ++row) {
+            lu.at(row, col) /= lu.at(col, col);
+            const double factor = lu.at(row, col);
+            for (std::size_t inner = col + 1; inner < n; ++inner) {
+                lu.at(row, inner) -= factor * lu.at(col, inner);
+                if (mymath::abs(lu.at(row, inner)) <= tolerance) {
+                    lu.at(row, inner) = 0.0;
+                }
+            }
+        }
+    }
+
+    std::vector<double> y(n, 0.0);
+    for (std::size_t row = 0; row < n; ++row) {
+        long double value =
+            static_cast<long double>(rhs_column.at(permutation[row], 0));
+        for (std::size_t col = 0; col < row; ++col) {
+            value -= static_cast<long double>(lu.at(row, col)) *
+                     static_cast<long double>(y[col]);
+        }
+        y[row] = static_cast<double>(value);
+    }
+
+    Matrix result(n, 1, 0.0);
+    for (std::size_t reverse = 0; reverse < n; ++reverse) {
+        const std::size_t row = n - 1 - reverse;
+        long double value = static_cast<long double>(y[row]);
+        for (std::size_t col = row + 1; col < n; ++col) {
+            value -= static_cast<long double>(lu.at(row, col)) *
+                     static_cast<long double>(result.at(col, 0));
+        }
+        result.at(row, 0) =
+            static_cast<double>(value / static_cast<long double>(lu.at(row, row)));
+    }
+    return result;
+}
+
 Matrix solve(const Matrix& coefficients, const Matrix& rhs) {
     if (!coefficients.is_square()) {
         throw std::runtime_error("solve requires a square coefficient matrix");
@@ -158,63 +226,11 @@ Matrix solve(const Matrix& coefficients, const Matrix& rhs) {
     if (rhs_size != n) {
         throw std::runtime_error("solve requires rhs to match the coefficient matrix dimension");
     }
-    const double tolerance = matrix_tolerance(coefficients);
-
-    // 对增广矩阵 [A | b] 做 Gauss-Jordan 消元，右端最终就是解向量。
-    Matrix augmented(n, n + 1, 0.0);
+    Matrix rhs_column(n, 1, 0.0);
     for (std::size_t row = 0; row < n; ++row) {
-        for (std::size_t col = 0; col < n; ++col) {
-            augmented.at(row, col) = coefficients.at(row, col);
-        }
-        augmented.at(row, n) = rhs.rows == 1 ? rhs.at(0, row) : rhs.at(row, 0);
+        rhs_column.at(row, 0) = rhs.rows == 1 ? rhs.at(0, row) : rhs.at(row, 0);
     }
-
-    for (std::size_t col = 0; col < n; ++col) {
-        std::size_t best_row = col;
-        double best_value = mymath::abs(augmented.at(best_row, col));
-        for (std::size_t row = col + 1; row < n; ++row) {
-            const double current = mymath::abs(augmented.at(row, col));
-            if (current > best_value) {
-                best_value = current;
-                best_row = row;
-            }
-        }
-
-        if (best_value <= tolerance) {
-            throw std::runtime_error("linear system has no unique solution");
-        }
-
-        swap_rows(&augmented, col, best_row);
-        const long double pivot = static_cast<long double>(augmented.at(col, col));
-        for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
-            augmented.at(col, current_col) = static_cast<double>(
-                static_cast<long double>(augmented.at(col, current_col)) / pivot);
-        }
-
-        for (std::size_t row = 0; row < n; ++row) {
-            if (row == col) {
-                continue;
-            }
-            const long double factor = static_cast<long double>(augmented.at(row, col));
-            if (mymath::abs(static_cast<double>(factor)) <= tolerance) {
-                continue;
-            }
-            for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
-                augmented.at(row, current_col) = static_cast<double>(
-                    static_cast<long double>(augmented.at(row, current_col)) -
-                    factor * static_cast<long double>(augmented.at(col, current_col)));
-                if (mymath::abs(augmented.at(row, current_col)) <= tolerance) {
-                    augmented.at(row, current_col) = 0.0;
-                }
-            }
-        }
-    }
-
-    Matrix result(n, 1, 0.0);
-    for (std::size_t row = 0; row < n; ++row) {
-        result.at(row, 0) = augmented.at(row, n);
-    }
-    return result;
+    return lu_solve_with_partial_pivoting(coefficients, rhs_column);
 }
 
 Matrix power(Matrix base, long long exponent) {

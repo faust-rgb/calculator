@@ -225,164 +225,9 @@ private:
     double apply_function(const std::string& name, const std::vector<double>& arguments) {
         // 这里是“普通浮点路径”的函数分发中心。
         // 需要字符串结果的功能，例如 factor/bin/hex，不从这里返回。
-        if (name == "pow") {
-            return apply_pow(arguments);
-        }
-        if (name == "root") {
-            return apply_root(arguments);
-        }
-        if (name == "and") {
-            return apply_and(arguments);
-        }
-        if (name == "or") {
-            return apply_or(arguments);
-        }
-        if (name == "xor") {
-            return apply_xor(arguments);
-        }
-        if (name == "shl") {
-            return apply_shl(arguments);
-        }
-        if (name == "shr") {
-            return apply_shr(arguments);
-        }
-        if (name == "rol") {
-            return apply_rol(arguments);
-        }
-        if (name == "ror") {
-            return apply_ror(arguments);
-        }
-        if (name == "gcd") {
-            return apply_gcd(arguments);
-        }
-        if (name == "lcm") {
-            return apply_lcm(arguments);
-        }
-        if (name == "mod") {
-            return apply_mod(arguments);
-        }
-        if (name == "min") {
-            return apply_min(arguments);
-        }
-        if (name == "max") {
-            return apply_max(arguments);
-        }
-        if (name == "clamp") {
-            return apply_clamp(arguments);
-        }
-        if (name == "log") {
-            return apply_log(arguments);
-        }
-        if (name == "sum") {
-            return apply_sum(arguments);
-        }
-        if (name == "mean") {
-            return apply_mean(arguments);
-        }
-        if (name == "avg") {
-            return apply_avg(arguments);
-        }
-        if (name == "median") {
-            return apply_median(arguments);
-        }
-        if (name == "mode") {
-            return apply_mode(arguments);
-        }
-        if (name == "var") {
-            return apply_variance(arguments);
-        }
-        if (name == "std") {
-            return apply_stddev(arguments);
-        }
-        if (name == "skewness" || name == "skew") {
-            return apply_skewness(arguments);
-        }
-        if (name == "kurtosis") {
-            return apply_kurtosis(arguments);
-        }
-        if (name == "percentile") {
-            return apply_percentile(arguments);
-        }
-        if (name == "quartile") {
-            return apply_quartile(arguments);
-        }
-        if (name == "factorial") {
-            return apply_factorial(arguments);
-        }
-        if (name == "nCr") {
-            return apply_ncr(arguments);
-        }
-        if (name == "binom") {
-            return apply_ncr(arguments);
-        }
-        if (name == "nPr") {
-            return apply_npr(arguments);
-        }
-        if (name == "fib") {
-            return apply_fib(arguments);
-        }
-        if (name == "is_prime") {
-            return apply_is_prime(arguments);
-        }
-        if (name == "next_prime") {
-            return apply_next_prime(arguments);
-        }
-        if (name == "prev_prime") {
-            return apply_prev_prime(arguments);
-        }
-        if (name == "prime_pi") {
-            return apply_prime_pi(arguments);
-        }
-        if (name == "euler_phi" || name == "phi") {
-            return apply_euler_phi(arguments);
-        }
-        if (name == "mobius") {
-            return apply_mobius(arguments);
-        }
-        if (name == "egcd") {
-            return apply_egcd(arguments);
-        }
-        if (name == "rand") {
-            return apply_rand(arguments);
-        }
-        if (name == "randn") {
-            return apply_randn(arguments);
-        }
-        if (name == "randint") {
-            return apply_randint(arguments);
-        }
-        if (name == "beta") {
-            return apply_beta(arguments);
-        }
-        if (name == "zeta") {
-            return apply_zeta(arguments);
-        }
-        if (name == "bessel") {
-            return apply_bessel(arguments);
-        }
-        if (name == "pdf_normal") {
-            return apply_pdf_normal(arguments);
-        }
-        if (name == "cdf_normal") {
-            return apply_cdf_normal(arguments);
-        }
-        if (name == "popcount") {
-            return apply_popcount(arguments);
-        }
-        if (name == "bitlen") {
-            return apply_bitlen(arguments);
-        }
-        if (name == "ctz") {
-            return apply_ctz(arguments);
-        }
-        if (name == "clz") {
-            return apply_clz(arguments);
-        }
-        if (name == "parity") {
-            return apply_parity(arguments);
-        }
-        if (name == "reverse_bits") {
-            return apply_reverse_bits(arguments);
+        const BuiltinFunction* builtin = find_builtin_function(name);
+        if (builtin != nullptr) {
+            return (*builtin)(arguments);
         }
 
         const auto function_it = functions_->find(name);
@@ -568,6 +413,80 @@ private:
         }
 
         throw std::runtime_error("unknown function: " + name);
+    }
+
+    using BuiltinFunction = double (*)(const std::vector<double>&);
+
+    struct BuiltinFunctionEntry {
+        const char* name;
+        BuiltinFunction function;
+    };
+
+    static const BuiltinFunction* find_builtin_function(const std::string& name) {
+        static const BuiltinFunctionEntry functions[] = {
+            {"and", apply_and},
+            {"avg", apply_avg},
+            {"bessel", apply_bessel},
+            {"beta", apply_beta},
+            {"binom", apply_ncr},
+            {"bitlen", apply_bitlen},
+            {"cdf_normal", apply_cdf_normal},
+            {"clamp", apply_clamp},
+            {"clz", apply_clz},
+            {"ctz", apply_ctz},
+            {"egcd", apply_egcd},
+            {"euler_phi", apply_euler_phi},
+            {"factorial", apply_factorial},
+            {"fib", apply_fib},
+            {"gcd", apply_gcd},
+            {"is_prime", apply_is_prime},
+            {"kurtosis", apply_kurtosis},
+            {"lcm", apply_lcm},
+            {"log", apply_log},
+            {"max", apply_max},
+            {"mean", apply_mean},
+            {"median", apply_median},
+            {"min", apply_min},
+            {"mobius", apply_mobius},
+            {"mod", apply_mod},
+            {"mode", apply_mode},
+            {"nCr", apply_ncr},
+            {"next_prime", apply_next_prime},
+            {"nPr", apply_npr},
+            {"or", apply_or},
+            {"parity", apply_parity},
+            {"pdf_normal", apply_pdf_normal},
+            {"percentile", apply_percentile},
+            {"phi", apply_euler_phi},
+            {"popcount", apply_popcount},
+            {"pow", apply_pow},
+            {"prev_prime", apply_prev_prime},
+            {"prime_pi", apply_prime_pi},
+            {"quartile", apply_quartile},
+            {"rand", apply_rand},
+            {"randint", apply_randint},
+            {"randn", apply_randn},
+            {"reverse_bits", apply_reverse_bits},
+            {"rol", apply_rol},
+            {"root", apply_root},
+            {"ror", apply_ror},
+            {"shl", apply_shl},
+            {"shr", apply_shr},
+            {"skew", apply_skewness},
+            {"skewness", apply_skewness},
+            {"std", apply_stddev},
+            {"sum", apply_sum},
+            {"var", apply_variance},
+            {"xor", apply_xor},
+            {"zeta", apply_zeta},
+        };
+
+        for (const BuiltinFunctionEntry& entry : functions) {
+            if (name == entry.name) {
+                return &entry.function;
+            }
+        }
+        return nullptr;
     }
 
     static double apply_gcd(const std::vector<double>& arguments) {

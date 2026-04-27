@@ -1023,6 +1023,81 @@ ReducedSvd compute_reduced_svd(const Matrix& matrix) {
         return {u, s, vt};
     }
 
+    if (m < n) {
+        const Matrix aat = multiply(matrix, transpose(matrix));
+        const SymmetricEigenDecomposition eig =
+            jacobi_symmetric_eigendecomposition(aat);
+
+        std::vector<std::size_t> order(eig.values.size(), 0);
+        for (std::size_t i = 0; i < order.size(); ++i) {
+            order[i] = i;
+        }
+        std::sort(order.begin(),
+                  order.end(),
+                  [&eig](std::size_t lhs, std::size_t rhs) {
+                      return eig.values[lhs] > eig.values[rhs];
+                  });
+
+        std::vector<std::vector<double>> u_basis;
+        std::vector<std::vector<double>> v_basis;
+        u_basis.reserve(k);
+        v_basis.reserve(k);
+
+        for (std::size_t out_col = 0; out_col < k; ++out_col) {
+            std::vector<double> u_col =
+                out_col < order.size()
+                    ? matrix_column(eig.vectors, order[out_col])
+                    : standard_basis_vector(m, out_col % m);
+            if (!orthonormalize(&u_col, u_basis)) {
+                for (std::size_t basis_idx = 0; basis_idx < m; ++basis_idx) {
+                    u_col = standard_basis_vector(m, basis_idx);
+                    if (orthonormalize(&u_col, u_basis)) {
+                        break;
+                    }
+                }
+            }
+            u_basis.push_back(u_col);
+
+            double lambda = out_col < order.size() ? eig.values[order[out_col]] : 0.0;
+            if (lambda < 0.0 && mymath::abs(lambda) < matrix_tolerance(matrix)) {
+                lambda = 0.0;
+            }
+            const double sigma = mymath::sqrt(std::max(0.0, lambda));
+            s.at(out_col, out_col) = sigma;
+
+            std::vector<double> v_col(n, 0.0);
+            if (sigma > matrix_tolerance(matrix)) {
+                for (std::size_t col = 0; col < n; ++col) {
+                    for (std::size_t row = 0; row < m; ++row) {
+                        v_col[col] += matrix.at(row, col) * u_col[row];
+                    }
+                    v_col[col] /= sigma;
+                }
+                if (!orthonormalize(&v_col, v_basis)) {
+                    v_col.assign(n, 0.0);
+                }
+            }
+            if (vector_norm_squared(v_col) <= matrix_tolerance(matrix)) {
+                for (std::size_t basis_idx = 0; basis_idx < n; ++basis_idx) {
+                    v_col = standard_basis_vector(n, basis_idx);
+                    if (orthonormalize(&v_col, v_basis)) {
+                        break;
+                    }
+                }
+            }
+            v_basis.push_back(v_col);
+        }
+
+        for (std::size_t col = 0; col < k; ++col) {
+            set_matrix_column(&u, col, u_basis[col]);
+            for (std::size_t row = 0; row < n; ++row) {
+                vt.at(col, row) = v_basis[col][row];
+            }
+        }
+
+        return {u, s, vt};
+    }
+
     const Matrix ata = multiply(transpose(matrix), matrix);
     const SymmetricEigenDecomposition eig =
         jacobi_symmetric_eigendecomposition(ata);
@@ -1062,9 +1137,10 @@ ReducedSvd compute_reduced_svd(const Matrix& matrix) {
         if (out_col < order.size()) {
             lambda = eig.values[order[out_col]];
         }
-        const double sigma =
-            mymath::sqrt(lambda < 0.0 && mymath::abs(lambda) < matrix_tolerance(matrix) ? 0.0
-                                                                                        : lambda);
+        if (lambda < 0.0 && mymath::abs(lambda) < matrix_tolerance(matrix)) {
+            lambda = 0.0;
+        }
+        const double sigma = mymath::sqrt(std::max(0.0, lambda));
         s.at(out_col, out_col) = sigma;
 
         std::vector<double> u_col(m, 0.0);

@@ -21,11 +21,20 @@ double MultivariableIntegrator::integrate(
     }
 
     long double scale = 1.0L;
+    unsigned long long sample_count = 1;
+    constexpr unsigned long long kMaxTensorSamples = 2000000ULL;
     std::vector<int> normalized_subdivisions;
     normalized_subdivisions.reserve(subdivisions.size());
     for (std::size_t i = 0; i < bounds.size(); ++i) {
         const int normalized = normalize_subdivision_count(subdivisions[i]);
         normalized_subdivisions.push_back(normalized);
+        const unsigned long long dimension_samples =
+            static_cast<unsigned long long>(normalized) + 1ULL;
+        if (sample_count > kMaxTensorSamples / dimension_samples) {
+            throw std::runtime_error(
+                "tensor Simpson integration would exceed the maximum sample count");
+        }
+        sample_count *= dimension_samples;
 
         const double width = bounds[i].second - bounds[i].first;
         if (width == 0.0) {

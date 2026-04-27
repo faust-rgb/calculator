@@ -17,33 +17,42 @@ namespace symbolic_expression_internal {
 
 std::shared_ptr<SymbolicExpression::Node> intern_node(
     std::shared_ptr<SymbolicExpression::Node> node) {
+    using InternEntry =
+        std::pair<std::string, std::weak_ptr<SymbolicExpression::Node>>;
+    static thread_local std::list<InternEntry> interned_order;
     static thread_local std::unordered_map<std::string,
-                                           std::weak_ptr<SymbolicExpression::Node>>
+                                           std::list<InternEntry>::iterator>
         interned_nodes;
     static constexpr std::size_t kMaxInternedNodes = 8192;
 
     const std::string key = node_structural_key(node);
     const auto found = interned_nodes.find(key);
     if (found != interned_nodes.end()) {
-        if (std::shared_ptr<SymbolicExpression::Node> existing = found->second.lock()) {
+        if (std::shared_ptr<SymbolicExpression::Node> existing = found->second->second.lock()) {
+            interned_order.splice(interned_order.begin(), interned_order, found->second);
             return existing;
         }
+        interned_order.erase(found->second);
+        interned_nodes.erase(found);
     }
 
     if (interned_nodes.size() >= kMaxInternedNodes) {
-        for (auto it = interned_nodes.begin(); it != interned_nodes.end();) {
+        for (auto it = interned_order.begin(); it != interned_order.end();) {
             if (it->second.expired()) {
-                it = interned_nodes.erase(it);
+                interned_nodes.erase(it->first);
+                it = interned_order.erase(it);
             } else {
                 ++it;
             }
         }
-        if (interned_nodes.size() >= kMaxInternedNodes) {
-            interned_nodes.clear();
+        while (interned_nodes.size() >= kMaxInternedNodes && !interned_order.empty()) {
+            interned_nodes.erase(interned_order.back().first);
+            interned_order.pop_back();
         }
     }
 
-    interned_nodes[key] = node;
+    interned_order.push_front({key, node});
+    interned_nodes[key] = interned_order.begin();
     return node;
 }
 

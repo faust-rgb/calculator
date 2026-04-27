@@ -6,7 +6,6 @@
 #include "mymath.h"
 #include "ode_solver.h"
 #include "polynomial.h"
-#include "script_parser.h"
 #include "symbolic_expression.h"
 
 #include <algorithm>
@@ -15,128 +14,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <utility>
-
-double Calculator::evaluate(const std::string& expression) {
-    return normalize_result(evaluate_raw(expression));
-}
-
-double Calculator::evaluate_raw(const std::string& expression) {
-    const StoredValue value = evaluate_expression_value(this, impl_.get(), expression, false);
-    if (value.is_matrix) {
-        throw std::runtime_error("matrix expression cannot be used as a scalar");
-    }
-    return value.decimal;
-}
-
-std::string Calculator::evaluate_for_display(const std::string& expression, bool exact_mode) {
-    // 显示型功能优先于普通数值/分数显示，例如 hex(255) 应直接得到 "FF"。
-    const std::map<std::string, StoredValue> variables = visible_variables(impl_.get());
-    std::string converted;
-    if (try_base_conversion_expression(expression,
-                                       &variables,
-                                       &impl_->functions,
-                                       {impl_->hex_prefix_mode, impl_->hex_uppercase_mode},
-                                       &converted)) {
-        return converted;
-    }
-
-    if (impl_->symbolic_constants_mode) {
-        std::string symbolic_output;
-        if (try_symbolic_constant_expression(expression,
-                                             &variables,
-                                             &impl_->functions,
-                                             &symbolic_output)) {
-            return symbolic_output;
-        }
-    }
-
-    return format_stored_value(
-        evaluate_expression_value(this, impl_.get(), expression, exact_mode),
-        impl_->symbolic_constants_mode);
-}
-
-std::string Calculator::process_line(const std::string& expression, bool exact_mode) {
-    std::string lhs;
-    std::string rhs;
-    if (!split_assignment(expression, &lhs, &rhs)) {
-        return evaluate_for_display(expression, exact_mode);
-    }
-
-    if (!is_valid_variable_name(lhs)) {
-        throw std::runtime_error("invalid variable name: " + lhs);
-    }
-    if (rhs.empty()) {
-        throw std::runtime_error("assignment requires a value");
-    }
-
-    const StoredValue stored = evaluate_expression_value(this, impl_.get(), rhs, exact_mode);
-    assign_visible_variable(impl_.get(), lhs, stored);
-    return lhs + " = " + format_stored_value(stored, impl_->symbolic_constants_mode);
-}
-
-std::string Calculator::execute_script(const std::string& source, bool exact_mode) {
-    script::Program program = script::parse_program(source);
-    std::string last_output;
-    for (const auto& statement : program.statements) {
-        const ScriptSignal signal =
-            execute_script_statement(this, impl_.get(), *statement, exact_mode, &last_output, false);
-        if (signal.kind == ScriptSignal::Kind::kReturn) {
-            return signal.has_value ? format_stored_value(signal.value, impl_->symbolic_constants_mode)
-                                    : (last_output.empty() ? "OK" : last_output);
-        }
-        if (signal.kind == ScriptSignal::Kind::kBreak ||
-            signal.kind == ScriptSignal::Kind::kContinue) {
-            throw std::runtime_error("break/continue can only be used inside loops");
-        }
-    }
-    return last_output.empty() ? "OK" : last_output;
-}
-
-std::string Calculator::list_variables() const {
-    if (impl_->variables.empty()) {
-        return "No variables defined.";
-    }
-
-    std::ostringstream out;
-    bool first = true;
-    for (const auto& [name, value] : impl_->variables) {
-        // std::map 保证变量按名字稳定排序，便于人读和测试断言。
-        if (!first) {
-            out << '\n';
-        }
-        first = false;
-        out << name << " = " << format_stored_value(value, impl_->symbolic_constants_mode);
-    }
-    return out.str();
-}
-
-std::string Calculator::factor_expression(const std::string& expression) const {
-    std::string inside;
-    if (!split_named_call(expression, "factor", &inside)) {
-        throw std::runtime_error("expected factor(expression)");
-    }
-
-    // 先允许 inside 是一个普通表达式或变量，再检查最终值是否为整数。
-    DecimalParser parser(inside, &impl_->variables, &impl_->functions);
-    const double value = normalize_result(parser.parse());
-    if (!is_integer_double(value)) {
-        throw std::runtime_error("factor only accepts integers");
-    }
-
-    return factor_integer(round_to_long_long(value));
-}
-
-std::string Calculator::base_conversion_expression(const std::string& expression) const {
-    std::string converted;
-    if (!try_base_conversion_expression(expression,
-                                        &impl_->variables,
-                                        &impl_->functions,
-                                        {impl_->hex_prefix_mode, impl_->hex_uppercase_mode},
-                                        &converted)) {
-        throw std::runtime_error("expected bin(...), oct(...), hex(...), or base(value, base)");
-    }
-    return converted;
-}
 
 bool Calculator::try_process_function_command(const std::string& expression,
                                               std::string* output) {
@@ -620,7 +497,8 @@ bool Calculator::try_process_function_command(const std::string& expression,
             const std::vector<double>& upper_bounds,
             double planning_tolerance,
             std::vector<double>* solution,
-            double* objective_value) {
+            double* objective_value,
+            std::string* diagnostic) {
             const std::size_t variable_count = objective.size();
             if (inequality_matrix.cols != variable_count ||
                 inequality_rhs.size() != inequality_matrix.rows ||
@@ -676,6 +554,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                 return true;
             }
 
+            static constexpr std::size_t kMaxPlanningBasisCount = 250000;
             std::vector<std::vector<double>> all_rows;
             std::vector<double> all_rhs;
             all_rows.reserve(inequality_matrix.rows + 2 * equality_matrix.rows +
@@ -715,14 +594,48 @@ bool Calculator::try_process_function_command(const std::string& expression,
                 all_rhs.push_back(-lower_bounds[col]);
             }
 
+            auto capped_choose = [](std::size_t n, std::size_t k, std::size_t cap) {
+                if (k > n) {
+                    return std::size_t{0};
+                }
+                if (k > n - k) {
+                    k = n - k;
+                }
+
+                long double value = 1.0L;
+                for (std::size_t i = 1; i <= k; ++i) {
+                    value *= static_cast<long double>(n - k + i);
+                    value /= static_cast<long double>(i);
+                    if (value > static_cast<long double>(cap)) {
+                        return cap + 1;
+                    }
+                }
+                return static_cast<std::size_t>(value + 0.5L);
+            };
+
+            const std::size_t basis_count_estimate =
+                capped_choose(all_rows.size(), variable_count, kMaxPlanningBasisCount);
+            if (basis_count_estimate > kMaxPlanningBasisCount) {
+                throw std::runtime_error(
+                    "planning basis enumeration limit exceeded: " +
+                    std::to_string(basis_count_estimate) +
+                    "+ candidate bases for " + std::to_string(variable_count) +
+                    " variables and " + std::to_string(all_rows.size()) +
+                    " active constraints");
+            }
+
             bool found = false;
             std::vector<double> best_solution(variable_count, 0.0);
             double best_value = 0.0;
             std::vector<std::size_t> selection(variable_count, 0);
+            std::size_t checked_bases = 0;
+            std::size_t singular_bases = 0;
+            std::size_t infeasible_bases = 0;
 
             std::function<void(std::size_t, std::size_t)> enumerate_bases =
                 [&](std::size_t start, std::size_t depth) {
                     if (depth == variable_count) {
+                        ++checked_bases;
                         matrix::Matrix basis(variable_count, variable_count, 0.0);
                         matrix::Matrix basis_rhs(variable_count, 1, 0.0);
                         for (std::size_t row = 0; row < variable_count; ++row) {
@@ -741,6 +654,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                                     mymath::abs(value) <= planning_tolerance ? 0.0 : value;
                             }
                             if (!feasible_solution(candidate)) {
+                                ++infeasible_bases;
                                 return;
                             }
 
@@ -753,6 +667,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                                 best_solution = candidate;
                             }
                         } catch (const std::exception&) {
+                            ++singular_bases;
                         }
                         return;
                     }
@@ -768,6 +683,13 @@ bool Calculator::try_process_function_command(const std::string& expression,
 
             enumerate_bases(0, 0);
             if (!found) {
+                if (diagnostic != nullptr) {
+                    *diagnostic = "checked " + std::to_string(checked_bases) +
+                                  " bases, skipped " + std::to_string(singular_bases) +
+                                  " singular bases and " +
+                                  std::to_string(infeasible_bases) +
+                                  " infeasible candidates";
+                }
                 return false;
             }
 
@@ -2673,6 +2595,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
         if (integer_indices.empty()) {
             std::vector<double> best_solution;
             double best_value = 0.0;
+            std::string planning_diagnostic;
             if (!solve_linear_box_problem(transformed_objective,
                                           inequality_matrix,
                                           inequality_rhs,
@@ -2682,28 +2605,62 @@ bool Calculator::try_process_function_command(const std::string& expression,
                                           upper_bounds,
                                           planning_tolerance,
                                           &best_solution,
-                                          &best_value)) {
-                throw std::runtime_error(planning_command + " found no feasible bounded solution");
+                                          &best_value,
+                                          &planning_diagnostic)) {
+                std::string message =
+                    planning_command + " found no feasible bounded solution";
+                if (!planning_diagnostic.empty()) {
+                    message += " (" + planning_diagnostic + ")";
+                }
+                throw std::runtime_error(message);
             }
             *output = format_planning_result(best_solution,
                                              dot_product(objective, best_solution));
             return true;
         }
 
+        static constexpr std::size_t kMaxIntegerAssignments = 1000000;
+        static constexpr std::size_t kMaxIntegerSearchNodes = 2000000;
+        std::size_t estimated_integer_assignments = 1;
         std::vector<long long> integer_lower(variable_count, 0);
         std::vector<long long> integer_upper(variable_count, 0);
         for (std::size_t index : integer_indices) {
             integer_lower[index] = round_to_long_long(lower_bounds[index]);
             integer_upper[index] = round_to_long_long(upper_bounds[index]);
+            const long double width =
+                static_cast<long double>(integer_upper[index]) -
+                static_cast<long double>(integer_lower[index]) + 1.0L;
+            if (width <= 0.0L ||
+                width > static_cast<long double>(kMaxIntegerAssignments) ||
+                estimated_integer_assignments >
+                    kMaxIntegerAssignments / static_cast<std::size_t>(width)) {
+                estimated_integer_assignments = kMaxIntegerAssignments + 1;
+            } else {
+                estimated_integer_assignments *= static_cast<std::size_t>(width);
+            }
+        }
+        if (estimated_integer_assignments > kMaxIntegerAssignments) {
+            throw std::runtime_error(
+                planning_command + " integer search limit exceeded: more than " +
+                std::to_string(kMaxIntegerAssignments) +
+                " possible integer assignments");
         }
 
         bool found = false;
         double best_value = 0.0;
         std::vector<double> best_solution(variable_count, 0.0);
         std::vector<long long> current_integer_values(variable_count, 0);
+        std::size_t visited_integer_nodes = 0;
 
         std::function<void(std::size_t, long double)> search_integer =
             [&](std::size_t depth, long double current_objective) {
+                ++visited_integer_nodes;
+                if (visited_integer_nodes > kMaxIntegerSearchNodes) {
+                    throw std::runtime_error(
+                        planning_command + " integer search node limit exceeded after " +
+                        std::to_string(kMaxIntegerSearchNodes) + " nodes");
+                }
+
                 for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
                     long double assigned_total = 0.0L;
                     for (std::size_t assigned_depth = 0; assigned_depth < depth; ++assigned_depth) {
@@ -2914,6 +2871,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
 
                     std::vector<double> reduced_solution;
                     double reduced_objective_value = 0.0;
+                    std::string reduced_diagnostic;
                     if (!solve_linear_box_problem(reduced_objective,
                                                   reduced_inequality,
                                                   reduced_inequality_rhs,
@@ -2923,7 +2881,8 @@ bool Calculator::try_process_function_command(const std::string& expression,
                                                   reduced_upper,
                                                   planning_tolerance,
                                                   &reduced_solution,
-                                                  &reduced_objective_value)) {
+                                                  &reduced_objective_value,
+                                                  &reduced_diagnostic)) {
                         return;
                     }
 

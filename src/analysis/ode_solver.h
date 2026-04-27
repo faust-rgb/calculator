@@ -21,7 +21,9 @@ public:
     using EventFunction = std::function<double(double, double)>;
 
     explicit ODESolver(RHSFunction rhs,
-                       EventFunction event = EventFunction());
+                       EventFunction event = EventFunction(),
+                       double relative_tolerance = 1e-9,
+                       double absolute_tolerance = 1e-12);
 
     double solve(double x0, double y0, double x1, int steps = 100) const;
 
@@ -37,6 +39,8 @@ private:
 
     RHSFunction rhs_;
     EventFunction event_;
+    double relative_tolerance_ = 1e-9;
+    double absolute_tolerance_ = 1e-12;
 };
 
 class ODESystemSolver {
@@ -45,7 +49,9 @@ public:
     using EventFunction = std::function<double(double, const std::vector<double>&)>;
 
     explicit ODESystemSolver(RHSFunction rhs,
-                             EventFunction event = EventFunction());
+                             EventFunction event = EventFunction(),
+                             double relative_tolerance = 1e-9,
+                             double absolute_tolerance = 1e-12);
 
     std::vector<double> solve(double x0,
                               const std::vector<double>& y0,
@@ -74,6 +80,8 @@ private:
 
     RHSFunction rhs_;
     EventFunction event_;
+    double relative_tolerance_ = 1e-9;
+    double absolute_tolerance_ = 1e-12;
 };
 
 #endif

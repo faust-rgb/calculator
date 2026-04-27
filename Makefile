@@ -8,6 +8,7 @@ BIN_DIR := bin
 BUILD_DIR := build
 APP := $(BIN_DIR)/calculator
 TEST_APP := $(BIN_DIR)/calculator_tests
+PLANNING_TEST_APP := $(BIN_DIR)/planning_tests
 SRC_DIR := src
 TEST_DIR := test
 SRC_DIRS := $(SRC_DIR)/app $(SRC_DIR)/core $(SRC_DIR)/math $(SRC_DIR)/matrix $(SRC_DIR)/analysis $(SRC_DIR)/algebra $(SRC_DIR)/symbolic $(SRC_DIR)/script
@@ -16,6 +17,7 @@ CPPFLAGS += $(INCLUDES) -MMD -MP
 
 MAIN_SRC := $(SRC_DIR)/app/main.cpp
 COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
+	$(SRC_DIR)/core/calculator_basic_commands.cpp \
 	$(SRC_DIR)/core/calculator_help.cpp \
 	$(SRC_DIR)/core/core_helpers.cpp \
 	$(SRC_DIR)/core/precise_decimal_parser.cpp \
@@ -58,7 +60,8 @@ COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 COMMON_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(COMMON_SRCS))
 MAIN_OBJ := $(BUILD_DIR)/$(MAIN_SRC:.cpp=.o)
 TEST_OBJ := $(BUILD_DIR)/$(TEST_DIR)/tests.o
-DEPS := $(MAIN_OBJ:.o=.d) $(TEST_OBJ:.o=.d) $(COMMON_OBJS:.o=.d)
+PLANNING_TEST_OBJ := $(BUILD_DIR)/$(TEST_DIR)/planning_tests.o
+DEPS := $(MAIN_OBJ:.o=.d) $(TEST_OBJ:.o=.d) $(PLANNING_TEST_OBJ:.o=.d) $(COMMON_OBJS:.o=.d)
 
 .PHONY: all test script-test check debug asan ubsan clean
 
@@ -77,8 +80,12 @@ $(APP): $(MAIN_OBJ) $(COMMON_OBJS) | $(BIN_DIR)
 $(TEST_APP): $(TEST_OBJ) $(COMMON_OBJS) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(TEST_APP)
 
-test: $(TEST_APP)
+$(PLANNING_TEST_APP): $(PLANNING_TEST_OBJ) $(COMMON_OBJS) | $(BIN_DIR)
+	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(PLANNING_TEST_APP)
+
+test: $(TEST_APP) $(PLANNING_TEST_APP)
 	$(TEST_APP)
+	$(PLANNING_TEST_APP)
 
 script-test: $(APP)
 	test/script/run_symbolic_cli_validation.sh
@@ -95,6 +102,6 @@ ubsan:
 	$(MAKE) OPT_CXXFLAGS="-O1 -g -fsanitize=undefined" LDFLAGS="-fsanitize=undefined"
 
 clean:
-	rm -rf $(BUILD_DIR) $(APP) $(TEST_APP)
+	rm -rf $(BUILD_DIR) $(APP) $(TEST_APP) $(PLANNING_TEST_APP)
 
 -include $(DEPS)

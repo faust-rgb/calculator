@@ -1453,17 +1453,24 @@ std::vector<SymbolicExpression> SymbolicExpression::gradient(
 
 std::vector<std::vector<SymbolicExpression>> SymbolicExpression::hessian(
     const std::vector<std::string>& variable_names) const {
-    std::vector<std::vector<SymbolicExpression>> result;
-    result.reserve(variable_names.size());
-    for (const std::string& outer_variable : variable_names) {
-        std::vector<SymbolicExpression> row;
-        row.reserve(variable_names.size());
-        const SymbolicExpression outer_derivative =
-            derivative(outer_variable).simplify();
-        for (const std::string& inner_variable : variable_names) {
-            row.push_back(outer_derivative.derivative(inner_variable).simplify());
+    const std::size_t n = variable_names.size();
+    std::vector<SymbolicExpression> first_derivatives;
+    first_derivatives.reserve(n);
+    for (const std::string& variable_name : variable_names) {
+        first_derivatives.push_back(derivative(variable_name).simplify());
+    }
+
+    std::vector<std::vector<SymbolicExpression>> result(
+        n, std::vector<SymbolicExpression>(n, SymbolicExpression::number(0.0)));
+    for (std::size_t row = 0; row < n; ++row) {
+        for (std::size_t col = row; col < n; ++col) {
+            const SymbolicExpression value =
+                first_derivatives[row].derivative(variable_names[col]).simplify();
+            result[row][col] = value;
+            if (row != col) {
+                result[col][row] = value;
+            }
         }
-        result.push_back(row);
     }
     return result;
 }

@@ -229,12 +229,36 @@ FunctionAnalysis::FunctionAnalysis(std::string variable_name)
     }
 }
 
+FunctionAnalysis::FunctionAnalysis(const FunctionAnalysis& other)
+    : expression_(other.expression_),
+      variable_name_(other.variable_name_) {}
+
+FunctionAnalysis& FunctionAnalysis::operator=(const FunctionAnalysis& other) {
+    if (this != &other) {
+        expression_ = other.expression_;
+        variable_name_ = other.variable_name_;
+        evaluator_.reset();
+        evaluation_cache_entries_.clear();
+        evaluation_cache_index_.clear();
+    }
+    return *this;
+}
+
+FunctionAnalysis::FunctionAnalysis(FunctionAnalysis&& other) noexcept = default;
+
+FunctionAnalysis& FunctionAnalysis::operator=(FunctionAnalysis&& other) noexcept = default;
+
+FunctionAnalysis::~FunctionAnalysis() = default;
+
 void FunctionAnalysis::define(const std::string& expression) {
     if (expression.empty()) {
         throw std::runtime_error("function expression cannot be empty");
     }
 
     expression_ = expression;
+    evaluator_.reset();
+    evaluation_cache_entries_.clear();
+    evaluation_cache_index_.clear();
 }
 
 double FunctionAnalysis::evaluate(double x) const {
@@ -253,6 +277,8 @@ double FunctionAnalysis::derivative(double x) const {
         central_difference_step_value(scale, 1.0 / mymath::pow(curvature_scale, 0.25));
 
     long double richardson[4][4] = {};
+    long double best_value = 0.0L;
+    long double best_error = static_cast<long double>(mymath::infinity());
     for (int row = 0; row < 4; ++row) {
         const double step = base_step / mymath::pow(2.0, static_cast<double>(row));
         const long double forward = to_long_double(evaluate_with_variable(x + step));
@@ -266,8 +292,21 @@ double FunctionAnalysis::derivative(double x) const {
                 (richardson[row][col - 1] - richardson[row - 1][col - 1]) /
                     (factor - 1.0L);
         }
+        if (row > 0) {
+            const long double candidate = richardson[row][row];
+            const long double error_estimate =
+                mymath::abs_long_double(candidate - richardson[row - 1][row - 1]);
+            if (error_estimate < best_error &&
+                mymath::isfinite(static_cast<double>(candidate))) {
+                best_error = error_estimate;
+                best_value = candidate;
+            }
+        }
     }
 
+    if (best_error < static_cast<long double>(mymath::infinity())) {
+        return static_cast<double>(best_value);
+    }
     return static_cast<double>(richardson[3][3]);
 }
 
@@ -491,22 +530,28 @@ double FunctionAnalysis::evaluate_with_variable(double x) const {
         throw std::runtime_error("function is not defined");
     }
 
-    static thread_local std::unordered_map<std::string, double> evaluation_cache;
     static constexpr std::size_t kMaxEvaluationCacheSize = 4096;
     const std::string cache_key =
         variable_name_ + "|" + expression_ + "|" + format_double(x);
-    const auto found = evaluation_cache.find(cache_key);
-    if (found != evaluation_cache.end()) {
-        return found->second;
+    const auto found = evaluation_cache_index_.find(cache_key);
+    if (found != evaluation_cache_index_.end()) {
+        evaluation_cache_entries_.splice(evaluation_cache_entries_.begin(),
+                                         evaluation_cache_entries_,
+                                         found->second);
+        return found->second->second;
     }
 
-    Calculator calculator;
-    calculator.process_line(variable_name_ + " = " + format_double(x), false);
-    const double value = calculator.evaluate_raw(expression_);
-    if (evaluation_cache.size() >= kMaxEvaluationCacheSize) {
-        evaluation_cache.clear();
+    if (!evaluator_) {
+        evaluator_ = std::make_unique<Calculator>();
     }
-    evaluation_cache.emplace(cache_key, value);
+    evaluator_->process_line(variable_name_ + " = " + format_double(x), false);
+    const double value = evaluator_->evaluate_raw(expression_);
+    evaluation_cache_entries_.push_front({cache_key, value});
+    evaluation_cache_index_[cache_key] = evaluation_cache_entries_.begin();
+    while (evaluation_cache_entries_.size() > kMaxEvaluationCacheSize) {
+        evaluation_cache_index_.erase(evaluation_cache_entries_.back().first);
+        evaluation_cache_entries_.pop_back();
+    }
     return value;
 }
 

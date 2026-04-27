@@ -1,7 +1,10 @@
 #ifndef FUNCTION_ANALYSIS_H
 #define FUNCTION_ANALYSIS_H
 
+#include <list>
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class Calculator;
@@ -43,6 +46,11 @@ public:
      * @throw std::runtime_error 当变量名不合法时抛出
      */
     explicit FunctionAnalysis(std::string variable_name = "x");
+    FunctionAnalysis(const FunctionAnalysis& other);
+    FunctionAnalysis& operator=(const FunctionAnalysis& other);
+    FunctionAnalysis(FunctionAnalysis&& other) noexcept;
+    FunctionAnalysis& operator=(FunctionAnalysis&& other) noexcept;
+    ~FunctionAnalysis();
 
     /**
      * @brief 定义要分析的函数
@@ -179,6 +187,11 @@ private:
 
     std::string expression_;      ///< 函数表达式
     std::string variable_name_;   ///< 变量名
+    mutable std::unique_ptr<Calculator> evaluator_;
+    mutable std::list<std::pair<std::string, double>> evaluation_cache_entries_;
+    mutable std::unordered_map<std::string,
+                               std::list<std::pair<std::string, double>>::iterator>
+        evaluation_cache_index_;
 };
 
 #endif

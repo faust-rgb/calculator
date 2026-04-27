@@ -533,11 +533,12 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
 
     SimplifyDepthGuard guard(&simplify_depth);
     SymbolicExpression current = expression;
-    constexpr int kMaxSimplifyPasses = 3;
+    constexpr int kMaxSimplifyPasses = 16;
     for (int pass = 0; pass < kMaxSimplifyPasses; ++pass) {
+        const std::string current_key = node_structural_key(current.node_);
         SymbolicExpression next = simplify_once(current);
         const std::string next_key = node_structural_key(next.node_);
-        if (next_key == node_structural_key(current.node_)) {
+        if (next_key == current_key) {
             return next;
         }
         current = next;
