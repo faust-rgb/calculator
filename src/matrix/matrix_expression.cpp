@@ -189,9 +189,9 @@ private:
         while (true) {
             skip_spaces();
             if (match('+')) {
-                value = add_values(value, parse_term());
+                value = add_values(std::move(value), parse_term());
             } else if (match('-')) {
-                value = subtract_values(value, parse_term());
+                value = subtract_values(std::move(value), parse_term());
             } else {
                 break;
             }
@@ -204,9 +204,9 @@ private:
         while (true) {
             skip_spaces();
             if (match('*')) {
-                value = multiply_values(value, parse_unary());
+                value = multiply_values(std::move(value), parse_unary());
             } else if (match('/')) {
-                value = divide_values(value, parse_unary());
+                value = divide_values(std::move(value), parse_unary());
             } else {
                 break;
             }
@@ -218,7 +218,7 @@ private:
         Value value = parse_primary();
         skip_spaces();
         if (match('^')) {
-            value = power_values(value, parse_unary());
+            value = power_values(std::move(value), parse_unary());
         }
         return value;
     }
@@ -1375,46 +1375,46 @@ private:
                name == "abs";
     }
 
-    static Value add_values(const Value& lhs, const Value& rhs) {
+    static Value add_values(Value lhs, Value rhs) {
         if (lhs.is_matrix && rhs.is_matrix) {
-            return Value::from_matrix(add(lhs.matrix, rhs.matrix));
+            return Value::from_matrix(add(std::move(lhs.matrix), rhs.matrix));
         }
         if (lhs.is_matrix) {
-            return Value::from_matrix(add(lhs.matrix, rhs.scalar));
+            return Value::from_matrix(add(std::move(lhs.matrix), rhs.scalar));
         }
         if (rhs.is_matrix) {
-            return Value::from_matrix(add(rhs.matrix, lhs.scalar));
+            return Value::from_matrix(add(std::move(rhs.matrix), lhs.scalar));
         }
         return Value::from_scalar(lhs.scalar + rhs.scalar);
     }
 
-    static Value subtract_values(const Value& lhs, const Value& rhs) {
+    static Value subtract_values(Value lhs, Value rhs) {
         if (lhs.is_matrix && rhs.is_matrix) {
-            return Value::from_matrix(subtract(lhs.matrix, rhs.matrix));
+            return Value::from_matrix(subtract(std::move(lhs.matrix), rhs.matrix));
         }
         if (lhs.is_matrix) {
-            return Value::from_matrix(subtract(lhs.matrix, rhs.scalar));
+            return Value::from_matrix(subtract(std::move(lhs.matrix), rhs.scalar));
         }
         if (rhs.is_matrix) {
-            return Value::from_matrix(add(multiply(rhs.matrix, -1.0), lhs.scalar));
+            return Value::from_matrix(add(multiply(std::move(rhs.matrix), -1.0), lhs.scalar));
         }
         return Value::from_scalar(lhs.scalar - rhs.scalar);
     }
 
-    static Value multiply_values(const Value& lhs, const Value& rhs) {
+    static Value multiply_values(Value lhs, Value rhs) {
         if (lhs.is_matrix && rhs.is_matrix) {
             return Value::from_matrix(multiply(lhs.matrix, rhs.matrix));
         }
         if (lhs.is_matrix) {
-            return Value::from_matrix(multiply(lhs.matrix, rhs.scalar));
+            return Value::from_matrix(multiply(std::move(lhs.matrix), rhs.scalar));
         }
         if (rhs.is_matrix) {
-            return Value::from_matrix(multiply(rhs.matrix, lhs.scalar));
+            return Value::from_matrix(multiply(std::move(rhs.matrix), lhs.scalar));
         }
         return Value::from_scalar(lhs.scalar * rhs.scalar);
     }
 
-    static Value divide_values(const Value& lhs, const Value& rhs) {
+    static Value divide_values(Value lhs, Value rhs) {
         if (rhs.is_matrix) {
             throw std::runtime_error("division by a matrix is not supported");
         }
@@ -1422,17 +1422,17 @@ private:
             throw std::runtime_error("division by zero");
         }
         if (lhs.is_matrix) {
-            return Value::from_matrix(divide(lhs.matrix, rhs.scalar));
+            return Value::from_matrix(divide(std::move(lhs.matrix), rhs.scalar));
         }
         return Value::from_scalar(lhs.scalar / rhs.scalar);
     }
 
-    static Value power_values(const Value& lhs, const Value& rhs) {
+    static Value power_values(Value lhs, Value rhs) {
         if (rhs.is_matrix) {
             throw std::runtime_error("matrix exponents must be scalars");
         }
         if (lhs.is_matrix) {
-            return Value::from_matrix(power(lhs.matrix, parse_integer_exponent(rhs.scalar)));
+            return Value::from_matrix(power(std::move(lhs.matrix), parse_integer_exponent(rhs.scalar)));
         }
         return Value::from_scalar(mymath::pow(lhs.scalar, rhs.scalar));
     }

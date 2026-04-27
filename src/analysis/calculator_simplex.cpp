@@ -140,14 +140,12 @@ bool simplex_iterate(
         // 比值检验
         double theta = std::numeric_limits<double>::infinity();
         std::size_t leaving = n_full;
-        bool from_upper = false;
 
         if (x_curr[entering] <= lb_full[entering] + eps) {
             theta = ub_full[entering] - lb_full[entering];
         } else if (ub_full[entering] < std::numeric_limits<double>::infinity() &&
                    x_curr[entering] >= ub_full[entering] - eps) {
             theta = x_curr[entering] - lb_full[entering];
-            from_upper = true;
         }
 
         for (std::size_t i = 0; i < m_total; ++i) {
@@ -160,7 +158,6 @@ bool simplex_iterate(
                 if (ratio < theta) {
                     theta = ratio;
                     leaving = i;
-                    from_upper = false;
                 }
             } else {
                 if (ub_full[j] < std::numeric_limits<double>::infinity()) {
@@ -168,7 +165,6 @@ bool simplex_iterate(
                     if (ratio < theta) {
                         theta = ratio;
                         leaving = i;
-                        from_upper = true;
                     }
                 }
             }

@@ -195,15 +195,32 @@ These currently include:
 
 These return formatted strings rather than just numbers.
 
+## Symbolic Algebra Core
+
+The symbolic engine (in `src/symbolic`) uses an **interning** pattern to ensure structural uniqueness of nodes. This enables:
+
+- $O(1)$ structural comparison (via pointer equality or structural key checks).
+- Efficient caching for simplification and derivatives.
+- Reduced memory footprint for complex expressions.
+
+**Eviction Strategy:** The interning pool uses an incremental LRU eviction strategy. When the pool (default 8192 nodes) is full, it performs a limited scan to prune expired weak references and evicts the oldest entries if necessary, ensuring stable $O(1)$ amortized insertion performance.
+
+### Exact Constants and Normalization
+
+Version 1.5 introduced dedicated node types for `pi` and `e` (`NodeType::kPi` and `NodeType::kE`). This prevents symbolic constants from being prematurely collapsed into floating-point numbers during simplification.
+
+**Normalization Rules:**
+- `e ^ x` is automatically normalized to `exp(x)` during the `simplify()` pass. This allows the engine to reuse established exponential rules for calculus and transforms while keeping the external display consistent.
+
 ## Terminal UX
 
-`src/app/main.cpp` implements a raw terminal reader with:
+`src/app/main.cpp` implements a custom REPL with raw terminal support:
 
-- up/down arrow history recall
-- `Tab` autocomplete
-- fallback to `getline` when input is not a TTY
-
-Autocomplete currently uses a fixed dictionary of common commands and functions.
+- **Navigation:** Left/Right arrow keys for inline cursor movement, Home (`Ctrl+A`), and End (`Ctrl+E`).
+- **History:** Up/Down arrow keys for command recall.
+- **Editing:** `Backspace`, `Ctrl+D` (delete character at cursor), and `Ctrl+K` (clear to end of line).
+- **Autocomplete:** Single `Tab` for completion, double `Tab` for listing candidates.
+- **Fallback:** Transparently falls back to standard `getline` when input is not a TTY.
 
 ## Persistence
 

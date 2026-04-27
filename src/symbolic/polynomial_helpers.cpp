@@ -18,8 +18,11 @@ bool is_known_positive_expression(const SymbolicExpression& expression) {
     }
 
     const auto& node = expression.node_;
+    if (node->type == NodeType::kPi || node->type == NodeType::kE) {
+        return true;
+    }
     if (node->type == NodeType::kVariable) {
-        return node->text == "e" || node->text == "pi";
+        return false;
     }
     if (node->type == NodeType::kFunction) {
         return node->text == "exp" || node->text == "sqrt" || node->text == "abs";
@@ -148,6 +151,11 @@ bool decompose_power_factor_expression(const SymbolicExpression& expression,
         *exponent = SymbolicExpression(expression.node_->right);
         return true;
     }
+    if (expression.node_->type == NodeType::kFunction && expression.node_->text == "exp") {
+        *base = SymbolicExpression::variable("e");
+        *exponent = SymbolicExpression(expression.node_->left);
+        return true;
+    }
 
     *base = expression;
     *exponent = SymbolicExpression::number(1.0);
@@ -174,6 +182,9 @@ SymbolicExpression rebuild_power_difference(const SymbolicExpression& base, doub
 
 SymbolicExpression rebuild_power_expression(const SymbolicExpression& base,
                                             const SymbolicExpression& exponent) {
+    if (base.node_->type == NodeType::kVariable && base.node_->text == "e") {
+        return make_function("exp", exponent);
+    }
     double numeric_exponent = 0.0;
     if (exponent.is_number(&numeric_exponent)) {
         return rebuild_power_difference(base, numeric_exponent);
@@ -471,13 +482,15 @@ void collect_identifier_variables(const SymbolicExpression& expression,
                                   std::vector<std::string>* names) {
     const auto& node = expression.node_;
     switch (node->type) {
+        case NodeType::kNumber:
+        case NodeType::kPi:
+        case NodeType::kE:
+            return;
         case NodeType::kVariable:
             if (node->text != "pi" && node->text != "e" && node->text != "i" &&
                 is_identifier_variable_name(node->text)) {
                 names->push_back(node->text);
             }
-            return;
-        case NodeType::kNumber:
             return;
         case NodeType::kNegate:
         case NodeType::kFunction:
@@ -655,6 +668,8 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
             return finish(true);
         }
         case NodeType::kNumber:
+        case NodeType::kPi:
+        case NodeType::kE:
         case NodeType::kVariable:
         case NodeType::kFunction:
         case NodeType::kNegate:
@@ -779,6 +794,128 @@ SymbolicExpression maybe_canonicalize_polynomial(const SymbolicExpression& expre
         return expression;
     }
     return build_polynomial_expression_from_coefficients(coefficients, variable_name);
+}
+
+void trim_symbolic_polynomial_coefficients(std::vector<SymbolicExpression>* coefficients) {
+    while (coefficients->size() > 1 && expr_is_zero(coefficients->back())) {
+        coefficients->pop_back();
+    }
+    if (coefficients->empty()) {
+        coefficients->push_back(SymbolicExpression::number(0.0));
+    }
+}
+
+bool is_symbolic_polynomial(const SymbolicExpression& expression,
+                            const std::string& variable_name) {
+    std::vector<SymbolicExpression> coefficients;
+    return symbolic_polynomial_coefficients_from_simplified(expression,
+                                                            variable_name,
+                                                            &coefficients);
+}
+
+bool symbolic_polynomial_coefficients_from_simplified(
+    const SymbolicExpression& expression,
+    const std::string& variable_name,
+    std::vector<SymbolicExpression>* coefficients) {
+    
+    // 递归基础情况
+    if (expression.is_variable_named(variable_name)) {
+        *coefficients = {SymbolicExpression::number(0.0), SymbolicExpression::number(1.0)};
+        return true;
+    }
+    if (expression.is_constant(variable_name)) {
+        *coefficients = {expression};
+        return true;
+    }
+
+    const auto& node = expression.node_;
+    
+    // 递归处理复合表达式
+    if (node->type == NodeType::kNegate) {
+        if (!symbolic_polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
+                                                             variable_name,
+                                                             coefficients)) {
+            return false;
+        }
+        for (auto& c : *coefficients) {
+            c = make_negate(c).simplify();
+        }
+        return true;
+    }
+
+    if (node->type == NodeType::kAdd || node->type == NodeType::kSubtract) {
+        std::vector<SymbolicExpression> left, right;
+        if (!symbolic_polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
+                                                             variable_name,
+                                                             &left) ||
+            !symbolic_polynomial_coefficients_from_simplified(SymbolicExpression(node->right),
+                                                             variable_name,
+                                                             &right)) {
+            return false;
+        }
+        
+        const std::size_t size = std::max(left.size(), right.size());
+        coefficients->assign(size, SymbolicExpression::number(0.0));
+        for (std::size_t i = 0; i < left.size(); ++i) {
+            (*coefficients)[i] = left[i];
+        }
+        for (std::size_t i = 0; i < right.size(); ++i) {
+            if (node->type == NodeType::kAdd) {
+                (*coefficients)[i] = make_add((*coefficients)[i], right[i]).simplify();
+            } else {
+                (*coefficients)[i] = make_subtract((*coefficients)[i], right[i]).simplify();
+            }
+        }
+        trim_symbolic_polynomial_coefficients(coefficients);
+        return true;
+    }
+
+    if (node->type == NodeType::kMultiply) {
+        std::vector<SymbolicExpression> left, right;
+        if (!symbolic_polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
+                                                             variable_name,
+                                                             &left) ||
+            !symbolic_polynomial_coefficients_from_simplified(SymbolicExpression(node->right),
+                                                             variable_name,
+                                                             &right)) {
+            return false;
+        }
+        
+        coefficients->assign(left.size() + right.size() - 1, SymbolicExpression::number(0.0));
+        for (std::size_t i = 0; i < left.size(); ++i) {
+            for (std::size_t j = 0; j < right.size(); ++j) {
+                const auto prod = make_multiply(left[i], right[j]).simplify();
+                (*coefficients)[i + j] = make_add((*coefficients)[i + j], prod).simplify();
+            }
+        }
+        trim_symbolic_polynomial_coefficients(coefficients);
+        return true;
+    }
+
+    if (node->type == NodeType::kPower) {
+        double exponent = 0.0;
+        if (SymbolicExpression(node->right).is_number(&exponent) &&
+            exponent >= 0.0 && mymath::is_integer(exponent, 1e-10)) {
+            const int exp_int = static_cast<int>(exponent + 0.5);
+            if (exp_int == 0) {
+                *coefficients = {SymbolicExpression::number(1.0)};
+                return true;
+            }
+            if (symbolic_polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
+                                                                variable_name,
+                                                                coefficients)) {
+                // 简单的幂运算展开逻辑（仅针对单项式变量）
+                if (coefficients->size() == 2 && expr_is_zero((*coefficients)[0])) {
+                    const auto base_coeff = (*coefficients)[1];
+                    coefficients->assign(exp_int + 1, SymbolicExpression::number(0.0));
+                    (*coefficients)[exp_int] = make_power(base_coeff, SymbolicExpression::number(exponent)).simplify();
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
 }
 
 }  // namespace symbolic_expression_internal

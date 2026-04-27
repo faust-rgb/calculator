@@ -43,7 +43,7 @@
 ## Terminal UX
 
 - Autocomplete uses a fixed word list
-- Interactive editing is intentionally minimal and does not provide full shell-like editing
+- Line editing provides basic navigation (arrows, Home/End) and deletion (Ctrl+D/K), but is not as comprehensive as `readline` or `zsh`.
 
 ## Scope
 
@@ -63,11 +63,12 @@ This project is now a capable calculator and mini CAS-style tool, but it is not:
     implemented
 - Nonlinear multi-variable `critical(...)` uses bounded numeric search
   - Hessian-based classification is available for isolated 1-3 variable solutions, but global completeness is not guaranteed
-- Common subexpression elimination is still partial
-  - expression nodes are interned and structural keys are cached, but there is no explicit CSE pass that rewrites expressions with shared temporary subexpressions
+- Common subexpression elimination (CSE)
+  - Nodes are interned and structural keys are cached.
+  - Basic CSE extraction logic is available via `common_subexpressions()`, but the core simplifier does not yet automatically rewrite expressions into variable-sharing forms.
 - Simplification is algebraic and heuristic
   - mathematically equivalent expressions may print in a different but still correct form, such as reordered products or `1 - x ^ 2` vs `-(x ^ 2) + 1`
 - Domain-aware simplification is still partial
   - some expressions are intentionally not collapsed unless positivity is known; full condition-tracking is not implemented
-- Internal symbolic coefficients still rely on `double`
-  - this keeps the implementation lightweight, but it can limit robustness for more advanced exact algebra
+- Symbolic Constants
+  - `pi` and `e` are now first-class exact constant nodes. They are preserved during symbolic algebra passes unless explicit numerical evaluation is requested.

@@ -52,24 +52,34 @@ private:
         index_;
 };
 
-bool is_one_plus_variable_squared(const SymbolicExpression& expression,
-                                  const std::string& variable_name) {
-    std::vector<double> coefficients;
-    return expression.polynomial_coefficients(variable_name, &coefficients) &&
-           coefficients.size() == 3 &&
-           mymath::is_near_zero(coefficients[0] - 1.0, kFormatEps) &&
-           mymath::is_near_zero(coefficients[1], kFormatEps) &&
-           mymath::is_near_zero(coefficients[2] - 1.0, kFormatEps);
+bool is_general_quadratic(const SymbolicExpression& expression,
+                          const std::string& variable_name,
+                          SymbolicExpression* a,
+                          SymbolicExpression* b,
+                          SymbolicExpression* c) {
+    std::vector<SymbolicExpression> coeffs;
+    if (symbolic_polynomial_coefficients_from_simplified(expression, variable_name, &coeffs) &&
+        coeffs.size() <= 3) {
+        *c = (coeffs.size() > 0) ? coeffs[0] : SymbolicExpression::number(0.0);
+        *b = (coeffs.size() > 1) ? coeffs[1] : SymbolicExpression::number(0.0);
+        *a = (coeffs.size() > 2) ? coeffs[2] : SymbolicExpression::number(0.0);
+        return true;
+    }
+    return false;
 }
 
-bool is_one_minus_variable_squared(const SymbolicExpression& expression,
-                                   const std::string& variable_name) {
-    std::vector<double> coefficients;
-    return expression.polynomial_coefficients(variable_name, &coefficients) &&
-           coefficients.size() == 3 &&
-           mymath::is_near_zero(coefficients[0] - 1.0, kFormatEps) &&
-           mymath::is_near_zero(coefficients[1], kFormatEps) &&
-           mymath::is_near_zero(coefficients[2] + 1.0, kFormatEps);
+bool is_pure_quadratic(const SymbolicExpression& expression,
+                       const std::string& variable_name,
+                       SymbolicExpression* constant_term,
+                       SymbolicExpression* x2_coeff) {
+    SymbolicExpression a, b, c;
+    if (is_general_quadratic(expression, variable_name, &a, &b, &c) &&
+        expr_is_zero(b) && !expr_is_zero(a)) {
+        *constant_term = c;
+        *x2_coeff = a;
+        return true;
+    }
+    return false;
 }
 
 bool is_sqrt_one_minus_variable_squared(const SymbolicExpression& expression,
@@ -78,8 +88,10 @@ bool is_sqrt_one_minus_variable_squared(const SymbolicExpression& expression,
         expression.node_->text != "sqrt") {
         return false;
     }
-    return is_one_minus_variable_squared(SymbolicExpression(expression.node_->left),
-                                         variable_name);
+    const SymbolicExpression inner(expression.node_->left);
+    SymbolicExpression a, b, c;
+    return is_general_quadratic(inner, variable_name, &a, &b, &c) &&
+           expr_is_one(c) && expr_is_zero(b) && expr_is_minus_one(a);
 }
 
 void trim_coefficients(std::vector<double>* coefficients) {
@@ -875,9 +887,23 @@ bool primitive_for_outer_function(const std::string& function_name,
         return true;
     }
     if (function_name == "cot") {
-        *primitive =
-            make_function("ln", make_function("abs", make_function("sin", argument)))
-                .simplify();
+        *primitive = make_function("ln", make_function("abs", make_function("sin", argument))).simplify();
+        return true;
+    }
+    if (function_name == "ln") {
+        *primitive = make_subtract(make_multiply(argument, make_function("ln", argument)), argument).simplify();
+        return true;
+    }
+    if (function_name == "sinh") {
+        *primitive = make_function("cosh", argument);
+        return true;
+    }
+    if (function_name == "cosh") {
+        *primitive = make_function("sinh", argument);
+        return true;
+    }
+    if (function_name == "tanh") {
+        *primitive = make_function("ln", make_function("cosh", argument)).simplify();
         return true;
     }
     return false;
@@ -1021,6 +1047,67 @@ bool try_integrate_trig_power_identity(const SymbolicExpression& base,
         return true;
     }
     return false;
+}
+
+bool try_integrate_by_parts(const SymbolicExpression& left,
+                            const SymbolicExpression& right,
+                            const std::string& variable_name,
+                            SymbolicExpression* integrated) {
+    // LIATE 启发式原则选择 u: Log, Inverse trig, Algebraic, Trig, Exponential
+    auto get_priority = [&](const SymbolicExpression& e) {
+        if (e.node_->type == NodeType::kFunction) {
+            if (e.node_->text == "ln") return 1;
+            if (e.node_->text == "asin" || e.node_->text == "atan") return 2;
+            if (e.node_->text == "sin" || e.node_->text == "cos" || e.node_->text == "tan") return 4;
+            if (e.node_->text == "exp") return 5;
+        }
+        if (is_symbolic_polynomial(e, variable_name)) return 3;
+        return 6;
+    };
+
+    SymbolicExpression u = left;
+    SymbolicExpression dv = right;
+    if (get_priority(right) < get_priority(left)) {
+        u = right;
+        dv = left;
+    }
+
+    // 计算 v = integral(dv)
+    SymbolicExpression v;
+    try {
+        v = dv.integral(variable_name);
+    } catch (...) {
+        // 如果 dv 无法直接积分，尝试交换 u, dv
+        u = (u.node_ == left.node_) ? right : left;
+        dv = (dv.node_ == right.node_) ? left : right;
+        try {
+            v = dv.integral(variable_name);
+        } catch (...) {
+            return false;
+        }
+    }
+
+    // IBP 公式: integral(u dv) = u*v - integral(v du)
+    const SymbolicExpression du = u.derivative(variable_name).simplify();
+    const SymbolicExpression v_du = make_multiply(v, du).simplify();
+
+    // 避免无限递归：如果 v*du 的结构键与原始积相同（或更复杂），则跳过
+    if (node_structural_key(v_du.node_) == node_structural_key(make_multiply(left, right).node_)) {
+        return false;
+    }
+
+    try {
+        static thread_local int ibp_depth = 0;
+        if (ibp_depth > 2) return false; // 限制分部积分递归深度
+        ibp_depth++;
+        const SymbolicExpression second_integral = v_du.integral(variable_name);
+        ibp_depth--;
+        
+        *integrated = make_subtract(make_multiply(u, v), second_integral).simplify();
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool try_integrate_trig_product_identity(const SymbolicExpression& left,
@@ -1272,6 +1359,8 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
     const std::shared_ptr<SymbolicExpression::Node>& node_ = expression.node_;
     switch (node_->type) {
         case NodeType::kNumber:
+        case NodeType::kPi:
+        case NodeType::kE:
             return SymbolicExpression::number(0.0);
         case NodeType::kVariable:
             return SymbolicExpression::number(node_->text == variable_name ? 1.0 : 0.0);
@@ -1412,6 +1501,18 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                                                             SymbolicExpression::number(2.0))))
                     .simplify();
             }
+            if (node_->text == "erf") {
+                const SymbolicExpression pi_val = SymbolicExpression::variable("pi");
+                const SymbolicExpression exp_part = make_function("exp", make_negate(make_power(argument, SymbolicExpression::number(2.0))));
+                const SymbolicExpression factor = make_divide(SymbolicExpression::number(2.0), make_function("sqrt", pi_val));
+                return make_multiply(make_multiply(factor, exp_part), inner).simplify();
+            }
+            if (node_->text == "erfc") {
+                const SymbolicExpression pi_val = SymbolicExpression::variable("pi");
+                const SymbolicExpression exp_part = make_function("exp", make_negate(make_power(argument, SymbolicExpression::number(2.0))));
+                const SymbolicExpression factor = make_divide(SymbolicExpression::number(-2.0), make_function("sqrt", pi_val));
+                return make_multiply(make_multiply(factor, exp_part), inner).simplify();
+            }
             if (node_->text == "abs") {
                 return make_multiply(make_function("sign", argument), inner).simplify();
             }
@@ -1497,7 +1598,9 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
 
     switch (node_->type) {
         case NodeType::kNumber:
-            return make_multiply(number(node_->number_value), variable(variable_name)).simplify();
+        case NodeType::kPi:
+        case NodeType::kE:
+            return make_multiply(*this, variable(variable_name)).simplify();
         case NodeType::kVariable:
             if (node_->text == variable_name) {
                 return make_divide(make_power(variable(variable_name), number(2.0)),
@@ -1527,6 +1630,12 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                                                   left,
                                                   variable_name,
                                                   &integrated)) {
+                return integrated.simplify();
+            }
+            if (try_integrate_by_parts(left,
+                                       right,
+                                       variable_name,
+                                       &integrated)) {
                 return integrated.simplify();
             }
             if (try_integrate_trig_product_identity(left,
@@ -1580,22 +1689,59 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
     if (node_->type == NodeType::kDivide) {
         const SymbolicExpression left(node_->left);
         const SymbolicExpression right(node_->right);
-        if (left.is_number(&numeric_value) && mymath::is_near_zero(numeric_value - 1.0, kFormatEps)) {
-            if (is_one_plus_variable_squared(right, variable_name)) {
-                return make_function("atan", variable(variable_name)).simplify();
+        
+        if (left.is_constant(variable_name)) {
+            SymbolicExpression c_term, x2_coeff;
+            // Case 1: 1 / (c + a*x^2) -> atan
+            if (is_pure_quadratic(right, variable_name, &c_term, &x2_coeff)) {
+                double a_val, c_val;
+                if (x2_coeff.is_number(&a_val) && c_term.is_number(&c_val)) {
+                    if (a_val * c_val > 0) {
+                        const double factor = 1.0 / mymath::sqrt(a_val * c_val);
+                        const double internal = mymath::sqrt(a_val / c_val);
+                        return make_multiply(left,
+                            make_multiply(number(factor),
+                                make_function("atan", make_multiply(number(internal), variable(variable_name)))))
+                            .simplify();
+                    } else if (a_val * c_val < 0) {
+                        // 1 / (x^2 - 1) -> partial fractions (ln)
+                        // This is handled by try_integrate_polynomial_quotient below
+                    }
+                } else if (expr_is_one(x2_coeff) && expr_is_one(c_term)) {
+                    return make_multiply(left, make_function("atan", variable(variable_name))).simplify();
+                }
             }
-            if (is_sqrt_one_minus_variable_squared(right, variable_name)) {
-                return make_function("asin", variable(variable_name)).simplify();
+            
+            // Case 2: 1 / sqrt(c - a*x^2) -> asin
+            if (right.node_->type == NodeType::kFunction && right.node_->text == "sqrt") {
+                const SymbolicExpression inner(right.node_->left);
+                if (is_pure_quadratic(inner, variable_name, &c_term, &x2_coeff)) {
+                    double a_val, c_val;
+                    if (x2_coeff.is_number(&a_val) && c_term.is_number(&c_val)) {
+                        if (c_val > 0 && a_val < 0) {
+                            const double abs_a = -a_val;
+                            const double factor = 1.0 / mymath::sqrt(abs_a);
+                            const double internal = mymath::sqrt(abs_a / c_val);
+                            return make_multiply(left,
+                                make_multiply(number(factor),
+                                    make_function("asin", make_multiply(number(internal), variable(variable_name)))))
+                                .simplify();
+                        }
+                    } else if (expr_is_one(c_term) && expr_is_minus_one(x2_coeff)) {
+                        return make_multiply(left, make_function("asin", variable(variable_name))).simplify();
+                    }
+                }
             }
-            double a = 0.0;
-            double b = 0.0;
-            if (decompose_linear(right, variable_name, &a, &b) &&
-                !mymath::is_near_zero(a, kFormatEps)) {
-                return make_divide(make_function("ln", make_function("abs", right)),
-                                   number(a))
+
+            // Case 3: 1 / (ax + b) -> (1/a) * ln|ax + b|
+            SymbolicExpression a_expr, b_expr;
+            if (symbolic_decompose_linear(right, variable_name, &a_expr, &b_expr) && !expr_is_zero(a_expr)) {
+                return make_divide(make_multiply(left, make_function("ln", make_function("abs", right))),
+                                   a_expr)
                     .simplify();
             }
         }
+        
         SymbolicExpression rational_integral;
         if (try_integrate_polynomial_quotient(left,
                                               right,
@@ -1610,8 +1756,6 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
         const SymbolicExpression base(node_->left);
         const SymbolicExpression exponent(node_->right);
         double exponent_value = 0.0;
-        double a = 0.0;
-        double b = 0.0;
         SymbolicExpression trig_identity_integral;
         if (exponent.is_number(&exponent_value) &&
             try_integrate_trig_power_identity(base,
@@ -1620,19 +1764,22 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                                               &trig_identity_integral)) {
             return trig_identity_integral.simplify();
         }
-        if (exponent.is_number(&exponent_value) &&
-            decompose_linear(base, variable_name, &a, &b) &&
-            !mymath::is_near_zero(a, kFormatEps)) {
-            if (mymath::is_near_zero(exponent_value + 1.0, kFormatEps)) {
+        
+        SymbolicExpression a_expr, b_expr;
+        if (exponent.is_constant(variable_name) &&
+            symbolic_decompose_linear(base, variable_name, &a_expr, &b_expr) &&
+            !expr_is_zero(a_expr)) {
+            if (expr_is_minus_one(exponent)) {
                 return make_divide(make_function("ln", make_function("abs", base)),
-                                   number(a))
+                                   a_expr)
                     .simplify();
             }
-            return make_divide(make_power(base, number(exponent_value + 1.0)),
-                               number(a * (exponent_value + 1.0)))
+            const SymbolicExpression new_exponent = make_add(exponent, number(1.0)).simplify();
+            return make_divide(make_power(base, new_exponent),
+                               make_multiply(a_expr, new_exponent))
                 .simplify();
         }
-        throw std::runtime_error("symbolic integral only supports powers of the integration variable");
+        throw std::runtime_error("symbolic integral only supports powers of linear terms or certain trig identities");
     }
 
     if (node_->type == NodeType::kFunction) {
@@ -1649,8 +1796,26 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
         if (node_->text == "cos" && linear) {
             return make_divide(make_function("sin", argument), number(a)).simplify();
         }
-        if (node_->text == "exp" && linear) {
-            return make_divide(make_function("exp", argument), number(a)).simplify();
+        if (node_->text == "exp") {
+            if (linear) {
+                return make_divide(make_function("exp", argument), number(a)).simplify();
+            }
+            SymbolicExpression c_term, x2_coeff;
+            if (is_pure_quadratic(argument, variable_name, &c_term, &x2_coeff)) {
+                double a_val;
+                if (x2_coeff.is_number(&a_val) && a_val < 0) {
+                    const double pos_a = -a_val;
+                    const SymbolicExpression pi_val = variable("pi");
+                    const SymbolicExpression factor = make_divide(
+                        make_multiply(make_function("exp", c_term), make_function("sqrt", pi_val)),
+                        make_multiply(number(2.0), make_function("sqrt", number(pos_a)))
+                    );
+                    return make_multiply(
+                        factor,
+                        make_function("erf", make_multiply(make_function("sqrt", number(pos_a)), variable(variable_name)))
+                    ).simplify();
+                }
+            }
         }
         if (node_->text == "sqrt" && linear) {
             return make_divide(make_multiply(number(2.0),
@@ -1666,14 +1831,17 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                                number(4.0 * a))
                 .simplify();
         }
-        if (node_->text == "sqrt" &&
-            is_one_minus_variable_squared(argument, variable_name)) {
-            const SymbolicExpression x = variable(variable_name);
-            return make_divide(
-                       make_add(make_multiply(x, make_function("sqrt", argument)),
-                                make_function("asin", x)),
-                       number(2.0))
-                .simplify();
+        if (node_->text == "sqrt") {
+            SymbolicExpression a_quad, b_quad, c_quad;
+            if (is_general_quadratic(argument, variable_name, &a_quad, &b_quad, &c_quad) &&
+                expr_is_one(c_quad) && expr_is_zero(b_quad) && expr_is_minus_one(a_quad)) {
+                const SymbolicExpression x = variable(variable_name);
+                return make_divide(
+                           make_add(make_multiply(x, make_function("sqrt", argument)),
+                                    make_function("asin", x)),
+                           number(2.0))
+                    .simplify();
+            }
         }
         if (node_->text == "tan" && linear) {
             return make_divide(make_negate(make_function("ln",

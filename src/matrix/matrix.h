@@ -91,6 +91,12 @@ struct Matrix {
 
     /** @brief 转换为可读字符串 */
     std::string to_string() const;
+
+    // In-place operators
+    Matrix& operator+=(const Matrix& rhs);
+    Matrix& operator-=(const Matrix& rhs);
+    Matrix& operator*=(double scalar);
+    Matrix& operator/=(double scalar);
 };
 
 /** @brief 设置矩阵字符串输出的十进制显示有效位数 */
@@ -113,6 +119,9 @@ struct Value {
 
     /** @brief 从矩阵创建 Value */
     static Value from_matrix(const Matrix& matrix_value);
+
+    /** @brief 从矩阵移动创建 Value */
+    static Value from_matrix(Matrix&& matrix_value);
 };
 
 /** @brief 标量求值函数类型，用于表达式解析 */
@@ -127,24 +136,32 @@ using MatrixLookup = std::function<bool(const std::string&, Matrix*)>;
 
 /** @brief 矩阵加法 */
 Matrix add(const Matrix& lhs, const Matrix& rhs);
+Matrix add(Matrix&& lhs, const Matrix& rhs);
+Matrix add(const Matrix& lhs, Matrix&& rhs);
 
 /** @brief 矩阵与标量加法 */
 Matrix add(const Matrix& lhs, double scalar);
+Matrix add(Matrix&& lhs, double scalar);
 
 /** @brief 矩阵减法 */
 Matrix subtract(const Matrix& lhs, const Matrix& rhs);
+Matrix subtract(Matrix&& lhs, const Matrix& rhs);
+Matrix subtract(const Matrix& lhs, Matrix&& rhs);
 
 /** @brief 矩阵与标量减法 */
 Matrix subtract(const Matrix& lhs, double scalar);
+Matrix subtract(Matrix&& lhs, double scalar);
 
 /** @brief 矩阵乘法 */
 Matrix multiply(const Matrix& lhs, const Matrix& rhs);
 
 /** @brief 矩阵与标量乘法 */
 Matrix multiply(const Matrix& lhs, double scalar);
+Matrix multiply(Matrix&& lhs, double scalar);
 
 /** @brief 矩阵与标量除法 */
 Matrix divide(const Matrix& lhs, double scalar);
+Matrix divide(Matrix&& lhs, double scalar);
 
 /** @brief 矩阵转置 */
 Matrix transpose(const Matrix& matrix);
@@ -160,6 +177,15 @@ double dot(const Matrix& lhs, const Matrix& rhs);
 
 /** @brief 向量外积 */
 Matrix outer(const Matrix& lhs, const Matrix& rhs);
+
+/** @brief 向量叉积 (仅限 3D 向量) */
+Matrix cross(const Matrix& lhs, const Matrix& rhs);
+
+/** @brief 向量投影 (lhs 在 rhs 上的投影) */
+Matrix project(const Matrix& lhs, const Matrix& rhs);
+
+/** @brief 向量单位化 */
+Matrix normalize(const Matrix& matrix);
 
 /** @brief Kronecker 积 */
 Matrix kronecker(const Matrix& lhs, const Matrix& rhs);
@@ -209,6 +235,12 @@ double condition_number(const Matrix& matrix);
 
 /** @brief Cholesky 分解（返回下三角矩阵） */
 Matrix cholesky(const Matrix& matrix);
+
+/** @brief 检查是否为对称矩阵 */
+bool is_symmetric(const Matrix& matrix);
+
+/** @brief 检查是否为正交矩阵 */
+bool is_orthogonal(const Matrix& matrix);
 
 /** @brief Hessenberg 形式 */
 Matrix hessenberg(const Matrix& matrix);

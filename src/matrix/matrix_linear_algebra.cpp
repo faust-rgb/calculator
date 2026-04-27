@@ -15,72 +15,100 @@ namespace matrix {
 
 using namespace internal;
 
-Matrix inverse(const Matrix& matrix) {
+namespace internal {
+
+LuResult lu_decompose_with_pivoting(const Matrix& matrix) {
     if (!matrix.is_square()) {
-        throw std::runtime_error("inverse requires a square matrix");
+        throw std::runtime_error("LU decomposition requires a square matrix");
     }
 
-    // 通过对 [A | I] 做 Gauss-Jordan 消元，把左半边化成 I，
-    // 右半边就会变成 A 的逆矩阵。
     const std::size_t n = matrix.rows;
-    Matrix augmented(n, n * 2, 0.0);
-    for (std::size_t row = 0; row < n; ++row) {
-        for (std::size_t col = 0; col < n; ++col) {
-            augmented.at(row, col) = matrix.at(row, col);
-            augmented.at(row, n + col) = row == col ? 1.0 : 0.0;
-        }
-    }
-
     const double tolerance = matrix_tolerance(matrix);
+    LuResult result;
+    result.lu = matrix;
+    result.p.resize(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        result.p[i] = i;
+    }
+    result.det_sign = 1;
 
     for (std::size_t col = 0; col < n; ++col) {
-        std::size_t best_row = col;
-        double best_value = mymath::abs(augmented.at(best_row, col));
+        std::size_t pivot_row = col;
+        double pivot_value = mymath::abs(result.lu.at(col, col));
         for (std::size_t row = col + 1; row < n; ++row) {
-            const double current = mymath::abs(augmented.at(row, col));
-            if (current > best_value) {
-                best_value = current;
-                best_row = row;
+            const double current = mymath::abs(result.lu.at(row, col));
+            if (current > pivot_value) {
+                pivot_value = current;
+                pivot_row = row;
             }
         }
 
-        if (best_value <= tolerance) {
-            throw std::runtime_error("matrix is singular and cannot be inverted");
+        if (pivot_value <= tolerance) {
+            // Singular matrix
+            result.det_sign = 0;
+            return result;
         }
 
-        swap_rows(&augmented, col, best_row);
-        const long double pivot = static_cast<long double>(augmented.at(col, col));
-        for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
-            augmented.at(col, current_col) = static_cast<double>(
-                static_cast<long double>(augmented.at(col, current_col)) / pivot);
+        if (pivot_row != col) {
+            swap_rows(&result.lu, col, pivot_row);
+            std::swap(result.p[col], result.p[pivot_row]);
+            result.det_sign *= -1;
         }
 
-        for (std::size_t row = 0; row < n; ++row) {
-            if (row == col) {
-                continue;
-            }
-            const long double factor = static_cast<long double>(augmented.at(row, col));
-            if (mymath::abs(static_cast<double>(factor)) <= tolerance) {
-                continue;
-            }
-            for (std::size_t current_col = 0; current_col < augmented.cols; ++current_col) {
-                augmented.at(row, current_col) = static_cast<double>(
-                    static_cast<long double>(augmented.at(row, current_col)) -
-                    factor * static_cast<long double>(augmented.at(col, current_col)));
-                if (mymath::abs(augmented.at(row, current_col)) <= tolerance) {
-                    augmented.at(row, current_col) = 0.0;
+        for (std::size_t row = col + 1; row < n; ++row) {
+            result.lu.at(row, col) /= result.lu.at(col, col);
+            const double factor = result.lu.at(row, col);
+            for (std::size_t inner = col + 1; inner < n; ++inner) {
+                result.lu.at(row, inner) -= factor * result.lu.at(col, inner);
+                if (mymath::abs(result.lu.at(row, inner)) <= tolerance) {
+                    result.lu.at(row, inner) = 0.0;
                 }
             }
         }
     }
 
-    Matrix result(n, n, 0.0);
-    for (std::size_t row = 0; row < n; ++row) {
-        for (std::size_t col = 0; col < n; ++col) {
-            result.at(row, col) = augmented.at(row, n + col);
+    return result;
+}
+
+}  // namespace internal
+
+Matrix inverse(const Matrix& matrix) {
+    if (!matrix.is_square()) {
+        throw std::runtime_error("inverse requires a square matrix");
+    }
+
+    const std::size_t n = matrix.rows;
+    const LuResult lu = lu_decompose_with_pivoting(matrix);
+    if (lu.det_sign == 0) {
+        throw std::runtime_error("matrix is singular and cannot be inverted");
+    }
+
+    Matrix inv(n, n, 0.0);
+    // Solve Ax = e_i for each column
+    for (std::size_t j = 0; j < n; ++j) {
+        // Forward substitution Ly = Pb
+        std::vector<double> y(n, 0.0);
+        for (std::size_t row = 0; row < n; ++row) {
+            long double value = (lu.p[row] == j) ? 1.0L : 0.0L;
+            for (std::size_t k = 0; k < row; ++k) {
+                value -= static_cast<long double>(lu.lu.at(row, k)) *
+                         static_cast<long double>(y[k]);
+            }
+            y[row] = static_cast<double>(value);
+        }
+
+        // Backward substitution Ux = y
+        for (int row = static_cast<int>(n) - 1; row >= 0; --row) {
+            long double value = static_cast<long double>(y[row]);
+            for (std::size_t k = static_cast<std::size_t>(row) + 1; k < n; ++k) {
+                value -= static_cast<long double>(lu.lu.at(row, k)) *
+                         static_cast<long double>(inv.at(k, j));
+            }
+            inv.at(static_cast<std::size_t>(row), j) =
+                static_cast<double>(value / static_cast<long double>(lu.lu.at(row, row)));
         }
     }
-    return result;
+    return inv;
 }
 
 Matrix pseudo_inverse(const Matrix& matrix) {
@@ -150,65 +178,32 @@ Matrix svd_vt(const Matrix& matrix) {
 Matrix lu_solve_with_partial_pivoting(const Matrix& coefficients,
                                       const Matrix& rhs_column) {
     const std::size_t n = coefficients.rows;
-    const double tolerance = matrix_tolerance(coefficients);
-    Matrix lu = coefficients;
-    std::vector<std::size_t> permutation(n, 0);
-    for (std::size_t i = 0; i < n; ++i) {
-        permutation[i] = i;
-    }
-
-    for (std::size_t col = 0; col < n; ++col) {
-        std::size_t pivot_row = col;
-        double pivot_value = mymath::abs(lu.at(col, col));
-        for (std::size_t row = col + 1; row < n; ++row) {
-            const double current = mymath::abs(lu.at(row, col));
-            if (current > pivot_value) {
-                pivot_value = current;
-                pivot_row = row;
-            }
-        }
-        if (pivot_value <= tolerance) {
-            throw std::runtime_error("linear system has no unique solution");
-        }
-
-        if (pivot_row != col) {
-            swap_rows(&lu, col, pivot_row);
-            std::swap(permutation[col], permutation[pivot_row]);
-        }
-
-        for (std::size_t row = col + 1; row < n; ++row) {
-            lu.at(row, col) /= lu.at(col, col);
-            const double factor = lu.at(row, col);
-            for (std::size_t inner = col + 1; inner < n; ++inner) {
-                lu.at(row, inner) -= factor * lu.at(col, inner);
-                if (mymath::abs(lu.at(row, inner)) <= tolerance) {
-                    lu.at(row, inner) = 0.0;
-                }
-            }
-        }
+    const LuResult lu = lu_decompose_with_pivoting(coefficients);
+    if (lu.det_sign == 0) {
+        throw std::runtime_error("linear system has no unique solution");
     }
 
     std::vector<double> y(n, 0.0);
     for (std::size_t row = 0; row < n; ++row) {
         long double value =
-            static_cast<long double>(rhs_column.at(permutation[row], 0));
+            static_cast<long double>(rhs_column.at(lu.p[row], 0));
         for (std::size_t col = 0; col < row; ++col) {
-            value -= static_cast<long double>(lu.at(row, col)) *
+            value -= static_cast<long double>(lu.lu.at(row, col)) *
                      static_cast<long double>(y[col]);
         }
         y[row] = static_cast<double>(value);
     }
 
     Matrix result(n, 1, 0.0);
-    for (std::size_t reverse = 0; reverse < n; ++reverse) {
+    for (int reverse = 0; reverse < static_cast<int>(n); ++reverse) {
         const std::size_t row = n - 1 - reverse;
         long double value = static_cast<long double>(y[row]);
         for (std::size_t col = row + 1; col < n; ++col) {
-            value -= static_cast<long double>(lu.at(row, col)) *
+            value -= static_cast<long double>(lu.lu.at(row, col)) *
                      static_cast<long double>(result.at(col, 0));
         }
         result.at(row, 0) =
-            static_cast<double>(value / static_cast<long double>(lu.at(row, row)));
+            static_cast<double>(value / static_cast<long double>(lu.lu.at(row, row)));
     }
     return result;
 }
@@ -309,6 +304,40 @@ Matrix cholesky(const Matrix& matrix) {
         }
     }
     return result;
+}
+
+bool is_symmetric(const Matrix& matrix) {
+    if (!matrix.is_square()) {
+        return false;
+    }
+    const double tolerance = matrix_tolerance(matrix);
+    for (std::size_t i = 0; i < matrix.rows; ++i) {
+        for (std::size_t j = i + 1; j < matrix.cols; ++j) {
+            if (mymath::abs(matrix.at(i, j) - matrix.at(j, i)) > tolerance) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool is_orthogonal(const Matrix& matrix) {
+    if (!matrix.is_square()) {
+        return false;
+    }
+    const std::size_t n = matrix.rows;
+    // A^T * A should be I
+    Matrix prod = multiply(transpose(matrix), matrix);
+    const double tolerance = matrix_tolerance(matrix);
+    for (std::size_t i = 0; i < n; ++i) {
+        for (std::size_t j = 0; j < n; ++j) {
+            const double expected = (i == j ? 1.0 : 0.0);
+            if (mymath::abs(prod.at(i, j) - expected) > tolerance) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 Matrix hessenberg(const Matrix& matrix) {
@@ -479,54 +508,17 @@ double determinant(const Matrix& matrix) {
                 static_cast<long double>(matrix.at(1, 0)));
     }
 
-    // 通过带部分主元选取的上三角消元求行列式。
-    // 行交换会翻转符号，对角线乘积给出最终结果。
-    std::vector<std::vector<long double>> reduced(
-        matrix.rows, std::vector<long double>(matrix.cols, 0.0L));
-    for (std::size_t row = 0; row < matrix.rows; ++row) {
-        for (std::size_t col = 0; col < matrix.cols; ++col) {
-            reduced[row][col] = static_cast<long double>(matrix.at(row, col));
-        }
-    }
-    long double result = 1.0L;
-    int swap_count = 0;
-
-    for (std::size_t col = 0; col < matrix.cols; ++col) {
-        std::size_t best_row = col;
-        long double best_value = reduced[best_row][col] < 0.0L
-                                     ? -reduced[best_row][col]
-                                     : reduced[best_row][col];
-        for (std::size_t row = col + 1; row < matrix.rows; ++row) {
-            const long double current = reduced[row][col] < 0.0L
-                                            ? -reduced[row][col]
-                                            : reduced[row][col];
-            if (current > best_value) {
-                best_value = current;
-                best_row = row;
-            }
-        }
-
-        if (best_value <= static_cast<long double>(kMatrixEps)) {
-            return 0.0;
-        }
-
-        if (best_row != col) {
-            std::swap(reduced[best_row], reduced[col]);
-            ++swap_count;
-        }
-
-        const long double pivot = reduced[col][col];
-        result *= pivot;
-        for (std::size_t row = col + 1; row < matrix.rows; ++row) {
-            const long double factor = reduced[row][col] / pivot;
-            for (std::size_t current_col = col; current_col < matrix.cols; ++current_col) {
-                reduced[row][current_col] -= factor * reduced[col][current_col];
-            }
-        }
+    const LuResult lu = lu_decompose_with_pivoting(matrix);
+    if (lu.det_sign == 0) {
+        return 0.0;
     }
 
-    const long double sign = swap_count % 2 == 0 ? 1.0L : -1.0L;
-    return static_cast<double>(sign * result);
+    long double det = static_cast<long double>(lu.det_sign);
+    for (std::size_t i = 0; i < matrix.rows; ++i) {
+        det *= static_cast<long double>(lu.lu.at(i, i));
+    }
+
+    return static_cast<double>(det);
 }
 
 double rank(const Matrix& matrix) {

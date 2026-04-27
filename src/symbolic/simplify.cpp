@@ -29,6 +29,56 @@
 
 namespace symbolic_expression_internal {
 
+bool try_extract_common_symbolic_factor(const SymbolicExpression& expression,
+                                        SymbolicExpression* common_factor,
+                                        SymbolicExpression* remaining) {
+    if (expression.node_->type != NodeType::kAdd && expression.node_->type != NodeType::kSubtract) {
+        return false;
+    }
+    
+    std::vector<SymbolicExpression> terms;
+    collect_additive_expressions(expression, &terms);
+    if (terms.size() < 2) return false;
+    
+    double dummy_num = 1.0;
+    std::vector<SymbolicExpression> common_factors;
+    collect_multiplicative_terms(terms[0], &dummy_num, &common_factors);
+    
+    if (common_factors.empty()) return false;
+    
+    for (size_t i = 1; i < terms.size(); ++i) {
+        double t_num = 1.0;
+        std::vector<SymbolicExpression> t_factors;
+        collect_multiplicative_terms(terms[i], &t_num, &t_factors);
+        
+        std::vector<SymbolicExpression> new_common;
+        std::vector<bool> used(t_factors.size(), false);
+        for (const auto& cf : common_factors) {
+            const std::string c_key = node_structural_key(cf.node_);
+            for (size_t j = 0; j < t_factors.size(); ++j) {
+                if (!used[j] && c_key == node_structural_key(t_factors[j].node_)) {
+                    new_common.push_back(cf);
+                    used[j] = true;
+                    break;
+                }
+            }
+        }
+        common_factors = new_common;
+        if (common_factors.empty()) break;
+    }
+    
+    if (common_factors.empty()) return false;
+    
+    *common_factor = make_sorted_product(1.0, common_factors).simplify();
+    
+    std::vector<SymbolicExpression> new_terms;
+    for (const auto& term : terms) {
+        new_terms.push_back(make_divide(term, *common_factor).simplify());
+    }
+    *remaining = make_sorted_sum(new_terms).simplify();
+    return true;
+}
+
 // ============================================================================
 // 单轮简化主函数
 // ============================================================================
@@ -50,6 +100,8 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
     switch (node->type) {
         case NodeType::kNumber:
         case NodeType::kVariable:
+        case NodeType::kPi:
+        case NodeType::kE:
             return expression;
         // ========================================================================
     // 函数节点简化
@@ -97,7 +149,39 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                     return SymbolicExpression::number(mymath::ln(numeric));
                 }
                 if (node->text == "sqrt") {
-                    return SymbolicExpression::number(mymath::sqrt(numeric));
+                    double root = mymath::sqrt(numeric);
+                    if (mymath::is_near_zero(root * root - numeric, 1e-12) && mymath::is_integer(root, 1e-10)) {
+                        return SymbolicExpression::number(root);
+                    }
+                    if (mymath::is_integer(numeric, 1e-10) && numeric > 0.0) {
+                        long long val = static_cast<long long>(numeric + 0.5);
+                        long long extracted = 1;
+                        for (long long i = 2; i * i <= val; ++i) {
+                            while (val % (i * i) == 0) {
+                                extracted *= i;
+                                val /= (i * i);
+                            }
+                        }
+                        if (extracted > 1) {
+                            return make_multiply(SymbolicExpression::number(static_cast<double>(extracted)),
+                                                 make_function("sqrt", SymbolicExpression::number(static_cast<double>(val)))).simplify();
+                        }
+                    }
+                    // Avoid returning a newly allocated identical node to prevent infinite simplify loops
+                    return make_function("sqrt", SymbolicExpression::number(numeric));
+                }
+                if (node->text == "erf") {
+                    return SymbolicExpression::number(mymath::erf(numeric));
+                }
+                if (node->text == "erfc") {
+                    return SymbolicExpression::number(mymath::erfc(numeric));
+                }
+                if (node->text == "gamma") {
+                    if (mymath::is_integer(numeric, 1e-10) && numeric <= 0) {
+                        // gamma is undefined for non-positive integers
+                        return make_function(node->text, argument);
+                    }
+                    return SymbolicExpression::number(mymath::gamma(numeric));
                 }
                 if (node->text == "abs") {
                     return SymbolicExpression::number(mymath::abs(numeric));
@@ -142,6 +226,15 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 argument.node_->type == NodeType::kFunction &&
                 argument.node_->text == "exp") {
                 return SymbolicExpression(argument.node_->left).simplify();
+            }
+            // 恒等式：ln(a^b) -> b*ln(a) (针对数值指数)
+            if (node->text == "ln" && argument.node_->type == NodeType::kPower) {
+                double exponent = 0.0;
+                if (SymbolicExpression(argument.node_->right).is_number(&exponent)) {
+                    return make_multiply(SymbolicExpression::number(exponent),
+                                         make_function("ln", SymbolicExpression(argument.node_->left)))
+                        .simplify();
+                }
             }
             if (node->text == "sqrt" &&
                 argument.node_->type == NodeType::kPower) {
@@ -499,6 +592,15 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 }
             }
             {
+                SymbolicExpression common, rest;
+                if (try_extract_common_symbolic_factor(left, &common, &rest)) {
+                    return make_multiply(common, make_divide(rest, right)).simplify();
+                }
+                if (try_extract_common_symbolic_factor(right, &common, &rest)) {
+                    return make_divide(left, make_multiply(common, rest)).simplify();
+                }
+            }
+            {
                 SymbolicExpression quotient;
                 if (try_canonical_factor_quotient(left, right, &quotient)) {
                     return quotient;
@@ -584,6 +686,10 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
         // 3. 幂的幂：(x^a)^b → x^(a*b)
         // 4. 常数幂：数值直接计算
         case NodeType::kPower:
+            // 规范化：e ^ x -> exp(x)
+            if (left.node_->type == NodeType::kE) {
+                return make_function("exp", right).simplify();
+            }
             if (left.is_number(&left_value)) {
                 if (mymath::is_near_zero(left_value, kFormatEps)) {
                     return SymbolicExpression::number(0.0);
@@ -680,6 +786,74 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
 
     // 达到最大迭代次数，返回当前结果
     return current;
+}
+
+SymbolicExpression expand_impl(const SymbolicExpression& expression) {
+    const std::shared_ptr<SymbolicExpression::Node>& node = expression.node_;
+    switch (node->type) {
+        case NodeType::kNumber:
+        case NodeType::kVariable:
+        case NodeType::kPi:
+        case NodeType::kE:
+            return expression;
+        case NodeType::kFunction:
+            return make_function(node->text, expand_impl(SymbolicExpression(node->left))).simplify();
+        case NodeType::kNegate:
+            return make_negate(expand_impl(SymbolicExpression(node->left))).simplify();
+        case NodeType::kAdd:
+            return make_add(expand_impl(SymbolicExpression(node->left)),
+                            expand_impl(SymbolicExpression(node->right))).simplify();
+        case NodeType::kSubtract:
+            return make_subtract(expand_impl(SymbolicExpression(node->left)),
+                                 expand_impl(SymbolicExpression(node->right))).simplify();
+        case NodeType::kMultiply: {
+            SymbolicExpression left = expand_impl(SymbolicExpression(node->left));
+            SymbolicExpression right = expand_impl(SymbolicExpression(node->right));
+            if (left.node_->type == NodeType::kAdd) {
+                return make_add(expand_impl(make_multiply(SymbolicExpression(left.node_->left), right)),
+                                expand_impl(make_multiply(SymbolicExpression(left.node_->right), right))).simplify();
+            }
+            if (left.node_->type == NodeType::kSubtract) {
+                return make_subtract(expand_impl(make_multiply(SymbolicExpression(left.node_->left), right)),
+                                     expand_impl(make_multiply(SymbolicExpression(left.node_->right), right))).simplify();
+            }
+            if (right.node_->type == NodeType::kAdd) {
+                return make_add(expand_impl(make_multiply(left, SymbolicExpression(right.node_->left))),
+                                expand_impl(make_multiply(left, SymbolicExpression(right.node_->right)))).simplify();
+            }
+            if (right.node_->type == NodeType::kSubtract) {
+                return make_subtract(expand_impl(make_multiply(left, SymbolicExpression(right.node_->left))),
+                                     expand_impl(make_multiply(left, SymbolicExpression(right.node_->right)))).simplify();
+            }
+            return make_multiply(left, right).simplify();
+        }
+        case NodeType::kDivide: {
+            SymbolicExpression left = expand_impl(SymbolicExpression(node->left));
+            SymbolicExpression right = expand_impl(SymbolicExpression(node->right));
+            if (left.node_->type == NodeType::kAdd) {
+                return make_add(expand_impl(make_divide(SymbolicExpression(left.node_->left), right)),
+                                expand_impl(make_divide(SymbolicExpression(left.node_->right), right))).simplify();
+            }
+            if (left.node_->type == NodeType::kSubtract) {
+                return make_subtract(expand_impl(make_divide(SymbolicExpression(left.node_->left), right)),
+                                     expand_impl(make_divide(SymbolicExpression(left.node_->right), right))).simplify();
+            }
+            return make_divide(left, right).simplify();
+        }
+        case NodeType::kPower: {
+            SymbolicExpression left = expand_impl(SymbolicExpression(node->left));
+            SymbolicExpression right = expand_impl(SymbolicExpression(node->right));
+            double n = 0.0;
+            if (right.is_number(&n) && n > 1.0 && mymath::is_integer(n, 1e-10)) {
+                if (left.node_->type == NodeType::kAdd || left.node_->type == NodeType::kSubtract) {
+                    SymbolicExpression rest = make_power(left, SymbolicExpression::number(n - 1.0));
+                    return expand_impl(make_multiply(left, rest));
+                }
+            }
+            return make_power(left, right).simplify();
+        }
+    }
+    return expression;
 }
 
 

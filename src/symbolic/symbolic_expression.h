@@ -188,6 +188,12 @@ public:
     SymbolicExpression simplify() const;
 
     /**
+     * @brief 强制完全展开表达式（乘法分配律与多项式幂次展开）
+     * @return 展开后的表达式
+     */
+    SymbolicExpression expand() const;
+
+    /**
      * @brief 检查表达式是否不依赖于指定变量
      * @param variable_name 变量名
      * @return true 如果表达式中不包含该变量
@@ -224,6 +230,12 @@ public:
      * @return 去重后的变量名列表
      */
     std::vector<std::string> identifier_variables() const;
+
+    /**
+     * @brief 提取公共子表达式 (CSE)
+     * @return 包含重复出现的非平凡子表达式及其出现次数的列表
+     */
+    std::vector<std::pair<SymbolicExpression, int>> common_subexpressions() const;
 
     /**
      * @brief 从现有节点构造表达式（内部使用）

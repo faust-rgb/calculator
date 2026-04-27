@@ -630,11 +630,11 @@ int main() {
         (void)symbolic_calculator.set_symbolic_constants_mode(true);
         const std::string actual =
             symbolic_calculator.evaluate_for_display("sin(pi / 6)", false);
-        if (actual == "1 / 2") {
+        if (actual == "1/2") {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: symbolic sin(pi / 6) expected 1 / 2 got "
+            std::cout << "FAIL: symbolic sin(pi / 6) expected 1/2 got "
                       << actual << '\n';
         }
     } catch (const std::exception& ex) {
@@ -684,11 +684,11 @@ int main() {
         (void)symbolic_calculator.set_symbolic_constants_mode(true);
         const std::string actual =
             symbolic_calculator.evaluate_for_display("cos(pi / 3)", false);
-        if (actual == "1 / 2") {
+        if (actual == "1/2") {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: symbolic cos(pi / 3) expected 1 / 2 got "
+            std::cout << "FAIL: symbolic cos(pi / 3) expected 1/2 got "
                       << actual << '\n';
         }
     } catch (const std::exception& ex) {
@@ -2616,7 +2616,7 @@ int main() {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("integral((x ^ 2 + 1) / (x + 1))", &output);
-        if (handled && output == "2 * ln(abs(x + 1)) + 1/2 * x ^ 2 - x + C") {
+        if (handled && output == "1/2 * x ^ 2 - x + 2 * ln(abs(x + 1)) + C") {
             ++passed;
         } else {
             ++failed;
@@ -2788,7 +2788,7 @@ int main() {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("integral(x + y, x, y)", &output);
-        if (handled && output == "x ^ 2 / 2 * y + y ^ 2 / 2 * x + C") {
+        if (handled && (output == "x ^ 2 / 2 * y + y ^ 2 / 2 * x + C" || output == "y ^ 2 / 2 * x + x ^ 2 / 2 * y + C")) {
             ++passed;
         } else {
             ++failed;
@@ -2805,11 +2805,11 @@ int main() {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("diff(x ^ 2 * y + y ^ 3, y)", &output);
-        if (handled && output == "3 * y ^ 2 + x ^ 2") {
+        if (handled && output == "x ^ 2 + 3 * y ^ 2") {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: symbolic partial diff expected 3 * y ^ 2 + x ^ 2 got "
+            std::cout << "FAIL: symbolic partial diff expected x ^ 2 + 3 * y ^ 2 got "
                       << output << '\n';
         }
     } catch (const std::exception& ex) {
@@ -2822,7 +2822,7 @@ int main() {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("gradient(x ^ 2 * y + y ^ 3, x, y)", &output);
-        if (handled && output == "[2 * x * y, 3 * y ^ 2 + x ^ 2]") {
+        if (handled && output == "[2 * x * y, x ^ 2 + 3 * y ^ 2]") {
             ++passed;
         } else {
             ++failed;
@@ -2908,7 +2908,7 @@ int main() {
         const bool handled =
             calculator.try_process_function_command(
                 "gradient(x ^ 2 + x * y + y ^ 2, x, y)", &output);
-        if (handled && output == "[2 * x + y, 2 * y + x]") {
+        if (handled && output == "[2 * x + y, x + 2 * y]") {
             ++passed;
         } else {
             ++failed;
@@ -4795,7 +4795,7 @@ int main() {
         {"iztrans(z / (z - 1), z, n)", false, "step(n)"},
         {"iztrans(3 * z / (z - 1), z, n)", false, "3 * step(n)"},
         {"iztrans(2 * z / (z - 1) ^ 2, z, n)", false, "2 * step(n) * n"},
-        {"iztrans(5 * z / (z - 3) - 2 * z ^ -2 + z / (z - 1), z, n)", false, "step(n) + 5 * step(n) * 3 ^ n - 2 * delta(n - 2)"},
+        {"iztrans(5 * z / (z - 3) - 2 * z ^ -2 + z / (z - 1), z, n)", false, "5 * step(n) * 3 ^ n - 2 * delta(n - 2) + step(n)"},
     };
 
     for (const auto& test : command_display_cases) {

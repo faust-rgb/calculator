@@ -104,14 +104,13 @@ bool match_delta_shift(const SymbolicExpression& expression,
 }
 
 bool match_exponential_linear(const SymbolicExpression& expression,
-                              const std::string& variable_name,
-                              double* coefficient,
-                              double* intercept) {
+                               const std::string& variable_name,
+                               double* coefficient,
+                               double* intercept) {
     SymbolicExpression argument;
     return is_function_named(expression, "exp", &argument) &&
            decompose_linear(argument, variable_name, coefficient, intercept);
 }
-
 bool match_sine_linear(const SymbolicExpression& expression,
                        const std::string& variable_name,
                        double* coefficient,
@@ -293,6 +292,8 @@ bool apply_linear_transform_rules(
             return false;
         }
         case NodeType::kNumber:
+        case NodeType::kPi:
+        case NodeType::kE:
         case NodeType::kVariable:
         case NodeType::kDivide:
         case NodeType::kPower:
@@ -358,6 +359,41 @@ SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
 
             const SymbolicExpression left(simplified.node_->left);
             const SymbolicExpression right(simplified.node_->right);
+            
+            // Frequency shifting: exp(at) * f(t)
+            double a = 0.0;
+            double intercept = 0.0;
+            if (match_exponential_linear(left, time_variable, &a, &intercept)) {
+                SymbolicExpression F = laplace_transform_impl(right, time_variable, transform_variable);
+                SymbolicExpression s_minus_a = make_subtract(SymbolicExpression::variable(transform_variable),
+                                                            SymbolicExpression::number(a)).simplify();
+                SymbolicExpression result = F.substitute(transform_variable, s_minus_a);
+                if (!mymath::is_near_zero(intercept, kFormatEps)) {
+                    result = make_multiply(SymbolicExpression::number(mymath::exp(intercept)), result);
+                }
+                return result.simplify();
+            }
+            if (match_exponential_linear(right, time_variable, &a, &intercept)) {
+                SymbolicExpression F = laplace_transform_impl(left, time_variable, transform_variable);
+                SymbolicExpression s_minus_a = make_subtract(SymbolicExpression::variable(transform_variable),
+                                                            SymbolicExpression::number(a)).simplify();
+                SymbolicExpression result = F.substitute(transform_variable, s_minus_a);
+                if (!mymath::is_near_zero(intercept, kFormatEps)) {
+                    result = make_multiply(SymbolicExpression::number(mymath::exp(intercept)), result);
+                }
+                return result.simplify();
+            }
+
+            // Multiplication by t: t * f(t) -> -d/ds F(s)
+            if (left.is_variable_named(time_variable)) {
+                SymbolicExpression F = laplace_transform_impl(right, time_variable, transform_variable);
+                return make_negate(F.derivative(transform_variable)).simplify();
+            }
+            if (right.is_variable_named(time_variable)) {
+                SymbolicExpression F = laplace_transform_impl(left, time_variable, transform_variable);
+                return make_negate(F.derivative(transform_variable)).simplify();
+            }
+
             double shift = 0.0;
             if (match_step_shift(left, time_variable, &shift) &&
                 mymath::is_near_zero(shift, kFormatEps)) {
@@ -370,26 +406,23 @@ SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
             break;
         }
         case NodeType::kPower: {
-            if (simplified.is_variable_named(time_variable)) {
-                return make_divide(SymbolicExpression::number(1.0),
-                                   make_power(SymbolicExpression::variable(transform_variable),
-                                              SymbolicExpression::number(2.0)))
-                    .simplify();
-            }
-
             const SymbolicExpression base(simplified.node_->left);
+            const SymbolicExpression exponent_expr(simplified.node_->right);
             double exponent = 0.0;
+            
             if (base.is_variable_named(time_variable) &&
-                SymbolicExpression(simplified.node_->right).is_number(&exponent) &&
+                exponent_expr.is_number(&exponent) &&
                 mymath::is_integer(exponent, 1e-10) &&
-                exponent >= 0.0) {
-                const int order = static_cast<int>(exponent + 0.5);
-                return make_divide(
-                           SymbolicExpression::number(factorial_double(order)),
-                           make_power(SymbolicExpression::variable(transform_variable),
-                                      SymbolicExpression::number(
-                                          static_cast<double>(order + 1))))
-                    .simplify();
+                exponent > 0.0) {
+                const int k = static_cast<int>(exponent + 0.5);
+                // t^k is just 1 multiplied by t, k times.
+                // But we can also handle base^exponent * rest in kMultiply.
+                // Here we handle the case where the whole expression is t^k.
+                SymbolicExpression result = SymbolicExpression::number(1.0).laplace_transform(time_variable, transform_variable);
+                for (int i = 0; i < k; ++i) {
+                    result = make_negate(result.derivative(transform_variable)).simplify();
+                }
+                return result;
             }
             break;
         }
@@ -397,6 +430,8 @@ SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
         case NodeType::kDivide:
         case NodeType::kNegate:
         case NodeType::kNumber:
+        case NodeType::kPi:
+        case NodeType::kE:
         case NodeType::kVariable:
             break;
     }
@@ -614,6 +649,8 @@ SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expr
         case NodeType::kFunction:
         case NodeType::kNegate:
         case NodeType::kNumber:
+        case NodeType::kPi:
+        case NodeType::kE:
         case NodeType::kVariable:
         case NodeType::kPower:
             break;
@@ -718,6 +755,136 @@ SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expr
                                      make_multiply(result,
                                                    make_step_expression(time_variable, 0.0)))
                     .simplify();
+            }
+        }
+
+        // Shifted power: 1 / (s - a)^n -> t^(n-1)/(n-1)! * exp(at)
+        if (numerator_base.is_number(&numeric) &&
+            mymath::is_near_zero(numeric - 1.0, kFormatEps) &&
+            denominator.node_->type == NodeType::kPower) {
+            double exponent = 0.0;
+            double a = 0.0;
+            double intercept = 0.0;
+            if (decompose_linear(SymbolicExpression(denominator.node_->left), transform_variable, &a, &intercept) &&
+                mymath::is_near_zero(a - 1.0, kFormatEps) &&
+                SymbolicExpression(denominator.node_->right).is_number(&exponent) &&
+                mymath::is_integer(exponent, 1e-10) &&
+                exponent >= 1.0) {
+                const int order = static_cast<int>(exponent + 0.5) - 1;
+                const double pole = -intercept;
+                SymbolicExpression result;
+                if (order == 0) {
+                    result = SymbolicExpression::number(1.0);
+                } else {
+                    result = make_divide(
+                                 make_power(SymbolicExpression::variable(time_variable),
+                                            SymbolicExpression::number(static_cast<double>(order))),
+                                 SymbolicExpression::number(factorial_double(order)))
+                                 .simplify();
+                }
+                if (!mymath::is_near_zero(pole, kFormatEps)) {
+                    result = make_multiply(result,
+                                         make_function("exp",
+                                                       make_multiply(SymbolicExpression::number(pole),
+                                                                     SymbolicExpression::variable(time_variable))));
+                }
+                return make_multiply(SymbolicExpression::number(numerator_factor),
+                                     make_multiply(result, make_step_expression(time_variable, 0.0)))
+                    .simplify();
+            }
+        }
+
+        // Product of linear factors: 1 / ((s - a) * (s - b)) -> (exp(at) - exp(bt)) / (a - b)
+        if (numerator_base.is_number(&numeric) &&
+            mymath::is_near_zero(numeric - 1.0, kFormatEps) &&
+            denominator.node_->type == NodeType::kMultiply) {
+            const SymbolicExpression left_factor = SymbolicExpression(denominator.node_->left).simplify();
+            const SymbolicExpression right_factor = SymbolicExpression(denominator.node_->right).simplify();
+            double a1 = 0.0, b1 = 0.0;
+            double a2 = 0.0, b2 = 0.0;
+            if (decompose_linear(left_factor, transform_variable, &a1, &b1) &&
+                decompose_linear(right_factor, transform_variable, &a2, &b2)) {
+                const double pole1 = -b1 / a1;
+                const double pole2 = -b2 / a2;
+                const double scale = 1.0 / (a1 * a2);
+                if (mymath::is_near_zero(pole1 - pole2, kFormatEps)) {
+                    // Falls back to (s-a)^2 handled above if we simplify it to power
+                } else {
+                    SymbolicExpression term1 = make_function("exp",
+                                                            make_multiply(SymbolicExpression::number(pole1),
+                                                                          SymbolicExpression::variable(time_variable)));
+                    SymbolicExpression term2 = make_function("exp",
+                                                            make_multiply(SymbolicExpression::number(pole2),
+                                                                          SymbolicExpression::variable(time_variable)));
+                    SymbolicExpression result = make_multiply(
+                        SymbolicExpression::number(scale / (pole1 - pole2)),
+                        make_subtract(term1, term2));
+                    return make_multiply(SymbolicExpression::number(numerator_factor),
+                                         make_multiply(result, make_step_expression(time_variable, 0.0)))
+                        .simplify();
+                }
+            }
+        }
+
+        // Quadratic form: 1 / (s^2 + as + b) or (s+c) / (s^2 + as + b)
+        std::vector<double> coeffs;
+        if (denominator.polynomial_coefficients(transform_variable, &coeffs) && coeffs.size() == 3) {
+            // coeffs: [constant, s, s^2]
+            const double c = coeffs[0];
+            const double b = coeffs[1];
+            const double a = coeffs[2];
+            if (!mymath::is_near_zero(a, kFormatEps)) {
+                const double norm_b = b / a;
+                const double norm_c = c / a;
+                // s^2 + norm_b*s + norm_c = (s + norm_b/2)^2 + (norm_c - norm_b^2/4)
+                const double s_shift = norm_b / 2.0;
+                const double omega_sq = norm_c - (norm_b * norm_b / 4.0);
+                
+                double n_slope = 0.0, n_intercept = 0.0;
+                if (decompose_linear(numerator_base, transform_variable, &n_slope, &n_intercept)) {
+                    // Numerator: n_slope * s + n_intercept = n_slope * (s + s_shift) + (n_intercept - n_slope * s_shift)
+                    const double shifted_intercept = n_intercept - n_slope * s_shift;
+                    SymbolicExpression result;
+                    if (omega_sq > kFormatEps) {
+                        const double omega = mymath::sqrt(omega_sq);
+                        // n_slope * (s+s_shift)/((s+s_shift)^2 + omega^2) + shifted_intercept/((s+s_shift)^2 + omega^2)
+                        // -> n_slope * cos(omega*t) + (shifted_intercept/omega) * sin(omega*t)
+                        SymbolicExpression cos_term = make_multiply(SymbolicExpression::number(n_slope),
+                                                                  make_function("cos", make_multiply(SymbolicExpression::number(omega),
+                                                                                                    SymbolicExpression::variable(time_variable))));
+                        SymbolicExpression sin_term = make_multiply(SymbolicExpression::number(shifted_intercept / omega),
+                                                                  make_function("sin", make_multiply(SymbolicExpression::number(omega),
+                                                                                                    SymbolicExpression::variable(time_variable))));
+                        result = make_add(cos_term, sin_term);
+                    } else if (omega_sq < -kFormatEps) {
+                        const double alpha = mymath::sqrt(-omega_sq);
+                        // Use hyperbolic or exp
+                        // 1/(s^2-alpha^2) = (1/2alpha) * (1/(s-alpha) - 1/(s+alpha))
+                        // Or just exp: n_slope * cosh(alpha*t) + (shifted_intercept/alpha) * sinh(alpha*t)
+                        SymbolicExpression exp_p = make_function("exp", make_multiply(SymbolicExpression::number(alpha), SymbolicExpression::variable(time_variable)));
+                        SymbolicExpression exp_m = make_function("exp", make_multiply(SymbolicExpression::number(-alpha), SymbolicExpression::variable(time_variable)));
+                        // sinh = (exp_p - exp_m)/2, cosh = (exp_p + exp_m)/2
+                        SymbolicExpression cosh_term = make_multiply(SymbolicExpression::number(n_slope / 2.0), make_add(exp_p, exp_m));
+                        SymbolicExpression sinh_term = make_multiply(SymbolicExpression::number(shifted_intercept / (2.0 * alpha)), make_subtract(exp_p, exp_m));
+                        result = make_add(cosh_term, sinh_term);
+                    } else {
+                        // omega_sq == 0 -> (s+s_shift)^2
+                        // n_slope * 1/(s+s_shift) + shifted_intercept * 1/(s+s_shift)^2
+                        // -> n_slope * 1 + shifted_intercept * t
+                        result = make_add(SymbolicExpression::number(n_slope),
+                                         make_multiply(SymbolicExpression::number(shifted_intercept),
+                                                       SymbolicExpression::variable(time_variable)));
+                    }
+                    
+                    if (!mymath::is_near_zero(s_shift, kFormatEps)) {
+                        result = make_multiply(make_function("exp", make_multiply(SymbolicExpression::number(-s_shift),
+                                                                                 SymbolicExpression::variable(time_variable))),
+                                             result);
+                    }
+                    return make_multiply(SymbolicExpression::number(numerator_factor / a),
+                                         make_multiply(result, make_step_expression(time_variable, 0.0)))
+                        .simplify();
+                }
             }
         }
 
@@ -959,6 +1126,8 @@ SymbolicExpression fourier_transform_impl(const SymbolicExpression& expression,
         case NodeType::kDivide:
         case NodeType::kNegate:
         case NodeType::kNumber:
+        case NodeType::kPi:
+        case NodeType::kE:
         case NodeType::kVariable:
         case NodeType::kPower:
             break;
@@ -1090,6 +1259,8 @@ SymbolicExpression inverse_fourier_transform_impl(const SymbolicExpression& expr
         case NodeType::kDivide:
         case NodeType::kNegate:
         case NodeType::kNumber:
+        case NodeType::kPi:
+        case NodeType::kE:
         case NodeType::kVariable:
         case NodeType::kPower:
             break;
@@ -1200,6 +1371,23 @@ SymbolicExpression z_transform_impl(const SymbolicExpression& expression,
 
             const SymbolicExpression left(simplified.node_->left);
             const SymbolicExpression right(simplified.node_->right);
+
+            // Multiplication by n: n * f(n) -> -z * d/dz F(z)
+            if (left.is_variable_named(index_variable)) {
+                SymbolicExpression F = z_transform_impl(right, index_variable, transform_variable);
+                return make_negate(
+                    make_multiply(SymbolicExpression::variable(transform_variable),
+                                 F.derivative(transform_variable)))
+                    .simplify();
+            }
+            if (right.is_variable_named(index_variable)) {
+                SymbolicExpression F = z_transform_impl(left, index_variable, transform_variable);
+                return make_negate(
+                    make_multiply(SymbolicExpression::variable(transform_variable),
+                                 F.derivative(transform_variable)))
+                    .simplify();
+            }
+
             double shift = 0.0;
             if (match_step_shift(left, index_variable, &shift) &&
                 mymath::is_near_zero(shift, kFormatEps)) {
@@ -1215,9 +1403,31 @@ SymbolicExpression z_transform_impl(const SymbolicExpression& expression,
         case NodeType::kDivide:
         case NodeType::kNegate:
         case NodeType::kNumber:
+        case NodeType::kPi:
+        case NodeType::kE:
         case NodeType::kVariable:
-        case NodeType::kPower:
             break;
+        case NodeType::kPower: {
+            const SymbolicExpression base(simplified.node_->left);
+            const SymbolicExpression exponent_expr(simplified.node_->right);
+            double exponent = 0.0;
+            
+            if (base.is_variable_named(index_variable) &&
+                exponent_expr.is_number(&exponent) &&
+                mymath::is_integer(exponent, 1e-10) &&
+                exponent > 0.0) {
+                const int k = static_cast<int>(exponent + 0.5);
+                SymbolicExpression result = SymbolicExpression::number(1.0).z_transform(index_variable, transform_variable);
+                for (int i = 0; i < k; ++i) {
+                    result = make_negate(
+                        make_multiply(SymbolicExpression::variable(transform_variable),
+                                     result.derivative(transform_variable)))
+                        .simplify();
+                }
+                return result;
+            }
+            break;
+        }
     }
 
     if (simplified.node_->type == NodeType::kNegate) {
@@ -1272,6 +1482,42 @@ SymbolicExpression z_transform_impl(const SymbolicExpression& expression,
                            make_subtract(SymbolicExpression::variable(transform_variable),
                                          SymbolicExpression::number(base)))
             .simplify();
+    }
+
+    double linear_coefficient = 0.0;
+    double linear_intercept = 0.0;
+    if (match_sine_linear(simplified,
+                          index_variable,
+                          &linear_coefficient,
+                          &linear_intercept) &&
+        mymath::is_near_zero(linear_intercept, kFormatEps) &&
+        !mymath::is_near_zero(linear_coefficient, kFormatEps)) {
+        // sin(wn) -> z*sin(w) / (z^2 - 2z*cos(w) + 1)
+        const double w = linear_coefficient;
+        SymbolicExpression z = SymbolicExpression::variable(transform_variable);
+        SymbolicExpression denominator = make_add(
+            make_subtract(make_power(z, SymbolicExpression::number(2.0)),
+                         make_multiply(SymbolicExpression::number(2.0 * mymath::cos(w)), z)),
+            SymbolicExpression::number(1.0));
+        return make_divide(make_multiply(z, SymbolicExpression::number(mymath::sin(w))),
+                           denominator).simplify();
+    }
+
+    if (match_cosine_linear(simplified,
+                            index_variable,
+                            &linear_coefficient,
+                            &linear_intercept) &&
+        mymath::is_near_zero(linear_intercept, kFormatEps) &&
+        !mymath::is_near_zero(linear_coefficient, kFormatEps)) {
+        // cos(wn) -> z(z - cos(w)) / (z^2 - 2z*cos(w) + 1)
+        const double w = linear_coefficient;
+        SymbolicExpression z = SymbolicExpression::variable(transform_variable);
+        SymbolicExpression denominator = make_add(
+            make_subtract(make_power(z, SymbolicExpression::number(2.0)),
+                         make_multiply(SymbolicExpression::number(2.0 * mymath::cos(w)), z)),
+            SymbolicExpression::number(1.0));
+        return make_divide(make_multiply(z, make_subtract(z, SymbolicExpression::number(mymath::cos(w)))),
+                           denominator).simplify();
     }
 
     throw std::runtime_error("unsupported symbolic z transform");
@@ -1336,6 +1582,8 @@ SymbolicExpression inverse_z_transform_impl(const SymbolicExpression& expression
         case NodeType::kDivide:
         case NodeType::kNegate:
         case NodeType::kNumber:
+        case NodeType::kPi:
+        case NodeType::kE:
         case NodeType::kVariable:
         case NodeType::kPower:
             break;

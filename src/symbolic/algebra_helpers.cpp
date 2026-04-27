@@ -188,7 +188,7 @@ bool numeric_matches_any(double value, const std::initializer_list<double>& cand
  * 例如 sin(pi/3) = sqrt(3)/2。
  */
 SymbolicExpression sqrt3_symbol() {
-    return SymbolicExpression::variable("sqrt(3)");
+    return SymbolicExpression(make_function("sqrt", SymbolicExpression::number(3.0)));
 }
 
 /**
@@ -197,7 +197,7 @@ SymbolicExpression sqrt3_symbol() {
  * 使用伪变量 "1 / 2" 表示，用于三角函数特殊角度的输出。
  */
 SymbolicExpression half_symbol() {
-    return SymbolicExpression::variable("1 / 2");
+    return SymbolicExpression::number(0.5);
 }
 
 // ============================================================================
@@ -533,6 +533,26 @@ SymbolicExpression make_sorted_sum(std::vector<SymbolicExpression> terms) {
                   if (lhs_negative != rhs_negative) {
                       return lhs_negative;  // 负项排前面
                   }
+                  
+                  auto get_var_deg = [](const SymbolicExpression& e) -> std::pair<std::string, double> {
+                      double coeff = 1.0;
+                      std::vector<SymbolicExpression> factors;
+                      collect_multiplicative_terms(e, &coeff, &factors);
+                      if (factors.empty()) return {"", 0.0};
+                      const SymbolicExpression& f = factors.back();
+                      if (f.node_->type == NodeType::kVariable) return {f.node_->text, 1.0};
+                      if (f.node_->type == NodeType::kPower && f.node_->left->type == NodeType::kVariable && f.node_->right->type == NodeType::kNumber) {
+                          return {f.node_->left->text, f.node_->right->number_value};
+                      }
+                      if (f.node_->type == NodeType::kFunction) return {f.node_->text, 0.5};
+                      return {node_structural_key(f.node_), 0.0};
+                  };
+
+                  auto lhs_vd = get_var_deg(lhs);
+                  auto rhs_vd = get_var_deg(rhs);
+                  if (lhs_vd.first != rhs_vd.first) return lhs_vd.first < rhs_vd.first;
+                  if (!mymath::is_near_zero(lhs_vd.second - rhs_vd.second, 1e-10)) return lhs_vd.second > rhs_vd.second;
+
                   return node_structural_key(lhs.node_) < node_structural_key(rhs.node_);
               });
 
@@ -887,6 +907,22 @@ SymbolicExpression build_polynomial_expression_from_coefficients(
 }
 
 /** @brief 检查两个表达式是否结构相同 */
+bool symbolic_decompose_linear(const SymbolicExpression& expression,
+                               const std::string& variable_name,
+                               SymbolicExpression* a,
+                               SymbolicExpression* b) {
+    std::vector<SymbolicExpression> coefficients;
+    if (symbolic_polynomial_coefficients_from_simplified(expression.simplify(),
+                                                        variable_name,
+                                                        &coefficients) &&
+        coefficients.size() <= 2) {
+        *b = coefficients.size() > 0 ? coefficients[0] : SymbolicExpression::number(0.0);
+        *a = coefficients.size() > 1 ? coefficients[1] : SymbolicExpression::number(0.0);
+        return true;
+    }
+    return false;
+}
+
 bool expressions_match(const SymbolicExpression& lhs, const SymbolicExpression& rhs) {
     return node_structural_key(lhs.node_) == node_structural_key(rhs.node_);
 }

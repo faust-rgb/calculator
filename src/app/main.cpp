@@ -65,9 +65,19 @@ private:
     termios original_ {};
 };
 
-void redraw_input(const std::string& prompt, const std::string& line) {
-    // \33[2K 清空当前行，\r 回到行首，然后重画提示符和输入内容。
-    std::cout << "\33[2K\r" << prompt << line << std::flush;
+void redraw_input(const std::string& prompt, const std::string& line, std::size_t cursor_pos) {
+    // \33[2K 清空当前行，\r 回到行首
+    // 重画提示符和输入内容
+    std::cout << "\33[2K\r" << prompt << line;
+    
+    // 将光标移回到正确的位置。使用 \r 后接 \33[C (向前移动)
+    std::size_t offset = prompt.size() + cursor_pos;
+    if (offset > 0) {
+        std::cout << "\r\33[" << offset << "C";
+    } else {
+        std::cout << "\r";
+    }
+    std::cout << std::flush;
 }
 
 std::string trim_copy(const std::string& text) {
@@ -286,6 +296,7 @@ std::string read_line_with_history(Calculator& calculator,
     }
 
     std::string line;
+    std::size_t cursor_pos = 0;
     std::size_t history_index = history.size();
     std::string last_tab_line;
     bool last_tab_was_ambiguous = false;
@@ -302,18 +313,43 @@ std::string read_line_with_history(Calculator& calculator,
             return line;
         }
 
+        if (ch == 1) { // Ctrl+A (Home)
+            cursor_pos = 0;
+            redraw_input(prompt, line, cursor_pos);
+            continue;
+        }
+
+        if (ch == 5) { // Ctrl+E (End)
+            cursor_pos = line.size();
+            redraw_input(prompt, line, cursor_pos);
+            continue;
+        }
+
+        if (ch == 11) { // Ctrl+K (Kill to end)
+            if (cursor_pos < line.size()) {
+                line.erase(cursor_pos);
+                redraw_input(prompt, line, cursor_pos);
+            }
+            continue;
+        }
+
         if (ch == 4) {
-            // Ctrl+D: 在空行上视为 EOF，其他情况下忽略。
+            // Ctrl+D: 在空行上视为 EOF，其他情况下删除光标处字符。
             if (line.empty()) {
                 std::cout << '\n';
+                return line;
+            } else if (cursor_pos < line.size()) {
+                line.erase(cursor_pos, 1);
+                redraw_input(prompt, line, cursor_pos);
             }
-            return line;
+            continue;
         }
 
         if (ch == 127 || ch == '\b') {
-            if (!line.empty()) {
-                line.pop_back();
-                redraw_input(prompt, line);
+            if (cursor_pos > 0) {
+                line.erase(cursor_pos - 1, 1);
+                --cursor_pos;
+                redraw_input(prompt, line, cursor_pos);
             }
             last_tab_was_ambiguous = false;
             continue;
@@ -322,11 +358,12 @@ std::string read_line_with_history(Calculator& calculator,
         if (ch == '\t') {
             const CompletionResult result = apply_completion(calculator, &line);
             if (result.applied) {
-                redraw_input(prompt, line);
+                cursor_pos = line.size();
+                redraw_input(prompt, line, cursor_pos);
             }
             if (result.ambiguous && last_tab_was_ambiguous && last_tab_line == line) {
                 std::cout << '\n' << format_completion_candidates(result.matches);
-                redraw_input(prompt, line);
+                redraw_input(prompt, line, cursor_pos);
                 last_tab_was_ambiguous = false;
             } else {
                 last_tab_was_ambiguous = result.ambiguous;
@@ -345,28 +382,40 @@ std::string read_line_with_history(Calculator& calculator,
                 continue;
             }
 
-            if (seq[0] == '[' && seq[1] == 'A') {
-                // 上方向键：从最近一条历史开始向前浏览。
-                if (!history.empty() && history_index > 0) {
-                    --history_index;
-                    line = history[history_index];
-                    redraw_input(prompt, line);
-                }
-            } else if (seq[0] == '[' && seq[1] == 'B') {
-                // 下方向键：向较新的历史移动，超过尾部则回到空输入。
-                if (history_index < history.size()) {
-                    ++history_index;
-                    line = history_index == history.size() ? "" : history[history_index];
-                    redraw_input(prompt, line);
+            if (seq[0] == '[') {
+                if (seq[1] == 'A') { // Up
+                    if (!history.empty() && history_index > 0) {
+                        --history_index;
+                        line = history[history_index];
+                        cursor_pos = line.size();
+                        redraw_input(prompt, line, cursor_pos);
+                    }
+                } else if (seq[1] == 'B') { // Down
+                    if (history_index < history.size()) {
+                        ++history_index;
+                        line = history_index == history.size() ? "" : history[history_index];
+                        cursor_pos = line.size();
+                        redraw_input(prompt, line, cursor_pos);
+                    }
+                } else if (seq[1] == 'C') { // Right
+                    if (cursor_pos < line.size()) {
+                        ++cursor_pos;
+                        redraw_input(prompt, line, cursor_pos);
+                    }
+                } else if (seq[1] == 'D') { // Left
+                    if (cursor_pos > 0) {
+                        --cursor_pos;
+                        redraw_input(prompt, line, cursor_pos);
+                    }
                 }
             }
             continue;
         }
 
         if (ch >= 32 && ch <= 126) {
-            // 仅接受可打印 ASCII 字符，足够覆盖当前表达式输入需求。
-            line.push_back(ch);
-            std::cout << ch << std::flush;
+            line.insert(cursor_pos, 1, ch);
+            ++cursor_pos;
+            redraw_input(prompt, line, cursor_pos);
         }
     }
 }

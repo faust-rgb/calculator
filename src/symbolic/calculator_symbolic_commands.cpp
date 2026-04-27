@@ -235,12 +235,16 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
                              std::string* output) {
     const std::vector<std::string> arguments = split_top_level_arguments(inside);
 
-    if (command == "simplify") {
+    if (command == "simplify" || command == "expand") {
         const std::string argument = trim_copy(inside);
         std::string variable_name;
         SymbolicExpression expression;
         ctx.resolve_symbolic(argument, false, &variable_name, &expression);
-        *output = expression.simplify().to_string();
+        if (command == "expand") {
+            *output = expression.expand().to_string();
+        } else {
+            *output = expression.simplify().to_string();
+        }
         return true;
     }
 
@@ -337,13 +341,9 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
     }
 
     if (command == "integral") {
-        if (arguments.size() != 1 && arguments.size() != 2 &&
-            arguments.size() != 3 && arguments.size() != 4) {
+        if (arguments.empty()) {
             throw std::runtime_error(
-                "integral expects 1 argument for symbolic indefinite integral, "
-                "identifier arguments for chained symbolic integrals, "
-                "2 arguments for indefinite value, "
-                "3 for definite integral, or 4 for anchor and constant");
+                "integral expects at least 1 argument for symbolic indefinite integral");
         }
 
         bool symbolic_integral = true;
@@ -358,7 +358,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
                                  arguments.size() == 1,
                                  &variable_name,
                                  &expression);
-            if (arguments.size() == 2) {
+            if (arguments.size() >= 2) {
                 variable_name = trim_copy(arguments[1]);
             }
             SymbolicExpression integrated = expression;
@@ -372,6 +372,12 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             }
             *output = integrated.simplify().to_string() + " + C";
             return true;
+        }
+
+        if (arguments.size() != 2 && arguments.size() != 3 && arguments.size() != 4) {
+             throw std::runtime_error(
+                "numerical integral expects 2 arguments for indefinite value, "
+                "3 for definite integral, or 4 for anchor and constant");
         }
 
         const FunctionAnalysis analysis = ctx.build_analysis(arguments[0]);

@@ -26,6 +26,8 @@
 enum class NodeType {
     kNumber,     ///< 数值常量节点
     kVariable,   ///< 变量节点
+    kPi,         ///< 精确常数 pi
+    kE,          ///< 精确常数 e
     kAdd,        ///< 加法节点: left + right
     kSubtract,   ///< 减法节点: left - right
     kMultiply,   ///< 乘法节点: left * right
@@ -239,14 +241,31 @@ std::vector<double> polynomial_subtract_impl(const std::vector<double>& lhs,
 std::vector<double> polynomial_multiply_impl(const std::vector<double>& lhs,
                                              const std::vector<double>& rhs);
 
+/** @brief 检查表达式是否为关于指定变量的多项式（支持符号系数） */
+bool is_symbolic_polynomial(const SymbolicExpression& expression,
+                            const std::string& variable_name);
+
+/**
+ * @brief 从简化后的表达式提取符号多项式系数
+ * @param expression 已简化的表达式
+ * @param variable_name 多项式变量
+ * @param coefficients 输出系数向量（低次到高次，系数本身为表达式）
+ * @return true 如果表达式是关于该变量的多项式
+ */
+bool symbolic_polynomial_coefficients_from_simplified(
+    const SymbolicExpression& expression,
+    const std::string& variable_name,
+    std::vector<SymbolicExpression>* coefficients);
+
+/** @brief 裁剪符号多项式系数向量末尾的零 */
+void trim_symbolic_polynomial_coefficients(std::vector<SymbolicExpression>* coefficients);
+
 /**
  * @brief 从简化后的表达式提取多项式系数
  * @param expression 已简化的表达式
  * @param variable_name 多项式变量
  * @param coefficients 输出系数向量（低次到高次）
  * @return true 如果表达式是关于该变量的多项式
- *
- * 使用记忆化避免重复计算相同子树。
  */
 bool polynomial_coefficients_from_simplified(
     const SymbolicExpression& expression,
@@ -303,6 +322,9 @@ bool is_identifier_variable_name(const std::string& name);
  */
 SymbolicExpression simplify_impl(const SymbolicExpression& expression);
 
+/** @brief 强制完全展开的内部实现 */
+SymbolicExpression expand_impl(const SymbolicExpression& expression);
+
 /**
  * @brief 单轮简化
  * @param expression 待简化表达式
@@ -349,18 +371,16 @@ bool decompose_constant_times_expression(const SymbolicExpression& expression,
                                          double* constant,
                                          SymbolicExpression* remainder);
 
-/**
- * @brief 分解线性表达式
- * @param expression 表达式
- * @param variable_name 变量名
- * @param a 输出斜率
- * @param b 输出截距
- * @return true 如果 expression = a * variable + b
- */
 bool decompose_linear(const SymbolicExpression& expression,
                       const std::string& variable_name,
                       double* a,
                       double* b);
+
+/** @brief 分解符号线性表达式 a*x + b */
+bool symbolic_decompose_linear(const SymbolicExpression& expression,
+                               const std::string& variable_name,
+                               SymbolicExpression* a,
+                               SymbolicExpression* b);
 
 /**
  * @brief 分解幂因子

@@ -141,11 +141,27 @@ helpers, interactive terminal UX, and project documentation.
 - Expanded regression tests
 - Handoff and architecture documentation
 
+## Version 1.5 (2026-04-27)
+
+- **Performance Optimization:**
+  - Improved symbolic node interning with an incremental LRU eviction strategy in `src/symbolic/node_parser.cpp`, eliminating $O(N)$ scan overhead during high-frequency node creation.
+- **Terminal UX Enhancements:**
+  - Upgraded REPL in `src/app/main.cpp` with a full-featured line editor:
+    - Inline cursor movement (Left/Right arrow keys).
+    - Quick navigation: Home (`Ctrl+A`), End (`Ctrl+E`).
+    - Editing shortcuts: Delete character at cursor (`Ctrl+D`), Clear to end of line (`Ctrl+K`).
+    - Precise terminal redrawing and cursor synchronization.
+- **Symbolic Algebra Core Evolution:**
+  - Introduced dedicated `NodeType` for exact constants `pi` and `e`, enabling more robust pattern matching and preventing premature numerical collapse.
+  - Added `SymbolicExpression::common_subexpressions()` (CSE base) to identify and count repeated sub-trees within an expression.
+  - Unified internal representation by normalizing `e ^ x` to `exp(x)` during simplification.
+  - Updated derivative, integral, and transform engines to natively handle the new exact constant nodes.
+
 ## Current Quality Status
 
 - `make test` currently passes
 - Expected test summary:
-  - `Passed: 766, Failed: 0`
+  - `Passed: 771, Failed: 0`
   - `Planning passed: 6, Planning failed: 0`
 - Added comprehensive symbolic-computing coverage for calculus, limits,
   matrices, equation solving, and planning helpers

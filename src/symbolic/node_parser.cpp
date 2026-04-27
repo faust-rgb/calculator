@@ -106,16 +106,24 @@ std::shared_ptr<SymbolicExpression::Node> intern_node(
 
     // 池满时清理过期条目并淘汰 LRU
     if (interned_nodes.size() >= kMaxInternedNodes) {
-        // 先清理所有失效的弱引用
-        for (auto it = interned_order.begin(); it != interned_order.end();) {
+        // 增量清理：从末尾开始检查一定数量的条目，释放失效的弱引用或直接淘汰最旧条目
+        // 这样避免了 O(N) 的全量扫描，保证了单次插入的性能平稳
+        int checked = 0;
+        const int kMaxCheckPerInsert = 32; // 每次插入最多检查的过期条目数
+        
+        for (auto it = interned_order.rbegin(); it != interned_order.rend() && checked < kMaxCheckPerInsert; ) {
             if (it->second.expired()) {
-                interned_nodes.erase(it->first);
-                it = interned_order.erase(it);
+                auto erase_it = std::next(it).base(); // 转换为正向迭代器
+                interned_nodes.erase(erase_it->first);
+                interned_order.erase(erase_it);
+                it = interned_order.rbegin(); // 结构改变，重新开始（或者简单的 --it）
+                checked++;
             } else {
                 ++it;
             }
         }
-        // 仍满则淘汰 LRU
+
+        // 如果清理后依然满，则强制移除末尾最旧的条目
         while (interned_nodes.size() >= kMaxInternedNodes && !interned_order.empty()) {
             interned_nodes.erase(interned_order.back().first);
             interned_order.pop_back();
@@ -261,8 +269,14 @@ std::shared_ptr<SymbolicExpression::Node> make_number(double value) {
 std::shared_ptr<SymbolicExpression::Node> make_variable(const std::string& name) {
     std::shared_ptr<SymbolicExpression::Node> node =
         std::make_shared<SymbolicExpression::Node>();
-    node->type = NodeType::kVariable;
-    node->text = name;
+    if (name == "pi") {
+        node->type = NodeType::kPi;
+    } else if (name == "e") {
+        node->type = NodeType::kE;
+    } else {
+        node->type = NodeType::kVariable;
+        node->text = name;
+    }
     return intern_node(node);
 }
 
@@ -333,6 +347,8 @@ int precedence(const std::shared_ptr<SymbolicExpression::Node>& node) {
         case NodeType::kFunction:
         case NodeType::kNumber:
         case NodeType::kVariable:
+        case NodeType::kPi:
+        case NodeType::kE:
             return 5;
     }
     return 5;
@@ -360,6 +376,12 @@ std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node
             break;
         case NodeType::kVariable:
             text = node->text;
+            break;
+        case NodeType::kPi:
+            text = "pi";
+            break;
+        case NodeType::kE:
+            text = "e";
             break;
         case NodeType::kNegate:
             text = "-" + to_string_impl(node->left, precedence(node));
@@ -442,6 +464,12 @@ std::string node_structural_key(const std::shared_ptr<SymbolicExpression::Node>&
         case NodeType::kVariable:
             key = "V(" + node->text + ")";
             break;
+        case NodeType::kPi:
+            key = "PI";
+            break;
+        case NodeType::kE:
+            key = "E";
+            break;
         case NodeType::kNegate:
             key = "NEG(" + node_structural_key(node->left) + ")";
             break;
@@ -518,6 +546,21 @@ public:
     }
 
 private:
+    std::string source_;
+    std::size_t pos_ = 0;
+    int depth_ = 0;
+    static constexpr int kMaxDepth = 256;
+
+    struct DepthGuard {
+        int& depth_;
+        explicit DepthGuard(int& depth) : depth_(depth) {
+            if (++depth_ > kMaxDepth) {
+                throw std::runtime_error("expression too complex: maximum parsing depth exceeded");
+            }
+        }
+        ~DepthGuard() { --depth_; }
+    };
+
     // ========================================================================
     // 解析规则实现
     // ========================================================================
@@ -528,6 +571,7 @@ private:
      * expression -> term (('+' | '-') term)*
      */
     SymbolicExpression parse_expression() {
+        DepthGuard guard(depth_);
         SymbolicExpression value = parse_term();
         while (true) {
             skip_spaces();
@@ -693,6 +737,32 @@ private:
             }
         }
 
+        // 解析科学计数法
+        if (pos_ < source_.size() && (source_[pos_] == 'e' || source_[pos_] == 'E')) {
+            std::size_t exp_pos = pos_ + 1;
+            bool exp_negative = false;
+            if (exp_pos < source_.size() && source_[exp_pos] == '+') {
+                ++exp_pos;
+            } else if (exp_pos < source_.size() && source_[exp_pos] == '-') {
+                exp_negative = true;
+                ++exp_pos;
+            }
+            
+            if (exp_pos < source_.size() && std::isdigit(static_cast<unsigned char>(source_[exp_pos]))) {
+                double exponent = 0.0;
+                while (exp_pos < source_.size() && std::isdigit(static_cast<unsigned char>(source_[exp_pos]))) {
+                    exponent = exponent * 10.0 + static_cast<double>(source_[exp_pos] - '0');
+                    ++exp_pos;
+                }
+                pos_ = exp_pos;
+                if (exp_negative) {
+                    value /= mymath::pow(10.0, exponent);
+                } else {
+                    value *= mymath::pow(10.0, exponent);
+                }
+            }
+        }
+
         return SymbolicExpression(make_number(value));
     }
 
@@ -743,9 +813,6 @@ private:
             ++pos_;
         }
     }
-
-    std::string source_;  ///< 源字符串
-    std::size_t pos_ = 0; ///< 当前位置
 };
 
 bool expr_is_number(const SymbolicExpression& expression, double* value);
@@ -759,6 +826,8 @@ SymbolicExpression substitute_impl(const SymbolicExpression& expression,
     const auto& node = expression.node_;
     switch (node->type) {
         case NodeType::kNumber:
+        case NodeType::kPi:
+        case NodeType::kE:
             return expression;
         case NodeType::kVariable:
             if (node->text == variable_name) {
@@ -808,6 +877,9 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
         case NodeType::kNumber:
             *value = node->number_value;
             return true;
+        case NodeType::kPi:
+        case NodeType::kE:
+            return false;
         case NodeType::kVariable:
             if (node->text == "1 / 2") {
                 *value = 0.5;
@@ -908,7 +980,24 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                 return true;
             }
             if (node->text == "sqrt") {
-                *value = mymath::sqrt(argument);
+                double root = mymath::sqrt(argument);
+                // Only evaluate to number if it's a perfect square
+                if (mymath::is_near_zero(root * root - argument, 1e-12) && mymath::is_integer(root, 1e-10)) {
+                    *value = root;
+                    return true;
+                }
+                return false;
+            }
+            if (node->text == "erf") {
+                *value = mymath::erf(argument);
+                return true;
+            }
+            if (node->text == "erfc") {
+                *value = mymath::erfc(argument);
+                return true;
+            }
+            if (node->text == "gamma") {
+                *value = mymath::gamma(argument);
                 return true;
             }
             if (node->text == "abs") {
@@ -958,6 +1047,8 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
 }
 
 bool expr_is_variable(const SymbolicExpression& expression, const std::string& name) {
+    if (name == "pi") return expression.node_->type == NodeType::kPi;
+    if (name == "e") return expression.node_->type == NodeType::kE;
     return expression.node_->type == NodeType::kVariable && expression.node_->text == name;
 }
 
@@ -994,6 +1085,8 @@ std::string SymbolicExpression::to_string() const {
 bool SymbolicExpression::is_constant(const std::string& variable_name) const {
     switch (node_->type) {
         case NodeType::kNumber:
+        case NodeType::kPi:
+        case NodeType::kE:
             return true;
         case NodeType::kVariable:
             return node_->text != variable_name;
@@ -1041,6 +1134,47 @@ std::vector<std::string> SymbolicExpression::identifier_variables() const {
     return names;
 }
 
+namespace {
+void collect_subexpression_counts(const std::shared_ptr<SymbolicExpression::Node>& node,
+                                  std::unordered_map<std::string, std::pair<std::shared_ptr<SymbolicExpression::Node>, int>>& counts) {
+    if (!node) return;
+    
+    // 忽略叶子节点（数字、变量、常数），因为它们作为 CSE 提取没有意义
+    if (node->type != NodeType::kNumber && node->type != NodeType::kVariable &&
+        node->type != NodeType::kPi && node->type != NodeType::kE) {
+        const std::string key = node_structural_key(node);
+        auto& entry = counts[key];
+        if (entry.second == 0) {
+            entry.first = node;
+        }
+        entry.second++;
+    }
+
+    collect_subexpression_counts(node->left, counts);
+    collect_subexpression_counts(node->right, counts);
+}
+} // namespace
+
+std::vector<std::pair<SymbolicExpression, int>> SymbolicExpression::common_subexpressions() const {
+    std::unordered_map<std::string, std::pair<std::shared_ptr<Node>, int>> counts;
+    collect_subexpression_counts(node_, counts);
+
+    std::vector<std::pair<SymbolicExpression, int>> result;
+    for (auto& [key, entry] : counts) {
+        if (entry.second > 1) {
+            result.push_back({SymbolicExpression(entry.first), entry.second});
+        }
+    }
+
+    // 按出现次数降序排列，次数相同时按长度（通过字符串表示的长度估计）降序
+    std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) {
+        if (a.second != b.second) return a.second > b.second;
+        return a.first.to_string().size() > b.first.to_string().size();
+    });
+
+    return result;
+}
+
 SymbolicExpression SymbolicExpression::simplify() const {
     static constexpr std::size_t kMaxSimplifyCacheSize = 4096;
     static thread_local SymbolicExpressionLruCache cache(kMaxSimplifyCacheSize);
@@ -1054,6 +1188,10 @@ SymbolicExpression SymbolicExpression::simplify() const {
     SymbolicExpression simplified = simplify_impl(*this);
     cache.put(key, simplified);
     return simplified;
+}
+
+SymbolicExpression SymbolicExpression::expand() const {
+    return expand_impl(*this);
 }
 
 SymbolicExpression SymbolicExpression::substitute(

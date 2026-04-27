@@ -1364,6 +1364,44 @@ std::string Matrix::to_string() const {
     return out.str();
 }
 
+Matrix& Matrix::operator+=(const Matrix& rhs) {
+    if (rows != rhs.rows || cols != rhs.cols) {
+        throw std::runtime_error("matrix addition requires same shape");
+    }
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        data[i] += rhs.data[i];
+    }
+    return *this;
+}
+
+Matrix& Matrix::operator-=(const Matrix& rhs) {
+    if (rows != rhs.rows || cols != rhs.cols) {
+        throw std::runtime_error("matrix subtraction requires same shape");
+    }
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        data[i] -= rhs.data[i];
+    }
+    return *this;
+}
+
+Matrix& Matrix::operator*=(double scalar) {
+    for (double& val : data) {
+        val *= scalar;
+    }
+    return *this;
+}
+
+Matrix& Matrix::operator/=(double scalar) {
+    if (mymath::is_near_zero(scalar)) {
+        throw std::runtime_error("division by zero");
+    }
+    const double inv_scalar = 1.0 / scalar;
+    for (double& val : data) {
+        val *= inv_scalar;
+    }
+    return *this;
+}
+
 Value Value::from_scalar(double scalar_value) {
     Value value;
     value.is_matrix = false;
@@ -1378,13 +1416,27 @@ Value Value::from_matrix(const Matrix& matrix_value) {
     return value;
 }
 
+Value Value::from_matrix(Matrix&& matrix_value) {
+    Value value;
+    value.is_matrix = true;
+    value.matrix = std::move(matrix_value);
+    return value;
+}
+
 Matrix add(const Matrix& lhs, const Matrix& rhs) {
-    require_same_shape(lhs, rhs, "matrix addition");
-    Matrix result(lhs.rows, lhs.cols, 0.0);
-    for (std::size_t i = 0; i < lhs.data.size(); ++i) {
-        result.data[i] = lhs.data[i] + rhs.data[i];
-    }
+    Matrix result = lhs;
+    result += rhs;
     return result;
+}
+
+Matrix add(Matrix&& lhs, const Matrix& rhs) {
+    lhs += rhs;
+    return std::move(lhs);
+}
+
+Matrix add(const Matrix& lhs, Matrix&& rhs) {
+    rhs += lhs;
+    return std::move(rhs);
 }
 
 Matrix add(const Matrix& lhs, double scalar) {
@@ -1395,13 +1447,30 @@ Matrix add(const Matrix& lhs, double scalar) {
     return result;
 }
 
-Matrix subtract(const Matrix& lhs, const Matrix& rhs) {
-    require_same_shape(lhs, rhs, "matrix subtraction");
-    Matrix result(lhs.rows, lhs.cols, 0.0);
-    for (std::size_t i = 0; i < lhs.data.size(); ++i) {
-        result.data[i] = lhs.data[i] - rhs.data[i];
+Matrix add(Matrix&& lhs, double scalar) {
+    for (double& val : lhs.data) {
+        val += scalar;
     }
+    return std::move(lhs);
+}
+
+Matrix subtract(const Matrix& lhs, const Matrix& rhs) {
+    Matrix result = lhs;
+    result -= rhs;
     return result;
+}
+
+Matrix subtract(Matrix&& lhs, const Matrix& rhs) {
+    lhs -= rhs;
+    return std::move(lhs);
+}
+
+Matrix subtract(const Matrix& lhs, Matrix&& rhs) {
+    // result = lhs - rhs
+    for (std::size_t i = 0; i < rhs.data.size(); ++i) {
+        rhs.data[i] = lhs.data[i] - rhs.data[i];
+    }
+    return std::move(rhs);
 }
 
 Matrix subtract(const Matrix& lhs, double scalar) {
@@ -1412,33 +1481,67 @@ Matrix subtract(const Matrix& lhs, double scalar) {
     return result;
 }
 
+Matrix subtract(Matrix&& lhs, double scalar) {
+    for (double& val : lhs.data) {
+        val -= scalar;
+    }
+    return std::move(lhs);
+}
+
 Matrix multiply(const Matrix& lhs, const Matrix& rhs) {
     if (lhs.cols != rhs.rows) {
         throw std::runtime_error("matrix multiplication requires lhs.cols == rhs.rows");
     }
 
-    Matrix result(lhs.rows, rhs.cols, 0.0);
-    std::vector<long double> sums(lhs.rows * rhs.cols, 0.0L);
-    constexpr std::size_t kBlockSize = 32;
-    for (std::size_t row_block = 0; row_block < lhs.rows; row_block += kBlockSize) {
-        const std::size_t row_end = std::min(row_block + kBlockSize, lhs.rows);
-        for (std::size_t k_block = 0; k_block < lhs.cols; k_block += kBlockSize) {
-            const std::size_t k_end = std::min(k_block + kBlockSize, lhs.cols);
-            for (std::size_t col_block = 0; col_block < rhs.cols; col_block += kBlockSize) {
-                const std::size_t col_end = std::min(col_block + kBlockSize, rhs.cols);
-                for (std::size_t row = row_block; row < row_end; ++row) {
-                    for (std::size_t k = k_block; k < k_end; ++k) {
-                        const long double lhs_value =
-                            static_cast<long double>(lhs.at(row, k));
-                        for (std::size_t col = col_block; col < col_end; ++col) {
-                            sums[row * rhs.cols + col] +=
-                                lhs_value * static_cast<long double>(rhs.at(k, col));
-                        }
-                    }
+    // Optimization: check if one is identity
+    if (lhs.is_square() && lhs.rows == rhs.rows) {
+        bool is_lhs_identity = true;
+        for (std::size_t i = 0; i < lhs.rows; ++i) {
+            for (std::size_t j = 0; j < lhs.cols; ++j) {
+                const double val = lhs.at(i, j);
+                if (i == j) {
+                    if (!mymath::is_near_zero(val - 1.0)) { is_lhs_identity = false; break; }
+                } else {
+                    if (!mymath::is_near_zero(val)) { is_lhs_identity = false; break; }
                 }
+            }
+            if (!is_lhs_identity) break;
+        }
+        if (is_lhs_identity) return rhs;
+    }
+    if (rhs.is_square() && rhs.rows == lhs.cols) {
+        bool is_rhs_identity = true;
+        for (std::size_t i = 0; i < rhs.rows; ++i) {
+            for (std::size_t j = 0; j < rhs.cols; ++j) {
+                const double val = rhs.at(i, j);
+                if (i == j) {
+                    if (!mymath::is_near_zero(val - 1.0)) { is_rhs_identity = false; break; }
+                } else {
+                    if (!mymath::is_near_zero(val)) { is_rhs_identity = false; break; }
+                }
+            }
+            if (!is_rhs_identity) break;
+        }
+        if (is_rhs_identity) return lhs;
+    }
+
+    Matrix result(lhs.rows, rhs.cols, 0.0);
+    // Use long double for intermediate precision and inner loop optimization for cache locality
+    std::vector<long double> sums(lhs.rows * rhs.cols, 0.0L);
+    
+    for (std::size_t i = 0; i < lhs.rows; ++i) {
+        for (std::size_t k = 0; k < lhs.cols; ++k) {
+            const long double lhs_val = static_cast<long double>(lhs.at(i, k));
+            if (mymath::is_near_zero(static_cast<double>(lhs_val))) continue;
+            
+            const std::size_t row_offset = i * rhs.cols;
+            const std::size_t rhs_offset = k * rhs.cols;
+            for (std::size_t j = 0; j < rhs.cols; ++j) {
+                sums[row_offset + j] += lhs_val * static_cast<long double>(rhs.data[rhs_offset + j]);
             }
         }
     }
+
     for (std::size_t i = 0; i < sums.size(); ++i) {
         result.data[i] = static_cast<double>(sums[i]);
     }
@@ -1446,23 +1549,25 @@ Matrix multiply(const Matrix& lhs, const Matrix& rhs) {
 }
 
 Matrix multiply(const Matrix& lhs, double scalar) {
-    Matrix result(lhs.rows, lhs.cols, 0.0);
-    for (std::size_t i = 0; i < lhs.data.size(); ++i) {
-        result.data[i] = lhs.data[i] * scalar;
-    }
+    Matrix result = lhs;
+    result *= scalar;
     return result;
 }
 
-Matrix divide(const Matrix& lhs, double scalar) {
-    if (mymath::is_near_zero(scalar)) {
-        throw std::runtime_error("division by zero");
-    }
+Matrix multiply(Matrix&& lhs, double scalar) {
+    lhs *= scalar;
+    return std::move(lhs);
+}
 
-    Matrix result(lhs.rows, lhs.cols, 0.0);
-    for (std::size_t i = 0; i < lhs.data.size(); ++i) {
-        result.data[i] = lhs.data[i] / scalar;
-    }
+Matrix divide(const Matrix& lhs, double scalar) {
+    Matrix result = lhs;
+    result /= scalar;
     return result;
+}
+
+Matrix divide(Matrix&& lhs, double scalar) {
+    lhs /= scalar;
+    return std::move(lhs);
 }
 
 Matrix transpose(const Matrix& matrix) {
@@ -1507,6 +1612,55 @@ Matrix outer(const Matrix& lhs, const Matrix& rhs) {
         }
     }
     return result;
+}
+
+Matrix cross(const Matrix& lhs, const Matrix& rhs) {
+    const std::size_t lhs_size = vector_length(lhs, "cross");
+    const std::size_t rhs_size = vector_length(rhs, "cross");
+
+    if (lhs_size != 3 || rhs_size != 3) {
+        throw std::runtime_error("cross product is only defined for 3D vectors");
+    }
+
+    const double x1 = vector_entry(lhs, 0);
+    const double y1 = vector_entry(lhs, 1);
+    const double z1 = vector_entry(lhs, 2);
+    const double x2 = vector_entry(rhs, 0);
+    const double y2 = vector_entry(rhs, 1);
+    const double z2 = vector_entry(rhs, 2);
+
+    std::vector<double> result_data = {
+        y1 * z2 - z1 * y2,
+        z1 * x2 - x1 * z2,
+        x1 * y2 - y1 * x2
+    };
+
+    if (lhs.rows == 1) {
+        Matrix res(1, 3);
+        res.data = result_data;
+        return res;
+    } else {
+        return Matrix::vector(result_data);
+    }
+}
+
+Matrix project(const Matrix& lhs, const Matrix& rhs) {
+    const double rhs_norm_sq = dot(rhs, rhs);
+    if (mymath::is_near_zero(rhs_norm_sq)) {
+        throw std::runtime_error("cannot project onto a zero vector");
+    }
+    return multiply(rhs, dot(lhs, rhs) / rhs_norm_sq);
+}
+
+Matrix normalize(const Matrix& matrix) {
+    if (!matrix.is_vector()) {
+        throw std::runtime_error("normalize only works on vectors");
+    }
+    const double v_norm = norm(matrix);
+    if (mymath::is_near_zero(v_norm)) {
+        throw std::runtime_error("cannot normalize a zero vector");
+    }
+    return divide(matrix, v_norm);
 }
 
 Matrix kronecker(const Matrix& lhs, const Matrix& rhs) {
