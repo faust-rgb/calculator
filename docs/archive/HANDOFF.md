@@ -72,7 +72,7 @@ Current test status:
   Matrix implementation
 - `src/analysis`
   Function analysis helpers
-- `src/algebra`
+- `src/polynomial`
   Polynomial helpers
 - `src/symbolic`
   Symbolic expression support

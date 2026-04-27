@@ -211,7 +211,7 @@
 - 提升用户表达式简洁性
 
 **代码位置：**
-- `src/algebra/polynomial.cpp` - 利用现有多项式工具
+- `src/polynomial/polynomial.cpp` - 利用现有多项式工具
 - `src/symbolic/polynomial_helpers.cpp` - 多项式表达式提取与重建
 - `src/symbolic/simplify.cpp` - 集成到 `simplify()`
 

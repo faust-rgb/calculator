@@ -62,7 +62,7 @@ expect_exact 'integral(1 / (x ^ 2 - 1))' '1/2 * ln(abs((2 * x - 2) / (2 * x + 2)
 expect_exact 'integral(sin(x) ^ 2)' 'x / 2 - sin(2 * x) / 4 + C'
 expect_exact 'integral(cos(x) ^ 2)' 'sin(2 * x) / 4 + x / 2 + C'
 expect_exact 'integral(tan(x) ^ 2)' 'tan(x) - x + C'
-expect_exact 'gradient(x ^ 2 + x * y + y ^ 2, x, y)' '[2 * x + y, 2 * y + x]'
+expect_exact 'gradient(x ^ 2 + x * y + y ^ 2, x, y)' '[2 * x + y, x + 2 * y]'
 expect_exact 'hessian(x ^ 2 + x * y + y ^ 2, x, y)' '[[2, 1], [1, 2]]'
 expect_exact 'jacobian([x ^ 2 + y; sin(x * y)], x, y)' '[[2 * x, 1], [cos(x * y) * y, cos(x * y) * x]]'
 expect_exact 'critical(x ^ 2 + y ^ 2, x, y)' '[x = 0, y = 0] (local min)'

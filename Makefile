@@ -11,7 +11,7 @@ TEST_APP := $(BIN_DIR)/calculator_tests
 PLANNING_TEST_APP := $(BIN_DIR)/planning_tests
 SRC_DIR := src
 TEST_DIR := test
-SRC_DIRS := $(SRC_DIR)/app $(SRC_DIR)/core $(SRC_DIR)/math $(SRC_DIR)/matrix $(SRC_DIR)/analysis $(SRC_DIR)/algebra $(SRC_DIR)/symbolic $(SRC_DIR)/script
+SRC_DIRS := $(SRC_DIR)/app $(SRC_DIR)/core $(SRC_DIR)/math $(SRC_DIR)/matrix $(SRC_DIR)/analysis $(SRC_DIR)/polynomial $(SRC_DIR)/symbolic $(SRC_DIR)/script
 INCLUDES := $(addprefix -I,$(SRC_DIRS))
 CPPFLAGS += $(INCLUDES) -MMD -MP
 
@@ -52,8 +52,8 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/symbolic/symbolic_expression_transforms.cpp \
 	$(SRC_DIR)/symbolic/calculator_transforms.cpp \
 	$(SRC_DIR)/symbolic/calculator_symbolic_commands.cpp \
-	$(SRC_DIR)/algebra/calculator_polynomial.cpp \
-	$(SRC_DIR)/algebra/polynomial.cpp \
+	$(SRC_DIR)/polynomial/calculator_polynomial.cpp \
+	$(SRC_DIR)/polynomial/polynomial.cpp \
 	$(SRC_DIR)/script/script_parser.cpp
 COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/core/calculator_internal_types.h \
@@ -77,8 +77,8 @@ COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/symbolic/symbolic_expression_internal.h \
 	$(SRC_DIR)/symbolic/calculator_transforms.h \
 	$(SRC_DIR)/symbolic/calculator_symbolic_commands.h \
-	$(SRC_DIR)/algebra/calculator_polynomial.h \
-	$(SRC_DIR)/algebra/polynomial.h \
+	$(SRC_DIR)/polynomial/calculator_polynomial.h \
+	$(SRC_DIR)/polynomial/polynomial.h \
 	$(SRC_DIR)/script/script_parser.h \
 	$(SRC_DIR)/script/script_ast.h
 COMMON_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(COMMON_SRCS))

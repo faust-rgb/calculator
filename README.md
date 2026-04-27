@@ -15,7 +15,7 @@ using the standard math library implementations from `<cmath>` or `math.h`.
   Matrix types and operations, including a dedicated linear-algebra implementation unit
 - `src/analysis`
   One-variable function analysis
-- `src/algebra`
+- `src/polynomial`
   Polynomial helpers
 - `src/symbolic`
   Symbolic expression support
