@@ -1,14 +1,15 @@
 /**
  * @file polynomial.cpp
- * @brief 多项式运算实现
+ * @brief 多项式运算实现（高精度版本）
  *
  * 实现多项式的基本运算（加减乘除）和实根查找。
  * 使用系数向量表示多项式，索引 i 对应 x^i 的系数。
+ * 使用 numeric::Number 实现任意精度计算。
  */
 
 #include "polynomial.h"
 
-#include "mymath.h"
+#include "functions.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -17,134 +18,130 @@
 
 namespace {
 
-/** @brief 多项式运算的数值精度阈值 */
-constexpr double kPolynomialEps = 1e-10;
+using numeric::Number;
+using numeric::BigInt;
+using numeric::BigDecimal;
+using numeric::PrecisionContext;
 
-/** @brief 根隔离过程的精度阈值 */
-constexpr double kRootIsolationEps = 1e-8;
+PrecisionContext default_polynomial_context() {
+    PrecisionContext ctx;
+    ctx.digits = 50;
+    ctx.max_iterations = 1000;
+    return ctx;
+}
 
-void trim_trailing_zeros(std::vector<double>* coefficients) {
-    // 多项式内部采用“低次到高次”的系数表示：
-    // coefficients[i] 对应 x^i 的系数。
-    //
-    // 例如：
-    //   x^2 + 2x + 1  ->  [1, 2, 1]
-    //
-    // 算法过程中经常会出现最高项被消成接近 0 的情况，
-    // 如果不在这里统一裁掉尾部 0，后面的次数判断、除法和求根都会出错。
-    while (coefficients->size() > 1 &&
-           mymath::is_near_zero(coefficients->back(), kPolynomialEps)) {
+bool is_number_zero(const Number& value) {
+    return numeric::is_zero(value);
+}
+
+bool is_number_one(const Number& value) {
+    if (value.is_integer()) {
+        const BigInt& i = value.as_integer();
+        return !i.is_zero() && (i - BigInt(1)).is_zero();
+    }
+    if (value.is_rational()) {
+        const auto& r = value.as_rational();
+        return r.numerator() == BigInt(1) && r.denominator() == BigInt(1);
+    }
+    if (value.is_decimal()) {
+        const auto& d = value.as_decimal();
+        BigInt remainder = d.coefficient().abs() % BigDecimal::pow10(d.scale());
+        return remainder.is_zero() && d.coefficient() == BigInt(1);
+    }
+    return false;
+}
+
+Number number_abs(const Number& value) {
+    return numeric::abs(value);
+}
+
+Number number_sqrt(const Number& value) {
+    return numeric::sqrt(value);
+}
+
+void trim_trailing_zeros(std::vector<Number>* coefficients) {
+    while (coefficients->size() > 1 && is_number_zero(coefficients->back())) {
         coefficients->pop_back();
     }
     if (coefficients->empty()) {
-        coefficients->push_back(0.0);
+        coefficients->push_back(Number(0));
     }
 }
 
-std::string format_coefficient(double value) {
-    if (mymath::is_integer(value, 1e-10)) {
-        long long rounded =
-            static_cast<long long>(value >= 0.0 ? value + 0.5 : value - 0.5);
-        return std::to_string(rounded);
+std::string format_coefficient(const Number& value) {
+    if (value.is_integer()) {
+        return value.as_integer().to_string();
     }
-
-    long long numerator = 0;
-    long long denominator = 1;
-    if (mymath::approximate_fraction(value,
-                                     &numerator,
-                                     &denominator,
-                                     999,
-                                     1e-10)) {
-        if (denominator == 1) {
-            return std::to_string(numerator);
+    if (value.is_rational()) {
+        const auto& r = value.as_rational();
+        if (r.denominator() == BigInt(1)) {
+            return r.numerator().to_string();
         }
-        return std::to_string(numerator) + "/" + std::to_string(denominator);
+        return r.numerator().to_string() + "/" + r.denominator().to_string();
     }
-
-    std::string text = std::to_string(value);
-    while (!text.empty() && text.back() == '0') {
-        text.pop_back();
-    }
-    if (!text.empty() && text.back() == '.') {
-        text.pop_back();
-    }
-    return text;
+    return value.to_string();
 }
 
-double polynomial_evaluate_impl(const std::vector<double>& coefficients, double x) {
-    // 这里使用 Horner 形式求值：
-    //   a0 + a1*x + a2*x^2 + ...
-    // 可以改写成
-    //   (...((an*x + a(n-1))*x + ...) * x + a0)
-    //
-    // 这样既减少乘法次数，也比直接逐项求幂更稳定。
-    double result = 0.0;
+Number polynomial_evaluate_impl(const std::vector<Number>& coefficients, const Number& x) {
+    Number result(0);
     for (std::size_t i = coefficients.size(); i > 0; --i) {
         result = result * x + coefficients[i - 1];
     }
     return result;
 }
 
-std::vector<double> polynomial_derivative_impl(const std::vector<double>& coefficients) {
+std::vector<Number> polynomial_derivative_impl(const std::vector<Number>& coefficients) {
     if (coefficients.size() <= 1) {
-        return {0.0};
+        return {Number(0)};
     }
 
-    std::vector<double> derivative(coefficients.size() - 1, 0.0);
+    std::vector<Number> derivative(coefficients.size() - 1);
     for (std::size_t i = 1; i < coefficients.size(); ++i) {
-        derivative[i - 1] = coefficients[i] * static_cast<double>(i);
+        derivative[i - 1] = coefficients[i] * Number(static_cast<long long>(i));
     }
     trim_trailing_zeros(&derivative);
     return derivative;
 }
 
-double polynomial_root_bound(const std::vector<double>& coefficients) {
-    // 使用一个简单的 Cauchy 型根界：
-    // 所有实根都会落在 [-B, B]，其中 B = 1 + max |ai/an|。
-    //
-    // 这样就可以把“无界的实轴搜索”收缩到一个有限区间，
-    // 后续只需要在这个区间里结合导函数临界点做分段即可。
-    const double leading = coefficients.back();
-    double bound = 0.0;
+Number polynomial_root_bound(const std::vector<Number>& coefficients) {
+    const Number leading = coefficients.back();
+    Number bound(0);
     for (std::size_t i = 0; i + 1 < coefficients.size(); ++i) {
-        const double ratio = mymath::abs(coefficients[i] / leading);
-        if (ratio > bound) {
+        const Number ratio = number_abs(coefficients[i] / leading);
+        if (ratio.compare(bound) > 0) {
             bound = ratio;
         }
     }
-    return 1.0 + bound;
+    return Number(1) + bound;
 }
 
-double bisect_root(const std::vector<double>& coefficients, double left, double right) {
-    // 进入这个函数前，调用方已经保证 [left, right] 两端函数值异号。
-    // 因此直接用二分法做“可靠收敛”的根逼近。
-    double left_value = polynomial_evaluate_impl(coefficients, left);
+Number bisect_root(const std::vector<Number>& coefficients, const Number& left, const Number& right) {
+    Number left_value = polynomial_evaluate_impl(coefficients, left);
+    const Number eps(BigDecimal::from_string("1e-40"));
+    const int max_iterations = 200;
 
-    for (int i = 0; i < 100; ++i) {
-        const double mid = (left + right) * 0.5;
-        const double mid_value = polynomial_evaluate_impl(coefficients, mid);
-        if (mymath::is_near_zero(mid_value, kRootIsolationEps) ||
-            mymath::abs(right - left) <= kRootIsolationEps) {
+    for (int i = 0; i < max_iterations; ++i) {
+        const Number mid = (left + right) / Number(2);
+        const Number mid_value = polynomial_evaluate_impl(coefficients, mid);
+        if (is_number_zero(mid_value) || (right - mid).compare(eps) <= 0) {
             return mid;
         }
 
-        if ((left_value < 0.0 && mid_value > 0.0) ||
-            (left_value > 0.0 && mid_value < 0.0)) {
-            right = mid;
-        } else {
-            left = mid;
-            left_value = mid_value;
+        const bool left_negative = left_value.compare(Number(0)) < 0;
+        const bool mid_negative = mid_value.compare(Number(0)) < 0;
+        if (left_negative != mid_negative) {
+            return bisect_root(coefficients, left, mid);
         }
+        return bisect_root(coefficients, mid, right);
     }
 
-    return (left + right) * 0.5;
+    return (left + right) / Number(2);
 }
 
-void add_unique_root(std::vector<double>* roots, double candidate) {
-    // 求根过程会同时从“导函数临界点命中”以及“分段变号”两条路径得到根。
-    // 同一个根可能被重复发现，因此统一做一次近似去重。
-    for (double existing : *roots) {
-        if (mymath::abs(existing - candidate) <= 1e-6) {
+void add_unique_root(std::vector<Number>* roots, const Number& candidate) {
+    const Number eps(BigDecimal::from_string("1e-30"));
+    for (const Number& existing : *roots) {
+        if (number_abs(existing - candidate).compare(eps) <= 0) {
             return;
         }
     }
@@ -153,87 +150,83 @@ void add_unique_root(std::vector<double>* roots, double candidate) {
 
 }  // namespace
 
-double polynomial_evaluate(const std::vector<double>& coefficients, double x) {
+Number polynomial_evaluate(const std::vector<Number>& coefficients, const Number& x) {
     return polynomial_evaluate_impl(coefficients, x);
 }
 
-std::vector<double> polynomial_derivative(const std::vector<double>& coefficients) {
+std::vector<Number> polynomial_derivative(const std::vector<Number>& coefficients) {
     return polynomial_derivative_impl(coefficients);
 }
 
-std::vector<double> polynomial_add(const std::vector<double>& lhs,
-                                   const std::vector<double>& rhs) {
+std::vector<Number> polynomial_add(const std::vector<Number>& lhs,
+                                   const std::vector<Number>& rhs) {
     const std::size_t size = lhs.size() > rhs.size() ? lhs.size() : rhs.size();
-    std::vector<double> result(size, 0.0);
+    std::vector<Number> result(size, Number(0));
     for (std::size_t i = 0; i < lhs.size(); ++i) {
-        result[i] += lhs[i];
+        result[i] = result[i] + lhs[i];
     }
     for (std::size_t i = 0; i < rhs.size(); ++i) {
-        result[i] += rhs[i];
+        result[i] = result[i] + rhs[i];
     }
     trim_trailing_zeros(&result);
     return result;
 }
 
-std::vector<double> polynomial_subtract(const std::vector<double>& lhs,
-                                        const std::vector<double>& rhs) {
+std::vector<Number> polynomial_subtract(const std::vector<Number>& lhs,
+                                        const std::vector<Number>& rhs) {
     const std::size_t size = lhs.size() > rhs.size() ? lhs.size() : rhs.size();
-    std::vector<double> result(size, 0.0);
+    std::vector<Number> result(size, Number(0));
     for (std::size_t i = 0; i < lhs.size(); ++i) {
-        result[i] += lhs[i];
+        result[i] = result[i] + lhs[i];
     }
     for (std::size_t i = 0; i < rhs.size(); ++i) {
-        result[i] -= rhs[i];
+        result[i] = result[i] - rhs[i];
     }
     trim_trailing_zeros(&result);
     return result;
 }
 
-std::vector<double> polynomial_multiply(const std::vector<double>& lhs,
-                                        const std::vector<double>& rhs) {
-    std::vector<double> result(lhs.size() + rhs.size() - 1, 0.0);
+std::vector<Number> polynomial_multiply(const std::vector<Number>& lhs,
+                                        const std::vector<Number>& rhs) {
+    std::vector<Number> result(lhs.size() + rhs.size() - 1, Number(0));
     for (std::size_t i = 0; i < lhs.size(); ++i) {
         for (std::size_t j = 0; j < rhs.size(); ++j) {
-            result[i + j] += lhs[i] * rhs[j];
+            result[i + j] = result[i + j] + lhs[i] * rhs[j];
         }
     }
     trim_trailing_zeros(&result);
     return result;
 }
 
-PolynomialDivisionResult polynomial_divide(const std::vector<double>& dividend,
-                                           const std::vector<double>& divisor) {
-    std::vector<double> normalized_dividend = dividend;
-    std::vector<double> normalized_divisor = divisor;
+PolynomialDivisionResult polynomial_divide(const std::vector<Number>& dividend,
+                                           const std::vector<Number>& divisor) {
+    std::vector<Number> normalized_dividend = dividend;
+    std::vector<Number> normalized_divisor = divisor;
     trim_trailing_zeros(&normalized_dividend);
     trim_trailing_zeros(&normalized_divisor);
 
-    if (normalized_divisor.size() == 1 &&
-        mymath::is_near_zero(normalized_divisor[0], kPolynomialEps)) {
+    if (normalized_divisor.size() == 1 && is_number_zero(normalized_divisor[0])) {
         throw std::runtime_error("polynomial divisor cannot be zero");
     }
 
     if (normalized_dividend.size() < normalized_divisor.size()) {
-        return {{0.0}, normalized_dividend};
+        return {{Number(0)}, normalized_dividend};
     }
 
-    std::vector<double> quotient(
-        normalized_dividend.size() - normalized_divisor.size() + 1, 0.0);
-    std::vector<double> remainder = normalized_dividend;
+    std::vector<Number> quotient(
+        normalized_dividend.size() - normalized_divisor.size() + 1, Number(0));
+    std::vector<Number> remainder = normalized_dividend;
 
-    // 这里实现的是标准多项式长除法：
-    // 每一轮都拿“当前余式最高项 / 除式最高项”得到一个商项，
-    // 再把对应倍数从余式里消掉，直到余式次数低于除式次数。
     while (remainder.size() >= normalized_divisor.size() &&
-           !(remainder.size() == 1 && mymath::is_near_zero(remainder[0], kPolynomialEps))) {
+           !(remainder.size() == 1 && is_number_zero(remainder[0]))) {
         const std::size_t degree_diff =
             remainder.size() - normalized_divisor.size();
-        const double factor =
+        const Number factor =
             remainder.back() / normalized_divisor.back();
         quotient[degree_diff] = factor;
 
         for (std::size_t i = 0; i < normalized_divisor.size(); ++i) {
-            remainder[degree_diff + i] -= factor * normalized_divisor[i];
+            remainder[degree_diff + i] = remainder[degree_diff + i] - factor * normalized_divisor[i];
         }
         trim_trailing_zeros(&remainder);
         if (remainder.size() < normalized_divisor.size()) {
@@ -246,8 +239,8 @@ PolynomialDivisionResult polynomial_divide(const std::vector<double>& dividend,
     return {quotient, remainder};
 }
 
-std::vector<double> polynomial_real_roots(const std::vector<double>& coefficients) {
-    std::vector<double> normalized = coefficients;
+std::vector<Number> polynomial_real_roots(const std::vector<Number>& coefficients) {
+    std::vector<Number> normalized = coefficients;
     trim_trailing_zeros(&normalized);
 
     if (normalized.size() <= 1) {
@@ -258,91 +251,85 @@ std::vector<double> polynomial_real_roots(const std::vector<double>& coefficient
         return {-normalized[0] / normalized[1]};
     }
 
-    // 核心思路：
-    // 1. 先求导函数的全部实根，这些点就是原多项式在实轴上的临界点
-    // 2. 把根界区间 [-B, B] 用这些临界点切成若干段
-    // 3. 在每一段里，多项式单调，因此最多只有一个实根
-    // 4. 只要段两端变号，就可以安全地二分定位这个根
-    //
-    // 这种“递归导数 + 分段二分”的方式比对整个区间做稠密扫描更稳定，
-    // 对当前只返回实根的需求也足够直接。
-    const std::vector<double> derivative = polynomial_derivative(normalized);
-    std::vector<double> critical_points = polynomial_real_roots(derivative);
-    std::sort(critical_points.begin(), critical_points.end());
+    const std::vector<Number> derivative = polynomial_derivative(normalized);
+    std::vector<Number> critical_points = polynomial_real_roots(derivative);
+    std::sort(critical_points.begin(), critical_points.end(),
+              [](const Number& a, const Number& b) { return a.compare(b) < 0; });
 
-    const double bound = polynomial_root_bound(normalized);
-    std::vector<double> points;
+    const Number bound = polynomial_root_bound(normalized);
+    std::vector<Number> points;
     points.push_back(-bound);
-    for (double point : critical_points) {
+    for (const Number& point : critical_points) {
         points.push_back(point);
     }
     points.push_back(bound);
 
-    std::vector<double> roots;
-    for (double point : critical_points) {
-        // 临界点本身如果恰好落在 x 轴上，往往对应重根。
-        // 这类根不一定伴随普通的“左右变号”，所以需要单独补录。
-        if (mymath::is_near_zero(polynomial_evaluate(normalized, point), 1e-6)) {
+    std::vector<Number> roots;
+    const Number eps(BigDecimal::from_string("1e-25"));
+    for (const Number& point : critical_points) {
+        if (is_number_zero(polynomial_evaluate(normalized, point))) {
             add_unique_root(&roots, point);
         }
     }
 
     for (std::size_t i = 1; i < points.size(); ++i) {
-        const double left = points[i - 1];
-        const double right = points[i];
-        const double left_value = polynomial_evaluate(normalized, left);
-        const double right_value = polynomial_evaluate(normalized, right);
+        const Number left = points[i - 1];
+        const Number right = points[i];
+        const Number left_value = polynomial_evaluate(normalized, left);
+        const Number right_value = polynomial_evaluate(normalized, right);
 
-        if (mymath::is_near_zero(left_value, 1e-6)) {
+        if (is_number_zero(left_value)) {
             add_unique_root(&roots, left);
             continue;
         }
-        if (mymath::is_near_zero(right_value, 1e-6)) {
+        if (is_number_zero(right_value)) {
             add_unique_root(&roots, right);
             continue;
         }
 
-        if ((left_value < 0.0 && right_value > 0.0) ||
-            (left_value > 0.0 && right_value < 0.0)) {
+        const bool left_negative = left_value.compare(Number(0)) < 0;
+        const bool right_negative = right_value.compare(Number(0)) < 0;
+        if (left_negative != right_negative) {
             add_unique_root(&roots, bisect_root(normalized, left, right));
         }
     }
 
-    std::sort(roots.begin(), roots.end());
+    std::sort(roots.begin(), roots.end(),
+              [](const Number& a, const Number& b) { return a.compare(b) < 0; });
     return roots;
 }
 
-std::vector<double> polynomial_integral(const std::vector<double>& coefficients) {
-    std::vector<double> integral(coefficients.size() + 1, 0.0);
+std::vector<Number> polynomial_integral(const std::vector<Number>& coefficients) {
+    std::vector<Number> integral(coefficients.size() + 1, Number(0));
     for (std::size_t i = 0; i < coefficients.size(); ++i) {
-        integral[i + 1] = coefficients[i] / static_cast<double>(i + 1);
+        integral[i + 1] = coefficients[i] / Number(static_cast<long long>(i + 1));
     }
     trim_trailing_zeros(&integral);
     return integral;
 }
 
-std::vector<double> polynomial_compose(const std::vector<double>& outer,
-                                       const std::vector<double>& inner) {
-    std::vector<double> result = {0.0};
+std::vector<Number> polynomial_compose(const std::vector<Number>& outer,
+                                       const std::vector<Number>& inner) {
+    std::vector<Number> result = {Number(0)};
     for (std::size_t i = outer.size(); i > 0; --i) {
         result = polynomial_multiply(result, inner);
         if (result.empty()) {
-            result.push_back(0.0);
+            result.push_back(Number(0));
         }
-        result[0] += outer[i - 1];
+        result[0] = result[0] + outer[i - 1];
         trim_trailing_zeros(&result);
     }
     return result;
 }
 
-std::vector<double> polynomial_gcd(const std::vector<double>& lhs,
-                                   const std::vector<double>& rhs) {
-    std::vector<double> a = lhs;
-    std::vector<double> b = rhs;
+std::vector<Number> polynomial_gcd(const std::vector<Number>& lhs,
+                                   const std::vector<Number>& rhs) {
+    std::vector<Number> a = lhs;
+    std::vector<Number> b = rhs;
     trim_trailing_zeros(&a);
     trim_trailing_zeros(&b);
 
-    while (!(b.size() == 1 && mymath::is_near_zero(b[0], kPolynomialEps))) {
+    while (!(b.size() == 1 && is_number_zero(b[0]))) {
         const PolynomialDivisionResult division = polynomial_divide(a, b);
         a = b;
         b = division.remainder;
@@ -351,20 +338,20 @@ std::vector<double> polynomial_gcd(const std::vector<double>& lhs,
     }
 
     if (a.empty()) {
-        return {0.0};
+        return {Number(0)};
     }
-    const double leading = a.back();
-    if (!mymath::is_near_zero(leading, kPolynomialEps)) {
-        for (double& coefficient : a) {
-            coefficient /= leading;
+    const Number leading = a.back();
+    if (!is_number_zero(leading)) {
+        for (Number& coefficient : a) {
+            coefficient = coefficient / leading;
         }
     }
     trim_trailing_zeros(&a);
     return a;
 }
 
-std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
-                                   const std::vector<double>& y_samples,
+std::vector<Number> polynomial_fit(const std::vector<Number>& x_samples,
+                                   const std::vector<Number>& y_samples,
                                    int degree) {
     if (degree < 0) {
         throw std::runtime_error("polynomial degree must be non-negative");
@@ -376,109 +363,78 @@ std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
         throw std::runtime_error("polynomial_fit requires at least degree + 1 samples");
     }
 
+    // For polynomial fitting, we use a simplified approach with Number
+    // This is a basic least squares implementation
     const std::size_t n = x_samples.size();
     const std::size_t m = static_cast<std::size_t>(degree + 1);
-    long double center = 0.0L;
-    for (double sample : x_samples) {
-        center += static_cast<long double>(sample);
-    }
-    center /= static_cast<long double>(n);
 
-    long double scale = 0.0L;
-    for (double sample : x_samples) {
-        const long double shifted = static_cast<long double>(sample) - center;
-        const long double magnitude = shifted < 0.0L ? -shifted : shifted;
-        if (magnitude > scale) {
-            scale = magnitude;
+    // Build Vandermonde matrix and solve using normal equations
+    // A^T * A * c = A^T * y
+    std::vector<std::vector<Number>> ata(m, std::vector<Number>(m, Number(0)));
+    std::vector<Number> aty(m, Number(0));
+
+    for (std::size_t row = 0; row < n; ++row) {
+        std::vector<Number> powers(m, Number(1));
+        for (std::size_t j = 1; j < m; ++j) {
+            powers[j] = powers[j - 1] * x_samples[row];
+        }
+
+        for (std::size_t i = 0; i < m; ++i) {
+            for (std::size_t j = 0; j < m; ++j) {
+                ata[i][j] = ata[i][j] + powers[i] * powers[j];
+            }
+            aty[i] = aty[i] + powers[i] * y_samples[row];
         }
     }
-    if (scale == 0.0L) {
-        scale = 1.0L;
-    }
 
-    std::vector<std::vector<long double>> q_columns(
-        m, std::vector<long double>(n, 0.0L));
-    std::vector<std::vector<long double>> r(
-        m, std::vector<long double>(m, 0.0L));
-    std::vector<long double> qty(m, 0.0L);
+    // Gaussian elimination with partial pivoting
+    std::vector<Number> coefficients(m, Number(0));
+    std::vector<std::vector<Number>> aug = ata;
+    for (std::size_t i = 0; i < m; ++i) {
+        aug[i].push_back(aty[i]);
+    }
 
     for (std::size_t col = 0; col < m; ++col) {
-        std::vector<long double> column(n, 1.0L);
-        for (std::size_t row = 0; row < n; ++row) {
-            const long double shifted_x =
-                (static_cast<long double>(x_samples[row]) - center) / scale;
-            long double power = 1.0L;
-            for (std::size_t degree_idx = 0; degree_idx < col; ++degree_idx) {
-                power *= shifted_x;
+        // Find pivot
+        std::size_t max_row = col;
+        for (std::size_t row = col + 1; row < m; ++row) {
+            if (number_abs(aug[row][col]).compare(number_abs(aug[max_row][col])) > 0) {
+                max_row = row;
             }
-            column[row] = power;
         }
+        std::swap(aug[col], aug[max_row]);
 
-        for (std::size_t prev = 0; prev < col; ++prev) {
-            long double projection = 0.0L;
-            for (std::size_t row = 0; row < n; ++row) {
-                projection += q_columns[prev][row] * column[row];
-            }
-            r[prev][col] = projection;
-            for (std::size_t row = 0; row < n; ++row) {
-                column[row] -= projection * q_columns[prev][row];
-            }
-        }
-
-        long double norm_squared = 0.0L;
-        for (long double value : column) {
-            norm_squared += value * value;
-        }
-        const long double norm = mymath::sqrt(norm_squared);
-        if (norm <= 1e-18L) {
+        if (is_number_zero(aug[col][col])) {
             throw std::runtime_error("polynomial_fit design matrix is rank deficient");
         }
-        r[col][col] = norm;
-        for (std::size_t row = 0; row < n; ++row) {
-            q_columns[col][row] = column[row] / norm;
-        }
 
-        long double projected_rhs = 0.0L;
-        for (std::size_t row = 0; row < n; ++row) {
-            projected_rhs +=
-                q_columns[col][row] * static_cast<long double>(y_samples[row]);
+        // Eliminate
+        for (std::size_t row = col + 1; row < m; ++row) {
+            const Number factor = aug[row][col] / aug[col][col];
+            for (std::size_t j = col; j <= m; ++j) {
+                aug[row][j] = aug[row][j] - factor * aug[col][j];
+            }
         }
-        qty[col] = projected_rhs;
     }
 
-    std::vector<long double> scaled_coefficients(m, 0.0L);
-    for (std::size_t row = m; row-- > 0;) {
-        long double value = qty[row];
-        for (std::size_t col = row + 1; col < m; ++col) {
-            value -= r[row][col] * scaled_coefficients[col];
+    // Back substitution
+    for (std::size_t i = m; i-- > 0;) {
+        coefficients[i] = aug[i][m];
+        for (std::size_t j = i + 1; j < m; ++j) {
+            coefficients[i] = coefficients[i] - aug[i][j] * coefficients[j];
         }
-        scaled_coefficients[row] = value / r[row][row];
+        coefficients[i] = coefficients[i] / aug[i][i];
     }
 
-    std::vector<double> scaled_polynomial;
-    scaled_polynomial.reserve(m);
-    for (long double value : scaled_coefficients) {
-        scaled_polynomial.push_back(static_cast<double>(value));
-    }
-    const std::vector<double> linear_map = {
-        static_cast<double>(-center / scale),
-        static_cast<double>(1.0L / scale)};
-    std::vector<double> coefficients =
-        polynomial_compose(scaled_polynomial, linear_map);
     trim_trailing_zeros(&coefficients);
     return coefficients;
 }
 
-std::string polynomial_to_string(const std::vector<double>& coefficients,
+std::string polynomial_to_string(const std::vector<Number>& coefficients,
                                  const std::string& variable_name) {
-    // 这里负责把内部系数数组重新格式化成人可读的多项式字符串，
-    // 例如 [1, 0, -3] -> "-3 * x ^ 2 + 1"。
-    //
-    // 输出格式保持和项目里现有符号表达式风格一致，
-    // 方便 poly_*、roots 等命令直接复用。
-    std::vector<double> normalized = coefficients;
+    std::vector<Number> normalized = coefficients;
     trim_trailing_zeros(&normalized);
-    if (normalized.size() == 1 && mymath::is_near_zero(normalized[0], kPolynomialEps)) {
+    if (normalized.size() == 1 && is_number_zero(normalized[0])) {
         return "0";
     }
 
@@ -486,19 +442,19 @@ std::string polynomial_to_string(const std::vector<double>& coefficients,
     bool first = true;
     for (std::size_t index = normalized.size(); index > 0; --index) {
         const std::size_t degree = index - 1;
-        const double coefficient = normalized[degree];
-        if (mymath::is_near_zero(coefficient, kPolynomialEps)) {
+        const Number coefficient = normalized[degree];
+        if (is_number_zero(coefficient)) {
             continue;
         }
 
-        const bool negative = coefficient < 0.0;
-        const double abs_value = negative ? -coefficient : coefficient;
+        const bool negative = coefficient.compare(Number(0)) < 0;
+        const Number abs_value = number_abs(coefficient);
 
         std::string term;
         if (degree == 0) {
             term = format_coefficient(abs_value);
         } else {
-            if (!mymath::is_near_zero(abs_value - 1.0, kPolynomialEps)) {
+            if (!is_number_one(abs_value)) {
                 term += format_coefficient(abs_value) + " * ";
             }
             term += variable_name;
@@ -516,4 +472,98 @@ std::string polynomial_to_string(const std::vector<double>& coefficients,
     }
 
     return result.empty() ? "0" : result;
+}
+
+// ============================================================================
+// 兼容性接口：double 版本
+// ============================================================================
+
+namespace {
+
+std::vector<Number> doubles_to_numbers(const std::vector<double>& values) {
+    std::vector<Number> result;
+    result.reserve(values.size());
+    for (double v : values) {
+        result.push_back(Number(BigDecimal::from_string(std::to_string(v))));
+    }
+    return result;
+}
+
+std::vector<double> numbers_to_doubles(const std::vector<Number>& values) {
+    std::vector<double> result;
+    result.reserve(values.size());
+    for (const Number& v : values) {
+        result.push_back(static_cast<double>(std::stod(v.to_string())));
+    }
+    return result;
+}
+
+}  // namespace
+
+std::vector<double> polynomial_add_double(const std::vector<double>& lhs,
+                                          const std::vector<double>& rhs) {
+    return numbers_to_doubles(polynomial_add(doubles_to_numbers(lhs), doubles_to_numbers(rhs)));
+}
+
+std::vector<double> polynomial_subtract_double(const std::vector<double>& lhs,
+                                               const std::vector<double>& rhs) {
+    return numbers_to_doubles(polynomial_subtract(doubles_to_numbers(lhs), doubles_to_numbers(rhs)));
+}
+
+std::vector<double> polynomial_multiply_double(const std::vector<double>& lhs,
+                                               const std::vector<double>& rhs) {
+    return numbers_to_doubles(polynomial_multiply(doubles_to_numbers(lhs), doubles_to_numbers(rhs)));
+}
+
+double polynomial_evaluate_double(const std::vector<double>& coefficients, double x) {
+    Number result = polynomial_evaluate(doubles_to_numbers(coefficients),
+                                        Number(BigDecimal::from_string(std::to_string(x))));
+    return static_cast<double>(std::stod(result.to_string()));
+}
+
+std::vector<double> polynomial_derivative_double(const std::vector<double>& coefficients) {
+    return numbers_to_doubles(polynomial_derivative(doubles_to_numbers(coefficients)));
+}
+
+std::vector<double> polynomial_real_roots_double(const std::vector<double>& coefficients) {
+    return numbers_to_doubles(polynomial_real_roots(doubles_to_numbers(coefficients)));
+}
+
+PolynomialDivisionResultDouble polynomial_divide_double(const std::vector<double>& dividend,
+                                                        const std::vector<double>& divisor) {
+    PolynomialDivisionResult result = polynomial_divide(doubles_to_numbers(dividend),
+                                                        doubles_to_numbers(divisor));
+    PolynomialDivisionResultDouble double_result;
+    double_result.quotient = numbers_to_doubles(result.quotient);
+    double_result.remainder = numbers_to_doubles(result.remainder);
+    return double_result;
+}
+
+std::string polynomial_to_string_double(const std::vector<double>& coefficients,
+                                        const std::string& variable_name) {
+    return polynomial_to_string(doubles_to_numbers(coefficients), variable_name);
+}
+
+std::vector<double> polynomial_integral_double(const std::vector<double>& coefficients) {
+    return numbers_to_doubles(polynomial_integral(doubles_to_numbers(coefficients)));
+}
+
+std::vector<double> polynomial_fit_double(const std::vector<double>& x_samples,
+                                          const std::vector<double>& y_samples,
+                                          int degree) {
+    return numbers_to_doubles(polynomial_fit(doubles_to_numbers(x_samples),
+                                             doubles_to_numbers(y_samples),
+                                             degree));
+}
+
+std::vector<double> polynomial_compose_double(const std::vector<double>& outer,
+                                              const std::vector<double>& inner) {
+    return numbers_to_doubles(polynomial_compose(doubles_to_numbers(outer),
+                                                 doubles_to_numbers(inner)));
+}
+
+std::vector<double> polynomial_gcd_double(const std::vector<double>& lhs,
+                                          const std::vector<double>& rhs) {
+    return numbers_to_doubles(polynomial_gcd(doubles_to_numbers(lhs),
+                                             doubles_to_numbers(rhs)));
 }

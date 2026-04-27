@@ -8,6 +8,22 @@ helpers, interactive terminal UX, and project documentation.
 
 ## Latest Numerical Work
 
+- Completed the staged 2.0 migration through documentation/release scope:
+  - `:v2` exact/high-precision arithmetic over `BigInt`, `Rational`,
+    `BigDecimal`, `Complex`, and `Number`
+  - 2.0 matrix values for exact determinant, inverse, rref, complex matrix
+    arithmetic, and selected symbolic matrix workflows
+  - `STATE_V5` persistence for 2.0 precision and variables
+  - `roots_complex(...)` / `complex_roots(...)` for polynomial complex roots
+- Added expression node interning, bounded CAS simplification memoization, and a
+  `make benchmark` target for repeatable performance checks
+- Optimized 2.0 rational arithmetic with gcd-based denominator sharing and
+  cross-cancellation to reduce intermediate BigInt growth
+- Added default 2.0 routing for migrated forms so complex literals, large
+  integer arithmetic, nested 2.0 matrix literals, and 2.0 CAS commands no
+  longer require an explicit `:v2` prefix
+- Added `CAS_GUIDE.md`, `PRECISION_GUIDE.md`, `COMPLEX_GUIDE.md`, and
+  `MIGRATION_1_TO_2.md`
 - Replaced one-variable definite integration with an adaptive Gauss-Kronrod
   G7-K15 path, including endpoint-singularity transforms for cases such as
   `integral(1 / sqrt(x), 0, 1)`
@@ -145,6 +161,8 @@ helpers, interactive terminal UX, and project documentation.
 
 - `make test` currently passes
 - Expected test summary:
-  - `Passed: 743, Failed: 0`
+  - `Passed: 808, Failed: 0`
+- `make script-test` currently passes with 40 CLI symbolic validations
+- `make benchmark` builds and runs the local performance smoke benchmark
 - Added comprehensive symbolic-computing coverage for calculus, limits,
   matrices, and equation solving, plus a current `TEST_REPORT.md`

@@ -1,5 +1,6 @@
 #include "calculator_internal_types.h"
 
+#include "conversion.h"
 #include "mymath.h"
 #include "script_parser.h"
 
@@ -401,7 +402,7 @@ StoredValue evaluate_expression_value(Calculator* calculator,
             stored.is_matrix = true;
             stored.matrix = matrix_value.matrix;
         } else {
-            stored.decimal = matrix_value.scalar;
+            stored.decimal = numeric::to_double(matrix_value.scalar);
             stored.exact = false;
         }
         return stored;

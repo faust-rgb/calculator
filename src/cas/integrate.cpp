@@ -210,14 +210,13 @@ std::optional<Expr> integrate_polynomial_times_known_function(
     const std::string& variable_name) {
     std::vector<Expr> factors;
     append_mul_factors(expr, &factors);
-    numeric::PrecisionContext context;
     numeric::Number coefficient(1);
     std::optional<int> power_value;
     std::optional<std::string> function_name;
 
     for (const Expr& factor : factors) {
         if (factor.kind() == ExprKind::Number) {
-            coefficient = numeric::multiply(coefficient, factor.number_value(), context);
+            coefficient = numeric::multiply(coefficient, factor.number_value());
             continue;
         }
         if (const std::optional<int> n = monomial_power(factor, variable_name)) {

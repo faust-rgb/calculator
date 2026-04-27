@@ -116,14 +116,13 @@ expression::Expr fold_power(const expression::Expr& base,
     if (!integer_exponent(exponent.number_value(), &exp)) {
         return expression::Expr::pow(base, exponent);
     }
-    numeric::PrecisionContext context;
     numeric::Number result(1);
     const int count = exp < 0 ? -exp : exp;
     for (int i = 0; i < count; ++i) {
-        result = numeric::multiply(result, base.number_value(), context);
+        result = numeric::multiply(result, base.number_value());
     }
     if (exp < 0) {
-        result = numeric::divide(numeric::Number(1), result, context);
+        result = numeric::divide(numeric::Number(1), result);
     }
     return expression::Expr::number(result);
 }
@@ -175,7 +174,6 @@ expression::Expr build_mul(std::vector<expression::Expr> factors) {
 }
 
 expression::Expr canonicalize_mul(const std::vector<expression::Expr>& raw_factors) {
-    numeric::PrecisionContext context;
     numeric::Number coefficient(1);
     std::map<std::string, std::pair<expression::Expr, numeric::Number>> powers;
 
@@ -184,7 +182,7 @@ expression::Expr canonicalize_mul(const std::vector<expression::Expr>& raw_facto
         append_mul_factors(factor, &nested);
         for (const expression::Expr& nested_factor : nested) {
             if (nested_factor.kind() == expression::ExprKind::Number) {
-                coefficient = numeric::multiply(coefficient, nested_factor.number_value(), context);
+                coefficient = numeric::multiply(coefficient, nested_factor.number_value());
                 continue;
             }
             expression::Expr base;
@@ -201,8 +199,7 @@ expression::Expr canonicalize_mul(const std::vector<expression::Expr>& raw_facto
                 powers.emplace(key, std::make_pair(base, exponent.number_value()));
             } else {
                 it->second.second = numeric::add(it->second.second,
-                                                 exponent.number_value(),
-                                                 context);
+                                                 exponent.number_value());
             }
         }
     }
@@ -236,14 +233,13 @@ struct AddTerm {
 };
 
 AddTerm split_add_term(const expression::Expr& term) {
-    numeric::PrecisionContext context;
     std::vector<expression::Expr> factors;
     append_mul_factors(term, &factors);
     numeric::Number coefficient(1);
     std::vector<expression::Expr> symbolic_factors;
     for (const expression::Expr& factor : factors) {
         if (factor.kind() == expression::ExprKind::Number) {
-            coefficient = numeric::multiply(coefficient, factor.number_value(), context);
+            coefficient = numeric::multiply(coefficient, factor.number_value());
         } else {
             symbolic_factors.push_back(factor);
         }
@@ -252,7 +248,6 @@ AddTerm split_add_term(const expression::Expr& term) {
 }
 
 expression::Expr canonicalize_add(const std::vector<expression::Expr>& raw_terms) {
-    numeric::PrecisionContext context;
     numeric::Number constant(0);
     std::map<std::string, AddTerm> terms;
 
@@ -261,12 +256,12 @@ expression::Expr canonicalize_add(const std::vector<expression::Expr>& raw_terms
         append_add_terms(term, &nested);
         for (const expression::Expr& nested_term : nested) {
             if (nested_term.kind() == expression::ExprKind::Number) {
-                constant = numeric::add(constant, nested_term.number_value(), context);
+                constant = numeric::add(constant, nested_term.number_value());
                 continue;
             }
             const AddTerm split = split_add_term(nested_term);
             if (split.base.kind() == expression::ExprKind::Number && is_one(split.base)) {
-                constant = numeric::add(constant, split.coefficient, context);
+                constant = numeric::add(constant, split.coefficient);
                 continue;
             }
             const std::string key = expression::print(split.base);
@@ -275,8 +270,7 @@ expression::Expr canonicalize_add(const std::vector<expression::Expr>& raw_terms
                 terms.emplace(key, split);
             } else {
                 it->second.coefficient = numeric::add(it->second.coefficient,
-                                                      split.coefficient,
-                                                      context);
+                                                      split.coefficient);
             }
         }
     }
@@ -339,11 +333,9 @@ expression::Expr simplify(const expression::Expr& expr) {
                 base.children().size() == 2 &&
                 base.children()[1].kind() == expression::ExprKind::Number &&
                 exponent.kind() == expression::ExprKind::Number) {
-                numeric::PrecisionContext context;
                 return simplify(expression::Expr::pow(base.children()[0],
                     expression::Expr::number(numeric::multiply(base.children()[1].number_value(),
-                                                               exponent.number_value(),
-                                                               context))));
+                                                               exponent.number_value()))));
             }
             return fold_power(base, exponent);
         }

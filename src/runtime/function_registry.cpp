@@ -113,20 +113,20 @@ numeric::Number sign_value(const std::vector<numeric::Number>& args,
 }
 
 numeric::Number step_value(const std::vector<numeric::Number>& args,
-                           const numeric::PrecisionContext& context) {
-    return numeric::Number(args[0].compare(numeric::Number(0), context) >= 0 ? 1 : 0);
+                           const numeric::PrecisionContext&) {
+    return numeric::Number(args[0].compare(numeric::Number(0)) >= 0 ? 1 : 0);
 }
 
 numeric::Number delta_value(const std::vector<numeric::Number>& args,
-                            const numeric::PrecisionContext& context) {
-    return numeric::Number(args[0].compare(numeric::Number(0), context) == 0 ? 1 : 0);
+                            const numeric::PrecisionContext&) {
+    return numeric::Number(args[0].compare(numeric::Number(0)) == 0 ? 1 : 0);
 }
 
 numeric::Number min_value(const std::vector<numeric::Number>& args,
-                          const numeric::PrecisionContext& context) {
+                          const numeric::PrecisionContext&) {
     numeric::Number result = args[0];
     for (std::size_t i = 1; i < args.size(); ++i) {
-        if (args[i].compare(result, context) < 0) {
+        if (args[i].compare(result) < 0) {
             result = args[i];
         }
     }
@@ -134,10 +134,10 @@ numeric::Number min_value(const std::vector<numeric::Number>& args,
 }
 
 numeric::Number max_value(const std::vector<numeric::Number>& args,
-                          const numeric::PrecisionContext& context) {
+                          const numeric::PrecisionContext&) {
     numeric::Number result = args[0];
     for (std::size_t i = 1; i < args.size(); ++i) {
-        if (args[i].compare(result, context) > 0) {
+        if (args[i].compare(result) > 0) {
             result = args[i];
         }
     }
@@ -145,37 +145,36 @@ numeric::Number max_value(const std::vector<numeric::Number>& args,
 }
 
 numeric::Number clamp_value(const std::vector<numeric::Number>& args,
-                            const numeric::PrecisionContext& context) {
+                            const numeric::PrecisionContext&) {
     numeric::Number lo = args[1];
     numeric::Number hi = args[2];
-    if (lo.compare(hi, context) > 0) {
+    if (lo.compare(hi) > 0) {
         const numeric::Number tmp = lo;
         lo = hi;
         hi = tmp;
     }
-    if (args[0].compare(lo, context) < 0) {
+    if (args[0].compare(lo) < 0) {
         return lo;
     }
-    if (args[0].compare(hi, context) > 0) {
+    if (args[0].compare(hi) > 0) {
         return hi;
     }
     return args[0];
 }
 
 numeric::Number sum_value(const std::vector<numeric::Number>& args,
-                          const numeric::PrecisionContext& context) {
+                          const numeric::PrecisionContext&) {
     numeric::Number result(0);
     for (const numeric::Number& arg : args) {
-        result = numeric::add(result, arg, context);
+        result = numeric::add(result, arg);
     }
     return result;
 }
 
 numeric::Number mean_value(const std::vector<numeric::Number>& args,
-                           const numeric::PrecisionContext& context) {
-    return numeric::divide(sum_value(args, context),
-                           numeric::Number(static_cast<long long>(args.size())),
-                           context);
+                           const numeric::PrecisionContext&) {
+    return numeric::divide(sum_value(args, {}),
+                           numeric::Number(static_cast<long long>(args.size())));
 }
 
 numeric::BigInt floor_rational(const numeric::Rational& value) {
@@ -241,44 +240,43 @@ numeric::Number trunc_value(const std::vector<numeric::Number>& args,
 }
 
 numeric::Number median_value(std::vector<numeric::Number> args,
-                             const numeric::PrecisionContext& context) {
-    std::sort(args.begin(), args.end(), [&context](const numeric::Number& lhs,
-                                                   const numeric::Number& rhs) {
-        return lhs.compare(rhs, context) < 0;
+                             const numeric::PrecisionContext&) {
+    std::sort(args.begin(), args.end(), [](const numeric::Number& lhs,
+                                            const numeric::Number& rhs) {
+        return lhs.compare(rhs) < 0;
     });
     const std::size_t mid = args.size() / 2;
     if (args.size() % 2 == 1) {
         return args[mid];
     }
-    return numeric::divide(numeric::add(args[mid - 1], args[mid], context),
-                           numeric::Number(2),
-                           context);
+    return numeric::divide(numeric::add(args[mid - 1], args[mid]),
+                           numeric::Number(2));
 }
 
 numeric::Number variance_value(const std::vector<numeric::Number>& args,
-                               const numeric::PrecisionContext& context) {
-    const numeric::Number mean = mean_value(args, context);
+                               const numeric::PrecisionContext&) {
+    const numeric::Number mean = mean_value(args, {});
     numeric::Number total(0);
     for (const numeric::Number& arg : args) {
-        const numeric::Number delta = numeric::subtract(arg, mean, context);
-        total = numeric::add(total, numeric::multiply(delta, delta, context), context);
+        const numeric::Number delta = numeric::subtract(arg, mean);
+        total = numeric::add(total, numeric::multiply(delta, delta));
     }
-    return numeric::divide(total, numeric::Number(static_cast<long long>(args.size())), context);
+    return numeric::divide(total, numeric::Number(static_cast<long long>(args.size())));
 }
 
 numeric::Number mode_value(const std::vector<numeric::Number>& args,
-                           const numeric::PrecisionContext& context) {
+                           const numeric::PrecisionContext&) {
     numeric::Number best = args[0];
     std::size_t best_count = 0;
     for (const numeric::Number& candidate : args) {
         std::size_t count = 0;
         for (const numeric::Number& arg : args) {
-            if (arg.compare(candidate, context) == 0) {
+            if (arg.compare(candidate) == 0) {
                 ++count;
             }
         }
         if (count > best_count ||
-            (count == best_count && candidate.compare(best, context) < 0)) {
+            (count == best_count && candidate.compare(best) < 0)) {
             best = candidate;
             best_count = count;
         }
@@ -454,37 +452,32 @@ numeric::Number permutation_value(const std::vector<numeric::Number>& args,
 numeric::Number temperature_affine(const numeric::Number& value,
                                    long long numerator,
                                    long long denominator,
-                                   long long offset,
-                                   const numeric::PrecisionContext& context) {
-    return numeric::add(numeric::divide(numeric::multiply(value, numeric::Number(numerator), context),
-                                        numeric::Number(denominator),
-                                        context),
-                        numeric::Number(offset),
-                        context);
+                                   long long offset) {
+    return numeric::add(numeric::divide(numeric::multiply(value, numeric::Number(numerator)),
+                                        numeric::Number(denominator)),
+                        numeric::Number(offset));
 }
 
 numeric::Number celsius_value(const std::vector<numeric::Number>& args,
-                              const numeric::PrecisionContext& context) {
-    return temperature_affine(numeric::subtract(args[0], numeric::Number(32), context),
+                              const numeric::PrecisionContext&) {
+    return temperature_affine(numeric::subtract(args[0], numeric::Number(32)),
                               5,
                               9,
-                              0,
-                              context);
+                              0);
 }
 
 numeric::Number fahrenheit_value(const std::vector<numeric::Number>& args,
-                                 const numeric::PrecisionContext& context) {
-    return temperature_affine(args[0], 9, 5, 32, context);
+                                 const numeric::PrecisionContext&) {
+    return temperature_affine(args[0], 9, 5, 32);
 }
 
 numeric::Number kelvin_value(const std::vector<numeric::Number>& args,
-                             const numeric::PrecisionContext& context) {
-    return numeric::add(args[0], numeric::Number(numeric::Rational(5463, 20)), context);
+                             const numeric::PrecisionContext&) {
+    return numeric::add(args[0], numeric::Number(numeric::Rational(5463, 20)));
 }
 
 numeric::Number pow_integer(const numeric::Number& base,
-                            const numeric::Number& exponent,
-                            const numeric::PrecisionContext& context) {
+                            const numeric::Number& exponent) {
     if (!exponent.is_integer()) {
         throw std::runtime_error("pow currently requires an integer exponent");
     }
@@ -509,10 +502,10 @@ numeric::Number pow_integer(const numeric::Number& base,
     numeric::Number result(1);
     const int count = exp < 0 ? -exp : exp;
     for (int i = 0; i < count; ++i) {
-        result = numeric::multiply(result, base, context);
+        result = numeric::multiply(result, base);
     }
     if (exp < 0) {
-        result = numeric::divide(numeric::Number(1), result, context);
+        result = numeric::divide(numeric::Number(1), result);
     }
     return result;
 }
@@ -614,27 +607,27 @@ numeric::Number inverse_zero_exact(const std::vector<numeric::Number>& args,
 }
 
 numeric::Number real_part(const std::vector<numeric::Number>& args,
-                          const numeric::PrecisionContext& context) {
+                          const numeric::PrecisionContext&) {
     if (!args[0].is_complex()) {
         return args[0];
     }
-    return numeric::Number(args[0].to_complex(context).real());
+    return numeric::Number(args[0].to_complex().real());
 }
 
 numeric::Number imag_part(const std::vector<numeric::Number>& args,
-                          const numeric::PrecisionContext& context) {
+                          const numeric::PrecisionContext&) {
     if (!args[0].is_complex()) {
         return numeric::Number(0);
     }
-    return numeric::Number(args[0].to_complex(context).imag());
+    return numeric::Number(args[0].to_complex().imag());
 }
 
 numeric::Number conjugate(const std::vector<numeric::Number>& args,
-                          const numeric::PrecisionContext& context) {
+                          const numeric::PrecisionContext&) {
     if (!args[0].is_complex()) {
         return args[0];
     }
-    return numeric::Number(numeric::conj(args[0].to_complex(context)));
+    return numeric::Number(numeric::conj(args[0].to_complex()));
 }
 
 FunctionRegistry make_builtins() {
@@ -695,8 +688,8 @@ FunctionRegistry make_builtins() {
         2,
         2,
         [](const std::vector<numeric::Number>& args,
-           const numeric::PrecisionContext& context) {
-            return pow_integer(args[0], args[1], context);
+           const numeric::PrecisionContext&) {
+            return pow_integer(args[0], args[1]);
         },
     });
     registry.register_function({"real", {}, "complex", "Real part", {"real(z)"}, "", "", 1, 1, real_part});

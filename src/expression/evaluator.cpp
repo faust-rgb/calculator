@@ -80,29 +80,28 @@ std::size_t size_from_number(const numeric::Number& number, const std::string& c
     return value;
 }
 
-Expr add_expr(const Expr& lhs, const Expr& rhs, const numeric::PrecisionContext& context) {
+Expr add_expr(const Expr& lhs, const Expr& rhs) {
     if (expr_is_number(lhs) && expr_is_number(rhs)) {
-        return Expr::number(numeric::add(lhs.number_value(), rhs.number_value(), context));
+        return Expr::number(numeric::add(lhs.number_value(), rhs.number_value()));
     }
     return cas::simplify(Expr::add(lhs, rhs));
 }
 
-Expr negate_expr(const Expr& expr, const numeric::PrecisionContext& context) {
+Expr negate_expr(const Expr& expr) {
     return add_expr(Expr::number(numeric::Number(0)),
-                    Expr::mul(Expr::number(numeric::Number(-1)), expr),
-                    context);
+                    Expr::mul(Expr::number(numeric::Number(-1)), expr));
 }
 
-Expr subtract_expr(const Expr& lhs, const Expr& rhs, const numeric::PrecisionContext& context) {
+Expr subtract_expr(const Expr& lhs, const Expr& rhs) {
     if (expr_is_number(lhs) && expr_is_number(rhs)) {
-        return Expr::number(numeric::subtract(lhs.number_value(), rhs.number_value(), context));
+        return Expr::number(numeric::subtract(lhs.number_value(), rhs.number_value()));
     }
-    return add_expr(lhs, Expr::mul(Expr::number(numeric::Number(-1)), rhs), context);
+    return add_expr(lhs, Expr::mul(Expr::number(numeric::Number(-1)), rhs));
 }
 
-Expr multiply_expr(const Expr& lhs, const Expr& rhs, const numeric::PrecisionContext& context) {
+Expr multiply_expr(const Expr& lhs, const Expr& rhs) {
     if (expr_is_number(lhs) && expr_is_number(rhs)) {
-        return Expr::number(numeric::multiply(lhs.number_value(), rhs.number_value(), context));
+        return Expr::number(numeric::multiply(lhs.number_value(), rhs.number_value()));
     }
     return cas::simplify(Expr::mul(lhs, rhs));
 }
@@ -125,23 +124,21 @@ runtime::MatrixValue matrix_from_values(const std::vector<runtime::Value>& args,
 }
 
 runtime::MatrixValue add_matrix(const runtime::MatrixValue& lhs,
-                                const runtime::MatrixValue& rhs,
-                                const numeric::PrecisionContext& context) {
+                                const runtime::MatrixValue& rhs) {
     if (lhs.rows() != rhs.rows() || lhs.cols() != rhs.cols()) {
         throw std::runtime_error("matrix dimensions must agree");
     }
     runtime::MatrixValue result(lhs.rows(), lhs.cols(), Expr::number(numeric::Number(0)));
     for (std::size_t row = 0; row < lhs.rows(); ++row) {
         for (std::size_t col = 0; col < lhs.cols(); ++col) {
-            result.at(row, col) = add_expr(lhs.at(row, col), rhs.at(row, col), context);
+            result.at(row, col) = add_expr(lhs.at(row, col), rhs.at(row, col));
         }
     }
     return result;
 }
 
 runtime::MatrixValue multiply_matrix(const runtime::MatrixValue& lhs,
-                                     const runtime::MatrixValue& rhs,
-                                     const numeric::PrecisionContext& context) {
+                                     const runtime::MatrixValue& rhs) {
     if (lhs.cols() != rhs.rows()) {
         throw std::runtime_error("matrix inner dimensions must agree");
     }
@@ -151,8 +148,7 @@ runtime::MatrixValue multiply_matrix(const runtime::MatrixValue& lhs,
             Expr total = Expr::number(numeric::Number(0));
             for (std::size_t k = 0; k < lhs.cols(); ++k) {
                 total = add_expr(total,
-                                 multiply_expr(lhs.at(row, k), rhs.at(k, col), context),
-                                 context);
+                                 multiply_expr(lhs.at(row, k), rhs.at(k, col)));
             }
             result.at(row, col) = total;
         }
@@ -161,19 +157,17 @@ runtime::MatrixValue multiply_matrix(const runtime::MatrixValue& lhs,
 }
 
 runtime::MatrixValue scale_matrix(const Expr& scalar,
-                                  const runtime::MatrixValue& matrix,
-                                  const numeric::PrecisionContext& context) {
+                                  const runtime::MatrixValue& matrix) {
     runtime::MatrixValue result(matrix.rows(), matrix.cols(), Expr::number(numeric::Number(0)));
     for (std::size_t row = 0; row < matrix.rows(); ++row) {
         for (std::size_t col = 0; col < matrix.cols(); ++col) {
-            result.at(row, col) = multiply_expr(scalar, matrix.at(row, col), context);
+            result.at(row, col) = multiply_expr(scalar, matrix.at(row, col));
         }
     }
     return result;
 }
 
-Expr determinant(const runtime::MatrixValue& matrix,
-                 const numeric::PrecisionContext& context) {
+Expr determinant(const runtime::MatrixValue& matrix) {
     if (matrix.rows() != matrix.cols()) {
         throw std::runtime_error("det expects a square matrix");
     }
@@ -184,9 +178,8 @@ Expr determinant(const runtime::MatrixValue& matrix,
         return matrix.at(0, 0);
     }
     if (matrix.rows() == 2) {
-        return subtract_expr(multiply_expr(matrix.at(0, 0), matrix.at(1, 1), context),
-                             multiply_expr(matrix.at(0, 1), matrix.at(1, 0), context),
-                             context);
+        return subtract_expr(multiply_expr(matrix.at(0, 0), matrix.at(1, 1)),
+                             multiply_expr(matrix.at(0, 1), matrix.at(1, 0)));
     }
     Expr total = Expr::number(numeric::Number(0));
     for (std::size_t col = 0; col < matrix.cols(); ++col) {
@@ -203,18 +196,16 @@ Expr determinant(const runtime::MatrixValue& matrix,
             minor_entries.push_back(minor_row);
         }
         Expr term = multiply_expr(matrix.at(0, col),
-                                  determinant(runtime::MatrixValue(minor_entries), context),
-                                  context);
+                                  determinant(runtime::MatrixValue(minor_entries)));
         if (col % 2 == 1) {
-            term = negate_expr(term, context);
+            term = negate_expr(term);
         }
-        total = add_expr(total, term, context);
+        total = add_expr(total, term);
     }
     return total;
 }
 
-runtime::MatrixValue inverse_matrix(const runtime::MatrixValue& matrix,
-                                    const numeric::PrecisionContext& context) {
+runtime::MatrixValue inverse_matrix(const runtime::MatrixValue& matrix) {
     if (matrix.rows() != matrix.cols()) {
         throw std::runtime_error("inverse expects a square matrix");
     }
@@ -243,7 +234,7 @@ runtime::MatrixValue inverse_matrix(const runtime::MatrixValue& matrix,
         }
         const numeric::Number pivot_value = augmented[col][col];
         for (std::size_t j = 0; j < 2 * n; ++j) {
-            augmented[col][j] = numeric::divide(augmented[col][j], pivot_value, context);
+            augmented[col][j] = numeric::divide(augmented[col][j], pivot_value);
         }
         for (std::size_t row = 0; row < n; ++row) {
             if (row == col || is_zero_number(augmented[row][col])) {
@@ -253,8 +244,7 @@ runtime::MatrixValue inverse_matrix(const runtime::MatrixValue& matrix,
             for (std::size_t j = 0; j < 2 * n; ++j) {
                 augmented[row][j] = numeric::subtract(
                     augmented[row][j],
-                    numeric::multiply(factor, augmented[col][j], context),
-                    context);
+                    numeric::multiply(factor, augmented[col][j]));
             }
         }
     }
@@ -267,8 +257,7 @@ runtime::MatrixValue inverse_matrix(const runtime::MatrixValue& matrix,
     return runtime::MatrixValue(entries);
 }
 
-runtime::MatrixValue rref_matrix(const runtime::MatrixValue& matrix,
-                                 const numeric::PrecisionContext& context) {
+runtime::MatrixValue rref_matrix(const runtime::MatrixValue& matrix) {
     std::vector<std::vector<Expr>> entries = matrix.entries();
     std::size_t lead = 0;
     for (std::size_t row = 0; row < matrix.rows() && lead < matrix.cols(); ++row) {
@@ -293,8 +282,7 @@ runtime::MatrixValue rref_matrix(const runtime::MatrixValue& matrix,
         const numeric::Number pivot_value = entries[row][lead].number_value();
         for (std::size_t col = 0; col < matrix.cols(); ++col) {
             entries[row][col] = Expr::number(numeric::divide(entries[row][col].number_value(),
-                                                             pivot_value,
-                                                             context));
+                                                             pivot_value));
         }
         for (std::size_t other = 0; other < matrix.rows(); ++other) {
             if (other == row) {
@@ -307,8 +295,7 @@ runtime::MatrixValue rref_matrix(const runtime::MatrixValue& matrix,
             for (std::size_t col = 0; col < matrix.cols(); ++col) {
                 entries[other][col] = Expr::number(numeric::subtract(
                     entries[other][col].number_value(),
-                    numeric::multiply(factor, entries[row][col].number_value(), context),
-                    context));
+                    numeric::multiply(factor, entries[row][col].number_value())));
             }
         }
         ++lead;
@@ -355,12 +342,10 @@ runtime::Value evaluate(const Expr& expr, runtime::Environment& env) {
             const runtime::Value lhs = evaluate(expr.children()[0], env);
             const runtime::Value rhs = evaluate(expr.children()[1], env);
             if (lhs.is_number() && rhs.is_number()) {
-                return runtime::Value(numeric::add(lhs.as_number(), rhs.as_number(),
-                                                   env.precision()));
+                return runtime::Value(numeric::add(lhs.as_number(), rhs.as_number()));
             }
             if (lhs.is_matrix() && rhs.is_matrix()) {
-                return runtime::Value(add_matrix(lhs.as_matrix(), rhs.as_matrix(),
-                                                 env.precision()));
+                return runtime::Value(add_matrix(lhs.as_matrix(), rhs.as_matrix()));
             }
             if (lhs.is_matrix() || rhs.is_matrix()) {
                 throw std::runtime_error("matrix addition requires two matrices");
@@ -374,30 +359,24 @@ runtime::Value evaluate(const Expr& expr, runtime::Environment& env) {
             const runtime::Value lhs = evaluate(expr.children()[0], env);
             const runtime::Value rhs = evaluate(expr.children()[1], env);
             if (lhs.is_number() && rhs.is_number()) {
-                return runtime::Value(numeric::multiply(lhs.as_number(), rhs.as_number(),
-                                                        env.precision()));
+                return runtime::Value(numeric::multiply(lhs.as_number(), rhs.as_number()));
             }
             if (lhs.is_matrix() && rhs.is_matrix()) {
-                return runtime::Value(multiply_matrix(lhs.as_matrix(), rhs.as_matrix(),
-                                                      env.precision()));
+                return runtime::Value(multiply_matrix(lhs.as_matrix(), rhs.as_matrix()));
             }
             if (lhs.is_number() && rhs.is_matrix()) {
                 return runtime::Value(scale_matrix(Expr::number(lhs.as_number()),
-                                                   rhs.as_matrix(),
-                                                   env.precision()));
+                                                   rhs.as_matrix()));
             }
             if (lhs.is_expr() && rhs.is_matrix()) {
-                return runtime::Value(scale_matrix(lhs.as_expr(), rhs.as_matrix(),
-                                                   env.precision()));
+                return runtime::Value(scale_matrix(lhs.as_expr(), rhs.as_matrix()));
             }
             if (lhs.is_matrix() && rhs.is_number()) {
                 return runtime::Value(scale_matrix(Expr::number(rhs.as_number()),
-                                                   lhs.as_matrix(),
-                                                   env.precision()));
+                                                   lhs.as_matrix()));
             }
             if (lhs.is_matrix() && rhs.is_expr()) {
-                return runtime::Value(scale_matrix(rhs.as_expr(), lhs.as_matrix(),
-                                                   env.precision()));
+                return runtime::Value(scale_matrix(rhs.as_expr(), lhs.as_matrix()));
             }
             if (lhs.is_matrix() || rhs.is_matrix()) {
                 throw std::runtime_error("unsupported matrix multiplication operands");
@@ -416,10 +395,10 @@ runtime::Value evaluate(const Expr& expr, runtime::Environment& env) {
                     numeric::Number result(1);
                     const int count = exp < 0 ? -exp : exp;
                     for (int i = 0; i < count; ++i) {
-                        result = numeric::multiply(result, base.as_number(), env.precision());
+                        result = numeric::multiply(result, base.as_number());
                     }
                     if (exp < 0) {
-                        result = numeric::divide(numeric::Number(1), result, env.precision());
+                        result = numeric::divide(numeric::Number(1), result);
                     }
                     return runtime::Value(result);
                 }
@@ -459,8 +438,7 @@ runtime::Value evaluate(const Expr& expr, runtime::Environment& env) {
                 if (evaluated_args.size() != 1 || !evaluated_args[0].is_matrix()) {
                     throw std::runtime_error("det expects exactly one matrix argument");
                 }
-                const Expr result = determinant(evaluated_args[0].as_matrix(),
-                                                env.precision());
+                const Expr result = determinant(evaluated_args[0].as_matrix());
                 if (result.kind() == ExprKind::Number) {
                     return runtime::Value(result.number_value());
                 }
@@ -470,15 +448,13 @@ runtime::Value evaluate(const Expr& expr, runtime::Environment& env) {
                 if (evaluated_args.size() != 1 || !evaluated_args[0].is_matrix()) {
                     throw std::runtime_error("inverse expects exactly one matrix argument");
                 }
-                return runtime::Value(inverse_matrix(evaluated_args[0].as_matrix(),
-                                                     env.precision()));
+                return runtime::Value(inverse_matrix(evaluated_args[0].as_matrix()));
             }
             if (expr.function_name() == "rref") {
                 if (evaluated_args.size() != 1 || !evaluated_args[0].is_matrix()) {
                     throw std::runtime_error("rref expects exactly one matrix argument");
                 }
-                return runtime::Value(rref_matrix(evaluated_args[0].as_matrix(),
-                                                  env.precision()));
+                return runtime::Value(rref_matrix(evaluated_args[0].as_matrix()));
             }
             if (expr.function_name() == "simplify") {
                 if (evaluated_args.size() != 1) {

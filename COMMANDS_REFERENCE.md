@@ -24,6 +24,27 @@
 - `:exact`
   Show current exact mode status
 
+## 2.0 Precision Runtime
+
+- `:v2 expression`
+  Force evaluation with the 2.0 exact/high-precision runtime
+- `:precision digits`
+  Set 2.0 decimal precision
+- `:v2precision digits`
+  Compatibility alias for `:precision`
+- `:v2vars`
+  List only 2.0 runtime variables
+- `:v2clear`
+  Clear only 2.0 runtime variables
+
+Notes:
+
+- ordinary `:vars`, `:clear name`, and `:clear` include both 1.0 and 2.0
+  variables
+- migrated 2.0 forms route to 2.0 without the prefix, including complex
+  literals using `i`, large integer arithmetic, nested matrix literals, and
+  2.0 CAS commands such as `simplify(...)`
+
 ## Symbolic Constants Mode
 
 - `:symbolic on`
@@ -79,8 +100,10 @@
 
 Notes:
 
-- current persistence supports scalar variables
-- matrix variables can be used in-session, but are not yet saved or restored
+- current persistence writes `STATE_V5`
+- state files preserve scalars, strings, matrices, custom functions, script
+  functions, 2.0 precision, and 2.0 variables
+- older `STATE_V1` through `STATE_V4` files remain loadable
 
 ## Scripting
 

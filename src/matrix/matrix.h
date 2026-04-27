@@ -1,6 +1,8 @@
 #ifndef MATRIX_H
 #define MATRIX_H
 
+#include "number.h"
+
 #include <cstddef>
 #include <functional>
 #include <string>
@@ -26,7 +28,7 @@ namespace matrix {
 struct Matrix {
     std::size_t rows = 0;        ///< 行数
     std::size_t cols = 0;        ///< 列数
-    std::vector<double> data;    ///< 行优先存储的矩阵元素
+    std::vector<numeric::Number> data;    ///< 行优先存储的矩阵元素
 
     /** @brief 默认构造函数，创建空矩阵 */
     Matrix() = default;
@@ -37,14 +39,15 @@ struct Matrix {
      * @param col_count 列数
      * @param fill_value 填充值，默认为 0
      */
-    Matrix(std::size_t row_count, std::size_t col_count, double fill_value = 0.0);
+    Matrix(std::size_t row_count, std::size_t col_count,
+           const numeric::Number& fill_value = numeric::Number(numeric::BigInt(0)));
 
     /**
      * @brief 从向量创建列向量
      * @param values 向量元素
      * @return 列向量矩阵 (n×1)
      */
-    static Matrix vector(const std::vector<double>& values);
+    static Matrix vector(const std::vector<numeric::Number>& values);
 
     /**
      * @brief 创建零矩阵
@@ -68,10 +71,10 @@ struct Matrix {
     bool is_square() const;
 
     /** @brief 获取元素引用，用于修改 */
-    double& at(std::size_t row, std::size_t col);
+    numeric::Number& at(std::size_t row, std::size_t col);
 
     /** @brief 获取元素值 */
-    double at(std::size_t row, std::size_t col) const;
+    const numeric::Number& at(std::size_t row, std::size_t col) const;
 
     /**
      * @brief 调整矩阵大小
@@ -81,13 +84,13 @@ struct Matrix {
      */
     void resize(std::size_t new_rows,
                 std::size_t new_cols,
-                double fill_value = 0.0);
+                const numeric::Number& fill_value = numeric::Number(numeric::BigInt(0)));
 
     /** @brief 追加一行 */
-    void append_row(const std::vector<double>& values);
+    void append_row(const std::vector<numeric::Number>& values);
 
     /** @brief 追加一列 */
-    void append_col(const std::vector<double>& values);
+    void append_col(const std::vector<numeric::Number>& values);
 
     /** @brief 转换为可读字符串 */
     std::string to_string() const;
@@ -102,18 +105,18 @@ struct Matrix {
  */
 struct Value {
     bool is_matrix = false;   ///< true 表示矩阵，false 表示标量
-    double scalar = 0.0;      ///< 标量值（当 is_matrix 为 false 时有效）
+    numeric::Number scalar;   ///< 标量值（当 is_matrix 为 false 时有效）
     Matrix matrix;            ///< 矩阵值（当 is_matrix 为 true 时有效）
 
     /** @brief 从标量创建 Value */
-    static Value from_scalar(double scalar_value);
+    static Value from_scalar(const numeric::Number& scalar_value);
 
     /** @brief 从矩阵创建 Value */
     static Value from_matrix(const Matrix& matrix_value);
 };
 
 /** @brief 标量求值函数类型，用于表达式解析 */
-using ScalarEvaluator = std::function<double(const std::string&)>;
+using ScalarEvaluator = std::function<numeric::Number(const std::string&)>;
 
 /** @brief 矩阵查找函数类型，用于变量解析 */
 using MatrixLookup = std::function<bool(const std::string&, Matrix*)>;
@@ -126,22 +129,22 @@ using MatrixLookup = std::function<bool(const std::string&, Matrix*)>;
 Matrix add(const Matrix& lhs, const Matrix& rhs);
 
 /** @brief 矩阵与标量加法 */
-Matrix add(const Matrix& lhs, double scalar);
+Matrix add(const Matrix& lhs, const numeric::Number& scalar);
 
 /** @brief 矩阵减法 */
 Matrix subtract(const Matrix& lhs, const Matrix& rhs);
 
 /** @brief 矩阵与标量减法 */
-Matrix subtract(const Matrix& lhs, double scalar);
+Matrix subtract(const Matrix& lhs, const numeric::Number& scalar);
 
 /** @brief 矩阵乘法 */
 Matrix multiply(const Matrix& lhs, const Matrix& rhs);
 
 /** @brief 矩阵与标量乘法 */
-Matrix multiply(const Matrix& lhs, double scalar);
+Matrix multiply(const Matrix& lhs, const numeric::Number& scalar);
 
 /** @brief 矩阵与标量除法 */
-Matrix divide(const Matrix& lhs, double scalar);
+Matrix divide(const Matrix& lhs, const numeric::Number& scalar);
 
 /** @brief 矩阵转置 */
 Matrix transpose(const Matrix& matrix);
@@ -153,7 +156,7 @@ Matrix inverse(const Matrix& matrix);
 Matrix pseudo_inverse(const Matrix& matrix);
 
 /** @brief 向量点积 */
-double dot(const Matrix& lhs, const Matrix& rhs);
+numeric::Number dot(const Matrix& lhs, const Matrix& rhs);
 
 /** @brief 向量外积 */
 Matrix outer(const Matrix& lhs, const Matrix& rhs);
@@ -202,7 +205,7 @@ Matrix solve(const Matrix& coefficients, const Matrix& rhs);
 Matrix power(Matrix base, long long exponent);
 
 /** @brief 2-范数条件数 */
-double condition_number(const Matrix& matrix);
+numeric::Number condition_number(const Matrix& matrix);
 
 /** @brief Cholesky 分解（返回下三角矩阵） */
 Matrix cholesky(const Matrix& matrix);
@@ -218,28 +221,28 @@ Matrix schur(const Matrix& matrix);
 // ============================================================================
 
 /** @brief 获取指定位置的元素 */
-double get(const Matrix& matrix, std::size_t row, std::size_t col);
+numeric::Number get(const Matrix& matrix, std::size_t row, std::size_t col);
 
 /** @brief 获取向量指定索引的元素 */
-double get(const Matrix& matrix, std::size_t index);
+numeric::Number get(const Matrix& matrix, std::size_t index);
 
 /** @brief 设置指定位置的元素 */
-Matrix set(Matrix matrix, std::size_t row, std::size_t col, double value);
+Matrix set(Matrix matrix, std::size_t row, std::size_t col, const numeric::Number& value);
 
 /** @brief 设置向量指定索引的元素 */
-Matrix set(Matrix matrix, std::size_t index, double value);
+Matrix set(Matrix matrix, std::size_t index, const numeric::Number& value);
 
 /** @brief 计算矩阵范数（Frobenius 范数） */
-double norm(const Matrix& matrix);
+numeric::Number norm(const Matrix& matrix);
 
 /** @brief 计算矩阵迹（对角线元素之和） */
-double trace(const Matrix& matrix);
+numeric::Number trace(const Matrix& matrix);
 
 /** @brief 计算矩阵行列式 */
-double determinant(const Matrix& matrix);
+numeric::Number determinant(const Matrix& matrix);
 
 /** @brief 计算矩阵秩 */
-double rank(const Matrix& matrix);
+numeric::Number rank(const Matrix& matrix);
 
 /** @brief 计算行最简形（RREF） */
 Matrix rref(Matrix matrix);

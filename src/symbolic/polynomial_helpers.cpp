@@ -1,6 +1,7 @@
 #include "symbolic_expression_internal.h"
 
-#include "mymath.h"
+#include "functions.h"
+#include "number.h"
 #include "polynomial.h"
 
 #include <algorithm>
@@ -10,6 +11,12 @@
 #include <vector>
 
 namespace symbolic_expression_internal {
+
+namespace {
+
+
+
+}  // namespace
 
 bool is_known_positive_expression(const SymbolicExpression& expression) {
     double numeric = 0.0;
@@ -44,7 +51,7 @@ bool is_linear_function_argument(const SymbolicExpression& argument,
                                  double* a) {
     double b = 0.0;
     return decompose_linear(argument, variable_name, a, &b) &&
-           !mymath::is_near_zero(*a, kFormatEps);
+           !numeric::is_near_zero(*a, kFormatEps);
 }
 
 bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
@@ -155,13 +162,13 @@ bool decompose_power_factor_expression(const SymbolicExpression& expression,
 }
 
 SymbolicExpression rebuild_power_difference(const SymbolicExpression& base, double exponent) {
-    if (mymath::is_near_zero(exponent, kFormatEps)) {
+    if (numeric::is_near_zero(exponent, kFormatEps)) {
         return SymbolicExpression::number(1.0);
     }
-    if (mymath::is_near_zero(exponent - 1.0, kFormatEps)) {
+    if (numeric::is_near_zero(exponent - 1.0, kFormatEps)) {
         return base;
     }
-    if (mymath::is_near_zero(exponent + 1.0, kFormatEps)) {
+    if (numeric::is_near_zero(exponent + 1.0, kFormatEps)) {
         return make_divide(SymbolicExpression::number(1.0), base).simplify();
     }
     if (exponent < 0.0) {
@@ -183,7 +190,7 @@ SymbolicExpression rebuild_power_expression(const SymbolicExpression& base,
 
 SymbolicExpression make_sorted_product(double numeric_factor,
                                       std::vector<SymbolicExpression> factors) {
-    if (mymath::is_near_zero(numeric_factor, kFormatEps)) {
+    if (numeric::is_near_zero(numeric_factor, kFormatEps)) {
         return SymbolicExpression::number(0.0);
     }
 
@@ -243,10 +250,10 @@ SymbolicExpression make_sorted_product(double numeric_factor,
     if (!has_combined) {
         return SymbolicExpression::number(numeric_factor);
     }
-    if (mymath::is_near_zero(numeric_factor - 1.0, kFormatEps)) {
+    if (numeric::is_near_zero(numeric_factor - 1.0, kFormatEps)) {
         return combined;
     }
-    if (mymath::is_near_zero(numeric_factor + 1.0, kFormatEps)) {
+    if (numeric::is_near_zero(numeric_factor + 1.0, kFormatEps)) {
         return make_negate(combined).simplify();
     }
     return make_multiply(SymbolicExpression::number(numeric_factor), combined);
@@ -261,7 +268,7 @@ bool try_canonical_factor_quotient(const SymbolicExpression& numerator,
     std::vector<SymbolicExpression> denominator_factors;
     collect_multiplicative_terms(numerator, &numerator_coefficient, &numerator_factors);
     collect_multiplicative_terms(denominator, &denominator_coefficient, &denominator_factors);
-    if (mymath::is_near_zero(denominator_coefficient, kFormatEps)) {
+    if (numeric::is_near_zero(denominator_coefficient, kFormatEps)) {
         return false;
     }
 
@@ -297,8 +304,8 @@ bool try_canonical_factor_quotient(const SymbolicExpression& numerator,
     // 对“符号式 / 纯数字”这类简单分数，保留除法结构给后续规则处理，
     // 这样输出更接近用户输入，例如 pi / 2、x ^ 3 / 3。
     if (denominator_factors.empty() &&
-        mymath::is_near_zero(numerator_coefficient - 1.0, kFormatEps) &&
-        !mymath::is_near_zero(denominator_coefficient - 1.0, kFormatEps)) {
+        numeric::is_near_zero(numerator_coefficient - 1.0, kFormatEps) &&
+        !numeric::is_near_zero(denominator_coefficient - 1.0, kFormatEps)) {
         return false;
     }
 
@@ -309,7 +316,7 @@ bool try_canonical_factor_quotient(const SymbolicExpression& numerator,
         const SymbolicExpression exponent = item.second.exponent.simplify();
         double numeric_exponent = 0.0;
         if (exponent.is_number(&numeric_exponent)) {
-            if (mymath::is_near_zero(numeric_exponent, kFormatEps)) {
+            if (numeric::is_near_zero(numeric_exponent, kFormatEps)) {
                 changed = true;
                 continue;
             }
@@ -339,17 +346,17 @@ bool try_canonical_factor_quotient(const SymbolicExpression& numerator,
     } else {
         *quotient = make_divide(numerator_expression, denominator_expression);
     }
-    return changed || !mymath::is_near_zero(denominator_coefficient - 1.0, kFormatEps);
+    return changed || !numeric::is_near_zero(denominator_coefficient - 1.0, kFormatEps);
 }
 
 double common_numeric_factor(double lhs, double rhs) {
-    const double lhs_abs = mymath::abs(lhs);
-    const double rhs_abs = mymath::abs(rhs);
-    if (mymath::is_near_zero(lhs_abs, kFormatEps) ||
-        mymath::is_near_zero(rhs_abs, kFormatEps)) {
+    const double lhs_abs = std::abs(lhs);
+    const double rhs_abs = std::abs(rhs);
+    if (numeric::is_near_zero(lhs_abs, kFormatEps) ||
+        numeric::is_near_zero(rhs_abs, kFormatEps)) {
         return 0.0;
     }
-    if (mymath::is_integer(lhs_abs, 1e-10) && mymath::is_integer(rhs_abs, 1e-10)) {
+    if (numeric::is_integer_value(lhs_abs, 1e-10) && numeric::is_integer_value(rhs_abs, 1e-10)) {
         long long a = static_cast<long long>(lhs_abs + 0.5);
         long long b = static_cast<long long>(rhs_abs + 0.5);
         while (b != 0) {
@@ -359,7 +366,7 @@ double common_numeric_factor(double lhs, double rhs) {
         }
         return static_cast<double>(a);
     }
-    if (mymath::is_near_zero(lhs_abs - rhs_abs, kFormatEps)) {
+    if (numeric::is_near_zero(lhs_abs - rhs_abs, kFormatEps)) {
         return lhs_abs;
     }
     return 1.0;
@@ -404,11 +411,11 @@ bool try_factor_common_terms(const SymbolicExpression& left,
 
     const double numeric_factor = common_numeric_factor(left_coefficient, right_coefficient);
     if (common_factors.empty() &&
-        mymath::is_near_zero(numeric_factor - 1.0, kFormatEps)) {
+        numeric::is_near_zero(numeric_factor - 1.0, kFormatEps)) {
         return false;
     }
 
-    if (mymath::is_near_zero(numeric_factor, kFormatEps)) {
+    if (numeric::is_near_zero(numeric_factor, kFormatEps)) {
         return false;
     }
 
@@ -440,7 +447,7 @@ bool is_squared_function(const SymbolicExpression& expression,
 
     double exponent = 0.0;
     if (!SymbolicExpression(expression.node_->right).is_number(&exponent) ||
-        !mymath::is_near_zero(exponent - 2.0, kFormatEps)) {
+        !numeric::is_near_zero(exponent - 2.0, kFormatEps)) {
         return false;
     }
 
@@ -626,7 +633,7 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
             }
             double divisor = 0.0;
             if (!SymbolicExpression(node->right).is_number(&divisor) ||
-                mymath::is_near_zero(divisor, kFormatEps)) {
+                numeric::is_near_zero(divisor, kFormatEps)) {
                 return finish(false);
             }
             for (double& value : left) {
@@ -639,7 +646,7 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
         case NodeType::kPower: {
             double exponent = 0.0;
             if (!SymbolicExpression(node->right).is_number(&exponent) ||
-                !mymath::is_integer(exponent, 1e-10) || exponent < 0.0) {
+                !numeric::is_integer_value(exponent, 1e-10) || exponent < 0.0) {
                 return finish(false);
             }
             if (!polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
@@ -665,7 +672,7 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
 
 bool polynomial_is_zero_remainder(const std::vector<double>& coefficients) {
     for (double coefficient : coefficients) {
-        if (!mymath::is_near_zero(coefficient, kFormatEps)) {
+        if (!numeric::is_near_zero(coefficient, kFormatEps)) {
             return false;
         }
     }
@@ -691,7 +698,7 @@ bool try_reduce_polynomial_quotient(const SymbolicExpression& left,
         return false;
     }
 
-    const PolynomialDivisionResult division = polynomial_divide(numerator, denominator);
+    const PolynomialDivisionResultDouble division = polynomial_divide_double(numerator, denominator);
     if (!polynomial_is_zero_remainder(division.remainder)) {
         return false;
     }
@@ -721,16 +728,16 @@ bool try_reduce_polynomial_gcd_quotient(const SymbolicExpression& left,
         return false;
     }
 
-    std::vector<double> gcd = polynomial_gcd(numerator, denominator);
+    std::vector<double> gcd = polynomial_gcd_double(numerator, denominator);
     trim_polynomial_coefficients(&gcd);
     if (gcd.size() <= 1) {
         return false;
     }
 
-    const PolynomialDivisionResult numerator_division =
-        polynomial_divide(numerator, gcd);
-    const PolynomialDivisionResult denominator_division =
-        polynomial_divide(denominator, gcd);
+    const PolynomialDivisionResultDouble numerator_division =
+        polynomial_divide_double(numerator, gcd);
+    const PolynomialDivisionResultDouble denominator_division =
+        polynomial_divide_double(denominator, gcd);
     if (!polynomial_is_zero_remainder(numerator_division.remainder) ||
         !polynomial_is_zero_remainder(denominator_division.remainder)) {
         return false;
@@ -774,7 +781,7 @@ SymbolicExpression maybe_canonicalize_polynomial(const SymbolicExpression& expre
         return expression;
     }
 
-    const std::string canonical = polynomial_to_string(coefficients, variable_name);
+    const std::string canonical = polynomial_to_string_double(coefficients, variable_name);
     if (canonical == to_string_impl(expression.node_, 0)) {
         return expression;
     }

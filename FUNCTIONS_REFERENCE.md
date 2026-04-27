@@ -9,6 +9,12 @@
 - `a ^ b`
 - `pow(a, b)`
 
+2.0 note:
+
+- `:v2` arithmetic uses `BigInt`, `Rational`, `BigDecimal`, and `Complex`
+  instead of routing ordinary arithmetic through `double`
+- decimal division precision is controlled with `:precision digits`
+
 ## Exponential And Logarithmic
 
 - `exp(x)`
@@ -38,11 +44,17 @@
 - `sqrt(x)`
 - `cbrt(x)`
 - `root(value, degree)`
+- `roots(name)`
+- `roots_complex(name)`
+- `complex_roots(name)`
 
 Notes:
 
 - `root(value, degree)` requires an integer degree
 - negative values are allowed only for odd roots
+- `roots(name)` returns real polynomial roots
+- `roots_complex(name)` / `complex_roots(name)` return all polynomial roots,
+  including complex roots
 
 ## Trigonometric
 
@@ -158,6 +170,12 @@ Notes:
 - matrix addition and subtraction require the same shape
 - matrix multiplication requires `lhs.cols == rhs.rows`
 - matrix powers require a square matrix and an integer exponent
+
+2.0 note:
+
+- `:v2 [[...], [...]]`, `:v2 det(...)`, `:v2 inverse(...)`, and `:v2 rref(...)`
+  support exact rational and complex entries without using the legacy double
+  matrix backend
 - negative integer powers are supported for invertible matrices
 - division by a matrix is not supported
 

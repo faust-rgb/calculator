@@ -16,8 +16,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <functional>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
@@ -66,7 +68,7 @@ long double to_long_double(double value) {
 }
 
 double scale_aware_step(double x) {
-    const double scale = std::max(1.0, mymath::abs(x));
+    const double scale = std::max(1.0, std::abs(x));
     return kDerivativeBaseStep * scale;
 }
 
@@ -79,11 +81,11 @@ double relative_tolerance(double baseline, double scale) {
 }
 
 double limit_step_scale(double x) {
-    return kLimitInitialStep * std::max(1.0, mymath::abs(x));
+    return kLimitInitialStep * std::max(1.0, std::abs(x));
 }
 
 bool same_extremum_x(double lhs, double rhs) {
-    return mymath::abs(lhs - rhs) <= 1e-5;
+    return std::abs(lhs - rhs) <= 1e-5;
 }
 
 double gauss_kronrod_15_callable(const std::function<double(double)>& function,
@@ -129,7 +131,7 @@ double gauss_kronrod_15_callable(const std::function<double(double)>& function,
     long double gauss_sum = 0.0L;
 
     for (int i = 0; i < 8; ++i) {
-        if (mymath::is_near_zero(kNodes[i], 0.0)) {
+        if (std::abs(kNodes[i]) <= 0.0) {
             const long double value =
                 to_long_double(function(static_cast<double>(center)));
             kronrod_sum += static_cast<long double>(kKronrodWeights[i]) * value;
@@ -149,7 +151,7 @@ double gauss_kronrod_15_callable(const std::function<double(double)>& function,
 
     const long double kronrod = half_width * kronrod_sum;
     const long double gauss = half_width * gauss_sum;
-    *error_estimate = static_cast<double>(mymath::abs_long_double(kronrod - gauss));
+    *error_estimate = static_cast<double>(std::abs(kronrod - gauss));
     return static_cast<double>(kronrod);
 }
 
@@ -161,7 +163,7 @@ double adaptive_gauss_kronrod_callable_recursive(
     double whole,
     double error,
     int depth) {
-    const double scale = std::max(1.0, mymath::abs(whole));
+    const double scale = std::max(1.0, std::abs(whole));
     if (depth <= 0 || error <= relative_tolerance(eps, scale)) {
         return whole;
     }
@@ -242,25 +244,25 @@ double FunctionAnalysis::evaluate(double x) const {
 }
 
 double FunctionAnalysis::derivative(double x) const {
-    const double scale = std::max(1.0, mymath::abs(x));
+    const double scale = std::max(1.0, std::abs(x));
     const double center = evaluate_with_variable(x);
     const double curvature_probe = evaluate_with_variable(x + scale * 1e-3) -
                                    2.0 * center +
                                    evaluate_with_variable(x - scale * 1e-3);
     const double curvature_scale =
-        std::max(1.0, mymath::abs(curvature_probe) / std::max(1e-12, mymath::abs(center)));
+        std::max(1.0, std::abs(curvature_probe) / std::max(1e-12, std::abs(center)));
     const double base_step =
-        central_difference_step_value(scale, 1.0 / mymath::pow(curvature_scale, 0.25));
+        central_difference_step_value(scale, 1.0 / std::pow(curvature_scale, 0.25));
 
     long double richardson[4][4] = {};
     for (int row = 0; row < 4; ++row) {
-        const double step = base_step / mymath::pow(2.0, static_cast<double>(row));
+        const double step = base_step / std::pow(2.0, static_cast<double>(row));
         const long double forward = to_long_double(evaluate_with_variable(x + step));
         const long double backward = to_long_double(evaluate_with_variable(x - step));
         richardson[row][0] = (forward - backward) / (2.0L * to_long_double(step));
         for (int col = 1; col <= row; ++col) {
             const long double factor =
-                static_cast<long double>(mymath::pow(4.0, static_cast<double>(col)));
+                static_cast<long double>(std::pow(4.0, static_cast<double>(col)));
             richardson[row][col] =
                 richardson[row][col - 1] +
                 (richardson[row][col - 1] - richardson[row - 1][col - 1]) /
@@ -279,13 +281,13 @@ double FunctionAnalysis::limit(double x, int direction) const {
     auto one_sided_limit = [this, x](int side) {
         long double previous = 0.0L;
         long double best = 0.0L;
-        long double best_delta = static_cast<long double>(mymath::infinity());
+        long double best_delta = static_cast<long double>(std::numeric_limits<double>::infinity());
         bool has_previous = false;
 
         for (int i = 0; i < 32; ++i) {
             const long double step =
                 static_cast<long double>(limit_step_scale(x)) /
-                static_cast<long double>(mymath::pow(2.0, static_cast<double>(i)));
+                static_cast<long double>(std::pow(2.0, static_cast<double>(i)));
             const long double sample_x =
                 to_long_double(x) + static_cast<long double>(side) * step;
             long double current = 0.0L;
@@ -295,22 +297,22 @@ double FunctionAnalysis::limit(double x, int direction) const {
             } catch (const std::exception&) {
                 continue;
             }
-            if (!mymath::isfinite(static_cast<double>(current))) {
+            if (!std::isfinite(static_cast<double>(current))) {
                 continue;
             }
 
             if (has_previous) {
                 const long double extrapolated = 2.0L * current - previous;
-                const long double delta = mymath::abs_long_double(extrapolated - best);
+                const long double delta = std::abs(extrapolated - best);
                 if (delta < best_delta) {
                     best_delta = delta;
                     best = extrapolated;
                 }
                 const long double scale =
                     std::max({1.0L,
-                              mymath::abs_long_double(extrapolated),
-                              mymath::abs_long_double(current),
-                              mymath::abs_long_double(previous)});
+                              std::abs(extrapolated),
+                              std::abs(current),
+                              std::abs(previous)});
                 if (delta <= static_cast<long double>(relative_tolerance(kLimitTolerance,
                                                                          static_cast<double>(scale)))) {
                     return static_cast<double>(extrapolated);
@@ -324,10 +326,10 @@ double FunctionAnalysis::limit(double x, int direction) const {
         }
 
         if (has_previous &&
-            mymath::isfinite(static_cast<double>(best)) &&
+            std::isfinite(static_cast<double>(best)) &&
             best_delta <= static_cast<long double>(
                               relative_tolerance(kLimitTolerance * 100.0,
-                                                 static_cast<double>(mymath::abs_long_double(best)))) ) {
+                                                 static_cast<double>(std::abs(best)))) ) {
             return static_cast<double>(best);
         }
 
@@ -343,7 +345,7 @@ double FunctionAnalysis::limit(double x, int direction) const {
 
     const double left = one_sided_limit(-1);
     const double right = one_sided_limit(1);
-    if (mymath::abs(left - right) > kLimitTolerance * 5.0) {
+    if (std::abs(left - right) > kLimitTolerance * 5.0) {
         throw std::runtime_error("two-sided limit does not exist");
     }
     return (left + right) * 0.5;
@@ -351,24 +353,24 @@ double FunctionAnalysis::limit(double x, int direction) const {
 
 double FunctionAnalysis::definite_integral(double lower_bound,
                                            double upper_bound) const {
-    if (mymath::is_near_zero(lower_bound - upper_bound, 1e-15)) {
+    if (std::abs(lower_bound - upper_bound) <= 1e-15) {
         return 0.0;
     }
     if (lower_bound > upper_bound) {
         return -definite_integral(upper_bound, lower_bound);
     }
-    const double span = mymath::abs(upper_bound - lower_bound);
+    const double span = std::abs(upper_bound - lower_bound);
     const double scaled_eps =
-        relative_tolerance(kIntegralTolerance, span + mymath::abs(lower_bound) + mymath::abs(upper_bound));
+        relative_tolerance(kIntegralTolerance, span + std::abs(lower_bound) + std::abs(upper_bound));
     bool left_singular = false;
     bool right_singular = false;
     try {
-        left_singular = !mymath::isfinite(evaluate_with_variable(lower_bound));
+        left_singular = !std::isfinite(evaluate_with_variable(lower_bound));
     } catch (const std::exception&) {
         left_singular = true;
     }
     try {
-        right_singular = !mymath::isfinite(evaluate_with_variable(upper_bound));
+        right_singular = !std::isfinite(evaluate_with_variable(upper_bound));
     } catch (const std::exception&) {
         right_singular = true;
     }
@@ -430,10 +432,10 @@ std::vector<ExtremumPoint> FunctionAnalysis::solve_extrema(double left_bound,
                 static_cast<double>(scan_segments);
         const double current_derivative = derivative(current_x);
 
-        if (mymath::is_near_zero(previous_derivative, 1e-5)) {
+        if (std::abs(previous_derivative) <= 1e-5) {
             const double stationary_x = previous_x;
             const double second = second_derivative(stationary_x);
-            if (!mymath::is_near_zero(second, 1e-4)) {
+            if (std::abs(second) > 1e-4) {
                 bool duplicate = false;
                 for (const ExtremumPoint& point : extrema) {
                     if (same_extremum_x(point.x, stationary_x)) {
@@ -451,7 +453,7 @@ std::vector<ExtremumPoint> FunctionAnalysis::solve_extrema(double left_bound,
             const double stationary_x =
                 bisect_stationary_point(previous_x, current_x);
             const double second = second_derivative(stationary_x);
-            if (!mymath::is_near_zero(second, 1e-4)) {
+            if (std::abs(second) > 1e-4) {
                 extrema.push_back(
                     {stationary_x, evaluate_with_variable(stationary_x), second < 0.0});
             }
@@ -526,10 +528,10 @@ double FunctionAnalysis::bisect_stationary_point(double left, double right) cons
     for (int i = 0; i < 80; ++i) {
         const double mid = (left + right) * 0.5;
         const double mid_derivative = derivative(mid);
-        if (mymath::abs(mid_derivative) <= kRootTolerance ||
-            mymath::abs(right - left) <=
+        if (std::abs(mid_derivative) <= kRootTolerance ||
+            std::abs(right - left) <=
                 relative_tolerance(kRootTolerance,
-                                   std::max(mymath::abs(left), mymath::abs(right)))) {
+                                   std::max(std::abs(left), std::abs(right)))) {
             return mid;
         }
 
@@ -565,7 +567,7 @@ double FunctionAnalysis::adaptive_gauss_kronrod_recursive(double left,
                                                           double whole,
                                                           double error,
                                                           int depth) const {
-    const double scale = std::max(1.0, mymath::abs(whole));
+    const double scale = std::max(1.0, std::abs(whole));
     if (depth <= 0 || error <= relative_tolerance(eps, scale)) {
         return whole;
     }
@@ -631,7 +633,7 @@ double FunctionAnalysis::gauss_kronrod_15(double left,
     long double gauss_sum = 0.0L;
 
     for (int i = 0; i < 8; ++i) {
-        if (mymath::is_near_zero(kNodes[i], 0.0)) {
+        if (std::abs(kNodes[i]) <= 0.0) {
             const long double value =
                 to_long_double(evaluate_with_variable(static_cast<double>(center)));
             kronrod_sum += static_cast<long double>(kKronrodWeights[i]) * value;
@@ -651,6 +653,6 @@ double FunctionAnalysis::gauss_kronrod_15(double left,
 
     const long double kronrod = half_width * kronrod_sum;
     const long double gauss = half_width * gauss_sum;
-    *error_estimate = static_cast<double>(mymath::abs_long_double(kronrod - gauss));
+    *error_estimate = static_cast<double>(std::abs(kronrod - gauss));
     return static_cast<double>(kronrod);
 }

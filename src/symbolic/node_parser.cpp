@@ -1,7 +1,8 @@
 #include "symbolic_expression_internal.h"
 
-#include "mymath.h"
-
+#include "functions.h"
+#include "number.h"
+#include "conversion.h"
 #include <algorithm>
 #include <cctype>
 #include <list>
@@ -14,6 +15,10 @@
 #include <vector>
 
 namespace symbolic_expression_internal {
+
+using numeric::Number;
+using numeric::BigDecimal;
+using numeric::BigInt;
 
 std::shared_ptr<SymbolicExpression::Node> intern_node(
     std::shared_ptr<SymbolicExpression::Node> node) {
@@ -87,31 +92,24 @@ private:
 };
 
 std::string format_number(double value) {
-    // 符号输出会频繁生成中间常数。
-    // 这里统一做“接近 0 归零”和“接近整数按整数打印”，
-    // 避免输出里出现 -0、2.00000000001 这类噪声。
-    if (mymath::is_near_zero(value, kFormatEps)) {
+    if (numeric::is_near_zero(to_number(value))) {
         return "0";
     }
-    if (mymath::is_integer(value, 1e-10)) {
+    if (numeric::is_integer_value(to_number(value))) {
         long long rounded = static_cast<long long>(value >= 0.0 ? value + 0.5 : value - 0.5);
         return std::to_string(rounded);
     }
 
-    long long numerator = 0;
-    long long denominator = 1;
-    if (mymath::approximate_fraction(value,
-                                     &numerator,
-                                     &denominator,
-                                     999,
-                                     1e-10)) {
+    BigInt numerator;
+    BigInt denominator;
+    if (numeric::approximate_fraction(to_number(value), &numerator, &denominator, 999)) {
         if (value < 0.0) {
             numerator = -numerator;
         }
-        if (denominator == 1) {
-            return std::to_string(numerator);
+        if (denominator == BigInt(1)) {
+            return numerator.to_string();
         }
-        return std::to_string(numerator) + "/" + std::to_string(denominator);
+        return numerator.to_string() + "/" + denominator.to_string();
     }
 
     std::ostringstream out;
@@ -120,7 +118,7 @@ std::string format_number(double value) {
     return out.str();
 }
 
-std::shared_ptr<SymbolicExpression::Node> make_number(double value) {
+std::shared_ptr<SymbolicExpression::Node> make_number(numeric::Number value) {
     return intern_node(std::make_shared<SymbolicExpression::Node>(value));
 }
 
@@ -156,7 +154,7 @@ std::shared_ptr<SymbolicExpression::Node> make_binary(NodeType type,
 
 int precedence(const std::shared_ptr<SymbolicExpression::Node>& node) {
     // 这个优先级表直接决定 to_string() 时哪些子表达式要补括号。
-    // 目标不是做“最少括号竞赛”，而是保证输出稳定、易读、可再次解析。
+    // 目标不是做"最少括号竞赛"，而是保证输出稳定、易读、可再次解析。
     switch (node->type) {
         case NodeType::kAdd:
         case NodeType::kSubtract:
@@ -565,7 +563,7 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                     *value = left / right;
                     return true;
                 case NodeType::kPower:
-                    *value = mymath::pow(left, right);
+                    *value = numeric::to_double(numeric::pow(left, right));
                     return true;
                 case NodeType::kNumber:
                 case NodeType::kVariable:
@@ -581,55 +579,55 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                 return false;
             }
             if (node->text == "asin") {
-                *value = mymath::asin(argument);
+                *value = numeric::to_double(numeric::asin(argument));
                 return true;
             }
             if (node->text == "acos") {
-                *value = mymath::acos(argument);
+                *value = numeric::to_double(numeric::acos(argument));
                 return true;
             }
             if (node->text == "atan") {
-                *value = mymath::atan(argument);
+                *value = numeric::to_double(numeric::atan(argument));
                 return true;
             }
             if (node->text == "sin") {
-                *value = mymath::sin(argument);
+                *value = numeric::to_double(numeric::sin(argument));
                 return true;
             }
             if (node->text == "cos") {
-                *value = mymath::cos(argument);
+                *value = numeric::to_double(numeric::cos(argument));
                 return true;
             }
             if (node->text == "tan") {
-                *value = mymath::tan(argument);
+                *value = numeric::to_double(numeric::tan(argument));
                 return true;
             }
             if (node->text == "exp") {
-                *value = mymath::exp(argument);
+                *value = numeric::to_double(numeric::exp(argument));
                 return true;
             }
             if (node->text == "sinh") {
-                *value = mymath::sinh(argument);
+                *value = numeric::to_double(numeric::sinh(argument));
                 return true;
             }
             if (node->text == "cosh") {
-                *value = mymath::cosh(argument);
+                *value = numeric::to_double(numeric::cosh(argument));
                 return true;
             }
             if (node->text == "tanh") {
-                *value = mymath::tanh(argument);
+                *value = numeric::to_double(numeric::tanh(argument));
                 return true;
             }
             if (node->text == "ln") {
-                *value = mymath::ln(argument);
+                *value = numeric::to_double(numeric::ln(argument));
                 return true;
             }
             if (node->text == "sqrt") {
-                *value = mymath::sqrt(argument);
+                *value = numeric::to_double(numeric::sqrt(argument));
                 return true;
             }
             if (node->text == "abs") {
-                *value = mymath::abs(argument);
+                *value = numeric::to_double(numeric::abs(argument));
                 return true;
             }
             if (node->text == "floor") {
@@ -649,11 +647,11 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                 return true;
             }
             if (node->text == "cbrt") {
-                *value = mymath::cbrt(argument);
+                *value = numeric::to_double(numeric::cbrt(argument));
                 return true;
             }
             if (node->text == "sign") {
-                if (mymath::is_near_zero(argument, kFormatEps)) {
+                if (numeric::is_near_zero(argument, kFormatEps)) {
                     *value = 0.0;
                 } else {
                     *value = argument > 0.0 ? 1.0 : -1.0;
@@ -665,7 +663,7 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                 return true;
             }
             if (node->text == "delta") {
-                *value = mymath::is_near_zero(argument, kFormatEps) ? 1.0 : 0.0;
+                *value = numeric::is_near_zero(argument, kFormatEps) ? 1.0 : 0.0;
                 return true;
             }
             return false;
@@ -693,7 +691,7 @@ SymbolicExpression SymbolicExpression::parse(const std::string& text) {
 }
 
 SymbolicExpression SymbolicExpression::number(double value) {
-    return SymbolicExpression(make_number(value));
+    return SymbolicExpression(make_number(numeric::Number(value)));
 }
 
 SymbolicExpression SymbolicExpression::variable(const std::string& name) {

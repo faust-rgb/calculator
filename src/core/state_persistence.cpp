@@ -1,5 +1,6 @@
 #include "calculator_internal_types.h"
 
+#include "conversion.h"
 #include "line_executor.h"
 
 #include <filesystem>
@@ -26,8 +27,8 @@ std::string Calculator::save_state(const std::string& path) const {
             out << "VAR\t" << encode_state_field(name)
                 << "\tMATRIX\t" << value.matrix.rows
                 << '\t' << value.matrix.cols;
-            for (double element : value.matrix.data) {
-                out << '\t' << std::setprecision(17) << element;
+            for (const auto& element : value.matrix.data) {
+                out << '\t' << std::setprecision(17) << numeric::to_double(element);
             }
             out << '\n';
         } else if (value.is_string) {
@@ -179,9 +180,9 @@ std::string Calculator::load_state(const std::string& path) {
                         throw std::runtime_error("invalid save file format");
                     }
                     value.is_matrix = true;
-                    value.matrix = matrix::Matrix(rows, cols, 0.0);
+                    value.matrix = matrix::Matrix(rows, cols, numeric::Number(numeric::BigInt(0)));
                     for (std::size_t i = 0; i < value.matrix.data.size(); ++i) {
-                        value.matrix.data[i] = std::stod(parts[i + 5]);
+                        value.matrix.data[i] = numeric::from_double(std::stod(parts[i + 5]));
                     }
                 } else if (parts[2] == "EXACT") {
                     if (parts.size() != 6) {

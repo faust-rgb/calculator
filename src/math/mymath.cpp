@@ -1,9 +1,23 @@
 #include "mymath.h"
 #include "mymath_internal.h"
+#include "functions.h"
+#include "conversion.h"
 
 #include <stdexcept>
 
 namespace mymath {
+
+namespace {
+
+double number_to_double(const numeric::Number& value) {
+    return numeric::to_double(value);
+}
+
+numeric::Number from_double(double value) {
+    return numeric::from_double(value);
+}
+
+}  // namespace
 
 namespace internal {
 
@@ -11,27 +25,8 @@ double log_gamma_positive(double x) {
     if (x <= 0.0) {
         throw std::domain_error("log-gamma is only defined for positive inputs");
     }
-
-    static const double kLanczosCoefficients[] = {
-        0.99999999999980993,
-        676.5203681218851,
-        -1259.1392167224028,
-        771.32342877765313,
-        -176.61502916214059,
-        12.507343278686905,
-        -0.13857109526572012,
-        9.9843695780195716e-6,
-        1.5056327351493116e-7,
-    };
-
-    const double z = x - 1.0;
-    double series = kLanczosCoefficients[0];
-    for (int i = 1; i < 9; ++i) {
-        series += kLanczosCoefficients[i] / (z + static_cast<double>(i));
-    }
-
-    const double t = z + 7.5;
-    return 0.5 * ln(2.0 * kPi) + (z + 0.5) * ln(t) - t + ln(series);
+    numeric::Number result = numeric::ln(numeric::gamma(from_double(x)));
+    return number_to_double(result);
 }
 
 double finite_or_infinity_from_log(double log_value) {
@@ -252,107 +247,51 @@ double exp(double x) {
     if (x <= kLnDoubleDenormMin) {
         return 0.0;
     }
-    if (x < 0.0) {
-        return 1.0 / exp(-x);
-    }
-
-    int halvings = 0;
-    while (x > 0.5) {
-        x *= 0.5;
-        ++halvings;
-    }
-
-    long double term = 1.0L;
-    long double sum = 1.0L;
-    for (int n = 1; n <= 80; ++n) {
-        term *= static_cast<long double>(x) / static_cast<long double>(n);
-        sum += term;
-        if (abs_long_double(term) < 1e-18L) {
-            break;
-        }
-    }
-
-    double result = static_cast<double>(sum);
-    for (int i = 0; i < halvings; ++i) {
-        result *= result;
-        if (!isfinite(result)) {
-            return infinity();
-        }
-    }
-    return result;
+    return number_to_double(numeric::exp(from_double(x)));
 }
 
 double ln(double x) {
     if (x <= 0.0) {
         throw std::domain_error("ln is only defined for positive numbers");
     }
-
-    int shifts = 0;
-    while (x > 1.5) {
-        x /= kE;
-        ++shifts;
-    }
-    while (x < 0.75) {
-        x *= kE;
-        --shifts;
-    }
-
-    const double y = (x - 1.0) / (x + 1.0);
-    const double y2 = y * y;
-    double term = y;
-    double sum = 0.0;
-
-    for (int n = 1; n <= 199; n += 2) {
-        sum += term / static_cast<double>(n);
-        term *= y2;
-        if (abs(term) < kEps) {
-            break;
-        }
-    }
-
-    return 2.0 * sum + static_cast<double>(shifts);
+    return number_to_double(numeric::ln(from_double(x)));
 }
 
 double log10(double x) {
-    return ln(x) / ln(10.0);
+    if (x <= 0.0) {
+        throw std::domain_error("log10 is only defined for positive numbers");
+    }
+    return number_to_double(numeric::log10(from_double(x)));
 }
 
 double sinh(double x) {
-    const double positive = exp(x);
-    const double negative = exp(-x);
-    return 0.5 * (positive - negative);
+    return number_to_double(numeric::sinh(from_double(x)));
 }
 
 double cosh(double x) {
-    const double positive = exp(x);
-    const double negative = exp(-x);
-    return 0.5 * (positive + negative);
+    return number_to_double(numeric::cosh(from_double(x)));
 }
 
 double tanh(double x) {
-    const double denominator = cosh(x);
-    if (abs(denominator) < kEps) {
-        throw std::domain_error("tanh is undefined when cosh(x) is zero");
-    }
-    return sinh(x) / denominator;
+    return number_to_double(numeric::tanh(from_double(x)));
 }
 
 double asinh(double x) {
-    return ln(x + sqrt(x * x + 1.0));
+    return number_to_double(numeric::asinh(from_double(x)));
 }
 
 double acosh(double x) {
     if (x < 1.0) {
         throw std::domain_error("acosh is only defined for x >= 1");
     }
-    return ln(x + sqrt(x - 1.0) * sqrt(x + 1.0));
+    return number_to_double(numeric::acosh(from_double(x)));
 }
 
 double atanh(double x) {
     if (x <= -1.0 || x >= 1.0) {
         throw std::domain_error("atanh is only defined for values in (-1, 1)");
     }
-    return 0.5 * ln((1.0 + x) / (1.0 - x));
+    return number_to_double(numeric::atanh(from_double(x)));
 }
 
 }  // namespace mymath

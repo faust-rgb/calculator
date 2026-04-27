@@ -4,6 +4,7 @@
 #include "matrix.h"
 #include "multivariable_integrator.h"
 #include "mymath.h"
+#include "conversion.h"
 #include "ode_solver.h"
 #include "polynomial.h"
 #include "script_parser.h"
@@ -264,16 +265,16 @@ bool Calculator::try_process_function_command(const std::string& expression,
 
                 *variable_name = lhs_variable;
                 if (trimmed_argument.rfind("poly_add", 0) == 0) {
-                    *coefficients = polynomial_add(lhs_coefficients, rhs_coefficients);
+                    *coefficients = polynomial_add_double(lhs_coefficients, rhs_coefficients);
                     return;
                 }
                 if (trimmed_argument.rfind("poly_sub", 0) == 0) {
-                    *coefficients = polynomial_subtract(lhs_coefficients, rhs_coefficients);
+                    *coefficients = polynomial_subtract_double(lhs_coefficients, rhs_coefficients);
                     return;
                 }
                 if (trimmed_argument.rfind("poly_div", 0) == 0) {
-                    const PolynomialDivisionResult division =
-                        polynomial_divide(lhs_coefficients, rhs_coefficients);
+                    const PolynomialDivisionResultDouble division =
+                        polynomial_divide_double(lhs_coefficients, rhs_coefficients);
                     bool zero_remainder = true;
                     for (double coefficient : division.remainder) {
                         if (!mymath::is_near_zero(coefficient, 1e-10)) {
@@ -289,7 +290,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                     return;
                 }
 
-                *coefficients = polynomial_multiply(lhs_coefficients, rhs_coefficients);
+                *coefficients = polynomial_multiply_double(lhs_coefficients, rhs_coefficients);
                 return;
             }
 
@@ -378,7 +379,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                     std::vector<double> coefficients;
                     build_polynomial(trimmed_argument, variable_name, &coefficients);
                     *expression = SymbolicExpression::parse(
-                        polynomial_to_string(coefficients, *variable_name));
+                        polynomial_to_string_double(coefficients, *variable_name));
                     return;
                 }
                 const auto function_it = impl_->functions.find(trimmed_argument);
@@ -553,16 +554,18 @@ bool Calculator::try_process_function_command(const std::string& expression,
         const std::size_t size = value.rows == 1 ? value.cols : value.rows;
         std::vector<double> result(size, 0.0);
         for (std::size_t i = 0; i < size; ++i) {
-            result[i] = value.rows == 1 ? value.at(0, i) : value.at(i, 0);
+            result[i] = numeric::to_double(value.rows == 1 ? value.at(0, i) : value.at(i, 0));
         }
         return result;
     };
 
     auto vector_to_column_matrix = [&](const std::vector<double>& values) {
-        matrix::Matrix result(values.size(), 1, 0.0);
-        for (std::size_t i = 0; i < values.size(); ++i) {
-            result.at(i, 0) = normalize_result(values[i]);
+        std::vector<numeric::Number> number_values;
+        number_values.reserve(values.size());
+        for (double v : values) {
+            number_values.push_back(numeric::Number(numeric::from_double(v)));
         }
+        matrix::Matrix result = matrix::Matrix::vector(number_values);
         return result;
     };
 
@@ -587,8 +590,8 @@ bool Calculator::try_process_function_command(const std::string& expression,
             for (std::size_t i = 0; i < size; ++i) {
                 const double component_value =
                     parameter_value.matrix.rows == 1
-                        ? parameter_value.matrix.at(0, i)
-                        : parameter_value.matrix.at(i, 0);
+                        ? numeric::to_double(parameter_value.matrix.at(0, i))
+                        : numeric::to_double(parameter_value.matrix.at(i, 0));
                 assignments->push_back({"p" + std::to_string(i + 1),
                                         make_scalar_stored(component_value)});
             }
@@ -623,7 +626,12 @@ bool Calculator::try_process_function_command(const std::string& expression,
 
     auto format_planning_result = [&](const std::vector<double>& solution,
                                       double objective) {
-        return "x = " + matrix::Matrix::vector(solution).to_string() +
+        std::vector<numeric::Number> solution_numbers;
+        solution_numbers.reserve(solution.size());
+        for (double v : solution) {
+            solution_numbers.push_back(numeric::Number(numeric::from_double(v)));
+        }
+        return "x = " + matrix::Matrix::vector(solution_numbers).to_string() +
                "\nobjective = " + format_decimal(normalize_result(objective));
     };
 
@@ -661,7 +669,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                 for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
                     long double total = 0.0L;
                     for (std::size_t col = 0; col < variable_count; ++col) {
-                        total += static_cast<long double>(inequality_matrix.at(row, col)) *
+                        total += numeric::to_long_double(inequality_matrix.at(row, col)) *
                                  static_cast<long double>(x[col]);
                     }
                     if (total >
@@ -672,7 +680,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                 for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
                     long double total = 0.0L;
                     for (std::size_t col = 0; col < variable_count; ++col) {
-                        total += static_cast<long double>(equality_matrix.at(row, col)) *
+                        total += numeric::to_long_double(equality_matrix.at(row, col)) *
                                  static_cast<long double>(x[col]);
                     }
                     if (mymath::abs(static_cast<double>(total - equality_rhs[row])) >
@@ -703,7 +711,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
             for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
                 std::vector<double> coefficients(variable_count, 0.0);
                 for (std::size_t col = 0; col < variable_count; ++col) {
-                    coefficients[col] = inequality_matrix.at(row, col);
+                    coefficients[col] = numeric::to_double(inequality_matrix.at(row, col));
                 }
                 all_rows.push_back(coefficients);
                 all_rhs.push_back(inequality_rhs[row]);
@@ -712,8 +720,8 @@ bool Calculator::try_process_function_command(const std::string& expression,
                 std::vector<double> positive_row(variable_count, 0.0);
                 std::vector<double> negative_row(variable_count, 0.0);
                 for (std::size_t col = 0; col < variable_count; ++col) {
-                    positive_row[col] = equality_matrix.at(row, col);
-                    negative_row[col] = -equality_matrix.at(row, col);
+                    positive_row[col] = numeric::to_double(equality_matrix.at(row, col));
+                    negative_row[col] = -numeric::to_double(equality_matrix.at(row, col));
                 }
                 all_rows.push_back(positive_row);
                 all_rhs.push_back(equality_rhs[row]);
@@ -740,12 +748,14 @@ bool Calculator::try_process_function_command(const std::string& expression,
             std::function<void(std::size_t, std::size_t)> enumerate_bases =
                 [&](std::size_t start, std::size_t depth) {
                     if (depth == variable_count) {
-                        matrix::Matrix basis(variable_count, variable_count, 0.0);
-                        matrix::Matrix basis_rhs(variable_count, 1, 0.0);
+                        matrix::Matrix basis(variable_count, variable_count,
+                                             numeric::Number(numeric::BigInt(0)));
+                        matrix::Matrix basis_rhs(variable_count, 1,
+                                                  numeric::Number(numeric::BigInt(0)));
                         for (std::size_t row = 0; row < variable_count; ++row) {
-                            basis_rhs.at(row, 0) = all_rhs[selection[row]];
+                            basis_rhs.at(row, 0) = numeric::from_double(all_rhs[selection[row]]);
                             for (std::size_t col = 0; col < variable_count; ++col) {
-                                basis.at(row, col) = all_rows[selection[row]][col];
+                                basis.at(row, col) = numeric::from_double(all_rows[selection[row]][col]);
                             }
                         }
 
@@ -753,7 +763,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                             const matrix::Matrix solved = matrix::solve(basis, basis_rhs);
                             std::vector<double> candidate(variable_count, 0.0);
                             for (std::size_t i = 0; i < variable_count; ++i) {
-                                const double value = solved.at(i, 0);
+                                const double value = numeric::to_double(solved.at(i, 0));
                                 candidate[i] =
                                     mymath::abs(value) <= planning_tolerance ? 0.0 : value;
                             }
@@ -964,11 +974,11 @@ bool Calculator::try_process_function_command(const std::string& expression,
             for (std::size_t col = 0; col < size; ++col) {
                 std::size_t pivot = col;
                 for (std::size_t row = col + 1; row < size; ++row) {
-                    if (std::abs(matrix[row][col]) > std::abs(matrix[pivot][col])) {
+                    if (mymath::abs(matrix[row][col]) > mymath::abs(matrix[pivot][col])) {
                         pivot = row;
                     }
                 }
-                if (std::abs(matrix[pivot][col]) < 1e-12) {
+                if (mymath::abs(matrix[pivot][col]) < 1e-12) {
                     return false;
                 }
                 if (pivot != col) {
@@ -987,7 +997,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                         continue;
                     }
                     const double factor = matrix[row][col];
-                    if (std::abs(factor) < 1e-12) {
+                    if (mymath::abs(factor) < 1e-12) {
                         continue;
                     }
                     for (std::size_t j = col; j < size; ++j) {
@@ -1092,30 +1102,30 @@ bool Calculator::try_process_function_command(const std::string& expression,
 
         const std::string output_variable = lhs_variable;
         if (trimmed.rfind("poly_add", 0) == 0) {
-            *output = polynomial_to_string(
-                polynomial_add(lhs_coefficients, rhs_coefficients),
+            *output = polynomial_to_string_double(
+                polynomial_add_double(lhs_coefficients, rhs_coefficients),
                 output_variable);
             return true;
         }
         if (trimmed.rfind("poly_sub", 0) == 0) {
-            *output = polynomial_to_string(
-                polynomial_subtract(lhs_coefficients, rhs_coefficients),
+            *output = polynomial_to_string_double(
+                polynomial_subtract_double(lhs_coefficients, rhs_coefficients),
                 output_variable);
             return true;
         }
         if (trimmed.rfind("poly_mul", 0) == 0) {
-            *output = polynomial_to_string(
-                polynomial_multiply(lhs_coefficients, rhs_coefficients),
+            *output = polynomial_to_string_double(
+                polynomial_multiply_double(lhs_coefficients, rhs_coefficients),
                 output_variable);
             return true;
         }
 
-        const PolynomialDivisionResult division =
-            polynomial_divide(lhs_coefficients, rhs_coefficients);
+        const PolynomialDivisionResultDouble division =
+            polynomial_divide_double(lhs_coefficients, rhs_coefficients);
         *output = "quotient: " +
-                  polynomial_to_string(division.quotient, output_variable) +
+                  polynomial_to_string_double(division.quotient, output_variable) +
                   ", remainder: " +
-                  polynomial_to_string(division.remainder, output_variable);
+                  polynomial_to_string_double(division.remainder, output_variable);
         return true;
     }
 
@@ -1131,7 +1141,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
         std::string variable_name;
         std::vector<double> coefficients;
         build_polynomial(arguments[0], &variable_name, &coefficients);
-        const std::vector<double> roots = polynomial_real_roots(coefficients);
+        const std::vector<double> roots = polynomial_real_roots_double(coefficients);
         if (roots.empty()) {
             *output = "No real roots.";
             return true;
@@ -1269,9 +1279,9 @@ bool Calculator::try_process_function_command(const std::string& expression,
 
         const std::string base = shifted_series_base(variable_name, center);
         const std::string numerator_text =
-            polynomial_to_string(numerator, base);
+            polynomial_to_string_double(numerator, base);
         const std::string denominator_text =
-            polynomial_to_string(denominator, base);
+            polynomial_to_string_double(denominator, base);
         if (denominator_text == "1") {
             *output = simplify_symbolic_text(numerator_text);
         } else {
@@ -2361,10 +2371,10 @@ bool Calculator::try_process_function_command(const std::string& expression,
 
         const std::vector<ODEPoint> points =
             solver.solve_trajectory(x0, y0, x1, steps);
-        matrix::Matrix table(points.size(), 2, 0.0);
+        matrix::Matrix table(points.size(), 2, numeric::Number(numeric::BigInt(0)));
         for (std::size_t i = 0; i < points.size(); ++i) {
-            table.at(i, 0) = normalize_result(points[i].x);
-            table.at(i, 1) = normalize_result(points[i].y);
+            table.at(i, 0) = numeric::from_double(normalize_result(points[i].x));
+            table.at(i, 1) = numeric::from_double(normalize_result(points[i].y));
         }
         *output = matrix_literal_expression(table);
         return true;
@@ -2479,7 +2489,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
 
                 std::vector<double> result(result_size, 0.0);
                 for (std::size_t i = 0; i < result_size; ++i) {
-                    result[i] = rhs_matrix.rows == 1 ? rhs_matrix.at(0, i) : rhs_matrix.at(i, 0);
+                    result[i] = numeric::to_double(rhs_matrix.rows == 1 ? rhs_matrix.at(0, i) : rhs_matrix.at(i, 0));
                 }
                 return result;
             },
@@ -2515,17 +2525,23 @@ bool Calculator::try_process_function_command(const std::string& expression,
         if (ode_system_command_name == "ode_system") {
             const std::vector<double> final_state =
                 solver.solve(x0, initial_state, x1, steps);
-            *output = matrix::Matrix::vector(final_state).to_string();
+            std::vector<numeric::Number> final_state_numbers;
+            final_state_numbers.reserve(final_state.size());
+            for (double v : final_state) {
+                final_state_numbers.push_back(numeric::Number(numeric::from_double(v)));
+            }
+            *output = matrix::Matrix::vector(final_state_numbers).to_string();
             return true;
         }
 
         const std::vector<ODESystemPoint> points =
             solver.solve_trajectory(x0, initial_state, x1, steps);
-        matrix::Matrix table(points.size(), initial_state.size() + 1, 0.0);
+        matrix::Matrix table(points.size(), initial_state.size() + 1,
+                             numeric::Number(numeric::BigInt(0)));
         for (std::size_t row = 0; row < points.size(); ++row) {
-            table.at(row, 0) = normalize_result(points[row].x);
+            table.at(row, 0) = numeric::from_double(normalize_result(points[row].x));
             for (std::size_t col = 0; col < points[row].y.size(); ++col) {
-                table.at(row, col + 1) = normalize_result(points[row].y[col]);
+                table.at(row, col + 1) = numeric::from_double(normalize_result(points[row].y[col]));
             }
         }
         *output = matrix_literal_expression(table);
@@ -2576,7 +2592,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
         const std::vector<double> inequality_rhs = matrix_to_vector_values(
             parse_matrix_argument(arguments[argument_index++], planning_command), planning_command);
 
-        matrix::Matrix equality_matrix(0, variable_count, 0.0);
+        matrix::Matrix equality_matrix(0, variable_count, numeric::Number(numeric::BigInt(0)));
         std::vector<double> equality_rhs;
         std::vector<double> lower_bounds(variable_count, 0.0);
         std::vector<double> upper_bounds(variable_count, 0.0);
@@ -2725,7 +2741,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                     long double assigned_total = 0.0L;
                     for (std::size_t assigned_depth = 0; assigned_depth < depth; ++assigned_depth) {
                         const std::size_t col = integer_indices[assigned_depth];
-                        assigned_total += static_cast<long double>(inequality_matrix.at(row, col)) *
+                        assigned_total += numeric::to_long_double(inequality_matrix.at(row, col)) *
                                           static_cast<long double>(current_integer_values[col]);
                     }
 
@@ -2735,7 +2751,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                          ++remaining_depth) {
                         const std::size_t col = integer_indices[remaining_depth];
                         const long double coefficient =
-                            static_cast<long double>(inequality_matrix.at(row, col));
+                            numeric::to_long_double(inequality_matrix.at(row, col));
                         minimum_possible +=
                             coefficient >= 0.0L
                                 ? coefficient * static_cast<long double>(integer_lower[col])
@@ -2743,7 +2759,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                     }
                     for (std::size_t col : continuous_indices) {
                         const long double coefficient =
-                            static_cast<long double>(inequality_matrix.at(row, col));
+                            numeric::to_long_double(inequality_matrix.at(row, col));
                         minimum_possible +=
                             coefficient >= 0.0L
                                 ? coefficient * static_cast<long double>(lower_bounds[col])
@@ -2759,7 +2775,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                     long double assigned_total = 0.0L;
                     for (std::size_t assigned_depth = 0; assigned_depth < depth; ++assigned_depth) {
                         const std::size_t col = integer_indices[assigned_depth];
-                        assigned_total += static_cast<long double>(equality_matrix.at(row, col)) *
+                        assigned_total += numeric::to_long_double(equality_matrix.at(row, col)) *
                                           static_cast<long double>(current_integer_values[col]);
                     }
 
@@ -2770,7 +2786,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                          ++remaining_depth) {
                         const std::size_t col = integer_indices[remaining_depth];
                         const long double coefficient =
-                            static_cast<long double>(equality_matrix.at(row, col));
+                            numeric::to_long_double(equality_matrix.at(row, col));
                         minimum_possible +=
                             coefficient >= 0.0L
                                 ? coefficient * static_cast<long double>(integer_lower[col])
@@ -2782,7 +2798,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                     }
                     for (std::size_t col : continuous_indices) {
                         const long double coefficient =
-                            static_cast<long double>(equality_matrix.at(row, col));
+                            numeric::to_long_double(equality_matrix.at(row, col));
                         minimum_possible +=
                             coefficient >= 0.0L
                                 ? coefficient * static_cast<long double>(lower_bounds[col])
@@ -2840,7 +2856,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                         for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
                             long double total = 0.0L;
                             for (std::size_t col = 0; col < variable_count; ++col) {
-                                total += static_cast<long double>(inequality_matrix.at(row, col)) *
+                                total += numeric::to_long_double(inequality_matrix.at(row, col)) *
                                          static_cast<long double>(candidate[col]);
                             }
                             if (total >
@@ -2855,7 +2871,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                         for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
                             long double total = 0.0L;
                             for (std::size_t col = 0; col < variable_count; ++col) {
-                                total += static_cast<long double>(equality_matrix.at(row, col)) *
+                                total += numeric::to_long_double(equality_matrix.at(row, col)) *
                                          static_cast<long double>(candidate[col]);
                             }
                             if (mymath::abs(static_cast<double>(total - equality_rhs[row])) >
@@ -2879,13 +2895,13 @@ bool Calculator::try_process_function_command(const std::string& expression,
 
                     matrix::Matrix reduced_inequality(inequality_matrix.rows,
                                                       continuous_indices.size(),
-                                                      0.0);
+                                                      numeric::Number(numeric::BigInt(0)));
                     std::vector<double> reduced_inequality_rhs(inequality_rhs.size(), 0.0);
                     for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
                         long double rhs_adjustment = static_cast<long double>(inequality_rhs[row]);
                         for (std::size_t col : integer_indices) {
                             rhs_adjustment -=
-                                static_cast<long double>(inequality_matrix.at(row, col)) *
+                                numeric::to_long_double(inequality_matrix.at(row, col)) *
                                 static_cast<long double>(candidate[col]);
                         }
                         reduced_inequality_rhs[row] = static_cast<double>(rhs_adjustment);
@@ -2899,13 +2915,13 @@ bool Calculator::try_process_function_command(const std::string& expression,
 
                     matrix::Matrix reduced_equality(equality_matrix.rows,
                                                     continuous_indices.size(),
-                                                    0.0);
+                                                    numeric::Number(numeric::BigInt(0)));
                     std::vector<double> reduced_equality_rhs(equality_rhs.size(), 0.0);
                     for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
                         long double rhs_adjustment = static_cast<long double>(equality_rhs[row]);
                         for (std::size_t col : integer_indices) {
                             rhs_adjustment -=
-                                static_cast<long double>(equality_matrix.at(row, col)) *
+                                numeric::to_long_double(equality_matrix.at(row, col)) *
                                 static_cast<long double>(candidate[col]);
                         }
                         reduced_equality_rhs[row] = static_cast<double>(rhs_adjustment);
@@ -3165,8 +3181,8 @@ bool Calculator::try_process_function_command(const std::string& expression,
             return true;
         } catch (const std::exception&) {
             if (matrix_value.rows == 2 && matrix_value.cols == 2) {
-                const double trace = matrix_value.at(0, 0) + matrix_value.at(1, 1);
-                const double det = matrix::determinant(matrix_value);
+                const double trace = numeric::to_double(matrix_value.at(0, 0)) + numeric::to_double(matrix_value.at(1, 1));
+                const double det = numeric::to_double(matrix::determinant(matrix_value));
                 const double discriminant = trace * trace - 4.0 * det;
                 if (discriminant < 0.0) {
                     const double real = trace * 0.5;

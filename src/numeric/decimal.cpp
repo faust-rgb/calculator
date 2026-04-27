@@ -28,6 +28,7 @@ BigDecimal BigDecimal::from_string(const std::string& text) {
         ++pos;
     }
     bool has_digit = false;
+    int exponent = 0;
     for (; pos < text.size(); ++pos) {
         const char ch = text[pos];
         if (ch == '.') {
@@ -36,6 +37,31 @@ BigDecimal BigDecimal::from_string(const std::string& text) {
             }
             seen_dot = true;
             continue;
+        }
+        if (ch == 'e' || ch == 'E') {
+            ++pos;
+            bool exp_negative = false;
+            if (pos < text.size() && (text[pos] == '+' || text[pos] == '-')) {
+                exp_negative = text[pos] == '-';
+                ++pos;
+            }
+            std::string exp_digits;
+            for (; pos < text.size(); ++pos) {
+                if (!std::isdigit(static_cast<unsigned char>(text[pos]))) {
+                    throw std::runtime_error("invalid decimal literal: " + text);
+                }
+                exp_digits.push_back(text[pos]);
+            }
+            if (exp_digits.empty()) {
+                throw std::runtime_error("invalid decimal literal: " + text);
+            }
+            for (char d : exp_digits) {
+                exponent = exponent * 10 + (d - '0');
+            }
+            if (exp_negative) {
+                exponent = -exponent;
+            }
+            break;
         }
         if (!std::isdigit(static_cast<unsigned char>(ch))) {
             throw std::runtime_error("invalid decimal literal: " + text);
@@ -49,6 +75,8 @@ BigDecimal BigDecimal::from_string(const std::string& text) {
     if (!has_digit) {
         throw std::runtime_error("invalid decimal literal: " + text);
     }
+    // Adjust scale by exponent
+    scale -= exponent;
     BigInt coefficient = BigInt::from_string(digits);
     if (negative) {
         coefficient = -coefficient;

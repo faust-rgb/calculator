@@ -1,11 +1,15 @@
 #include "symbolic_expression_internal.h"
 
-#include "mymath.h"
+#include "functions.h"
 
 #include <string>
 #include <vector>
 
 namespace symbolic_expression_internal {
+
+using numeric::Number;
+using numeric::BigDecimal;
+using numeric::BigInt;
 
 SymbolicExpression simplify_once(const SymbolicExpression& expression) {
     const auto& node = expression.node_;
@@ -17,44 +21,45 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             const SymbolicExpression argument = SymbolicExpression(node->left).simplify();
             double numeric = 0.0;
             if (argument.is_number(&numeric)) {
+                Number num_value = numeric::Number(numeric);
                 if (node->text == "asin") {
-                    return SymbolicExpression::number(mymath::asin(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::asin(num_value)));
                 }
                 if (node->text == "acos") {
-                    return SymbolicExpression::number(mymath::acos(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::acos(num_value)));
                 }
                 if (node->text == "atan") {
-                    return SymbolicExpression::number(mymath::atan(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::atan(num_value)));
                 }
                 if (node->text == "sin") {
-                    return SymbolicExpression::number(mymath::sin(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::sin(num_value)));
                 }
                 if (node->text == "cos") {
-                    return SymbolicExpression::number(mymath::cos(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::cos(num_value)));
                 }
                 if (node->text == "tan") {
-                    return SymbolicExpression::number(mymath::tan(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::tan(num_value)));
                 }
                 if (node->text == "exp") {
-                    return SymbolicExpression::number(mymath::exp(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::exp(num_value)));
                 }
                 if (node->text == "sinh") {
-                    return SymbolicExpression::number(mymath::sinh(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::sinh(num_value)));
                 }
                 if (node->text == "cosh") {
-                    return SymbolicExpression::number(mymath::cosh(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::cosh(num_value)));
                 }
                 if (node->text == "tanh") {
-                    return SymbolicExpression::number(mymath::tanh(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::tanh(num_value)));
                 }
                 if (node->text == "ln") {
-                    return SymbolicExpression::number(mymath::ln(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::ln(num_value)));
                 }
                 if (node->text == "sqrt") {
-                    return SymbolicExpression::number(mymath::sqrt(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::sqrt(num_value)));
                 }
                 if (node->text == "abs") {
-                    return SymbolicExpression::number(mymath::abs(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::abs(num_value)));
                 }
                 if (node->text == "floor") {
                     return SymbolicExpression::number(static_cast<double>(
@@ -70,10 +75,10 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                     return SymbolicExpression::number(static_cast<double>(truncated));
                 }
                 if (node->text == "cbrt") {
-                    return SymbolicExpression::number(mymath::cbrt(numeric));
+                    return SymbolicExpression::number(numeric::to_double(numeric::cbrt(num_value)));
                 }
                 if (node->text == "sign") {
-                    if (mymath::is_near_zero(numeric, kFormatEps)) {
+                    if (numeric::is_near_zero(num_value)) {
                         return SymbolicExpression::number(0.0);
                     }
                     return SymbolicExpression::number(numeric > 0.0 ? 1.0 : -1.0);
@@ -101,7 +106,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 argument.node_->type == NodeType::kPower) {
                 double exponent = 0.0;
                 if (SymbolicExpression(argument.node_->right).is_number(&exponent) &&
-                    mymath::is_near_zero(exponent - 2.0, kFormatEps)) {
+                    numeric::is_near_zero(numeric::Number(exponent) - numeric::Number(2.0))) {
                     return make_function("abs",
                                          SymbolicExpression(argument.node_->left))
                         .simplify();
@@ -411,7 +416,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 std::vector<SymbolicExpression> denominator_factors;
                 collect_division_factors(left, &numerator_coefficient, &numerator_factors);
                 collect_division_factors(right, &denominator_coefficient, &denominator_factors);
-                if (!mymath::is_near_zero(denominator_coefficient, kFormatEps)) {
+                if (!numeric::is_near_zero(numeric::Number(denominator_coefficient))) {
                     std::vector<bool> denominator_used(denominator_factors.size(), false);
                     std::vector<SymbolicExpression> reduced_numerator_factors;
                     for (const SymbolicExpression& numerator_factor : numerator_factors) {
@@ -449,8 +454,8 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                         numerator_coefficient / denominator_coefficient;
                     if (!symbolic_cancellation_happened &&
                         reduced_denominator_factors.empty() &&
-                        mymath::is_near_zero(numerator_coefficient - 1.0, kFormatEps) &&
-                        !mymath::is_near_zero(denominator_coefficient - 1.0, kFormatEps)) {
+                        numeric::is_near_zero(numeric::Number(numerator_coefficient) - numeric::Number(1.0)) &&
+                        !numeric::is_near_zero(numeric::Number(denominator_coefficient) - numeric::Number(1.0))) {
                         return make_divide(left,
                                            SymbolicExpression::number(denominator_coefficient));
                     }
@@ -477,18 +482,18 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             return make_divide(left, right);
         case NodeType::kPower:
             if (left.is_number(&left_value)) {
-                if (mymath::is_near_zero(left_value, kFormatEps)) {
+                if (numeric::is_near_zero(numeric::Number(left_value))) {
                     return SymbolicExpression::number(0.0);
                 }
-                if (mymath::is_near_zero(left_value - 1.0, kFormatEps)) {
+                if (numeric::is_near_zero(numeric::Number(left_value) - numeric::Number(1.0))) {
                     return SymbolicExpression::number(1.0);
                 }
             }
             if (right.is_number(&right_value)) {
-                if (mymath::is_near_zero(right_value, kFormatEps)) {
+                if (numeric::is_near_zero(numeric::Number(right_value))) {
                     return SymbolicExpression::number(1.0);
                 }
-                if (mymath::is_near_zero(right_value - 1.0, kFormatEps)) {
+                if (numeric::is_near_zero(numeric::Number(right_value) - numeric::Number(1.0))) {
                     return left;
                 }
             }
@@ -502,7 +507,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 }
             }
             if (left.is_number(&left_value) && right.is_number(&right_value)) {
-                return SymbolicExpression::number(mymath::pow(left_value, right_value));
+                return SymbolicExpression::number(numeric::to_double(numeric::pow(numeric::Number(left_value), numeric::Number(right_value))));
             }
             return make_power(left, right);
         case NodeType::kNumber:

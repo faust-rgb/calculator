@@ -30,6 +30,10 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - `FUNCTIONS_REFERENCE.md`
 - `MATRIX_GUIDE.md`
 - `COMMANDS_REFERENCE.md`
+- `CAS_GUIDE.md`
+- `PRECISION_GUIDE.md`
+- `COMPLEX_GUIDE.md`
+- `MIGRATION_1_TO_2.md`
 - `HANDOFF.md`
 - `TEST_REPORT.md`
 - `test/TESTING.md`
@@ -64,6 +68,10 @@ Shared internal declarations for these splits live in private headers such as
 ## Features
 
 - Basic arithmetic: `+`, `-`, `*`, `/`
+- Default 2.0 routing for migrated exact/high-precision forms, backed by
+  `BigInt`, `Rational`, `BigDecimal`, `Complex`, and `Number`; `:v2` remains
+  available as a force/debug prefix
+- 2.0 precision control with `:precision digits`
 - Power operator: `^`
 - Scientific notation input such as `1e-3`, `1e20`, and `1e-300`
 - Functions: `sin(x)`, `cos(x)`, `tan(x)`, `asin(x)`, `acos(x)`, `atan(x)`,
@@ -90,6 +98,7 @@ Shared internal declarations for these splits live in private headers such as
 - Matrix operations with matrix/matrix and matrix/scalar `+`, `-`, `*`, `/`, `^`
 - Invertible matrices support negative integer powers such as `A ^ -1`
 - Matrix analysis with `norm(...)`, `trace(...)`, `det(...)`, `rank(...)`, `rref(...)`, `eigvals(...)`, `eigvecs(...)`, `eig(...)`, `svd(...)`
+- 2.0 exact matrix literals, determinant, inverse, and rref through `:v2`
 - Linear system solving with `solve(A, b)` for `Ax = b`
 - Vector/matrix helpers with `dot(...)`, `outer(...)`, `null(...)`, `least_squares(...)`, `qr_q(...)`, `qr_r(...)`, `diag(...)`, `reshape(...)`, `vec(m)`
 - Reduced singular value decomposition with `svd_u(...)`, `svd_s(...)`, `svd_vt(...)`
@@ -98,6 +107,8 @@ Shared internal declarations for these splits live in private headers such as
 - Matrix decompositions with `cholesky(...)`, `schur(...)`, `hessenberg(...)`
 - Vector statistics and fitting with `cov(...)`, `corr(...)`, `lagrange(...)`, `spline(...)`, `linear_regression(...)`, `poly_fit(...)`
 - Lightweight complex helpers with `complex(re, im)`, `real(z)`, `imag(z)`, `abs(z)`, `arg(z)`, `conj(z)`, `polar(r, theta)`
+- 2.0 complex literals with `i`, plus `roots_complex(...)` /
+  `complex_roots(...)` for polynomial complex roots
 - Constants: `pi`, `e`
 - Symbolic constants display mode with `:symbolic on` and `:symbolic off`
 - Parentheses and unary plus/minus
@@ -139,7 +150,8 @@ Current validation status:
 - `make test`
 - `make script-test`
 - `make check`
-- expected result: `Passed: 743`, `Failed: 0`
+- `make benchmark`
+- expected unit result: `Passed: 808`, `Failed: 0`
 - comprehensive script check: `bin/calculator test/script/comprehensive_validation.calc`
 
 ## Run

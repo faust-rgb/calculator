@@ -1,7 +1,8 @@
 #include "matrix.h"
 #include "matrix_internal.h"
 
-#include "mymath.h"
+#include "functions.h"
+#include "conversion.h"
 #include "polynomial.h"
 
 #include <algorithm>
@@ -17,60 +18,60 @@ namespace {
 
 std::size_t parse_size_argument(const std::string& expression,
                                 const ScalarEvaluator& scalar_evaluator) {
-    const double value = scalar_evaluator(expression);
-    if (!mymath::is_integer(value) || value < 0.0) {
+    const numeric::Number value = scalar_evaluator(expression);
+    if (!numeric::is_integer_value(value) || value < numeric::Number(0)) {
         throw std::runtime_error("matrix dimensions must be non-negative integers");
     }
-    return static_cast<std::size_t>(value >= 0.0 ? value + 0.5 : value - 0.5);
+    return static_cast<std::size_t>(numeric::to_double(value) + 0.5);
 }
 
-long long parse_integer_exponent(double value) {
-    if (!mymath::is_integer(value)) {
+long long parse_integer_exponent(const numeric::Number& value) {
+    if (!numeric::is_integer_value(value)) {
         throw std::runtime_error("matrix powers require an integer exponent");
     }
-    return static_cast<long long>(value >= 0.0 ? value + 0.5 : value - 0.5);
+    return static_cast<long long>(numeric::to_double(value));
 }
 
 std::size_t parse_index_argument(const std::string& expression,
                                  const ScalarEvaluator& scalar_evaluator,
                                  const std::string& name) {
-    const double value = scalar_evaluator(expression);
-    if (!mymath::is_integer(value) || value < 0.0) {
+    const numeric::Number value = scalar_evaluator(expression);
+    if (!numeric::is_integer_value(value) || value < numeric::Number(0)) {
         throw std::runtime_error(name + " requires non-negative integer indices");
     }
-    return static_cast<std::size_t>(value + 0.5);
+    return static_cast<std::size_t>(numeric::to_double(value) + 0.5);
 }
 
 long long parse_integer_argument(const std::string& expression,
                                  const ScalarEvaluator& scalar_evaluator,
                                  const std::string& name) {
-    const double value = scalar_evaluator(expression);
-    if (!mymath::is_integer(value)) {
+    const numeric::Number value = scalar_evaluator(expression);
+    if (!numeric::is_integer_value(value)) {
         throw std::runtime_error(name + " requires integer arguments");
     }
-    return static_cast<long long>(value >= 0.0 ? value + 0.5 : value - 0.5);
+    return static_cast<long long>(numeric::to_double(value));
 }
 
 Matrix make_window(std::size_t n, const std::string& name) {
     if (n == 0) {
         throw std::runtime_error(name + " requires a positive length");
     }
-    Matrix result(1, n, 0.0);
+    Matrix result(1, n, numeric::Number(0));
     if (n == 1) {
-        result.at(0, 0) = 1.0;
+        result.at(0, 0) = numeric::Number(1);
         return result;
     }
 
+    const numeric::Number two_pi = numeric::pi() * numeric::Number(2);
     for (std::size_t i = 0; i < n; ++i) {
-        const double phase =
-            2.0 * mymath::kPi * static_cast<double>(i) / static_cast<double>(n - 1);
+        const numeric::Number phase = two_pi * numeric::Number(static_cast<long long>(i)) / numeric::Number(static_cast<long long>(n - 1));
         if (name == "hann" || name == "hanning") {
-            result.at(0, i) = 0.5 - 0.5 * mymath::cos(phase);
+            result.at(0, i) = numeric::Number(0.5) - numeric::Number(0.5) * numeric::cos(phase);
         } else if (name == "hamming") {
-            result.at(0, i) = 0.54 - 0.46 * mymath::cos(phase);
+            result.at(0, i) = numeric::Number(0.54) - numeric::Number(0.46) * numeric::cos(phase);
         } else if (name == "blackman") {
-            result.at(0, i) = 0.42 - 0.5 * mymath::cos(phase) +
-                              0.08 * mymath::cos(2.0 * phase);
+            result.at(0, i) = numeric::Number(0.42) - numeric::Number(0.5) * numeric::cos(phase) +
+                              numeric::Number(0.08) * numeric::cos(phase * numeric::Number(2));
         }
     }
     return result;
@@ -110,20 +111,20 @@ Matrix divisors_vector(long long value) {
         throw std::runtime_error("divisors does not accept zero");
     }
     const long long n = value < 0 ? -value : value;
-    std::vector<double> small;
-    std::vector<double> large;
+    std::vector<numeric::Number> small;
+    std::vector<numeric::Number> large;
     for (long long d = 1; d * d <= n; ++d) {
         if (n % d != 0) {
             continue;
         }
-        small.push_back(static_cast<double>(d));
+        small.push_back(numeric::Number(d));
         if (d != n / d) {
-            large.push_back(static_cast<double>(n / d));
+            large.push_back(numeric::Number(n / d));
         }
     }
-    Matrix result(1, small.size() + large.size(), 0.0);
+    Matrix result(1, small.size() + large.size(), numeric::Number(0));
     std::size_t index = 0;
-    for (double divisor : small) {
+    for (const numeric::Number& divisor : small) {
         result.at(0, index++) = divisor;
     }
     for (auto it = large.rbegin(); it != large.rend(); ++it) {
@@ -231,7 +232,7 @@ private:
         if (match('-')) {
             Value value = parse_unary();
             if (value.is_matrix) {
-                return Value::from_matrix(multiply(value.matrix, -1.0));
+                return Value::from_matrix(multiply(value.matrix, numeric::Number(-1)));
             }
             return Value::from_scalar(-value.scalar);
         }
@@ -329,7 +330,7 @@ private:
 
         if (!saw_separator && rows.size() == 1 && rows[0].size() == 1 &&
             trim_copy(rows[0][0]).empty()) {
-            return Matrix(0, 0, 0.0);
+            return Matrix(0, 0, numeric::Number(0));
         }
 
         std::size_t max_cols = 0;
@@ -339,7 +340,7 @@ private:
             }
         }
 
-        Matrix result(rows.size(), max_cols, 0.0);
+        Matrix result(rows.size(), max_cols, numeric::Number(0));
         for (std::size_t row = 0; row < rows.size(); ++row) {
             for (std::size_t col = 0; col < rows[row].size(); ++col) {
                 const std::string cell = trim_copy(rows[row][col]);
@@ -375,7 +376,7 @@ private:
                 throw std::runtime_error("vec expects at least one element");
             }
 
-            std::vector<double> values;
+            std::vector<numeric::Number> values;
             values.reserve(arguments.size());
             for (const std::string& argument : arguments) {
                 values.push_back((*scalar_evaluator_)(argument));
@@ -395,7 +396,7 @@ private:
                 throw std::runtime_error("mat element count does not match the requested shape");
             }
 
-            Matrix result(rows, cols, 0.0);
+            Matrix result(rows, cols, numeric::Number(0));
             for (std::size_t i = 0; i < expected_values; ++i) {
                 result.data[i] = (*scalar_evaluator_)(arguments[i + 2]);
             }
@@ -447,10 +448,10 @@ private:
                                    parse_integer_argument(arguments[1], *scalar_evaluator_, "extended_gcd"),
                                    &x,
                                    &y);
-            Matrix result(1, 3, 0.0);
-            result.at(0, 0) = static_cast<double>(gcd);
-            result.at(0, 1) = static_cast<double>(x);
-            result.at(0, 2) = static_cast<double>(y);
+            Matrix result(1, 3, numeric::Number(0));
+            result.at(0, 0) = numeric::Number(gcd);
+            result.at(0, 1) = numeric::Number(x);
+            result.at(0, 2) = numeric::Number(y);
             return Value::from_matrix(result);
         }
 
@@ -471,7 +472,7 @@ private:
             }
 
             Matrix result = require_matrix(arguments[0], "append_row");
-            std::vector<double> values;
+            std::vector<numeric::Number> values;
             values.reserve(arguments.size() - 1);
             for (std::size_t i = 1; i < arguments.size(); ++i) {
                 values.push_back((*scalar_evaluator_)(arguments[i]));
@@ -486,7 +487,7 @@ private:
             }
 
             Matrix result = require_matrix(arguments[0], "append_col");
-            std::vector<double> values;
+            std::vector<numeric::Number> values;
             values.reserve(arguments.size() - 1);
             for (std::size_t i = 1; i < arguments.size(); ++i) {
                 values.push_back((*scalar_evaluator_)(arguments[i]));
@@ -761,7 +762,7 @@ private:
             if (arguments.empty()) {
                 throw std::runtime_error("mean expects at least one argument");
             }
-            std::vector<double> values;
+            std::vector<numeric::Number> values;
             if (arguments.size() == 1) {
                 Value value;
                 if (try_evaluate_expression(arguments[0],
@@ -786,7 +787,7 @@ private:
             if (arguments.empty()) {
                 throw std::runtime_error("median expects at least one argument");
             }
-            std::vector<double> values;
+            std::vector<numeric::Number> values;
             if (arguments.size() == 1) {
                 Value value;
                 if (try_evaluate_expression(arguments[0],
@@ -811,7 +812,7 @@ private:
             if (arguments.empty()) {
                 throw std::runtime_error("mode expects at least one argument");
             }
-            std::vector<double> values;
+            std::vector<numeric::Number> values;
             if (arguments.size() == 1) {
                 Value value;
                 if (try_evaluate_expression(arguments[0],
@@ -836,7 +837,7 @@ private:
             if (arguments.empty()) {
                 throw std::runtime_error("var expects at least one argument");
             }
-            std::vector<double> values;
+            std::vector<numeric::Number> values;
             if (arguments.size() == 1) {
                 Value value;
                 if (try_evaluate_expression(arguments[0],
@@ -861,7 +862,7 @@ private:
             if (arguments.empty()) {
                 throw std::runtime_error("std expects at least one argument");
             }
-            std::vector<double> values;
+            std::vector<numeric::Number> values;
             if (arguments.size() == 1) {
                 Value value;
                 if (try_evaluate_expression(arguments[0],
@@ -879,14 +880,14 @@ private:
                     values.push_back((*scalar_evaluator_)(argument));
                 }
             }
-            return Value::from_scalar(mymath::sqrt(variance_values(values)));
+            return Value::from_scalar(numeric::sqrt(variance_values(values)));
         }
 
         if (name == "skewness" || name == "skew" || name == "kurtosis") {
             if (arguments.empty()) {
                 throw std::runtime_error(name + " expects at least one argument");
             }
-            std::vector<double> values;
+            std::vector<numeric::Number> values;
             if (arguments.size() == 1) {
                 Value value;
                 if (try_evaluate_expression(arguments[0],
@@ -904,24 +905,24 @@ private:
                     values.push_back((*scalar_evaluator_)(argument));
                 }
             }
-            const double mean = mean_values(values);
-            double second_moment = 0.0;
-            double higher_moment = 0.0;
-            for (double value : values) {
-                const double delta = value - mean;
-                const double delta2 = delta * delta;
+            const numeric::Number mean = mean_values(values);
+            numeric::Number second_moment(0);
+            numeric::Number higher_moment(0);
+            for (const numeric::Number& val : values) {
+                const numeric::Number delta = val - mean;
+                const numeric::Number delta2 = delta * delta;
                 second_moment += delta2;
                 higher_moment += (name == "kurtosis") ? delta2 * delta2 : delta2 * delta;
             }
-            second_moment /= static_cast<double>(values.size());
-            if (mymath::is_near_zero(second_moment)) {
+            second_moment = second_moment / numeric::Number(static_cast<long long>(values.size()));
+            if (numeric::is_near_zero(second_moment)) {
                 throw std::runtime_error(name + " is undefined for zero variance data");
             }
-            higher_moment /= static_cast<double>(values.size());
+            higher_moment = higher_moment / numeric::Number(static_cast<long long>(values.size()));
             if (name == "kurtosis") {
-                return Value::from_scalar(higher_moment / (second_moment * second_moment) - 3.0);
+                return Value::from_scalar(higher_moment / (second_moment * second_moment) - numeric::Number(3));
             }
-            return Value::from_scalar(higher_moment / mymath::pow(second_moment, 1.5));
+            return Value::from_scalar(higher_moment / numeric::pow(second_moment, numeric::Number(3) / numeric::Number(2)));
         }
 
         if (name == "percentile") {
@@ -940,9 +941,9 @@ private:
                         (*scalar_evaluator_)(arguments[1])));
                 }
             }
-            std::vector<double> values;
+            std::vector<numeric::Number> values;
             values.reserve(arguments.size() - 1);
-            const double p = (*scalar_evaluator_)(arguments[0]);
+            const numeric::Number p = (*scalar_evaluator_)(arguments[0]);
             for (std::size_t i = 1; i < arguments.size(); ++i) {
                 values.push_back((*scalar_evaluator_)(arguments[i]));
             }
@@ -965,9 +966,9 @@ private:
                         (*scalar_evaluator_)(arguments[1])));
                 }
             }
-            std::vector<double> values;
+            std::vector<numeric::Number> values;
             values.reserve(arguments.size() - 1);
-            const double q = (*scalar_evaluator_)(arguments[0]);
+            const numeric::Number q = (*scalar_evaluator_)(arguments[0]);
             for (std::size_t i = 1; i < arguments.size(); ++i) {
                 values.push_back((*scalar_evaluator_)(arguments[i]));
             }
@@ -1028,14 +1029,22 @@ private:
             if (arguments.size() != 3) {
                 throw std::runtime_error(name + " expects x samples, y samples, and degree");
             }
-            const double degree_value = (*scalar_evaluator_)(arguments[2]);
-            if (!mymath::is_integer(degree_value) || degree_value < 0.0) {
+            const numeric::Number degree_value = (*scalar_evaluator_)(arguments[2]);
+            if (!numeric::is_integer_value(degree_value) || degree_value < numeric::Number(0)) {
                 throw std::runtime_error(name + " degree must be a non-negative integer");
             }
-            return Value::from_matrix(Matrix::vector(polynomial_fit(
-                as_vector_values(require_matrix(arguments[0], name), name),
-                as_vector_values(require_matrix(arguments[1], name), name),
-                static_cast<int>(degree_value + 0.5))));
+            const std::vector<numeric::Number> x_vals = as_vector_values(require_matrix(arguments[0], name), name);
+            const std::vector<numeric::Number> y_vals = as_vector_values(require_matrix(arguments[1], name), name);
+            std::vector<double> x_doubles, y_doubles;
+            x_doubles.reserve(x_vals.size());
+            y_doubles.reserve(y_vals.size());
+            for (const auto& n : x_vals) x_doubles.push_back(numeric::to_double(n));
+            for (const auto& n : y_vals) y_doubles.push_back(numeric::to_double(n));
+            std::vector<double> coeffs = polynomial_fit_double(x_doubles, y_doubles, static_cast<int>(numeric::to_double(degree_value) + 0.5));
+            std::vector<numeric::Number> result;
+            result.reserve(coeffs.size());
+            for (double c : coeffs) result.push_back(numeric::Number(c));
+            return Value::from_matrix(Matrix::vector(result));
         }
 
         if (name == "dft" || name == "fft") {
@@ -1075,43 +1084,87 @@ private:
             if (arguments.size() != 2) {
                 throw std::runtime_error("poly_eval expects coefficient vector and x");
             }
-            return Value::from_scalar(polynomial_evaluate(
-                as_vector_values(require_matrix(arguments[0], "poly_eval"), "poly_eval"),
-                (*scalar_evaluator_)(arguments[1])));
+            const std::vector<numeric::Number> coeffs = as_vector_values(require_matrix(arguments[0], "poly_eval"), "poly_eval");
+            std::vector<double> coeff_doubles;
+            coeff_doubles.reserve(coeffs.size());
+            for (const auto& n : coeffs) coeff_doubles.push_back(numeric::to_double(n));
+            return Value::from_scalar(numeric::Number(polynomial_evaluate_double(
+                coeff_doubles,
+                numeric::to_double((*scalar_evaluator_)(arguments[1])))));
         }
 
         if (name == "poly_deriv") {
             if (arguments.size() != 1) {
                 throw std::runtime_error("poly_deriv expects exactly one coefficient vector");
             }
-            return Value::from_matrix(Matrix::vector(polynomial_derivative(
-                as_vector_values(require_matrix(arguments[0], "poly_deriv"), "poly_deriv"))));
+            const std::vector<numeric::Number> coeffs = as_vector_values(require_matrix(arguments[0], "poly_deriv"), "poly_deriv");
+            std::vector<double> coeff_doubles;
+            coeff_doubles.reserve(coeffs.size());
+            for (const auto& n : coeffs) coeff_doubles.push_back(numeric::to_double(n));
+            std::vector<double> deriv = polynomial_derivative_double(coeff_doubles);
+            std::vector<numeric::Number> result;
+            result.reserve(deriv.size());
+            for (double d : deriv) {
+                result.push_back(numeric::Number(d));
+            }
+            return Value::from_matrix(Matrix::vector(result));
         }
 
         if (name == "poly_integ") {
             if (arguments.size() != 1) {
                 throw std::runtime_error("poly_integ expects exactly one coefficient vector");
             }
-            return Value::from_matrix(Matrix::vector(polynomial_integral(
-                as_vector_values(require_matrix(arguments[0], "poly_integ"), "poly_integ"))));
+            const std::vector<numeric::Number> coeffs = as_vector_values(require_matrix(arguments[0], "poly_integ"), "poly_integ");
+            std::vector<double> coeff_doubles;
+            coeff_doubles.reserve(coeffs.size());
+            for (const auto& n : coeffs) coeff_doubles.push_back(numeric::to_double(n));
+            std::vector<double> integ = polynomial_integral_double(coeff_doubles);
+            std::vector<numeric::Number> result;
+            result.reserve(integ.size());
+            for (double d : integ) {
+                result.push_back(numeric::Number(d));
+            }
+            return Value::from_matrix(Matrix::vector(result));
         }
 
         if (name == "poly_compose") {
             if (arguments.size() != 2) {
                 throw std::runtime_error("poly_compose expects exactly two coefficient vectors");
             }
-            return Value::from_matrix(Matrix::vector(polynomial_compose(
-                as_vector_values(require_matrix(arguments[0], "poly_compose"), "poly_compose"),
-                as_vector_values(require_matrix(arguments[1], "poly_compose"), "poly_compose"))));
+            const std::vector<numeric::Number> outer_coeffs = as_vector_values(require_matrix(arguments[0], "poly_compose"), "poly_compose");
+            const std::vector<numeric::Number> inner_coeffs = as_vector_values(require_matrix(arguments[1], "poly_compose"), "poly_compose");
+            std::vector<double> outer_doubles, inner_doubles;
+            outer_doubles.reserve(outer_coeffs.size());
+            inner_doubles.reserve(inner_coeffs.size());
+            for (const auto& n : outer_coeffs) outer_doubles.push_back(numeric::to_double(n));
+            for (const auto& n : inner_coeffs) inner_doubles.push_back(numeric::to_double(n));
+            std::vector<double> comp = polynomial_compose_double(outer_doubles, inner_doubles);
+            std::vector<numeric::Number> result;
+            result.reserve(comp.size());
+            for (double d : comp) {
+                result.push_back(numeric::Number(d));
+            }
+            return Value::from_matrix(Matrix::vector(result));
         }
 
         if (name == "poly_gcd") {
             if (arguments.size() != 2) {
                 throw std::runtime_error("poly_gcd expects exactly two coefficient vectors");
             }
-            return Value::from_matrix(Matrix::vector(polynomial_gcd(
-                as_vector_values(require_matrix(arguments[0], "poly_gcd"), "poly_gcd"),
-                as_vector_values(require_matrix(arguments[1], "poly_gcd"), "poly_gcd"))));
+            const std::vector<numeric::Number> lhs_coeffs = as_vector_values(require_matrix(arguments[0], "poly_gcd"), "poly_gcd");
+            const std::vector<numeric::Number> rhs_coeffs = as_vector_values(require_matrix(arguments[1], "poly_gcd"), "poly_gcd");
+            std::vector<double> lhs_doubles, rhs_doubles;
+            lhs_doubles.reserve(lhs_coeffs.size());
+            rhs_doubles.reserve(rhs_coeffs.size());
+            for (const auto& n : lhs_coeffs) lhs_doubles.push_back(numeric::to_double(n));
+            for (const auto& n : rhs_coeffs) rhs_doubles.push_back(numeric::to_double(n));
+            std::vector<double> gcd = polynomial_gcd_double(lhs_doubles, rhs_doubles);
+            std::vector<numeric::Number> result;
+            result.reserve(gcd.size());
+            for (double d : gcd) {
+                result.push_back(numeric::Number(d));
+            }
+            return Value::from_matrix(Matrix::vector(result));
         }
 
         if (name == "complex") {
@@ -1127,11 +1180,11 @@ private:
             if (arguments.size() != 2) {
                 throw std::runtime_error("polar expects exactly two scalar arguments");
             }
-            const double radius = (*scalar_evaluator_)(arguments[0]);
-            const double theta = (*scalar_evaluator_)(arguments[1]);
+            const numeric::Number radius = (*scalar_evaluator_)(arguments[0]);
+            const numeric::Number theta = (*scalar_evaluator_)(arguments[1]);
             return Value::from_matrix(
-                complex_value(radius * mymath::cos(theta),
-                              radius * mymath::sin(theta)));
+                complex_value(numeric::cos(theta) * radius,
+                              numeric::sin(theta) * radius));
         }
 
         if (name == "real") {
@@ -1164,18 +1217,19 @@ private:
             if (!is_complex_vector(value)) {
                 throw std::runtime_error("arg expects a complex value");
             }
-            const double real = complex_real(value);
-            const double imag = complex_imag(value);
-            if (mymath::is_near_zero(real, kMatrixEps)) {
-                if (mymath::is_near_zero(imag, kMatrixEps)) {
-                    return Value::from_scalar(0.0);
+            const numeric::Number real = complex_real(value);
+            const numeric::Number imag = complex_imag(value);
+            if (numeric::is_near_zero(real)) {
+                if (numeric::is_near_zero(imag)) {
+                    return Value::from_scalar(numeric::Number(0));
                 }
-                return Value::from_scalar(imag > 0.0 ? mymath::kPi / 2.0
-                                                     : -mymath::kPi / 2.0);
+                const numeric::Number half_pi = numeric::pi() / numeric::Number(2);
+                return Value::from_scalar(imag > numeric::Number(0) ? half_pi : -half_pi);
             }
-            double angle = mymath::atan(imag / real);
-            if (real < 0.0) {
-                angle += imag >= 0.0 ? mymath::kPi : -mymath::kPi;
+            numeric::Number angle = numeric::atan(imag / real);
+            if (real < numeric::Number(0)) {
+                const numeric::Number pi = numeric::pi();
+                angle = angle + (imag >= numeric::Number(0) ? pi : -pi);
             }
             return Value::from_scalar(angle);
         }
@@ -1205,9 +1259,9 @@ private:
                 if (!is_complex_vector(value.matrix)) {
                     throw std::runtime_error("matrix abs only supports complex values");
                 }
-                const double real = complex_real(value.matrix);
-                const double imag = complex_imag(value.matrix);
-                return Value::from_scalar(mymath::sqrt(real * real + imag * imag));
+                const numeric::Number real = complex_real(value.matrix);
+                const numeric::Number imag = complex_imag(value.matrix);
+                return Value::from_scalar(numeric::sqrt(real * real + imag * imag));
             }
             return Value::from_scalar((*scalar_evaluator_)("abs(" + arguments[0] + ")"));
         }
@@ -1272,7 +1326,7 @@ private:
         return value.matrix;
     }
 
-    double parse_scalar_call() {
+    numeric::Number parse_scalar_call() {
         const std::size_t start = pos_;
         int depth = 0;
         bool saw_open = false;
@@ -1295,7 +1349,7 @@ private:
         return (*scalar_evaluator_)(source_.substr(start, pos_ - start));
     }
 
-    double parse_scalar_literal() {
+    numeric::Number parse_scalar_literal() {
         const std::size_t start = pos_;
 
         if (peek('0') && pos_ + 1 < source_.size()) {
@@ -1393,7 +1447,7 @@ private:
             return Value::from_matrix(subtract(lhs.matrix, rhs.scalar));
         }
         if (rhs.is_matrix) {
-            return Value::from_matrix(add(multiply(rhs.matrix, -1.0), lhs.scalar));
+            return Value::from_matrix(add(multiply(rhs.matrix, numeric::Number(-1)), lhs.scalar));
         }
         return Value::from_scalar(lhs.scalar - rhs.scalar);
     }
@@ -1415,7 +1469,7 @@ private:
         if (rhs.is_matrix) {
             throw std::runtime_error("division by a matrix is not supported");
         }
-        if (mymath::is_near_zero(rhs.scalar)) {
+        if (numeric::is_near_zero(rhs.scalar)) {
             throw std::runtime_error("division by zero");
         }
         if (lhs.is_matrix) {
@@ -1431,7 +1485,7 @@ private:
         if (lhs.is_matrix) {
             return Value::from_matrix(power(lhs.matrix, parse_integer_exponent(rhs.scalar)));
         }
-        return Value::from_scalar(mymath::pow(lhs.scalar, rhs.scalar));
+        return Value::from_scalar(numeric::pow(lhs.scalar, rhs.scalar));
     }
 
     bool peek(char expected) const {

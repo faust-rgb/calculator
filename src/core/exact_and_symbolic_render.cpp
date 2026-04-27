@@ -1,5 +1,6 @@
 #include "calculator_internal_types.h"
 
+#include "conversion.h"
 #include "matrix.h"
 #include "mymath.h"
 #include "symbolic_expression.h"
@@ -847,7 +848,7 @@ std::string matrix_literal_expression(const matrix::Matrix& value) {
             if (col != 0) {
                 out << ", ";
             }
-            out << format_decimal(normalize_display_decimal(value.at(row, col)));
+            out << format_decimal(normalize_display_decimal(numeric::to_double(value.at(row, col))));
         }
     }
     out << ']';

@@ -1,6 +1,6 @@
 #include "symbolic_expression_internal.h"
 
-#include "mymath.h"
+#include "functions.h"
 
 #include <algorithm>
 #include <initializer_list>
@@ -11,19 +11,27 @@
 
 namespace symbolic_expression_internal {
 
+using numeric::Number;
+using numeric::BigDecimal;
+using numeric::BigInt;
+
+Number to_number(double value) {
+    return Number(BigDecimal::from_string(std::to_string(value)));
+}
+
 bool expr_is_zero(const SymbolicExpression& expression) {
     double value = 0.0;
-    return expr_is_number(expression, &value) && mymath::is_near_zero(value, kFormatEps);
+    return expr_is_number(expression, &value) && numeric::is_near_zero(to_number(value));
 }
 
 bool expr_is_one(const SymbolicExpression& expression) {
     double value = 0.0;
-    return expr_is_number(expression, &value) && mymath::is_near_zero(value - 1.0, kFormatEps);
+    return expr_is_number(expression, &value) && numeric::is_near_zero(to_number(value) - to_number(1.0));
 }
 
 bool expr_is_minus_one(const SymbolicExpression& expression) {
     double value = 0.0;
-    return expr_is_number(expression, &value) && mymath::is_near_zero(value + 1.0, kFormatEps);
+    return expr_is_number(expression, &value) && numeric::is_near_zero(to_number(value) + to_number(1.0));
 }
 
 bool expr_is_number(const SymbolicExpression& expression, double* value) {
@@ -73,7 +81,7 @@ bool decompose_numeric_multiple_of_symbol(const SymbolicExpression& expression,
     if (node->type == NodeType::kDivide) {
         double divisor = 0.0;
         if (!SymbolicExpression(node->right).is_number(&divisor) ||
-            mymath::is_near_zero(divisor, kFormatEps)) {
+            numeric::is_near_zero(to_number(divisor))) {
             return false;
         }
         if (decompose_numeric_multiple_of_symbol(SymbolicExpression(node->left),
@@ -90,7 +98,7 @@ bool decompose_numeric_multiple_of_symbol(const SymbolicExpression& expression,
 
 bool numeric_matches_any(double value, const std::initializer_list<double>& candidates) {
     for (double candidate : candidates) {
-        if (mymath::is_near_zero(value - candidate, kFormatEps)) {
+        if (numeric::is_near_zero(to_number(value) - to_number(candidate))) {
             return true;
         }
     }
@@ -194,7 +202,7 @@ void collect_division_factors(const SymbolicExpression& expression,
     if (node->type == NodeType::kPower) {
         double exponent = 0.0;
         if (SymbolicExpression(node->right).is_number(&exponent) &&
-            mymath::is_integer(exponent, 1e-10) &&
+            numeric::is_integer_value(to_number(exponent)) &&
             exponent > 0.0) {
             const int count = static_cast<int>(exponent + 0.5);
             const SymbolicExpression base = SymbolicExpression(node->left);
@@ -210,7 +218,7 @@ void collect_division_factors(const SymbolicExpression& expression,
 
 SymbolicExpression rebuild_product_expression(double numeric_factor,
                                               const std::vector<SymbolicExpression>& factors) {
-    if (mymath::is_near_zero(numeric_factor, kFormatEps)) {
+    if (numeric::is_near_zero(to_number(numeric_factor))) {
         return SymbolicExpression::number(0.0);
     }
 
@@ -229,10 +237,10 @@ SymbolicExpression rebuild_product_expression(double numeric_factor,
     if (!has_combined) {
         return SymbolicExpression::number(numeric_factor);
     }
-    if (mymath::is_near_zero(numeric_factor - 1.0, kFormatEps)) {
+    if (numeric::is_near_zero(to_number(numeric_factor) - to_number(1.0))) {
         return combined;
     }
-    if (mymath::is_near_zero(numeric_factor + 1.0, kFormatEps)) {
+    if (numeric::is_near_zero(to_number(numeric_factor) + to_number(1.0))) {
         return SymbolicExpression(make_unary(NodeType::kNegate, combined.node_)).simplify();
     }
     return SymbolicExpression(
@@ -377,7 +385,7 @@ bool try_combine_like_terms(const SymbolicExpression& left,
 
     const double result_coefficient =
         left_coefficient + right_sign * right_coefficient;
-    if (mymath::is_near_zero(result_coefficient, kFormatEps)) {
+    if (numeric::is_near_zero(to_number(result_coefficient))) {
         *combined = SymbolicExpression::number(0.0);
         return true;
     }
@@ -385,11 +393,11 @@ bool try_combine_like_terms(const SymbolicExpression& left,
         *combined = SymbolicExpression::number(result_coefficient);
         return true;
     }
-    if (mymath::is_near_zero(result_coefficient - 1.0, kFormatEps)) {
+    if (numeric::is_near_zero(to_number(result_coefficient) - to_number(1.0))) {
         *combined = left_rest;
         return true;
     }
-    if (mymath::is_near_zero(result_coefficient + 1.0, kFormatEps)) {
+    if (numeric::is_near_zero(to_number(result_coefficient) + to_number(1.0))) {
         *combined = SymbolicExpression(
                         make_unary(NodeType::kNegate, left_rest.node_))
                         .simplify();
@@ -407,9 +415,6 @@ bool decompose_linear(const SymbolicExpression& expression,
                       const std::string& variable_name,
                       double* coefficient,
                       double* intercept) {
-    // 把表达式尝试识别成 a*x + b 的形式。
-    // 这是符号积分里处理 sin(ax+b)、cos(ax+b)、exp(ax+b)、1/(ax+b)
-    // 这些常见模式的基础工具函数。
     const SymbolicExpression simplified = expression.simplify();
     double number = 0.0;
     if (simplified.is_variable_named(variable_name)) {
@@ -460,7 +465,7 @@ bool decompose_linear(const SymbolicExpression& expression,
 
 void trim_polynomial_coefficients(std::vector<double>* coefficients) {
     while (coefficients->size() > 1 &&
-           mymath::is_near_zero(coefficients->back(), kFormatEps)) {
+           numeric::is_near_zero(to_number(coefficients->back()))) {
         coefficients->pop_back();
     }
     if (coefficients->empty()) {
@@ -547,7 +552,7 @@ SymbolicExpression build_polynomial_expression_from_coefficients(
     for (std::size_t index = normalized.size(); index > 0; --index) {
         const std::size_t degree = index - 1;
         const double coefficient = normalized[degree];
-        if (mymath::is_near_zero(coefficient, kFormatEps)) {
+        if (numeric::is_near_zero(to_number(coefficient))) {
             continue;
         }
 
@@ -563,7 +568,7 @@ SymbolicExpression build_polynomial_expression_from_coefficients(
                        : make_power(SymbolicExpression::variable(variable_name),
                                     SymbolicExpression::number(
                                         static_cast<double>(degree)));
-            if (!mymath::is_near_zero(magnitude - 1.0, kFormatEps)) {
+            if (!numeric::is_near_zero(to_number(magnitude) - to_number(1.0))) {
                 term = make_multiply(SymbolicExpression::number(magnitude), term);
             }
         }

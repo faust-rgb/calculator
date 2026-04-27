@@ -4,12 +4,25 @@
 
 namespace numeric {
 
-Number::Number() : value_(BigInt(0)) {}
-Number::Number(const BigInt& value) : value_(value) {}
-Number::Number(const Rational& value) : value_(value) {}
-Number::Number(const BigDecimal& value) : value_(value) {}
-Number::Number(const Complex& value) : value_(value) {}
-Number::Number(long long value) : value_(BigInt(value)) {}
+Number::Number() : value_(BigInt(0)), context_(default_precision()) {}
+
+Number::Number(const BigInt& value) : value_(value), context_(default_precision()) {}
+
+Number::Number(const Rational& value) : value_(value), context_(default_precision()) {}
+
+Number::Number(const BigDecimal& value) : value_(value), context_(default_precision()) {}
+
+Number::Number(const Complex& value) : value_(value), context_(default_precision()) {}
+
+Number::Number(long long value) : value_(BigInt(value)), context_(default_precision()) {}
+
+Number::Number(const BigInt& value, const PrecisionContext& ctx) : value_(value), context_(ctx) {}
+
+Number::Number(const Rational& value, const PrecisionContext& ctx) : value_(value), context_(ctx) {}
+
+Number::Number(const BigDecimal& value, const PrecisionContext& ctx) : value_(value), context_(ctx) {}
+
+Number::Number(long long value, const PrecisionContext& ctx) : value_(BigInt(value)), context_(ctx) {}
 
 NumberKind Number::kind() const {
     if (std::holds_alternative<BigInt>(value_)) {
@@ -37,22 +50,37 @@ std::string Number::to_string() const {
     return std::get<Complex>(value_).to_string();
 }
 
-int Number::compare(const Number& other, const PrecisionContext& context) const {
+Number Number::with_context(const PrecisionContext& ctx) const {
+    Number result = *this;
+    result.context_ = ctx;
+    return result;
+}
+
+PrecisionContext Number::effective_context(const Number& lhs, const Number& rhs) {
+    // Use the higher precision of the two
+    if (lhs.context_.digits >= rhs.context_.digits) {
+        return lhs.context_;
+    }
+    return rhs.context_;
+}
+
+int Number::compare(const Number& other) const {
+    const PrecisionContext ctx = effective_context(*this, other);
     if (is_complex() || other.is_complex()) {
         throw std::runtime_error("complex values are not ordered");
     }
     if (is_decimal() || other.is_decimal()) {
-        return to_decimal(context).compare(other.to_decimal(context));
+        return to_decimal().compare(other.to_decimal());
     }
     return to_rational().compare(other.to_rational());
 }
 
-BigDecimal Number::to_decimal(const PrecisionContext& context) const {
+BigDecimal Number::to_decimal() const {
     if (std::holds_alternative<BigInt>(value_)) {
         return BigDecimal(std::get<BigInt>(value_));
     }
     if (std::holds_alternative<Rational>(value_)) {
-        return BigDecimal::from_rational(std::get<Rational>(value_), context);
+        return BigDecimal::from_rational(std::get<Rational>(value_), context_);
     }
     if (std::holds_alternative<BigDecimal>(value_)) {
         return std::get<BigDecimal>(value_);
@@ -60,11 +88,11 @@ BigDecimal Number::to_decimal(const PrecisionContext& context) const {
     throw std::runtime_error("complex value cannot be converted to a scalar decimal");
 }
 
-Complex Number::to_complex(const PrecisionContext& context) const {
+Complex Number::to_complex() const {
     if (std::holds_alternative<Complex>(value_)) {
         return std::get<Complex>(value_);
     }
-    return Complex(to_decimal(context));
+    return Complex(to_decimal());
 }
 
 bool Number::is_integer() const {
@@ -121,53 +149,57 @@ Rational Number::to_rational() const {
     throw std::runtime_error("decimal value cannot be converted to exact rational");
 }
 
-Number add(const Number& lhs, const Number& rhs, const PrecisionContext& context) {
+Number add(const Number& lhs, const Number& rhs) {
+    const PrecisionContext ctx = Number::effective_context(lhs, rhs);
     if (lhs.is_complex() || rhs.is_complex()) {
-        return Number(lhs.to_complex(context) + rhs.to_complex(context));
+        return Number(lhs.to_complex() + rhs.to_complex()).with_context(ctx);
     }
     if (lhs.is_decimal() || rhs.is_decimal()) {
-        return Number(lhs.to_decimal(context) + rhs.to_decimal(context));
+        return Number(lhs.to_decimal() + rhs.to_decimal()).with_context(ctx);
     }
     if (lhs.is_rational() || rhs.is_rational()) {
-        return Number(lhs.to_rational() + rhs.to_rational());
+        return Number(lhs.to_rational() + rhs.to_rational()).with_context(ctx);
     }
-    return Number(std::get<BigInt>(lhs.value_) + std::get<BigInt>(rhs.value_));
+    return Number(std::get<BigInt>(lhs.value_) + std::get<BigInt>(rhs.value_)).with_context(ctx);
 }
 
-Number subtract(const Number& lhs, const Number& rhs, const PrecisionContext& context) {
+Number subtract(const Number& lhs, const Number& rhs) {
+    const PrecisionContext ctx = Number::effective_context(lhs, rhs);
     if (lhs.is_complex() || rhs.is_complex()) {
-        return Number(lhs.to_complex(context) - rhs.to_complex(context));
+        return Number(lhs.to_complex() - rhs.to_complex()).with_context(ctx);
     }
     if (lhs.is_decimal() || rhs.is_decimal()) {
-        return Number(lhs.to_decimal(context) - rhs.to_decimal(context));
+        return Number(lhs.to_decimal() - rhs.to_decimal()).with_context(ctx);
     }
     if (lhs.is_rational() || rhs.is_rational()) {
-        return Number(lhs.to_rational() - rhs.to_rational());
+        return Number(lhs.to_rational() - rhs.to_rational()).with_context(ctx);
     }
-    return Number(std::get<BigInt>(lhs.value_) - std::get<BigInt>(rhs.value_));
+    return Number(std::get<BigInt>(lhs.value_) - std::get<BigInt>(rhs.value_)).with_context(ctx);
 }
 
-Number multiply(const Number& lhs, const Number& rhs, const PrecisionContext& context) {
+Number multiply(const Number& lhs, const Number& rhs) {
+    const PrecisionContext ctx = Number::effective_context(lhs, rhs);
     if (lhs.is_complex() || rhs.is_complex()) {
-        return Number(lhs.to_complex(context) * rhs.to_complex(context));
+        return Number(lhs.to_complex() * rhs.to_complex()).with_context(ctx);
     }
     if (lhs.is_decimal() || rhs.is_decimal()) {
-        return Number(lhs.to_decimal(context) * rhs.to_decimal(context));
+        return Number(lhs.to_decimal() * rhs.to_decimal()).with_context(ctx);
     }
     if (lhs.is_rational() || rhs.is_rational()) {
-        return Number(lhs.to_rational() * rhs.to_rational());
+        return Number(lhs.to_rational() * rhs.to_rational()).with_context(ctx);
     }
-    return Number(std::get<BigInt>(lhs.value_) * std::get<BigInt>(rhs.value_));
+    return Number(std::get<BigInt>(lhs.value_) * std::get<BigInt>(rhs.value_)).with_context(ctx);
 }
 
-Number divide(const Number& lhs, const Number& rhs, const PrecisionContext& context) {
+Number divide(const Number& lhs, const Number& rhs) {
+    const PrecisionContext ctx = Number::effective_context(lhs, rhs);
     if (lhs.is_complex() || rhs.is_complex()) {
-        return Number(lhs.to_complex(context) / rhs.to_complex(context));
+        return Number(lhs.to_complex() / rhs.to_complex()).with_context(ctx);
     }
     if (lhs.is_decimal() || rhs.is_decimal()) {
-        return Number(numeric::divide(lhs.to_decimal(context), rhs.to_decimal(context), context));
+        return Number(numeric::divide(lhs.to_decimal(), rhs.to_decimal(), ctx)).with_context(ctx);
     }
-    return Number(lhs.to_rational() / rhs.to_rational());
+    return Number(lhs.to_rational() / rhs.to_rational()).with_context(ctx);
 }
 
 }  // namespace numeric

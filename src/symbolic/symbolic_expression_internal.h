@@ -2,6 +2,8 @@
 #define SYMBOLIC_EXPRESSION_INTERNAL_H
 
 #include "symbolic_expression.h"
+#include "number.h"
+#include "conversion.h"
 
 #include <initializer_list>
 #include <memory>
@@ -30,13 +32,15 @@ struct SymbolicExpression::Node {
 
     Node() = default;
     explicit Node(double value) : type(NodeType::kNumber), number_value(value) {}
+    explicit Node(numeric::Number value) : type(NodeType::kNumber), number_value(numeric::to_double(value)) {}
 };
 
 namespace symbolic_expression_internal {
 
 constexpr double kFormatEps = 1e-12;
 
-std::shared_ptr<SymbolicExpression::Node> make_number(double value);
+numeric::Number to_number(double value);
+std::shared_ptr<SymbolicExpression::Node> make_number(numeric::Number value);
 std::shared_ptr<SymbolicExpression::Node> make_variable(const std::string& name);
 std::shared_ptr<SymbolicExpression::Node> make_unary(
     NodeType type,
