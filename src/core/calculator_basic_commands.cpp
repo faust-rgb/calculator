@@ -18,6 +18,8 @@ double Calculator::evaluate_raw(const std::string& expression) {
 }
 
 std::string Calculator::evaluate_for_display(const std::string& expression, bool exact_mode) {
+    apply_calculator_display_precision(impl_.get());
+
     // 显示型功能优先于普通数值/分数显示，例如 hex(255) 应直接得到 "FF"。
     const std::map<std::string, StoredValue> variables = visible_variables(impl_.get());
     std::string converted;
@@ -45,6 +47,8 @@ std::string Calculator::evaluate_for_display(const std::string& expression, bool
 }
 
 std::string Calculator::process_line(const std::string& expression, bool exact_mode) {
+    apply_calculator_display_precision(impl_.get());
+
     std::string lhs;
     std::string rhs;
     if (!split_assignment(expression, &lhs, &rhs)) {
@@ -64,6 +68,8 @@ std::string Calculator::process_line(const std::string& expression, bool exact_m
 }
 
 std::string Calculator::execute_script(const std::string& source, bool exact_mode) {
+    apply_calculator_display_precision(impl_.get());
+
     script::Program program = script::parse_program(source);
     std::string last_output;
     for (const auto& statement : program.statements) {
@@ -82,6 +88,8 @@ std::string Calculator::execute_script(const std::string& source, bool exact_mod
 }
 
 std::string Calculator::list_variables() const {
+    apply_calculator_display_precision(impl_.get());
+
     if (impl_->variables.empty()) {
         return "No variables defined.";
     }

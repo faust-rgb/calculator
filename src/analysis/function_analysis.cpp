@@ -65,6 +65,23 @@ long double to_long_double(double value) {
     return static_cast<long double>(value);
 }
 
+void compensated_add(long double value,
+                     long double* sum,
+                     long double* compensation) {
+    const long double adjusted = value - *compensation;
+    const long double next = *sum + adjusted;
+    *compensation = (next - *sum) - adjusted;
+    *sum = next;
+}
+
+long double compensated_pair_sum(long double lhs, long double rhs) {
+    long double sum = 0.0L;
+    long double compensation = 0.0L;
+    compensated_add(lhs, &sum, &compensation);
+    compensated_add(rhs, &sum, &compensation);
+    return sum;
+}
+
 double scale_aware_step(double x) {
     const double scale = std::max(1.0, mymath::abs(x));
     return kDerivativeBaseStep * scale;
@@ -127,13 +144,19 @@ double gauss_kronrod_15_callable(const std::function<double(double)>& function,
         (to_long_double(right) - to_long_double(left)) * 0.5L;
     long double kronrod_sum = 0.0L;
     long double gauss_sum = 0.0L;
+    long double kronrod_compensation = 0.0L;
+    long double gauss_compensation = 0.0L;
 
     for (int i = 0; i < 8; ++i) {
         if (mymath::is_near_zero(kNodes[i], 0.0)) {
             const long double value =
                 to_long_double(function(static_cast<double>(center)));
-            kronrod_sum += static_cast<long double>(kKronrodWeights[i]) * value;
-            gauss_sum += static_cast<long double>(kGaussWeights[i]) * value;
+            compensated_add(static_cast<long double>(kKronrodWeights[i]) * value,
+                            &kronrod_sum,
+                            &kronrod_compensation);
+            compensated_add(static_cast<long double>(kGaussWeights[i]) * value,
+                            &gauss_sum,
+                            &gauss_compensation);
             continue;
         }
 
@@ -142,9 +165,13 @@ double gauss_kronrod_15_callable(const std::function<double(double)>& function,
             to_long_double(function(static_cast<double>(center - offset)));
         const long double right_value =
             to_long_double(function(static_cast<double>(center + offset)));
-        const long double pair_sum = left_value + right_value;
-        kronrod_sum += static_cast<long double>(kKronrodWeights[i]) * pair_sum;
-        gauss_sum += static_cast<long double>(kGaussWeights[i]) * pair_sum;
+        const long double pair_sum = compensated_pair_sum(left_value, right_value);
+        compensated_add(static_cast<long double>(kKronrodWeights[i]) * pair_sum,
+                        &kronrod_sum,
+                        &kronrod_compensation);
+        compensated_add(static_cast<long double>(kGaussWeights[i]) * pair_sum,
+                        &gauss_sum,
+                        &gauss_compensation);
     }
 
     const long double kronrod = half_width * kronrod_sum;
@@ -173,20 +200,23 @@ double adaptive_gauss_kronrod_callable_recursive(
         gauss_kronrod_15_callable(function, left, mid, &left_error);
     const double right_area =
         gauss_kronrod_15_callable(function, mid, right, &right_error);
-    return adaptive_gauss_kronrod_callable_recursive(function,
-                                                    left,
-                                                    mid,
-                                                    eps * 0.5,
-                                                    left_area,
-                                                    left_error,
-                                                    depth - 1) +
-           adaptive_gauss_kronrod_callable_recursive(function,
-                                                    mid,
-                                                    right,
-                                                    eps * 0.5,
-                                                    right_area,
-                                                    right_error,
-                                                    depth - 1);
+    const long double left_result = to_long_double(
+        adaptive_gauss_kronrod_callable_recursive(function,
+                                                  left,
+                                                  mid,
+                                                  eps * 0.5,
+                                                  left_area,
+                                                  left_error,
+                                                  depth - 1));
+    const long double right_result = to_long_double(
+        adaptive_gauss_kronrod_callable_recursive(function,
+                                                  mid,
+                                                  right,
+                                                  eps * 0.5,
+                                                  right_area,
+                                                  right_error,
+                                                  depth - 1));
+    return static_cast<double>(compensated_pair_sum(left_result, right_result));
 }
 
 double adaptive_gauss_kronrod_callable(const std::function<double(double)>& function,
@@ -277,22 +307,48 @@ double FunctionAnalysis::derivative(double x) const {
         central_difference_step_value(scale, 1.0 / mymath::pow(curvature_scale, 0.25));
 
     long double richardson[4][4] = {};
+    bool row_valid[4] = {};
     long double best_value = 0.0L;
     long double best_error = static_cast<long double>(mymath::infinity());
     for (int row = 0; row < 4; ++row) {
         const double step = base_step / mymath::pow(2.0, static_cast<double>(row));
-        const long double forward = to_long_double(evaluate_with_variable(x + step));
-        const long double backward = to_long_double(evaluate_with_variable(x - step));
-        richardson[row][0] = (forward - backward) / (2.0L * to_long_double(step));
+        const long double forward_x = to_long_double(x) + to_long_double(step);
+        const long double backward_x = to_long_double(x) - to_long_double(step);
+        const long double actual_step =
+            (forward_x - backward_x) * 0.5L;
+        if (actual_step <= 0.0L) {
+            continue;
+        }
+        const long double forward =
+            to_long_double(evaluate_with_variable(static_cast<double>(forward_x)));
+        const long double backward =
+            to_long_double(evaluate_with_variable(static_cast<double>(backward_x)));
+        if (!mymath::isfinite(static_cast<double>(forward)) ||
+            !mymath::isfinite(static_cast<double>(backward))) {
+            continue;
+        }
+        richardson[row][0] = (forward - backward) / (2.0L * actual_step);
+        row_valid[row] = mymath::isfinite(static_cast<double>(richardson[row][0]));
+        if (!row_valid[row]) {
+            continue;
+        }
         for (int col = 1; col <= row; ++col) {
+            if (!row_valid[row - 1]) {
+                row_valid[row] = false;
+                break;
+            }
             const long double factor =
                 static_cast<long double>(mymath::pow(4.0, static_cast<double>(col)));
             richardson[row][col] =
                 richardson[row][col - 1] +
                 (richardson[row][col - 1] - richardson[row - 1][col - 1]) /
                     (factor - 1.0L);
+            if (!mymath::isfinite(static_cast<double>(richardson[row][col]))) {
+                row_valid[row] = false;
+                break;
+            }
         }
-        if (row > 0) {
+        if (row > 0 && row_valid[row] && row_valid[row - 1]) {
             const long double candidate = richardson[row][row];
             const long double error_estimate =
                 mymath::abs_long_double(candidate - richardson[row - 1][row - 1]);
@@ -306,6 +362,11 @@ double FunctionAnalysis::derivative(double x) const {
 
     if (best_error < static_cast<long double>(mymath::infinity())) {
         return static_cast<double>(best_value);
+    }
+    for (int row = 3; row >= 0; --row) {
+        if (row_valid[row]) {
+            return static_cast<double>(richardson[row][row]);
+        }
     }
     return static_cast<double>(richardson[3][3]);
 }
@@ -558,11 +619,17 @@ double FunctionAnalysis::evaluate_with_variable(double x) const {
 double FunctionAnalysis::second_derivative(double x) const {
     const double step = scale_aware_step(x);
     const long double center = to_long_double(evaluate_with_variable(x));
-    const long double left = to_long_double(evaluate_with_variable(x - step));
-    const long double right = to_long_double(evaluate_with_variable(x + step));
-    const long double step_ld = to_long_double(step);
+    const long double left_x = to_long_double(x) - to_long_double(step);
+    const long double right_x = to_long_double(x) + to_long_double(step);
+    const long double actual_step = (right_x - left_x) * 0.5L;
+    const long double left =
+        to_long_double(evaluate_with_variable(static_cast<double>(left_x)));
+    const long double right =
+        to_long_double(evaluate_with_variable(static_cast<double>(right_x)));
+    const long double numerator =
+        compensated_pair_sum(left - center, right - center);
     return static_cast<double>(
-        (left - 2.0L * center + right) / (step_ld * step_ld));
+        numerator / (actual_step * actual_step));
 }
 
 double FunctionAnalysis::bisect_stationary_point(double left, double right) const {
@@ -620,18 +687,21 @@ double FunctionAnalysis::adaptive_gauss_kronrod_recursive(double left,
     double right_error = 0.0;
     const double left_area = gauss_kronrod_15(left, mid, &left_error);
     const double right_area = gauss_kronrod_15(mid, right, &right_error);
-    return adaptive_gauss_kronrod_recursive(left,
-                                            mid,
-                                            eps * 0.5,
-                                            left_area,
-                                            left_error,
-                                            depth - 1) +
-           adaptive_gauss_kronrod_recursive(mid,
-                                            right,
-                                            eps * 0.5,
-                                            right_area,
-                                            right_error,
-                                            depth - 1);
+    const long double left_result = to_long_double(
+        adaptive_gauss_kronrod_recursive(left,
+                                         mid,
+                                         eps * 0.5,
+                                         left_area,
+                                         left_error,
+                                         depth - 1));
+    const long double right_result = to_long_double(
+        adaptive_gauss_kronrod_recursive(mid,
+                                         right,
+                                         eps * 0.5,
+                                         right_area,
+                                         right_error,
+                                         depth - 1));
+    return static_cast<double>(compensated_pair_sum(left_result, right_result));
 }
 
 double FunctionAnalysis::gauss_kronrod_15(double left,
@@ -674,13 +744,19 @@ double FunctionAnalysis::gauss_kronrod_15(double left,
         (to_long_double(right) - to_long_double(left)) * 0.5L;
     long double kronrod_sum = 0.0L;
     long double gauss_sum = 0.0L;
+    long double kronrod_compensation = 0.0L;
+    long double gauss_compensation = 0.0L;
 
     for (int i = 0; i < 8; ++i) {
         if (mymath::is_near_zero(kNodes[i], 0.0)) {
             const long double value =
                 to_long_double(evaluate_with_variable(static_cast<double>(center)));
-            kronrod_sum += static_cast<long double>(kKronrodWeights[i]) * value;
-            gauss_sum += static_cast<long double>(kGaussWeights[i]) * value;
+            compensated_add(static_cast<long double>(kKronrodWeights[i]) * value,
+                            &kronrod_sum,
+                            &kronrod_compensation);
+            compensated_add(static_cast<long double>(kGaussWeights[i]) * value,
+                            &gauss_sum,
+                            &gauss_compensation);
             continue;
         }
 
@@ -689,9 +765,13 @@ double FunctionAnalysis::gauss_kronrod_15(double left,
             to_long_double(evaluate_with_variable(static_cast<double>(center - offset)));
         const long double right_value =
             to_long_double(evaluate_with_variable(static_cast<double>(center + offset)));
-        const long double pair_sum = left_value + right_value;
-        kronrod_sum += static_cast<long double>(kKronrodWeights[i]) * pair_sum;
-        gauss_sum += static_cast<long double>(kGaussWeights[i]) * pair_sum;
+        const long double pair_sum = compensated_pair_sum(left_value, right_value);
+        compensated_add(static_cast<long double>(kKronrodWeights[i]) * pair_sum,
+                        &kronrod_sum,
+                        &kronrod_compensation);
+        compensated_add(static_cast<long double>(kGaussWeights[i]) * pair_sum,
+                        &gauss_sum,
+                        &gauss_compensation);
     }
 
     const long double kronrod = half_width * kronrod_sum;

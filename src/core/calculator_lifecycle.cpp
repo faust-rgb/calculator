@@ -1,11 +1,22 @@
 #include "calculator_internal_types.h"
 
+#include "symbolic_expression.h"
+
 #include "mymath.h"
 
 #include <algorithm>
 #include <stdexcept>
 
-Calculator::Calculator() : impl_(new Impl()) {}
+void apply_calculator_display_precision(const Calculator::Impl* impl) {
+    const int precision = impl == nullptr ? kDefaultDisplayPrecision : impl->display_precision;
+    set_process_display_precision(precision);
+    matrix::set_display_precision(precision);
+    SymbolicExpression::set_display_precision(precision);
+}
+
+Calculator::Calculator() : impl_(new Impl()) {
+    apply_calculator_display_precision(impl_.get());
+}
 
 Calculator::~Calculator() = default;
 
@@ -48,6 +59,19 @@ std::string Calculator::set_symbolic_constants_mode(bool enabled) {
 
 bool Calculator::symbolic_constants_mode() const {
     return impl_->symbolic_constants_mode;
+}
+
+std::string Calculator::set_display_precision(int precision) {
+    if (precision < kMinDisplayPrecision || precision > kMaxDisplayPrecision) {
+        throw std::runtime_error("display precision must be in the range 1..17");
+    }
+    impl_->display_precision = precision;
+    apply_calculator_display_precision(impl_.get());
+    return "Display precision: " + std::to_string(precision);
+}
+
+int Calculator::display_precision() const {
+    return impl_->display_precision;
 }
 
 std::vector<std::string> Calculator::variable_names() const {

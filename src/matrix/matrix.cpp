@@ -21,6 +21,19 @@
 
 namespace matrix {
 
+namespace {
+
+int& mutable_display_precision() {
+    static int precision = 12;
+    return precision;
+}
+
+int clamp_display_precision(int precision) {
+    return std::clamp(precision, 1, 17);
+}
+
+}  // namespace
+
 namespace internal {
 
 /** @brief 矩阵运算的数值精度阈值 */
@@ -58,7 +71,7 @@ std::string format_number(double value) {
     }
 
     std::ostringstream out;
-    out << std::setprecision(12) << value;
+    out << std::setprecision(mutable_display_precision()) << value;
     return out.str();
 }
 
@@ -1203,6 +1216,10 @@ ReducedSvd compute_reduced_svd(const Matrix& matrix) {
 }
 
 }  // namespace internal
+
+void set_display_precision(int precision) {
+    mutable_display_precision() = clamp_display_precision(precision);
+}
 
 using namespace internal;
 

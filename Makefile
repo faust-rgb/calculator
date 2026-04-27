@@ -25,6 +25,8 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/core/exact_and_symbolic_render.cpp \
 	$(SRC_DIR)/core/script_runtime.cpp \
 	$(SRC_DIR)/core/calculator_commands.cpp \
+	$(SRC_DIR)/analysis/calculator_simplex.cpp \
+		$(SRC_DIR)/core/calculator_command_helpers.cpp \
 	$(SRC_DIR)/core/state_persistence.cpp \
 	$(SRC_DIR)/math/mymath.cpp \
 	$(SRC_DIR)/math/mymath_special_functions.cpp \
@@ -34,6 +36,13 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/analysis/function_analysis.cpp \
 	$(SRC_DIR)/analysis/multivariable_integrator.cpp \
 	$(SRC_DIR)/analysis/ode_solver.cpp \
+	$(SRC_DIR)/analysis/calculator_ode.cpp \
+	$(SRC_DIR)/analysis/calculator_integration.cpp \
+	$(SRC_DIR)/analysis/calculator_analysis_cmds.cpp \
+	$(SRC_DIR)/analysis/calculator_rootfinding.cpp \
+	$(SRC_DIR)/analysis/calculator_optimization.cpp \
+	$(SRC_DIR)/analysis/calculator_series.cpp \
+	$(SRC_DIR)/analysis/optimization_helpers.cpp \
 	$(SRC_DIR)/symbolic/node_parser.cpp \
 	$(SRC_DIR)/symbolic/algebra_helpers.cpp \
 	$(SRC_DIR)/symbolic/polynomial_helpers.cpp \
@@ -41,10 +50,14 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/symbolic/transforms.cpp \
 	$(SRC_DIR)/symbolic/symbolic_expression_calculus.cpp \
 	$(SRC_DIR)/symbolic/symbolic_expression_transforms.cpp \
+	$(SRC_DIR)/symbolic/calculator_transforms.cpp \
+	$(SRC_DIR)/algebra/calculator_polynomial.cpp \
 	$(SRC_DIR)/algebra/polynomial.cpp \
 	$(SRC_DIR)/script/script_parser.cpp
 COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/core/calculator_internal_types.h \
+		$(SRC_DIR)/analysis/calculator_simplex.h \
+		$(SRC_DIR)/core/calculator_command_helpers.h \
 	$(SRC_DIR)/math/mymath.h \
 	$(SRC_DIR)/math/mymath_internal.h \
 	$(SRC_DIR)/matrix/matrix.h \
@@ -52,8 +65,17 @@ COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/analysis/function_analysis.h \
 	$(SRC_DIR)/analysis/multivariable_integrator.h \
 	$(SRC_DIR)/analysis/ode_solver.h \
+	$(SRC_DIR)/analysis/calculator_ode.h \
+	$(SRC_DIR)/analysis/calculator_integration.h \
+	$(SRC_DIR)/analysis/calculator_analysis_cmds.h \
+	$(SRC_DIR)/analysis/calculator_rootfinding.h \
+	$(SRC_DIR)/analysis/calculator_optimization.h \
+	$(SRC_DIR)/analysis/calculator_series.h \
+	$(SRC_DIR)/analysis/optimization_helpers.h \
 	$(SRC_DIR)/symbolic/symbolic_expression.h \
 	$(SRC_DIR)/symbolic/symbolic_expression_internal.h \
+	$(SRC_DIR)/symbolic/calculator_transforms.h \
+	$(SRC_DIR)/algebra/calculator_polynomial.h \
 	$(SRC_DIR)/algebra/polynomial.h \
 	$(SRC_DIR)/script/script_parser.h \
 	$(SRC_DIR)/script/script_ast.h

@@ -49,6 +49,12 @@ public:
     static SymbolicExpression number(double value);
 
     /**
+     * @brief 设置符号表达式字符串输出中的十进制显示有效位数
+     * @param precision 有效位数，范围 1..17
+     */
+    static void set_display_precision(int precision);
+
+    /**
      * @brief 创建变量表达式
      * @param name 变量名
      * @return 变量表达式

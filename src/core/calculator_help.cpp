@@ -14,6 +14,8 @@ std::string build_help_topic(const std::string& topic) {
         "  :exact              Show current exact mode status\n"
         "  :symbolic on|off    Preserve pi/e in scalar display results\n"
         "  :symbolic           Show current symbolic constants mode\n"
+        "  :precision n        Set decimal display precision (1..17)\n"
+        "  :precision          Show current decimal display precision\n"
         "  :hexprefix on|off   Toggle 0x/0X prefix for hex output\n"
         "  :hexprefix          Show current hex prefix mode\n"
         "  :hexcase upper|lower Set hex letter case\n"

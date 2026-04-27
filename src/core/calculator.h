@@ -182,6 +182,19 @@ public:
     bool symbolic_constants_mode() const;
 
     /**
+     * @brief 设置十进制输出显示有效位数
+     * @param precision 有效位数，范围 1..17
+     * @return 操作结果消息
+     */
+    std::string set_display_precision(int precision);
+
+    /**
+     * @brief 查询当前十进制输出显示有效位数
+     * @return 当前有效位数
+     */
+    int display_precision() const;
+
+    /**
      * @brief 列出当前会话可补全的变量名
      * @return 变量名列表
      */

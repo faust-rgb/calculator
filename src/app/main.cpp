@@ -116,6 +116,7 @@ const std::vector<std::string>& command_completion_words() {
         ":help exact", ":help variables", ":help persistence", ":help programmer",
         ":exact", ":exact on", ":exact off",
         ":symbolic", ":symbolic on", ":symbolic off",
+        ":precision",
         ":hexprefix", ":hexprefix on", ":hexprefix off",
         ":hexcase", ":hexcase upper", ":hexcase lower",
         ":vars", ":funcs", ":history", ":clear", ":clearfunc", ":clearfuncs",
@@ -448,6 +449,18 @@ std::string execute_repl_line(Calculator& calculator,
     if (line == ":symbolic") {
         return std::string("Symbolic constants mode: ") +
                (calculator.symbolic_constants_mode() ? "ON" : "OFF");
+    }
+    if (line == ":precision") {
+        return "Display precision: " + std::to_string(calculator.display_precision());
+    }
+    if (line.rfind(":precision ", 0) == 0) {
+        const std::string argument = trim_copy(line.substr(11));
+        std::size_t parsed = 0;
+        const int precision = std::stoi(argument, &parsed);
+        if (parsed != argument.size()) {
+            throw std::runtime_error("display precision must be an integer");
+        }
+        return calculator.set_display_precision(precision);
     }
     if (line == ":hexprefix on") {
         return calculator.set_hex_prefix_mode(true);

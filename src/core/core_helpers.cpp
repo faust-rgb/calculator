@@ -582,9 +582,32 @@ Rational abs_rational(Rational value) {
 }
 
 std::string format_decimal(double value) {
+    return format_decimal(value, process_display_precision());
+}
+
+std::string format_decimal(double value, int precision) {
+    precision = std::clamp(precision, kMinDisplayPrecision, kMaxDisplayPrecision);
     std::ostringstream out;
-    out << std::setprecision(12) << value;
+    out << std::setprecision(precision) << value;
     return out.str();
+}
+
+namespace {
+
+int& mutable_process_display_precision() {
+    static int precision = kDefaultDisplayPrecision;
+    return precision;
+}
+
+} // namespace
+
+void set_process_display_precision(int precision) {
+    mutable_process_display_precision() =
+        std::clamp(precision, kMinDisplayPrecision, kMaxDisplayPrecision);
+}
+
+int process_display_precision() {
+    return mutable_process_display_precision();
 }
 
 bool try_make_simple_rational(double value,

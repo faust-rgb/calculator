@@ -43,6 +43,13 @@ constexpr double kDisplayZeroEps = mymath::kDoubleDenormMin;
 /** @brief 判断数值是否为整数的显示阈值 */
 constexpr double kDisplayIntegerEps = 1e-9;
 
+/** @brief 默认十进制显示有效位数 */
+constexpr int kDefaultDisplayPrecision = 12;
+
+/** @brief 十进制显示有效位数范围 */
+constexpr int kMinDisplayPrecision = 1;
+constexpr int kMaxDisplayPrecision = 17;
+
 // ============================================================================
 // 异常类型
 // ============================================================================
@@ -275,6 +282,7 @@ struct Calculator::Impl {
     bool symbolic_constants_mode = false;  ///< 符号常量模式（pi, e 保留符号形式）
     bool hex_prefix_mode = false;          ///< 十六进制输出前缀
     bool hex_uppercase_mode = true;        ///< 十六进制大写字母
+    int display_precision = kDefaultDisplayPrecision; ///< 十进制显示有效位数
 };
 
 // ============================================================================
@@ -339,7 +347,10 @@ long long ceil_to_long_long(double x);                ///< 向上取整
 // 显示格式化
 double normalize_display_decimal(double value);       ///< 规范化显示数值
 std::string format_decimal(double value);             ///< 格式化小数
+std::string format_decimal(double value, int precision); ///< 按指定有效位数格式化小数
 std::string format_symbolic_number(double value);     ///< 格式化符号数值
+void set_process_display_precision(int precision);    ///< 设置进程级显示有效位数
+int process_display_precision();                      ///< 查询进程级显示有效位数
 
 // 随机数
 std::mt19937_64& global_rng();  ///< 全局随机数生成器
@@ -432,6 +443,7 @@ std::string stored_value_precise_decimal_text(const StoredValue& value);
 PreciseDecimal parse_precise_decimal_expression(const std::string& expression, const std::map<std::string, StoredValue>* variables);
 
 // 值格式化
+void apply_calculator_display_precision(const Calculator::Impl* impl);
 std::string format_stored_value(const StoredValue& value, bool symbolic_constants_mode);
 std::string format_print_value(const StoredValue& value, bool symbolic_constants_mode);
 std::string format_symbolic_scalar(double value);

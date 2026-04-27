@@ -452,6 +452,43 @@ int main() {
         }
     }
 
+    try {
+        Calculator precision_calculator;
+        const std::string status = precision_calculator.set_display_precision(6);
+        const std::string scalar = precision_calculator.evaluate_for_display("pi", false);
+        const std::string matrix =
+            precision_calculator.evaluate_for_display("mat(1, 2, pi, sqrt(2))", false);
+        const std::string symbolic =
+            SymbolicExpression::number(mymath::sqrt(2.0)).to_string();
+        calculator.set_display_precision(12);
+        if (status == "Display precision: 6" &&
+            precision_calculator.display_precision() == 6 &&
+            scalar == "3.14159" &&
+            matrix == "[3.14159, 1.41421]" &&
+            symbolic == "1.41421") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: display precision config returned scalar="
+                      << scalar << " matrix=" << matrix
+                      << " symbolic=" << symbolic << '\n';
+        }
+    } catch (const std::exception& ex) {
+        calculator.set_display_precision(12);
+        ++failed;
+        std::cout << "FAIL: display precision config threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        calculator.set_display_precision(18);
+        ++failed;
+        std::cout << "FAIL: display precision accepted an out-of-range value\n";
+    } catch (const std::exception&) {
+        calculator.set_display_precision(12);
+        ++passed;
+    }
+
     const std::vector<DisplayCase> assignment_cases = {
         {"x = 1/3 + 1/4", true, "x = 7/12"},
         {"x + 1/6", true, "3/4"},
@@ -849,6 +886,7 @@ int main() {
             help.find(":help programmer") != std::string::npos &&
             help.find(":exact on|off") != std::string::npos &&
             help.find(":symbolic on|off") != std::string::npos &&
+            help.find(":precision n") != std::string::npos &&
             help.find(":funcs") != std::string::npos &&
             help.find(":history") != std::string::npos &&
             help.find(":save file") != std::string::npos &&
@@ -873,6 +911,7 @@ int main() {
             help.find(":clear") != std::string::npos &&
             help.find(":clearfunc") != std::string::npos &&
             help.find(":symbolic on|off") != std::string::npos &&
+            help.find(":precision n") != std::string::npos &&
             help.find(":hexprefix on|off") != std::string::npos &&
             help.find(":hexcase upper|lower") != std::string::npos &&
             help.find(":run file.calc") != std::string::npos &&

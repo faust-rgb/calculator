@@ -93,6 +93,9 @@ struct Matrix {
     std::string to_string() const;
 };
 
+/** @brief 设置矩阵字符串输出的十进制显示有效位数 */
+void set_display_precision(int precision);
+
 /**
  * @struct Value
  * @brief 矩阵表达式求值结果
