@@ -17,6 +17,60 @@ std::string simplify_symbolic_text(const std::string& text) {
     return SymbolicExpression::parse(text).simplify().to_string();
 }
 
+std::vector<double> build_taylor_coefficients(
+    const SeriesContext& ctx,
+    const SymbolicExpression& expression,
+    const std::string& variable_name,
+    double center,
+    int degree) {
+    struct TaylorDerivativeCacheEntry {
+        SymbolicExpression derivative;
+        double value = 0.0;
+        bool has_value = false;
+    };
+    static thread_local std::map<std::string, TaylorDerivativeCacheEntry> derivative_cache;
+    static constexpr std::size_t kMaxTaylorDerivativeCacheSize = 256;
+
+    const std::string base_key =
+        variable_name + "|" + format_symbolic_scalar(center) + "|" +
+        expression.simplify().to_string();
+    std::vector<double> coefficients;
+    coefficients.reserve(static_cast<std::size_t>(degree + 1));
+    SymbolicExpression current = expression;
+    for (int order = 0; order <= degree; ++order) {
+        const std::string order_key = base_key + "|" + std::to_string(order);
+        auto found = derivative_cache.find(order_key);
+        if (found == derivative_cache.end()) {
+            if (derivative_cache.size() >= kMaxTaylorDerivativeCacheSize) {
+                derivative_cache.clear();
+            }
+            TaylorDerivativeCacheEntry entry;
+            entry.derivative = current.simplify();
+            found = derivative_cache.emplace(order_key, entry).first;
+        } else {
+            current = found->second.derivative;
+        }
+
+        if (!found->second.has_value) {
+            found->second.value =
+                ctx.evaluate_at(found->second.derivative, variable_name, center);
+            found->second.has_value = true;
+        }
+        const double derivative_value = found->second.value;
+        coefficients.push_back(derivative_value / factorial_value(order));
+        if (order != degree) {
+            const std::string next_key = base_key + "|" + std::to_string(order + 1);
+            auto next_found = derivative_cache.find(next_key);
+            if (next_found != derivative_cache.end()) {
+                current = next_found->second.derivative;
+            } else {
+                current = found->second.derivative.derivative(variable_name).simplify();
+            }
+        }
+    }
+    return coefficients;
+}
+
 }  // namespace
 
 std::string taylor(const SeriesContext& ctx,
@@ -28,7 +82,7 @@ std::string taylor(const SeriesContext& ctx,
     ctx.resolve_symbolic(expr, true, &variable_name, &expression);
 
     const std::vector<double> coefficients =
-        ctx.build_taylor_coefficients(expression, variable_name, center, degree);
+        build_taylor_coefficients(ctx, expression, variable_name, center, degree);
     return taylor_series_to_string(coefficients, variable_name, center);
 }
 
@@ -45,8 +99,8 @@ std::string pade(const SeriesContext& ctx,
     SymbolicExpression expression;
     ctx.resolve_symbolic(expr, true, &variable_name, &expression);
 
-    const std::vector<double> coefficients = ctx.build_taylor_coefficients(
-        expression, variable_name, center, numerator_degree + denominator_degree);
+    const std::vector<double> coefficients = build_taylor_coefficients(
+        ctx, expression, variable_name, center, numerator_degree + denominator_degree);
 
     auto coefficient_at = [&](int index) {
         if (index < 0 || index >= static_cast<int>(coefficients.size())) {
@@ -118,8 +172,8 @@ std::string puiseux(const SeriesContext& ctx,
                   std::to_string(denominator);
     const SymbolicExpression substituted = expression.substitute(
         variable_name, SymbolicExpression::parse(replacement_text));
-    const std::vector<double> coefficients = ctx.build_taylor_coefficients(
-        substituted, auxiliary_variable, 0.0, degree);
+    const std::vector<double> coefficients = build_taylor_coefficients(
+        ctx, substituted, auxiliary_variable, 0.0, degree);
     return generalized_series_to_string(
         coefficients, variable_name, center, denominator);
 }
@@ -129,9 +183,147 @@ std::string series_sum(const SeriesContext& ctx,
                        const std::string& index_name,
                        const std::string& lower,
                        const std::string& upper) {
-    // 这个函数的实现比较复杂，涉及符号求和和数值求和
-    // 暂时保留在 calculator_commands.cpp 中，后续可以迁移
-    throw std::runtime_error("series_sum not yet implemented in series_ops module");
+    SymbolicExpression summand = SymbolicExpression::parse(ctx.expand_inline(expr));
+    SymbolicExpression upper_expression;
+    const bool upper_is_infinite =
+        upper == "inf" || upper == "oo" || upper == "infinity";
+    if (!upper_is_infinite) {
+        upper_expression = SymbolicExpression::parse(ctx.expand_inline(upper));
+    }
+
+    auto make_polynomial_sum_primitive =
+        [&](const std::vector<double>& coefficients) {
+            if (coefficients.size() > 4) {
+                throw std::runtime_error(
+                    "series_sum polynomial summands are currently supported up to degree 3");
+            }
+
+            std::vector<std::string> pieces;
+            if (coefficients.size() >= 1 &&
+                !mymath::is_near_zero(coefficients[0], 1e-10)) {
+                pieces.push_back("(" + format_symbolic_scalar(coefficients[0]) +
+                                 ") * (" + index_name + " + 1)");
+            }
+            if (coefficients.size() >= 2 &&
+                !mymath::is_near_zero(coefficients[1], 1e-10)) {
+                pieces.push_back("(" + format_symbolic_scalar(coefficients[1]) +
+                                 ") * (" + index_name + " * (" + index_name +
+                                 " + 1) / 2)");
+            }
+            if (coefficients.size() >= 3 &&
+                !mymath::is_near_zero(coefficients[2], 1e-10)) {
+                pieces.push_back("(" + format_symbolic_scalar(coefficients[2]) +
+                                 ") * (" + index_name + " * (" + index_name +
+                                 " + 1) * (2 * " + index_name + " + 1) / 6)");
+            }
+            if (coefficients.size() >= 4 &&
+                !mymath::is_near_zero(coefficients[3], 1e-10)) {
+                pieces.push_back("(" + format_symbolic_scalar(coefficients[3]) +
+                                 ") * ((" + index_name + " * (" + index_name +
+                                 " + 1) / 2) ^ 2)");
+            }
+
+            if (pieces.empty()) {
+                return SymbolicExpression::number(0.0);
+            }
+            std::ostringstream out;
+            for (std::size_t i = 0; i < pieces.size(); ++i) {
+                if (i != 0) {
+                    out << " + ";
+                }
+                out << pieces[i];
+            }
+            return SymbolicExpression::parse(out.str()).simplify();
+        };
+
+    auto finite_sum_from_primitive =
+        [&](const SymbolicExpression& primitive) {
+            const SymbolicExpression lower_minus_one =
+                SymbolicExpression::parse("(" + lower + ") - 1").simplify();
+            return SymbolicExpression::parse(
+                       "(" +
+                       primitive.substitute(index_name, upper_expression).to_string() +
+                       ") - (" +
+                       primitive.substitute(index_name, lower_minus_one).to_string() +
+                       ")")
+                .simplify()
+                .to_string();
+        };
+
+    std::vector<double> polynomial_coefficients;
+    if (summand.polynomial_coefficients(index_name, &polynomial_coefficients)) {
+        if (upper_is_infinite) {
+            bool all_zero = true;
+            for (double coefficient : polynomial_coefficients) {
+                if (!mymath::is_near_zero(coefficient, 1e-10)) {
+                    all_zero = false;
+                    break;
+                }
+            }
+            if (!all_zero) {
+                throw std::runtime_error(
+                    "series_sum does not support infinite polynomial sums");
+            }
+            return "0";
+        }
+
+        const SymbolicExpression primitive =
+            make_polynomial_sum_primitive(polynomial_coefficients);
+        return finite_sum_from_primitive(primitive);
+    }
+
+    auto geometric_ratio = [&](double* coefficient, double* ratio) {
+        const double s0 = ctx.evaluate_at(summand, index_name, 0.0);
+        const double s1 = ctx.evaluate_at(summand, index_name, 1.0);
+        const double s2 = ctx.evaluate_at(summand, index_name, 2.0);
+        const double s3 = ctx.evaluate_at(summand, index_name, 3.0);
+        if (mymath::is_near_zero(s0, 1e-10)) {
+            return false;
+        }
+        const double candidate = s1 / s0;
+        if (!mymath::is_near_zero(s2 - s1 * candidate, 1e-8) ||
+            !mymath::is_near_zero(s3 - s2 * candidate, 1e-8)) {
+            return false;
+        }
+        *coefficient = s0;
+        *ratio = candidate;
+        return true;
+    };
+
+    double geometric_coefficient = 0.0;
+    double geometric_ratio_value = 0.0;
+    if (!geometric_ratio(&geometric_coefficient, &geometric_ratio_value)) {
+        throw std::runtime_error(
+            "series_sum currently supports polynomial summands up to degree 3 and common geometric series");
+    }
+
+    const std::string coefficient_text =
+        format_symbolic_scalar(geometric_coefficient);
+    const std::string ratio_text = format_symbolic_scalar(geometric_ratio_value);
+
+    if (upper_is_infinite) {
+        if (mymath::abs(geometric_ratio_value) >= 1.0 - 1e-10) {
+            throw std::runtime_error(
+                "series_sum infinite geometric series requires |r| < 1");
+        }
+        if (mymath::is_near_zero(geometric_ratio_value - 1.0, 1e-10)) {
+            throw std::runtime_error(
+                "series_sum infinite geometric series diverges for r = 1");
+        }
+        return ctx.simplify_symbolic(
+            "(" + coefficient_text + ") * (" + ratio_text + ") ^ (" +
+            lower + ") / (1 - (" + ratio_text + "))");
+    }
+
+    const std::string geometric_primitive_text =
+        mymath::is_near_zero(geometric_ratio_value - 1.0, 1e-10)
+            ? "(" + coefficient_text + ") * (" + index_name + " + 1)"
+            : "(" + coefficient_text + ") * (1 - (" + ratio_text +
+                  ") ^ (" + index_name + " + 1)) / (1 - (" +
+                  ratio_text + "))";
+    const SymbolicExpression primitive =
+        SymbolicExpression::parse(geometric_primitive_text).simplify();
+    return finite_sum_from_primitive(primitive);
 }
 
 bool is_series_command(const std::string& command) {
@@ -225,7 +417,25 @@ bool handle_series_command(const SeriesContext& ctx,
         return true;
     }
 
-    // series_sum / summation 暂时返回 false，由 calculator_commands.cpp 处理
+    if (command == "series_sum" || command == "summation") {
+        if (arguments.size() != 4) {
+            throw std::runtime_error(
+                "series_sum expects expr, index, lower, upper");
+        }
+
+        const std::string index_name = trim_copy(arguments[1]);
+        if (!is_identifier_text(index_name)) {
+            throw std::runtime_error("series_sum index must be an identifier");
+        }
+
+        *output = series_sum(ctx,
+                             arguments[0],
+                             index_name,
+                             arguments[2],
+                             trim_copy(arguments[3]));
+        return true;
+    }
+
     return false;
 }
 

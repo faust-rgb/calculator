@@ -3,6 +3,7 @@
 // ============================================================================
 //
 // 提供函数分析命令的计算逻辑，包括：
+// - 极限计算 (limit)
 // - 临界点分析 (critical)
 // - 极值点查找 (extrema)
 
@@ -34,10 +35,6 @@ struct AnalysisContext {
     std::function<std::vector<std::string>(const std::vector<std::string>&, std::size_t, const std::vector<std::string>&)>
         parse_symbolic_variable_arguments;
 
-    // 在点处求值符号表达式
-    std::function<bool(SymbolicExpression, const std::vector<std::string>&, const std::vector<double>&, double*)>
-        evaluate_symbolic_at_point;
-
     // 数值求值
     std::function<double(const std::string&)> parse_decimal;
 
@@ -64,8 +61,7 @@ struct AnalysisContext {
 std::string classify_critical_point(
     const std::vector<std::vector<SymbolicExpression>>& hessian,
     const std::vector<std::string>& variables,
-    const std::vector<double>& values,
-    const std::function<bool(SymbolicExpression, const std::vector<std::string>&, const std::vector<double>&, double*)>& evaluate_at_point);
+    const std::vector<double>& values);
 
 // ============================================================================
 // 命令处理

@@ -6,9 +6,37 @@
 
 #include "mymath.h"
 
+#include <stdexcept>
 #include <vector>
 
 namespace integration_ops {
+
+namespace {
+
+std::vector<int> parse_subdivisions(const IntegrationContext& ctx,
+                                    const std::vector<std::string>& arguments,
+                                    std::size_t offset,
+                                    const std::vector<int>& defaults) {
+    std::vector<int> subdivisions = defaults;
+    if (arguments.size() == offset) {
+        return subdivisions;
+    }
+    if (arguments.size() != offset + defaults.size()) {
+        throw std::runtime_error("unexpected subdivision argument count");
+    }
+
+    for (std::size_t i = 0; i < defaults.size(); ++i) {
+        const double value = ctx.parse_decimal(arguments[offset + i]);
+        if (!is_integer_double(value) || value <= 0.0) {
+            throw std::runtime_error(
+                "integration subdivision counts must be positive integers");
+        }
+        subdivisions[i] = static_cast<int>(round_to_long_long(value));
+    }
+    return subdivisions;
+}
+
+}  // namespace
 
 double double_integral(
     const IntegrationContext& ctx,
@@ -135,7 +163,7 @@ bool handle_integration_command(const IntegrationContext& ctx,
             throw std::runtime_error(
                 "double_integral expects expr, x0, x1, y0, y1, and optional nx, ny");
         }
-        const std::vector<int> subdivisions = ctx.parse_subdivisions(arguments, 5, {32, 32});
+        const std::vector<int> subdivisions = parse_subdivisions(ctx, arguments, 5, {32, 32});
         double result = double_integral(
             ctx, arguments[0],
             ctx.parse_decimal(arguments[1]), ctx.parse_decimal(arguments[2]),
@@ -150,7 +178,7 @@ bool handle_integration_command(const IntegrationContext& ctx,
             throw std::runtime_error(
                 command + " expects expr, r0, r1, theta0, theta1, and optional nr, ntheta");
         }
-        const std::vector<int> subdivisions = ctx.parse_subdivisions(arguments, 5, {32, 32});
+        const std::vector<int> subdivisions = parse_subdivisions(ctx, arguments, 5, {32, 32});
         double result = double_integral_polar(
             ctx, arguments[0],
             ctx.parse_decimal(arguments[1]), ctx.parse_decimal(arguments[2]),
@@ -165,7 +193,7 @@ bool handle_integration_command(const IntegrationContext& ctx,
             throw std::runtime_error(
                 "triple_integral expects expr, x0, x1, y0, y1, z0, z1, and optional nx, ny, nz");
         }
-        const std::vector<int> subdivisions = ctx.parse_subdivisions(arguments, 7, {16, 16, 16});
+        const std::vector<int> subdivisions = parse_subdivisions(ctx, arguments, 7, {16, 16, 16});
         double result = triple_integral(
             ctx, arguments[0],
             ctx.parse_decimal(arguments[1]), ctx.parse_decimal(arguments[2]),
@@ -181,7 +209,7 @@ bool handle_integration_command(const IntegrationContext& ctx,
             throw std::runtime_error(
                 "triple_integral_cyl expects expr, r0, r1, theta0, theta1, z0, z1, and optional nr, ntheta, nz");
         }
-        const std::vector<int> subdivisions = ctx.parse_subdivisions(arguments, 7, {16, 16, 16});
+        const std::vector<int> subdivisions = parse_subdivisions(ctx, arguments, 7, {16, 16, 16});
         double result = triple_integral_cyl(
             ctx, arguments[0],
             ctx.parse_decimal(arguments[1]), ctx.parse_decimal(arguments[2]),
@@ -197,7 +225,7 @@ bool handle_integration_command(const IntegrationContext& ctx,
             throw std::runtime_error(
                 "triple_integral_sph expects expr, rho0, rho1, theta0, theta1, phi0, phi1, and optional nrho, ntheta, nphi");
         }
-        const std::vector<int> subdivisions = ctx.parse_subdivisions(arguments, 7, {16, 16, 16});
+        const std::vector<int> subdivisions = parse_subdivisions(ctx, arguments, 7, {16, 16, 16});
         double result = triple_integral_sph(
             ctx, arguments[0],
             ctx.parse_decimal(arguments[1]), ctx.parse_decimal(arguments[2]),

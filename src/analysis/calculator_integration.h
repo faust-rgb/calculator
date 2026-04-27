@@ -40,9 +40,6 @@ struct IntegrationContext {
     // 结果归一化
     std::function<double(double)> normalize_result;
 
-    // 解析分割数
-    std::function<std::vector<int>(const std::vector<std::string>&, std::size_t, const std::vector<int>&)>
-        parse_subdivisions;
 };
 
 // ============================================================================

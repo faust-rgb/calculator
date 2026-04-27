@@ -31,21 +31,8 @@ struct OptimizationContext {
     // 解析矩阵参数
     std::function<matrix::Matrix(const std::string&, const std::string&)> parse_matrix_argument;
 
-    // 矩阵转向量
-    std::function<std::vector<double>(const matrix::Matrix&, const std::string&)> matrix_to_vector_values;
-
-    // 点积
-    std::function<double(const std::vector<double>&, const std::vector<double>&)> dot_product;
-
-    // 格式化结果
-    std::function<std::string(const std::vector<double>&, double)> format_planning_result;
-
-    // 求解线性规划
-    std::function<bool(const std::vector<double>&, const matrix::Matrix&, const std::vector<double>&,
-                       const matrix::Matrix&, const std::vector<double>&,
-                       const std::vector<double>&, const std::vector<double>&,
-                       double, std::vector<double>*, double*, std::string*)>
-        solve_linear_box_problem;
+    // 结果归一化
+    std::function<double(double)> normalize_result;
 
     // 检查是否为整数
     std::function<bool(double, double)> is_integer_double;
@@ -92,6 +79,21 @@ bool is_optimization_command(const std::string& command);
  * - binary_min -> bip_min
  */
 std::string normalize_optimization_command(const std::string& command);
+
+/**
+ * @brief 求解带上下界和线性约束的连续线性规划子问题
+ */
+bool solve_linear_box_problem(const std::vector<double>& objective,
+                              const matrix::Matrix& inequality_matrix,
+                              const std::vector<double>& inequality_rhs,
+                              const matrix::Matrix& equality_matrix,
+                              const std::vector<double>& equality_rhs,
+                              const std::vector<double>& lower_bounds,
+                              const std::vector<double>& upper_bounds,
+                              double planning_tolerance,
+                              std::vector<double>* solution,
+                              double* objective_value,
+                              std::string* diagnostic);
 
 /**
  * @brief 处理优化命令

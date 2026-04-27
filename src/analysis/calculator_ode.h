@@ -43,21 +43,6 @@ struct ODEContext {
     // 解析矩阵参数
     std::function<matrix::Matrix(const std::string&, const std::string&)> parse_matrix_argument;
 
-    // 矩阵转向量
-    std::function<std::vector<double>(const matrix::Matrix&, const std::string&)> matrix_to_vector_values;
-
-    // 向量转列矩阵
-    std::function<matrix::Matrix(const std::vector<double>&)> vector_to_column_matrix;
-
-    // 创建标量存储值
-    std::function<StoredValue(double)> make_scalar_stored;
-
-    // 追加参数赋值
-    std::function<void(const StoredValue&, std::vector<std::pair<std::string, StoredValue>>*)> append_parameter_assignments;
-
-    // 解析正整数步数
-    std::function<bool(const std::string&, int*)> try_parse_positive_step_argument;
-
     // 求值表达式值
     std::function<StoredValue(const std::string&, bool)> evaluate_expression_value;
 

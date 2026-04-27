@@ -39,10 +39,6 @@ struct SeriesContext {
     std::function<double(const std::string&)> parse_decimal;
     std::function<double(const SymbolicExpression&, const std::string&, double)> evaluate_at;
 
-    // Taylor 系数计算
-    std::function<std::vector<double>(const SymbolicExpression&, const std::string&, double, int)>
-        build_taylor_coefficients;
-
     // 简化
     std::function<std::string(const std::string&)> simplify_symbolic;
 

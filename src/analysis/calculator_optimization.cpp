@@ -5,11 +5,36 @@
 #include "calculator_optimization.h"
 
 #include "mymath.h"
+#include "optimization_helpers.h"
 
 #include <algorithm>
 #include <vector>
 
 namespace optimization {
+
+namespace {
+
+std::vector<double> matrix_to_vector_values(const matrix::Matrix& value,
+                                            const std::string& context) {
+    if (!value.is_vector()) {
+        throw std::runtime_error(context + " expects vector arguments");
+    }
+    const std::size_t size = value.rows == 1 ? value.cols : value.rows;
+    std::vector<double> result(size, 0.0);
+    for (std::size_t i = 0; i < size; ++i) {
+        result[i] = value.rows == 1 ? value.at(0, i) : value.at(i, 0);
+    }
+    return result;
+}
+
+std::string format_planning_result(const OptimizationContext& ctx,
+                                   const std::vector<double>& solution,
+                                   double objective) {
+    return "x = " + matrix::Matrix::vector(solution).to_string() +
+           "\nobjective = " + format_decimal(ctx.normalize_result(objective));
+}
+
+}  // namespace
 
 ProblemType get_problem_type(const std::string& command) {
     if (command == "lp_max" || command == "lp_min") {
@@ -48,6 +73,216 @@ std::string normalize_optimization_command(const std::string& command) {
     return command;
 }
 
+bool solve_linear_box_problem(const std::vector<double>& objective,
+                              const matrix::Matrix& inequality_matrix,
+                              const std::vector<double>& inequality_rhs,
+                              const matrix::Matrix& equality_matrix,
+                              const std::vector<double>& equality_rhs,
+                              const std::vector<double>& lower_bounds,
+                              const std::vector<double>& upper_bounds,
+                              double planning_tolerance,
+                              std::vector<double>* solution,
+                              double* objective_value,
+                              std::string* diagnostic) {
+    const std::size_t variable_count = objective.size();
+    if (inequality_matrix.cols != variable_count ||
+        inequality_rhs.size() != inequality_matrix.rows ||
+        equality_matrix.cols != variable_count ||
+        equality_rhs.size() != equality_matrix.rows ||
+        lower_bounds.size() != variable_count ||
+        upper_bounds.size() != variable_count) {
+        throw std::runtime_error("planning dimension mismatch");
+    }
+
+    auto feasible_solution = [&](const std::vector<double>& x) {
+        if (x.size() != variable_count) {
+            return false;
+        }
+        for (std::size_t col = 0; col < variable_count; ++col) {
+            if (x[col] < lower_bounds[col] - planning_tolerance ||
+                x[col] > upper_bounds[col] + planning_tolerance) {
+                return false;
+            }
+        }
+        for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
+            long double total = 0.0L;
+            for (std::size_t col = 0; col < variable_count; ++col) {
+                total += static_cast<long double>(inequality_matrix.at(row, col)) *
+                         static_cast<long double>(x[col]);
+            }
+            if (total >
+                static_cast<long double>(inequality_rhs[row]) + planning_tolerance) {
+                return false;
+            }
+        }
+        for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
+            long double total = 0.0L;
+            for (std::size_t col = 0; col < variable_count; ++col) {
+                total += static_cast<long double>(equality_matrix.at(row, col)) *
+                         static_cast<long double>(x[col]);
+            }
+            if (mymath::abs(static_cast<double>(total - equality_rhs[row])) >
+                planning_tolerance) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    if (variable_count == 0) {
+        const std::vector<double> empty_solution;
+        if (!feasible_solution(empty_solution)) {
+            return false;
+        }
+        *solution = empty_solution;
+        *objective_value = 0.0;
+        return true;
+    }
+
+    static constexpr std::size_t kMaxPlanningBasisCount = 250000;
+    std::vector<std::vector<double>> all_rows;
+    std::vector<double> all_rhs;
+    all_rows.reserve(inequality_matrix.rows + 2 * equality_matrix.rows +
+                     2 * variable_count);
+    all_rhs.reserve(inequality_matrix.rows + 2 * equality_matrix.rows +
+                    2 * variable_count);
+
+    for (std::size_t row = 0; row < inequality_matrix.rows; ++row) {
+        std::vector<double> coefficients(variable_count, 0.0);
+        for (std::size_t col = 0; col < variable_count; ++col) {
+            coefficients[col] = inequality_matrix.at(row, col);
+        }
+        all_rows.push_back(coefficients);
+        all_rhs.push_back(inequality_rhs[row]);
+    }
+    for (std::size_t row = 0; row < equality_matrix.rows; ++row) {
+        std::vector<double> positive_row(variable_count, 0.0);
+        std::vector<double> negative_row(variable_count, 0.0);
+        for (std::size_t col = 0; col < variable_count; ++col) {
+            positive_row[col] = equality_matrix.at(row, col);
+            negative_row[col] = -equality_matrix.at(row, col);
+        }
+        all_rows.push_back(positive_row);
+        all_rhs.push_back(equality_rhs[row]);
+        all_rows.push_back(negative_row);
+        all_rhs.push_back(-equality_rhs[row]);
+    }
+    for (std::size_t col = 0; col < variable_count; ++col) {
+        std::vector<double> upper_row(variable_count, 0.0);
+        upper_row[col] = 1.0;
+        all_rows.push_back(upper_row);
+        all_rhs.push_back(upper_bounds[col]);
+
+        std::vector<double> lower_row(variable_count, 0.0);
+        lower_row[col] = -1.0;
+        all_rows.push_back(lower_row);
+        all_rhs.push_back(-lower_bounds[col]);
+    }
+
+    auto capped_choose = [](std::size_t n, std::size_t k, std::size_t cap) {
+        if (k > n) {
+            return std::size_t{0};
+        }
+        if (k > n - k) {
+            k = n - k;
+        }
+
+        long double value = 1.0L;
+        for (std::size_t i = 1; i <= k; ++i) {
+            value *= static_cast<long double>(n - k + i);
+            value /= static_cast<long double>(i);
+            if (value > static_cast<long double>(cap)) {
+                return cap + 1;
+            }
+        }
+        return static_cast<std::size_t>(value + 0.5L);
+    };
+
+    const std::size_t basis_count_estimate =
+        capped_choose(all_rows.size(), variable_count, kMaxPlanningBasisCount);
+    if (basis_count_estimate > kMaxPlanningBasisCount) {
+        throw std::runtime_error(
+            "planning basis enumeration limit exceeded: " +
+            std::to_string(basis_count_estimate) +
+            "+ candidate bases for " + std::to_string(variable_count) +
+            " variables and " + std::to_string(all_rows.size()) +
+            " active constraints");
+    }
+
+    bool found = false;
+    std::vector<double> best_solution(variable_count, 0.0);
+    double best_value = 0.0;
+    std::vector<std::size_t> selection(variable_count, 0);
+    std::size_t checked_bases = 0;
+    std::size_t singular_bases = 0;
+    std::size_t infeasible_bases = 0;
+
+    std::function<void(std::size_t, std::size_t)> enumerate_bases =
+        [&](std::size_t start, std::size_t depth) {
+            if (depth == variable_count) {
+                ++checked_bases;
+                matrix::Matrix basis(variable_count, variable_count, 0.0);
+                matrix::Matrix basis_rhs(variable_count, 1, 0.0);
+                for (std::size_t row = 0; row < variable_count; ++row) {
+                    basis_rhs.at(row, 0) = all_rhs[selection[row]];
+                    for (std::size_t col = 0; col < variable_count; ++col) {
+                        basis.at(row, col) = all_rows[selection[row]][col];
+                    }
+                }
+
+                try {
+                    const matrix::Matrix solved = matrix::solve(basis, basis_rhs);
+                    std::vector<double> candidate(variable_count, 0.0);
+                    for (std::size_t i = 0; i < variable_count; ++i) {
+                        const double value = solved.at(i, 0);
+                        candidate[i] =
+                            mymath::abs(value) <= planning_tolerance ? 0.0 : value;
+                    }
+                    if (!feasible_solution(candidate)) {
+                        ++infeasible_bases;
+                        return;
+                    }
+
+                    const double candidate_objective =
+                        optimization_helpers::dot_product(objective, candidate);
+                    if (!found ||
+                        candidate_objective > best_value + planning_tolerance) {
+                        found = true;
+                        best_value = candidate_objective;
+                        best_solution = candidate;
+                    }
+                } catch (const std::exception&) {
+                    ++singular_bases;
+                }
+                return;
+            }
+
+            const std::size_t remaining = variable_count - depth;
+            for (std::size_t index = start;
+                 index + remaining <= all_rows.size();
+                 ++index) {
+                selection[depth] = index;
+                enumerate_bases(index + 1, depth + 1);
+            }
+        };
+
+    enumerate_bases(0, 0);
+    if (!found) {
+        if (diagnostic != nullptr) {
+            *diagnostic = "checked " + std::to_string(checked_bases) +
+                          " bases, skipped " + std::to_string(singular_bases) +
+                          " singular bases and " +
+                          std::to_string(infeasible_bases) +
+                          " infeasible candidates";
+        }
+        return false;
+    }
+
+    *solution = best_solution;
+    *objective_value = best_value;
+    return true;
+}
+
 bool handle_optimization_command(const OptimizationContext& ctx,
                                  const std::string& command,
                                  const std::string& inside,
@@ -60,7 +295,7 @@ bool handle_optimization_command(const OptimizationContext& ctx,
     const double planning_tolerance = 1e-8;
 
     // 解析目标函数
-    const std::vector<double> objective = ctx.matrix_to_vector_values(
+    const std::vector<double> objective = matrix_to_vector_values(
         ctx.parse_matrix_argument(arguments[0], normalized), normalized);
     const std::size_t variable_count = objective.size();
 
@@ -68,7 +303,7 @@ bool handle_optimization_command(const OptimizationContext& ctx,
     std::size_t argument_index = 1;
     const matrix::Matrix inequality_matrix =
         ctx.parse_matrix_argument(arguments[argument_index++], normalized);
-    const std::vector<double> inequality_rhs = ctx.matrix_to_vector_values(
+    const std::vector<double> inequality_rhs = matrix_to_vector_values(
         ctx.parse_matrix_argument(arguments[argument_index++], normalized), normalized);
 
     // 初始化默认值
@@ -88,7 +323,7 @@ bool handle_optimization_command(const OptimizationContext& ctx,
         if (arguments.size() == 5) {
             equality_matrix =
                 ctx.parse_matrix_argument(arguments[argument_index++], normalized);
-            equality_rhs = ctx.matrix_to_vector_values(
+            equality_rhs = matrix_to_vector_values(
                 ctx.parse_matrix_argument(arguments[argument_index++], normalized), normalized);
         }
         std::fill(lower_bounds.begin(), lower_bounds.end(), 0.0);
@@ -103,14 +338,14 @@ bool handle_optimization_command(const OptimizationContext& ctx,
         if (arguments.size() == 8) {
             equality_matrix =
                 ctx.parse_matrix_argument(arguments[argument_index++], normalized);
-            equality_rhs = ctx.matrix_to_vector_values(
+            equality_rhs = matrix_to_vector_values(
                 ctx.parse_matrix_argument(arguments[argument_index++], normalized), normalized);
         }
-        lower_bounds = ctx.matrix_to_vector_values(
+        lower_bounds = matrix_to_vector_values(
             ctx.parse_matrix_argument(arguments[argument_index++], normalized), normalized);
-        upper_bounds = ctx.matrix_to_vector_values(
+        upper_bounds = matrix_to_vector_values(
             ctx.parse_matrix_argument(arguments[argument_index++], normalized), normalized);
-        integrality = ctx.matrix_to_vector_values(
+        integrality = matrix_to_vector_values(
             ctx.parse_matrix_argument(arguments[argument_index++], normalized), normalized);
     } else {
         // LP or ILP
@@ -122,12 +357,12 @@ bool handle_optimization_command(const OptimizationContext& ctx,
         if (arguments.size() == 7) {
             equality_matrix =
                 ctx.parse_matrix_argument(arguments[argument_index++], normalized);
-            equality_rhs = ctx.matrix_to_vector_values(
+            equality_rhs = matrix_to_vector_values(
                 ctx.parse_matrix_argument(arguments[argument_index++], normalized), normalized);
         }
-        lower_bounds = ctx.matrix_to_vector_values(
+        lower_bounds = matrix_to_vector_values(
             ctx.parse_matrix_argument(arguments[argument_index++], normalized), normalized);
-        upper_bounds = ctx.matrix_to_vector_values(
+        upper_bounds = matrix_to_vector_values(
             ctx.parse_matrix_argument(arguments[argument_index++], normalized), normalized);
         if (problem_type == ProblemType::ILP) {
             std::fill(integrality.begin(), integrality.end(), 1.0);
@@ -183,17 +418,17 @@ bool handle_optimization_command(const OptimizationContext& ctx,
         std::vector<double> best_solution;
         double best_value = 0.0;
         std::string planning_diagnostic;
-        if (!ctx.solve_linear_box_problem(transformed_objective,
-                                          inequality_matrix,
-                                          inequality_rhs,
-                                          equality_matrix,
-                                          equality_rhs,
-                                          lower_bounds,
-                                          upper_bounds,
-                                          planning_tolerance,
-                                          &best_solution,
-                                          &best_value,
-                                          &planning_diagnostic)) {
+        if (!solve_linear_box_problem(transformed_objective,
+                                      inequality_matrix,
+                                      inequality_rhs,
+                                      equality_matrix,
+                                      equality_rhs,
+                                      lower_bounds,
+                                      upper_bounds,
+                                      planning_tolerance,
+                                      &best_solution,
+                                      &best_value,
+                                      &planning_diagnostic)) {
             std::string message =
                 normalized + " found no feasible bounded solution";
             if (!planning_diagnostic.empty()) {
@@ -201,8 +436,10 @@ bool handle_optimization_command(const OptimizationContext& ctx,
             }
             throw std::runtime_error(message);
         }
-        *output = ctx.format_planning_result(best_solution,
-                                             ctx.dot_product(objective, best_solution));
+        *output = format_planning_result(
+            ctx,
+            best_solution,
+            optimization_helpers::dot_product(objective, best_solution));
         return true;
     }
 
@@ -409,7 +646,8 @@ bool handle_optimization_command(const OptimizationContext& ctx,
                         return;
                     }
 
-                    const double objective_value = ctx.dot_product(transformed_objective, candidate);
+                    const double objective_value =
+                        optimization_helpers::dot_product(transformed_objective, candidate);
                     if (!found || objective_value > best_value + planning_tolerance) {
                         found = true;
                         best_value = objective_value;
@@ -474,17 +712,17 @@ bool handle_optimization_command(const OptimizationContext& ctx,
                 std::vector<double> reduced_solution;
                 double reduced_objective_value = 0.0;
                 std::string reduced_diagnostic;
-                if (!ctx.solve_linear_box_problem(reduced_objective,
-                                                  reduced_inequality,
-                                                  reduced_inequality_rhs,
-                                                  reduced_equality,
-                                                  reduced_equality_rhs,
-                                                  reduced_lower,
-                                                  reduced_upper,
-                                                  planning_tolerance,
-                                                  &reduced_solution,
-                                                  &reduced_objective_value,
-                                                  &reduced_diagnostic)) {
+                if (!solve_linear_box_problem(reduced_objective,
+                                              reduced_inequality,
+                                              reduced_inequality_rhs,
+                                              reduced_equality,
+                                              reduced_equality_rhs,
+                                              reduced_lower,
+                                              reduced_upper,
+                                              planning_tolerance,
+                                              &reduced_solution,
+                                              &reduced_objective_value,
+                                              &reduced_diagnostic)) {
                     return;
                 }
 
@@ -494,7 +732,8 @@ bool handle_optimization_command(const OptimizationContext& ctx,
                     candidate[continuous_indices[reduced_col]] = reduced_solution[reduced_col];
                 }
 
-                const double objective_value = ctx.dot_product(transformed_objective, candidate);
+                const double objective_value =
+                    optimization_helpers::dot_product(transformed_objective, candidate);
                 if (!found || objective_value > best_value + planning_tolerance) {
                     found = true;
                     best_value = objective_value;
@@ -536,8 +775,10 @@ bool handle_optimization_command(const OptimizationContext& ctx,
         throw std::runtime_error(normalized + " found no feasible mixed-integer solution");
     }
 
-    *output = ctx.format_planning_result(best_solution,
-                                         ctx.dot_product(objective, best_solution));
+        *output = format_planning_result(
+            ctx,
+            best_solution,
+            optimization_helpers::dot_product(objective, best_solution));
     return true;
 }
 
