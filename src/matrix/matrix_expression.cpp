@@ -904,24 +904,27 @@ private:
                     values.push_back((*scalar_evaluator_)(argument));
                 }
             }
-            const double mean = mean_values(values);
-            double second_moment = 0.0;
-            double higher_moment = 0.0;
+            const long double mean = static_cast<long double>(mean_values(values));
+            long double second_moment = 0.0L;
+            long double higher_moment = 0.0L;
             for (double value : values) {
-                const double delta = value - mean;
-                const double delta2 = delta * delta;
+                const long double delta = static_cast<long double>(value) - mean;
+                const long double delta2 = delta * delta;
                 second_moment += delta2;
                 higher_moment += (name == "kurtosis") ? delta2 * delta2 : delta2 * delta;
             }
-            second_moment /= static_cast<double>(values.size());
-            if (mymath::is_near_zero(second_moment)) {
+            second_moment /= static_cast<long double>(values.size());
+            if (mymath::is_near_zero(static_cast<double>(second_moment))) {
                 throw std::runtime_error(name + " is undefined for zero variance data");
             }
-            higher_moment /= static_cast<double>(values.size());
+            higher_moment /= static_cast<long double>(values.size());
             if (name == "kurtosis") {
-                return Value::from_scalar(higher_moment / (second_moment * second_moment) - 3.0);
+                return Value::from_scalar(static_cast<double>(
+                    higher_moment / (second_moment * second_moment) - 3.0L));
             }
-            return Value::from_scalar(higher_moment / mymath::pow(second_moment, 1.5));
+            return Value::from_scalar(static_cast<double>(
+                higher_moment /
+                static_cast<long double>(mymath::pow(static_cast<double>(second_moment), 1.5))));
         }
 
         if (name == "percentile") {

@@ -587,11 +587,15 @@ private:
         if (arguments.empty()) {
             throw std::runtime_error("sum expects at least one argument");
         }
-        double total = 0.0;
+        long double total = 0.0L;
+        long double compensation = 0.0L;
         for (double value : arguments) {
-            total += value;
+            const long double adjusted = static_cast<long double>(value) - compensation;
+            const long double next = total + adjusted;
+            compensation = (next - total) - adjusted;
+            total = next;
         }
-        return total;
+        return static_cast<double>(total);
     }
 
     static double apply_avg(const std::vector<double>& arguments) {
@@ -654,13 +658,18 @@ private:
         if (arguments.empty()) {
             throw std::runtime_error("var expects at least one argument");
         }
-        const double mean = apply_mean(arguments);
-        double sum = 0.0;
+        long double mean = 0.0L;
+        long double m2 = 0.0L;
+        std::size_t count = 0;
         for (double value : arguments) {
-            const double delta = value - mean;
-            sum += delta * delta;
+            ++count;
+            const long double value_ld = static_cast<long double>(value);
+            const long double delta = value_ld - mean;
+            mean += delta / static_cast<long double>(count);
+            const long double delta2 = value_ld - mean;
+            m2 += delta * delta2;
         }
-        return sum / static_cast<double>(arguments.size());
+        return static_cast<double>(m2 / static_cast<long double>(arguments.size()));
     }
 
     static double apply_stddev(const std::vector<double>& arguments) {
@@ -671,42 +680,44 @@ private:
         if (arguments.empty()) {
             throw std::runtime_error("skewness expects at least one argument");
         }
-        const double mean = apply_mean(arguments);
-        double second_moment = 0.0;
-        double third_moment = 0.0;
+        const long double mean = static_cast<long double>(apply_mean(arguments));
+        long double second_moment = 0.0L;
+        long double third_moment = 0.0L;
         for (double value : arguments) {
-            const double delta = value - mean;
-            const double delta2 = delta * delta;
+            const long double delta = static_cast<long double>(value) - mean;
+            const long double delta2 = delta * delta;
             second_moment += delta2;
             third_moment += delta2 * delta;
         }
-        second_moment /= static_cast<double>(arguments.size());
-        if (mymath::is_near_zero(second_moment)) {
+        second_moment /= static_cast<long double>(arguments.size());
+        if (mymath::is_near_zero(static_cast<double>(second_moment))) {
             throw std::runtime_error("skewness is undefined for zero variance data");
         }
-        third_moment /= static_cast<double>(arguments.size());
-        return third_moment / mymath::pow(second_moment, 1.5);
+        third_moment /= static_cast<long double>(arguments.size());
+        return static_cast<double>(
+            third_moment / static_cast<long double>(mymath::pow(static_cast<double>(second_moment), 1.5)));
     }
 
     static double apply_kurtosis(const std::vector<double>& arguments) {
         if (arguments.empty()) {
             throw std::runtime_error("kurtosis expects at least one argument");
         }
-        const double mean = apply_mean(arguments);
-        double second_moment = 0.0;
-        double fourth_moment = 0.0;
+        const long double mean = static_cast<long double>(apply_mean(arguments));
+        long double second_moment = 0.0L;
+        long double fourth_moment = 0.0L;
         for (double value : arguments) {
-            const double delta = value - mean;
-            const double delta2 = delta * delta;
+            const long double delta = static_cast<long double>(value) - mean;
+            const long double delta2 = delta * delta;
             second_moment += delta2;
             fourth_moment += delta2 * delta2;
         }
-        second_moment /= static_cast<double>(arguments.size());
-        if (mymath::is_near_zero(second_moment)) {
+        second_moment /= static_cast<long double>(arguments.size());
+        if (mymath::is_near_zero(static_cast<double>(second_moment))) {
             throw std::runtime_error("kurtosis is undefined for zero variance data");
         }
-        fourth_moment /= static_cast<double>(arguments.size());
-        return fourth_moment / (second_moment * second_moment) - 3.0;
+        fourth_moment /= static_cast<long double>(arguments.size());
+        return static_cast<double>(
+            fourth_moment / (second_moment * second_moment) - 3.0L);
     }
 
     static double apply_percentile(const std::vector<double>& arguments) {

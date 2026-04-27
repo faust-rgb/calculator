@@ -416,18 +416,43 @@ std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
 
         for (std::size_t prev = 0; prev < col; ++prev) {
             long double projection = 0.0L;
+            long double compensation = 0.0L;
             for (std::size_t row = 0; row < n; ++row) {
-                projection += q_columns[prev][row] * column[row];
+                const long double term = q_columns[prev][row] * column[row];
+                const long double adjusted = term - compensation;
+                const long double next = projection + adjusted;
+                compensation = (next - projection) - adjusted;
+                projection = next;
             }
             r[prev][col] = projection;
             for (std::size_t row = 0; row < n; ++row) {
                 column[row] -= projection * q_columns[prev][row];
             }
         }
+        for (std::size_t prev = 0; prev < col; ++prev) {
+            long double correction = 0.0L;
+            long double compensation = 0.0L;
+            for (std::size_t row = 0; row < n; ++row) {
+                const long double term = q_columns[prev][row] * column[row];
+                const long double adjusted = term - compensation;
+                const long double next = correction + adjusted;
+                compensation = (next - correction) - adjusted;
+                correction = next;
+            }
+            r[prev][col] += correction;
+            for (std::size_t row = 0; row < n; ++row) {
+                column[row] -= correction * q_columns[prev][row];
+            }
+        }
 
         long double norm_squared = 0.0L;
+        long double norm_compensation = 0.0L;
         for (long double value : column) {
-            norm_squared += value * value;
+            const long double term = value * value;
+            const long double adjusted = term - norm_compensation;
+            const long double next = norm_squared + adjusted;
+            norm_compensation = (next - norm_squared) - adjusted;
+            norm_squared = next;
         }
         const long double norm = mymath::sqrt(norm_squared);
         if (norm <= 1e-18L) {
@@ -439,9 +464,14 @@ std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
         }
 
         long double projected_rhs = 0.0L;
+        long double rhs_compensation = 0.0L;
         for (std::size_t row = 0; row < n; ++row) {
-            projected_rhs +=
+            const long double term =
                 q_columns[col][row] * static_cast<long double>(y_samples[row]);
+            const long double adjusted = term - rhs_compensation;
+            const long double next = projected_rhs + adjusted;
+            rhs_compensation = (next - projected_rhs) - adjusted;
+            projected_rhs = next;
         }
         qty[col] = projected_rhs;
     }

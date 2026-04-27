@@ -796,7 +796,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                 found->second.has_value = true;
             }
             const double derivative_value = found->second.value;
-            coefficients.push_back(derivative_value / factorial_int(order));
+            coefficients.push_back(derivative_value / factorial_value(order));
             if (order != degree) {
                 const std::string next_key = base_key + "|" + std::to_string(order + 1);
                 auto next_found = derivative_cache.find(next_key);

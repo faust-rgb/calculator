@@ -1,3 +1,25 @@
+// ============================================================================
+// 符号表达式简化模块
+// ============================================================================
+//
+// 本文件实现符号表达式的代数简化规则。简化是符号计算的核心，应用于：
+// - 解析后的表达式规范化
+// - 微积分运算后的结果整理
+// - 用户交互时的输出优化
+//
+// 简化策略采用启发式规则集，按表达式类型分派：
+// 1. 常数折叠：数值运算的直接求值
+// 2. 恒等式消去：x+0→x, x*1→x, x^0→1 等
+// 3. 三角恒等式：sin²(x)+cos²(x)→1, sin(0)→0 等
+// 4. 幂运算简化：x^a * x^b → x^(a+b), (x^a)^b → x^(a*b)
+// 5. 有理式约分：多项式 GCD 约分、整除化简
+// 6. 公因子提取：2x+2y → 2(x+y)
+// 7. 多项式规范化：单变量多项式按降幂排列
+//
+// 简化通过多轮迭代进行，直到表达式结构不再变化（最多 16 轮）。
+// 结果通过 LRU 缓存记忆，避免重复计算。
+// ============================================================================
+
 #include "symbolic_expression_internal.h"
 
 #include "mymath.h"
@@ -7,13 +29,37 @@
 
 namespace symbolic_expression_internal {
 
+// ============================================================================
+// 单轮简化主函数
+// ============================================================================
+
+/**
+ * @brief 对表达式应用一轮简化规则
+ *
+ * 这是简化的核心调度函数，根据节点类型分派到相应的规则：
+ * - kNumber/kVariable: 原样返回
+ * - kFunction: 简化参数，应用函数特定规则
+ * - kNegate: 简化操作数，处理双重取负
+ * - 二元运算: 简化两操作数，应用相应代数规则
+ *
+ * 注意：此函数只应用规则一次，不保证达到最优形式。
+ * 完整简化通过 simplify_impl() 多轮调用此函数实现。
+ */
 SymbolicExpression simplify_once(const SymbolicExpression& expression) {
     const auto& node = expression.node_;
     switch (node->type) {
         case NodeType::kNumber:
         case NodeType::kVariable:
             return expression;
-        case NodeType::kFunction: {
+        // ========================================================================
+    // 函数节点简化
+    // ========================================================================
+    // 策略：先简化参数，然后应用函数特定的规则：
+    // 1. 数值参数：直接调用数值函数求值
+    // 2. 特殊恒等式：ln(e)→1, exp(ln(x))→x（需正性检查）, sqrt(x²)→abs(x)
+    // 3. 奇偶性处理：sin(-x)→-sin(x), cos(-x)→cos(x)
+    // 4. π 的特殊角度：sin(π/6)→1/2, cos(π/3)→1/2 等
+    case NodeType::kFunction: {
             const SymbolicExpression argument = SymbolicExpression(node->left).simplify();
             double numeric = 0.0;
             if (argument.is_number(&numeric)) {
@@ -212,7 +258,13 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
 
             return make_function(node->text, argument);
         }
-        case NodeType::kNegate: {
+        // ========================================================================
+    // 取负节点简化
+    // ========================================================================
+    // 规则：
+    // 1. 数值取负：直接计算
+    // 2. 双重取负：-(-x) → x
+    case NodeType::kNegate: {
             const SymbolicExpression operand = SymbolicExpression(node->left).simplify();
             double value = 0.0;
             if (operand.is_number(&value)) {
@@ -223,20 +275,36 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             return make_negate(operand);
         }
-        case NodeType::kAdd:
-        case NodeType::kSubtract:
-        case NodeType::kMultiply:
-        case NodeType::kDivide:
-        case NodeType::kPower:
-            break;
+        // ========================================================================
+    // 二元运算节点简化
+    // ========================================================================
+    // 首先简化左右操作数，然后根据运算类型应用规则
+    case NodeType::kAdd:
+    case NodeType::kSubtract:
+    case NodeType::kMultiply:
+    case NodeType::kDivide:
+    case NodeType::kPower:
+        break;
     }
 
+    // 简化后的左右操作数
     const SymbolicExpression left = SymbolicExpression(node->left).simplify();
     const SymbolicExpression right = SymbolicExpression(node->right).simplify();
     double left_value = 0.0;
     double right_value = 0.0;
 
     switch (node->type) {
+        // ====================================================================
+        // 加法简化
+        // ====================================================================
+        // 规则优先级：
+        // 1. 常数折叠：数值直接相加
+        // 2. 零元消去：x+0 → x
+        // 3. 三角恒等式：sin²(x)+cos²(x) → 1
+        // 4. 相似项合并：2x+3x → 5x
+        // 5. 多项式规范化
+        // 6. 公因子提取：ax+ay → a(x+y)
+        // 7. 项排序：按结构键字典序排列
         case NodeType::kAdd:
             if (left.is_number(&left_value) && right.is_number(&right_value)) {
                 return SymbolicExpression::number(left_value + right_value);
@@ -287,6 +355,16 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 }
             }
             return make_add(left, right);
+        // ====================================================================
+        // 减法简化
+        // ====================================================================
+        // 规则：
+        // 1. 常数折叠
+        // 2. 零元消去：x-0 → x, 0-x → -x
+        // 3. 负负得正：x-(-y) → x+y
+        // 4. 相似项合并
+        // 5. 多项式规范化
+        // 6. 公因子提取
         case NodeType::kSubtract:
             if (left.is_number(&left_value) && right.is_number(&right_value)) {
                 return SymbolicExpression::number(left_value - right_value);
@@ -322,6 +400,16 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 }
             }
             return make_subtract(left, right);
+        // ====================================================================
+        // 乘法简化
+        // ====================================================================
+        // 规则：
+        // 1. 常数折叠
+        // 2. 零元消去：x*0 → 0
+        // 3. 单位元消去：x*1 → x
+        // 4. 负号处理：x*(-1) → -x
+        // 5. 幂次合并：x^a * x^b → x^(a+b)
+        // 6. 乘积规范化：收集因子、排序、合并幂次
         case NodeType::kMultiply:
             if (left.is_number(&left_value) && right.is_number(&right_value)) {
                 return SymbolicExpression::number(left_value * right_value);
@@ -360,7 +448,19 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 collect_multiplicative_terms(right, &numeric_factor, &symbolic_factors);
                 return make_sorted_product(numeric_factor, symbolic_factors);
             }
-        case NodeType::kDivide:
+            // ====================================================================
+            // 除法简化
+            // ====================================================================
+            // 规则：
+            // 1. 常数折叠
+            // 2. 零分子：0/x → 0
+            // 3. 单位分母：x/1 → x
+            // 4. 负号提取：(-a)/b → -(a/b)
+            // 5. 多项式整除约分
+            // 6. 多项式 GCD 约分
+            // 7. 幂次约分：x^a / x^b → x^(a-b)
+            // 8. 因子约分：展开幂次后对消相同因子
+            case NodeType::kDivide:
             if (left.is_number(&left_value) && right.is_number(&right_value)) {
                 return SymbolicExpression::number(left_value / right_value);
             }
@@ -475,6 +575,14 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 }
             }
             return make_divide(left, right);
+        // ====================================================================
+        // 幂运算简化
+        // ====================================================================
+        // 规则：
+        // 1. 底数为零或一：0^x → 0, 1^x → 1
+        // 2. 指数为零或一：x^0 → 1, x^1 → x
+        // 3. 幂的幂：(x^a)^b → x^(a*b)
+        // 4. 常数幂：数值直接计算
         case NodeType::kPower:
             if (left.is_number(&left_value)) {
                 if (mymath::is_near_zero(left_value, kFormatEps)) {
@@ -505,6 +613,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 return SymbolicExpression::number(mymath::pow(left_value, right_value));
             }
             return make_power(left, right);
+        // 已在上面处理的节点类型，此处仅为消除编译器警告
         case NodeType::kNumber:
         case NodeType::kVariable:
         case NodeType::kNegate:
@@ -514,8 +623,26 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
     return expression;
 }
 
+// ============================================================================
+// 多轮简化实现
+// ============================================================================
+
+/**
+ * @brief 简化的完整实现（多轮迭代）
+ *
+ * 简化通过迭代进行，直到表达式结构不再变化。
+ * 最多进行 kMaxSimplifyPasses (16) 轮迭代。
+ *
+ * 使用结构键检测变化，避免不必要的字符串比较。
+ *
+ * 注意：递归调用时使用 simplify_once 而非 simplify_impl，
+ * 以避免无限循环和重复的缓存查询。
+ */
 SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
+    // 简化深度计数器，用于检测递归调用
     static thread_local int simplify_depth = 0;
+
+    // RAII 守卫，确保深度计数器正确递减
     struct SimplifyDepthGuard {
         int* depth;
         explicit SimplifyDepthGuard(int* value) : depth(value) {
@@ -526,6 +653,8 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
         }
     };
 
+    // 如果已经在递归调用中，直接执行单轮简化
+    // 这避免了嵌套的多轮迭代
     if (simplify_depth > 0) {
         SimplifyDepthGuard guard(&simplify_depth);
         return simplify_once(expression);
@@ -533,16 +662,23 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
 
     SimplifyDepthGuard guard(&simplify_depth);
     SymbolicExpression current = expression;
+
+    // 最多 16 轮迭代，通常 2-4 轮即可收敛
     constexpr int kMaxSimplifyPasses = 16;
     for (int pass = 0; pass < kMaxSimplifyPasses; ++pass) {
+        // 使用结构键检测是否还有变化
         const std::string current_key = node_structural_key(current.node_);
         SymbolicExpression next = simplify_once(current);
         const std::string next_key = node_structural_key(next.node_);
+
+        // 结构键不变表示已收敛
         if (next_key == current_key) {
             return next;
         }
         current = next;
     }
+
+    // 达到最大迭代次数，返回当前结果
     return current;
 }
 

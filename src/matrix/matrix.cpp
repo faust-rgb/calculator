@@ -105,9 +105,14 @@ void swap_rows(Matrix* matrix, std::size_t lhs, std::size_t rhs) {
 
 double vector_norm_squared(const std::vector<double>& values) {
     long double sum = 0.0L;
+    long double compensation = 0.0L;
     for (double value : values) {
         const long double value_ld = static_cast<long double>(value);
-        sum += value_ld * value_ld;
+        const long double term = value_ld * value_ld;
+        const long double adjusted = term - compensation;
+        const long double next = sum + adjusted;
+        compensation = (next - sum) - adjusted;
+        sum = next;
     }
     return static_cast<double>(sum);
 }
@@ -419,8 +424,14 @@ void set_matrix_column(Matrix* matrix, std::size_t col, const std::vector<double
 
 double dot_vectors(const std::vector<double>& lhs, const std::vector<double>& rhs) {
     long double sum = 0.0L;
+    long double compensation = 0.0L;
     for (std::size_t i = 0; i < lhs.size(); ++i) {
-        sum += static_cast<long double>(lhs[i]) * static_cast<long double>(rhs[i]);
+        const long double term =
+            static_cast<long double>(lhs[i]) * static_cast<long double>(rhs[i]);
+        const long double adjusted = term - compensation;
+        const long double next = sum + adjusted;
+        compensation = (next - sum) - adjusted;
+        sum = next;
     }
     return static_cast<double>(sum);
 }
@@ -474,8 +485,12 @@ std::vector<double> sort_values(std::vector<double> values) {
 double mean_values(const std::vector<double>& values) {
     require_nonempty_values(values, "mean");
     long double total = 0.0L;
+    long double compensation = 0.0L;
     for (double value : values) {
-        total += static_cast<long double>(value);
+        const long double adjusted = static_cast<long double>(value) - compensation;
+        const long double next = total + adjusted;
+        compensation = (next - total) - adjusted;
+        total = next;
     }
     return static_cast<double>(total / static_cast<long double>(values.size()));
 }
@@ -518,14 +533,18 @@ double mode_values(const std::vector<double>& values) {
 
 double variance_values(const std::vector<double>& values) {
     require_nonempty_values(values, "var");
-    const double mean = mean_values(values);
-    long double sum = 0.0L;
+    long double mean = 0.0L;
+    long double m2 = 0.0L;
+    std::size_t count = 0;
     for (double value : values) {
-        const long double delta =
-            static_cast<long double>(value) - static_cast<long double>(mean);
-        sum += delta * delta;
+        ++count;
+        const long double value_ld = static_cast<long double>(value);
+        const long double delta = value_ld - mean;
+        mean += delta / static_cast<long double>(count);
+        const long double delta2 = value_ld - mean;
+        m2 += delta * delta2;
     }
-    return static_cast<double>(sum / static_cast<long double>(values.size()));
+    return static_cast<double>(m2 / static_cast<long double>(values.size()));
 }
 
 double percentile_values(const std::vector<double>& values, double p) {
@@ -566,14 +585,20 @@ double covariance_values(const std::vector<double>& lhs,
     if (lhs.size() != rhs.size() || lhs.empty()) {
         throw std::runtime_error("cov requires vectors of the same non-zero length");
     }
-    const double lhs_mean = mean_values(lhs);
-    const double rhs_mean = mean_values(rhs);
-    long double sum = 0.0L;
+    long double lhs_mean = 0.0L;
+    long double rhs_mean = 0.0L;
+    long double co_moment = 0.0L;
     for (std::size_t i = 0; i < lhs.size(); ++i) {
-        sum += (static_cast<long double>(lhs[i]) - static_cast<long double>(lhs_mean)) *
-               (static_cast<long double>(rhs[i]) - static_cast<long double>(rhs_mean));
+        const long double count = static_cast<long double>(i + 1);
+        const long double x = static_cast<long double>(lhs[i]);
+        const long double y = static_cast<long double>(rhs[i]);
+        const long double dx = x - lhs_mean;
+        lhs_mean += dx / count;
+        const long double dy = y - rhs_mean;
+        rhs_mean += dy / count;
+        co_moment += dx * (y - rhs_mean);
     }
-    return static_cast<double>(sum / static_cast<long double>(lhs.size()));
+    return static_cast<double>(co_moment / static_cast<long double>(lhs.size()));
 }
 
 double correlation_values(const std::vector<double>& lhs,
@@ -1376,6 +1401,7 @@ Matrix multiply(const Matrix& lhs, const Matrix& rhs) {
     }
 
     Matrix result(lhs.rows, rhs.cols, 0.0);
+    std::vector<long double> sums(lhs.rows * rhs.cols, 0.0L);
     constexpr std::size_t kBlockSize = 32;
     for (std::size_t row_block = 0; row_block < lhs.rows; row_block += kBlockSize) {
         const std::size_t row_end = std::min(row_block + kBlockSize, lhs.rows);
@@ -1385,14 +1411,19 @@ Matrix multiply(const Matrix& lhs, const Matrix& rhs) {
                 const std::size_t col_end = std::min(col_block + kBlockSize, rhs.cols);
                 for (std::size_t row = row_block; row < row_end; ++row) {
                     for (std::size_t k = k_block; k < k_end; ++k) {
-                        const double lhs_value = lhs.at(row, k);
+                        const long double lhs_value =
+                            static_cast<long double>(lhs.at(row, k));
                         for (std::size_t col = col_block; col < col_end; ++col) {
-                            result.at(row, col) += lhs_value * rhs.at(k, col);
+                            sums[row * rhs.cols + col] +=
+                                lhs_value * static_cast<long double>(rhs.at(k, col));
                         }
                     }
                 }
             }
         }
+    }
+    for (std::size_t i = 0; i < sums.size(); ++i) {
+        result.data[i] = static_cast<double>(sums[i]);
     }
     return result;
 }
@@ -1434,11 +1465,18 @@ double dot(const Matrix& lhs, const Matrix& rhs) {
         throw std::runtime_error("dot requires vectors of the same length");
     }
 
-    double sum = 0.0;
+    long double sum = 0.0L;
+    long double compensation = 0.0L;
     for (std::size_t i = 0; i < lhs_size; ++i) {
-        sum += vector_entry(lhs, i) * vector_entry(rhs, i);
+        const long double term =
+            static_cast<long double>(vector_entry(lhs, i)) *
+            static_cast<long double>(vector_entry(rhs, i));
+        const long double adjusted = term - compensation;
+        const long double next = sum + adjusted;
+        compensation = (next - sum) - adjusted;
+        sum = next;
     }
-    return sum;
+    return static_cast<double>(sum);
 }
 
 Matrix outer(const Matrix& lhs, const Matrix& rhs) {
