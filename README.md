@@ -30,14 +30,13 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - `FUNCTIONS_REFERENCE.md`
 - `MATRIX_GUIDE.md`
 - `COMMANDS_REFERENCE.md`
-- `HANDOFF.md`
-- `TEST_REPORT.md`
 - `test/TESTING.md`
+- `test/script/SYNTAX_GUIDE.md`
 - `CHANGELOG.md`
 - `ROADMAP.md`
 - `VERSION_2_IMPLEMENTATION_PLAN.md`
 - `KNOWN_LIMITATIONS.md`
-- `SIMPLIFY_IMPROVEMENTS.md`
+- `docs/archive/` for historical handoff notes and one-off reports
 
 ## Source Organization
 
@@ -139,7 +138,8 @@ Current validation status:
 - `make test`
 - `make script-test`
 - `make check`
-- expected result: `Passed: 743`, `Failed: 0`
+- expected C++ regression result: `Passed: 766`, `Failed: 0`
+- expected planning result: `Planning passed: 6`, `Planning failed: 0`
 - comprehensive script check: `bin/calculator test/script/comprehensive_validation.calc`
 
 ## Run
@@ -524,8 +524,6 @@ Runnable script-related inputs are provided in `test/script/`:
   Broad script and calculator feature validation; expected final output is `11`
 - `test/script/SYNTAX_GUIDE.md`
   The dedicated scripting syntax guide
-- `test/script/TEST_REPORT_MERGED.md`
-  Historical validation notes for the older merged script
 
 Example commands:
 

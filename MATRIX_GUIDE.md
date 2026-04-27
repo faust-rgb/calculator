@@ -144,5 +144,5 @@ Use `:vars` to inspect stored values.
 
 ## Persistence Note
 
-Matrix variables can be stored in the current session, but `:save` and `:load`
-do not yet persist matrix values.
+Matrix variables are included in `:save` and `:load` state files alongside
+scalar, string, custom-function, and script-function values.

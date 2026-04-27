@@ -24,5 +24,3 @@ The expected final output is:
   Broad script and calculator feature validation.
 - `SYNTAX_GUIDE.md`
   The dedicated script syntax guide.
-- `TEST_REPORT_MERGED.md`
-  Historical validation notes for the older merged script.

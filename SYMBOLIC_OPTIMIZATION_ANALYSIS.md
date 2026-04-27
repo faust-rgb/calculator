@@ -44,7 +44,9 @@
 - 已完成：矩阵乘法改为小块平铺的 `i-k-j` 累加顺序，改善行优先存储下的缓存局部性
 - 已完成：`dft/fft` 和 `idft/ifft` 对 2 的幂长度输入使用迭代 Cooley-Tukey FFT，非 2 的幂长度继续使用原 O(n^2) DFT
 - 已完成：Jacobi SVD 底层对称特征分解增加尺度感知的 off-diagonal 收敛阈值，避免在已收敛矩阵上继续迭代
-- 已完成：数值函数分析增加线程局部求值缓存，减少导数、极限、积分流程中相同采样点的重复解析和求值
+- 已完成：数值函数分析复用求值器并使用实例级 LRU 求值缓存，减少导数、极限、积分流程中相同采样点的重复解析和求值
+- 已完成：节点 interning 改为 LRU 淘汰，避免容量满时整表清空导致复杂符号任务缓存抖动
+- 已完成：Hessian 先缓存一阶梯度并只计算上三角，再按对称性填充下三角
 
 未在本轮直接实现的优化：
 
@@ -97,7 +99,7 @@
 - 更好的重复简化稳定性
 
 **代码位置：**
-- `src/symbolic/symbolic_expression_core.cpp` - `try_combine_like_terms()`, `collect_division_factors()`
+- `src/symbolic/algebra_helpers.cpp` - `try_combine_like_terms()`, `collect_division_factors()`
 - `src/symbolic/symbolic_expression_internal.h` - 数据结构定义
 
 **本次已落地：**
@@ -143,8 +145,8 @@
 - 在微分和积分后更好的简化结果
 
 **代码位置：**
-- `src/symbolic/symbolic_expression_core.cpp` - `simplify()` 函数
-- 需要新增：`extract_common_factors()` 辅助函数
+- `src/symbolic/simplify.cpp` - `simplify_once()` / `simplify_impl()`
+- `src/symbolic/algebra_helpers.cpp` - 公因子提取辅助函数
 
 **本次已落地：**
 - `try_factor_common_terms()` 已支持公共数值因子和公共符号因子提取
@@ -192,7 +194,8 @@
 
 **代码位置：**
 - `src/algebra/polynomial.cpp` - 利用现有多项式工具
-- `src/symbolic/symbolic_expression_core.cpp` - 集成到 `simplify()`
+- `src/symbolic/polynomial_helpers.cpp` - 多项式表达式提取与重建
+- `src/symbolic/simplify.cpp` - 集成到 `simplify()`
 
 **本次已落地：**
 - 幂次级别的变量约消
@@ -337,7 +340,7 @@
 
 **代码位置：**
 - `src/symbolic/symbolic_expression_calculus.cpp` - 核心微积分
-- `src/symbolic/symbolic_expression_core.cpp` - 变量分析
+- `src/symbolic/node_parser.cpp` - 变量分析与符号表达式入口
 - 核心 API - `symbolic_expression.h` 中的新函数
 
 **本次已落地：**
@@ -383,8 +386,9 @@
 - 支持更深的符号计算
 
 **代码位置：**
-- `src/symbolic/symbolic_expression_core.cpp` - `simplify()`
-- `src/symbolic/symbolic_expression_internal.h` - 需要新增缓存结构（当前不存在）
+- `src/symbolic/node_parser.cpp` - 节点构造、结构键、interning 与 simplify 入口
+- `src/symbolic/simplify.cpp` - 主要化简规则与 fixpoint pass
+- `src/symbolic/symbolic_expression_calculus.cpp` - 求导缓存、梯度、Jacobian、Hessian 与积分规则
 
 ---
 
@@ -423,8 +427,8 @@
 
 **代码位置：**
 - `src/symbolic/symbolic_expression_internal.h` - 新的常数表示
-- `src/symbolic/symbolic_expression_core.cpp` - 精确运算
-- `src/core/calculator.cpp` - 与已有精确模式集成
+- `src/symbolic/node_parser.cpp` / `src/symbolic/simplify.cpp` - 精确符号节点与化简
+- `src/core/exact_and_symbolic_render.cpp` - 与已有精确/符号显示模式集成
 
 ---
 
@@ -468,7 +472,7 @@ unified_transform(expr, rules_table, variable_mappings)
 - 减少重复代码
 
 **代码位置：**
-- `src/symbolic/symbolic_expression_core.cpp` - 当前变换规则和 `apply_linear_transform_rules()`
+- `src/symbolic/transforms.cpp` - 当前变换规则和 `apply_linear_transform_rules()`
 - `src/symbolic/symbolic_expression_transforms.cpp` - 公共 API 包装
 
 **本次已落地：**
@@ -549,10 +553,9 @@ unified_transform(expr, rules_table, variable_mappings)
 
 **重新进入计划：**
 1. 运行 `make test` 获取当前基准
-2. 检查 `src/symbolic/symbolic_expression_core.cpp` 中的关键函数
+2. 检查 `src/symbolic/simplify.cpp`、`src/symbolic/algebra_helpers.cpp` 和 `src/symbolic/symbolic_expression_calculus.cpp` 中的关键函数
 3. 如需新增优化规则，参考已实现的 `make_sorted_product()`、`try_canonical_factor_quotient()`、`try_factor_common_terms()` 模式
 4. 避免回归：每次提交前检查完整测试套件
-5. 定期参考 `SIMPLIFY_IMPROVEMENTS.md` 中的风险区域
 
 ---
 
@@ -561,20 +564,19 @@ unified_transform(expr, rules_table, variable_mappings)
 对于下一个工作会话：
 
 - [ ] 重新阅读本分析文档
-- [ ] 读取 `src/symbolic/symbolic_expression_core.cpp`
+- [ ] 读取 `src/symbolic/simplify.cpp`、`src/symbolic/algebra_helpers.cpp` 和 `src/symbolic/symbolic_expression_calculus.cpp`
 - [ ] 搜索关键函数：`simplify()`, `try_combine_like_terms()`, `make_sorted_product()`, `try_canonical_factor_quotient()`, `try_factor_common_terms()`
 - [ ] 运行 `make test` 确认基准
 - [ ] 为新的优化项创建回归测试
 - [ ] 实现单个优化规则（避免一次做太多）
-- [ ] 定期检查 `SIMPLIFY_IMPROVEMENTS.md` 中的风险区域
 
 ---
 
 ## 相关文档引用
 
-- `SIMPLIFY_IMPROVEMENTS.md` - 当前简化边界和已验证示例
 - `KNOWN_LIMITATIONS.md` - 系统范围限制
 - `ROADMAP.md` - 长期路线图和指导原则
+- `docs/archive/SIMPLIFY_IMPROVEMENTS.md` - 历史简化边界记录
 - `src/symbolic/symbolic_expression.h` - 公共 API
 - `src/symbolic/symbolic_expression_internal.h` - 内部结构
 

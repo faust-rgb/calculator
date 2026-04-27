@@ -15,7 +15,6 @@
 
 - `bin`, `oct`, `hex`, and `base` only accept integer values
 - `base(n, b)` currently supports bases `2..16`
-- No prefixed output mode toggle yet
 
 ## Bitwise Operations
 
@@ -31,8 +30,8 @@
 - Finite one-variable integrals use adaptive Gauss-Kronrod G7-K15 and include
   endpoint-singularity transforms, but infinite integration bounds are not yet
   exposed through command syntax
-- ODE solving still uses fixed-step RK4 and does not provide adaptive step-size
-  control for stiff problems
+- ODE solving uses adaptive RKF45 with configurable internal tolerances, but it
+  is not a dedicated stiff solver
 - Polynomial fitting still uses the normal equations path and can be sensitive
   on ill-conditioned datasets
 

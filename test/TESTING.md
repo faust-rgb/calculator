@@ -6,7 +6,7 @@
 make test
 ```
 
-The test binary is `bin/calculator_tests`.
+The test binaries are `bin/calculator_tests` and `bin/planning_tests`.
 
 The automated regression source is `test/tests.cpp`.
 
@@ -49,8 +49,10 @@ both the C++ regression suite and the script validation.
 
 Current expected summary:
 
-- `Passed: 743`
+- `Passed: 766`
 - `Failed: 0`
+- `Planning passed: 6`
+- `Planning failed: 0`
 
 ## Example Scripts
 
@@ -60,8 +62,6 @@ Runnable example inputs are stored in `test/script/`:
   Broad script and calculator feature validation
 - `test/script/SYNTAX_GUIDE.md`
   The dedicated script syntax guide
-- `test/script/TEST_REPORT_MERGED.md`
-  Historical validation notes for the older merged script
 
 You can run them with:
 

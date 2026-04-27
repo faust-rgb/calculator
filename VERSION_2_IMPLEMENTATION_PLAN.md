@@ -1032,7 +1032,8 @@ Tasks:
 
 - migrate root solving to high-precision values
 - migrate numerical integration to precision-aware algorithms
-- upgrade ODE solving from fixed-step RK4 to adaptive methods
+- migrate adaptive RKF45 ODE solving to precision-aware tolerances and add
+  stronger stiff-problem diagnostics
 - support complex polynomial roots
 - keep LP, ILP, and MILP exact where appropriate
 - make tolerances precision-aware

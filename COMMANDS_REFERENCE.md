@@ -79,8 +79,8 @@
 
 Notes:
 
-- current persistence supports scalar variables
-- matrix variables can be used in-session, but are not yet saved or restored
+- persistence supports scalar variables, strings, matrices, custom functions,
+  and script functions
 
 ## Scripting
 

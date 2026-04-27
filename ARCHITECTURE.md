@@ -234,8 +234,8 @@ Important numeric behavior:
 
 For future work, the fastest way to rebuild context is:
 
-1. `HANDOFF.md`
-2. `README.md`
+1. `README.md`
+2. `ARCHITECTURE.md`
 3. `test/tests.cpp`
 4. `src/core/calculator_commands.cpp`
 5. `src/symbolic/node_parser.cpp`
