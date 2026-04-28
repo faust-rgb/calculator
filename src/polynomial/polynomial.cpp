@@ -45,6 +45,9 @@ std::string format_coefficient(double value) {
                                      &denominator,
                                      999,
                                      1e-10)) {
+        if (value < 0.0) {
+            numerator = -numerator;
+        }
         if (denominator == 1) {
             return std::to_string(numerator);
         }
@@ -207,6 +210,9 @@ std::vector<double> polynomial_real_roots(const std::vector<double>& coefficient
         double r = -normalized[0] / normalized[1];
         long long num, den;
         if (mymath::approximate_fraction(r, &num, &den, 100, 1e-9)) {
+            if (r < 0.0) {
+                num = -num;
+            }
             r = static_cast<double>(num) / static_cast<double>(den);
         }
         return {r};
@@ -248,6 +254,9 @@ std::vector<double> polynomial_real_roots(const std::vector<double>& coefficient
             double r = bisect_root(normalized, left, right);
             long long num, den;
             if (mymath::approximate_fraction(r, &num, &den, 100, 1e-9)) {
+                if (r < 0.0) {
+                    num = -num;
+                }
                 r = static_cast<double>(num) / static_cast<double>(den);
             }
             add_unique_root(&roots, r);

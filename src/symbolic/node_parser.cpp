@@ -661,10 +661,16 @@ private:
 
             // 特殊常量
             if (identifier == "pi") {
-                return SymbolicExpression(make_variable("pi"));
+                return SymbolicExpression(make_unary(NodeType::kPi, nullptr));
             }
             if (identifier == "e") {
-                return SymbolicExpression(make_variable("e"));
+                return SymbolicExpression(make_unary(NodeType::kE, nullptr));
+            }
+            if (identifier == "inf" || identifier == "infinity") {
+                return SymbolicExpression::number(mymath::infinity());
+            }
+            if (identifier == "nan") {
+                return SymbolicExpression::number(0.0 / 0.0);
             }
 
             skip_spaces();
@@ -923,6 +929,8 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                     *value = mymath::pow(left, right);
                     return true;
                 case NodeType::kNumber:
+                case NodeType::kPi:
+                case NodeType::kE:
                 case NodeType::kVariable:
                 case NodeType::kNegate:
                 case NodeType::kFunction:

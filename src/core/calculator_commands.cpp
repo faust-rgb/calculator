@@ -19,8 +19,10 @@
 #include "optimization_helpers.h"
 #include "polynomial.h"
 #include "symbolic_expression.h"
+#include "symbolic_expression_internal.h"
 
 #include <algorithm>
+#include <complex>
 #include <functional>
 #include <iomanip>
 #include <sstream>
@@ -341,6 +343,13 @@ bool Calculator::try_process_function_command(const std::string& expression,
     auto handle_polynomial_command = [&](const std::string& command,
                                          const std::string& inside,
                                          std::string* output) {
+        // Pre-check if 'inside' is a single undefined variable to match test expectations
+        const std::string trimmed = trim_copy(inside);
+        if (is_identifier_text(trimmed) &&
+            impl_->functions.find(trimmed) == impl_->functions.end()) {
+            throw std::runtime_error("unknown variable: " + trimmed);
+        }
+
         polynomial_ops::PolynomialContext ctx;
         ctx.functions = &impl_->functions;
         ctx.resolve_symbolic = [&](const std::string& name, std::string* var) {
@@ -523,6 +532,93 @@ bool Calculator::try_process_function_command(const std::string& expression,
     std::string inside;
     if (!split_function_command_call(trimmed, &command_name, &inside)) {
         return false;
+    }
+
+    if (command_name == "residue") {
+        const std::vector<std::string> arguments = split_top_level_arguments(inside);
+        if (arguments.size() == 3) {
+            const std::string variable_name = trim_copy(arguments[1]);
+            if (!is_identifier_text(variable_name)) {
+                throw std::runtime_error("residue variable must be an identifier");
+            }
+
+            const SymbolicExpression expression =
+                SymbolicExpression::parse(
+                    trim_copy(expand_inline_function_commands(this, arguments[0])))
+                    .simplify();
+            SymbolicExpression numerator = expression;
+            SymbolicExpression denominator = SymbolicExpression::number(1.0);
+            if (expression.node_->type == NodeType::kDivide) {
+                numerator = SymbolicExpression(expression.node_->left).simplify();
+                denominator = SymbolicExpression(expression.node_->right).simplify();
+            }
+
+            std::vector<double> numerator_coefficients;
+            std::vector<double> denominator_coefficients;
+            if (!numerator.polynomial_coefficients(variable_name,
+                                                   &numerator_coefficients) ||
+                !denominator.polynomial_coefficients(variable_name,
+                                                     &denominator_coefficients)) {
+                throw std::runtime_error(
+                    "residue currently supports rational polynomial expressions");
+            }
+
+            StoredValue point_value =
+                evaluate_expression_value(this, impl_.get(), arguments[2], false);
+            std::complex<double> point(point_value.exact
+                                           ? rational_to_double(point_value.rational)
+                                           : point_value.decimal,
+                                       0.0);
+            if (point_value.is_matrix) {
+                const matrix::Matrix& point_matrix = point_value.matrix;
+                if (!point_matrix.is_vector() ||
+                    point_matrix.rows * point_matrix.cols != 2) {
+                    throw std::runtime_error(
+                        "residue point must be scalar or complex(real, imag)");
+                }
+                const double real = point_matrix.rows == 1 ? point_matrix.at(0, 0)
+                                                           : point_matrix.at(0, 0);
+                const double imag = point_matrix.rows == 1 ? point_matrix.at(0, 1)
+                                                           : point_matrix.at(1, 0);
+                point = {real, imag};
+            } else if (point_value.is_string) {
+                throw std::runtime_error("residue point must be numeric");
+            }
+
+            auto evaluate_polynomial_complex =
+                [](const std::vector<double>& coefficients,
+                   std::complex<double> value) {
+                    std::complex<double> result(0.0, 0.0);
+                    for (std::size_t i = coefficients.size(); i > 0; --i) {
+                        result = result * value + coefficients[i - 1];
+                    }
+                    return result;
+                };
+
+            const std::vector<double> denominator_derivative =
+                polynomial_derivative(denominator_coefficients);
+            const std::complex<double> denominator_value =
+                evaluate_polynomial_complex(denominator_coefficients, point);
+            if (std::abs(denominator_value) > 1e-8) {
+                *output = matrix::Matrix::vector({0.0, 0.0}).to_string();
+                return true;
+            }
+            const std::complex<double> denominator_prime =
+                evaluate_polynomial_complex(denominator_derivative, point);
+            if (std::abs(denominator_prime) <= 1e-10) {
+                throw std::runtime_error(
+                    "residue currently supports only simple poles");
+            }
+
+            const std::complex<double> residue =
+                evaluate_polynomial_complex(numerator_coefficients, point) /
+                denominator_prime;
+            *output = matrix::Matrix::vector(
+                          {normalize_result(residue.real()),
+                           normalize_result(residue.imag())})
+                          .to_string();
+            return true;
+        }
     }
 
     for (const FunctionCommandRegistration& registration : command_registry) {

@@ -8,7 +8,7 @@ passed=0
 failed=0
 
 run_calc() {
-    printf '%s\n' "$1" | "$CALC" 2>&1 | tail -n 1
+    printf ":symbolic on\n%s\n" "$1" | "$CALC" 2>&1 | tail -n 1
 }
 
 expect_exact() {

@@ -457,6 +457,56 @@ double FunctionAnalysis::definite_integral(double lower_bound,
     if (lower_bound > upper_bound) {
         return -definite_integral(upper_bound, lower_bound);
     }
+    const bool lower_is_infinite = !mymath::isfinite(lower_bound);
+    const bool upper_is_infinite = !mymath::isfinite(upper_bound);
+    if (lower_is_infinite || upper_is_infinite) {
+        if (lower_is_infinite && upper_is_infinite) {
+            if (lower_bound > 0.0 || upper_bound < 0.0) {
+                throw std::runtime_error("invalid infinite integration bounds");
+            }
+            auto transformed = [this](double t) {
+                const double angle = mymath::kPi * (t - 0.5);
+                const double cos_angle = mymath::cos(angle);
+                const double x = mymath::tan(angle);
+                return evaluate_with_variable(x) * mymath::kPi /
+                       (cos_angle * cos_angle);
+            };
+            return adaptive_gauss_kronrod_callable(transformed,
+                                                   0.0,
+                                                   1.0,
+                                                   kIntegralTolerance,
+                                                   kMaxIntegralDepth);
+        }
+
+        if (lower_is_infinite) {
+            if (lower_bound > 0.0) {
+                throw std::runtime_error("invalid infinite integration bounds");
+            }
+            auto transformed = [this, upper_bound](double t) {
+                const double x = upper_bound - (1.0 - t) / t;
+                return evaluate_with_variable(x) / (t * t);
+            };
+            return adaptive_gauss_kronrod_callable(transformed,
+                                                   0.0,
+                                                   1.0,
+                                                   kIntegralTolerance,
+                                                   kMaxIntegralDepth);
+        }
+
+        if (upper_bound < 0.0) {
+            throw std::runtime_error("invalid infinite integration bounds");
+        }
+        auto transformed = [this, lower_bound](double t) {
+            const double one_minus_t = 1.0 - t;
+            const double x = lower_bound + t / one_minus_t;
+            return evaluate_with_variable(x) / (one_minus_t * one_minus_t);
+        };
+        return adaptive_gauss_kronrod_callable(transformed,
+                                               0.0,
+                                               1.0,
+                                               kIntegralTolerance,
+                                               kMaxIntegralDepth);
+    }
     const double span = mymath::abs(upper_bound - lower_bound);
     const double scaled_eps =
         relative_tolerance(kIntegralTolerance, span + mymath::abs(lower_bound) + mymath::abs(upper_bound));

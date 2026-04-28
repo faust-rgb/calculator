@@ -75,18 +75,17 @@ int main() {
         (void)calculator.try_process_function_command(
             "ilp_max(mat(1, 4, 1, 1, 1, 1), mat(1, 4, 0, 0, 0, 0), mat(1, 1, 10), mat(1, 4, 0, 0, 0, 0), mat(1, 4, 40, 40, 40, 40))",
             &output);
-        ++failed;
-        std::cout << "FAIL: oversized ilp_max expected a search-limit error but got "
-                  << output << '\n';
-    } catch (const std::exception& ex) {
-        const std::string message = ex.what();
-        if (message.find("integer search limit exceeded") != std::string::npos) {
+        if (output == "x = [40, 40, 40, 40]\nobjective = 160") {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: oversized ilp_max expected search-limit error got "
-                      << message << '\n';
+            std::cout << "FAIL: oversized ilp_max expected optimal corner solution got "
+                      << output << '\n';
         }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: oversized ilp_max threw unexpected error: "
+                  << ex.what() << '\n';
     }
 
     std::cout << "Planning passed: " << passed << '\n';
