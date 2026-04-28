@@ -6,6 +6,7 @@
 #include "matrix_internal.h"
 
 #include "mymath.h"
+#include "polynomial.h"
 
 #include <stdexcept>
 #include <utility>
@@ -156,11 +157,37 @@ Matrix qr_r(const Matrix& matrix) {
 }
 
 Matrix lu_l(const Matrix& matrix) {
-    return lu_decompose(matrix).first;
+    const LuResult lu = lu_decompose_with_pivoting(matrix);
+    const std::size_t n = matrix.rows;
+    Matrix l = Matrix::identity(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        for (std::size_t j = 0; j < i; ++j) {
+            l.at(i, j) = lu.lu.at(i, j);
+        }
+    }
+    return l;
 }
 
 Matrix lu_u(const Matrix& matrix) {
-    return lu_decompose(matrix).second;
+    const LuResult lu = lu_decompose_with_pivoting(matrix);
+    const std::size_t n = matrix.rows;
+    Matrix u(n, n, 0.0);
+    for (std::size_t i = 0; i < n; ++i) {
+        for (std::size_t j = i; j < n; ++j) {
+            u.at(i, j) = lu.lu.at(i, j);
+        }
+    }
+    return u;
+}
+
+Matrix lu_p(const Matrix& matrix) {
+    const LuResult lu = lu_decompose_with_pivoting(matrix);
+    const std::size_t n = matrix.rows;
+    Matrix p(n, n, 0.0);
+    for (std::size_t i = 0; i < n; ++i) {
+        p.at(i, lu.p[i]) = 1.0;
+    }
+    return p;
 }
 
 Matrix svd_u(const Matrix& matrix) {
@@ -655,6 +682,132 @@ Matrix eigenvectors(const Matrix& matrix) {
         }
     }
     return vectors;
+}
+
+Matrix filter(const Matrix& b, const Matrix& a, const Matrix& x) {
+    const std::vector<double> bv = as_vector_values(b, "filter");
+    const std::vector<double> av = as_vector_values(a, "filter");
+    const std::vector<double> xv = as_vector_values(x, "filter");
+
+    if (av.empty() || mymath::is_near_zero(av[0])) {
+        throw std::runtime_error("filter requires non-zero lead coefficient in a");
+    }
+
+    const std::size_t n = xv.size();
+    std::vector<double> yv(n, 0.0);
+
+    for (std::size_t i = 0; i < n; ++i) {
+        long double sum = 0.0L;
+        for (std::size_t j = 0; j < bv.size() && j <= i; ++j) {
+            sum += static_cast<long double>(bv[j]) * static_cast<long double>(xv[i - j]);
+        }
+        for (std::size_t j = 1; j < av.size() && j <= i; ++j) {
+            sum -= static_cast<long double>(av[j]) * static_cast<long double>(yv[i - j]);
+        }
+        yv[i] = static_cast<double>(sum / static_cast<long double>(av[0]));
+    }
+
+    // Return matrix with same orientation as x
+    if (x.rows == 1) {
+        return Matrix::vector(yv);
+    } else {
+        Matrix res(yv.size(), 1);
+        res.data = yv;
+        return res;
+    }
+}
+
+Matrix freqz(const Matrix& b, const Matrix& a, std::size_t n) {
+    const std::vector<double> bv = as_vector_values(b, "freqz");
+    const std::vector<double> av = as_vector_values(a, "freqz");
+
+    Matrix res(n, 2, 0.0);
+    for (std::size_t i = 0; i < n; ++i) {
+        const double w = mymath::kPi * static_cast<double>(i) / static_cast<double>(n);
+        
+        long double num_r = 0, num_i = 0;
+        for (std::size_t k = 0; k < bv.size(); ++k) {
+            num_r += static_cast<long double>(bv[k]) * mymath::cos(-k * w);
+            num_i += static_cast<long double>(bv[k]) * mymath::sin(-k * w);
+        }
+        
+        long double den_r = 0, den_i = 0;
+        for (std::size_t k = 0; k < av.size(); ++k) {
+            den_r += static_cast<long double>(av[k]) * mymath::cos(-k * w);
+            den_i += static_cast<long double>(av[k]) * mymath::sin(-k * w);
+        }
+        
+        const long double den_mag_sq = den_r * den_r + den_i * den_i;
+        if (den_mag_sq > 1e-25L) {
+            res.at(i, 0) = static_cast<double>((num_r * den_r + num_i * den_i) / den_mag_sq);
+            res.at(i, 1) = static_cast<double>((num_i * den_r - num_r * den_i) / den_mag_sq);
+        } else {
+            res.at(i, 0) = mymath::infinity();
+            res.at(i, 1) = 0.0;
+        }
+    }
+    return res;
+}
+
+
+Matrix residue(const Matrix& b, const Matrix& a) {
+    std::vector<double> bv = as_vector_values(b, "residue");
+    std::vector<double> av = as_vector_values(a, "residue");
+
+    if (av.empty() || mymath::is_near_zero(av.back())) {
+        throw std::runtime_error("residue requires a non-zero denominator");
+    }
+
+    // Remove leading zeros from b
+    while (bv.size() > 1 && mymath::is_near_zero(bv.back())) {
+        bv.pop_back();
+    }
+
+    std::vector<double> k_term;
+    if (bv.size() >= av.size()) {
+        auto div = polynomial_divide(bv, av);
+        k_term = div.quotient;
+        bv = div.remainder;
+    }
+
+    // Find roots of a (poles)
+    // Currently only real roots are supported by polynomial_real_roots
+    std::vector<double> poles = polynomial_real_roots(av);
+    if (poles.size() < av.size() - 1) {
+        // Simple heuristic: if we don't find all roots, it's likely complex roots
+        // In a more complete system, we would use a complex root finder.
+        throw std::runtime_error("residue currently only supports denominators with distinct real roots");
+    }
+
+    std::size_t num_poles = poles.size();
+    std::vector<double> residues(num_poles);
+
+    // For distinct poles: r_i = B(p_i) / A'(p_i)
+    std::vector<double> a_prime = polynomial_derivative(av);
+    for (std::size_t i = 0; i < num_poles; ++i) {
+        double den = polynomial_evaluate(a_prime, poles[i]);
+        if (mymath::is_near_zero(den)) {
+            throw std::runtime_error("residue currently only supports simple poles");
+        }
+        residues[i] = polynomial_evaluate(bv, poles[i]) / den;
+    }
+
+    // Result matrix: Col 0 = Residues, Col 1 = Poles
+    // If k exists, we need to handle it. For simplicity, return Nx2 and use a separate function for k if needed,
+    // or return (N+M)x2 where k terms are marked.
+    // Standard approach: return residues, poles, and k. 
+    // We will return a matrix where rows are [r, p, 0] and last rows are [k, 0, 0]
+    std::size_t total_rows = residues.size() + k_term.size();
+    Matrix res(total_rows, 3, 0.0);
+    for (std::size_t i = 0; i < residues.size(); ++i) {
+        res.at(i, 0) = residues[i];
+        res.at(i, 1) = poles[i];
+    }
+    for (std::size_t i = 0; i < k_term.size(); ++i) {
+        res.at(residues.size() + i, 0) = k_term[i];
+    }
+
+    return res;
 }
 
 }  // namespace matrix

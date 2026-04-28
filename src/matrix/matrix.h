@@ -209,11 +209,14 @@ Matrix qr_q(const Matrix& matrix);
 /** @brief QR 分解：返回 R 矩阵 */
 Matrix qr_r(const Matrix& matrix);
 
-/** @brief LU 分解：返回单位下三角矩阵 L */
+/** @brief LU 分解：返回单位下三角矩阵 L (带部分主元) */
 Matrix lu_l(const Matrix& matrix);
 
-/** @brief LU 分解：返回上三角矩阵 U */
+/** @brief LU 分解：返回上三角矩阵 U (带部分主元) */
 Matrix lu_u(const Matrix& matrix);
+
+/** @brief LU 分解：返回置换矩阵 P */
+Matrix lu_p(const Matrix& matrix);
 
 /** @brief SVD 分解：返回 U 矩阵 */
 Matrix svd_u(const Matrix& matrix);
@@ -293,6 +296,39 @@ Matrix vectorize(const Matrix& matrix);
 
 /** @brief 提取或构造对角矩阵 */
 Matrix diag(const Matrix& matrix);
+
+// ============================================================================
+// 信号处理运算
+// ============================================================================
+
+/**
+ * @brief 线性滤波
+ * @param b 分子系数向量
+ * @param a 分母系数向量
+ * @param x 输入信号向量
+ * @return 滤波后的输出向量
+ */
+Matrix filter(const Matrix& b, const Matrix& a, const Matrix& x);
+
+/**
+ * @brief 计算频率响应
+ * @param b 分子系数向量
+ * @param a 分母系数向量
+ * @param n 采样点数
+ * @return Nx2 矩阵，第一列为实部，第二列为虚部
+ */
+Matrix freqz(const Matrix& b, const Matrix& a, std::size_t n = 512);
+
+/**
+ * @brief 部分分式展开 (Residue)
+ * @param b 分子系数向量
+ * @param a 分母系数向量
+ * @return 包含结果的矩阵：
+ *         第一列：留数 (Residues)
+ *         第二列：极点 (Poles)
+ *         第三列（可选）：常数项 (Direct term, k)
+ */
+Matrix residue(const Matrix& b, const Matrix& a);
 
 // ============================================================================
 // 表达式求值

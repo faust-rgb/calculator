@@ -615,6 +615,13 @@ private:
             return Value::from_matrix(lu_u(require_matrix(arguments[0], "lu_u")));
         }
 
+        if (name == "lu_p") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("lu_p expects exactly one argument");
+            }
+            return Value::from_matrix(lu_p(require_matrix(arguments[0], "lu_p")));
+        }
+
         if (name == "svd_u") {
             if (arguments.size() != 1) {
                 throw std::runtime_error("svd_u expects exactly one argument");
@@ -774,6 +781,30 @@ private:
                 throw std::runtime_error("schur expects exactly one argument");
             }
             return Value::from_matrix(schur(require_matrix(arguments[0], "schur")));
+        }
+        if (name == "filter") {
+            if (arguments.size() != 3) {
+                throw std::runtime_error("filter expects b, a, and x");
+            }
+            return Value::from_matrix(filter(require_matrix(arguments[0], "filter"), require_matrix(arguments[1], "filter"), require_matrix(arguments[2], "filter")));
+        }
+
+        if (name == "freqz") {
+            if (arguments.size() < 2 || arguments.size() > 3) {
+                throw std::runtime_error("freqz expects b, a, and optional n");
+            }
+            std::size_t n = 512;
+            if (arguments.size() == 3) {
+                n = parse_size_argument(arguments[2], *scalar_evaluator_);
+            }
+            return Value::from_matrix(freqz(require_matrix(arguments[0], "freqz"), require_matrix(arguments[1], "freqz"), n));
+        }
+
+        if (name == "residue") {
+            if (arguments.size() != 2) {
+                throw std::runtime_error("residue expects b and a");
+            }
+            return Value::from_matrix(residue(require_matrix(arguments[0], "residue"), require_matrix(arguments[1], "residue")));
         }
 
         if (name == "mean") {
@@ -1436,6 +1467,7 @@ private:
                name == "corr" || name == "lagrange" || name == "spline" ||
                name == "linear_regression" || name == "poly_fit" ||
                name == "polynomial_fit" || name == "poly_eval" ||
+               name == "lu_p" || name == "filter" || name == "freqz" || name == "residue" ||
                name == "poly_deriv" || name == "poly_integ" ||
                name == "poly_compose" || name == "poly_gcd" ||
                name == "dft" || name == "fft" ||
@@ -1698,6 +1730,9 @@ bool try_evaluate_expression(const std::string& expression,
         trimmed.find("poly_integ(") != std::string::npos ||
         trimmed.find("poly_compose(") != std::string::npos ||
         trimmed.find("poly_gcd(") != std::string::npos ||
+        trimmed.find("lu_p(") != std::string::npos ||
+        trimmed.find("filter(") != std::string::npos ||
+        trimmed.find("freqz(") != std::string::npos ||
         trimmed.find("real(") != std::string::npos ||
         trimmed.find("imag(") != std::string::npos ||
         trimmed.find("arg(") != std::string::npos ||

@@ -627,18 +627,36 @@ int run_non_interactive_input(Calculator& calculator, const std::string& input) 
 }  // namespace
 
 int main(int argc, char* argv[]) {
-    // Calculator 封装了解析和求值逻辑，main 只负责与用户交互。
     Calculator calculator;
     std::vector<std::string> history;
     bool exact_mode = false;
+    bool plain_mode = !isatty(STDIN_FILENO);
+    std::string script_path;
 
-    if (argc > 2) {
-        std::cerr << "Usage: " << argv[0] << " [script.calc]\n";
-        return 1;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--plain") {
+            plain_mode = true;
+        } else if (arg == "--version") {
+            std::cout << "Calculator Version 2.0.0\n";
+            return 0;
+        } else if (arg == "--help" || arg == "-h") {
+            std::cout << "Usage: " << argv[0] << " [options] [script.calc]\n"
+                      << "Options:\n"
+                      << "  --plain      Minimal output (no prompts/headers)\n"
+                      << "  --version    Show version info\n"
+                      << "  --help, -h   Show this help\n";
+            return 0;
+        } else if (arg.size() > 5 && arg.substr(arg.size() - 5) == ".calc") {
+            script_path = arg;
+        } else {
+            std::cerr << "Unknown argument: " << arg << "\n";
+            return 1;
+        }
     }
 
-    if (argc == 2) {
-        return run_script_file(calculator, argv[1], exact_mode);
+    if (!script_path.empty()) {
+        return run_script_file(calculator, script_path, exact_mode);
     }
 
     if (!isatty(STDIN_FILENO)) {
@@ -654,32 +672,33 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    std::cout << "Command Line Calculator\n";
-    std::cout << "Enter an expression, or type 'exit' to quit.\n";
-    std::cout << "Type 'help' or ':help' to see available commands.\n";
-    std::cout << "Use ':exact on' or ':exact off' to toggle exact fraction mode.\n";
-    std::cout << "Use ':symbolic on' or ':symbolic off' to preserve pi/e in scalar results.\n";
-    std::cout << "Use ':vars', ':clear name', or ':clear' to manage variables.\n";
-    std::cout << "Use 'f(x) = ...', 'poly_*', 'diff(...)', 'taylor(...)', 'limit(...)', 'integral(...)', and 'extrema(...)' for custom functions.\n";
-    std::cout << "Use ':save file', ':load file', or ':run file.calc' for files and scripts.\n";
+    if (!plain_mode) {
+        std::cout << "Command Line Calculator\n";
+        std::cout << "Enter an expression, or type 'exit' to quit.\n";
+        std::cout << "Type 'help' or ':help' to see available commands.\n";
+        std::cout << "Use ':exact on' or ':exact off' to toggle exact fraction mode.\n";
+        std::cout << "Use ':symbolic on' or ':symbolic off' to preserve pi/e in scalar results.\n";
+        std::cout << "Use ':vars', ':clear name', or ':clear' to manage variables.\n";
+        std::cout << "Use 'f(x) = ...', 'poly_*', 'diff(...)', 'taylor(...)', 'limit(...)', 'integral(...)', and 'extrema(...)' for custom functions.\n";
+        std::cout << "Use ':save file', ':load file', or ':run file.calc' for files and scripts.\n";
+    }
 
     while (true) {
-        // 自定义输入函数支持按上方向键回填历史命令。
-        std::string line = read_line_with_history(calculator, "> ", history);
-        if (!std::cin && line.empty()) {
-            break;
+        std::string line;
+        if (plain_mode) {
+            if (!std::getline(std::cin, line)) break;
+        } else {
+            line = read_line_with_history(calculator, "> ", history);
+            if (!std::cin && line.empty()) break;
         }
 
-        if (line.empty()) {
-            // 空输入直接跳过，避免给出噪声错误。
-            continue;
-        }
+        if (line.empty()) continue;
 
         try {
             bool should_exit = false;
             const std::string output =
                 execute_repl_line(calculator, line, &exact_mode, history, &should_exit);
-            if (!should_exit) {
+            if (!should_exit && !plain_mode) {
                 history.push_back(line);
             }
             if (!output.empty()) {
@@ -689,8 +708,11 @@ int main(int argc, char* argv[]) {
                 break;
             }
         } catch (const std::exception& ex) {
-            // 解析错误、定义域错误和除零都会在这里统一展示。
-            std::cout << "Error: " << ex.what() << '\n';
+            if (plain_mode) {
+                std::cerr << "Error: " << ex.what() << '\n';
+            } else {
+                std::cout << "Error: " << ex.what() << '\n';
+            }
         }
     }
 

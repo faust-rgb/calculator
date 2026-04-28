@@ -211,6 +211,10 @@ std::string normalize_python_like_script(const std::string& source) {
     bool pending_block = false;
     std::string line;
 
+    std::string accumulated_line;
+    int paren_depth = 0;
+    int bracket_depth = 0;
+
     while (std::getline(input, line)) {
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
@@ -218,36 +222,66 @@ std::string normalize_python_like_script(const std::string& source) {
 
         const std::string without_comment = strip_hash_comment(line);
         const std::string stripped = trim_copy(without_comment);
-        if (stripped.empty()) {
+        if (stripped.empty() && accumulated_line.empty()) {
             continue;
         }
 
-        const int indent = indentation_width(without_comment);
-        if (indent > indent_stack.back()) {
-            if (!pending_block) {
-                throw std::runtime_error("unexpected indentation");
-            }
-            indent_stack.push_back(indent);
-            pending_block = false;
-        } else {
-            if (pending_block) {
-                throw std::runtime_error("expected an indented block");
-            }
-            while (indent < indent_stack.back()) {
-                output << "}\n";
-                indent_stack.pop_back();
-            }
-            if (indent != indent_stack.back()) {
-                throw std::runtime_error("inconsistent indentation");
+        // Update depths to detect if a line is continued (e.g., inside [ ] or ( ))
+        bool in_string = false;
+        bool escaping = false;
+        for (char ch : without_comment) {
+            if (in_string) {
+                if (escaping) escaping = false;
+                else if (ch == '\\') escaping = true;
+                else if (ch == '"') in_string = false;
+            } else {
+                if (ch == '"') in_string = true;
+                else if (ch == '(') ++paren_depth;
+                else if (ch == ')') --paren_depth;
+                else if (ch == '[') ++bracket_depth;
+                else if (ch == ']') --bracket_depth;
             }
         }
 
-        if (stripped == "pass") {
+        if (accumulated_line.empty()) {
+            // New logical line: handle indentation
+            const int indent = indentation_width(without_comment);
+            if (indent > indent_stack.back()) {
+                if (!pending_block) {
+                    throw std::runtime_error("unexpected indentation");
+                }
+                indent_stack.push_back(indent);
+                pending_block = false;
+            } else {
+                if (pending_block) {
+                    throw std::runtime_error("expected an indented block");
+                }
+                while (indent < indent_stack.back()) {
+                    output << "}\n";
+                    indent_stack.pop_back();
+                }
+                if (indent != indent_stack.back()) {
+                    throw std::runtime_error("inconsistent indentation");
+                }
+            }
+        }
+
+        accumulated_line += (accumulated_line.empty() ? "" : " ") + stripped;
+
+        // If we are still inside brackets or parentheses, continue accumulating
+        if (paren_depth > 0 || bracket_depth > 0) {
             continue;
         }
 
-        if (!stripped.empty() && stripped.back() == ':') {
-            const std::string header = trim_copy(stripped.substr(0, stripped.size() - 1));
+        const std::string current = trim_copy(accumulated_line);
+        accumulated_line.clear();
+
+        if (current == "pass") {
+            continue;
+        }
+
+        if (!current.empty() && current.back() == ':') {
+            const std::string header = trim_copy(current.substr(0, current.size() - 1));
             if (starts_with_keyword(header, "def")) {
                 output << "fn " << trim_copy(header.substr(3)) << " {\n";
             } else if (starts_with_keyword(header, "fn")) {
@@ -274,17 +308,21 @@ std::string normalize_python_like_script(const std::string& source) {
             continue;
         }
 
-        if (starts_with_keyword(stripped, "return")) {
-            output << "return " << trim_copy(stripped.substr(6)) << ";\n";
-        } else if (stripped == "break" || stripped == "continue") {
-            output << stripped << ";\n";
+        if (starts_with_keyword(current, "return")) {
+            output << "return " << trim_copy(current.substr(6)) << ";\n";
+        } else if (current == "break" || current == "continue") {
+            output << current << ";\n";
         } else {
-            output << stripped;
-            if (stripped.back() != ';') {
+            output << current;
+            if (current.back() != ';') {
                 output << ';';
             }
             output << '\n';
         }
+    }
+
+    if (paren_depth > 0 || bracket_depth > 0) {
+        throw std::runtime_error("unterminated parenthesis or bracket");
     }
 
     if (pending_block) {

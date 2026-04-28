@@ -13,7 +13,7 @@
 namespace matrix_commands {
 
 bool is_matrix_command(const std::string& command) {
-    return command == "eig" || command == "svd";
+    return command == "eig" || command == "svd" || command == "lu_p";
 }
 
 bool handle_matrix_command(const MatrixCommandContext& ctx,
@@ -35,6 +35,11 @@ bool handle_matrix_command(const MatrixCommandContext& ctx,
         *output = "U: " + matrix::svd_u(matrix_value).to_string() +
                   "\nS: " + matrix::svd_s(matrix_value).to_string() +
                   "\nVt: " + matrix::svd_vt(matrix_value).to_string();
+        return true;
+    }
+
+    if (command == "lu_p") {
+        *output = matrix::lu_p(matrix_value).to_string();
         return true;
     }
 
