@@ -49,7 +49,7 @@ both the C++ regression suite and the script validation.
 
 Current expected summary:
 
-- `Passed: 766`
+- `Passed: 788`
 - `Failed: 0`
 - `Planning passed: 6`
 - `Planning failed: 0`

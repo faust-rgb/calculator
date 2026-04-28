@@ -271,41 +271,34 @@ ODEPoint ODESolver::integrate_segment_with_event(double x0,
 
         const double next_event = event_(candidate_x, candidate_y);
         if (event_triggered(current_event, next_event)) {
-            double left_x = x;
-            double left_y = y;
-            double left_event = current_event;
-            double right_x = candidate_x;
-            double right_y = candidate_y;
-            for (int i = 0; i < 80; ++i) {
-                if (mymath::abs(right_x - left_x) <=
-                    kEventPositionTolerance * std::max(1.0, std::max(mymath::abs(left_x), mymath::abs(right_x)))) {
-                    break;
-                }
-                const double mid_x = 0.5 * (left_x + right_x);
-                const double mid_y = integrate_segment(left_x, left_y, mid_x);
-                const double mid_event = event_(mid_x, mid_y);
-                if (mymath::abs(mid_event) <= kEventValueTolerance) {
-                    left_x = mid_x;
-                    left_y = mid_y;
-                    right_x = mid_x;
-                    right_y = mid_y;
-                    break;
-                }
-                if (event_triggered(left_event, mid_event)) {
-                    right_x = mid_x;
-                    right_y = mid_y;
-                } else {
-                    left_x = mid_x;
-                    left_y = mid_y;
-                    left_event = mid_event;
-                }
+            // 使用 Hermite 插值定位根
+            const double dy0 = rhs_(x, y);
+            const double dy1 = rhs_(candidate_x, candidate_y);
+            const double step_h = candidate_x - x;
+            
+            double t_low = 0.0;
+            double t_high = 1.0;
+            double t_root = 0.5;
+            
+            for (int i = 0; i < 15; ++i) {
+                t_root = (t_low + t_high) * 0.5;
+                const double t2 = t_root * t_root;
+                const double t3 = t2 * t_root;
+                const double y_interp = (2*t3 - 3*t2 + 1) * y + (t3 - 2*t2 + t_root) * step_h * dy0 + 
+                                       (-2*t3 + 3*t2) * candidate_y + (t3 - t2) * step_h * dy1;
+                const double event_interp = event_(x + t_root * step_h, y_interp);
+                if (mymath::abs(event_interp) < kEventValueTolerance) break;
+                if (event_triggered(current_event, event_interp)) t_high = t_root;
+                else t_low = t_root;
             }
 
             *stopped = true;
-            if (mymath::abs(left_event) <= kEventValueTolerance) {
-                return {left_x, left_y};
-            }
-            return {right_x, right_y};
+            const double final_x = x + t_root * step_h;
+            const double t2 = t_root * t_root;
+            const double t3 = t2 * t_root;
+            const double final_y = (2*t3 - 3*t2 + 1) * y + (t3 - 2*t2 + t_root) * step_h * dy0 + 
+                                  (-2*t3 + 3*t2) * candidate_y + (t3 - t2) * step_h * dy1;
+            return {final_x, final_y};
         }
 
         x = candidate_x;
@@ -560,41 +553,48 @@ ODESystemPoint ODESystemSolver::integrate_segment_with_event(double x0,
 
         const double next_event = event_(candidate_x, candidate_y);
         if (event_triggered(current_event, next_event)) {
-            double left_x = x;
-            std::vector<double> left_y = y;
-            double left_event = current_event;
-            double right_x = candidate_x;
-            std::vector<double> right_y = candidate_y;
-            for (int i = 0; i < 80; ++i) {
-                if (mymath::abs(right_x - left_x) <=
-                    kEventPositionTolerance * std::max(1.0, std::max(mymath::abs(left_x), mymath::abs(right_x)))) {
-                    break;
+            // 使用 Hermite 插值定位根
+            const std::vector<double> dy0 = rhs_(x, y);
+            const std::vector<double> dy1 = rhs_(candidate_x, candidate_y);
+            const double step_h = candidate_x - x;
+            
+            double t_low = 0.0;
+            double t_high = 1.0;
+            double t_root = 0.5;
+            
+            for (int i = 0; i < 15; ++i) {
+                t_root = (t_low + t_high) * 0.5;
+                const double t2 = t_root * t_root;
+                const double t3 = t2 * t_root;
+                const double h00 = 2*t3 - 3*t2 + 1;
+                const double h10 = t3 - 2*t2 + t_root;
+                const double h01 = -2*t3 + 3*t2;
+                const double h11 = t3 - t2;
+
+                std::vector<double> y_interp(y.size());
+                for (size_t j = 0; j < y.size(); ++j) {
+                    y_interp[j] = h00 * y[j] + h10 * step_h * dy0[j] + h01 * candidate_y[j] + h11 * step_h * dy1[j];
                 }
-                const double mid_x = 0.5 * (left_x + right_x);
-                const std::vector<double> mid_y = integrate_segment(left_x, left_y, mid_x);
-                const double mid_event = event_(mid_x, mid_y);
-                if (mymath::abs(mid_event) <= kEventValueTolerance) {
-                    left_x = mid_x;
-                    left_y = mid_y;
-                    right_x = mid_x;
-                    right_y = mid_y;
-                    break;
-                }
-                if (event_triggered(left_event, mid_event)) {
-                    right_x = mid_x;
-                    right_y = mid_y;
-                } else {
-                    left_x = mid_x;
-                    left_y = mid_y;
-                    left_event = mid_event;
-                }
+
+                const double event_interp = event_(x + t_root * step_h, y_interp);
+                if (mymath::abs(event_interp) < kEventValueTolerance) break;
+                if (event_triggered(current_event, event_interp)) t_high = t_root;
+                else t_low = t_root;
             }
 
             *stopped = true;
-            if (mymath::abs(left_event) <= kEventValueTolerance) {
-                return {left_x, left_y};
+            const double final_x = x + t_root * step_h;
+            const double t2 = t_root * t_root;
+            const double t3 = t2 * t_root;
+            const double h00 = 2*t3 - 3*t2 + 1;
+            const double h10 = t3 - 2*t2 + t_root;
+            const double h01 = -2*t3 + 3*t2;
+            const double h11 = t3 - t2;
+            std::vector<double> final_y(y.size());
+            for (size_t j = 0; j < y.size(); ++j) {
+                final_y[j] = h00 * y[j] + h10 * step_h * dy0[j] + h01 * candidate_y[j] + h11 * step_h * dy1[j];
             }
-            return {right_x, right_y};
+            return {final_x, final_y};
         }
 
         x = candidate_x;

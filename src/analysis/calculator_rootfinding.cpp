@@ -30,7 +30,8 @@ double root_derivative_step(double x) {
 double newton_solve(
     const std::function<double(const std::vector<std::pair<std::string, double>>&)>& evaluate,
     double initial,
-    const std::function<double(double)>& normalize) {
+    const std::function<double(double)>& normalize,
+    const std::function<double(const std::vector<std::pair<std::string, double>>&)>& evaluate_derivative) {
 
     double x = initial;
     for (int iteration = 0; iteration < 100; ++iteration) {
@@ -38,11 +39,17 @@ double newton_solve(
         if (mymath::abs(fx) <= root_function_tolerance(fx)) {
             return normalize(x);
         }
-        const double h = root_derivative_step(x);
-        const long double derivative =
-            (static_cast<long double>(evaluate({{"x", x + h}})) -
-             static_cast<long double>(evaluate({{"x", x - h}}))) /
-            (2.0L * static_cast<long double>(h));
+
+        long double derivative = 0.0L;
+        if (evaluate_derivative) {
+            derivative = static_cast<long double>(evaluate_derivative({{"x", x}}));
+        } else {
+            const double h = root_derivative_step(x);
+            derivative =
+                (static_cast<long double>(evaluate({{"x", x + h}})) -
+                 static_cast<long double>(evaluate({{"x", x - h}}))) /
+                (2.0L * static_cast<long double>(h));
+        }
         
         if (mymath::abs_long_double(derivative) <=
             1e-13L * std::max(1.0L, mymath::abs_long_double(static_cast<long double>(fx)))) {
@@ -181,8 +188,17 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
             !ctx.is_matrix_argument(arguments[0]) &&
             !ctx.is_matrix_argument(arguments[1])) {
             const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
+            
+            std::function<double(const std::vector<std::pair<std::string, double>>&)> evaluate_derivative = nullptr;
+            if (ctx.get_derivative_expression) {
+                const std::string deriv_expr = ctx.get_derivative_expression(arguments[0], "x");
+                if (!deriv_expr.empty()) {
+                    evaluate_derivative = ctx.build_scoped_evaluator(deriv_expr);
+                }
+            }
+            
             double x = ctx.parse_decimal(arguments[1]);
-            double result = newton_solve(evaluate_expression, x, ctx.normalize_result);
+            double result = newton_solve(evaluate_expression, x, ctx.normalize_result, evaluate_derivative);
             *output = format_decimal(result);
             return true;
         }

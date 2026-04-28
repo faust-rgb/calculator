@@ -414,6 +414,20 @@ bool Calculator::try_process_function_command(const std::string& expression,
         ctx.build_scoped_evaluator = [&](const std::string& arg) {
             return build_scoped_decimal_evaluator(arg);
         };
+        ctx.get_derivative_expression = [&](const std::string& expr_str, const std::string& var_name) {
+            std::string var;
+            SymbolicExpression expr;
+            try {
+                // 尝试解析表达式。如果 expr_str 仅是表达式，resolve_symbolic_expression 也能处理。
+                resolve_symbolic_expression(expr_str, false, &var, &expr);
+                if (expr.node_) {
+                    return expr.derivative(var_name).simplify().to_string();
+                }
+            } catch (...) {
+                // 如果解析失败，返回空字符串，调用者将回退到差分法
+            }
+            return std::string();
+        };
         ctx.is_matrix_argument = [&](const std::string& arg) { return is_matrix_argument(arg); };
         ctx.normalize_result = [&](double v) { return normalize_result(v); };
         return rootfinding::handle_rootfinding_command(ctx, command, inside, output);

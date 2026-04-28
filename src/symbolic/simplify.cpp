@@ -858,8 +858,8 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
     SimplifyDepthGuard guard(&simplify_depth);
     SymbolicExpression current = expression;
 
-    // 最多 16 轮迭代，通常 2-4 轮即可收敛
-    constexpr int kMaxSimplifyPasses = 16;
+    // 最多 24 轮迭代，通常 2-4 轮即可收敛
+    constexpr int kMaxSimplifyPasses = 24;
     for (int pass = 0; pass < kMaxSimplifyPasses; ++pass) {
         // 使用结构键检测是否还有变化
         const std::string current_key = node_structural_key(current.node_);
@@ -947,3 +947,4 @@ SymbolicExpression expand_impl(const SymbolicExpression& expression) {
 
 
 }  // namespace symbolic_expression_internal
+

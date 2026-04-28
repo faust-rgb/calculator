@@ -34,6 +34,9 @@ struct RootfindingContext {
     std::function<std::function<double(const std::vector<std::pair<std::string, double>>&)>(const std::string&)>
         build_scoped_evaluator;
 
+    // 获取导数表达式字符串 (可选)
+    std::function<std::string(const std::string&, const std::string&)> get_derivative_expression;
+
     // 检查是否为矩阵参数
     std::function<bool(const std::string&)> is_matrix_argument;
 
@@ -42,7 +45,7 @@ struct RootfindingContext {
 };
 
 // ============================================================================
-// 求根方法
+// 求求根方法
 // ============================================================================
 
 /**
@@ -51,12 +54,14 @@ struct RootfindingContext {
  * @param evaluate 表达式求值函数
  * @param initial 初始值
  * @param normalize 结果归一化函数
+ * @param evaluate_derivative 导数求值函数 (可选)
  * @return 求得的根
  */
 double newton_solve(
     const std::function<double(const std::vector<std::pair<std::string, double>>&)>& evaluate,
     double initial,
-    const std::function<double(double)>& normalize);
+    const std::function<double(double)>& normalize,
+    const std::function<double(const std::vector<std::pair<std::string, double>>&)>& evaluate_derivative = nullptr);
 
 /**
  * @brief 二分法求根
