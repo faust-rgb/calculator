@@ -103,7 +103,7 @@ std::string classify_critical_point(
 }
 
 bool is_analysis_command(const std::string& command) {
-    return command == "limit" || command == "critical" || command == "extrema";
+    return command == "limit" || command == "critical" || command == "extrema" || command == "lagrange";
 }
 
 bool handle_analysis_command(const AnalysisContext& ctx,
@@ -111,6 +111,48 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                              const std::string& inside,
                              std::string* output) {
     const std::vector<std::string> arguments = split_top_level_arguments(inside);
+
+    if (command == "lagrange") {
+        if (arguments.size() < 2) {
+            throw std::runtime_error("lagrange expects (expr, constraints, [vars...])");
+        }
+        
+        // Parse f
+        std::string variable_name;
+        SymbolicExpression f;
+        ctx.resolve_symbolic(arguments[0], false, &variable_name, &f);
+        
+        // Parse constraints [g1, g2, ...]
+        std::vector<SymbolicExpression> constraints;
+        if (arguments[1].front() == '[' && arguments[1].back() == ']') {
+             std::vector<std::string> const_strs = split_top_level_arguments(arguments[1].substr(1, arguments[1].size() - 2));
+             for (const auto& s : const_strs) constraints.push_back(SymbolicExpression::parse(s));
+        } else {
+             constraints.push_back(SymbolicExpression::parse(arguments[1]));
+        }
+        
+        // Parse variables
+        std::vector<std::string> variables = ctx.parse_symbolic_variable_arguments(arguments, 2, f.identifier_variables());
+        
+        // Build Lagrangian L = f - sum(lambda_i * gi)
+        SymbolicExpression lagrangian = f;
+        std::vector<std::string> all_vars = variables;
+        for (std::size_t i = 0; i < constraints.size(); ++i) {
+            std::string lambda_var = "L" + std::to_string(i + 1); // Avoid 'l' as it looks like '1'
+            all_vars.push_back(lambda_var);
+            lagrangian = (lagrangian - SymbolicExpression::variable(lambda_var) * constraints[i]).simplify();
+        }
+        
+        // Redirect to critical(lagrangian, all_vars)
+        std::string lagrangian_str = lagrangian.to_string();
+        std::string all_vars_str;
+        for (std::size_t i = 0; i < all_vars.size(); ++i) {
+            if (i > 0) all_vars_str += ", ";
+            all_vars_str += all_vars[i];
+        }
+        
+        return handle_analysis_command(ctx, "critical", lagrangian_str + ", " + all_vars_str, output);
+    }
 
     if (command == "limit") {
         if (arguments.size() != 2 && arguments.size() != 3) {

@@ -207,8 +207,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                                                &value) ||
                 !value.is_matrix) {
                 throw std::runtime_error("expected a matrix-valued expression");
-            }
-            return value.matrix;
+            }            return value.matrix;
         };
     };
 

@@ -56,8 +56,13 @@ bool is_symbolic_command(const std::string& command) {
            command == "gradient" ||
            command == "hessian" ||
            command == "jacobian" ||
+           command == "divergence" ||
+           command == "div" ||
+           command == "curl" ||
+           command == "laplacian" ||
            command == "diff" ||
-           command == "integral";
+           command == "integral" ||
+           command == "dsolve";
 }
 
 void resolve_symbolic_expression(const SymbolicResolverContext& ctx,
@@ -236,7 +241,53 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
                              std::string* output) {
     const std::vector<std::string> arguments = split_top_level_arguments(inside);
 
-    if (command == "simplify" || command == "expand") {
+    if (command == "dsolve") {
+        if (arguments.size() < 1 || arguments.size() > 3) {
+            throw std::runtime_error("dsolve expects (rhs, [x, y])");
+        }
+
+        std::string x_var = "x";
+        std::string y_var = "y";
+        if (arguments.size() >= 2) x_var = trim_copy(arguments[1]);
+        if (arguments.size() >= 3) y_var = trim_copy(arguments[2]);
+
+        SymbolicExpression rhs = SymbolicExpression::parse(arguments[0]);
+
+        auto contains = [](const SymbolicExpression& expr, const std::string& var) {
+            auto vars = expr.identifier_variables();
+            return std::find(vars.begin(), vars.end(), var) != vars.end();
+        };
+
+        // 1. Check if independent of y: y' = f(x)
+        if (!contains(rhs, y_var)) {
+            *output = y_var + " = " + rhs.integral(x_var).simplify().to_string() + " + C";
+            return true;
+        }
+
+        // 2. Check if linear: y' = -P(x)y + Q(x) => y' + P(x)y = Q(x)
+        SymbolicExpression neg_P = rhs.derivative(y_var).simplify();
+        if (!contains(neg_P, y_var)) {
+            SymbolicExpression Q = rhs.substitute(y_var, SymbolicExpression::number(0.0)).simplify();
+            if (!contains(Q, y_var)) {
+                // Linear ODE: y' + P(x)y = Q(x) where P = -neg_P
+                SymbolicExpression P = (-neg_P).simplify();
+                SymbolicExpression mu_exponent = P.integral(x_var).simplify();
+
+                std::string mu_str = "exp(" + mu_exponent.to_string() + ")";
+                std::string mu_inv_str = "exp(" + ((-mu_exponent).simplify()).to_string() + ")";
+
+                SymbolicExpression mu = SymbolicExpression::parse(mu_str).simplify();
+                SymbolicExpression mu_inv = SymbolicExpression::parse(mu_inv_str).simplify();
+
+                SymbolicExpression integral_part = (mu * Q).simplify().integral(x_var).simplify();
+                *output = y_var + " = " + (mu_inv * (integral_part)).simplify().to_string() + " + " + mu_inv.to_string() + " * C";
+                return true;
+            }
+        }
+
+        throw std::runtime_error("Only linear ODEs and y' = f(x) are currently supported by dsolve.");
+    }
+    if (command == "simplify") {
         const std::string argument = trim_copy(inside);
         std::string variable_name;
         SymbolicExpression expression;
@@ -294,6 +345,44 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             ctx.parse_symbolic_variable_arguments(arguments, 1, fallback_variables);
         *output = symbolic_matrix_to_string(
             SymbolicExpression::jacobian(expressions, variables));
+        return true;
+    }
+
+    if (command == "divergence" || command == "div" || command == "curl") {
+        if (arguments.size() < 2) {
+            throw std::runtime_error(command + " expects a bracketed expression list and variable names");
+        }
+        const std::vector<SymbolicExpression> components =
+            ctx.parse_symbolic_expression_list(arguments[0]);
+        std::vector<std::string> fallback_variables;
+        for (const SymbolicExpression& comp : components) {
+            const std::vector<std::string> ids = comp.identifier_variables();
+            fallback_variables.insert(fallback_variables.end(), ids.begin(), ids.end());
+        }
+        std::sort(fallback_variables.begin(), fallback_variables.end());
+        fallback_variables.erase(std::unique(fallback_variables.begin(), fallback_variables.end()), fallback_variables.end());
+        
+        const std::vector<std::string> variables =
+            ctx.parse_symbolic_variable_arguments(arguments, 1, fallback_variables);
+            
+        if (command == "curl") {
+            *output = symbolic_vector_to_string(SymbolicExpression::curl(components, variables));
+        } else {
+            *output = SymbolicExpression::divergence(components, variables).simplify().to_string();
+        }
+        return true;
+    }
+
+    if (command == "laplacian") {
+        if (arguments.empty()) {
+            throw std::runtime_error("laplacian expects an expression and optional variable names");
+        }
+        std::string variable_name;
+        SymbolicExpression expression;
+        ctx.resolve_symbolic(arguments[0], false, &variable_name, &expression);
+        const std::vector<std::string> variables =
+            ctx.parse_symbolic_variable_arguments(arguments, 1, expression.identifier_variables());
+        *output = expression.laplacian(variables).simplify().to_string();
         return true;
     }
 

@@ -781,7 +781,7 @@ private:
         const std::size_t start = pos_;
         while (pos_ < source_.size()) {
             const char ch = source_[pos_];
-            if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_') {
+            if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '\'') {
                 ++pos_;
             } else {
                 break;

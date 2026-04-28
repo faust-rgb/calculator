@@ -147,7 +147,7 @@ const std::vector<std::string>& builtin_expression_completion_words() {
         "gcd(", "lcm(", "mod(", "pow(", "rat(", "factor(", "fib(", "is_prime(", "next_prime(", "prev_prime(", "prime_pi(", "euler_phi(", "mobius(", "divisors(", "extended_gcd(",
         "deg(", "rad(", "deg2rad(", "rad2deg(", "sin_deg(", "cos_deg(", "celsius(", "fahrenheit(", "kelvin(", "c2f(", "f2c(",
         "poly_add(", "poly_sub(", "poly_mul(", "poly_div(", "roots(", "poly_eval(", "poly_deriv(", "poly_integ(", "poly_fit(", "poly_compose(", "poly_gcd(",
-        "diff(", "limit(", "integral(", "gradient(", "jacobian(", "hessian(", "critical(", "taylor(", "extrema(", "simplify(",
+        "diff(", "limit(", "integral(", "gradient(", "jacobian(", "hessian(", "divergence(", "div(", "curl(", "laplacian(", "critical(", "lagrange(", "taylor(", "extrema(", "simplify(",
         "ode(", "ode_table(", "ode_system(", "ode_system_table(",
         "lp_max(", "lp_min(", "ilp_max(", "ilp_min(", "milp_max(", "milp_min(", "bip_max(", "bip_min(", "binary_max(", "binary_min(",
         "step(", "delta(", "heaviside(", "impulse(", "laplace(", "ilaplace(", "inverse_laplace(", "fourier(", "ifourier(", "inverse_fourier(",

@@ -536,7 +536,7 @@ bool is_identifier_variable_name(const std::string& name) {
     }
 
     for (char ch : name) {
-        if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_') {
+        if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_' && ch != '\'') {
             return false;
         }
     }

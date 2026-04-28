@@ -1068,7 +1068,7 @@ bool is_identifier_text(const std::string& text) {
         return false;
     }
     for (char ch : text) {
-        if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_') {
+        if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_' && ch != '\'') {
             return false;
         }
     }

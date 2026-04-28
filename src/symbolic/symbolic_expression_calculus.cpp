@@ -1605,6 +1605,43 @@ std::vector<std::vector<SymbolicExpression>> SymbolicExpression::jacobian(
     return result;
 }
 
+SymbolicExpression SymbolicExpression::divergence(
+    const std::vector<SymbolicExpression>& components,
+    const std::vector<std::string>& variable_names) {
+    if (components.size() != variable_names.size()) {
+        throw std::runtime_error("divergence requires vector field components to match variable names count");
+    }
+    SymbolicExpression result = number(0.0);
+    for (std::size_t i = 0; i < components.size(); ++i) {
+        result = make_add(result, components[i].derivative(variable_names[i])).simplify();
+    }
+    return result;
+}
+
+std::vector<SymbolicExpression> SymbolicExpression::curl(
+    const std::vector<SymbolicExpression>& components,
+    const std::vector<std::string>& variable_names) {
+    if (components.size() != 3 || variable_names.size() != 3) {
+        throw std::runtime_error("curl is currently only supported for 3D vector fields");
+    }
+    
+    // components: [Fx, Fy, Fz], variables: [x, y, z]
+    // curl = [dFz/dy - dFy/dz, dFx/dz - dFz/dx, dFy/dx - dFx/dy]
+    return {
+        make_subtract(components[2].derivative(variable_names[1]), components[1].derivative(variable_names[2])).simplify(),
+        make_subtract(components[0].derivative(variable_names[2]), components[2].derivative(variable_names[0])).simplify(),
+        make_subtract(components[1].derivative(variable_names[0]), components[0].derivative(variable_names[1])).simplify()
+    };
+}
+
+SymbolicExpression SymbolicExpression::laplacian(const std::vector<std::string>& variable_names) const {
+    SymbolicExpression result = number(0.0);
+    for (const std::string& variable_name : variable_names) {
+        result = make_add(result, derivative(variable_name).derivative(variable_name)).simplify();
+    }
+    return result;
+}
+
 SymbolicExpression SymbolicExpression::integral(const std::string& variable_name) const {
     double numeric_value = 0.0;
     if (is_constant(variable_name)) {

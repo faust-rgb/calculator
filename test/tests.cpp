@@ -2934,6 +2934,57 @@ int main() {
     try {
         std::string output;
         const bool handled =
+            calculator.try_process_function_command("div([x ^ 2, y ^ 2, z ^ 2], x, y, z)", &output);
+        if (handled && (output == "2 * (x + y + z)" || output == "2 * x + 2 * y + 2 * z" || output == "2 * z + 2 * y + 2 * x")) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic divergence returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic divergence threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("curl([z, x, y], x, y, z)", &output);
+        if (handled && output == "[1, 1, 1]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic curl returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic curl threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("laplacian(x ^ 3 + y ^ 3 + z ^ 3, x, y, z)", &output);
+        if (handled && (output == "6 * (x + y + z)" || output == "6 * x + 6 * y + 6 * z" || output == "6 * z + 6 * y + 6 * x")) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: symbolic laplacian returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: symbolic laplacian threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
             calculator.try_process_function_command("critical(x ^ 2 + y ^ 2, x, y)", &output);
         if (handled && output == "[x = 0, y = 0] (local min)") {
             ++passed;
@@ -3302,6 +3353,25 @@ int main() {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: ode_system command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "ode_solve(y'' + y, 0, vec(0, 1), 1.57079632679, 40)",
+                &output);
+        if (handled && output == "[1, 0]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ode_solve harmonic oscillator returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: ode_solve command threw unexpected error: "
                   << ex.what() << '\n';
     }
 

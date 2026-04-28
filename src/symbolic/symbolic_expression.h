@@ -103,6 +103,33 @@ public:
         const std::vector<std::string>& variable_names);
 
     /**
+     * @brief 计算散度 (Divergence)
+     * @param components 向量场分量
+     * @param variable_names 变量名列表
+     * @return 散度表达式
+     */
+    static SymbolicExpression divergence(
+        const std::vector<SymbolicExpression>& components,
+        const std::vector<std::string>& variable_names);
+
+    /**
+     * @brief 计算旋度 (Curl) - 仅限 3D
+     * @param components 向量场分量 (3个)
+     * @param variable_names 变量名列表 (3个)
+     * @return 旋度分量向量
+     */
+    static std::vector<SymbolicExpression> curl(
+        const std::vector<SymbolicExpression>& components,
+        const std::vector<std::string>& variable_names);
+
+    /**
+     * @brief 计算拉普拉斯算子 (Laplacian)
+     * @param variable_names 变量名列表
+     * @return 标量场拉普拉斯表达式
+     */
+    SymbolicExpression laplacian(const std::vector<std::string>& variable_names) const;
+
+    /**
      * @brief 计算符号积分
      * @param variable_name 积分变量名
      * @return 积分表达式（不含常数 C）

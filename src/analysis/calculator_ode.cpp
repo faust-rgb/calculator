@@ -2,12 +2,14 @@
 // ODE 求解器命令实现
 // ============================================================================
 
+#include "symbolic_expression.h"
+#include "symbolic_expression_internal.h"
 #include "calculator_ode.h"
-
 #include "ode_solver.h"
 
 #include <stdexcept>
 #include <vector>
+#include <algorithm>
 
 namespace ode_ops {
 
@@ -79,13 +81,75 @@ bool try_parse_positive_step_argument(const ODEContext& ctx,
     }
 }
 
+int get_derivative_order(const std::string& var) {
+    if (var.empty() || var[0] != 'y') return 0;
+    if (var == "y") return 0;
+    int order = 0;
+    for (std::size_t i = 1; i < var.size(); ++i) {
+        if (var[i] == '\'') {
+            order++;
+        } else {
+            return 0; // Not a pure derivative notation like y''
+        }
+    }
+    return order;
+}
+
+std::string order_to_var(int order) {
+    std::string s = "y";
+    for (int i = 0; i < order; ++i) s += "'";
+    return s;
+}
+
+struct ODEInfo {
+    bool is_high_order = false;
+    int order = 1;
+    SymbolicExpression rhs;
+};
+
+ODEInfo analyze_ode_expression(const std::string& expr_str) {
+    SymbolicExpression expr = SymbolicExpression::parse(expr_str);
+    std::vector<std::string> vars = expr.identifier_variables();
+    int max_order = 0;
+    for (const std::string& v : vars) {
+        max_order = std::max(max_order, get_derivative_order(v));
+    }
+
+    ODEInfo info;
+    if (max_order <= 1 && expr_str.find("y'") == std::string::npos) {
+        // Simple first order y' = f(x, y)
+        info.is_high_order = false;
+        info.order = 1;
+        info.rhs = expr;
+        return info;
+    }
+
+    // High order or implicit first order
+    info.is_high_order = true;
+    info.order = std::max(1, max_order);
+    const std::string highest_var = order_to_var(info.order);
+
+    // Try to solve for highest_var: expr = 0 => highest_var = ...
+    // Simple linear solver: E = A * highest_var + B = 0 => highest_var = -B/A
+    SymbolicExpression coeff_A = expr.derivative(highest_var).simplify();
+    if (coeff_A.is_constant(highest_var) && !symbolic_expression_internal::expr_is_zero(coeff_A)) {
+        SymbolicExpression term_B = expr.substitute(highest_var, SymbolicExpression::number(0.0)).simplify();
+        info.rhs = ((-term_B) / coeff_A).simplify();
+    } else {
+        throw std::runtime_error("Could not solve for highest derivative " + highest_var + ". The equation must be linear in the highest derivative.");
+    }
+
+    return info;
+}
+
 }  // namespace
 
 bool is_ode_command(const std::string& command) {
     return command == "ode" ||
            command == "ode_table" ||
            command == "ode_system" ||
-           command == "ode_system_table";
+           command == "ode_system_table" ||
+           command == "ode_solve";
 }
 
 bool handle_ode_command(const ODEContext& ctx,
@@ -101,8 +165,90 @@ bool handle_ode_command(const ODEContext& ctx,
                 " expects rhs, x0, y0, x1, optional steps, optional event, and optional params");
         }
 
+        ODEInfo info = analyze_ode_expression(arguments[0]);
+        
         double x0 = ctx.parse_decimal(arguments[1]);
-        double y0 = ctx.parse_decimal(arguments[2]);
+        std::vector<double> initial_state;
+        
+        // Handle y0 as scalar or vector
+        StoredValue y0_val = ctx.evaluate_expression_value(arguments[2], false);
+        if (y0_val.is_matrix && y0_val.matrix.is_vector()) {
+            initial_state = matrix_to_vector_values(y0_val.matrix, "ODE initial state");
+        } else {
+            initial_state = { ctx.parse_decimal(arguments[2]) };
+        }
+
+        if (info.is_high_order) {
+            // Ensure initial state matches order
+            if (initial_state.size() < (std::size_t)info.order) {
+                initial_state.resize(info.order, 0.0);
+            } else if (initial_state.size() > (std::size_t)info.order) {
+                initial_state.resize(info.order);
+            }
+
+            // Convert high-order to system
+            std::vector<std::string> system_exprs;
+            for (int i = 1; i < info.order; ++i) {
+                system_exprs.push_back("y" + std::to_string(i + 1));
+            }
+            
+            std::string rhs_str = info.rhs.to_string();
+            // Replace y, y', y'', ... with y1, y2, y3, ...
+            for (int i = info.order - 1; i >= 0; --i) {
+                std::string from = "y";
+                for (int j = 0; j < i; ++j) from += "'";
+                
+                std::string to = "y" + std::to_string(i + 1);
+                
+                auto replace_identifier = [](std::string& s, const std::string& id, const std::string& replacement) {
+                    std::string result;
+                    std::string current_id;
+                    auto flush = [&]() {
+                        if (current_id == id) result += replacement;
+                        else result += current_id;
+                        current_id.clear();
+                    };
+                    for (char c : s) {
+                        if (std::isalnum(c) || c == '_' || c == '\'') {
+                            current_id += c;
+                        } else {
+                            flush();
+                            result += c;
+                        }
+                    }
+                    flush();
+                    s = result;
+                };
+                replace_identifier(rhs_str, from, to);
+            }
+            system_exprs.push_back(rhs_str);
+
+            std::string system_arg = "[";
+            for (std::size_t i = 0; i < system_exprs.size(); ++i) {
+                if (i > 0) system_arg += "; ";
+                system_arg += system_exprs[i];
+            }
+            system_arg += "]";
+
+            // Redirect to ode_system
+            std::vector<std::string> new_args = arguments;
+            new_args[0] = system_arg;
+            matrix::Matrix y0_mat(initial_state.size(), 1, 0.0);
+            for (std::size_t i = 0; i < initial_state.size(); ++i) y0_mat.at(i, 0) = initial_state[i];
+            new_args[2] = matrix_literal_expression(y0_mat);
+
+            std::string rec_inside;
+            for (std::size_t i = 0; i < new_args.size(); ++i) {
+                if (i > 0) rec_inside += ", ";
+                rec_inside += new_args[i];
+            }
+            
+            std::string sys_cmd = (command == "ode") ? "ode_system" : "ode_system_table";
+            return handle_ode_command(ctx, sys_cmd, rec_inside, output);
+        }
+
+        // Original scalar ODE logic
+        double y0 = initial_state[0];
         double x1 = ctx.parse_decimal(arguments[3]);
         int steps = command == "ode" ? 100 : 10;
 
@@ -195,6 +341,16 @@ bool handle_ode_command(const ODEContext& ctx,
                 " expects rhs_vector, x0, y0_vector, x1, optional steps, optional event, and optional params");
         }
 
+        const double x0 = ctx.parse_decimal(arguments[1]);
+        const double x1 = ctx.parse_decimal(arguments[3]);
+        const std::vector<double> initial_state =
+            matrix_to_vector_values(ctx.parse_matrix_argument(arguments[2], command),
+                                    "ODE initial state");
+
+        const auto evaluate_rhs_matrix =
+            ctx.build_scoped_matrix_evaluator(arguments[0]);
+        std::function<double(const std::vector<std::pair<std::string, StoredValue>>&)> evaluate_event;
+
         int steps = command == "ode_system" ? 100 : 10;
         std::size_t optional_index = 4;
         int parsed_steps = steps;
@@ -228,18 +384,6 @@ bool handle_ode_command(const ODEContext& ctx,
             }
         }
 
-        if (optional_index != arguments.size()) {
-            throw std::runtime_error(command + " received too many optional arguments");
-        }
-
-        const double x0 = ctx.parse_decimal(arguments[1]);
-        const double x1 = ctx.parse_decimal(arguments[3]);
-        const std::vector<double> initial_state =
-            matrix_to_vector_values(ctx.parse_matrix_argument(arguments[2], command),
-                                    command);
-        const auto evaluate_rhs_matrix =
-            ctx.build_scoped_matrix_evaluator(arguments[0]);
-        std::function<double(const std::vector<std::pair<std::string, StoredValue>>&)> evaluate_event;
         if (has_event) {
             evaluate_event = ctx.build_scoped_scalar_evaluator(event_expression);
         }
@@ -249,7 +393,6 @@ bool handle_ode_command(const ODEContext& ctx,
                 double x_value, const std::vector<double>& y_value) {
                 std::vector<std::pair<std::string, StoredValue>> assignments;
                 assignments.reserve(y_value.size() + (has_parameter ? 4 : 2));
-
                 assignments.push_back({"x", make_scalar_stored(ctx, x_value)});
 
                 StoredValue y_matrix_stored;
@@ -325,6 +468,11 @@ bool handle_ode_command(const ODEContext& ctx,
         }
         *output = matrix_literal_expression(table);
         return true;
+    }
+
+    if (command == "ode_solve") {
+        // Redundant now, but kept for compatibility. Redirect to ode.
+        return handle_ode_command(ctx, "ode", inside, output);
     }
 
     return false;
