@@ -475,6 +475,22 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 return make_add(left, SymbolicExpression::number(-right_value)).simplify();
             }
             {
+                std::string left_argument;
+                std::string right_argument;
+                // sec^2(x) - tan^2(x) -> 1
+                if (is_squared_function(left, "sec", &left_argument) &&
+                    is_squared_function(right, "tan", &right_argument) &&
+                    left_argument == right_argument) {
+                    return SymbolicExpression::number(1.0);
+                }
+                // csc^2(x) - cot^2(x) -> 1
+                if (is_squared_function(left, "csc", &left_argument) &&
+                    is_squared_function(right, "cot", &right_argument) &&
+                    left_argument == right_argument) {
+                    return SymbolicExpression::number(1.0);
+                }
+            }
+            {
                 SymbolicExpression combined;
                 if (try_combine_like_terms(left, right, -1.0, &combined)) {
                     return combined;

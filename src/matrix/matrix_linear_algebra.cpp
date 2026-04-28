@@ -494,13 +494,10 @@ double determinant(const Matrix& matrix) {
     if (!matrix.is_square()) {
         throw std::runtime_error("determinant requires a square matrix");
     }
-    if (matrix.rows == 0) {
-        return 1.0;
-    }
-    if (matrix.rows == 1) {
-        return matrix.at(0, 0);
-    }
-    if (matrix.rows == 2) {
+    const std::size_t n = matrix.rows;
+    if (n == 0) return 1.0;
+    if (n == 1) return matrix.at(0, 0);
+    if (n == 2) {
         return static_cast<double>(
             static_cast<long double>(matrix.at(0, 0)) *
                 static_cast<long double>(matrix.at(1, 1)) -
@@ -509,16 +506,29 @@ double determinant(const Matrix& matrix) {
     }
 
     const LuResult lu = lu_decompose_with_pivoting(matrix);
-    if (lu.det_sign == 0) {
-        return 0.0;
+    if (lu.det_sign == 0) return 0.0;
+
+    // 使用指数和对数路径来防止大规模矩阵乘法导致溢出
+    // 同时处理符号位
+    long double log_sum = 0.0L;
+    int sign = lu.det_sign;
+    for (std::size_t i = 0; i < n; ++i) {
+        const double diag = lu.lu.at(i, i);
+        if (mymath::is_near_zero(diag)) return 0.0;
+        if (diag < 0.0) {
+            sign = -sign;
+            log_sum += mymath::ln(-diag);
+        } else {
+            log_sum += mymath::ln(diag);
+        }
     }
 
-    long double det = static_cast<long double>(lu.det_sign);
-    for (std::size_t i = 0; i < matrix.rows; ++i) {
-        det *= static_cast<long double>(lu.lu.at(i, i));
+    // 检查结果是否超出 double 范围
+    if (log_sum > 709.0L) { // ln(1.79e308) 约为 709.7
+        return sign > 0 ? mymath::infinity() : -mymath::infinity();
     }
 
-    return static_cast<double>(det);
+    return sign * static_cast<double>(mymath::exp(static_cast<double>(log_sum)));
 }
 
 double rank(const Matrix& matrix) {

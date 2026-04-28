@@ -11,6 +11,18 @@
 #include <vector>
 
 namespace matrix {
+
+static bool is_complex_symbol(const std::string& text) {
+    std::size_t pos = text.find('i');
+    while (pos != std::string::npos) {
+        bool prefix_ok = (pos == 0 || (!std::isalnum(static_cast<unsigned char>(text[pos - 1])) && text[pos-1] != '_'));
+        bool suffix_ok = (pos + 1 == text.size() || (!std::isalnum(static_cast<unsigned char>(text[pos + 1])) && text[pos+1] != '_'));
+        if (prefix_ok && suffix_ok) return true;
+        pos = text.find('i', pos + 1);
+    }
+    return false;
+}
+
 namespace internal {
 
 namespace {
@@ -1196,23 +1208,75 @@ private:
         }
 
         if (name == "abs") {
-            if (arguments.size() != 1) {
-                throw std::runtime_error("abs expects exactly one argument");
-            }
-            Value value;
-            if (try_evaluate_expression(arguments[0],
-                                        *scalar_evaluator_,
-                                        *matrix_lookup_,
-                                        &value) &&
-                value.is_matrix) {
-                if (!is_complex_vector(value.matrix)) {
-                    throw std::runtime_error("matrix abs only supports complex values");
+            if (arguments.size() != 1) throw std::runtime_error("abs expects 1 argument");
+            Value v;
+            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, &v)) {
+                if (v.is_matrix && v.matrix.rows == 1 && v.matrix.cols == 2) {
+                    const double r = v.matrix.at(0, 0), i = v.matrix.at(0, 1);
+                    return Value::from_scalar(mymath::sqrt(r * r + i * i));
+                } else if (v.is_matrix) {
+                    return Value::from_scalar(norm(v.matrix));
+                } else {
+                    return Value::from_scalar(mymath::abs(v.scalar));
                 }
-                const double real = complex_real(value.matrix);
-                const double imag = complex_imag(value.matrix);
-                return Value::from_scalar(mymath::sqrt(real * real + imag * imag));
             }
             return Value::from_scalar((*scalar_evaluator_)("abs(" + arguments[0] + ")"));
+        }
+
+        if (name == "exp") {
+            if (arguments.size() != 1) throw std::runtime_error("exp expects 1 argument");
+            Value v;
+            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, &v)) {
+                if (v.is_matrix && v.matrix.rows == 1 && v.matrix.cols == 2) {
+                    const double r = v.matrix.at(0, 0), i = v.matrix.at(0, 1), m = mymath::exp(r);
+                    return Value::from_matrix(complex_value(m * mymath::cos(i), m * mymath::sin(i)));
+                } else if (!v.is_matrix) {
+                    return Value::from_scalar(mymath::exp(v.scalar));
+                }
+            }
+            return Value::from_scalar((*scalar_evaluator_)("exp(" + arguments[0] + ")"));
+        }
+
+        if (name == "ln") {
+            if (arguments.size() != 1) throw std::runtime_error("ln expects 1 argument");
+            Value v;
+            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, &v)) {
+                if (v.is_matrix && v.matrix.rows == 1 && v.matrix.cols == 2) {
+                    const double r = v.matrix.at(0, 0), i = v.matrix.at(0, 1);
+                    return Value::from_matrix(complex_value(0.5 * mymath::ln(r * r + i * i), mymath::atan2(i, r)));
+                } else if (!v.is_matrix) {
+                    return Value::from_scalar(mymath::ln(v.scalar));
+                }
+            }
+            return Value::from_scalar((*scalar_evaluator_)("ln(" + arguments[0] + ")"));
+        }
+
+        if (name == "sin") {
+            if (arguments.size() != 1) throw std::runtime_error("sin expects 1 argument");
+            Value v;
+            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, &v)) {
+                if (v.is_matrix && v.matrix.rows == 1 && v.matrix.cols == 2) {
+                    const double r = v.matrix.at(0, 0), i = v.matrix.at(0, 1);
+                    return Value::from_matrix(complex_value(mymath::sin(r) * mymath::cosh(i), mymath::cos(r) * mymath::sinh(i)));
+                } else if (!v.is_matrix) {
+                    return Value::from_scalar(mymath::sin(v.scalar));
+                }
+            }
+            return Value::from_scalar((*scalar_evaluator_)("sin(" + arguments[0] + ")"));
+        }
+
+        if (name == "cos") {
+            if (arguments.size() != 1) throw std::runtime_error("cos expects 1 argument");
+            Value v;
+            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, &v)) {
+                if (v.is_matrix && v.matrix.rows == 1 && v.matrix.cols == 2) {
+                    const double r = v.matrix.at(0, 0), i = v.matrix.at(0, 1);
+                    return Value::from_matrix(complex_value(mymath::cos(r) * mymath::cosh(i), -mymath::sin(r) * mymath::sinh(i)));
+                } else if (!v.is_matrix) {
+                    return Value::from_scalar(mymath::cos(v.scalar));
+                }
+            }
+            return Value::from_scalar((*scalar_evaluator_)("cos(" + arguments[0] + ")"));
         }
 
         throw std::runtime_error("unknown matrix function: " + name);
@@ -1403,6 +1467,17 @@ private:
 
     static Value multiply_values(Value lhs, Value rhs) {
         if (lhs.is_matrix && rhs.is_matrix) {
+            if (lhs.matrix.rows == 1 && lhs.matrix.cols == 2 && 
+                rhs.matrix.rows == 1 && rhs.matrix.cols == 2) {
+                const double a = lhs.matrix.at(0, 0);
+                const double b = lhs.matrix.at(0, 1);
+                const double c = rhs.matrix.at(0, 0);
+                const double d = rhs.matrix.at(0, 1);
+                Matrix res(1, 2);
+                res.at(0, 0) = a * c - b * d;
+                res.at(0, 1) = a * d + b * c;
+                return Value::from_matrix(res);
+            }
             return Value::from_matrix(multiply(lhs.matrix, rhs.matrix));
         }
         if (lhs.is_matrix) {
@@ -1415,6 +1490,24 @@ private:
     }
 
     static Value divide_values(Value lhs, Value rhs) {
+        if (rhs.is_matrix && rhs.matrix.rows == 1 && rhs.matrix.cols == 2) {
+            const double c = rhs.matrix.at(0, 0);
+            const double d = rhs.matrix.at(0, 1);
+            const double denom = c * c + d * d;
+            if (mymath::is_near_zero(denom)) throw std::runtime_error("complex division by zero");
+            if (lhs.is_matrix && lhs.matrix.rows == 1 && lhs.matrix.cols == 2) {
+                const double a = lhs.matrix.at(0, 0);
+                const double b = lhs.matrix.at(0, 1);
+                Matrix res(1, 2);
+                res.at(0, 0) = (a * c + b * d) / denom;
+                res.at(0, 1) = (b * c - a * d) / denom;
+                return Value::from_matrix(res);
+            }
+            Matrix res(1, 2);
+            res.at(0, 0) = (lhs.scalar * c) / denom;
+            res.at(0, 1) = (-lhs.scalar * d) / denom;
+            return Value::from_matrix(res);
+        }
         if (rhs.is_matrix) {
             throw std::runtime_error("division by a matrix is not supported");
         }
@@ -1582,8 +1675,12 @@ bool try_evaluate_expression(const std::string& expression,
         trimmed.find("arg(") != std::string::npos ||
         trimmed.find("conj(") != std::string::npos ||
         trimmed.find("abs(") != std::string::npos ||
+        trimmed.find("residue(") != std::string::npos ||
+        trimmed.find("complex_integral(") != std::string::npos ||
         trimmed.find("eigvecs(") != std::string::npos ||
-        trimmed.find('[') != std::string::npos;
+        trimmed.find('[') != std::string::npos ||
+        is_complex_symbol(trimmed);
+
     const bool mentions_matrix_variable =
         contains_matrix_identifier(trimmed, matrix_lookup);
 
@@ -1596,12 +1693,13 @@ bool try_evaluate_expression(const std::string& expression,
         return false;
     }
 
-    // 只有在“明显像矩阵表达式”时才启用矩阵解析器，
-    // 这样可以避免和原有纯标量函数路径互相抢解析权。
-    Parser parser(trimmed, &scalar_evaluator, &matrix_lookup);
-    Value parsed = parser.parse();
-    *value = parsed;
-    return true;
+    try {
+        Parser parser(trimmed, &scalar_evaluator, &matrix_lookup);
+        *value = parser.parse();
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 }  // namespace matrix

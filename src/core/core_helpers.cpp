@@ -105,6 +105,10 @@ bool lookup_builtin_constant(const std::string& name, double* value) {
         *value = 6.02214076e23;
         return true;
     }
+    if (name == "inf" || name == "infinity" || name == "oo") {
+        *value = mymath::infinity();
+        return true;
+    }
     return false;
 }
 

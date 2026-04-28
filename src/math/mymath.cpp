@@ -355,4 +355,14 @@ double atanh(double x) {
     return 0.5 * ln((1.0 + x) / (1.0 - x));
 }
 
+double atan2(double y, double x) {
+    if (is_near_zero(x)) {
+        if (is_near_zero(y)) return 0.0;
+        return y > 0.0 ? kPi / 2.0 : -kPi / 2.0;
+    }
+    double res = atan(y / x);
+    if (x < 0.0) res += y >= 0.0 ? kPi : -kPi;
+    return res;
+}
+
 }  // namespace mymath

@@ -894,6 +894,28 @@ bool primitive_for_outer_function(const std::string& function_name,
         *primitive = make_subtract(make_multiply(argument, make_function("ln", argument)), argument).simplify();
         return true;
     }
+    if (function_name == "asin") {
+        *primitive = make_add(make_multiply(argument, make_function("asin", argument)),
+                              make_function("sqrt", make_subtract(SymbolicExpression::number(1.0),
+                                                                make_power(argument, SymbolicExpression::number(2.0)))))
+                        .simplify();
+        return true;
+    }
+    if (function_name == "acos") {
+        *primitive = make_subtract(make_multiply(argument, make_function("acos", argument)),
+                                   make_function("sqrt", make_subtract(SymbolicExpression::number(1.0),
+                                                                     make_power(argument, SymbolicExpression::number(2.0)))))
+                        .simplify();
+        return true;
+    }
+    if (function_name == "atan") {
+        *primitive = make_subtract(make_multiply(argument, make_function("atan", argument)),
+                                   make_multiply(SymbolicExpression::number(0.5),
+                                               make_function("ln", make_add(SymbolicExpression::number(1.0),
+                                                                          make_power(argument, SymbolicExpression::number(2.0))))))
+                        .simplify();
+        return true;
+    }
     if (function_name == "sinh") {
         *primitive = make_function("cosh", argument);
         return true;
@@ -1788,6 +1810,12 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
         double b = 0.0;
         const bool linear = decompose_linear(argument, variable_name, &a, &b) &&
                             !mymath::is_near_zero(a, kFormatEps);
+        
+        SymbolicExpression primitive;
+        if (linear && primitive_for_outer_function(node_->text, argument, &primitive)) {
+            return make_divide(primitive, number(a)).simplify();
+        }
+
         if (node_->text == "sin" && linear) {
             return make_divide(make_negate(make_function("cos", argument)),
                                number(a))

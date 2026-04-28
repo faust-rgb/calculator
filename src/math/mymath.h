@@ -233,6 +233,7 @@ double tan(double x);
  * 使用恒等式将输入范围缩减到 [0, 0.5]，然后使用泰勒级数。
  */
 double atan(double x);
+double atan2(double y, double x);
 
 /**
  * @brief 计算反正弦值

@@ -35,6 +35,9 @@ struct AnalysisContext {
     std::function<std::vector<std::string>(const std::vector<std::string>&, std::size_t, const std::vector<std::string>&)>
         parse_symbolic_variable_arguments;
 
+    // 通用求值（支持矩阵/复数）
+    std::function<matrix::Value(const std::string&, bool)> evaluate_expression_value;
+
     // 数值求值
     std::function<double(const std::string&)> parse_decimal;
 
