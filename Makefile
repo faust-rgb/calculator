@@ -11,8 +11,8 @@ TEST_APP := $(BIN_DIR)/calculator_tests
 PLANNING_TEST_APP := $(BIN_DIR)/planning_tests
 SRC_DIR := src
 TEST_DIR := test
-SRC_DIRS := $(SRC_DIR)/app $(SRC_DIR)/core $(SRC_DIR)/math $(SRC_DIR)/matrix $(SRC_DIR)/analysis $(SRC_DIR)/polynomial $(SRC_DIR)/symbolic $(SRC_DIR)/script
-INCLUDES := $(addprefix -I,$(SRC_DIRS))
+SRC_DIRS := $(SRC_DIR)/app $(SRC_DIR)/core $(SRC_DIR)/math $(SRC_DIR)/matrix $(SRC_DIR)/analysis $(SRC_DIR)/polynomial $(SRC_DIR)/symbolic $(SRC_DIR)/script $(SRC_DIR)/statistics
+INCLUDES := -I$(SRC_DIR) $(addprefix -I,$(SRC_DIRS))
 CPPFLAGS += $(INCLUDES) -MMD -MP
 
 MAIN_SRC := $(SRC_DIR)/app/main.cpp
@@ -54,7 +54,10 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/symbolic/calculator_symbolic_commands.cpp \
 	$(SRC_DIR)/polynomial/calculator_polynomial.cpp \
 	$(SRC_DIR)/polynomial/polynomial.cpp \
-	$(SRC_DIR)/script/script_parser.cpp
+	$(SRC_DIR)/script/script_parser.cpp \
+	$(SRC_DIR)/statistics/statistics.cpp \
+	$(SRC_DIR)/statistics/probability.cpp \
+	$(SRC_DIR)/statistics/calculator_statistics.cpp
 COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/core/calculator_internal_types.h \
 		$(SRC_DIR)/analysis/calculator_simplex.h \

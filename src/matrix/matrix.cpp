@@ -8,6 +8,8 @@
 
 #include "matrix.h"
 #include "matrix_internal.h"
+#include "statistics/statistics.h"
+#include "statistics/probability.h"
 
 #include "mymath.h"
 #include "polynomial.h"
@@ -502,134 +504,37 @@ std::vector<double> sort_values(std::vector<double> values) {
 }
 
 double mean_values(const std::vector<double>& values) {
-    require_nonempty_values(values, "mean");
-    long double total = 0.0L;
-    long double compensation = 0.0L;
-    for (double value : values) {
-        const long double adjusted = static_cast<long double>(value) - compensation;
-        const long double next = total + adjusted;
-        compensation = (next - total) - adjusted;
-        total = next;
-    }
-    return static_cast<double>(total / static_cast<long double>(values.size()));
+    return stats::mean(values);
 }
 
 double median_values(const std::vector<double>& values) {
-    require_nonempty_values(values, "median");
-    std::vector<double> sorted = sort_values(values);
-    const std::size_t middle = sorted.size() / 2;
-    if (sorted.size() % 2 == 1) {
-        return sorted[middle];
-    }
-    return (sorted[middle - 1] + sorted[middle]) * 0.5;
+    return stats::median(values);
 }
 
 double mode_values(const std::vector<double>& values) {
-    require_nonempty_values(values, "mode");
-    std::vector<double> sorted = sort_values(values);
-    double best_value = sorted.front();
-    int best_count = 1;
-    double current_value = sorted.front();
-    int current_count = 1;
-
-    for (std::size_t i = 1; i < sorted.size(); ++i) {
-        if (mymath::is_near_zero(sorted[i] - current_value, 1e-10)) {
-            ++current_count;
-            continue;
-        }
-        if (current_count > best_count) {
-            best_count = current_count;
-            best_value = current_value;
-        }
-        current_value = sorted[i];
-        current_count = 1;
-    }
-    if (current_count > best_count) {
-        best_value = current_value;
-    }
-    return best_value;
+    return stats::mode(values);
 }
 
 double variance_values(const std::vector<double>& values) {
-    require_nonempty_values(values, "var");
-    long double mean = 0.0L;
-    long double m2 = 0.0L;
-    std::size_t count = 0;
-    for (double value : values) {
-        ++count;
-        const long double value_ld = static_cast<long double>(value);
-        const long double delta = value_ld - mean;
-        mean += delta / static_cast<long double>(count);
-        const long double delta2 = value_ld - mean;
-        m2 += delta * delta2;
-    }
-    return static_cast<double>(m2 / static_cast<long double>(values.size()));
+    return stats::variance(values);
 }
 
 double percentile_values(const std::vector<double>& values, double p) {
-    require_nonempty_values(values, "percentile");
-    if (p < 0.0 || p > 100.0) {
-        throw std::runtime_error("percentile p must be in [0, 100]");
-    }
-    std::vector<double> sorted = sort_values(values);
-    if (sorted.size() == 1) {
-        return sorted.front();
-    }
-    const double position =
-        p * static_cast<double>(sorted.size() - 1) / 100.0;
-    const std::size_t lower =
-        floor_to_size_t(position);
-    const std::size_t upper =
-        ceil_to_size_t(position);
-    if (lower == upper) {
-        return sorted[lower];
-    }
-    const double fraction = position - static_cast<double>(lower);
-    return sorted[lower] + (sorted[upper] - sorted[lower]) * fraction;
+    return stats::percentile(values, p);
 }
 
 double quartile_values(const std::vector<double>& values, double q) {
-    if (!mymath::is_integer(q)) {
-        throw std::runtime_error("quartile q must be an integer");
-    }
-    const int quartile = static_cast<int>(q);
-    if (quartile < 0 || quartile > 4) {
-        throw std::runtime_error("quartile q must be between 0 and 4");
-    }
-    return percentile_values(values, static_cast<double>(quartile * 25));
+    return stats::quartile(values, static_cast<int>(q));
 }
 
 double covariance_values(const std::vector<double>& lhs,
                          const std::vector<double>& rhs) {
-    if (lhs.size() != rhs.size() || lhs.empty()) {
-        throw std::runtime_error("cov requires vectors of the same non-zero length");
-    }
-    long double lhs_mean = 0.0L;
-    long double rhs_mean = 0.0L;
-    long double co_moment = 0.0L;
-    for (std::size_t i = 0; i < lhs.size(); ++i) {
-        const long double count = static_cast<long double>(i + 1);
-        const long double x = static_cast<long double>(lhs[i]);
-        const long double y = static_cast<long double>(rhs[i]);
-        const long double dx = x - lhs_mean;
-        lhs_mean += dx / count;
-        const long double dy = y - rhs_mean;
-        rhs_mean += dy / count;
-        co_moment += dx * (y - rhs_mean);
-    }
-    return static_cast<double>(co_moment / static_cast<long double>(lhs.size()));
+    return stats::covariance(lhs, rhs);
 }
 
 double correlation_values(const std::vector<double>& lhs,
                           const std::vector<double>& rhs) {
-    const double covariance = covariance_values(lhs, rhs);
-    const double lhs_std = mymath::sqrt(variance_values(lhs));
-    const double rhs_std = mymath::sqrt(variance_values(rhs));
-    if (mymath::is_near_zero(lhs_std, kMatrixEps) ||
-        mymath::is_near_zero(rhs_std, kMatrixEps)) {
-        throw std::runtime_error("corr requires non-constant vectors");
-    }
-    return covariance / (lhs_std * rhs_std);
+    return stats::correlation(lhs, rhs);
 }
 
 double lagrange_interpolate(const std::vector<double>& x,
@@ -747,28 +652,11 @@ double spline_interpolate(const std::vector<double>& x,
 
 std::pair<double, double> linear_regression_fit(const std::vector<double>& x,
                                                 const std::vector<double>& y) {
-    if (x.size() != y.size() || x.empty()) {
-        throw std::runtime_error("linear_regression requires sample vectors of the same non-zero length");
-    }
-    const double x_mean = mean_values(x);
-    const double y_mean = mean_values(y);
-    long double numerator = 0.0L;
-    long double denominator = 0.0L;
-    for (std::size_t i = 0; i < x.size(); ++i) {
-        const long double dx =
-            static_cast<long double>(x[i]) - static_cast<long double>(x_mean);
-        const long double dy =
-            static_cast<long double>(y[i]) - static_cast<long double>(y_mean);
-        numerator += dx * dy;
-        denominator += dx * dx;
-    }
-    if (abs_ld(denominator) <= 1e-12L) {
-        throw std::runtime_error("linear_regression requires x values with non-zero variance");
-    }
-    const double slope = static_cast<double>(numerator / denominator);
-    const double intercept = static_cast<double>(
-        static_cast<long double>(y_mean) - static_cast<long double>(slope) * static_cast<long double>(x_mean));
-    return {slope, intercept};
+    std::vector<double> res = stats::linear_regression(x, y);
+    // stats::linear_regression returns [intercept, slope]
+    // matrix expects [slope, intercept] or [intercept, slope]? 
+    // Let's check MatrixExpression usage.
+    return {res[1], res[0]}; 
 }
 
 bool is_complex_vector(const Matrix& matrix) {

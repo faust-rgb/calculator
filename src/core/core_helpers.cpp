@@ -128,23 +128,6 @@ double fahrenheit_to_celsius(double value) {
     return (value - 32.0) * 5.0 / 9.0;
 }
 
-double normal_pdf(double x, double mean, double sigma) {
-    if (sigma <= 0.0) {
-        throw std::runtime_error("normal distribution sigma must be positive");
-    }
-    const double z = (x - mean) / sigma;
-    return mymath::exp(-0.5 * z * z) /
-           (sigma * mymath::sqrt(2.0 * mymath::kPi));
-}
-
-double normal_cdf(double x, double mean, double sigma) {
-    if (sigma <= 0.0) {
-        throw std::runtime_error("normal distribution sigma must be positive");
-    }
-    return 0.5 * (1.0 + mymath::erf((x - mean) /
-                                    (sigma * mymath::sqrt(2.0))));
-}
-
 bool is_prime_ll(long long value) {
     if (value <= 1) {
         return false;

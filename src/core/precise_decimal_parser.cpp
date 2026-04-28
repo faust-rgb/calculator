@@ -299,20 +299,6 @@ double factorial_int(int n) {
     return result;
 }
 
-double factorial_value(long long n) {
-    if (n < 0) {
-        throw std::runtime_error("factorial only accepts non-negative integers");
-    }
-    if (n > 170) {
-        throw std::runtime_error("factorial is limited to n <= 170 to avoid overflow");
-    }
-    double result = 1.0;
-    for (long long i = 2; i <= n; ++i) {
-        result *= static_cast<double>(i);
-    }
-    return result;
-}
-
 Rational factorial_rational(long long n) {
     if (n < 0) {
         throw std::runtime_error("factorial only accepts non-negative integers");
@@ -323,22 +309,6 @@ Rational factorial_rational(long long n) {
     Rational result(1, 1);
     for (long long i = 2; i <= n; ++i) {
         result = result * Rational(i, 1);
-    }
-    return result;
-}
-
-double combination_value(long long n, long long r) {
-    if (n < 0 || r < 0) {
-        throw std::runtime_error("nCr only accepts non-negative integers");
-    }
-    if (r > n) {
-        throw std::runtime_error("nCr requires r <= n");
-    }
-    const long long effective_r = r < (n - r) ? r : (n - r);
-    double result = 1.0;
-    for (long long i = 1; i <= effective_r; ++i) {
-        result *= static_cast<double>(n - effective_r + i);
-        result /= static_cast<double>(i);
     }
     return result;
 }
@@ -354,20 +324,6 @@ Rational combination_rational(long long n, long long r) {
     Rational result(1, 1);
     for (long long i = 1; i <= effective_r; ++i) {
         result = result * Rational(n - effective_r + i, i);
-    }
-    return result;
-}
-
-double permutation_value(long long n, long long r) {
-    if (n < 0 || r < 0) {
-        throw std::runtime_error("nPr only accepts non-negative integers");
-    }
-    if (r > n) {
-        throw std::runtime_error("nPr requires r <= n");
-    }
-    double result = 1.0;
-    for (long long i = 0; i < r; ++i) {
-        result *= static_cast<double>(n - i);
     }
     return result;
 }

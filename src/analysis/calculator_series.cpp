@@ -3,6 +3,7 @@
 // ============================================================================
 
 #include "calculator_series.h"
+#include "statistics/probability.h"
 
 #include "polynomial.h"
 #include "mymath.h"
@@ -57,7 +58,7 @@ std::vector<double> build_taylor_coefficients(
             found->second.has_value = true;
         }
         const double derivative_value = found->second.value;
-        coefficients.push_back(derivative_value / factorial_value(order));
+        coefficients.push_back(derivative_value / prob::factorial(order));
         if (order != degree) {
             const std::string next_key = base_key + "|" + std::to_string(order + 1);
             auto next_found = derivative_cache.find(next_key);

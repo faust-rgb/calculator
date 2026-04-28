@@ -2,6 +2,7 @@
 
 #include "matrix.h"
 #include "mymath.h"
+#include "statistics/calculator_statistics.h"
 
 #include <algorithm>
 #include <cctype>
@@ -429,6 +430,8 @@ private:
             {"bessel", apply_bessel},
             {"beta", apply_beta},
             {"binom", apply_ncr},
+            {"binom_cdf", apply_binom_cdf},
+            {"binom_pmf", apply_binom_pmf},
             {"bitlen", apply_bitlen},
             {"cdf_normal", apply_cdf_normal},
             {"clamp", apply_clamp},
@@ -458,6 +461,8 @@ private:
             {"pdf_normal", apply_pdf_normal},
             {"percentile", apply_percentile},
             {"phi", apply_euler_phi},
+            {"poisson_cdf", apply_poisson_cdf},
+            {"poisson_pmf", apply_poisson_pmf},
             {"popcount", apply_popcount},
             {"pow", apply_pow},
             {"prev_prime", apply_prev_prime},
@@ -599,203 +604,91 @@ private:
     }
 
     static double apply_avg(const std::vector<double>& arguments) {
-        if (arguments.empty()) {
-            throw std::runtime_error("avg expects at least one argument");
-        }
-        return apply_sum(arguments) / static_cast<double>(arguments.size());
+        return stats_ops::apply_statistic("avg", arguments);
     }
 
     static double apply_mean(const std::vector<double>& arguments) {
-        if (arguments.empty()) {
-            throw std::runtime_error("mean expects at least one argument");
-        }
-        return apply_sum(arguments) / static_cast<double>(arguments.size());
+        return stats_ops::apply_statistic("mean", arguments);
     }
 
     static double apply_median(const std::vector<double>& arguments) {
-        if (arguments.empty()) {
-            throw std::runtime_error("median expects at least one argument");
-        }
-
-        std::vector<double> sorted = arguments;
-        std::sort(sorted.begin(), sorted.end());
-        const std::size_t middle = sorted.size() / 2;
-        if (sorted.size() % 2 == 1) {
-            return sorted[middle];
-        }
-        return (sorted[middle - 1] + sorted[middle]) / 2.0;
+        return stats_ops::apply_statistic("median", arguments);
     }
 
     static double apply_mode(const std::vector<double>& arguments) {
-        if (arguments.empty()) {
-            throw std::runtime_error("mode expects at least one argument");
-        }
-        std::vector<double> sorted = arguments;
-        std::sort(sorted.begin(), sorted.end());
-        double best_value = sorted.front();
-        int best_count = 1;
-        double current_value = sorted.front();
-        int current_count = 1;
-        for (std::size_t i = 1; i < sorted.size(); ++i) {
-            if (mymath::is_near_zero(sorted[i] - current_value, 1e-10)) {
-                ++current_count;
-                continue;
-            }
-            if (current_count > best_count) {
-                best_count = current_count;
-                best_value = current_value;
-            }
-            current_value = sorted[i];
-            current_count = 1;
-        }
-        if (current_count > best_count) {
-            best_value = current_value;
-        }
-        return best_value;
+        return stats_ops::apply_statistic("mode", arguments);
     }
 
     static double apply_variance(const std::vector<double>& arguments) {
-        if (arguments.empty()) {
-            throw std::runtime_error("var expects at least one argument");
-        }
-        long double mean = 0.0L;
-        long double m2 = 0.0L;
-        std::size_t count = 0;
-        for (double value : arguments) {
-            ++count;
-            const long double value_ld = static_cast<long double>(value);
-            const long double delta = value_ld - mean;
-            mean += delta / static_cast<long double>(count);
-            const long double delta2 = value_ld - mean;
-            m2 += delta * delta2;
-        }
-        return static_cast<double>(m2 / static_cast<long double>(arguments.size()));
+        return stats_ops::apply_statistic("var", arguments);
     }
 
     static double apply_stddev(const std::vector<double>& arguments) {
-        return mymath::sqrt(apply_variance(arguments));
+        return stats_ops::apply_statistic("std", arguments);
     }
 
     static double apply_skewness(const std::vector<double>& arguments) {
-        if (arguments.empty()) {
-            throw std::runtime_error("skewness expects at least one argument");
-        }
-        const long double mean = static_cast<long double>(apply_mean(arguments));
-        long double second_moment = 0.0L;
-        long double third_moment = 0.0L;
-        for (double value : arguments) {
-            const long double delta = static_cast<long double>(value) - mean;
-            const long double delta2 = delta * delta;
-            second_moment += delta2;
-            third_moment += delta2 * delta;
-        }
-        second_moment /= static_cast<long double>(arguments.size());
-        if (mymath::is_near_zero(static_cast<double>(second_moment))) {
-            throw std::runtime_error("skewness is undefined for zero variance data");
-        }
-        third_moment /= static_cast<long double>(arguments.size());
-        return static_cast<double>(
-            third_moment / static_cast<long double>(mymath::pow(static_cast<double>(second_moment), 1.5)));
+        return stats_ops::apply_statistic("skewness", arguments);
     }
 
     static double apply_kurtosis(const std::vector<double>& arguments) {
-        if (arguments.empty()) {
-            throw std::runtime_error("kurtosis expects at least one argument");
-        }
-        const long double mean = static_cast<long double>(apply_mean(arguments));
-        long double second_moment = 0.0L;
-        long double fourth_moment = 0.0L;
-        for (double value : arguments) {
-            const long double delta = static_cast<long double>(value) - mean;
-            const long double delta2 = delta * delta;
-            second_moment += delta2;
-            fourth_moment += delta2 * delta2;
-        }
-        second_moment /= static_cast<long double>(arguments.size());
-        if (mymath::is_near_zero(static_cast<double>(second_moment))) {
-            throw std::runtime_error("kurtosis is undefined for zero variance data");
-        }
-        fourth_moment /= static_cast<long double>(arguments.size());
-        return static_cast<double>(
-            fourth_moment / (second_moment * second_moment) - 3.0L);
+        return stats_ops::apply_statistic("kurtosis", arguments);
     }
 
     static double apply_percentile(const std::vector<double>& arguments) {
-        if (arguments.size() < 2) {
-            throw std::runtime_error("percentile expects p followed by at least one value");
-        }
-        const double p = arguments[0];
-        if (p < 0.0 || p > 100.0) {
-            throw std::runtime_error("percentile p must be in [0, 100]");
-        }
-        std::vector<double> values(arguments.begin() + 1, arguments.end());
-        std::sort(values.begin(), values.end());
-        if (values.size() == 1) {
-            return values.front();
-        }
-        const double position =
-            p * static_cast<double>(values.size() - 1) / 100.0;
-        const long long lower_index = floor_to_long_long(position);
-        const long long upper_index = ceil_to_long_long(position);
-        if (lower_index == upper_index) {
-            return values[static_cast<std::size_t>(lower_index)];
-        }
-        const double fraction = position - static_cast<double>(lower_index);
-        const double lower = values[static_cast<std::size_t>(lower_index)];
-        const double upper = values[static_cast<std::size_t>(upper_index)];
-        return lower + (upper - lower) * fraction;
+        return stats_ops::apply_statistic("percentile", arguments);
     }
 
     static double apply_quartile(const std::vector<double>& arguments) {
-        if (arguments.size() < 2) {
-            throw std::runtime_error("quartile expects q followed by at least one value");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("quartile q must be an integer");
-        }
-        const long long q = round_to_long_long(arguments[0]);
-        if (q < 0 || q > 4) {
-            throw std::runtime_error("quartile q must be between 0 and 4");
-        }
-        std::vector<double> percentile_arguments;
-        percentile_arguments.reserve(arguments.size());
-        percentile_arguments.push_back(static_cast<double>(q * 25));
-        percentile_arguments.insert(percentile_arguments.end(),
-                                    arguments.begin() + 1,
-                                    arguments.end());
-        return apply_percentile(percentile_arguments);
+        return stats_ops::apply_statistic("quartile", arguments);
     }
 
     static double apply_factorial(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("factorial expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("factorial only accepts integers");
-        }
-        return factorial_value(round_to_long_long(arguments[0]));
+        return stats_ops::apply_probability("factorial", arguments);
     }
 
     static double apply_ncr(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("nCr expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("nCr only accepts integers");
-        }
-        return combination_value(round_to_long_long(arguments[0]),
-                                 round_to_long_long(arguments[1]));
+        return stats_ops::apply_probability("nCr", arguments);
     }
 
     static double apply_npr(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("nPr expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("nPr only accepts integers");
-        }
-        return permutation_value(round_to_long_long(arguments[0]),
-                                 round_to_long_long(arguments[1]));
+        return stats_ops::apply_probability("nPr", arguments);
+    }
+
+    static double apply_rand(const std::vector<double>& arguments) {
+        return stats_ops::apply_probability("rand", arguments);
+    }
+
+    static double apply_randn(const std::vector<double>& arguments) {
+        return stats_ops::apply_probability("randn", arguments);
+    }
+
+    static double apply_randint(const std::vector<double>& arguments) {
+        return stats_ops::apply_probability("randint", arguments);
+    }
+
+    static double apply_pdf_normal(const std::vector<double>& arguments) {
+        return stats_ops::apply_probability("pdf_normal", arguments);
+    }
+
+    static double apply_cdf_normal(const std::vector<double>& arguments) {
+        return stats_ops::apply_probability("cdf_normal", arguments);
+    }
+
+    static double apply_poisson_pmf(const std::vector<double>& arguments) {
+        return stats_ops::apply_probability("poisson_pmf", arguments);
+    }
+
+    static double apply_poisson_cdf(const std::vector<double>& arguments) {
+        return stats_ops::apply_probability("poisson_cdf", arguments);
+    }
+
+    static double apply_binom_pmf(const std::vector<double>& arguments) {
+        return stats_ops::apply_probability("binom_pmf", arguments);
+    }
+
+    static double apply_binom_cdf(const std::vector<double>& arguments) {
+        return stats_ops::apply_probability("binom_cdf", arguments);
     }
 
     static double apply_fib(const std::vector<double>& arguments) {
@@ -883,38 +776,6 @@ private:
                                                   &y));
     }
 
-    static double apply_rand(const std::vector<double>& arguments) {
-        if (!arguments.empty()) {
-            throw std::runtime_error("rand expects no arguments");
-        }
-        std::uniform_real_distribution<double> distribution(0.0, 1.0);
-        return distribution(global_rng());
-    }
-
-    static double apply_randn(const std::vector<double>& arguments) {
-        if (!arguments.empty()) {
-            throw std::runtime_error("randn expects no arguments");
-        }
-        std::normal_distribution<double> distribution(0.0, 1.0);
-        return distribution(global_rng());
-    }
-
-    static double apply_randint(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("randint expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("randint only accepts integers");
-        }
-        long long left = round_to_long_long(arguments[0]);
-        long long right = round_to_long_long(arguments[1]);
-        if (left > right) {
-            std::swap(left, right);
-        }
-        std::uniform_int_distribution<long long> distribution(left, right);
-        return static_cast<double>(distribution(global_rng()));
-    }
-
     static double apply_beta(const std::vector<double>& arguments) {
         if (arguments.size() != 2) {
             throw std::runtime_error("beta expects exactly two arguments");
@@ -938,20 +799,6 @@ private:
         }
         return mymath::bessel_j(static_cast<int>(round_to_long_long(arguments[0])),
                                 arguments[1]);
-    }
-
-    static double apply_pdf_normal(const std::vector<double>& arguments) {
-        if (arguments.size() != 3) {
-            throw std::runtime_error("pdf_normal expects exactly three arguments");
-        }
-        return normal_pdf(arguments[0], arguments[1], arguments[2]);
-    }
-
-    static double apply_cdf_normal(const std::vector<double>& arguments) {
-        if (arguments.size() != 3) {
-            throw std::runtime_error("cdf_normal expects exactly three arguments");
-        }
-        return normal_cdf(arguments[0], arguments[1], arguments[2]);
     }
 
     static double apply_and(const std::vector<double>& arguments) {

@@ -1,5 +1,6 @@
 #include "matrix.h"
 #include "matrix_internal.h"
+#include "statistics/calculator_statistics.h"
 
 #include "mymath.h"
 #include "polynomial.h"
