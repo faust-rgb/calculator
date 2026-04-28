@@ -11,7 +11,7 @@ MultivariableIntegrator::MultivariableIntegrator(Integrand integrand)
 }
 
 double MultivariableIntegrator::integrate(
-    const std::vector<std::pair<double, double>>& bounds,
+    const std::vector<BoundFunc>& bounds,
     const std::vector<int>& subdivisions) const {
     if (bounds.empty()) {
         throw std::runtime_error("multivariable integrator requires at least one bound");
@@ -20,37 +20,19 @@ double MultivariableIntegrator::integrate(
         throw std::runtime_error("integration bounds and subdivision counts must match");
     }
 
-    long double scale = 1.0L;
-    unsigned long long sample_count = 1;
-    constexpr unsigned long long kMaxTensorSamples = 2000000ULL;
     std::vector<int> normalized_subdivisions;
     normalized_subdivisions.reserve(subdivisions.size());
-    for (std::size_t i = 0; i < bounds.size(); ++i) {
-        const int normalized = normalize_subdivision_count(subdivisions[i]);
-        normalized_subdivisions.push_back(normalized);
-        const unsigned long long dimension_samples =
-            static_cast<unsigned long long>(normalized) + 1ULL;
-        if (sample_count > kMaxTensorSamples / dimension_samples) {
-            throw std::runtime_error(
-                "tensor Simpson integration would exceed the maximum sample count");
-        }
-        sample_count *= dimension_samples;
-
-        const double width = bounds[i].second - bounds[i].first;
-        if (width == 0.0) {
-            return 0.0;
-        }
-        scale *= static_cast<long double>(width) /
-                 static_cast<long double>(normalized) / 3.0L;
+    for (int sub : subdivisions) {
+        normalized_subdivisions.push_back(normalize_subdivision_count(sub));
     }
 
     std::vector<double> point(bounds.size(), 0.0);
     return static_cast<double>(
-        scale * static_cast<long double>(integrate_recursive(bounds,
-                                                             normalized_subdivisions,
-                                                             &point,
-                                                             0,
-                                                             1.0)));
+        integrate_recursive(bounds,
+                           normalized_subdivisions,
+                           &point,
+                           0,
+                           1.0));
 }
 
 double MultivariableIntegrator::simpson_weight(int index, int subdivisions) {
@@ -68,7 +50,7 @@ int MultivariableIntegrator::normalize_subdivision_count(int subdivisions) {
 }
 
 double MultivariableIntegrator::integrate_recursive(
-    const std::vector<std::pair<double, double>>& bounds,
+    const std::vector<BoundFunc>& bounds,
     const std::vector<int>& subdivisions,
     std::vector<double>* point,
     std::size_t dimension,
@@ -77,10 +59,18 @@ double MultivariableIntegrator::integrate_recursive(
         return accumulated_weight * integrand_(*point);
     }
 
-    const double lower = bounds[dimension].first;
-    const double upper = bounds[dimension].second;
+    const std::pair<double, double> current_bounds = bounds[dimension](*point);
+    const double lower = current_bounds.first;
+    const double upper = current_bounds.second;
+
+    if (lower == upper) {
+        return 0.0;
+    }
+
     const int subdivision_count = subdivisions[dimension];
     const double step = (upper - lower) / static_cast<double>(subdivision_count);
+    const long double scale = static_cast<long double>(upper - lower) /
+                              static_cast<long double>(subdivision_count) / 3.0L;
 
     long double sum = 0.0L;
     for (int i = 0; i <= subdivision_count; ++i) {
@@ -93,5 +83,5 @@ double MultivariableIntegrator::integrate_recursive(
                                 accumulated_weight *
                                     simpson_weight(i, subdivision_count)));
     }
-    return static_cast<double>(sum);
+    return static_cast<double>(sum * scale);
 }

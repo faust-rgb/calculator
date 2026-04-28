@@ -34,68 +34,63 @@ std::string classify_critical_point(
     const std::vector<double>& values) {
 
     const std::size_t n = variables.size();
-    std::vector<std::vector<double>> evaluated(n, std::vector<double>(n, 0.0));
+    matrix::Matrix h_mat(n, n);
     for (std::size_t row = 0; row < n; ++row) {
         for (std::size_t col = 0; col < n; ++col) {
+            double val = 0.0;
             if (!evaluate_symbolic_at_point(
-                    hessian[row][col], variables, values, &evaluated[row][col])) {
+                    hessian[row][col], variables, values, &val)) {
                 return "unclassified";
             }
+            h_mat.at(row, col) = val;
         }
     }
 
-    if (n == 1) {
-        if (evaluated[0][0] > 1e-8) {
-            return "local min";
+    const matrix::Matrix ev_result = matrix::eigenvalues(h_mat);
+    std::vector<double> evals;
+    evals.reserve(n);
+    if (ev_result.cols == 1 || ev_result.rows == 1) {
+        // Vector result
+        std::size_t len = ev_result.rows * ev_result.cols;
+        for (std::size_t i = 0; i < len; ++i) {
+            evals.push_back(ev_result.data[i]);
         }
-        if (evaluated[0][0] < -1e-8) {
-            return "local max";
+    } else if (ev_result.rows == 2 && ev_result.cols == 2) {
+        // 2x2 Complex result format: [real1, imag1; real2, imag2]
+        evals.push_back(ev_result.at(0, 0));
+        evals.push_back(ev_result.at(1, 0));
+    } else {
+        // General diagonal matrix result
+        for (std::size_t i = 0; i < std::min(ev_result.rows, ev_result.cols); ++i) {
+            evals.push_back(ev_result.at(i, i));
         }
+    }
+
+    bool positive = false;
+    bool negative = false;
+    bool zero = false;
+    constexpr double eps = 1e-5;
+
+    for (double ev : evals) {
+        if (ev > eps) {
+            positive = true;
+        } else if (ev < -eps) {
+            negative = true;
+        } else {
+            zero = true;
+        }
+    }
+
+    if (zero) {
         return "degenerate";
     }
-
-    if (n == 2) {
-        const double det =
-            evaluated[0][0] * evaluated[1][1] -
-            evaluated[0][1] * evaluated[1][0];
-        if (det > 1e-8 && evaluated[0][0] > 1e-8) {
-            return "local min";
-        }
-        if (det > 1e-8 && evaluated[0][0] < -1e-8) {
-            return "local max";
-        }
-        if (det < -1e-8) {
-            return "saddle";
-        }
-        return "degenerate";
+    if (positive && !negative) {
+        return "local min";
     }
-
-    if (n == 3) {
-        const double d1 = evaluated[0][0];
-        const double d2 =
-            evaluated[0][0] * evaluated[1][1] -
-            evaluated[0][1] * evaluated[1][0];
-        const double d3 =
-            evaluated[0][0] *
-                (evaluated[1][1] * evaluated[2][2] -
-                 evaluated[1][2] * evaluated[2][1]) -
-            evaluated[0][1] *
-                (evaluated[1][0] * evaluated[2][2] -
-                 evaluated[1][2] * evaluated[2][0]) +
-            evaluated[0][2] *
-                (evaluated[1][0] * evaluated[2][1] -
-                 evaluated[1][1] * evaluated[2][0]);
-        if (d1 > 1e-8 && d2 > 1e-8 && d3 > 1e-8) {
-            return "local min";
-        }
-        if (d1 < -1e-8 && d2 > 1e-8 && d3 < -1e-8) {
-            return "local max";
-        }
-        if (mymath::abs(d1) <= 1e-8 ||
-            mymath::abs(d2) <= 1e-8 ||
-            mymath::abs(d3) <= 1e-8) {
-            return "degenerate";
-        }
+    if (negative && !positive) {
+        return "local max";
+    }
+    if (positive && negative) {
         return "saddle";
     }
 
@@ -405,8 +400,9 @@ bool handle_analysis_command(const AnalysisContext& ctx,
             for (double value : current) {
                 current_norm += value * value;
             }
-            if (current_norm < 1e-6 &&
-                classify_critical_point(hessian, variables, current) == "degenerate") {
+            if (current_norm < 1e-2 &&
+                (classify_critical_point(hessian, variables, current) == "degenerate" ||
+                 classify_critical_point(hessian, variables, current) == "local min")) {
                 for (double& value : current) {
                     value = 0.0;
                 }

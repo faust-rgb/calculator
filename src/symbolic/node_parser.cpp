@@ -221,35 +221,23 @@ private:
  * @return 格式化字符串
  */
 std::string format_number(double value) {
-    // 接近零归零，避免 -0 输出
     if (mymath::is_near_zero(value, kFormatEps)) {
         return "0";
     }
+    if (value < 0.0) {
+        return "-" + format_number(-value);
+    }
 
-    // 接近整数按整数打印
     if (mymath::is_integer(value, 1e-10)) {
-        long long rounded = static_cast<long long>(value >= 0.0 ? value + 0.5 : value - 0.5);
-        return std::to_string(rounded);
+        return std::to_string(static_cast<long long>(value + 0.5));
     }
 
-    // 尝试分数近似（分母最大 999）
-    long long numerator = 0;
-    long long denominator = 1;
-    if (mymath::approximate_fraction(value,
-                                     &numerator,
-                                     &denominator,
-                                     999,
-                                     1e-10)) {
-        if (value < 0.0) {
-            numerator = -numerator;
-        }
-        if (denominator == 1) {
-            return std::to_string(numerator);
-        }
-        return std::to_string(numerator) + "/" + std::to_string(denominator);
+    long long n, d;
+    if (mymath::approximate_fraction(value, &n, &d, 999, 1e-10)) {
+        if (d == 1) return std::to_string(n);
+        return std::to_string(n) + "/" + std::to_string(d);
     }
 
-    // 一般浮点数，12 位精度
     std::ostringstream out;
     out.precision(mutable_display_precision());
     out << value;
@@ -451,7 +439,6 @@ std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node
  * 结果缓存在节点的 structural_key_cache 字段中。
  */
 std::string node_structural_key(const std::shared_ptr<SymbolicExpression::Node>& node) {
-    // 使用缓存避免重复计算
     if (!node->structural_key_cache.empty()) {
         return node->structural_key_cache;
     }
@@ -459,7 +446,8 @@ std::string node_structural_key(const std::shared_ptr<SymbolicExpression::Node>&
     std::string key;
     switch (node->type) {
         case NodeType::kNumber:
-            key = "N(" + format_number(node->number_value) + ")";
+            // 使用 std::to_string 保证内部键的唯一性，不受格式化策略影响
+            key = "N(" + std::to_string(node->number_value) + ")";
             break;
         case NodeType::kVariable:
             key = "V(" + node->text + ")";

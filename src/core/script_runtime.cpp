@@ -515,9 +515,23 @@ std::string execute_simple_script_line(Calculator* calculator,
             if (i != 0) {
                 out << ' ';
             }
-            out << format_print_value(
-                evaluate_expression_value(calculator, impl, print_arguments[i], exact_mode),
-                impl->symbolic_constants_mode);
+            
+            const std::string arg_text = trim_copy(print_arguments[i]);
+            try {
+                // Try normal expression evaluation first
+                out << format_print_value(
+                    evaluate_expression_value(calculator, impl, arg_text, exact_mode),
+                    impl->symbolic_constants_mode);
+            } catch (...) {
+                // If it fails, check if it's a command like diff(...) or integral(...)
+                std::string command_output;
+                if (calculator->try_process_function_command(arg_text, &command_output)) {
+                    out << command_output;
+                } else {
+                    // It's a genuine error, rethrow to be safe
+                    throw;
+                }
+            }
         }
         return out.str();
     }

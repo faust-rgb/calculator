@@ -6,6 +6,31 @@ The project has evolved from a minimal C++ hello-world style setup into a
 feature-rich command-line calculator with exact rational mode, programmable
 helpers, interactive terminal UX, and project documentation.
 
+## Latest Series and Limit Improvements
+
+- **Introduced Power Series Arithmetic (PSA) Engine**:
+  - Implemented a dedicated engine for efficient Taylor series expansion of
+    composite functions (e.g., `sin(exp(x))`, `exp(sin(x))`) using recursive
+    coefficient formulas.
+  - Significantly improved performance for high-degree expansions by avoiding
+    symbolic derivative explosion.
+- **Enhanced Limit Calculation**:
+  - Integrated symbolic PSA for limit detection, allowing exact resolution of
+    removable singularities like `sin(x)/x` or `(1-cos(x))/x^2`.
+  - Added support for infinity limits via symbolic substitution ($x=1/t$) and
+    Laurent-style series analysis.
+  - Upgraded numerical fallback to a high-order Richardson extrapolation
+    (up to 14th order), improving accuracy from $10^{-5}$ to $10^{-11}$ or better.
+- **Advanced Series Summation**:
+  - Added support for infinite series involving Riemann Zeta function values
+    $\zeta(2k)$ (e.g., $\sum 1/n^2 = \pi^2/6$).
+  - Implemented robust symbolic geometric series detection via term-ratio
+    simplification.
+- **Modular Test Architecture**:
+  - Refactored the massive `test/tests.cpp` into a modular suite under
+    `test/suites/` (`core`, `analysis`, `symbolic`).
+  - Updated build system to automatically detect and compile new test suites.
+
 ## Latest Numerical Work
 
 - Replaced one-variable definite integration with an adaptive Gauss-Kronrod
@@ -140,6 +165,20 @@ helpers, interactive terminal UX, and project documentation.
   - `rol`, `ror`, `popcount`, `bitlen`, `ctz`, `clz`, `parity`, `reverse_bits`
 - Expanded regression tests
 - Handoff and architecture documentation
+
+## Version 1.6 (2026-04-28)
+
+- **ODE and Symbolic Calculus Enhancements:**
+  - High-order ODE automatic reduction: `ode(y'' + y, x0, [y0, y'0], x1)` syntax now supported, automatically converting to first-order systems.
+  - Symbolic ODE solver `dsolve(rhs, x_var, y_var)` for first-order linear ODEs and `y' = f(x)` forms.
+  - Constrained optimization via Lagrange multipliers: `lagrange(f, [g1, g2...], vars...)`.
+  - Field theory operators: `divergence`/`div`, `curl`, and `laplacian` with full CLI autocomplete support.
+  - Identifier system extended to support derivative notation like `y'`, `y''` in ODE expressions.
+- **Extended Trigonometric Integration:**
+  - Added integral rules for `sec(x)^2`, `csc(x)^2`, `cot(x)^2`.
+  - Added integral rules for products: `sec(x)*tan(x)`, `csc(x)*cot(x)`, `sec(x)^2*tan(x)`, `csc(x)^2*cot(x)`.
+  - Implemented Weierstrass substitution for rational functions of `sin`/`cos`.
+  - Extended chain-rule substitution to support `sec`, `csc`, `cot`, `ln`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`.
 
 ## Version 1.5 (2026-04-27)
 

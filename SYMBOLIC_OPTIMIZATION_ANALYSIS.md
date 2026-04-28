@@ -8,8 +8,8 @@
 
 本轮重点优化了微分方程 (ODE) 和多元微积分的自动化能力，并增强了符号求解与约束优化的覆盖：
 
-- **已完成：高阶 ODE 自动化降阶**。支持 `ode(y'' + y, 0, [1, 0], 1)` 语法，内部自动通过符号推导将其转化为一阶方程组并调用 `ode_system` 求解。
-- **已完成：符号 ODE 解析求解 (dsolve)**。实现 `dsolve(rhs, [x, y])` 命令，支持一阶线性 ODE ($y' + P(x)y = Q(x)$) 和 $y' = f(x)$ 的解析求解。
+- **已完成：高阶 ODE 自动化降阶**。支持 `ode(y'' + y, x0, [y0, y'0], x1)` 语法，其中表达式可包含 `y'`、`y''` 等带撇号的导数标识符，初始状态向量的分量依次对应 `y`、`y'`、`y''`...。内部自动通过符号推导将其转化为一阶方程组并调用 `ode_system` 求解。要求方程对最高阶导数是线性的。
+- **已完成：符号 ODE 解析求解 (dsolve)**。实现 `dsolve(rhs, x_var, y_var)` 命令，支持一阶线性 ODE ($y' + P(x)y = Q(x)$) 和 $y' = f(x)$ 的解析求解。
 - **已完成：带约束优化 (Lagrange Multipliers)**。实现 `lagrange(f, [g1, g2...], vars...)` 命令，通过构造拉格朗日函数并重定向至 `critical` 搜索，实现带约束的最值问题求解。
 - **已完成：场论算子增强**。在 CLI 中补齐了 `div`、`curl` 和 `laplacian` 的自动补全，并验证了其在多维标量/向量场分析中的正确性。
 - **已完成：标识符系统扩展**。更新了符号解析器和核心辅助函数，支持 `y'`、`y''` 等带撇号的标识符，为物理和数学建模提供了更直观的符号表示。
@@ -272,9 +272,10 @@
 - ∫ 1/(x-1)^2 dx, ∫ 1/(x^2+1)^2 dx                 (重复线性/常见重复不可约二次)
 - ∫ 1/((x-1)^2*(x+1)) dx                           (混合重复实线性因子)
 - ∫ 1/((x-1)*(x^2+1)^2) dx                         (实线性 + 重复不可约二次)
-- ∫ sin(x)^2 dx, ∫ cos(x)^2 dx, ∫ tan(x)^2 dx      (基础三角恒等式)
+- ∫ sin(x)^2 dx, ∫ cos(x)^2 dx, ∫ tan(x)^2 dx, ∫ sec(x)^2 dx, ∫ csc(x)^2 dx, ∫ cot(x)^2 dx (基础三角恒等式)
 - ∫ sin(x)^3 dx, ∫ cos(x)^3 dx, ∫ sin(x)*cos(x) dx (新增三角幂/乘积恒等式)
-- ∫ g'(x)*F(g(x)) dx                               (链式替换，支持 exp/sin/cos/tan)
+- ∫ sec(x)*tan(x) dx, ∫ csc(x)*cot(x) dx, ∫ sec(x)^2*tan(x) dx, ∫ csc(x)^2*cot(x) dx (sec/csc/cot 乘积)
+- ∫ g'(x)*F(g(x)) dx                               (链式替换，支持 exp/sin/cos/tan/sec/csc/cot/ln/asin/acos/atan/sinh/cosh/tanh)
 - ∫ x*sin(x) dx                                    (递推分部积分形式，已有 `polynomial * sin/cos/exp`)
 
 仍需支持的形式 ✗：
@@ -303,8 +304,10 @@
 - 新增 `1 / (1 + x ^ 2)`、`1 / sqrt(1 - x ^ 2)`、`sqrt(1 - x ^ 2)` 的符号原函数规则
 - 新增多项式商积分：先长除法，再对线性/二次分母余项生成 `ln(abs(...))` 或 `atan(...)`
 - 新增部分分式积分：覆盖互异实线性因子、单一重复线性因子、混合重复实线性因子和 `1/(x^2+1)^2`
-- 新增基础三角恒等式积分：覆盖 `sin(x)^2`、`cos(x)^2`、`tan(x)^2`
-- 新增链式替换积分：识别 `g'(x) * F(g(x))` 及常数比例因子
+- 新增基础三角恒等式积分：覆盖 `sin(x)^2`、`cos(x)^2`、`tan(x)^2`、`sec(x)^2`、`csc(x)^2`、`cot(x)^2`
+- 新增 sec/csc/cot 乘积积分：`sec(x)*tan(x)`、`csc(x)*cot(x)`、`sec(x)^2*tan(x)`、`csc(x)^2*cot(x)`
+- 新增链式替换积分：识别 `g'(x) * F(g(x))` 及常数比例因子，支持 exp/sin/cos/tan/sec/csc/cot/ln/asin/acos/atan/sinh/cosh/tanh
+- 新增 Weierstrass 置换积分：处理形如 `1 / (A + B*sin(ax) + C*cos(ax))` 的三角有理式积分
 
 **实现说明：**
 - 反三角积分通过 `is_one_plus_variable_squared()` 和 `is_sqrt_one_minus_variable_squared()` 辅助函数检测特定模式
@@ -540,10 +543,13 @@ unified_transform(expr, rules_table, variable_mappings)
 - 平方根特殊积分（`integral(sqrt(1-x^2))`）
 - 有理积分规则（长除法、线性/二次分母、互异实线性因子部分分式）
 - 重复线性因子、混合重复实线性因子、常见重复不可约二次因子和链式替换积分
-- 基础三角恒等式积分（`sin^2/cos^2/tan^2`）
+- 基础三角恒等式积分（`sin^2/cos^2/tan^2/sec^2/csc^2/cot^2`）
+- sec/csc/cot 乘积积分（`sec*tan`, `csc*cot`, `sec^2*tan`, `csc^2*cot`）
 - 多变量偏导（`diff(x^2*y + y^3, y)`）
 - gradient/jacobian/hessian 输出验证
+- divergence/curl/laplacian 输出验证
 - chained symbolic integral、affine-gradient 和 nonlinear `critical(...)` 输出验证
+- `lagrange(...)` 带约束优化验证
 
 **建议的测试增强：**
 ```
@@ -577,6 +583,8 @@ unified_transform(expr, rules_table, variable_mappings)
   - 混合重复不可约二次因子/一般不可约高次因子的完整部分分式
   - 更完整的三角恒等式驱动积分和非线性分部积分
   - nonlinear critical point 的全局完备性和分类
+  - `dsolve(...)` 符号 ODE 解析求解
+  - 高阶 ODE 自动降阶
 ```
 
 **重新进入计划：**
@@ -611,5 +619,6 @@ unified_transform(expr, rules_table, variable_mappings)
 ---
 
 **文档创建时间：** 2026-04-24  
-**版本：** 1.5  
-**状态：** 阶段 1 已落地；阶段 2 补齐了微积分和多变量入口；阶段 3 提前完成了精确常数系统基础、增量 LRU 性能优化以及 CSE 基础提取逻辑。
+**最后更新：** 2026-04-28  
+**版本：** 1.6  
+**状态：** 阶段 1 已落地；阶段 2 补齐了微积分和多变量入口；阶段 3 提前完成了精确常数系统基础、增量 LRU 性能优化以及 CSE 基础提取逻辑。新增了高阶 ODE 自动降阶、符号 ODE 解析求解 (dsolve)、带约束优化 (lagrange)、场论算子增强、sec/csc/cot 积分支持和 Weierstrass 置换。

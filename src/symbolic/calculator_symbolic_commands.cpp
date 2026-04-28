@@ -287,7 +287,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
 
         throw std::runtime_error("Only linear ODEs and y' = f(x) are currently supported by dsolve.");
     }
-    if (command == "simplify") {
+    if (command == "simplify" || command == "expand") {
         const std::string argument = trim_copy(inside);
         std::string variable_name;
         SymbolicExpression expression;

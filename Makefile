@@ -11,8 +11,9 @@ TEST_APP := $(BIN_DIR)/calculator_tests
 PLANNING_TEST_APP := $(BIN_DIR)/planning_tests
 SRC_DIR := src
 TEST_DIR := test
+TEST_SUITE_DIR := $(TEST_DIR)/suites
 SRC_DIRS := $(SRC_DIR)/app $(SRC_DIR)/core $(SRC_DIR)/math $(SRC_DIR)/matrix $(SRC_DIR)/analysis $(SRC_DIR)/polynomial $(SRC_DIR)/symbolic $(SRC_DIR)/script $(SRC_DIR)/statistics
-INCLUDES := -I$(SRC_DIR) $(addprefix -I,$(SRC_DIRS))
+INCLUDES := -I$(SRC_DIR) $(addprefix -I,$(SRC_DIRS)) -I$(TEST_DIR)
 CPPFLAGS += $(INCLUDES) -MMD -MP
 
 MAIN_SRC := $(SRC_DIR)/app/main.cpp
@@ -86,9 +87,10 @@ COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/script/script_ast.h
 COMMON_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(COMMON_SRCS))
 MAIN_OBJ := $(BUILD_DIR)/$(MAIN_SRC:.cpp=.o)
-TEST_OBJ := $(BUILD_DIR)/$(TEST_DIR)/tests.o
+TEST_SRCS := $(TEST_DIR)/main.cpp $(wildcard $(TEST_SUITE_DIR)/*.cpp)
+TEST_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(TEST_SRCS))
 PLANNING_TEST_OBJ := $(BUILD_DIR)/$(TEST_DIR)/planning_tests.o
-DEPS := $(MAIN_OBJ:.o=.d) $(TEST_OBJ:.o=.d) $(PLANNING_TEST_OBJ:.o=.d) $(COMMON_OBJS:.o=.d)
+DEPS := $(MAIN_OBJ:.o=.d) $(TEST_OBJS:.o=.d) $(PLANNING_TEST_OBJ:.o=.d) $(COMMON_OBJS:.o=.d)
 
 .PHONY: all test script-test check debug asan ubsan clean
 
@@ -104,7 +106,7 @@ $(BUILD_DIR)/%.o: %.cpp
 $(APP): $(MAIN_OBJ) $(COMMON_OBJS) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(APP)
 
-$(TEST_APP): $(TEST_OBJ) $(COMMON_OBJS) | $(BIN_DIR)
+$(TEST_APP): $(TEST_OBJS) $(COMMON_OBJS) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(TEST_APP)
 
 $(PLANNING_TEST_APP): $(PLANNING_TEST_OBJ) $(COMMON_OBJS) | $(BIN_DIR)

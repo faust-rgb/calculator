@@ -54,8 +54,12 @@ the main functions.
   Inversion, decompositions, eigensolvers, RREF, and related linear-algebra routines
 - `src/math/mymath.h`
   Math declarations and shared constants
-- `test/tests.cpp`
-  Regression suite covering supported behavior
+- `test/main.cpp`
+  Test entry point and suite orchestrator
+- `test/suites/*.cpp`
+  Modular test suites (Core, Analysis, Symbolic, etc.)
+- `test/test_helpers.h`
+  Shared test utilities and structures
 
 ## Directory Layout
 

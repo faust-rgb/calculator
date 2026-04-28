@@ -47,6 +47,24 @@ struct SeriesContext {
 };
 
 // ============================================================================
+// 幂级数代数 (PSA) 内部工具
+// ============================================================================
+
+namespace internal {
+
+/**
+ * @brief 使用 PSA 引擎计算表达式的级数系数
+ */
+bool evaluate_psa(const SymbolicExpression& expr,
+                  const std::string& var_name,
+                  double center,
+                  int degree,
+                  std::vector<double>& result,
+                  const SeriesContext& ctx);
+
+} // namespace internal
+
+// ============================================================================
 // 级数展开函数
 // ============================================================================
 

@@ -4,6 +4,8 @@
 #include <random>
 #include <stdexcept>
 #include <algorithm>
+#include <limits>
+#include <string>
 
 namespace prob {
 
@@ -14,8 +16,19 @@ static std::mt19937& global_rng() {
     return gen;
 }
 
+static bool is_integer(double value) {
+    return std::isfinite(value) && std::floor(value) == value;
+}
+
+static double checked_exp(double log_value, const char* name) {
+    if (log_value > std::log(std::numeric_limits<double>::max())) {
+        throw std::runtime_error(std::string(name) + " result overflows double");
+    }
+    return std::exp(log_value);
+}
+
 double factorial(double n) {
-    if (n < 0 || std::floor(n) != n) {
+    if (n < 0 || !is_integer(n)) {
         throw std::runtime_error("factorial only accepts non-negative integers");
     }
     if (n > 170) {
@@ -25,7 +38,7 @@ double factorial(double n) {
 }
 
 double nCr(double n, double r) {
-    if (n < 0 || r < 0 || std::floor(n) != n || std::floor(r) != r) {
+    if (n < 0 || r < 0 || !is_integer(n) || !is_integer(r)) {
         throw std::runtime_error("nCr only accepts non-negative integers");
     }
     if (r > n) {
@@ -34,17 +47,33 @@ double nCr(double n, double r) {
     if (r == 0 || r == n) return 1.0;
     if (r > n / 2) r = n - r;
 
-    return std::exp(lgamma(n + 1.0) - lgamma(r + 1.0) - lgamma(n - r + 1.0));
+    const double log_value = lgamma(n + 1.0) - lgamma(r + 1.0) - lgamma(n - r + 1.0);
+    return checked_exp(log_value, "nCr");
 }
 
 double nPr(double n, double r) {
-    if (n < 0 || r < 0 || std::floor(n) != n || std::floor(r) != r) {
+    if (n < 0 || r < 0 || !is_integer(n) || !is_integer(r)) {
         throw std::runtime_error("nPr only accepts non-negative integers");
     }
     if (r > n) {
         throw std::runtime_error("nPr requires r <= n");
     }
-    return std::exp(lgamma(n + 1.0) - lgamma(n - r + 1.0));
+    const double log_value = lgamma(n + 1.0) - lgamma(n - r + 1.0);
+    return checked_exp(log_value, "nPr");
+}
+
+double bernoulli(int n) {
+    if (n < 0) return 0.0;
+    static std::vector<double> B = {1.0, 0.5};
+    while (B.size() <= static_cast<std::size_t>(n)) {
+        int m = B.size();
+        double sum = 0.0;
+        for (int k = 0; k < m; ++k) {
+            sum += nCr(m + 1, k) * B[k];
+        }
+        B.push_back((m + 1.0 - sum) / nCr(m + 1, m));
+    }
+    return B[n];
 }
 
 double gamma(double x) {
@@ -73,15 +102,22 @@ double normal_cdf(double x, double mean, double sigma) {
 }
 
 double poisson_pmf(int k, double lambda) {
-    if (k < 0 || lambda <= 0) return 0.0;
+    if (!std::isfinite(lambda) || lambda < 0.0) {
+        throw std::runtime_error("poisson lambda must be non-negative");
+    }
+    if (k < 0) return 0.0;
+    if (lambda == 0.0) return k == 0 ? 1.0 : 0.0;
     // P(X=k) = (lambda^k * e^-lambda) / k!
     // 使用 log-space: exp(k * ln(lambda) - lambda - ln(k!))
     return std::exp(static_cast<double>(k) * std::log(lambda) - lambda - lgamma(static_cast<double>(k + 1.0)));
 }
 
 double poisson_cdf(int k, double lambda) {
+    if (!std::isfinite(lambda) || lambda < 0.0) {
+        throw std::runtime_error("poisson lambda must be non-negative");
+    }
     if (k < 0) return 0.0;
-    if (lambda <= 0) return 0.0;
+    if (lambda == 0.0) return 1.0;
     double sum = 0.0;
     for (int i = 0; i <= k; ++i) {
         sum += poisson_pmf(i, lambda);
@@ -90,21 +126,52 @@ double poisson_cdf(int k, double lambda) {
 }
 
 double binom_pmf(int n, int k, double p) {
-    if (k < 0 || k > n || p < 0.0 || p > 1.0) return 0.0;
+    if (n < 0) {
+        throw std::runtime_error("binomial n must be non-negative");
+    }
+    if (!std::isfinite(p) || p < 0.0 || p > 1.0) {
+        throw std::runtime_error("binomial p must be in [0, 1]");
+    }
+    if (k < 0 || k > n) return 0.0;
+    if (p == 0.0) return k == 0 ? 1.0 : 0.0;
+    if (p == 1.0) return k == n ? 1.0 : 0.0;
     // P(X=k) = C(n, k) * p^k * (1-p)^(n-k)
-    return nCr(static_cast<double>(n), static_cast<double>(k)) * 
-           std::pow(p, static_cast<double>(k)) * 
-           std::pow(1.0 - p, static_cast<double>(n - k));
+    const double log_value = lgamma(static_cast<double>(n) + 1.0) -
+                             lgamma(static_cast<double>(k) + 1.0) -
+                             lgamma(static_cast<double>(n - k) + 1.0) +
+                             static_cast<double>(k) * std::log(p) +
+                             static_cast<double>(n - k) * std::log1p(-p);
+    return std::exp(log_value);
 }
 
 double binom_cdf(int n, int k, double p) {
+    if (n < 0) {
+        throw std::runtime_error("binomial n must be non-negative");
+    }
+    if (!std::isfinite(p) || p < 0.0 || p > 1.0) {
+        throw std::runtime_error("binomial p must be in [0, 1]");
+    }
     if (k < 0) return 0.0;
     if (k >= n) return 1.0;
-    double sum = 0.0;
+    if (p == 0.0) return 1.0;
+    if (p == 1.0) return 0.0;
+
+    double log_sum = -std::numeric_limits<double>::infinity();
     for (int i = 0; i <= k; ++i) {
-        sum += binom_pmf(n, i, p);
+        const double log_term = lgamma(static_cast<double>(n) + 1.0) -
+                                lgamma(static_cast<double>(i) + 1.0) -
+                                lgamma(static_cast<double>(n - i) + 1.0) +
+                                static_cast<double>(i) * std::log(p) +
+                                static_cast<double>(n - i) * std::log1p(-p);
+        if (std::isinf(log_sum)) {
+            log_sum = log_term;
+        } else if (log_term > log_sum) {
+            log_sum = log_term + std::log1p(std::exp(log_sum - log_term));
+        } else {
+            log_sum = log_sum + std::log1p(std::exp(log_term - log_sum));
+        }
     }
-    return sum;
+    return std::exp(log_sum);
 }
 
 double rand() {
@@ -118,7 +185,9 @@ double randn() {
 }
 
 double randint(long long min, long long max) {
-    if (min > max) std::swap(min, max);
+    if (min > max) {
+        throw std::runtime_error("randint requires min <= max");
+    }
     std::uniform_int_distribution<long long> dist(min, max);
     return static_cast<double>(dist(global_rng()));
 }

@@ -78,17 +78,30 @@ std::string Calculator::execute_script(const std::string& source, bool exact_mod
         const ScriptSignal signal =
             execute_script_statement(this, impl_.get(), *statement, exact_mode, &current_output, false);
         
-        // Only accumulate if this was a print-like call or if it's the very last result
-        // We detect print-like calls by checking if the statement was kSimple and contains "print"
-        bool is_print = false;
+        // Accumulate output if:
+        // 1. It's a print call (recognized by the script engine)
+        // 2. It's a "command" (like diff, integral) that produced output
+        // 3. It's the very last statement in the program
+        bool should_accumulate = false;
         if (statement->kind == script::Statement::Kind::kSimple) {
             const auto& simple = static_cast<const script::SimpleStatement&>(*statement);
-            if (simple.text.find("print") != std::string::npos) {
-                is_print = true;
+            const std::string trimmed = trim_copy(simple.text);
+            // Explicit print call
+            if (trimmed.compare(0, 6, "print(") == 0 || trimmed == "print") {
+                should_accumulate = true;
+            }
+            // Commands that are NOT assignments but produced output should usually be shown in scripts
+            else if (trimmed.find('=') == std::string::npos && !current_output.empty()) {
+                should_accumulate = true;
             }
         }
+        
+        bool is_last = (statement == program.statements.back());
+        if (is_last) {
+            should_accumulate = true;
+        }
 
-        if (is_print && !current_output.empty()) {
+        if (should_accumulate && !current_output.empty()) {
             if (!accumulated_output.empty()) {
                 accumulated_output += "\n";
             }

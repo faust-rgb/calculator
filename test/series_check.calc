@@ -1,0 +1,26 @@
+# Test series calculation support
+
+print("--- Taylor Series ---")
+# High degree Taylor
+print("taylor(exp(x), 0, 10):", taylor(exp(x), 0, 10))
+
+print("\n--- Puiseux Series ---")
+# Puiseux expansion of sqrt(sin(x))
+print("puiseux(sqrt(sin(x)), 0, 4, 2):", puiseux(sqrt(sin(x)), 0, 4, 2))
+
+print("\n--- Series Summation (Polynomial) ---")
+print("summation(n^4, n, 1, 10):", summation(n^4, n, 1, 10))
+
+# Polynomial sum degree 2
+print("summation(n^2, n, 1, 5) (expected 55):", summation(n^2, n, 1, 5))
+
+print("\n--- Series Summation (Geometric) ---")
+# Geometric sum with offset
+print("summation(2^n, n, 0, 5) (expected 63):", summation(2^n, n, 0, 5))
+
+# Geometric sum starting at index 1
+print("summation(2^n, n, 1, 5) (expected 62):", summation(2^n, n, 1, 5))
+
+print("\n--- Infinite Series ---")
+# Infinite geometric series
+print("summation((1/2)^n, n, 0, inf) (expected 2):", summation((1/2)^n, n, 0, inf))

@@ -27,7 +27,7 @@ double median(const std::vector<double>& data);
 double mode(const std::vector<double>& data);
 
 /**
- * @brief 计算方差 (样本方差)
+ * @brief 计算方差 (总体方差)
  */
 double variance(const std::vector<double>& data);
 

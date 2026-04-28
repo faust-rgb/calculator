@@ -13,6 +13,10 @@
 
 #include "calculator.h"
 #include "mymath.h"
+#include "calculator_series.h"
+#include "symbolic_expression.h"
+#include "symbolic_expression_internal.h"
+#include "statistics/probability.h"
 
 #include <algorithm>
 #include <cctype>
@@ -101,6 +105,35 @@ double limit_step_scale(double x) {
 
 bool same_extremum_x(double lhs, double rhs) {
     return mymath::abs(lhs - rhs) <= 1e-5;
+}
+
+double require_finite_integral(double value) {
+    if (!mymath::isfinite(value)) {
+        throw std::runtime_error("integral did not converge");
+    }
+    return value;
+}
+
+void reject_divergent_transformed_endpoint(
+    const std::function<double(double)>& transformed,
+    bool check_left,
+    bool check_right) {
+    const double offsets[] = {1e-3, 1e-4, 1e-5};
+    auto check_at = [&](double t) {
+        double value = transformed(t);
+        if (!mymath::isfinite(value) || mymath::abs(value) > 1e4) {
+            throw std::runtime_error("integral did not converge");
+        }
+    };
+
+    for (double offset : offsets) {
+        if (check_left) {
+            check_at(offset);
+        }
+        if (check_right) {
+            check_at(1.0 - offset);
+        }
+    }
 }
 
 double gauss_kronrod_15_callable(const std::function<double(double)>& function,
@@ -226,16 +259,17 @@ double adaptive_gauss_kronrod_callable(const std::function<double(double)>& func
                                        int depth) {
     double error = 0.0;
     const double whole = gauss_kronrod_15_callable(function, left, right, &error);
-    return adaptive_gauss_kronrod_callable_recursive(function,
-                                                    left,
-                                                    right,
-                                                    eps,
-                                                    whole,
-                                                    error,
-                                                    depth);
+    return require_finite_integral(
+        adaptive_gauss_kronrod_callable_recursive(function,
+                                                  left,
+                                                  right,
+                                                  eps,
+                                                  whole,
+                                                  error,
+                                                  depth));
 }
 
-bool is_valid_variable_name(const std::string& name) {
+bool is_valid_analysis_variable_name(const std::string& name) {
     if (name.empty() ||
         !std::isalpha(static_cast<unsigned char>(name.front()))) {
         return false;
@@ -254,7 +288,7 @@ bool is_valid_variable_name(const std::string& name) {
 
 FunctionAnalysis::FunctionAnalysis(std::string variable_name)
     : variable_name_(std::move(variable_name)) {
-    if (!is_valid_variable_name(variable_name_)) {
+    if (!is_valid_analysis_variable_name(variable_name_)) {
         throw std::runtime_error("invalid variable name for custom function");
     }
 }
@@ -298,6 +332,9 @@ double FunctionAnalysis::evaluate(double x) const {
 double FunctionAnalysis::derivative(double x) const {
     const double scale = std::max(1.0, mymath::abs(x));
     const double center = evaluate_with_variable(x);
+    if (!mymath::isfinite(center)) {
+        throw std::runtime_error("derivative is undefined at this point");
+    }
     const double curvature_probe = evaluate_with_variable(x + scale * 1e-3) -
                                    2.0 * center +
                                    evaluate_with_variable(x - scale * 1e-3);
@@ -361,6 +398,21 @@ double FunctionAnalysis::derivative(double x) const {
     }
 
     if (best_error < static_cast<long double>(mymath::infinity())) {
+        const double side_step = std::max(1e-7 * scale, base_step / 64.0);
+        const double left_value = evaluate_with_variable(x - side_step);
+        const double right_value = evaluate_with_variable(x + side_step);
+        if (!mymath::isfinite(left_value) || !mymath::isfinite(right_value)) {
+            throw std::runtime_error("derivative is undefined at this point");
+        }
+        const double left_slope = (center - left_value) / side_step;
+        const double right_slope = (right_value - center) / side_step;
+        const double slope_scale =
+            std::max({1.0, mymath::abs(left_slope), mymath::abs(right_slope),
+                      mymath::abs(static_cast<double>(best_value))});
+        if (mymath::abs(left_slope - right_slope) >
+            std::max(1e-4, 1e-5 * slope_scale)) {
+            throw std::runtime_error("derivative does not exist at this point");
+        }
         return static_cast<double>(best_value);
     }
     for (int row = 3; row >= 0; --row) {
@@ -376,128 +428,141 @@ double FunctionAnalysis::limit(double x, int direction) const {
         throw std::runtime_error("limit direction must be -1, 0, or 1");
     }
 
-    if (!mymath::isfinite(x)) {
-        const double sign = x < 0.0 ? -1.0 : 1.0;
-        long double previous = 0.0L;
-        long double best = 0.0L;
-        long double best_delta = static_cast<long double>(mymath::infinity());
-        bool has_previous = false;
+    // --- 优化点 1 & 2: 符号极限处理 (基于 PSA 引擎) ---
+    try {
+        SymbolicExpression expr = SymbolicExpression::parse(expression_);
+        series_ops::SeriesContext ctx;
+        ctx.evaluate_at = [this](const SymbolicExpression& e, const std::string& v, double p) {
+            // 注意：这里需要临时改变变量名来评估，比较复杂，
+            // 但对于单变量函数，PSA 内部主要是常数或主变量。
+            // 简单处理：如果是主变量，直接返回 p
+            if (v == variable_name_) return p;
+            // 否则尝试解析为数值 (这里简化处理)
+            double val = 0.0;
+            if (e.is_number(&val)) return val;
+            return 0.0; 
+        };
 
-        for (int i = 0; i < 48; ++i) {
-            const double t = mymath::pow(2.0, -static_cast<double>(i + 4));
-            const double sample_x = sign / t;
-            long double current = 0.0L;
-            try {
-                current = to_long_double(evaluate_with_variable(sample_x));
-            } catch (const std::exception&) {
-                continue;
+        if (mymath::isfinite(x)) {
+            std::vector<double> coeffs;
+            // 尝试在 x 处展开。 degree=0 就足够获取常数项极限。
+            // 为了处理 sin(x)/x 这种，我们需要更智能的 evaluate_psa，
+            // 但目前的 evaluate_psa 在 ps_div 中会抛出。
+            // 策略：如果直接展开失败，继续尝试数值方法。
+            if (series_ops::internal::evaluate_psa(expr, variable_name_, x, 2, coeffs, ctx)) {
+                if (!coeffs.empty()) return coeffs[0];
             }
-            if (!mymath::isfinite(static_cast<double>(current))) {
-                continue;
+        } else {
+            // x 为无穷大：代换 x = 1/t, t -> 0+
+            // 构造 f(1/t)
+            SymbolicExpression t_var = SymbolicExpression::variable("t_limit_tmp");
+            SymbolicExpression inv_t = SymbolicExpression::number(1.0) / t_var;
+            SymbolicExpression substituted = expr.substitute(variable_name_, inv_t);
+            std::vector<double> coeffs;
+            if (series_ops::internal::evaluate_psa(substituted, "t_limit_tmp", 0.0, 2, coeffs, ctx)) {
+                if (!coeffs.empty()) return coeffs[0];
             }
-
-            if (has_previous) {
-                const long double extrapolated = 2.0L * current - previous;
-                const long double delta = mymath::abs_long_double(extrapolated - best);
-                if (delta < best_delta) {
-                    best_delta = delta;
-                    best = extrapolated;
-                }
-                const long double scale =
-                    std::max({1.0L,
-                              mymath::abs_long_double(extrapolated),
-                              mymath::abs_long_double(current),
-                              mymath::abs_long_double(previous)});
-                if (delta <= static_cast<long double>(
-                                 relative_tolerance(kLimitTolerance,
-                                                    static_cast<double>(scale)))) {
-                    return static_cast<double>(extrapolated);
-                }
-            } else {
-                best = current;
-            }
-
-            previous = current;
-            has_previous = true;
         }
-
-        if (has_previous && mymath::isfinite(static_cast<double>(best))) {
-            return static_cast<double>(best);
-        }
-        throw std::runtime_error("limit did not converge");
+    } catch (...) {
+        // 符号处理失败，静默回退到数值方法
     }
 
-    auto one_sided_limit = [this, x](int side) {
-        long double previous = 0.0L;
-        long double best = 0.0L;
-        long double best_delta = static_cast<long double>(mymath::infinity());
-        bool has_previous = false;
+    // --- 优化点 4: 升级数值极限算法 (使用 Richardson 外推) ---
+    auto compute_limit_at = [this](double x_target, int side) {
+        // side: -1 (左), 1 (右), 0 (中心或无穷大)
+        long double richardson[14][14] = {};
+        bool row_valid[14] = {};
+        long double best_value = 0.0L;
+        long double best_error = static_cast<long double>(mymath::infinity());
+        bool have_best = false;
 
-        for (int i = 0; i < 32; ++i) {
-            const long double step =
-                static_cast<long double>(limit_step_scale(x)) /
-                static_cast<long double>(mymath::pow(2.0, static_cast<double>(i)));
-            const long double sample_x =
-                to_long_double(x) + static_cast<long double>(side) * step;
-            long double current = 0.0L;
-            try {
-                current = to_long_double(
-                    evaluate_with_variable(static_cast<double>(sample_x)));
-            } catch (const std::exception&) {
-                continue;
-            }
-            if (!mymath::isfinite(static_cast<double>(current))) {
-                continue;
-            }
-
-            if (has_previous) {
-                const long double extrapolated = 2.0L * current - previous;
-                const long double delta = mymath::abs_long_double(extrapolated - best);
-                if (delta < best_delta) {
-                    best_delta = delta;
-                    best = extrapolated;
-                }
-                const long double scale =
-                    std::max({1.0L,
-                              mymath::abs_long_double(extrapolated),
-                              mymath::abs_long_double(current),
-                              mymath::abs_long_double(previous)});
-                if (delta <= static_cast<long double>(relative_tolerance(kLimitTolerance,
-                                                                         static_cast<double>(scale)))) {
-                    return static_cast<double>(extrapolated);
-                }
+        const double base_h = mymath::isfinite(x_target) ? limit_step_scale(x_target) : 1e-2;
+        
+        for (int row = 0; row < 14; ++row) {
+            const double h = base_h / mymath::pow(2.0, static_cast<double>(row + 4));
+            double sample_x;
+            if (mymath::isfinite(x_target)) {
+                sample_x = x_target + static_cast<double>(side) * h;
             } else {
-                best = current;
+                // 无穷大：x = 1/h (或 -1/h)
+                sample_x = (x_target > 0 ? 1.0 : -1.0) / h;
             }
 
-            previous = current;
-            has_previous = true;
+            long double val = 0.0L;
+            try {
+                val = to_long_double(evaluate_with_variable(sample_x));
+            } catch (...) {
+                continue;
+            }
+            if (!mymath::isfinite(static_cast<double>(val))) continue;
+
+            richardson[row][0] = val;
+            row_valid[row] = true;
+
+            for (int col = 1; col <= row; ++col) {
+                if (!row_valid[row - 1]) {
+                    row_valid[row] = false;
+                    break;
+                }
+                // 极限逼近的误差项通常是 h, h^2, h^3... 
+                // 外推公式：R(n,k) = (2^k * R(n,k-1) - R(n-1,k-1)) / (2^k - 1)
+                const long double factor = static_cast<long double>(1LL << col);
+                richardson[row][col] = richardson[row][col-1] + (richardson[row][col-1] - richardson[row-1][col-1]) / (factor - 1.0L);
+                if (!mymath::isfinite(static_cast<double>(richardson[row][col]))) {
+                    row_valid[row] = false;
+                    break;
+                }
+            }
+
+            if (row > 0 && row_valid[row]) {
+                long double err = mymath::abs_long_double(richardson[row][row] - richardson[row-1][row-1]);
+                if (err < best_error) {
+                    best_error = err;
+                    best_value = richardson[row][row];
+                    have_best = true;
+                }
+                
+                // 如果误差已经非常小，提前退出
+                if (err < 1e-15L) {
+                    return static_cast<double>(richardson[row][row]);
+                }
+            } else if (row == 0 && row_valid[0]) {
+                best_value = richardson[0][0];
+            }
         }
 
-        if (has_previous &&
-            mymath::isfinite(static_cast<double>(best)) &&
-            best_delta <= static_cast<long double>(
-                              relative_tolerance(kLimitTolerance * 100.0,
-                                                 static_cast<double>(mymath::abs_long_double(best)))) ) {
-            return static_cast<double>(best);
+        if (!have_best) {
+            throw std::runtime_error("limit did not converge");
         }
 
-        throw std::runtime_error("limit did not converge");
+        const long double scale =
+            std::max(1.0L, mymath::abs_long_double(best_value));
+        const long double acceptable_error =
+            std::max(1e-8L, static_cast<long double>(kLimitTolerance) * 1000.0L * scale);
+        if (best_error > acceptable_error) {
+            throw std::runtime_error("limit did not converge");
+        }
+        return static_cast<double>(best_value);
     };
 
-    if (direction == -1) {
-        return one_sided_limit(-1);
-    }
-    if (direction == 1) {
-        return one_sided_limit(1);
+    if (!mymath::isfinite(x)) {
+        return compute_limit_at(x, 0);
     }
 
-    const double left = one_sided_limit(-1);
-    const double right = one_sided_limit(1);
-    if (mymath::abs(left - right) > kLimitTolerance * 5.0) {
-        throw std::runtime_error("two-sided limit does not exist");
+    if (direction == -1) return compute_limit_at(x, -1);
+    if (direction == 1) return compute_limit_at(x, 1);
+
+    // 双侧极限
+    const double left = compute_limit_at(x, -1);
+    const double right = compute_limit_at(x, 1);
+    
+    // 如果两侧极限非常接近，或者是符号一致的无穷大
+    if (mymath::abs(left - right) <= kLimitTolerance * 100.0 || 
+        (!mymath::isfinite(left) && !mymath::isfinite(right) && ((left > 0) == (right > 0)))) {
+        return (left + right) * 0.5;
     }
-    return (left + right) * 0.5;
+    
+    throw std::runtime_error("two-sided limit does not exist");
 }
 
 double FunctionAnalysis::definite_integral(double lower_bound,
@@ -522,6 +587,7 @@ double FunctionAnalysis::definite_integral(double lower_bound,
                 return evaluate_with_variable(x) * mymath::kPi /
                        (cos_angle * cos_angle);
             };
+            reject_divergent_transformed_endpoint(transformed, true, true);
             return adaptive_gauss_kronrod_callable(transformed,
                                                    0.0,
                                                    1.0,
@@ -537,6 +603,7 @@ double FunctionAnalysis::definite_integral(double lower_bound,
                 const double x = upper_bound - (1.0 - t) / t;
                 return evaluate_with_variable(x) / (t * t);
             };
+            reject_divergent_transformed_endpoint(transformed, true, false);
             return adaptive_gauss_kronrod_callable(transformed,
                                                    0.0,
                                                    1.0,
@@ -552,6 +619,7 @@ double FunctionAnalysis::definite_integral(double lower_bound,
             const double x = lower_bound + t / one_minus_t;
             return evaluate_with_variable(x) / (one_minus_t * one_minus_t);
         };
+        reject_divergent_transformed_endpoint(transformed, false, true);
         return adaptive_gauss_kronrod_callable(transformed,
                                                0.0,
                                                1.0,
@@ -591,6 +659,9 @@ double FunctionAnalysis::definite_integral(double lower_bound,
             const double x = upper_bound - width * one_minus_t * one_minus_t;
             return evaluate_with_variable(x) * 2.0 * width * one_minus_t;
         };
+        reject_divergent_transformed_endpoint(transformed,
+                                              left_singular,
+                                              right_singular);
         return adaptive_gauss_kronrod_callable(transformed,
                                                0.0,
                                                1.0,
@@ -598,10 +669,21 @@ double FunctionAnalysis::definite_integral(double lower_bound,
                                                kMaxIntegralDepth);
     }
 
-    return adaptive_gauss_kronrod(lower_bound,
-                                  upper_bound,
-                                  scaled_eps,
-                                  kMaxIntegralDepth);
+    for (int i = 1; i < 40; ++i) {
+        const double x =
+            lower_bound + (upper_bound - lower_bound) *
+                              (static_cast<double>(i) / 40.0);
+        double value = evaluate_with_variable(x);
+        if (!mymath::isfinite(value) || mymath::abs(value) > 1e10) {
+            throw std::runtime_error("integral did not converge");
+        }
+    }
+
+    return require_finite_integral(
+        adaptive_gauss_kronrod(lower_bound,
+                               upper_bound,
+                               scaled_eps,
+                               kMaxIntegralDepth));
 }
 
 double FunctionAnalysis::indefinite_integral_at(double x,
@@ -764,12 +846,13 @@ double FunctionAnalysis::adaptive_gauss_kronrod(double left,
                                                 int max_depth) const {
     double error = 0.0;
     const double whole = gauss_kronrod_15(left, right, &error);
-    return adaptive_gauss_kronrod_recursive(left,
-                                            right,
-                                            eps,
-                                            whole,
-                                            error,
-                                            max_depth);
+    return require_finite_integral(
+        adaptive_gauss_kronrod_recursive(left,
+                                         right,
+                                         eps,
+                                         whole,
+                                         error,
+                                         max_depth));
 }
 
 double FunctionAnalysis::adaptive_gauss_kronrod_recursive(double left,

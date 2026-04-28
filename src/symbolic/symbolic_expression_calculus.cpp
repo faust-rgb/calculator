@@ -204,9 +204,6 @@ SymbolicExpression clean_symbolic_constant(double value) {
                                      &denominator,
                                      999,
                                      1e-7)) {
-        if (value < 0.0) {
-            numerator = -numerator;
-        }
         return make_divide(SymbolicExpression::number(numerator), SymbolicExpression::number(denominator)).simplify();
     }
     return SymbolicExpression::number(value);
@@ -220,16 +217,6 @@ std::vector<double> polynomial_power_coefficients(const std::vector<double>& bas
     }
     trim_coefficients(&result);
     return result;
-}
-
-SymbolicExpression make_linear_form(double slope,
-                                    double intercept,
-                                    const std::string& variable_name) {
-    return make_add(
-               make_multiply(SymbolicExpression::number(slope),
-                             SymbolicExpression::variable(variable_name)),
-               SymbolicExpression::number(intercept))
-        .simplify();
 }
 
 /*
@@ -330,7 +317,7 @@ bool extract_general_rational_factorization(
             ++multiplicity;
         }
         if (multiplicity > 0) {
-            linear_factors->push_back(LinearFactorMultiplicity{root, multiplicity});
+            linear_factors->push_back(LinearFactorMultiplicity{cleaned_root, multiplicity});
         }
     }
 
@@ -996,12 +983,16 @@ bool try_integrate_by_parts(const SymbolicExpression& left,
         }
     }
 
+    if (ibp_stack.size() >= 2) return false;
+    ibp_stack.push_back({original_key, make_multiply(u, v)});
     try {
         *integrated = make_subtract(make_multiply(u, v),
                                     v_du.integral(variable_name))
                           .simplify();
+        ibp_stack.pop_back();
         return true;
     } catch (...) {
+        ibp_stack.pop_back();
     }
 
     // 如果没有直接发现循环，尝试递归积分 v_du
@@ -1534,6 +1525,13 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
             if (node_->text == "abs") {
                 return make_multiply(make_function("sign", argument), inner).simplify();
             }
+            if (node_->text == "sign") {
+                return make_multiply(
+                           make_multiply(SymbolicExpression::number(2.0),
+                                         make_function("delta", argument)),
+                           inner)
+                    .simplify();
+            }
             if (node_->text == "step") {
                 return make_multiply(make_function("delta", argument), inner).simplify();
             }
@@ -1706,12 +1704,6 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                                                     &integrated)) {
                 return integrated.simplify();
             }
-            if (try_integrate_by_parts(left,
-                                       right,
-                                       variable_name,
-                                       &integrated)) {
-                return integrated.simplify();
-            }
             if (try_integrate_trig_product_identity(left,
                                                     right,
                                                     variable_name,
@@ -1722,6 +1714,12 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                                                     right,
                                                     variable_name,
                                                     &integrated)) {
+                return integrated.simplify();
+            }
+            if (try_integrate_by_parts(left,
+                                       right,
+                                       variable_name,
+                                       &integrated)) {
                 return integrated.simplify();
             }
             if (decompose_constant_times_expression(*this, variable_name, &constant, &rest)) {
@@ -1882,6 +1880,32 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                 return make_function("Ci", argument);
             }
         }
+        if (left.is_constant(variable_name) &&
+            right.node_->type == NodeType::kMultiply) {
+            const SymbolicExpression den_left(right.node_->left);
+            const SymbolicExpression den_right(right.node_->right);
+            const bool x_ln_x =
+                den_left.is_variable_named(variable_name) &&
+                den_right.node_->type == NodeType::kFunction &&
+                den_right.node_->text == "ln" &&
+                SymbolicExpression(den_right.node_->left).is_variable_named(variable_name);
+            const bool ln_x_x =
+                den_right.is_variable_named(variable_name) &&
+                den_left.node_->type == NodeType::kFunction &&
+                den_left.node_->text == "ln" &&
+                SymbolicExpression(den_left.node_->left).is_variable_named(variable_name);
+            if (x_ln_x || ln_x_x) {
+                return make_multiply(
+                           left,
+                           make_function(
+                               "ln",
+                               make_function("abs",
+                                             make_function(
+                                                 "ln",
+                                                 variable(variable_name)))))
+                    .simplify();
+            }
+        }
 
         SymbolicExpression rational_integral;
         if (try_integrate_polynomial_quotient(left,
@@ -2002,6 +2026,14 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                                                         number(4.0))),
                                number(4.0 * a))
                 .simplify();
+        }
+        if (node_->text == "abs" && linear) {
+            return make_divide(make_multiply(argument, make_function("abs", argument)),
+                               number(2.0 * a))
+                .simplify();
+        }
+        if (node_->text == "sign" && linear) {
+            return make_divide(make_function("abs", argument), number(a)).simplify();
         }
         if (node_->text == "sqrt") {
             SymbolicExpression a_quad, b_quad, c_quad;

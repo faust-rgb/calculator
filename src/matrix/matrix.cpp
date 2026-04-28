@@ -16,7 +16,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -524,6 +526,11 @@ double percentile_values(const std::vector<double>& values, double p) {
 }
 
 double quartile_values(const std::vector<double>& values, double q) {
+    if (!std::isfinite(q) || std::floor(q) != q ||
+        q < static_cast<double>(std::numeric_limits<int>::min()) ||
+        q > static_cast<double>(std::numeric_limits<int>::max())) {
+        throw std::runtime_error("quartile q must be an integer");
+    }
     return stats::quartile(values, static_cast<int>(q));
 }
 

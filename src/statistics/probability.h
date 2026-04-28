@@ -26,6 +26,11 @@ double nCr(double n, double r);
 double nPr(double n, double r);
 
 /**
+ * @brief 伯努利数 B_n
+ */
+double bernoulli(int n);
+
+/**
  * @brief Gamma 函数
  */
 double gamma(double x);

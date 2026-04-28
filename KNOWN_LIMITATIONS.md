@@ -27,6 +27,7 @@
 - Internal decimal calculations use `double`
 - Arbitrary precision is not supported
 - Some operations are approximate by nature and rely on tolerance handling
+- Numerical stability for extremely high-order derivatives or limits of highly oscillatory functions may still be limited by double-precision floating point (though PSA/Richardson optimizations significantly improve this)
 - Finite one-variable integrals use adaptive Gauss-Kronrod G7-K15 and include
   endpoint-singularity transforms, but infinite integration bounds are not yet
   exposed through command syntax
@@ -58,9 +59,10 @@ This project is now a capable calculator and mini CAS-style tool, but it is not:
 - Symbolic integration is rule-based rather than complete
   - full Risch-style integration is not implemented
   - multiple distinct irreducible quadratic factors, general irreducible high-degree factors, and symbolic-parameter factorization are still limited
-  - reciprocal trigonometric rules cover common `sec`/`csc`/`cot` cases, but
-    general trigonometric reduction and universal tangent substitution are not
-    implemented
+  - reciprocal trigonometric rules cover common `sec`/`csc`/`cot` cases
+  - Weierstrass substitution (universal tangent substitution) is implemented for
+    rational functions of `sin`/`cos`, but general trigonometric reduction is not
+    complete
 - Nonlinear multi-variable `critical(...)` uses bounded numeric search
   - Hessian-based classification is available for isolated 1-3 variable solutions, but global completeness is not guaranteed
 - Common subexpression elimination (CSE)

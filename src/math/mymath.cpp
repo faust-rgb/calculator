@@ -133,7 +133,7 @@ bool approximate_fraction(double value,
 
         if (abs(candidate - positive) <= eps) {
             const long long divisor = gcd(num, den);
-            *numerator = num / divisor;
+            *numerator = (value < 0.0 ? -num : num) / divisor;
             *denominator = den / divisor;
             return true;
         }

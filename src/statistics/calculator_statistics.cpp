@@ -3,8 +3,36 @@
 #include "probability.h"
 #include <stdexcept>
 #include <cmath>
+#include <limits>
+#include <string>
 
 namespace stats_ops {
+
+namespace {
+
+bool is_integer(double value) {
+    return std::isfinite(value) && std::floor(value) == value;
+}
+
+int require_int(double value, const std::string& name) {
+    if (!is_integer(value) ||
+        value < static_cast<double>(std::numeric_limits<int>::min()) ||
+        value > static_cast<double>(std::numeric_limits<int>::max())) {
+        throw std::runtime_error(name + " must be an integer");
+    }
+    return static_cast<int>(value);
+}
+
+long long require_long_long(double value, const std::string& name) {
+    if (!is_integer(value) ||
+        value < static_cast<double>(std::numeric_limits<long long>::min()) ||
+        value > static_cast<double>(std::numeric_limits<long long>::max())) {
+        throw std::runtime_error(name + " must be an integer");
+    }
+    return static_cast<long long>(value);
+}
+
+} // namespace
 
 std::vector<double> extract_vector(const StoredValue& value) {
     if (value.is_matrix) {
@@ -44,7 +72,7 @@ double apply_statistic(const std::string& name, const std::vector<double>& argum
     if (name == "quartile") {
         if (arguments.size() < 2) throw std::runtime_error("quartile expects q followed by data");
         std::vector<double> data(arguments.begin() + 1, arguments.end());
-        return stats::quartile(data, static_cast<int>(arguments[0]));
+        return stats::quartile(data, require_int(arguments[0], "quartile q"));
     }
 
     if (name == "cov") {
@@ -84,25 +112,36 @@ double apply_probability(const std::string& name, const std::vector<double>& arg
     }
     if (name == "poisson_pmf") {
         if (arguments.size() != 2) throw std::runtime_error("poisson_pmf expects k, lambda");
-        return prob::poisson_pmf(static_cast<int>(arguments[0]), arguments[1]);
+        return prob::poisson_pmf(require_int(arguments[0], "poisson k"), arguments[1]);
     }
     if (name == "poisson_cdf") {
         if (arguments.size() != 2) throw std::runtime_error("poisson_cdf expects k, lambda");
-        return prob::poisson_cdf(static_cast<int>(arguments[0]), arguments[1]);
+        return prob::poisson_cdf(require_int(arguments[0], "poisson k"), arguments[1]);
     }
     if (name == "binom_pmf") {
         if (arguments.size() != 3) throw std::runtime_error("binom_pmf expects n, k, p");
-        return prob::binom_pmf(static_cast<int>(arguments[0]), static_cast<int>(arguments[1]), arguments[2]);
+        return prob::binom_pmf(require_int(arguments[0], "binomial n"),
+                               require_int(arguments[1], "binomial k"),
+                               arguments[2]);
     }
     if (name == "binom_cdf") {
         if (arguments.size() != 3) throw std::runtime_error("binom_cdf expects n, k, p");
-        return prob::binom_cdf(static_cast<int>(arguments[0]), static_cast<int>(arguments[1]), arguments[2]);
+        return prob::binom_cdf(require_int(arguments[0], "binomial n"),
+                               require_int(arguments[1], "binomial k"),
+                               arguments[2]);
     }
-    if (name == "rand") return prob::rand();
-    if (name == "randn") return prob::randn();
+    if (name == "rand") {
+        if (!arguments.empty()) throw std::runtime_error("rand expects no arguments");
+        return prob::rand();
+    }
+    if (name == "randn") {
+        if (!arguments.empty()) throw std::runtime_error("randn expects no arguments");
+        return prob::randn();
+    }
     if (name == "randint") {
         if (arguments.size() != 2) throw std::runtime_error("randint expects min, max");
-        return prob::randint(static_cast<long long>(arguments[0]), static_cast<long long>(arguments[1]));
+        return prob::randint(require_long_long(arguments[0], "randint min"),
+                             require_long_long(arguments[1], "randint max"));
     }
 
     throw std::runtime_error("unknown probability function: " + name);

@@ -78,8 +78,7 @@ double variance(const std::vector<double>& data) {
         long double delta2 = static_cast<long double>(x) - mean_val;
         m2 += delta * delta2;
     }
-    // 使用样本方差 (n-1)，如果是总体方差则用 n。
-    // 这里保持原样（目前实现似乎是除以 n）
+    // 使用总体方差 (n)，与现有 var/std/cov 行为保持一致。
     return static_cast<double>(m2 / static_cast<long double>(data.size()));
 }
 

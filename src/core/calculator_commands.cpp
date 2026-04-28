@@ -293,21 +293,32 @@ bool Calculator::try_process_function_command(const std::string& expression,
         temporary.exact = false;
         impl_->variables[variable_name] = temporary;
 
+        auto cleanup = [&]() {
+            if (had_existing) {
+                impl_->variables[variable_name] = backup;
+            } else {
+                impl_->variables.erase(variable_name);
+            }
+        };
+
         try {
             const double value = evaluate(expression.to_string());
-            if (had_existing) {
-                impl_->variables[variable_name] = backup;
-            } else {
-                impl_->variables.erase(variable_name);
+            if (!std::isfinite(value)) {
+                throw std::runtime_error("Non-finite value");
             }
+            cleanup();
             return value;
         } catch (...) {
-            if (had_existing) {
-                impl_->variables[variable_name] = backup;
-            } else {
-                impl_->variables.erase(variable_name);
+            cleanup();
+            // If direct evaluation fails (e.g. division by zero like sin(x)/x at 0), fallback to limit
+            try {
+                FunctionAnalysis analysis(variable_name);
+                analysis.define(expression.to_string());
+                // Use right-sided limit (1) instead of two-sided (0) to handle branches like t/|t| in Puiseux
+                return analysis.limit(point, 1);
+            } catch (...) {
+                return std::numeric_limits<double>::quiet_NaN();
             }
-            throw;
         }
     };
 

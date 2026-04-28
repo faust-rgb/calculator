@@ -258,6 +258,13 @@ Notes:
 - `jacobian([expr1; expr2; ...], variable1, variable2, ...)`
 - `hessian(expr, variable1, variable2, ...)`
 - `critical(expr, variable1, variable2, ...)`
+- `lagrange(f, constraint, variable1, variable2, ...)`
+- `lagrange(f, [constraint1, constraint2, ...], variable1, variable2, ...)`
+- `dsolve(rhs, x_var, y_var)`
+- `divergence([expr1, expr2, ...], variable1, variable2, ...)`
+- `div([expr1, expr2, ...], variable1, variable2, ...)`
+- `curl([expr1, expr2, expr3], variable1, variable2, variable3)`
+- `laplacian(expr, variable1, variable2, ...)`
 - `taylor(expr, a, n)`
 - `pade(expr, m, n)`
 - `pade(expr, a, m, n)`
@@ -345,10 +352,17 @@ Notes:
 - `taylor` also accepts raw one-variable symbolic expressions, not only named custom functions
 - `pade` builds a rational approximant from the local Taylor coefficients of `expr`
 - `critical` appends a Hessian-based classification (`local min`, `local max`, `saddle`, or `degenerate`) for isolated 1-3 variable points
+- `lagrange` solves constrained optimization problems using Lagrange multipliers; it constructs the Lagrangian and delegates to `critical`
+- `dsolve` attempts symbolic solution of first-order ODEs; currently supports `y' = f(x)` and linear ODEs `y' + P(x)y = Q(x)`
+- `divergence`/`div` computes the divergence of a vector field
+- `curl` computes the curl of a 3D vector field
+- `laplacian` computes the Laplacian of a scalar field
 - symbolic `integral` includes rule-based support for mixed real-linear plus repeated irreducible quadratic rational factors and common trig power/product identities
 - `puiseux` uses a denominator grid; for example `denominator = 2` allows half-integer powers
-- `series_sum` / `summation` currently cover polynomial summands up to degree 3 and common geometric series
-- use `inf`, `oo`, or `infinity` as the upper bound for supported infinite geometric sums
+- `series_sum` / `summation` covers polynomial summands (via Faulhaber formulas), geometric series, and infinite series involving Riemann Zeta values $\zeta(2k)$ up to $k=5$
+- use `inf`, `oo`, or `infinity` as the upper bound for supported infinite sums
+- `limit` uses a hybrid approach: symbolic Power Series Arithmetic (PSA) for exact results and removable singularities, plus high-order Richardson extrapolation (14th order) for numerical fallback
+- infinity limits (`inf` or `-inf`) are handled via symbolic substitution $x=1/t$ followed by series analysis
 - symbolic transform commands default to `(t, w)` for Fourier, `(t, s)` for Laplace, and `(n, z)` for z transforms when variables are omitted
 - current symbolic Fourier/Laplace/z support is rule-based and focuses on common signal-analysis forms such as constants, exponentials, `sin/cos`, `step`, and `delta`
 - symbolic `simplify(expr)` may be used on multi-variable expressions, but symbolic `diff/integral/taylor/limit/extrema` still require a one-variable input

@@ -3,6 +3,7 @@
 // ============================================================================
 
 #include "calculator_series.h"
+#include "symbolic_expression_internal.h"
 #include "statistics/probability.h"
 
 #include "polynomial.h"
@@ -12,6 +13,302 @@
 
 namespace series_ops {
 
+namespace internal {
+
+std::vector<double> ps_add(const std::vector<double>& a, const std::vector<double>& b, int degree) {
+    std::vector<double> res(degree + 1, 0.0);
+    for (int i = 0; i <= degree; ++i) {
+        res[i] = (i < static_cast<int>(a.size()) ? a[i] : 0.0) +
+                 (i < static_cast<int>(b.size()) ? b[i] : 0.0);
+    }
+    return res;
+}
+
+std::vector<double> ps_sub(const std::vector<double>& a, const std::vector<double>& b, int degree) {
+    std::vector<double> res(degree + 1, 0.0);
+    for (int i = 0; i <= degree; ++i) {
+        res[i] = (i < static_cast<int>(a.size()) ? a[i] : 0.0) -
+                 (i < static_cast<int>(b.size()) ? b[i] : 0.0);
+    }
+    return res;
+}
+
+std::vector<double> ps_mul(const std::vector<double>& a, const std::vector<double>& b, int degree) {
+    std::vector<double> res(degree + 1, 0.0);
+    for (int i = 0; i <= degree; ++i) {
+        if (i >= static_cast<int>(a.size()) || mymath::is_near_zero(a[i], 1e-12)) continue;
+        for (int j = 0; i + j <= degree; ++j) {
+            if (j >= static_cast<int>(b.size()) || mymath::is_near_zero(b[j], 1e-12)) continue;
+            res[i + j] += a[i] * b[j];
+        }
+    }
+    return res;
+}
+
+std::vector<double> ps_div(const std::vector<double>& a, const std::vector<double>& b, int degree) {
+    if (b.empty()) throw std::runtime_error("division by empty power series");
+    
+    // 查找 a 和 b 的第一个非零项索引
+    int start_a = -1;
+    for (int i = 0; i < static_cast<int>(a.size()); ++i) {
+        if (!mymath::is_near_zero(a[i], 1e-15)) {
+            start_a = i;
+            break;
+        }
+    }
+    
+    int start_b = -1;
+    for (int i = 0; i < static_cast<int>(b.size()); ++i) {
+        if (!mymath::is_near_zero(b[i], 1e-15)) {
+            start_b = i;
+            break;
+        }
+    }
+
+    if (start_b == -1) throw std::runtime_error("division by zero in power series");
+    
+    // 如果 a 为全零，结果全零
+    if (start_a == -1) return std::vector<double>(degree + 1, 0.0);
+
+    // 计算位移：x^start_a / x^start_b = x^(start_a - start_b)
+    int shift = start_a - start_b;
+    
+    // 如果 shift < 0，结果包含负幂项（Laurent 级数），目前 Taylor PSA 不支持。
+    // 但对于极限计算，这表示无穷大。这里抛出异常以便回退到数值方法。
+    if (shift < 0) throw std::runtime_error("Laurent series result (infinite limit)");
+
+    // 提取有效部分并相除
+    std::vector<double> a_effective;
+    for (int i = start_a; i < static_cast<int>(a.size()); ++i) a_effective.push_back(a[i]);
+    
+    std::vector<double> b_effective;
+    for (int i = start_b; i < static_cast<int>(b.size()); ++i) b_effective.push_back(b[i]);
+
+    std::vector<double> res_effective(degree + 1, 0.0);
+    double inv_b0 = 1.0 / b_effective[0];
+    for (int i = 0; i <= degree; ++i) {
+        double val = (i < static_cast<int>(a_effective.size()) ? a_effective[i] : 0.0);
+        for (int j = 1; j <= i; ++j) {
+            if (j < static_cast<int>(b_effective.size())) val -= b_effective[j] * res_effective[i - j];
+        }
+        res_effective[i] = val * inv_b0;
+    }
+
+    // 处理 shift > 0 的情况：在前面补零
+    std::vector<double> final_res(degree + 1, 0.0);
+    for (int i = 0; i <= degree; ++i) {
+        if (i >= shift && i - shift < static_cast<int>(res_effective.size())) {
+            final_res[i] = res_effective[i - shift];
+        }
+    }
+    return final_res;
+}
+
+std::vector<double> ps_exp(const std::vector<double>& a, int degree) {
+    std::vector<double> res(degree + 1, 0.0);
+    double a0 = a.empty() ? 0.0 : a[0];
+    res[0] = mymath::exp(a0);
+    for (int i = 1; i <= degree; ++i) {
+        double sum = 0.0;
+        for (int k = 1; k <= i; ++k) {
+            double ak = k < static_cast<int>(a.size()) ? a[k] : 0.0;
+            sum += k * ak * res[i - k];
+        }
+        res[i] = sum / i;
+    }
+    return res;
+}
+
+std::vector<double> ps_ln(const std::vector<double>& a, int degree) {
+    if (a.empty() || a[0] <= 0) throw std::runtime_error("ln of non-positive power series base");
+    std::vector<double> res(degree + 1, 0.0);
+    res[0] = mymath::ln(a[0]);
+    double inv_a0 = 1.0 / a[0];
+    for (int i = 1; i <= degree; ++i) {
+        double sum = 0.0;
+        for (int k = 1; k < i; ++k) {
+            double ak = i - k < static_cast<int>(a.size()) ? a[i - k] : 0.0;
+            sum += k * res[k] * ak;
+        }
+        double ai = i < static_cast<int>(a.size()) ? a[i] : 0.0;
+        res[i] = (ai - sum / i) * inv_a0;
+    }
+    return res;
+}
+
+void ps_sincos(const std::vector<double>& a, int degree, std::vector<double>& sin_res, std::vector<double>& cos_res) {
+    sin_res.assign(degree + 1, 0.0);
+    cos_res.assign(degree + 1, 0.0);
+    double a0 = a.empty() ? 0.0 : a[0];
+    sin_res[0] = mymath::sin(a0);
+    cos_res[0] = mymath::cos(a0);
+    for (int i = 1; i <= degree; ++i) {
+        double sum_sin = 0.0;
+        double sum_cos = 0.0;
+        for (int k = 1; k <= i; ++k) {
+            double ak = k < static_cast<int>(a.size()) ? a[k] : 0.0;
+            sum_sin += k * ak * cos_res[i - k];
+            sum_cos -= k * ak * sin_res[i - k];
+        }
+        sin_res[i] = sum_sin / i;
+        cos_res[i] = sum_cos / i;
+    }
+}
+
+std::vector<double> ps_sin(const std::vector<double>& a, int degree) {
+    std::vector<double> s, c;
+    ps_sincos(a, degree, s, c);
+    return s;
+}
+
+std::vector<double> ps_cos(const std::vector<double>& a, int degree) {
+    std::vector<double> s, c;
+    ps_sincos(a, degree, s, c);
+    return c;
+}
+
+std::vector<double> ps_pow_const(const std::vector<double>& a, double n, int degree) {
+    if (a.empty() || mymath::is_near_zero(a[0], 1e-12)) {
+        if (mymath::is_near_zero(n, 1e-12)) {
+            std::vector<double> res(degree + 1, 0.0);
+            res[0] = 1.0;
+            return res;
+        }
+        if (n > 0 && mymath::is_integer(n, 1e-12)) {
+            std::vector<double> res(degree + 1, 0.0);
+            res[0] = 1.0;
+            std::vector<double> base = a;
+            int p = static_cast<int>(n + 0.5);
+            for (int i = 0; i < p; ++i) res = ps_mul(res, base, degree);
+            return res;
+        }
+
+        int leading = -1;
+        for (int i = 0; i < static_cast<int>(a.size()); ++i) {
+            if (!mymath::is_near_zero(a[i], 1e-12)) {
+                leading = i;
+                break;
+            }
+        }
+        if (leading >= 0 && n > 0.0) {
+            const double shifted_power = static_cast<double>(leading) * n;
+            if (is_integer_double(shifted_power, 1e-10)) {
+                const int shift = static_cast<int>(round_to_long_long(shifted_power));
+                if (shift > degree) {
+                    return std::vector<double>(degree + 1, 0.0);
+                }
+
+                std::vector<double> normalized;
+                normalized.reserve(a.size() - static_cast<std::size_t>(leading));
+                for (int i = leading; i < static_cast<int>(a.size()); ++i) {
+                    normalized.push_back(a[static_cast<std::size_t>(i)]);
+                }
+
+                const std::vector<double> powered =
+                    ps_pow_const(normalized, n, degree - shift);
+                std::vector<double> res(degree + 1, 0.0);
+                for (int i = 0; i + shift <= degree &&
+                                i < static_cast<int>(powered.size()); ++i) {
+                    res[static_cast<std::size_t>(i + shift)] =
+                        powered[static_cast<std::size_t>(i)];
+                }
+                return res;
+            }
+        }
+        throw std::runtime_error("unsupported power series base 0 with non-integer/negative exponent");
+    }
+    std::vector<double> res(degree + 1, 0.0);
+    res[0] = mymath::pow(a[0], n);
+    double inv_a0 = 1.0 / a[0];
+    for (int i = 1; i <= degree; ++i) {
+        double sum = 0.0;
+        for (int k = 1; k <= i; ++k) {
+            double ak = k < static_cast<int>(a.size()) ? a[k] : 0.0;
+            sum += (n * k - (i - k)) * ak * res[i - k];
+        }
+        res[i] = sum * inv_a0 / i;
+    }
+    return res;
+}
+
+bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, double center, int degree, std::vector<double>& result, const SeriesContext& ctx) {
+    if (!expr.node_) return false;
+    auto node = expr.node_;
+    
+    if (node->type == NodeType::kNumber) {
+        result.assign(degree + 1, 0.0);
+        result[0] = node->number_value;
+        return true;
+    }
+    if (node->type == NodeType::kPi) {
+        result.assign(degree + 1, 0.0);
+        result[0] = mymath::kPi;
+        return true;
+    }
+    if (node->type == NodeType::kE) {
+        result.assign(degree + 1, 0.0);
+        result[0] = mymath::kE;
+        return true;
+    }
+    if (node->type == NodeType::kVariable) {
+        result.assign(degree + 1, 0.0);
+        if (node->text == var_name) {
+            result[0] = center;
+            if (degree >= 1) result[1] = 1.0;
+        } else {
+            result[0] = ctx.evaluate_at(expr, var_name, center);
+        }
+        return true;
+    }
+
+    std::vector<double> left_res, right_res;
+    if (node->left && !series_ops::internal::evaluate_psa(SymbolicExpression(node->left), var_name, center, degree, left_res, ctx)) return false;
+    if (node->right && !series_ops::internal::evaluate_psa(SymbolicExpression(node->right), var_name, center, degree, right_res, ctx)) return false;
+
+    try {
+        switch (node->type) {
+            case NodeType::kAdd: result = ps_add(left_res, right_res, degree); return true;
+            case NodeType::kSubtract: result = ps_sub(left_res, right_res, degree); return true;
+            case NodeType::kMultiply: result = ps_mul(left_res, right_res, degree); return true;
+            case NodeType::kDivide: result = ps_div(left_res, right_res, degree); return true;
+            case NodeType::kNegate: 
+                result.assign(degree + 1, 0.0);
+                for (int i = 0; i <= degree; ++i) result[i] = -left_res[i];
+                return true;
+            case NodeType::kPower: {
+                bool right_is_const = true;
+                for (int i = 1; i <= degree; ++i) {
+                    if (i < static_cast<int>(right_res.size()) &&
+                        !mymath::is_near_zero(right_res[i], 1e-12)) {
+                        right_is_const = false; break;
+                    }
+                }
+                if (right_is_const) {
+                    double p = right_res.empty() ? 0.0 : right_res[0];
+                    result = ps_pow_const(left_res, p, degree);
+                    return true;
+                } else {
+                    result = ps_exp(ps_mul(right_res, ps_ln(left_res, degree), degree), degree);
+                    return true;
+                }
+            }
+            case NodeType::kFunction: {
+                if (node->text == "exp") { result = ps_exp(left_res, degree); return true; }
+                if (node->text == "ln") { result = ps_ln(left_res, degree); return true; }
+                if (node->text == "sin") { result = ps_sin(left_res, degree); return true; }
+                if (node->text == "cos") { result = ps_cos(left_res, degree); return true; }
+                if (node->text == "sqrt") { result = ps_pow_const(left_res, 0.5, degree); return true; }
+                return false;
+            }
+            default: return false;
+        }
+    } catch (...) {
+        return false;
+    }
+}
+
+} // namespace internal
+
 namespace {
 
 std::string simplify_symbolic_text(const std::string& text) {
@@ -19,6 +316,7 @@ std::string simplify_symbolic_text(const std::string& text) {
 }
 
 std::vector<double> build_taylor_coefficients(
+
     const SeriesContext& ctx,
     const SymbolicExpression& expression,
     const std::string& variable_name,
@@ -32,6 +330,12 @@ std::vector<double> build_taylor_coefficients(
     static thread_local std::map<std::string, TaylorDerivativeCacheEntry> derivative_cache;
     static constexpr std::size_t kMaxTaylorDerivativeCacheSize = 256;
 
+    std::vector<double> psa_result;
+    if (series_ops::internal::evaluate_psa(expression.simplify(), variable_name, center, degree, psa_result, ctx)) {
+        return psa_result;
+    }
+
+    // Fallback to symbolic derivative
     const std::string base_key =
         variable_name + "|" + format_symbolic_scalar(center) + "|" +
         expression.simplify().to_string();
@@ -58,6 +362,10 @@ std::vector<double> build_taylor_coefficients(
             found->second.has_value = true;
         }
         const double derivative_value = found->second.value;
+        if (!mymath::isfinite(derivative_value)) {
+            throw std::runtime_error(
+                "taylor expansion produced a non-finite coefficient");
+        }
         coefficients.push_back(derivative_value / prob::factorial(order));
         if (order != degree) {
             const std::string next_key = base_key + "|" + std::to_string(order + 1);
@@ -173,8 +481,20 @@ std::string puiseux(const SeriesContext& ctx,
                   std::to_string(denominator);
     const SymbolicExpression substituted = expression.substitute(
         variable_name, SymbolicExpression::parse(replacement_text));
+    std::string substituted_text = substituted.to_string();
+    const std::string positive_aux_abs = "abs(" + auxiliary_variable + ")";
+    std::size_t abs_pos = 0;
+    while ((abs_pos = substituted_text.find(positive_aux_abs, abs_pos)) !=
+           std::string::npos) {
+        substituted_text.replace(abs_pos,
+                                positive_aux_abs.size(),
+                                auxiliary_variable);
+        abs_pos += auxiliary_variable.size();
+    }
+    const SymbolicExpression puiseux_expression =
+        SymbolicExpression::parse(substituted_text);
     const std::vector<double> coefficients = build_taylor_coefficients(
-        ctx, substituted, auxiliary_variable, 0.0, degree);
+        ctx, puiseux_expression, auxiliary_variable, 0.0, degree);
     return generalized_series_to_string(
         coefficients, variable_name, center, denominator);
 }
@@ -194,34 +514,40 @@ std::string series_sum(const SeriesContext& ctx,
 
     auto make_polynomial_sum_primitive =
         [&](const std::vector<double>& coefficients) {
-            if (coefficients.size() > 4) {
-                throw std::runtime_error(
-                    "series_sum polynomial summands are currently supported up to degree 3");
-            }
+            auto get_bernoulli = [](int m) -> double {
+                static std::vector<double> B = {1.0, 0.5};
+                while (B.size() <= static_cast<std::size_t>(m)) {
+                    int n = B.size();
+                    double sum = 0.0;
+                    for (int k = 0; k < n; ++k) {
+                        sum += prob::nCr(n + 1, k) * B[k];
+                    }
+                    B.push_back((n + 1.0 - sum) / prob::nCr(n + 1, n));
+                }
+                return B[m];
+            };
 
             std::vector<std::string> pieces;
-            if (coefficients.size() >= 1 &&
-                !mymath::is_near_zero(coefficients[0], 1e-10)) {
-                pieces.push_back("(" + format_symbolic_scalar(coefficients[0]) +
-                                 ") * (" + index_name + " + 1)");
-            }
-            if (coefficients.size() >= 2 &&
-                !mymath::is_near_zero(coefficients[1], 1e-10)) {
-                pieces.push_back("(" + format_symbolic_scalar(coefficients[1]) +
-                                 ") * (" + index_name + " * (" + index_name +
-                                 " + 1) / 2)");
-            }
-            if (coefficients.size() >= 3 &&
-                !mymath::is_near_zero(coefficients[2], 1e-10)) {
-                pieces.push_back("(" + format_symbolic_scalar(coefficients[2]) +
-                                 ") * (" + index_name + " * (" + index_name +
-                                 " + 1) * (2 * " + index_name + " + 1) / 6)");
-            }
-            if (coefficients.size() >= 4 &&
-                !mymath::is_near_zero(coefficients[3], 1e-10)) {
-                pieces.push_back("(" + format_symbolic_scalar(coefficients[3]) +
-                                 ") * ((" + index_name + " * (" + index_name +
-                                 " + 1) / 2) ^ 2)");
+            for (std::size_t p = 0; p < coefficients.size(); ++p) {
+                if (mymath::is_near_zero(coefficients[p], 1e-10)) {
+                    continue;
+                }
+                
+                std::ostringstream poly_part;
+                poly_part << "(1 / " << (p + 1) << ") * (";
+                bool first = true;
+                for (std::size_t j = 0; j <= p; ++j) {
+                    double bj = get_bernoulli(j);
+                    if (mymath::is_near_zero(bj, 1e-10)) continue;
+                    
+                    double term_coeff = prob::nCr(p + 1, j) * bj;
+                    if (!first) poly_part << " + ";
+                    poly_part << format_symbolic_scalar(term_coeff) << " * (" << index_name << " ^ " << (p + 1 - j) << ")";
+                    first = false;
+                }
+                poly_part << ")";
+                
+                pieces.push_back("(" + format_symbolic_scalar(coefficients[p]) + ") * " + poly_part.str());
             }
 
             if (pieces.empty()) {
@@ -273,21 +599,69 @@ std::string series_sum(const SeriesContext& ctx,
         return finite_sum_from_primitive(primitive);
     }
 
+    if (upper_is_infinite && lower == "1") {
+        for (int k = 1; k <= 5; ++k) {
+            int two_k = 2 * k;
+            std::string inv_pow_str = "1 / (" + index_name + " ^ " + std::to_string(two_k) + ")";
+            SymbolicExpression diff = SymbolicExpression::parse("(" + summand.to_string() + ") - (" + inv_pow_str + ")").simplify();
+            double val = 0.0;
+            if (diff.is_number(&val) && mymath::is_near_zero(val, 1e-10)) {
+                // zeta(2k) = (-1)^(k+1) (2pi)^(2k) B_{2k} / (2(2k)!)
+                double B = prob::bernoulli(two_k);
+                double coeff = mymath::pow(2.0, two_k - 1) * mymath::abs(B) / prob::factorial(two_k);
+                std::ostringstream ss;
+                if (!mymath::is_near_zero(coeff - 1.0, 1e-10)) {
+                    ss << format_symbolic_scalar(coeff) << " * ";
+                }
+                ss << "pi ^ " << two_k;
+                return ctx.simplify_symbolic(ss.str());
+            }
+        }
+    }
+
     auto geometric_ratio = [&](double* coefficient, double* ratio) {
-        const double s0 = ctx.evaluate_at(summand, index_name, 0.0);
-        const double s1 = ctx.evaluate_at(summand, index_name, 1.0);
-        const double s2 = ctx.evaluate_at(summand, index_name, 2.0);
-        const double s3 = ctx.evaluate_at(summand, index_name, 3.0);
-        if (mymath::is_near_zero(s0, 1e-10)) {
+        SymbolicExpression n_plus_1 = SymbolicExpression::parse("(" + index_name + ") + 1");
+        SymbolicExpression next_term = summand.substitute(index_name, n_plus_1);
+        SymbolicExpression ratio_expr = SymbolicExpression::parse("(" + next_term.to_string() + ") / (" + summand.to_string() + ")").simplify();
+        double symbolic_ratio = 0.0;
+        if (ratio_expr.is_number(&symbolic_ratio)) {
+            *ratio = symbolic_ratio;
+            SymbolicExpression coeff_expr = SymbolicExpression::parse("(" + summand.to_string() + ") / ((" + format_symbolic_scalar(symbolic_ratio) + ") ^ (" + index_name + "))").simplify();
+            double symbolic_coeff = 0.0;
+            if (coeff_expr.is_number(&symbolic_coeff)) {
+                *coefficient = symbolic_coeff;
+                return true;
+            }
+        }
+
+        double s[4];
+        int offset = 0;
+        while (offset < 10) {
+            for (int i = 0; i < 4; ++i) {
+                s[i] = ctx.evaluate_at(summand, index_name, offset + i);
+            }
+            if (!mymath::is_near_zero(s[0], 1e-10)) {
+                break;
+            }
+            offset++;
+        }
+        if (offset == 10 || mymath::is_near_zero(s[0], 1e-10)) {
             return false;
         }
-        const double candidate = s1 / s0;
-        if (!mymath::is_near_zero(s2 - s1 * candidate, 1e-8) ||
-            !mymath::is_near_zero(s3 - s2 * candidate, 1e-8)) {
+
+        const double candidate = s[1] / s[0];
+        if (!mymath::is_near_zero(s[2] - s[1] * candidate, 1e-8) ||
+            !mymath::is_near_zero(s[3] - s[2] * candidate, 1e-8)) {
             return false;
         }
-        *coefficient = s0;
-        *ratio = candidate;
+        
+        if (mymath::is_near_zero(candidate, 1e-10)) {
+            *ratio = 0.0;
+            *coefficient = s[0];
+        } else {
+            *ratio = candidate;
+            *coefficient = s[0] / mymath::pow(candidate, offset);
+        }
         return true;
     };
 
