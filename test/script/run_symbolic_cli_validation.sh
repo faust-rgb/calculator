@@ -48,6 +48,19 @@ expect_numeric() {
     fi
 }
 
+expect_error_contains() {
+    local expr="$1"
+    local expected_msg="$2"
+    local actual
+    actual="$(run_calc "$expr")"
+    if [[ "$actual" == *"$expected_msg"* ]]; then
+        passed=$((passed + 1))
+    else
+        failed=$((failed + 1))
+        printf 'FAIL error: %s\n  expected to contain: %s\n  actual:              %s\n' "$expr" "$expected_msg" "$actual"
+    fi
+}
+
 # =============================================================================
 # 1. Symbolic Differentiation and Calculus
 # =============================================================================
@@ -107,18 +120,18 @@ expect_numeric 'fixed_point(cos(x), 0.5)' 0.73908513325 0.0000000001
 # =============================================================================
 # 5. Matrix and Linear Algebra
 # =============================================================================
-expect_exact 'det(mat(3, 3, 1, 2, 3, 0, 1, 4, 5, 6, 0))' '1'
-expect_exact 'rank(mat(3, 3, 1, 2, 3, 2, 4, 6, 1, 1, 1))' '2'
-expect_exact 'pinv(mat(2, 2, 1, 2, 2, 4))' '[[0.04, 0.08], [0.08, 0.16]]'
-expect_exact 'eigvals(mat(2, 2, 2, 0, 0, 3))' '[3, 2]'
-expect_exact 'inverse(mat(3, 3, 1, 2, 3, 0, 1, 4, 5, 6, 0))' '[[-24, 18, 5], [20, -15, -4], [-5, 4, 1]]'
-expect_exact 'det(mat(3, 3, 1, 2, 3, 0, 1, 4, 5, 6, 0))' '1'
-expect_exact 'rref(mat(3, 4, 1, 2, -1, -4, 2, 3, -1, -11, -2, 0, -3, 22))' '[[1, 0, 0, -8], [0, 1, 0, 1], [0, 0, 1, -2]]'
-expect_exact 'solve(mat(3, 3, 3, 2, -1, 2, -2, 4, -1, 0.5, -1), vec(1, -2, 0))' '[[1], [-2], [-2]]'
-expect_exact 'rank(mat(3, 3, 1, 2, 3, 2, 4, 6, 1, 1, 1))' '2'
-expect_exact 'null(mat(2, 3, 1, 2, 3, 2, 4, 6))' '[[-2, -3], [1, 0], [0, 1]]'
-expect_exact 'pinv(mat(2, 2, 1, 2, 2, 4))' '[[0.04, 0.08], [0.08, 0.16]]'
-expect_exact 'eigvals(mat(2, 2, 2, 0, 0, 3))' '[3, 2]'
+expect_exact 'det([1, 2, 3; 0, 1, 4; 5, 6, 0])' '1'
+expect_exact 'rank([1, 2, 3; 2, 4, 6; 1, 1, 1])' '2'
+expect_exact 'pinv([1, 2; 2, 4])' '[[0.04, 0.08], [0.08, 0.16]]'
+expect_exact 'eigvals([2, 0; 0, 3])' '[3, 2]'
+expect_exact 'inverse([1, 2, 3; 0, 1, 4; 5, 6, 0])' '[[-24, 18, 5], [20, -15, -4], [-5, 4, 1]]'
+expect_exact 'det([1, 2, 3; 0, 1, 4; 5, 6, 0])' '1'
+expect_exact 'rref([1, 2, -1, -4; 2, 3, -1, -11; -2, 0, -3, 22])' '[[1, 0, 0, -8], [0, 1, 0, 1], [0, 0, 1, -2]]'
+expect_exact 'solve([3, 2, -1; 2, -2, 4; -1, 0.5, -1], [1, -2, 0])' '[[1], [-2], [-2]]'
+expect_exact 'rank([1, 2, 3; 2, 4, 6; 1, 1, 1])' '2'
+expect_exact 'null([1, 2, 3; 2, 4, 6])' '[[-2, -3], [1, 0], [0, 1]]'
+expect_exact 'pinv([1, 2; 2, 4])' '[[0.04, 0.08], [0.08, 0.16]]'
+expect_exact 'eigvals([2, 0; 0, 3])' '[3, 2]'
 # =============================================================================
 # 6. Complex Number Arithmetic and Analysis
 # =============================================================================
