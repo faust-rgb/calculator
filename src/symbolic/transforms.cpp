@@ -35,6 +35,13 @@ bool is_i_variable(const SymbolicExpression& expression) {
     return expr_is_variable(expression.simplify(), "i");
 }
 
+bool is_abs_of_variable(const SymbolicExpression& expression,
+                        const std::string& variable_name) {
+    SymbolicExpression argument;
+    return is_function_named(expression, "abs", &argument) &&
+           argument.is_variable_named(variable_name);
+}
+
 bool decompose_i_times_variable(const SymbolicExpression& expression,
                                 const std::string& variable_name,
                                 double* coefficient) {
@@ -1167,6 +1174,36 @@ SymbolicExpression fourier_transform_impl(const SymbolicExpression& expression,
             .simplify();
     }
 
+    if (simplified.node_->type == NodeType::kFunction &&
+        simplified.node_->text == "exp") {
+        const SymbolicExpression exponent(simplified.node_->left);
+        if (exponent.node_->type == NodeType::kNegate &&
+            is_abs_of_variable(SymbolicExpression(exponent.node_->left), time_variable)) {
+            return make_divide(
+                       SymbolicExpression::number(2.0),
+                       make_add(SymbolicExpression::number(1.0),
+                                make_power(SymbolicExpression::variable(frequency_variable),
+                                           SymbolicExpression::number(2.0))))
+                .simplify();
+        }
+        double constant = 0.0;
+        SymbolicExpression rest;
+        if (decompose_constant_times_expression(exponent,
+                                                time_variable,
+                                                &constant,
+                                                &rest) &&
+            constant < -kFormatEps &&
+            is_abs_of_variable(rest, time_variable)) {
+            const double decay = -constant;
+            return make_divide(
+                       SymbolicExpression::number(2.0 * decay),
+                       make_add(SymbolicExpression::number(decay * decay),
+                                make_power(SymbolicExpression::variable(frequency_variable),
+                                           SymbolicExpression::number(2.0))))
+                .simplify();
+        }
+    }
+
     double coefficient = 0.0;
     double intercept = 0.0;
     if (match_cosine_linear(simplified, time_variable, &coefficient, &intercept) &&
@@ -1417,6 +1454,24 @@ SymbolicExpression z_transform_impl(const SymbolicExpression& expression,
                 mymath::is_integer(exponent, 1e-10) &&
                 exponent > 0.0) {
                 const int k = static_cast<int>(exponent + 0.5);
+                if (k == 1) {
+                    return make_divide(
+                               SymbolicExpression::variable(transform_variable),
+                               make_power(make_subtract(SymbolicExpression::variable(transform_variable),
+                                                        SymbolicExpression::number(1.0)),
+                                          SymbolicExpression::number(2.0)))
+                        .simplify();
+                }
+                if (k == 2) {
+                    return make_divide(
+                               make_multiply(SymbolicExpression::variable(transform_variable),
+                                             make_add(SymbolicExpression::variable(transform_variable),
+                                                      SymbolicExpression::number(1.0))),
+                               make_power(make_subtract(SymbolicExpression::variable(transform_variable),
+                                                        SymbolicExpression::number(1.0)),
+                                          SymbolicExpression::number(3.0)))
+                        .simplify();
+                }
                 SymbolicExpression result = SymbolicExpression::number(1.0).z_transform(index_variable, transform_variable);
                 for (int i = 0; i < k; ++i) {
                     result = make_negate(

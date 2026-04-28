@@ -531,6 +531,16 @@ double determinant(const Matrix& matrix) {
             static_cast<long double>(matrix.at(0, 1)) *
                 static_cast<long double>(matrix.at(1, 0)));
     }
+    if (n == 3) {
+        const long double a = matrix.at(0, 0), b = matrix.at(0, 1), c = matrix.at(0, 2);
+        const long double d = matrix.at(1, 0), e = matrix.at(1, 1), f = matrix.at(1, 2);
+        const long double g = matrix.at(2, 0), h = matrix.at(2, 1), i = matrix.at(2, 2);
+        return static_cast<double>(
+            a * (e * i - f * h) -
+            b * (d * i - f * g) +
+            c * (d * h - e * g)
+        );
+    }
 
     const LuResult lu = lu_decompose_with_pivoting(matrix);
     if (lu.det_sign == 0) return 0.0;

@@ -272,22 +272,24 @@ double cbrt(double x) {
         return 0.0;
     }
 
-    // 立方根对负数仍有实数解，因此单独保留符号处理。
-    // 这里直接使用：
-    //   cbrt(x) = exp(ln(x) / 3)
-    // 对负数则改成先取绝对值、最后再补回负号。
-    if (x < 0.0) {
-        return -exp(ln(-x) / 3.0);
+    // 使用牛顿迭代法提升立方根精度：
+    // g_{n+1} = (2*g_n + x / g_n^2) / 3
+    double guess = x > 0.0 ? exp(ln(x) / 3.0) : -exp(ln(-x) / 3.0);
+    const long double target = static_cast<long double>(x);
+    
+    for (int i = 0; i < 10; ++i) {
+        long double g = static_cast<long double>(guess);
+        long double next = (2.0L * g + target / (g * g)) / 3.0L;
+        if (abs_long_double(next - g) < 1e-15L) {
+            return static_cast<double>(next);
+        }
+        guess = static_cast<double>(next);
     }
-    return exp(ln(x) / 3.0);
+    return guess;
 }
 
 double root(double value, double degree) {
     // root(value, degree) 约定只接受“整数次数”的根。
-    // 例如：
-    //   root(16, 2) = 4
-    //   root(27, 3) = 3
-    //   root(16, -2) = 1 / root(16, 2)
     if (!is_integer(degree)) {
         throw std::domain_error("root degree must be an integer");
     }
@@ -305,10 +307,13 @@ double root(double value, double degree) {
     }
 
     const long long abs_n = n < 0 ? -n : n;
-    double result = 0.0;
+    
+    // 特殊情况优化
+    if (abs_n == 2 && value > 0.0) return n < 0 ? 1.0 / sqrt(value) : sqrt(value);
+    if (abs_n == 3) return n < 0 ? 1.0 / cbrt(value) : cbrt(value);
 
+    double result = 0.0;
     if (value < 0.0) {
-        // 负数的偶次实根不存在，但奇次实根存在。
         if (abs_n % 2 == 0) {
             throw std::domain_error("even root is undefined for negative values");
         }
@@ -321,16 +326,15 @@ double root(double value, double degree) {
 }
 
 static double int_pow(double base, long long exponent) {
+    // 0^0 = 1 是数学惯例
     if (exponent == 0) {
         return 1.0;
     }
 
     if (base == 0.0 && exponent < 0) {
-        throw std::domain_error("zero cannot be raised to a negative power");
+        throw std::runtime_error("zero cannot be raised to a negative power");
     }
 
-    // 整数指数使用快速幂，时间复杂度从 O(n) 降到 O(log n)。
-    // 这里同时兼顾负指数：最后统一取倒数即可。
     bool negative = exponent < 0;
     unsigned long long power = negative
                                    ? static_cast<unsigned long long>(-exponent)
@@ -445,7 +449,7 @@ double beta(double a, double b) {
 }
 
 double zeta(double s) {
-    if (is_near_zero(s - 1.0, 1e-12)) {
+    if (is_near_zero(s - 1.0, 1e-13)) {
         throw std::domain_error("zeta is undefined at s = 1");
     }
 
@@ -462,23 +466,45 @@ double zeta(double s) {
         return -0.5;
     }
 
-    // 使用 Dirichlet eta 级数延拓到 s > 0, s != 1：
-    // eta(s) = sum (-1)^(n-1)/n^s, zeta(s) = eta(s)/(1-2^(1-s))
-    const double denominator = 1.0 - pow(2.0, 1.0 - s);
-    if (is_near_zero(denominator, 1e-12)) {
-        throw std::domain_error("zeta is numerically unstable near s = 1");
+    static constexpr long double kBernoulli[] = {
+        1.0L / 6.0L,
+        -1.0L / 30.0L,
+        1.0L / 42.0L,
+        -1.0L / 30.0L,
+        5.0L / 66.0L,
+        -691.0L / 2730.0L,
+        7.0L / 6.0L,
+        -3617.0L / 510.0L,
+    };
+    constexpr int kEulerMaclaurinTerms = 8;
+    constexpr int kEulerMaclaurinN = 32;
+
+    const long double s_ld = static_cast<long double>(s);
+    long double total = 0.0L;
+    for (int n = 1; n < kEulerMaclaurinN; ++n) {
+        total += 1.0L / static_cast<long double>(pow(static_cast<double>(n), s));
     }
 
-    long double eta = 0.0L;
-    for (int n = 1; n <= 200000; ++n) {
-        const long double term =
-            static_cast<long double>(1.0 / pow(static_cast<double>(n), s));
-        eta += (n % 2 == 1 ? term : -term);
-        if (term < 1e-12L) {
-            break;
+    const long double n_ld = static_cast<long double>(kEulerMaclaurinN);
+    total += static_cast<long double>(pow(kEulerMaclaurinN, 1.0 - s)) /
+             (s_ld - 1.0L);
+    total += 0.5L / static_cast<long double>(pow(kEulerMaclaurinN, s));
+
+    long double rising = s_ld;
+    long double factorial = 2.0L;
+    for (int k = 1; k <= kEulerMaclaurinTerms; ++k) {
+        if (k > 1) {
+            rising *= (s_ld + static_cast<long double>(2 * k - 3)) *
+                      (s_ld + static_cast<long double>(2 * k - 2));
+            factorial *= static_cast<long double>(2 * k - 1) *
+                         static_cast<long double>(2 * k);
         }
+        total += kBernoulli[k - 1] * rising / factorial /
+                 static_cast<long double>(
+                     pow(static_cast<double>(n_ld),
+                         s + static_cast<double>(2 * k - 1)));
     }
-    return static_cast<double>(eta / static_cast<long double>(denominator));
+    return static_cast<double>(total);
 }
 
 double bessel_j(int order, double x) {

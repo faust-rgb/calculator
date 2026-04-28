@@ -82,7 +82,7 @@ bool is_pure_quadratic(const SymbolicExpression& expression,
     return false;
 }
 
-bool is_sqrt_one_minus_variable_squared(const SymbolicExpression& expression,
+[[maybe_unused]] bool is_sqrt_one_minus_variable_squared(const SymbolicExpression& expression,
                                         const std::string& variable_name) {
     if (expression.node_->type != NodeType::kFunction ||
         expression.node_->text != "sqrt") {
@@ -1163,6 +1163,14 @@ bool try_integrate_by_parts(const SymbolicExpression& left,
         }
     }
 
+    try {
+        *integrated = make_subtract(make_multiply(u, v),
+                                    v_du.integral(variable_name))
+                          .simplify();
+        return true;
+    } catch (...) {
+    }
+
     // 如果没有直接发现循环，尝试递归积分 v_du
     if (ibp_stack.size() >= 2) return false;
 
@@ -1250,6 +1258,34 @@ bool try_integrate_sec_csc_power_product(const SymbolicExpression& left,
                                          const SymbolicExpression& right,
                                          const std::string& variable_name,
                                          SymbolicExpression* integrated) {
+    if (left.node_->type == NodeType::kFunction &&
+        right.node_->type == NodeType::kFunction &&
+        same_simplified_expression(SymbolicExpression(left.node_->left),
+                                   SymbolicExpression(right.node_->left))) {
+        const SymbolicExpression argument(left.node_->left);
+        double a = 0.0;
+        double b = 0.0;
+        if (decompose_linear(argument, variable_name, &a, &b) &&
+            !mymath::is_near_zero(a, kFormatEps)) {
+            if ((left.node_->text == "sec" && right.node_->text == "tan") ||
+                (left.node_->text == "tan" && right.node_->text == "sec")) {
+                *integrated =
+                    make_divide(make_function("sec", argument),
+                                SymbolicExpression::number(a))
+                        .simplify();
+                return true;
+            }
+            if ((left.node_->text == "csc" && right.node_->text == "cot") ||
+                (left.node_->text == "cot" && right.node_->text == "csc")) {
+                *integrated =
+                    make_divide(make_negate(make_function("csc", argument)),
+                                SymbolicExpression::number(a))
+                        .simplify();
+                return true;
+            }
+        }
+    }
+
     const SymbolicExpression* power_factor = nullptr;
     const SymbolicExpression* function_factor = nullptr;
     if (left.node_->type == NodeType::kPower &&
@@ -1864,6 +1900,25 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                                                   &integrated)) {
                 return integrated.simplify();
             }
+            SymbolicExpression polynomial;
+            if (polynomial_expression(left, variable_name, &polynomial) &&
+                right.node_->type == NodeType::kFunction &&
+                integrate_polynomial_times_function(polynomial,
+                                                    right.node_->text,
+                                                    SymbolicExpression(right.node_->left),
+                                                    variable_name,
+                                                    &integrated)) {
+                return integrated.simplify();
+            }
+            if (polynomial_expression(right, variable_name, &polynomial) &&
+                left.node_->type == NodeType::kFunction &&
+                integrate_polynomial_times_function(polynomial,
+                                                    left.node_->text,
+                                                    SymbolicExpression(left.node_->left),
+                                                    variable_name,
+                                                    &integrated)) {
+                return integrated.simplify();
+            }
             if (try_integrate_by_parts(left,
                                        right,
                                        variable_name,
@@ -1891,7 +1946,6 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             if (right.is_constant(variable_name)) {
                 return make_multiply(right, left.integral(variable_name)).simplify();
             }
-            SymbolicExpression polynomial;
             if (polynomial_expression(left, variable_name, &polynomial) &&
                 right.node_->type == NodeType::kFunction &&
                 integrate_polynomial_times_function(polynomial,
@@ -1973,6 +2027,52 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                     .simplify();
             }
         }
+
+        if (right.node_->type == NodeType::kFunction && right.node_->text == "sqrt") {
+            const SymbolicExpression inner(right.node_->left);
+            const SymbolicExpression expected_derivative =
+                inner.derivative(variable_name).simplify();
+            double scale = 1.0;
+            bool matched = same_simplified_expression(left, expected_derivative);
+            if (!matched) {
+                double constant = 0.0;
+                SymbolicExpression rest;
+                if (decompose_constant_times_expression(expected_derivative,
+                                                        variable_name,
+                                                        &constant,
+                                                        &rest) &&
+                    !mymath::is_near_zero(constant, kFormatEps) &&
+                    same_simplified_expression(left, rest)) {
+                    scale = 1.0 / constant;
+                    matched = true;
+                } else if (decompose_constant_times_expression(left,
+                                                               variable_name,
+                                                               &constant,
+                                                               &rest) &&
+                           same_simplified_expression(rest, expected_derivative)) {
+                    scale = constant;
+                    matched = true;
+                }
+            }
+            if (matched) {
+                return make_multiply(SymbolicExpression::number(2.0 * scale),
+                                     make_function("sqrt", inner))
+                    .simplify();
+            }
+
+            SymbolicExpression c_term;
+            SymbolicExpression x2_coeff;
+            if (is_pure_quadratic(inner, variable_name, &c_term, &x2_coeff)) {
+                double a_value = 0.0;
+                if (x2_coeff.is_number(&a_value) &&
+                    !mymath::is_near_zero(a_value, kFormatEps) &&
+                    left.is_variable_named(variable_name)) {
+                    return make_divide(make_function("sqrt", inner),
+                                       SymbolicExpression::number(a_value))
+                        .simplify();
+                }
+            }
+        }
         
         if (left.node_->type == NodeType::kFunction && left.node_->text == "exp" &&
             right.is_variable_named(variable_name)) {
@@ -2051,6 +2151,15 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
         SymbolicExpression primitive;
         if (linear && primitive_for_outer_function(node_->text, argument, &primitive)) {
             return make_divide(primitive, number(a)).simplify();
+        }
+
+        SymbolicExpression symbolic_a;
+        SymbolicExpression symbolic_b;
+        if (!linear &&
+            symbolic_decompose_linear(argument, variable_name, &symbolic_a, &symbolic_b) &&
+            !expr_is_zero(symbolic_a) &&
+            primitive_for_outer_function(node_->text, argument, &primitive)) {
+            return make_divide(primitive, symbolic_a).simplify();
         }
 
         if (node_->text == "sin" && linear) {

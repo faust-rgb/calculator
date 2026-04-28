@@ -33,7 +33,7 @@ double newton_solve(
     const std::function<double(double)>& normalize) {
 
     double x = initial;
-    for (int iteration = 0; iteration < 64; ++iteration) {
+    for (int iteration = 0; iteration < 100; ++iteration) {
         const double fx = evaluate({{"x", x}});
         if (mymath::abs(fx) <= root_function_tolerance(fx)) {
             return normalize(x);
@@ -43,13 +43,34 @@ double newton_solve(
             (static_cast<long double>(evaluate({{"x", x + h}})) -
              static_cast<long double>(evaluate({{"x", x - h}}))) /
             (2.0L * static_cast<long double>(h));
+        
         if (mymath::abs_long_double(derivative) <=
-            1e-12L * std::max(1.0L, mymath::abs_long_double(static_cast<long double>(fx)))) {
+            1e-13L * std::max(1.0L, mymath::abs_long_double(static_cast<long double>(fx)))) {
             throw std::runtime_error("solve failed because the derivative vanished");
         }
-        const double next = static_cast<double>(
-            static_cast<long double>(x) -
-            static_cast<long double>(fx) / derivative);
+
+        const double raw_step = static_cast<double>(static_cast<long double>(fx) / derivative);
+        
+        // Backtracking line search to ensure reduction in |f(x)|
+        double factor = 1.0;
+        double next = x - raw_step;
+        bool step_accepted = false;
+        
+        for (int retry = 0; retry < 10; ++retry) {
+            const double f_next = evaluate({{"x", next}});
+            // Armijo-like condition: check if we actually improved
+            if (mymath::abs(f_next) < mymath::abs(fx) || mymath::abs(f_next) <= root_function_tolerance(f_next)) {
+                step_accepted = true;
+                break;
+            }
+            factor *= 0.5;
+            next = x - factor * raw_step;
+        }
+
+        if (!step_accepted) {
+            throw std::runtime_error("solve failed to find a decreasing Newton step");
+        }
+
         if (mymath::abs(next - x) <=
             root_position_tolerance(std::max(mymath::abs(next), mymath::abs(x)))) {
             return normalize(next);

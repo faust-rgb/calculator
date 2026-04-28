@@ -52,6 +52,7 @@ std::string symbolic_matrix_to_string(
 
 bool is_symbolic_command(const std::string& command) {
     return command == "simplify" ||
+           command == "expand" ||
            command == "gradient" ||
            command == "hessian" ||
            command == "jacobian" ||
@@ -241,7 +242,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         SymbolicExpression expression;
         ctx.resolve_symbolic(argument, false, &variable_name, &expression);
         if (command == "expand") {
-            *output = expression.expand().to_string();
+            *output = expression.expand().simplify().to_string();
         } else {
             *output = expression.simplify().to_string();
         }

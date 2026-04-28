@@ -294,16 +294,30 @@ std::vector<double> polynomial_gcd(const std::vector<double>& lhs,
     std::vector<double> b = rhs;
     trim_trailing_zeros(&a);
     trim_trailing_zeros(&b);
-    while (!(b.size() == 1 && mymath::is_near_zero(b[0], kPolynomialEps))) {
+    
+    // 动态容差：根据输入多项式系数的最大绝对值决定
+    auto get_max_coeff = [](const std::vector<double>& p) {
+        double m = 0.0;
+        for (double c : p) m = std::max(m, mymath::abs(c));
+        return m;
+    };
+    const double scale = std::max(get_max_coeff(a), get_max_coeff(b));
+    const double dynamic_eps = std::max(kPolynomialEps, scale * 1e-12);
+
+    while (!(b.size() == 1 && mymath::is_near_zero(b[0], dynamic_eps))) {
         const PolynomialDivisionResult division = polynomial_divide(a, b);
         a = b;
         b = division.remainder;
         trim_trailing_zeros(&a);
         trim_trailing_zeros(&b);
     }
-    if (a.empty()) return {0.0};
+    
+    if (a.empty() || (a.size() == 1 && mymath::is_near_zero(a[0], dynamic_eps))) {
+        return {0.0};
+    }
+
     const double leading = a.back();
-    if (!mymath::is_near_zero(leading, kPolynomialEps)) {
+    if (!mymath::is_near_zero(leading, dynamic_eps)) {
         for (double& coefficient : a) coefficient /= leading;
     }
     trim_trailing_zeros(&a);

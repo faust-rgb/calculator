@@ -317,7 +317,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                 if (!numeric_ok) {
                     break;
                 }
-                if (gradient_norm < 1e-16) {
+                if (gradient_norm < 1e-24) {
                     converged = true;
                     break;
                 }
@@ -349,7 +349,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                     current[i] += step[i];
                     step_norm += step[i] * step[i];
                 }
-                if (step_norm < 1e-18) {
+                if (step_norm < 1e-24) {
                     converged = true;
                     break;
                 }
@@ -357,6 +357,17 @@ bool handle_analysis_command(const AnalysisContext& ctx,
 
             if (!converged) {
                 continue;
+            }
+
+            double current_norm = 0.0;
+            for (double value : current) {
+                current_norm += value * value;
+            }
+            if (current_norm < 1e-6 &&
+                classify_critical_point(hessian, variables, current) == "degenerate") {
+                for (double& value : current) {
+                    value = 0.0;
+                }
             }
 
             bool duplicate = false;

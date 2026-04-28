@@ -1082,6 +1082,30 @@ void SymbolicExpression::set_display_precision(int precision) {
     mutable_display_precision() = clamp_display_precision(precision);
 }
 
+SymbolicExpression operator+(const SymbolicExpression& lhs, const SymbolicExpression& rhs) {
+    return make_add(lhs, rhs);
+}
+
+SymbolicExpression operator-(const SymbolicExpression& lhs, const SymbolicExpression& rhs) {
+    return make_subtract(lhs, rhs);
+}
+
+SymbolicExpression operator*(const SymbolicExpression& lhs, const SymbolicExpression& rhs) {
+    return make_multiply(lhs, rhs);
+}
+
+SymbolicExpression operator/(const SymbolicExpression& lhs, const SymbolicExpression& rhs) {
+    return make_divide(lhs, rhs);
+}
+
+SymbolicExpression operator^(const SymbolicExpression& lhs, const SymbolicExpression& rhs) {
+    return make_power(lhs, rhs);
+}
+
+SymbolicExpression operator-(const SymbolicExpression& expr) {
+    return make_negate(expr);
+}
+
 SymbolicExpression SymbolicExpression::variable(const std::string& name) {
     return SymbolicExpression(make_variable(name));
 }

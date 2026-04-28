@@ -29,6 +29,46 @@
 
 namespace symbolic_expression_internal {
 
+bool combine_all_like_additive_terms(const SymbolicExpression& expression,
+                                     SymbolicExpression* combined_expression) {
+    std::vector<SymbolicExpression> terms;
+    collect_additive_expressions(expression, &terms);
+    if (terms.size() < 3) {
+        return false;
+    }
+
+    std::vector<SymbolicExpression> combined_terms;
+    bool changed = false;
+    for (const SymbolicExpression& term : terms) {
+        bool merged = false;
+        for (SymbolicExpression& existing : combined_terms) {
+            SymbolicExpression combined;
+            if (try_combine_like_terms(existing, term, 1.0, &combined)) {
+                existing = combined;
+                changed = true;
+                merged = true;
+                break;
+            }
+        }
+        if (!merged) {
+            combined_terms.push_back(term);
+        }
+    }
+
+    if (!changed) {
+        return false;
+    }
+
+    std::vector<SymbolicExpression> nonzero_terms;
+    for (const SymbolicExpression& term : combined_terms) {
+        if (!expr_is_zero(term)) {
+            nonzero_terms.push_back(term);
+        }
+    }
+    *combined_expression = make_sorted_sum(nonzero_terms);
+    return true;
+}
+
 bool try_extract_common_symbolic_factor(const SymbolicExpression& expression,
                                         SymbolicExpression* common_factor,
                                         SymbolicExpression* remaining) {
@@ -230,10 +270,20 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             // 恒等式：ln(a^b) -> b*ln(a) (针对数值指数)
             if (node->text == "ln" && argument.node_->type == NodeType::kPower) {
                 double exponent = 0.0;
-                if (SymbolicExpression(argument.node_->right).is_number(&exponent)) {
+                // 只有当底数已知为正时，ln(a^b) -> b*ln(a) 才在实数域内恒成立
+                if (SymbolicExpression(argument.node_->right).is_number(&exponent) &&
+                    is_known_positive_expression(SymbolicExpression(argument.node_->left))) {
                     return make_multiply(SymbolicExpression::number(exponent),
                                          make_function("ln", SymbolicExpression(argument.node_->left)))
                         .simplify();
+                }
+            }
+            if (node->text == "ln" && argument.node_->type == NodeType::kMultiply) {
+                // ln(a*b) -> ln(a) + ln(b) 只有在 a, b > 0 时才安全
+                SymbolicExpression mult_left(argument.node_->left);
+                SymbolicExpression mult_right(argument.node_->right);
+                if (is_known_positive_expression(mult_left) && is_known_positive_expression(mult_right)) {
+                    return (make_function("ln", mult_left) + make_function("ln", mult_right)).simplify();
                 }
             }
             if (node->text == "sqrt" &&
@@ -441,6 +491,11 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             {
                 std::vector<SymbolicExpression> terms;
                 collect_additive_expressions(make_add(left, right), &terms);
+                SymbolicExpression combined_terms;
+                if (combine_all_like_additive_terms(make_add(left, right),
+                                                    &combined_terms)) {
+                    return combined_terms;
+                }
                 const SymbolicExpression sorted = make_sorted_sum(terms);
                 if (node_structural_key(sorted.node_) !=
                     node_structural_key(make_add(left, right).node_)) {
@@ -537,6 +592,14 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             if (expr_is_minus_one(right)) {
                 return make_negate(left).simplify();
+            }
+            // 规则：exp(a) * exp(b) -> exp(a+b)
+            if (left.node_->type == NodeType::kFunction && right.node_->type == NodeType::kFunction) {
+                if (left.node_->text == "exp" && right.node_->text == "exp") {
+                    return make_function("exp",
+                        (SymbolicExpression(left.node_->left) +
+                         SymbolicExpression(right.node_->left))).simplify();
+                }
             }
             {
                 SymbolicExpression left_base;
@@ -708,7 +771,15 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             if (left.is_number(&left_value)) {
                 if (mymath::is_near_zero(left_value, kFormatEps)) {
-                    return SymbolicExpression::number(0.0);
+                    // 处理 0^x 情况
+                    if (right.is_number(&right_value)) {
+                        if (mymath::is_near_zero(right_value, kFormatEps)) {
+                            return SymbolicExpression::number(1.0); // 0^0 = 1
+                        }
+                        return SymbolicExpression::number(0.0);
+                    }
+                    // 如果指数是非零常数或已知非零表达式，也可以考虑简化，
+                    // 但这里保守起见，只处理数值常数。
                 }
                 if (mymath::is_near_zero(left_value - 1.0, kFormatEps)) {
                     return SymbolicExpression::number(1.0);
@@ -738,6 +809,8 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
         // 已在上面处理的节点类型，此处仅为消除编译器警告
         case NodeType::kNumber:
         case NodeType::kVariable:
+        case NodeType::kPi:
+        case NodeType::kE:
         case NodeType::kNegate:
         case NodeType::kFunction:
             break;

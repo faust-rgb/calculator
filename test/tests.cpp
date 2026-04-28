@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -2799,6 +2800,52 @@ int main() {
         ++failed;
         std::cout << "FAIL: chained symbolic multivariable integral threw unexpected error: "
                   << ex.what() << '\n';
+    }
+
+    {
+        Calculator regression_calculator;
+        (void)regression_calculator.set_symbolic_constants_mode(true);
+        const std::vector<std::pair<std::string, std::string>> symbolic_regression_cases = {
+            {"expand((x + y) ^ 3)",
+             "x ^ 3 + 3 * y ^ 2 * x + y ^ 3 + 3 * x ^ 2 * y"},
+            {"integral(cos(pi * x), x)", "sin(pi * x) / pi + C"},
+            {"integral(exp(e * x), x)", "exp(e * x + -1) + C"},
+            {"integral(sec(x) * tan(x), x)", "sec(x) + C"},
+            {"integral(x * cos(x), x)", "cos(x) + sin(x) * x + C"},
+            {"integral(x * sin(x), x)", "-(cos(x) * x) + sin(x) + C"},
+            {"integral(x ^ 2 * sin(x), x)",
+             "-(cos(x) * x ^ 2) + 2 * (cos(x) + sin(x) * x) + C"},
+            {"integral(x * ln(x), x)", "x ^ 2 * (ln(x) / 2 - 1/4) + C"},
+            {"integral(x * atan(x), x)",
+             "1/2 * (atan(x) * (x ^ 2 + 1) - x) + C"},
+            {"integral(x / sqrt(1 - x ^ 2), x)",
+             "sqrt(-(x ^ 2) + 1) / -1 + C"},
+            {"critical(x ^ 4 + y ^ 4, x, y)", "[x = 0, y = 0] (degenerate)"},
+            {"limit((1 + 1 / x) ^ x, inf)", "2.71828182842"},
+            {"limit(x * sin(1 / x), inf)", "1"},
+            {"fourier(exp(-abs(t)), t, w)", "2 / (w ^ 2 + 1)"},
+            {"ztrans(n ^ 2, n, z)", "z * (z + 1) / (z - 1) ^ 3"},
+        };
+
+        for (const auto& test : symbolic_regression_cases) {
+            try {
+                std::string output;
+                const bool handled =
+                    regression_calculator.try_process_function_command(test.first, &output);
+                if (handled && output == test.second) {
+                    ++passed;
+                } else {
+                    ++failed;
+                    std::cout << "FAIL: symbolic regression " << test.first
+                              << " expected " << test.second << " got "
+                              << output << '\n';
+                }
+            } catch (const std::exception& ex) {
+                ++failed;
+                std::cout << "FAIL: symbolic regression " << test.first
+                          << " threw unexpected error: " << ex.what() << '\n';
+            }
+        }
     }
 
     try {

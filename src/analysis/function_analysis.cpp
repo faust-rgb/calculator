@@ -376,6 +376,57 @@ double FunctionAnalysis::limit(double x, int direction) const {
         throw std::runtime_error("limit direction must be -1, 0, or 1");
     }
 
+    if (!mymath::isfinite(x)) {
+        const double sign = x < 0.0 ? -1.0 : 1.0;
+        long double previous = 0.0L;
+        long double best = 0.0L;
+        long double best_delta = static_cast<long double>(mymath::infinity());
+        bool has_previous = false;
+
+        for (int i = 0; i < 48; ++i) {
+            const double t = mymath::pow(2.0, -static_cast<double>(i + 4));
+            const double sample_x = sign / t;
+            long double current = 0.0L;
+            try {
+                current = to_long_double(evaluate_with_variable(sample_x));
+            } catch (const std::exception&) {
+                continue;
+            }
+            if (!mymath::isfinite(static_cast<double>(current))) {
+                continue;
+            }
+
+            if (has_previous) {
+                const long double extrapolated = 2.0L * current - previous;
+                const long double delta = mymath::abs_long_double(extrapolated - best);
+                if (delta < best_delta) {
+                    best_delta = delta;
+                    best = extrapolated;
+                }
+                const long double scale =
+                    std::max({1.0L,
+                              mymath::abs_long_double(extrapolated),
+                              mymath::abs_long_double(current),
+                              mymath::abs_long_double(previous)});
+                if (delta <= static_cast<long double>(
+                                 relative_tolerance(kLimitTolerance,
+                                                    static_cast<double>(scale)))) {
+                    return static_cast<double>(extrapolated);
+                }
+            } else {
+                best = current;
+            }
+
+            previous = current;
+            has_previous = true;
+        }
+
+        if (has_previous && mymath::isfinite(static_cast<double>(best))) {
+            return static_cast<double>(best);
+        }
+        throw std::runtime_error("limit did not converge");
+    }
+
     auto one_sided_limit = [this, x](int side) {
         long double previous = 0.0L;
         long double best = 0.0L;

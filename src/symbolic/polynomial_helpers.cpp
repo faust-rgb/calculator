@@ -89,17 +89,66 @@ bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
         return false;
     }
 
-    const SymbolicExpression derivative = polynomial.derivative(variable_name).simplify();
-    SymbolicExpression recursive;
-    if (!integrate_polynomial_times_function(derivative,
-                                             function_name,
-                                             argument,
-                                             variable_name,
-                                             &recursive)) {
-        return false;
+    if (argument.is_variable_named(variable_name)) {
+        std::vector<double> coefficients;
+        if (polynomial.polynomial_coefficients(variable_name, &coefficients)) {
+            const SymbolicExpression x = SymbolicExpression::variable(variable_name);
+            if (function_name == "ln") {
+                SymbolicExpression result = SymbolicExpression::number(0.0);
+                for (std::size_t degree = 0; degree < coefficients.size(); ++degree) {
+                    const double coefficient = coefficients[degree];
+                    if (mymath::is_near_zero(coefficient, kFormatEps)) {
+                        continue;
+                    }
+                    const double next_degree = static_cast<double>(degree + 1);
+                    const SymbolicExpression power =
+                        make_power(x, SymbolicExpression::number(next_degree));
+                    const SymbolicExpression term =
+                        make_multiply(
+                            SymbolicExpression::number(coefficient),
+                            make_multiply(
+                                power,
+                                make_subtract(
+                                    make_divide(make_function("ln", x),
+                                                SymbolicExpression::number(next_degree)),
+                                    SymbolicExpression::number(1.0 / (next_degree * next_degree)))));
+                    result = make_add(result, term).simplify();
+                }
+                *integrated = result.simplify();
+                return true;
+            }
+            if (function_name == "atan" &&
+                coefficients.size() == 2 &&
+                mymath::is_near_zero(coefficients[0], kFormatEps) &&
+                !mymath::is_near_zero(coefficients[1], kFormatEps)) {
+                const SymbolicExpression x_squared =
+                    make_power(x, SymbolicExpression::number(2.0));
+                *integrated =
+                    make_multiply(
+                        SymbolicExpression::number(coefficients[1]),
+                        make_subtract(
+                            make_multiply(
+                                SymbolicExpression::number(0.5),
+                                make_multiply(
+                                    make_add(x_squared, SymbolicExpression::number(1.0)),
+                                    make_function("atan", x))),
+                            make_multiply(SymbolicExpression::number(0.5), x)))
+                        .simplify();
+                return true;
+            }
+        }
     }
 
+    const SymbolicExpression derivative = polynomial.derivative(variable_name).simplify();
     if (function_name == "exp") {
+        SymbolicExpression recursive;
+        if (!integrate_polynomial_times_function(derivative,
+                                                 function_name,
+                                                 argument,
+                                                 variable_name,
+                                                 &recursive)) {
+            return false;
+        }
         *integrated = make_subtract(
                           make_divide(make_multiply(polynomial,
                                                     make_function("exp", argument)),
@@ -109,6 +158,14 @@ bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
         return true;
     }
     if (function_name == "sin") {
+        SymbolicExpression recursive;
+        if (!integrate_polynomial_times_function(derivative,
+                                                 "cos",
+                                                 argument,
+                                                 variable_name,
+                                                 &recursive)) {
+            return false;
+        }
         *integrated = make_add(
                           make_divide(make_negate(make_multiply(polynomial,
                                                                 make_function("cos", argument))),
@@ -118,6 +175,14 @@ bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
         return true;
     }
     if (function_name == "cos") {
+        SymbolicExpression recursive;
+        if (!integrate_polynomial_times_function(derivative,
+                                                 "sin",
+                                                 argument,
+                                                 variable_name,
+                                                 &recursive)) {
+            return false;
+        }
         *integrated = make_subtract(
                           make_divide(make_multiply(polynomial,
                                                     make_function("sin", argument)),

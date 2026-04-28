@@ -973,72 +973,93 @@ SymmetricEigenDecomposition jacobi_symmetric_eigendecomposition(
     const std::size_t n = matrix.rows;
     Matrix current = matrix;
     Matrix vectors = Matrix::identity(n);
-    long double diagonal_scale = 0.0L;
+    
+    // 初始缩放
+    long double max_diag = 0.0L;
     for (std::size_t i = 0; i < n; ++i) {
-        diagonal_scale = std::max(diagonal_scale,
-                                  abs_ld(static_cast<long double>(current.at(i, i))));
+        max_diag = std::max(max_diag, abs_ld(static_cast<long double>(current.at(i, i))));
     }
-    const long double convergence_tolerance =
-        std::max(1.0L, diagonal_scale) * 1e-12L;
+    
+    // 动态收敛阈值：根据对角线元素动态调整，最小不低于机器 epsilon 级别
+    const long double eps_limit = 1e-18L;
+    long double tolerance = std::max(max_diag * 1e-15L, eps_limit);
 
-    for (int iteration = 0; iteration < 128 * static_cast<int>(n + 1); ++iteration) {
-        std::size_t pivot_row = 0;
-        std::size_t pivot_col = 0;
-        long double pivot_value = 0.0L;
-        long double off_diagonal_norm = 0.0L;
-        for (std::size_t row = 0; row < n; ++row) {
-            for (std::size_t col = row + 1; col < n; ++col) {
-                const long double current_value =
-                    static_cast<long double>(mymath::abs(current.at(row, col)));
-                off_diagonal_norm += current_value * current_value;
-                if (current_value > pivot_value) {
-                    pivot_value = current_value;
-                    pivot_row = row;
-                    pivot_col = col;
+    // 增加最大迭代次数，并采用经典的 Jacobi 扫掠（Sweeps）模式
+    const int max_sweeps = 50;
+    for (int sweep = 0; sweep < max_sweeps; ++sweep) {
+        long double off_diag_norm_sq = 0.0L;
+        bool changed = false;
+
+        for (std::size_t p = 0; p < n; ++p) {
+            for (std::size_t q = p + 1; q < n; ++q) {
+                const long double apq = static_cast<long double>(current.at(p, q));
+                off_diag_norm_sq += apq * apq;
+
+                // 如果该项已经足够小，跳过旋转以保持稳定性
+                if (abs_ld(apq) < tolerance) {
+                    continue;
                 }
+
+                const long double app = static_cast<long double>(current.at(p, p));
+                const long double aqq = static_cast<long double>(current.at(q, q));
+                const long double diff = aqq - app;
+                
+                long double t;
+                if (abs_ld(diff) < tolerance * 1e-3L) {
+                    // 处理 app 约等于 aqq 的情况，theta 约为 pi/4
+                    t = (apq > 0 ? 1.0L : -1.0L);
+                } else {
+                    const long double tau = diff / (2.0L * apq);
+                    t = (tau >= 0.0L ? 1.0L : -1.0L) / (abs_ld(tau) + sqrt_ld(1.0L + tau * tau));
+                }
+
+                const long double c = 1.0L / sqrt_ld(1.0L + t * t);
+                const long double s = t * c;
+                const long double tau_s = s / (1.0L + c); // 用于提高精度的辅助量
+
+                // 更新对角线元素
+                const long double h = t * apq;
+                current.at(p, p) = static_cast<double>(app - h);
+                current.at(q, q) = static_cast<double>(aqq + h);
+                current.at(p, q) = 0.0;
+                current.at(q, p) = 0.0;
+
+                // 更新非对角线元素（仅扫掠相关行列）
+                for (std::size_t i = 0; i < n; ++i) {
+                    if (i == p || i == q) continue;
+                    const long double g = static_cast<long double>(current.at(i, p));
+                    const long double h_val = static_cast<long double>(current.at(i, q));
+                    current.at(i, p) = static_cast<double>(g - s * (h_val + g * tau_s));
+                    current.at(p, i) = current.at(i, p);
+                    current.at(i, q) = static_cast<double>(h_val + s * (g - h_val * tau_s));
+                    current.at(q, i) = current.at(i, q);
+                }
+
+                // 更新特征向量
+                for (std::size_t i = 0; i < n; ++i) {
+                    const long double g = static_cast<long double>(vectors.at(i, p));
+                    const long double h_val = static_cast<long double>(vectors.at(i, q));
+                    vectors.at(i, p) = static_cast<double>(g - s * (h_val + g * tau_s));
+                    vectors.at(i, q) = static_cast<double>(h_val + s * (g - h_val * tau_s));
+                }
+                changed = true;
             }
         }
 
-        if (pivot_value < convergence_tolerance ||
-            sqrt_ld(off_diagonal_norm) < convergence_tolerance) {
+        const long double off_diag_norm = sqrt_ld(off_diag_norm_sq);
+        if (off_diag_norm < tolerance) {
             break;
         }
-
-        const long double app = static_cast<long double>(current.at(pivot_row, pivot_row));
-        const long double aqq = static_cast<long double>(current.at(pivot_col, pivot_col));
-        const long double apq = static_cast<long double>(current.at(pivot_row, pivot_col));
-        const long double tau = (aqq - app) / (2.0L * apq);
-        const long double t =
-            (tau >= 0.0L ? 1.0L : -1.0L) /
-            (abs_ld(tau) + sqrt_ld(1.0L + tau * tau));
-        const long double cosine = 1.0L / sqrt_ld(1.0L + t * t);
-        const long double sine = t * cosine;
-
-        for (std::size_t col = 0; col < n; ++col) {
-            if (col == pivot_row || col == pivot_col) {
-                continue;
+        if (!changed) {
+            const long double lowered_tolerance = std::max(tolerance * 0.1L, eps_limit);
+            if (lowered_tolerance == tolerance) {
+                break;
             }
-            const long double aip = static_cast<long double>(current.at(col, pivot_row));
-            const long double aiq = static_cast<long double>(current.at(col, pivot_col));
-            const long double new_aip = cosine * aip - sine * aiq;
-            const long double new_aiq = sine * aip + cosine * aiq;
-            current.at(col, pivot_row) = static_cast<double>(new_aip);
-            current.at(pivot_row, col) = static_cast<double>(new_aip);
-            current.at(col, pivot_col) = static_cast<double>(new_aiq);
-            current.at(pivot_col, col) = static_cast<double>(new_aiq);
+            tolerance = lowered_tolerance;
+            continue;
         }
-
-        current.at(pivot_row, pivot_row) = static_cast<double>(app - t * apq);
-        current.at(pivot_col, pivot_col) = static_cast<double>(aqq + t * apq);
-        current.at(pivot_row, pivot_col) = 0.0;
-        current.at(pivot_col, pivot_row) = 0.0;
-
-        for (std::size_t row = 0; row < n; ++row) {
-            const long double vip = static_cast<long double>(vectors.at(row, pivot_row));
-            const long double viq = static_cast<long double>(vectors.at(row, pivot_col));
-            vectors.at(row, pivot_row) = static_cast<double>(cosine * vip - sine * viq);
-            vectors.at(row, pivot_col) = static_cast<double>(sine * vip + cosine * viq);
-        }
+        // 随着扫掠进行，逐渐降低阈值
+        if (sweep < 3) tolerance *= 0.1L;
     }
 
     std::vector<double> values(n, 0.0);

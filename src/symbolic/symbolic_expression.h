@@ -246,4 +246,15 @@ public:
     std::shared_ptr<Node> node_;  ///< 表达式树根节点
 };
 
+// ============================================================================
+// 运算符重载
+// ============================================================================
+
+SymbolicExpression operator+(const SymbolicExpression& lhs, const SymbolicExpression& rhs);
+SymbolicExpression operator-(const SymbolicExpression& lhs, const SymbolicExpression& rhs);
+SymbolicExpression operator*(const SymbolicExpression& lhs, const SymbolicExpression& rhs);
+SymbolicExpression operator/(const SymbolicExpression& lhs, const SymbolicExpression& rhs);
+SymbolicExpression operator^(const SymbolicExpression& lhs, const SymbolicExpression& rhs);
+SymbolicExpression operator-(const SymbolicExpression& expr);
+
 #endif

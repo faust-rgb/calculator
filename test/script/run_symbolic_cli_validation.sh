@@ -73,18 +73,29 @@ expect_exact 'simplify(sec(x) ^ 2 - tan(x) ^ 2)' '1'
 expect_exact 'diff(sin(x) * exp(x), x)' 'exp(x) * (cos(x) + sin(x))'
 expect_exact 'diff(x ^ 2 * y + sin(y), x, y)' '2 * x'
 expect_exact 'diff(sin(x) / x)' '(cos(x) * x - sin(x)) / x ^ 2'
+expect_exact 'expand((x + y) ^ 3)' 'x ^ 3 + 3 * y ^ 2 * x + y ^ 3 + 3 * x ^ 2 * y'
 expect_exact 'integral(cos(3 * x), x)' 'sin(3 * x) / 3 + C'
+expect_exact 'integral(cos(pi * x), x)' 'sin(pi * x) / pi + C'
+expect_exact 'integral(exp(e * x), x)' 'exp(e * x + -1) + C'
 expect_exact 'integral(3 * x ^ 2 * exp(x ^ 3), x)' 'exp(x ^ 3) + C'
 expect_exact 'integral(1 / (x + 2), x)' 'ln(abs(x + 2)) + C'
 expect_exact 'integral(1 / (x ^ 2 - 1))' '1/2 * ln(abs((2 * x - 2) / (2 * x + 2))) + C'
 expect_exact 'integral(sin(x) ^ 2)' 'x / 2 - sin(2 * x) / 4 + C'
 expect_exact 'integral(cos(x) ^ 2)' 'sin(2 * x) / 4 + x / 2 + C'
 expect_exact 'integral(tan(x) ^ 2)' 'tan(x) - x + C'
+expect_exact 'integral(sec(x) * tan(x), x)' 'sec(x) + C'
+expect_exact 'integral(x * cos(x), x)' 'cos(x) + sin(x) * x + C'
+expect_exact 'integral(x * sin(x), x)' '-(cos(x) * x) + sin(x) + C'
+expect_exact 'integral(x ^ 2 * sin(x), x)' '-(cos(x) * x ^ 2) + 2 * (cos(x) + sin(x) * x) + C'
+expect_exact 'integral(x * ln(x), x)' 'x ^ 2 * (ln(x) / 2 - 1/4) + C'
+expect_exact 'integral(x * atan(x), x)' '1/2 * (atan(x) * (x ^ 2 + 1) - x) + C'
+expect_exact 'integral(x / sqrt(1 - x ^ 2), x)' 'sqrt(-(x ^ 2) + 1) / -1 + C'
 expect_exact 'gradient(x ^ 2 + x * y + y ^ 2, x, y)' '[2 * x + y, x + 2 * y]'
 expect_exact 'hessian(x ^ 2 + x * y + y ^ 2, x, y)' '[[2, 1], [1, 2]]'
 expect_exact 'jacobian([x ^ 2 + y; sin(x * y)], x, y)' '[[2 * x, 1], [cos(x * y) * y, cos(x * y) * x]]'
 expect_exact 'critical(x ^ 2 + y ^ 2, x, y)' '[x = 0, y = 0] (local min)'
 expect_exact 'critical(x ^ 2 - y ^ 2, x, y)' '[x = 0, y = 0] (saddle)'
+expect_exact 'critical(x ^ 4 + y ^ 4, x, y)' '[x = 0, y = 0] (degenerate)'
 expect_exact 'taylor(sin(x), 0, 5)' 'x - 1/6 * x ^ 3 + 1/120 * x ^ 5'
 # =============================================================================
 # 2. Multivariable Calculus
@@ -112,6 +123,8 @@ expect_numeric 'limit((1 - cos(x)) / x ^ 2, 0)' 0.5 0.00000001
 expect_exact 'limit((x ^ 3 - 1) / (x - 1), 1)' '3'
 expect_exact 'limit(abs(x) / x, 0, 1)' '1'
 expect_exact 'limit(abs(x) / x, 0, -1)' '-1'
+expect_numeric 'limit((1 + 1 / x) ^ x, inf)' 2.71828182842 0.00000001
+expect_numeric 'limit(x * sin(1 / x), inf)' 1 0.00000001
 expect_error_contains 'limit(1 / x, 0)' 'limit did not converge'
 expect_numeric 'solve(cos(x) - x, 0.5)' 0.739085133215 0.0000000001
 expect_numeric 'bisect(x ^ 3 - x - 2, 1, 2)' 1.5213797068 0.0000000001
@@ -148,7 +161,9 @@ expect_exact 'residue(1/(z^2+1), z, complex(0,1))' '[0, -0.5]'
 # 7. Transform Rules
 # =============================================================================
 expect_exact 'laplace(exp(-2 * t), t, s)' '1 / (s + 2)'
+expect_exact 'fourier(exp(-abs(t)), t, w)' '2 / (w ^ 2 + 1)'
 expect_exact 'ztrans(step(n - 2), n, z)' '1 / (z * (z - 1))'
+expect_exact 'ztrans(n ^ 2, n, z)' 'z * (z + 1) / (z - 1) ^ 3'
 
 printf '\nCLI comprehensive validation passed: %d\n' "$passed"
 printf 'CLI comprehensive validation failed: %d\n' "$failed"
