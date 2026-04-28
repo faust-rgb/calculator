@@ -71,20 +71,47 @@ std::string Calculator::execute_script(const std::string& source, bool exact_mod
     apply_calculator_display_precision(impl_.get());
 
     script::Program program = script::parse_program(source);
-    std::string last_output;
+    std::string accumulated_output;
+    std::string last_statement_output;
     for (const auto& statement : program.statements) {
+        std::string current_output;
         const ScriptSignal signal =
-            execute_script_statement(this, impl_.get(), *statement, exact_mode, &last_output, false);
+            execute_script_statement(this, impl_.get(), *statement, exact_mode, &current_output, false);
+        
+        // Only accumulate if this was a print-like call or if it's the very last result
+        // We detect print-like calls by checking if the statement was kSimple and contains "print"
+        bool is_print = false;
+        if (statement->kind == script::Statement::Kind::kSimple) {
+            const auto& simple = static_cast<const script::SimpleStatement&>(*statement);
+            if (simple.text.find("print") != std::string::npos) {
+                is_print = true;
+            }
+        }
+
+        if (is_print && !current_output.empty()) {
+            if (!accumulated_output.empty()) {
+                accumulated_output += "\n";
+            }
+            accumulated_output += current_output;
+        }
+        last_statement_output = current_output;
+
         if (signal.kind == ScriptSignal::Kind::kReturn) {
-            return signal.has_value ? format_stored_value(signal.value, impl_->symbolic_constants_mode)
-                                    : (last_output.empty() ? "OK" : last_output);
+            std::string return_val = signal.has_value ? format_stored_value(signal.value, impl_->symbolic_constants_mode)
+                                                      : (last_statement_output.empty() ? "OK" : last_statement_output);
+            if (accumulated_output.empty()) {
+                return return_val;
+            } else {
+                return accumulated_output + "\n" + return_val;
+            }
         }
         if (signal.kind == ScriptSignal::Kind::kBreak ||
             signal.kind == ScriptSignal::Kind::kContinue) {
             throw std::runtime_error("break/continue can only be used inside loops");
         }
     }
-    return last_output.empty() ? "OK" : last_output;
+    return accumulated_output.empty() ? (last_statement_output.empty() ? "OK" : last_statement_output) 
+                                      : accumulated_output;
 }
 
 std::string Calculator::list_variables() const {

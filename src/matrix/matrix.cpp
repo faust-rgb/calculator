@@ -976,13 +976,43 @@ std::vector<ComplexSample> discrete_fourier_transform(const std::vector<ComplexS
 
 std::vector<ComplexSample> convolve_sequences(const std::vector<ComplexSample>& lhs,
                                               const std::vector<ComplexSample>& rhs) {
-    if (lhs.empty() || rhs.empty()) {
+    if (lhs.size() == 0 || rhs.size() == 0) {
         return {};
     }
 
-    std::vector<ComplexSample> result(lhs.size() + rhs.size() - 1, {0.0, 0.0});
-    for (std::size_t i = 0; i < lhs.size(); ++i) {
-        for (std::size_t j = 0; j < rhs.size(); ++j) {
+    const std::size_t n = lhs.size();
+    const std::size_t m = rhs.size();
+    const std::size_t out_len = n + m - 1;
+
+    // Threshold for choosing FFT vs Direct convolution. 
+    // FFT has O(L log L) cost where L is next power of 2 >= n+m-1.
+    if (static_cast<double>(n) * static_cast<double>(m) > 1024.0) {
+        std::size_t fft_len = 1;
+        while (fft_len < out_len) {
+            fft_len <<= 1;
+        }
+
+        std::vector<ComplexSample> lhs_padded = lhs;
+        lhs_padded.resize(fft_len, {0.0, 0.0});
+        std::vector<ComplexSample> rhs_padded = rhs;
+        rhs_padded.resize(fft_len, {0.0, 0.0});
+
+        const std::vector<ComplexSample> lhs_fft = discrete_fourier_transform(lhs_padded, false);
+        const std::vector<ComplexSample> rhs_fft = discrete_fourier_transform(rhs_padded, false);
+
+        std::vector<ComplexSample> prod_fft(fft_len);
+        for (std::size_t i = 0; i < fft_len; ++i) {
+            prod_fft[i] = multiply_complex(lhs_fft[i], rhs_fft[i]);
+        }
+
+        std::vector<ComplexSample> result_full = discrete_fourier_transform(prod_fft, true);
+        result_full.resize(out_len);
+        return result_full;
+    }
+
+    std::vector<ComplexSample> result(out_len, {0.0, 0.0});
+    for (std::size_t i = 0; i < n; ++i) {
+        for (std::size_t j = 0; j < m; ++j) {
             const ComplexSample product = multiply_complex(lhs[i], rhs[j]);
             result[i + j].real = static_cast<double>(
                 static_cast<long double>(result[i + j].real) +

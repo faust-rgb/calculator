@@ -157,10 +157,44 @@ bool solve_dense_linear_system(std::vector<std::vector<double>> matrix,
     return true;
 }
 
-double clean_symbolic_constant(double value) {
+SymbolicExpression clean_symbolic_constant(double value) {
     if (mymath::is_integer(value, 1e-7)) {
-        return value >= 0.0 ? static_cast<long long>(value + 0.5)
-                            : static_cast<long long>(value - 0.5);
+        return SymbolicExpression::number(value >= 0.0 ? static_cast<long long>(value + 0.5)
+                                                      : static_cast<long long>(value - 0.5));
+    }
+
+    // Try common radicals: sqrt(2), sqrt(3), and their reciprocal/half multiples
+    const double sqrt2 = 1.4142135623730951;
+    const double sqrt3 = 1.7320508075688772;
+    const std::vector<std::pair<double, std::string>> candidates = {
+        {sqrt2, "sqrt(2)"}, {sqrt3, "sqrt(3)"},
+        {1.0/sqrt2, "1/sqrt(2)"}, {1.0/sqrt3, "1/sqrt(3)"},
+        {sqrt2/2.0, "sqrt(2)/2"}, {sqrt3/2.0, "sqrt(3)/2"},
+        {2.0/sqrt3, "2/sqrt(3)"}
+    };
+
+    for (const auto& cand : candidates) {
+        double scale = value / cand.first;
+        if (mymath::is_integer(scale, 1e-6)) {
+            int int_scale = static_cast<int>(std::round(scale));
+            if (int_scale == 1) return SymbolicExpression::parse(cand.second);
+            if (int_scale == -1) return make_negate(SymbolicExpression::parse(cand.second));
+            return make_multiply(SymbolicExpression::number(int_scale), SymbolicExpression::parse(cand.second)).simplify();
+        }
+        // Try common fractions of radicals
+        for (int den = 2; den <= 6; ++den) {
+            for (int num = 1; num <= 10; ++num) {
+                double f = static_cast<double>(num) / den;
+                if (mymath::abs(value - f * cand.first) < 1e-7) {
+                    return make_multiply(make_divide(SymbolicExpression::number(num), SymbolicExpression::number(den)),
+                                         SymbolicExpression::parse(cand.second)).simplify();
+                }
+                if (mymath::abs(value + f * cand.first) < 1e-7) {
+                    return make_negate(make_multiply(make_divide(SymbolicExpression::number(num), SymbolicExpression::number(den)),
+                                                     SymbolicExpression::parse(cand.second))).simplify();
+                }
+            }
+        }
     }
 
     long long numerator = 0;
@@ -173,9 +207,9 @@ double clean_symbolic_constant(double value) {
         if (value < 0.0) {
             numerator = -numerator;
         }
-        return static_cast<double>(numerator) / static_cast<double>(denominator);
+        return make_divide(SymbolicExpression::number(numerator), SymbolicExpression::number(denominator)).simplify();
     }
-    return value;
+    return SymbolicExpression::number(value);
 }
 
 std::vector<double> polynomial_power_coefficients(const std::vector<double>& base,
@@ -198,6 +232,7 @@ SymbolicExpression make_linear_form(double slope,
         .simplify();
 }
 
+/*
 bool integrate_inverse_quadratic(const std::vector<double>& denominator,
                                  const std::string& variable_name,
                                  SymbolicExpression* integrated) {
@@ -241,6 +276,7 @@ bool integrate_inverse_quadratic(const std::vector<double>& denominator,
 
     return false;
 }
+*/
 
 struct LinearFactorMultiplicity {
     double root = 0.0;
@@ -285,8 +321,10 @@ bool extract_general_rational_factorization(
     }
 
     for (double root : roots) {
-        root = clean_symbolic_constant(root);
-        const std::vector<double> factor = {-root, 1.0};
+        SymbolicExpression cleaned_root_expr = clean_symbolic_constant(root);
+        double cleaned_root = root;
+        expr_is_number(cleaned_root_expr, &cleaned_root);
+        const std::vector<double> factor = {-cleaned_root, 1.0};
         int multiplicity = 0;
         while (remaining.size() > 1 && divide_exact_polynomial(&remaining, factor)) {
             ++multiplicity;
@@ -474,10 +512,18 @@ bool integrate_general_partial_fractions(
 
         std::vector<double> row;
         for (const auto& col : columns) {
-            row.push_back(polynomial_evaluate(col, x));
+            double val = polynomial_evaluate(col, x);
+            SymbolicExpression cleaned = clean_symbolic_constant(val);
+            double cleaned_val = val;
+            expr_is_number(cleaned, &cleaned_val);
+            row.push_back(cleaned_val);
         }
         matrix.push_back(row);
-        rhs.push_back(polynomial_evaluate(numerator, x));
+        double rhs_val = polynomial_evaluate(numerator, x);
+        SymbolicExpression cleaned_rhs = clean_symbolic_constant(rhs_val);
+        double cleaned_rhs_val = rhs_val;
+        expr_is_number(cleaned_rhs, &cleaned_rhs_val);
+        rhs.push_back(cleaned_rhs_val);
     }
 
     std::vector<double> coeffs;
@@ -486,24 +532,25 @@ bool integrate_general_partial_fractions(
     SymbolicExpression result = SymbolicExpression::number(0.0);
     std::vector<SymbolicExpression> term_exprs;
     for (size_t i = 0; i < terms.size(); ++i) {
-        double val = clean_symbolic_constant(coeffs[i]);
-        if (mymath::is_near_zero(val, kFormatEps)) continue;
+        SymbolicExpression val = clean_symbolic_constant(coeffs[i]);
+        if (expr_is_zero(val)) continue;
 
         SymbolicExpression term_int;
         if (terms[i].kind == RationalPartialFractionTerm::Kind::kLinear) {
             const SymbolicExpression v = make_subtract(SymbolicExpression::variable(variable_name),
                                                        SymbolicExpression::number(terms[i].root)).simplify();
             if (terms[i].power == 1) {
-                term_int = make_multiply(SymbolicExpression::number(val),
+                term_int = make_multiply(val,
                                          make_function("ln", make_function("abs", v))).simplify();
             } else {
-                term_int = make_multiply(SymbolicExpression::number(val / (1.0 - terms[i].power)),
-                                         make_power(v, SymbolicExpression::number(1.0 - terms[i].power))).simplify();
+                double p_val = static_cast<double>(terms[i].power);
+                term_int = make_multiply(make_divide(val, SymbolicExpression::number(1.0 - p_val)),
+                                         make_power(v, SymbolicExpression::number(1.0 - p_val))).simplify();
             }
         } else {
-            double slope = (terms[i].numerator_degree == 1) ? val : 0.0;
-            double constant = (terms[i].numerator_degree == 0) ? val : 0.0;
-            term_int = integrate_quadratic_partial_fraction_term(terms[i].quadratic, slope, constant, terms[i].power, variable_name);
+            double slope_val = (terms[i].numerator_degree == 1) ? coeffs[i] : 0.0;
+            double const_val = (terms[i].numerator_degree == 0) ? coeffs[i] : 0.0;
+            term_int = integrate_quadratic_partial_fraction_term(terms[i].quadratic, slope_val, const_val, terms[i].power, variable_name);
         }
         term_exprs.push_back(term_int);
     }
@@ -585,19 +632,20 @@ SymbolicExpression integrate_quadratic_partial_fraction_term(
     SymbolicExpression result = SymbolicExpression::number(0.0);
 
     if (!mymath::is_near_zero(derivative_scale, kFormatEps)) {
+        SymbolicExpression clean_derivative_scale = clean_symbolic_constant(derivative_scale);
         SymbolicExpression derivative_part;
         if (power == 1) {
             derivative_part =
-                make_multiply(SymbolicExpression::number(derivative_scale),
+                make_multiply(clean_derivative_scale,
                               make_function("ln",
                                             make_function("abs", quadratic_expression)))
                     .simplify();
         } else {
+            double p_val = static_cast<double>(power);
             derivative_part =
-                make_multiply(SymbolicExpression::number(
-                                  derivative_scale / static_cast<double>(1 - power)),
+                make_multiply(make_divide(clean_derivative_scale, SymbolicExpression::number(1.0 - p_val)),
                               make_power(quadratic_expression,
-                                         SymbolicExpression::number(1 - power)))
+                                         SymbolicExpression::number(1.0 - p_val)))
                     .simplify();
         }
         result = make_add(result, derivative_part).simplify();
@@ -606,7 +654,7 @@ SymbolicExpression integrate_quadratic_partial_fraction_term(
     if (!mymath::is_near_zero(inverse_scale, kFormatEps)) {
         result =
             make_add(result,
-                     make_multiply(SymbolicExpression::number(inverse_scale),
+                     make_multiply(clean_symbolic_constant(inverse_scale),
                                    integrate_inverse_quadratic_power(quadratic,
                                                                     power,
                                                                     variable_name)))

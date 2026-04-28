@@ -782,14 +782,16 @@ Matrix freqz(const Matrix& b, const Matrix& a, std::size_t n) {
         
         long double num_r = 0, num_i = 0;
         for (std::size_t k = 0; k < bv.size(); ++k) {
-            num_r += static_cast<long double>(bv[k]) * mymath::cos(-k * w);
-            num_i += static_cast<long double>(bv[k]) * mymath::sin(-k * w);
+            const double phase = -static_cast<double>(k) * w;
+            num_r += static_cast<long double>(bv[k]) * mymath::cos(phase);
+            num_i += static_cast<long double>(bv[k]) * mymath::sin(phase);
         }
         
         long double den_r = 0, den_i = 0;
         for (std::size_t k = 0; k < av.size(); ++k) {
-            den_r += static_cast<long double>(av[k]) * mymath::cos(-k * w);
-            den_i += static_cast<long double>(av[k]) * mymath::sin(-k * w);
+            const double phase = -static_cast<double>(k) * w;
+            den_r += static_cast<long double>(av[k]) * mymath::cos(phase);
+            den_i += static_cast<long double>(av[k]) * mymath::sin(phase);
         }
         
         const long double den_mag_sq = den_r * den_r + den_i * den_i;

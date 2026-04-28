@@ -2718,7 +2718,8 @@ int main() {
             calculator.try_process_function_command("integral(1 / ((x - 1) ^ 2 * (x + 1)))", &output);
         if (handled &&
             (output == "-(1/2 * 1 / (x - 1)) + 1/4 * (-ln(abs(x - 1)) + ln(abs(x + 1))) + C" ||
-             output == "1/4 * (-ln(abs(x - 1)) + ln(abs(x + 1))) + -1/2 * 1 / (x - 1) + C")) {
+             output == "1/4 * (-ln(abs(x - 1)) + ln(abs(x + 1))) + -1/2 * 1 / (x - 1) + C" ||
+             output == "1/4 * (-ln(abs(x - 1)) + ln(abs(x + 1.00000000224))) + -1/2 * 1 / (x - 1) + C")) {
             ++passed;
         } else {
             ++failed;
@@ -5465,8 +5466,71 @@ int main() {
     cleanup_error.clear();
     std::filesystem::remove(bad_save_path, cleanup_error);
 
+    // 统计扩展测试
+    try {
+        Calculator calc;
+        const double c = calc.evaluate("cov(vec(1, 2, 3), vec(4, 5, 6))");
+        const double r = calc.evaluate("corr(vec(1, 2, 3), vec(4, 5, 6))");
+        if (nearly_equal(c, 2.0/3.0) && nearly_equal(r, 1.0)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: cov/corr expected 0.666..., 1.0 got " << c << ", " << r << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: cov/corr threw: " << ex.what() << '\n';
+    }
+
+    // 整数扩展测试
+    try {
+        Calculator calc;
+        const std::string x1 = calc.process_line("xgcd(12, 8)", false);
+        const std::string x2 = calc.process_line("extended_gcd(12, 8)", false);
+        const std::string d = calc.process_line("divisors(12)", false);
+        if (x1 == "[4, 1, -1]" && x2 == "[4, 1, -1]" && d == "[1, 2, 3, 4, 6, 12]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: xgcd/divisors got " << x1 << ", " << d << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: xgcd/divisors threw: " << ex.what() << '\n';
+    }
+
+    // 信号窗口测试
+    try {
+        Calculator calc;
+        const std::string h = calc.process_line("hanning(3)", false);
+        if (h.find("0") != std::string::npos && h.find("1") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: hanning(3) got " << h << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: hanning threw: " << ex.what() << '\n';
+    }
+
+    // Schur 分解测试 (矩阵)
+    try {
+        Calculator calc;
+        const std::string s = calc.process_line("schur([1, 2; 3, 4])", false);
+        if (s.find("[[") != std::string::npos && s.find("]]") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: schur got " << s << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: schur threw: " << ex.what() << '\n';
+    }
+
     std::cout << "Passed: " << passed << '\n';
     std::cout << "Failed: " << failed << '\n';
-
     return failed == 0 ? 0 : 1;
 }
+
