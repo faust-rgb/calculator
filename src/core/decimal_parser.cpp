@@ -1118,6 +1118,9 @@ private:
         if (it->second.is_matrix) {
             throw std::runtime_error("matrix variable " + name + " cannot be used as a scalar");
         }
+        if (it->second.is_complex) {
+            throw std::runtime_error("complex variable " + name + " cannot be used as a real scalar");
+        }
         if (it->second.is_string) {
             throw std::runtime_error("string variable " + name + " cannot be used as a number");
         }
@@ -1247,9 +1250,19 @@ bool try_evaluate_matrix_expression(const std::string& expression,
             *matrix_value = it->second.matrix;
             return true;
         };
+    const matrix::ComplexLookup complex_lookup =
+        [variables](const std::string& name, matrix::ComplexNumber* complex_value) {
+            const auto it = variables->find(name);
+            if (it == variables->end() || !it->second.is_complex) {
+                return false;
+            }
+            *complex_value = it->second.complex;
+            return true;
+        };
     return matrix::try_evaluate_expression(expression,
                                            scalar_evaluator,
                                            matrix_lookup,
+                                           complex_lookup,
                                            value);
 }
 

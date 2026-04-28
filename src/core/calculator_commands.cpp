@@ -228,7 +228,7 @@ bool Calculator::try_process_function_command(const std::string& expression,
                     evaluate_expression_value(this, impl_.get(), scoped_expression, false);
                 impl_->local_scopes.pop_back();
 
-                if (value.is_matrix || value.is_string) {
+                if (value.is_matrix || value.is_complex || value.is_string) {
                     throw std::runtime_error("expected a scalar-valued expression");
                 }
                 return normalize_result(value.exact
@@ -581,6 +581,8 @@ bool Calculator::try_process_function_command(const std::string& expression,
                 const double imag = point_matrix.rows == 1 ? point_matrix.at(0, 1)
                                                            : point_matrix.at(1, 0);
                 point = {real, imag};
+            } else if (point_value.is_complex) {
+                point = {point_value.complex.real, point_value.complex.imag};
             } else if (point_value.is_string) {
                 throw std::runtime_error("residue point must be numeric");
             }

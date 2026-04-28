@@ -75,6 +75,12 @@ std::string format_number(double value) {
     return out.str();
 }
 
+std::string format_complex(ComplexNumber value) {
+    value = normalize_complex(value);
+    return "complex(" + format_number(value.real) + ", " +
+           format_number(value.imag) + ")";
+}
+
 long double abs_ld(long double value) {
     return mymath::abs_long_double(value);
 }
@@ -781,6 +787,36 @@ Matrix complex_value(double real, double imag) {
     return Matrix::vector({real, imag});
 }
 
+ComplexNumber normalize_complex(ComplexNumber value) {
+    if (mymath::is_near_zero(value.real, kMatrixEps)) {
+        value.real = 0.0;
+    }
+    if (mymath::is_near_zero(value.imag, kMatrixEps)) {
+        value.imag = 0.0;
+    }
+    return value;
+}
+
+ComplexNumber complex_from_matrix(const Matrix& matrix) {
+    return {complex_real(matrix), complex_imag(matrix)};
+}
+
+bool try_complex_from_value(const Value& value, ComplexNumber* complex) {
+    if (value.is_complex) {
+        *complex = value.complex;
+        return true;
+    }
+    if (value.is_matrix && is_complex_vector(value.matrix)) {
+        *complex = complex_from_matrix(value.matrix);
+        return true;
+    }
+    if (!value.is_matrix) {
+        *complex = {value.scalar, 0.0};
+        return true;
+    }
+    return false;
+}
+
 ComplexSample multiply_complex(ComplexSample lhs, ComplexSample rhs) {
     return {
         lhs.real * rhs.real - lhs.imag * rhs.imag,
@@ -1427,6 +1463,17 @@ Value Value::from_scalar(double scalar_value) {
     Value value;
     value.is_matrix = false;
     value.scalar = scalar_value;
+    return value;
+}
+
+Value Value::from_complex(double real, double imag) {
+    return from_complex(ComplexNumber{real, imag});
+}
+
+Value Value::from_complex(ComplexNumber complex_value) {
+    Value value;
+    value.is_complex = true;
+    value.complex = internal::normalize_complex(complex_value);
     return value;
 }
 

@@ -8,6 +8,11 @@
 
 namespace matrix {
 
+struct ComplexNumber {
+    double real = 0.0;
+    double imag = 0.0;
+};
+
 /**
  * @namespace matrix
  * @brief 矩阵运算库
@@ -111,11 +116,17 @@ void set_display_precision(int precision);
  */
 struct Value {
     bool is_matrix = false;   ///< true 表示矩阵，false 表示标量
+    bool is_complex = false;  ///< true 表示复数标量
     double scalar = 0.0;      ///< 标量值（当 is_matrix 为 false 时有效）
+    ComplexNumber complex;    ///< 复数值（当 is_complex 为 true 时有效）
     Matrix matrix;            ///< 矩阵值（当 is_matrix 为 true 时有效）
 
     /** @brief 从标量创建 Value */
     static Value from_scalar(double scalar_value);
+
+    /** @brief 从复数创建 Value */
+    static Value from_complex(double real, double imag);
+    static Value from_complex(ComplexNumber complex_value);
 
     /** @brief 从矩阵创建 Value */
     static Value from_matrix(const Matrix& matrix_value);
@@ -129,6 +140,9 @@ using ScalarEvaluator = std::function<double(const std::string&)>;
 
 /** @brief 矩阵查找函数类型，用于变量解析 */
 using MatrixLookup = std::function<bool(const std::string&, Matrix*)>;
+
+/** @brief 复数查找函数类型，用于变量解析 */
+using ComplexLookup = std::function<bool(const std::string&, ComplexNumber*)>;
 
 // ============================================================================
 // 基本矩阵运算
@@ -350,6 +364,7 @@ Matrix residue(const Matrix& b, const Matrix& a);
 bool try_evaluate_expression(const std::string& expression,
                              const ScalarEvaluator& scalar_evaluator,
                              const MatrixLookup& matrix_lookup,
+                             const ComplexLookup& complex_lookup,
                              Value* value);
 
 }  // namespace matrix

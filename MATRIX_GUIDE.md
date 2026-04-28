@@ -108,7 +108,8 @@ Examples:
 Notes:
 
 - `trace`, `det`, `eigvals`, and `eigvecs` require square matrices
-- `eigvals` and `eigvecs` are implemented for real-valued results; matrices with only complex eigenvalues are rejected
+- `eigvals` returns real eigenvalues as a vector and complex eigenvalues as an `N x 2` matrix of `[real, imag]` rows
+- `eigvecs` currently supports real-valued eigenvectors only
 - `qr_q`, `qr_r`, `lu_l`, and `lu_u` currently require square matrices
 - `lu_l` and `lu_u` use LU decomposition without pivoting, so leading pivots must stay non-zero
 - `svd_u`, `svd_s`, and `svd_vt` return the reduced SVD factors

@@ -30,6 +30,8 @@ struct ComplexSample {
     double imag = 0.0;
 };
 
+std::string format_complex(ComplexNumber value);
+
 std::string trim_copy(const std::string& text);
 void swap_rows(Matrix* matrix, std::size_t lhs, std::size_t rhs);
 double vector_norm_squared(const std::vector<double>& values);
@@ -67,6 +69,9 @@ bool is_complex_vector(const Matrix& matrix);
 double complex_real(const Matrix& matrix);
 double complex_imag(const Matrix& matrix);
 Matrix complex_value(double real, double imag);
+ComplexNumber complex_from_matrix(const Matrix& matrix);
+bool try_complex_from_value(const Value& value, ComplexNumber* complex);
+ComplexNumber normalize_complex(ComplexNumber value);
 std::vector<ComplexSample> as_complex_sequence(const Matrix& matrix,
                                                const std::string& func_name);
 Matrix complex_sequence_to_matrix(const std::vector<ComplexSample>& values,

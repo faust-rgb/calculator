@@ -172,7 +172,8 @@ private:
         if (it == variables_->end()) {
             throw PreciseDecimalUnsupported("unknown variable for precise parsing");
         }
-        if (it->second.is_matrix || it->second.is_string || it->second.has_symbolic_text) {
+                if (it->second.is_matrix || it->second.is_complex ||
+                    it->second.is_string || it->second.has_symbolic_text) {
             throw PreciseDecimalUnsupported("unsupported variable type for precise parsing");
         }
         return PreciseDecimal::from_decimal_literal(
@@ -241,6 +242,9 @@ PreciseDecimal parse_precise_decimal_expression(
 std::string format_stored_value(const StoredValue& value, bool symbolic_constants_mode) {
     if (value.is_matrix) {
         return value.matrix.to_string();
+    }
+    if (value.is_complex) {
+        return matrix::internal::format_complex(value.complex);
     }
     if (value.is_string) {
         std::ostringstream out;

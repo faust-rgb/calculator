@@ -598,7 +598,14 @@ Matrix eigenvalues(const Matrix& matrix) {
         const double c = determinant(matrix);
         const double discriminant = b * b - 4.0 * a * c;
         if (discriminant < -kMatrixEps) {
-            throw std::runtime_error("eigvals only supports matrices with real eigenvalues");
+            const double real = -b * 0.5;
+            const double imag = mymath::sqrt(-discriminant) * 0.5;
+            Matrix result(2, 2, 0.0);
+            result.at(0, 0) = real;
+            result.at(0, 1) = imag;
+            result.at(1, 0) = real;
+            result.at(1, 1) = -imag;
+            return result;
         }
         const double root = mymath::sqrt(discriminant < 0.0 ? 0.0 : discriminant);
         return Matrix::vector({(-b + root) / 2.0, (-b - root) / 2.0});
@@ -643,7 +650,7 @@ Matrix eigenvalues(const Matrix& matrix) {
         }
     }
 
-    std::vector<double> values;
+    std::vector<ComplexNumber> values;
     values.reserve(current.rows);
     for (std::size_t i = 0; i < current.rows;) {
         if (i + 1 < current.rows && mymath::abs(current.at(i + 1, i)) > tolerance) {
@@ -656,19 +663,47 @@ Matrix eigenvalues(const Matrix& matrix) {
             const double block_discriminant =
                 block_trace * block_trace - 4.0 * block_determinant;
             if (block_discriminant < -tolerance) {
-                throw std::runtime_error("eigvals only supports matrices with real eigenvalues");
+                const double real = block_trace * 0.5;
+                const double imag = mymath::sqrt(-block_discriminant) * 0.5;
+                values.push_back({real, imag});
+                values.push_back({real, -imag});
+                i += 2;
+                continue;
             }
             const double block_root =
                 mymath::sqrt(block_discriminant < 0.0 ? 0.0 : block_discriminant);
-            values.push_back((block_trace + block_root) * 0.5);
-            values.push_back((block_trace - block_root) * 0.5);
+            values.push_back({(block_trace + block_root) * 0.5, 0.0});
+            values.push_back({(block_trace - block_root) * 0.5, 0.0});
             i += 2;
             continue;
         }
-        values.push_back(current.at(i, i));
+        values.push_back({current.at(i, i), 0.0});
         ++i;
     }
-    return Matrix::vector(values);
+    bool all_real = true;
+    for (const ComplexNumber& value : values) {
+        if (!mymath::is_near_zero(value.imag, tolerance)) {
+            all_real = false;
+            break;
+        }
+    }
+    if (all_real) {
+        std::vector<double> real_values;
+        real_values.reserve(values.size());
+        for (ComplexNumber value : values) {
+            real_values.push_back(mymath::is_near_zero(value.real, tolerance)
+                                      ? 0.0
+                                      : value.real);
+        }
+        return Matrix::vector(real_values);
+    }
+    Matrix result(values.size(), 2, 0.0);
+    for (std::size_t row = 0; row < values.size(); ++row) {
+        const ComplexNumber value = normalize_complex(values[row]);
+        result.at(row, 0) = value.real;
+        result.at(row, 1) = value.imag;
+    }
+    return result;
 }
 
 Matrix eigenvectors(const Matrix& matrix) {
@@ -679,11 +714,21 @@ Matrix eigenvectors(const Matrix& matrix) {
     // 先求特征值，再逐个解 (A - lambda I)v = 0。
     // 返回结果按“列向量矩阵”组织：每一列是一个特征向量。
     const Matrix values = eigenvalues(matrix);
+    const bool complex_value_matrix = values.rows > 1 && values.cols == 2;
+    if (complex_value_matrix) {
+        for (std::size_t row = 0; row < values.rows; ++row) {
+            if (!mymath::is_near_zero(values.at(row, 1), kMatrixEps)) {
+                throw std::runtime_error("eigvecs currently supports real eigenvalues only");
+            }
+        }
+    }
     Matrix vectors(matrix.rows, matrix.cols, 0.0);
-    for (std::size_t col = 0; col < values.cols; ++col) {
+    const std::size_t value_count = complex_value_matrix ? values.rows : values.cols;
+    for (std::size_t col = 0; col < value_count; ++col) {
+        const double lambda = complex_value_matrix ? values.at(col, 0) : values.at(0, col);
         Matrix shifted = matrix;
         for (std::size_t i = 0; i < shifted.rows; ++i) {
-            shifted.at(i, i) -= values.at(0, col);
+            shifted.at(i, i) -= lambda;
         }
 
         const std::vector<double> basis = nullspace_vector(shifted);

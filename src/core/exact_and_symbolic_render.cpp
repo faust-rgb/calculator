@@ -641,8 +641,8 @@ private:
             }
             throw std::runtime_error("unknown variable: " + name);
         }
-        if (it->second.is_matrix) {
-            throw ExactModeUnsupported("matrix variable " + name + " cannot be used exactly");
+        if (it->second.is_matrix || it->second.is_complex) {
+            throw ExactModeUnsupported("matrix or complex variable " + name + " cannot be used exactly");
         }
         if (it->second.is_string) {
             throw ExactModeUnsupported("string variable " + name + " cannot be used exactly");
@@ -998,7 +998,7 @@ private:
         if (it == variables_->end()) {
             return name;
         }
-        if (it->second.is_matrix || it->second.is_string) {
+        if (it->second.is_matrix || it->second.is_complex || it->second.is_string) {
             throw std::runtime_error("unsupported symbolic variable");
         }
         if (it->second.has_symbolic_text) {

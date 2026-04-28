@@ -234,6 +234,9 @@ bool truthy_value(const StoredValue& value) {
     if (value.is_matrix) {
         throw std::runtime_error("matrix values cannot be used as script conditions");
     }
+    if (value.is_complex) {
+        throw std::runtime_error("complex values cannot be used as script conditions");
+    }
     return !mymath::is_near_zero(value.exact
                                      ? rational_to_double(value.rational)
                                      : value.decimal,
@@ -274,7 +277,7 @@ double invoke_script_function_decimal(Calculator* calculator,
         if (signal.kind != ScriptSignal::Kind::kReturn || !signal.has_value) {
             throw std::runtime_error("script function " + name + " must return a value");
         }
-        if (signal.value.is_matrix) {
+        if (signal.value.is_matrix || signal.value.is_complex) {
             throw std::runtime_error("script function " + name +
                                      " cannot be used as a scalar expression");
         }
@@ -359,6 +362,9 @@ StoredValue evaluate_expression_value(Calculator* calculator,
                 if (matrix_val.is_matrix) {
                     result.is_matrix = true;
                     result.matrix = std::move(matrix_val.matrix);
+                } else if (matrix_val.is_complex) {
+                    result.is_complex = true;
+                    result.complex = matrix_val.complex;
                 } else {
                     result.decimal = matrix_val.scalar;
                 }
@@ -379,8 +385,8 @@ StoredValue evaluate_expression_value(Calculator* calculator,
 
         const StoredValue value =
             evaluate_expression_value(calculator, impl, rational_arguments[0], false);
-        if (value.is_matrix) {
-            throw std::runtime_error("rat cannot approximate a matrix value");
+        if (value.is_matrix || value.is_complex) {
+            throw std::runtime_error("rat cannot approximate a matrix or complex value");
         }
         if (value.is_string) {
             throw std::runtime_error("rat cannot approximate a string value");
@@ -390,7 +396,8 @@ StoredValue evaluate_expression_value(Calculator* calculator,
         if (rational_arguments.size() == 2) {
             const StoredValue max_denominator_value =
                 evaluate_expression_value(calculator, impl, rational_arguments[1], false);
-            if (max_denominator_value.is_matrix || max_denominator_value.is_string) {
+            if (max_denominator_value.is_matrix || max_denominator_value.is_complex ||
+                max_denominator_value.is_string) {
                 throw std::runtime_error("rat max_denominator must be a positive integer");
             }
             const double scalar =
@@ -448,6 +455,11 @@ StoredValue evaluate_expression_value(Calculator* calculator,
         if (matrix_value.is_matrix) {
             stored.is_matrix = true;
             stored.matrix = matrix_value.matrix;
+        } else if (matrix_value.is_complex) {
+            stored.is_complex = true;
+            stored.complex = matrix_value.complex;
+            stored.decimal = matrix_value.complex.real;
+            stored.exact = false;
         } else {
             stored.decimal = matrix_value.scalar;
             stored.exact = false;

@@ -228,7 +228,9 @@ Notes:
 
 - `norm(m)` returns the Euclidean norm for vectors and the Frobenius norm for matrices
 - `trace`, `det`, `eigvals`, and `eigvecs` require square matrices
-- `eigvals` and `eigvecs` currently support real-valued results
+- `eigvals` returns real eigenvalues as a vector and complex eigenvalues as
+  an `N x 2` matrix with rows `[real, imag]`; `eigvecs` currently supports
+  real-valued eigenvectors only
 - `dot(a, b)` and `outer(a, b)` require vector arguments
 - `qr_q(A)` and `qr_r(A)` currently require square matrices
 - `lu_l(A)` and `lu_u(A)` currently require square matrices and use LU decomposition without pivoting

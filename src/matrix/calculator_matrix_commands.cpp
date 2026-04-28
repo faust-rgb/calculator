@@ -5,12 +5,33 @@
 #include "calculator_matrix_commands.h"
 
 #include "calculator_internal_types.h"
+#include "matrix_internal.h"
 #include "mymath.h"
 
 #include <sstream>
 #include <stdexcept>
 
 namespace matrix_commands {
+namespace {
+
+std::string format_eigenvalue_matrix(const matrix::Matrix& values) {
+    if (values.rows <= 1 || values.cols != 2) {
+        return values.to_string();
+    }
+    std::ostringstream out;
+    out << "[";
+    for (std::size_t row = 0; row < values.rows; ++row) {
+        if (row != 0) {
+            out << ", ";
+        }
+        out << matrix::internal::format_complex({values.at(row, 0),
+                                                 values.at(row, 1)});
+    }
+    out << "]";
+    return out.str();
+}
+
+}  // namespace
 
 bool is_matrix_command(const std::string& command) {
     return command == "eig" || command == "svd" || command == "lu_p";
@@ -44,7 +65,13 @@ bool handle_matrix_command(const MatrixCommandContext& ctx,
     }
 
     try {
-        *output = "values: " + matrix::eigenvalues(matrix_value).to_string() +
+        const matrix::Matrix values = matrix::eigenvalues(matrix_value);
+        if (values.rows > 1 && values.cols == 2) {
+            *output = "values: " + format_eigenvalue_matrix(values) +
+                      "\nvectors: unavailable for complex eigenvalues";
+            return true;
+        }
+        *output = "values: " + values.to_string() +
                   "\nvectors: " + matrix::eigenvectors(matrix_value).to_string();
         return true;
     } catch (const std::exception&) {

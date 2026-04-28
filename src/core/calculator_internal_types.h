@@ -176,6 +176,7 @@ struct PreciseDecimal {
  */
 struct StoredValue {
     bool is_matrix = false;              ///< 是否为矩阵
+    bool is_complex = false;             ///< 是否为复数标量
     bool is_string = false;              ///< 是否为字符串
     bool has_symbolic_text = false;      ///< 是否有符号表达式文本
     bool has_precise_decimal_text = false; ///< 是否有精确小数文本
@@ -183,6 +184,7 @@ struct StoredValue {
 
     Rational rational;                   ///< 有理数值
     double decimal = 0.0;                ///< 浮点数值
+    matrix::ComplexNumber complex;       ///< 复数值
     std::string string_value;            ///< 字符串值
     std::string symbolic_text;           ///< 符号表达式文本
     std::string precise_decimal_text;    ///< 精确小数文本

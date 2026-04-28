@@ -4,9 +4,11 @@
 
 #include "calculator_polynomial.h"
 
+#include "matrix_internal.h"
 #include "polynomial.h"
 #include "mymath.h"
 
+#include <complex>
 #include <sstream>
 
 namespace polynomial_ops {
@@ -123,21 +125,39 @@ std::string poly_div(const PolynomialData& lhs, const PolynomialData& rhs) {
 }
 
 std::string roots(const PolynomialData& poly) {
-    const std::vector<double> roots = polynomial_real_roots(poly.coefficients);
+    const std::vector<std::complex<double>> roots =
+        polynomial_complex_roots(poly.coefficients);
     if (roots.empty()) {
-        return "No real roots.";
+        return "No roots.";
     }
 
     std::ostringstream out;
+    bool wrote_root = false;
+    std::complex<double> previous_root(0.0, 0.0);
     for (std::size_t i = 0; i < roots.size(); ++i) {
-        if (i != 0) {
+        if (wrote_root &&
+            mymath::abs(roots[i].real() - previous_root.real()) <= 1e-7 &&
+            mymath::abs(roots[i].imag() - previous_root.imag()) <= 1e-7) {
+            continue;
+        }
+        if (wrote_root) {
             out << ", ";
         }
-        const double root =
-            is_integer_double(roots[i], 1e-6)
-                ? static_cast<double>(round_to_long_long(roots[i]))
-                : roots[i];
-        out << format_symbolic_scalar(root);
+        double real = roots[i].real();
+        double imag = roots[i].imag();
+        if (is_integer_double(real, 1e-6)) {
+            real = static_cast<double>(round_to_long_long(real));
+        }
+        if (is_integer_double(imag, 1e-6)) {
+            imag = static_cast<double>(round_to_long_long(imag));
+        }
+        if (mymath::is_near_zero(imag, 1e-8)) {
+            out << format_symbolic_scalar(real);
+        } else {
+            out << matrix::internal::format_complex({real, imag});
+        }
+        previous_root = {real, imag};
+        wrote_root = true;
     }
     return out.str();
 }

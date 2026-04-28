@@ -9,6 +9,7 @@
 #include "mymath.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <stdexcept>
 #include <string>
@@ -264,6 +265,83 @@ std::vector<double> polynomial_real_roots(const std::vector<double>& coefficient
     }
 
     std::sort(roots.begin(), roots.end());
+    return roots;
+}
+
+std::vector<std::complex<double>> polynomial_complex_roots(
+    const std::vector<double>& coefficients) {
+    std::vector<double> normalized = coefficients;
+    trim_trailing_zeros(&normalized);
+
+    if (normalized.size() <= 1) {
+        throw std::runtime_error("constant polynomial does not have isolated roots");
+    }
+
+    const std::size_t degree = normalized.size() - 1;
+    if (degree == 1) {
+        return {std::complex<double>(-normalized[0] / normalized[1], 0.0)};
+    }
+
+    const double leading = normalized.back();
+    const double radius = std::max(1.0, polynomial_root_bound(normalized));
+    std::vector<std::complex<double>> roots;
+    roots.reserve(degree);
+    for (std::size_t k = 0; k < degree; ++k) {
+        const double angle =
+            2.0 * mymath::kPi * (static_cast<double>(k) + 0.25) /
+            static_cast<double>(degree);
+        roots.emplace_back(radius * mymath::cos(angle),
+                           radius * mymath::sin(angle));
+    }
+
+    auto evaluate_complex = [&](std::complex<double> x) {
+        std::complex<double> result(0.0, 0.0);
+        for (std::size_t i = normalized.size(); i > 0; --i) {
+            result = result * x + normalized[i - 1] / leading;
+        }
+        return result;
+    };
+
+    for (int iteration = 0; iteration < 2000; ++iteration) {
+        double max_delta = 0.0;
+        for (std::size_t i = 0; i < roots.size(); ++i) {
+            std::complex<double> denominator(1.0, 0.0);
+            for (std::size_t j = 0; j < roots.size(); ++j) {
+                if (i == j) continue;
+                denominator *= roots[i] - roots[j];
+            }
+            if (std::abs(denominator) <= 1e-24) {
+                denominator = std::complex<double>(1e-12, 1e-12);
+            }
+            const std::complex<double> delta = evaluate_complex(roots[i]) / denominator;
+            roots[i] -= delta;
+            max_delta = std::max(max_delta, std::abs(delta));
+        }
+        if (max_delta <= 1e-12) {
+            break;
+        }
+    }
+
+    for (std::complex<double>& root : roots) {
+        double real = root.real();
+        double imag = root.imag();
+        if (mymath::is_near_zero(real, 1e-9)) real = 0.0;
+        if (mymath::is_near_zero(imag, 1e-9)) imag = 0.0;
+        if (mymath::is_integer(real)) {
+            real = static_cast<double>(std::llround(real));
+        }
+        if (mymath::is_integer(imag)) {
+            imag = static_cast<double>(std::llround(imag));
+        }
+        root = {real, imag};
+    }
+
+    std::sort(roots.begin(), roots.end(), [](const auto& lhs, const auto& rhs) {
+        if (mymath::abs(lhs.real() - rhs.real()) > 1e-8) {
+            return lhs.real() < rhs.real();
+        }
+        return lhs.imag() < rhs.imag();
+    });
     return roots;
 }
 

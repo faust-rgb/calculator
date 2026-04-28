@@ -491,8 +491,8 @@ Use `:funcs` to list custom functions, `:clearfunc name` to remove one, and
 `:clearfuncs` to clear all of them.
 
 `poly_add/poly_sub/poly_mul/poly_div/roots` operate on custom functions that
-can be recognized as one-variable polynomials. `roots(p)` returns real roots
-only. `diff(f)` returns a symbolic derivative expression, while `diff(f, value)`
+can be recognized as one-variable polynomials. `roots(p)` returns real and
+complex roots. `diff(f)` returns a symbolic derivative expression, while `diff(f, value)`
 returns the numeric derivative at a point. `integral(f)` returns a symbolic
 indefinite integral, while `integral(...)` with more arguments keeps the
 existing numeric integration behavior. Symbolic `diff(...)` and `integral(...)`

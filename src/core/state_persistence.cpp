@@ -17,7 +17,7 @@ std::string Calculator::save_state(const std::string& path) const {
         throw std::runtime_error("unable to open file for writing: " + path);
     }
 
-    out << "STATE_V4\n";
+    out << "STATE_V5\n";
 
     for (const auto& [name, value] : impl_->variables) {
         if (value.is_matrix) {
@@ -28,6 +28,10 @@ std::string Calculator::save_state(const std::string& path) const {
                 out << '\t' << std::setprecision(17) << element;
             }
             out << '\n';
+        } else if (value.is_complex) {
+            out << "VAR\t" << encode_state_field(name)
+                << "\tCOMPLEX\t" << std::setprecision(17) << value.complex.real
+                << '\t' << std::setprecision(17) << value.complex.imag << '\n';
         } else if (value.is_string) {
             out << "VAR\t" << encode_state_field(name)
                 << "\tSTRING\t" << encode_state_field(value.string_value) << '\n';
@@ -135,6 +139,10 @@ std::string Calculator::load_state(const std::string& path) {
             state_version = 4;
             continue;
         }
+        if (line == "STATE_V5") {
+            state_version = 5;
+            continue;
+        }
 
         const std::vector<std::string> parts = split_tab_fields(line);
         if (state_version >= 2) {
@@ -170,6 +178,13 @@ std::string Calculator::load_state(const std::string& path) {
                     for (std::size_t i = 0; i < value.matrix.data.size(); ++i) {
                         value.matrix.data[i] = std::stod(parts[i + 5]);
                     }
+                } else if (parts[2] == "COMPLEX" && state_version >= 5) {
+                    if (parts.size() != 5) {
+                        throw std::runtime_error("invalid save file format");
+                    }
+                    value.is_complex = true;
+                    value.complex.real = std::stod(parts[3]);
+                    value.complex.imag = std::stod(parts[4]);
                 } else if (parts[2] == "EXACT") {
                     if (parts.size() != 6) {
                         throw std::runtime_error("invalid save file format");
@@ -200,7 +215,8 @@ std::string Calculator::load_state(const std::string& path) {
                 }
                 const std::string name = decode_state_field(parts[1]);
                 auto it = loaded.find(name);
-                if (it == loaded.end() || it->second.is_matrix || it->second.is_string) {
+                if (it == loaded.end() || it->second.is_matrix || it->second.is_complex ||
+                    it->second.is_string) {
                     throw std::runtime_error("invalid save file format");
                 }
                 it->second.has_precise_decimal_text = true;
@@ -214,7 +230,8 @@ std::string Calculator::load_state(const std::string& path) {
                 }
                 const std::string name = decode_state_field(parts[1]);
                 auto it = loaded.find(name);
-                if (it == loaded.end() || it->second.is_matrix || it->second.is_string) {
+                if (it == loaded.end() || it->second.is_matrix || it->second.is_complex ||
+                    it->second.is_string) {
                     throw std::runtime_error("invalid save file format");
                 }
                 it->second.has_symbolic_text = true;

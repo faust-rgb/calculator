@@ -1610,6 +1610,26 @@ int main() {
     }
 
     try {
+        std::string output;
+        const bool defined =
+            calculator.try_process_function_command("croot(x) = x ^ 2 + 1", &output);
+        const bool handled =
+            calculator.try_process_function_command("roots(croot)", &output);
+        if (defined && handled &&
+            output == "complex(0, -1), complex(0, 1)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: roots(croot) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: roots(croot) command threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
         const double actual = calculator.evaluate("f(2)");
         const double expected = mymath::sin(2.0) + 4.0;
         if (nearly_equal(actual, expected, 1e-7)) {
@@ -4450,13 +4470,16 @@ int main() {
         {"dft(mat(1, 4, 1, 0, 0, 0))", false, "[[1, 0], [1, 0], [1, 0], [1, 0]]"},
         {"idft(mat(4, 2, 1, 0, 1, 0, 1, 0, 1, 0))", false, "[1, 0, 0, 0]"},
         {"convolve(mat(1, 2, 1, 2), mat(1, 3, 3, 4, 5))", false, "[3, 10, 13, 10]"},
-        {"complex(3, 4)", false, "[3, 4]"},
+        {"complex(3, 4)", false, "complex(3, 4)"},
         {"real(complex(3, 4))", false, "3"},
         {"imag(complex(3, 4))", false, "4"},
         {"abs(complex(3, 4))", false, "5"},
         {"arg(complex(0, 1))", false, "1.57079632679"},
-        {"conj(complex(3, 4))", false, "[3, -4]"},
-        {"polar(2, pi / 2)", false, "[0, 2]"},
+        {"conj(complex(3, 4))", false, "complex(3, -4)"},
+        {"polar(2, pi / 2)", false, "complex(0, 2)"},
+        {"complex(1, 2) * complex(3, 4)", false, "complex(-5, 10)"},
+        {"1 / complex(0, 1)", false, "complex(0, -1)"},
+        {"eigvals(mat(2, 2, 0, -1, 1, 0))", false, "[[0, 1], [0, -1]]"},
         {"mean(vec(1, 2, 3))", false, "2"},
         {"mode(vec(1, 2, 2, 3))", false, "2"},
         {"var(vec(1, 2, 3))", false, "0.666666666667"},
@@ -4761,7 +4784,6 @@ int main() {
         {"rank(3)"},
         {"rref(3)"},
         {"eigvals(mat(2, 3, 1, 2, 3, 4, 5, 6))"},
-        {"eigvals(mat(2, 2, 0, -1, 1, 0))"},
         {"eigvecs(mat(2, 2, 0, -1, 1, 0))"},
         {"eigvecs(mat(2, 3, 1, 2, 3, 4, 5, 6))"},
         {"ode_system(vec(y2), 0, vec(1, 2), 1)"},

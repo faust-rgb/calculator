@@ -150,9 +150,9 @@ expect_exact 'eigvals([2, 0; 0, 3])' '[3, 2]'
 # =============================================================================
 expect_numeric 'real(exp(complex(0, 1) * 3.1415926535))' '-1' '0.000001'
 # Complex multiplication (1+2i)*(3+4i) = -5+10i
-expect_exact 'complex(1, 2) * complex(3, 4)' '[-5, 10]'
+expect_exact 'complex(1, 2) * complex(3, 4)' 'complex(-5, 10)'
 # Division 1/i = -i
-expect_exact '1 / complex(0, 1)' '[0, -1]'
+expect_exact '1 / complex(0, 1)' 'complex(0, -1)'
 # Residues
 expect_exact 'residue(1/z, z, 0)' '[1, 0]'
 expect_exact 'residue(1/(z^2+1), z, complex(0,1))' '[0, -0.5]'

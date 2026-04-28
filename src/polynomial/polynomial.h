@@ -1,6 +1,7 @@
 #ifndef POLYNOMIAL_H
 #define POLYNOMIAL_H
 
+#include <complex>
 #include <string>
 #include <vector>
 
@@ -79,6 +80,14 @@ PolynomialDivisionResult polynomial_divide(const std::vector<double>& dividend,
  * 4. 在符号变化的区间使用二分法求根
  */
 std::vector<double> polynomial_real_roots(const std::vector<double>& coefficients);
+
+/**
+ * @brief 计算多项式的全部复根
+ * @param coefficients 多项式系数
+ * @return 按实部、虚部排序的复根列表
+ */
+std::vector<std::complex<double>> polynomial_complex_roots(
+    const std::vector<double>& coefficients);
 
 /**
  * @brief 使用 Horner 法计算多项式在 x 处的值

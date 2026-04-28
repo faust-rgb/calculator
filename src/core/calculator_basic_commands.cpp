@@ -11,8 +11,8 @@ double Calculator::evaluate(const std::string& expression) {
 
 double Calculator::evaluate_raw(const std::string& expression) {
     const StoredValue value = evaluate_expression_value(this, impl_.get(), expression, false);
-    if (value.is_matrix) {
-        throw std::runtime_error("matrix expression cannot be used as a scalar");
+    if (value.is_matrix || value.is_complex) {
+        throw std::runtime_error("matrix or complex expression cannot be used as a scalar");
     }
     return value.decimal;
 }
