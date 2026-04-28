@@ -283,7 +283,14 @@ private:
                 return Value::from_matrix(matrix_value);
             }
 
-            return Value::from_scalar((*scalar_evaluator_)(name));
+            try {
+                return Value::from_scalar((*scalar_evaluator_)(name));
+            } catch (...) {
+                if (name == "i") {
+                    return Value::from_matrix(complex_value(0, 1));
+                }
+                throw;
+            }
         }
 
         return Value::from_scalar(parse_scalar_literal());
@@ -1436,7 +1443,7 @@ private:
                name == "conv" || name == "convolve" ||
                name == "complex" || name == "real" || name == "imag" ||
                name == "arg" || name == "conj" || name == "polar" ||
-               name == "abs";
+               name == "abs" || name == "exp" || name == "sin" || name == "cos" || name == "ln";
     }
 
     static Value add_values(Value lhs, Value rhs) {
@@ -1444,9 +1451,19 @@ private:
             return Value::from_matrix(add(std::move(lhs.matrix), rhs.matrix));
         }
         if (lhs.is_matrix) {
+            if (is_complex_vector(lhs.matrix)) {
+                Matrix result = lhs.matrix;
+                result.at(0, 0) += rhs.scalar;
+                return Value::from_matrix(result);
+            }
             return Value::from_matrix(add(std::move(lhs.matrix), rhs.scalar));
         }
         if (rhs.is_matrix) {
+            if (is_complex_vector(rhs.matrix)) {
+                Matrix result = rhs.matrix;
+                result.at(0, 0) += lhs.scalar;
+                return Value::from_matrix(result);
+            }
             return Value::from_matrix(add(std::move(rhs.matrix), lhs.scalar));
         }
         return Value::from_scalar(lhs.scalar + rhs.scalar);
@@ -1457,9 +1474,20 @@ private:
             return Value::from_matrix(subtract(std::move(lhs.matrix), rhs.matrix));
         }
         if (lhs.is_matrix) {
+            if (is_complex_vector(lhs.matrix)) {
+                Matrix result = lhs.matrix;
+                result.at(0, 0) -= rhs.scalar;
+                return Value::from_matrix(result);
+            }
             return Value::from_matrix(subtract(std::move(lhs.matrix), rhs.scalar));
         }
         if (rhs.is_matrix) {
+            if (is_complex_vector(rhs.matrix)) {
+                Matrix result = rhs.matrix;
+                result.at(0, 0) = lhs.scalar - result.at(0, 0);
+                result.at(0, 1) = -result.at(0, 1);
+                return Value::from_matrix(result);
+            }
             return Value::from_matrix(add(multiply(std::move(rhs.matrix), -1.0), lhs.scalar));
         }
         return Value::from_scalar(lhs.scalar - rhs.scalar);

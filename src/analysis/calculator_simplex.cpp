@@ -15,7 +15,70 @@ namespace simplex {
 
 namespace {
 
-// 单纯形迭代核心算法
+// 使用 Sherman-Morrison 公式更新基矩阵之逆 B_inv
+// B_new = B + (a_entering - B_leaving) * e_leaving'
+// B_inv_new = B_inv - (B_inv * (a_entering - B_leaving) * e_leaving' * B_inv) / (1 + e_leaving' * B_inv * (a_entering - B_leaving))
+// 简化版：令 u = a_entering, v = e_leaving, 则 B_inv_new = B_inv - (B_inv * u - e_leaving) * (row_leaving_of_B_inv) / (e_leaving' * B_inv * u)
+bool update_basis_inverse(
+    matrix::Matrix& B_inv,
+    const std::vector<double>& a_enter,
+    std::size_t leaving_idx,
+    double eps) {
+
+    const std::size_t m = B_inv.rows;
+    
+    // 计算 w = B_inv * a_enter
+    std::vector<double> w(m, 0.0);
+    for (std::size_t i = 0; i < m; ++i) {
+        for (std::size_t j = 0; j < m; ++j) {
+            w[i] += B_inv.at(i, j) * a_enter[j];
+        }
+    }
+
+    const double pivot = w[leaving_idx];
+    if (std::abs(pivot) < eps * 1e-3) {
+        return false; // 数值不稳定
+    }
+
+    // 更新 B_inv
+    for (std::size_t i = 0; i < m; ++i) {
+        if (i == leaving_idx) continue;
+        const double factor = w[i] / pivot;
+        for (std::size_t j = 0; j < m; ++j) {
+            B_inv.at(i, j) -= factor * B_inv.at(leaving_idx, j);
+        }
+    }
+    
+    // 处理出基行
+    for (std::size_t j = 0; j < m; ++j) {
+        B_inv.at(leaving_idx, j) /= pivot;
+    }
+
+    return true;
+}
+
+// 重新从头计算基矩阵之逆
+bool reinvert_basis(
+    matrix::Matrix& B_inv,
+    const std::vector<std::size_t>& basis_curr,
+    const std::vector<std::vector<double>>& A_full,
+    std::size_t m) {
+
+    matrix::Matrix B(m, m, 0.0);
+    for (std::size_t i = 0; i < m; ++i) {
+        for (std::size_t k = 0; k < m; ++k) {
+            B.at(i, k) = A_full[i][basis_curr[k]];
+        }
+    }
+    try {
+        B_inv = matrix::inverse(B);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+// 单纯形迭代核心算法 (优化版: O(m^2) 迭代)
 bool simplex_iterate(
     std::vector<double>& x_curr,
     std::vector<std::size_t>& basis_curr,
@@ -29,44 +92,33 @@ bool simplex_iterate(
     std::size_t max_iters,
     double eps) {
 
+    matrix::Matrix B_inv(m_total, m_total, 0.0);
+    if (!reinvert_basis(B_inv, basis_curr, A_full, m_total)) {
+        return false;
+    }
+
     for (std::size_t iter = 0; iter < max_iters; ++iter) {
-        // 计算对偶变量 y: B' * y = c_B
+        // 每 50 次迭代重新求逆以保持数值稳定性
+        if (iter > 0 && iter % 50 == 0) {
+            if (!reinvert_basis(B_inv, basis_curr, A_full, m_total)) return false;
+        }
+
+        // 计算对偶变量 y: y' = c_B' * B_inv
         std::vector<double> y(m_total, 0.0);
-        {
-            matrix::Matrix B(m_total, m_total, 0.0);
-            matrix::Matrix cB(m_total, 1, 0.0);
+        for (std::size_t j = 0; j < m_total; ++j) {
+            const double cB_val = c_obj[basis_curr[j]];
             for (std::size_t i = 0; i < m_total; ++i) {
-                cB.at(i, 0) = c_obj[basis_curr[i]];
-                for (std::size_t k = 0; k < m_total; ++k) {
-                    B.at(i, k) = A_full[i][basis_curr[k]];
-                }
-            }
-            matrix::Matrix BT(m_total, m_total, 0.0);
-            for (std::size_t i = 0; i < m_total; ++i) {
-                for (std::size_t k = 0; k < m_total; ++k) {
-                    BT.at(i, k) = B.at(k, i);
-                }
-            }
-            try {
-                matrix::Matrix y_mat = matrix::solve(BT, cB);
-                for (std::size_t i = 0; i < m_total; ++i) {
-                    y[i] = y_mat.at(i, 0);
-                }
-            } catch (...) {
-                return false;
+                y[i] += cB_val * B_inv.at(j, i);
             }
         }
 
-        // 找入基变量（最负检验数）
+        // 找入基变量（定价）
         std::size_t entering = n_full;
         double best_rc = 0.0;
         for (std::size_t j = 0; j < n_full; ++j) {
             bool is_basic = false;
             for (std::size_t k = 0; k < m_total; ++k) {
-                if (basis_curr[k] == j) {
-                    is_basic = true;
-                    break;
-                }
+                if (basis_curr[k] == j) { is_basic = true; break; }
             }
             if (is_basic) continue;
 
@@ -81,105 +133,85 @@ bool simplex_iterate(
                             std::abs(xj - ub_full[j]) <= eps;
 
             if (minimize) {
-                if (at_lower && rc < best_rc) {
-                    best_rc = rc;
-                    entering = j;
-                } else if (at_upper && rc > -best_rc) {
-                    best_rc = -rc;
-                    entering = j;
-                } else if (!at_lower && !at_upper && rc < best_rc) {
-                    best_rc = rc;
-                    entering = j;
+                if (at_lower && rc < -eps) {
+                    if (rc < best_rc) { best_rc = rc; entering = j; }
+                } else if (at_upper && rc > eps) {
+                    if (-rc < best_rc) { best_rc = -rc; entering = j; }
                 }
             } else {
-                if (at_lower && rc > -best_rc) {
-                    best_rc = -rc;
-                    entering = j;
-                } else if (at_upper && rc < best_rc) {
-                    best_rc = rc;
-                    entering = j;
-                } else if (!at_lower && !at_upper && rc > -best_rc) {
-                    best_rc = -rc;
-                    entering = j;
+                if (at_lower && rc > eps) {
+                    if (-rc < best_rc) { best_rc = -rc; entering = j; }
+                } else if (at_upper && rc < -eps) {
+                    if (rc < best_rc) { best_rc = rc; entering = j; }
                 }
             }
         }
 
         if (entering >= n_full || std::abs(best_rc) <= eps) {
-            return true;
+            return true; // 找到最优解
         }
 
-        // 计算方向: B * d = A_entering
-        std::vector<double> a_enter(m_total, 0.0);
-        for (std::size_t i = 0; i < m_total; ++i) {
-            a_enter[i] = A_full[i][entering];
-        }
+        // 计算搜索方向 d = B_inv * A_entering
+        std::vector<double> a_enter(m_total);
+        for (std::size_t i = 0; i < m_total; ++i) a_enter[i] = A_full[i][entering];
 
         std::vector<double> d(m_total, 0.0);
-        {
-            matrix::Matrix B(m_total, m_total, 0.0);
-            for (std::size_t i = 0; i < m_total; ++i) {
-                for (std::size_t k = 0; k < m_total; ++k) {
-                    B.at(i, k) = A_full[i][basis_curr[k]];
-                }
-            }
-            matrix::Matrix a_mat(m_total, 1, 0.0);
-            for (std::size_t i = 0; i < m_total; ++i) {
-                a_mat.at(i, 0) = a_enter[i];
-            }
-            try {
-                matrix::Matrix d_mat = matrix::solve(B, a_mat);
-                for (std::size_t i = 0; i < m_total; ++i) {
-                    d[i] = d_mat.at(i, 0);
-                }
-            } catch (...) {
-                return false;
+        for (std::size_t i = 0; i < m_total; ++i) {
+            for (std::size_t j = 0; j < m_total; ++j) {
+                d[i] += B_inv.at(i, j) * a_enter[j];
             }
         }
 
-        // 比值检验
+        // 确定步长 (Ratio Test)
         double theta = std::numeric_limits<double>::infinity();
-        std::size_t leaving = n_full;
+        std::size_t leaving = m_total;
 
-        if (x_curr[entering] <= lb_full[entering] + eps) {
-            theta = ub_full[entering] - lb_full[entering];
-        } else if (ub_full[entering] < std::numeric_limits<double>::infinity() &&
-                   x_curr[entering] >= ub_full[entering] - eps) {
-            theta = x_curr[entering] - lb_full[entering];
+        // 如果变量从上界减少
+        bool decreasing_entering = false;
+        if (ub_full[entering] < std::numeric_limits<double>::infinity() &&
+            x_curr[entering] >= ub_full[entering] - eps) {
+            decreasing_entering = true;
         }
+
+        double max_theta = (ub_full[entering] < std::numeric_limits<double>::infinity())
+                            ? (ub_full[entering] - lb_full[entering])
+                            : std::numeric_limits<double>::infinity();
+
+        theta = max_theta;
 
         for (std::size_t i = 0; i < m_total; ++i) {
             std::size_t j = basis_curr[i];
-            if (std::abs(d[i]) <= eps) continue;
+            double di = decreasing_entering ? -d[i] : d[i];
+            if (std::abs(di) <= eps) continue;
 
-            double ratio;
-            if (d[i] > 0) {
-                ratio = (x_curr[j] - lb_full[j]) / d[i];
-                if (ratio < theta) {
-                    theta = ratio;
-                    leaving = i;
-                }
+            if (di > 0) {
+                double ratio = (x_curr[j] - lb_full[j]) / di;
+                if (ratio < theta) { theta = ratio; leaving = i; }
             } else {
                 if (ub_full[j] < std::numeric_limits<double>::infinity()) {
-                    ratio = (ub_full[j] - x_curr[j]) / (-d[i]);
-                    if (ratio < theta) {
-                        theta = ratio;
-                        leaving = i;
-                    }
+                    double ratio = (ub_full[j] - x_curr[j]) / (-di);
+                    if (ratio < theta) { theta = ratio; leaving = i; }
                 }
             }
         }
 
-        if (theta >= std::numeric_limits<double>::infinity() - 1) {
-            return true;
+        if (theta >= std::numeric_limits<double>::infinity() - 1e9) {
+            return true; // 无界或已达到极值
         }
 
-        x_curr[entering] += theta;
+        // 更新当前解
+        double shift = decreasing_entering ? -theta : theta;
+        x_curr[entering] += shift;
         for (std::size_t i = 0; i < m_total; ++i) {
-            x_curr[basis_curr[i]] -= theta * d[i];
+            x_curr[basis_curr[i]] -= shift * d[i];
         }
 
+        // 换基与 B_inv 更新
         if (leaving < m_total) {
+            if (!update_basis_inverse(B_inv, a_enter, leaving, eps)) {
+                // 如果秩 1 更新失败，尝试重新从头计算
+                if (!reinvert_basis(B_inv, basis_curr, A_full, m_total)) return false;
+            }
             basis_curr[leaving] = entering;
         }
     }

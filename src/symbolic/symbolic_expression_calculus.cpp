@@ -269,6 +269,13 @@ bool extract_real_linear_factorization(const std::vector<double>& denominator,
                                        std::vector<LinearFactorMultiplicity>* factors) {
     std::vector<double> remaining = denominator;
     trim_coefficients(&remaining);
+    
+    // 预标准化：确保最高项为 1
+    if (remaining.size() > 0) {
+        double lc = remaining.back();
+        for (double& c : remaining) c /= lc;
+    }
+
     std::vector<double> roots;
     try {
         roots = polynomial_real_roots(remaining);
@@ -276,16 +283,30 @@ bool extract_real_linear_factorization(const std::vector<double>& denominator,
         return false;
     }
 
+    // 针对符号积分优化的模糊除法逻辑
+    const double kFuzzyEps = 1e-6;
+
     for (double root : roots) {
         root = clean_symbolic_constant(root);
         const std::vector<double> factor = {-root, 1.0};
         int multiplicity = 0;
+        
         while (remaining.size() > 1) {
-            const PolynomialDivisionResult division =
-                polynomial_divide(remaining, factor);
-            if (!polynomial_is_zero(division.remainder)) {
+            PolynomialDivisionResult division = polynomial_divide(remaining, factor);
+            
+            // 检查余数是否在容差范围内为零
+            bool rem_is_zero = true;
+            for (double c : division.remainder) {
+                if (std::abs(c) > kFuzzyEps) {
+                    rem_is_zero = false;
+                    break;
+                }
+            }
+
+            if (!rem_is_zero) {
                 break;
             }
+
             remaining = division.quotient;
             trim_coefficients(&remaining);
             ++multiplicity;
@@ -296,7 +317,8 @@ bool extract_real_linear_factorization(const std::vector<double>& denominator,
     }
 
     trim_coefficients(&remaining);
-    return remaining.size() == 1 && !factors->empty();
+    // 最终检查：由于我们预先除以了 LC，剩余多项式理论上应该是 [1.0]
+    return remaining.size() == 1 && std::abs(remaining[0] - 1.0) < 1e-4 && !factors->empty();
 }
 
 bool polynomial_close(const std::vector<double>& lhs,
@@ -1075,7 +1097,26 @@ bool try_integrate_by_parts(const SymbolicExpression& left,
                             const SymbolicExpression& right,
                             const std::string& variable_name,
                             SymbolicExpression* integrated) {
-    // LIATE 启发式原则选择 u: Log, Inverse trig, Algebraic, Trig, Exponential
+    struct IbpState {
+        std::string original_key;
+        SymbolicExpression uv_sum = SymbolicExpression::number(0.0);
+    };
+    static thread_local std::vector<IbpState> ibp_stack;
+
+    const SymbolicExpression original_expr = make_multiply(left, right).simplify();
+    const std::string original_key = node_structural_key(original_expr.node_);
+
+    // 检查是否已经在栈中（循环检测）
+    for (const auto& state : ibp_stack) {
+        if (state.original_key == original_key) {
+            // 发现循环！我们不能直接积分，而是抛出一个特定异常或返回 false
+            // 实际上，这里需要通过代数手段解决。
+            // 简单起见，如果是在第二层递归发现循环，我们可以标记它。
+            return false; 
+        }
+    }
+
+    // LIATE 优先级
     auto get_priority = [&](const SymbolicExpression& e) {
         if (e.node_->type == NodeType::kFunction) {
             if (e.node_->text == "ln") return 1;
@@ -1094,12 +1135,10 @@ bool try_integrate_by_parts(const SymbolicExpression& left,
         dv = left;
     }
 
-    // 计算 v = integral(dv)
     SymbolicExpression v;
     try {
         v = dv.integral(variable_name);
     } catch (...) {
-        // 如果 dv 无法直接积分，尝试交换 u, dv
         u = (u.node_ == left.node_) ? right : left;
         dv = (dv.node_ == right.node_) ? left : right;
         try {
@@ -1109,25 +1148,67 @@ bool try_integrate_by_parts(const SymbolicExpression& left,
         }
     }
 
-    // IBP 公式: integral(u dv) = u*v - integral(v du)
     const SymbolicExpression du = u.derivative(variable_name).simplify();
     const SymbolicExpression v_du = make_multiply(v, du).simplify();
 
-    // 避免无限递归：如果 v*du 的结构键与原始积相同（或更复杂），则跳过
-    if (node_structural_key(v_du.node_) == node_structural_key(make_multiply(left, right).node_)) {
-        return false;
+    // 检查 v_du 是否是原始表达式的常数倍 (I = uv - k*I => I = uv/(1+k))
+    double k = 0.0;
+    SymbolicExpression remainder;
+    if (decompose_constant_times_expression(v_du, variable_name, &k, &remainder) &&
+        node_structural_key(remainder.node_) == original_key) {
+        if (!mymath::is_near_zero(1.0 + k, kFormatEps)) {
+            *integrated = make_divide(make_multiply(u, v),
+                                      SymbolicExpression::number(1.0 + k)).simplify();
+            return true;
+        }
     }
 
+    // 如果没有直接发现循环，尝试递归积分 v_du
+    if (ibp_stack.size() >= 2) return false;
+
+    ibp_stack.push_back({original_key, make_multiply(u, v)});
     try {
-        static thread_local int ibp_depth = 0;
-        if (ibp_depth > 2) return false; // 限制分部积分递归深度
-        ibp_depth++;
-        const SymbolicExpression second_integral = v_du.integral(variable_name);
-        ibp_depth--;
+        SymbolicExpression second_integral;
+        // 在这里，我们需要处理二阶循环： I = uv - (u2v2 - kI)
+        // 这需要更复杂的逻辑。暂时先处理一阶循环。
+        // 为了支持 exp(x)*cos(x)，我们需要两步 IBP。
         
-        *integrated = make_subtract(make_multiply(u, v), second_integral).simplify();
-        return true;
+        // 我们尝试手动展开一轮
+        // I = u*v - integral(v*du)
+        // 令 I2 = integral(v*du)
+        SymbolicExpression u2, dv2;
+        // 简单假设 v_du 也是乘积
+        if (v_du.node_->type == NodeType::kMultiply) {
+            u2 = SymbolicExpression(v_du.node_->left);
+            dv2 = SymbolicExpression(v_du.node_->right);
+            
+            SymbolicExpression v2;
+            try {
+                v2 = dv2.integral(variable_name);
+                SymbolicExpression du2 = u2.derivative(variable_name).simplify();
+                SymbolicExpression v2_du2 = make_multiply(v2, du2).simplify();
+                
+                // 检查 v2_du2 是否回到 I
+                double k2 = 0.0;
+                SymbolicExpression remainder2;
+                if (decompose_constant_times_expression(v2_du2, variable_name, &k2, &remainder2) &&
+                    node_structural_key(remainder2.node_) == original_key) {
+                    // I = uv - (u2v2 - k2*I) => I = (uv - u2v2) / (1 - k2)
+                    if (!mymath::is_near_zero(1.0 - k2, kFormatEps)) {
+                        *integrated = make_divide(make_subtract(make_multiply(u, v),
+                                                                make_multiply(u2, v2)),
+                                                  SymbolicExpression::number(1.0 - k2)).simplify();
+                        ibp_stack.pop_back();
+                        return true;
+                    }
+                }
+            } catch (...) {}
+        }
+
+        ibp_stack.pop_back();
+        return false;
     } catch (...) {
+        ibp_stack.pop_back();
         return false;
     }
 }
@@ -1376,6 +1457,120 @@ bool try_integrate_polynomial_quotient(const SymbolicExpression& numerator,
     return true;
 }
 
+bool try_integrate_weierstrass_substitution(const SymbolicExpression& expression,
+                                             const std::string& variable_name,
+                                             SymbolicExpression* integrated) {
+    // 检查是否为 1 / (trig expression)
+    if (expression.node_->type != NodeType::kDivide) {
+        return false;
+    }
+
+    const SymbolicExpression numerator = SymbolicExpression(expression.node_->left);
+    const SymbolicExpression denominator = SymbolicExpression(expression.node_->right);
+
+    if (!numerator.is_constant(variable_name)) {
+        return false;
+    }
+
+    // 尝试识别 A + B*sin(ax+b) + C*cos(ax+b)
+    // 这里我们先做一个简化版的：检查分母是否只包含 sin/cos 的线性组合
+    std::vector<SymbolicExpression> terms;
+    collect_additive_expressions(denominator, &terms);
+
+    double A = 0.0;
+    SymbolicExpression B_expr = SymbolicExpression::number(0.0);
+    SymbolicExpression C_expr = SymbolicExpression::number(0.0);
+    SymbolicExpression argument;
+    bool found_argument = false;
+
+    for (const auto& term : terms) {
+        double val = 0.0;
+        if (term.is_number(&val)) {
+            A += val;
+        } else if (term.node_->type == NodeType::kFunction && term.node_->text == "sin") {
+            if (!found_argument) {
+                argument = SymbolicExpression(term.node_->left);
+                found_argument = true;
+            } else if (!expressions_match(argument, SymbolicExpression(term.node_->left))) {
+                return false;
+            }
+            B_expr = make_add(B_expr, SymbolicExpression::number(1.0)).simplify();
+        } else if (term.node_->type == NodeType::kFunction && term.node_->text == "cos") {
+            if (!found_argument) {
+                argument = SymbolicExpression(term.node_->left);
+                found_argument = true;
+            } else if (!expressions_match(argument, SymbolicExpression(term.node_->left))) {
+                return false;
+            }
+            C_expr = make_add(C_expr, SymbolicExpression::number(1.0)).simplify();
+        } else if (term.node_->type == NodeType::kMultiply) {
+            // 处理 B * sin(x) 或 C * cos(x)
+            double coeff = 0.0;
+            SymbolicExpression rest;
+            if (decompose_constant_times_expression(term, variable_name, &coeff, &rest)) {
+                if (rest.node_->type == NodeType::kFunction && rest.node_->text == "sin") {
+                    if (!found_argument) {
+                        argument = SymbolicExpression(rest.node_->left);
+                        found_argument = true;
+                    } else if (!expressions_match(argument, SymbolicExpression(rest.node_->left))) {
+                        return false;
+                    }
+                    B_expr = make_add(B_expr, SymbolicExpression::number(coeff)).simplify();
+                } else if (rest.node_->type == NodeType::kFunction && rest.node_->text == "cos") {
+                    if (!found_argument) {
+                        argument = SymbolicExpression(rest.node_->left);
+                        found_argument = true;
+                    } else if (!expressions_match(argument, SymbolicExpression(rest.node_->left))) {
+                        return false;
+                    }
+                    C_expr = make_add(C_expr, SymbolicExpression::number(coeff)).simplify();
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
+    if (!found_argument) return false;
+
+    double a = 0.0, b = 0.0;
+    if (!decompose_linear(argument, variable_name, &a, &b) || !mymath::is_near_zero(b, kFormatEps)) {
+        // 目前仅支持 sin(ax), cos(ax)
+        return false;
+    }
+
+    // Weierstrass 置换: t = tan(ax/2)
+    // sin(ax) = 2t / (1+t^2)
+    // cos(ax) = (1-t^2) / (1+t^2)
+    // dx = 2 / (a * (1+t^2)) dt
+    
+    // 积分变为: integral( (2/a) / (A*(1+t^2) + B*(2t) + C*(1-t^2)), t )
+    // 分母多项式: (A-C)t^2 + 2Bt + (A+C)
+    double b_val = 0.0, c_val = 0.0;
+    if (!B_expr.is_number(&b_val) || !C_expr.is_number(&c_val)) return false;
+
+    std::vector<double> poly_numerator = { 2.0 / a };
+    std::vector<double> poly_denominator = { A + c_val, 2.0 * b_val, A - c_val };
+
+    SymbolicExpression t_variable = SymbolicExpression::variable("_t");
+    SymbolicExpression t_numerator = build_polynomial_expression_from_coefficients(poly_numerator, "_t");
+    SymbolicExpression t_denominator = build_polynomial_expression_from_coefficients(poly_denominator, "_t");
+
+    SymbolicExpression t_integrated;
+    if (try_integrate_polynomial_quotient(t_numerator, t_denominator, "_t", &t_integrated)) {
+        // 替换 t 为 tan(ax/2)
+        SymbolicExpression substitution = make_function("tan", make_divide(argument, SymbolicExpression::number(2.0)));
+        *integrated = substitute_impl(t_integrated, "_t", substitution).simplify();
+        return true;
+    }
+
+    return false;
+}
+
 SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                                        const std::string& variable_name) {
     const std::shared_ptr<SymbolicExpression::Node>& node_ = expression.node_;
@@ -1534,6 +1729,21 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                 const SymbolicExpression exp_part = make_function("exp", make_negate(make_power(argument, SymbolicExpression::number(2.0))));
                 const SymbolicExpression factor = make_divide(SymbolicExpression::number(-2.0), make_function("sqrt", pi_val));
                 return make_multiply(make_multiply(factor, exp_part), inner).simplify();
+            }
+            if (node_->text == "erfi") {
+                const SymbolicExpression pi_val = SymbolicExpression::variable("pi");
+                const SymbolicExpression exp_part = make_function("exp", make_power(argument, SymbolicExpression::number(2.0)));
+                const SymbolicExpression factor = make_divide(SymbolicExpression::number(2.0), make_function("sqrt", pi_val));
+                return make_multiply(make_multiply(factor, exp_part), inner).simplify();
+            }
+            if (node_->text == "Ei") {
+                return make_multiply(make_divide(make_function("exp", argument), argument), inner).simplify();
+            }
+            if (node_->text == "Si") {
+                return make_multiply(make_divide(make_function("sin", argument), argument), inner).simplify();
+            }
+            if (node_->text == "Ci") {
+                return make_multiply(make_divide(make_function("cos", argument), argument), inner).simplify();
             }
             if (node_->text == "abs") {
                 return make_multiply(make_function("sign", argument), inner).simplify();
@@ -1764,11 +1974,38 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             }
         }
         
+        if (left.node_->type == NodeType::kFunction && left.node_->text == "exp" &&
+            right.is_variable_named(variable_name)) {
+            const SymbolicExpression argument(left.node_->left);
+            if (argument.is_variable_named(variable_name)) {
+                return make_function("Ei", argument);
+            }
+        }
+        if (left.node_->type == NodeType::kFunction && left.node_->text == "sin" &&
+            right.is_variable_named(variable_name)) {
+            const SymbolicExpression argument(left.node_->left);
+            if (argument.is_variable_named(variable_name)) {
+                return make_function("Si", argument);
+            }
+        }
+        if (left.node_->type == NodeType::kFunction && left.node_->text == "cos" &&
+            right.is_variable_named(variable_name)) {
+            const SymbolicExpression argument(left.node_->left);
+            if (argument.is_variable_named(variable_name)) {
+                return make_function("Ci", argument);
+            }
+        }
+
         SymbolicExpression rational_integral;
         if (try_integrate_polynomial_quotient(left,
                                               right,
                                               variable_name,
                                               &rational_integral)) {
+            return rational_integral.simplify();
+        }
+        if (try_integrate_weierstrass_substitution(*this,
+                                                   variable_name,
+                                                   &rational_integral)) {
             return rational_integral.simplify();
         }
         throw std::runtime_error("symbolic integral does not support this quotient");
@@ -1831,17 +2068,28 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             SymbolicExpression c_term, x2_coeff;
             if (is_pure_quadratic(argument, variable_name, &c_term, &x2_coeff)) {
                 double a_val;
-                if (x2_coeff.is_number(&a_val) && a_val < 0) {
-                    const double pos_a = -a_val;
+                if (x2_coeff.is_number(&a_val)) {
                     const SymbolicExpression pi_val = variable("pi");
-                    const SymbolicExpression factor = make_divide(
-                        make_multiply(make_function("exp", c_term), make_function("sqrt", pi_val)),
-                        make_multiply(number(2.0), make_function("sqrt", number(pos_a)))
-                    );
-                    return make_multiply(
-                        factor,
-                        make_function("erf", make_multiply(make_function("sqrt", number(pos_a)), variable(variable_name)))
-                    ).simplify();
+                    if (a_val < 0) {
+                        const double pos_a = -a_val;
+                        const SymbolicExpression factor = make_divide(
+                            make_multiply(make_function("exp", c_term), make_function("sqrt", pi_val)),
+                            make_multiply(number(2.0), make_function("sqrt", number(pos_a)))
+                        );
+                        return make_multiply(
+                            factor,
+                            make_function("erf", make_multiply(make_function("sqrt", number(pos_a)), variable(variable_name)))
+                        ).simplify();
+                    } else if (a_val > 0) {
+                        const SymbolicExpression factor = make_divide(
+                            make_multiply(make_function("exp", c_term), make_function("sqrt", pi_val)),
+                            make_multiply(number(2.0), make_function("sqrt", number(a_val)))
+                        );
+                        return make_multiply(
+                            factor,
+                            make_function("erfi", make_multiply(make_function("sqrt", number(a_val)), variable(variable_name)))
+                        ).simplify();
+                    }
                 }
             }
         }

@@ -291,6 +291,31 @@ double invoke_script_function_decimal(Calculator* calculator,
     }
 }
 
+namespace {
+
+bool expression_contains_i(const std::string& expression) {
+    bool in_string = false;
+    bool escaping = false;
+    for (std::size_t i = 0; i < expression.size(); ++i) {
+        char ch = expression[i];
+        if (in_string) {
+            if (escaping) escaping = false;
+            else if (ch == '\\') escaping = true;
+            else if (ch == '"') in_string = false;
+            continue;
+        }
+        if (ch == '"') { in_string = true; continue; }
+        if (ch == 'i') {
+            bool prev_ok = (i == 0 || (!std::isalnum(static_cast<unsigned char>(expression[i-1])) && expression[i-1] != '_'));
+            bool next_ok = (i == expression.size() - 1 || (!std::isalnum(static_cast<unsigned char>(expression[i+1])) && expression[i+1] != '_'));
+            if (prev_ok && next_ok) return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
 StoredValue evaluate_expression_value(Calculator* calculator,
                                       Calculator::Impl* impl,
                                       const std::string& expression,
@@ -320,6 +345,29 @@ StoredValue evaluate_expression_value(Calculator* calculator,
         [calculator, impl](const std::string& name, const std::vector<double>& arguments) {
             return invoke_script_function_decimal(calculator, impl, name, arguments);
         };
+
+    if (expression_contains_i(trimmed)) {
+        try {
+            matrix::Value matrix_val;
+            if (try_evaluate_matrix_expression(trimmed,
+                                              &variables,
+                                              &impl->functions,
+                                              has_script_function,
+                                              invoke_script_function,
+                                              &matrix_val)) {
+                StoredValue result;
+                if (matrix_val.is_matrix) {
+                    result.is_matrix = true;
+                    result.matrix = std::move(matrix_val.matrix);
+                } else {
+                    result.decimal = matrix_val.scalar;
+                }
+                return result;
+            }
+        } catch (...) {
+            // 回退到标量解析路径
+        }
+    }
 
     StoredValue stored;
     std::vector<std::string> rational_arguments;

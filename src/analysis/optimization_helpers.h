@@ -42,19 +42,13 @@ struct IntegerSearchContext {
     const std::vector<double>* inequality_rhs;
     const matrix::Matrix* equality_matrix;
     const std::vector<double>* equality_rhs;
-    const std::vector<double>* lower_bounds;
-    const std::vector<double>* upper_bounds;
     const std::vector<std::size_t>* integer_indices;
-    const std::vector<std::size_t>* continuous_indices;
-    const std::vector<long long>* integer_lower;
-    const std::vector<long long>* integer_upper;
     double tolerance;
 
     // 搜索状态
     bool* found;
     double* best_value;
     std::vector<double>* best_solution;
-    std::vector<long long>* current_integer_values;
     std::size_t* visited_nodes;
 
     // 搜索限制
@@ -66,12 +60,12 @@ struct IntegerSearchContext {
  * @brief 执行整数规划分支定界搜索
  *
  * @param ctx 搜索上下文
- * @param depth 当前搜索深度
- * @param current_objective 当前目标值
+ * @param initial_lower 初始变量下界
+ * @param initial_upper 初始变量上界
  */
 void search_integer_branch_and_bound(IntegerSearchContext& ctx,
-                                      std::size_t depth,
-                                      long double current_objective);
+                                      const std::vector<double>& initial_lower,
+                                      const std::vector<double>& initial_upper);
 
 }  // namespace optimization_helpers
 

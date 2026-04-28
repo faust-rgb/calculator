@@ -2,6 +2,7 @@
 
 #include "function_analysis.h"
 #include "matrix.h"
+#include "matrix_internal.h"
 #include "multivariable_integrator.h"
 #include "mymath.h"
 #include "ode_solver.h"

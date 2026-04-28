@@ -3,12 +3,14 @@
 // ============================================================================
 
 #include "optimization_helpers.h"
+#include "calculator_simplex.h"
 
 #include "mymath.h"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <queue>
 #include <sstream>
 #include <stdexcept>
 
@@ -42,194 +44,105 @@ std::string format_planning_result(const std::vector<double>& solution, double o
 
 namespace {
 
-// 检查约束可行性剪枝
-bool check_constraint_feasibility(
-    const IntegerSearchContext& ctx,
-    std::size_t depth,
-    const std::vector<long long>& current_values) {
+struct Node {
+    std::vector<double> lower;
+    std::vector<double> upper;
+    double estimated_value;
 
-    const double eps = ctx.tolerance;
-
-    // 检查不等式约束
-    for (std::size_t row = 0; row < ctx.inequality_matrix->rows; ++row) {
-        long double assigned_total = 0.0L;
-        for (std::size_t d = 0; d < depth; ++d) {
-            const std::size_t col = (*ctx.integer_indices)[d];
-            assigned_total += static_cast<long double>(ctx.inequality_matrix->at(row, col)) *
-                              static_cast<long double>(current_values[col]);
-        }
-
-        long double minimum_possible = assigned_total;
-        for (std::size_t remaining = depth; remaining < ctx.integer_indices->size(); ++remaining) {
-            const std::size_t col = (*ctx.integer_indices)[remaining];
-            const long double coeff = static_cast<long double>(ctx.inequality_matrix->at(row, col));
-            minimum_possible += coeff >= 0.0L
-                ? coeff * static_cast<long double>((*ctx.integer_lower)[col])
-                : coeff * static_cast<long double>((*ctx.integer_upper)[col]);
-        }
-        for (std::size_t col : *ctx.continuous_indices) {
-            const long double coeff = static_cast<long double>(ctx.inequality_matrix->at(row, col));
-            minimum_possible += coeff >= 0.0L
-                ? coeff * static_cast<long double>((*ctx.lower_bounds)[col])
-                : coeff * static_cast<long double>((*ctx.upper_bounds)[col]);
-        }
-
-        if (minimum_possible > static_cast<long double>((*ctx.inequality_rhs)[row]) + eps) {
-            return false;
-        }
+    // 用于优先队列 (Best-First Search)
+    // 假设是最大化问题：估计值越大越优先
+    bool operator<(const Node& other) const {
+        return estimated_value < other.estimated_value;
     }
+};
 
-    // 检查等式约束
-    for (std::size_t row = 0; row < ctx.equality_matrix->rows; ++row) {
-        long double assigned_total = 0.0L;
-        for (std::size_t d = 0; d < depth; ++d) {
-            const std::size_t col = (*ctx.integer_indices)[d];
-            assigned_total += static_cast<long double>(ctx.equality_matrix->at(row, col)) *
-                              static_cast<long double>(current_values[col]);
-        }
-
-        long double minimum_possible = assigned_total;
-        long double maximum_possible = assigned_total;
-        for (std::size_t remaining = depth; remaining < ctx.integer_indices->size(); ++remaining) {
-            const std::size_t col = (*ctx.integer_indices)[remaining];
-            const long double coeff = static_cast<long double>(ctx.equality_matrix->at(row, col));
-            minimum_possible += coeff >= 0.0L
-                ? coeff * static_cast<long double>((*ctx.integer_lower)[col])
-                : coeff * static_cast<long double>((*ctx.integer_upper)[col]);
-            maximum_possible += coeff >= 0.0L
-                ? coeff * static_cast<long double>((*ctx.integer_upper)[col])
-                : coeff * static_cast<long double>((*ctx.integer_lower)[col]);
-        }
-        for (std::size_t col : *ctx.continuous_indices) {
-            const long double coeff = static_cast<long double>(ctx.equality_matrix->at(row, col));
-            minimum_possible += coeff >= 0.0L
-                ? coeff * static_cast<long double>((*ctx.lower_bounds)[col])
-                : coeff * static_cast<long double>((*ctx.upper_bounds)[col]);
-            maximum_possible += coeff >= 0.0L
-                ? coeff * static_cast<long double>((*ctx.upper_bounds)[col])
-                : coeff * static_cast<long double>((*ctx.lower_bounds)[col]);
-        }
-
-        const long double target = static_cast<long double>((*ctx.equality_rhs)[row]);
-        if (target < minimum_possible - eps || target > maximum_possible + eps) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-// 计算乐观目标值
-long double compute_optimistic_objective(
-    const IntegerSearchContext& ctx,
-    std::size_t depth,
-    long double current_objective) {
-
-    long double optimistic = current_objective;
-    for (std::size_t remaining = depth; remaining < ctx.integer_indices->size(); ++remaining) {
-        const std::size_t col = (*ctx.integer_indices)[remaining];
-        const long double coeff = static_cast<long double>((*ctx.objective)[col]);
-        optimistic += coeff >= 0.0L
-            ? coeff * static_cast<long double>((*ctx.integer_upper)[col])
-            : coeff * static_cast<long double>((*ctx.integer_lower)[col]);
-    }
-    for (std::size_t col : *ctx.continuous_indices) {
-        const long double coeff = static_cast<long double>((*ctx.objective)[col]);
-        optimistic += coeff >= 0.0L
-            ? coeff * static_cast<long double>((*ctx.upper_bounds)[col])
-            : coeff * static_cast<long double>((*ctx.lower_bounds)[col]);
-    }
-    return optimistic;
+bool is_integer_val(double val, double eps) {
+    return std::abs(val - std::round(val)) <= eps;
 }
 
 }  // namespace
 
 void search_integer_branch_and_bound(IntegerSearchContext& ctx,
-                                      std::size_t depth,
-                                      long double current_objective) {
-    ++(*ctx.visited_nodes);
-    if (*ctx.visited_nodes > ctx.max_nodes) {
-        throw std::runtime_error(
-            *ctx.command_name + " integer search node limit exceeded after " +
-            std::to_string(ctx.max_nodes) + " nodes");
-    }
+                                      const std::vector<double>& initial_lower,
+                                      const std::vector<double>& initial_upper) {
 
-    // 约束可行性剪枝
-    if (!check_constraint_feasibility(ctx, depth, *ctx.current_integer_values)) {
-        return;
-    }
+    std::priority_queue<Node> nodes;
+    
+    // 根节点：初始 LP 松弛
+    // 初始估计值设为无穷大，确保根节点首先被探索
+    nodes.push({initial_lower, initial_upper, std::numeric_limits<double>::infinity()});
 
-    // 目标值剪枝
-    const long double optimistic = compute_optimistic_objective(ctx, depth, current_objective);
-    if (*ctx.found && optimistic <= static_cast<long double>(*ctx.best_value) + ctx.tolerance) {
-        return;
-    }
+    while (!nodes.empty()) {
+        Node current = nodes.top();
+        nodes.pop();
 
-    // 到达叶子节点
-    if (depth == ctx.integer_indices->size()) {
-        // 构建候选解
-        std::vector<double> candidate(ctx.variable_count, 0.0);
-        for (std::size_t col = 0; col < ctx.variable_count; ++col) {
-            candidate[col] = (*ctx.lower_bounds)[col];
-        }
-        for (std::size_t col : *ctx.integer_indices) {
-            candidate[col] = static_cast<double>((*ctx.current_integer_values)[col]);
+        ++(*ctx.visited_nodes);
+        if (*ctx.visited_nodes > ctx.max_nodes) {
+            throw std::runtime_error(
+                *ctx.command_name + " integer search node limit exceeded after " +
+                std::to_string(ctx.max_nodes) + " nodes");
         }
 
-        // 检查可行性
-        const double eps = ctx.tolerance;
-        for (std::size_t row = 0; row < ctx.inequality_matrix->rows; ++row) {
-            long double total = 0.0L;
-            for (std::size_t col = 0; col < ctx.variable_count; ++col) {
-                total += static_cast<long double>(ctx.inequality_matrix->at(row, col)) *
-                         static_cast<long double>(candidate[col]);
-            }
-            if (total > static_cast<long double>((*ctx.inequality_rhs)[row]) + eps) {
-                return;
-            }
+        std::vector<double> sol;
+        double obj_val = 0.0;
+        std::string diag;
+
+        // 求解当前节点的 LP 松弛子问题
+        bool feasible = simplex::solve_linear_box_problem(
+            *ctx.objective, *ctx.inequality_matrix, *ctx.inequality_rhs,
+            *ctx.equality_matrix, *ctx.equality_rhs,
+            current.lower, current.upper, ctx.tolerance,
+            &sol, &obj_val, &diag);
+
+        if (!feasible) {
+            continue; // 剪枝：LP 不可行
         }
-        for (std::size_t row = 0; row < ctx.equality_matrix->rows; ++row) {
-            long double total = 0.0L;
-            for (std::size_t col = 0; col < ctx.variable_count; ++col) {
-                total += static_cast<long double>(ctx.equality_matrix->at(row, col)) *
-                         static_cast<long double>(candidate[col]);
-            }
-            if (mymath::abs(static_cast<double>(total - (*ctx.equality_rhs)[row])) > eps) {
-                return;
+
+        // 边界剪枝
+        if (*ctx.found && obj_val <= *ctx.best_value + ctx.tolerance) {
+            continue; 
+        }
+
+        // 检查所有应为整数的变量
+        std::size_t branch_var = ctx.variable_count;
+        double max_fractionality = -1.0;
+
+        for (std::size_t idx : *ctx.integer_indices) {
+            double val = sol[idx];
+            if (!is_integer_val(val, ctx.tolerance)) {
+                // 分支策略：选取最接近 0.5 的变量（Most fractional）
+                double fractionality = std::abs(val - std::round(val));
+                if (fractionality > max_fractionality) {
+                    max_fractionality = fractionality;
+                    branch_var = idx;
+                }
             }
         }
 
-        // 更新最优解
-        const double obj_value = dot_product(*ctx.objective, candidate);
-        if (!*ctx.found || obj_value > *ctx.best_value + eps) {
+        if (branch_var == ctx.variable_count) {
+            // 所有整数变量确实都取了整数值，这是一个改进的整数可行解
             *ctx.found = true;
-            *ctx.best_value = obj_value;
-            *ctx.best_solution = candidate;
-        }
-        return;
-    }
+            *ctx.best_value = obj_val;
+            *ctx.best_solution = sol;
+        } else {
+            // 需要分支
+            double val = sol[branch_var];
+            
+            // 下分支节点: x_i <= floor(v)
+            Node left = current;
+            left.upper[branch_var] = std::floor(val + ctx.tolerance);
+            left.estimated_value = obj_val;
+            if (left.upper[branch_var] >= left.lower[branch_var]) {
+                nodes.push(left);
+            }
 
-    // 分支搜索
-    const std::size_t current_col = (*ctx.integer_indices)[depth];
-    const bool descending = (*ctx.objective)[current_col] >= 0.0;
-
-    if (descending) {
-        for (long long value = (*ctx.integer_upper)[current_col];
-             value >= (*ctx.integer_lower)[current_col]; --value) {
-            (*ctx.current_integer_values)[current_col] = value;
-            search_integer_branch_and_bound(
-                ctx, depth + 1,
-                current_objective + static_cast<long double>((*ctx.objective)[current_col]) *
-                                    static_cast<long double>(value));
-        }
-    } else {
-        for (long long value = (*ctx.integer_lower)[current_col];
-             value <= (*ctx.integer_upper)[current_col]; ++value) {
-            (*ctx.current_integer_values)[current_col] = value;
-            search_integer_branch_and_bound(
-                ctx, depth + 1,
-                current_objective + static_cast<long double>((*ctx.objective)[current_col]) *
-                                    static_cast<long double>(value));
+            // 上分支节点: x_i >= ceil(v)
+            Node right = current;
+            right.lower[branch_var] = std::ceil(val - ctx.tolerance);
+            right.estimated_value = obj_val;
+            if (right.lower[branch_var] <= right.upper[branch_var]) {
+                nodes.push(right);
+            }
         }
     }
 }
