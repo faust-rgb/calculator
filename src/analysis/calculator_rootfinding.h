@@ -40,6 +40,9 @@ struct RootfindingContext {
     // 检查是否为矩阵参数
     std::function<bool(const std::string&)> is_matrix_argument;
 
+    // 解析矩阵参数
+    std::function<matrix::Matrix(const std::string&, const std::string&)> parse_matrix_argument;
+
     // 结果格式化
     std::function<double(double)> normalize_result;
 };

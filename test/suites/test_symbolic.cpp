@@ -1,6 +1,21 @@
+/**
+ * @file test_symbolic.cpp
+ * @brief 符号计算测试实现
+ *
+ * 该文件实现了符号计算测试，测试计算器的高级数学功能，包括：
+ * - 矩阵创建与运算（向量、矩阵、转置、逆、行列式等）
+ * - 线性代数运算（QR分解、LU分解、SVD分解、特征值等）
+ * - 多项式运算（求值、求导、积分、拟合等）
+ * - 复数运算
+ * - 信号处理（傅里叶变换、卷积、窗口函数）
+ * - 积分变换（拉普拉斯变换、Z变换）
+ * - 脚本执行（控制流、函数定义、状态持久化）
+ */
+
 #include "suites/test_symbolic.h"
 #include "calculator.h"
 #include "test_helpers.h"
+#include "math/mymath.h"
 #include "symbolic_expression.h"
 #include <iostream>
 #include <vector>
@@ -11,9 +26,27 @@
 
 namespace test_suites {
 
+/**
+ * @brief 运行符号计算测试
+ * @param passed 成功测试计数器的引用
+ * @param failed 失败测试计数器的引用
+ * @return 测试全部通过返回0，否则返回1
+ *
+ * 该函数执行以下测试类别：
+ * 1. 矩阵显示测试：验证矩阵运算结果的正确显示
+ * 2. 矩阵错误测试：验证非法矩阵操作的错误处理
+ * 3. 随机数测试：验证随机数生成函数
+ * 4. 命令测试：验证各种高级命令的正确执行
+ * 5. 脚本测试：验证脚本语言的执行
+ * 6. 状态持久化测试：验证保存和加载功能
+ * 7. 扩展功能测试：验证统计扩展、整数扩展、信号窗口等
+ */
 int run_symbolic_tests(int& passed, int& failed) {
     Calculator calculator;
     using namespace test_helpers;
+
+    // ========== 矩阵显示测试 ==========
+    // 测试矩阵创建、运算和结果的正确显示
     const std::vector<DisplayCase> matrix_display_cases = {
         {"vec(1, 2, 3)", false, "[1, 2, 3]"},
         {"[1, 2, 3]", false, "[1, 2, 3]"},
@@ -22,6 +55,8 @@ int run_symbolic_tests(int& passed, int& failed) {
         {"[1, , 3; 4]", false, "[[1, 0, 3], [4, 0, 0]]"},
         {"mat(2, 3, 1, 2, 3, 4, 5, 6)", false, "[[1, 2, 3], [4, 5, 6]]"},
         {"zeros(2, 2)", false, "[[0, 0], [0, 0]]"},
+        {"randmat(2, 3, 5, 5)", false, "[[5, 5, 5], [5, 5, 5]]"},
+        {"random_matrix(1, 2, -3, -3)", false, "[-3, -3]"},
         {"eye(3)", false, "[[1, 0, 0], [0, 1, 0], [0, 0, 1]]"},
         {"resize(mat(2, 2, 1, 2, 3, 4), 3, 3)", false, "[[1, 2, 0], [3, 4, 0], [0, 0, 0]]"},
         {"resize(mat(2, 3, 1, 2, 3, 4, 5, 6), 1, 2)", false, "[1, 2]"},
@@ -134,6 +169,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         {"extended_gcd(240, 46)", false, "[2, -9, 47]"},
     };
 
+    // 遍历所有矩阵显示测试用例
     for (const auto& test : matrix_display_cases) {
         try {
             const std::string actual =
@@ -153,6 +189,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         }
     }
 
+    // 测试消元敏感的行列式计算
     try {
         const double actual =
             calculator.evaluate("det(mat(2, 2, 100001, 100000, 100000, 99999))");
@@ -169,6 +206,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试满秩矩阵的零空间
     try {
         const std::string actual =
             calculator.evaluate_for_display("null(mat(2, 2, 1, 2, 3, 4))", false);
@@ -185,6 +223,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试奇异矩阵的条件数（应为无穷大）
     try {
         const double actual =
             calculator.evaluate("cond(mat(2, 2, 1, 1, 1, 1))");
@@ -201,6 +240,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试矩阵变量的赋值与操作
     try {
         const std::string assigned = calculator.process_line("m = mat(2, 2, 1, 2, 3, 4)", false);
         if (assigned == "m = [[1, 2], [3, 4]]") {
@@ -216,6 +256,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试括号语法的矩阵赋值
     try {
         const std::string assigned = calculator.process_line("b = [1, 2; 3]", false);
         if (assigned == "b = [[1, 2], [3, 0]]") {
@@ -231,6 +272,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试向量变量的赋值
     try {
         const std::string assigned = calculator.process_line("v = vec(5, 6)", true);
         if (assigned == "v = [5, 6]") {
@@ -246,6 +288,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试矩阵运算后的赋值
     try {
         const std::string assigned =
             calculator.process_line("n = m + eye(2)", false);
@@ -262,6 +305,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试矩阵元素设置
     try {
         const std::string assigned =
             calculator.process_line("m = set(m, 1, 0, 8)", false);
@@ -278,6 +322,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试括号矩阵的自动扩展设置
     try {
         const std::string assigned =
             calculator.process_line("b = set(b, 2, 3, 7)", false);
@@ -294,6 +339,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试获取矩阵变量元素
     try {
         const std::string element =
             calculator.evaluate_for_display("get(m, 1, 0)", false);
@@ -310,6 +356,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试向量元素设置
     try {
         const std::string assigned =
             calculator.process_line("v = set(v, 0, -3)", false);
@@ -326,6 +373,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试获取向量变量元素
     try {
         const std::string element =
             calculator.evaluate_for_display("get(v, 1)", false);
@@ -342,6 +390,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试矩阵变量的大小调整
     try {
         const std::string resized =
             calculator.evaluate_for_display("resize(m, 3, 1)", false);
@@ -358,6 +407,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试列出所有变量
     try {
         const std::string vars_output = calculator.list_variables();
         if (vars_output.find("b = [[1, 2, 0, 0], [3, 0, 0, 0], [0, 0, 0, 7]]") != std::string::npos &&
@@ -376,6 +426,8 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // ========== 矩阵错误测试 ==========
+    // 验证非法矩阵操作能被正确捕获
     const std::vector<ErrorCase> matrix_error_cases = {
         {"mat(2, 2, 1, 2, 3)"},
         {"resize(3, 2, 2)"},
@@ -396,6 +448,9 @@ int run_symbolic_tests(int& passed, int& failed) {
         {"svd_vt(3)"},
         {"solve(3, vec(1, 2))"},
         {"zeros(2.5, 2)"},
+        {"randmat(2)"},
+        {"randmat(2.5, 2)"},
+        {"randmat(2, 2, 5, 3)"},
         {"mat(2, 2, 1, 2, 3, 4) + mat(1, 2, 1, 2)"},
         {"mat(2, 2, 1, 2, 3, 4) * mat(1, 2, 1, 2)"},
         {"mat(2, 2, 1, 2, 3, 4) / eye(2)"},
@@ -438,6 +493,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         {"convolve(mat(2, 3, 1, 2, 3, 4, 5, 6), mat(1, 2, 1, 2))"},
     };
 
+    // 遍历所有矩阵错误测试用例
     for (const auto& test : matrix_error_cases) {
         try {
             (void)calculator.evaluate_for_display(test.expression, false);
@@ -449,6 +505,8 @@ int run_symbolic_tests(int& passed, int& failed) {
         }
     }
 
+    // ========== 随机数测试 ==========
+    // 测试随机数生成函数
     try {
         const double value = calculator.evaluate("rand()");
         if (value >= 0.0 && value < 1.0) {
@@ -476,6 +534,23 @@ int run_symbolic_tests(int& passed, int& failed) {
         std::cout << "FAIL: randint(2, 4) threw unexpected error: " << ex.what() << '\n';
     }
 
+    try {
+        const double value = calculator.evaluate("get(randmat(2, 3, -2, -1), 1, 2)");
+        if (value >= -2.0 && value < -1.0) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: randmat(2, 3, -2, -1) expected value in range got "
+                      << value << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: randmat range test threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    // ========== 命令测试 ==========
+    // 测试各种高级数学命令
     const std::vector<DisplayCase> command_display_cases = {
         {"solve(x^2 - 2, 1)", false, "1.41421356237"},
         {"bisect(x^2 - 2, 1, 2)", false, "1.41421356238"},
@@ -503,6 +578,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         {"iztrans(5 * z / (z - 3) - 2 * z ^ -2 + z / (z - 1), z, n)", false, "5 * step(n) * 3 ^ n - 2 * delta(n - 2) + step(n)"},
     };
 
+    // 遍历所有命令测试用例
     for (const auto& test : command_display_cases) {
         try {
             std::string output;
@@ -533,6 +609,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         }
     }
 
+    // 测试SVD分解的格式化输出
     try {
         std::string output;
         const bool handled = calculator.try_process_function_command(
@@ -552,6 +629,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试特征值的复数显示
     try {
         std::string output;
         const bool handled = calculator.try_process_function_command(
@@ -571,6 +649,8 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // ========== 脚本测试 ==========
+    // 测试脚本语言的print命令
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
@@ -590,6 +670,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试脚本中的多项式运算
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
@@ -611,6 +692,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试脚本中的多项式除法和乘法组合
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
@@ -631,6 +713,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试脚本中的字符串表达式
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
@@ -650,6 +733,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试脚本中的while循环
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
@@ -673,6 +757,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试脚本中的if/elif/else条件语句
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
@@ -698,6 +783,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试脚本中的for循环与break/continue
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
@@ -723,6 +809,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试脚本中的递归函数定义
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
@@ -746,6 +833,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试脚本中的注释处理
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
@@ -769,6 +857,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试脚本中的函数作用域
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
@@ -793,6 +882,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试:funcs命令列出脚本函数
     try {
         Calculator script_calculator;
         (void)script_calculator.execute_script(
@@ -818,6 +908,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试:clearfunc命令清除脚本函数
     try {
         Calculator script_calculator;
         (void)script_calculator.execute_script(
@@ -841,6 +932,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试脚本中的矩阵循环操作
     try {
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
@@ -863,9 +955,11 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // ========== 状态持久化测试 ==========
     const std::string matrix_save_path =
         make_test_path("calculator_matrix_state_test.txt").string();
 
+    // 测试矩阵变量的保存与加载
     try {
         Calculator matrix_save;
         (void)matrix_save.process_line("a = vec(1, 2)", false);
@@ -887,6 +981,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 清除所有变量
     try {
         const std::string cleared = calculator.clear_all_variables();
         if (cleared == "Cleared all variables.") {
@@ -902,6 +997,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试完整状态的保存与加载（包括变量、函数、精确小数）
     const std::string save_path =
         make_test_path("calculator_state_test.txt").string();
     try {
@@ -928,6 +1024,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试加载保存的状态
     try {
         Calculator loaded;
         const std::string loaded_message = loaded.load_state(save_path);
@@ -939,6 +1036,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                       << loaded_message << '\n';
         }
 
+        // 验证加载的变量
         const std::string vars_output = loaded.list_variables();
         if (vars_output == "a = 5/6\nb = 9\nlabel = \"persisted\"\nprec = 0.12345678901234567890123456789") {
             ++passed;
@@ -948,6 +1046,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                       << vars_output << '\n';
         }
 
+        // 验证加载的脚本函数
         const std::string loaded_script_output =
             loaded.execute_script("print(add(2, 3), label);\n", false);
         if (loaded_script_output == "5 persisted") {
@@ -958,6 +1057,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                       << loaded_script_output << '\n';
         }
 
+        // 验证加载的精确小数精度
         const std::string loaded_precise_sum = loaded.evaluate_for_display(
             "prec + 0.00000000000000000000000000001", false);
         if (loaded_precise_sum == "0.1234567890123456789012345679") {
@@ -973,6 +1073,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试加载不存在的文件应抛出异常
     try {
         Calculator missing;
         (void)missing.load_state(make_test_path("calculator_no_such_state_file.txt").string());
@@ -982,6 +1083,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         ++passed;
     }
 
+    // 测试加载无效格式的文件应抛出异常
     const std::string bad_save_path =
         make_test_path("calculator_bad_state_test.txt").string();
     {
@@ -998,6 +1100,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         ++passed;
     }
 
+    // 测试符号常量的持久化
     try {
         Calculator symbolic_persisted;
         (void)symbolic_persisted.set_symbolic_constants_mode(true);
@@ -1026,6 +1129,8 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // ========== ODE求解测试 ==========
+    // 测试自适应刚性ODE求解
     try {
         const double actual = calculator.evaluate(
             "ode(-1000*(y-sin(x))+cos(x), 0, 0, 0.1, 20)");
@@ -1042,6 +1147,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试近奇异矩阵求解
     try {
         const std::string actual =
             calculator.evaluate_for_display(
@@ -1060,6 +1166,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试近奇异矩阵的秩
     try {
         const double actual =
             calculator.evaluate("rank(mat(2,2,1,1,1,1.000000000001))");
@@ -1076,6 +1183,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试复数特征值情况（应抛出异常）
     try {
         (void)calculator.evaluate("eigvals(mat(3,3,0,-1,0,1,0,0,0,0,2))");
         ++failed;
@@ -1084,6 +1192,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         ++passed;
     }
 
+    // 清理临时文件
     std::error_code cleanup_error;
     std::filesystem::remove(matrix_save_path, cleanup_error);
     cleanup_error.clear();
@@ -1091,6 +1200,7 @@ int run_symbolic_tests(int& passed, int& failed) {
     cleanup_error.clear();
     std::filesystem::remove(bad_save_path, cleanup_error);
 
+    // ========== 扩展功能测试 ==========
     // 统计扩展测试
     try {
         Calculator calc;
@@ -1139,7 +1249,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         std::cout << "FAIL: hanning threw: " << ex.what() << '\n';
     }
 
-    // Schur 分解测试 (矩阵)
+    // Schur分解测试 (矩阵)
     try {
         Calculator calc;
         const std::string s = calc.process_line("schur([1, 2; 3, 4])", false);
@@ -1154,8 +1264,250 @@ int run_symbolic_tests(int& passed, int& failed) {
         std::cout << "FAIL: schur threw: " << ex.what() << '\n';
     }
 
-    std::cout << "Passed: " << passed << '\n';
-    std::cout << "Failed: " << failed << '\n';
+    // ========== Phase 5: 高级微分形式和向量分析命令测试 ==========
+
+    // 测试 implicit_diff: x^2 + y^2 = 1 => dy/dx = -x/y
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "implicit_diff(x^2 + y^2 - 1, y, x)", &output);
+        if (handled && output == "-x / y") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: implicit_diff(x^2 + y^2 - 1, y, x) expected -x / y got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: implicit_diff threw unexpected error: " << ex.what() << '\n';
+    }
+
+    // 测试 param_deriv: x = t, y = t^2 => dy/dx = 2t
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "param_deriv(t, t^2, t)", &output);
+        if (handled && output == "2 * t") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: param_deriv(t, t^2, t) expected 2 * t got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: param_deriv threw unexpected error: " << ex.what() << '\n';
+    }
+
+    // 测试 param_deriv: 圆 x = cos(t), y = sin(t) => dy/dx = -cos(t)/sin(t)
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "param_deriv(cos(t), sin(t), t)", &output);
+        // -sin(t) / -cos(t) = sin(t)/cos(t) = tan(t), but with our derivative it's
+        // dy/dt = cos(t), dx/dt = -sin(t), so dy/dx = cos(t)/(-sin(t)) = -cot(t)
+        if (handled) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: param_deriv(cos(t), sin(t), t) expected handled got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: param_deriv circle threw unexpected error: " << ex.what() << '\n';
+    }
+
+    // 测试 directional: f = x^2 + y^2, direction = [1, 0] at point
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "directional(x^2 + y^2, x, y, 1, 0)", &output);
+        // gradient = [2x, 2y], normalized direction = [1, 0]
+        // directional derivative = 2x * 1 + 2y * 0 = 2x
+        if (handled && output == "2 * x") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: directional(x^2 + y^2, x, y, 1, 0) expected 2 * x got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: directional threw unexpected error: " << ex.what() << '\n';
+    }
+
+    // 测试 line_integral: f = 1 along line segment from (0,0) to (1,0)
+    // r(t) = [t, 0], t in [0, 1], |r'| = 1, integral = 1
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "line_integral(1, [t, 0], t, 0, 1)", &output);
+        if (handled && output == "1") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: line_integral(1, [t, 0], t, 0, 1) expected 1 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: line_integral scalar threw unexpected error: " << ex.what() << '\n';
+    }
+
+    // 测试 line_integral: f = x along line segment from (0,0) to (1,0)
+    // r(t) = [t, 0], f(r(t)) = t, |r'| = 1, integral = ∫_0^1 t dt = 0.5
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "line_integral(x, [t, 0], t, 0, 1)", &output);
+        if (handled && output == "0.5") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: line_integral(x, [t, 0], t, 0, 1) expected 0.5 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: line_integral(x) threw unexpected error: " << ex.what() << '\n';
+    }
+
+    // 测试 line_integral 的数值回退：单位圆周长 = 2π
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "line_integral(1, [cos(t), sin(t)], t, 0, 2*pi)", &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 2.0 * mymath::kPi, 1e-6)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: line_integral unit circle expected 2*pi got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: line_integral unit circle threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    // 测试 line_integral: F = [y, -x] along line from (0,0) to (1,0)
+    // r(t) = [t, 0], r' = [1, 0], F(r) = [0, -t], F·r' = 0
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "line_integral([y, -x], [t, 0], t, 0, 1)", &output);
+        if (handled && output == "0") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: line_integral([y, -x], [t, 0], t, 0, 1) expected 0 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: line_integral vector threw unexpected error: " << ex.what() << '\n';
+    }
+
+    // 测试 line_integral: F = [x, y] along line from (0,0) to (1,1)
+    // r(t) = [t, t], r' = [1, 1], F(r) = [t, t], F·r' = 2t, integral = ∫_0^1 2t dt = 1
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "line_integral([x, y], [t, t], t, 0, 1)", &output);
+        if (handled && output == "1") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: line_integral([x, y], [t, t], t, 0, 1) expected 1 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: line_integral([x, y]) threw unexpected error: " << ex.what() << '\n';
+    }
+
+    // 测试 surface_integral: f = 1 on unit square in xy-plane
+    // r(u,v) = [u, v, 0], u in [0,1], v in [0,1]
+    // r_u = [1, 0, 0], r_v = [0, 1, 0], r_u × r_v = [0, 0, 1], |r_u × r_v| = 1
+    // integral = 1
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "surface_integral(1, [u, v, 0], u, 0, 1, v, 0, 1)", &output);
+        if (handled && output == "1") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: surface_integral(1, [u, v, 0], u, 0, 1, v, 0, 1) expected 1 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: surface_integral scalar threw unexpected error: " << ex.what() << '\n';
+    }
+
+    // 测试 surface_integral 的数值求值：单位球面积 = 4π
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "surface_integral(1, [sin(u)*cos(v), sin(u)*sin(v), cos(u)], u, 0, pi, v, 0, 2*pi)",
+            &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 4.0 * mymath::kPi, 1e-5)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: surface_integral unit sphere expected 4*pi got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: surface_integral unit sphere threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    // 测试 surface_integral: F = [0, 0, 1] through unit square in xy-plane
+    // r(u,v) = [u, v, 0], r_u × r_v = [0, 0, 1], F·(r_u × r_v) = 1
+    // flux = 1
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "surface_integral([0, 0, 1], [u, v, 0], u, 0, 1, v, 0, 1)", &output);
+        if (handled && output == "1") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: surface_integral([0, 0, 1], [u, v, 0], ...) expected 1 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: surface_integral flux threw unexpected error: " << ex.what() << '\n';
+    }
+
+    // 测试 surface_integral: F = [x, 0, 0] through unit square in yz-plane
+    // r(u,v) = [0, u, v], r_u = [0, 1, 0], r_v = [0, 0, 1]
+    // r_u × r_v = [1, 0, 0], F(r) = [0, 0, 0], F·(r_u × r_v) = 0
+    // flux = 0
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "surface_integral([x, 0, 0], [0, u, v], u, 0, 1, v, 0, 1)", &output);
+        if (handled && output == "0") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: surface_integral([x, 0, 0], [0, u, v], ...) expected 0 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: surface_integral yz-plane threw unexpected error: " << ex.what() << '\n';
+    }
+
+    //std::cout << "Passed: " << passed << '\n';
+    //std::cout << "Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 
     return 0;

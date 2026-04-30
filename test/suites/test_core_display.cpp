@@ -1,6 +1,19 @@
+/**
+ * @file test_core_display.cpp
+ * @brief 核心显示测试实现
+ *
+ * 该文件实现了核心显示测试，测试计算器结果的字符串显示功能，包括：
+ * - 分数显示（精确模式）
+ * - 浮点数显示（近似模式）
+ * - 显示精度设置
+ * - 进制转换显示（二进制、八进制、十六进制）
+ * - 位运算结果显示
+ */
+
 #include "suites/test_core.h"
 #include "calculator.h"
 #include "test_helpers.h"
+#include "math/mymath.h"
 #include "symbolic_expression.h"
 #include "function_analysis.h"
 #include "ode_solver.h"
@@ -13,9 +26,23 @@
 
 namespace test_suites {
 
+/**
+ * @brief 运行核心显示测试
+ * @param passed 成功测试计数器的引用
+ * @param failed 失败测试计数器的引用
+ * @return 测试完成后返回0
+ *
+ * 该函数测试计算结果的字符串显示功能，包括：
+ * - 精确模式下的分数显示
+ * - 近似模式下的浮点数显示
+ * - 显示精度的配置与限制
+ * - 各种数学函数结果的格式化输出
+ */
 int run_core_display_tests(int& passed, int& failed) {
     Calculator calculator;
     using namespace test_helpers;
+
+    // 显示测试用例：验证各种表达式的字符串输出格式
     const std::vector<DisplayCase> display_cases = {
         {"1/3 + 1/4", true, "7/12"},
         {"2/4 + 2/4", true, "1"},
@@ -92,6 +119,7 @@ int run_core_display_tests(int& passed, int& failed) {
         {"1/3 + 1/4", false, "0.5833333333333333333333333333333333333333"},
     };
 
+    // 遍历所有显示测试用例，验证输出格式
     for (const auto& test : display_cases) {
         try {
             const std::string actual =
@@ -110,6 +138,7 @@ int run_core_display_tests(int& passed, int& failed) {
         }
     }
 
+    // 测试显示精度配置功能
     try {
         Calculator precision_calculator;
         const std::string status = precision_calculator.set_display_precision(6);
@@ -138,6 +167,7 @@ int run_core_display_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试显示精度范围限制（最大允许17位）
     try {
         calculator.set_display_precision(18);
         ++failed;

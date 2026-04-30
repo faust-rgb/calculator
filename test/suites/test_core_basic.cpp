@@ -1,6 +1,22 @@
+/**
+ * @file test_core_basic.cpp
+ * @brief 核心基础测试实现
+ *
+ * 该文件实现了核心基础测试，测试计算器的基本功能，包括：
+ * - 表达式解析与计算
+ * - 算术运算（加减乘除、幂运算）
+ * - 数学函数（三角函数、指数、对数等）
+ * - 特殊函数（Gamma、Beta、Bessel等）
+ * - 统计函数
+ * - 数论函数
+ * - 位运算
+ * - 错误处理（除零、定义域错误等）
+ */
+
 #include "suites/test_core.h"
 #include "calculator.h"
 #include "test_helpers.h"
+#include "math/mymath.h"
 #include "symbolic_expression.h"
 #include "function_analysis.h"
 #include "ode_solver.h"
@@ -13,11 +29,22 @@
 
 namespace test_suites {
 
+/**
+ * @brief 运行核心基础测试
+ * @param passed 成功测试计数器的引用
+ * @param failed 失败测试计数器的引用
+ * @return 测试完成后返回0
+ *
+ * 该函数执行两大类测试：
+ * 1. 成功路径测试：验证各种表达式能正确计算出期望结果
+ * 2. 异常路径测试：验证错误输入能被正确捕获并抛出异常
+ */
 int run_core_basic_tests(int& passed, int& failed) {
     Calculator calculator;
     using namespace test_helpers;
 
-    // 正常路径：验证表达式解析和数值函数都能返回合理结果。
+    // ========== 成功路径测试 ==========
+    // 验证表达式解析和数值函数都能返回合理结果
     const std::vector<SuccessCase> success_cases = {
         {"1 + 2 * 3", 7.0},
         {"(1 + 2) * 3", 9.0},
@@ -180,7 +207,7 @@ int run_core_basic_tests(int& passed, int& failed) {
         {"reverse_bits(1)", -9223372036854775808.0},
     };
 
-
+    // 遍历所有成功测试用例，验证计算结果
     for (const auto& test : success_cases) {
         try {
             const double actual = calculator.evaluate(test.expression);
@@ -198,6 +225,7 @@ int run_core_basic_tests(int& passed, int& failed) {
         }
     }
 
+    // 测试大参数Gamma函数的数值稳定性
     try {
         const double actual = calculator.evaluate("gamma(170)");
         if (mymath::isfinite(actual) && actual > 1e304 && actual < 1e305) {
@@ -213,6 +241,7 @@ int run_core_basic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试小参数Beta函数的数值稳定性
     try {
         const double actual = calculator.evaluate("beta(100, 100)");
         if (mymath::isfinite(actual) && actual > 0.0 && actual < 1e-40) {
@@ -228,6 +257,7 @@ int run_core_basic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试大参数Bessel函数的数值稳定性
     try {
         const double actual = calculator.evaluate("bessel(0, 100)");
         if (mymath::isfinite(actual) && mymath::abs(actual) <= 1.0) {
@@ -243,6 +273,7 @@ int run_core_basic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试大参数三角函数的精度（参数约简）
     try {
         const double actual = calculator.evaluate("sin(100000000000000000000)");
         if (mymath::isfinite(actual) && mymath::abs(actual) <= 1.0) {
@@ -258,6 +289,7 @@ int run_core_basic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试大样本二项分布概率质量函数的数值稳定性
     try {
         const double pmf = calculator.evaluate("binom_pmf(2000, 1000, 0.5)");
         if (mymath::isfinite(pmf) && pmf > 0.017 && pmf < 0.019) {
@@ -273,6 +305,7 @@ int run_core_basic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试大样本二项分布累积分布函数的数值稳定性
     try {
         const double cdf = calculator.evaluate("binom_cdf(2000, 1000, 0.5)");
         if (mymath::isfinite(cdf) && cdf > 0.50 && cdf < 0.52) {
@@ -288,7 +321,8 @@ int run_core_basic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
-    // 异常路径：验证除零、定义域错误和语法错误能被正确拦截。
+    // ========== 异常路径测试 ==========
+    // 验证除零、定义域错误和语法错误能被正确拦截
     const std::vector<ErrorCase> error_cases = {
         {"1 / 0"},
         {"ln(0)"},
@@ -372,6 +406,7 @@ int run_core_basic_tests(int& passed, int& failed) {
         {"(-2) ^ 0.5"},
     };
 
+    // 遍历所有错误测试用例，验证异常被正确抛出
     for (const auto& test : error_cases) {
         try {
             (void)calculator.evaluate(test.expression);

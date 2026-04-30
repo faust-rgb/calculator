@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+class CalculatorModule;
+
 /**
  * @class Calculator
  * @brief 高级科学计算器的核心类，提供表达式求值、变量管理、脚本执行等功能
@@ -30,6 +32,12 @@ public:
 
     /** @brief 析构函数，释放实现类资源 */
     ~Calculator();
+
+    /**
+     * @brief 注册一个外部数学模块
+     * @param module 实现了 CalculatorModule 接口的对象指针
+     */
+    void register_module(std::shared_ptr<CalculatorModule> module);
 
     /**
      * @brief 计算数学表达式的数值结果
@@ -112,6 +120,13 @@ public:
     std::string factor_expression(const std::string& expression) const;
 
     /**
+     * @brief 绘制函数图形
+     * @param expression 绘图表达式，如 "plot(sin(x), -pi, pi)"
+     * @return 终端字符画图形
+     */
+    std::string plot_expression(const std::string& expression) const;
+
+    /**
      * @brief 执行进制转换
      * @param expression 转换表达式，如 "0b1010 to hex"
      * @return 转换结果
@@ -127,6 +142,13 @@ public:
      * 支持的命令：limit, derivative, integral, extrema 等
      */
     bool try_process_function_command(const std::string& expression, std::string* output);
+
+    /**
+     * @brief 导出变量到文件
+     * @param line 导出指令，如 ":export \"data.csv\" A"
+     * @return 操作结果消息
+     */
+    std::string export_variable(const std::string& line) const;
 
     /**
      * @brief 保存计算器状态到文件
@@ -206,16 +228,16 @@ public:
      */
     std::vector<std::string> custom_function_names() const;
 
-private:
-    /** @brief Pimpl 模式的实现指针 */
-    std::unique_ptr<Impl> impl_;
-
     /**
      * @brief 规范化计算结果（处理 -0 等边界情况）
      * @param value 原始计算结果
      * @return 规范化后的结果
      */
     static double normalize_result(double value);
+
+private:
+    /** @brief Pimpl 模式的实现指针 */
+    std::unique_ptr<Impl> impl_;
 };
 
 #endif

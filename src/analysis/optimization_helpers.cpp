@@ -8,8 +8,6 @@
 #include "mymath.h"
 
 #include <algorithm>
-#include <cmath>
-#include <limits>
 #include <queue>
 #include <sstream>
 #include <stdexcept>
@@ -57,7 +55,7 @@ struct Node {
 };
 
 bool is_integer_val(double val, double eps) {
-    return std::abs(val - std::round(val)) <= eps;
+    return mymath::abs(val - mymath::round(val)) <= eps;
 }
 
 }  // namespace
@@ -70,7 +68,7 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
     
     // 根节点：初始 LP 松弛
     // 初始估计值设为无穷大，确保根节点首先被探索
-    nodes.push({initial_lower, initial_upper, std::numeric_limits<double>::infinity()});
+    nodes.push({initial_lower, initial_upper, mymath::infinity()});
 
     while (!nodes.empty()) {
         Node current = nodes.top();
@@ -111,7 +109,7 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
             double val = sol[idx];
             if (!is_integer_val(val, ctx.tolerance)) {
                 // 分支策略：选取最接近 0.5 的变量（Most fractional）
-                double fractionality = std::abs(val - std::round(val));
+                double fractionality = mymath::abs(val - mymath::round(val));
                 if (fractionality > max_fractionality) {
                     max_fractionality = fractionality;
                     branch_var = idx;
@@ -130,7 +128,7 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
             
             // 下分支节点: x_i <= floor(v)
             Node left = current;
-            left.upper[branch_var] = std::floor(val + ctx.tolerance);
+            left.upper[branch_var] = mymath::floor(val + ctx.tolerance);
             left.estimated_value = obj_val;
             if (left.upper[branch_var] >= left.lower[branch_var]) {
                 nodes.push(left);
@@ -138,7 +136,7 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
 
             // 上分支节点: x_i >= ceil(v)
             Node right = current;
-            right.lower[branch_var] = std::ceil(val - ctx.tolerance);
+            right.lower[branch_var] = mymath::ceil(val - ctx.tolerance);
             right.estimated_value = obj_val;
             if (right.lower[branch_var] <= right.upper[branch_var]) {
                 nodes.push(right);

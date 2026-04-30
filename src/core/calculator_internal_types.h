@@ -6,13 +6,11 @@
 // 这些类型不对外暴露，允许在不修改公共 API 的情况下更改实现。
 //
 // 主要组件：
-// 1. Rational - 有理数表示，用于精确模式
-// 2. PreciseDecimal - 精确小数表示，避免浮点误差
-// 3. StoredValue - 存储的值（标量、矩阵、字符串等）
-// 4. CustomFunction/ScriptFunction - 用户定义的函数
-// 5. Calculator::Impl - Pimpl 模式的实现类
-// 6. ScriptSignal - 脚本执行控制流信号
-// 7. 辅助函数声明
+// 1. StoredValue - 存储的值（标量、矩阵、字符串等）
+// 2. CustomFunction/ScriptFunction - 用户定义的函数
+// 3. Calculator::Impl - Pimpl 模式的实现类
+// 4. ScriptSignal - 脚本执行控制流信号
+// 5. 辅助函数声明
 // ============================================================================
 
 #ifndef CALCULATOR_INTERNAL_TYPES_H
@@ -23,6 +21,9 @@
 #include "matrix.h"
 #include "mymath.h"
 #include "script_ast.h"
+#include "types/rational.h"
+#include "types/precise_decimal.h"
+#include "types/stored_value.h"
 
 #include <cstdint>
 #include <functional>
@@ -33,6 +34,8 @@
 #include <string>
 #include "statistics/statistics.h"
 #include "statistics/probability.h"
+
+#include "calculator_exceptions.h"
 
 // ============================================================================
 // 显示精度常量
@@ -52,145 +55,10 @@ constexpr int kMinDisplayPrecision = 1;
 constexpr int kMaxDisplayPrecision = 17;
 
 // ============================================================================
-// 异常类型
+// 存储值类型（定义在 types/stored_value.h）
 // ============================================================================
 
-/**
- * @class ExactModeUnsupported
- * @brief 精确模式不支持异常
- *
- * 当表达式无法在精确模式下计算时抛出。
- */
-class ExactModeUnsupported : public std::runtime_error {
-public:
-    explicit ExactModeUnsupported(const std::string& message)
-        : std::runtime_error(message) {}
-};
-
-/**
- * @class PreciseDecimalUnsupported
- * @brief 精确小数不支持异常
- *
- * 当表达式无法用精确小数表示时抛出。
- */
-class PreciseDecimalUnsupported : public std::runtime_error {
-public:
-    explicit PreciseDecimalUnsupported(const std::string& message)
-        : std::runtime_error(message) {}
-};
-
-// ============================================================================
-// 有理数类型
-// ============================================================================
-
-/**
- * @struct Rational
- * @brief 有理数表示
- *
- * 用于精确模式下的分数运算，避免浮点误差。
- * 自动规范化为最简分数（分母为正）。
- *
- * 例如：1/3 + 1/6 = 1/2（精确计算）
- */
-struct Rational {
-    long long numerator = 0;    ///< 分子
-    long long denominator = 1;  ///< 分母（始终为正）
-
-    Rational() = default;
-    Rational(long long num, long long den);
-
-    /** @brief 规范化为最简分数 */
-    void normalize();
-
-    /** @brief 检查是否为整数 */
-    bool is_integer() const;
-
-    /** @brief 转换为字符串，如 "1/2" 或 "3" */
-    std::string to_string() const;
-};
-
-Rational operator+(const Rational& lhs, const Rational& rhs);
-Rational operator-(const Rational& lhs, const Rational& rhs);
-Rational operator*(const Rational& lhs, const Rational& rhs);
-Rational operator/(const Rational& lhs, const Rational& rhs);
-
-// ============================================================================
-// 精确小数类型
-// ============================================================================
-
-/**
- * @struct PreciseDecimal
- * @brief 精确小数表示
- *
- * 使用字符串存储数字，避免浮点误差。
- * 适用于需要精确表示小数的场景，如货币计算。
- *
- * 内部表示：digits 存储有效数字，scale 表示小数点位置。
- * 例如：123.45 → digits="12345", scale=2
- */
-struct PreciseDecimal {
-    std::string digits = "0";  ///< 有效数字字符串
-    int scale = 0;             ///< 小数点后的位数
-    bool negative = false;     ///< 是否为负数
-
-    /** @brief 规范化表示（去除前导零、末尾零） */
-    void normalize();
-
-    /** @brief 检查是否为零 */
-    bool is_zero() const;
-
-    /** @brief 转换为字符串 */
-    std::string to_string() const;
-
-    /** @brief 转换为 double（可能有精度损失） */
-    double to_double() const;
-
-    /** @brief 从原始数字构造 */
-    static PreciseDecimal from_digits(std::string raw_digits,
-                                      int raw_scale,
-                                      bool is_negative);
-
-    /** @brief 从整数字符串构造 */
-    static PreciseDecimal from_integer_string(const std::string& integer_text,
-                                              bool is_negative);
-
-    /** @brief 从小数字面量构造 */
-    static PreciseDecimal from_decimal_literal(const std::string& token);
-};
-
-// ============================================================================
-// 存储值类型
-// ============================================================================
-
-/**
- * @struct StoredValue
- * @brief 计算器中存储的值
- *
- * 支持多种值类型：
- * - 标量（double 或有理数）
- * - 矩阵
- * - 字符串
- * - 符号表达式文本
- * - 精确小数文本
- *
- * 通过标志位区分值类型，实现统一的存储接口。
- */
-struct StoredValue {
-    bool is_matrix = false;              ///< 是否为矩阵
-    bool is_complex = false;             ///< 是否为复数标量
-    bool is_string = false;              ///< 是否为字符串
-    bool has_symbolic_text = false;      ///< 是否有符号表达式文本
-    bool has_precise_decimal_text = false; ///< 是否有精确小数文本
-    bool exact = false;                  ///< 是否在精确模式下创建
-
-    Rational rational;                   ///< 有理数值
-    double decimal = 0.0;                ///< 浮点数值
-    matrix::ComplexNumber complex;       ///< 复数值
-    std::string string_value;            ///< 字符串值
-    std::string symbolic_text;           ///< 符号表达式文本
-    std::string precise_decimal_text;    ///< 精确小数文本
-    matrix::Matrix matrix;               ///< 矩阵值
-};
+// StoredValue 结构体已移至 types/stored_value.h
 
 // ============================================================================
 // 函数类型
@@ -231,6 +99,46 @@ using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
 using InvokeScriptFunctionDecimalCallback =
     std::function<double(const std::string&, const std::vector<double>&)>;
 
+/**
+ * @class VariableResolver
+ * @brief 变量查找解析器，避免 Map 复制
+ *
+ * 在脚本执行或表达式求值时，用于在局部作用域栈、全局变量表和内置常量中
+ * 按优先级查找变量。通过持有引用或指针，避免了 visible_variables() 的 Map 复制开销。
+ */
+class VariableResolver {
+public:
+    VariableResolver() : global_vars_(nullptr), local_scopes_(nullptr), override_vars_(nullptr), parent_(nullptr), is_owned_(false) {}
+    VariableResolver(const std::map<std::string, StoredValue>* global_vars,
+                     const std::vector<std::map<std::string, StoredValue>>* local_scopes,
+                     const std::map<std::string, StoredValue>* override_vars = nullptr,
+                     const VariableResolver* parent = nullptr)
+        : global_vars_(global_vars), local_scopes_(local_scopes), override_vars_(override_vars), parent_(parent), is_owned_(false) {}
+
+    /** @brief 构造一个拥有所有权副本的解析器，用于 Lambda 捕获 */
+    static VariableResolver make_owned(const VariableResolver& other);
+
+    /** @brief 查找变量值，返回指针，未找到返回 nullptr */
+    const StoredValue* lookup(const std::string& name) const;
+
+    /** @brief 检查变量是否存在（包括内置常量） */
+    bool contains(const std::string& name) const;
+
+    /** @brief 获取所有可见变量的快照（用于兼容旧代码或显示） */
+    std::map<std::string, StoredValue> snapshot() const;
+
+private:
+    const std::map<std::string, StoredValue>* global_vars_;
+    const std::vector<std::map<std::string, StoredValue>>* local_scopes_;
+    const std::map<std::string, StoredValue>* override_vars_;
+    const VariableResolver* parent_;
+    
+    bool is_owned_;
+    std::shared_ptr<std::map<std::string, StoredValue>> owned_global_vars_;
+    std::shared_ptr<std::vector<std::map<std::string, StoredValue>>> owned_local_scopes_;
+    std::shared_ptr<VariableResolver> owned_parent_;
+};
+
 // ============================================================================
 // 数值表达式解析器
 // ============================================================================
@@ -248,7 +156,7 @@ using InvokeScriptFunctionDecimalCallback =
 class DecimalParser {
 public:
     DecimalParser(std::string source,
-                  const std::map<std::string, StoredValue>* variables,
+                  const VariableResolver& variables,
                   const std::map<std::string, CustomFunction>* functions,
                   HasScriptFunctionCallback has_script_function = {},
                   InvokeScriptFunctionDecimalCallback invoke_script_function = {});
@@ -257,11 +165,13 @@ public:
 
 private:
     std::string source_;
-    const std::map<std::string, StoredValue>* variables_;
+    VariableResolver variables_;
     const std::map<std::string, CustomFunction>* functions_;
     HasScriptFunctionCallback has_script_function_;
     InvokeScriptFunctionDecimalCallback invoke_script_function_;
 };
+
+class CalculatorModule;
 
 // ============================================================================
 // Calculator 实现类
@@ -281,6 +191,8 @@ struct Calculator::Impl {
     std::map<std::string, CustomFunction> functions;       ///< 简单函数
     std::map<std::string, ScriptFunction> script_functions; ///< 脚本函数
     std::vector<std::map<std::string, StoredValue>> local_scopes; ///< 局部作用域栈
+
+    std::vector<std::shared_ptr<CalculatorModule>> registered_modules; ///< 已注册的数学模块
 
     bool symbolic_constants_mode = false;  ///< 符号常量模式（pi, e 保留符号形式）
     bool hex_prefix_mode = false;          ///< 十六进制输出前缀
@@ -355,9 +267,6 @@ std::string format_symbolic_number(double value);     ///< 格式化符号数值
 void set_process_display_precision(int precision);    ///< 设置进程级显示有效位数
 int process_display_precision();                      ///< 查询进程级显示有效位数
 
-// 随机数
-std::mt19937_64& global_rng();  ///< 全局随机数生成器
-
 // 内置常量
 bool lookup_builtin_constant(const std::string& name, double* value); ///< 查找内置常量
 
@@ -407,16 +316,18 @@ int digit_value(char ch);                   ///< 字符转数字值
 bool prefixed_base(char prefix, int* base); ///< 判断前缀对应的进制
 long long parse_prefixed_integer_token(const std::string& token); ///< 解析带前缀整数
 
-// 有理数运算
+// 有理数运算（实现在 precise/rational.cpp）
 Rational pow_rational(Rational base, long long exponent); ///< 有理数幂
 Rational abs_rational(Rational value);  ///< 有理数绝对值
 double rational_to_double(const Rational& value); ///< 有理数转 double
 
-// 精确小数运算
+// 精确小数运算（实现在 precise/precise_decimal.cpp）
 PreciseDecimal add_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs);
 PreciseDecimal subtract_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs);
 PreciseDecimal multiply_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs);
 PreciseDecimal divide_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs);
+PreciseDecimal pow_precise_decimal(const PreciseDecimal& base, long long exponent);
+int compare_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs);
 
 // 字符串处理
 bool is_valid_variable_name(const std::string& name);  ///< 检查变量名合法性
@@ -438,9 +349,9 @@ std::vector<std::string> split_top_level_arguments(const std::string& text);
 // 函数展开
 std::string expand_inline_function_commands(Calculator* calculator, const std::string& expression);
 
-// 精确小数处理
-std::string stored_value_precise_decimal_text(const StoredValue& value);
-PreciseDecimal parse_precise_decimal_expression(const std::string& expression, const std::map<std::string, StoredValue>* variables);
+// 精确小数处理（实现在 precise/precise_decimal.cpp 和 precise/precise_parser.cpp）
+// stored_value_precise_decimal_text 和 parse_precise_decimal_expression
+// 已移至 types/stored_value.h 和 precise/precise_parser.h
 
 // 值格式化
 void apply_calculator_display_precision(const Calculator::Impl* impl);
@@ -466,25 +377,26 @@ bool is_reserved_function_name(const std::string& name);
 bool split_function_definition(const std::string& expression, std::string* function_name, std::string* parameter_name, std::string* body);
 
 // 表达式求值
-double parse_decimal_expression(const std::string& expression, const std::map<std::string, StoredValue>* variables, const std::map<std::string, CustomFunction>* functions, HasScriptFunctionCallback has_script_function = {}, InvokeScriptFunctionDecimalCallback invoke_script_function = {});
+double parse_decimal_expression(const std::string& expression, const VariableResolver& variables, const std::map<std::string, CustomFunction>* functions, HasScriptFunctionCallback has_script_function = {}, InvokeScriptFunctionDecimalCallback invoke_script_function = {});
 
-bool try_evaluate_matrix_expression(const std::string& expression, const std::map<std::string, StoredValue>* variables, const std::map<std::string, CustomFunction>* functions, const HasScriptFunctionCallback& has_script_function, const InvokeScriptFunctionDecimalCallback& invoke_script_function, matrix::Value* value);
+bool try_evaluate_matrix_expression(const std::string& expression, const VariableResolver& variables, const std::map<std::string, CustomFunction>* functions, const HasScriptFunctionCallback& has_script_function, const InvokeScriptFunctionDecimalCallback& invoke_script_function, matrix::Value* value);
 
-Rational parse_exact_expression(const std::string& expression, const std::map<std::string, StoredValue>* variables, const std::map<std::string, CustomFunction>* functions, HasScriptFunctionCallback has_script_function = {});
+Rational parse_exact_expression(const std::string& expression, const VariableResolver& variables, const std::map<std::string, CustomFunction>* functions, HasScriptFunctionCallback has_script_function = {});
 
-bool try_base_conversion_expression(const std::string& expression, const std::map<std::string, StoredValue>* variables, const std::map<std::string, CustomFunction>* functions, const HexFormatOptions& hex_options, std::string* output);
+bool try_base_conversion_expression(const std::string& expression, const VariableResolver& variables, const std::map<std::string, CustomFunction>* functions, const HexFormatOptions& hex_options, std::string* output);
 
 std::string matrix_literal_expression(const matrix::Matrix& value);
 
-bool try_symbolic_constant_expression(const std::string& expression, const std::map<std::string, StoredValue>* variables, const std::map<std::string, CustomFunction>* functions, std::string* output);
+bool try_symbolic_constant_expression(const std::string& expression, const VariableResolver& variables, const std::map<std::string, CustomFunction>* functions, std::string* output);
 
 // 变量作用域
-std::map<std::string, StoredValue> visible_variables(const Calculator::Impl* impl);
+VariableResolver visible_variables(const Calculator::Impl* impl);
 bool has_visible_script_function(const Calculator::Impl* impl, const std::string& name);
 void assign_visible_variable(Calculator::Impl* impl, const std::string& name, const StoredValue& value);
 
-// 表达式求值（返回 StoredValue）
-StoredValue evaluate_expression_value(Calculator* calculator, Calculator::Impl* impl, const std::string& expression, bool exact_mode);
+// 表达式求值（返回 StoredValue）- 新接口使用 ExpressionCache
+struct ExpressionCache;
+StoredValue evaluate_expression_value(Calculator* calculator, Calculator::Impl* impl, const std::string& expression, bool exact_mode, std::shared_ptr<ExpressionCache>* cache = nullptr);
 
 // 脚本函数调用
 double invoke_script_function_decimal(Calculator* calculator, Calculator::Impl* impl, const std::string& name, const std::vector<double>& arguments);
@@ -492,5 +404,8 @@ double invoke_script_function_decimal(Calculator* calculator, Calculator::Impl* 
 // 脚本执行
 ScriptSignal execute_script_statement(Calculator* calculator, Calculator::Impl* impl, const script::Statement& statement, bool exact_mode, std::string* last_output, bool create_scope);
 std::string render_script_block(const script::BlockStatement& block, int indent);
+
+// 模块注册
+void register_standard_modules(Calculator* calculator, Calculator::Impl* impl);
 
 #endif

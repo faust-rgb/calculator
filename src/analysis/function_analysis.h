@@ -1,13 +1,12 @@
 #ifndef FUNCTION_ANALYSIS_H
 #define FUNCTION_ANALYSIS_H
 
+#include <functional>
 #include <list>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-class Calculator;
 
 /**
  * @file function_analysis.h
@@ -58,6 +57,12 @@ public:
      * @throw std::runtime_error 当表达式为空时抛出
      */
     void define(const std::string& expression);
+
+    /**
+     * @brief 设置求值器函数
+     * @param evaluator 求值器，接收变量名-值对列表并返回结果
+     */
+    void set_evaluator(std::function<double(const std::vector<std::pair<std::string, double>>&)> evaluator);
 
     /**
      * @brief 计算函数值
@@ -187,7 +192,7 @@ private:
 
     std::string expression_;      ///< 函数表达式
     std::string variable_name_;   ///< 变量名
-    mutable std::unique_ptr<Calculator> evaluator_;
+    std::function<double(const std::vector<std::pair<std::string, double>>&)> evaluator_;
     mutable std::list<std::pair<std::string, double>> evaluation_cache_entries_;
     mutable std::unordered_map<std::string,
                                std::list<std::pair<std::string, double>>::iterator>

@@ -1,0 +1,18 @@
+# Test Polynomial and Series
+print("--- Polynomial Tests ---")
+# poly_add(v1, v2)
+p1 = [1, 2, 3] # x^2 + 2x + 3
+p2 = [4, 5, 6] # 4x^2 + 5x + 6
+# Result should be [5, 7, 9]
+# Note: poly_add is an inline command, might suffer from same expansion issue
+res_poly = poly_add([1, 2, 3], [4, 5, 6])
+print("poly_add([1,2,3], [4,5,6]) = ", res_poly)
+
+print("--- Series Tests ---")
+# summation(n^2, n, 1, 10) -> 385
+s1 = summation(n^2, n, 1, 10)
+print("summation(n^2, n, 1, 10) = ", s1)
+
+# series_sum(1/2^n, n, 0, inf) -> 2
+s2 = series_sum((1/2)^n, n, 0, inf)
+print("series_sum((1/2)^n, n, 0, inf) = ", s2)

@@ -1,5 +1,125 @@
 # Functions Reference
 
+## Commands Reference
+
+### General
+
+- `help`
+- `:help`
+- `:help commands`
+- `:help functions`
+- `:help matrix`
+- `:help examples`
+- `:help exact`
+- `:help variables`
+- `:help persistence`
+- `:help programmer`
+- `exit`
+- `quit`
+
+### Exact Mode
+
+- `:exact on`
+  Enable exact fraction mode
+- `:exact off`
+  Disable exact fraction mode
+- `:exact`
+  Show current exact mode status
+
+### Symbolic Constants Mode
+
+- `:symbolic on`
+  Preserve `pi` and `e` in scalar display results
+- `:symbolic off`
+  Return to normal numeric display
+- `:symbolic`
+  Show current symbolic constants mode status
+
+### Programmer Formatting
+
+- `:hexprefix on`
+  Show hex results with a `0x` prefix
+- `:hexprefix off`
+  Hide the `0x` prefix
+- `:hexprefix`
+  Show current hex prefix mode status
+- `:hexcase upper`
+  Use uppercase hex digits such as `0xFF`
+- `:hexcase lower`
+  Use lowercase hex digits such as `0xff`
+- `:hexcase`
+  Show current hex letter-case mode
+
+### Variables
+
+- `name = expression`
+  Assign a variable
+- `:vars`
+  List all stored variables
+- `:clear name`
+  Remove a single variable
+- `:clear`
+  Remove all variables
+
+### History
+
+- up arrow
+  Recall previous command in interactive mode
+- down arrow
+  Move toward newer history entries
+- `:history`
+  Print the current session history
+
+### Persistence
+
+- `:save file`
+  Save variables to a file
+- `:load file`
+  Load variables from a file
+- `:run file.calc`
+  Execute a `.calc` script file
+
+Notes:
+
+- persistence supports scalar variables, strings, matrices, custom functions,
+  and script functions
+
+### Scripting
+
+Use `bin/calculator file.calc` or `:run file.calc` to execute scripts. The
+dedicated syntax guide is `test/script/SYNTAX_GUIDE.md`.
+
+### Autocomplete
+
+- `Tab`
+  Autocomplete commands, functions, variables, and custom functions
+- double `Tab`
+  Show the current candidate list when multiple completions match
+
+Examples:
+
+- type `:he` then press `Tab` -> `:help`
+- type `sq` then press `Tab` -> `sqrt(`
+- type `:help ma` then press `Tab` -> `:help matrix`
+- type `:help ` then double `Tab` -> show help topics
+- type `g` inside `diff(g` then press `Tab` -> complete a matching custom function
+
+### Prefixed Integer Literals
+
+These are expression features rather than commands, but they are commonly used
+like shell-style numeric shortcuts:
+
+- `0b1010`
+- `0o77`
+- `0xFF`
+
+They can be mixed directly into expressions:
+
+- `0b1010 + 0xF`
+- `and(0xF, 0b1010)`
+- `rol(1, 3)`
+- `popcount(0xF0)`
+
 ## Arithmetic
 
 - `a + b`
@@ -141,7 +261,20 @@ Notes:
 - matrix and vector indices are zero-based
 - `get(v, index)` and `set(v, index, value)` only work on vectors
 
-## Matrix Operations
+### Plotting
+
+- `plot(f(x), x, start, end)`
+- `plot(f(x), x, start, end, points)`
+- `plot(f(x), start, end)` (defaults to variable `x`)
+
+Examples:
+- `plot(sin(x), -pi, pi)`
+- `plot(x^2, x, -5, 5, 50)`
+
+---
+
+### Matrix Operations
+
 
 - `A + B`
 - `A - B`
@@ -224,6 +357,74 @@ Notes:
 - `conj(z)`
 - `polar(r, theta)`
 
+## Signal Processing
+
+### FFT Commands
+
+- `fft(signal)`
+  Fast Fourier Transform
+- `ifft(spectrum)`
+  Inverse FFT
+- `rfft(signal)` (planned)
+  Real FFT (optimized for real signals)
+
+### Convolution & Correlation
+
+- `conv(s1, s2)`
+  Linear convolution
+- `cconv(s1, s2 [, n])` (planned)
+  Circular convolution
+- `xcorr(s1, s2)` (planned)
+  Cross-correlation
+- `autocorr(signal)` (planned)
+  Auto-correlation
+
+### Window Functions
+
+- `hann(n)` / `hanning(n)`
+  Hanning window
+- `hamming(n)`
+  Hamming window
+- `blackman(n)`
+  Blackman window
+
+### Filter Design (planned)
+
+- `fir_design(order, cutoff, type [, window])`
+  Design FIR filter (types: `lowpass`, `highpass`, `bandpass`, `bandstop`)
+- `iir_design(order, cutoff, type)`
+  Design Butterworth IIR filter
+- `filter(b, a, signal)`
+  Apply digital filter
+- `freqz(b, a [, n])`
+  Frequency response
+
+### Time-Frequency Analysis (planned)
+
+- `psd(signal [, nfft])`
+  Power spectral density (Welch method)
+- `stft(signal [, nfft])`
+  Short-time Fourier transform
+- `spectrogram(signal [, nfft])`
+  Spectrogram
+
+Notes:
+
+- `fft` supports arbitrary-length signals using mixed-radix and Bluestein algorithms
+- `rfft` (planned) will return only positive frequencies for real signals
+- `hann`, `hamming`, `blackman` return normalized window vectors
+- `fir_design` (planned) returns numerator `b` and denominator `a` coefficients
+- `psd` (planned) uses Welch's method with 50% overlap and Hanning window by default
+
+Examples:
+
+- `fft([1, 2, 3, 4])` -> `[10+0j, -2+2j, -2+0j, -2-2j]`
+- `conv([1, 2, 3], [1, 1])` -> `[1, 3, 5, 3]`
+- `hann(5)` -> `[0, 0.5, 1, 0.5, 0]`
+- `hamming(8)` -> `[0.08, 0.253, 0.642, 0.954, 0.954, 0.642, 0.253, 0.08]`
+- `fir_design(16, 0.2, lowpass)` (planned) -> returns `b` and `a` coefficients
+- `psd([1, 2, 3, 4, 5, 6, 7, 8], 8)` (planned) -> power spectral density
+
 Notes:
 
 - `norm(m)` returns the Euclidean norm for vectors and the Frobenius norm for matrices
@@ -242,7 +443,13 @@ Notes:
 - `dft` / `fft` return an `N x 2` matrix whose rows are `[real, imag]`
 - `idft` / `ifft` accept a real vector or an `N x 2` complex matrix
 - `conv` / `convolve` perform linear convolution on real vectors or `N x 2` complex sequences
-- `abs(z)` returns the magnitude of a complex number
+- `abs(z)` returns the magnitude of a complex number (for real inputs, returns absolute value)
+- `complex(re, im)` creates a complex number from real and imaginary parts
+- `real(z)` returns the real part of a complex number
+- `imag(z)` returns the imaginary part of a complex number
+- `arg(z)` returns the argument (phase angle) of a complex number
+- `conj(z)` returns the complex conjugate
+- `polar(r, theta)` creates a complex number from polar coordinates
 
 ## Function Analysis And ODE
 
@@ -264,7 +471,17 @@ Notes:
 - `divergence([expr1, expr2, ...], variable1, variable2, ...)`
 - `div([expr1, expr2, ...], variable1, variable2, ...)`
 - `curl([expr1, expr2, expr3], variable1, variable2, variable3)`
+- `curl_2d([expr1, expr2], variable1, variable2)`
 - `laplacian(expr, variable1, variable2, ...)`
+- `implicit_diff(F, y, x)`
+- `param_deriv(x_t, y_t, t)`
+- `param_deriv(x_t, y_t, t, order)`
+- `directional(expr, var1, var2, ..., v1, v2, ...)`
+- `line_integral(f_or_F, [x_t, y_t, ...], t, a, b)`
+- `surface_integral(f_or_F, [x_u_v, y_u_v, z_u_v], u, a, b, v, c, d)`
+- `greens_theorem([F_x, F_y], [x_t, y_t], t, a, b)`
+- `stokes_theorem([F_x, F_y, F_z], [x_u_v, y_u_v, z_u_v], u, a, b, v, c, d)`
+- `divergence_theorem([F_x, F_y, F_z], [x_u_v, y_u_v, z_u_v], u, a, b, v, c, d)`
 - `taylor(expr, a, n)`
 - `pade(expr, m, n)`
 - `pade(expr, a, m, n)`
@@ -290,16 +507,10 @@ Notes:
 - `extrema(f, a, b)`
 - `double_integral(expr, x0, x1, y0, y1)`
 - `double_integral(expr, x0, x1, y0, y1, nx, ny)`
-- `double_integral_cyl(expr, r0, r1, theta0, theta1)`
-- `double_integral_cyl(expr, r0, r1, theta0, theta1, nr, ntheta)`
-- `double_integral_polar(expr, r0, r1, theta0, theta1)`
-- `double_integral_polar(expr, r0, r1, theta0, theta1, nr, ntheta)`
+- `double_integral(expr, r0, r1, theta0, theta1, "polar")`
 - `triple_integral(expr, x0, x1, y0, y1, z0, z1)`
-- `triple_integral(expr, x0, x1, y0, y1, z0, z1, nx, ny, nz)`
-- `triple_integral_cyl(expr, r0, r1, theta0, theta1, z0, z1)`
-- `triple_integral_cyl(expr, r0, r1, theta0, theta1, z0, z1, nr, ntheta, nz)`
-- `triple_integral_sph(expr, rho0, rho1, theta0, theta1, phi0, phi1)`
-- `triple_integral_sph(expr, rho0, rho1, theta0, theta1, phi0, phi1, nrho, ntheta, nphi)`
+- `triple_integral(expr, r0, r1, theta0, theta1, z0, z1, "cyl")`
+- `triple_integral(expr, rho0, rho1, theta0, theta1, phi0, phi1, "sph")`
 - `ode(rhs, x0, y0, x1)`
 - `ode(rhs, x0, y0, x1, steps)`
 - `ode(rhs, x0, y0, x1, steps, params_vec)`
@@ -356,7 +567,17 @@ Notes:
 - `dsolve` attempts symbolic solution of first-order ODEs; currently supports `y' = f(x)` and linear ODEs `y' + P(x)y = Q(x)`
 - `divergence`/`div` computes the divergence of a vector field
 - `curl` computes the curl of a 3D vector field
+- `curl_2d([F_x, F_y], x, y)` computes the scalar 2D curl ∂Fy/∂x - ∂Fx/∂y
 - `laplacian` computes the Laplacian of a scalar field
+- `implicit_diff(F, y, x)` computes the implicit derivative dy/dx for F(x,y) = 0 using the formula dy/dx = -F_x / F_y
+- `param_deriv(x_t, y_t, t)` computes the derivative dy/dx for a parametric curve (x(t), y(t)); higher-order derivatives are supported via the optional `order` parameter
+- `directional(expr, vars..., direction...)` computes the directional derivative of `expr` in the given direction (automatically normalized)
+- `line_integral(f_or_F, curve, t, a, b)` computes the scalar or vector line integral along a parametric curve
+- `surface_integral(f_or_F, surface, u, a, b, v, c, d)` computes the scalar or flux surface integral over a parametric surface
+- both automatically detect whether the integrand is a scalar field or a vector field
+- `greens_theorem([F_x, F_y], [x_t, y_t], t, a, b)` computes the line integral ∮_C F·dr using Green's theorem (2D)
+- `stokes_theorem([F_x, F_y, F_z], [x_u_v, y_u_v, z_u_v], u, a, b, v, c, d)` computes the surface integral ∬_S curl(F)·n dS using Stokes' theorem
+- `divergence_theorem([F_x, F_y, F_z], [x_u_v, y_u_v, z_u_v], u, a, b, v, c, d)` computes the flux ∬_S F·n dS using the divergence theorem
 - symbolic `integral` includes rule-based support for mixed real-linear plus repeated irreducible quadratic rational factors and common trig power/product identities
 - `puiseux` uses a denominator grid; for example `denominator = 2` allows half-integer powers
 - `series_sum` / `summation` covers polynomial summands (via Faulhaber formulas), geometric series, and infinite series involving Riemann Zeta values $\zeta(2k)$ up to $k=5$
@@ -366,11 +587,10 @@ Notes:
 - symbolic transform commands default to `(t, w)` for Fourier, `(t, s)` for Laplace, and `(n, z)` for z transforms when variables are omitted
 - current symbolic Fourier/Laplace/z support is rule-based and focuses on common signal-analysis forms such as constants, exponentials, `sin/cos`, `step`, and `delta`
 - symbolic `simplify(expr)` may be used on multi-variable expressions, but symbolic `diff/integral/taylor/limit/extrema` still require a one-variable input
-- `double_integral` and `triple_integral` use Cartesian coordinates
-- `double_integral_cyl` / `double_integral_polar` use the planar polar Jacobian `r`
-- `fft`/`ifft` use an FFT path for power-of-two sequence lengths and fall back to direct DFT otherwise
-- `triple_integral_cyl` uses cylindrical coordinates `(r, theta, z)` with Jacobian `r`
-- `triple_integral_sph` uses spherical coordinates `(rho, theta, phi)` with Jacobian `rho^2 sin(phi)`
+- `double_integral` and `triple_integral` use Cartesian coordinates by default
+- `double_integral` with `"polar"` uses the planar polar Jacobian `r`
+- `triple_integral` with `"cyl"` uses cylindrical coordinates `(r, theta, z)` with Jacobian `r`
+- `triple_integral` with `"sph"` uses spherical coordinates `(rho, theta, phi)` with Jacobian `rho^2 sin(phi)`
 - in cylindrical and spherical modes, Cartesian variables such as `x`, `y`, and `z` are also available inside the integrand
 - `ode` solves the first-order initial value problem `y' = rhs(x, y)` with the classical RK4 method
 - `ode` returns the approximated value at `x1`
@@ -404,6 +624,9 @@ Notes:
 - `fib(n)`
 - `is_prime(n)`
 - `next_prime(n)`
+- `divisors(n)`
+- `extended_gcd(a, b)`
+- `xgcd(a, b)`
 
 Notes:
 
@@ -411,6 +634,8 @@ Notes:
 - `factor(n)` returns a factorization string, not a plain numeric value
 - `factorial(n)` requires an integer `n >= 0`
 - `nCr(n, r)` and `nPr(n, r)` require integer inputs with `0 <= r <= n`
+- `divisors(n)` returns a vector of all positive divisors of `n` in ascending order
+- `extended_gcd(a, b)` / `xgcd(a, b)` returns `[g, x, y]` where `g = gcd(a, b)` and `a*x + b*y = g`
 
 ## Unit Conversion
 
@@ -483,6 +708,11 @@ Notes:
 
 - `pi`
 - `e`
+- `c` (Speed of Light)
+- `G` (Gravitational Constant)
+- `h` (Planck Constant)
+- `k` (Boltzmann Constant)
+- `NA` (Avogadro Number)
 
 ## Symbolic Constants Mode
 
@@ -539,3 +769,153 @@ Examples:
 - `abs(-7/3)` -> `7/3`
 - `floor(7/3)` -> `2`
 - `min(7/3, 5/2)` -> `7/3`
+
+# Matrix Guide
+
+## Creation
+
+- `[a, b; c, d]`
+  Create a matrix literal, using `,` to separate columns and `;` to separate rows
+- `vec(a, b, c)`
+  Create a row vector
+- `mat(rows, cols, values...)`
+  Create a matrix in row-major order
+- `zeros(rows, cols)`
+  Create a zero matrix
+- `eye(n)`
+- `identity(n)`
+  Create an identity matrix
+
+Examples:
+
+- `[1, 2; 3, 4]` -> `[[1, 2], [3, 4]]`
+- `[1, 2; 3]` -> `[[1, 2], [3, 0]]`
+- `vec(1, 2, 3)` -> `[1, 2, 3]`
+- `mat(2, 2, 1, 2, 3, 4)` -> `[[1, 2], [3, 4]]`
+
+## Resizing And Editing
+
+- `resize(m, rows, cols)`
+  Resize and zero-fill any new cells
+- `append_row(m, values...)`
+  Append one row
+- `append_col(m, values...)`
+  Append one column
+- `transpose(m)`
+  Return the transposed matrix
+- `inverse(m)`
+  Return the inverse matrix
+- `get(m, row, col)`
+  Read a matrix element using zero-based indices
+- `set(m, row, col, value)`
+  Return a modified matrix
+
+Vector shortcuts:
+
+- `get(v, index)`
+- `set(v, index, value)`
+
+Examples:
+
+- `get(mat(2, 2, 1, 2, 3, 4), 1, 0)` -> `3`
+- `set(vec(5, 6, 7), 1, 42)` -> `[5, 42, 7]`
+- `set([1, 2; 3], 1, 2, 9)` -> `[[1, 2, 0], [3, 0, 9]]`
+
+Notes:
+
+- matrix literals pad missing elements with `0`
+- `append_row(...)` and `append_col(...)` pad missing values with `0`
+- if an appended row or column is longer than the current shape, the matrix expands and fills new cells with `0`
+- `set(...)` expands the matrix with `0` fill if the target index is outside the current shape
+
+## Operations
+
+- `A + B`
+- `A - B`
+- `A * B`
+- `A / scalar`
+- `A ^ n`
+- matrix-scalar mixing is supported for `+ - * /`
+- `dot(a, b)`
+- `outer(a, b)`
+
+Notes:
+
+- matrix addition and subtraction require the same shape
+- matrix multiplication requires `lhs.cols == rhs.rows`
+- matrix powers require a square matrix and an integer exponent
+- negative integer powers are supported for invertible matrices, for example `A ^ -1`
+- division by a matrix is not supported
+
+Examples:
+
+- `mat(2, 2, 1, 2, 3, 4) + eye(2)`
+- `2 * mat(2, 2, 1, 2, 3, 4)`
+- `mat(2, 3, 1, 2, 3, 4, 5, 6) * mat(3, 1, 7, 8, 9)`
+- `mat(2, 2, 1, 2, 3, 4) ^ -1`
+- `dot(vec(1, 2, 3), vec(4, 5, 6))`
+- `outer(vec(1, 2), vec(3, 4, 5))`
+
+## Analysis
+
+- `norm(m)`
+  Vector 2-norm or matrix Frobenius norm
+- `trace(m)`
+- `det(m)`
+- `rank(m)`
+- `rref(m)`
+- `eigvals(m)`
+- `eigvecs(m)`
+- `null(m)`
+- `least_squares(A, b)`
+- `qr_q(A)`
+- `qr_r(A)`
+- `lu_l(A)`
+- `lu_u(A)`
+- `svd_u(A)`
+- `svd_s(A)`
+- `svd_vt(A)`
+- `solve(A, b)`
+
+Notes:
+
+- `trace`, `det`, `eigvals`, and `eigvecs` require square matrices
+- `eigvals` returns real eigenvalues as a vector and complex eigenvalues as an `N x 2` matrix of `[real, imag]` rows
+- `eigvecs` currently supports real-valued eigenvectors only
+- `qr_q`, `qr_r`, `lu_l`, and `lu_u` currently require square matrices
+- `lu_l` and `lu_u` use LU decomposition without pivoting, so leading pivots must stay non-zero
+- `svd_u`, `svd_s`, and `svd_vt` return the reduced SVD factors
+- `solve(A, b)` requires a square coefficient matrix and a vector right-hand side, and it returns the solution vector
+- `least_squares(A, b)` currently uses the normal equations and expects a vector right-hand side
+
+Examples:
+
+- `norm(vec(3, 4))` -> `5`
+- `det(mat(2, 2, 1, 2, 3, 4))` -> `-2`
+- `det(mat(3, 3, 1, 2, 3, 0, 1, 4, 5, 6, 0))` -> `1`
+- `rref(mat(2, 3, 1, 2, 3, 2, 4, 6))` -> `[[1, 2, 3], [0, 0, 0]]`
+- `rref(mat(3, 4, 1, 2, -1, -4, 2, 3, -1, -11, -2, 0, -3, 22))` -> `[[1, 0, 0, -8], [0, 1, 0, 1], [0, 0, 1, -2]]`
+- `eigvals(mat(2, 2, 2, 0, 0, 3))` -> `[3, 2]`
+- `null(mat(2, 3, 1, 2, 3, 2, 4, 6))` -> `[[-2, -3], [1, 0], [0, 1]]`
+- `least_squares(mat(2, 1, 1, 1), vec(2, 4))` -> `[3]`
+- `qr_q(mat(2, 2, 2, 0, 0, 3))` -> `[[1, 0], [0, 1]]`
+- `lu_l(mat(2, 2, 4, 3, 6, 3))` -> `[[1, 0], [1.5, 1]]`
+- `lu_u(mat(2, 2, 4, 3, 6, 3))` -> `[[4, 3], [0, -1.5]]`
+- `svd_s(mat(3, 2, 3, 0, 0, 2, 0, 0))` -> `[[3, 0], [0, 2]]`
+- `solve(mat(2, 2, 2, 1, 5, 3), vec(1, 2))` -> `[[1], [-1]]`
+- `solve(mat(3, 3, 3, 2, -1, 2, -2, 4, -1, 0.5, -1), vec(1, -2, 0))` -> `[[1], [-2], [-2]]`
+
+## Variables
+
+Matrix expressions can be assigned to variables:
+
+- `m = mat(2, 2, 1, 2, 3, 4)`
+- `m = set(m, 1, 0, 8)`
+- `n = m + eye(2)`
+
+Use `:vars` to inspect stored values.
+
+## Persistence Note
+
+Matrix variables are included in `:save` and `:load` state files alongside
+scalar, string, custom-function, and script-function values.

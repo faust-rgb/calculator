@@ -1,5 +1,19 @@
 // ============================================================================
-// 符号命令
+// 符号命令头文件
+// ============================================================================
+//
+// 定义符号计算命令的接口和数据结构。主要包含：
+//
+// 1. SymbolicResolverContext - 符号表达式解析上下文
+//    用于解析嵌套表达式和自定义函数
+//
+// 2. SymbolicCommandContext - 符号命令执行上下文
+//    提供命令执行所需的回调函数接口
+//
+// 3. 命令处理函数
+//    - is_symbolic_command: 判断是否为符号命令
+//    - resolve_symbolic_expression: 解析符号表达式
+//    - handle_symbolic_command: 分发处理具体命令
 // ============================================================================
 
 #ifndef CALCULATOR_SYMBOLIC_COMMANDS_H
@@ -32,6 +46,8 @@ struct SymbolicCommandContext {
     std::function<std::vector<SymbolicExpression>(const std::string&)>
         parse_symbolic_expression_list;
     std::function<FunctionAnalysis(const std::string&)> build_analysis;
+    std::function<std::function<double(const std::vector<std::pair<std::string, double>>&)>(const std::string&)>
+        build_scoped_evaluator;
     std::function<double(const std::string&)> parse_decimal;
     std::function<double(double)> normalize_result;
 };

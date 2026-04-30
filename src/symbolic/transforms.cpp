@@ -1,3 +1,33 @@
+// ============================================================================
+// 积分变换核心实现模块
+// ============================================================================
+//
+// 本文件实现各种积分变换的符号计算核心算法：
+//
+// 1. Laplace 变换
+//    L{f(t)} = ∫₀^∞ f(t) * e^(-st) dt
+//    - 支持基本函数：1, t^n, exp(at), sin(at), cos(at)
+//    - 支持性质：线性性、频移、时移、微分性质
+//
+// 2. 逆 Laplace 变换
+//    - 部分分式分解
+//    - 极点展开
+//    - 二次式处理（振荡/非振荡响应）
+//
+// 3. Fourier 变换
+//    F{f(t)} = ∫_{-∞}^{∞} f(t) * e^(-iωt) dt
+//    - 支持基本函数：delta, step, exp, sin, cos
+//    - 特殊函数：exp(-|t|), abs
+//
+// 4. Z 变换
+//    Z{x[n]} = Σ x[n] * z^(-n)
+//    - 支持基本序列：delta[n-k], step[n], n^k, a^n
+//    - 支持性质：线性性、时移、Z 域微分
+//
+// 各变换函数使用模式匹配识别表达式形式，
+// 并应用相应的变换公式。
+// ============================================================================
+
 #include "symbolic_expression_internal.h"
 
 #include "mymath.h"
@@ -9,6 +39,13 @@
 
 namespace symbolic_expression_internal {
 
+// ============================================================================
+// 辅助函数
+// ============================================================================
+
+/**
+ * @brief 计算阶乘（浮点结果）
+ */
 double factorial_double(int exponent) {
     double value = 1.0;
     for (int i = 2; i <= exponent; ++i) {
@@ -17,6 +54,13 @@ double factorial_double(int exponent) {
     return value;
 }
 
+// ============================================================================
+// 表达式匹配辅助函数
+// ============================================================================
+
+/**
+ * @brief 检查表达式是否为指定函数
+ */
 bool is_function_named(const SymbolicExpression& expression,
                        const std::string& function_name,
                        SymbolicExpression* argument = nullptr) {
@@ -31,10 +75,16 @@ bool is_function_named(const SymbolicExpression& expression,
     return true;
 }
 
+/**
+ * @brief 检查表达式是否为虚数单位 i
+ */
 bool is_i_variable(const SymbolicExpression& expression) {
     return expr_is_variable(expression.simplify(), "i");
 }
 
+/**
+ * @brief 检查表达式是否为 abs(variable_name)
+ */
 bool is_abs_of_variable(const SymbolicExpression& expression,
                         const std::string& variable_name) {
     SymbolicExpression argument;
@@ -42,6 +92,11 @@ bool is_abs_of_variable(const SymbolicExpression& expression,
            argument.is_variable_named(variable_name);
 }
 
+/**
+ * @brief 分解 i * variable 形式
+ *
+ * 检查表达式是否为 coefficient * i * variable_name 形式。
+ */
 bool decompose_i_times_variable(const SymbolicExpression& expression,
                                 const std::string& variable_name,
                                 double* coefficient) {
@@ -78,6 +133,11 @@ bool decompose_i_times_variable(const SymbolicExpression& expression,
     return true;
 }
 
+/**
+ * @brief 分解单位斜率的线性表达式
+ *
+ * 检查表达式是否为 x - shift 形式。
+ */
 bool decompose_unit_slope_shift(const SymbolicExpression& expression,
                                 const std::string& variable_name,
                                 double* shift) {
@@ -94,6 +154,9 @@ bool decompose_unit_slope_shift(const SymbolicExpression& expression,
     return true;
 }
 
+/**
+ * @brief 匹配 step(x - shift) 形式
+ */
 bool match_step_shift(const SymbolicExpression& expression,
                       const std::string& variable_name,
                       double* shift) {
@@ -102,6 +165,9 @@ bool match_step_shift(const SymbolicExpression& expression,
            decompose_unit_slope_shift(argument, variable_name, shift);
 }
 
+/**
+ * @brief 匹配 delta(x - shift) 形式
+ */
 bool match_delta_shift(const SymbolicExpression& expression,
                        const std::string& variable_name,
                        double* shift) {
@@ -110,6 +176,9 @@ bool match_delta_shift(const SymbolicExpression& expression,
            decompose_unit_slope_shift(argument, variable_name, shift);
 }
 
+/**
+ * @brief 匹配 exp(coefficient * x + intercept) 形式
+ */
 bool match_exponential_linear(const SymbolicExpression& expression,
                                const std::string& variable_name,
                                double* coefficient,
@@ -118,6 +187,10 @@ bool match_exponential_linear(const SymbolicExpression& expression,
     return is_function_named(expression, "exp", &argument) &&
            decompose_linear(argument, variable_name, coefficient, intercept);
 }
+
+/**
+ * @brief 匹配 sin(coefficient * x + intercept) 形式
+ */
 bool match_sine_linear(const SymbolicExpression& expression,
                        const std::string& variable_name,
                        double* coefficient,
@@ -127,6 +200,9 @@ bool match_sine_linear(const SymbolicExpression& expression,
            decompose_linear(argument, variable_name, coefficient, intercept);
 }
 
+/**
+ * @brief 匹配 cos(coefficient * x + intercept) 形式
+ */
 bool match_cosine_linear(const SymbolicExpression& expression,
                          const std::string& variable_name,
                          double* coefficient,
@@ -136,6 +212,9 @@ bool match_cosine_linear(const SymbolicExpression& expression,
            decompose_linear(argument, variable_name, coefficient, intercept);
 }
 
+/**
+ * @brief 匹配 base^index_variable 形式（常数底）
+ */
 bool match_constant_power_sequence(const SymbolicExpression& expression,
                                    const std::string& index_variable,
                                    double* base) {
@@ -148,6 +227,11 @@ bool match_constant_power_sequence(const SymbolicExpression& expression,
     return true;
 }
 
+/**
+ * @brief 匹配非负整数位移
+ *
+ * 检查表达式是否为 x - k 形式，其中 k 为非负整数。
+ */
 bool match_non_negative_integer_shift(const SymbolicExpression& expression,
                                       const std::string& variable_name,
                                       int* shift) {
@@ -161,6 +245,15 @@ bool match_non_negative_integer_shift(const SymbolicExpression& expression,
     return true;
 }
 
+// ============================================================================
+// 表达式构造函数
+// ============================================================================
+
+/**
+ * @brief 构造移位变量表达式
+ *
+ * 返回 variable_name - shift 形式的表达式。
+ */
 SymbolicExpression make_shifted_variable_expression(const std::string& variable_name,
                                                     double shift) {
     if (mymath::is_near_zero(shift, kFormatEps)) {
@@ -174,16 +267,25 @@ SymbolicExpression make_shifted_variable_expression(const std::string& variable_
                     SymbolicExpression::number(-shift)).simplify();
 }
 
+/**
+ * @brief 创建单位阶跃函数 step(variable - shift)
+ */
 SymbolicExpression make_step_expression(const std::string& variable_name, double shift) {
     return make_function("step",
                          make_shifted_variable_expression(variable_name, shift)).simplify();
 }
 
+/**
+ * @brief 创建 Dirac delta 函数 delta(variable - shift)
+ */
 SymbolicExpression make_delta_expression(const std::string& variable_name, double shift) {
     return make_function("delta",
                          make_shifted_variable_expression(variable_name, shift)).simplify();
 }
 
+/**
+ * @brief 创建复相位项 exp(i * coefficient * variable)
+ */
 SymbolicExpression make_complex_phase(double coefficient,
                                       const std::string& variable_name) {
     SymbolicExpression phase =
@@ -195,6 +297,9 @@ SymbolicExpression make_complex_phase(double coefficient,
     return make_function("exp", phase).simplify();
 }
 
+/**
+ * @brief 创建 Z 变换中的位移项 z^(-shift)
+ */
 SymbolicExpression make_z_shift_term(const std::string& z_variable, int shift) {
     if (shift == 0) {
         return SymbolicExpression::number(1.0);
@@ -204,6 +309,11 @@ SymbolicExpression make_z_shift_term(const std::string& z_variable, int shift) {
         .simplify();
 }
 
+/**
+ * @brief 匹配 i*frequency - constant 形式
+ *
+ * 用于 Fourier 变换中的分母匹配。
+ */
 bool match_i_frequency_minus_constant(const SymbolicExpression& expression,
                                       const std::string& frequency_variable,
                                       double* constant) {
@@ -242,25 +352,61 @@ bool match_i_frequency_minus_constant(const SymbolicExpression& expression,
     return false;
 }
 
+// ============================================================================
+// 变换实现声明
+// ============================================================================
+
+/**
+ * @brief Laplace 变换实现
+ */
 SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
                                           const std::string& time_variable,
                                           const std::string& transform_variable);
+
+/**
+ * @brief 逆 Laplace 变换实现
+ */
 SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expression,
                                                   const std::string& transform_variable,
                                                   const std::string& time_variable);
+
+/**
+ * @brief Fourier 变换实现
+ */
 SymbolicExpression fourier_transform_impl(const SymbolicExpression& expression,
                                           const std::string& time_variable,
                                           const std::string& frequency_variable);
+
+/**
+ * @brief 逆 Fourier 变换实现
+ */
 SymbolicExpression inverse_fourier_transform_impl(const SymbolicExpression& expression,
                                                   const std::string& frequency_variable,
                                                   const std::string& time_variable);
+
+/**
+ * @brief Z 变换实现
+ */
 SymbolicExpression z_transform_impl(const SymbolicExpression& expression,
                                     const std::string& index_variable,
                                     const std::string& transform_variable);
+
+/**
+ * @brief 逆 Z 变换实现
+ */
 SymbolicExpression inverse_z_transform_impl(const SymbolicExpression& expression,
                                             const std::string& transform_variable,
                                             const std::string& index_variable);
 
+// ============================================================================
+// 线性变换规则
+// ============================================================================
+
+/**
+ * @brief 应用线性变换规则
+ *
+ * 对于加法、减法、取负和常数乘法，应用线性性递归处理。
+ */
 bool apply_linear_transform_rules(
     const SymbolicExpression& simplified,
     const std::string& variable_name,
@@ -301,6 +447,7 @@ bool apply_linear_transform_rules(
         case NodeType::kNumber:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
         case NodeType::kVariable:
         case NodeType::kDivide:
         case NodeType::kPower:
@@ -310,6 +457,25 @@ bool apply_linear_transform_rules(
     return false;
 }
 
+// ============================================================================
+// Laplace 变换实现
+// ============================================================================
+
+/**
+ * @brief Laplace 变换核心实现
+ *
+ * 支持的变换公式：
+ * - L{1} = 1/s
+ * - L{t} = 1/s²
+ * - L{t^n} = n!/s^(n+1)
+ * - L{exp(at)} = 1/(s-a)
+ * - L{sin(at)} = a/(s²+a²)
+ * - L{cos(at)} = s/(s²+a²)
+ * - L{step(t)} = 1/s
+ * - L{delta(t)} = 1
+ * - L{exp(at)*f(t)} = F(s-a) （频移性质）
+ * - L{t*f(t)} = -dF/ds （微分性质）
+ */
 SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
                                           const std::string& time_variable,
                                           const std::string& transform_variable) {
@@ -439,6 +605,7 @@ SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
         case NodeType::kNumber:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
         case NodeType::kVariable:
             break;
     }
@@ -547,6 +714,24 @@ SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
     throw std::runtime_error("unsupported symbolic Laplace transform");
 }
 
+// ============================================================================
+// 逆 Laplace 变换实现
+// ============================================================================
+
+/**
+ * @brief 逆 Laplace 变换核心实现
+ *
+ * 支持的逆变换：
+ * - L⁻¹{1} = delta(t)
+ * - L⁻¹{1/s} = step(t)
+ * - L⁻¹{1/s^n} = t^(n-1)/(n-1)! * step(t)
+ * - L⁻¹{1/(s-a)} = exp(at) * step(t)
+ * - L⁻¹{1/(s-a)^n} = t^(n-1)/(n-1)! * exp(at) * step(t)
+ * - L⁻¹{s/(s²+a²)} = cos(at) * step(t)
+ * - L⁻¹{a/(s²+a²)} = sin(at) * step(t)
+ * - 部分分式分解处理有理函数
+ * - 二次式分解处理振荡/非振荡响应
+ */
 SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expression,
                                                   const std::string& transform_variable,
                                                   const std::string& time_variable) {
@@ -658,6 +843,7 @@ SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expr
         case NodeType::kNumber:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
         case NodeType::kVariable:
         case NodeType::kPower:
             break;
@@ -969,6 +1155,22 @@ SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expr
     throw std::runtime_error("unsupported symbolic inverse Laplace transform");
 }
 
+// ============================================================================
+// Fourier 变换实现
+// ============================================================================
+
+/**
+ * @brief Fourier 变换核心实现
+ *
+ * 支持的变换公式：
+ * - F{1} = 2π * delta(ω)
+ * - F{delta(t)} = 1
+ * - F{step(t)} = π*delta(ω) + 1/(iω)
+ * - F{exp(-|t|)} = 2/(1+ω²)
+ * - F{sin(at)} = iπ*(delta(ω+a) - delta(ω-a))
+ * - F{cos(at)} = π*(delta(ω+a) + delta(ω-a))
+ * - F{exp(at)*step(t)} = 1/(iω-a)（a<0 收敛）
+ */
 SymbolicExpression fourier_transform_impl(const SymbolicExpression& expression,
                                           const std::string& time_variable,
                                           const std::string& frequency_variable) {
@@ -1135,6 +1337,7 @@ SymbolicExpression fourier_transform_impl(const SymbolicExpression& expression,
         case NodeType::kNumber:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
         case NodeType::kVariable:
         case NodeType::kPower:
             break;
@@ -1231,6 +1434,19 @@ SymbolicExpression fourier_transform_impl(const SymbolicExpression& expression,
     throw std::runtime_error("unsupported symbolic Fourier transform");
 }
 
+// ============================================================================
+// 逆 Fourier 变换实现
+// ============================================================================
+
+/**
+ * @brief 逆 Fourier 变换核心实现
+ *
+ * 支持的逆变换：
+ * - F⁻¹{1} = delta(t)
+ * - F⁻¹{delta(ω)} = 1/(2π)
+ * - F⁻¹{exp(i*shift*ω)} = delta(t+shift)/(2π)
+ * - F⁻¹{1/(iω-a)} = exp(at) * step(t)
+ */
 SymbolicExpression inverse_fourier_transform_impl(const SymbolicExpression& expression,
                                                   const std::string& frequency_variable,
                                                   const std::string& time_variable) {
@@ -1298,6 +1514,7 @@ SymbolicExpression inverse_fourier_transform_impl(const SymbolicExpression& expr
         case NodeType::kNumber:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
         case NodeType::kVariable:
         case NodeType::kPower:
             break;
@@ -1349,6 +1566,24 @@ SymbolicExpression inverse_fourier_transform_impl(const SymbolicExpression& expr
     throw std::runtime_error("unsupported symbolic inverse Fourier transform");
 }
 
+// ============================================================================
+// Z 变换实现
+// ============================================================================
+
+/**
+ * @brief Z 变换核心实现
+ *
+ * 支持的变换公式：
+ * - Z{1} = z/(z-1)
+ * - Z{n} = z/(z-1)²
+ * - Z{n^k} = 递推公式
+ * - Z{a^n} = z/(z-a)
+ * - Z{delta[n-k]} = z^(-k)
+ * - Z{step[n]} = z/(z-1)
+ * - Z{sin(wn)} = z*sin(w)/(z²-2z*cos(w)+1)
+ * - Z{cos(wn)} = z(z-cos(w))/(z²-2z*cos(w)+1)
+ * - Z{n*x[n]} = -z*dX/dz （微分性质）
+ */
 SymbolicExpression z_transform_impl(const SymbolicExpression& expression,
                                     const std::string& index_variable,
                                     const std::string& transform_variable) {
@@ -1442,6 +1677,7 @@ SymbolicExpression z_transform_impl(const SymbolicExpression& expression,
         case NodeType::kNumber:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
         case NodeType::kVariable:
             break;
         case NodeType::kPower: {
@@ -1578,6 +1814,20 @@ SymbolicExpression z_transform_impl(const SymbolicExpression& expression,
     throw std::runtime_error("unsupported symbolic z transform");
 }
 
+// ============================================================================
+// 逆 Z 变换实现
+// ============================================================================
+
+/**
+ * @brief 逆 Z 变换核心实现
+ *
+ * 支持的逆变换：
+ * - Z⁻¹{1} = delta[n]
+ * - Z⁻¹{z^(-k)} = delta[n-k]
+ * - Z⁻¹{z/(z-a)} = a^n * step[n]
+ * - Z⁻¹{z/(z-1)^2} = n * step[n]
+ * - Z⁻¹{z/(z-1)^n} = C(n-1+k, k) 形式
+ */
 SymbolicExpression inverse_z_transform_impl(const SymbolicExpression& expression,
                                             const std::string& transform_variable,
                                             const std::string& index_variable) {
@@ -1639,6 +1889,7 @@ SymbolicExpression inverse_z_transform_impl(const SymbolicExpression& expression
         case NodeType::kNumber:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
         case NodeType::kVariable:
         case NodeType::kPower:
             break;

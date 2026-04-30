@@ -1,7 +1,8 @@
 #ifndef POLYNOMIAL_H
 #define POLYNOMIAL_H
 
-#include <complex>
+#include "mymath_complex.h"
+
 #include <string>
 #include <vector>
 
@@ -86,7 +87,7 @@ std::vector<double> polynomial_real_roots(const std::vector<double>& coefficient
  * @param coefficients 多项式系数
  * @return 按实部、虚部排序的复根列表
  */
-std::vector<std::complex<double>> polynomial_complex_roots(
+std::vector<mymath::complex<double>> polynomial_complex_roots(
     const std::vector<double>& coefficients);
 
 /**

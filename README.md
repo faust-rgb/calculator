@@ -28,14 +28,11 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 
 - `ARCHITECTURE.md`
 - `FUNCTIONS_REFERENCE.md`
-- `MATRIX_GUIDE.md`
-- `COMMANDS_REFERENCE.md`
+- `KEYWORDS_REFERENCE.md` — Keywords and reserved names
 - `test/TESTING.md`
 - `test/script/SYNTAX_GUIDE.md`
 - `CHANGELOG.md`
-- `ROADMAP.md`
-- `VERSION_2_IMPLEMENTATION_PLAN.md`
-- `KNOWN_LIMITATIONS.md`
+- `使用手册.md` — Chinese user manual
 - `docs/archive/` for historical handoff notes and one-off reports
 
 ## Source Organization
@@ -116,7 +113,7 @@ Shared internal declarations for these splits live in private headers such as
   nonlinear ODE system solving with `ode_system(...)` / `ode_system_table(...)`,
   optional ODE event stopping and parameter passing,
   root-finding with `solve(...)`, `bisect(...)`, `secant(...)`, `fixed_point(...)`,
-  and multi-variable integration in Cartesian, cylindrical, and spherical coordinates
+  and multi-variable integration in Cartesian, cylindrical, and spherical coordinates (via `double_integral` and `triple_integral`)
 - Box-constrained linear and integer planning with `lp_max(...)`, `lp_min(...)`,
   `ilp_max(...)`, mixed-integer planning with `milp_max(...)` / `milp_min(...)`,
   optional equality constraints `Aeq * x = beq`, and binary shortcuts `bip_max(...)` / `bip_min(...)`
@@ -138,7 +135,7 @@ Current validation status:
 - `make test`
 - `make script-test`
 - `make check`
-- expected C++ regression result: `Passed: 766`, `Failed: 0`
+- expected C++ regression result: `Passed: 867`, `Failed: 0`
 - expected planning result: `Planning passed: 6`, `Planning failed: 0`
 - comprehensive script check: `bin/calculator test/script/comprehensive_validation.calc`
 

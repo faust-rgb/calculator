@@ -1,6 +1,11 @@
 // ============================================================================
 // 多项式操作命令实现
 // ============================================================================
+//
+// 本文件实现了计算器中的多项式操作命令，包括：
+// - 多项式四则运算（加、减、乘、除）
+// - 多项式求根（实根和复根）
+// - 嵌套多项式表达式的解析和计算
 
 #include "calculator_polynomial.h"
 
@@ -8,14 +13,29 @@
 #include "polynomial.h"
 #include "mymath.h"
 
-#include <complex>
 #include <sstream>
 
 namespace polynomial_ops {
 
 namespace {
 
-// 递归构建多项式，支持嵌套调用
+// ============================================================================
+// 多项式构建辅助函数
+// ============================================================================
+
+/**
+ * @brief 递归构建多项式系数
+ * @param ctx 多项式构建上下文
+ * @param argument 参数字符串（函数名或嵌套调用）
+ * @param variable_name 输出：多项式变量名
+ * @param coefficients 输出：多项式系数（低次到高次）
+ *
+ * 支持的输入形式：
+ * 1. 直接的符号表达式（如 "x^2 + 2*x + 1"）
+ * 2. 嵌套的多项式操作（如 "poly_add(p, q)"）
+ *
+ * 对于除法，要求余数为零。
+ */
 void build_polynomial_recursive(
     const PolynomialContext& ctx,
     const std::string& argument,
@@ -89,6 +109,16 @@ void build_polynomial_recursive(
 
 }  // namespace
 
+// ============================================================================
+// 公共接口实现
+// ============================================================================
+
+/**
+ * @brief 从参数构建多项式数据
+ * @param ctx 多项式构建上下文
+ * @param argument 参数字符串
+ * @return 多项式数据（包含变量名和系数）
+ */
 PolynomialData build_polynomial(const PolynomialContext& ctx,
                                 const std::string& argument) {
     PolynomialData result;
@@ -97,24 +127,52 @@ PolynomialData build_polynomial(const PolynomialContext& ctx,
     return result;
 }
 
+// ============================================================================
+// 多项式运算函数
+// ============================================================================
+
+/**
+ * @brief 多项式加法
+ * @param lhs 左操作数
+ * @param rhs 右操作数
+ * @return 和的多项式字符串
+ */
 std::string poly_add(const PolynomialData& lhs, const PolynomialData& rhs) {
     return polynomial_to_string(
         polynomial_add(lhs.coefficients, rhs.coefficients),
         lhs.variable_name);
 }
 
+/**
+ * @brief 多项式减法
+ * @param lhs 左操作数（被减数）
+ * @param rhs 右操作数（减数）
+ * @return 差的多项式字符串
+ */
 std::string poly_sub(const PolynomialData& lhs, const PolynomialData& rhs) {
     return polynomial_to_string(
         polynomial_subtract(lhs.coefficients, rhs.coefficients),
         lhs.variable_name);
 }
 
+/**
+ * @brief 多项式乘法
+ * @param lhs 左操作数
+ * @param rhs 右操作数
+ * @return 积的多项式字符串
+ */
 std::string poly_mul(const PolynomialData& lhs, const PolynomialData& rhs) {
     return polynomial_to_string(
         polynomial_multiply(lhs.coefficients, rhs.coefficients),
         lhs.variable_name);
 }
 
+/**
+ * @brief 多项式除法
+ * @param lhs 被除数
+ * @param rhs 除数
+ * @return 包含商和余数的结果字符串
+ */
 std::string poly_div(const PolynomialData& lhs, const PolynomialData& rhs) {
     const PolynomialDivisionResult division =
         polynomial_divide(lhs.coefficients, rhs.coefficients);
@@ -124,8 +182,16 @@ std::string poly_div(const PolynomialData& lhs, const PolynomialData& rhs) {
            polynomial_to_string(division.remainder, lhs.variable_name);
 }
 
+/**
+ * @brief 计算多项式的所有根
+ * @param poly 多项式数据
+ * @return 格式化的根字符串（实根或复根）
+ *
+ * 显示所有不同的根，复根以 a + bi 形式输出。
+ * 对接近整数的实部和虚部进行取整处理。
+ */
 std::string roots(const PolynomialData& poly) {
-    const std::vector<std::complex<double>> roots =
+    const std::vector<mymath::complex<double>> roots =
         polynomial_complex_roots(poly.coefficients);
     if (roots.empty()) {
         return "No roots.";
@@ -133,7 +199,7 @@ std::string roots(const PolynomialData& poly) {
 
     std::ostringstream out;
     bool wrote_root = false;
-    std::complex<double> previous_root(0.0, 0.0);
+    mymath::complex<double> previous_root(0.0, 0.0);
     for (std::size_t i = 0; i < roots.size(); ++i) {
         if (wrote_root &&
             mymath::abs(roots[i].real() - previous_root.real()) <= 1e-7 &&
@@ -162,6 +228,15 @@ std::string roots(const PolynomialData& poly) {
     return out.str();
 }
 
+// ============================================================================
+// 命令处理函数
+// ============================================================================
+
+/**
+ * @brief 检查是否为多项式命令
+ * @param command 命令字符串
+ * @return 如果是多項式命令返回 true
+ */
 bool is_polynomial_command(const std::string& command) {
     return command == "poly_add" ||
            command == "poly_sub" ||
@@ -170,6 +245,21 @@ bool is_polynomial_command(const std::string& command) {
            command == "roots";
 }
 
+/**
+ * @brief 处理多项式命令
+ * @param ctx 多项式构建上下文
+ * @param command 命令名称
+ * @param inside 括号内的参数字符串
+ * @param output 输出结果字符串
+ * @return 是否成功处理
+ *
+ * 支持的命令：
+ * - poly_add(p, q): 多项式加法
+ * - poly_sub(p, q): 多项式减法
+ * - poly_mul(p, q): 多项式乘法
+ * - poly_div(p, q): 多项式除法
+ * - roots(p): 多项式求根
+ */
 bool handle_polynomial_command(const PolynomialContext& ctx,
                                const std::string& command,
                                const std::string& inside,

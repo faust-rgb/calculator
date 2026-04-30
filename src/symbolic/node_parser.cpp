@@ -43,6 +43,10 @@
 #include <utility>
 #include <vector>
 
+#include <mutex>
+
+#include "base_parser.h"
+
 namespace symbolic_expression_internal {
 
 int& mutable_display_precision() {
@@ -67,7 +71,7 @@ int clamp_display_precision(int precision) {
  * - 加速比较：指针比较可判断结构相等
  * - 支持缓存：结构键可作为缓存键
  *
- * 使用 LRU 策略管理驻留池，最大 8192 个节点。
+ * 使用 LRU 策略管理驻留池，最大 8192 个节点（可自适应调整）。
  * 当池满时，淘汰最久未使用的节点。
  *
  * @param node 待驻留的节点
@@ -76,16 +80,18 @@ int clamp_display_precision(int precision) {
 std::shared_ptr<SymbolicExpression::Node> intern_node(
     std::shared_ptr<SymbolicExpression::Node> node) {
     // 驻留池：存储结构键到节点的弱引用
-    // 使用弱引用允许节点在无外部引用时被释放
     using InternEntry =
         std::pair<std::string, std::weak_ptr<SymbolicExpression::Node>>;
 
-    // 线程局部的驻留池，避免锁竞争
-    static thread_local std::list<InternEntry> interned_order;  // LRU 顺序
-    static thread_local std::unordered_map<std::string,
+    // 全局驻留池，带互斥锁保证线程安全
+    static std::list<InternEntry> interned_order;  // LRU 顺序
+    static std::unordered_map<std::string,
                                            std::list<InternEntry>::iterator>
         interned_nodes;  // 快速查找
-    static constexpr std::size_t kMaxInternedNodes = 8192;  // 最大驻留数
+    static std::mutex intern_mutex;
+    static std::size_t kMaxInternedNodes = 8192;  // 最大驻留数
+
+    std::lock_guard<std::mutex> lock(intern_mutex);
 
     // 计算结构键
     const std::string key = node_structural_key(node);
@@ -106,27 +112,33 @@ std::shared_ptr<SymbolicExpression::Node> intern_node(
 
     // 池满时清理过期条目并淘汰 LRU
     if (interned_nodes.size() >= kMaxInternedNodes) {
-        // 增量清理：从末尾开始检查一定数量的条目，释放失效的弱引用或直接淘汰最旧条目
-        // 这样避免了 O(N) 的全量扫描，保证了单次插入的性能平稳
+        // 增量清理
         int checked = 0;
-        const int kMaxCheckPerInsert = 32; // 每次插入最多检查的过期条目数
+        const int kMaxCheckPerInsert = 32; 
         
         for (auto it = interned_order.rbegin(); it != interned_order.rend() && checked < kMaxCheckPerInsert; ) {
             if (it->second.expired()) {
-                auto erase_it = std::next(it).base(); // 转换为正向迭代器
+                auto erase_it = std::next(it).base();
                 interned_nodes.erase(erase_it->first);
                 interned_order.erase(erase_it);
-                it = interned_order.rbegin(); // 结构改变，重新开始（或者简单的 --it）
+                it = interned_order.rbegin();
                 checked++;
             } else {
                 ++it;
             }
         }
 
-        // 如果清理后依然满，则强制移除末尾最旧的条目
-        while (interned_nodes.size() >= kMaxInternedNodes && !interned_order.empty()) {
-            interned_nodes.erase(interned_order.back().first);
-            interned_order.pop_back();
+        // 自适应调整：如果几乎所有节点都在使用中，扩容
+        if (interned_nodes.size() >= kMaxInternedNodes) {
+             if (kMaxInternedNodes < 65536) {
+                 kMaxInternedNodes *= 2;
+             } else {
+                // 强制移除末尾最旧的条目
+                while (interned_nodes.size() >= kMaxInternedNodes && !interned_order.empty()) {
+                    interned_nodes.erase(interned_order.back().first);
+                    interned_order.pop_back();
+                }
+             }
         }
     }
 
@@ -268,6 +280,15 @@ std::shared_ptr<SymbolicExpression::Node> make_variable(const std::string& name)
     return intern_node(node);
 }
 
+/** @brief 创建无穷大节点（带驻留） */
+std::shared_ptr<SymbolicExpression::Node> make_infinity(bool positive) {
+    std::shared_ptr<SymbolicExpression::Node> node =
+        std::make_shared<SymbolicExpression::Node>();
+    node->type = NodeType::kInfinity;
+    node->number_value = positive ? 1.0 : -1.0;  // 1.0 表示 +inf, -1.0 表示 -inf
+    return intern_node(node);
+}
+
 /**
  * @brief 创建一元节点（取负或函数调用）
  * @param type 节点类型
@@ -337,6 +358,7 @@ int precedence(const std::shared_ptr<SymbolicExpression::Node>& node) {
         case NodeType::kVariable:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
             return 5;
     }
     return 5;
@@ -370,6 +392,9 @@ std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node
             break;
         case NodeType::kE:
             text = "e";
+            break;
+        case NodeType::kInfinity:
+            text = (node->number_value > 0) ? "inf" : "-inf";
             break;
         case NodeType::kNegate:
             text = "-" + to_string_impl(node->left, precedence(node));
@@ -458,6 +483,9 @@ std::string node_structural_key(const std::shared_ptr<SymbolicExpression::Node>&
         case NodeType::kE:
             key = "E";
             break;
+        case NodeType::kInfinity:
+            key = (node->number_value > 0) ? "INF" : "NINF";
+            break;
         case NodeType::kNegate:
             key = "NEG(" + node_structural_key(node->left) + ")";
             break;
@@ -515,9 +543,10 @@ std::string node_structural_key(const std::shared_ptr<SymbolicExpression::Node>&
  * 4. 一元正负
  * 5. 函数调用、原子表达式
  */
-class Parser {
+
+class Parser : public BaseParser {
 public:
-    explicit Parser(std::string source) : source_(std::move(source)) {}
+    explicit Parser(std::string source) : BaseParser(std::move(source)) {}
 
     /**
      * @brief 解析表达式
@@ -528,14 +557,12 @@ public:
         SymbolicExpression expression = parse_expression();
         skip_spaces();
         if (pos_ != source_.size()) {
-            throw std::runtime_error("unexpected token near: " + source_.substr(pos_, 1));
+            throw SyntaxError("unexpected token near: " + source_.substr(pos_, 1));
         }
         return expression;
     }
 
 private:
-    std::string source_;
-    std::size_t pos_ = 0;
     int depth_ = 0;
     static constexpr int kMaxDepth = 256;
 
@@ -654,8 +681,8 @@ private:
             if (identifier == "e") {
                 return SymbolicExpression(make_unary(NodeType::kE, nullptr));
             }
-            if (identifier == "inf" || identifier == "infinity") {
-                return SymbolicExpression::number(mymath::infinity());
+            if (identifier == "inf" || identifier == "infinity" || identifier == "oo") {
+                return SymbolicExpression(make_infinity(true));
             }
             if (identifier == "nan") {
                 return SymbolicExpression::number(0.0 / 0.0);
@@ -711,7 +738,7 @@ private:
         }
 
         if (!has_digit) {
-            throw std::runtime_error("expected number");
+            throw SyntaxError("expected number");
         }
 
         // 手动解析数值（避免 strtod 的依赖和区域设置问题）
@@ -759,54 +786,6 @@ private:
 
         return SymbolicExpression(make_number(value));
     }
-
-    // ========================================================================
-    // 辅助函数
-    // ========================================================================
-
-    /** @brief 解析标识符（字母开头，含字母数字下划线） */
-    std::string parse_identifier() {
-        const std::size_t start = pos_;
-        while (pos_ < source_.size()) {
-            const char ch = source_[pos_];
-            if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '\'') {
-                ++pos_;
-            } else {
-                break;
-            }
-        }
-        return source_.substr(start, pos_ - start);
-    }
-
-    /** @brief 检查当前位置是否为字母 */
-    bool peek_is_alpha() const {
-        return pos_ < source_.size() &&
-               std::isalpha(static_cast<unsigned char>(source_[pos_]));
-    }
-
-    /** @brief 尝试匹配指定字符，成功则前进 */
-    bool match(char ch) {
-        if (pos_ >= source_.size() || source_[pos_] != ch) {
-            return false;
-        }
-        ++pos_;
-        return true;
-    }
-
-    /** @brief 期望指定字符，不存在则抛出异常 */
-    void expect(char ch) {
-        if (!match(ch)) {
-            throw std::runtime_error(std::string("expected '") + ch + "'");
-        }
-    }
-
-    /** @brief 跳过空白字符 */
-    void skip_spaces() {
-        while (pos_ < source_.size() &&
-               std::isspace(static_cast<unsigned char>(source_[pos_]))) {
-            ++pos_;
-        }
-    }
 };
 
 bool expr_is_number(const SymbolicExpression& expression, double* value);
@@ -822,6 +801,7 @@ SymbolicExpression substitute_impl(const SymbolicExpression& expression,
         case NodeType::kNumber:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
             return expression;
         case NodeType::kVariable:
             if (node->text == variable_name) {
@@ -865,6 +845,57 @@ SymbolicExpression substitute_impl(const SymbolicExpression& expression,
     throw std::runtime_error("unsupported symbolic substitution");
 }
 
+SymbolicExpression substitute_expression_impl(const SymbolicExpression& expression,
+                                              const SymbolicExpression& target,
+                                              const SymbolicExpression& replacement) {
+    if (expressions_match(expression, target)) {
+        return replacement;
+    }
+    const auto& node = expression.node_;
+    switch (node->type) {
+        case NodeType::kNumber:
+        case NodeType::kPi:
+        case NodeType::kE:
+        case NodeType::kInfinity:
+        case NodeType::kVariable:
+            return expression;
+        case NodeType::kNegate:
+            return SymbolicExpression(
+                       make_unary(NodeType::kNegate,
+                                  substitute_expression_impl(SymbolicExpression(node->left),
+                                                             target,
+                                                             replacement)
+                                      .node_))
+                .simplify();
+        case NodeType::kFunction:
+            return SymbolicExpression(
+                       make_unary(NodeType::kFunction,
+                                  substitute_expression_impl(SymbolicExpression(node->left),
+                                                             target,
+                                                             replacement)
+                                      .node_,
+                                  node->text))
+                .simplify();
+        case NodeType::kAdd:
+        case NodeType::kSubtract:
+        case NodeType::kMultiply:
+        case NodeType::kDivide:
+        case NodeType::kPower:
+            return SymbolicExpression(
+                       make_binary(node->type,
+                                   substitute_expression_impl(SymbolicExpression(node->left),
+                                                              target,
+                                                              replacement)
+                                       .node_,
+                                   substitute_expression_impl(SymbolicExpression(node->right),
+                                                              target,
+                                                              replacement)
+                                       .node_))
+                .simplify();
+    }
+    throw std::runtime_error("unsupported symbolic substitution");
+}
+
 bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& node,
                                double* value) {
     switch (node->type) {
@@ -874,6 +905,11 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
         case NodeType::kPi:
         case NodeType::kE:
             return false;
+        case NodeType::kInfinity:
+            *value = (node->number_value > 0) ?
+                mymath::infinity() :
+                -mymath::infinity();
+            return true;
         case NodeType::kVariable:
             if (node->text == "1 / 2") {
                 *value = 0.5;
@@ -919,6 +955,7 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                 case NodeType::kNumber:
                 case NodeType::kPi:
                 case NodeType::kE:
+                case NodeType::kInfinity:
                 case NodeType::kVariable:
                 case NodeType::kNegate:
                 case NodeType::kFunction:
@@ -1107,6 +1144,7 @@ bool SymbolicExpression::is_constant(const std::string& variable_name) const {
         case NodeType::kNumber:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
             return true;
         case NodeType::kVariable:
             return node_->text != variable_name;
@@ -1158,10 +1196,11 @@ namespace {
 void collect_subexpression_counts(const std::shared_ptr<SymbolicExpression::Node>& node,
                                   std::unordered_map<std::string, std::pair<std::shared_ptr<SymbolicExpression::Node>, int>>& counts) {
     if (!node) return;
-    
-    // 忽略叶子节点（数字、变量、常数），因为它们作为 CSE 提取没有意义
+
+    // 忽略叶子节点（数字、变量、常数、无穷大），因为它们作为 CSE 提取没有意义
     if (node->type != NodeType::kNumber && node->type != NodeType::kVariable &&
-        node->type != NodeType::kPi && node->type != NodeType::kE) {
+        node->type != NodeType::kPi && node->type != NodeType::kE &&
+        node->type != NodeType::kInfinity) {
         const std::string key = node_structural_key(node);
         auto& entry = counts[key];
         if (entry.second == 0) {
@@ -1223,4 +1262,174 @@ SymbolicExpression SymbolicExpression::substitute(
             "symbolic substitution variable must be a non-reserved identifier");
     }
     return substitute_impl(*this, variable_name, replacement).simplify();
+}
+
+SymbolicExpression SymbolicExpression::substitute_expression(
+    const SymbolicExpression& target,
+    const SymbolicExpression& replacement) const {
+    return substitute_expression_impl(*this, target, replacement).simplify();
+}
+
+// ============================================================================
+// 边界参数解析实现
+// ============================================================================
+
+double BoundArgument::to_double() const {
+    switch (kind) {
+        case BoundKind::kFinite:
+            return value;
+        case BoundKind::kPosInf:
+            return mymath::infinity();
+        case BoundKind::kNegInf:
+            return -mymath::infinity();
+    }
+    return value;
+}
+
+BoundArgument BoundArgument::finite(double v) {
+    BoundArgument result;
+    result.kind = BoundKind::kFinite;
+    result.value = v;
+    return result;
+}
+
+BoundArgument BoundArgument::pos_inf() {
+    BoundArgument result;
+    result.kind = BoundKind::kPosInf;
+    return result;
+}
+
+BoundArgument BoundArgument::neg_inf() {
+    BoundArgument result;
+    result.kind = BoundKind::kNegInf;
+    return result;
+}
+
+bool is_infinity_literal(const std::string& text) {
+    std::string value = text;
+    // 去除空白
+    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
+        value.erase(0, 1);
+    }
+    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) {
+        value.pop_back();
+    }
+    // 去除正号
+    if (!value.empty() && value.front() == '+') {
+        value.erase(0, 1);
+    }
+    return value == "inf" || value == "infinity" || value == "oo";
+}
+
+BoundArgument parse_bound_argument(const std::string& text) {
+    std::string value = text;
+    // 去除空白
+    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
+        value.erase(0, 1);
+    }
+    while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) {
+        value.pop_back();
+    }
+
+    if (value.empty()) {
+        throw std::runtime_error("empty bound argument");
+    }
+
+    // 检查符号
+    bool negative = false;
+    if (value.front() == '-') {
+        negative = true;
+        value.erase(0, 1);
+        // 再次去除空白
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
+            value.erase(0, 1);
+        }
+    } else if (value.front() == '+') {
+        value.erase(0, 1);
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
+            value.erase(0, 1);
+        }
+    }
+
+    // 检查无穷大字面量
+    if (value == "inf" || value == "infinity" || value == "oo") {
+        return negative ? BoundArgument::neg_inf() : BoundArgument::pos_inf();
+    }
+
+    // 尝试解析为数值
+    try {
+        // 使用简单的数值解析
+        double num = 0.0;
+        bool has_digit = false;
+        std::size_t i = 0;
+
+        // 解析整数部分
+        while (i < value.size() && std::isdigit(static_cast<unsigned char>(value[i]))) {
+            num = num * 10.0 + (value[i] - '0');
+            has_digit = true;
+            ++i;
+        }
+
+        // 解析小数部分
+        if (i < value.size() && value[i] == '.') {
+            ++i;
+            double place = 0.1;
+            while (i < value.size() && std::isdigit(static_cast<unsigned char>(value[i]))) {
+                num += (value[i] - '0') * place;
+                place *= 0.1;
+                has_digit = true;
+                ++i;
+            }
+        }
+
+        // 解析科学计数法
+        if (i < value.size() && (value[i] == 'e' || value[i] == 'E')) {
+            ++i;
+            bool exp_neg = false;
+            if (i < value.size() && value[i] == '-') {
+                exp_neg = true;
+                ++i;
+            } else if (i < value.size() && value[i] == '+') {
+                ++i;
+            }
+            int exponent = 0;
+            while (i < value.size() && std::isdigit(static_cast<unsigned char>(value[i]))) {
+                exponent = exponent * 10 + (value[i] - '0');
+                ++i;
+            }
+            if (exp_neg) {
+                num /= mymath::pow(10.0, exponent);
+            } else {
+                num *= mymath::pow(10.0, exponent);
+            }
+        }
+
+        if (!has_digit || i != value.size()) {
+            throw std::runtime_error("invalid bound argument: " + text);
+        }
+
+        return BoundArgument::finite(negative ? -num : num);
+    } catch (...) {
+        throw std::runtime_error("invalid bound argument: " + text);
+    }
+}
+
+bool expr_is_infinity(const SymbolicExpression& expression, bool* positive) {
+    const auto& node = expression.node_;
+    if (node->type == NodeType::kInfinity) {
+        if (positive) {
+            *positive = node->number_value > 0;
+        }
+        return true;
+    }
+    // 也检查数值无穷大
+    if (node->type == NodeType::kNumber) {
+        if (mymath::isinf(node->number_value)) {
+            if (positive) {
+                *positive = node->number_value > 0;
+            }
+            return true;
+        }
+    }
+    return false;
 }

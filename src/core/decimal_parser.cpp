@@ -1,24 +1,19 @@
 #include "calculator_internal_types.h"
-
+#include "base_parser.h"
 #include "matrix.h"
 #include "mymath.h"
 #include "statistics/calculator_statistics.h"
-
 #include <algorithm>
-#include <cctype>
 #include <map>
-#include <random>
-#include <stdexcept>
-#include <utility>
 
-class DecimalParserImpl {
+class DecimalParserImpl : public BaseParser {
 public:
     DecimalParserImpl(std::string source,
-                      const std::map<std::string, StoredValue>* variables,
+                      const VariableResolver& variables,
                       const std::map<std::string, CustomFunction>* functions,
                       HasScriptFunctionCallback has_script_function = {},
                       InvokeScriptFunctionDecimalCallback invoke_script_function = {})
-        : source_(std::move(source)),
+        : BaseParser(std::move(source)),
           variables_(variables),
           functions_(functions),
           has_script_function_(std::move(has_script_function)),
@@ -28,7 +23,7 @@ public:
         double value = parse_comparison();
         skip_spaces();
         if (!is_at_end()) {
-            throw std::runtime_error("unexpected token near: " + source_.substr(pos_, 1));
+            throw SyntaxError("unexpected token near: " + source_.substr(pos_, 1));
         }
         return value;
     }
@@ -80,8 +75,8 @@ private:
                 value *= parse_unary();
             } else if (match('/')) {
                 const double divisor = parse_unary();
-                if (mymath::is_near_zero(divisor)) {
-                    throw std::runtime_error("division by zero");
+                if (divisor == 0.0) {
+                    throw MathError("division by zero");
                 }
                 value /= divisor;
             } else {
@@ -159,7 +154,6 @@ private:
     double parse_number() {
         skip_spaces();
 
-        // 先尝试解析 0b/0o/0x 这类前缀整数。
         if (!is_at_end() &&
             source_[pos_] == '0' &&
             pos_ + 1 < source_.size()) {
@@ -213,826 +207,540 @@ private:
         }
 
         if (!has_digit) {
-            throw std::runtime_error("expected number");
+            throw SyntaxError("expected number");
         }
 
-        return parse_decimal(source_.substr(start, pos_ - start));
+        return std::stod(source_.substr(start, pos_ - start));
     }
 
-    static double parse_decimal(const std::string& token) {
-        return std::stod(token);
+    double lookup_variable(const std::string& name) const {
+        const StoredValue* found = variables_.lookup(name);
+        if (found) {
+            if (found->is_matrix || found->is_complex ||
+                found->is_string || found->has_symbolic_text) {
+                throw MathError("unsupported variable type in numeric expression: " + name);
+            }
+            return found->exact ? rational_to_double(found->rational)
+                                   : found->decimal;
+        }
+
+        throw UndefinedError("unknown variable: " + name);
     }
 
     double apply_function(const std::string& name, const std::vector<double>& arguments) {
-        // 这里是“普通浮点路径”的函数分发中心。
-        // 需要字符串结果的功能，例如 factor/bin/hex，不从这里返回。
-        const BuiltinFunction* builtin = find_builtin_function(name);
-        if (builtin != nullptr) {
-            return (*builtin)(arguments);
-        }
+        const auto require_integer_argument =
+            [&name](double value, const std::string& label) -> long long {
+                if (!is_integer_double(value)) {
+                    throw MathError(name + " requires integer " + label);
+                }
+                return round_to_long_long(value);
+            };
 
-        const auto function_it = functions_->find(name);
-        if (function_it != functions_->end()) {
+        const auto it = functions_->find(name);
+        if (it != functions_->end()) {
             if (arguments.size() != 1) {
-                throw std::runtime_error("custom function " + name +
-                                         " expects exactly one argument");
+                throw MathError("custom function " + name + " expects 1 argument");
             }
-
-            std::map<std::string, StoredValue> scoped_variables = *variables_;
-            StoredValue parameter_value;
-            parameter_value.decimal = arguments[0];
-            parameter_value.exact = false;
-            scoped_variables[function_it->second.parameter_name] = parameter_value;
-
-            DecimalParserImpl nested_parser(function_it->second.expression,
-                                            &scoped_variables,
-                                            functions_,
-                                            has_script_function_,
-                                            invoke_script_function_);
-            return nested_parser.parse();
+            std::map<std::string, StoredValue> snapshot = variables_.snapshot();
+            StoredValue arg_value;
+            arg_value.decimal = arguments[0];
+            snapshot[it->second.parameter_name] = arg_value;
+            DecimalParser parser(it->second.expression,
+                                 VariableResolver(&snapshot, nullptr),
+                                 functions_,
+                                 has_script_function_,
+                                 invoke_script_function_);
+            return parser.parse();
         }
 
         if (has_script_function_ && has_script_function_(name)) {
             return invoke_script_function_(name, arguments);
         }
 
-        if (arguments.size() != 1) {
-            throw std::runtime_error("function " + name + " expects exactly one argument");
-        }
-
-        const double argument = arguments[0];
-        if (name == "abs") {
-            return mymath::abs(argument);
-        }
-        if (name == "not") {
-            // 位运算函数只接受整数，浮点路径里也保持这个约束。
-            if (!is_integer_double(argument)) {
-                throw std::runtime_error("not only accepts integers");
-            }
-            return static_cast<double>(~round_to_long_long(argument));
-        }
-        if (name == "sign") {
-            if (mymath::is_near_zero(argument)) {
-                return 0.0;
-            }
-            return argument > 0.0 ? 1.0 : -1.0;
-        }
-        if (name == "floor") {
-            return static_cast<double>(floor_to_long_long(argument));
-        }
-        if (name == "ceil") {
-            return static_cast<double>(ceil_to_long_long(argument));
-        }
-        if (name == "round") {
-            return static_cast<double>(round_to_long_long(argument));
-        }
-        if (name == "trunc") {
-            return static_cast<double>(trunc_to_long_long(argument));
-        }
-        if (name == "cbrt") {
-            return mymath::cbrt(argument);
-        }
-        if (name == "asinh") {
-            return mymath::asinh(argument);
-        }
-        if (name == "acosh") {
-            return mymath::acosh(argument);
-        }
-        if (name == "atanh") {
-            return mymath::atanh(argument);
-        }
-        if (name == "sinh") {
-            return mymath::sinh(argument);
-        }
-        if (name == "cosh") {
-            return mymath::cosh(argument);
-        }
-        if (name == "tanh") {
-            return mymath::tanh(argument);
-        }
-        if (name == "sec") {
-            return mymath::sec(argument);
-        }
-        if (name == "csc") {
-            return mymath::csc(argument);
-        }
-        if (name == "cot") {
-            return mymath::cot(argument);
-        }
         if (name == "sin") {
-            return mymath::sin(argument);
+            if (arguments.size() != 1) throw MathError("sin expects 1 argument");
+            return mymath::sin(arguments[0]);
         }
         if (name == "cos") {
-            return mymath::cos(argument);
+            if (arguments.size() != 1) throw MathError("cos expects 1 argument");
+            return mymath::cos(arguments[0]);
         }
         if (name == "tan") {
-            return mymath::tan(argument);
-        }
-        if (name == "atan") {
-            return mymath::atan(argument);
+            if (arguments.size() != 1) throw MathError("tan expects 1 argument");
+            return mymath::tan(arguments[0]);
         }
         if (name == "asin") {
-            return mymath::asin(argument);
+            if (arguments.size() != 1) throw MathError("asin expects 1 argument");
+            return mymath::asin(arguments[0]);
         }
         if (name == "acos") {
-            return mymath::acos(argument);
+            if (arguments.size() != 1) throw MathError("acos expects 1 argument");
+            return mymath::acos(arguments[0]);
+        }
+        if (name == "atan") {
+            if (arguments.size() == 1) return mymath::atan(arguments[0]);
+            if (arguments.size() == 2) return mymath::atan2(arguments[0], arguments[1]);
+            throw MathError("atan expects 1 or 2 arguments");
+        }
+        if (name == "sec") {
+            if (arguments.size() != 1) throw MathError("sec expects 1 argument");
+            return mymath::sec(arguments[0]);
+        }
+        if (name == "csc") {
+            if (arguments.size() != 1) throw MathError("csc expects 1 argument");
+            return mymath::csc(arguments[0]);
+        }
+        if (name == "cot") {
+            if (arguments.size() != 1) throw MathError("cot expects 1 argument");
+            return mymath::cot(arguments[0]);
         }
         if (name == "asec") {
-            return mymath::asec(argument);
+            if (arguments.size() != 1) throw MathError("asec expects 1 argument");
+            return mymath::asec(arguments[0]);
         }
         if (name == "acsc") {
-            return mymath::acsc(argument);
+            if (arguments.size() != 1) throw MathError("acsc expects 1 argument");
+            return mymath::acsc(arguments[0]);
         }
         if (name == "acot") {
-            return mymath::acot(argument);
+            if (arguments.size() != 1) throw MathError("acot expects 1 argument");
+            return mymath::acot(arguments[0]);
         }
-        if (name == "ln") {
-            return mymath::ln(argument);
+        if (name == "sinh") {
+            if (arguments.size() != 1) throw MathError("sinh expects 1 argument");
+            return mymath::sinh(arguments[0]);
         }
-        if (name == "log2") {
-            return mymath::ln(argument) / mymath::ln(2.0);
+        if (name == "cosh") {
+            if (arguments.size() != 1) throw MathError("cosh expects 1 argument");
+            return mymath::cosh(arguments[0]);
         }
-        if (name == "log10") {
-            return mymath::log10(argument);
+        if (name == "tanh") {
+            if (arguments.size() != 1) throw MathError("tanh expects 1 argument");
+            return mymath::tanh(arguments[0]);
+        }
+        if (name == "asinh") {
+            if (arguments.size() != 1) throw MathError("asinh expects 1 argument");
+            return mymath::asinh(arguments[0]);
+        }
+        if (name == "acosh") {
+            if (arguments.size() != 1) throw MathError("acosh expects 1 argument");
+            return mymath::acosh(arguments[0]);
+        }
+        if (name == "atanh") {
+            if (arguments.size() != 1) throw MathError("atanh expects 1 argument");
+            return mymath::atanh(arguments[0]);
         }
         if (name == "exp") {
-            return mymath::exp(argument);
+            if (arguments.size() != 1) throw MathError("exp expects 1 argument");
+            return mymath::exp(arguments[0]);
         }
         if (name == "exp2") {
-            return mymath::exp(argument * mymath::ln(2.0));
+            if (arguments.size() != 1) throw MathError("exp2 expects 1 argument");
+            return mymath::pow(2.0, arguments[0]);
         }
-        if (name == "gamma") {
-            return mymath::gamma(argument);
+        if (name == "ln") {
+            if (arguments.size() != 1) throw MathError("ln expects 1 argument");
+            return mymath::ln(arguments[0]);
         }
-        if (name == "erf") {
-            return mymath::erf(argument);
+        if (name == "log") {
+            if (arguments.size() == 1) return mymath::ln(arguments[0]);
+            if (arguments.size() == 2) {
+                if (arguments[1] <= 0.0 || mymath::is_near_zero(arguments[1] - 1.0)) {
+                    throw MathError("log base must be positive and not equal to 1");
+                }
+                return mymath::ln(arguments[0]) / mymath::ln(arguments[1]);
+            }
+            throw MathError("log expects 1 or 2 arguments");
         }
-        if (name == "erfc") {
-            return mymath::erfc(argument);
+        if (name == "log2") {
+            if (arguments.size() != 1) throw MathError("log2 expects 1 argument");
+            return mymath::ln(arguments[0]) / mymath::ln(2.0);
+        }
+        if (name == "log10") {
+            if (arguments.size() != 1) throw MathError("log10 expects 1 argument");
+            return mymath::ln(arguments[0]) / mymath::ln(10.0);
         }
         if (name == "sqrt") {
-            return mymath::sqrt(argument);
+            if (arguments.size() != 1) throw MathError("sqrt expects 1 argument");
+            return mymath::sqrt(arguments[0]);
         }
-        if (name == "step" || name == "u" || name == "heaviside") {
-            return argument >= 0.0 ? 1.0 : 0.0;
+        if (name == "cbrt") {
+            if (arguments.size() != 1) throw MathError("cbrt expects 1 argument");
+            return mymath::cbrt(arguments[0]);
         }
-        if (name == "delta" || name == "impulse") {
-            return mymath::is_near_zero(argument, 1e-10) ? 1.0 : 0.0;
+        if (name == "root") {
+            if (arguments.size() != 2) throw MathError("root expects 2 arguments");
+            return mymath::root(arguments[0], arguments[1]);
+        }
+        if (name == "pow") {
+            if (arguments.size() != 2) throw MathError("pow expects 2 arguments");
+            return mymath::pow(arguments[0], arguments[1]);
+        }
+        if (name == "abs") {
+            if (arguments.size() != 1) throw MathError("abs expects 1 argument");
+            return mymath::abs(arguments[0]);
+        }
+        if (name == "sign") {
+            if (arguments.size() != 1) throw MathError("sign expects 1 argument");
+            if (mymath::is_near_zero(arguments[0], 1e-12)) {
+                return 0.0;
+            }
+            return arguments[0] > 0.0 ? 1.0 : -1.0;
+        }
+        if (name == "floor") {
+            if (arguments.size() != 1) throw MathError("floor expects 1 argument");
+            return static_cast<double>(floor_to_long_long(arguments[0]));
+        }
+        if (name == "ceil") {
+            if (arguments.size() != 1) throw MathError("ceil expects 1 argument");
+            return static_cast<double>(ceil_to_long_long(arguments[0]));
+        }
+        if (name == "round") {
+            if (arguments.size() != 1) throw MathError("round expects 1 argument");
+            return static_cast<double>(round_to_long_long(arguments[0]));
+        }
+        if (name == "trunc") {
+            if (arguments.size() != 1) throw MathError("trunc expects 1 argument");
+            return static_cast<double>(trunc_to_long_long(arguments[0]));
+        }
+        if (name == "min") {
+            if (arguments.empty()) throw MathError("min expects at least 1 argument");
+            double res = arguments[0];
+            for (std::size_t i = 1; i < arguments.size(); ++i) res = std::min(res, arguments[i]);
+            return res;
+        }
+        if (name == "max") {
+            if (arguments.empty()) throw MathError("max expects at least 1 argument");
+            double res = arguments[0];
+            for (std::size_t i = 1; i < arguments.size(); ++i) res = std::max(res, arguments[i]);
+            return res;
+        }
+        if (name == "clamp") {
+            if (arguments.size() != 3) throw MathError("clamp expects 3 arguments");
+            const double low = std::min(arguments[1], arguments[2]);
+            const double high = std::max(arguments[1], arguments[2]);
+            return std::clamp(arguments[0], low, high);
+        }
+        if (name == "gamma") {
+            if (arguments.size() != 1) throw MathError("gamma expects 1 argument");
+            return mymath::gamma(arguments[0]);
+        }
+        if (name == "beta") {
+            if (arguments.size() != 2) throw MathError("beta expects 2 arguments");
+            return mymath::beta(arguments[0], arguments[1]);
+        }
+        if (name == "zeta") {
+            if (arguments.size() != 1) throw MathError("zeta expects 1 argument");
+            return mymath::zeta(arguments[0]);
+        }
+        if (name == "erf") {
+            if (arguments.size() != 1) throw MathError("erf expects 1 argument");
+            return mymath::erf(arguments[0]);
+        }
+        if (name == "erfc") {
+            if (arguments.size() != 1) throw MathError("erfc expects 1 argument");
+            return mymath::erfc(arguments[0]);
+        }
+        if (name == "bessel" || name == "bessel_j") {
+            if (arguments.size() != 2) throw MathError("bessel expects 2 arguments");
+            return mymath::bessel_j(
+                static_cast<int>(require_integer_argument(arguments[0], "order")),
+                arguments[1]);
+        }
+        if (name == "gcd") {
+            if (arguments.size() != 2) throw MathError("gcd expects 2 arguments");
+            return static_cast<double>(gcd_ll(round_to_long_long(arguments[0]), round_to_long_long(arguments[1])));
+        }
+        if (name == "lcm") {
+            if (arguments.size() != 2) throw MathError("lcm expects 2 arguments");
+            return static_cast<double>(lcm_ll(round_to_long_long(arguments[0]), round_to_long_long(arguments[1])));
+        }
+        if (name == "mod") {
+            if (arguments.size() != 2) throw MathError("mod expects 2 arguments");
+            const long long lhs = require_integer_argument(arguments[0], "lhs");
+            const long long rhs = require_integer_argument(arguments[1], "rhs");
+            if (rhs == 0) {
+                throw MathError("mod by zero");
+            }
+            return static_cast<double>(lhs % rhs);
+        }
+        if (name == "factorial") {
+            if (arguments.size() != 1) throw MathError("factorial expects 1 argument");
+            return factorial_value(require_integer_argument(arguments[0], "argument"));
+        }
+        if (name == "nCr" || name == "binom") {
+            if (arguments.size() != 2) throw MathError("combination expects 2 arguments");
+            return combination_value(require_integer_argument(arguments[0], "n"),
+                                     require_integer_argument(arguments[1], "r"));
+        }
+        if (name == "nPr") {
+            if (arguments.size() != 2) throw MathError("permutation expects 2 arguments");
+            return permutation_value(require_integer_argument(arguments[0], "n"),
+                                     require_integer_argument(arguments[1], "r"));
+        }
+        if (name == "fib") {
+            if (arguments.size() != 1) throw MathError("fib expects 1 argument");
+            return fibonacci_value(round_to_long_long(arguments[0]));
+        }
+        if (name == "is_prime") {
+            if (arguments.size() != 1) throw MathError("is_prime expects 1 argument");
+            return is_prime_ll(require_integer_argument(arguments[0], "argument")) ? 1.0 : 0.0;
+        }
+        if (name == "next_prime") {
+            if (arguments.size() != 1) throw MathError("next_prime expects 1 argument");
+            return static_cast<double>(next_prime_ll(require_integer_argument(arguments[0], "argument")));
+        }
+        if (name == "prev_prime") {
+            if (arguments.size() != 1) throw MathError("prev_prime expects 1 argument");
+            return static_cast<double>(prev_prime_ll(require_integer_argument(arguments[0], "argument")));
+        }
+        if (name == "euler_phi") {
+            if (arguments.size() != 1) throw MathError("euler_phi expects 1 argument");
+            return static_cast<double>(euler_phi_ll(require_integer_argument(arguments[0], "argument")));
+        }
+        if (name == "phi") {
+            if (arguments.size() != 1) throw MathError("phi expects 1 argument");
+            return static_cast<double>(euler_phi_ll(require_integer_argument(arguments[0], "argument")));
+        }
+        if (name == "mobius") {
+            if (arguments.size() != 1) throw MathError("mobius expects 1 argument");
+            return static_cast<double>(mobius_ll(require_integer_argument(arguments[0], "argument")));
+        }
+        if (name == "prime_pi") {
+            if (arguments.size() != 1) throw MathError("prime_pi expects 1 argument");
+            return static_cast<double>(prime_pi_ll(require_integer_argument(arguments[0], "argument")));
+        }
+        if (name == "egcd") {
+            if (arguments.size() != 2) throw MathError("egcd expects 2 arguments");
+            long long x = 0;
+            long long y = 0;
+            return static_cast<double>(extended_gcd_ll(
+                require_integer_argument(arguments[0], "a"),
+                require_integer_argument(arguments[1], "b"),
+                &x,
+                &y));
+        }
+        if (name == "rand") {
+            if (!arguments.empty()) throw MathError("rand expects no arguments");
+            return stats_ops::apply_probability(name, arguments);
+        }
+        if (name == "randn") {
+            if (!arguments.empty()) throw MathError("randn expects no arguments");
+            return stats_ops::apply_probability(name, arguments);
+        }
+        if (name == "randint") {
+            if (arguments.size() != 2) throw MathError("randint expects 2 arguments");
+            return stats_ops::apply_probability(name, arguments);
+        }
+        if (name == "pdf_normal") {
+            if (arguments.size() != 3) throw MathError("pdf_normal expects 3 arguments");
+            return stats_ops::apply_probability("pdf_normal", arguments);
+        }
+        if (name == "cdf_normal") {
+            if (arguments.size() != 3) throw MathError("cdf_normal expects 3 arguments");
+            return stats_ops::apply_probability("cdf_normal", arguments);
         }
         if (name == "deg") {
-            return radians_to_degrees(argument);
+            if (arguments.size() != 1) throw MathError("deg expects 1 argument");
+            return radians_to_degrees(arguments[0]);
         }
         if (name == "rad") {
-            return degrees_to_radians(argument);
+            if (arguments.size() != 1) throw MathError("rad expects 1 argument");
+            return degrees_to_radians(arguments[0]);
         }
         if (name == "deg2rad") {
-            return degrees_to_radians(argument);
+            if (arguments.size() != 1) throw MathError("deg2rad expects 1 argument");
+            return degrees_to_radians(arguments[0]);
         }
         if (name == "rad2deg") {
-            return radians_to_degrees(argument);
+            if (arguments.size() != 1) throw MathError("rad2deg expects 1 argument");
+            return radians_to_degrees(arguments[0]);
         }
         if (name == "sin_deg") {
-            return mymath::sin(degrees_to_radians(argument));
+            if (arguments.size() != 1) throw MathError("sin_deg expects 1 argument");
+            return mymath::sin(degrees_to_radians(arguments[0]));
         }
         if (name == "cos_deg") {
-            return mymath::cos(degrees_to_radians(argument));
+            if (arguments.size() != 1) throw MathError("cos_deg expects 1 argument");
+            return mymath::cos(degrees_to_radians(arguments[0]));
         }
         if (name == "celsius") {
-            return fahrenheit_to_celsius(argument);
+            if (arguments.size() != 1) throw MathError("celsius expects 1 argument");
+            return fahrenheit_to_celsius(arguments[0]);
         }
         if (name == "fahrenheit") {
-            return celsius_to_fahrenheit(argument);
+            if (arguments.size() != 1) throw MathError("fahrenheit expects 1 argument");
+            return celsius_to_fahrenheit(arguments[0]);
         }
         if (name == "kelvin") {
-            return argument + 273.15;
+            if (arguments.size() != 1) throw MathError("kelvin expects 1 argument");
+            return arguments[0] + 273.15;
         }
         if (name == "c2f") {
-            return celsius_to_fahrenheit(argument);
+            if (arguments.size() != 1) throw MathError("c2f expects 1 argument");
+            return celsius_to_fahrenheit(arguments[0]);
         }
         if (name == "f2c") {
-            return fahrenheit_to_celsius(argument);
+            if (arguments.size() != 1) throw MathError("f2c expects 1 argument");
+            return fahrenheit_to_celsius(arguments[0]);
         }
-
-        throw std::runtime_error("unknown function: " + name);
-    }
-
-    using BuiltinFunction = double (*)(const std::vector<double>&);
-
-    struct BuiltinFunctionEntry {
-        const char* name;
-        BuiltinFunction function;
-    };
-
-    static const BuiltinFunction* find_builtin_function(const std::string& name) {
-        static const BuiltinFunctionEntry functions[] = {
-            {"and", apply_and},
-            {"avg", apply_avg},
-            {"bessel", apply_bessel},
-            {"beta", apply_beta},
-            {"binom", apply_ncr},
-            {"binom_cdf", apply_binom_cdf},
-            {"binom_pmf", apply_binom_pmf},
-            {"bitlen", apply_bitlen},
-            {"cdf_normal", apply_cdf_normal},
-            {"clamp", apply_clamp},
-            {"clz", apply_clz},
-            {"ctz", apply_ctz},
-            {"egcd", apply_egcd},
-            {"euler_phi", apply_euler_phi},
-            {"factorial", apply_factorial},
-            {"fib", apply_fib},
-            {"gcd", apply_gcd},
-            {"is_prime", apply_is_prime},
-            {"kurtosis", apply_kurtosis},
-            {"lcm", apply_lcm},
-            {"log", apply_log},
-            {"max", apply_max},
-            {"mean", apply_mean},
-            {"median", apply_median},
-            {"min", apply_min},
-            {"mobius", apply_mobius},
-            {"mod", apply_mod},
-            {"mode", apply_mode},
-            {"nCr", apply_ncr},
-            {"next_prime", apply_next_prime},
-            {"nPr", apply_npr},
-            {"or", apply_or},
-            {"parity", apply_parity},
-            {"pdf_normal", apply_pdf_normal},
-            {"percentile", apply_percentile},
-            {"phi", apply_euler_phi},
-            {"poisson_cdf", apply_poisson_cdf},
-            {"poisson_pmf", apply_poisson_pmf},
-            {"popcount", apply_popcount},
-            {"pow", apply_pow},
-            {"prev_prime", apply_prev_prime},
-            {"prime_pi", apply_prime_pi},
-            {"quartile", apply_quartile},
-            {"rand", apply_rand},
-            {"randint", apply_randint},
-            {"randn", apply_randn},
-            {"reverse_bits", apply_reverse_bits},
-            {"rol", apply_rol},
-            {"root", apply_root},
-            {"ror", apply_ror},
-            {"shl", apply_shl},
-            {"shr", apply_shr},
-            {"skew", apply_skewness},
-            {"skewness", apply_skewness},
-            {"std", apply_stddev},
-            {"sum", apply_sum},
-            {"var", apply_variance},
-            {"xor", apply_xor},
-            {"zeta", apply_zeta},
-        };
-
-        for (const BuiltinFunctionEntry& entry : functions) {
-            if (name == entry.name) {
-                return &entry.function;
+        if (name == "sum") {
+            if (arguments.empty()) throw MathError("sum expects at least 1 argument");
+            long double sum = 0.0L;
+            long double compensation = 0.0L;
+            for (double arg : arguments) {
+                const long double adjusted = static_cast<long double>(arg) - compensation;
+                const long double next = sum + adjusted;
+                compensation = (next - sum) - adjusted;
+                sum = next;
             }
+            return static_cast<double>(sum);
         }
-        return nullptr;
-    }
-
-    static double apply_gcd(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("gcd expects exactly two arguments");
+        if (name == "mean" || name == "avg") {
+            return stats::mean(arguments);
         }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("gcd only accepts integers");
+        if (name == "median") {
+            return stats::median(arguments);
         }
-        return static_cast<double>(
-            gcd_ll(round_to_long_long(arguments[0]), round_to_long_long(arguments[1])));
-    }
-
-    static double apply_pow(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("pow expects exactly two arguments");
+        if (name == "mode") {
+            return stats::mode(arguments);
         }
-        return mymath::pow(arguments[0], arguments[1]);
-    }
-
-    static double apply_root(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("root expects exactly two arguments");
+        if (name == "percentile") {
+            if (arguments.size() < 2) throw MathError("percentile expects percentage and data");
+            std::vector<double> data(arguments.begin() + 1, arguments.end());
+            return stats::percentile(data, arguments[0]);
         }
-        return mymath::root(arguments[0], arguments[1]);
-    }
-
-    static double apply_lcm(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("lcm expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("lcm only accepts integers");
-        }
-        return static_cast<double>(
-            lcm_ll(round_to_long_long(arguments[0]), round_to_long_long(arguments[1])));
-    }
-
-    static double apply_mod(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("mod expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("mod only accepts integers");
-        }
-
-        const long long lhs = round_to_long_long(arguments[0]);
-        const long long rhs = round_to_long_long(arguments[1]);
-        if (rhs == 0) {
-            throw std::runtime_error("mod divisor cannot be zero");
-        }
-        return static_cast<double>(lhs % rhs);
-    }
-
-    static double apply_min(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("min expects exactly two arguments");
-        }
-        return arguments[0] < arguments[1] ? arguments[0] : arguments[1];
-    }
-
-    static double apply_max(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("max expects exactly two arguments");
-        }
-        return arguments[0] > arguments[1] ? arguments[0] : arguments[1];
-    }
-
-    static double apply_clamp(const std::vector<double>& arguments) {
-        if (arguments.size() != 3) {
-            throw std::runtime_error("clamp expects exactly three arguments");
-        }
-        double lower = arguments[1];
-        double upper = arguments[2];
-        if (lower > upper) {
-            std::swap(lower, upper);
-        }
-        if (arguments[0] < lower) {
-            return lower;
-        }
-        if (arguments[0] > upper) {
-            return upper;
-        }
-        return arguments[0];
-    }
-
-    static double apply_log(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("log expects exactly two arguments");
-        }
-        if (mymath::is_near_zero(arguments[1] - 1.0)) {
-            throw std::runtime_error("log base cannot be 1");
-        }
-        return mymath::ln(arguments[0]) / mymath::ln(arguments[1]);
-    }
-
-    static double apply_sum(const std::vector<double>& arguments) {
-        if (arguments.empty()) {
-            throw std::runtime_error("sum expects at least one argument");
-        }
-        long double total = 0.0L;
-        long double compensation = 0.0L;
-        for (double value : arguments) {
-            const long double adjusted = static_cast<long double>(value) - compensation;
-            const long double next = total + adjusted;
-            compensation = (next - total) - adjusted;
-            total = next;
-        }
-        return static_cast<double>(total);
-    }
-
-    static double apply_avg(const std::vector<double>& arguments) {
-        return stats_ops::apply_statistic("avg", arguments);
-    }
-
-    static double apply_mean(const std::vector<double>& arguments) {
-        return stats_ops::apply_statistic("mean", arguments);
-    }
-
-    static double apply_median(const std::vector<double>& arguments) {
-        return stats_ops::apply_statistic("median", arguments);
-    }
-
-    static double apply_mode(const std::vector<double>& arguments) {
-        return stats_ops::apply_statistic("mode", arguments);
-    }
-
-    static double apply_variance(const std::vector<double>& arguments) {
-        return stats_ops::apply_statistic("var", arguments);
-    }
-
-    static double apply_stddev(const std::vector<double>& arguments) {
-        return stats_ops::apply_statistic("std", arguments);
-    }
-
-    static double apply_skewness(const std::vector<double>& arguments) {
-        return stats_ops::apply_statistic("skewness", arguments);
-    }
-
-    static double apply_kurtosis(const std::vector<double>& arguments) {
-        return stats_ops::apply_statistic("kurtosis", arguments);
-    }
-
-    static double apply_percentile(const std::vector<double>& arguments) {
-        return stats_ops::apply_statistic("percentile", arguments);
-    }
-
-    static double apply_quartile(const std::vector<double>& arguments) {
-        return stats_ops::apply_statistic("quartile", arguments);
-    }
-
-    static double apply_factorial(const std::vector<double>& arguments) {
-        return stats_ops::apply_probability("factorial", arguments);
-    }
-
-    static double apply_ncr(const std::vector<double>& arguments) {
-        return stats_ops::apply_probability("nCr", arguments);
-    }
-
-    static double apply_npr(const std::vector<double>& arguments) {
-        return stats_ops::apply_probability("nPr", arguments);
-    }
-
-    static double apply_rand(const std::vector<double>& arguments) {
-        return stats_ops::apply_probability("rand", arguments);
-    }
-
-    static double apply_randn(const std::vector<double>& arguments) {
-        return stats_ops::apply_probability("randn", arguments);
-    }
-
-    static double apply_randint(const std::vector<double>& arguments) {
-        return stats_ops::apply_probability("randint", arguments);
-    }
-
-    static double apply_pdf_normal(const std::vector<double>& arguments) {
-        return stats_ops::apply_probability("pdf_normal", arguments);
-    }
-
-    static double apply_cdf_normal(const std::vector<double>& arguments) {
-        return stats_ops::apply_probability("cdf_normal", arguments);
-    }
-
-    static double apply_poisson_pmf(const std::vector<double>& arguments) {
-        return stats_ops::apply_probability("poisson_pmf", arguments);
-    }
-
-    static double apply_poisson_cdf(const std::vector<double>& arguments) {
-        return stats_ops::apply_probability("poisson_cdf", arguments);
-    }
-
-    static double apply_binom_pmf(const std::vector<double>& arguments) {
-        return stats_ops::apply_probability("binom_pmf", arguments);
-    }
-
-    static double apply_binom_cdf(const std::vector<double>& arguments) {
-        return stats_ops::apply_probability("binom_cdf", arguments);
-    }
-
-    static double apply_fib(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("fib expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("fib only accepts integers");
-        }
-        return fibonacci_value(round_to_long_long(arguments[0]));
-    }
-
-    static double apply_is_prime(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("is_prime expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("is_prime only accepts integers");
-        }
-        return is_prime_ll(round_to_long_long(arguments[0])) ? 1.0 : 0.0;
-    }
-
-    static double apply_next_prime(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("next_prime expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("next_prime only accepts integers");
-        }
-        return static_cast<double>(next_prime_ll(round_to_long_long(arguments[0])));
-    }
-
-    static double apply_prev_prime(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("prev_prime expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("prev_prime only accepts integers");
-        }
-        return static_cast<double>(prev_prime_ll(round_to_long_long(arguments[0])));
-    }
-
-    static double apply_prime_pi(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("prime_pi expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("prime_pi only accepts integers");
-        }
-        return static_cast<double>(prime_pi_ll(round_to_long_long(arguments[0])));
-    }
-
-    static double apply_euler_phi(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("euler_phi expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("euler_phi only accepts integers");
-        }
-        return static_cast<double>(euler_phi_ll(round_to_long_long(arguments[0])));
-    }
-
-    static double apply_mobius(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("mobius expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("mobius only accepts integers");
-        }
-        return static_cast<double>(mobius_ll(round_to_long_long(arguments[0])));
-    }
-
-    static double apply_egcd(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("egcd expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("egcd only accepts integers");
-        }
-        long long x = 0;
-        long long y = 0;
-        return static_cast<double>(extended_gcd_ll(round_to_long_long(arguments[0]),
-                                                  round_to_long_long(arguments[1]),
-                                                  &x,
-                                                  &y));
-    }
-
-    static double apply_beta(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("beta expects exactly two arguments");
-        }
-        return mymath::beta(arguments[0], arguments[1]);
-    }
-
-    static double apply_zeta(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("zeta expects exactly one argument");
-        }
-        return mymath::zeta(arguments[0]);
-    }
-
-    static double apply_bessel(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("bessel expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("bessel order must be an integer");
-        }
-        return mymath::bessel_j(static_cast<int>(round_to_long_long(arguments[0])),
-                                arguments[1]);
-    }
-
-    static double apply_and(const std::vector<double>& arguments) {
-        // 位运算统一通过整数检查后再执行，避免隐式截断带来困惑。
-        if (arguments.size() != 2) {
-            throw std::runtime_error("and expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("and only accepts integers");
-        }
-        return static_cast<double>(
-            round_to_long_long(arguments[0]) & round_to_long_long(arguments[1]));
-    }
-
-    static double apply_or(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("or expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("or only accepts integers");
-        }
-        return static_cast<double>(
-            round_to_long_long(arguments[0]) | round_to_long_long(arguments[1]));
-    }
-
-    static double apply_xor(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("xor expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("xor only accepts integers");
-        }
-        return static_cast<double>(
-            round_to_long_long(arguments[0]) ^ round_to_long_long(arguments[1]));
-    }
-
-    static double apply_shl(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("shl expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("shl only accepts integers");
-        }
-        const long long shift = round_to_long_long(arguments[1]);
-        if (shift < 0) {
-            throw std::runtime_error("shift count cannot be negative");
-        }
-        return static_cast<double>(round_to_long_long(arguments[0]) << shift);
-    }
-
-    static double apply_shr(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("shr expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("shr only accepts integers");
-        }
-        const long long shift = round_to_long_long(arguments[1]);
-        if (shift < 0) {
-            throw std::runtime_error("shift count cannot be negative");
-        }
-        return static_cast<double>(round_to_long_long(arguments[0]) >> shift);
-    }
-
-    static double apply_rol(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("rol expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("rol only accepts integers");
-        }
-        const std::uint64_t value = to_unsigned_bits(round_to_long_long(arguments[0]));
-        const unsigned count = normalize_rotation_count(round_to_long_long(arguments[1]));
-        return static_cast<double>(from_unsigned_bits(rotate_left_bits(value, count)));
-    }
-
-    static double apply_ror(const std::vector<double>& arguments) {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("ror expects exactly two arguments");
-        }
-        if (!is_integer_double(arguments[0]) || !is_integer_double(arguments[1])) {
-            throw std::runtime_error("ror only accepts integers");
-        }
-        const std::uint64_t value = to_unsigned_bits(round_to_long_long(arguments[0]));
-        const unsigned count = normalize_rotation_count(round_to_long_long(arguments[1]));
-        return static_cast<double>(from_unsigned_bits(rotate_right_bits(value, count)));
-    }
-
-    static double apply_popcount(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("popcount expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("popcount only accepts integers");
-        }
-        return static_cast<double>(
-            popcount_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
-    }
-
-    static double apply_bitlen(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("bitlen expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("bitlen only accepts integers");
-        }
-        return static_cast<double>(
-            bit_length_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
-    }
-
-    static double apply_ctz(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("ctz expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("ctz only accepts integers");
-        }
-        return static_cast<double>(
-            trailing_zero_count_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
-    }
-
-    static double apply_clz(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("clz expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("clz only accepts integers");
-        }
-        return static_cast<double>(
-            leading_zero_count_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
-    }
-
-    static double apply_parity(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("parity expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("parity only accepts integers");
-        }
-        return static_cast<double>(
-            parity_bits(to_unsigned_bits(round_to_long_long(arguments[0]))));
-    }
-
-    static double apply_reverse_bits(const std::vector<double>& arguments) {
-        if (arguments.size() != 1) {
-            throw std::runtime_error("reverse_bits expects exactly one argument");
-        }
-        if (!is_integer_double(arguments[0])) {
-            throw std::runtime_error("reverse_bits only accepts integers");
-        }
-        return static_cast<double>(
-            from_unsigned_bits(reverse_bits(to_unsigned_bits(round_to_long_long(arguments[0])))));
-    }
-
-    double lookup_variable(const std::string& name) const {
-        const auto it = variables_->find(name);
-        if (it == variables_->end()) {
-            double constant_value = 0.0;
-            if (lookup_builtin_constant(name, &constant_value)) {
-                return constant_value;
+        if (name == "quartile") {
+            if (arguments.size() < 2) throw MathError("quartile expects q and data");
+            if (!is_integer_double(arguments[0])) {
+                throw MathError("quartile q must be an integer");
             }
-            throw std::runtime_error("unknown variable: " + name);
+            std::vector<double> data(arguments.begin() + 1, arguments.end());
+            return stats::quartile(data, static_cast<int>(arguments[0]));
         }
-        if (it->second.is_matrix) {
-            throw std::runtime_error("matrix variable " + name + " cannot be used as a scalar");
+        if (name == "var") {
+            return stats::variance(arguments);
         }
-        if (it->second.is_complex) {
-            throw std::runtime_error("complex variable " + name + " cannot be used as a real scalar");
+        if (name == "std") {
+            return stats::stddev(arguments);
         }
-        if (it->second.is_string) {
-            throw std::runtime_error("string variable " + name + " cannot be used as a number");
+        if (name == "sample_var") {
+            return stats::sample_variance(arguments);
         }
-        return it->second.exact ? rational_to_double(it->second.rational)
-                                : it->second.decimal;
-    }
-
-    std::string parse_identifier() {
-        const std::size_t start = pos_;
-        while (!is_at_end()) {
-            const char ch = source_[pos_];
-            if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_') {
-                ++pos_;
-            } else {
-                break;
+        if (name == "sample_std") {
+            return stats::sample_stddev(arguments);
+        }
+        if (name == "skewness") {
+            return stats::skewness(arguments);
+        }
+        if (name == "kurtosis") {
+            return stats::kurtosis(arguments);
+        }
+        if (name == "cov" || name == "corr" || name == "slope" || name == "intercept") {
+            return stats_ops::apply_statistic(name, arguments);
+        }
+        if (name == "bernoulli") {
+            return stats_ops::apply_probability(name, arguments);
+        }
+        if (name == "and") {
+            if (arguments.size() != 2) throw MathError("and expects 2 arguments");
+            return static_cast<double>(require_integer_argument(arguments[0], "lhs") &
+                                       require_integer_argument(arguments[1], "rhs"));
+        }
+        if (name == "or") {
+            if (arguments.size() != 2) throw MathError("or expects 2 arguments");
+            return static_cast<double>(require_integer_argument(arguments[0], "lhs") |
+                                       require_integer_argument(arguments[1], "rhs"));
+        }
+        if (name == "xor") {
+            if (arguments.size() != 2) throw MathError("xor expects 2 arguments");
+            return static_cast<double>(require_integer_argument(arguments[0], "lhs") ^
+                                       require_integer_argument(arguments[1], "rhs"));
+        }
+        if (name == "not") {
+            if (arguments.size() != 1) throw MathError("not expects 1 argument");
+            return static_cast<double>(~require_integer_argument(arguments[0], "argument"));
+        }
+        if (name == "shl") {
+            if (arguments.size() != 2) throw MathError("shl expects 2 arguments");
+            const long long count = require_integer_argument(arguments[1], "shift");
+            if (count < 0) {
+                throw MathError("shift count cannot be negative");
             }
+            return static_cast<double>(require_integer_argument(arguments[0], "value") << count);
         }
-        return source_.substr(start, pos_ - start);
-    }
-
-    bool peek_is_alpha() const {
-        return !is_at_end() &&
-               std::isalpha(static_cast<unsigned char>(source_[pos_]));
-    }
-
-    bool peek(char expected) const {
-        return !is_at_end() && source_[pos_] == expected;
-    }
-
-    void skip_spaces() {
-        while (!is_at_end() &&
-               std::isspace(static_cast<unsigned char>(source_[pos_]))) {
-            ++pos_;
+        if (name == "shr") {
+            if (arguments.size() != 2) throw MathError("shr expects 2 arguments");
+            const long long count = require_integer_argument(arguments[1], "shift");
+            if (count < 0) {
+                throw MathError("shift count cannot be negative");
+            }
+            return static_cast<double>(require_integer_argument(arguments[0], "value") >> count);
         }
-    }
-
-    bool match(char expected) {
-        if (is_at_end() || source_[pos_] != expected) {
-            return false;
+        if (name == "rol") {
+            if (arguments.size() != 2) throw MathError("rol expects 2 arguments");
+            return static_cast<double>(from_unsigned_bits(rotate_left_bits(
+                to_unsigned_bits(require_integer_argument(arguments[0], "value")),
+                normalize_rotation_count(require_integer_argument(arguments[1], "shift")))));
         }
-        ++pos_;
-        return true;
-    }
-
-    bool match_string(const std::string& text) {
-        if (source_.compare(pos_, text.size(), text) != 0) {
-            return false;
+        if (name == "ror") {
+            if (arguments.size() != 2) throw MathError("ror expects 2 arguments");
+            return static_cast<double>(from_unsigned_bits(rotate_right_bits(
+                to_unsigned_bits(require_integer_argument(arguments[0], "value")),
+                normalize_rotation_count(require_integer_argument(arguments[1], "shift")))));
         }
-        pos_ += text.size();
-        return true;
-    }
-
-    void expect(char expected) {
-        if (!match(expected)) {
-            throw std::runtime_error(std::string("expected '") + expected + "'");
+        if (name == "popcount") {
+            if (arguments.size() != 1) throw MathError("popcount expects 1 argument");
+            return static_cast<double>(popcount_bits(
+                to_unsigned_bits(require_integer_argument(arguments[0], "argument"))));
         }
+        if (name == "bitlen") {
+            if (arguments.size() != 1) throw MathError("bitlen expects 1 argument");
+            return static_cast<double>(bit_length_bits(
+                to_unsigned_bits(require_integer_argument(arguments[0], "argument"))));
+        }
+        if (name == "ctz") {
+            if (arguments.size() != 1) throw MathError("ctz expects 1 argument");
+            return static_cast<double>(trailing_zero_count_bits(
+                to_unsigned_bits(require_integer_argument(arguments[0], "argument"))));
+        }
+        if (name == "clz") {
+            if (arguments.size() != 1) throw MathError("clz expects 1 argument");
+            return static_cast<double>(leading_zero_count_bits(
+                to_unsigned_bits(require_integer_argument(arguments[0], "argument"))));
+        }
+        if (name == "parity") {
+            if (arguments.size() != 1) throw MathError("parity expects 1 argument");
+            return static_cast<double>(parity_bits(
+                to_unsigned_bits(require_integer_argument(arguments[0], "argument"))));
+        }
+        if (name == "reverse_bits") {
+            if (arguments.size() != 1) throw MathError("reverse_bits expects 1 argument");
+            return static_cast<double>(from_unsigned_bits(reverse_bits(
+                to_unsigned_bits(require_integer_argument(arguments[0], "argument")))));
+        }
+        if (name == "step" || name == "heaviside") {
+            if (arguments.size() != 1) throw MathError(name + " expects 1 argument");
+            return arguments[0] < 0.0 ? 0.0 : 1.0;
+        }
+        if (name == "delta" || name == "impulse") {
+            if (arguments.size() != 1) throw MathError(name + " expects 1 argument");
+            return mymath::is_near_zero(arguments[0], 1e-12) ? 1.0 : 0.0;
+        }
+        if (name == "poisson_pmf" || name == "poisson_cdf" ||
+            name == "binom_pmf" || name == "binom_cdf") {
+            return stats_ops::apply_probability(name, arguments);
+        }
+        if (name == "rat") {
+            if (arguments.size() == 1) return arguments[0];
+            if (arguments.size() == 2) return arguments[0];
+            throw MathError("rat expects 1 or 2 arguments");
+        }
+
+        throw UndefinedError("unknown function: " + name);
     }
 
-    bool is_at_end() const {
-        return pos_ >= source_.size();
-    }
-
-    std::string source_;
-    std::size_t pos_ = 0;
-    const std::map<std::string, StoredValue>* variables_;
+    VariableResolver variables_;
     const std::map<std::string, CustomFunction>* functions_;
     HasScriptFunctionCallback has_script_function_;
     InvokeScriptFunctionDecimalCallback invoke_script_function_;
@@ -1040,7 +748,7 @@ private:
 
 double parse_decimal_expression(
     const std::string& expression,
-    const std::map<std::string, StoredValue>* variables,
+    const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
     HasScriptFunctionCallback has_script_function,
     InvokeScriptFunctionDecimalCallback invoke_script_function) {
@@ -1054,7 +762,7 @@ double parse_decimal_expression(
 
 DecimalParser::DecimalParser(
     std::string source,
-    const std::map<std::string, StoredValue>* variables,
+    const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
     HasScriptFunctionCallback has_script_function,
     InvokeScriptFunctionDecimalCallback invoke_script_function)
@@ -1065,15 +773,16 @@ DecimalParser::DecimalParser(
       invoke_script_function_(std::move(invoke_script_function)) {}
 
 double DecimalParser::parse() {
-    return parse_decimal_expression(source_,
-                                    variables_,
-                                    functions_,
-                                    std::move(has_script_function_),
-                                    std::move(invoke_script_function_));
+    DecimalParserImpl parser(source_,
+                             variables_,
+                             functions_,
+                             std::move(has_script_function_),
+                             std::move(invoke_script_function_));
+    return parser.parse();
 }
 
 bool try_evaluate_matrix_expression(const std::string& expression,
-                                    const std::map<std::string, StoredValue>* variables,
+                                    const VariableResolver& variables,
                                     const std::map<std::string, CustomFunction>* functions,
                                     const HasScriptFunctionCallback& has_script_function,
                                     const InvokeScriptFunctionDecimalCallback& invoke_script_function,
@@ -1090,20 +799,20 @@ bool try_evaluate_matrix_expression(const std::string& expression,
         };
     const matrix::MatrixLookup matrix_lookup =
         [variables](const std::string& name, matrix::Matrix* matrix_value) {
-            const auto it = variables->find(name);
-            if (it == variables->end() || !it->second.is_matrix) {
+            const StoredValue* found = variables.lookup(name);
+            if (!found || !found->is_matrix) {
                 return false;
             }
-            *matrix_value = it->second.matrix;
+            *matrix_value = found->matrix;
             return true;
         };
     const matrix::ComplexLookup complex_lookup =
         [variables](const std::string& name, matrix::ComplexNumber* complex_value) {
-            const auto it = variables->find(name);
-            if (it == variables->end() || !it->second.is_complex) {
+            const StoredValue* found = variables.lookup(name);
+            if (!found || !found->is_complex) {
                 return false;
             }
-            *complex_value = it->second.complex;
+            *complex_value = found->complex;
             return true;
         };
     return matrix::try_evaluate_expression(expression,
@@ -1112,7 +821,3 @@ bool try_evaluate_matrix_expression(const std::string& expression,
                                            complex_lookup,
                                            value);
 }
-
-// ExactParser 只处理能够保持为有理数的表达式。
-// 当遇到 sin、pi 或非整数指数这类无法精确表示为分数的情况时，
-// 它会抛出 ExactModeUnsupported，调用方再回退到普通浮点模式。

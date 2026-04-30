@@ -1,0 +1,22 @@
+# Test Transforms and Multivariable Integration
+print("--- Transform Tests ---")
+# laplace(step(t), t, s) -> 1/s
+l1 = laplace(step(t), t, s)
+print("laplace(step(t)) = ", l1)
+
+# fourier(delta(t), t, w) -> 1
+f1 = fourier(delta(t), t, w)
+print("fourier(delta(t)) = ", f1)
+
+# ztrans(step(n), n, z) -> z/(z-1)
+z1 = ztrans(step(n), n, z)
+print("ztrans(step(n)) = ", z1)
+
+print("--- Multivariable Integration Tests ---")
+# double_integral(x*y, 0, 1, 0, 1) -> 1/4 = 0.25
+di1 = double_integral(x*y, 0, 1, 0, 1)
+print("double_integral(x*y, 0, 1, 0, 1) = ", di1)
+
+# triple_integral(1, 0, 1, 0, 1, 0, 1) -> 1
+ti1 = triple_integral(1, 0, 1, 0, 1, 0, 1)
+print("triple_integral(1, 0, 1, 0, 1, 0, 1) = ", ti1)

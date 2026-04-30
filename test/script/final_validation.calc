@@ -1,0 +1,66 @@
+# Final Comprehensive Validation Script (Fixed)
+# Covers Matrix, Symbolic, DSP, Plot, Stats, and Scripting.
+# NOTE: Uses print() wrappers and avoids symbolic assignments to variables.
+
+print("=== Final Validation Starting ===")
+
+# 1. Matrix Operations & Decompositions
+print("--- Matrix ---")
+A = [1, 2, 3; 4, 5, 6; 7, 8, 10]
+print("det(A) = ", det(A))
+print("inv(A) = ", inverse(A))
+print("eigvals(A) = ", eigvals(A))
+print("svd_s(A) = ", svd_s(A))
+print("qr_q(A) = ", qr_q(A))
+
+# 2. Symbolic Multi-variable Calculus
+print("--- Symbolic ---")
+# Use direct expressions in print()
+print("gradient(x^2+y^2+z^2) = ", gradient(x^2 + y^2 + z^2, x, y, z))
+print("jacobian([x*y, y*z]) = ", jacobian([x*y, y*z], x, y, z))
+print("hessian(x^2*y) = ", hessian(x^2 * y, x, y))
+print("div([x, y, z]) = ", div([x, y, z], x, y, z))
+print("curl([y, -x, 0]) = ", curl([y, -x, 0], x, y, z))
+
+# 3. Complex Arithmetic
+print("--- Complex ---")
+# Use *i for complex literals
+z1 = 1 + 2*i
+z2 = 2 - 1*i
+print("z1 * z2 = ", z1 * z2) 
+print("exp(i * 3.14159265) = ", exp(i * 3.14159265))
+
+# 4. Signal Processing
+print("--- DSP ---")
+print("fft([1, 1, 1, 1]) = ", fft([1, 1, 1, 1]))
+print("conv([1, 2], [1, 1]) = ", conv([1, 2], [1, 1]))
+
+# 5. ODE Solving
+print("--- ODE ---")
+print("ode( -y, 0, 1, 1) = ", ode(-y, 0, 1, 1))
+
+# 6. Optimization
+print("--- Optimization ---")
+print("lp_max([1, 1], [1, 2], [3], [0, 0], [10, 10]) = ", lp_max([1, 1], [1, 2], [3], [0, 0], [10, 10]))
+
+# 7. Statistics
+print("--- Statistics ---")
+print("skewness(1, 2, 3, 4, 10) = ", skewness(1, 2, 3, 4, 10))
+print("kurtosis(1, 2, 3, 4, 10) = ", kurtosis(1, 2, 3, 4, 10))
+
+# 8. Scripting Logic
+print("--- Scripting ---")
+def power_rec(a, b):
+    if b == 0:
+        return 1
+    else:
+        return a * power_rec(a, b - 1)
+
+print("2^10 = ", power_rec(2, 10))
+
+# 9. Plotting
+print("--- Plot ---")
+print("Generating plot of cos(x)...")
+print(plot(cos(x), -3.14, 3.14))
+
+print("=== Final Validation Finished ===")

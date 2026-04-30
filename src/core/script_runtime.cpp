@@ -1,22 +1,122 @@
 #include "calculator_internal_types.h"
+#include "calculator_module.h"
+#include "expression_compiler.h"
 
 #include "mymath.h"
 #include "script_parser.h"
 
+#include <iomanip>
 #include <map>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
+VariableResolver VariableResolver::make_owned(const VariableResolver& other) {
+    VariableResolver owned;
+    owned.is_owned_ = true;
+    if (other.global_vars_) {
+        owned.owned_global_vars_ = std::make_shared<std::map<std::string, StoredValue>>(*other.global_vars_);
+        owned.global_vars_ = owned.owned_global_vars_.get();
+    }
+    if (other.local_scopes_) {
+        owned.owned_local_scopes_ = std::make_shared<std::vector<std::map<std::string, StoredValue>>>(*other.local_scopes_);
+        owned.local_scopes_ = owned.owned_local_scopes_.get();
+    }
+    if (other.parent_) {
+        owned.owned_parent_ = std::make_shared<VariableResolver>(make_owned(*other.parent_));
+        owned.parent_ = owned.owned_parent_.get();
+    }
+    // Note: override_vars_ are usually transient and NOT captured by make_owned.
+    // They are passed to the constructor of the chained resolver during evaluation.
+    return owned;
+}
 
-std::map<std::string, StoredValue> visible_variables(const Calculator::Impl* impl) {
-    std::map<std::string, StoredValue> merged = impl->variables;
-    for (const auto& scope : impl->local_scopes) {
-        for (const auto& [name, value] : scope) {
+const StoredValue* VariableResolver::lookup(const std::string& name) const {
+    if (override_vars_) {
+        const auto found = override_vars_->find(name);
+        if (found != override_vars_->end()) {
+            return &found->second;
+        }
+    }
+
+    if (local_scopes_) {
+        for (auto it = local_scopes_->rbegin(); it != local_scopes_->rend(); ++it) {
+            const auto found = it->find(name);
+            if (found != it->end()) {
+                return &found->second;
+            }
+        }
+    }
+
+    if (global_vars_) {
+        const auto found = global_vars_->find(name);
+        if (found != global_vars_->end()) {
+            return &found->second;
+        }
+    }
+
+    double constant_value = 0.0;
+    if (lookup_builtin_constant(name, &constant_value)) {
+        static thread_local std::map<std::string, StoredValue> constant_cache;
+        auto& cached = constant_cache[name];
+        if (!cached.decimal && !cached.exact) {
+            cached.decimal = constant_value;
+            cached.exact = false;
+        }
+        return &cached;
+    }
+
+    if (parent_) {
+        return parent_->lookup(name);
+    }
+
+    return nullptr;
+}
+
+bool VariableResolver::contains(const std::string& name) const {
+    return lookup(name) != nullptr;
+}
+
+std::map<std::string, StoredValue> VariableResolver::snapshot() const {
+    std::map<std::string, StoredValue> merged;
+    if (parent_) {
+        merged = parent_->snapshot();
+    }
+    
+    if (global_vars_) {
+        for (const auto& [name, value] : *global_vars_) {
+            merged[name] = value;
+        }
+    }
+    
+    for (const char* name : {"pi", "e", "c", "G", "h", "k", "NA", "inf", "infinity", "oo"}) {
+        double constant_value = 0.0;
+        if (lookup_builtin_constant(name, &constant_value)) {
+            StoredValue stored;
+            stored.decimal = constant_value;
+            stored.exact = false;
+            merged.insert({name, stored});
+        }
+    }
+    
+    if (local_scopes_) {
+        for (const auto& scope : *local_scopes_) {
+            for (const auto& [name, value] : scope) {
+                merged[name] = value;
+            }
+        }
+    }
+    
+    if (override_vars_) {
+        for (const auto& [name, value] : *override_vars_) {
             merged[name] = value;
         }
     }
     return merged;
+}
+
+VariableResolver visible_variables(const Calculator::Impl* impl) {
+    return VariableResolver(&impl->variables, &impl->local_scopes);
 }
 
 bool has_visible_script_function(const Calculator::Impl* impl, const std::string& name) {
@@ -71,7 +171,13 @@ ScriptSignal ScriptSignal::make_continue() {
 StoredValue evaluate_expression_value(Calculator* calculator,
                                       Calculator::Impl* impl,
                                       const std::string& expression,
-                                      bool exact_mode);
+                                      bool exact_mode,
+                                      std::shared_ptr<ExpressionCache>* cache);
+StoredValue evaluate_expression_value_legacy(Calculator* calculator,
+                                             Calculator::Impl* impl,
+                                             const std::string& expression,
+                                             bool exact_mode,
+                                             std::shared_ptr<void>* cache);
 ScriptSignal execute_script_statement(Calculator* calculator,
                                       Calculator::Impl* impl,
                                       const script::Statement& statement,
@@ -91,6 +197,31 @@ std::string render_script_block(const script::BlockStatement& block, int indent)
 
 std::string indent_text(int indent) {
     return std::string(static_cast<std::size_t>(indent) * 2, ' ');
+}
+
+bool contains_builtin_constant_token(const std::string& expression) {
+    for (std::size_t i = 0; i < expression.size(); ++i) {
+        const char ch = expression[i];
+        if (!std::isalpha(static_cast<unsigned char>(ch)) && ch != '_') {
+            continue;
+        }
+
+        const std::size_t start = i;
+        ++i;
+        while (i < expression.size() &&
+               (std::isalnum(static_cast<unsigned char>(expression[i])) ||
+                expression[i] == '_')) {
+            ++i;
+        }
+        const std::string token = expression.substr(start, i - start);
+        --i;
+
+        double value = 0.0;
+        if (lookup_builtin_constant(token, &value)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 std::unique_ptr<script::BlockStatement> clone_block_statement(const script::BlockStatement& block) {
@@ -176,14 +307,17 @@ script::StatementPtr clone_statement(const script::Statement& statement) {
         case script::Statement::Kind::kBlock:
             return clone_block_statement(static_cast<const script::BlockStatement&>(statement));
         case script::Statement::Kind::kSimple: {
+            const auto& source = static_cast<const script::SimpleStatement&>(statement);
             auto clone = std::make_unique<script::SimpleStatement>();
-            clone->text = static_cast<const script::SimpleStatement&>(statement).text;
+            clone->text = source.text;
+            clone->cache = source.cache;
             return clone;
         }
         case script::Statement::Kind::kIf: {
             const auto& source = static_cast<const script::IfStatement&>(statement);
             auto clone = std::make_unique<script::IfStatement>();
             clone->condition = source.condition;
+            clone->cache = source.cache;
             clone->then_branch = clone_statement(*source.then_branch);
             if (source.else_branch) {
                 clone->else_branch = clone_statement(*source.else_branch);
@@ -194,6 +328,7 @@ script::StatementPtr clone_statement(const script::Statement& statement) {
             const auto& source = static_cast<const script::WhileStatement&>(statement);
             auto clone = std::make_unique<script::WhileStatement>();
             clone->condition = source.condition;
+            clone->cache = source.cache;
             clone->body = clone_statement(*source.body);
             return clone;
         }
@@ -203,6 +338,9 @@ script::StatementPtr clone_statement(const script::Statement& statement) {
             clone->initializer = source.initializer;
             clone->condition = source.condition;
             clone->step = source.step;
+            clone->init_cache = source.init_cache;
+            clone->cond_cache = source.cond_cache;
+            clone->step_cache = source.step_cache;
             clone->body = clone_statement(*source.body);
             return clone;
         }
@@ -219,6 +357,7 @@ script::StatementPtr clone_statement(const script::Statement& statement) {
             auto clone = std::make_unique<script::ReturnStatement>();
             clone->has_expression = source.has_expression;
             clone->expression = source.expression;
+            clone->cache = source.cache;
             return clone;
         }
         case script::Statement::Kind::kBreak:
@@ -249,6 +388,25 @@ double invoke_script_function_decimal(Calculator* calculator,
                                       const std::vector<double>& arguments) {
     auto it = impl->script_functions.find(name);
     if (it == impl->script_functions.end()) {
+        // Try to invoke as a module command
+        std::ostringstream call_ss;
+        call_ss << name << "(";
+        for (std::size_t i = 0; i < arguments.size(); ++i) {
+            if (i != 0) call_ss << ", ";
+            call_ss << std::setprecision(17) << arguments[i];
+        }
+        call_ss << ")";
+        
+        std::string output;
+        if (calculator->try_process_function_command(call_ss.str(), &output)) {
+            try {
+                return std::stod(output);
+            } catch (...) {
+                // If output is not a number (e.g. vector), it's an error for this scalar path
+                throw std::runtime_error("function " + name + " did not return a scalar value: " + output);
+            }
+        }
+        
         throw std::runtime_error("unknown function: " + name);
     }
 
@@ -294,66 +452,124 @@ double invoke_script_function_decimal(Calculator* calculator,
     }
 }
 
-namespace {
-
-bool expression_contains_i(const std::string& expression) {
-    bool in_string = false;
-    bool escaping = false;
-    for (std::size_t i = 0; i < expression.size(); ++i) {
-        char ch = expression[i];
-        if (in_string) {
-            if (escaping) escaping = false;
-            else if (ch == '\\') escaping = true;
-            else if (ch == '"') in_string = false;
-            continue;
-        }
-        if (ch == '"') { in_string = true; continue; }
-        if (ch == 'i') {
-            bool prev_ok = (i == 0 || (!std::isalnum(static_cast<unsigned char>(expression[i-1])) && expression[i-1] != '_'));
-            bool next_ok = (i == expression.size() - 1 || (!std::isalnum(static_cast<unsigned char>(expression[i+1])) && expression[i+1] != '_'));
-            if (prev_ok && next_ok) return true;
-        }
-    }
-    return false;
-}
-
-} // namespace
+// ============================================================================
+// 优化后的表达式求值函数
+// ============================================================================
 
 StoredValue evaluate_expression_value(Calculator* calculator,
                                       Calculator::Impl* impl,
                                       const std::string& expression,
-                                      bool exact_mode) {
-    const std::string expanded_expression =
-        expand_inline_function_commands(calculator, expression);
-    const std::string trimmed = trim_copy(expanded_expression);
-    const std::map<std::string, StoredValue> variables = visible_variables(impl);
-    if (is_string_literal(trimmed)) {
-        StoredValue stored;
-        stored.is_string = true;
-        stored.string_value = parse_string_literal_value(trimmed);
-        return stored;
-    }
-    if (is_identifier_text(trimmed)) {
-        const auto it = variables.find(trimmed);
-        if (it != variables.end() && it->second.is_string) {
-            return it->second;
+                                      bool exact_mode,
+                                      std::shared_ptr<ExpressionCache>* cache) {
+    // 获取或创建缓存
+    std::shared_ptr<ExpressionCache> expr_cache;
+    if (cache && *cache) {
+        expr_cache = *cache;
+    } else {
+        expr_cache = std::make_shared<ExpressionCache>();
+        expr_cache->expanded = expand_inline_function_commands(calculator, expression);
+        expr_cache->hint = analyze_expression_hint(expr_cache->expanded);
+        expr_cache->features = analyze_expression_features(expr_cache->expanded);
+        if (cache) {
+            *cache = expr_cache;
         }
     }
 
-    const HasScriptFunctionCallback has_script_function =
-        [impl](const std::string& name) {
-            return has_visible_script_function(impl, name);
-        };
-    const InvokeScriptFunctionDecimalCallback invoke_script_function =
-        [calculator, impl](const std::string& name, const std::vector<double>& arguments) {
-            return invoke_script_function_decimal(calculator, impl, name, arguments);
-        };
+    const std::string& trimmed = expr_cache->expanded;
+    const VariableResolver variables = visible_variables(impl);
 
-    if (expression_contains_i(trimmed)) {
-        try {
+    // 根据类型提示快速分发
+    switch (expr_cache->hint) {
+        case ExpressionHint::kStringLiteral: {
+            StoredValue stored;
+            stored.is_string = true;
+            stored.string_value = parse_string_literal_value(trimmed);
+            return stored;
+        }
+
+        case ExpressionHint::kIdentifier: {
+            const StoredValue* found = variables.lookup(trimmed);
+            if (found) {
+                return *found;
+            }
+            throw UndefinedError("unknown variable: " + trimmed);
+        }
+
+        case ExpressionHint::kRatCall: {
+            // rat() 特殊处理
+            std::vector<std::string> rational_arguments;
+            if (!split_named_call_with_arguments(trimmed, "rat", &rational_arguments)) {
+                break; // 回退到通用路径
+            }
+            if (rational_arguments.size() != 1 && rational_arguments.size() != 2) {
+                throw std::runtime_error(
+                    "rat expects one argument or expression plus max_denominator");
+            }
+
+            const StoredValue value =
+                evaluate_expression_value(calculator, impl, rational_arguments[0], false, nullptr);
+            if (value.is_matrix || value.is_complex) {
+                throw std::runtime_error("rat cannot approximate a matrix or complex value");
+            }
+            if (value.is_string) {
+                throw std::runtime_error("rat cannot approximate a string value");
+            }
+
+            long long max_denominator = 999;
+            if (rational_arguments.size() == 2) {
+                const StoredValue max_denominator_value =
+                    evaluate_expression_value(calculator, impl, rational_arguments[1], false, nullptr);
+                if (max_denominator_value.is_matrix || max_denominator_value.is_complex ||
+                    max_denominator_value.is_string) {
+                    throw std::runtime_error("rat max_denominator must be a positive integer");
+                }
+                const double scalar =
+                    max_denominator_value.exact
+                        ? rational_to_double(max_denominator_value.rational)
+                        : max_denominator_value.decimal;
+                if (!is_integer_double(scalar) || scalar <= 0.0) {
+                    throw std::runtime_error("rat max_denominator must be a positive integer");
+                }
+                max_denominator = round_to_long_long(scalar);
+            }
+
+            if (value.exact && value.rational.denominator <= max_denominator) {
+                return value;
+            }
+
+            const double decimal_value = value.exact
+                                             ? rational_to_double(value.rational)
+                                             : value.decimal;
+            long long numerator = 0;
+            long long denominator = 1;
+            if (!mymath::best_rational_approximation(decimal_value,
+                                                     &numerator,
+                                                     &denominator,
+                                                     max_denominator)) {
+                throw std::runtime_error("rat could not compute a rational approximation");
+            }
+
+            StoredValue stored;
+            stored.exact = true;
+            stored.rational = Rational(numerator, denominator);
+            stored.decimal = rational_to_double(stored.rational);
+            return stored;
+        }
+
+        case ExpressionHint::kComplexCandidate: {
+            // 复数表达式路径
+            const HasScriptFunctionCallback has_script_function =
+                [impl](const std::string& name) {
+                    return has_visible_script_function(impl, name);
+                };
+            const InvokeScriptFunctionDecimalCallback invoke_script_function =
+                [calculator, impl](const std::string& name, const std::vector<double>& arguments) {
+                    return invoke_script_function_decimal(calculator, impl, name, arguments);
+                };
+
             matrix::Value matrix_val;
             if (try_evaluate_matrix_expression(trimmed,
-                                              &variables,
+                                              variables,
                                               &impl->functions,
                                               has_script_function,
                                               invoke_script_function,
@@ -370,72 +586,84 @@ StoredValue evaluate_expression_value(Calculator* calculator,
                 }
                 return result;
             }
-        } catch (...) {
-            // 回退到标量解析路径
+            // 失败则回退到标量路径
+            break;
         }
+
+        case ExpressionHint::kMatrixCandidate: {
+            // 矩阵表达式路径
+            const HasScriptFunctionCallback has_script_function =
+                [impl](const std::string& name) {
+                    return has_visible_script_function(impl, name);
+                };
+            const InvokeScriptFunctionDecimalCallback invoke_script_function =
+                [calculator, impl](const std::string& name, const std::vector<double>& arguments) {
+                    return invoke_script_function_decimal(calculator, impl, name, arguments);
+                };
+
+            matrix::Value matrix_val;
+            if (try_evaluate_matrix_expression(trimmed,
+                                              variables,
+                                              &impl->functions,
+                                              has_script_function,
+                                              invoke_script_function,
+                                              &matrix_val)) {
+                StoredValue result;
+                if (matrix_val.is_matrix) {
+                    result.is_matrix = true;
+                    result.matrix = std::move(matrix_val.matrix);
+                } else if (matrix_val.is_complex) {
+                    result.is_complex = true;
+                    result.complex = matrix_val.complex;
+                } else {
+                    result.decimal = matrix_val.scalar;
+                }
+                return result;
+            }
+            // 失败则回退到标量路径
+            break;
+        }
+
+        case ExpressionHint::kScalar: {
+            break;
+        }
+
+        default:
+            break;
     }
 
-    StoredValue stored;
-    std::vector<std::string> rational_arguments;
-    if (split_named_call_with_arguments(trimmed, "rat", &rational_arguments)) {
-        if (rational_arguments.size() != 1 && rational_arguments.size() != 2) {
-            throw std::runtime_error(
-                "rat expects one argument or expression plus max_denominator");
-        }
+    // 通用路径：依次尝试各种解析器
+    const HasScriptFunctionCallback has_script_function =
+        [impl](const std::string& name) {
+            return has_visible_script_function(impl, name);
+        };
+    const InvokeScriptFunctionDecimalCallback invoke_script_function =
+        [calculator, impl](const std::string& name, const std::vector<double>& arguments) {
+            return invoke_script_function_decimal(calculator, impl, name, arguments);
+        };
 
-        const StoredValue value =
-            evaluate_expression_value(calculator, impl, rational_arguments[0], false);
-        if (value.is_matrix || value.is_complex) {
-            throw std::runtime_error("rat cannot approximate a matrix or complex value");
-        }
-        if (value.is_string) {
-            throw std::runtime_error("rat cannot approximate a string value");
-        }
-
-        long long max_denominator = 999;
-        if (rational_arguments.size() == 2) {
-            const StoredValue max_denominator_value =
-                evaluate_expression_value(calculator, impl, rational_arguments[1], false);
-            if (max_denominator_value.is_matrix || max_denominator_value.is_complex ||
-                max_denominator_value.is_string) {
-                throw std::runtime_error("rat max_denominator must be a positive integer");
-            }
-            const double scalar =
-                max_denominator_value.exact
-                    ? rational_to_double(max_denominator_value.rational)
-                    : max_denominator_value.decimal;
-            if (!is_integer_double(scalar) || scalar <= 0.0) {
-                throw std::runtime_error("rat max_denominator must be a positive integer");
-            }
-            max_denominator = round_to_long_long(scalar);
-        }
-
-        if (value.exact && value.rational.denominator <= max_denominator) {
-            return value;
-        }
-
-        const double decimal_value = value.exact
-                                         ? rational_to_double(value.rational)
-                                         : value.decimal;
-        long long numerator = 0;
-        long long denominator = 1;
-        if (!mymath::best_rational_approximation(decimal_value,
-                                                 &numerator,
-                                                 &denominator,
-                                                 max_denominator)) {
-            throw std::runtime_error("rat could not compute a rational approximation");
-        }
-
-        stored.exact = true;
-        stored.rational = Rational(numerator, denominator);
-        stored.decimal = rational_to_double(stored.rational);
+    // 检查字符串字面量
+    if (is_string_literal(trimmed)) {
+        StoredValue stored;
+        stored.is_string = true;
+        stored.string_value = parse_string_literal_value(trimmed);
         return stored;
     }
 
+    // 检查标识符
+    if (is_identifier_text(trimmed)) {
+        const StoredValue* found = variables.lookup(trimmed);
+        if (found && found->is_string) {
+            return *found;
+        }
+    }
+
+    // 精确模式
     if (exact_mode) {
         try {
+            StoredValue stored;
             stored.rational = parse_exact_expression(trimmed,
-                                                     &variables,
+                                                     variables,
                                                      &impl->functions,
                                                      has_script_function);
             stored.exact = true;
@@ -445,13 +673,15 @@ StoredValue evaluate_expression_value(Calculator* calculator,
         }
     }
 
+    // 矩阵/复数表达式
     matrix::Value matrix_value;
     if (try_evaluate_matrix_expression(trimmed,
-                                       &variables,
+                                       variables,
                                        &impl->functions,
                                        has_script_function,
                                        invoke_script_function,
                                        &matrix_value)) {
+        StoredValue stored;
         if (matrix_value.is_matrix) {
             stored.is_matrix = true;
             stored.matrix = matrix_value.matrix;
@@ -467,38 +697,71 @@ StoredValue evaluate_expression_value(Calculator* calculator,
         return stored;
     }
 
+    // 模块隐式求值
     if (!exact_mode) {
-        try {
-            const PreciseDecimal precise_value =
-                parse_precise_decimal_expression(trimmed, &variables);
-            stored.decimal = precise_value.to_double();
-            stored.exact = false;
-            stored.has_precise_decimal_text = true;
-            stored.precise_decimal_text = precise_value.to_string();
-            return stored;
-        } catch (const PreciseDecimalUnsupported&) {
+        std::map<std::string, StoredValue> snapshot = variables.snapshot();
+        StoredValue stored;
+        for (const auto& module : impl->registered_modules) {
+            if (module->try_evaluate_implicit(trimmed, &stored, snapshot)) {
+                return stored;
+            }
         }
     }
 
-    DecimalParser parser(trimmed,
-                         &variables,
-                         &impl->functions,
-                         has_script_function,
-                         invoke_script_function);
-    const double parsed_value = parser.parse();
-    stored.decimal = parsed_value;
-    stored.exact = false;
-    if (impl->symbolic_constants_mode) {
-        std::string symbolic_output;
-        if (try_symbolic_constant_expression(trimmed,
-                                             &variables,
-                                             &impl->functions,
-                                             &symbolic_output)) {
-            stored.has_symbolic_text = true;
-            stored.symbolic_text = symbolic_output;
+    // 标量解析
+    try {
+        DecimalParser parser(trimmed,
+                             variables,
+                             &impl->functions,
+                             has_script_function,
+                             invoke_script_function);
+        const double parsed_value = parser.parse();
+        StoredValue stored;
+        stored.decimal = parsed_value;
+        stored.exact = false;
+        if (impl->symbolic_constants_mode) {
+            std::string symbolic_output;
+            if (try_symbolic_constant_expression(trimmed,
+                                                 variables,
+                                                 &impl->functions,
+                                                 &symbolic_output)) {
+                stored.has_symbolic_text = true;
+                stored.symbolic_text = symbolic_output;
+            } else if (contains_builtin_constant_token(trimmed)) {
+                stored.has_symbolic_text = true;
+                stored.symbolic_text = trimmed;
+            }
         }
+        return stored;
+    } catch (const UndefinedError&) {
+        // 如果数值求值失败（由于变量未定义），但该表达式是由符号指令展开而来的，
+        // 则保留其原始文本作为符号结果返回。
+        if (trimmed != expression && (trimmed.find(' ') != std::string::npos || trimmed.find('*') != std::string::npos)) {
+            StoredValue stored;
+            stored.has_symbolic_text = true;
+            stored.symbolic_text = trimmed;
+            return stored;
+        }
+        throw;
     }
-    return stored;
+}
+
+// 兼容旧接口的包装函数
+StoredValue evaluate_expression_value_legacy(Calculator* calculator,
+                                             Calculator::Impl* impl,
+                                             const std::string& expression,
+                                             bool exact_mode,
+                                             std::shared_ptr<void>* cache) {
+    std::shared_ptr<ExpressionCache> expr_cache;
+    if (cache && *cache) {
+        expr_cache = std::static_pointer_cast<ExpressionCache>(*cache);
+    }
+    auto result = evaluate_expression_value(calculator, impl, expression, exact_mode,
+                                            cache ? &expr_cache : nullptr);
+    if (cache && expr_cache) {
+        *cache = expr_cache;
+    }
+    return result;
 }
 
 std::string execute_simple_script_line(Calculator* calculator,
@@ -575,12 +838,15 @@ ScriptSignal execute_script_statement(Calculator* calculator,
                                         create_scope);
         case script::Statement::Kind::kSimple: {
             const auto& simple = static_cast<const script::SimpleStatement&>(statement);
-            *last_output = execute_simple_script_line(calculator, impl, simple.text, exact_mode);
+            // 使用预编译缓存
+            std::shared_ptr<ExpressionCache> cache = simple.cache;
+            *last_output = execute_simple_script_line(calculator, impl,
+                cache ? cache->expanded : simple.text, exact_mode);
             return {};
         }
         case script::Statement::Kind::kIf: {
             const auto& if_statement = static_cast<const script::IfStatement&>(statement);
-            if (truthy_value(evaluate_expression_value(calculator, impl, if_statement.condition, false))) {
+            if (truthy_value(evaluate_expression_value(calculator, impl, if_statement.condition, false, &if_statement.cache))) {
                 return execute_script_statement(calculator,
                                                 impl,
                                                 *if_statement.then_branch,
@@ -603,7 +869,8 @@ ScriptSignal execute_script_statement(Calculator* calculator,
             while (truthy_value(evaluate_expression_value(calculator,
                                                           impl,
                                                           while_statement.condition,
-                                                          false))) {
+                                                          false,
+                                                          &while_statement.cache))) {
                 const ScriptSignal signal =
                     execute_script_statement(calculator,
                                              impl,
@@ -628,16 +895,24 @@ ScriptSignal execute_script_statement(Calculator* calculator,
             impl->local_scopes.push_back({});
             try {
                 if (!for_statement.initializer.empty()) {
+                    // 使用预编译缓存
+                    std::shared_ptr<ExpressionCache> init_cache = for_statement.init_cache;
+                    if (!init_cache) {
+                        init_cache = std::make_shared<ExpressionCache>();
+                        init_cache->expanded = expand_inline_function_commands(calculator, for_statement.initializer);
+                        for_statement.init_cache = init_cache;
+                    }
                     (void)execute_simple_script_line(calculator,
                                                      impl,
-                                                     for_statement.initializer,
+                                                     init_cache->expanded,
                                                      exact_mode);
                 }
                 while (for_statement.condition.empty() ||
                        truthy_value(evaluate_expression_value(calculator,
                                                               impl,
                                                               for_statement.condition,
-                                                              false))) {
+                                                              false,
+                                                              &for_statement.cond_cache))) {
                     const ScriptSignal signal =
                         execute_script_statement(calculator,
                                                  impl,
@@ -653,9 +928,16 @@ ScriptSignal execute_script_statement(Calculator* calculator,
                         break;
                     }
                     if (!for_statement.step.empty()) {
+                        // 使用预编译缓存
+                        std::shared_ptr<ExpressionCache> step_cache = for_statement.step_cache;
+                        if (!step_cache) {
+                            step_cache = std::make_shared<ExpressionCache>();
+                            step_cache->expanded = expand_inline_function_commands(calculator, for_statement.step);
+                            for_statement.step_cache = step_cache;
+                        }
                         (void)execute_simple_script_line(calculator,
                                                          impl,
-                                                         for_statement.step,
+                                                         step_cache->expanded,
                                                          exact_mode);
                     }
                     if (signal.kind == ScriptSignal::Kind::kContinue) {
@@ -701,7 +983,7 @@ ScriptSignal execute_script_statement(Calculator* calculator,
                 return signal;
             }
             return ScriptSignal::make_return(
-                evaluate_expression_value(calculator, impl, return_statement.expression, exact_mode));
+                evaluate_expression_value(calculator, impl, return_statement.expression, exact_mode, &return_statement.cache));
         }
         case script::Statement::Kind::kBreak:
             return ScriptSignal::make_break();

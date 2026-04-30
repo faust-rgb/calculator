@@ -1,4 +1,5 @@
 #include "calculator_internal_types.h"
+#include "plot/calculator_plot.h"
 
 #include "script_parser.h"
 
@@ -21,10 +22,10 @@ std::string Calculator::evaluate_for_display(const std::string& expression, bool
     apply_calculator_display_precision(impl_.get());
 
     // 显示型功能优先于普通数值/分数显示，例如 hex(255) 应直接得到 "FF"。
-    const std::map<std::string, StoredValue> variables = visible_variables(impl_.get());
+    const VariableResolver variables = visible_variables(impl_.get());
     std::string converted;
     if (try_base_conversion_expression(expression,
-                                       &variables,
+                                       variables,
                                        &impl_->functions,
                                        {impl_->hex_prefix_mode, impl_->hex_uppercase_mode},
                                        &converted)) {
@@ -34,7 +35,7 @@ std::string Calculator::evaluate_for_display(const std::string& expression, bool
     if (impl_->symbolic_constants_mode) {
         std::string symbolic_output;
         if (try_symbolic_constant_expression(expression,
-                                             &variables,
+                                             variables,
                                              &impl_->functions,
                                              &symbolic_output)) {
             return symbolic_output;
@@ -154,7 +155,7 @@ std::string Calculator::factor_expression(const std::string& expression) const {
     }
 
     // 先允许 inside 是一个普通表达式或变量，再检查最终值是否为整数。
-    DecimalParser parser(inside, &impl_->variables, &impl_->functions);
+    DecimalParser parser(inside, VariableResolver(&impl_->variables, nullptr), &impl_->functions);
     const double value = normalize_result(parser.parse());
     if (!is_integer_double(value)) {
         throw std::runtime_error("factor only accepts integers");
@@ -163,10 +164,58 @@ std::string Calculator::factor_expression(const std::string& expression) const {
     return factor_integer(round_to_long_long(value));
 }
 
+std::string Calculator::plot_expression(const std::string& expression) const {
+    std::vector<std::string> arguments;
+    bool is_gnuplot = false;
+    
+    // Internal convention: if the expression starts with ":plot ", it's a gnuplot request.
+    // However, our main.cpp wraps it in "plot(...)". Let's use a cleaner detection.
+    if (!split_named_call_with_arguments(expression, "plot", &arguments)) {
+        throw std::runtime_error("expected plot(...)");
+    }
+
+    plot::PlotContext ctx;
+    ctx.variables = visible_variables(impl_.get());
+    ctx.functions = &impl_->functions;
+    ctx.has_script_function = [this](const std::string& name) {
+        return has_visible_script_function(impl_.get(), name);
+    };
+    ctx.invoke_script_function = [this](const std::string& name, const std::vector<double>& args) {
+        return invoke_script_function_decimal(const_cast<Calculator*>(this), impl_.get(), name, args);
+    };
+
+    // We can use a trick: if the first argument starts with ":", it's a gnuplot request.
+    // But since we want to support both plot() and :plot, let's look at the raw input from main.cpp.
+    // Wait, main.cpp already handles the prefix. Let's add a flag to the method or a separate method.
+    // To keep it simple, let's check if there's a special marker.
+    if (!arguments.empty() && arguments[0].find("__gnuplot__") != std::string::npos) {
+        is_gnuplot = true;
+        arguments[0] = arguments[0].substr(11); // Remove marker
+    }
+
+    if (is_gnuplot) {
+        return plot::handle_gnuplot_command(ctx, arguments);
+    }
+    return plot::handle_plot_command(ctx, arguments);
+}
+
+std::string Calculator::export_variable(const std::string& line) const {
+    plot::PlotContext ctx;
+    ctx.variables = visible_variables(impl_.get());
+    ctx.functions = &impl_->functions;
+    ctx.has_script_function = [this](const std::string& name) {
+        return has_visible_script_function(impl_.get(), name);
+    };
+    ctx.invoke_script_function = [this](const std::string& name, const std::vector<double>& args) {
+        return invoke_script_function_decimal(const_cast<Calculator*>(this), impl_.get(), name, args);
+    };
+    return plot::handle_export_command(ctx, line);
+}
+
 std::string Calculator::base_conversion_expression(const std::string& expression) const {
     std::string converted;
     if (!try_base_conversion_expression(expression,
-                                        &impl_->variables,
+                                        VariableResolver(&impl_->variables, nullptr),
                                         &impl_->functions,
                                         {impl_->hex_prefix_mode, impl_->hex_uppercase_mode},
                                         &converted)) {

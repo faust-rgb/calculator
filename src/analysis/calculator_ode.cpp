@@ -1,6 +1,16 @@
 // ============================================================================
 // ODE 求解器命令实现
 // ============================================================================
+//
+// 本文件实现了常微分方程（ODE）求解命令的处理逻辑，包括：
+// - ode / ode_table: 单方程求解
+// - ode_system / ode_system_table: 方程组求解
+// - ode_solve: 兼容性别名
+//
+// 支持功能：
+// - 高阶 ODE 自动转换为方程组
+// - 事件检测
+// - 参数化方程
 
 #include "symbolic_expression.h"
 #include "symbolic_expression_internal.h"
@@ -15,12 +25,18 @@ namespace ode_ops {
 
 namespace {
 
+/**
+ * @brief 创建标量存储值
+ */
 StoredValue make_scalar_stored(const ODEContext& ctx, double value) {
     StoredValue stored;
     stored.decimal = ctx.normalize_result(value);
     return stored;
 }
 
+/**
+ * @brief 将矩阵转换为向量（用于初始状态）
+ */
 std::vector<double> matrix_to_vector_values(const matrix::Matrix& value,
                                             const std::string& context) {
     if (!value.is_vector()) {
@@ -34,6 +50,9 @@ std::vector<double> matrix_to_vector_values(const matrix::Matrix& value,
     return result;
 }
 
+/**
+ * @brief 将向量转换为列矩阵
+ */
 matrix::Matrix vector_to_column_matrix(const ODEContext& ctx,
                                        const std::vector<double>& values) {
     matrix::Matrix result(values.size(), 1, 0.0);
@@ -43,6 +62,11 @@ matrix::Matrix vector_to_column_matrix(const ODEContext& ctx,
     return result;
 }
 
+/**
+ * @brief 添加参数赋值
+ *
+ * 支持向量参数 p 和分量参数 p1, p2, ...
+ */
 void append_parameter_assignments(
     const ODEContext& ctx,
     const StoredValue& parameter_value,
@@ -66,6 +90,9 @@ void append_parameter_assignments(
     }
 }
 
+/**
+ * @brief 尝试解析步数参数
+ */
 bool try_parse_positive_step_argument(const ODEContext& ctx,
                                       const std::string& argument,
                                       int* steps) {
@@ -81,6 +108,12 @@ bool try_parse_positive_step_argument(const ODEContext& ctx,
     }
 }
 
+/**
+ * @brief 获取导数阶数
+ *
+ * 解析 y, y', y'', ... 等变量名，返回导数阶数。
+ * y -> 0, y' -> 1, y'' -> 2, ...
+ */
 int get_derivative_order(const std::string& var) {
     if (var.empty() || var[0] != 'y') return 0;
     if (var == "y") return 0;
@@ -95,19 +128,37 @@ int get_derivative_order(const std::string& var) {
     return order;
 }
 
+/**
+ * @brief 将导数阶数转换为变量名
+ */
 std::string order_to_var(int order) {
     std::string s = "y";
     for (int i = 0; i < order; ++i) s += "'";
     return s;
 }
 
+/**
+ * @struct ODEInfo
+ * @brief ODE 信息结构
+ *
+ * 存储分析 ODE 表达式后得到的信息。
+ */
 struct ODEInfo {
-    bool is_high_order = false;
-    int order = 1;
-    SymbolicExpression rhs;
+    bool is_high_order = false;  ///< 是否为高阶 ODE
+    int order = 1;               ///< ODE 阶数
+    SymbolicExpression rhs;      ///< 右端表达式（解出最高阶导数后）
 };
 
+/**
+ * @brief 分析 ODE 表达式
+ *
+ * 分析表达式，判断是否为高阶 ODE，并尝试解出最高阶导数。
+ *
+ * 对于高阶 ODE，需要表达式关于最高阶导数是线性的。
+ * 例如：y'' + y = 0 -> y'' = -y
+ */
 ODEInfo analyze_ode_expression(const std::string& expr_str) {
+    // 查找最高阶导数
     SymbolicExpression expr = SymbolicExpression::parse(expr_str);
     std::vector<std::string> vars = expr.identifier_variables();
     int max_order = 0;
@@ -117,20 +168,20 @@ ODEInfo analyze_ode_expression(const std::string& expr_str) {
 
     ODEInfo info;
     if (max_order <= 1 && expr_str.find("y'") == std::string::npos) {
-        // Simple first order y' = f(x, y)
+        // 简单一阶 ODE: y' = f(x, y)
         info.is_high_order = false;
         info.order = 1;
         info.rhs = expr;
         return info;
     }
 
-    // High order or implicit first order
+    // 高阶 ODE 或隐式一阶 ODE
     info.is_high_order = true;
     info.order = std::max(1, max_order);
     const std::string highest_var = order_to_var(info.order);
 
-    // Try to solve for highest_var: expr = 0 => highest_var = ...
-    // Simple linear solver: E = A * highest_var + B = 0 => highest_var = -B/A
+    // 尝试解出最高阶导数: expr = 0 => highest_var = ...
+    // 简单线性求解: E = A * highest_var + B = 0 => highest_var = -B/A
     SymbolicExpression coeff_A = expr.derivative(highest_var).simplify();
     if (coeff_A.is_constant(highest_var) && !symbolic_expression_internal::expr_is_zero(coeff_A)) {
         SymbolicExpression term_B = expr.substitute(highest_var, SymbolicExpression::number(0.0)).simplify();
@@ -144,6 +195,9 @@ ODEInfo analyze_ode_expression(const std::string& expr_str) {
 
 }  // namespace
 
+/**
+ * @brief 检查是否为 ODE 命令
+ */
 bool is_ode_command(const std::string& command) {
     return command == "ode" ||
            command == "ode_table" ||
@@ -152,12 +206,19 @@ bool is_ode_command(const std::string& command) {
            command == "ode_solve";
 }
 
+/**
+ * @brief 处理 ODE 命令
+ *
+ * 统一处理单方程和方程组求解命令。
+ * 对于高阶 ODE，自动转换为等价的一阶方程组。
+ */
 bool handle_ode_command(const ODEContext& ctx,
                         const std::string& command,
                         const std::string& inside,
                         std::string* output) {
     const std::vector<std::string> arguments = split_top_level_arguments(inside);
 
+    // ==================== 单方程求解 ====================
     if (command == "ode" || command == "ode_table") {
         if (arguments.size() < 4 || arguments.size() > 7) {
             throw std::runtime_error(
@@ -334,6 +395,7 @@ bool handle_ode_command(const ODEContext& ctx,
         return true;
     }
 
+    // ==================== 方程组求解 ====================
     if (command == "ode_system" || command == "ode_system_table") {
         if (arguments.size() < 4 || arguments.size() > 7) {
             throw std::runtime_error(
@@ -470,8 +532,9 @@ bool handle_ode_command(const ODEContext& ctx,
         return true;
     }
 
+    // ==================== 兼容性别名 ====================
     if (command == "ode_solve") {
-        // Redundant now, but kept for compatibility. Redirect to ode.
+        // 已弃用，重定向到 ode
         return handle_ode_command(ctx, "ode", inside, output);
     }
 

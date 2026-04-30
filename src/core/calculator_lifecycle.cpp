@@ -16,6 +16,11 @@ void apply_calculator_display_precision(const Calculator::Impl* impl) {
 
 Calculator::Calculator() : impl_(new Impl()) {
     apply_calculator_display_precision(impl_.get());
+    register_standard_modules(this, impl_.get());
+}
+
+void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
+    impl_->registered_modules.push_back(std::move(module));
 }
 
 Calculator::~Calculator() = default;

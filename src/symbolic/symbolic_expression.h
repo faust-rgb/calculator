@@ -123,6 +123,16 @@ public:
         const std::vector<std::string>& variable_names);
 
     /**
+     * @brief 计算2D旋度 (标量)
+     * @param components 向量场分量 (2个): [Fx, Fy]
+     * @param variable_names 变量名列表 (2个): [x, y]
+     * @return 标量旋度 ∂Fy/∂x - ∂Fx/∂y
+     */
+    static SymbolicExpression curl_2d(
+        const std::vector<SymbolicExpression>& components,
+        const std::vector<std::string>& variable_names);
+
+    /**
      * @brief 计算拉普拉斯算子 (Laplacian)
      * @param variable_names 变量名列表
      * @return 标量场拉普拉斯表达式
@@ -202,6 +212,15 @@ public:
      */
     SymbolicExpression substitute(const std::string& variable_name,
                                   const SymbolicExpression& replacement) const;
+
+    /**
+     * @brief 用另一个表达式替换指定表达式
+     * @param target 被替换的子表达式
+     * @param replacement 替换表达式
+     * @return 代换后的表达式
+     */
+    SymbolicExpression substitute_expression(const SymbolicExpression& target,
+                                             const SymbolicExpression& replacement) const;
 
     /**
      * @brief 简化表达式

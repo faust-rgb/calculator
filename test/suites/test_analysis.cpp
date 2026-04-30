@@ -1,6 +1,24 @@
+/**
+ * @file test_analysis.cpp
+ * @brief 分析功能测试实现
+ *
+ * 该文件实现了分析功能测试，测试计算器的高级分析功能，包括：
+ * - 函数求值与分析
+ * - 数值微分（Richardson外推法）
+ * - 定积分与不定积分计算
+ * - 极限求解
+ * - 极值点分析
+ * - 常微分方程求解
+ * - 多变量积分
+ * - 符号微积分运算
+ * - 积分变换（拉普拉斯、傅里叶、Z变换）
+ * - 线性规划（LP、ILP、MILP、BIP）
+ */
+
 #include "suites/test_analysis.h"
 #include "calculator.h"
 #include "test_helpers.h"
+#include "math/mymath.h"
 #include "ode_solver.h"
 #include "multivariable_integrator.h"
 #include "function_analysis.h"
@@ -14,9 +32,26 @@
 
 namespace test_suites {
 
+/**
+ * @brief 运行分析测试
+ * @param passed 成功测试计数器的引用
+ * @param failed 失败测试计数器的引用
+ * @return 测试完成后返回0
+ *
+ * 该函数执行以下测试类别：
+ * 1. 函数分析测试：求值、导数、积分、极限、极值
+ * 2. 微分方程求解测试：ODE求解器
+ * 3. 符号微积分测试：符号导数、积分、变换
+ * 4. 多变量积分测试：二重积分、三重积分
+ * 5. 矩阵求解测试：近奇异矩阵
+ * 6. 线性规划测试：LP、ILP、MILP、BIP
+ */
 int run_analysis_tests(int& passed, int& failed) {
     Calculator calculator;
     using namespace test_helpers;
+
+    // ========== 函数分析测试 ==========
+    // 测试自定义函数的定义与求值
     try {
         FunctionAnalysis function("x");
         function.define("sin(x) + x ^ 2");
@@ -35,6 +70,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试数值导数（中心差分法）
     try {
         FunctionAnalysis function("x");
         function.define("sin(x)");
@@ -51,6 +87,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试小参数情况下的数值导数
     try {
         FunctionAnalysis function("x");
         function.define("sin(x)");
@@ -67,6 +104,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试Richardson外推法求导
     try {
         FunctionAnalysis function("x");
         function.define("exp(x)");
@@ -84,6 +122,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试尖点处的导数（应抛出异常）
     try {
         FunctionAnalysis function("x");
         function.define("abs(x)");
@@ -94,6 +133,7 @@ int run_analysis_tests(int& passed, int& failed) {
         ++passed;
     }
 
+    // 测试定积分计算
     try {
         FunctionAnalysis function("x");
         function.define("x ^ 2");
@@ -111,6 +151,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试端点奇异的积分
     try {
         FunctionAnalysis function("x");
         function.define("1 / sqrt(x)");
@@ -128,6 +169,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试发散的端点奇异积分（应抛出异常）
     try {
         FunctionAnalysis function("x");
         function.define("1 / x");
@@ -138,6 +180,7 @@ int run_analysis_tests(int& passed, int& failed) {
         ++passed;
     }
 
+    // 测试内部奇异积分（应抛出异常）
     try {
         FunctionAnalysis function("x");
         function.define("1 / (x - 0.1)");
@@ -148,6 +191,7 @@ int run_analysis_tests(int& passed, int& failed) {
         ++passed;
     }
 
+    // 测试振荡的无穷积分（应抛出异常）
     try {
         FunctionAnalysis function("x");
         function.define("sin(x)");
@@ -158,6 +202,7 @@ int run_analysis_tests(int& passed, int& failed) {
         ++passed;
     }
 
+    // 测试振荡函数积分
     try {
         FunctionAnalysis function("x");
         function.define("sin(50 * x)");
@@ -175,6 +220,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试反正切积分
     try {
         FunctionAnalysis function("x");
         function.define("1 / (1 + x ^ 2)");
@@ -192,6 +238,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试不定积分
     try {
         FunctionAnalysis function("x");
         function.define("x ^ 2");
@@ -209,6 +256,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试数值极限（sin(x)/x在x->0）
     try {
         FunctionAnalysis function("x");
         function.define("sin(x) / x");
@@ -226,6 +274,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试二阶极限
     try {
         FunctionAnalysis function("x");
         function.define("(1 - cos(x)) / (x ^ 2)");
@@ -243,6 +292,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试指数消去极限
     try {
         FunctionAnalysis function("x");
         function.define("(exp(x) - 1) / x");
@@ -260,6 +310,25 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试无穷点 L'Hopital 极限
+    try {
+        FunctionAnalysis function("x");
+        function.define("ln(x) / x");
+        const double actual = function.limit(mymath::infinity());
+        if (nearly_equal(actual, 0.0, 1e-12)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: infinite L'Hopital limit expected 0 got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: infinite L'Hopital limit threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    // 测试极值点求解
     try {
         FunctionAnalysis function("x");
         function.define("x ^ 3 - 3 * x");
@@ -287,6 +356,8 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // ========== 微分方程求解测试 ==========
+    // 测试ODE求解器
     try {
         ODESolver solver([](double x, double y) {
             return y - x * x + 1.0;
@@ -306,6 +377,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试指数增长ODE
     try {
         ODESolver solver([](double, double y) {
             return y;
@@ -324,6 +396,8 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // ========== 符号微积分测试 ==========
+    // 测试符号反正弦导数
     try {
         const SymbolicExpression derivative =
             SymbolicExpression::parse("asin(x)").derivative("x").simplify();
@@ -341,6 +415,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试近奇异矩阵求解
     try {
         const std::string actual = calculator.process_line(
             "near_singular_solution = solve(mat(2, 2, 1, 1, 1, 1.0000001), vec(2, 2.0000001))",
@@ -367,6 +442,7 @@ int run_analysis_tests(int& passed, int& failed) {
     } catch (const std::exception&) {
     }
 
+    // 测试阶跃函数的符号导数
     try {
         const SymbolicExpression derivative =
             SymbolicExpression::parse("step(x)").derivative("x").simplify();
@@ -383,6 +459,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试拉普拉斯变换
     try {
         const SymbolicExpression transformed =
             SymbolicExpression::parse("step(t)").laplace_transform("t", "s").simplify();
@@ -399,6 +476,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试傅里叶变换
     try {
         const SymbolicExpression transformed =
             SymbolicExpression::parse("delta(t - 2)").fourier_transform("t", "w").simplify();
@@ -415,6 +493,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试Z变换
     try {
         const SymbolicExpression transformed =
             SymbolicExpression::parse("step(n - 2)").z_transform("n", "z").simplify();
@@ -432,6 +511,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试符号积分-微分循环
     try {
         const SymbolicExpression antiderivative =
             SymbolicExpression::parse("x * exp(x)").integral("x").simplify();
@@ -451,6 +531,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试正割和余割积分
     try {
         const SymbolicExpression sec_integral =
             SymbolicExpression::parse("sec(x)").integral("x").simplify();
@@ -471,6 +552,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试正割幂积分
     try {
         const SymbolicExpression sec2_integral =
             SymbolicExpression::parse("sec(x) ^ 2").integral("x").simplify();
@@ -495,6 +577,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试绝对值、符号、对数积分
     try {
         const SymbolicExpression abs_integral =
             SymbolicExpression::parse("abs(x)").integral("x").simplify();
@@ -519,6 +602,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试正割导数
     try {
         const SymbolicExpression derivative =
             SymbolicExpression::parse("sec(x)").derivative("x").simplify();
@@ -536,6 +620,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试对数-指数简化
     try {
         const SymbolicExpression simplified =
             SymbolicExpression::parse("ln(exp(x))").simplify();
@@ -552,6 +637,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试保留符号替换（应抛出异常）
     try {
         const SymbolicExpression expression = SymbolicExpression::parse("x + pi");
         (void)expression.substitute("pi", SymbolicExpression::number(3.0));
@@ -561,6 +647,8 @@ int run_analysis_tests(int& passed, int& failed) {
         ++passed;
     }
 
+    // ========== 多变量积分测试 ==========
+    // 测试二重积分
     try {
         MultivariableIntegrator integrator([](const std::vector<double>& point) {
             return point[0] + point[1];
@@ -579,6 +667,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试三重积分
     try {
         MultivariableIntegrator integrator([](const std::vector<double>& point) {
             return point[0] * point[1] * point[2];
@@ -598,6 +687,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试二次函数积分
     try {
         MultivariableIntegrator integrator([](const std::vector<double>& point) {
             return point[0] * point[0] + point[1] * point[1];
@@ -617,6 +707,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试对数函数定义与求值
     try {
         FunctionAnalysis function("x");
         function.define("ln(x)");
@@ -634,6 +725,7 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试因数分解
     try {
         const std::string fact = calculator.factor_expression("factor(-1)");
         if (fact == "-1") {
@@ -659,6 +751,71 @@ int run_analysis_tests(int& passed, int& failed) {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: factor(13) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    // ========== 线性规划测试 (LP, ILP, MILP, BIP) ==========
+    // 定义线性规划测试辅助函数
+    auto run_planning_case = [&](const std::string& expr, const std::string& expected) {
+        try {
+            std::string output;
+            const bool handled = calculator.try_process_function_command(expr, &output);
+            if (handled && output == expected) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: planning " << expr
+                          << " expected " << expected << " got "
+                          << output << '\n';
+            }
+        } catch (const std::exception& ex) {
+            ++failed;
+            std::cout << "FAIL: planning " << expr
+                      << " threw unexpected error: " << ex.what() << '\n';
+        }
+    };
+
+    // 测试线性规划 (LP)
+    run_planning_case(
+        "lp_max(vec(3, 2), mat(3, 2, 1, 1, 1, 0, 0, 1), vec(4, 2, 3), vec(0, 0), vec(10, 10))",
+        "x = [2, 2]\nobjective = 10");
+
+    // 测试整数线性规划 (ILP)
+    run_planning_case(
+        "ilp_max(vec(3, 2), mat(3, 2, 1, 1, 1, 0, 0, 1), vec(4, 2, 3), vec(0, 0), vec(10, 10))",
+        "x = [2, 2]\nobjective = 10");
+
+    // 测试带有等式约束的线性规划
+    run_planning_case(
+        "lp_max(vec(2, 1), mat(1, 2, 1, 2), mat(1, 1, 4), mat(1, 2, 1, 1), mat(1, 1, 3), vec(0, 0), vec(10, 10))",
+        "x = [3, 0]\nobjective = 6");
+
+    // 测试混合整数线性规划 (MILP)
+    run_planning_case(
+        "milp_max(vec(3, 1), mat(1, 2, 2, 1), mat(1, 1, 5), vec(0, 0), vec(2, 10), vec(1, 0))",
+        "x = [2, 1]\nobjective = 7");
+
+    // 测试二进制整数规划 (BIP)
+    run_planning_case(
+        "bip_max(vec(5, 4, 3), mat(1, 3, 2, 1, 1), mat(1, 1, 2), mat(1, 3, 1, 1, 0), mat(1, 1, 1))",
+        "x = [0, 1, 1]\nobjective = 7");
+
+    // 测试大规模整数线性规划
+    try {
+        std::string output;
+        (void)calculator.try_process_function_command(
+            "ilp_max(mat(1, 4, 1, 1, 1, 1), mat(1, 4, 0, 0, 0, 0), mat(1, 1, 10), mat(1, 4, 0, 0, 0, 0), mat(1, 4, 40, 40, 40, 40))",
+            &output);
+        if (output == "x = [40, 40, 40, 40]\nobjective = 160") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: oversized ilp_max expected optimal corner solution got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: oversized ilp_max threw unexpected error: "
                   << ex.what() << '\n';
     }
 

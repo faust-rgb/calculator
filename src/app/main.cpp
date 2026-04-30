@@ -11,6 +11,7 @@
  */
 
 #include "calculator.h"
+#include "utils.h"
 
 #include <algorithm>
 #include <cctype>
@@ -80,22 +81,6 @@ void redraw_input(const std::string& prompt, const std::string& line, std::size_
     std::cout << std::flush;
 }
 
-std::string trim_copy(const std::string& text) {
-    std::size_t start = 0;
-    while (start < text.size() &&
-           std::isspace(static_cast<unsigned char>(text[start]))) {
-        ++start;
-    }
-
-    std::size_t end = text.size();
-    while (end > start &&
-           std::isspace(static_cast<unsigned char>(text[end - 1]))) {
-        --end;
-    }
-
-    return text.substr(start, end - start);
-}
-
 std::string format_history(const std::vector<std::string>& history) {
     if (history.empty()) {
         return "No history.";
@@ -144,10 +129,10 @@ const std::vector<std::string>& builtin_expression_completion_words() {
         "abs(", "sign(", "floor(", "ceil(", "round(", "trunc(", "clamp(",
         "min(", "max(", "clamp(", "sum(", "avg(", "mean(", "median(", "mode(", "var(", "std(", "skewness(", "kurtosis(", "percentile(", "quartile(", "factorial(", "nCr(", "nPr(",
         "cov(", "corr(", "rand(", "randn(", "randint(", "cdf_normal(", "pdf_normal(",
-        "gcd(", "lcm(", "mod(", "pow(", "rat(", "factor(", "fib(", "is_prime(", "next_prime(", "prev_prime(", "prime_pi(", "euler_phi(", "mobius(", "divisors(", "extended_gcd(",
+        "gcd(", "lcm(", "mod(", "pow(", "rat(", "factor(", "plot(", "fib(", "is_prime(", "next_prime(", "prev_prime(", "prime_pi(", "euler_phi(", "mobius(", "divisors(", "extended_gcd(",
         "deg(", "rad(", "deg2rad(", "rad2deg(", "sin_deg(", "cos_deg(", "celsius(", "fahrenheit(", "kelvin(", "c2f(", "f2c(",
         "poly_add(", "poly_sub(", "poly_mul(", "poly_div(", "roots(", "poly_eval(", "poly_deriv(", "poly_integ(", "poly_fit(", "poly_compose(", "poly_gcd(",
-        "diff(", "limit(", "integral(", "gradient(", "jacobian(", "hessian(", "divergence(", "div(", "curl(", "laplacian(", "critical(", "lagrange(", "taylor(", "extrema(", "simplify(",
+        "diff(", "limit(", "integral(", "gradient(", "jacobian(", "hessian(", "divergence(", "div(", "curl(", "laplacian(", "implicit_diff(", "param_deriv(", "directional(", "critical(", "lagrange(", "taylor(", "extrema(", "simplify(",
         "ode(", "ode_table(", "ode_system(", "ode_system_table(",
         "lp_max(", "lp_min(", "ilp_max(", "ilp_min(", "milp_max(", "milp_min(", "bip_max(", "bip_min(", "binary_max(", "binary_min(",
         "step(", "delta(", "heaviside(", "impulse(", "laplace(", "ilaplace(", "inverse_laplace(", "fourier(", "ifourier(", "inverse_fourier(",
@@ -462,7 +447,7 @@ std::string execute_repl_line(Calculator& calculator,
                               bool* exact_mode,
                               const std::vector<std::string>& history,
                               bool* should_exit) {
-    const std::string line = trim_copy(raw_line);
+    const std::string line = utils::trim_copy(raw_line);
     if (line.empty()) {
         return "";
     }
@@ -476,7 +461,7 @@ std::string execute_repl_line(Calculator& calculator,
         return calculator.help_text();
     }
     if (line.rfind(":help ", 0) == 0) {
-        return calculator.help_topic(trim_copy(line.substr(6)));
+        return calculator.help_topic(utils::trim_copy(line.substr(6)));
     }
     if (line == ":exact on") {
         *exact_mode = true;
@@ -503,7 +488,7 @@ std::string execute_repl_line(Calculator& calculator,
         return "Display precision: " + std::to_string(calculator.display_precision());
     }
     if (line.rfind(":precision ", 0) == 0) {
-        const std::string argument = trim_copy(line.substr(11));
+        const std::string argument = utils::trim_copy(line.substr(11));
         std::size_t parsed = 0;
         const int precision = std::stoi(argument, &parsed);
         if (parsed != argument.size()) {
@@ -550,7 +535,7 @@ std::string execute_repl_line(Calculator& calculator,
         return calculator.load_state(line.substr(6));
     }
     if (line.rfind(":run ", 0) == 0) {
-        const std::string script_path = trim_copy(line.substr(5));
+        const std::string script_path = utils::trim_copy(line.substr(5));
         if (!has_calc_extension(script_path)) {
             throw std::runtime_error(":run only accepts .calc script files");
         }
@@ -587,6 +572,17 @@ std::string execute_repl_line(Calculator& calculator,
     if (line.rfind("factor(", 0) == 0) {
         return calculator.factor_expression(line);
     }
+    if (line.rfind("plot(", 0) == 0) {
+        return calculator.plot_expression(line);
+    }
+    if (line.rfind(":plot ", 0) == 0) {
+        std::string expr = line.substr(6);
+        // Use a marker to tell plot_expression to use Gnuplot
+        return calculator.plot_expression("plot(__gnuplot__" + expr + ")");
+    }
+    if (line.rfind(":export ", 0) == 0) {
+        return calculator.export_variable(line);
+    }
     return calculator.process_line(line, *exact_mode);
 }
 
@@ -597,7 +593,7 @@ int run_non_interactive_input(Calculator& calculator, const std::string& input) 
     bool exact_mode = false;
 
     while (std::getline(stream, line)) {
-        const std::string trimmed = trim_copy(line);
+        const std::string trimmed = utils::trim_copy(line);
         if (trimmed.empty()) {
             continue;
         }
@@ -661,7 +657,7 @@ int main(int argc, char* argv[]) {
 
     if (!isatty(STDIN_FILENO)) {
         const std::string input = read_all(std::cin);
-        if (trim_copy(input).empty()) {
+        if (utils::trim_copy(input).empty()) {
             return 0;
         }
         try {

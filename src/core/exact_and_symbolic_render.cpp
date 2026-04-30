@@ -11,13 +11,15 @@
 #include <stdexcept>
 #include <utility>
 
-class ExactParserImpl {
+#include "base_parser.h"
+
+class ExactParserImpl : public BaseParser {
 public:
     ExactParserImpl(std::string source,
-                    const std::map<std::string, StoredValue>* variables,
+                    const VariableResolver& variables,
                     const std::map<std::string, CustomFunction>* functions,
                     HasScriptFunctionCallback has_script_function = {})
-        : source_(std::move(source)),
+        : BaseParser(std::move(source)),
           variables_(variables),
           functions_(functions),
           has_script_function_(std::move(has_script_function)) {}
@@ -26,7 +28,7 @@ public:
         Rational value = parse_comparison();
         skip_spaces();
         if (!is_at_end()) {
-            throw std::runtime_error("unexpected token near: " + source_.substr(pos_, 1));
+            throw SyntaxError("unexpected token near: " + source_.substr(pos_, 1));
         }
         return value;
     }
@@ -633,91 +635,34 @@ private:
     }
 
     Rational lookup_variable(const std::string& name) const {
-        const auto it = variables_->find(name);
-        if (it == variables_->end()) {
+        const StoredValue* found = variables_.lookup(name);
+        if (!found) {
             double constant_value = 0.0;
             if (lookup_builtin_constant(name, &constant_value)) {
                 throw ExactModeUnsupported("built-in constants are not rational");
             }
             throw std::runtime_error("unknown variable: " + name);
         }
-        if (it->second.is_matrix || it->second.is_complex) {
+        if (found->is_matrix || found->is_complex) {
             throw ExactModeUnsupported("matrix or complex variable " + name + " cannot be used exactly");
         }
-        if (it->second.is_string) {
+        if (found->is_string) {
             throw ExactModeUnsupported("string variable " + name + " cannot be used exactly");
         }
-        if (!it->second.exact) {
+        if (!found->exact) {
             throw ExactModeUnsupported("variable " + name + " is only stored approximately");
         }
-        return it->second.rational;
+        return found->rational;
     }
 
-    std::string parse_identifier() {
-        const std::size_t start = pos_;
-        while (!is_at_end()) {
-            const char ch = source_[pos_];
-            if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_') {
-                ++pos_;
-            } else {
-                break;
-            }
-        }
-        return source_.substr(start, pos_ - start);
-    }
-
-    bool peek_is_alpha() const {
-        return !is_at_end() &&
-               std::isalpha(static_cast<unsigned char>(source_[pos_]));
-    }
-
-    bool peek(char expected) const {
-        return !is_at_end() && source_[pos_] == expected;
-    }
-
-    void skip_spaces() {
-        while (!is_at_end() &&
-               std::isspace(static_cast<unsigned char>(source_[pos_]))) {
-            ++pos_;
-        }
-    }
-
-    bool match(char expected) {
-        if (is_at_end() || source_[pos_] != expected) {
-            return false;
-        }
-        ++pos_;
-        return true;
-    }
-
-    bool match_string(const std::string& text) {
-        if (source_.compare(pos_, text.size(), text) != 0) {
-            return false;
-        }
-        pos_ += text.size();
-        return true;
-    }
-
-    void expect(char expected) {
-        if (!match(expected)) {
-            throw std::runtime_error(std::string("expected '") + expected + "'");
-        }
-    }
-
-    bool is_at_end() const {
-        return pos_ >= source_.size();
-    }
-
-    std::string source_;
-    std::size_t pos_ = 0;
-    const std::map<std::string, StoredValue>* variables_;
+    VariableResolver variables_;
     const std::map<std::string, CustomFunction>* functions_;
     HasScriptFunctionCallback has_script_function_;
 };
 
 Rational parse_exact_expression(
     const std::string& expression,
-    const std::map<std::string, StoredValue>* variables,
+    const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
     HasScriptFunctionCallback has_script_function) {
     ExactParserImpl parser(expression,
@@ -769,7 +714,7 @@ bool convert_base_value(long long value,
 }
 
 bool try_base_conversion_expression(const std::string& expression,
-                                    const std::map<std::string, StoredValue>* variables,
+                                    const VariableResolver& variables,
                                     const std::map<std::string, CustomFunction>* functions,
                                     const HexFormatOptions& hex_options,
                                     std::string* output) {
@@ -863,13 +808,13 @@ bool is_supported_symbolic_unary_function(const std::string& name) {
            name == "step" || name == "delta";
 }
 
-class SymbolicRenderParser {
+class SymbolicRenderParser : public BaseParser {
 public:
     SymbolicRenderParser(std::string source,
-                         const std::map<std::string, StoredValue>* variables,
+                         const VariableResolver& variables,
                          const std::map<std::string, CustomFunction>* functions,
                          int depth = 0)
-        : source_(std::move(source)),
+        : BaseParser(std::move(source)),
           variables_(variables),
           functions_(functions),
           depth_(depth) {}
@@ -954,7 +899,7 @@ private:
         if (peek_is_alpha()) {
             const std::string name = parse_identifier();
             skip_spaces();
-            if (!peek('(')) {
+            if (peek() != '(') {
                 return render_identifier(name);
             }
 
@@ -969,7 +914,7 @@ private:
     std::vector<std::string> parse_argument_list() {
         std::vector<std::string> arguments;
         skip_spaces();
-        if (peek(')')) {
+        if (peek() == ')') {
             return arguments;
         }
 
@@ -994,17 +939,17 @@ private:
             return format_symbolic_scalar(builtin_constant);
         }
 
-        const auto it = variables_->find(name);
-        if (it == variables_->end()) {
+        const StoredValue* found = variables_.lookup(name);
+        if (!found) {
             return name;
         }
-        if (it->second.is_matrix || it->second.is_complex || it->second.is_string) {
+        if (found->is_matrix || found->is_complex || found->is_string) {
             throw std::runtime_error("unsupported symbolic variable");
         }
-        if (it->second.has_symbolic_text) {
+        if (found->has_symbolic_text) {
             used_symbolic_constant_ = true;
         }
-        return "(" + scalar_value_expression_text(it->second) + ")";
+        return "(" + scalar_value_expression_text(*found) + ")";
     }
 
     std::string render_function(const std::string& name,
@@ -1026,14 +971,14 @@ private:
             if (arguments.size() != 1) {
                 throw std::runtime_error("custom function expects one argument");
             }
-            std::map<std::string, StoredValue> scoped_variables = *variables_;
+            std::map<std::string, StoredValue> scoped_variables = variables_.snapshot();
             StoredValue parameter_value;
             parameter_value.has_symbolic_text = true;
             parameter_value.symbolic_text = arguments[0];
             scoped_variables[function_it->second.parameter_name] = parameter_value;
 
             SymbolicRenderParser nested(function_it->second.expression,
-                                        &scoped_variables,
+                                        VariableResolver(&scoped_variables, nullptr),
                                         functions_,
                                         depth_ + 1);
             std::string expanded;
@@ -1108,63 +1053,14 @@ private:
         return format_decimal(std::stod(source_.substr(start, pos_ - start)));
     }
 
-    std::string parse_identifier() {
-        const std::size_t start = pos_;
-        while (!is_at_end()) {
-            const char ch = source_[pos_];
-            if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_') {
-                ++pos_;
-            } else {
-                break;
-            }
-        }
-        return source_.substr(start, pos_ - start);
-    }
-
-    bool peek_is_alpha() const {
-        return !is_at_end() &&
-               std::isalpha(static_cast<unsigned char>(source_[pos_]));
-    }
-
-    bool peek(char expected) const {
-        return !is_at_end() && source_[pos_] == expected;
-    }
-
-    void skip_spaces() {
-        while (!is_at_end() &&
-               std::isspace(static_cast<unsigned char>(source_[pos_]))) {
-            ++pos_;
-        }
-    }
-
-    bool match(char expected) {
-        if (is_at_end() || source_[pos_] != expected) {
-            return false;
-        }
-        ++pos_;
-        return true;
-    }
-
-    void expect(char expected) {
-        if (!match(expected)) {
-            throw std::runtime_error(std::string("expected '") + expected + "'");
-        }
-    }
-
-    bool is_at_end() const {
-        return pos_ >= source_.size();
-    }
-
-    std::string source_;
-    const std::map<std::string, StoredValue>* variables_;
+    VariableResolver variables_;
     const std::map<std::string, CustomFunction>* functions_;
-    std::size_t pos_ = 0;
     int depth_ = 0;
     bool used_symbolic_constant_ = false;
 };
 
 bool try_symbolic_constant_expression(const std::string& expression,
-                                      const std::map<std::string, StoredValue>* variables,
+                                      const VariableResolver& variables,
                                       const std::map<std::string, CustomFunction>* functions,
                                       std::string* output) {
     SymbolicRenderParser parser(expression, variables, functions);

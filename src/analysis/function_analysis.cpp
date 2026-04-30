@@ -284,6 +284,378 @@ bool is_valid_analysis_variable_name(const std::string& name) {
     return true;
 }
 
+enum class SymbolicLimitProbeKind {
+    kFinite,
+    kPositiveInfinity,
+    kNegativeInfinity,
+    kUnknown,
+};
+
+bool is_infinite_probe(SymbolicLimitProbeKind kind) {
+    return kind == SymbolicLimitProbeKind::kPositiveInfinity ||
+           kind == SymbolicLimitProbeKind::kNegativeInfinity;
+}
+
+SymbolicLimitProbeKind probe_symbolic_value_at(
+    SymbolicExpression expression,
+    const std::string& variable_name,
+    double point,
+    double* finite_value) {
+    try {
+        if (!mymath::isfinite(point)) {
+            expression = expression.simplify();
+            const std::shared_ptr<SymbolicExpression::Node>& node = expression.node_;
+            switch (node->type) {
+                case NodeType::kNumber:
+                case NodeType::kPi:
+                case NodeType::kE:
+                case NodeType::kInfinity: {
+                    double value = 0.0;
+                    if (expression.is_number(&value)) {
+                        *finite_value = value;
+                        return SymbolicLimitProbeKind::kFinite;
+                    }
+                    return SymbolicLimitProbeKind::kUnknown;
+                }
+                case NodeType::kVariable:
+                    if (node->text == variable_name) {
+                        return point > 0.0 ? SymbolicLimitProbeKind::kPositiveInfinity
+                                           : SymbolicLimitProbeKind::kNegativeInfinity;
+                    }
+                    return SymbolicLimitProbeKind::kUnknown;
+                case NodeType::kNegate: {
+                    double child_value = 0.0;
+                    const SymbolicLimitProbeKind child_kind =
+                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                                                variable_name,
+                                                point,
+                                                &child_value);
+                    if (child_kind == SymbolicLimitProbeKind::kFinite) {
+                        *finite_value = -child_value;
+                        return SymbolicLimitProbeKind::kFinite;
+                    }
+                    if (child_kind == SymbolicLimitProbeKind::kPositiveInfinity) {
+                        return SymbolicLimitProbeKind::kNegativeInfinity;
+                    }
+                    if (child_kind == SymbolicLimitProbeKind::kNegativeInfinity) {
+                        return SymbolicLimitProbeKind::kPositiveInfinity;
+                    }
+                    return SymbolicLimitProbeKind::kUnknown;
+                }
+                case NodeType::kAdd:
+                case NodeType::kSubtract: {
+                    double left_value = 0.0;
+                    double right_value = 0.0;
+                    SymbolicLimitProbeKind left_kind =
+                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                                                variable_name,
+                                                point,
+                                                &left_value);
+                    SymbolicLimitProbeKind right_kind =
+                        probe_symbolic_value_at(SymbolicExpression(node->right),
+                                                variable_name,
+                                                point,
+                                                &right_value);
+                    if (node->type == NodeType::kSubtract) {
+                        if (right_kind == SymbolicLimitProbeKind::kFinite) {
+                            right_value = -right_value;
+                        } else if (right_kind == SymbolicLimitProbeKind::kPositiveInfinity) {
+                            right_kind = SymbolicLimitProbeKind::kNegativeInfinity;
+                        } else if (right_kind == SymbolicLimitProbeKind::kNegativeInfinity) {
+                            right_kind = SymbolicLimitProbeKind::kPositiveInfinity;
+                        }
+                    }
+                    if (left_kind == SymbolicLimitProbeKind::kFinite &&
+                        right_kind == SymbolicLimitProbeKind::kFinite) {
+                        *finite_value = left_value + right_value;
+                        return SymbolicLimitProbeKind::kFinite;
+                    }
+                    if (left_kind == SymbolicLimitProbeKind::kFinite) return right_kind;
+                    if (right_kind == SymbolicLimitProbeKind::kFinite) return left_kind;
+                    if (left_kind == right_kind) return left_kind;
+                    return SymbolicLimitProbeKind::kUnknown;
+                }
+                case NodeType::kMultiply: {
+                    double left_value = 0.0;
+                    double right_value = 0.0;
+                    const SymbolicLimitProbeKind left_kind =
+                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                                                variable_name,
+                                                point,
+                                                &left_value);
+                    const SymbolicLimitProbeKind right_kind =
+                        probe_symbolic_value_at(SymbolicExpression(node->right),
+                                                variable_name,
+                                                point,
+                                                &right_value);
+                    if (left_kind == SymbolicLimitProbeKind::kFinite &&
+                        right_kind == SymbolicLimitProbeKind::kFinite) {
+                        *finite_value = left_value * right_value;
+                        return SymbolicLimitProbeKind::kFinite;
+                    }
+                    if (left_kind == SymbolicLimitProbeKind::kFinite &&
+                        mymath::is_near_zero(left_value, kLimitTolerance)) {
+                        return SymbolicLimitProbeKind::kUnknown;
+                    }
+                    if (right_kind == SymbolicLimitProbeKind::kFinite &&
+                        mymath::is_near_zero(right_value, kLimitTolerance)) {
+                        return SymbolicLimitProbeKind::kUnknown;
+                    }
+                    auto sign_of = [](SymbolicLimitProbeKind kind, double value) {
+                        if (kind == SymbolicLimitProbeKind::kFinite) {
+                            return value >= 0.0 ? 1 : -1;
+                        }
+                        return kind == SymbolicLimitProbeKind::kPositiveInfinity ? 1 : -1;
+                    };
+                    if ((left_kind == SymbolicLimitProbeKind::kFinite || is_infinite_probe(left_kind)) &&
+                        (right_kind == SymbolicLimitProbeKind::kFinite || is_infinite_probe(right_kind))) {
+                        const int sign = sign_of(left_kind, left_value) *
+                                         sign_of(right_kind, right_value);
+                        return sign >= 0 ? SymbolicLimitProbeKind::kPositiveInfinity
+                                         : SymbolicLimitProbeKind::kNegativeInfinity;
+                    }
+                    return SymbolicLimitProbeKind::kUnknown;
+                }
+                case NodeType::kDivide: {
+                    double left_value = 0.0;
+                    double right_value = 0.0;
+                    const SymbolicLimitProbeKind left_kind =
+                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                                                variable_name,
+                                                point,
+                                                &left_value);
+                    const SymbolicLimitProbeKind right_kind =
+                        probe_symbolic_value_at(SymbolicExpression(node->right),
+                                                variable_name,
+                                                point,
+                                                &right_value);
+                    if (left_kind == SymbolicLimitProbeKind::kFinite &&
+                        right_kind == SymbolicLimitProbeKind::kFinite &&
+                        !mymath::is_near_zero(right_value, kLimitTolerance)) {
+                        *finite_value = left_value / right_value;
+                        return SymbolicLimitProbeKind::kFinite;
+                    }
+                    if (left_kind == SymbolicLimitProbeKind::kFinite &&
+                        is_infinite_probe(right_kind)) {
+                        *finite_value = 0.0;
+                        return SymbolicLimitProbeKind::kFinite;
+                    }
+                    if (is_infinite_probe(left_kind) &&
+                        right_kind == SymbolicLimitProbeKind::kFinite &&
+                        !mymath::is_near_zero(right_value, kLimitTolerance)) {
+                        const bool positive =
+                            (left_kind == SymbolicLimitProbeKind::kPositiveInfinity) ==
+                            (right_value > 0.0);
+                        return positive ? SymbolicLimitProbeKind::kPositiveInfinity
+                                        : SymbolicLimitProbeKind::kNegativeInfinity;
+                    }
+                    return SymbolicLimitProbeKind::kUnknown;
+                }
+                case NodeType::kPower: {
+                    const SymbolicExpression base(node->left);
+                    const SymbolicExpression exponent(node->right);
+                    double exponent_value = 0.0;
+                    if (!exponent.is_number(&exponent_value)) {
+                        return SymbolicLimitProbeKind::kUnknown;
+                    }
+                    double base_value = 0.0;
+                    const SymbolicLimitProbeKind base_kind =
+                        probe_symbolic_value_at(base,
+                                                variable_name,
+                                                point,
+                                                &base_value);
+                    if (base_kind == SymbolicLimitProbeKind::kFinite) {
+                        *finite_value = mymath::pow(base_value, exponent_value);
+                        return mymath::isfinite(*finite_value)
+                                   ? SymbolicLimitProbeKind::kFinite
+                                   : SymbolicLimitProbeKind::kUnknown;
+                    }
+                    if (is_infinite_probe(base_kind)) {
+                        if (exponent_value > 0.0) {
+                            if (base_kind == SymbolicLimitProbeKind::kNegativeInfinity &&
+                                mymath::is_integer(exponent_value) &&
+                                static_cast<long long>(std::llround(exponent_value)) % 2 != 0) {
+                                return SymbolicLimitProbeKind::kNegativeInfinity;
+                            }
+                            return SymbolicLimitProbeKind::kPositiveInfinity;
+                        }
+                        if (exponent_value < 0.0) {
+                            *finite_value = 0.0;
+                            return SymbolicLimitProbeKind::kFinite;
+                        }
+                    }
+                    return SymbolicLimitProbeKind::kUnknown;
+                }
+                case NodeType::kFunction: {
+                    const std::string& name = node->text;
+                    double argument_value = 0.0;
+                    const SymbolicLimitProbeKind argument_kind =
+                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                                                variable_name,
+                                                point,
+                                                &argument_value);
+                    if (name == "ln") {
+                        if (argument_kind == SymbolicLimitProbeKind::kPositiveInfinity) {
+                            return SymbolicLimitProbeKind::kPositiveInfinity;
+                        }
+                        if (argument_kind == SymbolicLimitProbeKind::kFinite &&
+                            argument_value > 0.0) {
+                            *finite_value = mymath::log(argument_value);
+                            return SymbolicLimitProbeKind::kFinite;
+                        }
+                    }
+                    if (name == "exp") {
+                        if (argument_kind == SymbolicLimitProbeKind::kPositiveInfinity) {
+                            return SymbolicLimitProbeKind::kPositiveInfinity;
+                        }
+                        if (argument_kind == SymbolicLimitProbeKind::kNegativeInfinity) {
+                            *finite_value = 0.0;
+                            return SymbolicLimitProbeKind::kFinite;
+                        }
+                        if (argument_kind == SymbolicLimitProbeKind::kFinite) {
+                            *finite_value = mymath::exp(argument_value);
+                            return SymbolicLimitProbeKind::kFinite;
+                        }
+                    }
+                    return SymbolicLimitProbeKind::kUnknown;
+                }
+            }
+            return SymbolicLimitProbeKind::kUnknown;
+        }
+
+        expression = expression.substitute(
+            variable_name,
+            SymbolicExpression::number(point)).simplify();
+        double value = 0.0;
+        if (!expression.is_number(&value)) {
+            return SymbolicLimitProbeKind::kUnknown;
+        }
+        if (mymath::isfinite(value)) {
+            *finite_value = value;
+            return SymbolicLimitProbeKind::kFinite;
+        }
+        return value > 0.0 ? SymbolicLimitProbeKind::kPositiveInfinity
+                           : SymbolicLimitProbeKind::kNegativeInfinity;
+    } catch (...) {
+        return SymbolicLimitProbeKind::kUnknown;
+    }
+}
+
+bool is_zero_probe(SymbolicLimitProbeKind kind, double value) {
+    return kind == SymbolicLimitProbeKind::kFinite &&
+           mymath::is_near_zero(value, kLimitTolerance);
+}
+
+bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
+                                 const std::string& variable_name,
+                                 double point,
+                                 double* result) {
+    SymbolicExpression current = expression.simplify();
+    static constexpr int kMaxLhopitalDepth = 8;
+    for (int depth = 0; depth < kMaxLhopitalDepth; ++depth) {
+        if (current.node_->type != NodeType::kDivide) {
+            return false;
+        }
+
+        SymbolicExpression numerator(current.node_->left);
+        SymbolicExpression denominator(current.node_->right);
+        double numerator_value = 0.0;
+        double denominator_value = 0.0;
+        const SymbolicLimitProbeKind numerator_kind =
+            probe_symbolic_value_at(numerator,
+                                    variable_name,
+                                    point,
+                                    &numerator_value);
+        const SymbolicLimitProbeKind denominator_kind =
+            probe_symbolic_value_at(denominator,
+                                    variable_name,
+                                    point,
+                                    &denominator_value);
+
+        const bool zero_over_zero =
+            is_zero_probe(numerator_kind, numerator_value) &&
+            is_zero_probe(denominator_kind, denominator_value);
+        const bool infinity_over_infinity =
+            is_infinite_probe(numerator_kind) &&
+            is_infinite_probe(denominator_kind);
+        if (!zero_over_zero && !infinity_over_infinity) {
+            return false;
+        }
+
+        current = (numerator.derivative(variable_name).simplify() /
+                   denominator.derivative(variable_name).simplify()).simplify();
+
+        double current_value = 0.0;
+        const SymbolicLimitProbeKind current_kind =
+            probe_symbolic_value_at(current,
+                                    variable_name,
+                                    point,
+                                    &current_value);
+        if (current_kind == SymbolicLimitProbeKind::kFinite) {
+            *result = current_value;
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * @brief 符号极限在无穷点
+ *
+ * 计算 limit(expr, var, ±inf) 的符号形式。
+ * 使用代换 x = 1/t，将问题转化为 limit(expr(1/t), t, 0)。
+ *
+ * @param expression 符号表达式
+ * @param variable_name 变量名
+ * @param positive true 表示 +inf，false 表示 -inf
+ * @param result 输出极限值
+ * @return true 如果成功计算符号极限
+ */
+bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
+                                const std::string& variable_name,
+                                bool positive,
+                                double* result) {
+    series_ops::SeriesContext ctx;
+    ctx.evaluate_at = [](const SymbolicExpression& e, const std::string& /*v*/, double /*p*/) {
+        double val = 0.0;
+        if (e.is_number(&val)) return val;
+        return 0.0;
+    };
+
+    // 代换 x = 1/t (对于 +inf) 或 x = -1/t (对于 -inf)
+    SymbolicExpression t_var = SymbolicExpression::variable("t_limit_inf_tmp");
+    SymbolicExpression inv_t;
+    if (positive) {
+        inv_t = SymbolicExpression::number(1.0) / t_var;
+    } else {
+        inv_t = SymbolicExpression::number(-1.0) / t_var;
+    }
+    SymbolicExpression substituted = expression.substitute(variable_name, inv_t);
+
+    std::vector<double> coeffs;
+    // 在 t -> 0+ 处展开（对于 +inf，t -> 0+；对于 -inf，t -> 0-）
+    // 由于 PSA 在 0 处展开，我们尝试获取常数项
+    if (series_ops::internal::evaluate_psa(substituted, "t_limit_inf_tmp", 0.0, 2, coeffs, ctx)) {
+        if (!coeffs.empty() && mymath::isfinite(coeffs[0])) {
+            *result = coeffs[0];
+            return true;
+        }
+    }
+
+    // 尝试 L'Hopital 规则（对于无穷点）
+    // 检查是否是 inf/inf 形式
+    double lhopital_result = 0.0;
+    if (try_symbolic_lhopital_limit(expression, variable_name,
+                                     positive ? mymath::infinity()
+                                              : -mymath::infinity(),
+                                     &lhopital_result)) {
+        *result = lhopital_result;
+        return true;
+    }
+
+    return false;
+}
+
 }  // namespace
 
 FunctionAnalysis::FunctionAnalysis(std::string variable_name)
@@ -295,13 +667,14 @@ FunctionAnalysis::FunctionAnalysis(std::string variable_name)
 
 FunctionAnalysis::FunctionAnalysis(const FunctionAnalysis& other)
     : expression_(other.expression_),
-      variable_name_(other.variable_name_) {}
+      variable_name_(other.variable_name_),
+      evaluator_(other.evaluator_) {}
 
 FunctionAnalysis& FunctionAnalysis::operator=(const FunctionAnalysis& other) {
     if (this != &other) {
         expression_ = other.expression_;
         variable_name_ = other.variable_name_;
-        evaluator_.reset();
+        evaluator_ = other.evaluator_;
         evaluation_cache_entries_.clear();
         evaluation_cache_index_.clear();
     }
@@ -320,9 +693,12 @@ void FunctionAnalysis::define(const std::string& expression) {
     }
 
     expression_ = expression;
-    evaluator_.reset();
     evaluation_cache_entries_.clear();
     evaluation_cache_index_.clear();
+}
+
+void FunctionAnalysis::set_evaluator(std::function<double(const std::vector<std::pair<std::string, double>>&)> evaluator) {
+    evaluator_ = std::move(evaluator);
 }
 
 double FunctionAnalysis::evaluate(double x) const {
@@ -431,16 +807,25 @@ double FunctionAnalysis::limit(double x, int direction) const {
     // --- 优化点 1 & 2: 符号极限处理 (基于 PSA 引擎) ---
     try {
         SymbolicExpression expr = SymbolicExpression::parse(expression_);
+        double lhopital_value = 0.0;
+        if (direction == 0 &&
+            try_symbolic_lhopital_limit(expr,
+                                        variable_name_,
+                                        x,
+                                        &lhopital_value)) {
+            return lhopital_value;
+        }
+
         series_ops::SeriesContext ctx;
         ctx.evaluate_at = [this](const SymbolicExpression& e, const std::string& v, double p) {
-            // 注意：这里需要临时改变变量名来评估，比较复杂，
-            // 但对于单变量函数，PSA 内部主要是常数或主变量。
-            // 简单处理：如果是主变量，直接返回 p
+            // 对于主变量，返回点值
             if (v == variable_name_) return p;
-            // 否则尝试解析为数值 (这里简化处理)
+            // 尝试解析为数值
             double val = 0.0;
             if (e.is_number(&val)) return val;
-            return 0.0; 
+            // 对于其他情况（如其他变量或复杂表达式），返回 0.0
+            // 这会导致 PSA 失败并回退到数值方法，这是预期行为
+            return 0.0;
         };
 
         if (mymath::isfinite(x)) {
@@ -453,14 +838,11 @@ double FunctionAnalysis::limit(double x, int direction) const {
                 if (!coeffs.empty()) return coeffs[0];
             }
         } else {
-            // x 为无穷大：代换 x = 1/t, t -> 0+
-            // 构造 f(1/t)
-            SymbolicExpression t_var = SymbolicExpression::variable("t_limit_tmp");
-            SymbolicExpression inv_t = SymbolicExpression::number(1.0) / t_var;
-            SymbolicExpression substituted = expr.substitute(variable_name_, inv_t);
-            std::vector<double> coeffs;
-            if (series_ops::internal::evaluate_psa(substituted, "t_limit_tmp", 0.0, 2, coeffs, ctx)) {
-                if (!coeffs.empty()) return coeffs[0];
+            // x 为无穷大：使用封装的 symbolic_limit_at_infinity
+            bool positive = x > 0;
+            double inf_result = 0.0;
+            if (symbolic_limit_at_infinity(expr, variable_name_, positive, &inf_result)) {
+                return inf_result;
             }
         }
     } catch (...) {
@@ -785,11 +1167,15 @@ double FunctionAnalysis::evaluate_with_variable(double x) const {
         return found->second->second;
     }
 
-    if (!evaluator_) {
-        evaluator_ = std::make_unique<Calculator>();
+    double value = 0.0;
+    if (evaluator_) {
+        value = evaluator_({{variable_name_, x}});
+    } else {
+        Calculator calculator;
+        calculator.process_line(variable_name_ + " = " + format_double(x), false);
+        value = calculator.evaluate_raw(expression_);
     }
-    evaluator_->process_line(variable_name_ + " = " + format_double(x), false);
-    const double value = evaluator_->evaluate_raw(expression_);
+    
     evaluation_cache_entries_.push_front({cache_key, value});
     evaluation_cache_index_[cache_key] = evaluation_cache_entries_.begin();
     while (evaluation_cache_entries_.size() > kMaxEvaluationCacheSize) {

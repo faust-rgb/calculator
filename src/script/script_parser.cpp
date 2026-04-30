@@ -7,6 +7,9 @@
  */
 
 #include "script_parser.h"
+#include "base_parser.h"
+#include "expression_compiler.h"
+#include "utils.h"
 
 #include <cctype>
 #include <stdexcept>
@@ -18,34 +21,231 @@
 namespace script {
 namespace {
 
+using utils::trim_copy;
+
 /**
- * @brief 去除字符串首尾空白字符
- * @param text 输入字符串
- * @return 去除空白后的字符串
+ * @brief 创建表达式缓存（在解析阶段预编译）
+ * @param expression 表达式字符串
+ * @return 预编译的表达式缓存
  */
-std::string trim_copy(const std::string& text) {
-    std::size_t start = 0;
-    while (start < text.size() &&
-           std::isspace(static_cast<unsigned char>(text[start]))) {
-        ++start;
-    }
-
-    std::size_t end = text.size();
-    while (end > start &&
-           std::isspace(static_cast<unsigned char>(text[end - 1]))) {
-        --end;
-    }
-
-    return text.substr(start, end - start);
+std::shared_ptr<ExpressionCache> create_expression_cache(const std::string& expression) {
+    auto cache = std::make_shared<ExpressionCache>();
+    cache->expanded = expression;  // 展开会在运行时进行
+    cache->hint = analyze_expression_hint(expression);
+    cache->features = analyze_expression_features(expression);
+    return cache;
 }
 
+/**
+ * @struct Token
+ * @brief 脚本标记
+ */
+struct Token {
+    enum class Kind {
+        kIdentifier,
+        kKeyword,
+        kSymbol,
+        kNumber,
+        kString,
+        kNewline,
+        kIndent,
+        kDedent,
+        kEof,
+    };
+
+    Kind kind;
+    std::string text;
+    int line = 0;
+};
+
+/**
+ * @class ScriptLexer
+ * @brief 脚本词法分析器，支持缩进处理
+ */
+class ScriptLexer : public BaseParser {
+public:
+    explicit ScriptLexer(std::string source)
+        : BaseParser(std::move(source)), indent_stack_{0} {}
+
+    std::vector<Token> tokenize() {
+        std::vector<Token> tokens;
+        while (!is_at_end()) {
+            // 处理行首缩进
+            if (pos_ == 0 || (pos_ > 0 && source_[pos_ - 1] == '\n')) {
+                handle_indentation(tokens);
+            }
+
+            skip_spaces_except_newline();
+            if (is_at_end()) break;
+
+            const char ch = peek();
+            if (ch == '\n') {
+                tokens.push_back({Token::Kind::kNewline, "\n"});
+                ++pos_;
+                continue;
+            }
+
+            if (ch == '#' || (ch == '/' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '/')) {
+                skip_comment();
+                continue;
+            }
+
+            if (ch == '"') {
+                tokens.push_back(parse_string_literal_token());
+                continue;
+            }
+
+            if (std::isdigit(static_cast<unsigned char>(ch)) || 
+                (ch == '.' && pos_ + 1 < source_.size() && std::isdigit(static_cast<unsigned char>(source_[pos_ + 1])))) {
+                tokens.push_back(parse_number_literal_token());
+                continue;
+            }
+
+            if (peek_is_identifier_start()) {
+                const std::string id = parse_identifier();
+                if (is_keyword(id)) {
+                    tokens.push_back({Token::Kind::kKeyword, id});
+                } else {
+                    tokens.push_back({Token::Kind::kIdentifier, id});
+                }
+            } else if (std::ispunct(static_cast<unsigned char>(ch))) {
+                // 处理多字符符号
+                if (ch == '=' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '=') {
+                    tokens.push_back({Token::Kind::kSymbol, "=="});
+                    pos_ += 2;
+                } else if (ch == '!' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '=') {
+                    tokens.push_back({Token::Kind::kSymbol, "!="});
+                    pos_ += 2;
+                } else if (ch == '<' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '=') {
+                    tokens.push_back({Token::Kind::kSymbol, "<="});
+                    pos_ += 2;
+                } else if (ch == '>' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '=') {
+                    tokens.push_back({Token::Kind::kSymbol, ">="});
+                    pos_ += 2;
+                } else {
+                    tokens.push_back({Token::Kind::kSymbol, std::string(1, ch)});
+                    ++pos_;
+                }
+            } else {
+                tokens.push_back({Token::Kind::kSymbol, std::string(1, ch)});
+                ++pos_;
+            }
+        }
+
+        // 补齐末尾的 Dedent
+        while (indent_stack_.size() > 1) {
+            tokens.push_back({Token::Kind::kDedent, ""});
+            indent_stack_.pop_back();
+        }
+        tokens.push_back({Token::Kind::kEof, ""});
+        return tokens;
+    }
+
+private:
+    void skip_spaces_except_newline() {
+        while (pos_ < source_.size() && std::isspace(static_cast<unsigned char>(source_[pos_])) && source_[pos_] != '\n') {
+            ++pos_;
+        }
+    }
+
+    void skip_comment() {
+        while (pos_ < source_.size() && source_[pos_] != '\n') {
+            ++pos_;
+        }
+    }
+
+    Token parse_string_literal_token() {
+        const std::size_t start = pos_;
+        expect('"');
+        bool escaping = false;
+        while (!is_at_end()) {
+            const char ch = source_[pos_++];
+            if (escaping) {
+                escaping = false;
+            } else if (ch == '\\') {
+                escaping = true;
+            } else if (ch == '"') {
+                return {Token::Kind::kString, source_.substr(start, pos_ - start)};
+            }
+        }
+        throw std::runtime_error("Unterminated string literal");
+    }
+
+    Token parse_number_literal_token() {
+        const std::size_t start = pos_;
+        bool seen_dot = false;
+        if (peek() == '.') {
+            seen_dot = true;
+            ++pos_;
+        }
+        while (!is_at_end() && std::isdigit(static_cast<unsigned char>(peek()))) {
+            ++pos_;
+        }
+        if (!seen_dot && !is_at_end() && peek() == '.') {
+            seen_dot = true;
+            ++pos_;
+            while (!is_at_end() && std::isdigit(static_cast<unsigned char>(peek()))) {
+                ++pos_;
+            }
+        }
+        // 指数部分
+        if (!is_at_end() && (peek() == 'e' || peek() == 'E')) {
+            ++pos_;
+            if (!is_at_end() && (peek() == '+' || peek() == '-')) ++pos_;
+            while (!is_at_end() && std::isdigit(static_cast<unsigned char>(peek()))) {
+                ++pos_;
+            }
+        }
+        return {Token::Kind::kNumber, source_.substr(start, pos_ - start)};
+    }
+
+    void handle_indentation(std::vector<Token>& tokens) {
+        int current_indent = 0;
+        while (pos_ < source_.size() && (source_[pos_] == ' ' || source_[pos_] == '\t')) {
+            if (source_[pos_] == ' ') current_indent += 1;
+            else current_indent += 4;
+            ++pos_;
+        }
+
+        if (is_at_end() || peek() == '\n' || peek() == '#' || (peek() == '/' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '/')) {
+            return; // 忽略空行或只有注释的行
+        }
+
+        if (current_indent > indent_stack_.back()) {
+            indent_stack_.push_back(current_indent);
+            tokens.push_back({Token::Kind::kIndent, ""});
+        } else {
+            while (current_indent < indent_stack_.back()) {
+                tokens.push_back({Token::Kind::kDedent, ""});
+                indent_stack_.pop_back();
+            }
+            if (current_indent != indent_stack_.back()) {
+                throw std::runtime_error("Inconsistent indentation");
+            }
+        }
+    }
+
+    bool is_keyword(const std::string& id) {
+        static const std::vector<std::string> keywords = {
+            "fn", "def", "if", "elif", "else", "while", "for", "return", "break", "continue", "pass", "in"
+        };
+        for (const auto& k : keywords) if (k == id) return true;
+        return false;
+    }
+
+    std::vector<int> indent_stack_;
+};
+
+/**
+ * @brief 辅助函数：拆分顶层文本
+ */
 std::vector<std::string> split_top_level_text(const std::string& text, char delimiter) {
     std::vector<std::string> parts;
+    std::string current;
     int paren_depth = 0;
     int bracket_depth = 0;
     bool in_string = false;
     bool escaping = false;
-    std::size_t start = 0;
 
     for (std::size_t i = 0; i < text.size(); ++i) {
         const char ch = text[i];
@@ -57,113 +257,42 @@ std::vector<std::string> split_top_level_text(const std::string& text, char deli
             } else if (ch == '"') {
                 in_string = false;
             }
-            continue;
+            current += ch;
+        } else {
+            if (ch == '"') {
+                in_string = true;
+                current += ch;
+            } else if (ch == '(') {
+                paren_depth++;
+                current += ch;
+            } else if (ch == ')') {
+                paren_depth--;
+                current += ch;
+            } else if (ch == '[') {
+                bracket_depth++;
+                current += ch;
+            } else if (ch == ']') {
+                bracket_depth--;
+                current += ch;
+            } else if (ch == delimiter && paren_depth == 0 && bracket_depth == 0) {
+                parts.push_back(current);
+                current.clear();
+            } else {
+                current += ch;
+            }
         }
-        if (ch == '"') {
-            in_string = true;
-        } else if (ch == '(') {
-            ++paren_depth;
-        } else if (ch == ')') {
-            --paren_depth;
-        } else if (ch == '[') {
-            ++bracket_depth;
-        } else if (ch == ']') {
-            --bracket_depth;
-        } else if (ch == delimiter && paren_depth == 0 && bracket_depth == 0) {
-            parts.push_back(text.substr(start, i - start));
-            start = i + 1;
-        }
     }
-
-    if (!text.empty() || delimiter == ',') {
-        parts.push_back(text.substr(start));
-    }
-    if (text.empty() && delimiter == ',') {
-        parts.clear();
-    }
+    parts.push_back(current);
     return parts;
 }
 
-std::string strip_hash_comment(const std::string& line) {
-    bool in_string = false;
-    bool escaping = false;
-    for (std::size_t i = 0; i < line.size(); ++i) {
-        const char ch = line[i];
-        if (in_string) {
-            if (escaping) {
-                escaping = false;
-            } else if (ch == '\\') {
-                escaping = true;
-            } else if (ch == '"') {
-                in_string = false;
-            }
-            continue;
-        }
-        if (ch == '"') {
-            in_string = true;
-        } else if (ch == '#') {
-            return line.substr(0, i);
-        }
-    }
-    return line;
-}
-
-int indentation_width(const std::string& line) {
-    int width = 0;
-    for (const char ch : line) {
-        if (ch == ' ') {
-            ++width;
-        } else if (ch == '\t') {
-            width += 4;
-        } else {
-            break;
-        }
-    }
-    return width;
-}
-
-bool starts_with_keyword(const std::string& text, const std::string& keyword) {
-    if (text.compare(0, keyword.size(), keyword) != 0) {
-        return false;
-    }
-    if (text.size() == keyword.size()) {
-        return true;
-    }
-    const char next = text[keyword.size()];
-    return !std::isalnum(static_cast<unsigned char>(next)) && next != '_';
-}
-
-bool has_legacy_block_markers(const std::string& source) {
-    bool in_string = false;
-    bool escaping = false;
-    for (const char ch : source) {
-        if (in_string) {
-            if (escaping) {
-                escaping = false;
-            } else if (ch == '\\') {
-                escaping = true;
-            } else if (ch == '"') {
-                in_string = false;
-            }
-            continue;
-        }
-        if (ch == '"') {
-            in_string = true;
-        } else if (ch == '{' || ch == '}') {
-            return true;
-        }
-    }
-    return false;
-}
-
-std::string parenthesize_condition(const std::string& condition) {
-    return "(" + trim_copy(condition) + ")";
-}
-
+/**
+ * @brief 辅助函数：转换 Python 风格的 for 循环为 C 风格
+ */
 std::string translate_range_for(const std::string& header) {
     const std::size_t in_pos = header.find(" in ");
     if (in_pos == std::string::npos) {
-        throw std::runtime_error("for expects 'name in range(...)' or a legacy for header");
+        return header; // 可能是已经转换过的或者是 C 风格的 (init; cond; step)
     }
 
     const std::string variable = trim_copy(header.substr(0, in_pos));
@@ -195,176 +324,137 @@ std::string translate_range_for(const std::string& header) {
         throw std::runtime_error("range arguments cannot be empty");
     }
 
-    const std::string comparison = step.front() == '-' ? " > " : " < ";
+    const std::string comparison = (step.size() > 0 && step[0] == '-') ? " > " : " < ";
     return variable + " = " + start + "; " + variable + comparison + stop + "; " +
            variable + " = " + variable + " + " + step;
 }
 
-std::string normalize_python_like_script(const std::string& source) {
-    if (has_legacy_block_markers(source)) {
-        return source;
+std::string strip_enclosing_parentheses(const std::string& text) {
+    const std::string trimmed = trim_copy(text);
+    if (trimmed.size() < 2 || trimmed.front() != '(' || trimmed.back() != ')') {
+        return trimmed;
     }
 
-    std::istringstream input(source);
-    std::ostringstream output;
-    std::vector<int> indent_stack = {0};
-    bool pending_block = false;
-    std::string line;
-
-    std::string accumulated_line;
-    int paren_depth = 0;
-    int bracket_depth = 0;
-
-    while (std::getline(input, line)) {
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
-        }
-
-        const std::string without_comment = strip_hash_comment(line);
-        const std::string stripped = trim_copy(without_comment);
-        if (stripped.empty() && accumulated_line.empty()) {
+    int depth = 0;
+    bool in_string = false;
+    bool escaping = false;
+    for (std::size_t i = 0; i < trimmed.size(); ++i) {
+        const char ch = trimmed[i];
+        if (in_string) {
+            if (escaping) {
+                escaping = false;
+            } else if (ch == '\\') {
+                escaping = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
             continue;
         }
-
-        // Update depths to detect if a line is continued (e.g., inside [ ] or ( ))
-        bool in_string = false;
-        bool escaping = false;
-        for (char ch : without_comment) {
-            if (in_string) {
-                if (escaping) escaping = false;
-                else if (ch == '\\') escaping = true;
-                else if (ch == '"') in_string = false;
-            } else {
-                if (ch == '"') in_string = true;
-                else if (ch == '(') ++paren_depth;
-                else if (ch == ')') --paren_depth;
-                else if (ch == '[') ++bracket_depth;
-                else if (ch == ']') --bracket_depth;
+        if (ch == '"') {
+            in_string = true;
+        } else if (ch == '(') {
+            ++depth;
+        } else if (ch == ')') {
+            --depth;
+            if (depth == 0 && i != trimmed.size() - 1) {
+                return trimmed;
             }
-        }
-
-        if (accumulated_line.empty()) {
-            // New logical line: handle indentation
-            const int indent = indentation_width(without_comment);
-            if (indent > indent_stack.back()) {
-                if (!pending_block) {
-                    throw std::runtime_error("unexpected indentation");
-                }
-                indent_stack.push_back(indent);
-                pending_block = false;
-            } else {
-                if (pending_block) {
-                    throw std::runtime_error("expected an indented block");
-                }
-                while (indent < indent_stack.back()) {
-                    output << "}\n";
-                    indent_stack.pop_back();
-                }
-                if (indent != indent_stack.back()) {
-                    throw std::runtime_error("inconsistent indentation");
-                }
-            }
-        }
-
-        accumulated_line += (accumulated_line.empty() ? "" : " ") + stripped;
-
-        // If we are still inside brackets or parentheses, continue accumulating
-        if (paren_depth > 0 || bracket_depth > 0) {
-            continue;
-        }
-
-        const std::string current = trim_copy(accumulated_line);
-        accumulated_line.clear();
-
-        if (current == "pass") {
-            continue;
-        }
-
-        if (!current.empty() && current.back() == ':') {
-            const std::string header = trim_copy(current.substr(0, current.size() - 1));
-            if (starts_with_keyword(header, "def")) {
-                output << "fn " << trim_copy(header.substr(3)) << " {\n";
-            } else if (starts_with_keyword(header, "fn")) {
-                output << "fn " << trim_copy(header.substr(2)) << " {\n";
-            } else if (starts_with_keyword(header, "if")) {
-                output << "if " << parenthesize_condition(header.substr(2)) << " {\n";
-            } else if (starts_with_keyword(header, "elif")) {
-                output << "else if " << parenthesize_condition(header.substr(4)) << " {\n";
-            } else if (header == "else") {
-                output << "else {\n";
-            } else if (starts_with_keyword(header, "while")) {
-                output << "while " << parenthesize_condition(header.substr(5)) << " {\n";
-            } else if (starts_with_keyword(header, "for")) {
-                const std::string for_header = trim_copy(header.substr(3));
-                if (!for_header.empty() && for_header.front() == '(' && for_header.back() == ')') {
-                    output << "for " << for_header << " {\n";
-                } else {
-                    output << "for (" << translate_range_for(for_header) << ") {\n";
-                }
-            } else {
-                throw std::runtime_error("unknown block header: " + header);
-            }
-            pending_block = true;
-            continue;
-        }
-
-        if (starts_with_keyword(current, "return")) {
-            output << "return " << trim_copy(current.substr(6)) << ";\n";
-        } else if (current == "break" || current == "continue") {
-            output << current << ";\n";
-        } else {
-            output << current;
-            if (current.back() != ';') {
-                output << ';';
-            }
-            output << '\n';
         }
     }
 
-    if (paren_depth > 0 || bracket_depth > 0) {
-        throw std::runtime_error("unterminated parenthesis or bracket");
-    }
-
-    if (pending_block) {
-        throw std::runtime_error("expected an indented block");
-    }
-    while (indent_stack.size() > 1) {
-        output << "}\n";
-        indent_stack.pop_back();
-    }
-
-    return output.str();
+    return depth == 0 ? trim_copy(trimmed.substr(1, trimmed.size() - 2)) : trimmed;
 }
 
 /**
- * @class Parser
+ * @class ScriptParserImpl
  * @brief 递归下降解析器
- *
- * 将源代码解析为抽象语法树（AST）。
- * 处理词法分析和语法分析两个阶段。
  */
-class Parser {
+class ScriptParserImpl {
 public:
-    explicit Parser(std::string source)
-        : source_(normalize_python_like_script(std::move(source))) {}
+    explicit ScriptParserImpl(std::vector<Token> tokens)
+        : tokens_(std::move(tokens)), pos_(0) {}
 
     Program parse() {
         Program program;
-        skip_ignorable();
+        skip_newlines();
         while (!is_at_end()) {
             program.statements.push_back(parse_statement());
-            skip_ignorable();
+            skip_newlines();
         }
         return program;
     }
 
 private:
+    std::vector<Token> tokens_;
+    std::size_t pos_;
+
+    bool is_at_end() const {
+        return pos_ >= tokens_.size() || tokens_[pos_].kind == Token::Kind::kEof;
+    }
+
+    const Token& peek() const {
+        return tokens_[pos_];
+    }
+
+    Token advance() {
+        if (!is_at_end()) ++pos_;
+        return tokens_[pos_ - 1];
+    }
+
+    bool match(Token::Kind kind) {
+        if (peek().kind == kind) { advance(); return true; }
+        return false;
+    }
+
+    bool match_keyword(const std::string& text) {
+        if (peek().kind == Token::Kind::kKeyword && peek().text == text) {
+            advance();
+            return true;
+        }
+        return false;
+    }
+
+    bool match_symbol(const std::string& text) {
+        if (peek().kind == Token::Kind::kSymbol && peek().text == text) {
+            advance();
+            return true;
+        }
+        return false;
+    }
+
+    void expect(Token::Kind kind) {
+        if (!match(kind)) {
+            throw std::runtime_error("Unexpected token");
+        }
+    }
+
+    void expect_symbol(const std::string& text) {
+        if (!match_symbol(text)) {
+            throw std::runtime_error("Expected symbol '" + text + "'");
+        }
+    }
+
+    void skip_newlines() {
+        while (!is_at_end() && peek().kind == Token::Kind::kNewline) {
+            advance();
+        }
+    }
+
+    void skip_brace_block_separators() {
+        while (!is_at_end() &&
+               (peek().kind == Token::Kind::kNewline ||
+                peek().kind == Token::Kind::kIndent ||
+                peek().kind == Token::Kind::kDedent)) {
+            advance();
+        }
+    }
+
     StatementPtr parse_statement() {
-        skip_ignorable();
-        if (match('{')) {
+        skip_newlines();
+        if (match_symbol("{")) {
             return parse_block_after_open();
         }
-        if (match_keyword("fn")) {
+        if (match_keyword("fn") || match_keyword("def")) {
             return parse_function();
         }
         if (match_keyword("if")) {
@@ -381,273 +471,216 @@ private:
         }
         if (match_keyword("break")) {
             auto statement = std::make_unique<BreakStatement>();
-            expect(';');
+            if (!is_at_end() && peek().kind == Token::Kind::kSymbol && peek().text == ";") advance();
             return statement;
         }
         if (match_keyword("continue")) {
             auto statement = std::make_unique<ContinueStatement>();
-            expect(';');
+            if (!is_at_end() && peek().kind == Token::Kind::kSymbol && peek().text == ";") advance();
             return statement;
+        }
+        if (match_keyword("pass")) {
+            advance();
+            return std::make_unique<SimpleStatement>(); 
         }
         return parse_simple_statement();
     }
 
     StatementPtr parse_block_after_open() {
         auto block = std::make_unique<BlockStatement>();
-        skip_ignorable();
-        while (!is_at_end() && !peek('}')) {
+        skip_brace_block_separators();
+        while (!is_at_end() && (peek().kind != Token::Kind::kSymbol || peek().text != "}")) {
             block->statements.push_back(parse_statement());
-            skip_ignorable();
+            skip_brace_block_separators();
         }
-        expect('}');
+        expect_symbol("}");
+        return block;
+    }
+
+    StatementPtr parse_indented_block() {
+        if (match_symbol("{")) return parse_block_after_open();
+        
+        expect(Token::Kind::kIndent);
+        auto block = std::make_unique<BlockStatement>();
+        while (!is_at_end() && peek().kind != Token::Kind::kDedent) {
+            block->statements.push_back(parse_statement());
+            skip_newlines();
+        }
+        expect(Token::Kind::kDedent);
         return block;
     }
 
     StatementPtr parse_function() {
-        skip_ignorable();
-        const std::string name = parse_identifier();
-        skip_ignorable();
-        const std::string parameter_text = parse_group('(', ')');
-        skip_ignorable();
-        expect('{');
+        const std::string name = advance().text;
+        expect_symbol("(");
+        std::vector<std::string> params;
+        if (!match_symbol(")")) {
+            while (true) {
+                params.push_back(advance().text);
+                if (!match_symbol(",")) break;
+            }
+            expect_symbol(")");
+        }
+        
+        if (match_symbol(":")) {
+            skip_newlines();
+            return finish_function(name, params, parse_indented_block());
+        } else {
+            expect_symbol("{");
+            return finish_function(name, params, parse_block_after_open());
+        }
+    }
 
+    StatementPtr finish_function(const std::string& name, const std::vector<std::string>& params, StatementPtr body) {
         auto statement = std::make_unique<FunctionStatement>();
         statement->name = name;
-        statement->parameters = split_top_level(parameter_text, ',');
-
-        for (std::string& parameter : statement->parameters) {
-            parameter = trim_copy(parameter);
-            if (parameter.empty()) {
-                throw std::runtime_error("function parameters must be identifiers");
-            }
-        }
-
-        StatementPtr body = parse_block_after_open();
+        statement->parameters = params;
         statement->body.reset(static_cast<BlockStatement*>(body.release()));
         return statement;
     }
 
     StatementPtr parse_if() {
         auto statement = std::make_unique<IfStatement>();
-        skip_ignorable();
-        statement->condition = trim_copy(parse_group('(', ')'));
-        skip_ignorable();
-        statement->then_branch = parse_statement();
-        skip_ignorable();
+        statement->condition = parse_expression_string();
+        statement->cache = create_expression_cache(statement->condition);
+
+        if (match_symbol(":")) {
+            skip_newlines();
+            statement->then_branch = parse_indented_block();
+        } else {
+            statement->then_branch = parse_statement();
+        }
+
+        skip_newlines();
         if (match_keyword("else")) {
-            skip_ignorable();
-            statement->else_branch = parse_statement();
+            if (match_symbol(":")) {
+                skip_newlines();
+                statement->else_branch = parse_indented_block();
+            } else {
+                statement->else_branch = parse_statement();
+            }
+        } else if (match_keyword("elif")) {
+            statement->else_branch = parse_if();
         }
         return statement;
     }
 
     StatementPtr parse_while() {
         auto statement = std::make_unique<WhileStatement>();
-        skip_ignorable();
-        statement->condition = trim_copy(parse_group('(', ')'));
-        skip_ignorable();
-        statement->body = parse_statement();
+        statement->condition = parse_expression_string();
+        statement->cache = create_expression_cache(statement->condition);
+        if (match_symbol(":")) {
+            skip_newlines();
+            statement->body = parse_indented_block();
+        } else {
+            statement->body = parse_statement();
+        }
         return statement;
     }
 
     StatementPtr parse_for() {
         auto statement = std::make_unique<ForStatement>();
-        skip_ignorable();
-        const std::string header = parse_group('(', ')');
-        const std::vector<std::string> parts = split_top_level(header, ';');
-        if (parts.size() != 3) {
-            throw std::runtime_error("for expects initializer; condition; step");
+        std::string header = strip_enclosing_parentheses(parse_expression_string());
+        header = translate_range_for(header);
+
+        std::vector<std::string> parts = split_top_level_text(header, ';');
+        if (parts.size() == 3) {
+            statement->initializer = trim_copy(parts[0]);
+            statement->condition = trim_copy(parts[1]);
+            statement->step = trim_copy(parts[2]);
+            // 预编译 for 循环的三个表达式
+            if (!statement->initializer.empty()) {
+                statement->init_cache = create_expression_cache(statement->initializer);
+            }
+            if (!statement->condition.empty()) {
+                statement->cond_cache = create_expression_cache(statement->condition);
+            }
+            if (!statement->step.empty()) {
+                statement->step_cache = create_expression_cache(statement->step);
+            }
+        } else {
+            statement->condition = header;
+            if (!statement->condition.empty()) {
+                statement->cond_cache = create_expression_cache(statement->condition);
+            }
         }
-        statement->initializer = trim_copy(parts[0]);
-        statement->condition = trim_copy(parts[1]);
-        statement->step = trim_copy(parts[2]);
-        skip_ignorable();
-        statement->body = parse_statement();
+
+        if (match_symbol(":")) {
+            skip_newlines();
+            statement->body = parse_indented_block();
+        } else {
+            statement->body = parse_statement();
+        }
         return statement;
     }
 
     StatementPtr parse_return() {
         auto statement = std::make_unique<ReturnStatement>();
-        const std::string expression = trim_copy(parse_until_semicolon());
-        if (!expression.empty()) {
+        std::string expr = parse_expression_string();
+        if (!expr.empty()) {
             statement->has_expression = true;
-            statement->expression = expression;
+            statement->expression = expr;
+            statement->cache = create_expression_cache(expr);
         }
         return statement;
     }
 
     StatementPtr parse_simple_statement() {
         auto statement = std::make_unique<SimpleStatement>();
-        statement->text = trim_copy(parse_until_semicolon());
-        if (statement->text.empty()) {
-            throw std::runtime_error("empty statement");
-        }
+        statement->text = parse_expression_string();
+        // 预编译简单语句
+        statement->cache = create_expression_cache(statement->text);
         return statement;
     }
 
-    std::string parse_group(char open, char close) {
-        expect(open);
-        const std::size_t start = pos_;
-        int depth = 1;
-        bool in_string = false;
-        bool escaping = false;
+    std::string parse_expression_string() {
+        std::string result;
+        int depth = 0;
         while (!is_at_end()) {
-            const char ch = source_[pos_];
-            if (in_string) {
-                if (escaping) {
-                    escaping = false;
-                } else if (ch == '\\') {
-                    escaping = true;
-                } else if (ch == '"') {
-                    in_string = false;
-                }
-            } else if (ch == '"') {
-                in_string = true;
-            } else if (ch == open) {
-                ++depth;
-            } else if (ch == close) {
-                --depth;
-                if (depth == 0) {
-                    const std::string content = source_.substr(start, pos_ - start);
-                    ++pos_;
-                    return content;
-                }
-            }
-            ++pos_;
-        }
-        throw std::runtime_error("unterminated grouped expression");
-    }
-
-    std::string parse_until_semicolon() {
-        const std::size_t start = pos_;
-        int paren_depth = 0;
-        int bracket_depth = 0;
-        bool in_string = false;
-        bool escaping = false;
-        while (!is_at_end()) {
-            const char ch = source_[pos_];
-            if (in_string) {
-                if (escaping) {
-                    escaping = false;
-                } else if (ch == '\\') {
-                    escaping = true;
-                } else if (ch == '"') {
-                    in_string = false;
-                }
-            } else if (ch == '"') {
-                in_string = true;
-            } else if (ch == '(') {
-                ++paren_depth;
-            } else if (ch == ')') {
-                --paren_depth;
-            } else if (ch == '[') {
-                ++bracket_depth;
-            } else if (ch == ']') {
-                --bracket_depth;
-            } else if (ch == ';' && paren_depth == 0 && bracket_depth == 0) {
-                const std::string text = source_.substr(start, pos_ - start);
-                ++pos_;
-                return text;
-            }
-            ++pos_;
-        }
-        throw std::runtime_error("expected ';'");
-    }
-
-    std::string parse_identifier() {
-        if (is_at_end() ||
-            !std::isalpha(static_cast<unsigned char>(source_[pos_]))) {
-            throw std::runtime_error("expected identifier");
-        }
-
-        const std::size_t start = pos_;
-        while (!is_at_end()) {
-            const char ch = source_[pos_];
-            if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_') {
-                ++pos_;
-            } else {
+            const auto& t = peek();
+            if (depth == 0 && (t.kind == Token::Kind::kNewline || 
+                               (t.kind == Token::Kind::kSymbol &&
+                                (t.text == ":" || t.text == ";" ||
+                                 t.text == "{" || t.text == "}")))) {
                 break;
             }
-        }
-        return source_.substr(start, pos_ - start);
-    }
-
-    std::vector<std::string> split_top_level(const std::string& text, char delimiter) const {
-        return split_top_level_text(text, delimiter);
-    }
-
-    void skip_ignorable() {
-        while (!is_at_end()) {
-            if (std::isspace(static_cast<unsigned char>(source_[pos_]))) {
-                ++pos_;
-                continue;
+            
+            if (t.kind == Token::Kind::kSymbol) {
+                if (t.text == "(" || t.text == "[" || t.text == "{") ++depth;
+                else if (t.text == ")" || t.text == "]" || t.text == "}") --depth;
             }
-            if (source_[pos_] == '#') {
-                while (!is_at_end() && source_[pos_] != '\n') {
-                    ++pos_;
+            
+            if (!result.empty()) {
+                const char last_ch = result.back();
+                const char next_ch = t.text.front();
+                
+                bool last_is_alnum = std::isalnum(static_cast<unsigned char>(last_ch)) || last_ch == '_';
+                bool next_is_alnum = std::isalnum(static_cast<unsigned char>(next_ch)) || next_ch == '_';
+                bool last_is_op = std::ispunct(static_cast<unsigned char>(last_ch)) && last_ch != '(' && last_ch != ')' && last_ch != '[' && last_ch != ']' && last_ch != ',' && last_ch != ';';
+                bool next_is_op = std::ispunct(static_cast<unsigned char>(next_ch)) && next_ch != '(' && next_ch != ')' && next_ch != '[' && next_ch != ']' && next_ch != ',' && next_ch != ';';
+
+                if ((last_is_alnum && next_is_alnum) || 
+                    (last_is_alnum && next_is_op) || 
+                    (last_is_op && next_is_alnum) ||
+                    (last_is_op && next_is_op) ||
+                    t.kind == Token::Kind::kKeyword) {
+                    result += " ";
                 }
-                continue;
             }
-            if (source_[pos_] == '/' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '/') {
-                pos_ += 2;
-                while (!is_at_end() && source_[pos_] != '\n') {
-                    ++pos_;
-                }
-                continue;
-            }
-            break;
+            
+            result += t.text;
+            advance();
         }
+        if (!is_at_end() && peek().kind == Token::Kind::kSymbol && peek().text == ";") advance();
+        return trim_copy(result);
     }
-
-    bool match_keyword(const std::string& keyword) {
-        skip_ignorable();
-        if (source_.compare(pos_, keyword.size(), keyword) != 0) {
-            return false;
-        }
-        const std::size_t after = pos_ + keyword.size();
-        if (after < source_.size()) {
-            const char next = source_[after];
-            if (std::isalnum(static_cast<unsigned char>(next)) || next == '_') {
-                return false;
-            }
-        }
-        pos_ = after;
-        return true;
-    }
-
-    bool match(char ch) {
-        skip_ignorable();
-        if (is_at_end() || source_[pos_] != ch) {
-            return false;
-        }
-        ++pos_;
-        return true;
-    }
-
-    bool peek(char ch) const {
-        return !is_at_end() && source_[pos_] == ch;
-    }
-
-    void expect(char ch) {
-        skip_ignorable();
-        if (is_at_end() || source_[pos_] != ch) {
-            throw std::runtime_error(std::string("expected '") + ch + "'");
-        }
-        ++pos_;
-    }
-
-    bool is_at_end() const {
-        return pos_ >= source_.size();
-    }
-
-    std::string source_;
-    std::size_t pos_ = 0;
 };
 
 }  // namespace
 
 Program parse_program(const std::string& source) {
-    Parser parser(source);
+    ScriptLexer lexer(source);
+    ScriptParserImpl parser(lexer.tokenize());
     return parser.parse();
 }
 

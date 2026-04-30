@@ -8,6 +8,9 @@
 #include <string>
 #include <vector>
 
+// 前向声明
+class SymbolicPolynomial;
+
 // ============================================================================
 // 节点类型枚举
 // ============================================================================
@@ -28,6 +31,7 @@ enum class NodeType {
     kVariable,   ///< 变量节点
     kPi,         ///< 精确常数 pi
     kE,          ///< 精确常数 e
+    kInfinity,   ///< 无穷大节点 (+inf 或 -inf)
     kAdd,        ///< 加法节点: left + right
     kSubtract,   ///< 减法节点: left - right
     kMultiply,   ///< 乘法节点: left * right
@@ -74,6 +78,74 @@ struct SymbolicExpression::Node {
 };
 
 // ============================================================================
+// 边界/端点解析协议
+// ============================================================================
+
+/**
+ * @enum BoundKind
+ * @brief 边界值类型
+ */
+enum class BoundKind {
+    kFinite,   ///< 有限数值
+    kPosInf,   ///< 正无穷大 (+inf)
+    kNegInf,   ///< 负无穷大 (-inf)
+};
+
+/**
+ * @struct BoundArgument
+ * @brief 边界参数解析结果
+ *
+ * 统一表示有限值和无穷大，用于 integral、limit 等命令的边界解析。
+ */
+struct BoundArgument {
+    BoundKind kind = BoundKind::kFinite;
+    double value = 0.0;  ///< 仅当 kind == kFinite 时有效
+
+    /** @brief 是否为有限值 */
+    bool is_finite() const { return kind == BoundKind::kFinite; }
+
+    /** @brief 是否为无穷大（正或负） */
+    bool is_infinite() const { return kind != BoundKind::kFinite; }
+
+    /** @brief 是否为正无穷 */
+    bool is_pos_inf() const { return kind == BoundKind::kPosInf; }
+
+    /** @brief 是否为负无穷 */
+    bool is_neg_inf() const { return kind == BoundKind::kNegInf; }
+
+    /** @brief 获取数值（无穷大返回 ±inf） */
+    double to_double() const;
+
+    /** @brief 创建有限边界 */
+    static BoundArgument finite(double v);
+
+    /** @brief 创建正无穷边界 */
+    static BoundArgument pos_inf();
+
+    /** @brief 创建负无穷边界 */
+    static BoundArgument neg_inf();
+};
+
+/**
+ * @brief 解析边界参数字符串
+ * @param text 边界参数文本（如 "0", "inf", "+inf", "-inf", "infinity", "oo"）
+ * @return 解析后的 BoundArgument
+ *
+ * 支持的格式：
+ * - 有限数值：直接解析为 double
+ * - 正无穷：inf, +inf, infinity, +infinity, oo, +oo
+ * - 负无穷：-inf, -infinity, -oo
+ */
+BoundArgument parse_bound_argument(const std::string& text);
+
+/**
+ * @brief 检查字符串是否为无穷大字面量
+ * @param text 待检查文本
+ * @return true 如果是 inf/infinity/oo（不含符号）
+ */
+bool is_infinity_literal(const std::string& text);
+
+// ============================================================================
 // 内部实现命名空间
 // ============================================================================
 
@@ -110,6 +182,13 @@ std::shared_ptr<SymbolicExpression::Node> make_number(double value);
  * @return 驻留后的节点指针
  */
 std::shared_ptr<SymbolicExpression::Node> make_variable(const std::string& name);
+
+/**
+ * @brief 创建无穷大节点（带驻留）
+ * @param positive true 表示 +inf，false 表示 -inf
+ * @return 驻留后的节点指针
+ */
+std::shared_ptr<SymbolicExpression::Node> make_infinity(bool positive = true);
 
 /**
  * @brief 创建一元节点（带驻留）
@@ -210,6 +289,14 @@ bool expr_is_minus_one(const SymbolicExpression& expression);
 
 /** @brief 检查表达式是否为数值，可选输出该数值 */
 bool expr_is_number(const SymbolicExpression& expression, double* value = nullptr);
+
+/**
+ * @brief 检查表达式是否为无穷大
+ * @param expression 表达式
+ * @param positive 输出参数，true 表示 +inf，false 表示 -inf（可选）
+ * @return true 如果表达式是无穷大节点或数值无穷大
+ */
+bool expr_is_infinity(const SymbolicExpression& expression, bool* positive = nullptr);
 
 /**
  * @brief 尝试数值求值
@@ -622,6 +709,44 @@ bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
                                          const SymbolicExpression& argument,
                                          const std::string& variable_name,
                                          SymbolicExpression* integrated);
+
+/**
+ * @brief 符号逆二次式积分（常数分子）
+ *
+ * 计算 A * ∫ dx / (ax^2 + bx + c)^n
+ * 使用符号公式，返回 atan 或 atanh/log 形式。
+ */
+SymbolicExpression integrate_symbolic_inverse_quadratic(
+    const SymbolicExpression& a,
+    const SymbolicExpression& b,
+    const SymbolicExpression& c,
+    const SymbolicExpression& coeff,
+    int power,
+    const std::string& variable_name);
+
+/**
+ * @brief 符号逆二次式积分（线性分子）
+ *
+ * 计算 B * ∫ x dx / (ax^2 + bx + c)^n
+ */
+SymbolicExpression integrate_symbolic_inverse_quadratic_linear(
+    const SymbolicExpression& a,
+    const SymbolicExpression& b,
+    const SymbolicExpression& c,
+    const SymbolicExpression& coeff,
+    int power,
+    const std::string& variable_name);
+
+/**
+ * @brief 符号部分分式积分
+ *
+ * 使用系数恒等式方法求解部分分式系数。
+ */
+bool integrate_symbolic_partial_fractions(
+    const SymbolicPolynomial& numerator,
+    const SymbolicPolynomial& denominator,
+    const std::string& variable_name,
+    SymbolicExpression* integrated);
 
 // ============================================================================
 // 特殊函数构造

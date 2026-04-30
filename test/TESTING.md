@@ -24,6 +24,7 @@ both the C++ regression suite and the script validation.
 - `abs(x)`, `sign(x)`, `floor(x)`, and `ceil(x)` evaluation
 - `min(a, b)` and `max(a, b)` evaluation
 - `pow(a, b)` function-style exponentiation and `factor(n)` factorization
+- `plot(f(x), ...)` terminal plotting with Braille resolution
 - Base conversion functions `bin`, `oct`, `hex`, and `base`
 - Prefixed integer literal parsing for `0b`, `0o`, and `0x`
 - Bitwise functions `and`, `or`, `xor`, `not`, `shl`, and `shr`

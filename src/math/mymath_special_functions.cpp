@@ -28,6 +28,22 @@ double gamma(double x) {
     return finite_or_infinity_from_log(log_gamma_positive(x));
 }
 
+double lgamma(double x) {
+    if (x <= 0.0 && is_integer(x)) {
+        throw std::domain_error("lgamma is undefined for non-positive integers");
+    }
+
+    if (x > 0.0) {
+        return log_gamma_positive(x);
+    }
+
+    const double reflected_sine = sin(kPi * x);
+    if (abs(reflected_sine) < kEps) {
+        throw std::domain_error("lgamma is undefined at this input");
+    }
+    return ln(kPi) - ln(abs(reflected_sine)) - log_gamma_positive(1.0 - x);
+}
+
 double sin(double x) {
     x = normalize_angle(x);
     if (is_near_zero(x, 1e-12) || is_near_zero(abs(x) - kPi, 1e-12)) {

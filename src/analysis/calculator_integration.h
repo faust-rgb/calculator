@@ -52,19 +52,24 @@ struct IntegrationContext {
 double double_integral(
     const IntegrationContext& ctx,
     const std::string& expr,
-    double x0, double x1,
-    double y0, double y1,
+    const std::string& x_var, double x0, double x1,
+    const std::string& y_var,
+    const std::string& y0_expr,
+    const std::string& y1_expr,
     int nx, int ny);
 
 /**
  * @brief 极坐标二重积分
+ * 支持变边界，例如 r 可依赖于 theta
  */
 double double_integral_polar(
     const IntegrationContext& ctx,
     const std::string& expr,
-    double r0, double r1,
-    double theta0, double theta1,
-    int nr, int ntheta);
+    const std::string& theta_var, double theta0, double theta1,
+    const std::string& r_var,
+    const std::string& r0_expr,
+    const std::string& r1_expr,
+    int ntheta, int nr);
 
 /**
  * @brief 三重积分
@@ -72,32 +77,44 @@ double double_integral_polar(
 double triple_integral(
     const IntegrationContext& ctx,
     const std::string& expr,
-    double x0, double x1,
-    double y0, double y1,
-    double z0, double z1,
+    const std::string& x_var, double x0, double x1,
+    const std::string& y_var,
+    const std::string& y0_expr,
+    const std::string& y1_expr,
+    const std::string& z_var,
+    const std::string& z0_expr,
+    const std::string& z1_expr,
     int nx, int ny, int nz);
 
 /**
  * @brief 柱坐标三重积分
+ * 支持变边界，例如 z 可依赖于 r, theta
  */
 double triple_integral_cyl(
     const IntegrationContext& ctx,
     const std::string& expr,
-    double r0, double r1,
-    double theta0, double theta1,
-    double z0, double z1,
-    int nr, int ntheta, int nz);
+    const std::string& theta_var, double theta0, double theta1,
+    const std::string& r_var,
+    const std::string& r0_expr,
+    const std::string& r1_expr,
+    const std::string& z_var,
+    const std::string& z0_expr,
+    const std::string& z1_expr,
+    int ntheta, int nr, int nz);
 
 /**
  * @brief 球坐标三重积分
+ * 支持变边界，例如 rho 可依赖于 theta, phi
  */
 double triple_integral_sph(
     const IntegrationContext& ctx,
     const std::string& expr,
-    double rho0, double rho1,
-    double theta0, double theta1,
-    double phi0, double phi1,
-    int nrho, int ntheta, int nphi);
+    const std::string& theta_var, double theta0, double theta1,
+    const std::string& phi_var, double phi0, double phi1,
+    const std::string& rho_var,
+    const std::string& rho0_expr,
+    const std::string& rho1_expr,
+    int ntheta, int nphi, int nrho);
 
 // ============================================================================
 // 命令处理

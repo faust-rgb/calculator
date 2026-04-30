@@ -1,6 +1,21 @@
+/**
+ * @file matrix_expression.cpp
+ * @brief 矩阵表达式解析与求值实现
+ *
+ * 本文件实现了矩阵表达式的解析和求值功能，包括：
+ * - 矩阵字面量的解析（如 [1, 2; 3, 4]）
+ * - 矩阵函数调用（如 transpose(A), inverse(M)）
+ * - 矩阵运算（加减乘除、幂运算）
+ * - 统计函数、插值函数、信号处理函数等
+ * - 复数运算支持
+ */
+
 #include "matrix.h"
 #include "matrix_internal.h"
+#include "base_parser.h"
 #include "statistics/calculator_statistics.h"
+#include "statistics/probability.h"
+#include "utils.h"
 
 #include "mymath.h"
 #include "polynomial.h"
@@ -13,6 +28,17 @@
 
 namespace matrix {
 
+using utils::trim_copy;  // 使用统一的 trim_copy 实现
+
+/**
+ * @brief 检查字符串是否包含独立的 'i' 符号（表示虚数单位）
+ *
+ * 判断字符串中是否存在不作为标识符一部分的 'i' 字符。
+ * 例如 "3+i" 返回 true，"sin" 返回 false。
+ *
+ * @param text 待检查的字符串
+ * @return 如果存在独立的 'i' 则返回 true
+ */
 static bool is_complex_symbol(const std::string& text) {
     std::size_t pos = text.find('i');
     while (pos != std::string::npos) {
@@ -28,6 +54,16 @@ namespace internal {
 
 namespace {
 
+/**
+ * @brief 解析尺寸参数（行数或列数）
+ *
+ * 将表达式字符串解析为非负整数尺寸值。
+ *
+ * @param expression 包含尺寸的表达式字符串
+ * @param scalar_evaluator 标量求值器
+ * @return 解析得到的尺寸值
+ * @throws 如果结果不是非负整数则抛出异常
+ */
 std::size_t parse_size_argument(const std::string& expression,
                                 const ScalarEvaluator& scalar_evaluator) {
     const double value = scalar_evaluator(expression);
@@ -37,6 +73,15 @@ std::size_t parse_size_argument(const std::string& expression,
     return static_cast<std::size_t>(value >= 0.0 ? value + 0.5 : value - 0.5);
 }
 
+/**
+ * @brief 解析整数指数参数
+ *
+ * 将浮点数值转换为整数指数，用于矩阵幂运算。
+ *
+ * @param value 浮点数值
+ * @return 整数指数
+ * @throws 如果不是整数则抛出异常
+ */
 long long parse_integer_exponent(double value) {
     if (!mymath::is_integer(value)) {
         throw std::runtime_error("matrix powers require an integer exponent");
@@ -44,6 +89,17 @@ long long parse_integer_exponent(double value) {
     return static_cast<long long>(value >= 0.0 ? value + 0.5 : value - 0.5);
 }
 
+/**
+ * @brief 解析索引参数
+ *
+ * 将表达式字符串解析为非负整数索引。
+ *
+ * @param expression 包含索引的表达式字符串
+ * @param scalar_evaluator 标量求值器
+ * @param name 函数名称（用于错误信息）
+ * @return 解析得到的索引值
+ * @throws 如果结果不是非负整数则抛出异常
+ */
 std::size_t parse_index_argument(const std::string& expression,
                                  const ScalarEvaluator& scalar_evaluator,
                                  const std::string& name) {
@@ -54,6 +110,17 @@ std::size_t parse_index_argument(const std::string& expression,
     return static_cast<std::size_t>(value + 0.5);
 }
 
+/**
+ * @brief 解析整数参数
+ *
+ * 将表达式字符串解析为整数（可以为负数）。
+ *
+ * @param expression 包含整数的表达式字符串
+ * @param scalar_evaluator 标量求值器
+ * @param name 函数名称（用于错误信息）
+ * @return 解析得到的整数
+ * @throws 如果不是整数则抛出异常
+ */
 long long parse_integer_argument(const std::string& expression,
                                  const ScalarEvaluator& scalar_evaluator,
                                  const std::string& name) {
@@ -64,6 +131,16 @@ long long parse_integer_argument(const std::string& expression,
     return static_cast<long long>(value >= 0.0 ? value + 0.5 : value - 0.5);
 }
 
+/**
+ * @brief 创建窗函数向量
+ *
+ * 生成指定类型的窗函数系数向量（Hann/Hamming/Blackman）。
+ * 这些窗函数常用于信号处理中的频谱分析。
+ *
+ * @param n 窗函数长度
+ * @param name 窗函数类型名称
+ * @return 包含窗函数系数的行向量矩阵
+ */
 Matrix make_window(std::size_t n, const std::string& name) {
     if (n == 0) {
         throw std::runtime_error(name + " requires a positive length");
@@ -89,6 +166,52 @@ Matrix make_window(std::size_t n, const std::string& name) {
     return result;
 }
 
+/**
+ * @brief 创建均匀分布随机矩阵
+ *
+ * 生成指定行列数的矩阵，元素服从 [min_value, max_value) 区间的均匀分布。
+ * 当上下界相等时直接填充该常量，便于构造确定值矩阵。
+ *
+ * @param rows 行数
+ * @param cols 列数
+ * @param min_value 随机数下界
+ * @param max_value 随机数上界
+ * @return 随机矩阵
+ */
+Matrix make_random_matrix(std::size_t rows,
+                          std::size_t cols,
+                          double min_value,
+                          double max_value) {
+    if (!mymath::isfinite(min_value) || !mymath::isfinite(max_value)) {
+        throw std::runtime_error("randmat range bounds must be finite");
+    }
+    if (min_value > max_value) {
+        throw std::runtime_error("randmat requires min <= max");
+    }
+
+    Matrix result(rows, cols, min_value);
+    if (min_value == max_value) {
+        return result;
+    }
+
+    const double width = max_value - min_value;
+    for (double& value : result.data) {
+        value = min_value + prob::rand() * width;
+    }
+    return result;
+}
+
+/**
+ * @brief 扩展欧几里得算法
+ *
+ * 计算 gcd(a, b) 以及满足 ax + by = gcd(a, b) 的系数 x, y。
+ *
+ * @param a 第一个整数
+ * @param b 第二个整数
+ * @param x 输出参数，存储系数 x
+ * @param y 输出参数，存储系数 y
+ * @return a 和 b 的最大公约数
+ */
 long long extended_gcd_local(long long a, long long b, long long* x, long long* y) {
     long long old_r = a;
     long long r = b;
@@ -118,6 +241,15 @@ long long extended_gcd_local(long long a, long long b, long long* x, long long* 
     return old_r;
 }
 
+/**
+ * @brief 计算整数的所有因数
+ *
+ * 返回给定整数的所有正因数，按升序排列。
+ *
+ * @param value 输入整数（可以为负）
+ * @return 包含所有因数的行向量矩阵
+ * @throws 如果输入为零则抛出异常
+ */
 Matrix divisors_vector(long long value) {
     if (value == 0) {
         throw std::runtime_error("divisors does not accept zero");
@@ -145,6 +277,16 @@ Matrix divisors_vector(long long value) {
     return result;
 }
 
+/**
+ * @brief 检查字符串是否包含矩阵变量标识符
+ *
+ * 扫描字符串中的所有标识符，检查是否有任何一个标识符
+ * 可以通过 matrix_lookup 回调找到对应的矩阵值。
+ *
+ * @param text 待检查的字符串
+ * @param matrix_lookup 矩阵查找回调函数
+ * @return 如果包含矩阵变量则返回 true
+ */
 bool contains_matrix_identifier(const std::string& text,
                                 const MatrixLookup& matrix_lookup) {
     for (std::size_t i = 0; i < text.size();) {
@@ -174,6 +316,16 @@ bool contains_matrix_identifier(const std::string& text,
     return false;
 }
 
+/**
+ * @brief 检查字符串是否包含复数变量标识符
+ *
+ * 扫描字符串中的所有标识符，检查是否有任何一个标识符
+ * 可以通过 complex_lookup 回调找到对应的复数值。
+ *
+ * @param text 待检查的字符串
+ * @param complex_lookup 复数查找回调函数
+ * @return 如果包含复数变量则返回 true
+ */
 bool contains_complex_identifier(const std::string& text,
                                  const ComplexLookup& complex_lookup) {
     for (std::size_t i = 0; i < text.size();) {
@@ -205,19 +357,47 @@ bool contains_complex_identifier(const std::string& text,
 
 }  // namespace
 
-class Parser {
+/**
+ * @class MatrixExpressionParser
+ * @brief 矩阵表达式解析器
+ *
+ * 继承 BaseParser 以复用词法分析工具。
+ * 该类实现了递归下降解析器，用于解析和求值包含矩阵、向量和标量的表达式。
+ * 支持的语法包括：
+ * - 矩阵字面量：[1, 2; 3, 4]
+ * - 函数调用：transpose(A), inverse(M)
+ * - 算术运算：+, -, *, /, ^
+ * - 括号分组：(A + B) * C
+ */
+class MatrixExpressionParser : public BaseParser {
 public:
-    Parser(std::string source,
+    /**
+     * @brief 构造解析器
+     *
+     * @param source 待解析的源字符串
+     * @param scalar_evaluator 标量表达式求值器
+     * @param matrix_lookup 矩阵变量查找函数
+     * @param complex_lookup 复数变量查找函数
+     */
+    MatrixExpressionParser(std::string source,
            const ScalarEvaluator* scalar_evaluator,
            const MatrixLookup* matrix_lookup,
            const ComplexLookup* complex_lookup)
-        : source_(std::move(source)),
+        : BaseParser(std::move(source)),
           scalar_evaluator_(scalar_evaluator),
           matrix_lookup_(matrix_lookup),
           complex_lookup_(complex_lookup) {}
 
+    /**
+     * @brief 执行解析
+     *
+     * 解析整个表达式并返回结果值。
+     *
+     * @return 解析得到的值（可以是标量、矩阵或复数）
+     * @throws 如果语法错误则抛出异常
+     */
     Value parse() {
-        Value value = parse_expression();
+        Value value = parse_comparison();
         skip_spaces();
         if (!is_at_end()) {
             throw std::runtime_error("unexpected token near: " + source_.substr(pos_, 1));
@@ -226,6 +406,55 @@ public:
     }
 
 private:
+    /**
+     * @brief 解析比较运算表达式（最低优先级）
+     *
+     * 处理 ==, !=, <, >, <=, >= 运算符。
+     */
+    Value parse_comparison() {
+        Value value = parse_expression();
+        while (true) {
+            skip_spaces();
+            std::string op;
+            if (match('<')) {
+                if (match('=')) op = "<=";
+                else op = "<";
+            } else if (match('>')) {
+                if (match('=')) op = ">=";
+                else op = ">";
+            } else if (match('=')) {
+                if (match('=')) op = "==";
+                else { --pos_; break; }
+            } else if (match('!')) {
+                if (match('=')) op = "!=";
+                else { --pos_; break; }
+            } else {
+                break;
+            }
+
+            value = Value::from_scalar(compare_values(value, parse_expression(), op));
+        }
+        return value;
+    }
+
+    double compare_values(const Value& lhs, const Value& rhs, const std::string& op) {
+        double l = lhs.is_matrix ? norm(lhs.matrix) : (lhs.is_complex ? lhs.complex.real : lhs.scalar);
+        double r = rhs.is_matrix ? norm(rhs.matrix) : (rhs.is_complex ? rhs.complex.real : rhs.scalar);
+
+        if (op == "<") return l < r ? 1.0 : 0.0;
+        if (op == "<=") return l <= r ? 1.0 : 0.0;
+        if (op == ">") return l > r ? 1.0 : 0.0;
+        if (op == ">=") return l >= r ? 1.0 : 0.0;
+        if (op == "==") return mymath::is_near_zero(l - r, 1e-10) ? 1.0 : 0.0;
+        if (op == "!=") return !mymath::is_near_zero(l - r, 1e-10) ? 1.0 : 0.0;
+        return 0.0;
+    }
+
+    /**
+     * @brief 解析加减法表达式
+     *
+     * 处理 + 和 - 运算符，左结合。
+     */
     Value parse_expression() {
         // 矩阵表达式和标量表达式共用同一套优先级：
         // + - 最低，* / 其次，^ 再高，单目正负号最高。
@@ -243,6 +472,11 @@ private:
         return value;
     }
 
+    /**
+     * @brief 解析乘除法表达式（中等优先级）
+     *
+     * 处理 * 和 / 运算符，左结合。
+     */
     Value parse_term() {
         Value value = parse_unary();
         while (true) {
@@ -258,6 +492,11 @@ private:
         return value;
     }
 
+    /**
+     * @brief 解析幂运算表达式（较高优先级）
+     *
+     * 处理 ^ 运算符，右结合。
+     */
     Value parse_power() {
         Value value = parse_primary();
         skip_spaces();
@@ -267,6 +506,11 @@ private:
         return value;
     }
 
+    /**
+     * @brief 解析一元表达式（最高优先级）
+     *
+     * 处理单目正号和负号。
+     */
     Value parse_unary() {
         skip_spaces();
         if (match('+')) {
@@ -285,6 +529,11 @@ private:
         return parse_power();
     }
 
+    /**
+     * @brief 解析基本表达式
+     *
+     * 处理括号、矩阵字面量、函数调用、变量引用和数值字面量。
+     */
     Value parse_primary() {
         skip_spaces();
         if (match('(')) {
@@ -336,6 +585,14 @@ private:
         return Value::from_scalar(parse_scalar_literal());
     }
 
+    /**
+     * @brief 解析矩阵字面量
+     *
+     * 解析形如 [1, 2; 3, 4] 的矩阵字面量语法。
+     * 逗号分隔列，分号分隔行。
+     *
+     * @return 解析得到的矩阵
+     */
     Matrix parse_matrix_literal() {
         std::vector<std::vector<std::string>> rows(1, std::vector<std::string>(1));
         bool saw_separator = false;
@@ -425,6 +682,16 @@ private:
         return result;
     }
 
+    /**
+     * @brief 解析矩阵函数调用
+     *
+     * 根据函数名调用相应的矩阵处理函数。
+     * 支持的函数包括：vec, mat, zeros, eye, transpose, inverse,
+     * 各种分解函数、统计函数、信号处理函数等。
+     *
+     * @param name 函数名称
+     * @return 函数调用结果的值
+     */
     Value parse_matrix_function(const std::string& name) {
         expect('(');
         const std::vector<std::string> arguments = parse_argument_strings();
@@ -472,6 +739,22 @@ private:
             return Value::from_matrix(Matrix::zero(
                 parse_size_argument(arguments[0], *scalar_evaluator_),
                 parse_size_argument(arguments[1], *scalar_evaluator_)));
+        }
+
+        if (name == "randmat" || name == "random_matrix") {
+            if (arguments.size() != 2 && arguments.size() != 4) {
+                throw std::runtime_error("randmat expects rows, cols, and optional min, max");
+            }
+            const std::size_t rows = parse_size_argument(arguments[0], *scalar_evaluator_);
+            const std::size_t cols = parse_size_argument(arguments[1], *scalar_evaluator_);
+            double min_value = 0.0;
+            double max_value = 1.0;
+            if (arguments.size() == 4) {
+                min_value = (*scalar_evaluator_)(arguments[2]);
+                max_value = (*scalar_evaluator_)(arguments[3]);
+            }
+            return Value::from_matrix(
+                make_random_matrix(rows, cols, min_value, max_value));
         }
 
         if (name == "eye" || name == "identity") {
@@ -1362,6 +1645,14 @@ private:
         throw std::runtime_error("unknown matrix function: " + name);
     }
 
+    /**
+     * @brief 解析参数字符串列表
+     *
+     * 提取函数调用中的各个参数字符串，保持嵌套表达式的完整性。
+     * 只在顶层逗号处分割，括号和方括号内的逗号不分割。
+     *
+     * @return 参数字符串列表
+     */
     std::vector<std::string> parse_argument_strings() {
         // 参数提取只在最外层逗号处分割，这样 mat(...), set(...),
         // 以及嵌套表达式都能安全保留原样后续再递归求值。
@@ -1410,6 +1701,15 @@ private:
         return arguments;
     }
 
+    /**
+     * @brief 要求参数为矩阵并返回
+     *
+     * 尝试将表达式求值为矩阵，如果失败则抛出异常。
+     *
+     * @param expression 表达式字符串
+     * @param func_name 函数名称（用于错误信息）
+     * @return 求值得到的矩阵
+     */
     Matrix require_matrix(const std::string& expression, const std::string& func_name) const {
         Value value;
         if (!try_evaluate_expression(expression,
@@ -1423,6 +1723,14 @@ private:
         return value.matrix;
     }
 
+    /**
+     * @brief 求值参数为通用值
+     *
+     * 尝试将表达式求值为值（标量、矩阵或复数）。
+     *
+     * @param expression 表达式字符串
+     * @return 求值得到的值
+     */
     Value evaluate_value_argument(const std::string& expression) const {
         Value value;
         if (try_evaluate_expression(expression,
@@ -1435,6 +1743,15 @@ private:
         return Value::from_scalar((*scalar_evaluator_)(expression));
     }
 
+    /**
+     * @brief 要求参数为复数并返回
+     *
+     * 尝试将表达式求值为复数，如果失败则抛出异常。
+     *
+     * @param expression 表达式字符串
+     * @param func_name 函数名称（用于错误信息）
+     * @return 求值得到的复数
+     */
     ComplexNumber require_complex_argument(const std::string& expression,
                                            const std::string& func_name) const {
         Value value = evaluate_value_argument(expression);
@@ -1445,6 +1762,12 @@ private:
         return complex;
     }
 
+    /**
+     * @brief 解析标量函数调用
+     *
+     * 将非矩阵函数调用委托给标量求值器处理。
+     * 提取完整的函数调用字符串（包括括号和参数）。
+     */
     double parse_scalar_call() {
         const std::size_t start = pos_;
         int depth = 0;
@@ -1468,6 +1791,11 @@ private:
         return (*scalar_evaluator_)(source_.substr(start, pos_ - start));
     }
 
+    /**
+     * @brief 解析数值字面量
+     *
+     * 解析十进制数、二进制(0b)、八进制(0o)、十六进制(0x)数。
+     */
     double parse_scalar_literal() {
         const std::size_t start = pos_;
 
@@ -1507,8 +1835,18 @@ private:
         return (*scalar_evaluator_)(source_.substr(start, pos_ - start));
     }
 
+    /**
+     * @brief 判断函数名是否为矩阵函数
+     *
+     * 检查给定的函数名是否需要由矩阵解析器处理，
+     * 而不是委托给标量求值器。
+     *
+     * @param name 函数名称
+     * @return 如果是矩阵函数则返回 true
+     */
     static bool is_matrix_function(const std::string& name) {
         return name == "vec" || name == "mat" || name == "zeros" ||
+               name == "randmat" || name == "random_matrix" ||
                name == "eye" || name == "identity" || name == "resize" ||
                name == "hann" || name == "hanning" ||
                name == "hamming" || name == "blackman" ||
@@ -1546,6 +1884,13 @@ private:
                name == "abs" || name == "exp" || name == "sin" || name == "cos" || name == "ln";
     }
 
+    // ==================== 二元运算辅助函数 ====================
+
+    /**
+     * @brief 执行加法运算
+     *
+     * 支持标量+标量、矩阵+矩阵、矩阵+标量、复数+复数等组合。
+     */
     static Value add_values(Value lhs, Value rhs) {
         if (lhs.is_complex || rhs.is_complex ||
             (lhs.is_matrix && is_complex_vector(lhs.matrix)) ||
@@ -1579,6 +1924,11 @@ private:
         return Value::from_scalar(lhs.scalar + rhs.scalar);
     }
 
+    /**
+     * @brief 执行减法运算
+     *
+     * 支持标量-标量、矩阵-矩阵、矩阵-标量、复数-复数等组合。
+     */
     static Value subtract_values(Value lhs, Value rhs) {
         if (lhs.is_complex || rhs.is_complex ||
             (lhs.is_matrix && is_complex_vector(lhs.matrix)) ||
@@ -1613,6 +1963,11 @@ private:
         return Value::from_scalar(lhs.scalar - rhs.scalar);
     }
 
+    /**
+     * @brief 执行乘法运算
+     *
+     * 支持标量*标量、矩阵*矩阵（矩阵乘法）、矩阵*标量、复数*复数等组合。
+     */
     static Value multiply_values(Value lhs, Value rhs) {
         if (lhs.is_complex || rhs.is_complex ||
             (lhs.is_matrix && is_complex_vector(lhs.matrix)) ||
@@ -1648,6 +2003,12 @@ private:
         return Value::from_scalar(lhs.scalar * rhs.scalar);
     }
 
+    /**
+     * @brief 执行除法运算
+     *
+     * 支持标量/标量、矩阵/标量、复数/复数等组合。
+     * 不支持矩阵作为除数。
+     */
     static Value divide_values(Value lhs, Value rhs) {
         if (lhs.is_complex || rhs.is_complex ||
             (lhs.is_matrix && is_complex_vector(lhs.matrix)) ||
@@ -1694,6 +2055,12 @@ private:
         return Value::from_scalar(lhs.scalar / rhs.scalar);
     }
 
+    /**
+     * @brief 执行幂运算
+     *
+     * 支持标量^标量、矩阵^整数（矩阵幂）、复数^标量等组合。
+     * 指数必须为实标量。
+     */
     static Value power_values(Value lhs, Value rhs) {
         if (rhs.is_matrix || rhs.is_complex) {
             throw std::runtime_error("exponents must be real scalars");
@@ -1717,55 +2084,8 @@ private:
         return Value::from_scalar(mymath::pow(lhs.scalar, rhs.scalar));
     }
 
-    bool peek(char expected) const {
-        return !is_at_end() && source_[pos_] == expected;
-    }
+    // ==================== 额外成员变量 ====================
 
-    bool peek_is_identifier_start() const {
-        return !is_at_end() &&
-               std::isalpha(static_cast<unsigned char>(source_[pos_]));
-    }
-
-    std::string parse_identifier() {
-        const std::size_t start = pos_;
-        while (!is_at_end()) {
-            const char ch = source_[pos_];
-            if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '_') {
-                ++pos_;
-            } else {
-                break;
-            }
-        }
-        return source_.substr(start, pos_ - start);
-    }
-
-    void skip_spaces() {
-        while (!is_at_end() &&
-               std::isspace(static_cast<unsigned char>(source_[pos_]))) {
-            ++pos_;
-        }
-    }
-
-    bool match(char expected) {
-        if (is_at_end() || source_[pos_] != expected) {
-            return false;
-        }
-        ++pos_;
-        return true;
-    }
-
-    void expect(char expected) {
-        if (!match(expected)) {
-            throw std::runtime_error(std::string("expected '") + expected + "'");
-        }
-    }
-
-    bool is_at_end() const {
-        return pos_ >= source_.size();
-    }
-
-    std::string source_;
-    std::size_t pos_ = 0;
     const ScalarEvaluator* scalar_evaluator_;
     const MatrixLookup* matrix_lookup_;
     const ComplexLookup* complex_lookup_;
@@ -1776,18 +2096,34 @@ private:
 
 using namespace internal;
 
+/**
+ * @brief 尝试求值矩阵表达式
+ *
+ * 尝试将给定的表达式字符串解析并求值为值（标量、矩阵或复数）。
+ * 如果表达式看起来不像是矩阵表达式（不包含矩阵关键字或变量），
+ * 则直接返回 false，不进行解析。
+ *
+ * @param expression 表达式字符串
+ * @param scalar_evaluator 标量表达式求值器
+ * @param matrix_lookup 矩阵变量查找函数
+ * @param complex_lookup 复数变量查找函数
+ * @param value 输出参数，存储求值结果
+ * @return 如果成功求值则返回 true，否则返回 false
+ */
 bool try_evaluate_expression(const std::string& expression,
                              const ScalarEvaluator& scalar_evaluator,
                              const MatrixLookup& matrix_lookup,
                              const ComplexLookup& complex_lookup,
                              Value* value) {
-    const std::string trimmed = trim_copy(expression);
+    const std::string trimmed = utils::trim_copy(expression);
     const bool looks_like_matrix_expression =
         trimmed.find("vec(") != std::string::npos ||
         trimmed.find("complex(") != std::string::npos ||
         trimmed.find("polar(") != std::string::npos ||
         trimmed.find("mat(") != std::string::npos ||
         trimmed.find("zeros(") != std::string::npos ||
+        trimmed.find("randmat(") != std::string::npos ||
+        trimmed.find("random_matrix(") != std::string::npos ||
         trimmed.find("eye(") != std::string::npos ||
         trimmed.find("identity(") != std::string::npos ||
         trimmed.find("hann(") != std::string::npos ||
@@ -1894,7 +2230,7 @@ bool try_evaluate_expression(const std::string& expression,
     }
 
     try {
-        Parser parser(trimmed, &scalar_evaluator, &matrix_lookup, &complex_lookup);
+        MatrixExpressionParser parser(trimmed, &scalar_evaluator, &matrix_lookup, &complex_lookup);
         *value = parser.parse();
         return true;
     } catch (...) {

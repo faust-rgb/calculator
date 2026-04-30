@@ -6,6 +6,27 @@ The project has evolved from a minimal C++ hello-world style setup into a
 feature-rich command-line calculator with exact rational mode, programmable
 helpers, interactive terminal UX, and project documentation.
 
+## Latest Vector Calculus Improvements
+
+- **Added Advanced Differential Form and Vector Analysis Commands**:
+  - `implicit_diff(F, y, x)`: Implicit differentiation using the formula dy/dx = -F_x / F_y
+  - `param_deriv(x_t, y_t, t)`: Parametric curve derivatives (supports higher-order)
+  - `directional(expr, vars..., direction...)`: Directional derivative with automatic normalization
+  - `line_integral_scalar(f, curve, t, a, b)`: Scalar line integral ∫_C f(r) |r'| dt
+  - `line_integral_vector(F, curve, t, a, b)`: Vector line integral (work) ∫_C F·r' dt
+  - `surface_integral_scalar(f, surface, u, a, b, v, c, d)`: Scalar surface integral ∬_S f |r_u × r_v| du dv
+  - `surface_integral_flux(F, surface, u, a, b, v, c, d)`: Flux integral ∬_S F·(r_u × r_v) du dv
+- **Integration Engine Enhancements**:
+  - Added `IntegrationEngine` class with strategy pattern for multi-method integration
+  - Implemented LIATE rule for integration by parts
+  - Added generic substitution with candidate collection
+  - Added cyclic integration detection
+- **Symbolic Polynomial Support**:
+  - New `SymbolicPolynomial` class with symbolic coefficients
+  - Square-free decomposition (Yun algorithm)
+  - Coefficient identity method for partial fraction decomposition
+  - Symbolic quadratic integration formulas
+
 ## Latest Series and Limit Improvements
 
 - **Introduced Power Series Arithmetic (PSA) Engine**:
@@ -198,9 +219,9 @@ helpers, interactive terminal UX, and project documentation.
 
 ## Current Quality Status
 
-- `make test` currently passes
-- Expected test summary:
-  - `Passed: 771, Failed: 0`
+- `make test` currently passes all tests
+- Current test summary:
+  - `Passed: 867, Failed: 0`
   - `Planning passed: 6, Planning failed: 0`
 - Added comprehensive symbolic-computing coverage for calculus, limits,
   matrices, equation solving, and planning helpers

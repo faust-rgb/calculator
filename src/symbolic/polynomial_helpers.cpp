@@ -1,3 +1,34 @@
+// ============================================================================
+// 多项式辅助函数模块
+// ============================================================================
+//
+// 本文件提供多项式操作和积分计算的核心辅助函数：
+//
+// 1. 表达式判定
+//    - 判断表达式是否为已知正数
+//    - 判断表达式是否为多项式
+//    - 判断参数是否为线性函数
+//
+// 2. 符号多项式系数提取
+//    - 从表达式中提取多项式系数
+//    - 支持符号系数（如 a*x^2 + b*x + c）
+//
+// 3. 幂因子分解与重建
+//    - 分解幂表达式为底数和指数
+//    - 处理负指数和分数指数
+//
+// 4. 乘积规范化
+//    - 构建排序后的乘积表达式
+//    - 合并相同底数的幂
+//
+// 5. 有理式约分
+//    - 多项式整除检测
+//    - 最大公因式提取
+//
+// 这些函数为 simplify.cpp 和 symbolic_expression_calculus.cpp
+// 提供多项式处理的基础设施。
+// ============================================================================
+
 #include "symbolic_expression_internal.h"
 
 #include "mymath.h"
@@ -11,6 +42,18 @@
 
 namespace symbolic_expression_internal {
 
+// ============================================================================
+// 表达式判定函数
+// ============================================================================
+
+/**
+ * @brief 判断表达式是否为已知正数
+ *
+ * 已知正数包括：
+ * - 正数值常量
+ * - pi, e 等数学常数
+ * - exp, sqrt, abs 等恒正函数
+ */
 bool is_known_positive_expression(const SymbolicExpression& expression) {
     double numeric = 0.0;
     if (expression.is_number(&numeric)) {
@@ -30,6 +73,11 @@ bool is_known_positive_expression(const SymbolicExpression& expression) {
     return false;
 }
 
+/**
+ * @brief 判断表达式是否为关于指定变量的多项式
+ *
+ * 尝试提取多项式系数，如果成功则为多项式。
+ */
 bool polynomial_expression(const SymbolicExpression& expression,
                            const std::string& variable_name,
                            SymbolicExpression* polynomial) {
@@ -42,6 +90,12 @@ bool polynomial_expression(const SymbolicExpression& expression,
     return true;
 }
 
+/**
+ * @brief 判断函数参数是否为线性形式
+ *
+ * 检查参数是否可表示为 a*variable + b 的形式，
+ * 且斜率 a 不为零。
+ */
 bool is_linear_function_argument(const SymbolicExpression& argument,
                                  const std::string& variable_name,
                                  double* a) {
@@ -50,6 +104,26 @@ bool is_linear_function_argument(const SymbolicExpression& argument,
            !mymath::is_near_zero(*a, kFormatEps);
 }
 
+// ============================================================================
+// 多项式积分辅助函数
+// ============================================================================
+
+/**
+ * @brief 积分多项式乘以初等函数
+ *
+ * 处理形如 P(x) * f(ax+b) 的积分，其中 f 为 exp, sin, cos 等。
+ * 使用递推公式：
+ * - P(x) * exp(ax+b): 分部积分递推
+ * - P(x) * sin(ax+b), P(x) * cos(ax+b): 分部积分递推
+ * - P(x) * ln(x): 特殊公式
+ *
+ * @param polynomial 多项式部分
+ * @param function_name 函数名
+ * @param argument 函数参数
+ * @param variable_name 积分变量
+ * @param integrated 输出积分结果
+ * @return true 如果成功积分
+ */
 bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
                                          const std::string& function_name,
                                          const SymbolicExpression& argument,
@@ -194,6 +268,17 @@ bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
     return false;
 }
 
+// ============================================================================
+// 幂因子分解函数
+// ============================================================================
+
+/**
+ * @brief 分解幂因子（数值指数）
+ *
+ * 将表达式分解为底数和数值指数：
+ * - x^3 → base=x, exponent=3
+ * - x → base=x, exponent=1
+ */
 bool decompose_power_factor(const SymbolicExpression& expression,
                             SymbolicExpression* base,
                             double* exponent) {
@@ -208,6 +293,14 @@ bool decompose_power_factor(const SymbolicExpression& expression,
     return true;
 }
 
+/**
+ * @brief 分解幂因子（符号指数）
+ *
+ * 将表达式分解为底数和符号指数：
+ * - x^n → base=x, exponent=n
+ * - exp(x) → base=e, exponent=x
+ * - x → base=x, exponent=1
+ */
 bool decompose_power_factor_expression(const SymbolicExpression& expression,
                                        SymbolicExpression* base,
                                        SymbolicExpression* exponent) {
@@ -227,6 +320,19 @@ bool decompose_power_factor_expression(const SymbolicExpression& expression,
     return true;
 }
 
+// ============================================================================
+// 幂表达式重建函数
+// ============================================================================
+
+/**
+ * @brief 重建幂表达式（数值指数）
+ *
+ * 根据指数值构建幂表达式：
+ * - exponent=0 → 1
+ * - exponent=1 → base
+ * - exponent=-1 → 1/base
+ * - exponent<0 → 1/base^(-exponent)
+ */
 SymbolicExpression rebuild_power_difference(const SymbolicExpression& base, double exponent) {
     if (mymath::is_near_zero(exponent, kFormatEps)) {
         return SymbolicExpression::number(1.0);
@@ -245,6 +351,12 @@ SymbolicExpression rebuild_power_difference(const SymbolicExpression& base, doub
     return make_power(base, SymbolicExpression::number(exponent)).simplify();
 }
 
+/**
+ * @brief 重建幂表达式（符号指数）
+ *
+ * 特殊处理自然对数底 e：
+ * - e^x → exp(x)
+ */
 SymbolicExpression rebuild_power_expression(const SymbolicExpression& base,
                                             const SymbolicExpression& exponent) {
     if (base.node_->type == NodeType::kVariable && base.node_->text == "e") {
@@ -257,6 +369,22 @@ SymbolicExpression rebuild_power_expression(const SymbolicExpression& base,
     return make_power(base, exponent);
 }
 
+// ============================================================================
+// 乘积规范化函数
+// ============================================================================
+
+/**
+ * @brief 构建排序后的乘积表达式
+ *
+ * 将因子列表构建为规范化的乘积表达式：
+ * 1. 合并相同底数的幂（如 x*x → x^2）
+ * 2. 按结构键排序因子
+ * 3. 处理数值因子
+ *
+ * @param numeric_factor 数值因子
+ * @param factors 符号因子列表
+ * @return 规范化的乘积表达式
+ */
 SymbolicExpression make_sorted_product(double numeric_factor,
                                       std::vector<SymbolicExpression> factors) {
     if (mymath::is_near_zero(numeric_factor, kFormatEps)) {
@@ -328,6 +456,21 @@ SymbolicExpression make_sorted_product(double numeric_factor,
     return make_multiply(SymbolicExpression::number(numeric_factor), combined);
 }
 
+// ============================================================================
+// 有理式约分函数
+// ============================================================================
+
+/**
+ * @brief 尝试规范因子商约分
+ *
+ * 对分子和分母的因子进行约分：
+ * 1. 分解分子分母为因子列表
+ * 2. 合并相同底数的幂
+ * 3. 约去可以消去的因子
+ *
+ * 注意：对于 "符号/纯数字" 形式保留除法结构，
+ * 以便输出更接近用户输入（如 pi/2）。
+ */
 bool try_canonical_factor_quotient(const SymbolicExpression& numerator,
                                    const SymbolicExpression& denominator,
                                    SymbolicExpression* quotient) {
@@ -418,6 +561,12 @@ bool try_canonical_factor_quotient(const SymbolicExpression& numerator,
     return changed || !mymath::is_near_zero(denominator_coefficient - 1.0, kFormatEps);
 }
 
+/**
+ * @brief 计算两个数值的最大公约数
+ *
+ * 对于整数参数使用欧几里得算法，
+ * 对于相近的数值返回较大者的绝对值。
+ */
 double common_numeric_factor(double lhs, double rhs) {
     const double lhs_abs = mymath::abs(lhs);
     const double rhs_abs = mymath::abs(rhs);
@@ -441,6 +590,19 @@ double common_numeric_factor(double lhs, double rhs) {
     return 1.0;
 }
 
+/**
+ * @brief 尝试提取公因子
+ *
+ * 检测两个项是否有公共因子，并提取：
+ * - 2*x + 2*y → 2*(x + y)
+ * - a*x + a*y → a*(x + y)
+ *
+ * @param left 左项
+ * @param right 右项
+ * @param right_sign 右项符号（+1 或 -1）
+ * @param combined 输出提取结果
+ * @return true 如果成功提取公因子
+ */
 bool try_factor_common_terms(const SymbolicExpression& left,
                              const SymbolicExpression& right,
                              double right_sign,
@@ -507,6 +669,16 @@ bool try_factor_common_terms(const SymbolicExpression& left,
     return true;
 }
 
+// ============================================================================
+// 三角函数辅助
+// ============================================================================
+
+/**
+ * @brief 检查是否为函数的平方
+ *
+ * 检测表达式是否为指定函数的平方形式：
+ * - sin^2(x) → 返回 true 并输出 x 的结构键
+ */
 bool is_squared_function(const SymbolicExpression& expression,
                          const std::string& function_name,
                          std::string* argument_key) {
@@ -529,6 +701,13 @@ bool is_squared_function(const SymbolicExpression& expression,
     return true;
 }
 
+/**
+ * @brief 检查字符串是否为合法的标识符变量名
+ *
+ * 合法标识符：
+ * - 字母开头
+ * - 仅含字母、数字、下划线和撇号
+ */
 bool is_identifier_variable_name(const std::string& name) {
     if (name.empty() ||
         !std::isalpha(static_cast<unsigned char>(name.front()))) {
@@ -543,6 +722,15 @@ bool is_identifier_variable_name(const std::string& name) {
     return true;
 }
 
+// ============================================================================
+// 变量收集函数
+// ============================================================================
+
+/**
+ * @brief 收集表达式中的所有标识符变量
+ *
+ * 递归遍历表达式树，收集所有变量名（排除 pi, e, i 等保留符号）。
+ */
 void collect_identifier_variables(const SymbolicExpression& expression,
                                   std::vector<std::string>* names) {
     const auto& node = expression.node_;
@@ -550,6 +738,7 @@ void collect_identifier_variables(const SymbolicExpression& expression,
         case NodeType::kNumber:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
             return;
         case NodeType::kVariable:
             if (node->text != "pi" && node->text != "e" && node->text != "i" &&
@@ -572,6 +761,11 @@ void collect_identifier_variables(const SymbolicExpression& expression,
     }
 }
 
+/**
+ * @brief 获取表达式中唯一的标识符变量
+ *
+ * 如果表达式只含一个变量，返回该变量名；否则返回空串。
+ */
 std::string unique_identifier_variable(const SymbolicExpression& expression) {
     std::vector<std::string> names;
     collect_identifier_variables(expression, &names);
@@ -580,6 +774,18 @@ std::string unique_identifier_variable(const SymbolicExpression& expression) {
     return names.size() == 1 ? names.front() : "";
 }
 
+// ============================================================================
+// 多项式系数提取
+// ============================================================================
+
+/**
+ * @brief 从简化后的表达式提取多项式系数
+ *
+ * 递归解析表达式，提取关于指定变量的多项式系数。
+ * 返回的系数向量按升幂排列：[c0, c1, c2, ...] 对应 c0 + c1*x + c2*x^2 + ...
+ *
+ * 使用记忆化避免重复计算，支持递归深度限制。
+ */
 bool polynomial_coefficients_from_simplified(const SymbolicExpression& expression,
                                              const std::string& variable_name,
                                              std::vector<double>* coefficients) {
@@ -735,6 +941,7 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
         case NodeType::kNumber:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
         case NodeType::kVariable:
         case NodeType::kFunction:
         case NodeType::kNegate:
@@ -743,6 +950,13 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
     return finish(false);
 }
 
+// ============================================================================
+// 多项式辅助判定函数
+// ============================================================================
+
+/**
+ * @brief 检查多项式系数向量是否全为零
+ */
 bool polynomial_is_zero_remainder(const std::vector<double>& coefficients) {
     for (double coefficient : coefficients) {
         if (!mymath::is_near_zero(coefficient, kFormatEps)) {
@@ -752,6 +966,12 @@ bool polynomial_is_zero_remainder(const std::vector<double>& coefficients) {
     return true;
 }
 
+/**
+ * @brief 尝试多项式整除约分
+ *
+ * 检测分子是否可被分母整除，如：
+ * - (x^2 - 1) / (x - 1) → x + 1
+ */
 bool try_reduce_polynomial_quotient(const SymbolicExpression& left,
                                     const SymbolicExpression& right,
                                     SymbolicExpression* reduced) {
@@ -781,6 +1001,12 @@ bool try_reduce_polynomial_quotient(const SymbolicExpression& left,
     return true;
 }
 
+/**
+ * @brief 尝试多项式 GCD 约分
+ *
+ * 提取分子分母的最大公因式进行约分：
+ * - (x^3 - x) / (x^2 - 1) → x(x+1) / (x+1) = x（GCD 为 x^2-1）
+ */
 bool try_reduce_polynomial_gcd_quotient(const SymbolicExpression& left,
                                         const SymbolicExpression& right,
                                         SymbolicExpression* reduced) {
@@ -833,6 +1059,9 @@ bool try_reduce_polynomial_gcd_quotient(const SymbolicExpression& left,
     return true;
 }
 
+/**
+ * @brief 检查表达式是否为单变量多项式
+ */
 bool is_single_variable_polynomial(const SymbolicExpression& expression) {
     const std::string variable_name = unique_identifier_variable(expression);
     if (variable_name.empty()) {
@@ -843,6 +1072,11 @@ bool is_single_variable_polynomial(const SymbolicExpression& expression) {
     return polynomial_coefficients_from_simplified(expression, variable_name, &coefficients);
 }
 
+/**
+ * @brief 尝试规范化多项式表达式
+ *
+ * 如果表达式是单变量多项式，按降幂排列输出规范形式。
+ */
 SymbolicExpression maybe_canonicalize_polynomial(const SymbolicExpression& expression) {
     const std::string variable_name = unique_identifier_variable(expression);
     if (variable_name.empty()) {
@@ -861,6 +1095,9 @@ SymbolicExpression maybe_canonicalize_polynomial(const SymbolicExpression& expre
     return build_polynomial_expression_from_coefficients(coefficients, variable_name);
 }
 
+/**
+ * @brief 裁剪符号多项式系数向量末尾的零
+ */
 void trim_symbolic_polynomial_coefficients(std::vector<SymbolicExpression>* coefficients) {
     while (coefficients->size() > 1 && expr_is_zero(coefficients->back())) {
         coefficients->pop_back();
@@ -870,6 +1107,13 @@ void trim_symbolic_polynomial_coefficients(std::vector<SymbolicExpression>* coef
     }
 }
 
+// ============================================================================
+// 符号多项式系数提取
+// ============================================================================
+
+/**
+ * @brief 检查表达式是否为关于指定变量的符号多项式
+ */
 bool is_symbolic_polynomial(const SymbolicExpression& expression,
                             const std::string& variable_name) {
     std::vector<SymbolicExpression> coefficients;
@@ -878,6 +1122,13 @@ bool is_symbolic_polynomial(const SymbolicExpression& expression,
                                                             &coefficients);
 }
 
+/**
+ * @brief 从简化后的表达式提取符号多项式系数
+ *
+ * 与 polynomial_coefficients_from_simplified 类似，
+ * 但系数本身可以是符号表达式。
+ * 例如：a*x^2 + b*x + c 的系数为 [c, b, a]
+ */
 bool symbolic_polynomial_coefficients_from_simplified(
     const SymbolicExpression& expression,
     const std::string& variable_name,

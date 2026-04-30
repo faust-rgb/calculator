@@ -22,10 +22,30 @@ constexpr double kPi = 3.14159265358979323846;
 
 /** @brief 自然对数的底 e，精确到小数点后20位 */
 constexpr double kE = 2.71828182845904523536;
+
+/** @brief 光速 c (m/s) */
+constexpr double kSpeedOfLight = 299792458.0;
+
+/** @brief 万有引力常数 G (m^3 kg^-1 s^-2) */
+constexpr double kGravitationalConstant = 6.67430e-11;
+
+/** @brief 普朗克常数 h (J·s) */
+constexpr double kPlanckConstant = 6.62607015e-34;
+
+/** @brief 玻尔兹曼常数 k (J/K) */
+constexpr double kBoltzmannConstant = 1.380649e-23;
+
+/** @brief 阿伏伽德罗常数 NA (mol^-1) */
+constexpr double kAvogadroNumber = 6.02214076e23;
+
 constexpr double kDoubleMax = 1.7976931348623157e308;
 constexpr double kDoubleDenormMin = 4.9406564584124654e-324;
 constexpr double kLnDoubleMax = 709.78271289338397;
 constexpr double kLnDoubleDenormMin = -744.44007192138122;
+constexpr int kIntMin = -2147483647 - 1;
+constexpr int kIntMax = 2147483647;
+constexpr long long kLongLongMin = -9223372036854775807LL - 1LL;
+constexpr long long kLongLongMax = 9223372036854775807LL;
 
 /**
  * @brief 默认数值精度阈值
@@ -46,10 +66,17 @@ constexpr double kEps = 1e-12;
  */
 double abs(double x);
 long double abs_long_double(long double x);
+bool isnan(double x);
+bool isinf(double x);
 bool isfinite(double x);
+double floor(double x);
+double ceil(double x);
+double round(double x);
+double trunc(double x);
 double clamp(double value, double low, double high);
 double remainder(double x, double y);
 double infinity();
+double quiet_nan();
 long long gcd(long long a, long long b);
 
 /**
@@ -134,6 +161,8 @@ double exp(double x);
  * 然后使用基于 (x-1)/(x+1) 的级数展开。
  */
 double ln(double x);
+double log(double x);
+double log1p(double x);
 
 /**
  * @brief 计算常用对数 log10(x)
@@ -144,6 +173,7 @@ double ln(double x);
  * 使用换底公式：log10(x) = ln(x) / ln(10)
  */
 double log10(double x);
+double log2(double x);
 
 /**
  * @brief 计算双曲正弦
@@ -194,6 +224,7 @@ double atanh(double x);
  * @throw std::domain_error 当 x 为非正整数时抛出
  */
 double gamma(double x);
+double lgamma(double x);
 
 // ============================================================================
 // 三角函数

@@ -1,3 +1,24 @@
+// ============================================================================
+// 积分变换实现模块
+// ============================================================================
+//
+// 本文件为 SymbolicExpression 类提供积分变换的公共接口：
+//
+// 1. Fourier 变换
+//    - fourier_transform: 正向变换
+//    - inverse_fourier_transform: 逆向变换
+//
+// 2. Laplace 变换
+//    - laplace_transform: 正向变换
+//    - inverse_laplace_transform: 逆向变换
+//
+// 3. Z 变换
+//    - z_transform: 正向变换
+//    - inverse_z_transform: 逆向变换
+//
+// 具体实现在 transforms.cpp 中，本文件仅提供包装接口。
+// ============================================================================
+
 #include "symbolic_expression_internal.h"
 
 using namespace symbolic_expression_internal;

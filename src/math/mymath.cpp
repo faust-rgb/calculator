@@ -57,8 +57,49 @@ long double abs_long_double(long double x) {
     return x < 0.0L ? -x : x;
 }
 
+bool isnan(double x) {
+    return x != x;
+}
+
+bool isinf(double x) {
+    return !isnan(x) && (x > kDoubleMax || x < -kDoubleMax);
+}
+
 bool isfinite(double x) {
-    return x == x && x <= kDoubleMax && x >= -kDoubleMax;
+    return !isnan(x) && !isinf(x);
+}
+
+double trunc(double x) {
+    if (!isfinite(x)) {
+        return x;
+    }
+    if (abs(x) >= 9.22e18) {
+        return x;
+    }
+    return static_cast<double>(static_cast<long long>(x));
+}
+
+double floor(double x) {
+    if (!isfinite(x)) {
+        return x;
+    }
+    const double integer = trunc(x);
+    return (integer > x) ? integer - 1.0 : integer;
+}
+
+double ceil(double x) {
+    if (!isfinite(x)) {
+        return x;
+    }
+    const double integer = trunc(x);
+    return (integer < x) ? integer + 1.0 : integer;
+}
+
+double round(double x) {
+    if (!isfinite(x)) {
+        return x;
+    }
+    return x >= 0.0 ? floor(x + 0.5) : ceil(x - 0.5);
 }
 
 double clamp(double value, double low, double high) {
@@ -107,6 +148,11 @@ double remainder(double x, double y) {
 
 double infinity() {
     return kDoubleMax * kDoubleMax;
+}
+
+double quiet_nan() {
+    const volatile double zero = 0.0;
+    return zero / zero;
 }
 
 long long gcd(long long a, long long b) {
@@ -313,8 +359,20 @@ double ln(double x) {
     return 2.0 * sum + static_cast<double>(shifts);
 }
 
+double log(double x) {
+    return ln(x);
+}
+
+double log1p(double x) {
+    return ln(1.0 + x);
+}
+
 double log10(double x) {
     return ln(x) / ln(10.0);
+}
+
+double log2(double x) {
+    return ln(x) / ln(2.0);
 }
 
 double sinh(double x) {

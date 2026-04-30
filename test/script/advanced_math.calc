@@ -1,0 +1,48 @@
+# Advanced Math and Matrix Validation
+
+print("--- Multi-variable Calculus Tests ---")
+# Gradient of x^2 + y^2 + z^2
+print("gradient(x^2 + y^2 + z^2, x, y, z):")
+gradient(x^2 + y^2 + z^2, x, y, z)
+
+# Jacobian of [x*y; y*z; z*x]
+print("jacobian([x*y; y*z; z*x], x, y, z):")
+jacobian([x*y; y*z; z*x], x, y, z)
+
+# Hessian of x^2 * y
+print("hessian(x^2 * y, x, y):")
+hessian(x^2 * y, x, y)
+
+# Curl and Div
+print("div([x^2, y^2, z^2], x, y, z):")
+div([x^2, y^2, z^2], x, y, z)
+print("curl([y, -x, 0], x, y, z):")
+curl([y, -x, 0], x, y, z)
+
+print("--- 4x4 Matrix and Decompositions ---")
+M = [1, 2, 3, 4; 0, 1, 2, 3; 0, 0, 1, 2; 0, 0, 0, 1]
+print("M = ", M)
+print("det(M) = ", det(M + [0,0;0,0]))
+print("trace(M) = ", trace(M + [0,0;0,0]))
+print("M^-1 = ", inverse(M + [0,0;0,0]))
+
+# Large matrix multiplication
+A = [1, 1, 1, 1; 1, 2, 3, 4; 1, 4, 9, 16; 1, 8, 27, 64] # Vandermonde
+print("det(A) = ", det(A + [0,0;0,0]))
+
+print("--- Complex Matrix Tests ---")
+# Testing if complex numbers work inside matrices
+# Format from docs: complex(re, im) or 1+2i
+C1 = [1+1i, 2-2i; 3+3i, 4-4i]
+print("Complex Matrix C1: ", C1)
+print("transpose(C1): ", transpose(C1 + [0,0;0,0]))
+
+print("--- Plotting Test ---")
+# Testing if plot command works in script
+print("Plotting sin(x) from -pi to pi:")
+plot(sin(x), -pi, pi)
+
+print("--- Advanced Stats ---")
+data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+print("Skewness: ", skewness(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
+print("Kurtosis: ", kurtosis(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))

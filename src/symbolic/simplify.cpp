@@ -142,6 +142,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
         case NodeType::kVariable:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
             return expression;
         // ========================================================================
     // 函数节点简化
@@ -811,6 +812,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
         case NodeType::kVariable:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
         case NodeType::kNegate:
         case NodeType::kFunction:
             break;
@@ -884,6 +886,7 @@ SymbolicExpression expand_impl(const SymbolicExpression& expression) {
         case NodeType::kVariable:
         case NodeType::kPi:
         case NodeType::kE:
+        case NodeType::kInfinity:
             return expression;
         case NodeType::kFunction:
             return make_function(node->text, expand_impl(SymbolicExpression(node->left))).simplify();

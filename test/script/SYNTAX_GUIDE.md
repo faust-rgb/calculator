@@ -54,6 +54,27 @@ names, and active function names should not be reused as ordinary variables.
 When a variable must be read after a block, initialize it before the block and
 assign to it inside the block.
 
+### Keywords and Reserved Names
+
+Script keywords cannot be used as variable names:
+
+```
+def, fn, if, elif, else, while, for, in, return, break, continue, pass
+```
+
+Reserved function names cannot be used for user-defined functions. See
+`KEYWORDS_REFERENCE.md` for the complete list. Common examples include:
+
+```
+sin, cos, tan, exp, ln, sqrt, abs, det, trace, inv, transpose, diff, integral
+```
+
+Variable naming rules:
+
+- First character must be a letter or underscore
+- Subsequent characters can be letters, digits, or underscores
+- Cannot be a keyword or reserved function name
+
 ## Expressions
 
 Calculator expressions use the same operators and built-ins as the REPL.

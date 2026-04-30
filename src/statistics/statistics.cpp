@@ -1,196 +1,236 @@
+/**
+ * @file statistics.cpp
+ * @brief 统计运算库实现文件
+ *
+ * 本文件实现了常用统计计算函数，包括：
+ * - 描述性统计量（均值、中位数、众数、方差、标准差）
+ * - 分布特征量（偏度、峰度）
+ * - 分位数计算（百分位数、四分位数）
+ * - 相关性分析（协方差、相关系数）
+ * - 线性回归分析
+ */
+
 #include "statistics.h"
 #include "../math/mymath.h"
 #include <algorithm>
 #include <stdexcept>
-#include <cmath>
 #include <numeric>
 #include <map>
 
 namespace stats {
 
+/**
+ * @brief 计算平均值（算术平均）
+ */
 double mean(const std::vector<double>& data) {
     if (data.empty()) {
         throw std::runtime_error("mean expects at least one value");
     }
-    long double sum = 0.0L;
-    for (double v : data) {
-        sum += static_cast<long double>(v);
-    }
+    long double sum = std::accumulate(data.begin(), data.end(), 0.0L);
     return static_cast<double>(sum / static_cast<long double>(data.size()));
 }
 
+/**
+ * @brief 计算中位数
+ * 使用 std::nth_element 以 O(n) 时间复杂度获取中位数，避免全排序。
+ */
 double median(const std::vector<double>& data) {
     if (data.empty()) {
         throw std::runtime_error("median expects at least one value");
     }
-    std::vector<double> sorted = data;
-    std::sort(sorted.begin(), sorted.end());
-    size_t n = sorted.size();
+    size_t n = data.size();
+    std::vector<double> copy = data;
     if (n % 2 == 1) {
-        return sorted[n / 2];
+        std::nth_element(copy.begin(), copy.begin() + n / 2, copy.end());
+        return copy[n / 2];
+    } else {
+        std::nth_element(copy.begin(), copy.begin() + n / 2, copy.end());
+        double right = copy[n / 2];
+        std::nth_element(copy.begin(), copy.begin() + n / 2 - 1, copy.begin() + n / 2);
+        double left = copy[n / 2 - 1];
+        return (left + right) / 2.0;
     }
-    return (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0;
 }
 
+/**
+ * @brief 计算众数
+ */
 double mode(const std::vector<double>& data) {
     if (data.empty()) {
         throw std::runtime_error("mode expects at least one value");
     }
     std::vector<double> sorted = data;
     std::sort(sorted.begin(), sorted.end());
-    
+
     double best_value = sorted.front();
-    int best_count = 1;
+    int best_count = 0;
     double current_value = sorted.front();
-    int current_count = 1;
-    
-    for (size_t i = 1; i < sorted.size(); ++i) {
-        if (mymath::is_near_zero(sorted[i] - current_value, 1e-10)) {
+    int current_count = 0;
+
+    for (double val : sorted) {
+        if (mymath::is_near_zero(val - current_value, 1e-10)) {
             ++current_count;
         } else {
             if (current_count > best_count) {
                 best_count = current_count;
                 best_value = current_value;
             }
-            current_value = sorted[i];
+            current_value = val;
             current_count = 1;
         }
     }
-    if (current_count > best_count) {
-        best_value = current_value;
+    return (current_count > best_count) ? current_value : best_value;
+}
+
+/**
+ * @brief 内部辅助：单次遍历计算均值、方差、三阶矩和四阶矩
+ * 使用扩展的 Welford 算法。
+ */
+struct Moments {
+    long long n = 0;
+    long double mean = 0;
+    long double m2 = 0;
+    long double m3 = 0;
+    long double m4 = 0;
+
+    void add(double x_in) {
+        long double x = static_cast<long double>(x_in);
+        long long n1 = n;
+        n++;
+        long double delta = x - mean;
+        long double delta_n = delta / n;
+        long double delta_n2 = delta_n * delta_n;
+        long double term1 = delta * delta_n * n1;
+        mean += delta_n;
+        m4 += term1 * delta_n2 * (n * n - 3 * n + 3) + 6 * delta_n2 * m2 - 4 * delta_n * m3;
+        m3 += term1 * delta_n * (n - 2) - 3 * delta_n * m2;
+        m2 += term1;
     }
-    return best_value;
+};
+
+static Moments compute_moments(const std::vector<double>& data) {
+    Moments m;
+    for (double x : data) m.add(x);
+    return m;
 }
 
 double variance(const std::vector<double>& data) {
-    if (data.empty()) {
-        throw std::runtime_error("variance expects at least one value");
-    }
+    if (data.empty()) throw std::runtime_error("variance expects at least one value");
     if (data.size() == 1) return 0.0;
+    Moments m = compute_moments(data);
+    return static_cast<double>(m.m2 / m.n);
+}
 
-    long double mean_val = 0.0L;
-    long double m2 = 0.0L;
-    size_t count = 0;
-    for (double x : data) {
-        count++;
-        long double delta = static_cast<long double>(x) - mean_val;
-        mean_val += delta / static_cast<long double>(count);
-        long double delta2 = static_cast<long double>(x) - mean_val;
-        m2 += delta * delta2;
-    }
-    // 使用总体方差 (n)，与现有 var/std/cov 行为保持一致。
-    return static_cast<double>(m2 / static_cast<long double>(data.size()));
+double sample_variance(const std::vector<double>& data) {
+    if (data.size() < 2) throw std::runtime_error("sample_variance requires at least two values");
+    Moments m = compute_moments(data);
+    return static_cast<double>(m.m2 / (m.n - 1));
 }
 
 double stddev(const std::vector<double>& data) {
-    return std::sqrt(variance(data));
+    return mymath::sqrt(variance(data));
+}
+
+double sample_stddev(const std::vector<double>& data) {
+    return mymath::sqrt(sample_variance(data));
 }
 
 double skewness(const std::vector<double>& data) {
-    if (data.empty()) {
-        throw std::runtime_error("skewness expects at least one value");
-    }
-    long double mean_val = static_cast<long double>(mean(data));
-    long double second_moment = 0.0L;
-    long double third_moment = 0.0L;
-    for (double x : data) {
-        long double delta = static_cast<long double>(x) - mean_val;
-        long double delta2 = delta * delta;
-        second_moment += delta2;
-        third_moment += delta2 * delta;
-    }
-    second_moment /= static_cast<long double>(data.size());
-    if (second_moment < 1e-20) {
-        throw std::runtime_error("skewness is undefined for zero variance data");
-    }
-    third_moment /= static_cast<long double>(data.size());
-    return static_cast<double>(third_moment / std::pow(static_cast<double>(second_moment), 1.5));
+    if (data.size() < 2) throw std::runtime_error("skewness requires at least two values");
+    Moments m = compute_moments(data);
+    double var = static_cast<double>(m.m2 / m.n);
+    if (var < 1e-20) throw std::runtime_error("skewness undefined for zero variance");
+    return static_cast<double>(m.m3 / m.n) / mymath::pow(var, 1.5);
 }
 
 double kurtosis(const std::vector<double>& data) {
-    if (data.empty()) {
-        throw std::runtime_error("kurtosis expects at least one value");
-    }
-    long double mean_val = static_cast<long double>(mean(data));
-    long double second_moment = 0.0L;
-    long double fourth_moment = 0.0L;
-    for (double x : data) {
-        long double delta = static_cast<long double>(x) - mean_val;
-        long double delta2 = delta * delta;
-        second_moment += delta2;
-        fourth_moment += delta2 * delta2;
-    }
-    second_moment /= static_cast<long double>(data.size());
-    if (second_moment < 1e-20) {
-        throw std::runtime_error("kurtosis is undefined for zero variance data");
-    }
-    fourth_moment /= static_cast<long double>(data.size());
-    return static_cast<double>(fourth_moment / (second_moment * second_moment) - 3.0L);
+    if (data.size() < 2) throw std::runtime_error("kurtosis requires at least two values");
+    Moments m = compute_moments(data);
+    double var = static_cast<double>(m.m2 / m.n);
+    if (var < 1e-20) throw std::runtime_error("kurtosis undefined for zero variance");
+    return static_cast<double>((m.m4 / m.n) / (var * var) - 3.0);
 }
 
 double percentile(const std::vector<double>& data, double p) {
-    if (data.empty()) {
-        throw std::runtime_error("percentile expects at least one value");
-    }
-    if (p < 0.0 || p > 100.0) {
-        throw std::runtime_error("percentile p must be in [0, 100]");
-    }
-    std::vector<double> sorted = data;
-    std::sort(sorted.begin(), sorted.end());
-    if (sorted.size() == 1) return sorted[0];
+    if (data.empty()) throw std::runtime_error("percentile expects at least one value");
+    if (p < 0.0 || p > 100.0) throw std::runtime_error("percentile p must be in [0, 100]");
+    if (data.size() == 1) return data[0];
 
-    double position = p * static_cast<double>(sorted.size() - 1) / 100.0;
-    size_t lower = static_cast<size_t>(std::floor(position));
-    size_t upper = static_cast<size_t>(std::ceil(position));
-    if (lower == upper) return sorted[lower];
+    std::vector<double> copy = data;
+    double pos = p * (copy.size() - 1) / 100.0;
+    size_t i = static_cast<size_t>(pos);
+    double fraction = pos - i;
+
+    if (fraction < 1e-12) {
+        std::nth_element(copy.begin(), copy.begin() + i, copy.end());
+        return copy[i];
+    }
     
-    double fraction = position - static_cast<double>(lower);
-    return sorted[lower] + (sorted[upper] - sorted[lower]) * fraction;
+    std::nth_element(copy.begin(), copy.begin() + i, copy.end());
+    double v0 = copy[i];
+    std::nth_element(copy.begin() + i + 1, copy.begin() + i + 1, copy.end());
+    double v1 = copy[i + 1];
+    return v0 + fraction * (v1 - v0);
 }
 
 double quartile(const std::vector<double>& data, int q) {
-    if (q < 0 || q > 4) {
-        throw std::runtime_error("quartile q must be between 0 and 4");
-    }
+    if (q < 0 || q > 4) throw std::runtime_error("quartile q must be between 0 and 4");
     return percentile(data, q * 25.0);
 }
 
 double covariance(const std::vector<double>& x, const std::vector<double>& y) {
     if (x.size() != y.size() || x.empty()) {
-        throw std::runtime_error("covariance requires two non-empty vectors of the same length");
+        throw std::runtime_error("covariance requires two non-empty vectors of same length");
     }
-    long double mean_x = static_cast<long double>(mean(x));
-    long double mean_y = static_cast<long double>(mean(y));
-    long double cov = 0.0L;
+    // 单次遍历计算协方差
+    long double mean_x = 0, mean_y = 0, C = 0;
     for (size_t i = 0; i < x.size(); ++i) {
-        cov += (static_cast<long double>(x[i]) - mean_x) * (static_cast<long double>(y[i]) - mean_y);
+        size_t n = i + 1;
+        long double dx = x[i] - mean_x;
+        mean_x += dx / n;
+        mean_y += (y[i] - mean_y) / n;
+        C += dx * (y[i] - mean_y);
     }
-    return static_cast<double>(cov / static_cast<long double>(x.size()));
+    return static_cast<double>(C / x.size());
 }
 
 double correlation(const std::vector<double>& x, const std::vector<double>& y) {
-    double cov = covariance(x, y);
-    double std_x = stddev(x);
-    double std_y = stddev(y);
-    if (std_x < 1e-20 || std_y < 1e-20) {
-        throw std::runtime_error("correlation requires non-constant vectors");
+    if (x.size() != y.size() || x.empty()) {
+        throw std::runtime_error("correlation requires two non-empty vectors of same length");
     }
-    return cov / (std_x * std_y);
+    // 单次遍历计算均值、方差和协方差
+    long double mx = 0, my = 0, vx = 0, vy = 0, cxy = 0;
+    for (size_t i = 0; i < x.size(); ++i) {
+        size_t n = i + 1;
+        long double dx = x[i] - mx;
+        mx += dx / n;
+        vx += dx * (x[i] - mx);
+        long double dy = y[i] - my;
+        my += dy / n;
+        vy += dy * (y[i] - my);
+        cxy += dx * (y[i] - my);
+    }
+    if (vx < 1e-20 || vy < 1e-20) throw std::runtime_error("correlation undefined for constant vectors");
+    return static_cast<double>(cxy / mymath::sqrt(vx * vy));
 }
 
 std::vector<double> linear_regression(const std::vector<double>& x, const std::vector<double>& y) {
     if (x.size() != y.size() || x.empty()) {
-        throw std::runtime_error("linear_regression requires two non-empty vectors of the same length");
+        throw std::runtime_error("linear_regression requires two non-empty vectors of same length");
     }
-    double mean_x = mean(x);
-    double mean_y = mean(y);
-    double cov = covariance(x, y);
-    double var_x = variance(x);
-    if (var_x < 1e-20) {
-        throw std::runtime_error("linear_regression requires x values with non-zero variance");
+    long double mx = 0, my = 0, vx = 0, cxy = 0;
+    for (size_t i = 0; i < x.size(); ++i) {
+        size_t n = i + 1;
+        long double dx = x[i] - mx;
+        mx += dx / n;
+        vx += dx * (x[i] - mx);
+        long double dy = y[i] - my;
+        my += dy / n;
+        cxy += dx * (y[i] - my);
     }
-    double slope = cov / var_x;
-    double intercept = mean_y - slope * mean_x;
+    if (vx < 1e-20) throw std::runtime_error("linear_regression requires non-constant x");
+    double slope = static_cast<double>(cxy / vx);
+    double intercept = static_cast<double>(my - slope * mx);
     return {intercept, slope};
 }
 

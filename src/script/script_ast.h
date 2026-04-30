@@ -1,6 +1,8 @@
 #ifndef SCRIPT_AST_H
 #define SCRIPT_AST_H
 
+#include "expression_compiler.h"
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -63,6 +65,7 @@ struct SimpleStatement : Statement {
     SimpleStatement() : Statement(Kind::kSimple) {}
 
     std::string text;  ///< 语句文本（表达式字符串）
+    mutable std::shared_ptr<ExpressionCache> cache; ///< 预编译缓存
 };
 
 /**
@@ -73,6 +76,7 @@ struct IfStatement : Statement {
     IfStatement() : Statement(Kind::kIf) {}
 
     std::string condition;    ///< 条件表达式
+    mutable std::shared_ptr<ExpressionCache> cache; ///< 预编译缓存
     StatementPtr then_branch; ///< then 分支
     StatementPtr else_branch; ///< else 分支（可选）
 };
@@ -85,6 +89,7 @@ struct WhileStatement : Statement {
     WhileStatement() : Statement(Kind::kWhile) {}
 
     std::string condition;  ///< 循环条件
+    mutable std::shared_ptr<ExpressionCache> cache; ///< 预编译缓存
     StatementPtr body;      ///< 循环体
 };
 
@@ -98,6 +103,9 @@ struct ForStatement : Statement {
     std::string initializer;  ///< 初始化表达式
     std::string condition;    ///< 循环条件
     std::string step;         ///< 步进表达式
+    mutable std::shared_ptr<ExpressionCache> init_cache; ///< 初始化表达式缓存
+    mutable std::shared_ptr<ExpressionCache> cond_cache; ///< 条件表达式缓存
+    mutable std::shared_ptr<ExpressionCache> step_cache; ///< 步进表达式缓存
     StatementPtr body;        ///< 循环体
 };
 
@@ -122,6 +130,7 @@ struct ReturnStatement : Statement {
 
     bool has_expression = false;  ///< 是否有返回值
     std::string expression;       ///< 返回表达式（可选）
+    mutable std::shared_ptr<ExpressionCache> cache; ///< 预编译缓存
 };
 
 /**
