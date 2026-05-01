@@ -96,6 +96,7 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 		$(SRC_DIR)/dsp/dsp_module.cpp \
 	$(SRC_DIR)/dsp/calculator_signal_commands.cpp \
 	$(SRC_DIR)/plot/plot_renderer.cpp \
+	$(SRC_DIR)/plot/plot_module.cpp \
 	$(SRC_DIR)/plot/calculator_plot.cpp \
 	$(SRC_DIR)/plot/plot_styles.cpp \
 	$(SRC_DIR)/plot/svg_renderer.cpp

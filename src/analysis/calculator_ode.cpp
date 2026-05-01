@@ -560,9 +560,6 @@ std::string matrix_literal_expression(const matrix::Matrix& value) {
     return out.str();
 }
 
-bool ODEModule::can_handle(const std::string& command) const {
-    return is_ode_command(command);
-}
 
 std::string ODEModule::execute_args(const std::string& command,
                                    const std::vector<std::string>& args,
@@ -590,7 +587,7 @@ std::string ODEModule::execute_args(const std::string& command,
 }
 
 std::vector<std::string> ODEModule::get_commands() const {
-    return {"ode", "ode_table", "ode_system", "ode_system_table"};
+    return {"ode", "ode_table", "ode_system", "ode_system_table", "ode_solve"};
 }
 
 std::string ODEModule::get_help_snippet(const std::string& topic) const {

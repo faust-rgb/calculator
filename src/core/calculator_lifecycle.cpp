@@ -49,11 +49,14 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
     }
 
     // 收集元数据
-    auto cmds = module->get_commands();
-    impl_->module_commands.insert(impl_->module_commands.end(), cmds.begin(), cmds.end());
-    for (const auto& cmd : cmds) {
-        impl_->command_to_module[cmd] = module;
-        impl_->command_to_module[":" + cmd] = module;
+    auto specs = module->get_command_specs();
+    for (const auto& spec : specs) {
+        if (impl_->command_to_module.find(spec.key) != impl_->command_to_module.end()) {
+            throw std::runtime_error("duplicate command registration: " +
+                                     command_key_display(spec.key));
+        }
+        impl_->module_commands.push_back(command_key_display(spec.key));
+        impl_->command_to_module[spec.key] = {module, spec.dispatch_name};
     }
     auto funcs = module->get_functions();
     impl_->module_functions.insert(impl_->module_functions.end(), funcs.begin(), funcs.end());
@@ -73,6 +76,22 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
 }
 
 Calculator::~Calculator() = default;
+
+bool is_reserved_user_function_name(const Calculator::Impl* impl, std::string_view name) {
+    if (is_reserved_function_name(name)) {
+        return true;
+    }
+    if (impl == nullptr) {
+        return false;
+    }
+    const std::string name_text(name);
+    if (impl->command_to_module.find(call_command_key(name)) != impl->command_to_module.end()) {
+        return true;
+    }
+    return impl->scalar_functions.find(name_text) != impl->scalar_functions.end() ||
+           impl->matrix_functions.find(name_text) != impl->matrix_functions.end() ||
+           impl->value_functions.find(name_text) != impl->value_functions.end();
+}
 
 std::string Calculator::clear_variable(const std::string& name) {
     const auto it = impl_->variables.find(name);

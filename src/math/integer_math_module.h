@@ -15,7 +15,6 @@ public:
         return {"factor", "bin", "oct", "hex", "base"};
     }
 
-    bool can_handle(const std::string& command) const override;
 
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,

@@ -64,8 +64,9 @@ struct Token {
  */
 class ScriptLexer : public BaseParser {
 public:
-    explicit ScriptLexer(std::string source)
-        : BaseParser(std::move(source)), current_line_{1}, indent_stack_{0} {}
+    ScriptLexer(std::string_view source)
+        : BaseParser(source), current_line_{1}, indent_stack_{0} {}
+
 
     std::vector<Token> tokenize() {
         std::vector<Token> tokens;
@@ -103,7 +104,7 @@ public:
             }
 
             if (peek_is_identifier_start()) {
-                const std::string id = parse_identifier();
+                const std::string id = std::string(parse_identifier());
                 if (is_keyword(id)) {
                     tokens.push_back({Token::Kind::kKeyword, id, current_line_});
                 } else {
@@ -169,7 +170,7 @@ private:
             } else if (ch == '\\') {
                 escaping = true;
             } else if (ch == '"') {
-                return {Token::Kind::kString, source_.substr(start, pos_ - start), start_line};
+                return {Token::Kind::kString, std::string(source_.substr(start, pos_ - start)), start_line};
             }
         }
         throw std::runtime_error("Line " + std::to_string(start_line) + ": Unterminated string literal");
@@ -201,7 +202,7 @@ private:
                 ++pos_;
             }
         }
-        return {Token::Kind::kNumber, source_.substr(start, pos_ - start), start_line};
+        return {Token::Kind::kNumber, std::string(source_.substr(start, pos_ - start)), start_line};
     }
 
     void handle_indentation(std::vector<Token>& tokens) {

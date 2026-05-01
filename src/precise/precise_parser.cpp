@@ -134,9 +134,9 @@ PreciseDecimal cos_precise_decimal_taylor(const PreciseDecimal& x, int terms = 3
 
 class PreciseDecimalParserImpl : public BaseParser {
 public:
-    PreciseDecimalParserImpl(std::string source,
+    PreciseDecimalParserImpl(std::string_view source,
                              const std::map<std::string, StoredValue>* variables)
-        : BaseParser(std::move(source)),
+        : BaseParser(source),
           variables_(variables) {}
 
     PreciseDecimal parse() {
@@ -257,7 +257,7 @@ private:
         }
 
         if (peek_is_alpha()) {
-            const std::string name = parse_identifier();
+            const std::string name = std::string(parse_identifier());
             skip_spaces();
             if (peek() == '(') {
                 expect('(');
@@ -373,7 +373,7 @@ private:
                     ++pos_;
                 }
                 const long long integer_value = parse_prefixed_integer_token(
-                    source_.substr(start, pos_ - start));
+                    std::string(source_.substr(start, pos_ - start)));
                 return PreciseDecimal::from_integer_string(
                     std::to_string(integer_value < 0 ? -integer_value : integer_value),
                     integer_value < 0);
@@ -416,7 +416,7 @@ private:
             throw SyntaxError("expected number");
         }
 
-        return PreciseDecimal::from_decimal_literal(source_.substr(start, pos_ - start));
+        return PreciseDecimal::from_decimal_literal(std::string(source_.substr(start, pos_ - start)));
     }
 
     PreciseDecimal lookup_variable(const std::string& name) const {

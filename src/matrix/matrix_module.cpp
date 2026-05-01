@@ -118,16 +118,11 @@ std::vector<std::string> MatrixModule::get_commands() const {
     return {"eig", "svd", "lu_p"};
 }
 
-bool MatrixModule::can_handle(const std::string& command) const {
-    return command == "eig" || command == "svd" || command == "lu_p";
-}
 
 std::string MatrixModule::execute_args(const std::string& command,
                                        const std::vector<std::string>& args,
                                        const CoreServices& services) {
-    if (!can_handle(command)) {
-        throw std::runtime_error("MatrixModule cannot handle command: " + command);
-    }
+    // 命令已由路由层验证，无需再检查
 
     if (args.size() != 1) {
         throw std::runtime_error(command + " expects exactly one matrix argument");

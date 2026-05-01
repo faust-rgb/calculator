@@ -36,6 +36,7 @@
 #include "statistics/probability.h"
 
 #include "calculator_exceptions.h"
+#include "command_types.h"
 #include "utils.h"
 
 // ============================================================================
@@ -72,6 +73,11 @@ constexpr int kMaxDisplayPrecision = 17;
 
 class CalculatorModule;
 
+struct CommandBinding {
+    std::shared_ptr<CalculatorModule> module;
+    std::string dispatch_name;
+};
+
 // ============================================================================
 // Calculator 实现类
 // ============================================================================
@@ -102,7 +108,7 @@ struct Calculator::Impl {
     std::vector<std::string> module_commands;
     std::vector<std::string> module_functions;
     std::map<std::string, std::vector<std::shared_ptr<CalculatorModule>>> help_topic_to_modules;
-    std::map<std::string, std::shared_ptr<CalculatorModule>> command_to_module;
+    std::map<CommandKey, CommandBinding> command_to_module;
 
     bool symbolic_constants_mode = false;  ///< 符号常量模式（pi, e 保留符号形式）
     bool hex_prefix_mode = false;          ///< 十六进制输出前缀
@@ -156,23 +162,27 @@ PreciseDecimal pow_precise_decimal(const PreciseDecimal& base, long long exponen
 int compare_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs);
 
 // 字符串处理
-bool is_valid_variable_name(const std::string& name);  ///< 检查变量名合法性
-bool is_identifier_text(const std::string& text);      ///< 检查是否为标识符
-bool is_string_literal(const std::string& text);       ///< 检查是否为字符串字面量
-std::string parse_string_literal_value(const std::string& text); ///< 解析字符串字面量
+bool is_valid_variable_name(std::string_view name);  ///< 检查变量名合法性
+bool is_identifier_text(std::string_view text);      ///< 检查是否为标识符
+bool is_string_literal(std::string_view text);       ///< 检查是否为字符串字面量
+std::string parse_string_literal_value(std::string_view text); ///< 解析字符串字面量
+bool is_reserved_user_function_name(const Calculator::Impl* impl, std::string_view name);
+
+#include <string_view>
 
 // 状态持久化
 std::string encode_state_field(const std::string& text); ///< 编码状态字段
 std::string decode_state_field(const std::string& text); ///< 解码状态字段
 
 // 表达式分割
-bool split_assignment(const std::string& expression, std::string* lhs, std::string* rhs);
-bool split_named_call(const std::string& expression, const std::string& name, std::string* inside);
-bool split_named_call_with_arguments(const std::string& expression, const std::string& name, std::vector<std::string>* arguments);
-std::vector<std::string> split_top_level_arguments(const std::string& text);
+bool split_assignment(std::string_view expression, std::string_view* lhs, std::string_view* rhs);
+bool split_named_call(std::string_view expression, std::string_view name, std::string_view* inside);
+bool split_named_call(std::string_view expression, std::string_view name, std::string* inside);
+bool split_named_call_with_arguments(std::string_view expression, std::string_view name, std::vector<std::string_view>* arguments);
+std::vector<std::string_view> split_top_level_arguments_view(std::string_view text);
 
 // 函数展开
-std::string expand_inline_function_commands(Calculator* calculator, const std::string& expression);
+std::string expand_inline_function_commands(Calculator* calculator, std::string_view expression);
 
 // 精确小数处理（实现在 precise/precise_decimal.cpp 和 precise/precise_parser.cpp）
 // stored_value_precise_decimal_text 和 parse_precise_decimal_expression

@@ -25,6 +25,7 @@
 
 // 信号处理
 #include "dsp/dsp_module.h"
+#include "plot/plot_module.h"
 
 void register_standard_modules(Calculator* calculator) {
     // 注册基础数学模块
@@ -36,6 +37,7 @@ void register_standard_modules(Calculator* calculator) {
     // 注册矩阵与 DSP 模块
     calculator->register_module(std::make_shared<MatrixModule>());
     calculator->register_module(std::make_shared<DspModule>());
+    calculator->register_module(std::make_shared<PlotModule>());
 
     // 注册核心功能模块
     calculator->register_module(std::make_shared<SystemModule>());

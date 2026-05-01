@@ -7,16 +7,11 @@ std::vector<std::string> DspModule::get_commands() const {
     return {"residue"};
 }
 
-bool DspModule::can_handle(const std::string& command) const {
-    return command == "residue";
-}
 
 std::string DspModule::execute_args(const std::string& command,
                                     const std::vector<std::string>& args,
                                     const CoreServices& services) {
-    if (!can_handle(command)) {
-        throw std::runtime_error("DspModule cannot handle command: " + command);
-    }
+    // 命令已由路由层验证，无需再检查
 
     // 将参数列表转换回 inside 字符串格式
     std::string inside;

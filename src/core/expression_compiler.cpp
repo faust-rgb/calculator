@@ -18,8 +18,8 @@ namespace {
  */
 class ExpressionLexer : public BaseParser {
 public:
-    explicit ExpressionLexer(std::string source)
-        : BaseParser(std::move(source)) {}
+    explicit ExpressionLexer(std::string_view source)
+        : BaseParser(source) {}
 
     bool tokenize(std::vector<ExpressionToken>* tokens) {
         tokens->clear();
@@ -47,7 +47,7 @@ public:
 
             // 标识符
             if (std::isalpha(static_cast<unsigned char>(ch)) || ch == '_') {
-                tokens->push_back({ExpressionTokenKind::kIdentifier, parse_identifier(), 0.0, pos});
+                tokens->push_back({ExpressionTokenKind::kIdentifier, std::string(parse_identifier()), 0.0, pos});
                 continue;
             }
 
@@ -79,7 +79,7 @@ private:
             } else if (ch == '\\') {
                 escaping = true;
             } else if (ch == '"') {
-                std::string text = source_.substr(start, pos_ - start);
+                std::string text = std::string(source_.substr(start, pos_ - start));
                 tokens->push_back({ExpressionTokenKind::kString, text, 0.0, start});
                 return true;
             }
@@ -134,7 +134,7 @@ private:
             }
         }
 
-        std::string text = source_.substr(start, pos_ - start);
+        std::string text = std::string(source_.substr(start, pos_ - start));
         double value = 0.0;
 
         // 解析数值
@@ -459,115 +459,4 @@ ExpressionHint analyze_expression_hint(const std::string& expression) {
     }
 
     return ExpressionHint::kUnknown;
-}
-
-bool tokenize_expression(const std::string& expression,
-                         std::vector<ExpressionToken>* tokens) {
-    ExpressionLexer lexer(expression);
-    return lexer.tokenize(tokens);
-}
-
-// ============================================================================
-// 快速路径检测
-// ============================================================================
-
-QuickPathResult detect_quick_path(const std::string& expression) {
-    QuickPathResult result;
-    const std::string trimmed = trim_copy(expression);
-
-    if (trimmed.empty()) {
-        return result;
-    }
-
-    // 字符串字面量
-    if (trimmed.size() >= 2 && trimmed.front() == '"' && trimmed.back() == '"') {
-        bool valid = true;
-        bool escaping = false;
-        for (std::size_t i = 1; i < trimmed.size() - 1; ++i) {
-            if (escaping) {
-                escaping = false;
-            } else if (trimmed[i] == '\\') {
-                escaping = true;
-            } else if (trimmed[i] == '"') {
-                valid = false;
-                break;
-            }
-        }
-        if (valid) {
-            result.type = QuickPathResult::Type::kStringLiteral;
-            result.value = trimmed;
-            return result;
-        }
-    }
-
-    // 单个标识符
-    if (is_identifier_text(trimmed)) {
-        result.type = QuickPathResult::Type::kIdentifier;
-        result.value = trimmed;
-        return result;
-    }
-
-    // 纯数字
-    try {
-        std::size_t pos = 0;
-        double num = std::stod(trimmed, &pos);
-        if (pos == trimmed.size()) {
-            result.type = QuickPathResult::Type::kNumber;
-            result.number = num;
-            return result;
-        }
-    } catch (...) {
-    }
-
-    // rat 调用
-    std::vector<std::string> rat_args;
-    if (split_named_call_with_arguments(trimmed, "rat", &rat_args)) {
-        result.type = QuickPathResult::Type::kRatCall;
-        result.value = trimmed;
-        return result;
-    }
-
-    return result;
-}
-
-// ============================================================================
-// CompiledExpression 实现
-// ============================================================================
-
-bool CompiledExpression::compile(const std::string& expression) {
-    source_ = expression;
-    expanded_ = expression;
-
-    // 词法分析
-    if (!tokenize()) {
-        return false;
-    }
-
-    // 特征分析
-    analyze_features();
-
-    // 生成字节码（可选，用于高性能场景）
-    // 目前先不生成完整字节码，只做词法分析和类型推断
-    // generate_code();
-
-    valid_ = true;
-    compiled_ = false; // 标记为未完全编译
-    return true;
-}
-
-bool CompiledExpression::tokenize() {
-    ExpressionLexer lexer(source_);
-    return lexer.tokenize(&tokens_);
-}
-
-void CompiledExpression::analyze_features() {
-    features_ = analyze_expression_features(source_);
-    hint_ = analyze_expression_hint(source_);
-}
-
-bool CompiledExpression::generate_code() {
-    // TODO: 实现完整的字节码生成
-    // 这需要将 Token 序列转换为逆波兰表示或三地址码
-    compiled_ = true;
-    return true;
 }

@@ -45,27 +45,11 @@ public:
 };
 
 /**
- * @brief 文件 IO 错误
- */
-class IOError : public CalculatorError {
-public:
-    explicit IOError(const std::string& message) : CalculatorError("I/O error: " + message) {}
-};
-
-/**
  * @brief 命令参数错误
  */
 class ArgumentError : public CalculatorError {
 public:
     explicit ArgumentError(const std::string& message) : CalculatorError("Argument error: " + message) {}
-};
-
-/**
- * @brief 收敛失败错误
- */
-class ConvergenceError : public CalculatorError {
-public:
-    explicit ConvergenceError(const std::string& message) : CalculatorError("Convergence error: " + message) {}
 };
 
 /**

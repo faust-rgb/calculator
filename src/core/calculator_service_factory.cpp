@@ -6,6 +6,7 @@
 #include "symbolic/calculator_symbolic_commands.h"
 #include "symbolic/symbolic_expression.h"
 #include "analysis/function_analysis.h"
+#include "plot/calculator_plot.h"
 #include "utils.h"
 #include <sstream>
 
@@ -209,6 +210,20 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
         const StoredValue value = evaluate_expression_value(calculator, impl, arg, false);
         if (!value.is_matrix) throw std::runtime_error(c + " expects a matrix or vector argument");
         return value.matrix;
+    };
+    s.render_plot = [calculator, impl](const std::vector<std::string>& args, bool gnuplot) {
+        plot::PlotContext ctx;
+        ctx.variables = visible_variables(impl);
+        ctx.functions = &impl->functions;
+        ctx.scalar_functions = &impl->scalar_functions;
+        ctx.has_script_function = [impl](const std::string& name) {
+            return has_visible_script_function(impl, name);
+        };
+        ctx.invoke_script_function = [calculator, impl](const std::string& name, const std::vector<double>& call_args) {
+            return invoke_script_function_decimal(calculator, impl, name, call_args);
+        };
+        return gnuplot ? plot::handle_gnuplot_command(ctx, args)
+                       : plot::handle_plot_command(ctx, args);
     };
     s.is_integer_double = [](double x, double eps) { return is_integer_double(x, eps); };
     s.round_to_long_long = [](double x) { return round_to_long_long(x); };

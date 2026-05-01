@@ -1556,9 +1556,6 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
     return false;
 }
 
-bool SymbolicModule::can_handle(const std::string& command) const {
-    return is_symbolic_command(command);
-}
 
 std::string SymbolicModule::execute_args(const std::string& command,
                                         const std::vector<std::string>& args,

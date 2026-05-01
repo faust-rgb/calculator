@@ -2,6 +2,7 @@
 #define CALCULATOR_BASE_PARSER_H
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include <cctype>
 #include <stdexcept>
@@ -17,16 +18,21 @@
  */
 class BaseParser {
 protected:
-    std::string source_;
+    std::string_view source_;
     std::size_t pos_ = 0;
     bool skip_comments_ = false;  ///< 是否跳过注释
 
-    explicit BaseParser(std::string source, bool skip_comments = false)
-        : source_(std::move(source)), skip_comments_(skip_comments) {}
+    explicit BaseParser(std::string_view source, bool skip_comments = false)
+        : source_(source), skip_comments_(skip_comments) {}
+
+    /// 判断字符是否为空白（内联比较，避免 std::isspace 的 locale 开销）
+    static constexpr bool is_space_char(char ch) {
+        return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
+    }
 
     /// 跳过空白字符
     void skip_spaces() {
-        while (pos_ < source_.size() && std::isspace(static_cast<unsigned char>(source_[pos_]))) {
+        while (pos_ < source_.size() && is_space_char(source_[pos_])) {
             ++pos_;
         }
     }
@@ -34,7 +40,7 @@ protected:
     /// 跳过空白和注释（用于脚本解析）
     void skip_ignorable() {
         while (pos_ < source_.size()) {
-            if (std::isspace(static_cast<unsigned char>(source_[pos_]))) {
+            if (is_space_char(source_[pos_])) {
                 ++pos_;
                 continue;
             }
@@ -118,7 +124,7 @@ protected:
     }
 
     /// 解析标识符（字母或下划线开头，后跟字母、数字或下划线）
-    std::string parse_identifier() {
+    std::string_view parse_identifier() {
         std::size_t start = pos_;
         while (!is_at_end() && (std::isalnum(static_cast<unsigned char>(source_[pos_])) ||
                                 source_[pos_] == '_' || source_[pos_] == '\'')) {

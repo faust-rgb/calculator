@@ -381,13 +381,13 @@ public:
      */
     using MatrixFunction = std::function<Matrix(const std::vector<Matrix>&)>;
 
-    MatrixExpressionParser(std::string source,
+    MatrixExpressionParser(std::string_view source,
                            const ScalarEvaluator* scalar_evaluator,
                            const MatrixLookup* matrix_lookup,
                            const ComplexLookup* complex_lookup,
                            const std::map<std::string, MatrixFunction>* matrix_functions = nullptr,
                            const std::map<std::string, ValueFunction>* value_functions = nullptr)
-        : BaseParser(std::move(source)),
+        : BaseParser(source),
           scalar_evaluator_(scalar_evaluator),
           matrix_lookup_(matrix_lookup),
           complex_lookup_(complex_lookup),
@@ -405,7 +405,7 @@ public:
         Value value = parse_comparison();
         skip_spaces();
         if (!is_at_end()) {
-            throw std::runtime_error("unexpected token near: " + source_.substr(pos_, 1));
+            throw std::runtime_error("unexpected token near: " + std::string(source_.substr(pos_, 1)));
         }
         return value;
     }
@@ -554,7 +554,7 @@ private:
 
         if (peek_is_identifier_start()) {
             const std::size_t start = pos_;
-            const std::string name = parse_identifier();
+            const std::string name(parse_identifier());
             skip_spaces();
 
             if (peek('(')) {
@@ -645,7 +645,7 @@ private:
                 ++pos_;
             }
 
-            rows.back().back() += source_.substr(token_start, pos_ - token_start);
+            rows.back().back() += std::string(source_.substr(token_start, pos_ - token_start));
         }
 
         if (!saw_separator && rows.size() == 1 && rows[0].size() == 1 &&
@@ -1733,7 +1733,7 @@ private:
                 ++pos_;
             }
 
-            arguments.push_back(trim_copy(source_.substr(start, pos_ - start)));
+            arguments.push_back(trim_copy(std::string(source_.substr(start, pos_ - start))));
             skip_spaces();
             if (!match(',')) {
                 break;
@@ -1835,7 +1835,7 @@ private:
             ++pos_;
         }
 
-        return (*scalar_evaluator_)(source_.substr(start, pos_ - start));
+        return (*scalar_evaluator_)(std::string(source_.substr(start, pos_ - start)));
     }
 
     /**
@@ -1856,7 +1856,7 @@ private:
                        std::isalnum(static_cast<unsigned char>(source_[pos_]))) {
                     ++pos_;
                 }
-                return (*scalar_evaluator_)(source_.substr(start, pos_ - start));
+                return (*scalar_evaluator_)(std::string(source_.substr(start, pos_ - start)));
             }
         }
 
@@ -1879,7 +1879,7 @@ private:
             throw std::runtime_error("expected number");
         }
 
-        return (*scalar_evaluator_)(source_.substr(start, pos_ - start));
+        return (*scalar_evaluator_)(std::string(source_.substr(start, pos_ - start)));
     }
 
     /**

@@ -365,9 +365,6 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
     return false;
 }
 
-bool RootfindingModule::can_handle(const std::string& command) const {
-    return is_rootfinding_command(command);
-}
 
 std::string RootfindingModule::execute_args(const std::string& command,
                                            const std::vector<std::string>& args,

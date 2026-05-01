@@ -10,10 +10,6 @@ class StatisticsModule : public CalculatorModule {
 public:
     std::string name() const override { return "Statistics"; }
 
-    bool can_handle(const std::string& command) const override {
-        return command == "stat_summary" || command == "describe";
-    }
-
     std::string execute(const std::string& command, 
                        const std::string& inside, 
                        const CoreServices& svc) override {

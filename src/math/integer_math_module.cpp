@@ -24,10 +24,6 @@ long long require_integer(double x, const std::string& name, const std::string& 
 
 } // namespace
 
-bool IntegerMathModule::can_handle(const std::string& command) const {
-    static const std::set<std::string> cmds = {"factor", "bin", "oct", "hex", "base"};
-    return cmds.count(command) > 0;
-}
 
 std::string IntegerMathModule::execute_args(const std::string& command,
                                           const std::vector<std::string>& args,

@@ -5,40 +5,64 @@
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
-#include <set>
+#include <unordered_set>
 #include <sstream>
+
+namespace {
+/// 判断字符是否为空白（内联比较，避免 std::isspace 的 locale 开销）
+constexpr bool is_space_char(char ch) {
+    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
+}
+
+/// 判断字符是否为 ASCII 字母（内联比较）
+constexpr bool is_ascii_alpha(char ch) {
+    return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+}
+
+/// 判断字符是否为 ASCII 数字（内联比较）
+constexpr bool is_ascii_digit(char ch) {
+    return ch >= '0' && ch <= '9';
+}
+
+/// 判断字符是否为 ASCII 字母或数字
+constexpr bool is_ascii_alnum(char ch) {
+    return is_ascii_alpha(ch) || is_ascii_digit(ch);
+}
+} // namespace
 
 namespace utils {
 
-std::string trim_copy(const std::string& text) {
+std::string_view trim_view(std::string_view text) {
     std::size_t start = 0;
-    while (start < text.size() &&
-           std::isspace(static_cast<unsigned char>(text[start]))) {
+    while (start < text.size() && is_space_char(text[start])) {
         ++start;
     }
 
     std::size_t end = text.size();
-    while (end > start &&
-           std::isspace(static_cast<unsigned char>(text[end - 1]))) {
+    while (end > start && is_space_char(text[end - 1])) {
         --end;
     }
 
     return text.substr(start, end - start);
 }
 
-bool is_valid_identifier(const std::string& name) {
+bool is_valid_identifier(std::string_view name) {
     if (name.empty()) return false;
-    if (!std::isalpha(static_cast<unsigned char>(name[0])) && name[0] != '_') {
+    if (!is_ascii_alpha(name[0]) && name[0] != '_') {
         return false;
     }
 
     for (char ch : name) {
-        if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_') {
+        if (!is_ascii_alnum(ch) && ch != '_' && ch != '\'') {
             return false;
         }
     }
 
     return true;
+}
+
+std::string trim_copy(std::string_view text) {
+    return std::string(trim_view(text));
 }
 
 } // namespace utils
@@ -47,8 +71,12 @@ bool is_valid_identifier(const std::string& name) {
 // 全局命名空间函数定义
 // ============================================================================
 
-std::string trim_copy(const std::string& text) {
-    return utils::trim_copy(text);
+std::string_view trim_view(std::string_view text) {
+    return utils::trim_view(text);
+}
+
+std::string trim_copy(std::string_view text) {
+    return std::string(utils::trim_view(text));
 }
 
 double normalize_display_decimal(double value) {
@@ -115,51 +143,6 @@ namespace {
 int& mutable_process_display_precision() {
     static int precision = kDefaultDisplayPrecision;
     return precision;
-}
-
-bool split_on_top_level_equals(const std::string& expression,
-                               std::string* lhs,
-                               std::string* rhs) {
-    int paren_depth = 0;
-    int bracket_depth = 0;
-    bool in_string = false;
-    bool escaping = false;
-
-    for (std::size_t i = 0; i < expression.size(); ++i) {
-        const char ch = expression[i];
-        if (in_string) {
-            if (escaping) {
-                escaping = false;
-            } else if (ch == '\\') {
-                escaping = true;
-            } else if (ch == '"') {
-                in_string = false;
-            }
-            continue;
-        }
-
-        if (ch == '"') {
-            in_string = true;
-        } else if (ch == '(') {
-            ++paren_depth;
-        } else if (ch == ')') {
-            --paren_depth;
-        } else if (ch == '[') {
-            ++bracket_depth;
-        } else if (ch == ']') {
-            --bracket_depth;
-        } else if (ch == '=' && paren_depth == 0 && bracket_depth == 0) {
-            if (lhs != nullptr) {
-                *lhs = utils::trim_copy(expression.substr(0, i));
-            }
-            if (rhs != nullptr) {
-                *rhs = utils::trim_copy(expression.substr(i + 1));
-            }
-            return true;
-        }
-    }
-
-    return false;
 }
 
 std::string signed_center_text(double center) {
@@ -310,14 +293,13 @@ double root_derivative_step(double value) {
     return 1e-6 * std::max(1.0, mymath::abs(value));
 }
 
-bool is_valid_variable_name(const std::string& name) {
-    if (name.empty() ||
-        !std::isalpha(static_cast<unsigned char>(name.front()))) {
+bool is_valid_variable_name(std::string_view name) {
+    if (name.empty() || !is_ascii_alpha(name.front())) {
         return false;
     }
 
     for (char ch : name) {
-        if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_') {
+        if (!is_ascii_alnum(ch) && ch != '_') {
             return false;
         }
     }
@@ -325,24 +307,23 @@ bool is_valid_variable_name(const std::string& name) {
     return true;
 }
 
-bool is_identifier_text(const std::string& text) {
-    if (text.empty() ||
-        !std::isalpha(static_cast<unsigned char>(text.front()))) {
+bool is_identifier_text(std::string_view text) {
+    if (text.empty() || !is_ascii_alpha(text.front())) {
         return false;
     }
     for (char ch : text) {
-        if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_' && ch != '\'') {
+        if (!is_ascii_alnum(ch) && ch != '_' && ch != '\'') {
             return false;
         }
     }
     return true;
 }
 
-bool is_string_literal(const std::string& text) {
+bool is_string_literal(std::string_view text) {
     return text.size() >= 2 && text.front() == '"' && text.back() == '"';
 }
 
-std::string decode_escaped_string(const std::string& text) {
+std::string decode_escaped_string(std::string_view text) {
     std::string result;
     result.reserve(text.size());
     bool escaping = false;
@@ -371,7 +352,7 @@ std::string decode_escaped_string(const std::string& text) {
     return result;
 }
 
-std::string parse_string_literal_value(const std::string& text) {
+std::string parse_string_literal_value(std::string_view text) {
     if (!is_string_literal(text)) {
         throw std::runtime_error("expected string literal");
     }
@@ -399,9 +380,9 @@ std::string decode_state_field(const std::string& text) {
     return decode_escaped_string(text);
 }
 
-bool split_assignment(const std::string& expression,
-                      std::string* lhs,
-                      std::string* rhs) {
+bool split_assignment(std::string_view expression,
+                      std::string_view* lhs,
+                      std::string_view* rhs) {
     int paren_depth = 0;
     int bracket_depth = 0;
     bool in_string = false;
@@ -440,18 +421,22 @@ bool split_assignment(const std::string& expression,
             if (is_comparison) {
                 continue;
             }
-            *lhs = utils::trim_copy(expression.substr(0, i));
-            *rhs = utils::trim_copy(expression.substr(i + 1));
+            if (lhs != nullptr) {
+                *lhs = utils::trim_view(expression.substr(0, i));
+            }
+            if (rhs != nullptr) {
+                *rhs = utils::trim_view(expression.substr(i + 1));
+            }
             return true;
         }
     }
     return false;
 }
 
-bool split_named_call(const std::string& expression,
-                      const std::string& name,
-                      std::string* inside) {
-    const std::string trimmed = utils::trim_copy(expression);
+bool split_named_call(std::string_view expression,
+                      std::string_view name,
+                      std::string_view* inside) {
+    const std::string_view trimmed = utils::trim_view(expression);
     if (trimmed.size() < name.size() + 2 ||
         trimmed.compare(0, name.size(), name) != 0) {
         return false;
@@ -483,23 +468,40 @@ bool split_named_call(const std::string& expression,
         return false;
     }
 
-    *inside = utils::trim_copy(trimmed.substr(pos + 1, trimmed.size() - pos - 2));
+    if (inside != nullptr) {
+        *inside = utils::trim_view(trimmed.substr(pos + 1, trimmed.size() - pos - 2));
+    }
     return true;
 }
 
-bool split_named_call_with_arguments(const std::string& expression,
-                                     const std::string& name,
-                                     std::vector<std::string>* arguments) {
-    std::string inside;
+bool split_named_call(std::string_view expression,
+                      std::string_view name,
+                      std::string* inside) {
+    std::string_view inside_view;
+    if (!split_named_call(expression, name, &inside_view)) {
+        return false;
+    }
+    if (inside != nullptr) {
+        *inside = std::string(inside_view);
+    }
+    return true;
+}
+
+bool split_named_call_with_arguments(std::string_view expression,
+                                     std::string_view name,
+                                     std::vector<std::string_view>* arguments) {
+    std::string_view inside;
     if (!split_named_call(expression, name, &inside)) {
         return false;
     }
-    *arguments = split_top_level_arguments(inside);
+    if (arguments != nullptr) {
+        *arguments = split_top_level_arguments_view(inside);
+    }
     return true;
 }
 
-std::vector<std::string> split_top_level_arguments(const std::string& text) {
-    std::vector<std::string> arguments;
+std::vector<std::string_view> split_top_level_arguments_view(std::string_view text) {
+    std::vector<std::string_view> arguments;
     int depth = 0;
     int bracket_depth = 0;
     bool in_string = false;
@@ -525,23 +527,49 @@ std::vector<std::string> split_top_level_arguments(const std::string& text) {
         } else if (ch == '[') {
             ++bracket_depth;
         } else if (ch == ')') {
+            if (depth == 0) {
+                throw SyntaxError("unmatched ')' in argument list at position " + std::to_string(i));
+            }
             --depth;
         } else if (ch == ']') {
+            if (bracket_depth == 0) {
+                throw SyntaxError("unmatched ']' in argument list at position " + std::to_string(i));
+            }
             --bracket_depth;
         } else if (ch == ',' && depth == 0 && bracket_depth == 0) {
-            arguments.push_back(utils::trim_copy(text.substr(start, i - start)));
+            arguments.push_back(utils::trim_view(text.substr(start, i - start)));
             start = i + 1;
         }
     }
 
+    if (in_string) {
+        throw SyntaxError("unterminated string literal in argument list");
+    }
+    if (depth != 0) {
+        throw SyntaxError("unbalanced parentheses in argument list");
+    }
+    if (bracket_depth != 0) {
+        throw SyntaxError("unbalanced brackets in argument list");
+    }
+
     if (!text.empty()) {
-        arguments.push_back(utils::trim_copy(text.substr(start)));
+        arguments.push_back(utils::trim_view(text.substr(start)));
     }
 
     return arguments;
 }
 
-bool is_inline_function_command_name(const std::string& name) {
+std::vector<std::string> split_top_level_arguments(const std::string& text) {
+    auto views = split_top_level_arguments_view(text);
+    std::vector<std::string> results;
+    results.reserve(views.size());
+    for (auto v : views) {
+        results.emplace_back(v);
+    }
+    return results;
+}
+
+bool is_inline_function_command_name(std::string_view name) {
     return name == "diff" ||
            name == "double_integral" ||
            name == "double_integral_cyl" ||
@@ -561,7 +589,7 @@ bool is_inline_function_command_name(const std::string& name) {
            name == "poly_mul";
 }
 
-std::size_t find_matching_paren(const std::string& text, std::size_t open_pos) {
+std::size_t find_matching_paren(std::string_view text, std::size_t open_pos) {
     if (open_pos >= text.size() || text[open_pos] != '(') {
         return std::string::npos;
     }
@@ -599,9 +627,9 @@ std::size_t find_matching_paren(const std::string& text, std::size_t open_pos) {
 }
 
 std::string expand_inline_function_commands(Calculator* calculator,
-                                            const std::string& expression) {
+                                            std::string_view expression) {
     static thread_local int depth = 0;
-    static constexpr int kMaxDepth = 32; // 此函数涉及命令执行，深度限制应更小
+    static constexpr int kMaxDepth = 32;
     if (++depth > kMaxDepth) {
         --depth;
         throw std::runtime_error("inline function expansion too deep");
@@ -633,9 +661,9 @@ std::string expand_inline_function_commands(Calculator* calculator,
             }
         }
 
-        const std::string name = expression.substr(i, name_end - i);
+        const std::string_view name = expression.substr(i, name_end - i);
         if (!is_inline_function_command_name(name)) {
-            expanded.append(expression, i, name_end - i);
+            expanded.append(expression.substr(i, name_end - i));
             i = name_end;
             continue;
         }
@@ -646,14 +674,14 @@ std::string expand_inline_function_commands(Calculator* calculator,
             ++open_pos;
         }
         if (open_pos >= expression.size() || expression[open_pos] != '(') {
-            expanded.append(expression, i, name_end - i);
+            expanded.append(expression.substr(i, name_end - i));
             i = name_end;
             continue;
         }
 
         const std::size_t close_pos = find_matching_paren(expression, open_pos);
         if (close_pos == std::string::npos) {
-            expanded.append(expression, i, name_end - i);
+            expanded.append(expression.substr(i, name_end - i));
             i = name_end;
             continue;
         }
@@ -662,7 +690,7 @@ std::string expand_inline_function_commands(Calculator* calculator,
             expand_inline_function_commands(calculator,
                                             expression.substr(open_pos + 1,
                                                               close_pos - open_pos - 1));
-        const std::string rebuilt = name + "(" + inner + ")";
+        const std::string rebuilt = std::string(name) + "(" + inner + ")";
         std::string command_output;
         if (calculator->try_process_function_command(rebuilt, &command_output)) {
             expanded += "(" + command_output + ")";
@@ -729,8 +757,8 @@ std::string taylor_series_to_string(const std::vector<double>& coefficients,
     return generalized_series_to_string(coefficients, variable_name, center, 1);
 }
 
-bool is_reserved_function_name(const std::string& name) {
-    static const std::set<std::string> reserved = {
+bool is_reserved_function_name(std::string_view name) {
+    static const std::unordered_set<std::string_view> reserved = {
         "abs", "acos", "acosh", "asin", "asinh", "atan", "atanh", "avg",
         "bisect", "ceil", "combination", "cos", "cosh", "cross", "curl",
         "det", "diag", "diff", "div", "dot", "eig", "exp", "factorial",
@@ -745,13 +773,13 @@ bool is_reserved_function_name(const std::string& name) {
     return reserved.find(name) != reserved.end();
 }
 
-bool split_function_definition(const std::string& expression,
-                               std::string* function_name,
-                               std::string* parameter_name,
-                               std::string* body) {
-    std::string lhs;
-    std::string rhs;
-    if (!split_on_top_level_equals(expression, &lhs, &rhs)) {
+bool split_function_definition(std::string_view expression,
+                               std::string_view* function_name,
+                               std::string_view* parameter_name,
+                               std::string_view* body) {
+    std::string_view lhs;
+    std::string_view rhs;
+    if (!split_assignment(expression, &lhs, &rhs)) {
         return false;
     }
 
@@ -761,12 +789,12 @@ bool split_function_definition(const std::string& expression,
         return false;
     }
 
-    const std::string name = utils::trim_copy(lhs.substr(0, open));
-    const std::string param = utils::trim_copy(lhs.substr(open + 1, close - open - 1));
+    const std::string_view name = utils::trim_view(lhs.substr(0, open));
+    const std::string_view param = utils::trim_view(lhs.substr(open + 1, close - open - 1));
     if (!utils::is_valid_identifier(name) || !utils::is_valid_identifier(param)) {
         return false;
     }
-    if (!utils::trim_copy(lhs.substr(close + 1)).empty() || rhs.empty()) {
+    if (!utils::trim_view(lhs.substr(close + 1)).empty() || rhs.empty()) {
         return false;
     }
 
@@ -823,13 +851,13 @@ bool convert_base_value(long long value,
     return true;
 }
 
-bool try_base_conversion_expression(const std::string& expression,
+bool try_base_conversion_expression(std::string_view expression,
                                     const VariableResolver& variables,
                                     const std::map<std::string, CustomFunction>* functions,
                                     const HexFormatOptions& hex_options,
                                     std::string* output) {
-    std::string inside;
-    std::string mode;
+    std::string_view inside;
+    std::string_view mode;
 
     if (split_named_call(expression, "bin", &inside)) {
         mode = "bin";
@@ -843,12 +871,12 @@ bool try_base_conversion_expression(const std::string& expression,
         return false;
     }
 
-    const std::vector<std::string> arguments = split_top_level_arguments(inside);
+    const std::vector<std::string_view> arguments = split_top_level_arguments_view(inside);
     int base = 10;
 
     if (mode == "bin" || mode == "oct" || mode == "hex") {
         if (arguments.size() != 1) {
-            throw std::runtime_error(mode + " expects exactly one argument");
+            throw std::runtime_error(std::string(mode) + " expects exactly one argument");
         }
         base = mode == "bin" ? 2 : (mode == "oct" ? 8 : 16);
     } else {

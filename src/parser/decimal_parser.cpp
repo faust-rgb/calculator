@@ -11,13 +11,13 @@ class DecimalParserImpl : public BaseParser {
 public:
     using ScalarFunction = std::function<double(const std::vector<double>&)>;
 
-    DecimalParserImpl(std::string source,
+    DecimalParserImpl(std::string_view source,
                       const VariableResolver& variables,
                       const std::map<std::string, CustomFunction>* functions,
                       const std::map<std::string, ScalarFunction>* scalar_functions = nullptr,
                       HasScriptFunctionCallback has_script_function = {},
                       InvokeScriptFunctionDecimalCallback invoke_script_function = {})
-        : BaseParser(std::move(source)),
+        : BaseParser(source),
           variables_(variables),
           functions_(functions),
           scalar_functions_(scalar_functions),
@@ -28,7 +28,7 @@ public:
         double value = parse_comparison();
         skip_spaces();
         if (!is_at_end()) {
-            throw SyntaxError("unexpected token near: " + source_.substr(pos_, 1));
+            throw SyntaxError("unexpected token near: " + std::string(source_.substr(pos_, 1)));
         }
         return value;
     }
@@ -122,7 +122,7 @@ private:
         }
 
         if (peek_is_alpha()) {
-            const std::string name = parse_identifier();
+            const std::string name = std::string(parse_identifier());
 
             skip_spaces();
             if (!peek('(')) {
@@ -174,7 +174,7 @@ private:
                     ++pos_;
                 }
                 return static_cast<double>(
-                    parse_prefixed_integer_token(source_.substr(start, pos_ - start)));
+                    parse_prefixed_integer_token(std::string(source_.substr(start, pos_ - start))));
             }
         }
 
@@ -215,7 +215,7 @@ private:
             throw SyntaxError("expected number");
         }
 
-        return std::stod(source_.substr(start, pos_ - start));
+        return std::stod(std::string(source_.substr(start, pos_ - start)));
     }
 
     double lookup_variable(const std::string& name) const {
@@ -273,7 +273,7 @@ private:
 };
 
 double parse_decimal_expression(
-    const std::string& expression,
+    std::string_view expression,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
     const std::map<std::string, DecimalParser::ScalarFunction>* scalar_functions,
@@ -289,13 +289,13 @@ double parse_decimal_expression(
 }
 
 DecimalParser::DecimalParser(
-    std::string source,
+    std::string_view source,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
     const std::map<std::string, ScalarFunction>* scalar_functions,
     HasScriptFunctionCallback has_script_function,
     InvokeScriptFunctionDecimalCallback invoke_script_function)
-    : source_(std::move(source)),
+    : source_(source),
       variables_(variables),
       functions_(functions),
       scalar_functions_(scalar_functions),
@@ -312,7 +312,7 @@ double DecimalParser::parse() {
     return parser.parse();
 }
 
-bool try_evaluate_matrix_expression(const std::string& expression,
+bool try_evaluate_matrix_expression(std::string_view expression,
                                     const VariableResolver& variables,
                                     const std::map<std::string, CustomFunction>* functions,
                                     const std::map<std::string, DecimalParser::ScalarFunction>* scalar_functions,
@@ -322,7 +322,7 @@ bool try_evaluate_matrix_expression(const std::string& expression,
                                     const InvokeScriptFunctionDecimalCallback& invoke_script_function,
                                     matrix::Value* value) {
     const matrix::ScalarEvaluator scalar_evaluator =
-        [variables, functions, scalar_functions, has_script_function, invoke_script_function](const std::string& text) {
+        [variables, functions, scalar_functions, has_script_function, invoke_script_function](std::string_view text) {
             DecimalParserImpl parser(text,
                                      variables,
                                      functions,
@@ -350,7 +350,7 @@ bool try_evaluate_matrix_expression(const std::string& expression,
             *complex_value = found->complex;
             return true;
         };
-    return matrix::try_evaluate_expression(expression,
+    return matrix::try_evaluate_expression(std::string(expression),
                                            scalar_evaluator,
                                            matrix_lookup,
                                            complex_lookup,

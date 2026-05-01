@@ -243,9 +243,9 @@ std::string Calculator::load_state(const std::string& path) {
                 if (parts.size() != 2) {
                     throw std::runtime_error("invalid save file format");
                 }
-                std::string function_name;
-                std::string parameter_name;
-                std::string body;
+                std::string_view function_name;
+                std::string_view parameter_name;
+                std::string_view body;
                 const std::string definition = decode_state_field(parts[1]);
                 if (!split_function_definition(definition,
                                                &function_name,
@@ -253,7 +253,7 @@ std::string Calculator::load_state(const std::string& path) {
                                                &body)) {
                     throw std::runtime_error("invalid save file format");
                 }
-                loaded_functions[function_name] = {parameter_name, body};
+                loaded_functions[std::string(function_name)] = {std::string(parameter_name), std::string(body)};
                 continue;
             }
 

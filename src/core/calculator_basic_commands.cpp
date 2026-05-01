@@ -50,22 +50,22 @@ std::string Calculator::evaluate_for_display(const std::string& expression, bool
 std::string Calculator::process_line(const std::string& expression, bool exact_mode) {
     apply_calculator_display_precision(impl_.get());
 
-    std::string lhs;
-    std::string rhs;
+    std::string_view lhs;
+    std::string_view rhs;
     if (!split_assignment(expression, &lhs, &rhs)) {
         return evaluate_for_display(expression, exact_mode);
     }
 
     if (!is_valid_variable_name(lhs)) {
-        throw std::runtime_error("invalid variable name: " + lhs);
+        throw std::runtime_error("invalid variable name: " + std::string(lhs));
     }
     if (rhs.empty()) {
         throw std::runtime_error("assignment requires a value");
     }
 
-    const StoredValue stored = evaluate_expression_value(this, impl_.get(), rhs, exact_mode);
-    assign_visible_variable(impl_.get(), lhs, stored);
-    return lhs + " = " + format_stored_value(stored, impl_->symbolic_constants_mode);
+    const StoredValue stored = evaluate_expression_value(this, impl_.get(), std::string(rhs), exact_mode);
+    assign_visible_variable(impl_.get(), std::string(lhs), stored);
+    return std::string(lhs) + " = " + format_stored_value(stored, impl_->symbolic_constants_mode);
 }
 
 std::string Calculator::execute_script(const std::string& source, bool exact_mode) {
@@ -149,7 +149,7 @@ std::string Calculator::list_variables() const {
 }
 
 std::string Calculator::factor_expression(const std::string& expression) const {
-    std::string inside;
+    std::string_view inside;
     if (!split_named_call(expression, "factor", &inside)) {
         throw std::runtime_error("expected factor(expression)");
     }
@@ -165,13 +165,14 @@ std::string Calculator::factor_expression(const std::string& expression) const {
 }
 
 std::string Calculator::plot_expression(const std::string& expression) const {
-    std::vector<std::string> arguments;
-    bool is_gnuplot = false;
-    
-    // Internal convention: if the expression starts with ":plot ", it's a gnuplot request.
-    // However, our main.cpp wraps it in "plot(...)". Let's use a cleaner detection.
-    if (!split_named_call_with_arguments(expression, "plot", &arguments)) {
+    std::vector<std::string_view> argument_views;
+    if (!split_named_call_with_arguments(expression, "plot", &argument_views)) {
         throw std::runtime_error("expected plot(...)");
+    }
+
+    std::vector<std::string> arguments;
+    for (auto arg : argument_views) {
+        arguments.emplace_back(arg);
     }
 
     plot::PlotContext ctx;
@@ -185,18 +186,6 @@ std::string Calculator::plot_expression(const std::string& expression) const {
         return invoke_script_function_decimal(const_cast<Calculator*>(this), impl_.get(), name, args);
     };
 
-    // We can use a trick: if the first argument starts with ":", it's a gnuplot request.
-    // But since we want to support both plot() and :plot, let's look at the raw input from main.cpp.
-    // Wait, main.cpp already handles the prefix. Let's add a flag to the method or a separate method.
-    // To keep it simple, let's check if there's a special marker.
-    if (!arguments.empty() && arguments[0].find("__gnuplot__") != std::string::npos) {
-        is_gnuplot = true;
-        arguments[0] = arguments[0].substr(11); // Remove marker
-    }
-
-    if (is_gnuplot) {
-        return plot::handle_gnuplot_command(ctx, arguments);
-    }
     return plot::handle_plot_command(ctx, arguments);
 }
 

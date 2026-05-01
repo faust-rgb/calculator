@@ -7,11 +7,11 @@
 
 class ExactParserImpl : public BaseParser {
 public:
-    ExactParserImpl(std::string source,
+    ExactParserImpl(std::string_view source,
                     const VariableResolver& variables,
                     const std::map<std::string, CustomFunction>* functions,
                     HasScriptFunctionCallback has_script_function = {})
-        : BaseParser(std::move(source)),
+        : BaseParser(source),
           variables_(variables),
           functions_(functions),
           has_script_function_(std::move(has_script_function)) {}
@@ -20,7 +20,7 @@ public:
         Rational value = parse_comparison();
         skip_spaces();
         if (!is_at_end()) {
-            throw SyntaxError("unexpected token near: " + source_.substr(pos_, 1));
+            throw SyntaxError("unexpected token near: " + std::string(source_.substr(pos_, 1)));
         }
         return value;
     }
@@ -128,7 +128,7 @@ private:
         }
 
         if (peek_is_alpha()) {
-            const std::string name = parse_identifier();
+            const std::string name = std::string(parse_identifier());
             skip_spaces();
             if (!peek('(')) {
                 return lookup_variable(name);
@@ -179,7 +179,7 @@ private:
                     ++pos_;
                 }
                 return Rational(
-                    parse_prefixed_integer_token(source_.substr(start, pos_ - start)), 1);
+                    parse_prefixed_integer_token(std::string(source_.substr(start, pos_ - start))), 1);
             }
         }
 
@@ -220,7 +220,7 @@ private:
             throw std::runtime_error("expected number");
         }
 
-        return parse_rational_literal(source_.substr(start, pos_ - start));
+        return parse_rational_literal(std::string(source_.substr(start, pos_ - start)));
     }
 
     static Rational parse_rational_literal(const std::string& token) {

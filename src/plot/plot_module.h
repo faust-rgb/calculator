@@ -1,14 +1,11 @@
-#ifndef SYSTEM_MODULE_H
-#define SYSTEM_MODULE_H
+#ifndef PLOT_MODULE_H
+#define PLOT_MODULE_H
 
-#include "calculator_module.h"
+#include "core/calculator_module.h"
 
-#include <string>
-#include <vector>
-
-class SystemModule : public CalculatorModule {
+class PlotModule : public CalculatorModule {
 public:
-    std::string name() const override;
+    std::string name() const override { return "Plot"; }
     std::vector<std::string> get_commands() const override;
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,

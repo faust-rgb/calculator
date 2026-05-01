@@ -301,9 +301,6 @@ bool handle_polynomial_command(const PolynomialContext& ctx,
 // PolynomialModule 实现
 // ============================================================================
 
-bool PolynomialModule::can_handle(const std::string& command) const {
-    return is_polynomial_command(command);
-}
 
 std::string PolynomialModule::execute_args(const std::string& command,
                                           const std::vector<std::string>& args,

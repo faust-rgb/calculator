@@ -741,15 +741,18 @@ bool handle_integration_command(const IntegrationContext& ctx, const std::string
     return handle_integration_command(ctx, command, split_top_level_arguments(inside), output);
 }
 
-bool IntegrationModule::can_handle(const std::string& command) const { return is_integration_command(command); }
-
-std::string IntegrationModule::execute_args(const std::string& command, const std::vector<std::string>& args, const CoreServices& services) {
+std::string IntegrationModule::execute_args(const std::string& command,
+                                            const std::vector<std::string>& args,
+                                            const CoreServices& services) {
     IntegrationContext ctx;
     ctx.parse_decimal = services.evaluation.parse_decimal;
     ctx.build_scoped_evaluator = services.evaluation.build_decimal_evaluator;
     ctx.normalize_result = services.evaluation.normalize_result;
-    std::string out;
-    if (handle_integration_command(ctx, command, args, &out)) return out;
+
+    std::string output;
+    if (handle_integration_command(ctx, command, args, &output)) {
+        return output;
+    }
     throw std::runtime_error("Unknown integration command: " + command);
 }
 
@@ -770,9 +773,7 @@ std::string IntegrationModule::get_help_snippet(const std::string& topic) const 
 }
 
 std::vector<std::string> IntegrationModule::get_commands() const {
-    return {"double_integral", "double_integral_cyl", "triple_integral", "triple_integral_sph",
-            "line_integral", "surface_integral", "integrate_region",
-            "greens_theorem", "divergence_theorem", "stokes_theorem"};
+    return {"double_integral", "double_integral_cyl", "triple_integral", "triple_integral_sph"};
 }
 
 }  // namespace integration_ops

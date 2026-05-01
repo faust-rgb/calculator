@@ -4,7 +4,6 @@
 
 #include <fstream>
 #include <iterator>
-#include <set>
 #include <sstream>
 #include <stdexcept>
 
@@ -13,19 +12,10 @@ std::string SystemModule::name() const {
 }
 
 std::vector<std::string> SystemModule::get_commands() const {
-    return { "vars", "funcs", "clear", "clearfuncs", "clearfunc",
-             "history", "save", "load", "export", "run",
-             "exact", "symbolic", "precision", "hexprefix", "hexcase",
+    return { ":vars", ":funcs", ":clear", ":clearfuncs", ":clearfunc",
+             ":history", ":save", ":load", ":export", ":run",
+             ":exact", ":symbolic", ":precision", ":hexprefix", ":hexcase",
              "print" };
-}
-
-bool SystemModule::can_handle(const std::string& command) const {
-    static const std::set<std::string> cmds = {
-        ":vars", ":funcs", ":clear", ":clearfuncs", ":clearfunc",
-        ":history", ":save", ":load", ":export", ":run",
-        ":exact", ":symbolic", ":precision", ":hexprefix", ":hexcase"
-    };
-    return cmds.count(command) > 0;
 }
 
 std::string SystemModule::execute_args(const std::string& command,

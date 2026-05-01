@@ -517,9 +517,6 @@ bool handle_analysis_command(const AnalysisContext& ctx,
     return false;
 }
 
-bool AnalysisModule::can_handle(const std::string& command) const {
-    return is_analysis_command(command);
-}
 
 std::string AnalysisModule::execute_args(const std::string& command,
                                         const std::vector<std::string>& args,

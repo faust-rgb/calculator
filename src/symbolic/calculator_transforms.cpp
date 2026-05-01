@@ -205,9 +205,6 @@ bool handle_transform_command(const TransformContext& ctx,
     return handle_transform_command(ctx, command, split_top_level_arguments(inside), output);
 }
 
-bool TransformModule::can_handle(const std::string& command) const {
-    return is_transform_command(command);
-}
 
 std::string TransformModule::execute_args(const std::string& command,
                                          const std::vector<std::string>& args,

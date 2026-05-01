@@ -580,7 +580,7 @@ std::string node_structural_key(const std::shared_ptr<SymbolicExpression::Node>&
 
 class Parser : public BaseParser {
 public:
-    explicit Parser(std::string source) : BaseParser(std::move(source)) {}
+    explicit Parser(std::string_view source) : BaseParser(source) {}
 
     /**
      * @brief 解析表达式
@@ -591,7 +591,7 @@ public:
         SymbolicExpression expression = parse_expression();
         skip_spaces();
         if (pos_ != source_.size()) {
-            throw SyntaxError("unexpected token near: " + source_.substr(pos_, 1));
+            throw SyntaxError("unexpected token near: " + std::string(source_.substr(pos_, 1)));
         }
         return expression;
     }
@@ -706,7 +706,7 @@ private:
 
         // 标识符（变量或函数）
         if (peek_is_alpha()) {
-            std::string identifier = parse_identifier();
+            std::string identifier(parse_identifier());
 
             // 特殊常量
             if (identifier == "pi") {

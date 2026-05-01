@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <map>
 
@@ -154,7 +155,7 @@ public:
      * @param vars 变量上下文
      * @return true 如果成功处理
      */
-    bool try_evaluate_implicit(const std::string& expression,
+    bool try_evaluate_implicit(std::string_view expression,
                                StoredValue* output,
                                const std::map<std::string, StoredValue>& vars) const;
 

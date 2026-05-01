@@ -3480,9 +3480,6 @@ bool handle_series_command(const SeriesContext& ctx,
     return false;
 }
 
-bool SeriesModule::can_handle(const std::string& command) const {
-    return is_series_command(command);
-}
 
 std::string SeriesModule::execute_args(const std::string& command,
                                       const std::vector<std::string>& args,

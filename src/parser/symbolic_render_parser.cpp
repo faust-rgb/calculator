@@ -9,11 +9,11 @@
 
 class SymbolicRenderParserImpl : public BaseParser {
 public:
-    SymbolicRenderParserImpl(std::string source,
+    SymbolicRenderParserImpl(std::string_view source,
                              const VariableResolver& variables,
                              const std::map<std::string, CustomFunction>* functions,
                              int depth = 0)
-        : BaseParser(std::move(source)),
+        : BaseParser(source),
           variables_(variables),
           functions_(functions),
           depth_(depth) {}
@@ -96,7 +96,7 @@ private:
             return "(" + value + ")";
         }
         if (peek_is_alpha()) {
-            const std::string name = parse_identifier();
+            const std::string name(parse_identifier());
             skip_spaces();
             if (peek() != '(') {
                 return render_identifier(name);
@@ -228,7 +228,7 @@ private:
                     ++pos_;
                 }
                 return format_decimal(static_cast<double>(
-                    parse_prefixed_integer_token(source_.substr(start, pos_ - start))));
+                    parse_prefixed_integer_token(std::string(source_.substr(start, pos_ - start)))));
             }
         }
 
@@ -265,7 +265,7 @@ private:
         if (!has_digit) {
             throw std::runtime_error("expected number");
         }
-        return format_decimal(std::stod(source_.substr(start, pos_ - start)));
+        return format_decimal(std::stod(std::string(source_.substr(start, pos_ - start))));
     }
 
     VariableResolver variables_;

@@ -262,9 +262,6 @@ bool handle_optimization_command(const OptimizationContext& ctx,
     return true;
 }
 
-bool OptimizationModule::can_handle(const std::string& command) const {
-    return is_optimization_command(command);
-}
 
 std::string OptimizationModule::execute_args(const std::string& command,
                                             const std::vector<std::string>& args,

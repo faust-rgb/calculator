@@ -72,6 +72,22 @@ int run_plot_tests(int& passed, int& failed) {
         std::cout << "  FAIL: Plot with custom function threw: " << e.what() << "\n";
     }
 
+    // Test 5: Plot through unified command dispatcher
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command("plot(sin(x), -1, 1)", &output);
+        if (handled && !output.empty() && output.find("y: [") != std::string::npos) {
+            passed++;
+            std::cout << "  PASS: Dispatcher plot(sin(x), -1, 1)\n";
+        } else {
+            failed++;
+            std::cout << "  FAIL: Dispatcher plot(sin(x), -1, 1) - unexpected output\n";
+        }
+    } catch (const std::exception& e) {
+        failed++;
+        std::cout << "  FAIL: Dispatcher plot(sin(x), -1, 1) threw: " << e.what() << "\n";
+    }
+
     return 0;
 }
 

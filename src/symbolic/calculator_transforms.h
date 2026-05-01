@@ -16,7 +16,6 @@ class TransformModule : public CalculatorModule {
 public:
     std::string name() const override { return "Transforms"; }
     std::vector<std::string> get_commands() const override;
-    bool can_handle(const std::string& command) const override;
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
                              const CoreServices& services) override;

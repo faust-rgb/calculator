@@ -2,6 +2,7 @@
 #define CALCULATOR_UTILS_H
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include <map>
 #include <memory>
@@ -19,16 +20,17 @@ namespace utils {
 /**
  * @brief 去除字符串首尾空白
  * @param text 输入字符串
- * @return 处理后的字符串
+ * @return 处理后的字符串视图
  */
-std::string trim_copy(const std::string& text);
+std::string_view trim_view(std::string_view text);
+std::string trim_copy(std::string_view text);
 
 /**
  * @brief 检查字符串是否为合法的标识符
  * @param name 字符串
  * @return 是否合法
  */
-bool is_valid_identifier(const std::string& name);
+bool is_valid_identifier(std::string_view name);
 
 } // namespace utils
 
@@ -37,16 +39,17 @@ bool is_valid_identifier(const std::string& name);
 // ============================================================================
 
 /** @brief 去除字符串首尾空白（全局版本） */
-std::string trim_copy(const std::string& text);
+std::string_view trim_view(std::string_view text);
+std::string trim_copy(std::string_view text);
 
 /** @brief 检查是否为保留函数名 */
-bool is_reserved_function_name(const std::string& name);
+bool is_reserved_function_name(std::string_view name);
 
 /** @brief 分割函数定义表达式 */
-bool split_function_definition(const std::string& expression,
-                               std::string* function_name,
-                               std::string* parameter_name,
-                               std::string* body);
+bool split_function_definition(std::string_view expression,
+                               std::string_view* function_name,
+                               std::string_view* parameter_name,
+                               std::string_view* body);
 
 // 进制转换
 /** @brief 转换数值进制为字符串 */
@@ -56,7 +59,7 @@ bool convert_base_value(long long value,
                         std::string* output);
 
 /** @brief 尝试在表达式中执行进制转换（如 bin(10)） */
-bool try_base_conversion_expression(const std::string& expression,
+bool try_base_conversion_expression(std::string_view expression,
                                     const class VariableResolver& variables,
                                     const std::map<std::string, struct CustomFunction>* functions,
                                     const struct HexFormatOptions& hex_options,
@@ -103,24 +106,38 @@ double root_function_tolerance(double value);
 double root_derivative_step(double value);
 
 // 字符串与标识符
-bool is_valid_variable_name(const std::string& name);
-bool is_identifier_text(const std::string& text);
-bool is_string_literal(const std::string& text);
-std::string parse_string_literal_value(const std::string& text);
-std::string decode_escaped_string(const std::string& text);
+bool is_valid_variable_name(std::string_view name);
+bool is_identifier_text(std::string_view text);
+bool is_string_literal(std::string_view text);
+std::string parse_string_literal_value(std::string_view text);
+std::string decode_escaped_string(std::string_view text);
 std::string encode_state_field(const std::string& text);
 std::string decode_state_field(const std::string& text);
 
-// 表达式分割
-bool split_assignment(const std::string& expression, std::string* lhs, std::string* rhs);
-bool split_named_call(const std::string& expression, const std::string& name, std::string* inside);
-bool split_named_call_with_arguments(const std::string& expression, const std::string& name, std::vector<std::string>* arguments);
+// ============================================================================
+// 表达式分割函数（逐步废弃，优先使用 CommandParser）
+// ============================================================================
+//
+// 以下函数已由 CommandParser 提供更完善的实现：
+// - split_assignment → CommandParser 解析 kAssignment
+// - split_named_call → CommandParser 解析 kFunctionCall
+// - split_function_definition → CommandParser 解析 kFunctionDefinition
+//
+// 建议新代码直接使用 CommandParser，以确保解析行为的一致性。
+// 这些函数保留用于向后兼容和特定场景的轻量级调用。
+// ============================================================================
+
+bool split_assignment(std::string_view expression, std::string_view* lhs, std::string_view* rhs);
+bool split_named_call(std::string_view expression, std::string_view name, std::string_view* inside);
+bool split_named_call(std::string_view expression, std::string_view name, std::string* inside);
+bool split_named_call_with_arguments(std::string_view expression, std::string_view name, std::vector<std::string_view>* arguments);
+std::vector<std::string_view> split_top_level_arguments_view(std::string_view text);
 std::vector<std::string> split_top_level_arguments(const std::string& text);
 
 // 指令展开
-bool is_inline_function_command_name(const std::string& name);
-std::size_t find_matching_paren(const std::string& text, std::size_t open_pos);
-std::string expand_inline_function_commands(Calculator* calculator, const std::string& expression);
+bool is_inline_function_command_name(std::string_view name);
+std::size_t find_matching_paren(std::string_view text, std::size_t open_pos);
+std::string expand_inline_function_commands(Calculator* calculator, std::string_view expression);
 
 // 级数格式化
 /** @brief 获取级数基底文本 */

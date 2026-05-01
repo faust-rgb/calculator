@@ -2,6 +2,7 @@
 #define DECIMAL_PARSER_H
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include <map>
 #include <functional>
@@ -30,7 +31,7 @@ class DecimalParser {
 public:
     using ScalarFunction = std::function<double(const std::vector<double>&)>;
 
-    DecimalParser(std::string source,
+    DecimalParser(std::string_view source,
                   const VariableResolver& variables,
                   const std::map<std::string, CustomFunction>* functions,
                   const std::map<std::string, ScalarFunction>* scalar_functions = nullptr,
@@ -52,7 +53,7 @@ private:
  * @brief 解析并计算十进制数值表达式
  */
 double parse_decimal_expression(
-    const std::string& expression,
+    std::string_view expression,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
     const std::map<std::string, DecimalParser::ScalarFunction>* scalar_functions = nullptr,
@@ -63,7 +64,7 @@ double parse_decimal_expression(
  * @brief 尝试计算可能包含矩阵的表达式
  */
 bool try_evaluate_matrix_expression(
-    const std::string& expression,
+    std::string_view expression,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
     const std::map<std::string, DecimalParser::ScalarFunction>* scalar_functions,

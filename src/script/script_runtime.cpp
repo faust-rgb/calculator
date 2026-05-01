@@ -364,9 +364,13 @@ StoredValue evaluate_expression_value(Calculator* calculator,
 
         case ExpressionHint::kRatCall: {
             // rat() 特殊处理
-            std::vector<std::string> rational_arguments;
-            if (!split_named_call_with_arguments(trimmed, "rat", &rational_arguments)) {
+            std::vector<std::string_view> rational_arguments_view;
+            if (!split_named_call_with_arguments(trimmed, "rat", &rational_arguments_view)) {
                 break; // 回退到通用路径
+            }
+            std::vector<std::string> rational_arguments;
+            for (auto sv : rational_arguments_view) {
+                rational_arguments.push_back(std::string(sv));
             }
             if (rational_arguments.size() != 1 && rational_arguments.size() != 2) {
                 throw std::runtime_error(
@@ -656,12 +660,12 @@ std::string execute_simple_script_line(Calculator* calculator,
     }
 
     // 2. 处理赋值语句
-    std::string lhs, rhs;
+    std::string_view lhs, rhs;
     if (split_assignment(trimmed, &lhs, &rhs)) {
-        if (!is_valid_variable_name(lhs)) throw std::runtime_error("invalid variable name: " + lhs);
-        const StoredValue stored = evaluate_expression_value(calculator, impl, rhs, exact_mode);
-        assign_visible_variable(impl, lhs, stored);
-        return lhs + " = " + format_stored_value(stored, impl->symbolic_constants_mode);
+        if (!is_valid_variable_name(lhs)) throw std::runtime_error("invalid variable name: " + std::string(lhs));
+        const StoredValue stored = evaluate_expression_value(calculator, impl, std::string(rhs), exact_mode);
+        assign_visible_variable(impl, std::string(lhs), stored);
+        return std::string(lhs) + " = " + format_stored_value(stored, impl->symbolic_constants_mode);
     }
 
     // 3. 回退到标准表达式求值
@@ -804,7 +808,7 @@ ScriptSignal execute_script_statement(Calculator* calculator,
             if (!is_valid_variable_name(function_statement.name)) {
                 throw std::runtime_error("invalid function name: " + function_statement.name);
             }
-            if (is_reserved_function_name(function_statement.name)) {
+            if (is_reserved_user_function_name(impl, function_statement.name)) {
                 throw std::runtime_error("function name is reserved: " +
                                          function_statement.name);
             }
