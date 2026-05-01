@@ -6,6 +6,31 @@ The project has evolved from a minimal C++ hello-world style setup into a
 feature-rich command-line calculator with exact rational mode, programmable
 helpers, interactive terminal UX, and project documentation.
 
+## Latest Script Engine Performance Optimizations
+
+- **FlatScopeStack Implementation**:
+  - Replaced `std::vector<std::map<std::string, StoredValue>>` with flat array storage
+  - Variables stored in contiguous memory with O(n) linear search (fast for small scopes)
+  - Cache-friendly memory layout improves loop iteration performance
+- **Expression Cache**:
+  - Loop bodies compile expressions to AST on first iteration
+  - Subsequent iterations reuse cached AST, avoiding repeated parsing
+  - Supports arithmetic, comparisons, function calls, and variable references
+- **Compile-time Variable Binding**:
+  - Built-in constants (`pi`, `e`) folded directly into AST nodes
+  - Local variables can be bound to slot indices for O(1) access
+  - Dynamic lookup fallback for variables that cannot be statically bound
+- **Stack Frame Optimization**:
+  - Function calls use pre-allocated frame mechanism
+  - Parameters stored directly in flat scope slots
+  - No per-call `std::map` allocation for local variables
+- **New Files**:
+  - `src/core/expression_ast.cpp` / `src/core/expression_ast.h`: Compiled expression AST
+  - `src/core/variable_resolver.cpp` / `src/core/variable_resolver.h`: Scoped variable resolution
+- **Documentation**:
+  - Added `test/script/SYNTAX_GUIDE_CN.md`: Chinese script syntax guide
+  - Updated `ARCHITECTURE.md` with script engine performance section
+
 ## Latest Vector Calculus Improvements
 
 - **Added Advanced Differential Form and Vector Analysis Commands**:

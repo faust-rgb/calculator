@@ -87,7 +87,9 @@ Notes:
 ### Scripting
 
 Use `bin/calculator file.calc` or `:run file.calc` to execute scripts. The
-dedicated syntax guide is `test/script/SYNTAX_GUIDE.md`.
+dedicated syntax guides are:
+- `test/script/SYNTAX_GUIDE.md` (English)
+- `test/script/SYNTAX_GUIDE_CN.md` (Chinese)
 
 ### Autocomplete
 

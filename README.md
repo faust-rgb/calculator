@@ -31,6 +31,7 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - `KEYWORDS_REFERENCE.md` — Keywords and reserved names
 - `test/TESTING.md`
 - `test/script/SYNTAX_GUIDE.md`
+- `test/script/SYNTAX_GUIDE_CN.md` — Chinese script syntax guide
 - `CHANGELOG.md`
 - `使用手册.md` — Chinese user manual
 - `docs/archive/` for historical handoff notes and one-off reports

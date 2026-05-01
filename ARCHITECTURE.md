@@ -28,8 +28,20 @@ the main functions.
   Save/load format handling
 - `src/core/calculator_lifecycle.cpp`
   Calculator construction, mode toggles, completion lists, and lightweight runtime helpers
+- `src/core/variable_resolver.cpp`
+  Variable lookup with scoped resolution and FlatScopeStack support
+- `src/core/expression_compiler.h`
+  Expression cache for AST reuse in loops
+- `src/core/expression_ast.cpp`
+  Compiled expression AST for high-performance evaluation
 - `src/core/calculator.h`
   Public calculator API
+- `src/script/script_parser.cpp`
+  Script lexer and parser (Python-style syntax)
+- `src/script/script_runtime.cpp`
+  Script execution engine with FlatScopeStack optimization
+- `src/script/script_ast.h`
+  Script AST node definitions
 - `src/symbolic/node_parser.cpp`
   Symbolic expression parsing and node construction
 - `src/symbolic/simplify.cpp`
@@ -92,7 +104,9 @@ Large implementation areas are split into private implementation `.cpp` files
 with internal headers for shared declarations. Current internal split headers
 include:
 
-- `src/core/calculator_internal_types.h`
+- `src/core/calculator_internal_types.h` (includes FlatScopeStack, VariableSlot, ExpressionCache)
+- `src/core/variable_resolver.h`
+- `src/core/expression_ast.h`
 - `src/math/mymath_internal.h`
 - `src/matrix/matrix_internal.h`
 - `src/symbolic/symbolic_expression_internal.h`
@@ -237,8 +251,8 @@ Variable state can be saved and restored with:
 
 The persistence format is simple tab-separated text written by
 `Calculator::save_state(...)` and read by `Calculator::load_state(...)`.
-`STATE_V4` adds matrix variables while preserving compatibility with older
-scalar-only state files.
+Current format version supports scalar variables, strings, matrices,
+expression-style custom functions, and script functions.
 
 ## Numeric Design Notes
 
@@ -253,13 +267,54 @@ Important numeric behavior:
 - base conversion output supports bases `2..16`
 - bitwise functions only accept integers
 
+## Script Engine Performance
+
+The script engine (in `src/script`) uses several optimizations for efficient execution:
+
+### FlatScopeStack
+
+Traditional scope implementations use `std::vector<std::map<std::string, StoredValue>>`,
+which has O(log n) lookup per scope level. The `FlatScopeStack` replaces this with
+a flat array of `VariableSlot` structures:
+
+- All variables stored in contiguous memory (`std::vector<VariableSlot>`)
+- Scope boundaries tracked via `scope_starts` indices
+- Linear search from innermost scope outward (fast for small local variable sets)
+- Cache-friendly memory layout
+
+### Expression Cache
+
+Loop bodies avoid re-parsing expressions on each iteration:
+
+- First iteration compiles the expression to AST
+- AST stored in `ExpressionCache` keyed by source text
+- Subsequent iterations reuse compiled AST
+- Supports arithmetic, comparisons, function calls, and variable references
+
+### Compile-time Variable Binding
+
+When possible, AST variable nodes are bound to slot indices at compile time:
+
+- Built-in constants (`pi`, `e`) folded directly into AST nodes
+- Local variables resolved to slot indices for O(1) access
+- Dynamic lookup fallback for variables that cannot be statically bound
+
+### Stack Frame Allocation
+
+Function calls use pre-allocated frame mechanism:
+
+- Parameters stored directly in flat scope slots
+- No per-call `std::map` allocation
+- Recursive calls efficiently manage scope push/pop
+
 ## Best Re-entry Points
 
 For future work, the fastest way to rebuild context is:
 
 1. `README.md`
 2. `ARCHITECTURE.md`
-3. `test/tests.cpp`
+3. `test/main.cpp` and `test/suites/*.cpp`
 4. `src/core/calculator_commands.cpp`
-5. `src/symbolic/node_parser.cpp`
-6. `src/math/mymath.cpp`
+5. `src/script/script_runtime.cpp`
+6. `src/symbolic/node_parser.cpp`
+7. `src/math/mymath.cpp`

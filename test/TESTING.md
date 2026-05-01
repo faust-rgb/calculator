@@ -8,7 +8,7 @@ make test
 
 The test binaries are `bin/calculator_tests` and `bin/planning_tests`.
 
-The automated regression source is `test/tests.cpp`.
+The automated regression source is under `test/suites/` with modular test files.
 
 Use `make script-test` for the CLI script validation, or `make check` to run
 both the C++ regression suite and the script validation.
@@ -50,7 +50,7 @@ both the C++ regression suite and the script validation.
 
 Current expected summary:
 
-- `Passed: 792`
+- `Passed: 867`
 - `Failed: 0`
 - `Planning passed: 6`
 - `Planning failed: 0`
@@ -62,7 +62,9 @@ Runnable example inputs are stored in `test/script/`:
 - `test/script/comprehensive_validation.calc`
   Broad script and calculator feature validation
 - `test/script/SYNTAX_GUIDE.md`
-  The dedicated script syntax guide
+  The dedicated script syntax guide (English)
+- `test/script/SYNTAX_GUIDE_CN.md`
+  The dedicated script syntax guide (Chinese)
 
 You can run them with:
 

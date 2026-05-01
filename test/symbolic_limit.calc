@@ -1,4 +1,0 @@
-f(x) = sin(x)
-for i in range(300) {
-  # This doesn't work because f(x) = ... is a command, not an assignment to a script function
-}

@@ -1,0 +1,112 @@
+# 性能优化验证脚本
+# 测试 FlatScopeStack 和编译期变量绑定
+
+print("== Performance Optimization Validation ==")
+
+# 测试 1: 深层嵌套循环（测试 FlatScopeStack）
+print("Test 1: Nested loops")
+nested_sum = 0
+for i in range(0, 100):
+    for j in range(0, 10):
+        nested_sum = nested_sum + i * j + j
+print("nested_sum = ", nested_sum)
+
+# 测试 2: 递归函数调用（测试栈帧分配优化）
+print("Test 2: Recursive function")
+def my_fib(n):
+    if n <= 1:
+        return n
+    return my_fib(n - 1) + my_fib(n - 2)
+
+fib_result = my_fib(15)
+print("my_fib(15) = ", fib_result)
+
+# 测试 3: 循环中的复杂表达式（测试 AST 缓存）
+print("Test 3: Complex expressions in loops")
+result = 0
+a = 2
+b = 3
+c = 5
+for i in range(0, 500):
+    result = result + (a * b + c) * (i + 1) - i
+print("complex loop result = ", result)
+
+# 测试 4: 多层嵌套函数调用
+print("Test 4: Nested function calls")
+def add_one(x):
+    return x + 1
+
+def add_two(x):
+    return add_one(x) + 1
+
+def add_four(x):
+    return add_two(add_two(x))
+
+nested_result = add_four(10)
+print("add_four(10) = ", nested_result)
+
+# 测试 5: 循环中的变量查找
+print("Test 5: Variable lookup in loops")
+sum_a = 0
+sum_b = 0
+sum_c = 0
+x = 1
+y = 2
+z = 3
+for i in range(0, 100):
+    sum_a = sum_a + x
+    sum_b = sum_b + y
+    sum_c = sum_c + z
+print("sums = ", sum_a, sum_b, sum_c)
+
+# 测试 6: 混合作用域变量
+print("Test 6: Mixed scope variables")
+global_var = 100
+def scope_test(local_var):
+    inner_result = global_var + local_var
+    return inner_result
+
+scope_result = scope_test(50)
+print("scope_test(50) = ", scope_result)
+
+# 测试 7: 大量局部变量
+print("Test 7: Many local variables")
+def many_vars(a, b, c, d, e):
+    f = a + b
+    g = c + d
+    h = e + f
+    i = g + h
+    j = i * 2
+    k = j - a
+    l = k + b
+    m = l * c
+    n = m / d
+    o = n + e
+    return o
+
+many_result = many_vars(1, 2, 3, 4, 5)
+print("many_vars result = ", many_result)
+
+# 测试 8: 条件表达式在循环中
+print("Test 8: Conditional in loop")
+cond_sum = 0
+for i in range(0, 50):
+    if mod(i, 2) == 0:
+        cond_sum = cond_sum + i
+    else:
+        cond_sum = cond_sum - i
+print("conditional sum = ", cond_sum)
+
+# 测试 9: 字符串操作
+print("Test 9: String operations")
+print("hello world")
+
+# 测试 10: 数学函数调用
+print("Test 10: Math functions")
+math_sum = 0
+for i in range(1, 10):
+    math_sum = math_sum + sqrt(i)
+print("math sum = ", math_sum)
+
+print("== All tests completed ==")
+"SUCCESS"
