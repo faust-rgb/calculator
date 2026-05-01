@@ -22,8 +22,13 @@ class PreciseModule : public CalculatorModule {
 public:
     std::string name() const override { return "PreciseDecimal"; }
 
+    bool wants_implicit_evaluation() const override { return true; }
+
+    std::string get_implicit_trigger_chars() const override;
+
     /**
      * @brief 尝试使用精确模式隐式求值
+     *
      * @param expression 表达式
      * @param out 输出值
      * @param variables 变量表

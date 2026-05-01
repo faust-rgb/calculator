@@ -297,4 +297,45 @@ bool handle_polynomial_command(const PolynomialContext& ctx,
     return true;
 }
 
+// ============================================================================
+// PolynomialModule 实现
+// ============================================================================
+
+bool PolynomialModule::can_handle(const std::string& command) const {
+    return is_polynomial_command(command);
+}
+
+std::string PolynomialModule::execute_args(const std::string& command,
+                                          const std::vector<std::string>& args,
+                                          const CoreServices& services) {
+    PolynomialContext ctx;
+    ctx.functions = nullptr;
+    ctx.resolve_symbolic = [&](const std::string& name, std::string* var) {
+        SymbolicExpression expr;
+        services.symbolic.resolve_symbolic(name, false, var, &expr);
+        return expr;
+    };
+
+    std::string inside;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (i != 0) inside += ", ";
+        inside += args[i];
+    }
+
+    std::string output;
+    if (handle_polynomial_command(ctx, command, inside, &output)) {
+        return output;
+    }
+    throw std::runtime_error("Unknown polynomial command: " + command);
+}
+
+std::string PolynomialModule::get_help_snippet(const std::string& topic) const {
+    if (topic == "functions") {
+        return "Polynomials:\n"
+               "  poly_add(p, q), poly_sub(p, q), poly_mul(p, q), poly_div(p, q)\n"
+               "  roots(p)            Real and complex roots";
+    }
+    return "";
+}
+
 }  // namespace polynomial_ops

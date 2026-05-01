@@ -20,7 +20,7 @@ public:
         auto args_str = split_top_level_arguments(inside);
         std::vector<double> data;
         for (const auto& arg_str : args_str) {
-            auto val = svc.evaluate_value(arg_str, false);
+            auto val = svc.evaluation.evaluate_value(arg_str, false);
             auto vec = stats_ops::extract_vector(val);
             data.insert(data.end(), vec.begin(), vec.end());
         }
@@ -46,23 +46,37 @@ public:
             std::ostringstream out;
             out << "--- Statistical Summary ---\n"
                 << "Count:    " << data.size() << "\n"
-                << "Mean:     " << svc.normalize_result(mean) << "\n"
-                << "StdDev(S):" << svc.normalize_result(stddev) << "\n"
-                << "Variance: " << svc.normalize_result(variance) << "\n"
-                << "Min:      " << svc.normalize_result(min) << "\n"
-                << "25% (Q1): " << svc.normalize_result(q1) << "\n"
-                << "50% (Med):" << svc.normalize_result(median) << "\n"
-                << "75% (Q3): " << svc.normalize_result(q3) << "\n"
-                << "Max:      " << svc.normalize_result(max) << "\n"
-                << "IQR:      " << svc.normalize_result(iqr) << "\n"
-                << "Skewness: " << svc.normalize_result(skew) << "\n"
-                << "Kurtosis: " << svc.normalize_result(kurt) << "\n"
-                << "MAD:      " << svc.normalize_result(mad);
+                << "Mean:     " << svc.evaluation.normalize_result(mean) << "\n"
+                << "StdDev(S):" << svc.evaluation.normalize_result(stddev) << "\n"
+                << "Variance: " << svc.evaluation.normalize_result(variance) << "\n"
+                << "Min:      " << svc.evaluation.normalize_result(min) << "\n"
+                << "25% (Q1): " << svc.evaluation.normalize_result(q1) << "\n"
+                << "50% (Med):" << svc.evaluation.normalize_result(median) << "\n"
+                << "75% (Q3): " << svc.evaluation.normalize_result(q3) << "\n"
+                << "Max:      " << svc.evaluation.normalize_result(max) << "\n"
+                << "IQR:      " << svc.evaluation.normalize_result(iqr) << "\n"
+                << "Skewness: " << svc.evaluation.normalize_result(skew) << "\n"
+                << "Kurtosis: " << svc.evaluation.normalize_result(kurt) << "\n"
+                << "MAD:      " << svc.evaluation.normalize_result(mad);
             return out.str();
         }
-        
+
         return "Unknown statistics command";
     }
+
+    std::vector<std::string> get_commands() const override {
+        return { "describe", "stat_summary" };
+    }
+
+    std::string get_help_snippet(const std::string& topic) const override {
+        if (topic == "analysis") {
+            return "Statistics:\n"
+                   "  describe(data)      Full statistical summary\n"
+                   "  stat_summary(data)  Full statistical summary";
+        }
+        return "";
+    }
+
 };
 
 #endif

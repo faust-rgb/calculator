@@ -379,6 +379,18 @@ int precedence(const std::shared_ptr<SymbolicExpression::Node>& node) {
  * @return 表达式字符串
  */
 std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node, int parent_precedence) {
+    static thread_local int depth = 0;
+    static constexpr int kMaxDepth = 1000;
+    if (++depth > kMaxDepth) {
+        --depth;
+        return "...";
+    }
+
+    struct DepthGuard {
+        int* depth;
+        ~DepthGuard() { if (depth) (*depth)--; }
+    } guard{&depth};
+
     std::string text;
     switch (node->type) {
         case NodeType::kNumber:
@@ -796,6 +808,18 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression);
 SymbolicExpression substitute_impl(const SymbolicExpression& expression,
                                   const std::string& variable_name,
                                   const SymbolicExpression& replacement) {
+    static thread_local int depth = 0;
+    static constexpr int kMaxDepth = 512;
+    if (++depth > kMaxDepth) {
+        --depth;
+        throw std::runtime_error("symbolic substitution too complex: maximum depth exceeded");
+    }
+
+    struct DepthGuard {
+        int* d;
+        ~DepthGuard() { if (d) (*d)--; }
+    } guard{&depth};
+
     const auto& node = expression.node_;
     switch (node->type) {
         case NodeType::kNumber:

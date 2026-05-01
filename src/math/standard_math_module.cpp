@@ -10,39 +10,20 @@
 #include <algorithm>
 #include <map>
 
-// 辅助函数声明（来自 core_helpers.cpp 或 utils.cpp）
-long long gcd_ll(long long a, long long b);
-long long lcm_ll(long long a, long long b);
+// 辅助函数声明
 long long round_to_long_long(double x);
-long long trunc_to_long_long(double x);
 long long floor_to_long_long(double x);
-long long ceil_to_long_long(double x);
 double degrees_to_radians(double value);
 double radians_to_degrees(double value);
 double celsius_to_fahrenheit(double value);
 double fahrenheit_to_celsius(double value);
-bool is_prime_ll(long long value);
-long long next_prime_ll(long long value);
-long long prev_prime_ll(long long value);
-long long euler_phi_ll(long long value);
-long long mobius_ll(long long value);
-long long prime_pi_ll(long long value);
-long long extended_gcd_ll(long long a, long long b, long long* x, long long* y);
-double fibonacci_value(long long n);
-double factorial_value(long long n);
-double combination_value(long long n, long long r);
-double permutation_value(long long n, long long r);
 
 namespace {
-
 long long require_integer(double val, const std::string& name, const std::string& func) {
-    if (!is_integer_double(val)) {
-        throw MathError(func + " requires integer " + name);
-    }
+    if (!is_integer_double(val)) throw MathError(func + " requires integer " + name);
     return round_to_long_long(val);
 }
-
-} // namespace
+}
 
 std::map<std::string, std::function<double(const std::vector<double>&)>> 
 StandardMathModule::get_scalar_functions() const {
@@ -133,32 +114,10 @@ StandardMathModule::get_scalar_functions() const {
     funcs["erfc"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("erfc expects 1 argument"); return mymath::erfc(a[0]); };
     funcs["bessel"] = [](const std::vector<double>& a) { 
         if(a.size()!=2) throw MathError("bessel expects 2 arguments"); 
-        return mymath::bessel_j(static_cast<int>(require_integer(a[0], "order", "bessel")), a[1]);
+        if (!is_integer_double(a[0])) throw MathError("bessel order must be an integer");
+        return mymath::bessel_j(static_cast<int>(round_to_long_long(a[0])), a[1]);
     };
     funcs["bessel_j"] = funcs["bessel"];
-
-    // Number Theory
-    funcs["gcd"] = [](const std::vector<double>& a) { if(a.size()!=2) throw MathError("gcd expects 2 arguments"); return static_cast<double>(gcd_ll(round_to_long_long(a[0]), round_to_long_long(a[1]))); };
-    funcs["lcm"] = [](const std::vector<double>& a) { if(a.size()!=2) throw MathError("lcm expects 2 arguments"); return static_cast<double>(lcm_ll(round_to_long_long(a[0]), round_to_long_long(a[1]))); };
-    funcs["mod"] = [](const std::vector<double>& a) { 
-        if(a.size()!=2) throw MathError("mod expects 2 arguments");
-        const long long lhs = require_integer(a[0], "lhs", "mod");
-        const long long rhs = require_integer(a[1], "rhs", "mod");
-        if (rhs == 0) throw MathError("mod by zero");
-        return static_cast<double>(lhs % rhs);
-    };
-    funcs["factorial"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("factorial expects 1 argument"); return factorial_value(require_integer(a[0], "argument", "factorial")); };
-    funcs["nCr"] = [](const std::vector<double>& a) { if(a.size()!=2) throw MathError("nCr expects 2 arguments"); return combination_value(require_integer(a[0], "n", "nCr"), require_integer(a[1], "r", "nCr")); };
-    funcs["binom"] = funcs["nCr"];
-    funcs["nPr"] = [](const std::vector<double>& a) { if(a.size()!=2) throw MathError("nPr expects 2 arguments"); return permutation_value(require_integer(a[0], "n", "nPr"), require_integer(a[1], "r", "nPr")); };
-    funcs["fib"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("fib expects 1 argument"); return fibonacci_value(round_to_long_long(a[0])); };
-    funcs["is_prime"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("is_prime expects 1 argument"); return is_prime_ll(require_integer(a[0], "argument", "is_prime")) ? 1.0 : 0.0; };
-    funcs["next_prime"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("next_prime expects 1 argument"); return static_cast<double>(next_prime_ll(require_integer(a[0], "argument", "next_prime"))); };
-    funcs["prev_prime"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("prev_prime expects 1 argument"); return static_cast<double>(prev_prime_ll(require_integer(a[0], "argument", "prev_prime"))); };
-    funcs["euler_phi"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("euler_phi expects 1 argument"); return static_cast<double>(euler_phi_ll(require_integer(a[0], "argument", "euler_phi"))); };
-    funcs["phi"] = funcs["euler_phi"];
-    funcs["mobius"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("mobius expects 1 argument"); return static_cast<double>(mobius_ll(require_integer(a[0], "argument", "mobius"))); };
-    funcs["prime_pi"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("prime_pi expects 1 argument"); return static_cast<double>(prime_pi_ll(require_integer(a[0], "argument", "prime_pi"))); };
 
     // Conversions
     funcs["deg"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("deg expects 1 argument"); return radians_to_degrees(a[0]); };
@@ -207,7 +166,7 @@ StandardMathModule::get_scalar_functions() const {
     funcs["skewness"] = [](const std::vector<double>& a) { return stats::skewness(a); };
     funcs["kurtosis"] = [](const std::vector<double>& a) { return stats::kurtosis(a); };
 
-    // Probability & Statistics (Bridge to apply_probability/apply_statistic)
+    // Probability & Statistics
     funcs["rand"] = [](const std::vector<double>& a) { return stats_ops::apply_probability("rand", a); };
     funcs["randn"] = [](const std::vector<double>& a) { return stats_ops::apply_probability("randn", a); };
     funcs["randint"] = [](const std::vector<double>& a) { return stats_ops::apply_probability("randint", a); };
@@ -246,53 +205,30 @@ StandardMathModule::get_scalar_functions() const {
     funcs["delta"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("delta expects 1 argument"); return mymath::is_near_zero(a[0], 1e-12) ? 1.0 : 0.0; };
     funcs["impulse"] = funcs["delta"];
 
-    // Bitwise
-    funcs["and"] = [](const std::vector<double>& a) { if(a.size()!=2) throw MathError("and expects 2 arguments"); return static_cast<double>(require_integer(a[0], "lhs", "and") & require_integer(a[1], "rhs", "and")); };
-    funcs["or"] = [](const std::vector<double>& a) { if(a.size()!=2) throw MathError("or expects 2 arguments"); return static_cast<double>(require_integer(a[0], "lhs", "or") | require_integer(a[1], "rhs", "or")); };
-    funcs["xor"] = [](const std::vector<double>& a) { if(a.size()!=2) throw MathError("xor expects 2 arguments"); return static_cast<double>(require_integer(a[0], "lhs", "xor") ^ require_integer(a[1], "rhs", "xor")); };
-    funcs["not"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("not expects 1 argument"); return static_cast<double>(~require_integer(a[0], "argument", "not")); };
-    funcs["shl"] = [](const std::vector<double>& a) { 
-        if(a.size()!=2) throw MathError("shl expects 2 arguments"); 
-        const long long count = require_integer(a[1], "shift", "shl");
-        if (count < 0) throw MathError("shift count cannot be negative");
-        return static_cast<double>(require_integer(a[0], "value", "shl") << count); 
-    };
-    funcs["shr"] = [](const std::vector<double>& a) { 
-        if(a.size()!=2) throw MathError("shr expects 2 arguments"); 
-        const long long count = require_integer(a[1], "shift", "shr");
-        if (count < 0) throw MathError("shift count cannot be negative");
-        return static_cast<double>(require_integer(a[0], "value", "shr") >> count); 
-    };
-    funcs["rol"] = [](const std::vector<double>& a) { 
-        if(a.size()!=2) throw MathError("rol expects 2 arguments"); 
-        return static_cast<double>(from_unsigned_bits(rotate_left_bits(
-            to_unsigned_bits(require_integer(a[0], "value", "rol")),
-            normalize_rotation_count(require_integer(a[1], "shift", "rol")))));
-    };
-    funcs["ror"] = [](const std::vector<double>& a) { 
-        if(a.size()!=2) throw MathError("ror expects 2 arguments"); 
-        return static_cast<double>(from_unsigned_bits(rotate_right_bits(
-            to_unsigned_bits(require_integer(a[0], "value", "ror")),
-            normalize_rotation_count(require_integer(a[1], "shift", "ror")))));
-    };
-    funcs["popcount"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("popcount expects 1 argument"); return static_cast<double>(popcount_bits(to_unsigned_bits(require_integer(a[0], "argument", "popcount")))); };
-    funcs["bitlen"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("bitlen expects 1 argument"); return static_cast<double>(bit_length_bits(to_unsigned_bits(require_integer(a[0], "argument", "bitlen")))); };
-    funcs["ctz"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("ctz expects 1 argument"); return static_cast<double>(trailing_zero_count_bits(to_unsigned_bits(require_integer(a[0], "argument", "ctz")))); };
-    funcs["clz"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("clz expects 1 argument"); return static_cast<double>(leading_zero_count_bits(to_unsigned_bits(require_integer(a[0], "argument", "clz")))); };
-    funcs["parity"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("parity expects 1 argument"); return static_cast<double>(parity_bits(to_unsigned_bits(require_integer(a[0], "argument", "parity")))); };
-    funcs["reverse_bits"] = [](const std::vector<double>& a) { if(a.size()!=1) throw MathError("reverse_bits expects 1 argument"); return static_cast<double>(from_unsigned_bits(reverse_bits(to_unsigned_bits(require_integer(a[0], "argument", "reverse_bits"))))); };
-
-    funcs["egcd"] = [](const std::vector<double>& a) { 
-        if(a.size()!=2) throw MathError("egcd expects 2 arguments"); 
-        long long x = 0, y = 0;
-        return static_cast<double>(extended_gcd_ll(require_integer(a[0], "a", "egcd"), require_integer(a[1], "b", "egcd"), &x, &y));
-    };
-
     // Other
     funcs["rat"] = [](const std::vector<double>& a) { 
         if(a.size() < 1 || a.size() > 2) throw MathError("rat expects 1 or 2 arguments");
-        return a[0]; // Logic for rat is mostly in rendering/exact mode, but here we return the value
+        return a[0]; 
     };
 
     return funcs;
+}
+
+std::vector<std::string> StandardMathModule::get_functions() const {
+    std::vector<std::string> names;
+    auto funcs = get_scalar_functions();
+    for (const auto& [name, _] : funcs) names.push_back(name);
+    return names;
+}
+
+std::string StandardMathModule::get_help_snippet(const std::string& topic) const {
+    if (topic == "functions") {
+        return "Common functions:\n"
+               "  Trigonometric: sin cos tan sec csc cot asin acos atan ...\n"
+               "  Exponential:   exp exp2 ln log log2 log10 pow gamma beta zeta erf ...\n"
+               "  Roots:         sqrt cbrt root\n"
+               "  Numeric:       abs sign floor ceil round trunc min max clamp sum ...\n"
+               "  Aggregates:    mean avg median mode percentile quartile var std ...";
+    }
+    return "";
 }

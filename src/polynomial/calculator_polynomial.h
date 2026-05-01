@@ -18,7 +18,31 @@
 #include <map>
 #include <functional>
 
+#include "../core/calculator_module.h"
+
 namespace polynomial_ops {
+
+/**
+ * @class PolynomialModule
+ * @brief 提供多项式运算命令的模块
+ */
+class PolynomialModule : public CalculatorModule {
+public:
+    std::string name() const override { return "Polynomial"; }
+    
+    std::vector<std::string> get_commands() const override {
+        return {"poly_add", "poly_sub", "poly_mul", "poly_div", "roots", 
+                "poly_eval", "poly_deriv", "poly_integ", "poly_fit", "poly_compose", "poly_gcd"};
+    }
+
+    bool can_handle(const std::string& command) const override;
+
+    std::string execute_args(const std::string& command,
+                             const std::vector<std::string>& args,
+                             const CoreServices& services) override;
+
+    std::string get_help_snippet(const std::string& topic) const override;
+};
 
 // ============================================================================
 // 多项式构建

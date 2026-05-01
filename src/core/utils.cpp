@@ -600,6 +600,18 @@ std::size_t find_matching_paren(const std::string& text, std::size_t open_pos) {
 
 std::string expand_inline_function_commands(Calculator* calculator,
                                             const std::string& expression) {
+    static thread_local int depth = 0;
+    static constexpr int kMaxDepth = 32; // 此函数涉及命令执行，深度限制应更小
+    if (++depth > kMaxDepth) {
+        --depth;
+        throw std::runtime_error("inline function expansion too deep");
+    }
+
+    struct DepthGuard {
+        int* d;
+        ~DepthGuard() { if (d) (*d)--; }
+    } guard{&depth};
+
     std::string expanded;
     expanded.reserve(expression.size());
 

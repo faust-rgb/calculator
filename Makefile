@@ -22,6 +22,7 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/core/utils.cpp \
 	$(SRC_DIR)/core/calculator_basic_commands.cpp \
 	$(SRC_DIR)/core/calculator_help.cpp \
+	$(SRC_DIR)/core/system_module.cpp \
 	$(SRC_DIR)/core/expression_compiler.cpp \
 		$(SRC_DIR)/precise/rational.cpp \
 		$(SRC_DIR)/precise/precise_decimal.cpp \
@@ -42,6 +43,7 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/math/mymath.cpp \
 	$(SRC_DIR)/math/mymath_special_functions.cpp \
 	$(SRC_DIR)/math/standard_math_module.cpp \
+	$(SRC_DIR)/math/integer_math_module.cpp \
 	$(SRC_DIR)/matrix/matrix.cpp \
 	$(SRC_DIR)/matrix/matrix_module.cpp \
 	$(SRC_DIR)/matrix/matrix_ops.cpp \
@@ -87,6 +89,7 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/dsp/filter_design.cpp \
 	$(SRC_DIR)/dsp/time_frequency.cpp \
 	$(SRC_DIR)/dsp/residue.cpp \
+		$(SRC_DIR)/dsp/dsp_module.cpp \
 	$(SRC_DIR)/dsp/calculator_signal_commands.cpp \
 	$(SRC_DIR)/plot/plot_renderer.cpp \
 	$(SRC_DIR)/plot/calculator_plot.cpp \
@@ -94,6 +97,7 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/plot/svg_renderer.cpp
 COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/core/calculator_internal_types.h \
+	$(SRC_DIR)/core/system_module.h \
 		$(SRC_DIR)/analysis/calculator_simplex.h \
 	$(SRC_DIR)/math/mymath.h \
 	$(SRC_DIR)/math/mymath_complex.h \

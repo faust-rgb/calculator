@@ -240,6 +240,19 @@ double invoke_script_function_decimal(Calculator* calculator,
                                       Calculator::Impl* impl,
                                       const std::string& name,
                                       const std::vector<double>& arguments) {
+    // 递归深度检查
+    static constexpr int kMaxScriptRecursionDepth = 512;
+    if (impl->script_call_depth >= kMaxScriptRecursionDepth) {
+        throw std::runtime_error("maximum script recursion depth exceeded (" +
+                                 std::to_string(kMaxScriptRecursionDepth) + ")");
+    }
+
+    struct DepthGuard {
+        int* depth;
+        explicit DepthGuard(int* d) : depth(d) { (*depth)++; }
+        ~DepthGuard() { (*depth)--; }
+    } guard(&impl->script_call_depth);
+
     auto it = impl->script_functions.find(name);
     if (it == impl->script_functions.end()) {
         // Try to invoke as a module command
@@ -564,7 +577,7 @@ StoredValue evaluate_expression_value(Calculator* calculator,
     if (!exact_mode) {
         std::map<std::string, StoredValue> snapshot = variables.snapshot();
         StoredValue stored;
-        for (const auto& module : impl->registered_modules) {
+        for (const auto& module : impl->implicit_evaluation_modules) {
             if (module->try_evaluate_implicit(trimmed, &stored, snapshot)) {
                 return stored;
             }
@@ -632,57 +645,27 @@ std::string execute_simple_script_line(Calculator* calculator,
                                        Calculator::Impl* impl,
                                        const std::string& text,
                                        bool exact_mode) {
-    std::vector<std::string> print_arguments;
-    if (split_named_call_with_arguments(text, "print", &print_arguments)) {
-        if (print_arguments.empty()) {
-            throw std::runtime_error("print expects at least one argument");
-        }
-        std::ostringstream out;
-        for (std::size_t i = 0; i < print_arguments.size(); ++i) {
-            if (i != 0) {
-                out << ' ';
-            }
-            
-            const std::string arg_text = trim_copy(print_arguments[i]);
-            try {
-                // Try normal expression evaluation first
-                out << format_print_value(
-                    evaluate_expression_value(calculator, impl, arg_text, exact_mode),
-                    impl->symbolic_constants_mode);
-            } catch (...) {
-                // If it fails, check if it's a command like diff(...) or integral(...)
-                std::string command_output;
-                if (calculator->try_process_function_command(arg_text, &command_output, exact_mode)) {
-                    out << command_output;
-                } else {
-                    // It's a genuine error, rethrow to be safe
-                    throw;
-                }
-            }
-        }
-        return out.str();
+    const std::string trimmed = trim_copy(text);
+    if (trimmed.empty()) return "";
+
+    // 1. 尝试作为内置/模块命令处理 (如 print, diff, plot 等)
+    // 所有的 print 逻辑现在都下沉到 System 或领域模块中，或者通过统一分发器处理
+    std::string command_output;
+    if (calculator->try_process_function_command(trimmed, &command_output, exact_mode)) {
+        return command_output;
     }
 
-    std::string function_output;
-    if (calculator->try_process_function_command(text, &function_output, exact_mode)) {
-        return function_output;
-    }
-
-    std::string lhs;
-    std::string rhs;
-    if (split_assignment(text, &lhs, &rhs)) {
-        if (!is_valid_variable_name(lhs)) {
-            throw std::runtime_error("invalid variable name: " + lhs);
-        }
-        if (rhs.empty()) {
-            throw std::runtime_error("assignment requires a value");
-        }
+    // 2. 处理赋值语句
+    std::string lhs, rhs;
+    if (split_assignment(trimmed, &lhs, &rhs)) {
+        if (!is_valid_variable_name(lhs)) throw std::runtime_error("invalid variable name: " + lhs);
         const StoredValue stored = evaluate_expression_value(calculator, impl, rhs, exact_mode);
         assign_visible_variable(impl, lhs, stored);
         return lhs + " = " + format_stored_value(stored, impl->symbolic_constants_mode);
     }
 
-    return format_stored_value(evaluate_expression_value(calculator, impl, text, exact_mode),
+    // 3. 回退到标准表达式求值
+    return format_stored_value(evaluate_expression_value(calculator, impl, trimmed, exact_mode),
                                impl->symbolic_constants_mode);
 }
 

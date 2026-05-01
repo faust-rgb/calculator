@@ -1,607 +1,443 @@
 // ============================================================================
 // 函数分析命令实现
 // ============================================================================
-//
-// 本文件实现了函数分析相关的命令处理逻辑，包括：
-// - limit: 极限计算（支持双侧极限和单侧极限）
-// - critical: 临界点分析（求解梯度为零的点）
-// - extrema: 极值点查找（在给定区间内寻找极值点）
-// - lagrange: 拉格朗日乘数法求解约束优化问题
 
 #include "calculator_analysis_cmds.h"
-
+#include "calculator_symbolic_commands.h"
+#include "symbolic_expression_internal.h"
+#include "function_analysis.h"
+#include "utils.h"
 #include "mymath.h"
-
 #include <algorithm>
 #include <sstream>
-#include <vector>
+#include <iterator>
 
 namespace analysis_cmds {
 
-namespace {
+using namespace utils;
 
-/**
- * @brief 在指定点求值符号表达式
- *
- * @param expression 符号表达式
- * @param variables 变量名列表
- * @param values 变量值列表
- * @param result 输出求值结果
- * @return 是否成功求值为数值
- */
-bool evaluate_symbolic_at_point(SymbolicExpression expression,
-                                const std::vector<std::string>& variables,
-                                const std::vector<double>& values,
-                                double* result) {
-    // 将所有变量替换为对应的数值
-    for (std::size_t i = 0; i < variables.size(); ++i) {
-        expression = expression.substitute(
-            variables[i], SymbolicExpression::number(values[i]));
-    }
-    // 简化并检查是否为数值
-    return expression.simplify().is_number(result);
-}
-
-bool is_infinity_literal(const std::string& text) {
-    std::string value = trim_copy(text);
-    if (!value.empty() && value.front() == '+') {
-        value = trim_copy(value.substr(1));
-    } else if (!value.empty() && value.front() == '-') {
-        value = trim_copy(value.substr(1));
-    }
-    return value == "inf" || value == "infinity" || value == "oo";
-}
-
-}  // namespace
-
-/**
- * @brief 分类临界点类型
- *
- * 通过计算 Hessian 矩阵的特征值来判断临界点的类型：
- * - 所有特征值 > 0：局部极小值
- * - 所有特征值 < 0：局部极大值
- * - 特征值有正有负：鞍点
- * - 存在零特征值：退化点
- *
- * @param hessian Hessian 矩阵的符号表达式
- * @param variables 变量名列表
- * @param values 临界点坐标
- * @return 分类结果字符串
- */
 std::string classify_critical_point(
     const std::vector<std::vector<SymbolicExpression>>& hessian,
     const std::vector<std::string>& variables,
     const std::vector<double>& values) {
-
-    const std::size_t n = variables.size();
-
-    // 构建 Hessian 矩阵的数值矩阵
-    matrix::Matrix h_mat(n, n);
-    for (std::size_t row = 0; row < n; ++row) {
-        for (std::size_t col = 0; col < n; ++col) {
-            double val = 0.0;
-            if (!evaluate_symbolic_at_point(
-                    hessian[row][col], variables, values, &val)) {
-                return "unclassified";
+    std::vector<std::vector<double>> numeric_hessian(variables.size(), std::vector<double>(variables.size(), 0.0));
+    for (std::size_t i = 0; i < variables.size(); ++i) {
+        for (std::size_t j = 0; j < variables.size(); ++j) {
+            SymbolicExpression current = hessian[i][j];
+            for (std::size_t k = 0; k < variables.size(); ++k) {
+                current = current.substitute(variables[k], SymbolicExpression::number(values[k])).simplify();
             }
-            h_mat.at(row, col) = val;
+            if (current.node_->type == NodeType::kNumber) numeric_hessian[i][j] = current.node_->number_value;
+            else return "unknown";
         }
     }
 
-    // 计算特征值
-    const matrix::Matrix ev_result = matrix::eigenvalues(h_mat);
-    std::vector<double> evals;
-    evals.reserve(n);
-
-    // 从特征值结果中提取特征值（处理不同的返回格式）
-    if (ev_result.cols == 1 || ev_result.rows == 1) {
-        // 向量结果
-        std::size_t len = ev_result.rows * ev_result.cols;
-        for (std::size_t i = 0; i < len; ++i) {
-            evals.push_back(ev_result.data[i]);
-        }
-    } else if (ev_result.rows == 2 && ev_result.cols == 2) {
-        // 2x2 复数结果格式: [real1, imag1; real2, imag2]
-        evals.push_back(ev_result.at(0, 0));
-        evals.push_back(ev_result.at(1, 0));
-    } else {
-        // 一般对角矩阵结果
-        for (std::size_t i = 0; i < std::min(ev_result.rows, ev_result.cols); ++i) {
-            evals.push_back(ev_result.at(i, i));
-        }
+    if (variables.size() == 1) {
+        double d2f = numeric_hessian[0][0];
+        if (mymath::is_near_zero(d2f, 1e-10)) return "degenerate";
+        return d2f > 0.0 ? "local min" : "local max";
     }
 
-    // 分析特征值符号
-    bool positive = false;
-    bool negative = false;
-    bool zero = false;
-    constexpr double eps = 1e-5;
-
-    for (double ev : evals) {
-        if (ev > eps) {
-            positive = true;
-        } else if (ev < -eps) {
-            negative = true;
-        } else {
-            zero = true;
-        }
+    if (variables.size() == 2) {
+        double A = numeric_hessian[0][0], B = numeric_hessian[0][1], C = numeric_hessian[1][1];
+        double D = A * C - B * B;
+        if (mymath::is_near_zero(D, 1e-10)) return "degenerate";
+        if (D < 0.0) return "saddle point";
+        return A > 0.0 ? "local min" : "local max";
     }
 
-    // 根据特征值符号判断临界点类型
-    if (zero) {
-        return "degenerate";  // 退化点：存在零特征值
-    }
-    if (positive && !negative) {
-        return "local min";   // 局部极小值：所有特征值 > 0
-    }
-    if (negative && !positive) {
-        return "local max";   // 局部极大值：所有特征值 < 0
-    }
-    if (positive && negative) {
-        return "saddle";      // 鞍点：特征值有正有负
-    }
-
-    return "unclassified";
+    return "higher order";
 }
 
-/**
- * @brief 检查是否为分析命令
- */
+namespace {
+bool is_infinity_literal_local(const std::string& text) {
+    std::string value = utils::trim_copy(text);
+    if (!value.empty() && value.front() == '+') value = utils::trim_copy(value.substr(1));
+    else if (!value.empty() && value.front() == '-') value = utils::trim_copy(value.substr(1));
+    return value == "inf" || value == "infinity" || value == "oo";
+}
+
+std::vector<double> solve_linear_system_local(std::vector<std::vector<double>> matrix,
+                                              std::vector<double> rhs) {
+    const std::size_t n = rhs.size();
+    for (std::size_t col = 0; col < n; ++col) {
+        std::size_t pivot = col;
+        for (std::size_t row = col + 1; row < n; ++row) {
+            if (mymath::abs(matrix[row][col]) > mymath::abs(matrix[pivot][col])) {
+                pivot = row;
+            }
+        }
+        if (mymath::is_near_zero(matrix[pivot][col], 1e-12)) {
+            throw std::runtime_error("singular critical point system");
+        }
+        if (pivot != col) {
+            std::swap(matrix[pivot], matrix[col]);
+            std::swap(rhs[pivot], rhs[col]);
+        }
+        const double divisor = matrix[col][col];
+        for (std::size_t c = col; c < n; ++c) matrix[col][c] /= divisor;
+        rhs[col] /= divisor;
+        for (std::size_t row = 0; row < n; ++row) {
+            if (row == col) continue;
+            const double factor = matrix[row][col];
+            if (mymath::is_near_zero(factor, 1e-14)) continue;
+            for (std::size_t c = col; c < n; ++c) matrix[row][c] -= factor * matrix[col][c];
+            rhs[row] -= factor * rhs[col];
+        }
+    }
+    return rhs;
+}
+}
+
 bool is_analysis_command(const std::string& command) {
     return command == "limit" || command == "critical" || command == "extrema" || command == "lagrange";
 }
 
-/**
- * @brief 处理分析命令的统一入口
- *
- * 根据命令类型分发到相应的处理函数：
- * - lagrange: 使用拉格朗日乘数法处理约束优化
- * - limit: 计算函数极限
- * - critical: 查找临界点
- * - extrema: 查找极值点
- *
- * @param ctx 分析上下文
- * @param command 命令名
- * @param inside 括号内的参数字符串
- * @param output 输出结果
- * @return 是否成功处理
- */
+bool handle_analysis_command(const AnalysisContext& ctx,
+                             const std::string& command,
+                             const std::vector<std::string>& arguments,
+                             std::string* output) {
+    if (command == "limit") {
+        if (arguments.size() < 2) throw std::runtime_error("limit expects expr, point");
+        std::string point_arg; size_t dir_idx; FunctionAnalysis analysis;
+        bool explicit_var = arguments.size() >= 3 && is_identifier_text(utils::trim_copy(arguments[1])) && !is_infinity_literal_local(arguments[1]);
+        if (explicit_var) {
+            std::string inf; SymbolicExpression expr; ctx.resolve_symbolic(arguments[0], false, &inf, &expr);
+            analysis = FunctionAnalysis(utils::trim_copy(arguments[1])); analysis.define(expr.to_string());
+            point_arg = arguments[2]; dir_idx = 3;
+        } else {
+            analysis = ctx.build_analysis(arguments[0]); point_arg = arguments[1]; dir_idx = 2;
+        }
+        int dir = 0; if (arguments.size() > dir_idx) dir = static_cast<int>(round_to_long_long(ctx.parse_decimal(arguments[dir_idx])));
+        *output = format_decimal(ctx.normalize_result(analysis.limit(ctx.parse_decimal(point_arg), dir)));
+        return true;
+    }
+
+    if (command == "extrema") {
+        if (arguments.size() != 3) throw std::runtime_error("extrema expects expression, a, b");
+        FunctionAnalysis analysis = ctx.build_analysis(arguments[0]);
+        const std::vector<ExtremumPoint> points = analysis.solve_extrema(ctx.parse_decimal(arguments[1]), ctx.parse_decimal(arguments[2]));
+        if (points.empty()) { *output = "No extrema found."; return true; }
+        std::ostringstream out;
+        for (size_t i = 0; i < points.size(); ++i) {
+            if (i != 0) out << '\n';
+            out << (points[i].is_maximum ? "max" : "min") << ": x = " << format_decimal(points[i].x) << ", f(x) = " << format_decimal(points[i].value);
+        }
+        *output = out.str(); return true;
+    }
+
+    if (command == "critical") {
+        // critical(f, [vars]) - Find and classify critical points
+        if (arguments.empty()) throw std::runtime_error("critical expects expression and optional variables");
+        std::string var;
+        SymbolicExpression expr;
+        ctx.resolve_symbolic(arguments[0], false, &var, &expr);
+        std::vector<std::string> variables = ctx.parse_symbolic_variable_arguments(arguments, 1, expr.identifier_variables());
+        if (variables.empty()) variables = {var};
+
+        // Compute gradient
+        std::vector<SymbolicExpression> gradient;
+        for (const auto& v : variables) {
+            gradient.push_back(expr.derivative(v).simplify());
+        }
+
+        // Find critical points by solving gradient = 0
+        std::vector<std::map<std::string, double>> critical_points;
+
+        if (variables.size() == 1) {
+            const std::string& variable = variables[0];
+            const SymbolicExpression derivative = gradient[0];
+            auto eval_derivative = [&](double x) {
+                SymbolicExpression at_x =
+                    derivative.substitute(variable, SymbolicExpression::number(x)).simplify();
+                double value = 0.0;
+                if (!at_x.is_number(&value)) {
+                    throw std::runtime_error("derivative is not numeric at this point");
+                }
+                return value;
+            };
+            auto add_point = [&](double x) {
+                for (const auto& existing : critical_points) {
+                    const auto it = existing.find(variable);
+                    if (it != existing.end() && mymath::abs(it->second - x) < 1e-5) {
+                        return;
+                    }
+                }
+                critical_points.push_back({{variable, ctx.normalize_result(x)}});
+            };
+
+            double previous_x = -10.0;
+            double previous_value = eval_derivative(previous_x);
+            for (int i = 1; i <= 256; ++i) {
+                const double current_x = -10.0 + 20.0 * static_cast<double>(i) / 256.0;
+                const double current_value = eval_derivative(current_x);
+                if (mymath::is_near_zero(previous_value, 1e-8)) {
+                    add_point(previous_x);
+                } else if ((previous_value < 0.0 && current_value > 0.0) ||
+                           (previous_value > 0.0 && current_value < 0.0)) {
+                    double left = previous_x;
+                    double right = current_x;
+                    double left_value = previous_value;
+                    for (int iter = 0; iter < 80; ++iter) {
+                        const double mid = (left + right) * 0.5;
+                        const double mid_value = eval_derivative(mid);
+                        if (mymath::is_near_zero(mid_value, 1e-12)) {
+                            left = right = mid;
+                            break;
+                        }
+                        if ((left_value < 0.0 && mid_value > 0.0) ||
+                            (left_value > 0.0 && mid_value < 0.0)) {
+                            right = mid;
+                        } else {
+                            left = mid;
+                            left_value = mid_value;
+                        }
+                    }
+                    add_point((left + right) * 0.5);
+                }
+                previous_x = current_x;
+                previous_value = current_value;
+            }
+            if (mymath::is_near_zero(previous_value, 1e-8)) add_point(previous_x);
+        } else {
+            auto eval_gradient_at = [&](const SymbolicExpression& g,
+                                        const std::map<std::string, double>& point) {
+                SymbolicExpression current = g;
+                for (const auto& [name, value] : point) {
+                    current = current.substitute(name, SymbolicExpression::number(value)).simplify();
+                }
+                double numeric = 0.0;
+                if (!current.is_number(&numeric)) {
+                    throw std::runtime_error("gradient is not numeric at this point");
+                }
+                return numeric;
+            };
+
+            try {
+                std::map<std::string, double> origin;
+                for (const auto& v : variables) origin[v] = 0.0;
+
+                std::vector<double> rhs(variables.size(), 0.0);
+                std::vector<std::vector<double>> matrix(
+                    variables.size(), std::vector<double>(variables.size(), 0.0));
+                for (std::size_t row = 0; row < variables.size(); ++row) {
+                    const double at_origin = eval_gradient_at(gradient[row], origin);
+                    rhs[row] = -at_origin;
+                    for (std::size_t col = 0; col < variables.size(); ++col) {
+                        std::map<std::string, double> unit = origin;
+                        unit[variables[col]] = 1.0;
+                        matrix[row][col] = eval_gradient_at(gradient[row], unit) - at_origin;
+                    }
+                }
+
+                const std::vector<double> solution =
+                    solve_linear_system_local(matrix, rhs);
+                std::map<std::string, double> candidate;
+                for (std::size_t i = 0; i < variables.size(); ++i) {
+                    candidate[variables[i]] = ctx.normalize_result(solution[i]);
+                }
+
+                bool is_critical = true;
+                for (const auto& g : gradient) {
+                    if (!mymath::is_near_zero(eval_gradient_at(g, candidate), 1e-8)) {
+                        is_critical = false;
+                        break;
+                    }
+                }
+                if (is_critical) {
+                    critical_points.push_back(candidate);
+                }
+            } catch (const std::exception&) {
+                // Fall back to the simple origin check below.
+            }
+
+            // Multi-variable fallback: check origin if gradient is zero there.
+            bool origin_is_critical = true;
+            for (const auto& g : gradient) {
+                auto g_at_origin = g;
+                for (const auto& v : variables) {
+                    g_at_origin = g_at_origin.substitute(v, SymbolicExpression::number(0)).simplify();
+                }
+                double val = 0.0;
+                if (!g_at_origin.is_number(&val) || !mymath::is_near_zero(val, 1e-10)) {
+                    origin_is_critical = false;
+                    break;
+                }
+            }
+            if (origin_is_critical && critical_points.empty()) {
+                std::map<std::string, double> origin;
+                for (const auto& v : variables) origin[v] = 0.0;
+                critical_points.push_back(origin);
+            }
+        }
+
+        if (critical_points.empty()) {
+            *output = "No critical points found.";
+            return true;
+        }
+
+        // Classify each critical point
+        std::ostringstream out;
+        for (size_t i = 0; i < critical_points.size(); ++i) {
+            const auto& pt = critical_points[i];
+            if (i > 0) out << "\n";
+
+            // Format point
+            out << "[";
+            bool first = true;
+            for (const auto& v : variables) {
+                if (!first) out << ", ";
+                first = false;
+                auto it = pt.find(v);
+                if (it != pt.end()) {
+                    out << v << " = " << format_decimal(it->second);
+                }
+            }
+            out << "]";
+
+            // Classify using Hessian
+            if (variables.size() == 1) {
+                // Single variable: use second derivative test
+                SymbolicExpression second_deriv = expr.derivative(variables[0]).derivative(variables[0]).simplify();
+                auto second_at_pt = second_deriv;
+                for (const auto& [v, val] : pt) {
+                    second_at_pt = second_at_pt.substitute(v, SymbolicExpression::number(val)).simplify();
+                }
+                double second_val = 0.0;
+                second_at_pt.is_number(&second_val);
+                if (second_val > 1e-10) out << " (local min)";
+                else if (second_val < -1e-10) out << " (local max)";
+                else out << " (inflection)";
+            } else {
+                // Multi-variable: use Hessian to classify
+                auto hessian = expr.hessian(variables);
+
+                // Evaluate Hessian at critical point
+                std::vector<std::vector<double>> hessian_values(hessian.size(), std::vector<double>(hessian.size(), 0.0));
+                bool hessian_evaluable = true;
+                for (size_t r = 0; r < hessian.size(); ++r) {
+                    for (size_t c = 0; c < hessian[r].size(); ++c) {
+                        auto h_rc = hessian[r][c];
+                        for (const auto& [v, val] : pt) {
+                            h_rc = h_rc.substitute(v, SymbolicExpression::number(val)).simplify();
+                        }
+                        if (!h_rc.is_number(&hessian_values[r][c])) {
+                            hessian_evaluable = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (hessian_evaluable && !hessian_values.empty()) {
+                    // Check if Hessian is positive definite (all leading principal minors > 0)
+                    // or negative definite (alternating signs starting with < 0)
+                    bool positive_definite = true;
+                    bool negative_definite = true;
+
+                    // Check diagonal elements
+                    for (size_t i = 0; i < hessian_values.size(); ++i) {
+                        if (hessian_values[i][i] <= 1e-10) positive_definite = false;
+                        if (hessian_values[i][i] >= -1e-10) negative_definite = false;
+                    }
+
+                    // For 2x2, also check determinant
+                    if (hessian_values.size() == 2) {
+                        double det = hessian_values[0][0] * hessian_values[1][1] - hessian_values[0][1] * hessian_values[1][0];
+                        if (det <= 1e-10) positive_definite = false;
+                        if (det <= 1e-10) negative_definite = false;
+                    }
+
+                    if (positive_definite) {
+                        out << " (local min)";
+                    } else if (negative_definite) {
+                        out << " (local max)";
+                    } else {
+                        // Check if Hessian is zero (degenerate case)
+                        bool all_zero = true;
+                        for (const auto& row : hessian_values) {
+                            for (double val : row) {
+                                if (std::abs(val) > 1e-10) {
+                                    all_zero = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if (all_zero) {
+                            out << " (degenerate)";
+                        } else {
+                            out << " (saddle)";
+                        }
+                    }
+                } else {
+                    out << " (degenerate)";
+                }
+            }
+        }
+        *output = out.str();
+        return true;
+    }
+
+    // Fallback for complex ones
+    std::string inside;
+    for (size_t i = 0; i < arguments.size(); ++i) { if (i != 0) inside += ", "; inside += arguments[i]; }
+    return handle_analysis_command(ctx, command, inside, output);
+}
+
 bool handle_analysis_command(const AnalysisContext& ctx,
                              const std::string& command,
                              const std::string& inside,
                              std::string* output) {
     const std::vector<std::string> arguments = split_top_level_arguments(inside);
-
-    // ==================== 拉格朗日乘数法 ====================
     if (command == "lagrange") {
-        if (arguments.size() < 2) {
-            throw std::runtime_error("lagrange expects (expr, constraints, [vars...])");
-        }
-
-        // 解析目标函数 f
-        std::string variable_name;
-        SymbolicExpression f;
-        ctx.resolve_symbolic(arguments[0], false, &variable_name, &f);
-
-        // 解析约束条件 [g1, g2, ...]
-        std::vector<SymbolicExpression> constraints;
-        if (arguments[1].front() == '[' && arguments[1].back() == ']') {
-             // 多个约束：解析列表形式
-             std::vector<std::string> const_strs = split_top_level_arguments(arguments[1].substr(1, arguments[1].size() - 2));
-             for (const auto& s : const_strs) constraints.push_back(SymbolicExpression::parse(s));
-        } else {
-             // 单个约束
-             constraints.push_back(SymbolicExpression::parse(arguments[1]));
-        }
-
-        // 解析变量列表
+        if (arguments.size() < 2) throw std::runtime_error("lagrange expects f, [g1, g2, ...], [vars]");
+        SymbolicExpression f = SymbolicExpression::parse(arguments[0]);
+        std::vector<SymbolicExpression> constraints = symbolic_commands::parse_symbolic_expression_list(arguments[1], nullptr);
         std::vector<std::string> variables = ctx.parse_symbolic_variable_arguments(arguments, 2, f.identifier_variables());
-
-        // 构造拉格朗日函数 L = f - sum(lambda_i * gi)
         SymbolicExpression lagrangian = f;
         std::vector<std::string> all_vars = variables;
         for (std::size_t i = 0; i < constraints.size(); ++i) {
-            std::string lambda_var = "L" + std::to_string(i + 1); // 使用 L1, L2, ... 作为拉格朗日乘子（避免 l 和 1 混淆）
+            std::string lambda_var = "L" + std::to_string(i + 1);
             all_vars.push_back(lambda_var);
             lagrangian = (lagrangian - SymbolicExpression::variable(lambda_var) * constraints[i]).simplify();
         }
-
-        // 转换为 critical 命令求解
-        std::string lagrangian_str = lagrangian.to_string();
         std::string all_vars_str;
-        for (std::size_t i = 0; i < all_vars.size(); ++i) {
-            if (i > 0) all_vars_str += ", ";
-            all_vars_str += all_vars[i];
-        }
-
-        return handle_analysis_command(ctx, "critical", lagrangian_str + ", " + all_vars_str, output);
+        for (std::size_t i = 0; i < all_vars.size(); ++i) { if (i > 0) all_vars_str += ", "; all_vars_str += all_vars[i]; }
+        return handle_analysis_command(ctx, "critical", {lagrangian.to_string(), all_vars_str}, output);
     }
-
-    // ==================== 极限计算 ====================
-    if (command == "limit") {
-        if (arguments.size() != 2 && arguments.size() != 3 && arguments.size() != 4) {
-            throw std::runtime_error(
-                "limit expects (expr, point[, direction]) or (expr, variable, point[, direction])");
-        }
-
-        std::string point_argument;
-        std::size_t direction_index = 0;
-        FunctionAnalysis analysis;
-
-        const bool explicit_variable =
-            arguments.size() >= 3 &&
-            is_identifier_text(trim_copy(arguments[1])) &&
-            !is_infinity_literal(arguments[1]);
-        if (explicit_variable) {
-            const std::string variable_name = trim_copy(arguments[1]);
-            std::string inferred_variable;
-            SymbolicExpression expression;
-            ctx.resolve_symbolic(arguments[0], false, &inferred_variable, &expression);
-            analysis = FunctionAnalysis(variable_name);
-            analysis.define(expression.to_string());
-            point_argument = arguments[2];
-            direction_index = 3;
-        } else {
-            analysis = ctx.build_analysis(arguments[0]);
-            point_argument = arguments[1];
-            direction_index = 2;
-        }
-
-        int direction = 0;  // 默认双侧极限
-        if (arguments.size() > direction_index) {
-            const double direction_value = ctx.parse_decimal(arguments[direction_index]);
-            if (!is_integer_double(direction_value)) {
-                throw std::runtime_error("limit direction must be -1, 0, or 1");
-            }
-            direction = static_cast<int>(round_to_long_long(direction_value));
-        }
-
-        *output = format_decimal(ctx.normalize_result(
-            analysis.limit(ctx.parse_decimal(point_argument), direction)));
-        return true;
-    }
-
-    // ==================== 临界点分析 ====================
-    if (command == "critical") {
-        if (arguments.empty()) {
-            throw std::runtime_error(
-                "critical expects a symbolic expression and optional variable names");
-        }
-
-        // 解析符号表达式
-        std::string variable_name;
-        SymbolicExpression expression;
-        ctx.resolve_symbolic(arguments[0], false, &variable_name, &expression);
-        const std::vector<std::string> variables =
-            ctx.parse_symbolic_variable_arguments(arguments,
-                                                  1,
-                                                  expression.identifier_variables());
-
-        // 计算梯度和 Hessian 矩阵
-        const std::vector<SymbolicExpression> gradient =
-            expression.gradient(variables);
-        const std::vector<std::vector<SymbolicExpression>> hessian =
-            expression.hessian(variables);
-
-        // 格式化临界点解的 lambda 函数
-        auto format_critical_solution = [&](const std::vector<double>& values) {
-            std::ostringstream out;
-            out << "[";
-            for (std::size_t i = 0; i < variables.size(); ++i) {
-                if (i != 0) {
-                    out << ", ";
-                }
-                out << variables[i] << " = "
-                    << format_decimal(ctx.normalize_result(values[i]));
-            }
-            out << "]";
-            out << " (" << classify_critical_point(
-                hessian, variables, values) << ")";
-            return out.str();
-        };
-
-        // 求解线性方程组的 lambda 函数（用于仿射梯度）
-        auto solve_linear_system =
-            [](std::vector<std::vector<double>> matrix,
-               std::vector<double> rhs,
-               std::vector<double>* solution) {
-                const std::size_t size = rhs.size();
-                // 高斯消元法求解
-                for (std::size_t col = 0; col < size; ++col) {
-                    // 选主元
-                    std::size_t pivot = col;
-                    for (std::size_t row = col + 1; row < size; ++row) {
-                        if (mymath::abs(matrix[row][col]) > mymath::abs(matrix[pivot][col])) {
-                            pivot = row;
-                        }
-                    }
-                    if (mymath::abs(matrix[pivot][col]) < 1e-12) {
-                        return false;  // 矩阵奇异
-                    }
-                    if (pivot != col) {
-                        std::swap(matrix[pivot], matrix[col]);
-                        std::swap(rhs[pivot], rhs[col]);
-                    }
-
-                    // 消元
-                    const double pivot_value = matrix[col][col];
-                    for (std::size_t j = col; j < size; ++j) {
-                        matrix[col][j] /= pivot_value;
-                    }
-                    rhs[col] /= pivot_value;
-
-                    for (std::size_t row = 0; row < size; ++row) {
-                        if (row == col) {
-                            continue;
-                        }
-                        const double factor = matrix[row][col];
-                        if (mymath::abs(factor) < 1e-12) {
-                            continue;
-                        }
-                        for (std::size_t j = col; j < size; ++j) {
-                            matrix[row][j] -= factor * matrix[col][j];
-                        }
-                        rhs[row] -= factor * rhs[col];
-                    }
-                }
-                *solution = rhs;
-                return true;
-            };
-
-        // 检查梯度是否为仿射函数（线性 + 常数）
-        // 如果是，可以直接用线性方程组求解
-        std::vector<std::vector<double>> coefficients(
-            variables.size(), std::vector<double>(variables.size(), 0.0));
-        std::vector<double> rhs(variables.size(), 0.0);
-        const std::vector<double> zeros(variables.size(), 0.0);
-        bool affine_gradient = true;
-
-        // 提取梯度的线性系数
-        for (std::size_t row = 0; row < gradient.size(); ++row) {
-            double constant = 0.0;
-            if (!evaluate_symbolic_at_point(
-                    gradient[row], variables, zeros, &constant)) {
-                affine_gradient = false;
-                break;
-            }
-            rhs[row] = -constant;
-
-            // 计算每个变量的系数
-            for (std::size_t col = 0; col < variables.size(); ++col) {
-                std::vector<double> sample = zeros;
-                sample[col] = 1.0;
-                double value = 0.0;
-                if (!evaluate_symbolic_at_point(
-                        gradient[row], variables, sample, &value)) {
-                    affine_gradient = false;
-                    break;
-                }
-                coefficients[row][col] = value - constant;
-            }
-            if (!affine_gradient) {
-                break;
-            }
-
-            // 验证梯度确实是仿射的（通过多点采样）
-            std::vector<std::vector<double>> validation_samples;
-            validation_samples.push_back(std::vector<double>(variables.size(), 1.0));
-            for (std::size_t col = 0; col < variables.size(); ++col) {
-                std::vector<double> sample = zeros;
-                sample[col] = 2.0;
-                validation_samples.push_back(sample);
-            }
-            for (const std::vector<double>& sample : validation_samples) {
-                double actual = 0.0;
-                if (!evaluate_symbolic_at_point(
-                        gradient[row], variables, sample, &actual)) {
-                    affine_gradient = false;
-                    break;
-                }
-                double predicted = constant;
-                for (std::size_t col = 0; col < variables.size(); ++col) {
-                    predicted += coefficients[row][col] * sample[col];
-                }
-                if (!mymath::is_near_zero(actual - predicted, 1e-8)) {
-                    affine_gradient = false;
-                    break;
-                }
-            }
-            if (!affine_gradient) {
-                break;
-            }
-        }
-
-        // 如果梯度是仿射的，直接求解线性方程组
-        if (affine_gradient) {
-            std::vector<double> solution;
-            if (!solve_linear_system(coefficients, rhs, &solution)) {
-                *output = "No isolated critical point.";
-                return true;
-            }
-            *output = format_critical_solution(solution);
-            return true;
-        }
-
-        // 非仿射梯度：使用牛顿迭代法求解非线性方程组
-        if (variables.size() > 3) {
-            throw std::runtime_error(
-                "critical nonlinear search supports up to 3 variables");
-        }
-
-        // 生成多个起始点以避免局部收敛
-        std::vector<std::vector<double>> starts = {
-            std::vector<double>(variables.size(), 0.0)};
-        const std::vector<double> seeds = {-2.0, -1.0, 1.0, 2.0};
-        for (std::size_t dimension = 0; dimension < variables.size(); ++dimension) {
-            std::vector<std::vector<double>> next = starts;
-            for (const std::vector<double>& start : starts) {
-                for (double seed : seeds) {
-                    std::vector<double> candidate = start;
-                    candidate[dimension] = seed;
-                    next.push_back(candidate);
-                }
-            }
-            starts.swap(next);
-        }
-
-        std::vector<std::vector<double>> solutions;
-        // 从每个起始点开始牛顿迭代
-        for (std::vector<double> current : starts) {
-            bool converged = false;
-            for (int iteration = 0; iteration < 40; ++iteration) {
-                // 计算当前点的梯度值
-                std::vector<double> gradient_values(variables.size(), 0.0);
-                double gradient_norm = 0.0;
-                bool numeric_ok = true;
-                for (std::size_t row = 0; row < variables.size(); ++row) {
-                    if (!evaluate_symbolic_at_point(
-                            gradient[row], variables, current, &gradient_values[row])) {
-                        numeric_ok = false;
-                        break;
-                    }
-                    gradient_norm += gradient_values[row] * gradient_values[row];
-                }
-                if (!numeric_ok) {
-                    break;
-                }
-                if (gradient_norm < 1e-24) {
-                    converged = true;  // 梯度足够小，认为收敛
-                    break;
-                }
-
-                // 计算 Jacobian 矩阵（即 Hessian 矩阵）
-                std::vector<std::vector<double>> jacobian(
-                    variables.size(), std::vector<double>(variables.size(), 0.0));
-                for (std::size_t row = 0; row < variables.size() && numeric_ok; ++row) {
-                    for (std::size_t col = 0; col < variables.size(); ++col) {
-                        if (!evaluate_symbolic_at_point(
-                                hessian[row][col], variables, current, &jacobian[row][col])) {
-                            numeric_ok = false;
-                            break;
-                        }
-                    }
-                }
-                if (!numeric_ok) {
-                    break;
-                }
-
-                // 牛顿法：求解 J * delta = -gradient
-                for (double& value : gradient_values) {
-                    value = -value;
-                }
-                std::vector<double> step;
-                if (!solve_linear_system(jacobian, gradient_values, &step)) {
-                    break;  // Jacobian 奇异，无法继续
-                }
-                double step_norm = 0.0;
-                for (std::size_t i = 0; i < current.size(); ++i) {
-                    current[i] += step[i];
-                    step_norm += step[i] * step[i];
-                }
-                if (step_norm < 1e-24) {
-                    converged = true;  // 步长足够小，认为收敛
-                    break;
-                }
-            }
-
-            if (!converged) {
-                continue;
-            }
-
-            // 处理接近原点的退化情况
-            double current_norm = 0.0;
-            for (double value : current) {
-                current_norm += value * value;
-            }
-            if (current_norm < 1e-2 &&
-                (classify_critical_point(hessian, variables, current) == "degenerate" ||
-                 classify_critical_point(hessian, variables, current) == "local min")) {
-                for (double& value : current) {
-                    value = 0.0;
-                }
-            }
-
-            // 检查是否与已找到的解重复
-            bool duplicate = false;
-            for (const std::vector<double>& existing : solutions) {
-                double distance = 0.0;
-                for (std::size_t i = 0; i < existing.size(); ++i) {
-                    const double diff = existing[i] - current[i];
-                    distance += diff * diff;
-                }
-                if (distance < 1e-10) {
-                    duplicate = true;
-                    break;
-                }
-            }
-            if (!duplicate) {
-                solutions.push_back(current);
-            }
-        }
-
-        // 输出结果
-        if (solutions.empty()) {
-            *output = "No isolated critical point.";
-            return true;
-        }
-        std::sort(solutions.begin(), solutions.end());
-        std::ostringstream out;
-        if (solutions.size() == 1) {
-            *output = format_critical_solution(solutions.front());
-            return true;
-        }
-        // 多个解：输出列表
-        out << "[";
-        for (std::size_t i = 0; i < solutions.size(); ++i) {
-            if (i != 0) {
-                out << ", ";
-            }
-            out << format_critical_solution(solutions[i]);
-        }
-        out << "]";
-        *output = out.str();
-        return true;
-    }
-
-    // ==================== 极值点查找 ====================
-    if (command == "extrema") {
-        if (arguments.size() != 3) {
-            throw std::runtime_error("extrema expects expression, a, b");
-        }
-
-        FunctionAnalysis analysis = ctx.build_analysis(arguments[0]);
-        double left = ctx.parse_decimal(arguments[1]);
-        double right = ctx.parse_decimal(arguments[2]);
-
-        // 在给定区间内查找极值点
-        const std::vector<ExtremumPoint> points = analysis.solve_extrema(left, right);
-
-        if (points.empty()) {
-            *output = "No extrema found in the given interval.";
-            return true;
-        }
-
-        // 格式化输出
-        std::ostringstream out;
-        auto display_value = [](double value) {
-            if (is_integer_double(value, 1e-6)) {
-                return format_decimal(static_cast<double>(round_to_long_long(value)));
-            }
-            return format_decimal(value);
-        };
-        for (std::size_t i = 0; i < points.size(); ++i) {
-            if (i != 0) {
-                out << '\n';
-            }
-            out << (points[i].is_maximum ? "max" : "min")
-                << ": x = " << display_value(points[i].x)
-                << ", f(x) = " << display_value(points[i].value);
-        }
-        *output = out.str();
-        return true;
-    }
-
     return false;
+}
+
+bool AnalysisModule::can_handle(const std::string& command) const {
+    return is_analysis_command(command);
+}
+
+std::string AnalysisModule::execute_args(const std::string& command,
+                                        const std::vector<std::string>& args,
+                                        const CoreServices& services) {
+    AnalysisContext ctx;
+    ctx.resolve_symbolic = services.symbolic.resolve_symbolic;
+    ctx.parse_symbolic_variable_arguments = services.parse_symbolic_vars;
+    ctx.parse_decimal = services.evaluation.parse_decimal;
+    ctx.normalize_result = services.evaluation.normalize_result;
+    ctx.build_analysis = services.symbolic.build_analysis;
+    std::string out;
+    if (handle_analysis_command(ctx, command, args, &out)) return out;
+    throw std::runtime_error("Unknown analysis command: " + command);
+}
+
+std::vector<std::string> AnalysisModule::get_commands() const {
+    return {"limit", "extrema", "critical", "lagrange"};
+}
+
+std::string AnalysisModule::get_help_snippet(const std::string& topic) const {
+    if (topic == "analysis") {
+        return "Function Analysis:\n"
+               "  limit(f, x0, [dir])    Limit of f at x=x0\n"
+               "  critical(f, [vars])    Find and classify critical points\n"
+               "  extrema(f, a, b)       Global and local extrema in [a, b]\n"
+               "  lagrange(f, g, [vars]) Constrained optimization";
+    }
+    return "";
 }
 
 }  // namespace analysis_cmds

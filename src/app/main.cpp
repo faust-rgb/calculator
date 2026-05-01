@@ -106,47 +106,15 @@ const std::vector<std::string>& help_topics() {
 
 const std::vector<std::string>& command_completion_words() {
     static const std::vector<std::string> words = {
-        ":help", ":help commands", ":help functions", ":help matrix", ":help examples",
-        ":help symbolic", ":help analysis", ":help planning",
-        ":help exact", ":help variables", ":help persistence", ":help programmer",
-        ":exact", ":exact on", ":exact off",
-        ":symbolic", ":symbolic on", ":symbolic off",
-        ":precision",
-        ":hexprefix", ":hexprefix on", ":hexprefix off",
-        ":hexcase", ":hexcase upper", ":hexcase lower",
-        ":vars", ":funcs", ":history", ":clear", ":clearfunc", ":clearfuncs",
-        ":save", ":load", ":run"
+        ":help", ":exact", ":precision", ":symbolic",
+        ":hexprefix", ":hexcase"
     };
     return words;
 }
 
 const std::vector<std::string>& builtin_expression_completion_words() {
     static const std::vector<std::string> words = {
-        "help", "exit", "quit",
-        "sin(", "cos(", "tan(", "sec(", "csc(", "cot(", "asin(", "acos(", "atan(", "asec(", "acsc(", "acot(",
-        "sinh(", "cosh(", "tanh(", "asinh(", "acosh(", "atanh(",
-        "exp(", "exp2(", "ln(", "log(", "log2(", "log10(", "gamma(", "beta(", "zeta(", "erf(", "erfc(", "bessel(", "sqrt(", "cbrt(", "root(",
-        "abs(", "sign(", "floor(", "ceil(", "round(", "trunc(", "clamp(",
-        "min(", "max(", "clamp(", "sum(", "avg(", "mean(", "median(", "mode(", "var(", "std(", "skewness(", "kurtosis(", "percentile(", "quartile(", "factorial(", "nCr(", "nPr(",
-        "cov(", "corr(", "rand(", "randn(", "randint(", "cdf_normal(", "pdf_normal(",
-        "gcd(", "lcm(", "mod(", "pow(", "rat(", "factor(", "plot(", "fib(", "is_prime(", "next_prime(", "prev_prime(", "prime_pi(", "euler_phi(", "mobius(", "divisors(", "extended_gcd(",
-        "deg(", "rad(", "deg2rad(", "rad2deg(", "sin_deg(", "cos_deg(", "celsius(", "fahrenheit(", "kelvin(", "c2f(", "f2c(",
-        "poly_add(", "poly_sub(", "poly_mul(", "poly_div(", "roots(", "poly_eval(", "poly_deriv(", "poly_integ(", "poly_fit(", "poly_compose(", "poly_gcd(",
-        "diff(", "limit(", "integral(", "gradient(", "jacobian(", "hessian(", "divergence(", "div(", "curl(", "laplacian(", "implicit_diff(", "param_deriv(", "directional(", "critical(", "lagrange(", "taylor(", "extrema(", "simplify(",
-        "ode(", "ode_table(", "ode_system(", "ode_system_table(",
-        "lp_max(", "lp_min(", "ilp_max(", "ilp_min(", "milp_max(", "milp_min(", "bip_max(", "bip_min(", "binary_max(", "binary_min(",
-        "step(", "delta(", "heaviside(", "impulse(", "laplace(", "ilaplace(", "inverse_laplace(", "fourier(", "ifourier(", "inverse_fourier(",
-        "ztrans(", "iztrans(", "z_transform(", "inverse_z(", "dft(", "fft(", "idft(", "ifft(", "conv(", "convolve(", "hann(", "hamming(", "blackman(",
-        "pade(", "puiseux(", "series_sum(", "summation(",
-        "vec(", "mat(", "zeros(", "eye(", "identity(",
-        "resize(", "append_row(", "append_col(", "transpose(", "inverse(",
-        "dot(", "outer(", "null(", "least_squares(", "qr_q(", "qr_r(",
-        "lu_l(", "lu_u(", "svd(", "svd_u(", "svd_s(", "svd_vt(", "pinv(", "kron(", "hadamard(",
-        "solve(", "get(", "set(",
-        "norm(", "trace(", "det(", "rank(", "rref(", "eig(", "eigvals(", "eigvecs(", "cond(", "diag(", "reshape(", "cholesky(", "schur(", "hessenberg(",
-        "bin(", "oct(", "hex(", "base(",
-        "and(", "or(", "xor(", "not(", "shl(", "shr(", "rol(", "ror(",
-        "popcount(", "bitlen(", "ctz(", "clz(", "parity(", "reverse_bits("
+        "help", "exit", "quit"
     };
     return words;
 }
@@ -196,10 +164,25 @@ std::vector<std::string> gather_completion_words(const Calculator& calculator,
     }
 
     if (!token.empty() && token.front() == ':') {
-        return command_completion_words();
+        // 合并核心命令和模块提供的命令
+        std::vector<std::string> words = command_completion_words();
+        const std::vector<std::string> module_cmds = calculator.module_command_names();
+        for (const auto& cmd : module_cmds) {
+            words.push_back(":" + cmd);
+        }
+        std::sort(words.begin(), words.end());
+        words.erase(std::unique(words.begin(), words.end()), words.end());
+        return words;
     }
 
-    std::vector<std::string> words = builtin_expression_completion_words();
+    // 合并核心函数、模块函数、变量和自定义函数
+    std::vector<std::string> words = { "help", "exit", "quit" };
+    
+    const std::vector<std::string> module_funcs = calculator.module_function_names();
+    for (const auto& name : module_funcs) {
+        words.push_back(name + "(");
+    }
+
     const std::vector<std::string> variable_names = calculator.variable_names();
     words.insert(words.end(), variable_names.begin(), variable_names.end());
 
@@ -463,71 +446,21 @@ std::string execute_repl_line(Calculator& calculator,
     if (line.rfind(":help ", 0) == 0) {
         return calculator.help_topic(utils::trim_copy(line.substr(6)));
     }
-    if (line == ":exact on") {
-        *exact_mode = true;
-        return "Exact fraction mode: ON";
-    }
-    if (line == ":exact off") {
-        *exact_mode = false;
-        return "Exact fraction mode: OFF";
-    }
-    if (line == ":exact") {
-        return std::string("Exact fraction mode: ") + (*exact_mode ? "ON" : "OFF");
-    }
-    if (line == ":symbolic on") {
-        return calculator.set_symbolic_constants_mode(true);
-    }
-    if (line == ":symbolic off") {
-        return calculator.set_symbolic_constants_mode(false);
-    }
-    if (line == ":symbolic") {
-        return std::string("Symbolic constants mode: ") +
-               (calculator.symbolic_constants_mode() ? "ON" : "OFF");
-    }
-    if (line == ":precision") {
-        return "Display precision: " + std::to_string(calculator.display_precision());
-    }
-    if (line.rfind(":precision ", 0) == 0) {
-        const std::string argument = utils::trim_copy(line.substr(11));
-        std::size_t parsed = 0;
-        const int precision = std::stoi(argument, &parsed);
-        if (parsed != argument.size()) {
-            throw std::runtime_error("display precision must be an integer");
-        }
-        return calculator.set_display_precision(precision);
-    }
-    if (line == ":hexprefix on") {
-        return calculator.set_hex_prefix_mode(true);
-    }
-    if (line == ":hexprefix off") {
-        return calculator.set_hex_prefix_mode(false);
-    }
-    if (line == ":hexprefix") {
-        return std::string("Hex prefix mode: ") +
-               (calculator.hex_prefix_mode() ? "ON" : "OFF");
-    }
-    if (line == ":hexcase upper" || line == ":hexcase uppercase") {
-        return calculator.set_hex_uppercase_mode(true);
-    }
-    if (line == ":hexcase lower" || line == ":hexcase lowercase") {
-        return calculator.set_hex_uppercase_mode(false);
-    }
-    if (line == ":hexcase") {
-        return std::string("Hex letter case: ") +
-               (calculator.hex_uppercase_mode() ? "UPPER" : "LOWER");
-    }
+
+    // 处理特殊 REPL 本地指令
     if (line == ":history") {
         return format_history(history);
     }
+    
+    // 拦截 :exact 以便同步 REPL 的本地 exact_mode 状态
+    if (line == ":exact on") { *exact_mode = true; }
+    else if (line == ":exact off") { *exact_mode = false; }
 
-    std::string function_output;
-    if (calculator.try_process_function_command(line, &function_output, *exact_mode)) {
-        return function_output;
+    std::string output;
+    if (calculator.try_process_function_command(line, &output, *exact_mode)) {
+        return output;
     }
 
-    // plot 指令如果到达这里，说明上面的 try_process_function_command 没有处理成功
-    // 或者需要 REPL 特殊处理（虽然大部分已经下沉到模块中）
-    
     return calculator.process_line(line, *exact_mode);
 }
 

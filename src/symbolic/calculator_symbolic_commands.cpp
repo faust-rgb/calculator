@@ -1379,4 +1379,45 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
     return false;
 }
 
+bool SymbolicModule::can_handle(const std::string& command) const {
+    return is_symbolic_command(command);
+}
+
+std::string SymbolicModule::execute_args(const std::string& command,
+                                        const std::vector<std::string>& args,
+                                        const CoreServices& services) {
+    SymbolicCommandContext ctx;
+    ctx.resolve_symbolic = services.symbolic.resolve_symbolic;
+    ctx.parse_symbolic_variable_arguments = services.parse_symbolic_vars;
+    ctx.parse_symbolic_expression_list = services.symbolic.parse_symbolic_expr_list;
+    ctx.build_analysis = services.symbolic.build_analysis;
+    ctx.build_scoped_evaluator = services.evaluation.build_decimal_evaluator;
+    ctx.parse_decimal = services.evaluation.parse_decimal;
+    ctx.normalize_result = services.evaluation.normalize_result;
+
+    std::string inside;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (i != 0) inside += ", ";
+        inside += args[i];
+    }
+
+    std::string output;
+    if (handle_symbolic_command(ctx, command, inside, &output)) {
+        return output;
+    }
+    throw std::runtime_error("Symbolic command failed: " + command);
+}
+
+std::string SymbolicModule::get_help_snippet(const std::string& topic) const {
+    if (topic == "symbolic") {
+        return "Symbolic Operations:\n"
+               "  simplify(expr)         Simplify an algebraic expression\n"
+               "  expand(expr)           Expand polynomial/algebraic expression\n"
+               "  diff(expr, [var])      Symbolic derivative\n"
+               "  integral(expr, [var])  Symbolic indefinite integral\n"
+               "  dsolve(rhs, [x, y])    Solve simple linear ODEs";
+    }
+    return "";
+}
+
 }  // namespace symbolic_commands

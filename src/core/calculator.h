@@ -4,7 +4,9 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <map>
 
+struct StoredValue;
 class CalculatorModule;
 
 /**
@@ -146,6 +148,17 @@ public:
     bool try_process_function_command(const std::string& expression, std::string* output, bool exact_mode = false);
 
     /**
+     * @brief 尝试使用注册模块进行隐式求值（如大数识别）
+     * @param expression 输入记号
+     * @param output 结果存储
+     * @param vars 变量上下文
+     * @return true 如果成功处理
+     */
+    bool try_evaluate_implicit(const std::string& expression,
+                               StoredValue* output,
+                               const std::map<std::string, StoredValue>& vars) const;
+
+    /**
      * @brief 导出变量到文件
      * @param line 导出指令，如 ":export \"data.csv\" A"
      * @return 操作结果消息
@@ -217,6 +230,18 @@ public:
      * @return 当前有效位数
      */
     int display_precision() const;
+
+    /**
+     * @brief 列出所有模块提供的命令名（用于补全）
+     * @return 命令名列表
+     */
+    std::vector<std::string> module_command_names() const;
+
+    /**
+     * @brief 列出所有模块提供的内置函数名（用于补全）
+     * @return 函数名列表
+     */
+    std::vector<std::string> module_function_names() const;
 
     /**
      * @brief 列出当前会话可补全的变量名

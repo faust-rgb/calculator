@@ -1154,6 +1154,11 @@ Matrix eigenvalues(const Matrix& matrix) {
         return Matrix::vector({matrix.at(0, 0)});
     }
 
+    if (is_symmetric(matrix)) {
+        internal::EigenResult res = internal::eigenvalues_with_vectors(matrix);
+        return Matrix::vector(res.values);
+    }
+
     if (matrix.rows == 2) {
         // 2x2 情况直接用特征多项式闭式解，结果更稳定也更快。
         const double a = 1.0;
@@ -1174,24 +1179,26 @@ Matrix eigenvalues(const Matrix& matrix) {
         return Matrix::vector({(-b + root) / 2.0, (-b - root) / 2.0});
     }
 
-    Matrix current = matrix;
+    // 一般矩阵：先化为 Hessenberg 型再进行 QR 迭代
+    Matrix current = hessenberg(matrix);
     const double tolerance = matrix_tolerance(matrix);
-    // 更高阶情况走带 Wilkinson 位移的实 QR 迭代，并在收尾时识别 2x2 实块。
-    for (int iteration = 0; iteration < 256; ++iteration) {
+    const int max_iter = std::max(256, static_cast<int>(matrix.rows * 32));
+
+    for (int iteration = 0; iteration < max_iter; ++iteration) {
         const std::size_t n = current.rows;
+        // 使用底部 2x2 块计算 Wilkinson 位移
         const double a = current.at(n - 2, n - 2);
         const double b = current.at(n - 2, n - 1);
         const double c = current.at(n - 1, n - 2);
         const double d = current.at(n - 1, n - 1);
-        const double trace = a + d;
-        const double determinant = a * d - b * c;
-        const double half_trace = trace * 0.5;
-        const double discriminant = half_trace * half_trace - determinant;
-        const double root = discriminant < 0.0 ? 0.0 : mymath::sqrt(discriminant);
-        const double candidate1 = half_trace + root;
-        const double candidate2 = half_trace - root;
-        const double mu =
-            mymath::abs(candidate1 - d) < mymath::abs(candidate2 - d) ? candidate1 : candidate2;
+        const double tr = a + d;
+        const double det = a * d - b * c;
+        const double half_tr = tr * 0.5;
+        const double disc = half_tr * half_tr - det;
+        const double root = disc < 0.0 ? 0.0 : mymath::sqrt(disc);
+        const double eig1 = half_tr + root;
+        const double eig2 = half_tr - root;
+        const double mu = mymath::abs(eig1 - d) < mymath::abs(eig2 - d) ? eig1 : eig2;
 
         Matrix shifted = current;
         for (std::size_t i = 0; i < n; ++i) {
@@ -1203,11 +1210,14 @@ Matrix eigenvalues(const Matrix& matrix) {
         for (std::size_t i = 0; i < n; ++i) {
             current.at(i, i) += mu;
         }
+
+        // 简单的数值清理
         for (std::size_t row = 1; row < n; ++row) {
             if (mymath::abs(current.at(row, row - 1)) <= tolerance) {
                 current.at(row, row - 1) = 0.0;
             }
         }
+
         if (off_diagonal_magnitude(current) <= tolerance * static_cast<double>(n * n)) {
             break;
         }
@@ -1286,8 +1296,18 @@ Matrix eigenvectors(const Matrix& matrix) {
         throw std::runtime_error("eigvecs requires a square matrix");
     }
 
-    // 先求特征值，再逐个解 (A - lambda I)v = 0。
-    // 返回结果按“列向量矩阵”组织：每一列是一个特征向量。
+    if (is_symmetric(matrix)) {
+        internal::EigenResult res = internal::eigenvalues_with_vectors(matrix);
+        Matrix vectors(matrix.rows, matrix.cols, 0.0);
+        for (std::size_t j = 0; j < res.vectors.size(); ++j) {
+            for (std::size_t i = 0; i < matrix.rows; ++i) {
+                vectors.at(i, j) = res.vectors[j][i];
+            }
+        }
+        return vectors;
+    }
+
+    // 非对称矩阵：先求特征值，再逐个解 (A - lambda I)v = 0。
     const Matrix values = eigenvalues(matrix);
     const bool complex_value_matrix = values.rows > 1 && values.cols == 2;
     if (complex_value_matrix) {
@@ -1297,20 +1317,57 @@ Matrix eigenvectors(const Matrix& matrix) {
             }
         }
     }
+
+    std::vector<double> real_vals;
+    if (complex_value_matrix) {
+        for (std::size_t i = 0; i < values.rows; ++i) real_vals.push_back(values.at(i, 0));
+    } else {
+        if (values.rows == 1) {
+            for (std::size_t j = 0; j < values.cols; ++j) real_vals.push_back(values.at(0, j));
+        } else {
+            for (std::size_t i = 0; i < values.rows; ++i) real_vals.push_back(values.at(i, 0));
+        }
+    }
+
     Matrix vectors(matrix.rows, matrix.cols, 0.0);
-    const std::size_t value_count = complex_value_matrix ? values.rows : values.cols;
-    for (std::size_t col = 0; col < value_count; ++col) {
-        const double lambda = complex_value_matrix ? values.at(col, 0) : values.at(0, col);
+    std::size_t current_col = 0;
+
+    // 提取唯一的特征值以处理几何多重性
+    std::vector<double> processed_lambdas;
+
+    for (double lambda : real_vals) {
+        bool already_done = false;
+        for (double p : processed_lambdas) {
+            if (mymath::abs(lambda - p) < 1e-8) {
+                already_done = true;
+                break;
+            }
+        }
+        if (already_done) continue;
+        processed_lambdas.push_back(lambda);
+
         Matrix shifted = matrix;
         for (std::size_t i = 0; i < shifted.rows; ++i) {
             shifted.at(i, i) -= lambda;
         }
 
-        const std::vector<double> basis = nullspace_vector(shifted);
-        for (std::size_t row = 0; row < basis.size(); ++row) {
-            vectors.at(row, col) = basis[row];
+        Matrix basis_mat = nullspace_basis(shifted);
+        for (std::size_t b_col = 0; b_col < basis_mat.cols && current_col < vectors.cols; ++b_col) {
+            // 规范化基向量
+            double norm_sq = 0.0;
+            for (std::size_t r = 0; r < basis_mat.rows; ++r) {
+                norm_sq += basis_mat.at(r, b_col) * basis_mat.at(r, b_col);
+            }
+            double mag = mymath::sqrt(norm_sq);
+            if (mag > 1e-15) {
+                for (std::size_t r = 0; r < basis_mat.rows; ++r) {
+                    vectors.at(r, current_col) = basis_mat.at(r, b_col) / mag;
+                }
+                ++current_col;
+            }
         }
     }
+
     return vectors;
 }
 

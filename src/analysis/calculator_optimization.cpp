@@ -19,6 +19,8 @@
 
 namespace optimization {
 
+enum class ProblemType { LP, ILP, MILP, BIP };
+
 namespace {
 
 /**
@@ -258,6 +260,48 @@ bool handle_optimization_command(const OptimizationContext& ctx,
     *output = format_planning_result(ctx, final_solution,
                                      optimization_helpers::dot_product(objective, final_solution));
     return true;
+}
+
+bool OptimizationModule::can_handle(const std::string& command) const {
+    return is_optimization_command(command);
+}
+
+std::string OptimizationModule::execute_args(const std::string& command,
+                                            const std::vector<std::string>& args,
+                                            const CoreServices& services) {
+    OptimizationContext ctx;
+    ctx.parse_matrix_argument = services.parse_matrix_argument;
+    ctx.normalize_result = services.evaluation.normalize_result;
+    ctx.is_integer_double = services.is_integer_double;
+    ctx.round_to_long_long = services.round_to_long_long;
+
+    std::string inside;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (i != 0) inside += ", ";
+        inside += args[i];
+    }
+
+    std::string output;
+    if (handle_optimization_command(ctx, command, inside, &output)) {
+        return output;
+    }
+    throw std::runtime_error("Optimization command failed: " + command);
+}
+
+std::vector<std::string> OptimizationModule::get_commands() const {
+    return {"lp_max", "lp_min", "ilp_max", "ilp_min", "milp_max", "milp_min", "bip_max", "bip_min", "binary_max", "binary_min"};
+}
+
+std::string OptimizationModule::get_help_snippet(const std::string& topic) const {
+    if (topic == "planning") {
+        return "Optimization:\n"
+               "  lp_max(c, A, b, lb, ub)       Linear programming (max)\n"
+               "  lp_min(c, A, b, lb, ub)       Linear programming (min)\n"
+               "  ilp_max(c, A, b, lb, ub)      Integer linear programming\n"
+               "  milp_max(c, A, b, lb, ub, int) Mixed-integer programming\n"
+               "  bip_max(c, A, b)              Binary integer programming";
+    }
+    return "";
 }
 
 }  // namespace optimization

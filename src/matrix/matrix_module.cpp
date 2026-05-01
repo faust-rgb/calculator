@@ -6,6 +6,8 @@
 #include "../core/calculator_exceptions.h"
 #include <stdexcept>
 #include <cmath>
+#include <algorithm>
+#include <sstream>
 
 namespace {
 
@@ -89,7 +91,93 @@ ComplexNumber require_complex_argument(const std::string& expression,
     throw std::runtime_error(func_name + " expects a scalar or complex argument");
 }
 
+// 格式化特征值矩阵（复数形式）
+std::string format_eigenvalue_matrix(const Matrix& values) {
+    if (values.rows <= 1 || values.cols != 2) {
+        return values.to_string();
+    }
+    std::ostringstream out;
+    out << "[";
+    for (std::size_t row = 0; row < values.rows; ++row) {
+        if (row != 0) {
+            out << ", ";
+        }
+        out << internal::format_complex({values.at(row, 0), values.at(row, 1)});
+    }
+    out << "]";
+    return out.str();
+}
+
 } // namespace
+
+// ============================================================================
+// 命令接口实现
+// ============================================================================
+
+std::vector<std::string> MatrixModule::get_commands() const {
+    return {"eig", "svd", "lu_p"};
+}
+
+bool MatrixModule::can_handle(const std::string& command) const {
+    return command == "eig" || command == "svd" || command == "lu_p";
+}
+
+std::string MatrixModule::execute_args(const std::string& command,
+                                       const std::vector<std::string>& args,
+                                       const CoreServices& services) {
+    if (!can_handle(command)) {
+        throw std::runtime_error("MatrixModule cannot handle command: " + command);
+    }
+
+    if (args.size() != 1) {
+        throw std::runtime_error(command + " expects exactly one matrix argument");
+    }
+
+    const std::string& arg = args[0];
+    if (!services.is_matrix_argument(arg)) {
+        throw std::runtime_error(command + " expects a matrix argument");
+    }
+
+    const Matrix matrix_value = services.parse_matrix_argument(arg, command);
+
+    if (command == "svd") {
+        return "U: " + svd_u(matrix_value).to_string() +
+               "\nS: " + svd_s(matrix_value).to_string() +
+               "\nVt: " + svd_vt(matrix_value).to_string();
+    }
+
+    if (command == "lu_p") {
+        return lu_p(matrix_value).to_string();
+    }
+
+    // command == "eig"
+    try {
+        const Matrix values = eigenvalues(matrix_value);
+        if (values.rows > 1 && values.cols == 2) {
+            return "values: " + format_eigenvalue_matrix(values) +
+                   "\nvectors: unavailable for complex eigenvalues";
+        }
+        return "values: " + values.to_string() +
+               "\nvectors: " + eigenvectors(matrix_value).to_string();
+    } catch (const std::exception&) {
+        if (matrix_value.rows == 2 && matrix_value.cols == 2) {
+            const double trace = matrix_value.at(0, 0) + matrix_value.at(1, 1);
+            const double det = determinant(matrix_value);
+            const double discriminant = trace * trace - 4.0 * det;
+            if (discriminant < 0.0) {
+                const double real = trace * 0.5;
+                const double imag = mymath::sqrt(-discriminant) * 0.5;
+                std::ostringstream out;
+                out << "values: [complex(" << format_decimal(real) << ", "
+                    << format_decimal(imag) << "), complex("
+                    << format_decimal(real) << ", " << format_decimal(-imag)
+                    << ")]\nvectors: unavailable for complex eigenvalues";
+                return out.str();
+            }
+        }
+        throw;
+    }
+}
 
 std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>
 MatrixModule::get_matrix_functions() const {
@@ -561,4 +649,31 @@ MatrixModule::get_value_functions() const {
     };
 
     return funcs;
+}
+
+std::vector<std::string> MatrixModule::get_functions() const {
+    std::vector<std::string> names;
+    auto mat_funcs = get_matrix_functions();
+    for (const auto& [name, _] : mat_funcs) names.push_back(name);
+    auto val_funcs = get_value_functions();
+    for (const auto& [name, _] : val_funcs) names.push_back(name);
+    
+    // Add matrix creation functions
+    std::vector<std::string> creation = { "vec", "mat", "zeros", "eye", "identity", "randmat" };
+    names.insert(names.end(), creation.begin(), creation.end());
+
+    std::sort(names.begin(), names.end());
+    names.erase(std::unique(names.begin(), names.end()), names.end());
+    return names;
+}
+
+std::string MatrixModule::get_help_snippet(const std::string& topic) const {
+    if (topic == "matrix") {
+        return "Matrix guide:\n"
+               "  Create:  [a,b;c,d] vec mat zeros eye identity randmat\n"
+               "  Shape:   resize append_row append_col transpose\n"
+               "  Anal.:   norm trace det rank rref eigvals solve cond diag\n"
+               "  Complex: real imag arg conj polar complex abs";
+    }
+    return "";
 }

@@ -2349,4 +2349,46 @@ bool handle_series_command(const SeriesContext& ctx,
     return false;
 }
 
+bool SeriesModule::can_handle(const std::string& command) const {
+    return is_series_command(command);
+}
+
+std::string SeriesModule::execute_args(const std::string& command,
+                                      const std::vector<std::string>& args,
+                                      const CoreServices& services) {
+    SeriesContext ctx;
+    ctx.resolve_symbolic = services.symbolic.resolve_symbolic;
+    ctx.parse_decimal = services.evaluation.parse_decimal;
+    ctx.evaluate_at = services.symbolic.evaluate_symbolic_at;
+    ctx.simplify_symbolic = services.symbolic.simplify_symbolic;
+    ctx.expand_inline = services.symbolic.expand_inline;
+
+    std::string inside;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (i != 0) inside += ", ";
+        inside += args[i];
+    }
+
+    std::string output;
+    if (handle_series_command(ctx, command, inside, &output)) {
+        return output;
+    }
+    throw std::runtime_error("Series command failed: " + command);
+}
+
+std::vector<std::string> SeriesModule::get_commands() const {
+    return {"taylor", "pade", "puiseux", "series_sum", "summation"};
+}
+
+std::string SeriesModule::get_help_snippet(const std::string& topic) const {
+    if (topic == "symbolic") {
+        return "Series:\n"
+               "  taylor(f, a, n)     Taylor series at x=a up to degree n\n"
+               "  pade(f, [a], m, n)  Pade approximation [m/n]\n"
+               "  puiseux(f, n, d)    Puiseux series (fractional powers)\n"
+               "  series_sum(f, i, a, b) Finite or infinite summation";
+    }
+    return "";
+}
+
 }  // namespace series_ops

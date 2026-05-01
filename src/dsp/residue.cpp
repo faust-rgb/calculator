@@ -26,7 +26,7 @@ std::string handle_residue_command(const std::string& command,
 
     const SymbolicExpression expression =
         SymbolicExpression::parse(
-            trim_copy(svc.expand_inline(arguments[0])))
+            trim_copy(svc.symbolic.expand_inline(arguments[0])))
             .simplify();
     SymbolicExpression numerator = expression;
     SymbolicExpression denominator = SymbolicExpression::number(1.0);
@@ -44,7 +44,8 @@ std::string handle_residue_command(const std::string& command,
         throw MathError("residue currently supports rational polynomial expressions");
     }
 
-    StoredValue point_value = svc.evaluate_value(arguments[2], false);
+    StoredValue point_value = svc.evaluation.evaluate_value(arguments[2], false);
+
     mymath::complex<double> point(point_value.exact
                                    ? rational_to_double(point_value.rational)
                                    : point_value.decimal,

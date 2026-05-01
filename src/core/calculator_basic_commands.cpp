@@ -177,6 +177,7 @@ std::string Calculator::plot_expression(const std::string& expression) const {
     plot::PlotContext ctx;
     ctx.variables = visible_variables(impl_.get());
     ctx.functions = &impl_->functions;
+    ctx.scalar_functions = &impl_->scalar_functions;
     ctx.has_script_function = [this](const std::string& name) {
         return has_visible_script_function(impl_.get(), name);
     };
@@ -203,6 +204,7 @@ std::string Calculator::export_variable(const std::string& line) const {
     plot::PlotContext ctx;
     ctx.variables = visible_variables(impl_.get());
     ctx.functions = &impl_->functions;
+    ctx.scalar_functions = &impl_->scalar_functions;
     ctx.has_script_function = [this](const std::string& name) {
         return has_visible_script_function(impl_.get(), name);
     };

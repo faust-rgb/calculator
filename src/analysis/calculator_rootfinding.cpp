@@ -365,4 +365,56 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
     return false;
 }
 
+bool RootfindingModule::can_handle(const std::string& command) const {
+    return is_rootfinding_command(command);
+}
+
+std::string RootfindingModule::execute_args(const std::string& command,
+                                           const std::vector<std::string>& args,
+                                           const CoreServices& services) {
+    RootfindingContext ctx;
+    ctx.parse_decimal = services.evaluation.parse_decimal;
+    ctx.build_scoped_evaluator = services.evaluation.build_decimal_evaluator;
+    ctx.get_derivative_expression = [&](const std::string& expr_str, const std::string& var_name) {
+        try {
+            std::string var;
+            SymbolicExpression expr;
+            services.symbolic.resolve_symbolic(expr_str, false, &var, &expr);
+            if (expr.node_) return expr.derivative(var_name).simplify().to_string();
+        } catch (...) {}
+        return std::string();
+    };
+    ctx.is_matrix_argument = services.is_matrix_argument;
+    ctx.parse_matrix_argument = services.parse_matrix_argument;
+    ctx.normalize_result = services.evaluation.normalize_result;
+
+    std::string inside;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (i != 0) inside += ", ";
+        inside += args[i];
+    }
+
+    std::string output;
+    if (handle_rootfinding_command(ctx, command, inside, &output)) {
+        return output;
+    }
+    throw std::runtime_error("Rootfinding command failed: " + command);
+}
+
+std::vector<std::string> RootfindingModule::get_commands() const {
+    return {"solve", "bisect", "secant", "fixed_point"};
+}
+
+std::string RootfindingModule::get_help_snippet(const std::string& topic) const {
+    if (topic == "analysis") {
+        return "Rootfinding:\n"
+               "  solve(f, x0)           Numerical root solving (Newton's method)\n"
+               "  solve(A, b)            Linear system solver\n"
+               "  bisect(f, a, b)        Bisection method\n"
+               "  secant(f, x0, x1)      Secant method\n"
+               "  fixed_point(f, x0)     Fixed-point iteration";
+    }
+    return "";
+}
+
 }  // namespace rootfinding

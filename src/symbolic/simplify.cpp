@@ -136,6 +136,18 @@ bool try_extract_common_symbolic_factor(const SymbolicExpression& expression,
  * 完整简化通过 simplify_impl() 多轮调用此函数实现。
  */
 SymbolicExpression simplify_once(const SymbolicExpression& expression) {
+    static thread_local int depth = 0;
+    static constexpr int kMaxDepth = 512;
+    if (++depth > kMaxDepth) {
+        --depth;
+        return expression; // 达到最大深度，不再继续简化
+    }
+
+    struct DepthGuard {
+        int* d;
+        ~DepthGuard() { if (d) (*d)--; }
+    } guard{&depth};
+
     const auto& node = expression.node_;
     switch (node->type) {
         case NodeType::kNumber:

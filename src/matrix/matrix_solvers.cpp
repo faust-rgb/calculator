@@ -133,84 +133,116 @@ Matrix nullspace_basis(const Matrix& matrix) {
 }
 
 ReducedSvd compute_reduced_svd(const Matrix& matrix) {
-    const std::size_t m = matrix.rows;
-    const std::size_t n = matrix.cols;
-    const std::size_t k = std::min(m, n);
+    bool transposed = false;
+    Matrix A = matrix;
+    if (matrix.rows < matrix.cols) {
+        A = transpose(matrix);
+        transposed = true;
+    }
 
-    Matrix u = Matrix::zero(m, k);
-    Matrix s = Matrix::zero(k, k);
-    Matrix vt = Matrix::zero(k, n);
+    const std::size_t m = A.rows;
+    const std::size_t n = A.cols; // n <= m
+    Matrix V = Matrix::identity(n);
+    const double tol = 1e-13;
+    const int max_sweeps = 100;
 
-    Matrix at_a = multiply(transpose(matrix), matrix);
-    EigenResult eig = eigenvalues_with_vectors(at_a);
+    for (int sweep = 0; sweep < max_sweeps; ++sweep) {
+        bool changed = false;
+        for (std::size_t i = 0; i < n - 1; ++i) {
+            for (std::size_t j = i + 1; j < n; ++j) {
+                double alpha = 0.0, beta = 0.0, gamma = 0.0;
+                for (std::size_t r = 0; r < m; ++r) {
+                    double ai = A.at(r, i);
+                    double aj = A.at(r, j);
+                    alpha += ai * ai;
+                    beta += aj * aj;
+                    gamma += ai * aj;
+                }
 
-    std::vector<std::size_t> order(eig.values.size());
-    for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;
-    std::sort(order.begin(), order.end(), [&](std::size_t i, std::size_t j) {
-        return eig.values[i] > eig.values[j];
+                if (mymath::abs(gamma) > tol * mymath::sqrt(alpha * beta)) {
+                    changed = true;
+                    double tau = (beta - alpha) / (2.0 * gamma);
+                    double t = (tau >= 0.0 ? 1.0 : -1.0) / (mymath::abs(tau) + mymath::sqrt(1.0 + tau * tau));
+                    double c = 1.0 / mymath::sqrt(1.0 + t * t);
+                    double s = c * t;
+
+                    for (std::size_t r = 0; r < m; ++r) {
+                        double ai = A.at(r, i);
+                        double aj = A.at(r, j);
+                        A.at(r, i) = c * ai - s * aj;
+                        A.at(r, j) = s * ai + c * aj;
+                    }
+                    for (std::size_t r = 0; r < n; ++r) {
+                        double vi = V.at(r, i);
+                        double vj = V.at(r, j);
+                        V.at(r, i) = c * vi - s * vj;
+                        V.at(r, j) = s * vi + c * vj;
+                    }
+                }
+            }
+        }
+        if (!changed) break;
+    }
+
+    std::vector<std::pair<double, std::size_t>> singular_values(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        double norm_sq = 0.0;
+        for (std::size_t r = 0; r < m; ++r) {
+            norm_sq += A.at(r, i) * A.at(r, i);
+        }
+        singular_values[i] = {mymath::sqrt(norm_sq), i};
+    }
+
+    std::sort(singular_values.begin(), singular_values.end(), [](const auto& a, const auto& b) {
+        return a.first > b.first;
     });
 
+    Matrix result_U = Matrix::zero(m, n);
+    Matrix result_S = Matrix::zero(n, n);
+    Matrix result_VT = Matrix::zero(n, n);
+
     std::vector<std::vector<double>> u_basis;
-    std::vector<std::vector<double>> v_basis;
+    for (std::size_t out_col = 0; out_col < n; ++out_col) {
+        double sigma = singular_values[out_col].first;
+        std::size_t orig_col = singular_values[out_col].second;
+        result_S.at(out_col, out_col) = sigma;
 
-    for (std::size_t out_col = 0; out_col < k; ++out_col) {
-        std::vector<double> v =
-            out_col < order.size()
-                ? matrix_column(eig.vectors, order[out_col])
-                : standard_basis_vector(n, out_col % n);
-
-        if (!orthonormalize(&v, v_basis)) {
-            for (std::size_t basis_idx = 0; basis_idx < n; ++basis_idx) {
-                v = standard_basis_vector(n, basis_idx);
-                if (orthonormalize(&v, v_basis)) {
-                    break;
-                }
-            }
+        for (std::size_t r = 0; r < n; ++r) {
+            result_VT.at(out_col, r) = V.at(r, orig_col);
         }
-        v_basis.push_back(v);
 
-        double lambda = 0.0;
-        if (out_col < order.size()) {
-            lambda = eig.values[order[out_col]];
-        }
-        if (lambda < 0.0 && mymath::abs(lambda) < matrix_tolerance(matrix)) {
-            lambda = 0.0;
-        }
-        const double sigma = mymath::sqrt(std::max(0.0, lambda));
-        s.at(out_col, out_col) = sigma;
-
-        std::vector<double> u_col(m, 0.0);
+        std::vector<double> col_vec(m, 0.0);
         if (sigma > matrix_tolerance(matrix)) {
-            for (std::size_t row = 0; row < m; ++row) {
-                for (std::size_t inner = 0; inner < n; ++inner) {
-                    u_col[row] += matrix.at(row, inner) * v[inner];
-                }
-                u_col[row] /= sigma;
+            for (std::size_t r = 0; r < m; ++r) {
+                col_vec[r] = A.at(r, orig_col) / sigma;
+                result_U.at(r, out_col) = col_vec[r];
             }
-            if (!orthonormalize(&u_col, u_basis)) {
-                u_col.assign(m, 0.0);
-            }
-        }
-
-        if (vector_norm_squared(u_col) <= matrix_tolerance(matrix)) {
+            u_basis.push_back(col_vec);
+        } else {
+            bool found = false;
             for (std::size_t basis_idx = 0; basis_idx < m; ++basis_idx) {
-                u_col = standard_basis_vector(m, basis_idx);
-                if (orthonormalize(&u_col, u_basis)) {
+                col_vec = standard_basis_vector(m, basis_idx);
+                if (orthonormalize(&col_vec, u_basis)) {
+                    u_basis.push_back(col_vec);
+                    for (std::size_t r = 0; r < m; ++r) {
+                        result_U.at(r, out_col) = col_vec[r];
+                    }
+                    found = true;
                     break;
                 }
             }
-        }
-        u_basis.push_back(u_col);
-    }
-
-    for (std::size_t col = 0; col < k; ++col) {
-        set_matrix_column(&u, col, u_basis[col]);
-        for (std::size_t row = 0; row < n; ++row) {
-            vt.at(col, row) = v_basis[col][row];
+            if (!found) {
+                for (std::size_t r = 0; r < m; ++r) {
+                    result_U.at(r, out_col) = 0.0;
+                }
+            }
         }
     }
 
-    return {u, s, vt};
+    if (transposed) {
+        return {transpose(result_VT), result_S, transpose(result_U)};
+    }
+    return {result_U, result_S, result_VT};
 }
 
 } // namespace internal

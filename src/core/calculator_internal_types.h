@@ -92,15 +92,23 @@ struct Calculator::Impl {
     std::vector<std::map<std::string, StoredValue>> local_scopes; ///< 局部作用域栈
 
     std::vector<std::shared_ptr<CalculatorModule>> registered_modules; ///< 已注册的数学模块
+    std::vector<std::shared_ptr<CalculatorModule>> implicit_evaluation_modules; ///< 优化后的隐式求值模块列表
 
     std::map<std::string, std::function<double(const std::vector<double>&)>> scalar_functions; ///< 汇总的标量函数
     std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>> matrix_functions; ///< 汇总的矩阵函数
     std::map<std::string, matrix::ValueFunction> value_functions; ///< 汇总的值多态函数
 
+    // 汇总的模块元数据，用于补全和帮助
+    std::vector<std::string> module_commands;
+    std::vector<std::string> module_functions;
+    std::map<std::string, std::vector<std::shared_ptr<CalculatorModule>>> help_topic_to_modules;
+    std::map<std::string, std::shared_ptr<CalculatorModule>> command_to_module;
+
     bool symbolic_constants_mode = false;  ///< 符号常量模式（pi, e 保留符号形式）
     bool hex_prefix_mode = false;          ///< 十六进制输出前缀
     bool hex_uppercase_mode = true;        ///< 十六进制大写字母
     int display_precision = kDefaultDisplayPrecision; ///< 十进制显示有效位数
+    int script_call_depth = 0;             ///< 脚本递归深度计数器
 };
 
 #include "../script/script_signal.h"
@@ -185,6 +193,6 @@ std::vector<double> solve_dense_linear_system(std::vector<std::vector<double>> m
 #include "../script/script_runtime.h"
 
 // 模块注册
-void register_standard_modules(Calculator* calculator, Calculator::Impl* impl);
+void register_standard_modules(Calculator* calculator);
 
 #endif

@@ -1,0 +1,6 @@
+s = "x"
+for i in range(300) {
+  s = "sin(" + s + ")"
+}
+# print("String length: " + s) # Wait, s is huge
+diff(s, x)

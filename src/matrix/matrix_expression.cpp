@@ -542,7 +542,7 @@ private:
     Value parse_primary() {
         skip_spaces();
         if (match('(')) {
-            Value value = parse_expression();
+            Value value = parse_comparison();
             skip_spaces();
             expect(')');
             return value;
@@ -2258,6 +2258,12 @@ bool try_evaluate_expression(const std::string& expression,
         trimmed.find("complex_integral(") != std::string::npos ||
         trimmed.find("eigvecs(") != std::string::npos ||
         trimmed.find('[') != std::string::npos ||
+        trimmed.find("==") != std::string::npos ||
+        trimmed.find("!=") != std::string::npos ||
+        trimmed.find("<=") != std::string::npos ||
+        trimmed.find(">=") != std::string::npos ||
+        trimmed.find('<') != std::string::npos ||
+        trimmed.find('>') != std::string::npos ||
         is_complex_symbol(trimmed);
 
     const bool mentions_matrix_variable =

@@ -1,0 +1,8 @@
+def test_cond(n) {
+  if (n <= 0) {
+    return 1;
+  }
+  return 0;
+}
+print(test_cond(-1));
+print(test_cond(1));

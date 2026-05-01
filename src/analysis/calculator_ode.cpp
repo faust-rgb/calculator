@@ -560,4 +560,47 @@ std::string matrix_literal_expression(const matrix::Matrix& value) {
     return out.str();
 }
 
+bool ODEModule::can_handle(const std::string& command) const {
+    return is_ode_command(command);
+}
+
+std::string ODEModule::execute_args(const std::string& command,
+                                   const std::vector<std::string>& args,
+                                   const CoreServices& services) {
+    ODEContext ctx;
+    ctx.parse_decimal = services.evaluation.parse_decimal;
+    ctx.build_scoped_scalar_evaluator = services.evaluation.build_scalar_evaluator;
+    ctx.build_scoped_matrix_evaluator = services.evaluation.build_matrix_evaluator;
+    ctx.is_matrix_argument = services.is_matrix_argument;
+    ctx.parse_matrix_argument = services.parse_matrix_argument;
+    ctx.evaluate_expression_value = services.evaluation.evaluate_value;
+    ctx.normalize_result = services.evaluation.normalize_result;
+
+    std::string inside;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (i != 0) inside += ", ";
+        inside += args[i];
+    }
+
+    std::string output;
+    if (handle_ode_command(ctx, command, inside, &output)) {
+        return output;
+    }
+    throw std::runtime_error("ODE command failed: " + command);
+}
+
+std::vector<std::string> ODEModule::get_commands() const {
+    return {"ode", "ode_table", "ode_system", "ode_system_table"};
+}
+
+std::string ODEModule::get_help_snippet(const std::string& topic) const {
+    if (topic == "analysis") {
+        return "ODE Solver:\n"
+               "  ode(f, x0, y0, x1)             Numerical solution of y'=f(x,y)\n"
+               "  ode_system(F, x0, Y0, x1)      Numerical solution of vector ODE\n"
+               "  ode_table(...)                 Return result trajectory";
+    }
+    return "";
+}
+
 }  // namespace ode_ops
