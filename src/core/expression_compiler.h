@@ -11,6 +11,8 @@
 #ifndef EXPRESSION_COMPILER_H
 #define EXPRESSION_COMPILER_H
 
+#include "expression_ast.h"
+
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -121,12 +123,17 @@ struct ExpressionCache {
     ExpressionFeature features;         ///< 特征
     std::vector<ExpressionToken> tokens; ///< Token 序列（可选）
 
+    // 编译后的 AST（用于快速求值）
+    std::unique_ptr<ExpressionAST> compiled_ast;
+    bool is_compiled = false;           ///< 是否已成功编译
+
     ExpressionCache() : hint(ExpressionHint::kUnknown),
-                        features(ExpressionFeature::kNone) {}
+                        features(ExpressionFeature::kNone),
+                        is_compiled(false) {}
 
     explicit ExpressionCache(const std::string& expr)
         : expanded(expr), hint(ExpressionHint::kUnknown),
-          features(ExpressionFeature::kNone) {}
+          features(ExpressionFeature::kNone), is_compiled(false) {}
 };
 
 // ============================================================================
@@ -146,5 +153,19 @@ ExpressionHint analyze_expression_hint(const std::string& expression);
  * @return 特征位掩码
  */
 ExpressionFeature analyze_expression_features(const std::string& expression);
+
+// ============================================================================
+// 编译表达式 AST
+// ============================================================================
+
+class VariableResolver;
+struct CustomFunction;
+
+/**
+ * @brief 编译表达式为 AST
+ * @param expression 表达式字符串
+ * @return 编译后的 AST，失败返回 nullptr
+ */
+std::unique_ptr<ExpressionAST> compile_expression_ast(const std::string& expression);
 
 #endif // EXPRESSION_COMPILER_H

@@ -1,5 +1,6 @@
 #include "script_runtime.h"
 #include "calculator_module.h"
+#include "expression_ast.h"
 #include "expression_compiler.h"
 #include "core/utils.h"
 #include "mymath.h"
@@ -13,6 +14,9 @@
 #include <utility>
 
 VariableResolver visible_variables(const Calculator::Impl* impl) {
+    if (impl->use_flat_scopes) {
+        return VariableResolver(&impl->variables, &impl->flat_scopes);
+    }
     return VariableResolver(&impl->variables, &impl->local_scopes);
 }
 
@@ -23,6 +27,29 @@ bool has_visible_script_function(const Calculator::Impl* impl, const std::string
 void assign_visible_variable(Calculator::Impl* impl,
                              const std::string& name,
                              const StoredValue& value) {
+    // 优先使用 FlatScopeStack
+    if (impl->use_flat_scopes) {
+        // 先在 flat_scopes 中查找是否已存在
+        if (VariableSlot* existing = impl->flat_scopes.find(name)) {
+            existing->value = value;
+            return;
+        }
+        // 检查全局变量
+        if (impl->variables.find(name) != impl->variables.end()) {
+            impl->variables[name] = value;
+            return;
+        }
+        // 在当前作用域创建新变量
+        if (impl->flat_scopes.scope_depth() > 0) {
+            impl->flat_scopes.set(name, value);
+            return;
+        }
+        // 无局部作用域，创建全局变量
+        impl->variables[name] = value;
+        return;
+    }
+
+    // 传统路径：std::map 查找
     for (auto it = impl->local_scopes.rbegin(); it != impl->local_scopes.rend(); ++it) {
         const auto existing = it->find(name);
         if (existing != it->end()) {
@@ -141,6 +168,13 @@ std::string render_script_statement(const script::Statement& statement, int inde
                    source.step + ") " +
                    render_script_statement(*source.body, indent).substr(prefix.size());
         }
+        case script::Statement::Kind::kForRange: {
+            const auto& source = static_cast<const script::ForRangeStatement&>(statement);
+            return prefix + "for " + source.variable + " in range(" +
+                   source.start_expr + ", " + source.stop_expr + ", " +
+                   source.step_expr + ") " +
+                   render_script_statement(*source.body, indent).substr(prefix.size());
+        }
         case script::Statement::Kind::kFunction: {
             const auto& source = static_cast<const script::FunctionStatement&>(statement);
             std::ostringstream out;
@@ -211,6 +245,20 @@ script::StatementPtr clone_statement(const script::Statement& statement) {
             clone->body = clone_statement(*source.body);
             return clone;
         }
+        case script::Statement::Kind::kForRange: {
+            const auto& source = static_cast<const script::ForRangeStatement&>(statement);
+            auto clone = std::make_unique<script::ForRangeStatement>();
+            clone->variable = source.variable;
+            clone->start_expr = source.start_expr;
+            clone->stop_expr = source.stop_expr;
+            clone->step_expr = source.step_expr;
+            clone->step_is_negative = source.step_is_negative;
+            clone->start_cache = source.start_cache;
+            clone->stop_cache = source.stop_cache;
+            clone->step_cache = source.step_cache;
+            clone->body = clone_statement(*source.body);
+            return clone;
+        }
         case script::Statement::Kind::kFunction: {
             const auto& source = static_cast<const script::FunctionStatement&>(statement);
             auto clone = std::make_unique<script::FunctionStatement>();
@@ -241,7 +289,7 @@ double invoke_script_function_decimal(Calculator* calculator,
                                       const std::string& name,
                                       const std::vector<double>& arguments) {
     // 递归深度检查
-    static constexpr int kMaxScriptRecursionDepth = 512;
+    static constexpr int kMaxScriptRecursionDepth = 4096;
     if (impl->script_call_depth >= kMaxScriptRecursionDepth) {
         throw std::runtime_error("maximum script recursion depth exceeded (" +
                                  std::to_string(kMaxScriptRecursionDepth) + ")");
@@ -284,20 +332,25 @@ double invoke_script_function_decimal(Calculator* calculator,
                                  " arguments");
     }
 
-    std::map<std::string, StoredValue> frame;
-    for (std::size_t i = 0; i < arguments.size(); ++i) {
-        StoredValue parameter_value;
-        parameter_value.decimal = arguments[i];
-        parameter_value.exact = false;
-        frame[function.parameter_names[i]] = parameter_value;
-    }
+    // 使用 FlatScopeStack 创建栈帧
+    if (impl->use_flat_scopes) {
+        impl->flat_scopes.push_scope();
+        for (std::size_t i = 0; i < arguments.size(); ++i) {
+            StoredValue parameter_value;
+            parameter_value.decimal = arguments[i];
+            parameter_value.exact = false;
+            impl->flat_scopes.set(function.parameter_names[i], parameter_value);
+        }
 
-    impl->local_scopes.push_back(frame);
-    std::string ignored_output;
-    try {
+        struct FlatScopeGuard {
+            Calculator::Impl* impl;
+            explicit FlatScopeGuard(Calculator::Impl* i) : impl(i) {}
+            ~FlatScopeGuard() { impl->flat_scopes.pop_scope(); }
+        } scope_guard(impl);
+
+        std::string ignored_output;
         const ScriptSignal signal =
             execute_script_block(calculator, impl, *function.body, false, &ignored_output, false);
-        impl->local_scopes.pop_back();
 
         if (signal.kind != ScriptSignal::Kind::kReturn || !signal.has_value) {
             throw std::runtime_error("script function " + name + " must return a value");
@@ -313,10 +366,42 @@ double invoke_script_function_decimal(Calculator* calculator,
         return signal.value.exact
                    ? rational_to_double(signal.value.rational)
                    : signal.value.decimal;
-    } catch (...) {
-        impl->local_scopes.pop_back();
-        throw;
     }
+
+    // 传统路径：std::map 栈帧
+    std::map<std::string, StoredValue> frame;
+    for (std::size_t i = 0; i < arguments.size(); ++i) {
+        StoredValue parameter_value;
+        parameter_value.decimal = arguments[i];
+        parameter_value.exact = false;
+        frame[function.parameter_names[i]] = parameter_value;
+    }
+
+    impl->local_scopes.push_back(std::move(frame));
+    struct ScopeGuard {
+        Calculator::Impl* impl;
+        explicit ScopeGuard(Calculator::Impl* i) : impl(i) {}
+        ~ScopeGuard() { impl->local_scopes.pop_back(); }
+    } scope_guard(impl);
+
+    std::string ignored_output;
+    const ScriptSignal signal =
+        execute_script_block(calculator, impl, *function.body, false, &ignored_output, false);
+
+    if (signal.kind != ScriptSignal::Kind::kReturn || !signal.has_value) {
+        throw std::runtime_error("script function " + name + " must return a value");
+    }
+    if (signal.value.is_matrix || signal.value.is_complex) {
+        throw std::runtime_error("script function " + name +
+                                 " cannot be used as a scalar expression");
+    }
+    if (signal.value.is_string) {
+        throw std::runtime_error("script function " + name +
+                                 " cannot be used as a numeric expression");
+    }
+    return signal.value.exact
+               ? rational_to_double(signal.value.rational)
+               : signal.value.decimal;
 }
 
 // ============================================================================
@@ -518,6 +603,23 @@ StoredValue evaluate_expression_value(Calculator* calculator,
         [calculator, impl](const std::string& name, const std::vector<double>& arguments) {
             return invoke_script_function_decimal(calculator, impl, name, arguments);
         };
+    auto attach_symbolic_text = [&](StoredValue* stored) {
+        if (!impl->symbolic_constants_mode || stored == nullptr ||
+            stored->is_matrix || stored->is_complex || stored->is_string) {
+            return;
+        }
+        std::string symbolic_output;
+        if (try_symbolic_constant_expression(trimmed,
+                                             variables,
+                                             &impl->functions,
+                                             &symbolic_output)) {
+            stored->has_symbolic_text = true;
+            stored->symbolic_text = symbolic_output;
+        } else if (contains_builtin_constant_token(trimmed)) {
+            stored->has_symbolic_text = true;
+            stored->symbolic_text = trimmed;
+        }
+    };
 
     // 检查字符串字面量
     if (is_string_literal(trimmed)) {
@@ -551,7 +653,7 @@ StoredValue evaluate_expression_value(Calculator* calculator,
     }
 
     // 矩阵/复数表达式
-    matrix::Value matrix_value;
+    auto matrix_value = std::make_unique<matrix::Value>();
     if (try_evaluate_matrix_expression(trimmed,
                                        variables,
                                        &impl->functions,
@@ -560,18 +662,18 @@ StoredValue evaluate_expression_value(Calculator* calculator,
                                        &impl->value_functions,
                                        has_script_function,
                                        invoke_script_function,
-                                       &matrix_value)) {
+                                       matrix_value.get())) {
         StoredValue stored;
-        if (matrix_value.is_matrix) {
+        if (matrix_value->is_matrix) {
             stored.is_matrix = true;
-            stored.matrix = matrix_value.matrix;
-        } else if (matrix_value.is_complex) {
+            stored.matrix = matrix_value->matrix;
+        } else if (matrix_value->is_complex) {
             stored.is_complex = true;
-            stored.complex = matrix_value.complex;
-            stored.decimal = matrix_value.complex.real;
+            stored.complex = matrix_value->complex;
+            stored.decimal = matrix_value->complex.real;
             stored.exact = false;
         } else {
-            stored.decimal = matrix_value.scalar;
+            stored.decimal = matrix_value->scalar;
             stored.exact = false;
         }
         return stored;
@@ -590,6 +692,51 @@ StoredValue evaluate_expression_value(Calculator* calculator,
 
     // 标量解析
     try {
+        // 尝试使用编译后的 AST 进行快速求值
+        if (expr_cache->is_compiled && expr_cache->compiled_ast) {
+            try {
+                const double parsed_value = evaluate_compiled_ast(
+                    expr_cache->compiled_ast.get(),
+                    variables,
+                    &impl->functions,
+                    &impl->scalar_functions,
+                    has_script_function,
+                    invoke_script_function);
+                StoredValue stored;
+                stored.decimal = parsed_value;
+                stored.exact = false;
+                attach_symbolic_text(&stored);
+                return stored;
+            } catch (const MathError&) {
+                // AST 求值失败，回退到完整解析器
+            }
+        } else if (!expr_cache->is_compiled && expr_cache->hint == ExpressionHint::kScalar) {
+            // 尝试编译 AST
+            expr_cache->compiled_ast = compile_expression_ast(trimmed);
+            if (expr_cache->compiled_ast) {
+                expr_cache->is_compiled = true;
+                // 尝试绑定变量槽位（高性能路径）
+                bind_variable_slots(expr_cache->compiled_ast.get(), variables);
+                try {
+                    const double parsed_value = evaluate_compiled_ast(
+                        expr_cache->compiled_ast.get(),
+                        variables,
+                        &impl->functions,
+                        &impl->scalar_functions,
+                        has_script_function,
+                        invoke_script_function);
+                    StoredValue stored;
+                    stored.decimal = parsed_value;
+                    stored.exact = false;
+                    attach_symbolic_text(&stored);
+                    return stored;
+                } catch (const MathError&) {
+                    // AST 求值失败，回退到完整解析器
+                }
+            }
+        }
+
+        // 回退到完整解析器
         DecimalParser parser(trimmed,
                              variables,
                              &impl->functions,
@@ -600,19 +747,7 @@ StoredValue evaluate_expression_value(Calculator* calculator,
         StoredValue stored;
         stored.decimal = parsed_value;
         stored.exact = false;
-        if (impl->symbolic_constants_mode) {
-            std::string symbolic_output;
-            if (try_symbolic_constant_expression(trimmed,
-                                                 variables,
-                                                 &impl->functions,
-                                                 &symbolic_output)) {
-                stored.has_symbolic_text = true;
-                stored.symbolic_text = symbolic_output;
-            } else if (contains_builtin_constant_token(trimmed)) {
-                stored.has_symbolic_text = true;
-                stored.symbolic_text = trimmed;
-            }
-        }
+        attach_symbolic_text(&stored);
         return stored;
     } catch (const UndefinedError&) {
         // 如果数值求值失败（由于变量未定义），但该表达式是由符号指令展开而来的，
@@ -743,6 +878,68 @@ ScriptSignal execute_script_statement(Calculator* calculator,
         }
         case script::Statement::Kind::kFor: {
             const auto& for_statement = static_cast<const script::ForStatement&>(statement);
+
+            // 使用 FlatScopeStack
+            if (impl->use_flat_scopes) {
+                impl->flat_scopes.push_scope();
+                try {
+                    if (!for_statement.initializer.empty()) {
+                        std::shared_ptr<ExpressionCache> init_cache = for_statement.init_cache;
+                        if (!init_cache) {
+                            init_cache = std::make_shared<ExpressionCache>();
+                            init_cache->expanded = expand_inline_function_commands(calculator, for_statement.initializer);
+                            for_statement.init_cache = init_cache;
+                        }
+                        (void)execute_simple_script_line(calculator,
+                                                         impl,
+                                                         init_cache->expanded,
+                                                         exact_mode);
+                    }
+                    while (for_statement.condition.empty() ||
+                           truthy_value(evaluate_expression_value(calculator,
+                                                                  impl,
+                                                                  for_statement.condition,
+                                                                  false,
+                                                                  &for_statement.cond_cache))) {
+                        const ScriptSignal signal =
+                            execute_script_statement(calculator,
+                                                     impl,
+                                                     *for_statement.body,
+                                                     exact_mode,
+                                                     last_output,
+                                                     true);
+                        if (signal.kind == ScriptSignal::Kind::kReturn) {
+                            impl->flat_scopes.pop_scope();
+                            return signal;
+                        }
+                        if (signal.kind == ScriptSignal::Kind::kBreak) {
+                            break;
+                        }
+                        if (!for_statement.step.empty()) {
+                            std::shared_ptr<ExpressionCache> step_cache = for_statement.step_cache;
+                            if (!step_cache) {
+                                step_cache = std::make_shared<ExpressionCache>();
+                                step_cache->expanded = expand_inline_function_commands(calculator, for_statement.step);
+                                for_statement.step_cache = step_cache;
+                            }
+                            (void)execute_simple_script_line(calculator,
+                                                             impl,
+                                                             step_cache->expanded,
+                                                             exact_mode);
+                        }
+                        if (signal.kind == ScriptSignal::Kind::kContinue) {
+                            continue;
+                        }
+                    }
+                    impl->flat_scopes.pop_scope();
+                    return {};
+                } catch (...) {
+                    impl->flat_scopes.pop_scope();
+                    throw;
+                }
+            }
+
+            // 传统路径
             impl->local_scopes.push_back({});
             try {
                 if (!for_statement.initializer.empty()) {
@@ -791,6 +988,149 @@ ScriptSignal execute_script_statement(Calculator* calculator,
                                                          step_cache->expanded,
                                                          exact_mode);
                     }
+                    if (signal.kind == ScriptSignal::Kind::kContinue) {
+                        continue;
+                    }
+                }
+                impl->local_scopes.pop_back();
+                return {};
+            } catch (...) {
+                impl->local_scopes.pop_back();
+                throw;
+            }
+        }
+        case script::Statement::Kind::kForRange: {
+            const auto& for_range = static_cast<const script::ForRangeStatement&>(statement);
+
+            // 使用 FlatScopeStack
+            if (impl->use_flat_scopes) {
+                impl->flat_scopes.push_scope();
+                try {
+                    // 一次性求值 start, stop, step
+                    const StoredValue start_val = evaluate_expression_value(
+                        calculator, impl, for_range.start_expr, false, &for_range.start_cache);
+                    const StoredValue stop_val = evaluate_expression_value(
+                        calculator, impl, for_range.stop_expr, false, &for_range.stop_cache);
+                    const StoredValue step_val = evaluate_expression_value(
+                        calculator, impl, for_range.step_expr, false, &for_range.step_cache);
+
+                    if (start_val.is_matrix || start_val.is_complex || start_val.is_string) {
+                        throw std::runtime_error("range start must be a scalar");
+                    }
+                    if (stop_val.is_matrix || stop_val.is_complex || stop_val.is_string) {
+                        throw std::runtime_error("range stop must be a scalar");
+                    }
+                    if (step_val.is_matrix || step_val.is_complex || step_val.is_string) {
+                        throw std::runtime_error("range step must be a scalar");
+                    }
+
+                    double start = start_val.exact ? rational_to_double(start_val.rational) : start_val.decimal;
+                    double stop = stop_val.exact ? rational_to_double(stop_val.rational) : stop_val.decimal;
+                    double step = step_val.exact ? rational_to_double(step_val.rational) : step_val.decimal;
+
+                    if (step == 0.0) {
+                        throw std::runtime_error("range step cannot be zero");
+                    }
+
+                    bool ascending = step > 0.0;
+
+                    // 直接数值循环，无需每次重新解析表达式
+                    double current = start;
+                    while ((ascending && current < stop) || (!ascending && current > stop)) {
+                        // 设置循环变量（直接在 flat_scopes 中设置）
+                        StoredValue loop_val;
+                        loop_val.decimal = current;
+                        loop_val.exact = false;
+                        impl->flat_scopes.set(for_range.variable, loop_val);
+
+                        // 执行循环体
+                        const ScriptSignal signal =
+                            execute_script_statement(calculator,
+                                                     impl,
+                                                     *for_range.body,
+                                                     exact_mode,
+                                                     last_output,
+                                                     true);
+                        if (signal.kind == ScriptSignal::Kind::kReturn) {
+                            impl->flat_scopes.pop_scope();
+                            return signal;
+                        }
+                        if (signal.kind == ScriptSignal::Kind::kBreak) {
+                            break;
+                        }
+
+                        current += step;
+
+                        if (signal.kind == ScriptSignal::Kind::kContinue) {
+                            continue;
+                        }
+                    }
+                    impl->flat_scopes.pop_scope();
+                    return {};
+                } catch (...) {
+                    impl->flat_scopes.pop_scope();
+                    throw;
+                }
+            }
+
+            // 传统路径
+            impl->local_scopes.push_back({});
+            try {
+                // 一次性求值 start, stop, step
+                const StoredValue start_val = evaluate_expression_value(
+                    calculator, impl, for_range.start_expr, false, &for_range.start_cache);
+                const StoredValue stop_val = evaluate_expression_value(
+                    calculator, impl, for_range.stop_expr, false, &for_range.stop_cache);
+                const StoredValue step_val = evaluate_expression_value(
+                    calculator, impl, for_range.step_expr, false, &for_range.step_cache);
+
+                if (start_val.is_matrix || start_val.is_complex || start_val.is_string) {
+                    throw std::runtime_error("range start must be a scalar");
+                }
+                if (stop_val.is_matrix || stop_val.is_complex || stop_val.is_string) {
+                    throw std::runtime_error("range stop must be a scalar");
+                }
+                if (step_val.is_matrix || step_val.is_complex || step_val.is_string) {
+                    throw std::runtime_error("range step must be a scalar");
+                }
+
+                double start = start_val.exact ? rational_to_double(start_val.rational) : start_val.decimal;
+                double stop = stop_val.exact ? rational_to_double(stop_val.rational) : stop_val.decimal;
+                double step = step_val.exact ? rational_to_double(step_val.rational) : step_val.decimal;
+
+                if (step == 0.0) {
+                    throw std::runtime_error("range step cannot be zero");
+                }
+
+                bool ascending = step > 0.0;
+
+                // 直接数值循环，无需每次重新解析表达式
+                double current = start;
+                while ((ascending && current < stop) || (!ascending && current > stop)) {
+                    // 设置循环变量
+                    StoredValue loop_val;
+                    loop_val.decimal = current;
+                    loop_val.exact = false;
+                    impl->local_scopes.back()[for_range.variable] = loop_val;
+
+                    // 执行循环体
+                    const ScriptSignal signal =
+                        execute_script_statement(calculator,
+                                                 impl,
+                                                 *for_range.body,
+                                                 exact_mode,
+                                                 last_output,
+                                                 true);
+                    if (signal.kind == ScriptSignal::Kind::kReturn) {
+                        impl->local_scopes.pop_back();
+                        return signal;
+                    }
+                    if (signal.kind == ScriptSignal::Kind::kBreak) {
+                        break;
+                    }
+
+                    current += step;
+
                     if (signal.kind == ScriptSignal::Kind::kContinue) {
                         continue;
                     }
@@ -852,7 +1192,11 @@ ScriptSignal execute_script_block(Calculator* calculator,
                                   std::string* last_output,
                                   bool create_scope) {
     if (create_scope) {
-        impl->local_scopes.push_back({});
+        if (impl->use_flat_scopes) {
+            impl->flat_scopes.push_scope();
+        } else {
+            impl->local_scopes.push_back({});
+        }
     }
 
     try {
@@ -866,18 +1210,30 @@ ScriptSignal execute_script_block(Calculator* calculator,
                                          true);
             if (signal.kind != ScriptSignal::Kind::kNone) {
                 if (create_scope) {
-                    impl->local_scopes.pop_back();
+                    if (impl->use_flat_scopes) {
+                        impl->flat_scopes.pop_scope();
+                    } else {
+                        impl->local_scopes.pop_back();
+                    }
                 }
                 return signal;
             }
         }
         if (create_scope) {
-            impl->local_scopes.pop_back();
+            if (impl->use_flat_scopes) {
+                impl->flat_scopes.pop_scope();
+            } else {
+                impl->local_scopes.pop_back();
+            }
         }
         return {};
     } catch (...) {
         if (create_scope) {
-            impl->local_scopes.pop_back();
+            if (impl->use_flat_scopes) {
+                impl->flat_scopes.pop_scope();
+            } else {
+                impl->local_scopes.pop_back();
+            }
         }
         throw;
     }

@@ -69,7 +69,7 @@ Shared internal declarations for these splits live in private headers such as
   `gamma(x)`, `beta(a, b)`, `zeta(s)`, `erf(x)`, `erfc(x)`, `bessel(n, x)`,
   `sqrt(x)`, `cbrt(x)`, `root(a, n)`, `abs(x)`, `sign(x)`, `floor(x)`,
   `ceil(x)`, `round(x)`, `trunc(x)`, `pow(a, b)`
-- Comparison and integer utilities: `min(a, b)`, `max(a, b)`, `clamp(x, min, max)`, `gcd(a, b)`, `lcm(a, b)`, `mod(a, b)`, `factorial(n)`, `nCr(n, r)`, `binom(n, r)`, `nPr(n, r)`, `fib(n)`, `is_prime(n)`, `next_prime(n)`
+- Comparison and integer utilities: `min(a, b)`, `max(a, b)`, `clamp(x, min, max)`, `gcd(a, b)`, `lcm(a, b)`, `mod(a, b)`, `factorial(n)`, `nCr(n, r)`, `binom(n, r)`, `nPr(n, r)`, `fib(n)`, `is_prime(n)`, `next_prime(n)`, `prev_prime(n)`, `euler_phi(n)`, `mobius(n)`, `prime_pi(n)`
 - Rational approximation helper: `rat(x)` and `rat(x, max_denominator)`
 - Aggregate helpers: `sum(...)`, `mean(...)`, `avg(...)`, `median(...)`, `mode(...)`, `percentile(...)`, `quartile(...)`, `var(...)`, `std(...)`
 - Probability helpers: `rand()`, `randn()`, `randint(a, b)`, `pdf_normal(x, mu, sigma)`, `cdf_normal(x, mu, sigma)`
@@ -117,6 +117,10 @@ Shared internal declarations for these splits live in private headers such as
 - Box-constrained linear and integer planning with `lp_max(...)`, `lp_min(...)`,
   `ilp_max(...)`, mixed-integer planning with `milp_max(...)` / `milp_min(...)`,
   optional equality constraints `Aeq * x = beq`, and binary shortcuts `bip_max(...)` / `bip_min(...)`
+- Statistical summary with `describe(...)` / `stat_summary(...)`
+- Terminal inline plotting with `plot(expr, start, end)` and gnuplot integration via `:plot`
+- DSP residue calculation with `residue(expr, var, point)`
+- Symbolic optimization with `cse(expr)` for common subexpression elimination
 - Improved numerical stability for large-angle trigonometric reduction, `beta`,
   `gamma`, `bessel`, and removable-singularity style `limit(...)` evaluations
 

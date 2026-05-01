@@ -24,13 +24,14 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/core/calculator_help.cpp \
 	$(SRC_DIR)/core/system_module.cpp \
 	$(SRC_DIR)/core/expression_compiler.cpp \
+	$(SRC_DIR)/core/expression_ast.cpp \
 	$(SRC_DIR)/core/calculator_service_factory.cpp \
 	$(SRC_DIR)/core/module_registration.cpp \
-		$(SRC_DIR)/core/command_parser.cpp \
-		$(SRC_DIR)/precise/rational.cpp \
-		$(SRC_DIR)/precise/precise_decimal.cpp \
-		$(SRC_DIR)/precise/precise_parser.cpp \
-		$(SRC_DIR)/precise/precise_module.cpp \
+	$(SRC_DIR)/core/command_parser.cpp \
+	$(SRC_DIR)/precise/rational.cpp \
+	$(SRC_DIR)/precise/precise_decimal.cpp \
+	$(SRC_DIR)/precise/precise_parser.cpp \
+	$(SRC_DIR)/precise/precise_module.cpp \
 	$(SRC_DIR)/parser/decimal_parser.cpp \
 	$(SRC_DIR)/parser/exact_parser.cpp \
 	$(SRC_DIR)/parser/symbolic_render_parser.cpp \
@@ -93,7 +94,7 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/dsp/filter_design.cpp \
 	$(SRC_DIR)/dsp/time_frequency.cpp \
 	$(SRC_DIR)/dsp/residue.cpp \
-		$(SRC_DIR)/dsp/dsp_module.cpp \
+	$(SRC_DIR)/dsp/dsp_module.cpp \
 	$(SRC_DIR)/dsp/calculator_signal_commands.cpp \
 	$(SRC_DIR)/plot/plot_renderer.cpp \
 	$(SRC_DIR)/plot/plot_module.cpp \
@@ -103,7 +104,7 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/core/calculator_internal_types.h \
 	$(SRC_DIR)/core/system_module.h \
-		$(SRC_DIR)/analysis/calculator_simplex.h \
+	$(SRC_DIR)/analysis/calculator_simplex.h \
 	$(SRC_DIR)/math/mymath.h \
 	$(SRC_DIR)/math/mymath_complex.h \
 	$(SRC_DIR)/math/mymath_internal.h \

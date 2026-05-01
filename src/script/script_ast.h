@@ -28,7 +28,8 @@ struct Statement {
         kSimple,     ///< 简单语句（表达式）
         kIf,         ///< 条件语句 if-else
         kWhile,      ///< while 循环
-        kFor,        ///< for 循环
+        kFor,        ///< for 循环（C 风格）
+        kForRange,   ///< for 循环（Python 风格：for i in range(...)）
         kFunction,   ///< 函数定义
         kReturn,     ///< 返回语句
         kBreak,      ///< 跳出循环
@@ -95,7 +96,7 @@ struct WhileStatement : Statement {
 
 /**
  * @struct ForStatement
- * @brief for 循环语句
+ * @brief for 循环语句（C 风格）
  */
 struct ForStatement : Statement {
     ForStatement() : Statement(Kind::kFor) {}
@@ -106,6 +107,26 @@ struct ForStatement : Statement {
     mutable std::shared_ptr<ExpressionCache> init_cache; ///< 初始化表达式缓存
     mutable std::shared_ptr<ExpressionCache> cond_cache; ///< 条件表达式缓存
     mutable std::shared_ptr<ExpressionCache> step_cache; ///< 步进表达式缓存
+    StatementPtr body;        ///< 循环体
+};
+
+/**
+ * @struct ForRangeStatement
+ * @brief for 循环语句（Python 风格：for i in range(...)）
+ */
+struct ForRangeStatement : Statement {
+    ForRangeStatement() : Statement(Kind::kForRange) {}
+
+    std::string variable;     ///< 循环变量名
+    std::string start_expr;   ///< 起始值表达式
+    std::string stop_expr;    ///< 终止值表达式
+    std::string step_expr;    ///< 步长表达式（默认 "1"）
+    bool step_is_negative = false;  ///< 步长是否为负数
+
+    mutable std::shared_ptr<ExpressionCache> start_cache; ///< 起始值缓存
+    mutable std::shared_ptr<ExpressionCache> stop_cache;  ///< 终止值缓存
+    mutable std::shared_ptr<ExpressionCache> step_cache;  ///< 步长缓存
+
     StatementPtr body;        ///< 循环体
 };
 

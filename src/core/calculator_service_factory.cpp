@@ -1,3 +1,13 @@
+// ============================================================================
+// 核心服务工厂实现
+// ============================================================================
+//
+// 构建计算器核心提供的所有服务接口，包括：
+// - 求值服务（表达式求值、作用域求值器构建）
+// - 符号服务（符号表达式解析、简化、求值）
+// - 环境服务（变量/函数管理、状态持久化）
+// ============================================================================
+
 #include "calculator_service_factory.h"
 #include "calculator_internal_types.h"
 #include "variable_resolver.h"
@@ -12,6 +22,7 @@
 
 namespace core {
 
+/// 构建核心服务对象
 CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl) {
     CoreServices s;
 
@@ -46,15 +57,33 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
     s.evaluation.build_scalar_evaluator = [calculator, impl](const std::string& arg) {
         const std::string scoped_expression = trim_copy(expand_inline_function_commands(calculator, arg));
         return [calculator, impl, scoped_expression](const std::vector<std::pair<std::string, StoredValue>>& assignments) {
-            std::map<std::string, StoredValue> frame;
-            for (const auto& [name, value] : assignments) frame[name] = value;
-            impl->local_scopes.push_back(frame);
+            if (impl->use_flat_scopes) {
+                impl->flat_scopes.push_scope();
+                for (const auto& [name, value] : assignments) {
+                    impl->flat_scopes.set(name, value);
+                }
+            } else {
+                std::map<std::string, StoredValue> frame;
+                for (const auto& [name, value] : assignments) frame[name] = value;
+                impl->local_scopes.push_back(frame);
+            }
             try {
                 const StoredValue value = evaluate_expression_value(calculator, impl, scoped_expression, false);
-                impl->local_scopes.pop_back();
+                if (impl->use_flat_scopes) {
+                    impl->flat_scopes.pop_scope();
+                } else {
+                    impl->local_scopes.pop_back();
+                }
                 if (value.is_matrix || value.is_complex || value.is_string) throw std::runtime_error("expected a scalar-valued expression");
                 return Calculator::normalize_result(value.exact ? rational_to_double(value.rational) : value.decimal);
-            } catch (...) { impl->local_scopes.pop_back(); throw; }
+            } catch (...) {
+                if (impl->use_flat_scopes) {
+                    impl->flat_scopes.pop_scope();
+                } else {
+                    impl->local_scopes.pop_back();
+                }
+                throw;
+            }
         };
     };
     

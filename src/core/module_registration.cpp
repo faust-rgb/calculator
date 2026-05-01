@@ -1,3 +1,16 @@
+// ============================================================================
+// 模块注册实现
+// ============================================================================
+//
+// 本文件负责将所有标准模块注册到计算器实例。
+// 模块按功能分组：
+// 1. 基础数学与系统模块 - 标准数学函数、整数运算、精确计算、统计
+// 2. 矩阵与 DSP 模块 - 矩阵运算、信号处理
+// 3. 分析模块 - 级数展开、数值积分、求根、优化、ODE 求解
+// 4. 符号计算与多项式 - 符号运算、多项式操作
+// 5. 绘图模块 - 函数可视化
+// ============================================================================
+
 #include "module_registration.h"
 #include "calculator.h"
 #include "calculator_module.h"
@@ -27,6 +40,7 @@
 #include "dsp/dsp_module.h"
 #include "plot/plot_module.h"
 
+/// 注册所有标准模块到计算器实例
 void register_standard_modules(Calculator* calculator) {
     // 注册基础数学模块
     calculator->register_module(std::make_shared<StandardMathModule>());

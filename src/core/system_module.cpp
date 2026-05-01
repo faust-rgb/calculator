@@ -1,3 +1,7 @@
+// ============================================================================
+// 系统模块实现
+// ============================================================================
+
 #include "system_module.h"
 
 #include "utils.h"
@@ -7,10 +11,12 @@
 #include <sstream>
 #include <stdexcept>
 
+/// 返回模块名称
 std::string SystemModule::name() const {
     return "System";
 }
 
+/// 返回支持的命令列表
 std::vector<std::string> SystemModule::get_commands() const {
     return { ":vars", ":funcs", ":clear", ":clearfuncs", ":clearfunc",
              ":history", ":save", ":load", ":export", ":run",
@@ -18,6 +24,7 @@ std::vector<std::string> SystemModule::get_commands() const {
              "print" };
 }
 
+/// 执行系统命令
 std::string SystemModule::execute_args(const std::string& command,
                                        const std::vector<std::string>& args,
                                        const CoreServices& svc) {
@@ -104,6 +111,7 @@ std::string SystemModule::execute_args(const std::string& command,
     return "Unknown system command";
 }
 
+/// 返回帮助文本
 std::string SystemModule::get_help_snippet(const std::string& topic) const {
     if (topic == "commands") {
         return "System Commands:\n"
