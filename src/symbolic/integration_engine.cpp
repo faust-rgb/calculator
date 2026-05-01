@@ -791,6 +791,215 @@ bool IntegrationEngine::solve_cyclic_integration(
     return true;
 }
 
+// ============================================================================
+// 高阶循环积分系统求解
+// ============================================================================
+
+std::vector<IntegrationEngine::CyclicIntegralEntry>
+IntegrationEngine::collect_cyclic_integrals(
+    const SymbolicExpression& current_integral,
+    const std::string& variable_name) {
+
+    std::vector<CyclicIntegralEntry> entries;
+
+    // 当前积分作为第一个条目
+    CyclicIntegralEntry current;
+    current.integral = current_integral;
+    current.variable_name = variable_name;
+    current.structural_key = node_structural_key(current_integral.node_);
+    entries.push_back(current);
+
+    // 从 integration_stack_ 中收集相关的积分
+    // 注意：integration_stack_ 存储的是结构键，我们需要重建表达式
+    // 这里简化处理：只返回当前积分（一阶循环）
+    // 完整实现需要维护积分表达式栈而非仅结构键
+
+    return entries;
+}
+
+bool IntegrationEngine::solve_cyclic_integration_system(
+    const std::vector<CyclicIntegralEntry>& entries,
+    std::vector<SymbolicExpression>* results) {
+
+    const std::size_t n = entries.size();
+    if (n == 0) {
+        return false;
+    }
+
+    // 一阶循环：使用现有的 solve_cyclic_integration
+    if (n == 1) {
+        SymbolicExpression result;
+        if (solve_cyclic_integration(entries[0].integral,
+                                     entries[0].after_parts,
+                                     entries[0].variable_name,
+                                     &result)) {
+            results->push_back(result);
+            return true;
+        }
+        return false;
+    }
+
+    // n×n 系统：构建系数矩阵并求解
+    // 系统形式：I_i = A_i + sum_j(k_ij * I_j)
+    // 重写为：(1 - k_ii) * I_i - sum_{j!=i}(k_ij * I_j) = A_i
+    // 矩阵形式：M * I = A
+
+    // 构建系数矩阵 M 和右侧向量 A
+    std::vector<std::vector<SymbolicExpression>> matrix(n,
+        std::vector<SymbolicExpression>(n, SymbolicExpression::number(0.0)));
+    std::vector<SymbolicExpression> rhs(n, SymbolicExpression::number(0.0));
+
+    // 对每个方程，提取系数
+    for (std::size_t i = 0; i < n; ++i) {
+        // 初始化：M[i][i] = 1
+        matrix[i][i] = SymbolicExpression::number(1.0);
+
+        // 从 after_parts 中提取各积分的系数
+        const SymbolicExpression& after_parts = entries[i].after_parts;
+        SymbolicExpression simplified_after = after_parts.simplify();
+
+        // 收集加法项
+        std::vector<SymbolicExpression> terms;
+        if (simplified_after.node_->type == NodeType::kAdd) {
+            std::function<void(const SymbolicExpression&, std::vector<SymbolicExpression>*)>
+                collect_additive;
+            collect_additive = [&](const SymbolicExpression& expr,
+                                   std::vector<SymbolicExpression>* terms) {
+                if (expr.node_->type == NodeType::kAdd) {
+                    collect_additive(SymbolicExpression(expr.node_->left), terms);
+                    collect_additive(SymbolicExpression(expr.node_->right), terms);
+                } else {
+                    terms->push_back(expr);
+                }
+            };
+            collect_additive(simplified_after, &terms);
+        } else {
+            terms.push_back(simplified_after);
+        }
+
+        // 分析每个项
+        for (const SymbolicExpression& term : terms) {
+            double constant = 1.0;
+            SymbolicExpression rest;
+            bool has_constant = extract_constant_factor(term, &constant, &rest);
+            SymbolicExpression term_to_check = has_constant ? rest : term;
+
+            // 检查是否为某个积分的倍数
+            bool found_match = false;
+            for (std::size_t j = 0; j < n; ++j) {
+                // 处理取负情况
+                SymbolicExpression check_expr = term_to_check;
+                double sign = 1.0;
+                if (check_expr.node_->type == NodeType::kNegate) {
+                    check_expr = SymbolicExpression(check_expr.node_->left);
+                    sign = -1.0;
+                }
+
+                if (expressions_match(check_expr, entries[j].integral)) {
+                    // 找到积分 j 的系数
+                    double coeff = sign * (has_constant ? constant : 1.0);
+                    matrix[i][j] = make_subtract(matrix[i][j],
+                        SymbolicExpression::number(coeff)).simplify();
+                    found_match = true;
+                    break;
+                }
+            }
+
+            // 如果不是任何积分的倍数，加入右侧
+            if (!found_match) {
+                if (rhs[i].is_number(nullptr) && expr_is_zero(rhs[i])) {
+                    rhs[i] = term;
+                } else {
+                    rhs[i] = make_add(rhs[i], term).simplify();
+                }
+            }
+        }
+    }
+
+    // 使用符号高斯消元求解
+    // 前向消元
+    for (std::size_t col = 0; col < n; ++col) {
+        // 寻找主元（优先选择数值非零的）
+        std::size_t pivot = col;
+        double pivot_val = 0.0;
+        for (std::size_t row = col; row < n; ++row) {
+            double val = 0.0;
+            if (matrix[row][col].is_number(&val) && !mymath::is_near_zero(val, kFormatEps)) {
+                if (pivot == col || mymath::abs(val) > mymath::abs(pivot_val)) {
+                    pivot = row;
+                    pivot_val = val;
+                }
+            }
+        }
+
+        // 交换行
+        if (pivot != col) {
+            std::swap(matrix[col], matrix[pivot]);
+            std::swap(rhs[col], rhs[pivot]);
+        }
+
+        // 检查主元是否为零
+        double pv = 0.0;
+        if (!matrix[col][col].is_number(&pv) || mymath::is_near_zero(pv, kFormatEps)) {
+            // 尝试符号消元（简化处理：返回失败）
+            return false;
+        }
+
+        // 消元
+        for (std::size_t row = col + 1; row < n; ++row) {
+            double row_val = 0.0;
+            if (!matrix[row][col].is_number(&row_val)) {
+                continue;  // 简化处理：跳过非数值系数
+            }
+
+            double factor = row_val / pv;
+            for (std::size_t j = col; j < n; ++j) {
+                double m_val = 0.0;
+                if (matrix[col][j].is_number(&m_val)) {
+                    matrix[row][j] = SymbolicExpression::number(
+                        matrix[row][j].is_number(nullptr) ?
+                        (matrix[row][j].is_number(&m_val) ? m_val : 0.0) - factor * m_val : -factor * m_val);
+                }
+            }
+            double rhs_val = 0.0;
+            if (rhs[col].is_number(&rhs_val)) {
+                rhs[row] = SymbolicExpression::number(
+                    rhs[row].is_number(&rhs_val) ? rhs_val - factor * rhs_val : -factor * rhs_val);
+            }
+        }
+    }
+
+    // 回代
+    results->resize(n);
+    for (std::size_t i = n; i-- > 0; ) {
+        double sum = 0.0;
+        if (rhs[i].is_number(&sum)) {
+            for (std::size_t j = i + 1; j < n; ++j) {
+                double m_val = 0.0, r_val = 0.0;
+                if (matrix[i][j].is_number(&m_val) && (*results)[j].is_number(&r_val)) {
+                    sum -= m_val * r_val;
+                }
+            }
+            double diag = 0.0;
+            if (matrix[i][i].is_number(&diag) && !mymath::is_near_zero(diag, kFormatEps)) {
+                (*results)[i] = SymbolicExpression::number(sum / diag);
+            } else {
+                return false;
+            }
+        } else {
+            // 非数值右侧，使用符号除法
+            SymbolicExpression sum_expr = rhs[i];
+            for (std::size_t j = i + 1; j < n; ++j) {
+                sum_expr = make_subtract(sum_expr,
+                    make_multiply(matrix[i][j], (*results)[j])).simplify();
+            }
+            (*results)[i] = make_divide(sum_expr, matrix[i][i]).simplify();
+        }
+    }
+
+    return true;
+}
+
 bool IntegrationEngine::contains_variable(
     const SymbolicExpression& expression,
     const std::string& variable_name) {

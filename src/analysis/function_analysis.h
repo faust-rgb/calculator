@@ -190,6 +190,15 @@ private:
                             double right,
                             double* error_estimate) const;
 
+    /**
+     * @brief 数值极限计算（带自适应步长的 Richardson 外推）
+     * @param x 极限点
+     * @param direction 方向：-1 左极限，1 右极限，0 双侧极限
+     * @return 极限值
+     * @throw std::runtime_error 当极限不收敛时
+     */
+    double compute_numerical_limit(double x, int direction) const;
+
     std::string expression_;      ///< 函数表达式
     std::string variable_name_;   ///< 变量名
     std::function<double(const std::vector<std::pair<std::string, double>>&)> evaluator_;

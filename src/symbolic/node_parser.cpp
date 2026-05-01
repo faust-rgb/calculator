@@ -31,6 +31,7 @@
 #include "symbolic_expression_internal.h"
 
 #include "mymath.h"
+#include "mymath_dual.h"
 
 #include <algorithm>
 #include <cctype>
@@ -523,6 +524,27 @@ std::string node_structural_key(const std::shared_ptr<SymbolicExpression::Node>&
         case NodeType::kPower:
             key = "POW(" + node_structural_key(node->left) + "," +
                   node_structural_key(node->right) + ")";
+            break;
+        case NodeType::kVector: {
+            key = "VEC(";
+            for (std::size_t i = 0; i < node->children.size(); ++i) {
+                if (i > 0) key += ",";
+                key += node_structural_key(node->children[i]);
+            }
+            key += ")";
+            break;
+        }
+        case NodeType::kTensor: {
+            key = "TEN(";
+            for (std::size_t i = 0; i < node->children.size(); ++i) {
+                if (i > 0) key += ";";
+                key += node_structural_key(node->children[i]);
+            }
+            key += ")";
+            break;
+        }
+        case NodeType::kDifferentialOp:
+            key = "DOP(" + node->text + ":" + node_structural_key(node->left) + ")";
             break;
     }
     node->structural_key_cache = key;
@@ -1103,6 +1125,216 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
     return false;
 }
 
+/**
+ * @brief Evaluate expression node with dual numbers for automatic differentiation.
+ *
+ * For the differentiation variable, returns dual(point_value, 1.0).
+ * For other variables, returns dual(their_value, 0.0).
+ * All operations propagate derivatives using dual arithmetic.
+ */
+bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& node,
+                            const DualEvaluationContext& ctx,
+                            mymath::dual<double>* result) {
+    switch (node->type) {
+        case NodeType::kNumber:
+            *result = mymath::dual<double>(node->number_value, 0.0);
+            return true;
+        case NodeType::kPi:
+            *result = mymath::dual<double>(mymath::kPi, 0.0);
+            return true;
+        case NodeType::kE:
+            *result = mymath::dual<double>(mymath::kE, 0.0);
+            return true;
+        case NodeType::kInfinity:
+            *result = mymath::dual<double>(
+                (node->number_value > 0) ? mymath::infinity() : -mymath::infinity(), 0.0);
+            return true;
+        case NodeType::kVariable: {
+            if (node->text == ctx.differentiation_variable) {
+                *result = mymath::dual<double>(ctx.point_value, 1.0);
+                return true;
+            }
+            auto it = ctx.other_values.find(node->text);
+            if (it != ctx.other_values.end()) {
+                *result = mymath::dual<double>(it->second, 0.0);
+                return true;
+            }
+            if (node->text == "1 / 2") {
+                *result = mymath::dual<double>(0.5, 0.0);
+                return true;
+            }
+            return false;
+        }
+        case NodeType::kNegate: {
+            mymath::dual<double> operand;
+            if (!try_evaluate_dual_node(node->left, ctx, &operand)) {
+                return false;
+            }
+            *result = -operand;
+            return true;
+        }
+        case NodeType::kAdd:
+        case NodeType::kSubtract:
+        case NodeType::kMultiply:
+        case NodeType::kDivide:
+        case NodeType::kPower: {
+            mymath::dual<double> left, right;
+            if (!try_evaluate_dual_node(node->left, ctx, &left) ||
+                !try_evaluate_dual_node(node->right, ctx, &right)) {
+                return false;
+            }
+
+            switch (node->type) {
+                case NodeType::kAdd:
+                    *result = left + right;
+                    return true;
+                case NodeType::kSubtract:
+                    *result = left - right;
+                    return true;
+                case NodeType::kMultiply:
+                    *result = left * right;
+                    return true;
+                case NodeType::kDivide:
+                    *result = left / right;
+                    return true;
+                case NodeType::kPower:
+                    *result = mymath::pow(left, right);
+                    return true;
+                case NodeType::kNumber:
+                case NodeType::kPi:
+                case NodeType::kE:
+                case NodeType::kInfinity:
+                case NodeType::kVariable:
+                case NodeType::kNegate:
+                case NodeType::kFunction:
+                    break;
+            }
+            return false;
+        }
+        case NodeType::kFunction: {
+            mymath::dual<double> argument;
+            if (!try_evaluate_dual_node(node->left, ctx, &argument)) {
+                return false;
+            }
+
+            if (node->text == "sin") {
+                *result = mymath::sin(argument);
+                return true;
+            }
+            if (node->text == "cos") {
+                *result = mymath::cos(argument);
+                return true;
+            }
+            if (node->text == "tan") {
+                *result = mymath::tan(argument);
+                return true;
+            }
+            if (node->text == "sec") {
+                *result = mymath::sec(argument);
+                return true;
+            }
+            if (node->text == "csc") {
+                *result = mymath::csc(argument);
+                return true;
+            }
+            if (node->text == "cot") {
+                *result = mymath::cot(argument);
+                return true;
+            }
+            if (node->text == "asin") {
+                *result = mymath::asin(argument);
+                return true;
+            }
+            if (node->text == "acos") {
+                *result = mymath::acos(argument);
+                return true;
+            }
+            if (node->text == "atan") {
+                *result = mymath::atan(argument);
+                return true;
+            }
+            if (node->text == "sinh") {
+                *result = mymath::sinh(argument);
+                return true;
+            }
+            if (node->text == "cosh") {
+                *result = mymath::cosh(argument);
+                return true;
+            }
+            if (node->text == "tanh") {
+                *result = mymath::tanh(argument);
+                return true;
+            }
+            if (node->text == "asinh") {
+                *result = mymath::asinh(argument);
+                return true;
+            }
+            if (node->text == "acosh") {
+                *result = mymath::acosh(argument);
+                return true;
+            }
+            if (node->text == "atanh") {
+                *result = mymath::atanh(argument);
+                return true;
+            }
+            if (node->text == "exp") {
+                *result = mymath::exp(argument);
+                return true;
+            }
+            if (node->text == "ln" || node->text == "log") {
+                *result = mymath::ln(argument);
+                return true;
+            }
+            if (node->text == "log10") {
+                *result = mymath::log10(argument);
+                return true;
+            }
+            if (node->text == "sqrt") {
+                *result = mymath::sqrt(argument);
+                return true;
+            }
+            if (node->text == "cbrt") {
+                *result = mymath::cbrt(argument);
+                return true;
+            }
+            if (node->text == "abs") {
+                *result = mymath::abs(argument);
+                return true;
+            }
+            if (node->text == "erf") {
+                *result = mymath::erf(argument);
+                return true;
+            }
+            if (node->text == "erfc") {
+                *result = mymath::erfc(argument);
+                return true;
+            }
+            if (node->text == "sign") {
+                *result = mymath::sign(argument);
+                return true;
+            }
+            if (node->text == "floor") {
+                *result = mymath::floor(argument);
+                return true;
+            }
+            if (node->text == "ceil") {
+                *result = mymath::ceil(argument);
+                return true;
+            }
+            if (node->text == "round") {
+                *result = mymath::round(argument);
+                return true;
+            }
+            if (node->text == "trunc") {
+                *result = mymath::trunc(argument);
+                return true;
+            }
+            return false;
+        }
+    }
+    return false;
+}
+
 bool expr_is_variable(const SymbolicExpression& expression, const std::string& name) {
     if (name == "pi") return expression.node_->type == NodeType::kPi;
     if (name == "e") return expression.node_->type == NodeType::kE;
@@ -1273,8 +1505,99 @@ SymbolicExpression SymbolicExpression::simplify() const {
     return simplified;
 }
 
+SymbolicExpression SymbolicExpression::simplify_with_budget(std::size_t max_nodes) const {
+    static constexpr std::size_t kMaxSimplifyCacheSize = 4096;
+    static thread_local SymbolicExpressionLruCache cache(kMaxSimplifyCacheSize);
+
+    const std::string key = node_structural_key(node_) + "_budget_" + std::to_string(max_nodes);
+    SymbolicExpression cached;
+    if (cache.get(key, &cached)) {
+        return cached;
+    }
+
+    SymbolicExpression simplified = simplify_with_budget_impl(*this, max_nodes);
+    cache.put(key, simplified);
+    return simplified;
+}
+
+std::size_t SymbolicExpression::node_count() const {
+    return count_nodes(node_);
+}
+
 SymbolicExpression SymbolicExpression::expand() const {
     return expand_impl(*this);
+}
+
+// ============================================================================
+// 向量/张量表达式实现
+// ============================================================================
+
+SymbolicExpression SymbolicExpression::vector(
+    const std::vector<SymbolicExpression>& components) {
+    auto node = std::make_shared<Node>();
+    node->type = NodeType::kVector;
+    node->shape = {components.size()};
+    for (const SymbolicExpression& comp : components) {
+        node->children.push_back(comp.node_);
+    }
+    return SymbolicExpression(node);
+}
+
+SymbolicExpression SymbolicExpression::tensor(
+    const std::vector<std::vector<SymbolicExpression>>& rows) {
+    auto node = std::make_shared<Node>();
+    node->type = NodeType::kTensor;
+    node->shape = {rows.size(), rows.empty() ? 0 : rows[0].size()};
+    for (const auto& row : rows) {
+        auto row_node = std::make_shared<Node>();
+        row_node->type = NodeType::kVector;
+        row_node->shape = {row.size()};
+        for (const SymbolicExpression& comp : row) {
+            row_node->children.push_back(comp.node_);
+        }
+        node->children.push_back(row_node);
+    }
+    return SymbolicExpression(node);
+}
+
+bool SymbolicExpression::is_vector() const {
+    return node_->type == NodeType::kVector;
+}
+
+bool SymbolicExpression::is_tensor() const {
+    return node_->type == NodeType::kTensor;
+}
+
+std::vector<SymbolicExpression> SymbolicExpression::vector_components() const {
+    if (!is_vector()) {
+        return {};
+    }
+    std::vector<SymbolicExpression> components;
+    for (const auto& child : node_->children) {
+        components.push_back(SymbolicExpression(child));
+    }
+    return components;
+}
+
+std::vector<std::vector<SymbolicExpression>> SymbolicExpression::tensor_rows() const {
+    if (!is_tensor()) {
+        return {};
+    }
+    std::vector<std::vector<SymbolicExpression>> rows;
+    for (const auto& row_node : node_->children) {
+        std::vector<SymbolicExpression> row;
+        if (row_node->type == NodeType::kVector) {
+            for (const auto& comp : row_node->children) {
+                row.push_back(SymbolicExpression(comp));
+            }
+        }
+        rows.push_back(row);
+    }
+    return rows;
+}
+
+std::vector<std::size_t> SymbolicExpression::get_shape() const {
+    return node_->shape;
 }
 
 SymbolicExpression SymbolicExpression::substitute(

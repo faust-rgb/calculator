@@ -25,9 +25,35 @@
 #include "mymath.h"
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace symbolic_expression_internal {
+
+// ============================================================================
+// Expression size monitoring
+// ============================================================================
+
+std::size_t count_nodes(const std::shared_ptr<SymbolicExpression::Node>& node) {
+    if (!node) {
+        return 0;
+    }
+
+    // Use structural key for memoization
+    static thread_local std::unordered_map<std::string, std::size_t> cache;
+    const std::string key = node_structural_key(node);
+    auto it = cache.find(key);
+    if (it != cache.end()) {
+        return it->second;
+    }
+
+    std::size_t count = 1;  // This node
+    count += count_nodes(node->left);
+    count += count_nodes(node->right);
+
+    cache[key] = count;
+    return count;
+}
 
 bool combine_all_like_additive_terms(const SymbolicExpression& expression,
                                      SymbolicExpression* combined_expression) {
@@ -819,6 +845,77 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 return SymbolicExpression::number(mymath::pow(left_value, right_value));
             }
             return make_power(left, right);
+
+        // ====================================================================
+        // 向量/张量节点简化
+        // ====================================================================
+        case NodeType::kVector: {
+            // 简化各分量
+            std::vector<SymbolicExpression> simplified_components;
+            for (const auto& child : node->children) {
+                simplified_components.push_back(
+                    simplify_once(SymbolicExpression(child)).simplify());
+            }
+            return SymbolicExpression::vector(simplified_components);
+        }
+
+        case NodeType::kTensor: {
+            // 简化各行
+            std::vector<std::vector<SymbolicExpression>> simplified_rows;
+            for (const auto& row_node : node->children) {
+                std::vector<SymbolicExpression> row;
+                if (row_node->type == NodeType::kVector) {
+                    for (const auto& comp : row_node->children) {
+                        row.push_back(
+                            simplify_once(SymbolicExpression(comp)).simplify());
+                    }
+                }
+                simplified_rows.push_back(row);
+            }
+            return SymbolicExpression::tensor(simplified_rows);
+        }
+
+        // ====================================================================
+        // 微分算子简化（向量恒等式）
+        // ====================================================================
+        case NodeType::kDifferentialOp: {
+            SymbolicExpression operand(node->left);
+            SymbolicExpression simplified_operand = simplify_once(operand);
+
+            // 向量恒等式简化
+            if (node->text == "div") {
+                // div(grad(f)) = laplacian(f)
+                if (simplified_operand.node_->type == NodeType::kDifferentialOp &&
+                    simplified_operand.node_->text == "grad") {
+                    SymbolicExpression inner(simplified_operand.node_->left);
+                    return make_function("laplacian", simplify_once(inner));
+                }
+
+                // div(curl(v)) = 0 (对于 3D 向量场)
+                if (simplified_operand.node_->type == NodeType::kDifferentialOp &&
+                    simplified_operand.node_->text == "curl") {
+                    return SymbolicExpression::number(0.0);
+                }
+            }
+
+            if (node->text == "curl") {
+                // curl(grad(f)) = 0
+                if (simplified_operand.node_->type == NodeType::kDifferentialOp &&
+                    simplified_operand.node_->text == "grad") {
+                    // 返回零向量（需要知道维度，这里返回标量 0）
+                    return SymbolicExpression::number(0.0);
+                }
+
+                // curl(curl(v)) = grad(div(v)) - laplacian(v)
+                // 这是一个复杂的恒等式，需要延迟处理
+                // 这里简化为返回原始表达式
+            }
+
+            // 重新构建微分算子
+            return SymbolicExpression(
+                make_function(node->text, simplified_operand).node_);
+        }
+
         // 已在上面处理的节点类型，此处仅为消除编译器警告
         case NodeType::kNumber:
         case NodeType::kVariable:
@@ -874,6 +971,9 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
 
     // 最多 24 轮迭代，通常 2-4 轮即可收敛
     constexpr int kMaxSimplifyPasses = 24;
+    // Maximum node count to prevent expression swell
+    constexpr std::size_t kMaxNodeCount = 10000;
+
     for (int pass = 0; pass < kMaxSimplifyPasses; ++pass) {
         // 使用结构键检测是否还有变化
         const std::string current_key = node_structural_key(current.node_);
@@ -884,10 +984,69 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
         if (next_key == current_key) {
             return next;
         }
+
+        // Check for expression swell - if the expression grows too large,
+        // return the previous (smaller) result to avoid memory issues
+        const std::size_t next_node_count = count_nodes(next.node_);
+        if (next_node_count > kMaxNodeCount) {
+            // Expression has grown too large, return current result
+            return current;
+        }
+
         current = next;
     }
 
     // 达到最大迭代次数，返回当前结果
+    return current;
+}
+
+/**
+ * @brief Simplify with a node count budget
+ *
+ * Like simplify_impl, but stops if the node count exceeds max_nodes.
+ * Useful for preventing expression swell in automated computations.
+ */
+SymbolicExpression simplify_with_budget_impl(const SymbolicExpression& expression,
+                                             std::size_t max_nodes) {
+    static thread_local int simplify_depth = 0;
+
+    struct SimplifyDepthGuard {
+        int* depth;
+        explicit SimplifyDepthGuard(int* value) : depth(value) {
+            ++(*depth);
+        }
+        ~SimplifyDepthGuard() {
+            --(*depth);
+        }
+    };
+
+    if (simplify_depth > 0) {
+        SimplifyDepthGuard guard(&simplify_depth);
+        return simplify_once(expression);
+    }
+
+    SimplifyDepthGuard guard(&simplify_depth);
+    SymbolicExpression current = expression;
+
+    constexpr int kMaxSimplifyPasses = 24;
+    for (int pass = 0; pass < kMaxSimplifyPasses; ++pass) {
+        const std::string current_key = node_structural_key(current.node_);
+        SymbolicExpression next = simplify_once(current);
+        const std::string next_key = node_structural_key(next.node_);
+
+        if (next_key == current_key) {
+            return next;
+        }
+
+        // Budget check - return current result if budget exceeded
+        const std::size_t next_node_count = count_nodes(next.node_);
+        if (next_node_count > max_nodes) {
+            return current;
+        }
+
+        current = next;
+    }
+
     return current;
 }
 

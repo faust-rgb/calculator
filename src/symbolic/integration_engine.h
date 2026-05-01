@@ -258,6 +258,44 @@ private:
         SymbolicExpression* result);
 
     /**
+     * @brief 循环积分系统条目
+     *
+     * 用于表示 n×n 循环积分方程组中的一个方程
+     */
+    struct CyclicIntegralEntry {
+        SymbolicExpression integral;       ///< 积分表达式 I_i
+        SymbolicExpression after_parts;    ///< 分部积分后的表达式
+        std::string variable_name;         ///< 积分变量
+        std::string structural_key;        ///< 结构键
+    };
+
+    /**
+     * @brief 求解 n×n 循环积分系统
+     *
+     * 当检测到多个相互引用的积分时，构建线性方程组求解。
+     * 例如：
+     *   I_1 = A_1 + k_12*I_2
+     *   I_2 = A_2 + k_21*I_1
+     * 解此 2×2 系统得到 I_1 和 I_2。
+     *
+     * @param entries 循环积分条目列表
+     * @param results 输出：各积分的解
+     * @return true 如果成功求解
+     */
+    bool solve_cyclic_integration_system(
+        const std::vector<CyclicIntegralEntry>& entries,
+        std::vector<SymbolicExpression>* results);
+
+    /**
+     * @brief 收集相关的循环积分
+     *
+     * 从当前积分栈中收集所有相互引用的积分表达式。
+     */
+    std::vector<CyclicIntegralEntry> collect_cyclic_integrals(
+        const SymbolicExpression& current_integral,
+        const std::string& variable_name);
+
+    /**
      * @brief 递归积分（带深度检查）
      */
     IntegrationResult integrate_recursive(

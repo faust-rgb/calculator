@@ -38,9 +38,12 @@ namespace symbolic_commands {
 class SymbolicModule : public CalculatorModule {
 public:
     std::string name() const override { return "Symbolic"; }
-    
+
     std::vector<std::string> get_commands() const override {
-        return {"simplify", "diff", "gradient", "jacobian", "hessian", "divergence", "div", "curl", "curl_2d", "laplacian", "implicit_diff", "param_deriv", "directional"};
+        return {"simplify", "diff", "gradient", "jacobian", "hessian", "divergence", "div",
+                "curl", "curl_2d", "laplacian", "implicit_diff", "param_deriv", "directional",
+                "line_integral", "line_integral_vector", "surface_integral", "greens_theorem",
+                "stokes_theorem", "divergence_theorem", "integrate_region", "integral", "dsolve"};
     }
 
     bool can_handle(const std::string& command) const override;

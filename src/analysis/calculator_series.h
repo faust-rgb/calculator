@@ -42,6 +42,12 @@ bool handle_series_command(const SeriesContext& ctx,
                            std::string* output);
 
 namespace internal {
+struct PoleException : public std::runtime_error {
+    int shift;
+    double leading_coefficient;
+    PoleException(int s, double coeff) : std::runtime_error("Pole encountered"), shift(s), leading_coefficient(coeff) {}
+};
+
 bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, double center, int degree, std::vector<double>& result, const SeriesContext& ctx);
 }
 

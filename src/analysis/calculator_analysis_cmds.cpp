@@ -109,7 +109,20 @@ bool handle_analysis_command(const AnalysisContext& ctx,
             analysis = ctx.build_analysis(arguments[0]); point_arg = arguments[1]; dir_idx = 2;
         }
         int dir = 0; if (arguments.size() > dir_idx) dir = static_cast<int>(round_to_long_long(ctx.parse_decimal(arguments[dir_idx])));
-        *output = format_decimal(ctx.normalize_result(analysis.limit(ctx.parse_decimal(point_arg), dir)));
+        double limit_value = 0.0;
+        try {
+            limit_value = ctx.normalize_result(analysis.limit(ctx.parse_decimal(point_arg), dir));
+        } catch (const std::runtime_error& ex) {
+            const std::string message = ex.what();
+            if (message.find("limit does not exist") != std::string::npos) {
+                throw std::runtime_error("limit did not converge");
+            }
+            throw;
+        }
+        if (!mymath::isfinite(limit_value)) {
+            throw std::runtime_error("limit did not converge");
+        }
+        *output = format_decimal(limit_value);
         return true;
     }
 
@@ -166,15 +179,29 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                 critical_points.push_back({{variable, ctx.normalize_result(x)}});
             };
 
-            double previous_x = -10.0;
+            // Extended scan range: [-100, 100] with adaptive refinement
+            // Also scan for even-multiplicity roots by checking second derivative sign changes
+            const double scan_min = -100.0;
+            const double scan_max = 100.0;
+            const int coarse_segments = 512;
+
+            // Pre-compute second derivative for validation
+            SymbolicExpression second_deriv = derivative.derivative(variable).simplify();
+            auto eval_second = [&](double x) {
+                SymbolicExpression at_x = second_deriv.substitute(variable, SymbolicExpression::number(x)).simplify();
+                double value = 0.0;
+                if (at_x.is_number(&value)) return value;
+                return 0.0;
+            };
+
+            double previous_x = scan_min;
             double previous_value = eval_derivative(previous_x);
-            for (int i = 1; i <= 256; ++i) {
-                const double current_x = -10.0 + 20.0 * static_cast<double>(i) / 256.0;
+            for (int i = 1; i <= coarse_segments; ++i) {
+                const double current_x = scan_min + (scan_max - scan_min) * static_cast<double>(i) / coarse_segments;
                 const double current_value = eval_derivative(current_x);
-                if (mymath::is_near_zero(previous_value, 1e-8)) {
-                    add_point(previous_x);
-                } else if ((previous_value < 0.0 && current_value > 0.0) ||
-                           (previous_value > 0.0 && current_value < 0.0)) {
+                // Sign change indicates a root of f' = 0
+                if ((previous_value < 0.0 && current_value > 0.0) ||
+                    (previous_value > 0.0 && current_value < 0.0)) {
                     double left = previous_x;
                     double right = current_x;
                     double left_value = previous_value;
@@ -198,7 +225,37 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                 previous_x = current_x;
                 previous_value = current_value;
             }
-            if (mymath::is_near_zero(previous_value, 1e-8)) add_point(previous_x);
+
+            // Detect even-multiplicity roots by checking where second derivative is non-zero
+            // while first derivative is near zero (indicating a "touching" root)
+            // This distinguishes true even-multiplicity roots from flat regions where both f' and f'' approach zero
+
+            for (int i = 0; i <= coarse_segments; ++i) {
+                const double x = scan_min + (scan_max - scan_min) * static_cast<double>(i) / coarse_segments;
+                const double deriv_val = eval_derivative(x);
+                const double second_val = eval_second(x);
+
+                // For even-multiplicity roots: f' ≈ 0 but f'' ≠ 0
+                // For flat regions: both f' ≈ 0 and f'' ≈ 0
+                // Require f' to be very close to zero AND f'' to be significantly non-zero
+                if (mymath::abs(deriv_val) < 1e-8 && mymath::abs(second_val) > 1e-6) {
+                    // This is likely an even-multiplicity root (derivative touches zero)
+                    // Refine using Newton's method on f'
+                    double refined_x = x;
+                    for (int iter = 0; iter < 20; ++iter) {
+                        const double f_prime = eval_derivative(refined_x);
+                        const double f_double_prime = eval_second(refined_x);
+                        if (mymath::is_near_zero(f_prime, 1e-12)) break;
+                        if (mymath::abs(f_double_prime) < 1e-8) break;
+                        refined_x = refined_x - f_prime / f_double_prime;
+                    }
+                    // Verify the refined point is still a valid critical point
+                    if (mymath::is_near_zero(eval_derivative(refined_x), 1e-10) &&
+                        mymath::abs(eval_second(refined_x)) > 1e-6) {
+                        add_point(refined_x);
+                    }
+                }
+            }
         } else {
             auto eval_gradient_at = [&](const SymbolicExpression& g,
                                         const std::map<std::string, double>& point) {
@@ -213,61 +270,114 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                 return numeric;
             };
 
-            try {
-                std::map<std::string, double> origin;
-                for (const auto& v : variables) origin[v] = 0.0;
-
-                std::vector<double> rhs(variables.size(), 0.0);
-                std::vector<std::vector<double>> matrix(
-                    variables.size(), std::vector<double>(variables.size(), 0.0));
-                for (std::size_t row = 0; row < variables.size(); ++row) {
-                    const double at_origin = eval_gradient_at(gradient[row], origin);
-                    rhs[row] = -at_origin;
-                    for (std::size_t col = 0; col < variables.size(); ++col) {
-                        std::map<std::string, double> unit = origin;
-                        unit[variables[col]] = 1.0;
-                        matrix[row][col] = eval_gradient_at(gradient[row], unit) - at_origin;
-                    }
+            auto eval_expr_at = [&](const std::map<std::string, double>& point) {
+                SymbolicExpression current = expr;
+                for (const auto& [name, value] : point) {
+                    current = current.substitute(name, SymbolicExpression::number(value)).simplify();
                 }
+                double numeric = 0.0;
+                if (current.is_number(&numeric)) return numeric;
+                return 0.0;
+            };
 
-                const std::vector<double> solution =
-                    solve_linear_system_local(matrix, rhs);
-                std::map<std::string, double> candidate;
-                for (std::size_t i = 0; i < variables.size(); ++i) {
-                    candidate[variables[i]] = ctx.normalize_result(solution[i]);
-                }
-
-                bool is_critical = true;
+            auto gradient_norm_at = [&](const std::map<std::string, double>& point) {
+                double norm = 0.0;
                 for (const auto& g : gradient) {
-                    if (!mymath::is_near_zero(eval_gradient_at(g, candidate), 1e-8)) {
-                        is_critical = false;
-                        break;
+                    const double val = eval_gradient_at(g, point);
+                    norm += val * val;
+                }
+                return mymath::sqrt(norm);
+            };
+
+            auto add_critical_point = [&](const std::map<std::string, double>& point) {
+                bool duplicate = false;
+                for (const auto& existing : critical_points) {
+                    bool same = true;
+                    for (const auto& v : variables) {
+                        const auto it_existing = existing.find(v);
+                        const auto it_current = point.find(v);
+                        if (it_existing == existing.end() || it_current == point.end() ||
+                            mymath::abs(it_existing->second - it_current->second) > 1e-4) {
+                            same = false;
+                            break;
+                        }
+                    }
+                    if (same) { duplicate = true; break; }
+                }
+                if (!duplicate) {
+                    std::map<std::string, double> normalized;
+                    for (const auto& [k, v] : point) {
+                        normalized[k] = ctx.normalize_result(v);
+                    }
+                    critical_points.push_back(normalized);
+                }
+            };
+
+            // Try Newton-Raphson from multiple starting points
+            std::vector<std::map<std::string, double>> starting_points;
+
+            // Origin as starting point
+            std::map<std::string, double> origin;
+            for (const auto& v : variables) origin[v] = 0.0;
+            starting_points.push_back(origin);
+
+            // Grid of starting points for better coverage
+            const std::vector<double> grid_values = {-10.0, -5.0, 0.0, 5.0, 10.0};
+            if (variables.size() == 2) {
+                for (double v0 : grid_values) {
+                    for (double v1 : grid_values) {
+                        std::map<std::string, double> pt;
+                        pt[variables[0]] = v0;
+                        pt[variables[1]] = v1;
+                        starting_points.push_back(pt);
                     }
                 }
-                if (is_critical) {
-                    critical_points.push_back(candidate);
-                }
-            } catch (const std::exception&) {
-                // Fall back to the simple origin check below.
             }
 
-            // Multi-variable fallback: check origin if gradient is zero there.
-            bool origin_is_critical = true;
-            for (const auto& g : gradient) {
-                auto g_at_origin = g;
-                for (const auto& v : variables) {
-                    g_at_origin = g_at_origin.substitute(v, SymbolicExpression::number(0)).simplify();
+            for (const auto& start : starting_points) {
+                try {
+                    std::map<std::string, double> current = start;
+                    if (gradient_norm_at(current) < 1e-8) {
+                        add_critical_point(current);
+                        continue;
+                    }
+
+                    // Newton-Raphson iteration
+                    for (int iter = 0; iter < 50; ++iter) {
+                        // Build Jacobian of gradient (Hessian of original function)
+                        std::vector<double> rhs(variables.size(), 0.0);
+                        std::vector<std::vector<double>> jac(variables.size(),
+                            std::vector<double>(variables.size(), 0.0));
+
+                        for (std::size_t row = 0; row < variables.size(); ++row) {
+                            rhs[row] = -eval_gradient_at(gradient[row], current);
+                            for (std::size_t col = 0; col < variables.size(); ++col) {
+                                std::map<std::string, double> perturbed = current;
+                                perturbed[variables[col]] += 1e-6;
+                                jac[row][col] = (eval_gradient_at(gradient[row], perturbed) -
+                                                eval_gradient_at(gradient[row], current)) / 1e-6;
+                            }
+                        }
+
+                        const std::vector<double> delta = solve_linear_system_local(jac, rhs);
+
+                        double max_change = 0.0;
+                        for (std::size_t i = 0; i < variables.size(); ++i) {
+                            current[variables[i]] += delta[i];
+                            max_change = std::max(max_change, mymath::abs(delta[i]));
+                        }
+
+                        if (max_change < 1e-10) break;
+                    }
+
+                    // Check if this is a valid critical point
+                    const double grad_norm = gradient_norm_at(current);
+                    if (grad_norm < 1e-8) {
+                        add_critical_point(current);
+                    }
+                } catch (const std::exception&) {
+                    // Continue with next starting point
                 }
-                double val = 0.0;
-                if (!g_at_origin.is_number(&val) || !mymath::is_near_zero(val, 1e-10)) {
-                    origin_is_critical = false;
-                    break;
-                }
-            }
-            if (origin_is_critical && critical_points.empty()) {
-                std::map<std::string, double> origin;
-                for (const auto& v : variables) origin[v] = 0.0;
-                critical_points.push_back(origin);
             }
         }
 

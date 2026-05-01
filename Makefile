@@ -61,6 +61,7 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/analysis/ode_solver.cpp \
 	$(SRC_DIR)/analysis/calculator_ode.cpp \
 	$(SRC_DIR)/analysis/calculator_integration.cpp \
+	$(SRC_DIR)/analysis/vector_field_theorems.cpp \
 	$(SRC_DIR)/analysis/calculator_analysis_cmds.cpp \
 	$(SRC_DIR)/analysis/calculator_rootfinding.cpp \
 	$(SRC_DIR)/analysis/calculator_optimization.cpp \

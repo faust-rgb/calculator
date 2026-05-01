@@ -622,7 +622,11 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
         return 0.0;
     };
 
-    // 代换 x = 1/t (对于 +inf) 或 x = -1/t (对于 -inf)
+    // 策略：对于 x -> inf，代换 x = 1/t，然后在 t -> 0 处展开
+    // 注意：如果代换后的表达式在 t=0 处有极点，需要区分两种情况：
+    // 1. 原表达式趋向无穷大（如 x^2 -> 1/t^2）
+    // 2. 代换引入的极点（如 1/x -> 1/(1/t)），原极限是有限值
+
     SymbolicExpression t_var = SymbolicExpression::variable("t_limit_inf_tmp");
     SymbolicExpression inv_t;
     if (positive) {
@@ -630,20 +634,54 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
     } else {
         inv_t = SymbolicExpression::number(-1.0) / t_var;
     }
-    SymbolicExpression substituted = expression.substitute(variable_name, inv_t);
+    SymbolicExpression substituted = expression.substitute(variable_name, inv_t).simplify();
 
     std::vector<double> coeffs;
-    // 在 t -> 0+ 处展开（对于 +inf，t -> 0+；对于 -inf，t -> 0-）
-    // 由于 PSA 在 0 处展开，我们尝试获取常数项
-    if (series_ops::internal::evaluate_psa(substituted, "t_limit_inf_tmp", 0.0, 2, coeffs, ctx)) {
-        if (!coeffs.empty() && mymath::isfinite(coeffs[0])) {
-            *result = coeffs[0];
-            return true;
+    try {
+        if (series_ops::internal::evaluate_psa(substituted, "t_limit_inf_tmp", 0.0, 2, coeffs, ctx)) {
+            if (!coeffs.empty() && mymath::isfinite(coeffs[0])) {
+                *result = coeffs[0];
+                return true;
+            }
         }
+    } catch (const series_ops::internal::PoleException& e) {
+        // 代换后的表达式在 t=0 处有极点
+        // 检查原表达式的主导项来确定极限行为
+        // 对于多项式类表达式，最高次项决定行为
+        // 对于有理函数，比较分子分母的最高次
+
+        // 尝试在非常大的点处展开，获取渐近行为
+        double large_x = positive ? 1e6 : -1e6;
+        try {
+            std::vector<double> large_coeffs;
+            if (series_ops::internal::evaluate_psa(expression, variable_name, large_x, 1, large_coeffs, ctx)) {
+                if (!large_coeffs.empty()) {
+                    // 使用线性近似估计极限趋势
+                    double val_at_large = large_coeffs[0];
+                    double slope = (large_coeffs.size() > 1) ? large_coeffs[1] : 0.0;
+
+                    // 如果值已经很大且在增长，极限是无穷
+                    if (mymath::abs(val_at_large) > 1e10) {
+                        *result = (val_at_large > 0) ? mymath::infinity() : -mymath::infinity();
+                        return true;
+                    }
+
+                    // 如果值很小且斜率也很小，极限可能是有限值
+                    if (mymath::abs(val_at_large) < 1e-6 && mymath::abs(slope) < 1e-6) {
+                        *result = val_at_large;
+                        return true;
+                    }
+                }
+            }
+        } catch (...) {
+            // 忽略，回退到其他方法
+        }
+
+        // 如果上述方法失败，返回 false 让数值方法处理
+        return false;
     }
 
     // 尝试 L'Hopital 规则（对于无穷点）
-    // 检查是否是 inf/inf 形式
     double lhopital_result = 0.0;
     if (try_symbolic_lhopital_limit(expression, variable_name,
                                      positive ? mymath::infinity()
@@ -654,6 +692,36 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
     }
 
     return false;
+}
+
+/**
+ * @brief 处理极点极限
+ *
+ * 根据 Laurent 级数的位移和前导系数判定无穷极限。
+ *
+ * @param shift Laurent 位移（负数表示极点阶数）
+ * @param leading_coefficient 前导系数
+ * @param direction 方向：-1 左极限，1 右极限，0 双侧极限
+ * @return 极限值（+inf 或 -inf）
+ * @throw std::runtime_error 当双侧极限不存在时
+ */
+double handle_pole_limit(int shift, double leading_coefficient, int direction) {
+    if (direction == 0) {
+        // 双侧极限：只有当 shift 为偶数时才存在
+        if (shift % 2 == 0) {
+            return (leading_coefficient > 0) ? mymath::infinity() : -mymath::infinity();
+        } else {
+            throw std::runtime_error("two-sided limit does not exist (pole with odd shift)");
+        }
+    } else if (direction == 1) {
+        // 右极限：(x - x0) > 0，符号不变
+        return (leading_coefficient > 0) ? mymath::infinity() : -mymath::infinity();
+    } else {
+        // 左极限：(x - x0) < 0，奇数 shift 时符号翻转
+        bool flip_sign = (shift % 2 != 0);
+        double effective_c = flip_sign ? -leading_coefficient : leading_coefficient;
+        return (effective_c > 0) ? mymath::infinity() : -mymath::infinity();
+    }
 }
 
 }  // namespace
@@ -804,52 +872,69 @@ double FunctionAnalysis::limit(double x, int direction) const {
         throw std::runtime_error("limit direction must be -1, 0, or 1");
     }
 
-    // --- 优化点 1 & 2: 符号极限处理 (基于 PSA 引擎) ---
+    // --- 策略优先级：PSA > 洛必达 > 数值方法 ---
+    // PSA 是主力方法，对于大多数情况能在微秒级完成
+    // 洛必达作为备选，处理 PSA 无法处理的情况
+    // 数值方法是最后手段
+
+    SymbolicExpression expr;
     try {
-        SymbolicExpression expr = SymbolicExpression::parse(expression_);
-        double lhopital_value = 0.0;
-        if (direction == 0 &&
-            try_symbolic_lhopital_limit(expr,
-                                        variable_name_,
-                                        x,
-                                        &lhopital_value)) {
-            return lhopital_value;
-        }
+        expr = SymbolicExpression::parse(expression_);
+    } catch (...) {
+        // 解析失败，直接使用数值方法
+        return compute_numerical_limit(x, direction);
+    }
 
-        series_ops::SeriesContext ctx;
-        ctx.evaluate_at = [this](const SymbolicExpression& e, const std::string& v, double p) {
-            // 对于主变量，返回点值
-            if (v == variable_name_) return p;
-            // 尝试解析为数值
-            double val = 0.0;
-            if (e.is_number(&val)) return val;
-            // 对于其他情况（如其他变量或复杂表达式），返回 0.0
-            // 这会导致 PSA 失败并回退到数值方法，这是预期行为
-            return 0.0;
-        };
+    series_ops::SeriesContext ctx;
+    ctx.evaluate_at = [this](const SymbolicExpression& e, const std::string& v, double p) {
+        if (v == variable_name_) return p;
+        double val = 0.0;
+        if (e.is_number(&val)) return val;
+        return 0.0;
+    };
 
-        if (mymath::isfinite(x)) {
-            std::vector<double> coeffs;
-            // 尝试在 x 处展开。 degree=0 就足够获取常数项极限。
-            // 为了处理 sin(x)/x 这种，我们需要更智能的 evaluate_psa，
-            // 但目前的 evaluate_psa 在 ps_div 中会抛出。
-            // 策略：如果直接展开失败，继续尝试数值方法。
+    // --- 第一优先级：PSA（幂级数展开）---
+    if (mymath::isfinite(x)) {
+        std::vector<double> coeffs;
+        try {
             if (series_ops::internal::evaluate_psa(expr, variable_name_, x, 2, coeffs, ctx)) {
                 if (!coeffs.empty()) return coeffs[0];
             }
-        } else {
-            // x 为无穷大：使用封装的 symbolic_limit_at_infinity
-            bool positive = x > 0;
-            double inf_result = 0.0;
-            if (symbolic_limit_at_infinity(expr, variable_name_, positive, &inf_result)) {
-                return inf_result;
-            }
+        } catch (const series_ops::internal::PoleException& e) {
+            // PSA 检测到极点，直接利用 Laurent 级数信息判定无穷极限
+            return handle_pole_limit(e.shift, e.leading_coefficient, direction);
         }
-    } catch (...) {
-        // 符号处理失败，静默回退到数值方法
+    } else {
+        // x 为无穷大：使用封装的 symbolic_limit_at_infinity
+        bool positive = x > 0;
+        double inf_result = 0.0;
+        if (symbolic_limit_at_infinity(expr, variable_name_, positive, &inf_result)) {
+            return inf_result;
+        }
     }
 
-    // --- 优化点 4: 升级数值极限算法 (使用 Richardson 外推) ---
+    // --- 第二优先级：洛必达法则（仅对 0/0 或 inf/inf 型）---
+    // 只有当 PSA 失败时才尝试洛必达
+    double lhopital_value = 0.0;
+    if (direction == 0 &&
+        try_symbolic_lhopital_limit(expr,
+                                    variable_name_,
+                                    x,
+                                    &lhopital_value)) {
+        return lhopital_value;
+    }
+
+    // --- 第三优先级：数值方法（Richardson 外推）---
+    return compute_numerical_limit(x, direction);
+}
+
+double FunctionAnalysis::compute_numerical_limit(double x, int direction) const {
+    // 自适应步长的 Richardson 外推算法
+    // 特点：
+    // 1. 自适应步长控制：根据误差估计调整步长
+    // 2. 步长拒绝机制：当检测到剧烈变化时拒绝当前步长
+    // 3. 振荡检测：检测高频振荡函数并调整策略
+
     auto compute_limit_at = [this](double x_target, int side) {
         // side: -1 (左), 1 (右), 0 (中心或无穷大)
         long double richardson[14][14] = {};
@@ -858,10 +943,20 @@ double FunctionAnalysis::limit(double x, int direction) const {
         long double best_error = static_cast<long double>(mymath::infinity());
         bool have_best = false;
 
+        // 自适应步长参数
         const double base_h = mymath::isfinite(x_target) ? limit_step_scale(x_target) : 1e-2;
-        
+        double adaptive_h = base_h;  // 当前自适应步长
+        int consecutive_bad = 0;     // 连续不良采样计数
+        constexpr int kMaxBadSamples = 3;  // 最大连续不良采样数
+
+        // 用于振荡检测的历史值
+        long double prev_val = 0.0L;
+        bool have_prev = false;
+        int oscillation_count = 0;
+
         for (int row = 0; row < 14; ++row) {
-            const double h = base_h / mymath::pow(2.0, static_cast<double>(row + 4));
+            // 使用自适应步长
+            const double h = adaptive_h / mymath::pow(2.0, static_cast<double>(row + 4));
             double sample_x;
             if (mymath::isfinite(x_target)) {
                 sample_x = x_target + static_cast<double>(side) * h;
@@ -874,10 +969,67 @@ double FunctionAnalysis::limit(double x, int direction) const {
             try {
                 val = to_long_double(evaluate_with_variable(sample_x));
             } catch (...) {
+                // 采样失败，调整步长并重试
+                adaptive_h *= 0.5;
+                consecutive_bad++;
+                if (consecutive_bad >= kMaxBadSamples) {
+                    throw std::runtime_error("limit did not converge (sampling failures)");
+                }
                 continue;
             }
-            if (!mymath::isfinite(static_cast<double>(val))) continue;
 
+            // 检测无穷大值（可能是极点）
+            if (!mymath::isfinite(static_cast<double>(val))) {
+                // 如果值趋向无穷，可能是无限极限
+                if (have_prev && mymath::isfinite(static_cast<double>(prev_val))) {
+                    // 从有限变为无穷，检查趋势
+                    if (prev_val > 1e10) {
+                        return mymath::infinity();
+                    } else if (prev_val < -1e10) {
+                        return -mymath::infinity();
+                    }
+                }
+                adaptive_h *= 0.5;
+                consecutive_bad++;
+                if (consecutive_bad >= kMaxBadSamples) {
+                    // 多次采样都得到无穷大，可能是极点
+                    throw std::runtime_error("limit appears to be infinite (numerical evidence)");
+                }
+                continue;
+            }
+
+            // 振荡检测：检测符号频繁变化
+            if (have_prev) {
+                if ((val > 0 && prev_val < 0) || (val < 0 && prev_val > 0)) {
+                    oscillation_count++;
+                    if (oscillation_count >= 4) {
+                        // 可能是高频振荡函数，使用更小的步长
+                        adaptive_h *= 0.25;
+                        oscillation_count = 0;
+                    }
+                } else {
+                    oscillation_count = std::max(0, oscillation_count - 1);
+                }
+            }
+            prev_val = val;
+            have_prev = true;
+
+            // 步长拒绝机制：检测剧烈变化
+            if (have_best && row > 0) {
+                const long double expected_change = best_error * 10.0L + 1e-10L;
+                const long double actual_change = mymath::abs_long_double(val - best_value);
+                if (actual_change > expected_change * 1e6L) {
+                    // 变化过于剧烈，拒绝此步长
+                    adaptive_h *= 0.5;
+                    consecutive_bad++;
+                    if (consecutive_bad >= kMaxBadSamples) {
+                        break;  // 尝试用已有的 Richardson 表外推
+                    }
+                    continue;
+                }
+            }
+
+            consecutive_bad = 0;  // 重置不良采样计数
             richardson[row][0] = val;
             row_valid[row] = true;
 
@@ -886,10 +1038,10 @@ double FunctionAnalysis::limit(double x, int direction) const {
                     row_valid[row] = false;
                     break;
                 }
-                // 极限逼近的误差项通常是 h, h^2, h^3... 
-                // 外推公式：R(n,k) = (2^k * R(n,k-1) - R(n-1,k-1)) / (2^k - 1)
+                // Richardson 外推公式
                 const long double factor = static_cast<long double>(1LL << col);
-                richardson[row][col] = richardson[row][col-1] + (richardson[row][col-1] - richardson[row-1][col-1]) / (factor - 1.0L);
+                richardson[row][col] = richardson[row][col-1] +
+                    (richardson[row][col-1] - richardson[row-1][col-1]) / (factor - 1.0L);
                 if (!mymath::isfinite(static_cast<double>(richardson[row][col]))) {
                     row_valid[row] = false;
                     break;
@@ -903,7 +1055,12 @@ double FunctionAnalysis::limit(double x, int direction) const {
                     best_value = richardson[row][row];
                     have_best = true;
                 }
-                
+
+                // 自适应步长调整：误差下降慢时减小步长
+                if (err > best_error * 0.9L && row > 3) {
+                    adaptive_h *= 0.75;
+                }
+
                 // 如果误差已经非常小，提前退出
                 if (err < 1e-15L) {
                     return static_cast<double>(richardson[row][row]);
@@ -937,13 +1094,13 @@ double FunctionAnalysis::limit(double x, int direction) const {
     // 双侧极限
     const double left = compute_limit_at(x, -1);
     const double right = compute_limit_at(x, 1);
-    
+
     // 如果两侧极限非常接近，或者是符号一致的无穷大
-    if (mymath::abs(left - right) <= kLimitTolerance * 100.0 || 
+    if (mymath::abs(left - right) <= kLimitTolerance * 100.0 ||
         (!mymath::isfinite(left) && !mymath::isfinite(right) && ((left > 0) == (right > 0)))) {
         return (left + right) * 0.5;
     }
-    
+
     throw std::runtime_error("two-sided limit does not exist");
 }
 
@@ -1051,13 +1208,99 @@ double FunctionAnalysis::definite_integral(double lower_bound,
                                                kMaxIntegralDepth);
     }
 
-    for (int i = 1; i < 40; ++i) {
+    // Check for internal singularities by looking for large values or sign changes
+    // that indicate a pole (like tan(x) near pi/2)
+    double prev_scan_val = evaluate_with_variable(lower_bound);
+    for (int i = 1; i <= 40; ++i) {
         const double x =
             lower_bound + (upper_bound - lower_bound) *
                               (static_cast<double>(i) / 40.0);
         double value = evaluate_with_variable(x);
-        if (!mymath::isfinite(value) || mymath::abs(value) > 1e10) {
+        if (!mymath::isfinite(value)) {
             throw std::runtime_error("integral did not converge");
+        }
+        // Check for sign change through large values (characteristic of a pole)
+        if (mymath::isfinite(prev_scan_val)) {
+            double prev_abs = mymath::abs(prev_scan_val);
+            double curr_abs = mymath::abs(value);
+            // If values have opposite signs and at least one is large, likely a pole
+            if ((prev_scan_val > 0) != (value > 0) &&
+                (prev_abs > 100.0 || curr_abs > 100.0)) {
+                throw std::runtime_error("potential internal discontinuity detected");
+            }
+        }
+        prev_scan_val = value;
+    }
+
+    // Additional adaptive scan for internal discontinuities
+    // Use a more thorough scan with adaptive refinement near suspicious points
+    const int coarse_scan_points = 100;
+    std::vector<std::pair<double, double>> suspicious_points;
+    double prev_x = lower_bound;
+    double prev_val = evaluate_with_variable(lower_bound);
+    for (int i = 1; i <= coarse_scan_points; ++i) {
+        const double x = lower_bound + (upper_bound - lower_bound) * static_cast<double>(i) / coarse_scan_points;
+        double val;
+        try {
+            val = evaluate_with_variable(x);
+        } catch (...) {
+            suspicious_points.push_back({prev_x, x});
+            prev_x = x;
+            prev_val = 0.0;
+            continue;
+        }
+
+        // Check for discontinuity indicators
+        if (!mymath::isfinite(val)) {
+            suspicious_points.push_back({prev_x, x});
+        } else if (mymath::abs(val) > 1e6) {  // Lower threshold to catch poles
+            suspicious_points.push_back({prev_x, x});
+        } else if (mymath::isfinite(prev_val)) {
+            // Check for large jump (potential discontinuity)
+            double jump = mymath::abs(val - prev_val);
+            double avg = (mymath::abs(val) + mymath::abs(prev_val)) / 2.0;
+            // Lower threshold to catch sign changes through infinity (like tan near pi/2)
+            if (avg > 1e-10 && jump > 10.0 * avg) {
+                suspicious_points.push_back({prev_x, x});
+            }
+        }
+        prev_x = x;
+        prev_val = val;
+    }
+
+    // Refine suspicious regions with binary search
+    for (const auto& [left, right] : suspicious_points) {
+        // Binary search for the discontinuity point
+        double l = left, r = right;
+        for (int iter = 0; iter < 30 && (r - l) > 1e-12; ++iter) {
+            double mid = (l + r) / 2.0;
+            double mid_val;
+            try {
+                mid_val = evaluate_with_variable(mid);
+                if (!mymath::isfinite(mid_val) || mymath::abs(mid_val) > 1e10) {
+                    r = mid;
+                } else {
+                    // Check if left or right side has the issue
+                    double left_mid = (l + mid) / 2.0;
+                    double right_mid = (mid + r) / 2.0;
+                    double left_val = evaluate_with_variable(left_mid);
+                    double right_val = evaluate_with_variable(right_mid);
+                    if (!mymath::isfinite(left_val) || mymath::abs(left_val) > 1e10) {
+                        r = mid;
+                    } else if (!mymath::isfinite(right_val) || mymath::abs(right_val) > 1e10) {
+                        l = mid;
+                    } else {
+                        break;  // No clear discontinuity found
+                    }
+                }
+            } catch (...) {
+                r = mid;
+            }
+        }
+        // If we found a narrow suspicious region, throw an error
+        if ((r - l) < 1e-6) {
+            throw std::runtime_error("potential internal discontinuity detected near x = " +
+                                     std::to_string((l + r) / 2.0));
         }
     }
 

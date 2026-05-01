@@ -2,10 +2,12 @@
 #define SYMBOLIC_EXPRESSION_INTERNAL_H
 
 #include "symbolic_expression.h"
+#include "mymath_dual.h"
 
 #include <initializer_list>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // 前向声明
@@ -25,20 +27,26 @@ class SymbolicPolynomial;
  * - kAdd/kSubtract/kMultiply/kDivide/kPower: 二元运算
  * - kNegate: 一元取负
  * - kFunction: 函数调用，如 sin(x), exp(x)
+ * - kVector: 向量表达式，children 存储各分量
+ * - kTensor: 张量（矩阵）表达式，children 存储各行
+ * - kDifferentialOp: 微分算子，text 存储算子名（grad, div, curl, laplacian）
  */
 enum class NodeType {
-    kNumber,     ///< 数值常量节点
-    kVariable,   ///< 变量节点
-    kPi,         ///< 精确常数 pi
-    kE,          ///< 精确常数 e
-    kInfinity,   ///< 无穷大节点 (+inf 或 -inf)
-    kAdd,        ///< 加法节点: left + right
-    kSubtract,   ///< 减法节点: left - right
-    kMultiply,   ///< 乘法节点: left * right
-    kDivide,     ///< 除法节点: left / right
-    kPower,      ///< 幂运算节点: left ^ right
-    kNegate,     ///< 取负节点: -left
-    kFunction,   ///< 函数调用节点: text(left)，如 sin(x)
+    kNumber,         ///< 数值常量节点
+    kVariable,       ///< 变量节点
+    kPi,             ///< 精确常数 pi
+    kE,              ///< 精确常数 e
+    kInfinity,       ///< 无穷大节点 (+inf 或 -inf)
+    kAdd,            ///< 加法节点: left + right
+    kSubtract,       ///< 减法节点: left - right
+    kMultiply,       ///< 乘法节点: left * right
+    kDivide,         ///< 除法节点: left / right
+    kPower,          ///< 幂运算节点: left ^ right
+    kNegate,         ///< 取负节点: -left
+    kFunction,       ///< 函数调用节点: text(left)，如 sin(x)
+    kVector,         ///< 向量节点: children 存储各分量
+    kTensor,         ///< 张量节点: children 存储各行（每行为 kVector）
+    kDifferentialOp, ///< 微分算子节点: text 为算子名，left 为操作数
 };
 
 // ============================================================================
@@ -55,6 +63,9 @@ enum class NodeType {
  * - kFunction: 使用 text 存储函数名，left 存储参数
  * - 二元运算: 使用 left/right 存储操作数
  * - kNegate: 使用 left 存储被取负的表达式
+ * - kVector: 使用 children 存储各分量
+ * - kTensor: 使用 children 存储各行，shape 存储 [rows, cols]
+ * - kDifferentialOp: 使用 text 存储算子名，left 存储操作数
  *
  * 节点通过 intern_node() 实现驻留（interning），相同结构的节点共享，
  * 以减少内存分配并加速结构比较。
@@ -62,9 +73,11 @@ enum class NodeType {
 struct SymbolicExpression::Node {
     NodeType type = NodeType::kNumber;  ///< 节点类型
     double number_value = 0.0;          ///< 数值（仅 kNumber 类型使用）
-    std::string text;                   ///< 变量名或函数名
+    std::string text;                   ///< 变量名、函数名或微分算子名
     std::shared_ptr<Node> left;         ///< 左子节点/唯一子节点
     std::shared_ptr<Node> right;        ///< 右子节点（二元运算使用）
+    std::vector<std::shared_ptr<Node>> children;  ///< 子节点列表（kVector, kTensor）
+    std::vector<std::size_t> shape;     ///< 形状信息（kTensor: [rows, cols]）
     mutable std::string structural_key_cache;  ///< 结构键缓存，用于快速比较
 
     /** @brief 默认构造函数，创建零节点 */
@@ -309,6 +322,37 @@ bool expr_is_infinity(const SymbolicExpression& expression, bool* positive = nul
 bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& node,
                                double* value);
 
+/**
+ * @brief Context for dual number evaluation (forward-mode AutoDiff)
+ */
+struct DualEvaluationContext {
+    std::string differentiation_variable;  ///< Variable to differentiate w.r.t.
+    double point_value;                     ///< Value of the variable at the point
+    std::unordered_map<std::string, double> other_values;  ///< Values of other variables
+};
+
+/**
+ * @brief Evaluate expression node with dual numbers for automatic differentiation.
+ *
+ * For the differentiation variable, returns dual(point_value, 1.0).
+ * For other variables, returns dual(their_value, 0.0).
+ * All operations propagate derivatives using dual arithmetic.
+ */
+bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& node,
+                            const DualEvaluationContext& ctx,
+                            mymath::dual<double>* result);
+
+// ============================================================================
+// Expression size monitoring
+// ============================================================================
+
+/**
+ * @brief Count nodes in expression tree
+ * @param node Expression root
+ * @return Total number of nodes (including leaves)
+ */
+std::size_t count_nodes(const std::shared_ptr<SymbolicExpression::Node>& node);
+
 // ============================================================================
 // 多项式操作
 // ============================================================================
@@ -408,6 +452,15 @@ bool is_identifier_variable_name(const std::string& name);
  * 最多进行 16 轮简化迭代，直到表达式结构不再变化。
  */
 SymbolicExpression simplify_impl(const SymbolicExpression& expression);
+
+/**
+ * @brief Simplify with a node count budget
+ * @param expression Expression to simplify
+ * @param max_nodes Maximum allowed node count
+ * @return Simplified expression, or partial result if budget exceeded
+ */
+SymbolicExpression simplify_with_budget_impl(const SymbolicExpression& expression,
+                                             std::size_t max_nodes);
 
 /** @brief 强制完全展开的内部实现 */
 SymbolicExpression expand_impl(const SymbolicExpression& expression);

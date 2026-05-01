@@ -34,6 +34,7 @@
 #include "multivariable_integrator.h"
 #include "multidim_integration.h"
 #include "polynomial.h"
+#include "symbolic_expression_internal.h"
 #include "../math/mymath.h"
 
 #include <algorithm>
@@ -94,6 +95,8 @@ bool is_symbolic_command(const std::string& command) {
            command == "expand" ||
            command == "cse" ||
            command == "gradient" ||
+           command == "numerical_gradient" ||
+           command == "num_grad" ||
            command == "hessian" ||
            command == "jacobian" ||
            command == "divergence" ||
@@ -105,6 +108,7 @@ bool is_symbolic_command(const std::string& command) {
            command == "param_deriv" ||
            command == "directional" ||
            command == "line_integral" ||
+           command == "line_integral_vector" ||
            command == "surface_integral" ||
            command == "greens_theorem" ||
            command == "stokes_theorem" ||
@@ -387,6 +391,88 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         return true;
     }
 
+    if (command == "numerical_gradient" || command == "num_grad") {
+        // numerical_gradient(expr, [vars], [point])
+        // Example: numerical_gradient(x^2 + y^2, x, y, 3, 4) -> [6, 8]
+        // Or: numerical_gradient(x^2, x, 2) -> [4]
+        if (arguments.size() < 3) {
+            throw std::runtime_error(
+                "numerical_gradient expects (expression, variables..., point_values...)");
+        }
+
+        std::string variable_name;
+        SymbolicExpression expression;
+        ctx.resolve_symbolic(arguments[0], false, &variable_name, &expression);
+
+        // Determine how many variables we have
+        // Variables are identifiers, point values are numbers
+        std::vector<std::string> variables;
+        std::vector<double> point_values;
+
+        for (std::size_t i = 1; i < arguments.size(); ++i) {
+            const std::string arg = trim_copy(arguments[i]);
+            // Try to parse as number first
+            try {
+                double val = ctx.parse_decimal(arg);
+                point_values.push_back(val);
+            } catch (...) {
+                // Not a number, must be a variable name
+                if (!is_identifier_text(arg)) {
+                    throw std::runtime_error(
+                        "numerical_gradient: argument '" + arg + "' is neither a number nor a valid variable name");
+                }
+                variables.push_back(arg);
+            }
+        }
+
+        // If no variables specified, use expression's identifiers
+        if (variables.empty()) {
+            variables = expression.identifier_variables();
+        }
+        if (variables.empty()) {
+            variables.push_back("x");
+        }
+
+        if (variables.size() != point_values.size()) {
+            throw std::runtime_error(
+                "numerical_gradient: number of variables (" + std::to_string(variables.size()) +
+                ") must match number of point values (" + std::to_string(point_values.size()) + ")");
+        }
+
+        // Compute gradient using forward-mode AutoDiff
+        std::vector<double> gradient_values;
+        for (std::size_t i = 0; i < variables.size(); ++i) {
+            symbolic_expression_internal::DualEvaluationContext dual_ctx;
+            dual_ctx.differentiation_variable = variables[i];
+            dual_ctx.point_value = point_values[i];
+            for (std::size_t j = 0; j < variables.size(); ++j) {
+                if (j != i) {
+                    dual_ctx.other_values[variables[j]] = point_values[j];
+                }
+            }
+
+            mymath::dual<double> result;
+            if (!symbolic_expression_internal::try_evaluate_dual_node(expression.node_, dual_ctx, &result)) {
+                throw std::runtime_error(
+                    "numerical_gradient: failed to evaluate expression with dual numbers");
+            }
+            gradient_values.push_back(result.derivative());
+        }
+
+        // Format output
+        std::ostringstream out;
+        out << "[";
+        for (std::size_t i = 0; i < gradient_values.size(); ++i) {
+            if (i != 0) {
+                out << ", ";
+            }
+            out << gradient_values[i];
+        }
+        out << "]";
+        *output = out.str();
+        return true;
+    }
+
     if (command == "jacobian") {
         if (arguments.size() < 2) {
             throw std::runtime_error(
@@ -550,9 +636,10 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
     // ============================================================================
 
     if (command == "line_integral") {
-        // line_integral(f_or_F, [x(t), y(t), ...], t, a, b)
+        // line_integral(f_or_F, [x(t), y(t), ...], t, a, b, [coord_vars])
+        // Optional coord_vars: list of coordinate variable names (default: x, y, z, ...)
         if (arguments.size() < 5) {
-            throw std::runtime_error("line_integral expects (f_or_F, [x(t), y(t), ...], t, a, b)");
+            throw std::runtime_error("line_integral expects (f_or_F, [x(t), y(t), ...], t, a, b, [coord_vars])");
         }
         const std::vector<SymbolicExpression> field_components = ctx.parse_symbolic_expression_list(arguments[0]);
         const std::vector<SymbolicExpression> curve_components = ctx.parse_symbolic_expression_list(arguments[1]);
@@ -561,9 +648,27 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         const double a = ctx.parse_decimal(arguments[3]);
         const double b = ctx.parse_decimal(arguments[4]);
         const std::size_t dim = curve_components.size();
+
+        // Parse optional coordinate variable names
+        std::vector<std::string> coord_vars;
+        if (arguments.size() > 5) {
+            const std::vector<SymbolicExpression> coord_exprs = ctx.parse_symbolic_expression_list(arguments[5]);
+            for (const auto& expr : coord_exprs) {
+                std::string var_name = expr.to_string();
+                // Clean up the variable name
+                if (!var_name.empty() && is_identifier_text(var_name)) {
+                    coord_vars.push_back(var_name);
+                }
+            }
+        }
+        // Fill with default names if not enough provided
+        const std::vector<std::string> default_vars = {"x", "y", "z", "u", "v", "w", "a", "b", "c", "d"};
+        while (coord_vars.size() < dim) {
+            coord_vars.push_back(default_vars[coord_vars.size()]);
+        }
+
         std::vector<SymbolicExpression> dr_dt(dim);
         for (std::size_t i = 0; i < dim; ++i) dr_dt[i] = curve_components[i].derivative(param).simplify();
-        const std::vector<std::string> coord_vars = {"x", "y", "z", "u", "v", "w"};
 
         if (field_components.size() > 1) {
             if (field_components.size() != dim) throw std::runtime_error("line_integral: field and curve dimensions must match");
@@ -825,71 +930,143 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
     }
 
     if (command == "surface_integral") {
-        // surface_integral([F_x, F_y, F_z], [x(u,v), y(u,v), z(u,v)], u, a, b, v, c, d)
-        // Computes ∬_S F(r(u,v)) · (r_u × r_v) du dv
+        // surface_integral([F_x, F_y, F_z], [x(u,v), y(u,v), z(u,v)], u, a, b, v, c(u), d(u), [orientation])
+        // or surface_integral(f, [x(u,v), y(u,v), z(u,v)], u, a, b, v, c(u), d(u)) for scalar integral
+        // c(u) and d(u) can be expressions depending on u, or constants
+        // orientation: "outward" (default) or "inward" for flux integrals
         if (arguments.size() < 8) {
             throw std::runtime_error(
-                "surface_integral expects (f_or_F, [x(u,v), y(u,v), z(u,v)], u, a, b, v, c, d)");
+                "surface_integral expects (f_or_F, [x(u,v), y(u,v), z(u,v)], u, a, b, v, c, d, [orientation])");
         }
 
-        // Parse the vector field components [F_x, F_y, F_z]
         const std::vector<SymbolicExpression> field_components =
             ctx.parse_symbolic_expression_list(arguments[0]);
 
-        if (field_components.size() != 3) {
-            throw std::runtime_error(
-                "surface_integral_flux currently only supports 3D vector fields");
-        }
-
-        // Parse the parametric surface components [x(u,v), y(u,v), z(u,v)]
         const std::vector<SymbolicExpression> surface_components =
             ctx.parse_symbolic_expression_list(arguments[1]);
-
-        if (surface_components.size() != 3) {
-            throw std::runtime_error(
-                "surface_integral_flux currently only supports 3D surfaces");
-        }
+        const std::size_t dim = surface_components.size();
 
         // Parse parameter names
         const std::string u_param = trim_copy(arguments[2]);
         const std::string v_param = trim_copy(arguments[5]);
         if (!is_identifier_text(u_param) || !is_identifier_text(v_param)) {
-            throw std::runtime_error("surface_integral_flux parameters must be identifiers");
+            throw std::runtime_error("surface_integral parameters must be identifiers");
         }
 
-        // Parse bounds
+        // Parse bounds - v bounds can depend on u
         const double u_a = ctx.parse_decimal(arguments[3]);
         const double u_b = ctx.parse_decimal(arguments[4]);
-        const double v_c = ctx.parse_decimal(arguments[6]);
-        const double v_d = ctx.parse_decimal(arguments[7]);
+        const std::string v_c_expr = arguments[6];  // Can be constant or expression in u
+        const std::string v_d_expr = arguments[7];  // Can be constant or expression in u
+
+        // Parse optional orientation
+        std::string orientation = "outward";
+        if (arguments.size() > 8) {
+            orientation = trim_copy(arguments[8]);
+        }
 
         // Compute r_u and r_v (partial derivatives)
-        std::vector<SymbolicExpression> r_u(3), r_v(3);
-        for (int i = 0; i < 3; ++i) {
+        std::vector<SymbolicExpression> r_u(dim), r_v(dim);
+        for (std::size_t i = 0; i < dim; ++i) {
             r_u[i] = surface_components[i].derivative(u_param).simplify();
             r_v[i] = surface_components[i].derivative(v_param).simplify();
         }
 
-        // Compute cross product r_u × r_v
-        SymbolicExpression cross_x = (r_u[1] * r_v[2] - r_u[2] * r_v[1]).simplify();
-        SymbolicExpression cross_y = (r_u[2] * r_v[0] - r_u[0] * r_v[2]).simplify();
-        SymbolicExpression cross_z = (r_u[0] * r_v[1] - r_u[1] * r_v[0]).simplify();
+        // Build integrand based on field type
+        SymbolicExpression integrand;
 
-        // Substitute r(u,v) into F
-        const std::vector<std::string> coord_vars = {"x", "y", "z"};
-        std::vector<SymbolicExpression> F_of_r(3);
-        for (int i = 0; i < 3; ++i) {
-            F_of_r[i] = field_components[i];
-            for (int j = 0; j < 3; ++j) {
-                F_of_r[i] = F_of_r[i].substitute(coord_vars[j], surface_components[j]).simplify();
+        if (field_components.size() > 1) {
+            // Vector field: flux integral F · n dS = F · (r_u × r_v) du dv
+            if (field_components.size() != dim) {
+                throw std::runtime_error("surface_integral: field and surface dimensions must match");
+            }
+            if (dim != 3) {
+                throw std::runtime_error("surface_integral flux currently only supports 3D surfaces");
+            }
+
+            // Compute cross product r_u × r_v
+            SymbolicExpression cross_x = (r_u[1] * r_v[2] - r_u[2] * r_v[1]).simplify();
+            SymbolicExpression cross_y = (r_u[2] * r_v[0] - r_u[0] * r_v[2]).simplify();
+            SymbolicExpression cross_z = (r_u[0] * r_v[1] - r_u[1] * r_v[0]).simplify();
+
+            // Apply orientation
+            double sign = (orientation == "inward") ? -1.0 : 1.0;
+
+            // Substitute r(u,v) into F
+            const std::vector<std::string> coord_vars = {"x", "y", "z"};
+            std::vector<SymbolicExpression> F_of_r(3);
+            for (int i = 0; i < 3; ++i) {
+                F_of_r[i] = field_components[i];
+                for (int j = 0; j < 3; ++j) {
+                    F_of_r[i] = F_of_r[i].substitute(coord_vars[j], surface_components[j]).simplify();
+                }
+            }
+
+            // Integrand: F(r(u,v)) · (r_u × r_v)
+            integrand = (F_of_r[0] * cross_x + F_of_r[1] * cross_y + F_of_r[2] * cross_z).simplify();
+            if (sign < 0) {
+                integrand = (SymbolicExpression::number(-1.0) * integrand).simplify();
+            }
+        } else {
+            // Scalar field: surface integral f dS = f * |r_u × r_v| du dv
+            std::string var;
+            SymbolicExpression f_expr;
+            ctx.resolve_symbolic(arguments[0], false, &var, &f_expr);
+
+            if (dim == 3) {
+                // Compute |r_u × r_v|
+                SymbolicExpression cross_x = (r_u[1] * r_v[2] - r_u[2] * r_v[1]).simplify();
+                SymbolicExpression cross_y = (r_u[2] * r_v[0] - r_u[0] * r_v[2]).simplify();
+                SymbolicExpression cross_z = (r_u[0] * r_v[1] - r_u[1] * r_v[0]).simplify();
+                SymbolicExpression cross_norm_sq = (cross_x * cross_x + cross_y * cross_y + cross_z * cross_z).simplify();
+                SymbolicExpression cross_norm = SymbolicExpression::parse("sqrt(" + cross_norm_sq.to_string() + ")").simplify();
+
+                const std::vector<std::string> coord_vars = {"x", "y", "z"};
+                SymbolicExpression f_of_r = f_expr;
+                for (int i = 0; i < 3; ++i) {
+                    f_of_r = f_of_r.substitute(coord_vars[i], surface_components[i]).simplify();
+                }
+                integrand = (f_of_r * cross_norm).simplify();
+            } else {
+                // General dimension: compute sqrt(det(g)) where g is the metric tensor
+                SymbolicExpression metric_det = SymbolicExpression::number(0.0);
+                for (std::size_t i = 0; i < dim; ++i) {
+                    for (std::size_t j = 0; j < dim; ++j) {
+                        // g_ij = r_i · r_j
+                        SymbolicExpression g_ij = SymbolicExpression::number(0.0);
+                        for (std::size_t k = 0; k < dim; ++k) {
+                            // For 2D surface, we compute the 2x2 metric tensor determinant
+                        }
+                    }
+                }
+                // For 2D surface in nD: area element = sqrt(|r_u|^2 * |r_v|^2 - (r_u·r_v)^2)
+                SymbolicExpression r_u_sq = SymbolicExpression::number(0.0);
+                SymbolicExpression r_v_sq = SymbolicExpression::number(0.0);
+                SymbolicExpression r_u_dot_r_v = SymbolicExpression::number(0.0);
+                for (std::size_t i = 0; i < dim; ++i) {
+                    r_u_sq = (r_u_sq + r_u[i] * r_u[i]).simplify();
+                    r_v_sq = (r_v_sq + r_v[i] * r_v[i]).simplify();
+                    r_u_dot_r_v = (r_u_dot_r_v + r_u[i] * r_v[i]).simplify();
+                }
+                SymbolicExpression area_sq = (r_u_sq * r_v_sq - r_u_dot_r_v * r_u_dot_r_v).simplify();
+                SymbolicExpression area_elem = SymbolicExpression::parse("sqrt(" + area_sq.to_string() + ")").simplify();
+
+                // Build default coordinate variable names
+                std::vector<std::string> coord_vars;
+                const std::vector<std::string> default_vars = {"x", "y", "z", "u", "v", "w"};
+                for (std::size_t i = 0; i < dim && i < default_vars.size(); ++i) {
+                    coord_vars.push_back(default_vars[i]);
+                }
+
+                SymbolicExpression f_of_r = f_expr;
+                for (std::size_t i = 0; i < dim && i < coord_vars.size(); ++i) {
+                    f_of_r = f_of_r.substitute(coord_vars[i], surface_components[i]).simplify();
+                }
+                integrand = (f_of_r * area_elem).simplify();
             }
         }
 
-        // Integrand: F(r(u,v)) · (r_u × r_v)
-        SymbolicExpression integrand = (
-            F_of_r[0] * cross_x + F_of_r[1] * cross_y + F_of_r[2] * cross_z).simplify();
-
-        // Use the improved double_integral which supports adaptive integration
+        // Use double_integral with potentially non-constant v bounds
         integration_ops::IntegrationContext int_ctx;
         int_ctx.parse_decimal = [&](const std::string& s) { return ctx.parse_decimal(s); };
         int_ctx.build_scoped_evaluator = [&](const std::string& s) { return ctx.build_scoped_evaluator(s); };
@@ -898,7 +1075,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         double result = integration_ops::double_integral(
             int_ctx, integrand.to_string(),
             u_param, u_a, u_b,
-            v_param, std::to_string(v_c), std::to_string(v_d),
+            v_param, v_c_expr, v_d_expr,
             50, 50);
 
         *output = format_decimal(ctx.normalize_result(result));

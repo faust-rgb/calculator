@@ -234,6 +234,21 @@ public:
     SymbolicExpression simplify() const;
 
     /**
+     * @brief 简化表达式，带有节点数预算限制
+     * @param max_nodes 最大允许节点数
+     * @return 简化后的表达式，如果预算超限则返回当前最佳结果
+     *
+     * 用于防止表达式膨胀导致的内存问题。
+     */
+    SymbolicExpression simplify_with_budget(std::size_t max_nodes) const;
+
+    /**
+     * @brief 计算表达式树的节点数
+     * @return 节点总数（包括叶子节点和内部节点）
+     */
+    std::size_t node_count() const;
+
+    /**
      * @brief 强制完全展开表达式（乘法分配律与多项式幂次展开）
      * @return 展开后的表达式
      */
@@ -282,6 +297,56 @@ public:
      * @return 包含重复出现的非平凡子表达式及其出现次数的列表
      */
     std::vector<std::pair<SymbolicExpression, int>> common_subexpressions() const;
+
+    // ========================================================================
+    // 向量/张量表达式支持
+    // ========================================================================
+
+    /**
+     * @brief 创建向量表达式
+     * @param components 向量各分量
+     * @return 向量表达式
+     */
+    static SymbolicExpression vector(
+        const std::vector<SymbolicExpression>& components);
+
+    /**
+     * @brief 创建张量（矩阵）表达式
+     * @param rows 各行（每行为一个向量）
+     * @return 张量表达式
+     */
+    static SymbolicExpression tensor(
+        const std::vector<std::vector<SymbolicExpression>>& rows);
+
+    /**
+     * @brief 检查表达式是否为向量
+     * @return true 如果节点类型为 kVector
+     */
+    bool is_vector() const;
+
+    /**
+     * @brief 检查表达式是否为张量
+     * @return true 如果节点类型为 kTensor
+     */
+    bool is_tensor() const;
+
+    /**
+     * @brief 获取向量的分量
+     * @return 分量列表（如果不是向量则返回空）
+     */
+    std::vector<SymbolicExpression> vector_components() const;
+
+    /**
+     * @brief 获取张量的行
+     * @return 行列表（每行为向量表达式）
+     */
+    std::vector<std::vector<SymbolicExpression>> tensor_rows() const;
+
+    /**
+     * @brief 获取向量或张量的维度
+     * @return shape 向量返回 [n]，张量返回 [rows, cols]
+     */
+    std::vector<std::size_t> get_shape() const;
 
     /**
      * @brief 从现有节点构造表达式（内部使用）
