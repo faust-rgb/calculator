@@ -1,6 +1,7 @@
 #include "utils.h"
 #include "calculator_internal_types.h"
 #include "math/mymath.h"
+#include "calculator.h"
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
@@ -43,14 +44,78 @@ bool is_valid_identifier(const std::string& name) {
 } // namespace utils
 
 // ============================================================================
-// 全局命名空间函数定义（calculator_internal_types.h 中声明）
+// 全局命名空间函数定义
 // ============================================================================
 
 std::string trim_copy(const std::string& text) {
     return utils::trim_copy(text);
 }
 
+double normalize_display_decimal(double value) {
+    if (mymath::is_near_zero(value, kDisplayZeroEps)) {
+        return 0.0;
+    }
+    if (mymath::abs(value) > kDisplayIntegerEps &&
+        is_integer_double(value, kDisplayIntegerEps)) {
+        return static_cast<double>(round_to_long_long(value));
+    }
+    return value;
+}
+
+bool lookup_builtin_constant(const std::string& name, double* value) {
+    if (name == "pi") {
+        *value = mymath::kPi;
+        return true;
+    }
+    if (name == "e") {
+        *value = mymath::kE;
+        return true;
+    }
+    if (name == "c") {
+        *value = mymath::kSpeedOfLight;
+        return true;
+    }
+    if (name == "G") {
+        *value = mymath::kGravitationalConstant;
+        return true;
+    }
+    if (name == "h") {
+        *value = mymath::kPlanckConstant;
+        return true;
+    }
+    if (name == "k") {
+        *value = mymath::kBoltzmannConstant;
+        return true;
+    }
+    if (name == "NA") {
+        *value = mymath::kAvogadroNumber;
+        return true;
+    }
+    if (name == "inf" || name == "infinity" || name == "oo") {
+        *value = mymath::infinity();
+        return true;
+    }
+    return false;
+}
+
+std::string format_decimal(double value) {
+    return format_decimal(value, process_display_precision());
+}
+
+std::string format_decimal(double value, int precision) {
+    value = normalize_display_decimal(value);
+    precision = std::clamp(precision, kMinDisplayPrecision, kMaxDisplayPrecision);
+    std::ostringstream out;
+    out << std::setprecision(precision) << value;
+    return out.str();
+}
+
 namespace {
+
+int& mutable_process_display_precision() {
+    static int precision = kDefaultDisplayPrecision;
+    return precision;
+}
 
 bool split_on_top_level_equals(const std::string& expression,
                                std::string* lhs,
@@ -147,62 +212,51 @@ std::string format_term(double coefficient, const std::string& factor) {
                              : coeff_text + " * " + factor;
 }
 
-}  // namespace
+} // namespace
 
-double factorial_value(long long n) {
-    if (n < 0) {
-        throw std::runtime_error("factorial only accepts non-negative integers");
-    }
-    if (n > 170) {
-        throw std::runtime_error("factorial is limited to n <= 170 to avoid overflow");
-    }
-    long double result = 1.0L;
-    for (long long i = 2; i <= n; ++i) {
-        result *= static_cast<long double>(i);
-    }
-    return static_cast<double>(result);
+void set_process_display_precision(int precision) {
+    mutable_process_display_precision() =
+        std::clamp(precision, kMinDisplayPrecision, kMaxDisplayPrecision);
 }
 
-Rational factorial_rational(long long n) {
-    return Rational(static_cast<long long>(factorial_value(n)), 1);
+int process_display_precision() {
+    return mutable_process_display_precision();
 }
 
-double combination_value(long long n, long long r) {
-    if (n < 0 || r < 0 || r > n) {
-        throw std::runtime_error("combination requires 0 <= r <= n");
+bool try_make_simple_rational(double value,
+                              int max_denominator,
+                              Rational* rational) {
+    if (rational == nullptr || !mymath::isfinite(value)) {
+        return false;
     }
-    if (n > 170) {
-        throw std::runtime_error("nCr is limited to n <= 170 to avoid overflow");
+
+    long long numerator = 0;
+    long long denominator = 1;
+    if (!mymath::approximate_fraction(value,
+                                      &numerator,
+                                      &denominator,
+                                      max_denominator,
+                                      1e-10)) {
+        return false;
     }
-    r = std::min(r, n - r);
-    long double result = 1.0L;
-    for (long long i = 1; i <= r; ++i) {
-        result *= static_cast<long double>(n - r + i);
-        result /= static_cast<long double>(i);
-    }
-    return static_cast<double>(result);
+
+    *rational = Rational(numerator, denominator);
+    return true;
 }
 
-Rational combination_rational(long long n, long long r) {
-    return Rational(static_cast<long long>(combination_value(n, r)), 1);
-}
+std::string format_symbolic_number(double value) {
+    value = mymath::is_near_zero(value, kDisplayZeroEps) ? 0.0 : value;
+    if (mymath::abs(value) > kDisplayIntegerEps &&
+        is_integer_double(value, kDisplayIntegerEps)) {
+        return std::to_string(round_to_long_long(value));
+    }
 
-double permutation_value(long long n, long long r) {
-    if (n < 0 || r < 0 || r > n) {
-        throw std::runtime_error("permutation requires 0 <= r <= n");
+    Rational rational;
+    if (try_make_simple_rational(value, 999, &rational)) {
+        return rational.to_string();
     }
-    if (n > 170) {
-        throw std::runtime_error("nPr is limited to n <= 170 to avoid overflow");
-    }
-    long double result = 1.0L;
-    for (long long i = 0; i < r; ++i) {
-        result *= static_cast<long double>(n - i);
-    }
-    return static_cast<double>(result);
-}
 
-Rational permutation_rational(long long n, long long r) {
-    return Rational(static_cast<long long>(permutation_value(n, r)), 1);
+    return format_decimal(value);
 }
 
 std::string format_symbolic_scalar(double value) {
@@ -242,6 +296,371 @@ std::string format_print_value(const StoredValue& value, bool symbolic_constants
         return value.string_value;
     }
     return format_stored_value(value, symbolic_constants_mode);
+}
+
+double root_position_tolerance(double value) {
+    return 1e-10 * std::max(1.0, mymath::abs(value));
+}
+
+double root_function_tolerance(double value) {
+    return 1e-10 * std::max(1.0, mymath::abs(value));
+}
+
+double root_derivative_step(double value) {
+    return 1e-6 * std::max(1.0, mymath::abs(value));
+}
+
+bool is_valid_variable_name(const std::string& name) {
+    if (name.empty() ||
+        !std::isalpha(static_cast<unsigned char>(name.front()))) {
+        return false;
+    }
+
+    for (char ch : name) {
+        if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool is_identifier_text(const std::string& text) {
+    if (text.empty() ||
+        !std::isalpha(static_cast<unsigned char>(text.front()))) {
+        return false;
+    }
+    for (char ch : text) {
+        if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_' && ch != '\'') {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool is_string_literal(const std::string& text) {
+    return text.size() >= 2 && text.front() == '"' && text.back() == '"';
+}
+
+std::string decode_escaped_string(const std::string& text) {
+    std::string result;
+    result.reserve(text.size());
+    bool escaping = false;
+    for (char ch : text) {
+        if (!escaping) {
+            if (ch == '\\') {
+                escaping = true;
+            } else {
+                result.push_back(ch);
+            }
+            continue;
+        }
+
+        escaping = false;
+        if (ch == 'n') {
+            result.push_back('\n');
+        } else if (ch == 't') {
+            result.push_back('\t');
+        } else {
+            result.push_back(ch);
+        }
+    }
+    if (escaping) {
+        result.push_back('\\');
+    }
+    return result;
+}
+
+std::string parse_string_literal_value(const std::string& text) {
+    if (!is_string_literal(text)) {
+        throw std::runtime_error("expected string literal");
+    }
+    return decode_escaped_string(text.substr(1, text.size() - 2));
+}
+
+std::string encode_state_field(const std::string& text) {
+    std::string encoded;
+    encoded.reserve(text.size());
+    for (char ch : text) {
+        if (ch == '\\') {
+            encoded += "\\\\";
+        } else if (ch == '\n') {
+            encoded += "\\n";
+        } else if (ch == '\t') {
+            encoded += "\\t";
+        } else {
+            encoded.push_back(ch);
+        }
+    }
+    return encoded;
+}
+
+std::string decode_state_field(const std::string& text) {
+    return decode_escaped_string(text);
+}
+
+bool split_assignment(const std::string& expression,
+                      std::string* lhs,
+                      std::string* rhs) {
+    int paren_depth = 0;
+    int bracket_depth = 0;
+    bool in_string = false;
+    bool escaping = false;
+    for (std::size_t i = 0; i < expression.size(); ++i) {
+        const char ch = expression[i];
+        if (in_string) {
+            if (escaping) {
+                escaping = false;
+            } else if (ch == '\\') {
+                escaping = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+            continue;
+        }
+        if (ch == '(') {
+            ++paren_depth;
+        } else if (ch == '[') {
+            ++bracket_depth;
+        } else if (ch == ')') {
+            --paren_depth;
+        } else if (ch == ']') {
+            --bracket_depth;
+        } else if (ch == '=' && paren_depth == 0 && bracket_depth == 0) {
+            const bool is_comparison =
+                (i > 0 && (expression[i - 1] == '!' ||
+                           expression[i - 1] == '<' ||
+                           expression[i - 1] == '>' ||
+                           expression[i - 1] == '=')) ||
+                (i + 1 < expression.size() && expression[i + 1] == '=');
+            if (is_comparison) {
+                continue;
+            }
+            *lhs = utils::trim_copy(expression.substr(0, i));
+            *rhs = utils::trim_copy(expression.substr(i + 1));
+            return true;
+        }
+    }
+    return false;
+}
+
+bool split_named_call(const std::string& expression,
+                      const std::string& name,
+                      std::string* inside) {
+    const std::string trimmed = utils::trim_copy(expression);
+    if (trimmed.size() < name.size() + 2 ||
+        trimmed.compare(0, name.size(), name) != 0) {
+        return false;
+    }
+
+    std::size_t pos = name.size();
+    while (pos < trimmed.size() &&
+           std::isspace(static_cast<unsigned char>(trimmed[pos]))) {
+        ++pos;
+    }
+
+    if (pos >= trimmed.size() || trimmed[pos] != '(' || trimmed.back() != ')') {
+        return false;
+    }
+
+    int depth = 0;
+    for (std::size_t i = pos; i < trimmed.size(); ++i) {
+        if (trimmed[i] == '(') {
+            ++depth;
+        } else if (trimmed[i] == ')') {
+            --depth;
+            if (depth == 0 && i != trimmed.size() - 1) {
+                return false;
+            }
+        }
+    }
+
+    if (depth != 0) {
+        return false;
+    }
+
+    *inside = utils::trim_copy(trimmed.substr(pos + 1, trimmed.size() - pos - 2));
+    return true;
+}
+
+bool split_named_call_with_arguments(const std::string& expression,
+                                     const std::string& name,
+                                     std::vector<std::string>* arguments) {
+    std::string inside;
+    if (!split_named_call(expression, name, &inside)) {
+        return false;
+    }
+    *arguments = split_top_level_arguments(inside);
+    return true;
+}
+
+std::vector<std::string> split_top_level_arguments(const std::string& text) {
+    std::vector<std::string> arguments;
+    int depth = 0;
+    int bracket_depth = 0;
+    bool in_string = false;
+    bool escaping = false;
+    std::size_t start = 0;
+
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        const char ch = text[i];
+        if (in_string) {
+            if (escaping) {
+                escaping = false;
+            } else if (ch == '\\') {
+                escaping = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+        } else if (ch == '(') {
+            ++depth;
+        } else if (ch == '[') {
+            ++bracket_depth;
+        } else if (ch == ')') {
+            --depth;
+        } else if (ch == ']') {
+            --bracket_depth;
+        } else if (ch == ',' && depth == 0 && bracket_depth == 0) {
+            arguments.push_back(utils::trim_copy(text.substr(start, i - start)));
+            start = i + 1;
+        }
+    }
+
+    if (!text.empty()) {
+        arguments.push_back(utils::trim_copy(text.substr(start)));
+    }
+
+    return arguments;
+}
+
+bool is_inline_function_command_name(const std::string& name) {
+    return name == "diff" ||
+           name == "double_integral" ||
+           name == "double_integral_cyl" ||
+           name == "double_integral_polar" ||
+           name == "integral" ||
+           name == "limit" ||
+           name == "ode" ||
+           name == "ode_system" ||
+           name == "ode_table" ||
+           name == "ode_system_table" ||
+           name == "taylor" ||
+           name == "triple_integral" ||
+           name == "triple_integral_cyl" ||
+           name == "triple_integral_sph" ||
+           name == "poly_add" ||
+           name == "poly_sub" ||
+           name == "poly_mul";
+}
+
+std::size_t find_matching_paren(const std::string& text, std::size_t open_pos) {
+    if (open_pos >= text.size() || text[open_pos] != '(') {
+        return std::string::npos;
+    }
+
+    int depth = 0;
+    bool in_string = false;
+    bool escaping = false;
+    for (std::size_t i = open_pos; i < text.size(); ++i) {
+        const char ch = text[i];
+        if (in_string) {
+            if (escaping) {
+                escaping = false;
+            } else if (ch == '\\') {
+                escaping = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+            continue;
+        }
+        if (ch == '(') {
+            ++depth;
+        } else if (ch == ')') {
+            --depth;
+            if (depth == 0) {
+                return i;
+            }
+        }
+    }
+
+    return std::string::npos;
+}
+
+std::string expand_inline_function_commands(Calculator* calculator,
+                                            const std::string& expression) {
+    std::string expanded;
+    expanded.reserve(expression.size());
+
+    for (std::size_t i = 0; i < expression.size();) {
+        const char ch = expression[i];
+        if (!std::isalpha(static_cast<unsigned char>(ch))) {
+            expanded.push_back(ch);
+            ++i;
+            continue;
+        }
+
+        std::size_t name_end = i;
+        while (name_end < expression.size()) {
+            const char name_ch = expression[name_end];
+            if (std::isalnum(static_cast<unsigned char>(name_ch)) || name_ch == '_') {
+                ++name_end;
+            } else {
+                break;
+            }
+        }
+
+        const std::string name = expression.substr(i, name_end - i);
+        if (!is_inline_function_command_name(name)) {
+            expanded.append(expression, i, name_end - i);
+            i = name_end;
+            continue;
+        }
+
+        std::size_t open_pos = name_end;
+        while (open_pos < expression.size() &&
+               std::isspace(static_cast<unsigned char>(expression[open_pos]))) {
+            ++open_pos;
+        }
+        if (open_pos >= expression.size() || expression[open_pos] != '(') {
+            expanded.append(expression, i, name_end - i);
+            i = name_end;
+            continue;
+        }
+
+        const std::size_t close_pos = find_matching_paren(expression, open_pos);
+        if (close_pos == std::string::npos) {
+            expanded.append(expression, i, name_end - i);
+            i = name_end;
+            continue;
+        }
+
+        const std::string inner =
+            expand_inline_function_commands(calculator,
+                                            expression.substr(open_pos + 1,
+                                                              close_pos - open_pos - 1));
+        const std::string rebuilt = name + "(" + inner + ")";
+        std::string command_output;
+        if (calculator->try_process_function_command(rebuilt, &command_output)) {
+            expanded += "(" + command_output + ")";
+        } else {
+            expanded += rebuilt;
+        }
+        i = close_pos + 1;
+    }
+
+    return expanded;
 }
 
 std::string shifted_series_base(const std::string& variable_name, double center) {
@@ -348,5 +767,99 @@ bool split_function_definition(const std::string& expression,
     if (body != nullptr) {
         *body = rhs;
     }
+    return true;
+}
+
+bool convert_base_value(long long value,
+                        int base,
+                        const HexFormatOptions& hex_options,
+                        std::string* output) {
+    if (base < 2 || base > 16) {
+        return false;
+    }
+
+    static const char upper_digits[] = "0123456789ABCDEF";
+    static const char lower_digits[] = "0123456789abcdef";
+    const char* digits = hex_options.uppercase ? upper_digits : lower_digits;
+    if (value == 0) {
+        *output = base == 16 && hex_options.prefix ? "0x0" : "0";
+        return true;
+    }
+
+    bool negative = value < 0;
+    unsigned long long current = negative
+                                     ? static_cast<unsigned long long>(-(value + 1)) + 1ULL
+                                     : static_cast<unsigned long long>(value);
+
+    std::string reversed;
+    while (current > 0) {
+        reversed.push_back(digits[current % static_cast<unsigned long long>(base)]);
+        current /= static_cast<unsigned long long>(base);
+    }
+
+    output->clear();
+    if (negative) {
+        output->push_back('-');
+    }
+    if (base == 16 && hex_options.prefix) {
+        output->push_back('0');
+        output->push_back('x');
+    }
+    for (std::size_t i = reversed.size(); i > 0; --i) {
+        output->push_back(reversed[i - 1]);
+    }
+    return true;
+}
+
+bool try_base_conversion_expression(const std::string& expression,
+                                    const VariableResolver& variables,
+                                    const std::map<std::string, CustomFunction>* functions,
+                                    const HexFormatOptions& hex_options,
+                                    std::string* output) {
+    std::string inside;
+    std::string mode;
+
+    if (split_named_call(expression, "bin", &inside)) {
+        mode = "bin";
+    } else if (split_named_call(expression, "oct", &inside)) {
+        mode = "oct";
+    } else if (split_named_call(expression, "hex", &inside)) {
+        mode = "hex";
+    } else if (split_named_call(expression, "base", &inside)) {
+        mode = "base";
+    } else {
+        return false;
+    }
+
+    const std::vector<std::string> arguments = split_top_level_arguments(inside);
+    int base = 10;
+
+    if (mode == "bin" || mode == "oct" || mode == "hex") {
+        if (arguments.size() != 1) {
+            throw std::runtime_error(mode + " expects exactly one argument");
+        }
+        base = mode == "bin" ? 2 : (mode == "oct" ? 8 : 16);
+    } else {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("base expects exactly two arguments");
+        }
+        DecimalParser base_parser(arguments[1], variables, functions);
+        const double base_value = base_parser.parse();
+        if (!is_integer_double(base_value)) {
+            throw std::runtime_error("base conversion requires an integer base");
+        }
+        base = static_cast<int>(round_to_long_long(base_value));
+    }
+
+    DecimalParser value_parser(arguments[0], variables, functions);
+    const double value = value_parser.parse();
+    if (!is_integer_double(value)) {
+        throw std::runtime_error("base conversion only accepts integers");
+    }
+
+    if (!convert_base_value(round_to_long_long(value), base, hex_options, output)) {
+        throw std::runtime_error("base must be in the range [2, 16]");
+    }
+
     return true;
 }

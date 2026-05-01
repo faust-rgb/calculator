@@ -67,6 +67,11 @@ bool handle_ode_command(const ODEContext& ctx,
                         const std::string& inside,
                         std::string* output);
 
+/**
+ * @brief 将矩阵转换为字面量字符串
+ */
+std::string matrix_literal_expression(const matrix::Matrix& value);
+
 }  // namespace ode_ops
 
 #endif  // CALCULATOR_ODE_H

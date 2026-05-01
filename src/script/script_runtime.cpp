@@ -1,7 +1,7 @@
-#include "calculator_internal_types.h"
+#include "script_runtime.h"
 #include "calculator_module.h"
 #include "expression_compiler.h"
-
+#include "core/utils.h"
 #include "mymath.h"
 #include "script_parser.h"
 
@@ -11,109 +11,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <utility>
-VariableResolver VariableResolver::make_owned(const VariableResolver& other) {
-    VariableResolver owned;
-    owned.is_owned_ = true;
-    if (other.global_vars_) {
-        owned.owned_global_vars_ = std::make_shared<std::map<std::string, StoredValue>>(*other.global_vars_);
-        owned.global_vars_ = owned.owned_global_vars_.get();
-    }
-    if (other.local_scopes_) {
-        owned.owned_local_scopes_ = std::make_shared<std::vector<std::map<std::string, StoredValue>>>(*other.local_scopes_);
-        owned.local_scopes_ = owned.owned_local_scopes_.get();
-    }
-    if (other.parent_) {
-        owned.owned_parent_ = std::make_shared<VariableResolver>(make_owned(*other.parent_));
-        owned.parent_ = owned.owned_parent_.get();
-    }
-    // Note: override_vars_ are usually transient and NOT captured by make_owned.
-    // They are passed to the constructor of the chained resolver during evaluation.
-    return owned;
-}
-
-const StoredValue* VariableResolver::lookup(const std::string& name) const {
-    if (override_vars_) {
-        const auto found = override_vars_->find(name);
-        if (found != override_vars_->end()) {
-            return &found->second;
-        }
-    }
-
-    if (local_scopes_) {
-        for (auto it = local_scopes_->rbegin(); it != local_scopes_->rend(); ++it) {
-            const auto found = it->find(name);
-            if (found != it->end()) {
-                return &found->second;
-            }
-        }
-    }
-
-    if (global_vars_) {
-        const auto found = global_vars_->find(name);
-        if (found != global_vars_->end()) {
-            return &found->second;
-        }
-    }
-
-    double constant_value = 0.0;
-    if (lookup_builtin_constant(name, &constant_value)) {
-        static thread_local std::map<std::string, StoredValue> constant_cache;
-        auto& cached = constant_cache[name];
-        if (!cached.decimal && !cached.exact) {
-            cached.decimal = constant_value;
-            cached.exact = false;
-        }
-        return &cached;
-    }
-
-    if (parent_) {
-        return parent_->lookup(name);
-    }
-
-    return nullptr;
-}
-
-bool VariableResolver::contains(const std::string& name) const {
-    return lookup(name) != nullptr;
-}
-
-std::map<std::string, StoredValue> VariableResolver::snapshot() const {
-    std::map<std::string, StoredValue> merged;
-    if (parent_) {
-        merged = parent_->snapshot();
-    }
-    
-    if (global_vars_) {
-        for (const auto& [name, value] : *global_vars_) {
-            merged[name] = value;
-        }
-    }
-    
-    for (const char* name : {"pi", "e", "c", "G", "h", "k", "NA", "inf", "infinity", "oo"}) {
-        double constant_value = 0.0;
-        if (lookup_builtin_constant(name, &constant_value)) {
-            StoredValue stored;
-            stored.decimal = constant_value;
-            stored.exact = false;
-            merged.insert({name, stored});
-        }
-    }
-    
-    if (local_scopes_) {
-        for (const auto& scope : *local_scopes_) {
-            for (const auto& [name, value] : scope) {
-                merged[name] = value;
-            }
-        }
-    }
-    
-    if (override_vars_) {
-        for (const auto& [name, value] : *override_vars_) {
-            merged[name] = value;
-        }
-    }
-    return merged;
-}
 
 VariableResolver visible_variables(const Calculator::Impl* impl) {
     return VariableResolver(&impl->variables, &impl->local_scopes);
@@ -148,52 +45,7 @@ void assign_visible_variable(Calculator::Impl* impl,
     impl->variables[name] = value;
 }
 
-ScriptSignal ScriptSignal::make_return(const StoredValue& return_value) {
-    ScriptSignal signal;
-    signal.kind = Kind::kReturn;
-    signal.has_value = true;
-    signal.value = return_value;
-    return signal;
-}
-
-ScriptSignal ScriptSignal::make_break() {
-    ScriptSignal signal;
-    signal.kind = Kind::kBreak;
-    return signal;
-}
-
-ScriptSignal ScriptSignal::make_continue() {
-    ScriptSignal signal;
-    signal.kind = Kind::kContinue;
-    return signal;
-}
-
-StoredValue evaluate_expression_value(Calculator* calculator,
-                                      Calculator::Impl* impl,
-                                      const std::string& expression,
-                                      bool exact_mode,
-                                      std::shared_ptr<ExpressionCache>* cache);
-StoredValue evaluate_expression_value_legacy(Calculator* calculator,
-                                             Calculator::Impl* impl,
-                                             const std::string& expression,
-                                             bool exact_mode,
-                                             std::shared_ptr<void>* cache);
-ScriptSignal execute_script_statement(Calculator* calculator,
-                                      Calculator::Impl* impl,
-                                      const script::Statement& statement,
-                                      bool exact_mode,
-                                      std::string* last_output,
-                                      bool create_scope);
-ScriptSignal execute_script_block(Calculator* calculator,
-                                  Calculator::Impl* impl,
-                                  const script::BlockStatement& block,
-                                  bool exact_mode,
-                                  std::string* last_output,
-                                  bool create_scope);
-
-script::StatementPtr clone_statement(const script::Statement& statement);
-std::string render_script_statement(const script::Statement& statement, int indent);
-std::string render_script_block(const script::BlockStatement& block, int indent);
+namespace {
 
 std::string indent_text(int indent) {
     return std::string(static_cast<std::size_t>(indent) * 2, ' ');
@@ -223,6 +75,21 @@ bool contains_builtin_constant_token(const std::string& expression) {
     }
     return false;
 }
+
+bool truthy_value(const StoredValue& value) {
+    if (value.is_matrix) {
+        throw std::runtime_error("matrix values cannot be used as script conditions");
+    }
+    if (value.is_complex) {
+        throw std::runtime_error("complex values cannot be used as script conditions");
+    }
+    return !mymath::is_near_zero(value.exact
+                                     ? rational_to_double(value.rational)
+                                     : value.decimal,
+                                 1e-10);
+}
+
+} // namespace
 
 std::unique_ptr<script::BlockStatement> clone_block_statement(const script::BlockStatement& block) {
     auto clone = std::make_unique<script::BlockStatement>();
@@ -367,19 +234,6 @@ script::StatementPtr clone_statement(const script::Statement& statement) {
     }
 
     throw std::runtime_error("unknown script statement kind");
-}
-
-bool truthy_value(const StoredValue& value) {
-    if (value.is_matrix) {
-        throw std::runtime_error("matrix values cannot be used as script conditions");
-    }
-    if (value.is_complex) {
-        throw std::runtime_error("complex values cannot be used as script conditions");
-    }
-    return !mymath::is_near_zero(value.exact
-                                     ? rational_to_double(value.rational)
-                                     : value.decimal,
-                                 1e-10);
 }
 
 double invoke_script_function_decimal(Calculator* calculator,

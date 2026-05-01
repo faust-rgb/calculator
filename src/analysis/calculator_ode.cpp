@@ -20,6 +20,7 @@
 #include <stdexcept>
 #include <vector>
 #include <algorithm>
+#include <sstream>
 
 namespace ode_ops {
 
@@ -539,6 +540,24 @@ bool handle_ode_command(const ODEContext& ctx,
     }
 
     return false;
+}
+
+std::string matrix_literal_expression(const matrix::Matrix& value) {
+    std::ostringstream out;
+    out << '[';
+    for (std::size_t row = 0; row < value.rows; ++row) {
+        if (row != 0) {
+            out << "; ";
+        }
+        for (std::size_t col = 0; col < value.cols; ++col) {
+            if (col != 0) {
+                out << ", ";
+            }
+            out << format_decimal(normalize_display_decimal(value.at(row, col)));
+        }
+    }
+    out << ']';
+    return out.str();
 }
 
 }  // namespace ode_ops

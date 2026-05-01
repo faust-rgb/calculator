@@ -1,3 +1,4 @@
+#include "decimal_parser.h"
 #include "calculator_internal_types.h"
 #include "base_parser.h"
 #include "matrix.h"
@@ -232,14 +233,6 @@ private:
     }
 
     double apply_function(const std::string& name, const std::vector<double>& arguments) {
-        const auto require_integer_argument =
-            [&name](double value, const std::string& label) -> long long {
-                if (!is_integer_double(value)) {
-                    throw MathError(name + " requires integer " + label);
-                }
-                return round_to_long_long(value);
-            };
-
         const auto it = functions_->find(name);
         if (it != functions_->end()) {
             if (arguments.size() != 1) {

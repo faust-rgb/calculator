@@ -1,17 +1,9 @@
+#include "exact_parser.h"
 #include "calculator_internal_types.h"
-
-#include "matrix.h"
+#include "base_parser.h"
 #include "mymath.h"
-#include "symbolic_expression.h"
-
 #include <algorithm>
 #include <cctype>
-#include <map>
-#include <sstream>
-#include <stdexcept>
-#include <utility>
-
-#include "base_parser.h"
 
 class ExactParserImpl : public BaseParser {
 public:
@@ -172,7 +164,6 @@ private:
     Rational parse_number() {
         skip_spaces();
 
-        // exact mode 也支持前缀整数，这样 0xFF 在分数模式里仍可作为整数参与计算。
         if (!is_at_end() &&
             source_[pos_] == '0' &&
             pos_ + 1 < source_.size()) {
@@ -274,8 +265,6 @@ private:
     }
 
     Rational apply_function(const std::string& name, const std::vector<Rational>& arguments) {
-        // exact mode 只实现“结果仍能保持为有理数”的函数。
-        // 其他函数会抛出 ExactModeUnsupported，再由上层回退到浮点显示。
         if (functions_->find(name) != functions_->end()) {
             throw ExactModeUnsupported("custom function " + name +
                                        " is not supported exactly");
@@ -660,6 +649,20 @@ private:
     HasScriptFunctionCallback has_script_function_;
 };
 
+ExactParser::ExactParser(std::string source,
+                         const VariableResolver& variables,
+                         const std::map<std::string, CustomFunction>* functions,
+                         HasScriptFunctionCallback has_script_function)
+    : source_(std::move(source)),
+      variables_(variables),
+      functions_(functions),
+      has_script_function_(std::move(has_script_function)) {}
+
+Rational ExactParser::parse() {
+    ExactParserImpl parser(source_, variables_, functions_, std::move(has_script_function_));
+    return parser.parse();
+}
+
 Rational parse_exact_expression(
     const std::string& expression,
     const VariableResolver& variables,
@@ -670,403 +673,4 @@ Rational parse_exact_expression(
                            functions,
                            std::move(has_script_function));
     return parser.parse();
-}
-
-bool convert_base_value(long long value,
-                        int base,
-                        const HexFormatOptions& hex_options,
-                        std::string* output) {
-    if (base < 2 || base > 16) {
-        return false;
-    }
-
-    static const char upper_digits[] = "0123456789ABCDEF";
-    static const char lower_digits[] = "0123456789abcdef";
-    const char* digits = hex_options.uppercase ? upper_digits : lower_digits;
-    if (value == 0) {
-        *output = base == 16 && hex_options.prefix ? "0x0" : "0";
-        return true;
-    }
-
-    bool negative = value < 0;
-    unsigned long long current = negative
-                                     ? static_cast<unsigned long long>(-(value + 1)) + 1ULL
-                                     : static_cast<unsigned long long>(value);
-
-    std::string reversed;
-    while (current > 0) {
-        reversed.push_back(digits[current % static_cast<unsigned long long>(base)]);
-        current /= static_cast<unsigned long long>(base);
-    }
-
-    output->clear();
-    if (negative) {
-        output->push_back('-');
-    }
-    if (base == 16 && hex_options.prefix) {
-        output->push_back('0');
-        output->push_back('x');
-    }
-    for (std::size_t i = reversed.size(); i > 0; --i) {
-        output->push_back(reversed[i - 1]);
-    }
-    return true;
-}
-
-bool try_base_conversion_expression(const std::string& expression,
-                                    const VariableResolver& variables,
-                                    const std::map<std::string, CustomFunction>* functions,
-                                    const HexFormatOptions& hex_options,
-                                    std::string* output) {
-    // 进制转换是“显示型功能”：
-    // 先把参数当表达式求成整数，再格式化成目标进制字符串。
-    std::string inside;
-    std::string mode;
-
-    if (split_named_call(expression, "bin", &inside)) {
-        mode = "bin";
-    } else if (split_named_call(expression, "oct", &inside)) {
-        mode = "oct";
-    } else if (split_named_call(expression, "hex", &inside)) {
-        mode = "hex";
-    } else if (split_named_call(expression, "base", &inside)) {
-        mode = "base";
-    } else {
-        return false;
-    }
-
-    const std::vector<std::string> arguments = split_top_level_arguments(inside);
-    int base = 10;
-
-    if (mode == "bin" || mode == "oct" || mode == "hex") {
-        if (arguments.size() != 1) {
-            throw std::runtime_error(mode + " expects exactly one argument");
-        }
-        base = mode == "bin" ? 2 : (mode == "oct" ? 8 : 16);
-    } else {
-        if (arguments.size() != 2) {
-            throw std::runtime_error("base expects exactly two arguments");
-        }
-        DecimalParser base_parser(arguments[1], variables, functions);
-        const double base_value = base_parser.parse();
-        if (!is_integer_double(base_value)) {
-            throw std::runtime_error("base conversion requires an integer base");
-        }
-        base = static_cast<int>(round_to_long_long(base_value));
-    }
-
-    DecimalParser value_parser(arguments[0], variables, functions);
-    const double value = value_parser.parse();
-    if (!is_integer_double(value)) {
-        throw std::runtime_error("base conversion only accepts integers");
-    }
-
-    if (!convert_base_value(round_to_long_long(value), base, hex_options, output)) {
-        throw std::runtime_error("base must be in the range [2, 16]");
-    }
-
-    return true;
-}
-
-std::string scalar_value_expression_text(const StoredValue& value) {
-    if (value.has_symbolic_text) {
-        return value.symbolic_text;
-    }
-    if (value.exact) {
-        return value.rational.to_string();
-    }
-    if (value.has_precise_decimal_text) {
-        return value.precise_decimal_text;
-    }
-    return format_decimal(normalize_display_decimal(value.decimal));
-}
-
-std::string matrix_literal_expression(const matrix::Matrix& value) {
-    std::ostringstream out;
-    out << '[';
-    for (std::size_t row = 0; row < value.rows; ++row) {
-        if (row != 0) {
-            out << "; ";
-        }
-        for (std::size_t col = 0; col < value.cols; ++col) {
-            if (col != 0) {
-                out << ", ";
-            }
-            out << format_decimal(normalize_display_decimal(value.at(row, col)));
-        }
-    }
-    out << ']';
-    return out.str();
-}
-
-bool is_supported_symbolic_unary_function(const std::string& name) {
-    return name == "sin" || name == "cos" || name == "tan" ||
-           name == "asin" || name == "acos" || name == "atan" ||
-           name == "exp" || name == "ln" || name == "log10" ||
-           name == "sqrt" || name == "abs" || name == "sign" ||
-           name == "floor" || name == "ceil" || name == "cbrt" ||
-           name == "step" || name == "delta";
-}
-
-class SymbolicRenderParser : public BaseParser {
-public:
-    SymbolicRenderParser(std::string source,
-                         const VariableResolver& variables,
-                         const std::map<std::string, CustomFunction>* functions,
-                         int depth = 0)
-        : BaseParser(std::move(source)),
-          variables_(variables),
-          functions_(functions),
-          depth_(depth) {}
-
-    bool parse(std::string* output, bool* used_symbolic_constant) {
-        if (depth_ > 12) {
-            return false;
-        }
-        try {
-            used_symbolic_constant_ = false;
-            const std::string text = parse_expression();
-            skip_spaces();
-            if (pos_ != source_.size()) {
-                return false;
-            }
-            SymbolicExpression expression = SymbolicExpression::parse(text);
-            *output = expression.to_string();
-            *used_symbolic_constant = used_symbolic_constant_;
-            return true;
-        } catch (const std::exception&) {
-            return false;
-        }
-    }
-
-private:
-    std::string parse_expression() {
-        std::string value = parse_term();
-        while (true) {
-            skip_spaces();
-            if (match('+')) {
-                value = "(" + value + " + " + parse_term() + ")";
-            } else if (match('-')) {
-                value = "(" + value + " - " + parse_term() + ")";
-            } else {
-                return value;
-            }
-        }
-    }
-
-    std::string parse_term() {
-        std::string value = parse_unary();
-        while (true) {
-            skip_spaces();
-            if (match('*')) {
-                value = "(" + value + " * " + parse_unary() + ")";
-            } else if (match('/')) {
-                value = "(" + value + " / " + parse_unary() + ")";
-            } else {
-                return value;
-            }
-        }
-    }
-
-    std::string parse_power() {
-        std::string value = parse_primary();
-        skip_spaces();
-        if (match('^')) {
-            value = "(" + value + " ^ " + parse_unary() + ")";
-        }
-        return value;
-    }
-
-    std::string parse_unary() {
-        skip_spaces();
-        if (match('+')) {
-            return parse_unary();
-        }
-        if (match('-')) {
-            return "(-" + parse_unary() + ")";
-        }
-        return parse_power();
-    }
-
-    std::string parse_primary() {
-        skip_spaces();
-        if (match('(')) {
-            const std::string value = parse_expression();
-            skip_spaces();
-            expect(')');
-            return "(" + value + ")";
-        }
-        if (peek_is_alpha()) {
-            const std::string name = parse_identifier();
-            skip_spaces();
-            if (peek() != '(') {
-                return render_identifier(name);
-            }
-
-            expect('(');
-            const std::vector<std::string> arguments = parse_argument_list();
-            expect(')');
-            return render_function(name, arguments);
-        }
-        return parse_number_token();
-    }
-
-    std::vector<std::string> parse_argument_list() {
-        std::vector<std::string> arguments;
-        skip_spaces();
-        if (peek() == ')') {
-            return arguments;
-        }
-
-        while (true) {
-            arguments.push_back(parse_expression());
-            skip_spaces();
-            if (!match(',')) {
-                break;
-            }
-        }
-        return arguments;
-    }
-
-    std::string render_identifier(const std::string& name) {
-        if (name == "pi" || name == "e") {
-            used_symbolic_constant_ = true;
-            return name;
-        }
-
-        double builtin_constant = 0.0;
-        if (lookup_builtin_constant(name, &builtin_constant)) {
-            return format_symbolic_scalar(builtin_constant);
-        }
-
-        const StoredValue* found = variables_.lookup(name);
-        if (!found) {
-            return name;
-        }
-        if (found->is_matrix || found->is_complex || found->is_string) {
-            throw std::runtime_error("unsupported symbolic variable");
-        }
-        if (found->has_symbolic_text) {
-            used_symbolic_constant_ = true;
-        }
-        return "(" + scalar_value_expression_text(*found) + ")";
-    }
-
-    std::string render_function(const std::string& name,
-                                const std::vector<std::string>& arguments) {
-        if (name == "pow") {
-            if (arguments.size() != 2) {
-                throw std::runtime_error("pow expects two arguments");
-            }
-            return "((" + arguments[0] + ") ^ (" + arguments[1] + "))";
-        }
-        if (name == "root") {
-            if (arguments.size() != 2) {
-                throw std::runtime_error("root expects two arguments");
-            }
-            return "((" + arguments[0] + ") ^ (1 / (" + arguments[1] + ")))";
-        }
-        const auto function_it = functions_->find(name);
-        if (function_it != functions_->end()) {
-            if (arguments.size() != 1) {
-                throw std::runtime_error("custom function expects one argument");
-            }
-            std::map<std::string, StoredValue> scoped_variables = variables_.snapshot();
-            StoredValue parameter_value;
-            parameter_value.has_symbolic_text = true;
-            parameter_value.symbolic_text = arguments[0];
-            scoped_variables[function_it->second.parameter_name] = parameter_value;
-
-            SymbolicRenderParser nested(function_it->second.expression,
-                                        VariableResolver(&scoped_variables, nullptr),
-                                        functions_,
-                                        depth_ + 1);
-            std::string expanded;
-            bool nested_symbolic = false;
-            if (!nested.parse(&expanded, &nested_symbolic)) {
-                throw std::runtime_error("unable to expand custom function symbolically");
-            }
-            used_symbolic_constant_ = used_symbolic_constant_ || nested_symbolic;
-            return "(" + expanded + ")";
-        }
-        if (!is_supported_symbolic_unary_function(name) || arguments.size() != 1) {
-            throw std::runtime_error("unsupported symbolic function");
-        }
-        return name + "(" + arguments[0] + ")";
-    }
-
-    std::string parse_number_token() {
-        skip_spaces();
-
-        if (!is_at_end() &&
-            source_[pos_] == '0' &&
-            pos_ + 1 < source_.size()) {
-            int base = 10;
-            if (prefixed_base(source_[pos_ + 1], &base)) {
-                const std::size_t start = pos_;
-                pos_ += 2;
-                while (!is_at_end()) {
-                    const int digit = digit_value(source_[pos_]);
-                    if (digit < 0 || digit >= base) {
-                        break;
-                    }
-                    ++pos_;
-                }
-                return format_decimal(static_cast<double>(
-                    parse_prefixed_integer_token(source_.substr(start, pos_ - start))));
-            }
-        }
-
-        const std::size_t start = pos_;
-        bool has_digit = false;
-        bool seen_dot = false;
-        while (!is_at_end()) {
-            const char ch = source_[pos_];
-            if (std::isdigit(static_cast<unsigned char>(ch))) {
-                has_digit = true;
-                ++pos_;
-            } else if (ch == '.' && !seen_dot) {
-                seen_dot = true;
-                ++pos_;
-            } else {
-                break;
-            }
-        }
-        if (!is_at_end() && (source_[pos_] == 'e' || source_[pos_] == 'E')) {
-            const std::size_t exponent_pos = pos_;
-            ++pos_;
-            if (!is_at_end() && (source_[pos_] == '+' || source_[pos_] == '-')) {
-                ++pos_;
-            }
-            const std::size_t exponent_digits = pos_;
-            while (!is_at_end() &&
-                   std::isdigit(static_cast<unsigned char>(source_[pos_]))) {
-                ++pos_;
-            }
-            if (exponent_digits == pos_) {
-                pos_ = exponent_pos;
-            }
-        }
-        if (!has_digit) {
-            throw std::runtime_error("expected number");
-        }
-        return format_decimal(std::stod(source_.substr(start, pos_ - start)));
-    }
-
-    VariableResolver variables_;
-    const std::map<std::string, CustomFunction>* functions_;
-    int depth_ = 0;
-    bool used_symbolic_constant_ = false;
-};
-
-bool try_symbolic_constant_expression(const std::string& expression,
-                                      const VariableResolver& variables,
-                                      const std::map<std::string, CustomFunction>* functions,
-                                      std::string* output) {
-    SymbolicRenderParser parser(expression, variables, functions);
-    bool used_symbolic_constant = false;
-    if (!parser.parse(output, &used_symbolic_constant)) {
-        return false;
-    }
-    return used_symbolic_constant;
 }
