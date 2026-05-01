@@ -71,6 +71,23 @@ double apply_statistic(const std::string& name, const std::vector<double>& argum
  */
 double apply_probability(const std::string& name, const std::vector<double>& arguments);
 
+/**
+ * @brief 执行 T 检验
+ * @param arguments 参数 [mu0, data...] 或 [data1..., data2...] (通过特殊方式区分)
+ *        实际上，更通用的方式是 [mu0, data...] 为单样本，
+ *        [data1..., data2...] 且带一个分隔标记为双样本。
+ *        或者简单点：前一半和后一半。
+ * @return p-value
+ */
+double t_test(const std::vector<double>& arguments);
+
+/**
+ * @brief 执行卡方检验（拟合优度）
+ * @param arguments [obs..., exp...] 前一半是观测值，后一半是期望值
+ * @return p-value
+ */
+double chi2_test(const std::vector<double>& arguments);
+
 } // namespace stats_ops
 
 #endif

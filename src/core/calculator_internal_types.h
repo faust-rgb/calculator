@@ -155,9 +155,12 @@ private:
  */
 class DecimalParser {
 public:
+    using ScalarFunction = std::function<double(const std::vector<double>&)>;
+
     DecimalParser(std::string source,
                   const VariableResolver& variables,
                   const std::map<std::string, CustomFunction>* functions,
+                  const std::map<std::string, ScalarFunction>* scalar_functions = nullptr,
                   HasScriptFunctionCallback has_script_function = {},
                   InvokeScriptFunctionDecimalCallback invoke_script_function = {});
 
@@ -167,6 +170,7 @@ private:
     std::string source_;
     VariableResolver variables_;
     const std::map<std::string, CustomFunction>* functions_;
+    const std::map<std::string, ScalarFunction>* scalar_functions_;
     HasScriptFunctionCallback has_script_function_;
     InvokeScriptFunctionDecimalCallback invoke_script_function_;
 };
@@ -193,6 +197,10 @@ struct Calculator::Impl {
     std::vector<std::map<std::string, StoredValue>> local_scopes; ///< 局部作用域栈
 
     std::vector<std::shared_ptr<CalculatorModule>> registered_modules; ///< 已注册的数学模块
+
+    std::map<std::string, std::function<double(const std::vector<double>&)>> scalar_functions; ///< 汇总的标量函数
+    std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>> matrix_functions; ///< 汇总的矩阵函数
+    std::map<std::string, matrix::ValueFunction> value_functions; ///< 汇总的值多态函数
 
     bool symbolic_constants_mode = false;  ///< 符号常量模式（pi, e 保留符号形式）
     bool hex_prefix_mode = false;          ///< 十六进制输出前缀
@@ -377,9 +385,9 @@ bool is_reserved_function_name(const std::string& name);
 bool split_function_definition(const std::string& expression, std::string* function_name, std::string* parameter_name, std::string* body);
 
 // 表达式求值
-double parse_decimal_expression(const std::string& expression, const VariableResolver& variables, const std::map<std::string, CustomFunction>* functions, HasScriptFunctionCallback has_script_function = {}, InvokeScriptFunctionDecimalCallback invoke_script_function = {});
+double parse_decimal_expression(const std::string& expression, const VariableResolver& variables, const std::map<std::string, CustomFunction>* functions, const std::map<std::string, DecimalParser::ScalarFunction>* scalar_functions = nullptr, HasScriptFunctionCallback has_script_function = {}, InvokeScriptFunctionDecimalCallback invoke_script_function = {});
 
-bool try_evaluate_matrix_expression(const std::string& expression, const VariableResolver& variables, const std::map<std::string, CustomFunction>* functions, const HasScriptFunctionCallback& has_script_function, const InvokeScriptFunctionDecimalCallback& invoke_script_function, matrix::Value* value);
+bool try_evaluate_matrix_expression(const std::string& expression, const VariableResolver& variables, const std::map<std::string, CustomFunction>* functions, const std::map<std::string, DecimalParser::ScalarFunction>* scalar_functions, const std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>* matrix_functions, const std::map<std::string, matrix::ValueFunction>* value_functions, const HasScriptFunctionCallback& has_script_function, const InvokeScriptFunctionDecimalCallback& invoke_script_function, matrix::Value* value);
 
 Rational parse_exact_expression(const std::string& expression, const VariableResolver& variables, const std::map<std::string, CustomFunction>* functions, HasScriptFunctionCallback has_script_function = {});
 

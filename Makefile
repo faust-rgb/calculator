@@ -1,6 +1,6 @@
 CXX ?= g++
 BASE_CXXFLAGS := -std=c++17 -Wall -Wextra -pedantic
-OPT_CXXFLAGS ?= -O2 -static
+OPT_CXXFLAGS ?= -O0 -g -static
 CXXFLAGS ?= $(BASE_CXXFLAGS) $(OPT_CXXFLAGS)
 LDFLAGS ?=
 
@@ -34,7 +34,9 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/core/state_persistence.cpp \
 	$(SRC_DIR)/math/mymath.cpp \
 	$(SRC_DIR)/math/mymath_special_functions.cpp \
+	$(SRC_DIR)/math/standard_math_module.cpp \
 	$(SRC_DIR)/matrix/matrix.cpp \
+	$(SRC_DIR)/matrix/matrix_module.cpp \
 	$(SRC_DIR)/matrix/matrix_ops.cpp \
 	$(SRC_DIR)/matrix/matrix_transform.cpp \
 	$(SRC_DIR)/matrix/matrix_utility.cpp \
@@ -89,6 +91,7 @@ COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/math/mymath.h \
 	$(SRC_DIR)/math/mymath_complex.h \
 	$(SRC_DIR)/math/mymath_internal.h \
+	$(SRC_DIR)/math/standard_math_module.h \
 	$(SRC_DIR)/matrix/matrix.h \
 	$(SRC_DIR)/matrix/matrix_internal.h \
 	$(SRC_DIR)/matrix/calculator_matrix_commands.h \

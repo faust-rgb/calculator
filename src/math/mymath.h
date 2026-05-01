@@ -391,6 +391,23 @@ double erf(double x);
 double erfc(double x);
 
 /**
+ * @brief 计算正则化下不完全伽马函数 P(a, x)
+ * @param a 参数 a
+ * @param x 参数 x
+ * @return P(a, x)
+ */
+double inc_gamma(double a, double x);
+
+/**
+ * @brief 计算正则化不完全贝塔函数 I_x(a, b)
+ * @param a 参数 a
+ * @param b 参数 b
+ * @param x 参数 x
+ * @return I_x(a, b)
+ */
+double inc_beta(double a, double b, double x);
+
+/**
  * @brief 计算贝塔函数
  * @param a 参数 a
  * @param b 参数 b

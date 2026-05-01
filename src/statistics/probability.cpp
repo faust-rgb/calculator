@@ -261,16 +261,7 @@ double poisson_pmf(int k, double lambda) {
 
 /**
  * @brief 计算泊松分布累积分布函数（CDF）
- *
- * 累加 P(X = 0) 到 P(X = k) 得到 P(X <= k)。
- *
- * @param k 事件发生次数上限
- * @param lambda 期望值（泊松参数）
- * @return P(X <= k)
- */
-/**
- * @brief 计算泊松分布累积分布函数（CDF）
- * 使用递推公式优化。
+ * 使用递推公式优化，大 lambda 使用正态近似。
  */
 double poisson_cdf(int k, double lambda) {
     if (!mymath::isfinite(lambda) || lambda < 0.0) {
@@ -279,6 +270,11 @@ double poisson_cdf(int k, double lambda) {
     // 边界情况
     if (k < 0) return 0.0;
     if (lambda == 0.0) return 1.0;
+
+    if (lambda > 100.0) {
+        // 使用正态近似优化：N(lambda, lambda)，带连续性校正
+        return normal_cdf(static_cast<double>(k) + 0.5, lambda, mymath::sqrt(lambda));
+    }
     
     double term = mymath::exp(-lambda); // P(X=0)
     double sum = term;
@@ -362,6 +358,69 @@ double binom_cdf(int n, int k, double p) {
         }
     }
     return std::min(mymath::exp(log_sum), 1.0);
+}
+
+double student_t_pdf(double x, double df) {
+    if (df <= 0) throw std::runtime_error("student_t df must be positive");
+    double log_pdf = mymath::lgamma((df + 1.0) / 2.0) - 
+                     (0.5 * mymath::log(df * mymath::kPi) + mymath::lgamma(df / 2.0)) -
+                     ((df + 1.0) / 2.0) * mymath::log(1.0 + x * x / df);
+    return mymath::exp(log_pdf);
+}
+
+double student_t_cdf(double x, double df) {
+    if (df <= 0) throw std::runtime_error("student_t df must be positive");
+    double x2 = x * x;
+    double z = df / (df + x2);
+    double ib = mymath::inc_beta(df / 2.0, 0.5, z);
+    return x > 0 ? 1.0 - 0.5 * ib : 0.5 * ib;
+}
+
+double chi2_pdf(double x, double df) {
+    if (df <= 0) throw std::runtime_error("chi2 df must be positive");
+    if (x < 0) return 0.0;
+    if (x == 0 && df < 2.0) return mymath::infinity();
+    if (x == 0 && df == 2.0) return 0.5;
+    if (x == 0 && df > 2.0) return 0.0;
+    
+    double log_pdf = (df / 2.0 - 1.0) * mymath::log(x) - x / 2.0 - 
+                     (df / 2.0 * mymath::log(2.0) + mymath::lgamma(df / 2.0));
+    return mymath::exp(log_pdf);
+}
+
+double chi2_cdf(double x, double df) {
+    if (df <= 0) throw std::runtime_error("chi2 df must be positive");
+    if (x <= 0) return 0.0;
+    return mymath::inc_gamma(df / 2.0, x / 2.0);
+}
+
+double f_pdf(double x, double df1, double df2) {
+    if (df1 <= 0 || df2 <= 0) throw std::runtime_error("F-distribution df must be positive");
+    if (x <= 0) return 0.0;
+    
+    double log_pdf = 0.5 * df1 * mymath::log(df1) + 0.5 * df2 * mymath::log(df2) +
+                     (0.5 * df1 - 1.0) * mymath::log(x) -
+                     0.5 * (df1 + df2) * mymath::log(df1 * x + df2) -
+                     (mymath::lgamma(0.5 * df1) + mymath::lgamma(0.5 * df2) - mymath::lgamma(0.5 * (df1 + df2)));
+    return mymath::exp(log_pdf);
+}
+
+double f_cdf(double x, double df1, double df2) {
+    if (df1 <= 0 || df2 <= 0) throw std::runtime_error("F-distribution df must be positive");
+    if (x <= 0) return 0.0;
+    return mymath::inc_beta(df1 / 2.0, df2 / 2.0, (df1 * x) / (df1 * x + df2));
+}
+
+double exp_pdf(double x, double lambda) {
+    if (lambda <= 0) throw std::runtime_error("exponential lambda must be positive");
+    if (x < 0) return 0.0;
+    return lambda * mymath::exp(-lambda * x);
+}
+
+double exp_cdf(double x, double lambda) {
+    if (lambda <= 0) throw std::runtime_error("exponential lambda must be positive");
+    if (x < 0) return 0.0;
+    return 1.0 - mymath::exp(-lambda * x);
 }
 
 /**

@@ -24,7 +24,7 @@ static std::vector<Point> sample_points(const PlotContext& ctx, const std::vecto
     size_t consumed = 0;
 
     auto eval = [&](const std::string& e) {
-        return parse_decimal_expression(e, ctx.variables, ctx.functions, ctx.has_script_function, ctx.invoke_script_function);
+        return parse_decimal_expression(e, ctx.variables, ctx.functions, ctx.scalar_functions, ctx.has_script_function, ctx.invoke_script_function);
     };
 
     if (args.size() >= 3 && !trim_copy(args[1]).empty() && args[1][0] != ':' && !is_identifier_text(trim_copy(args[1]))) {
@@ -64,7 +64,7 @@ static std::vector<Point> sample_points(const PlotContext& ctx, const std::vecto
         scoped_variables[var_name] = x_val;
 
         try {
-            double y = parse_decimal_expression(expr_str, VariableResolver(&scoped_variables, nullptr), ctx.functions, ctx.has_script_function, ctx.invoke_script_function);
+            double y = parse_decimal_expression(expr_str, VariableResolver(&scoped_variables, nullptr), ctx.functions, ctx.scalar_functions, ctx.has_script_function, ctx.invoke_script_function);
             points.push_back({x, y});
         } catch (...) {
             points.push_back({x, std::nan("")});
@@ -126,7 +126,7 @@ std::string handle_bar_command(const PlotContext& ctx, const std::vector<std::st
     size_t next_idx = 0;
 
     auto eval = [&](const std::string& e) {
-        return parse_decimal_expression(e, ctx.variables, ctx.functions, ctx.has_script_function, ctx.invoke_script_function);
+        return parse_decimal_expression(e, ctx.variables, ctx.functions, ctx.scalar_functions, ctx.has_script_function, ctx.invoke_script_function);
     };
 
     // 检查第一个参数是否是列表（标签）
@@ -273,7 +273,7 @@ std::string handle_hist_command(const PlotContext& ctx, const std::vector<std::s
     std::vector<double> data;
 
     auto eval = [&](const std::string& e) {
-        return parse_decimal_expression(e, ctx.variables, ctx.functions, ctx.has_script_function, ctx.invoke_script_function);
+        return parse_decimal_expression(e, ctx.variables, ctx.functions, ctx.scalar_functions, ctx.has_script_function, ctx.invoke_script_function);
     };
 
     std::string first_arg = trim_copy(arguments[0]);

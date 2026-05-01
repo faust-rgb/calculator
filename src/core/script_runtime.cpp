@@ -571,6 +571,9 @@ StoredValue evaluate_expression_value(Calculator* calculator,
             if (try_evaluate_matrix_expression(trimmed,
                                               variables,
                                               &impl->functions,
+                                              &impl->scalar_functions,
+                                              &impl->matrix_functions,
+                                              &impl->value_functions,
                                               has_script_function,
                                               invoke_script_function,
                                               &matrix_val)) {
@@ -605,6 +608,9 @@ StoredValue evaluate_expression_value(Calculator* calculator,
             if (try_evaluate_matrix_expression(trimmed,
                                               variables,
                                               &impl->functions,
+                                              &impl->scalar_functions,
+                                              &impl->matrix_functions,
+                                              &impl->value_functions,
                                               has_script_function,
                                               invoke_script_function,
                                               &matrix_val)) {
@@ -678,6 +684,9 @@ StoredValue evaluate_expression_value(Calculator* calculator,
     if (try_evaluate_matrix_expression(trimmed,
                                        variables,
                                        &impl->functions,
+                                       &impl->scalar_functions,
+                                       &impl->matrix_functions,
+                                       &impl->value_functions,
                                        has_script_function,
                                        invoke_script_function,
                                        &matrix_value)) {
@@ -713,6 +722,7 @@ StoredValue evaluate_expression_value(Calculator* calculator,
         DecimalParser parser(trimmed,
                              variables,
                              &impl->functions,
+                             &impl->scalar_functions,
                              has_script_function,
                              invoke_script_function);
         const double parsed_value = parser.parse();
@@ -788,7 +798,7 @@ std::string execute_simple_script_line(Calculator* calculator,
             } catch (...) {
                 // If it fails, check if it's a command like diff(...) or integral(...)
                 std::string command_output;
-                if (calculator->try_process_function_command(arg_text, &command_output)) {
+                if (calculator->try_process_function_command(arg_text, &command_output, exact_mode)) {
                     out << command_output;
                 } else {
                     // It's a genuine error, rethrow to be safe
@@ -800,7 +810,7 @@ std::string execute_simple_script_line(Calculator* calculator,
     }
 
     std::string function_output;
-    if (calculator->try_process_function_command(text, &function_output)) {
+    if (calculator->try_process_function_command(text, &function_output, exact_mode)) {
         return function_output;
     }
 

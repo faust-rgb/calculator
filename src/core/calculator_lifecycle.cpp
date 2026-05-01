@@ -2,6 +2,8 @@
 
 #include "symbolic_expression.h"
 
+#include "calculator_module.h"
+
 #include "mymath.h"
 
 #include <algorithm>
@@ -20,6 +22,26 @@ Calculator::Calculator() : impl_(new Impl()) {
 }
 
 void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
+    if (!module) return;
+
+    // 合并标量函数
+    auto new_scalar_funcs = module->get_scalar_functions();
+    for (auto& [name, func] : new_scalar_funcs) {
+        impl_->scalar_functions[name] = std::move(func);
+    }
+
+    // 合并矩阵函数
+    auto new_matrix_funcs = module->get_matrix_functions();
+    for (auto& [name, func] : new_matrix_funcs) {
+        impl_->matrix_functions[name] = std::move(func);
+    }
+
+    // 合并值多态函数
+    auto new_value_funcs = module->get_value_functions();
+    for (auto& [name, func] : new_value_funcs) {
+        impl_->value_functions[name] = std::move(func);
+    }
+
     impl_->registered_modules.push_back(std::move(module));
 }
 

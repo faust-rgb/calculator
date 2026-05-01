@@ -79,6 +79,8 @@ the main functions.
   Symbolic expression support
 - `src/script`
   Script AST and parser
+- `src/statistics`
+  Statistics, probability distributions, and hypothesis testing
 - `test`
   Regression tests and runnable example scripts
 - `bin`

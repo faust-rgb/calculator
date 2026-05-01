@@ -132,6 +132,36 @@ double correlation(const std::vector<double>& x, const std::vector<double>& y);
  */
 std::vector<double> linear_regression(const std::vector<double>& x, const std::vector<double>& y);
 
+/**
+ * @brief 计算四分位距（IQR）
+ * @param data 数据集
+ * @return IQR 值
+ */
+double iqr(const std::vector<double>& data);
+
+/**
+ * @brief 计算中位数绝对偏差（MAD）
+ * @param data 数据集
+ * @return MAD 值
+ */
+double mad(const std::vector<double>& data);
+
+/**
+ * @brief 计算加权平均值
+ * @param data 数据集
+ * @param weights 权重集
+ * @return 加权平均值
+ */
+double weighted_mean(const std::vector<double>& data, const std::vector<double>& weights);
+
+/**
+ * @brief 计算斯皮尔曼等级相关系数
+ * @param x 第一个变量数据
+ * @param y 第二个变量数据
+ * @return 相关系数（-1 到 1 之间）
+ */
+double spearman_correlation(const std::vector<double>& x, const std::vector<double>& y);
+
 } // namespace stats
 
 #endif

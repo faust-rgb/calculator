@@ -234,4 +234,66 @@ std::vector<double> linear_regression(const std::vector<double>& x, const std::v
     return {intercept, slope};
 }
 
+double iqr(const std::vector<double>& data) {
+    return quartile(data, 3) - quartile(data, 1);
+}
+
+double mad(const std::vector<double>& data) {
+    if (data.empty()) throw std::runtime_error("mad expects at least one value");
+    double med = median(data);
+    std::vector<double> diffs;
+    diffs.reserve(data.size());
+    for (double x : data) {
+        diffs.push_back(mymath::abs(x - med));
+    }
+    return median(diffs);
+}
+
+double weighted_mean(const std::vector<double>& data, const std::vector<double>& weights) {
+    if (data.size() != weights.size() || data.empty()) {
+        throw std::runtime_error("weighted_mean requires two non-empty vectors of same length");
+    }
+    long double weighted_sum = 0;
+    long double weight_sum = 0;
+    for (size_t i = 0; i < data.size(); i++) {
+        weighted_sum += static_cast<long double>(data[i]) * weights[i];
+        weight_sum += static_cast<long double>(weights[i]);
+    }
+    if (mymath::is_near_zero(static_cast<double>(weight_sum))) {
+        throw std::runtime_error("weighted_mean sum of weights is zero");
+    }
+    return static_cast<double>(weighted_sum / weight_sum);
+}
+
+static std::vector<double> get_ranks(const std::vector<double>& data) {
+    size_t n = data.size();
+    std::vector<size_t> indices(n);
+    std::iota(indices.begin(), indices.end(), 0);
+    std::sort(indices.begin(), indices.end(), [&](size_t i, size_t j) {
+        return data[i] < data[j];
+    });
+    std::vector<double> ranks(n);
+    for (size_t i = 0; i < n; ) {
+        size_t j = i + 1;
+        while (j < n && mymath::is_near_zero(data[indices[j]] - data[indices[i]], 1e-10)) {
+            j++;
+        }
+        double rank = (static_cast<double>(i) + static_cast<double>(j) + 1.0) / 2.0;
+        for (size_t k = i; k < j; k++) {
+            ranks[indices[k]] = rank;
+        }
+        i = j;
+    }
+    return ranks;
+}
+
+double spearman_correlation(const std::vector<double>& x, const std::vector<double>& y) {
+    if (x.size() != y.size() || x.empty()) {
+        throw std::runtime_error("spearman_correlation requires two non-empty vectors of same length");
+    }
+    std::vector<double> rx = get_ranks(x);
+    std::vector<double> ry = get_ranks(y);
+    return correlation(rx, ry);
+}
+
 } // namespace stats

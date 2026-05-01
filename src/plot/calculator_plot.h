@@ -14,6 +14,7 @@ namespace plot {
 struct PlotContext {
     VariableResolver variables;
     const std::map<std::string, CustomFunction>* functions;
+    const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions;
     HasScriptFunctionCallback has_script_function;
     InvokeScriptFunctionDecimalCallback invoke_script_function;
 };

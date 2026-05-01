@@ -44,9 +44,22 @@ struct CoreServices {
     std::function<bool(double, double)> is_integer_double;
     std::function<long long(double)> round_to_long_long;
 
-    // 环境查询
+    // 环境查询与管理
     std::function<bool(const std::string&)> has_variable;
     std::function<bool(const std::string&)> has_function;
+    std::function<std::string()> list_variables;
+    std::function<std::string()> list_functions;
+    std::function<std::string()> clear_all_variables;
+    std::function<std::string(const std::string&)> clear_variable;
+    std::function<std::string()> clear_all_functions;
+    std::function<std::string(const std::string&)> clear_function;
+
+    // 系统服务
+    std::function<std::string(const std::string&)> save_state;
+    std::function<std::string(const std::string&)> load_state;
+    std::function<std::string(const std::string&)> export_variable;
+    std::function<std::string()> get_history;
+    std::function<std::string(const std::string&, bool)> execute_script;
 };
 
 /**
@@ -72,6 +85,39 @@ public:
     virtual bool try_evaluate_implicit(const std::string&, 
                                       StoredValue*, 
                                       const std::map<std::string, StoredValue>&) const { return false; }
+
+    /**
+     * @brief 获取该模块提供的标量函数映射
+     * @return 函数名 -> (参数列表 -> 结果)
+     */
+    virtual std::map<std::string, std::function<double(const std::vector<double>&)>> get_scalar_functions() const { return {}; }
+
+    /**
+     * @brief 获取该模块提供的矩阵函数映射
+     * @return 函数名 -> (参数列表 -> 结果)
+     */
+    virtual std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>> get_matrix_functions() const { return {}; }
+
+    /**
+     * @brief 值多态函数类型：接受参数字符串列表和求值上下文，返回 Value
+     *
+     * 这种函数可以处理标量、复数、矩阵等多种输入类型，
+     * 并根据输入类型返回相应的结果。
+     *
+     * @param arguments 参数字符串列表（未求值）
+     * @param scalar_evaluator 标量求值器
+     * @param matrix_lookup 矩阵查找函数
+     * @param complex_lookup 复数查找函数
+     * @param matrix_functions 矩阵函数表（用于递归调用）
+     * @return 求值结果
+     */
+    using ValueFunction = matrix::ValueFunction;
+
+    /**
+     * @brief 获取该模块提供的值多态函数映射
+     * @return 函数名 -> 值多态函数
+     */
+    virtual std::map<std::string, ValueFunction> get_value_functions() const { return {}; }
 };
 
 #endif

@@ -1,3 +1,4 @@
+#include "residue.h"
 #include "calculator_internal_types.h"
 #include "../math/mymath.h"
 #include "mymath_complex.h"
@@ -6,12 +7,14 @@
 #include "matrix.h"
 #include "polynomial.h"
 #include "calculator_exceptions.h"
+#include "../core/calculator_module.h"
 
 namespace dsp_ops {
 
-std::string handle_residue_command(Calculator* calculator,
-                                   Calculator::Impl* impl,
-                                   const std::vector<std::string>& arguments) {
+std::string handle_residue_command(const std::string& command,
+                                   const std::string& inside,
+                                   const CoreServices& svc) {
+    std::vector<std::string> arguments = split_top_level_arguments(inside);
     if (arguments.size() != 3) {
         throw DimensionError("residue(expression, variable, point) expects 3 arguments");
     }
@@ -23,7 +26,7 @@ std::string handle_residue_command(Calculator* calculator,
 
     const SymbolicExpression expression =
         SymbolicExpression::parse(
-            trim_copy(expand_inline_function_commands(calculator, arguments[0])))
+            trim_copy(svc.expand_inline(arguments[0])))
             .simplify();
     SymbolicExpression numerator = expression;
     SymbolicExpression denominator = SymbolicExpression::number(1.0);
@@ -41,8 +44,7 @@ std::string handle_residue_command(Calculator* calculator,
         throw MathError("residue currently supports rational polynomial expressions");
     }
 
-    StoredValue point_value =
-        evaluate_expression_value(calculator, impl, arguments[2], false);
+    StoredValue point_value = svc.evaluate_value(arguments[2], false);
     mymath::complex<double> point(point_value.exact
                                    ? rational_to_double(point_value.rational)
                                    : point_value.decimal,

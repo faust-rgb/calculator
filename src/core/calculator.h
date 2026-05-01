@@ -134,14 +134,16 @@ public:
     std::string base_conversion_expression(const std::string& expression) const;
 
     /**
-     * @brief 尝试处理函数分析相关命令
+     * @brief 尝试处理函数分析相关命令或数学表达式
      * @param expression 输入表达式
      * @param output 输出结果存储位置
-     * @return 是否成功识别并处理为函数命令
+     * @param exact_mode 是否使用精确分数模式
+     * @return 是否成功识别并处理
      *
      * 支持的命令：limit, derivative, integral, extrema 等
+     * 也处理普通数学表达式求值和变量赋值
      */
-    bool try_process_function_command(const std::string& expression, std::string* output);
+    bool try_process_function_command(const std::string& expression, std::string* output, bool exact_mode = false);
 
     /**
      * @brief 导出变量到文件

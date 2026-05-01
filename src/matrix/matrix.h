@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -143,6 +144,19 @@ using MatrixLookup = std::function<bool(const std::string&, Matrix*)>;
 
 /** @brief 复数查找函数类型，用于变量解析 */
 using ComplexLookup = std::function<bool(const std::string&, ComplexNumber*)>;
+
+/**
+ * @brief 值多态函数类型
+ *
+ * 这种函数可以处理标量、复数、矩阵等多种输入类型，
+ * 并根据输入类型返回相应的结果。
+ */
+using ValueFunction = std::function<Value(
+    const std::vector<std::string>& arguments,
+    const ScalarEvaluator& scalar_evaluator,
+    const MatrixLookup& matrix_lookup,
+    const ComplexLookup& complex_lookup,
+    const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* matrix_functions)>;
 
 // ============================================================================
 // 基本矩阵运算
@@ -353,6 +367,9 @@ Matrix residue(const Matrix& b, const Matrix& a);
  * @param expression 表达式字符串
  * @param scalar_evaluator 标量求值回调
  * @param matrix_lookup 矩阵查找回调
+ * @param complex_lookup 复数查找回调
+ * @param matrix_functions 矩阵函数表
+ * @param value_functions 值多态函数表
  * @param value 输出结果
  * @return true 如果成功解析并求值
  *
@@ -362,11 +379,12 @@ Matrix residue(const Matrix& b, const Matrix& a);
  * - 函数调用：det(A), trace(A), rank(A) 等
  */
 bool try_evaluate_expression(const std::string& expression,
-                             const ScalarEvaluator& scalar_evaluator,
-                             const MatrixLookup& matrix_lookup,
-                             const ComplexLookup& complex_lookup,
-                             Value* value);
-
+                               const ScalarEvaluator& scalar_evaluator,
+                               const MatrixLookup& matrix_lookup,
+                               const ComplexLookup& complex_lookup,
+                               const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* matrix_functions,
+                               const std::map<std::string, ValueFunction>* value_functions,
+                               Value* value);
 }  // namespace matrix
 
 #endif

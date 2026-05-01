@@ -636,7 +636,7 @@ bool is_signal_command(const std::string& command) {
         "conv", "cconv", "xcorr", "autocorr",
         "window",
         "filter", "fir_design", "iir_design", "freqz",
-        "psd", "stft", "spectrogram"
+        "psd", "stft", "spectrogram", "residue"
     };
 
     return std::find(commands.begin(), commands.end(), command) != commands.end();

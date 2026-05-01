@@ -139,15 +139,55 @@ double apply_statistic(const std::string& name, const std::vector<double>& argum
     // 协方差和相关系数：支持直接传入两个向量数据（假设输入已按某种方式组织，
     // 例如前一半是 X，后一半是 Y，或者通过矩阵模式提取。
     // 这里我们支持 arguments 长度为偶数且对半开的情况作为备选。
-    if (name == "cov" || name == "corr") {
+    if (name == "cov" || name == "covariance" || name == "corr" || name == "correlation" || name == "spearman") {
         if (arguments.size() % 2 != 0 || arguments.empty()) {
             throw std::runtime_error(name + " expects two equal-length datasets (total size must be even)");
         }
         size_t n = arguments.size() / 2;
         std::vector<double> x(arguments.begin(), arguments.begin() + n);
         std::vector<double> y(arguments.begin() + n, arguments.end());
-        return (name == "cov") ? stats::covariance(x, y) : stats::correlation(x, y);
+        if (name == "cov" || name == "covariance") return stats::covariance(x, y);
+        if (name == "corr" || name == "correlation") return stats::correlation(x, y);
+        return stats::spearman_correlation(x, y);
     }
+
+    if (name == "iqr") return stats::iqr(arguments);
+    if (name == "mad") return stats::mad(arguments);
+    
+    if (name == "weighted_mean") {
+        if (arguments.size() % 2 != 0 || arguments.empty()) {
+            throw std::runtime_error("weighted_mean expects data followed by weights of same length");
+        }
+        size_t n = arguments.size() / 2;
+        std::vector<double> data(arguments.begin(), arguments.begin() + n);
+        std::vector<double> weights(arguments.begin() + n, arguments.end());
+        return stats::weighted_mean(data, weights);
+    }
+
+    if (name == "t_test") return t_test(arguments);
+    if (name == "t_test2") {
+        // Assume two-sample
+        if (arguments.size() % 2 != 0 || arguments.empty()) {
+            throw std::runtime_error("t_test2 expects two equal-length datasets");
+        }
+        size_t n = arguments.size() / 2;
+        std::vector<double> x(arguments.begin(), arguments.begin() + n);
+        std::vector<double> y(arguments.begin() + n, arguments.end());
+        
+        double m1 = stats::mean(x);
+        double m2 = stats::mean(y);
+        double s1 = stats::sample_variance(x);
+        double s2 = stats::sample_variance(y);
+        double n1 = static_cast<double>(x.size());
+        double n2 = static_cast<double>(y.size());
+        
+        double t = (m1 - m2) / mymath::sqrt(s1/n1 + s2/n2);
+        double df = mymath::pow(s1/n1 + s2/n2, 2) / 
+                    (mymath::pow(s1/n1, 2)/(n1-1.0) + mymath::pow(s2/n2, 2)/(n2-1.0));
+        
+        return 2.0 * prob::student_t_cdf(-mymath::abs(t), df);
+    }
+    if (name == "chi2_test") return chi2_test(arguments);
 
     throw std::runtime_error("unknown statistic: " + name);
 }
@@ -178,6 +218,10 @@ double apply_probability(const std::string& name, const std::vector<double>& arg
         if (arguments.size() != 1) throw std::runtime_error("gamma expects 1 argument");
         return prob::gamma(arguments[0]);
     }
+    if (name == "lgamma") {
+        if (arguments.size() != 1) throw std::runtime_error("lgamma expects 1 argument");
+        return prob::lgamma(arguments[0]);
+    }
     // 正态分布
     if (name == "pdf_normal") {
         if (arguments.size() != 3) throw std::runtime_error("pdf_normal expects x, mean, sigma");
@@ -186,6 +230,42 @@ double apply_probability(const std::string& name, const std::vector<double>& arg
     if (name == "cdf_normal") {
         if (arguments.size() != 3) throw std::runtime_error("cdf_normal expects x, mean, sigma");
         return prob::normal_cdf(arguments[0], arguments[1], arguments[2]);
+    }
+    // Student's t
+    if (name == "pdf_t") {
+        if (arguments.size() != 2) throw std::runtime_error("pdf_t expects x, df");
+        return prob::student_t_pdf(arguments[0], arguments[1]);
+    }
+    if (name == "cdf_t") {
+        if (arguments.size() != 2) throw std::runtime_error("cdf_t expects x, df");
+        return prob::student_t_cdf(arguments[0], arguments[1]);
+    }
+    // Chi-square
+    if (name == "pdf_chi2") {
+        if (arguments.size() != 2) throw std::runtime_error("pdf_chi2 expects x, df");
+        return prob::chi2_pdf(arguments[0], arguments[1]);
+    }
+    if (name == "cdf_chi2") {
+        if (arguments.size() != 2) throw std::runtime_error("cdf_chi2 expects x, df");
+        return prob::chi2_cdf(arguments[0], arguments[1]);
+    }
+    // F-distribution
+    if (name == "pdf_f") {
+        if (arguments.size() != 3) throw std::runtime_error("pdf_f expects x, df1, df2");
+        return prob::f_pdf(arguments[0], arguments[1], arguments[2]);
+    }
+    if (name == "cdf_f") {
+        if (arguments.size() != 3) throw std::runtime_error("cdf_f expects x, df1, df2");
+        return prob::f_cdf(arguments[0], arguments[1], arguments[2]);
+    }
+    // Exponential
+    if (name == "pdf_exp") {
+        if (arguments.size() != 2) throw std::runtime_error("pdf_exp expects x, lambda");
+        return prob::exp_pdf(arguments[0], arguments[1]);
+    }
+    if (name == "cdf_exp") {
+        if (arguments.size() != 2) throw std::runtime_error("cdf_exp expects x, lambda");
+        return prob::exp_cdf(arguments[0], arguments[1]);
     }
     // 泊松分布
     if (name == "poisson_pmf") {
@@ -225,6 +305,36 @@ double apply_probability(const std::string& name, const std::vector<double>& arg
     }
 
     throw std::runtime_error("unknown probability function: " + name);
+}
+
+double t_test(const std::vector<double>& arguments) {
+    if (arguments.size() < 2) throw std::runtime_error("t_test expects mu0 and data");
+    double mu0 = arguments[0];
+    std::vector<double> data(arguments.begin() + 1, arguments.end());
+    double m = stats::mean(data);
+    double s = stats::sample_stddev(data);
+    double n = static_cast<double>(data.size());
+    if (s < 1e-20) return (mymath::abs(m - mu0) < 1e-20) ? 1.0 : 0.0;
+    double t = (m - mu0) / (s / mymath::sqrt(n));
+    double df = n - 1.0;
+    return 2.0 * prob::student_t_cdf(-mymath::abs(t), df);
+}
+
+double chi2_test(const std::vector<double>& arguments) {
+    if (arguments.size() < 2 || arguments.size() % 2 != 0) {
+        throw std::runtime_error("chi2_test expects obs and exp datasets of same length");
+    }
+    size_t n = arguments.size() / 2;
+    double chi2 = 0;
+    for (size_t i = 0; i < n; i++) {
+        double obs = arguments[i];
+        double exp = arguments[i + n];
+        if (exp <= 0) throw std::runtime_error("chi2_test expected values must be positive");
+        chi2 += mymath::pow(obs - exp, 2) / exp;
+    }
+    double df = static_cast<double>(n - 1);
+    if (df < 1) throw std::runtime_error("chi2_test requires at least 2 categories");
+    return 1.0 - prob::chi2_cdf(chi2, df);
 }
 
 } // namespace stats_ops

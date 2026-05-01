@@ -454,6 +454,93 @@ double erfc(double x) {
     return poly * exp(-x * x);
 }
 
+double inc_gamma(double a, double x) {
+    if (x <= 0.0) return 0.0;
+    if (a <= 0.0) return 1.0;
+
+    const double log_ax = a * ln(x) - x - internal::log_gamma_positive(a);
+    const double prefix = internal::finite_or_infinity_from_log(log_ax);
+
+    if (x < a + 1.0) {
+        // Series representation for P(a, x)
+        double sum = 1.0 / a;
+        double term = sum;
+        for (int n = 1; n < 200; ++n) {
+            term *= x / (a + n);
+            sum += term;
+            if (abs(term) < abs(sum) * 1e-14) break;
+        }
+        return sum * prefix; 
+    } else {
+        // Continued fraction for Q(a, x) = 1 - P(a, x)
+        // Q(a, x) = (x^a e^-x / Gamma(a)) * [ 1 / (x+1-a - 1(1-a)/(x+3-a - 2(2-a)/(x+5-a - ...))) ]
+        const double tiny = 1e-30;
+        double b = x + 1.0 - a;
+        double c = 1.0 / tiny;
+        double d = 1.0 / b;
+        double h = d;
+        for (int i = 1; i < 200; ++i) {
+            double an = -static_cast<double>(i) * (static_cast<double>(i) - a);
+            b += 2.0;
+            d = an * d + b;
+            if (abs(d) < tiny) d = tiny;
+            c = b + an / c;
+            if (abs(c) < tiny) c = tiny;
+            d = 1.0 / d;
+            double delta = c * d;
+            h *= delta;
+            if (abs(delta - 1.0) < 1e-14) break;
+        }
+        return 1.0 - h * prefix;
+    }
+}
+
+double inc_beta(double a, double b, double x) {
+    if (x <= 0.0) return 0.0;
+    if (x >= 1.0) return 1.0;
+
+    if (x > (a + 1.0) / (a + b + 2.0)) {
+        return 1.0 - inc_beta(b, a, 1.0 - x);
+    }
+
+    const double log_beta = internal::log_gamma_positive(a) + internal::log_gamma_positive(b) - internal::log_gamma_positive(a + b);
+    const double prefix = exp(a * ln(x) + b * ln(1.0 - x) - log_beta) / a;
+
+    // Lentz's method for continued fraction
+    const double tiny = 1e-30;
+    double h = 1.0; // b0 is 1 for the CF part
+    double c = h;
+    double d = 0.0;
+
+    for (int m = 1; m <= 200; ++m) {
+        // Even step 2m
+        double m_d = static_cast<double>(m);
+        double num = m_d * (b - m_d) * x / ((a + 2.0 * m_d - 1.0) * (a + 2.0 * m_d));
+        
+        d = 1.0 + num * d;
+        if (abs(d) < tiny) d = tiny;
+        c = 1.0 + num / c;
+        if (abs(c) < tiny) c = tiny;
+        d = 1.0 / d;
+        h *= c * d;
+
+        // Odd step 2m + 1
+        num = -(a + m_d) * (a + b + m_d) * x / ((a + 2.0 * m_d) * (a + 2.0 * m_d + 1.0));
+        
+        d = 1.0 + num * d;
+        if (abs(d) < tiny) d = tiny;
+        c = 1.0 + num / c;
+        if (abs(c) < tiny) c = tiny;
+        d = 1.0 / d;
+        double delta = c * d;
+        h *= delta;
+
+        if (abs(delta - 1.0) < 1e-14) break;
+    }
+
+    return prefix * h;
+}
+
 double beta(double a, double b) {
     if (a <= 0.0 || b <= 0.0) {
         throw std::domain_error("beta is only defined for positive inputs");

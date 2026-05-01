@@ -516,73 +516,18 @@ std::string execute_repl_line(Calculator& calculator,
         return std::string("Hex letter case: ") +
                (calculator.hex_uppercase_mode() ? "UPPER" : "LOWER");
     }
-    if (line == ":vars") {
-        return calculator.list_variables();
-    }
-    if (line == ":funcs") {
-        std::string output;
-        return calculator.try_process_function_command(line, &output)
-                   ? output
-                   : "No custom functions defined.";
-    }
     if (line == ":history") {
         return format_history(history);
     }
-    if (line.rfind(":save ", 0) == 0) {
-        return calculator.save_state(line.substr(6));
-    }
-    if (line.rfind(":load ", 0) == 0) {
-        return calculator.load_state(line.substr(6));
-    }
-    if (line.rfind(":run ", 0) == 0) {
-        const std::string script_path = utils::trim_copy(line.substr(5));
-        if (!has_calc_extension(script_path)) {
-            throw std::runtime_error(":run only accepts .calc script files");
-        }
-        std::ifstream in(script_path);
-        if (!in) {
-            throw std::runtime_error("unable to open script file: " + script_path);
-        }
-        return calculator.execute_script(read_all(in), *exact_mode);
-    }
-    if (line == ":clear") {
-        return calculator.clear_all_variables();
-    }
-    if (line == ":clearfuncs") {
-        std::string output;
-        return calculator.try_process_function_command(line, &output)
-                   ? output
-                   : "Cleared all custom functions.";
-    }
-    if (line.rfind(":clearfunc ", 0) == 0) {
-        std::string output;
-        if (!calculator.try_process_function_command(line, &output)) {
-            throw std::runtime_error("invalid custom function command");
-        }
-        return output;
-    }
-    if (line.rfind(":clear ", 0) == 0) {
-        return calculator.clear_variable(line.substr(7));
-    }
 
     std::string function_output;
-    if (calculator.try_process_function_command(line, &function_output)) {
+    if (calculator.try_process_function_command(line, &function_output, *exact_mode)) {
         return function_output;
     }
-    if (line.rfind("factor(", 0) == 0) {
-        return calculator.factor_expression(line);
-    }
-    if (line.rfind("plot(", 0) == 0) {
-        return calculator.plot_expression(line);
-    }
-    if (line.rfind(":plot ", 0) == 0) {
-        std::string expr = line.substr(6);
-        // Use a marker to tell plot_expression to use Gnuplot
-        return calculator.plot_expression("plot(__gnuplot__" + expr + ")");
-    }
-    if (line.rfind(":export ", 0) == 0) {
-        return calculator.export_variable(line);
-    }
+
+    // plot 指令如果到达这里，说明上面的 try_process_function_command 没有处理成功
+    // 或者需要 REPL 特殊处理（虽然大部分已经下沉到模块中）
+    
     return calculator.process_line(line, *exact_mode);
 }
 

@@ -116,6 +116,72 @@ double binom_pmf(int n, int k, double p);
 double binom_cdf(int n, int k, double p);
 
 /**
+ * @brief 计算 Student's t 分布概率密度函数（PDF）
+ * @param x 自变量
+ * @param df 自由度
+ * @return PDF 值
+ */
+double student_t_pdf(double x, double df);
+
+/**
+ * @brief 计算 Student's t 分布累积分布函数（CDF）
+ * @param x 自变量
+ * @param df 自由度
+ * @return CDF 值
+ */
+double student_t_cdf(double x, double df);
+
+/**
+ * @brief 计算卡方分布概率密度函数（PDF）
+ * @param x 自变量
+ * @param df 自由度
+ * @return PDF 值
+ */
+double chi2_pdf(double x, double df);
+
+/**
+ * @brief 计算卡方分布累积分布函数（CDF）
+ * @param x 自变量
+ * @param df 自由度
+ * @return CDF 值
+ */
+double chi2_cdf(double x, double df);
+
+/**
+ * @brief 计算 F 分布概率密度函数（PDF）
+ * @param x 自变量
+ * @param df1 自由度1
+ * @param df2 自由度2
+ * @return PDF 值
+ */
+double f_pdf(double x, double df1, double df2);
+
+/**
+ * @brief 计算 F 分布累积分布函数（CDF）
+ * @param x 自变量
+ * @param df1 自由度1
+ * @param df2 自由度2
+ * @return CDF 值
+ */
+double f_cdf(double x, double df1, double df2);
+
+/**
+ * @brief 计算指数分布概率密度函数（PDF）
+ * @param x 自变量
+ * @param lambda 率参数
+ * @return PDF 值
+ */
+double exp_pdf(double x, double lambda);
+
+/**
+ * @brief 计算指数分布累积分布函数（CDF）
+ * @param x 自变量
+ * @param lambda 率参数
+ * @return CDF 值
+ */
+double exp_cdf(double x, double lambda);
+
+/**
  * @brief 生成 [0, 1) 区间均匀分布随机数
  * @return 随机数
  */

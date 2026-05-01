@@ -12,6 +12,8 @@
 #include "suites/test_analysis.h"
 #include "suites/test_signal_processing.h"
 #include "suites/test_plot.h"
+#include "suites/test_large_matrix.h"
+#include "suites/test_statistics_ext.h"
 #include <iostream>
 
 /**
@@ -52,6 +54,14 @@ int main() {
     // 运行绘图测试：测试终端图形渲染
     std::cout << "Running Plot Tests..." << std::endl;
     test_suites::run_plot_tests(total_passed, total_failed);
+
+    // 运行大维度矩阵测试：测试大规模矩阵运算的正确性
+    std::cout << "Running Large Matrix Tests..." << std::endl;
+    test_suites::run_large_matrix_tests(total_passed, total_failed);
+
+    // 运行扩展统计测试
+    std::cout << "Running Extended Statistics Tests..." << std::endl;
+    test_suites::run_statistics_ext_tests(total_passed, total_failed);
 
     // 输出测试汇总结果
     std::cout << "\nTest Summary:" << std::endl;
