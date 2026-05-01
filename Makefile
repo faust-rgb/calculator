@@ -24,6 +24,9 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/core/calculator_help.cpp \
 	$(SRC_DIR)/core/system_module.cpp \
 	$(SRC_DIR)/core/expression_compiler.cpp \
+	$(SRC_DIR)/core/calculator_service_factory.cpp \
+	$(SRC_DIR)/core/module_registration.cpp \
+		$(SRC_DIR)/core/command_parser.cpp \
 		$(SRC_DIR)/precise/rational.cpp \
 		$(SRC_DIR)/precise/precise_decimal.cpp \
 		$(SRC_DIR)/precise/precise_parser.cpp \

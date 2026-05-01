@@ -1,4 +1,5 @@
 #include "calculator_internal_types.h"
+#include "module_registration.h"
 #include "symbolic_expression.h"
 #include "calculator_module.h"
 #include "mymath.h"

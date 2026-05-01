@@ -378,7 +378,7 @@ std::string strip_enclosing_parentheses(const std::string& text) {
 class ScriptParserImpl {
 public:
     explicit ScriptParserImpl(std::vector<Token> tokens)
-        : tokens_(std::move(tokens)), pos_(0) {}
+        : tokens_(std::move(tokens)), pos_(0), recursion_depth_(0) {}
 
     Program parse() {
         Program program;
@@ -393,6 +393,14 @@ public:
 private:
     std::vector<Token> tokens_;
     std::size_t pos_;
+    int recursion_depth_;
+    static constexpr int kMaxRecursionDepth = 256;
+
+    void check_recursion_depth() {
+        if (recursion_depth_ > kMaxRecursionDepth) {
+            throw std::runtime_error("Line " + std::to_string(peek().line) + ": Script too deeply nested (recursion limit exceeded)");
+        }
+    }
 
     bool is_at_end() const {
         return pos_ >= tokens_.size() || tokens_[pos_].kind == Token::Kind::kEof;
@@ -457,39 +465,39 @@ private:
 
     StatementPtr parse_statement() {
         skip_newlines();
+        recursion_depth_++;
+        check_recursion_depth();
+        
+        StatementPtr result;
         if (match_symbol("{")) {
-            return parse_block_after_open();
-        }
-        if (match_keyword("fn") || match_keyword("def")) {
-            return parse_function();
-        }
-        if (match_keyword("if")) {
-            return parse_if();
-        }
-        if (match_keyword("while")) {
-            return parse_while();
-        }
-        if (match_keyword("for")) {
-            return parse_for();
-        }
-        if (match_keyword("return")) {
-            return parse_return();
-        }
-        if (match_keyword("break")) {
+            result = parse_block_after_open();
+        } else if (match_keyword("fn") || match_keyword("def")) {
+            result = parse_function();
+        } else if (match_keyword("if")) {
+            result = parse_if();
+        } else if (match_keyword("while")) {
+            result = parse_while();
+        } else if (match_keyword("for")) {
+            result = parse_for();
+        } else if (match_keyword("return")) {
+            result = parse_return();
+        } else if (match_keyword("break")) {
             auto statement = std::make_unique<BreakStatement>();
             if (!is_at_end() && peek().kind == Token::Kind::kSymbol && peek().text == ";") advance();
-            return statement;
-        }
-        if (match_keyword("continue")) {
+            result = std::move(statement);
+        } else if (match_keyword("continue")) {
             auto statement = std::make_unique<ContinueStatement>();
             if (!is_at_end() && peek().kind == Token::Kind::kSymbol && peek().text == ";") advance();
-            return statement;
-        }
-        if (match_keyword("pass")) {
+            result = std::move(statement);
+        } else if (match_keyword("pass")) {
             advance();
-            return std::make_unique<SimpleStatement>(); 
+            result = std::make_unique<SimpleStatement>(); 
+        } else {
+            result = parse_simple_statement();
         }
-        return parse_simple_statement();
+        
+        recursion_depth_--;
+        return result;
     }
 
     StatementPtr parse_block_after_open() {
