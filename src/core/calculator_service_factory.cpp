@@ -107,7 +107,14 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
         symbolic_resolver_ctx.resolve_custom_function = [calculator, impl](const std::string& name, std::string* v) {
             const auto it = impl->functions.find(name);
             if (it == impl->functions.end()) throw std::runtime_error("unknown custom function: " + name);
-            *v = it->second.parameter_name;
+            
+            // 为兼容符号解析接口，合并参数名（注：符号引擎目前主要支持单变量解析）
+            std::string params;
+            for (std::size_t i = 0; i < it->second.parameter_names.size(); ++i) {
+                params += it->second.parameter_names[i];
+                if (i + 1 < it->second.parameter_names.size()) params += ",";
+            }
+            *v = params;
             return SymbolicExpression::parse(it->second.expression);
         };
         symbolic_resolver_ctx.has_custom_function = [impl](const std::string& name) {
@@ -158,7 +165,14 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
         symbolic_resolver_ctx.resolve_custom_function = [calculator, impl](const std::string& name, std::string* v) {
             const auto it = impl->functions.find(name);
             if (it == impl->functions.end()) throw std::runtime_error("unknown custom function: " + name);
-            *v = it->second.parameter_name;
+            
+            // 为兼容符号解析接口，合并参数名（注：符号引擎目前主要支持单变量解析）
+            std::string params;
+            for (std::size_t i = 0; i < it->second.parameter_names.size(); ++i) {
+                params += it->second.parameter_names[i];
+                if (i + 1 < it->second.parameter_names.size()) params += ",";
+            }
+            *v = params;
             return SymbolicExpression::parse(it->second.expression);
         };
         symbolic_resolver_ctx.has_custom_function = [impl](const std::string& name) { return impl->functions.find(name) != impl->functions.end(); };
@@ -182,7 +196,12 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
         for (const auto& [name, function] : impl->functions) {
             if (!first) out << '\n';
             first = false;
-            out << name << "(" << function.parameter_name << ") = " << function.expression;
+            out << name << "(";
+            for (std::size_t i = 0; i < function.parameter_names.size(); ++i) {
+                if (i != 0) out << ", ";
+                out << function.parameter_names[i];
+            }
+            out << ") = " << function.expression;
         }
         for (const auto& [name, function] : impl->script_functions) {
             if (!first) out << '\n';

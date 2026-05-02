@@ -20,7 +20,7 @@ public:
         Rational value = parse_comparison();
         skip_spaces();
         if (!is_at_end()) {
-            throw SyntaxError("unexpected token near: " + std::string(source_.substr(pos_, 1)));
+            throw_error_at_pos<SyntaxError>("unexpected token near: " + std::string(source_.substr(pos_, 1)));
         }
         return value;
     }
@@ -99,7 +99,7 @@ private:
         if (match('^')) {
             const Rational exponent = parse_unary();
             if (!exponent.is_integer()) {
-                throw ExactModeUnsupported("exact rational mode does not support non-integer exponents");
+                throw_error_at_pos<ExactModeUnsupported>("exact rational mode does not support non-integer exponents");
             }
             return pow_rational(value, exponent.numerator);
         }
@@ -217,7 +217,7 @@ private:
         }
 
         if (!has_digit) {
-            throw std::runtime_error("expected number");
+            throw_error_at_pos<std::runtime_error>("expected number");
         }
 
         return parse_rational_literal(std::string(source_.substr(start, pos_ - start)));
@@ -266,52 +266,52 @@ private:
 
     Rational apply_function(const std::string& name, const std::vector<Rational>& arguments) {
         if (functions_->find(name) != functions_->end()) {
-            throw ExactModeUnsupported("custom function " + name +
+            throw_error_at_pos<ExactModeUnsupported>("custom function " + name +
                                        " is not supported exactly");
         }
         if (has_script_function_ && has_script_function_(name)) {
-            throw ExactModeUnsupported("script function " + name +
+            throw_error_at_pos<ExactModeUnsupported>("script function " + name +
                                        " is not supported exactly");
         }
         if (name == "pow") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("pow expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("pow expects exactly two arguments");
             }
             if (!arguments[1].is_integer()) {
-                throw ExactModeUnsupported("exact rational mode does not support non-integer exponents");
+                throw_error_at_pos<ExactModeUnsupported>("exact rational mode does not support non-integer exponents");
             }
             return pow_rational(arguments[0], arguments[1].numerator);
         }
         if (name == "abs") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("abs expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("abs expects exactly one argument");
             }
             return abs_rational(arguments[0]);
         }
         if (name == "step" || name == "u" || name == "heaviside") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("step expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("step expects exactly one argument");
             }
             return Rational(arguments[0].numerator >= 0 ? 1 : 0, 1);
         }
         if (name == "delta" || name == "impulse") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("delta expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("delta expects exactly one argument");
             }
             return Rational(arguments[0].numerator == 0 ? 1 : 0, 1);
         }
         if (name == "not") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("not expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("not expects exactly one argument");
             }
             if (!arguments[0].is_integer()) {
-                throw std::runtime_error("not only accepts integers");
+                throw_error_at_pos<std::runtime_error>("not only accepts integers");
             }
             return Rational(~arguments[0].numerator, 1);
         }
         if (name == "sign") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("sign expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("sign expects exactly one argument");
             }
             if (arguments[0].numerator == 0) {
                 return Rational(0, 1);
@@ -320,40 +320,40 @@ private:
         }
         if (name == "gcd") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("gcd expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("gcd expects exactly two arguments");
             }
             if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-                throw std::runtime_error("gcd only accepts integers");
+                throw_error_at_pos<std::runtime_error>("gcd only accepts integers");
             }
             return Rational(gcd_ll(arguments[0].numerator, arguments[1].numerator), 1);
         }
         if (name == "lcm") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("lcm expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("lcm expects exactly two arguments");
             }
             if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-                throw std::runtime_error("lcm only accepts integers");
+                throw_error_at_pos<std::runtime_error>("lcm only accepts integers");
             }
             return Rational(lcm_ll(arguments[0].numerator, arguments[1].numerator), 1);
         }
         if (name == "mod") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("mod expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("mod expects exactly two arguments");
             }
             if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-                throw std::runtime_error("mod only accepts integers");
+                throw_error_at_pos<std::runtime_error>("mod only accepts integers");
             }
             if (arguments[1].numerator == 0) {
-                throw std::runtime_error("mod divisor cannot be zero");
+                throw_error_at_pos<std::runtime_error>("mod divisor cannot be zero");
             }
             return Rational(arguments[0].numerator % arguments[1].numerator, 1);
         }
         if (name == "rol") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("rol expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("rol expects exactly two arguments");
             }
             if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-                throw std::runtime_error("rol only accepts integers");
+                throw_error_at_pos<std::runtime_error>("rol only accepts integers");
             }
             const unsigned count = normalize_rotation_count(arguments[1].numerator);
             return Rational(
@@ -363,10 +363,10 @@ private:
         }
         if (name == "ror") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("ror expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("ror expects exactly two arguments");
             }
             if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-                throw std::runtime_error("ror only accepts integers");
+                throw_error_at_pos<std::runtime_error>("ror only accepts integers");
             }
             const unsigned count = normalize_rotation_count(arguments[1].numerator);
             return Rational(
@@ -376,31 +376,31 @@ private:
         }
         if (name == "floor") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("floor expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("floor expects exactly one argument");
             }
             return Rational(floor_to_long_long(rational_to_double(arguments[0])), 1);
         }
         if (name == "ceil") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("ceil expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("ceil expects exactly one argument");
             }
             return Rational(ceil_to_long_long(rational_to_double(arguments[0])), 1);
         }
         if (name == "round") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("round expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("round expects exactly one argument");
             }
             return Rational(round_to_long_long(rational_to_double(arguments[0])), 1);
         }
         if (name == "trunc") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("trunc expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("trunc expects exactly one argument");
             }
             return Rational(trunc_to_long_long(rational_to_double(arguments[0])), 1);
         }
         if (name == "min") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("min expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("min expects exactly two arguments");
             }
             return rational_to_double(arguments[0]) < rational_to_double(arguments[1])
                        ? arguments[0]
@@ -408,7 +408,7 @@ private:
         }
         if (name == "max") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("max expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("max expects exactly two arguments");
             }
             return rational_to_double(arguments[0]) > rational_to_double(arguments[1])
                        ? arguments[0]
@@ -416,7 +416,7 @@ private:
         }
         if (name == "clamp") {
             if (arguments.size() != 3) {
-                throw std::runtime_error("clamp expects exactly three arguments");
+                throw_error_at_pos<std::runtime_error>("clamp expects exactly three arguments");
             }
             Rational lower = arguments[1];
             Rational upper = arguments[2];
@@ -433,7 +433,7 @@ private:
         }
         if (name == "sum") {
             if (arguments.empty()) {
-                throw std::runtime_error("sum expects at least one argument");
+                throw_error_at_pos<std::runtime_error>("sum expects at least one argument");
             }
             Rational total(0, 1);
             for (const Rational& value : arguments) {
@@ -443,7 +443,7 @@ private:
         }
         if (name == "avg") {
             if (arguments.empty()) {
-                throw std::runtime_error("avg expects at least one argument");
+                throw_error_at_pos<std::runtime_error>("avg expects at least one argument");
             }
             Rational total(0, 1);
             for (const Rational& value : arguments) {
@@ -453,7 +453,7 @@ private:
         }
         if (name == "mean") {
             if (arguments.empty()) {
-                throw std::runtime_error("mean expects at least one argument");
+                throw_error_at_pos<std::runtime_error>("mean expects at least one argument");
             }
             Rational total(0, 1);
             for (const Rational& value : arguments) {
@@ -463,7 +463,7 @@ private:
         }
         if (name == "median") {
             if (arguments.empty()) {
-                throw std::runtime_error("median expects at least one argument");
+                throw_error_at_pos<std::runtime_error>("median expects at least one argument");
             }
             std::vector<Rational> sorted = arguments;
             std::sort(sorted.begin(), sorted.end(),
@@ -478,91 +478,91 @@ private:
         }
         if (name == "factorial") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("factorial expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("factorial expects exactly one argument");
             }
             if (!arguments[0].is_integer()) {
-                throw std::runtime_error("factorial only accepts integers");
+                throw_error_at_pos<std::runtime_error>("factorial only accepts integers");
             }
             return factorial_rational(arguments[0].numerator);
         }
         if (name == "nCr") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("nCr expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("nCr expects exactly two arguments");
             }
             if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-                throw std::runtime_error("nCr only accepts integers");
+                throw_error_at_pos<std::runtime_error>("nCr only accepts integers");
             }
             return combination_rational(arguments[0].numerator, arguments[1].numerator);
         }
         if (name == "binom") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("binom expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("binom expects exactly two arguments");
             }
             if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-                throw std::runtime_error("binom only accepts integers");
+                throw_error_at_pos<std::runtime_error>("binom only accepts integers");
             }
             return combination_rational(arguments[0].numerator, arguments[1].numerator);
         }
         if (name == "nPr") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("nPr expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("nPr expects exactly two arguments");
             }
             if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-                throw std::runtime_error("nPr only accepts integers");
+                throw_error_at_pos<std::runtime_error>("nPr only accepts integers");
             }
             return permutation_rational(arguments[0].numerator, arguments[1].numerator);
         }
         if (name == "popcount") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("popcount expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("popcount expects exactly one argument");
             }
             if (!arguments[0].is_integer()) {
-                throw std::runtime_error("popcount only accepts integers");
+                throw_error_at_pos<std::runtime_error>("popcount only accepts integers");
             }
             return Rational(popcount_bits(to_unsigned_bits(arguments[0].numerator)), 1);
         }
         if (name == "bitlen") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("bitlen expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("bitlen expects exactly one argument");
             }
             if (!arguments[0].is_integer()) {
-                throw std::runtime_error("bitlen only accepts integers");
+                throw_error_at_pos<std::runtime_error>("bitlen only accepts integers");
             }
             return Rational(bit_length_bits(to_unsigned_bits(arguments[0].numerator)), 1);
         }
         if (name == "ctz") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("ctz expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("ctz expects exactly one argument");
             }
             if (!arguments[0].is_integer()) {
-                throw std::runtime_error("ctz only accepts integers");
+                throw_error_at_pos<std::runtime_error>("ctz only accepts integers");
             }
             return Rational(trailing_zero_count_bits(to_unsigned_bits(arguments[0].numerator)), 1);
         }
         if (name == "clz") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("clz expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("clz expects exactly one argument");
             }
             if (!arguments[0].is_integer()) {
-                throw std::runtime_error("clz only accepts integers");
+                throw_error_at_pos<std::runtime_error>("clz only accepts integers");
             }
             return Rational(leading_zero_count_bits(to_unsigned_bits(arguments[0].numerator)), 1);
         }
         if (name == "parity") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("parity expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("parity expects exactly one argument");
             }
             if (!arguments[0].is_integer()) {
-                throw std::runtime_error("parity only accepts integers");
+                throw_error_at_pos<std::runtime_error>("parity only accepts integers");
             }
             return Rational(parity_bits(to_unsigned_bits(arguments[0].numerator)), 1);
         }
         if (name == "reverse_bits") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("reverse_bits expects exactly one argument");
+                throw_error_at_pos<std::runtime_error>("reverse_bits expects exactly one argument");
             }
             if (!arguments[0].is_integer()) {
-                throw std::runtime_error("reverse_bits only accepts integers");
+                throw_error_at_pos<std::runtime_error>("reverse_bits only accepts integers");
             }
             return Rational(
                 from_unsigned_bits(reverse_bits(to_unsigned_bits(arguments[0].numerator))),
@@ -570,57 +570,57 @@ private:
         }
         if (name == "and") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("and expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("and expects exactly two arguments");
             }
             if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-                throw std::runtime_error("and only accepts integers");
+                throw_error_at_pos<std::runtime_error>("and only accepts integers");
             }
             return Rational(arguments[0].numerator & arguments[1].numerator, 1);
         }
         if (name == "or") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("or expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("or expects exactly two arguments");
             }
             if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-                throw std::runtime_error("or only accepts integers");
+                throw_error_at_pos<std::runtime_error>("or only accepts integers");
             }
             return Rational(arguments[0].numerator | arguments[1].numerator, 1);
         }
         if (name == "xor") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("xor expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("xor expects exactly two arguments");
             }
             if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-                throw std::runtime_error("xor only accepts integers");
+                throw_error_at_pos<std::runtime_error>("xor only accepts integers");
             }
             return Rational(arguments[0].numerator ^ arguments[1].numerator, 1);
         }
         if (name == "shl") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("shl expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("shl expects exactly two arguments");
             }
             if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-                throw std::runtime_error("shl only accepts integers");
+                throw_error_at_pos<std::runtime_error>("shl only accepts integers");
             }
             if (arguments[1].numerator < 0) {
-                throw std::runtime_error("shift count cannot be negative");
+                throw_error_at_pos<std::runtime_error>("shift count cannot be negative");
             }
             return Rational(arguments[0].numerator << arguments[1].numerator, 1);
         }
         if (name == "shr") {
             if (arguments.size() != 2) {
-                throw std::runtime_error("shr expects exactly two arguments");
+                throw_error_at_pos<std::runtime_error>("shr expects exactly two arguments");
             }
             if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-                throw std::runtime_error("shr only accepts integers");
+                throw_error_at_pos<std::runtime_error>("shr only accepts integers");
             }
             if (arguments[1].numerator < 0) {
-                throw std::runtime_error("shift count cannot be negative");
+                throw_error_at_pos<std::runtime_error>("shift count cannot be negative");
             }
             return Rational(arguments[0].numerator >> arguments[1].numerator, 1);
         }
 
-        throw ExactModeUnsupported("function " + name + " is not supported exactly");
+        throw_error_at_pos<ExactModeUnsupported>("function " + name + " is not supported exactly");
     }
 
     Rational lookup_variable(const std::string& name) const {
@@ -628,18 +628,18 @@ private:
         if (!found) {
             double constant_value = 0.0;
             if (lookup_builtin_constant(name, &constant_value)) {
-                throw ExactModeUnsupported("built-in constants are not rational");
+                throw_error_at_pos<ExactModeUnsupported>("built-in constants are not rational");
             }
-            throw std::runtime_error("unknown variable: " + name);
+            throw_error_at_pos<std::runtime_error>("unknown variable: " + name);
         }
         if (found->is_matrix || found->is_complex) {
-            throw ExactModeUnsupported("matrix or complex variable " + name + " cannot be used exactly");
+            throw_error_at_pos<ExactModeUnsupported>("matrix or complex variable " + name + " cannot be used exactly");
         }
         if (found->is_string) {
-            throw ExactModeUnsupported("string variable " + name + " cannot be used exactly");
+            throw_error_at_pos<ExactModeUnsupported>("string variable " + name + " cannot be used exactly");
         }
         if (!found->exact) {
-            throw ExactModeUnsupported("variable " + name + " is only stored approximately");
+            throw_error_at_pos<ExactModeUnsupported>("variable " + name + " is only stored approximately");
         }
         return found->rational;
     }

@@ -40,18 +40,31 @@ bool Calculator::try_process_function_command(const std::string& expression,
         return false;
     }
 
-    // 2. 函数定义 f(x) = ...
+    // 2. 函数定义 f(x, y) = ...
     if (ast.kind == CommandKind::kFunctionDefinition) {
         const FunctionDefinitionInfo* def = ast.as_function_definition();
         if (!def) return false;
+        
         std::string name(def->name);
-        std::string param(def->parameter);
-        std::string body(def->body);
         if (is_reserved_user_function_name(impl_.get(), name)) {
             throw std::runtime_error("function name is reserved: " + name);
         }
-        impl_->functions[name] = {param, body};
-        *output = name + "(" + param + ") = " + body;
+        
+        // 存储参数列表和函数体
+        std::vector<std::string> params;
+        std::string params_display;
+        for (std::size_t i = 0; i < def->parameters.size(); ++i) {
+            params.emplace_back(def->parameters[i]);
+            params_display += def->parameters[i];
+            if (i + 1 < def->parameters.size()) params_display += ", ";
+        }
+        
+        std::string body(def->body);
+        
+        // 存储为 CustomFunction
+        impl_->functions[name] = { params, body };
+        
+        *output = name + "(" + params_display + ") = " + body;
         return true;
     }
 

@@ -28,7 +28,7 @@ public:
         double value = parse_comparison();
         skip_spaces();
         if (!is_at_end()) {
-            throw SyntaxError("unexpected token near: " + std::string(source_.substr(pos_, 1)));
+            throw_error_at_pos<SyntaxError>("unexpected token near: " + std::string(source_.substr(pos_, 1)));
         }
         return value;
     }
@@ -81,7 +81,7 @@ private:
             } else if (match('/')) {
                 const double divisor = parse_unary();
                 if (divisor == 0.0) {
-                    throw MathError("division by zero");
+                    throw_error_at_pos<MathError>("division by zero");
                 }
                 value /= divisor;
             } else {
@@ -212,7 +212,7 @@ private:
         }
 
         if (!has_digit) {
-            throw SyntaxError("expected number");
+            throw_error_at_pos<SyntaxError>("expected number");
         }
 
         return std::stod(std::string(source_.substr(start, pos_ - start)));
@@ -223,25 +223,29 @@ private:
         if (found) {
             if (found->is_matrix || found->is_complex ||
                 found->is_string || found->has_symbolic_text) {
-                throw MathError("unsupported variable type in numeric expression: " + name);
+                throw_error_at_pos<MathError>("unsupported variable type in numeric expression: " + name);
             }
             return found->exact ? rational_to_double(found->rational)
                                    : found->decimal;
         }
 
-        throw UndefinedError("unknown variable: " + name);
+        throw_error_at_pos<UndefinedError>("unknown variable: " + name);
     }
 
     double apply_function(const std::string& name, const std::vector<double>& arguments) {
         const auto it = functions_->find(name);
         if (it != functions_->end()) {
-            if (arguments.size() != 1) {
-                throw MathError("custom function " + name + " expects 1 argument");
+            if (arguments.size() != it->second.parameter_names.size()) {
+                throw_error_at_pos<MathError>("custom function " + name + " expects " +
+                                std::to_string(it->second.parameter_names.size()) +
+                                " arguments, but got " + std::to_string(arguments.size()));
             }
             std::map<std::string, StoredValue> snapshot = variables_.snapshot();
-            StoredValue arg_value;
-            arg_value.decimal = arguments[0];
-            snapshot[it->second.parameter_name] = arg_value;
+            for (std::size_t i = 0; i < arguments.size(); ++i) {
+                StoredValue arg_value;
+                arg_value.decimal = arguments[i];
+                snapshot[it->second.parameter_names[i]] = arg_value;
+            }
             DecimalParser parser(it->second.expression,
                                  VariableResolver(&snapshot, nullptr),
                                  functions_,
@@ -262,7 +266,7 @@ private:
             }
         }
 
-        throw UndefinedError("unknown function: " + name);
+        throw_error_at_pos<UndefinedError>("unknown function: " + name);
     }
 
     VariableResolver variables_;

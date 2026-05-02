@@ -173,14 +173,18 @@ private:
         }
         const auto function_it = functions_->find(name);
         if (function_it != functions_->end()) {
-            if (arguments.size() != 1) {
-                throw std::runtime_error("custom function expects one argument");
+            if (arguments.size() != function_it->second.parameter_names.size()) {
+                throw std::runtime_error("custom function " + name + " expects " +
+                                         std::to_string(function_it->second.parameter_names.size()) +
+                                         " arguments, but got " + std::to_string(arguments.size()));
             }
             std::map<std::string, StoredValue> scoped_variables = variables_.snapshot();
-            StoredValue parameter_value;
-            parameter_value.has_symbolic_text = true;
-            parameter_value.symbolic_text = arguments[0];
-            scoped_variables[function_it->second.parameter_name] = parameter_value;
+            for (std::size_t i = 0; i < arguments.size(); ++i) {
+                StoredValue parameter_value;
+                parameter_value.has_symbolic_text = true;
+                parameter_value.symbolic_text = arguments[i];
+                scoped_variables[function_it->second.parameter_names[i]] = parameter_value;
+            }
 
             SymbolicRenderParserImpl nested(function_it->second.expression,
                                             VariableResolver(&scoped_variables, nullptr),

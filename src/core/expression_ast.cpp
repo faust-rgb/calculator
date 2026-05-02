@@ -409,15 +409,10 @@ double evaluate_ast(const ExpressionAST* ast,
             if (functions) {
                 auto it = functions->find(ast->identifier);
                 if (it != functions->end()) {
-                    if (args.size() != 1) {
-                        throw MathError("custom function " + ast->identifier + " expects 1 argument");
+                    if (args.size() != it->second.parameter_names.size()) {
+                        throw MathError("custom function " + ast->identifier + " expects " +
+                                        std::to_string(it->second.parameter_names.size()) + " arguments");
                     }
-                    std::map<std::string, StoredValue> snapshot = variables.snapshot();
-                    StoredValue arg_value;
-                    arg_value.decimal = args[0];
-                    snapshot[it->second.parameter_name] = arg_value;
-
-                    // 递归求值自定义函数（这里需要完整解析器）
                     // 简化处理：返回 0，实际使用时回退到 DecimalParser
                     throw MathError("custom function in AST not supported");
                 }

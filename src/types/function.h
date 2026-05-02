@@ -17,14 +17,14 @@
 
 /**
  * @struct CustomFunction
- * @brief 单参数自定义函数
+ * @brief 自定义函数
  *
- * 存储用户定义的简单函数，如 f(x) = x^2 + 1。
- * 参数名和表达式以字符串形式存储。
+ * 存储用户定义的简单函数，如 f(x, y) = x^2 + y^2。
+ * 参数名列表和表达式以字符串形式存储。
  */
 struct CustomFunction {
-    std::string parameter_name;  ///< 参数名
-    std::string expression;      ///< 函数体表达式
+    std::vector<std::string> parameter_names; ///< 参数名列表
+    std::string expression;                   ///< 函数体表达式
 };
 
 /**

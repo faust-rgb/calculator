@@ -26,6 +26,7 @@
 #define COMMAND_PARSER_H
 
 #include "calculator_exceptions.h"
+#include "base_parser.h"
 #include <memory>
 #include <string>
 #include <string_view>
@@ -63,7 +64,6 @@ struct CommandToken {
     CommandTokenType type;
     std::string_view text;      ///< 原始文本视图
     std::string string_value;   ///< 字符串值（仅 kString 类型使用）
-    double number_value = 0.0;  ///< 数值（仅 kNumber 类型使用）
     std::size_t position = 0;   ///< 在源字符串中的起始位置
 
     CommandToken() : type(CommandTokenType::kEnd) {}
@@ -80,7 +80,7 @@ struct CommandToken {
 enum class CommandKind {
     kEmpty,              ///< 空输入
     kMetaCommand,        ///< 元命令，如 :help, :vars
-    kFunctionDefinition, ///< 函数定义，如 f(x) = x^2
+    kFunctionDefinition, ///< 函数定义，如 f(x,y) = x^2+y^2
     kFunctionCall,       ///< 函数调用，如 sin(pi/4)
     kAssignment,         ///< 变量赋值，如 x = 5
     kExpression,         ///< 纯表达式，如 2 + 3
@@ -92,9 +92,9 @@ enum class CommandKind {
  * @brief 函数定义信息
  */
 struct FunctionDefinitionInfo {
-    std::string_view name;           ///< 函数名
-    std::string_view parameter;      ///< 参数名
-    std::string_view body;           ///< 函数体表达式
+    std::string_view name;                      ///< 函数名
+    std::vector<std::string_view> parameters;   ///< 参数名列表
+    std::string_view body;                      ///< 函数体表达式
 };
 
 /**
@@ -148,7 +148,7 @@ public:
     static CommandASTNode make_meta_command(std::string_view cmd,
                                             const std::vector<std::string_view>& args);
     static CommandASTNode make_function_definition(std::string_view name,
-                                                   std::string_view param,
+                                                   const std::vector<std::string_view>& params,
                                                    std::string_view body);
     static CommandASTNode make_function_call(std::string_view name,
                                              const std::vector<std::string_view>& args);
@@ -191,12 +191,10 @@ public:
  * @class CommandParser
  * @brief 统一的命令解析器
  *
- * 基于 Token 流实现 O(N) 单次扫描解析：
- * 1. 词法分析生成 Token 流
- * 2. 递归下降解析构建 AST
- * 3. 统一的语法错误处理
+ * 继承自 BaseParser 以复用基础词法分析工具。
+ * 基于 Token 流实现 O(N) 单次扫描解析。
  */
-class CommandParser {
+class CommandParser : public BaseParser {
 public:
     explicit CommandParser(std::string_view source);
 
@@ -218,42 +216,22 @@ public:
 
 private:
     // ========================================================================
-    // 词法分析
+    // 词法分析 (重载或补充 BaseParser)
     // ========================================================================
-
-    /// 判断字符是否为空白
-    static constexpr bool is_space_char(char ch) {
-        return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
-    }
-
-    /// 跳过空白字符
-    void skip_spaces();
-
-    /// 查看当前字符
-    char peek() const;
-
-    /// 查看下一个字符（不消费）
-    char peek_next() const;
-
-    /// 消费当前字符
-    char advance();
-
-    /// 是否到达末尾
-    bool is_at_end() const;
 
     /// 解析下一个 Token
     CommandToken next_token();
 
-    /// 解析标识符
+    /// 解析标识符 Token
     CommandToken parse_identifier_token();
 
-    /// 解析数字
+    /// 解析数字 Token
     CommandToken parse_number_token();
 
-    /// 解析字符串字面量
+    /// 解析字符串字面量 Token
     CommandToken parse_string_token();
 
-    /// 解析运算符
+    /// 解析运算符 Token
     CommandToken parse_operator_token();
 
     // ========================================================================
@@ -284,24 +262,38 @@ private:
     /// 解析函数定义或赋值
     CommandASTNode parse_definition_or_assignment(const CommandToken& id_token);
 
+    /// 解析参数名列表 (用于定义)
+    std::vector<std::string_view> parse_parameter_list();
+
     /// 解析函数调用
     CommandASTNode parse_function_call(const CommandToken& id_token);
 
-    /// 解析参数列表
+    /// 基于 Token 的参数列表解析
+    std::vector<std::string_view> parse_argument_list_by_tokens(bool stop_at_rparen);
+
+    /// 解析参数列表 (用于调用)
     std::vector<std::string_view> parse_argument_list();
 
     /// 解析表达式（兜底）
     CommandASTNode parse_expression();
 
-    /// 抛出语法错误
+    /// 抛出带有上下文信息的语法错误
     [[noreturn]] void throw_syntax_error(const std::string& message);
+
+    // ========================================================================
+    // 表达式预检验证
+    // ========================================================================
+
+    /// 检查表达式是否有明显的语法错误
+    bool has_obvious_syntax_error(std::string_view expr) const;
+
+    /// 检查括号是否匹配
+    bool check_paren_balance(std::string_view expr) const;
 
     // ========================================================================
     // 成员变量
     // ========================================================================
 
-    std::string_view source_;
-    std::size_t pos_ = 0;
     std::vector<CommandToken> tokens_;
     std::size_t token_pos_ = 0;
     bool tokens_scanned_ = false;

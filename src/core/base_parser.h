@@ -6,6 +6,7 @@
 #include <vector>
 #include <cctype>
 #include <stdexcept>
+#include <sstream>
 #include "calculator_exceptions.h"
 #include "calculator_internal_types.h"
 
@@ -71,6 +72,12 @@ protected:
         return source_[pos_];
     }
 
+    /// 查看下一个字符（不消费）
+    char peek_next() const {
+        if (pos_ + 1 >= source_.size()) return '\0';
+        return source_[pos_ + 1];
+    }
+
     /// 检查下一个字符是否匹配（不消费）
     bool peek(char expected) const {
         return peek() == expected;
@@ -94,6 +101,18 @@ protected:
         return false;
     }
 
+    template <typename ExceptionType = SyntaxError>
+    [[noreturn]] void throw_error_at_pos(const std::string& message, std::size_t error_pos = std::string::npos) const {
+        if (error_pos == std::string::npos) {
+            error_pos = pos_ < source_.size() ? pos_ : source_.size();
+        }
+        std::ostringstream oss;
+        oss << message << " at position " << error_pos << "\n";
+        oss << "  " << source_ << "\n";
+        oss << "  " << std::string(error_pos, ' ') << "^";
+        throw ExceptionType(oss.str());
+    }
+
     /// 匹配并消费指定字符，失败则抛出异常
     void expect(char expected) {
         if (!match(expected)) {
@@ -102,7 +121,7 @@ protected:
             msg += "' but found '";
             msg += (is_at_end() ? "EOF" : std::string(1, peek()));
             msg += "'";
-            throw SyntaxError(msg);
+            throw_error_at_pos<SyntaxError>(msg);
         }
     }
 

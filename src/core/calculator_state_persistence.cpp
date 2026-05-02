@@ -1,4 +1,5 @@
 #include "calculator_internal_types.h"
+#include "command_parser.h"
 
 #include <filesystem>
 #include <fstream>
@@ -55,8 +56,13 @@ std::string Calculator::save_state(const std::string& path) const {
     }
 
     for (const auto& [name, function] : impl_->functions) {
+        std::string params_str;
+        for (std::size_t i = 0; i < function.parameter_names.size(); ++i) {
+            if (i != 0) params_str += ", ";
+            params_str += function.parameter_names[i];
+        }
         out << "EXPRFUNC\t"
-            << encode_state_field(name + "(" + function.parameter_name + ") = " +
+            << encode_state_field(name + "(" + params_str + ") = " +
                                   function.expression)
             << '\n';
     }
@@ -243,17 +249,21 @@ std::string Calculator::load_state(const std::string& path) {
                 if (parts.size() != 2) {
                     throw std::runtime_error("invalid save file format");
                 }
-                std::string_view function_name;
-                std::string_view parameter_name;
-                std::string_view body;
                 const std::string definition = decode_state_field(parts[1]);
-                if (!split_function_definition(definition,
-                                               &function_name,
-                                               &parameter_name,
-                                               &body)) {
+                // 使用 CommandParser 解析函数定义
+                CommandASTNode ast = parse_command(definition);
+                if (ast.kind == CommandKind::kFunctionDefinition) {
+                    const FunctionDefinitionInfo* def = ast.as_function_definition();
+                    if (def) {
+                        std::vector<std::string> params;
+                        for (auto p : def->parameters) {
+                            params.emplace_back(p);
+                        }
+                        loaded_functions[std::string(def->name)] = {params, std::string(def->body)};
+                    }
+                } else {
                     throw std::runtime_error("invalid save file format");
                 }
-                loaded_functions[std::string(function_name)] = {std::string(parameter_name), std::string(body)};
                 continue;
             }
 
