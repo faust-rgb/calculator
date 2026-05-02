@@ -1,10 +1,10 @@
 #ifndef CALCULATOR_TRANSFORMS_H
 #define CALCULATOR_TRANSFORMS_H
 
-#include "symbolic_expression.h"
+#include "symbolic/symbolic_expression.h"
 #include <string>
 #include <functional>
-#include "../core/calculator_module.h"
+#include "core/calculator_module.h"
 
 namespace transforms {
 

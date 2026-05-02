@@ -20,12 +20,13 @@
 // 结果通过 LRU 缓存记忆，避免重复计算。
 // ============================================================================
 
-#include "symbolic_expression_internal.h"
+#include "symbolic/symbolic_expression_internal.h"
 
-#include "mymath.h"
+#include "math/mymath.h"
 
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace symbolic_expression_internal {
@@ -1115,10 +1116,29 @@ SymbolicExpression expand_impl(const SymbolicExpression& expression) {
             }
             return make_power(left, right).simplify();
         }
+        case NodeType::kVector: {
+            std::vector<SymbolicExpression> components;
+            for (const auto& child : node->children) {
+                components.push_back(expand_impl(SymbolicExpression(child)));
+            }
+            return SymbolicExpression::vector(components).simplify();
+        }
+        case NodeType::kTensor: {
+            std::vector<std::vector<SymbolicExpression>> rows;
+            for (const auto& row_node : node->children) {
+                std::vector<SymbolicExpression> row;
+                for (const auto& child : row_node->children) {
+                    row.push_back(expand_impl(SymbolicExpression(child)));
+                }
+                rows.push_back(std::move(row));
+            }
+            return SymbolicExpression::tensor(rows).simplify();
+        }
+        case NodeType::kDifferentialOp:
+            return expression;
     }
     return expression;
 }
 
 
 }  // namespace symbolic_expression_internal
-

@@ -34,9 +34,9 @@
 // 这些函数是 simplify.cpp 中简化规则的基础设施。
 // ============================================================================
 
-#include "symbolic_expression_internal.h"
+#include "symbolic/symbolic_expression_internal.h"
 
-#include "mymath.h"
+#include "math/mymath.h"
 
 #include <algorithm>
 #include <initializer_list>

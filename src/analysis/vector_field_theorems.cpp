@@ -2,10 +2,10 @@
 // 向量场定理实现
 // ============================================================================
 
-#include "vector_field_theorems.h"
-#include "calculator_integration.h"
-#include "multivariable_integrator.h"
-#include "mymath.h"
+#include "analysis/vector_field_theorems.h"
+#include "analysis/calculator_integration.h"
+#include "analysis/multivariable_integrator.h"
+#include "math/mymath.h"
 
 #include <cmath>
 #include <sstream>

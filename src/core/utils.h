@@ -1,6 +1,23 @@
 #ifndef CALCULATOR_UTILS_H
 #define CALCULATOR_UTILS_H
 
+// ============================================================================
+// 工具函数模块
+// ============================================================================
+//
+// 本头文件提供统一的工具函数接口，并包含以下子模块：
+// - string_utils.h: 字符串处理、标识符验证、字符串字面量
+// - format_utils.h: 数值和存储值格式化
+// - expression_utils.h: 表达式拆分、展开、级数处理
+//
+// 新代码可以直接包含 utils.h 获取所有功能，
+// 或按需包含具体的子模块头文件。
+// ============================================================================
+
+#include "core/string_utils.h"
+#include "core/format_utils.h"
+#include "core/expression_utils.h"
+
 #include <string>
 #include <string_view>
 #include <vector>
@@ -115,32 +132,9 @@ std::string encode_state_field(const std::string& text);
 std::string decode_state_field(const std::string& text);
 
 // ============================================================================
-// 表达式分割函数（逐步废弃，优先使用 CommandParser）
-// ============================================================================
-//
-// 以下函数已由 CommandParser 提供更完善的实现：
-// - split_assignment → CommandParser 解析 kAssignment
-// - split_named_call → CommandParser 解析 kFunctionCall
-// - split_function_definition → CommandParser 解析 kFunctionDefinition
-//
-// 建议新代码直接使用 CommandParser，以确保解析行为的一致性。
-// 这些函数保留用于向后兼容和特定场景的轻量级调用。
-// ============================================================================
-
-bool split_assignment(std::string_view expression, std::string_view* lhs, std::string_view* rhs);
-bool split_named_call(std::string_view expression, std::string_view name, std::string_view* inside);
-bool split_named_call(std::string_view expression, std::string_view name, std::string* inside);
-bool split_named_call_with_arguments(std::string_view expression, std::string_view name, std::vector<std::string_view>* arguments);
-std::vector<std::string_view> split_top_level_arguments_view(std::string_view text);
-std::vector<std::string> split_top_level_arguments(const std::string& text);
-
-// 指令展开
-bool is_inline_function_command_name(std::string_view name);
-std::size_t find_matching_paren(std::string_view text, std::size_t open_pos);
-std::string expand_inline_function_commands(Calculator* calculator, std::string_view expression);
-
 // 级数格式化
-/** @brief 获取级数基底文本 */
+// ============================================================================
+
 std::string shifted_series_base(const std::string& variable_name, double center);
 
 /** @brief 将广义级数系数转换为字符串 */

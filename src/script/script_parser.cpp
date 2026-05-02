@@ -7,8 +7,9 @@
  */
 
 #include "script_parser.h"
-#include "base_parser.h"
-#include "expression_compiler.h"
+#include "parser/base_parser.h"
+#include "command/expression_compiler.h"
+#include "parser/lazy_token_stream.h"
 #include "utils.h"
 
 #include <cctype>
@@ -34,6 +35,80 @@ std::shared_ptr<ExpressionCache> create_expression_cache(const std::string& expr
     cache->hint = analyze_expression_hint(expression);
     cache->features = analyze_expression_features(expression);
     return cache;
+}
+
+/**
+ * @brief 基于 Token 流的参数拆分（替代手动字符扫描）
+ * @param text 输入文本
+ * @param delimiter 分隔符
+ * @return 拆分后的参数列表
+ *
+ * 使用 LazyTokenStream 进行正确的词法分析，
+ * 自动处理字符串、注释和嵌套结构。
+ */
+std::vector<std::string> split_top_level_by_tokens(const std::string& text, char delimiter) {
+    std::vector<std::string> parts;
+    LazyTokenStream tokens(text);
+
+    std::size_t start_pos = 0;
+    int paren_depth = 0;
+    int bracket_depth = 0;
+    int brace_depth = 0;
+
+    while (!tokens.is_at_end()) {
+        ::Token tok = tokens.advance();
+
+        // 跟踪嵌套深度
+        switch (tok.kind) {
+            case TokenKind::kLParen:
+                paren_depth++;
+                break;
+            case TokenKind::kRParen:
+                if (paren_depth > 0) paren_depth--;
+                break;
+            case TokenKind::kLBracket:
+                bracket_depth++;
+                break;
+            case TokenKind::kRBracket:
+                if (bracket_depth > 0) bracket_depth--;
+                break;
+            case TokenKind::kLBrace:
+                brace_depth++;
+                break;
+            case TokenKind::kRBrace:
+                if (brace_depth > 0) brace_depth--;
+                break;
+            case TokenKind::kComma:
+                // 只在顶层拆分
+                if (paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 && delimiter == ',') {
+                    std::string part = text.substr(start_pos, tok.position - start_pos);
+                    parts.push_back(trim_copy(part));
+                    start_pos = tok.position + 1;
+                }
+                break;
+            case TokenKind::kSemicolon:
+                // 只在顶层拆分
+                if (paren_depth == 0 && bracket_depth == 0 && brace_depth == 0 && delimiter == ';') {
+                    std::string part = text.substr(start_pos, tok.position - start_pos);
+                    parts.push_back(trim_copy(part));
+                    start_pos = tok.position + 1;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    // 添加最后一个部分
+    if (start_pos < text.size()) {
+        std::string part = text.substr(start_pos);
+        parts.push_back(trim_copy(part));
+    } else if (!parts.empty() && delimiter == ',') {
+        // 尾部逗号情况
+        parts.push_back("");
+    }
+
+    return parts;
 }
 
 /**
@@ -246,75 +321,97 @@ private:
 };
 
 /**
- * @brief 辅助函数：拆分顶层文本
+ * @brief 辅助函数：拆分顶层文本（使用 Token 流实现）
+ *
+ * 保留旧函数签名以兼容，内部使用新的 Token 流实现。
  */
 std::vector<std::string> split_top_level_text(const std::string& text, char delimiter) {
-    std::vector<std::string> parts;
-    std::string current;
-    int paren_depth = 0;
-    int bracket_depth = 0;
-    bool in_string = false;
-    bool escaping = false;
-
-    for (std::size_t i = 0; i < text.size(); ++i) {
-        const char ch = text[i];
-        if (in_string) {
-            if (escaping) {
-                escaping = false;
-            } else if (ch == '\\') {
-                escaping = true;
-            } else if (ch == '"') {
-                in_string = false;
-            }
-            current += ch;
-        } else {
-            if (ch == '"') {
-                in_string = true;
-                current += ch;
-            } else if (ch == '(') {
-                paren_depth++;
-                current += ch;
-            } else if (ch == ')') {
-                paren_depth--;
-                current += ch;
-            } else if (ch == '[') {
-                bracket_depth++;
-                current += ch;
-            } else if (ch == ']') {
-                bracket_depth--;
-                current += ch;
-            } else if (ch == delimiter && paren_depth == 0 && bracket_depth == 0) {
-                parts.push_back(current);
-                current.clear();
-            } else {
-                current += ch;
-            }
-        }
-    }
-    parts.push_back(current);
-    return parts;
+    return split_top_level_by_tokens(text, delimiter);
 }
 
 /**
- * @brief 辅助函数：转换 Python 风格的 for 循环为 C 风格
+ * @brief 辅助函数：转换 Python 风格的 for 循环为 C 风格（使用纯 Token 流）
  */
 std::string translate_range_for(const std::string& header) {
-    const std::size_t in_pos = header.find(" in ");
-    if (in_pos == std::string::npos) {
+    // 使用 Token 流查找 "in" 关键字
+    LazyTokenStream tokens(header);
+    std::string variable;
+    std::string range_args_text;
+    bool found_in = false;
+
+    // 第一遍：找到变量名和 "in" 关键字
+    std::string last_identifier;
+    while (!tokens.is_at_end()) {
+        ::Token tok = tokens.advance();
+
+        if (tok.kind == TokenKind::kIdentifier) {
+            if (tok.text == "in" && !last_identifier.empty()) {
+                // 找到了 "in"，last_identifier 是循环变量
+                variable = last_identifier;
+                found_in = true;
+                break;
+            }
+            last_identifier = std::string(tok.text);
+        } else if (tok.kind != TokenKind::kEnd) {
+            // 重置（非标识符 token）
+            if (tok.kind != TokenKind::kLParen && tok.kind != TokenKind::kRParen) {
+                // 保留 last_identifier 以支持 "for i in range(...)" 格式
+            }
+        }
+    }
+
+    if (!found_in) {
         return header; // 可能是已经转换过的或者是 C 风格的 (init; cond; step)
     }
 
-    const std::string variable = trim_copy(header.substr(0, in_pos));
-    const std::string range_call = trim_copy(header.substr(in_pos + 4));
-    if (variable.empty() || range_call.rfind("range(", 0) != 0 || range_call.back() != ')') {
+    // 收集 "in" 之后的所有 token 直到末尾
+    std::vector<::Token> range_tokens;
+    while (!tokens.is_at_end()) {
+        ::Token tok = tokens.advance();
+        if (tok.kind == TokenKind::kEnd) break;
+        range_tokens.push_back(tok);
+    }
+
+    // 验证格式：应该是 "range(...)"
+    if (range_tokens.size() < 2 ||
+        range_tokens[0].kind != TokenKind::kIdentifier ||
+        range_tokens[0].text != "range" ||
+        range_tokens[1].kind != TokenKind::kLParen) {
         throw std::runtime_error("for expects 'name in range(...)'");
     }
 
-    std::vector<std::string> parts =
-        split_top_level_text(range_call.substr(6, range_call.size() - 7), ',');
-    for (std::string& part : parts) {
-        part = trim_copy(part);
+    // 找到右括号
+    if (range_tokens.back().kind != TokenKind::kRParen) {
+        throw std::runtime_error("for expects 'name in range(...)'");
     }
+
+    // 提取 range 参数（跳过 "range(" 和最后的 ")"）
+    std::vector<std::string> parts;
+    std::string current_arg;
+    int paren_depth = 0;
+
+    for (std::size_t i = 2; i < range_tokens.size() - 1; ++i) {
+        const ::Token& tok = range_tokens[i];
+
+        if (tok.kind == TokenKind::kLParen) {
+            paren_depth++;
+            current_arg += "(";
+        } else if (tok.kind == TokenKind::kRParen) {
+            paren_depth--;
+            current_arg += ")";
+        } else if (tok.kind == TokenKind::kComma && paren_depth == 0) {
+            parts.push_back(trim_copy(current_arg));
+            current_arg.clear();
+        } else {
+            current_arg += std::string(tok.text);
+        }
+    }
+
+    // 添加最后一个参数
+    if (!current_arg.empty() || !parts.empty()) {
+        parts.push_back(trim_copy(current_arg));
+    }
+
     if (parts.empty() || parts.size() > 3) {
         throw std::runtime_error("range expects stop, start/stop, or start/stop/step");
     }
@@ -333,7 +430,7 @@ std::string translate_range_for(const std::string& header) {
         throw std::runtime_error("range arguments cannot be empty");
     }
 
-    const std::string comparison = (step.size() > 0 && step[0] == '-') ? " > " : " < ";
+    const std::string comparison = (!step.empty() && step[0] == '-') ? " > " : " < ";
     return variable + " = " + start + "; " + variable + comparison + stop + "; " +
            variable + " = " + variable + " + " + step;
 }

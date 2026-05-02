@@ -22,7 +22,7 @@ class VariableResolver;
 struct CustomFunction;
 struct StoredValue;
 
-// 回调类型定义
+// 回调类型定义（来自 types/function.h）
 using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
 using InvokeScriptFunctionDecimalCallback = std::function<double(const std::string&, const std::vector<double>&)>;
 

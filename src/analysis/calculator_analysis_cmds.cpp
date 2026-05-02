@@ -2,12 +2,13 @@
 // 函数分析命令实现
 // ============================================================================
 
-#include "calculator_analysis_cmds.h"
-#include "calculator_symbolic_commands.h"
-#include "symbolic_expression_internal.h"
-#include "function_analysis.h"
-#include "utils.h"
-#include "mymath.h"
+#include "analysis/calculator_analysis_cmds.h"
+#include "symbolic/calculator_symbolic_commands.h"
+#include "symbolic/symbolic_expression_internal.h"
+#include "analysis/function_analysis.h"
+#include "core/utils.h"
+#include "math/mymath.h"
+#include "math/helpers/integer_helpers.h"
 #include <algorithm>
 #include <sstream>
 #include <iterator>
@@ -268,16 +269,6 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                     throw std::runtime_error("gradient is not numeric at this point");
                 }
                 return numeric;
-            };
-
-            auto eval_expr_at = [&](const std::map<std::string, double>& point) {
-                SymbolicExpression current = expr;
-                for (const auto& [name, value] : point) {
-                    current = current.substitute(name, SymbolicExpression::number(value)).simplify();
-                }
-                double numeric = 0.0;
-                if (current.is_number(&numeric)) return numeric;
-                return 0.0;
             };
 
             auto gradient_norm_at = [&](const std::map<std::string, double>& point) {

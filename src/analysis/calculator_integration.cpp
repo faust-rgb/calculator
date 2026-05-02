@@ -2,13 +2,14 @@
 // 多重积分命令实现
 // ============================================================================
 
-#include "calculator_integration.h"
-#include "calculator_internal_types.h"
-#include "mymath.h"
-#include "multidim_integration.h"
-#include "multivariable_integrator.h"
-#include "vector_field_theorems.h"
-#include "utils.h"
+#include "analysis/calculator_integration.h"
+#include "core/calculator_internal_types.h"
+#include "math/mymath.h"
+#include "math/helpers/integer_helpers.h"
+#include "analysis/multidim_integration.h"
+#include "analysis/multivariable_integrator.h"
+#include "analysis/vector_field_theorems.h"
+#include "core/utils.h"
 
 #include <stdexcept>
 #include <vector>
@@ -188,6 +189,8 @@ double double_integral_polar(
     const std::string& theta_var, double theta0, double theta1,
     const std::string& r_var, const std::string& r0_expr, const std::string& r1_expr,
     int ntheta, int nr, const std::string& method, double tol) {
+    (void)method;
+    (void)tol;
     const auto evaluate_expression = ctx.build_scoped_evaluator(expr);
     const MultivariableIntegrator integrator(
         [evaluate_expression, theta_var, r_var](const std::vector<double>& point) {
@@ -242,6 +245,8 @@ double triple_integral(const IntegrationContext& ctx, const std::string& expr, c
 }
 
 double triple_integral_cyl(const IntegrationContext& ctx, const std::string& expr, const std::string& t_v, double t0, double t1, const std::string& r_v, const std::string& r0_e, const std::string& r1_e, const std::string& z_v, const std::string& z0_e, const std::string& z1_e, int nt, int nr, int nz, const std::string& method, double tol) {
+    (void)method;
+    (void)tol;
     const auto evaluate_expression = ctx.build_scoped_evaluator(expr);
     const MultivariableIntegrator integrator([evaluate_expression, t_v, r_v, z_v](const std::vector<double>& pt) { 
         double t = pt[0], r = pt[1], z = pt[2];
@@ -259,6 +264,8 @@ double triple_integral_cyl(const IntegrationContext& ctx, const std::string& exp
 }
 
 double triple_integral_sph(const IntegrationContext& ctx, const std::string& expr, const std::string& t_v, double t0, double t1, const std::string& p_v, double p0, double p1, const std::string& r_v, const std::string& r0_e, const std::string& r1_e, int nt, int np, int nr, const std::string& method, double tol) {
+    (void)method;
+    (void)tol;
     const auto evaluate_expression = ctx.build_scoped_evaluator(expr);
     const MultivariableIntegrator integrator([evaluate_expression, t_v, p_v, r_v](const std::vector<double>& pt) {
         double t = pt[0], p = pt[1], r = pt[2], sp = mymath::sin(p);

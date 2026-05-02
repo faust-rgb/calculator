@@ -2,7 +2,7 @@
 // 多重积分器实现
 // ============================================================================
 
-#include "multivariable_integrator.h"
+#include "analysis/multivariable_integrator.h"
 
 #include <stdexcept>
 #include <utility>

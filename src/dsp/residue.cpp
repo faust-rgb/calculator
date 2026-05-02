@@ -14,6 +14,7 @@ namespace dsp_ops {
 std::string handle_residue_command(const std::string& command,
                                    const std::string& inside,
                                    const CoreServices& svc) {
+    (void)command;
     std::vector<std::string> arguments = split_top_level_arguments(inside);
     if (arguments.size() != 3) {
         throw DimensionError("residue(expression, variable, point) expects 3 arguments");

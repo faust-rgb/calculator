@@ -12,7 +12,7 @@
 
 #include "matrix.h"
 #include "matrix_internal.h"
-#include "base_parser.h"
+#include "parser/base_parser.h"
 #include "statistics/calculator_statistics.h"
 #include "statistics/probability.h"
 #include "utils.h"
@@ -557,7 +557,7 @@ private:
             const std::string name(parse_identifier());
             skip_spaces();
 
-            if (peek('(')) {
+            if (peek() == '(') {
                 if (is_matrix_function(name)) {
                     return parse_matrix_function(name);
                 }
@@ -1701,7 +1701,7 @@ private:
         // 以及嵌套表达式都能安全保留原样后续再递归求值。
         std::vector<std::string> arguments;
         skip_spaces();
-        if (peek(')')) {
+        if (peek() == ')') {
             return arguments;
         }
 
@@ -1846,7 +1846,7 @@ private:
     double parse_scalar_literal() {
         const std::size_t start = pos_;
 
-        if (peek('0') && pos_ + 1 < source_.size()) {
+        if (peek() == '0' && pos_ + 1 < source_.size()) {
             const char next = source_[pos_ + 1];
             if (next == 'b' || next == 'B' ||
                 next == 'o' || next == 'O' ||

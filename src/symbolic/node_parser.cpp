@@ -28,10 +28,10 @@
 //    - 线程局部存储，避免锁竞争
 // ============================================================================
 
-#include "symbolic_expression_internal.h"
+#include "symbolic/symbolic_expression_internal.h"
 
-#include "mymath.h"
-#include "mymath_dual.h"
+#include "math/mymath.h"
+#include "math/mymath_dual.h"
 
 #include <algorithm>
 #include <cctype>
@@ -46,7 +46,7 @@
 
 #include <mutex>
 
-#include "base_parser.h"
+#include "parser/base_parser.h"
 
 namespace symbolic_expression_internal {
 
@@ -360,6 +360,9 @@ int precedence(const std::shared_ptr<SymbolicExpression::Node>& node) {
         case NodeType::kPi:
         case NodeType::kE:
         case NodeType::kInfinity:
+        case NodeType::kVector:
+        case NodeType::kTensor:
+        case NodeType::kDifferentialOp:
             return 5;
     }
     return 5;
@@ -440,6 +443,27 @@ std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node
         case NodeType::kPower:
             text = to_string_impl(node->left, precedence(node)) + " ^ " +
                    to_string_impl(node->right, precedence(node));
+            break;
+        case NodeType::kVector: {
+            text = "[";
+            for (std::size_t i = 0; i < node->children.size(); ++i) {
+                if (i != 0) text += ", ";
+                text += to_string_impl(node->children[i], 0);
+            }
+            text += "]";
+            break;
+        }
+        case NodeType::kTensor: {
+            text = "[";
+            for (std::size_t i = 0; i < node->children.size(); ++i) {
+                if (i != 0) text += "; ";
+                text += to_string_impl(node->children[i], 0);
+            }
+            text += "]";
+            break;
+        }
+        case NodeType::kDifferentialOp:
+            text = node->text + "(" + to_string_impl(node->left, 0) + ")";
             break;
     }
 
@@ -887,6 +911,37 @@ SymbolicExpression substitute_impl(const SymbolicExpression& expression,
                                                    replacement)
                                        .node_))
                 .simplify();
+        case NodeType::kVector: {
+            std::vector<SymbolicExpression> components;
+            for (const auto& child : node->children) {
+                components.push_back(substitute_impl(SymbolicExpression(child),
+                                                     variable_name,
+                                                     replacement));
+            }
+            return SymbolicExpression::vector(components).simplify();
+        }
+        case NodeType::kTensor: {
+            std::vector<std::vector<SymbolicExpression>> rows;
+            for (const auto& row_node : node->children) {
+                std::vector<SymbolicExpression> row;
+                for (const auto& child : row_node->children) {
+                    row.push_back(substitute_impl(SymbolicExpression(child),
+                                                  variable_name,
+                                                  replacement));
+                }
+                rows.push_back(std::move(row));
+            }
+            return SymbolicExpression::tensor(rows).simplify();
+        }
+        case NodeType::kDifferentialOp:
+            return SymbolicExpression(
+                       make_unary(NodeType::kDifferentialOp,
+                                  substitute_impl(SymbolicExpression(node->left),
+                                                  variable_name,
+                                                  replacement)
+                                      .node_,
+                                  node->text))
+                .simplify();
     }
     throw std::runtime_error("unsupported symbolic substitution");
 }
@@ -937,6 +992,37 @@ SymbolicExpression substitute_expression_impl(const SymbolicExpression& expressi
                                                               target,
                                                               replacement)
                                        .node_))
+                .simplify();
+        case NodeType::kVector: {
+            std::vector<SymbolicExpression> components;
+            for (const auto& child : node->children) {
+                components.push_back(substitute_expression_impl(SymbolicExpression(child),
+                                                                target,
+                                                                replacement));
+            }
+            return SymbolicExpression::vector(components).simplify();
+        }
+        case NodeType::kTensor: {
+            std::vector<std::vector<SymbolicExpression>> rows;
+            for (const auto& row_node : node->children) {
+                std::vector<SymbolicExpression> row;
+                for (const auto& child : row_node->children) {
+                    row.push_back(substitute_expression_impl(SymbolicExpression(child),
+                                                             target,
+                                                             replacement));
+                }
+                rows.push_back(std::move(row));
+            }
+            return SymbolicExpression::tensor(rows).simplify();
+        }
+        case NodeType::kDifferentialOp:
+            return SymbolicExpression(
+                       make_unary(NodeType::kDifferentialOp,
+                                  substitute_expression_impl(SymbolicExpression(node->left),
+                                                             target,
+                                                             replacement)
+                                      .node_,
+                                  node->text))
                 .simplify();
     }
     throw std::runtime_error("unsupported symbolic substitution");
@@ -1005,6 +1091,9 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                 case NodeType::kVariable:
                 case NodeType::kNegate:
                 case NodeType::kFunction:
+                case NodeType::kVector:
+                case NodeType::kTensor:
+                case NodeType::kDifferentialOp:
                     break;
             }
             return false;
@@ -1121,6 +1210,10 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
             }
             return false;
         }
+        case NodeType::kVector:
+        case NodeType::kTensor:
+        case NodeType::kDifferentialOp:
+            return false;
     }
     return false;
 }
@@ -1207,6 +1300,9 @@ bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& nod
                 case NodeType::kVariable:
                 case NodeType::kNegate:
                 case NodeType::kFunction:
+                case NodeType::kVector:
+                case NodeType::kTensor:
+                case NodeType::kDifferentialOp:
                     break;
             }
             return false;
@@ -1331,6 +1427,10 @@ bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& nod
             }
             return false;
         }
+        case NodeType::kVector:
+        case NodeType::kTensor:
+        case NodeType::kDifferentialOp:
+            return false;
     }
     return false;
 }
@@ -1414,6 +1514,16 @@ bool SymbolicExpression::is_constant(const std::string& variable_name) const {
         case NodeType::kPower:
             return SymbolicExpression(node_->left).is_constant(variable_name) &&
                    SymbolicExpression(node_->right).is_constant(variable_name);
+        case NodeType::kVector:
+        case NodeType::kTensor:
+            for (const auto& child : node_->children) {
+                if (!SymbolicExpression(child).is_constant(variable_name)) {
+                    return false;
+                }
+            }
+            return true;
+        case NodeType::kDifferentialOp:
+            return SymbolicExpression(node_->left).is_constant(variable_name);
     }
     return false;
 }

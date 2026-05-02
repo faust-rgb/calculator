@@ -7,12 +7,13 @@
 
 #include "expression_ast.h"
 #include "expression_compiler.h"
-#include "base_parser.h"
+#include "parser/base_parser.h"
 #include "calculator_exceptions.h"
 #include "calculator_internal_types.h"
 #include "decimal_parser.h"
 #include "mymath.h"
 #include "variable_resolver.h"
+#include "parser/lazy_token_stream.h"
 
 #include <algorithm>
 #include <cmath>
@@ -31,68 +32,60 @@
  * @brief 将表达式字符串编译为 AST
  */
 class ASTCompiler {
-public:
-    ASTCompiler(const std::string& source) {
-        ExpressionLexer lexer(source);
-        if (!lexer.tokenize(&tokens_)) {
-            // Lexical error handled via parsing failure below
-        }
+	public:
+    ASTCompiler(const std::string& source) : tokens_(source) {
     }
 
     std::unique_ptr<ExpressionAST> compile() {
-        if (tokens_.empty() || tokens_[0].kind == ExpressionTokenKind::kEOF) {
+        if (tokens_.is_at_end()) {
             return nullptr;
         }
         auto ast = parse_comparison();
-        if (!is_at_end()) {
-            throw_syntax_error("unexpected token near: " + peek_token().text);
+        if (!tokens_.is_at_end()) {
+            throw_syntax_error("unexpected token near: " + std::string(tokens_.peek().text));
         }
         return ast;
     }
 
 private:
-    std::vector<ExpressionToken> tokens_;
-    std::size_t pos_ = 0;
+    LazyTokenStream tokens_;
 
     bool is_at_end() const {
-        return pos_ >= tokens_.size() || tokens_[pos_].kind == ExpressionTokenKind::kEOF;
+        return tokens_.is_at_end();
     }
 
-    const ExpressionToken& peek_token() const {
-        return tokens_[pos_];
+    const Token& peek_token() {
+        return tokens_.peek();
     }
 
-    ExpressionToken advance_token() {
-        if (!is_at_end()) {
-            return tokens_[pos_++];
-        }
-        return tokens_.back();
+    Token advance_token() {
+        return tokens_.advance();
     }
 
-    bool match_operator(const std::string& op) {
-        if (!is_at_end() && peek_token().kind == ExpressionTokenKind::kOperator && peek_token().text == op) {
-            advance_token();
+    bool match_operator(std::string_view op) {
+        if (!tokens_.is_at_end() && tokens_.peek().kind == TokenKind::kOperator && tokens_.peek().text == op) {
+            tokens_.advance();
             return true;
         }
         return false;
     }
 
-    bool match_kind(ExpressionTokenKind kind) {
-        if (!is_at_end() && peek_token().kind == kind) {
-            advance_token();
+    bool match_kind(TokenKind kind) {
+        if (!tokens_.is_at_end() && tokens_.peek().kind == kind) {
+            tokens_.advance();
             return true;
         }
         return false;
     }
 
-    void expect_kind(ExpressionTokenKind kind, const std::string& msg) {
+    void expect_kind(TokenKind kind, const std::string& msg) {
         if (!match_kind(kind)) {
             throw_syntax_error(msg);
         }
     }
 
-    [[noreturn]] void throw_syntax_error(const std::string& message) const {
-        std::size_t error_pos = is_at_end() ? (tokens_.empty() ? 0 : tokens_.back().position) : peek_token().position;
+    [[noreturn]] void throw_syntax_error(const std::string& message) {
+        std::size_t error_pos = tokens_.is_at_end() ? 0 : tokens_.peek().position;
         std::ostringstream oss;
         oss << message << " at position " << error_pos;
         throw SyntaxError(oss.str());
@@ -181,7 +174,7 @@ private:
         if (match_operator("+")) {
             return parse_unary();
         }
-        if (!is_at_end() && peek_token().kind == ExpressionTokenKind::kOperator && peek_token().text == "-") {
+        if (!is_at_end() && peek_token().kind == TokenKind::kOperator && peek_token().text == "-") {
             std::size_t pos = peek_token().position;
             advance_token();
             auto operand = parse_unary();
@@ -199,28 +192,28 @@ private:
         const auto& tok = peek_token();
 
         // 括号表达式
-        if (match_kind(ExpressionTokenKind::kLParen)) {
+        if (match_kind(TokenKind::kLParen)) {
             auto expr = parse_comparison();
-            expect_kind(ExpressionTokenKind::kRParen, "expected ')' after expression");
+            expect_kind(TokenKind::kRParen, "expected ')' after expression");
             return expr;
         }
 
         // 标识符或函数调用
-        if (tok.kind == ExpressionTokenKind::kIdentifier) {
-            std::string name = tok.text;
+        if (tok.kind == TokenKind::kIdentifier) {
+            std::string name(tok.text);
             std::size_t pos = tok.position;
             advance_token();
 
             // 函数调用
-            if (match_kind(ExpressionTokenKind::kLParen)) {
+            if (match_kind(TokenKind::kLParen)) {
                 std::vector<std::unique_ptr<ExpressionAST>> args;
-                if (!is_at_end() && peek_token().kind != ExpressionTokenKind::kRParen) {
+                if (!is_at_end() && peek_token().kind != TokenKind::kRParen) {
                     while (true) {
                         args.push_back(parse_comparison());
-                        if (!match_kind(ExpressionTokenKind::kComma)) break;
+                        if (!match_kind(TokenKind::kComma)) break;
                     }
                 }
-                expect_kind(ExpressionTokenKind::kRParen, "expected ')' after arguments");
+                expect_kind(TokenKind::kRParen, "expected ')' after arguments");
 
                 auto node = std::make_unique<ExpressionAST>(ExprKind::kFunctionCall);
                 node->identifier = name;
@@ -237,16 +230,16 @@ private:
         }
 
         // 数字字面量
-        if (tok.kind == ExpressionTokenKind::kNumber) {
+        if (tok.kind == TokenKind::kNumber) {
             auto node = std::make_unique<ExpressionAST>(ExprKind::kNumber);
             node->number_value = tok.number_value;
-            node->string_value = tok.text;
+            node->string_value = std::string(tok.text);
             node->position = tok.position;
             advance_token();
             return node;
         }
 
-        throw_syntax_error("unexpected token: " + tok.text);
+        throw_syntax_error("unexpected token: " + std::string(tok.text));
     }
 };
 

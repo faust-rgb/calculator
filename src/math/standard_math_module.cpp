@@ -1,5 +1,6 @@
 #include "standard_math_module.h"
 #include "mymath.h"
+#include "math/helpers/integer_helpers.h"
 #include "../core/calculator_exceptions.h"
 #include "../core/calculator_internal_types.h"
 #include "../core/utils.h"
@@ -11,19 +12,10 @@
 #include <map>
 
 // 辅助函数声明
-long long round_to_long_long(double x);
-long long floor_to_long_long(double x);
 double degrees_to_radians(double value);
 double radians_to_degrees(double value);
 double celsius_to_fahrenheit(double value);
 double fahrenheit_to_celsius(double value);
-
-namespace {
-long long require_integer(double val, const std::string& name, const std::string& func) {
-    if (!is_integer_double(val)) throw MathError(func + " requires integer " + name);
-    return round_to_long_long(val);
-}
-}
 
 std::map<std::string, std::function<double(const std::vector<double>&)>> 
 StandardMathModule::get_scalar_functions() const {

@@ -10,9 +10,9 @@
 // - 修正单纯形：使用矩阵求逆更新，O(m²) 每次迭代
 // - 有界变量处理：支持上下界约束
 
-#include "calculator_simplex.h"
+#include "analysis/calculator_simplex.h"
 
-#include "mymath.h"
+#include "math/mymath.h"
 
 #include <algorithm>
 #include <stdexcept>

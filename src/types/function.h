@@ -9,11 +9,33 @@
 #ifndef TYPES_FUNCTION_H
 #define TYPES_FUNCTION_H
 
-#include "script_ast.h"
-
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
+
+namespace script {
+struct BlockStatement;
+}
+
+// ============================================================================
+// 回调类型定义（统一放置，避免重复定义）
+// ============================================================================
+
+/**
+ * @brief 检查脚本函数是否存在的回调类型
+ */
+using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
+
+/**
+ * @brief 调用脚本函数的回调类型（返回 double）
+ */
+using InvokeScriptFunctionDecimalCallback =
+    std::function<double(const std::string&, const std::vector<double>&)>;
+
+// ============================================================================
+// 用户函数结构
+// ============================================================================
 
 /**
  * @struct CustomFunction

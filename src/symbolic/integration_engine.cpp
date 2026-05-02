@@ -2,9 +2,9 @@
 // 积分引擎实现
 // ============================================================================
 
-#include "integration_engine.h"
-#include "symbolic_expression_internal.h"
-#include "mymath.h"
+#include "symbolic/integration_engine.h"
+#include "symbolic/symbolic_expression_internal.h"
+#include "math/mymath.h"
 
 #include <algorithm>
 

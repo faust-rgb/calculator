@@ -2,10 +2,10 @@
 // 优化辅助函数实现
 // ============================================================================
 
-#include "optimization_helpers.h"
-#include "calculator_simplex.h"
+#include "analysis/optimization_helpers.h"
+#include "analysis/calculator_simplex.h"
 
-#include "mymath.h"
+#include "math/mymath.h"
 
 #include <algorithm>
 #include <queue>

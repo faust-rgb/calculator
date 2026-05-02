@@ -28,9 +28,9 @@
 // 并应用相应的变换公式。
 // ============================================================================
 
-#include "symbolic_expression_internal.h"
+#include "symbolic/symbolic_expression_internal.h"
 
-#include "mymath.h"
+#include "math/mymath.h"
 
 #include <functional>
 #include <stdexcept>
@@ -449,6 +449,9 @@ bool apply_linear_transform_rules(
         case NodeType::kE:
         case NodeType::kInfinity:
         case NodeType::kVariable:
+        case NodeType::kVector:
+        case NodeType::kTensor:
+        case NodeType::kDifferentialOp:
         case NodeType::kDivide:
         case NodeType::kPower:
         case NodeType::kFunction:
@@ -607,6 +610,9 @@ SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
         case NodeType::kE:
         case NodeType::kInfinity:
         case NodeType::kVariable:
+        case NodeType::kVector:
+        case NodeType::kTensor:
+        case NodeType::kDifferentialOp:
             break;
     }
 
@@ -845,6 +851,9 @@ SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expr
         case NodeType::kE:
         case NodeType::kInfinity:
         case NodeType::kVariable:
+        case NodeType::kVector:
+        case NodeType::kTensor:
+        case NodeType::kDifferentialOp:
         case NodeType::kPower:
             break;
     }
@@ -1339,6 +1348,9 @@ SymbolicExpression fourier_transform_impl(const SymbolicExpression& expression,
         case NodeType::kE:
         case NodeType::kInfinity:
         case NodeType::kVariable:
+        case NodeType::kVector:
+        case NodeType::kTensor:
+        case NodeType::kDifferentialOp:
         case NodeType::kPower:
             break;
     }
@@ -1516,6 +1528,9 @@ SymbolicExpression inverse_fourier_transform_impl(const SymbolicExpression& expr
         case NodeType::kE:
         case NodeType::kInfinity:
         case NodeType::kVariable:
+        case NodeType::kVector:
+        case NodeType::kTensor:
+        case NodeType::kDifferentialOp:
         case NodeType::kPower:
             break;
     }
@@ -1679,6 +1694,9 @@ SymbolicExpression z_transform_impl(const SymbolicExpression& expression,
         case NodeType::kE:
         case NodeType::kInfinity:
         case NodeType::kVariable:
+        case NodeType::kVector:
+        case NodeType::kTensor:
+        case NodeType::kDifferentialOp:
             break;
         case NodeType::kPower: {
             const SymbolicExpression base(simplified.node_->left);
@@ -1891,6 +1909,9 @@ SymbolicExpression inverse_z_transform_impl(const SymbolicExpression& expression
         case NodeType::kE:
         case NodeType::kInfinity:
         case NodeType::kVariable:
+        case NodeType::kVector:
+        case NodeType::kTensor:
+        case NodeType::kDifferentialOp:
         case NodeType::kPower:
             break;
     }

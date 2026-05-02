@@ -8,9 +8,9 @@
 // - secant: 割线法求根
 // - fixed_point: 不动点迭代
 
-#include "calculator_rootfinding.h"
+#include "analysis/calculator_rootfinding.h"
 
-#include "mymath.h"
+#include "math/mymath.h"
 
 #include <algorithm>
 #include <vector>

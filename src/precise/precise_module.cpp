@@ -3,7 +3,7 @@
 // ============================================================================
 
 #include "precise_module.h"
-#include "types/precise_decimal.h"
+#include "precise_decimal.h"
 #include "precise_parser.h"
 #include "core/calculator_exceptions.h"
 

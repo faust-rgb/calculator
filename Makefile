@@ -11,23 +11,28 @@ TEST_APP := $(BIN_DIR)/calculator_tests
 SRC_DIR := src
 TEST_DIR := test
 TEST_SUITE_DIR := $(TEST_DIR)/suites
-SRC_DIRS := $(SRC_DIR)/app $(SRC_DIR)/core $(SRC_DIR)/math $(SRC_DIR)/matrix $(SRC_DIR)/analysis $(SRC_DIR)/polynomial $(SRC_DIR)/symbolic $(SRC_DIR)/script $(SRC_DIR)/statistics $(SRC_DIR)/dsp $(SRC_DIR)/plot $(SRC_DIR)/types $(SRC_DIR)/precise $(SRC_DIR)/parser $(SRC_DIR)/math/helpers
+SRC_DIRS := $(SRC_DIR)/app $(SRC_DIR)/core $(SRC_DIR)/math $(SRC_DIR)/matrix $(SRC_DIR)/analysis $(SRC_DIR)/polynomial $(SRC_DIR)/symbolic $(SRC_DIR)/script $(SRC_DIR)/statistics $(SRC_DIR)/dsp $(SRC_DIR)/plot $(SRC_DIR)/types $(SRC_DIR)/precise $(SRC_DIR)/parser $(SRC_DIR)/math/helpers $(SRC_DIR)/module $(SRC_DIR)/command
 INCLUDES := -I$(SRC_DIR) $(addprefix -I,$(SRC_DIRS)) -I$(TEST_DIR)
 CPPFLAGS += $(INCLUDES) -MMD -MP
 
 MAIN_SRC := $(SRC_DIR)/app/main.cpp
-COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
+COMMON_SRCS := $(SRC_DIR)/core/calculator_core.cpp \
 	$(SRC_DIR)/script/script_signal.cpp \
-	$(SRC_DIR)/core/variable_resolver.cpp \
+	$(SRC_DIR)/command/variable_resolver.cpp \
 	$(SRC_DIR)/core/utils.cpp \
-	$(SRC_DIR)/core/calculator_basic_commands.cpp \
 	$(SRC_DIR)/core/calculator_help.cpp \
-	$(SRC_DIR)/core/system_module.cpp \
-	$(SRC_DIR)/core/expression_compiler.cpp \
-	$(SRC_DIR)/core/expression_ast.cpp \
+	$(SRC_DIR)/module/system_module.cpp \
+	$(SRC_DIR)/command/expression_compiler.cpp \
+	$(SRC_DIR)/command/expression_ast.cpp \
 	$(SRC_DIR)/core/calculator_service_factory.cpp \
-	$(SRC_DIR)/core/module_registration.cpp \
-	$(SRC_DIR)/core/command_parser.cpp \
+	$(SRC_DIR)/module/module_registration.cpp \
+	$(SRC_DIR)/module/calculator_module.cpp \
+	$(SRC_DIR)/parser/command_parser.cpp \
+		$(SRC_DIR)/parser/lazy_token_stream.cpp \
+		$(SRC_DIR)/parser/syntax_validator.cpp \
+		$(SRC_DIR)/parser/unified_parser_factory.cpp \
+		$(SRC_DIR)/parser/unified_expression_parser.cpp \
+		$(SRC_DIR)/command/command_registry.cpp \
 	$(SRC_DIR)/precise/rational.cpp \
 	$(SRC_DIR)/precise/precise_decimal.cpp \
 	$(SRC_DIR)/precise/precise_parser.cpp \
@@ -41,9 +46,7 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_lifecycle.cpp \
 	$(SRC_DIR)/math/helpers/unit_conversions.cpp \
 	$(SRC_DIR)/math/helpers/base_conversions.cpp \
 	$(SRC_DIR)/script/script_runtime.cpp \
-	$(SRC_DIR)/core/calculator_commands.cpp \
 	$(SRC_DIR)/analysis/calculator_simplex.cpp \
-	$(SRC_DIR)/core/calculator_state_persistence.cpp \
 	$(SRC_DIR)/math/mymath.cpp \
 	$(SRC_DIR)/math/mymath_special_functions.cpp \
 	$(SRC_DIR)/math/standard_math_module.cpp \
@@ -131,7 +134,6 @@ COMMON_HDRS := $(SRC_DIR)/core/calculator.h \
 	$(SRC_DIR)/polynomial/polynomial.h \
 	$(SRC_DIR)/script/script_parser.h \
 	$(SRC_DIR)/script/script_ast.h \
-	$(SRC_DIR)/dsp/dsp.h \
 	$(SRC_DIR)/dsp/calculator_signal_commands.h \
 	$(SRC_DIR)/plot/plot_renderer.h \
 	$(SRC_DIR)/plot/calculator_plot.h \

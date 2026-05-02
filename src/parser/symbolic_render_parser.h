@@ -3,7 +3,7 @@
 
 #include <string>
 #include <map>
-#include "../core/variable_resolver.h"
+#include "../command/variable_resolver.h"
 
 /**
  * @class SymbolicRenderParser

@@ -2,10 +2,11 @@
 // 精确小数表达式解析器
 // ============================================================================
 
-#include "types/precise_decimal.h"
+#include "precise_decimal.h"
 #include "types/stored_value.h"
-#include "core/base_parser.h"
+#include "parser/base_parser.h"
 #include "core/calculator_exceptions.h"
+#include "math/helpers/base_conversions.h"
 #include "math/mymath.h"
 
 #include <algorithm>

@@ -2,9 +2,9 @@
 // 常微分方程求解器实现
 // ============================================================================
 
-#include "ode_solver.h"
+#include "analysis/ode_solver.h"
 
-#include "mymath.h"
+#include "math/mymath.h"
 
 #include <algorithm>
 #include <stdexcept>

@@ -26,11 +26,11 @@
 // 积分结果使用 LRU 缓存加速重复计算。
 // ============================================================================
 
-#include "symbolic_expression_internal.h"
-#include "symbolic_polynomial.h"
+#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/symbolic_polynomial.h"
 
-#include "mymath.h"
-#include "polynomial.h"
+#include "math/mymath.h"
+#include "polynomial/polynomial.h"
 
 #include <algorithm>
 #include <list>
@@ -2728,6 +2728,26 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
             }
             throw std::runtime_error("symbolic derivative does not support function: " + node_->text);
         }
+        case NodeType::kVector: {
+            std::vector<SymbolicExpression> components;
+            for (const auto& child : node_->children) {
+                components.push_back(SymbolicExpression(child).derivative(variable_name));
+            }
+            return SymbolicExpression::vector(components).simplify();
+        }
+        case NodeType::kTensor: {
+            std::vector<std::vector<SymbolicExpression>> rows;
+            for (const auto& row_node : node_->children) {
+                std::vector<SymbolicExpression> row;
+                for (const auto& child : row_node->children) {
+                    row.push_back(SymbolicExpression(child).derivative(variable_name));
+                }
+                rows.push_back(std::move(row));
+            }
+            return SymbolicExpression::tensor(rows).simplify();
+        }
+        case NodeType::kDifferentialOp:
+            throw std::runtime_error("symbolic derivative does not support differential operator: " + node_->text);
     }
     throw std::runtime_error("unsupported symbolic derivative");
 }
@@ -3026,6 +3046,9 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
         case NodeType::kPower:
         case NodeType::kFunction:
         case NodeType::kDivide:
+        case NodeType::kVector:
+        case NodeType::kTensor:
+        case NodeType::kDifferentialOp:
             break;
     }
 

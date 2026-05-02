@@ -21,7 +21,7 @@
 #include "matrix/matrix_module.h"
 #include "precise/precise_module.h"
 #include "statistics/statistics_module.h"
-#include "core/system_module.h"
+#include "module/system_module.h"
 
 // 分析模块
 #include "analysis/calculator_series.h"

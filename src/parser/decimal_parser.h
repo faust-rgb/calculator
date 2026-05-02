@@ -6,16 +6,13 @@
 #include <vector>
 #include <map>
 #include <functional>
-#include "../core/variable_resolver.h"
+#include "../command/variable_resolver.h"
+#include "../types/function.h"
 
 #include "matrix.h"
 
-/** @brief 检查脚本函数是否存在的回调类型 */
-using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
-
-/** @brief 调用脚本函数的回调类型 */
-using InvokeScriptFunctionDecimalCallback =
-    std::function<double(const std::string&, const std::vector<double>&)>;
+// 回调类型定义（来自 types/function.h）
+// HasScriptFunctionCallback 和 InvokeScriptFunctionDecimalCallback 已在 function.h 中定义
 
 /**
  * @class DecimalParser

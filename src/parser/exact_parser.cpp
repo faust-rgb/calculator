@@ -1,8 +1,12 @@
 #include "exact_parser.h"
 #include "calculator_internal_types.h"
-#include "base_parser.h"
+#include "parser/base_parser.h"
 #include "mymath.h"
-#include "expression_compiler.h"
+#include "command/expression_compiler.h"
+#include "math/helpers/base_conversions.h"
+#include "math/helpers/bitwise_helpers.h"
+#include "math/helpers/combinatorics.h"
+#include "math/helpers/integer_helpers.h"
 #include <algorithm>
 #include <cctype>
 #include <sstream>
@@ -453,6 +457,12 @@ Rational apply_function(const std::string& name,
     throw_ast_error<ExactModeUnsupported>("function " + name + " is not supported exactly", pos);
 }
 
+} // namespace
+
+// ============================================================================
+// 公开的精确 AST 求值函数
+// ============================================================================
+
 Rational evaluate_ast_exact(const ExpressionAST* ast,
                             const VariableResolver& variables,
                             const std::map<std::string, CustomFunction>* functions,
@@ -466,7 +476,7 @@ Rational evaluate_ast_exact(const ExpressionAST* ast,
             if (ast->string_value.empty()) {
                 throw_ast_error<std::runtime_error>("empty number literal", ast->position);
             }
-            if (ast->string_value.size() > 2 && ast->string_value[0] == '0' && 
+            if (ast->string_value.size() > 2 && ast->string_value[0] == '0' &&
                 std::isalpha(ast->string_value[1])) {
                 // handle 0x, 0b, 0o
                 return Rational(parse_prefixed_integer_token(ast->string_value), 1);
@@ -561,8 +571,6 @@ Rational evaluate_ast_exact(const ExpressionAST* ast,
             throw_ast_error<std::runtime_error>("unknown AST node kind", ast->position);
     }
 }
-
-} // namespace
 
 ExactParser::ExactParser(std::string source,
                          const VariableResolver& variables,

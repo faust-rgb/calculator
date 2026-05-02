@@ -27,15 +27,16 @@
 // 支持自定义函数展开和多变量表达式处理。
 // ============================================================================
 
-#include "calculator_symbolic_commands.h"
+#include "symbolic/calculator_symbolic_commands.h"
 
-#include "calculator_internal_types.h"
-#include "calculator_integration.h"
-#include "multivariable_integrator.h"
-#include "multidim_integration.h"
-#include "polynomial.h"
-#include "symbolic_expression_internal.h"
-#include "../math/mymath.h"
+#include "core/calculator_internal_types.h"
+#include "analysis/calculator_integration.h"
+#include "analysis/multivariable_integrator.h"
+#include "analysis/multidim_integration.h"
+#include "polynomial/polynomial.h"
+#include "symbolic/symbolic_expression_internal.h"
+#include "parser/command_parser.h"
+#include "math/mymath.h"
 
 #include <algorithm>
 #include <sstream>
@@ -125,79 +126,77 @@ void resolve_symbolic_expression(const SymbolicResolverContext& ctx,
                                  std::string* variable_name,
                                  SymbolicExpression* expression) {
     const std::string trimmed_argument = trim_copy(argument);
-    std::string nested_inside;
-    if (split_named_call(trimmed_argument, "diff", &nested_inside)) {
-        const std::vector<std::string> nested_arguments =
-            split_top_level_arguments(nested_inside);
-        if (nested_arguments.empty()) {
-            throw std::runtime_error(
-                "nested symbolic diff expects at least one argument");
-        }
-        SymbolicExpression nested_expression;
-        resolve_symbolic_expression(ctx,
-                                    nested_arguments[0],
-                                    nested_arguments.size() == 1,
-                                    variable_name,
-                                    &nested_expression);
-        if (nested_arguments.size() == 1) {
-            *expression = nested_expression.derivative(*variable_name).simplify();
-        } else {
-            SymbolicExpression differentiated = nested_expression;
-            for (std::size_t i = 1; i < nested_arguments.size(); ++i) {
-                const std::string derivative_variable = trim_copy(nested_arguments[i]);
-                if (!is_identifier_text(derivative_variable)) {
-                    throw std::runtime_error(
-                        "nested symbolic diff variable arguments must be identifiers");
-                }
-                differentiated =
-                    differentiated.derivative(derivative_variable).simplify();
-            }
-            *variable_name = trim_copy(nested_arguments[1]);
-            *expression = differentiated;
-        }
-        return;
-    }
-    if (split_named_call(trimmed_argument, "integral", &nested_inside)) {
-        const std::vector<std::string> nested_arguments =
-            split_top_level_arguments(nested_inside);
-        if (nested_arguments.size() != 1 && nested_arguments.size() != 2) {
-            throw std::runtime_error(
-                "nested symbolic integral expects expression and optional variable");
-        }
-        SymbolicExpression nested_expression;
-        resolve_symbolic_expression(ctx,
-                                    nested_arguments[0],
-                                    nested_arguments.size() == 1,
-                                    variable_name,
-                                    &nested_expression);
-        if (nested_arguments.size() == 2) {
-            const std::string integral_variable = trim_copy(nested_arguments[1]);
-            if (!is_identifier_text(integral_variable)) {
+    CommandASTNode ast = parse_command(trimmed_argument);
+    
+    if (ast.kind == CommandKind::kFunctionCall) {
+        const auto* call = ast.as_function_call();
+        if (call->name == "diff") {
+            if (call->arguments.empty()) {
                 throw std::runtime_error(
-                    "nested symbolic integral variable must be an identifier");
+                    "nested symbolic diff expects at least one argument");
             }
-            *variable_name = integral_variable;
+            SymbolicExpression nested_expression;
+            resolve_symbolic_expression(ctx,
+                                        std::string(call->arguments[0].text),
+                                        call->arguments.size() == 1,
+                                        variable_name,
+                                        &nested_expression);
+            if (call->arguments.size() == 1) {
+                *expression = nested_expression.derivative(*variable_name).simplify();
+            } else {
+                SymbolicExpression differentiated = nested_expression;
+                for (std::size_t i = 1; i < call->arguments.size(); ++i) {
+                    const std::string derivative_variable = trim_copy(call->arguments[i].text);
+                    if (!is_identifier_text(derivative_variable)) {
+                        throw std::runtime_error(
+                            "nested symbolic diff variable arguments must be identifiers");
+                    }
+                    differentiated =
+                        differentiated.derivative(derivative_variable).simplify();
+                }
+                *variable_name = trim_copy(call->arguments[1].text);
+                *expression = differentiated;
+            }
+            return;
         }
-        *expression = nested_expression.integral(*variable_name).simplify();
-        return;
-    }
-    if (split_named_call(trimmed_argument, "poly_add", &nested_inside) ||
-        split_named_call(trimmed_argument, "poly_sub", &nested_inside) ||
-        split_named_call(trimmed_argument, "poly_mul", &nested_inside) ||
-        split_named_call(trimmed_argument, "poly_div", &nested_inside)) {
-        polynomial_ops::PolynomialContext polynomial_ctx;
-        polynomial_ctx.resolve_symbolic =
-            [&](const std::string& name, std::string* variable) {
-                SymbolicExpression resolved;
-                resolve_symbolic_expression(ctx, name, true, variable, &resolved);
-                return resolved;
-            };
-        const polynomial_ops::PolynomialData polynomial =
-            polynomial_ops::build_polynomial(polynomial_ctx, trimmed_argument);
-        *variable_name = polynomial.variable_name;
-        *expression = SymbolicExpression::parse(
-            polynomial_to_string(polynomial.coefficients, *variable_name));
-        return;
+        if (call->name == "integral") {
+            if (call->arguments.size() != 1 && call->arguments.size() != 2) {
+                throw std::runtime_error(
+                    "nested symbolic integral expects expression and optional variable");
+            }
+            SymbolicExpression nested_expression;
+            resolve_symbolic_expression(ctx,
+                                        std::string(call->arguments[0].text),
+                                        call->arguments.size() == 1,
+                                        variable_name,
+                                        &nested_expression);
+            if (call->arguments.size() == 2) {
+                const std::string integral_variable = trim_copy(call->arguments[1].text);
+                if (!is_identifier_text(integral_variable)) {
+                    throw std::runtime_error(
+                        "nested symbolic integral variable must be an identifier");
+                }
+                *variable_name = integral_variable;
+            }
+            *expression = nested_expression.integral(*variable_name).simplify();
+            return;
+        }
+        if (call->name == "poly_add" || call->name == "poly_sub" ||
+            call->name == "poly_mul" || call->name == "poly_div") {
+            polynomial_ops::PolynomialContext polynomial_ctx;
+            polynomial_ctx.resolve_symbolic =
+                [&](const std::string& name, std::string* variable) {
+                    SymbolicExpression resolved;
+                    resolve_symbolic_expression(ctx, name, true, variable, &resolved);
+                    return resolved;
+                };
+            const polynomial_ops::PolynomialData polynomial =
+                polynomial_ops::build_polynomial(polynomial_ctx, trimmed_argument);
+            *variable_name = polynomial.variable_name;
+            *expression = SymbolicExpression::parse(
+                polynomial_to_string(polynomial.coefficients, *variable_name));
+            return;
+        }
     }
     if (ctx.has_custom_function(trimmed_argument)) {
         *expression = ctx.resolve_custom_function(trimmed_argument, variable_name);

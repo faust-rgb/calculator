@@ -11,11 +11,14 @@
 #ifndef EXPRESSION_COMPILER_H
 #define EXPRESSION_COMPILER_H
 
+#include "parser/token_types.h"
+#include "parser/base_parser.h"
 #include "expression_ast.h"
 
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 // 前向声明
@@ -74,68 +77,11 @@ inline bool has_feature(ExpressionFeature features, ExpressionFeature feature) {
 }
 
 // ============================================================================
-// 表达式 Token
-// ============================================================================
-
-/**
- * @enum ExpressionTokenKind
- * @brief 表达式 Token 类型
- */
-enum class ExpressionTokenKind {
-    kNumber,        ///< 数字字面量
-    kIdentifier,    ///< 标识符（变量名或函数名）
-    kString,        ///< 字符串字面量
-    kOperator,      ///< 运算符
-    kLParen,        ///< 左圆括号
-    kRParen,        ///< 右圆括号
-    kLBracket,      ///< 左方括号
-    kRBracket,      ///< 右方括号
-    kComma,         ///< 逗号
-    kSemicolon,     ///< 分号
-    kColon,         ///< 冒号
-    kQuestion,      ///< 问号（三元运算符）
-    kEqual,         ///< 等号（赋值或比较）
-    kEOF,           ///< 结束标记
-};
-
-/**
- * @struct ExpressionToken
- * @brief 表达式 Token 结构
- */
-struct ExpressionToken {
-    ExpressionTokenKind kind;
-    std::string text;
-    double number_value = 0.0;  ///< 当 kind == kNumber 时的数值
-    std::size_t position = 0;   ///< 在源字符串中的位置
-};
-
-/**
- * @class ExpressionLexer
- * @brief 统一的表达式词法分析器，供 AST 编译器使用
- */
-class ExpressionLexer {
-public:
-    explicit ExpressionLexer(std::string_view source);
-    bool tokenize(std::vector<ExpressionToken>* tokens);
-
-private:
-    std::string_view source_;
-    std::size_t pos_ = 0;
-
-    void skip_spaces();
-    bool is_at_end() const;
-    char peek() const;
-    void expect(char expected);
-    std::string_view parse_identifier();
-
-    bool parse_string_token(std::vector<ExpressionToken>* tokens);
-    bool parse_number_token(std::vector<ExpressionToken>* tokens);
-    bool parse_operator_token(std::vector<ExpressionToken>* tokens);
-};
-
-// ============================================================================
 // 表达式缓存
 // ============================================================================
+
+// 前向声明
+struct ExpressionAST;
 
 /**
  * @struct ExpressionCache
@@ -145,7 +91,7 @@ struct ExpressionCache {
     std::string expanded;               ///< 展开后的表达式
     ExpressionHint hint;                ///< 类型提示
     ExpressionFeature features;         ///< 特征
-    std::vector<ExpressionToken> tokens; ///< Token 序列（可选）
+    std::vector<Token> tokens;          ///< Token 序列（可选）
 
     // 编译后的 AST（用于快速求值）
     std::unique_ptr<ExpressionAST> compiled_ast;

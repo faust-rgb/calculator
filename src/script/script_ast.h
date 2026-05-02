@@ -1,11 +1,11 @@
 #ifndef SCRIPT_AST_H
 #define SCRIPT_AST_H
 
-#include "expression_compiler.h"
-
 #include <memory>
 #include <string>
 #include <vector>
+
+struct ExpressionCache;
 
 namespace script {
 
@@ -15,6 +15,8 @@ namespace script {
  *
  * 定义了脚本语言的所有语句类型，形成树形结构。
  * 使用访问者模式的基础结构（通过基类虚析构）。
+ *
+ * 优化：使用 SharedStatementPtr 支持语句共享，避免循环中频繁克隆。
  */
 
 /**
@@ -45,8 +47,17 @@ struct Statement {
     Kind kind;  ///< 语句类型标识
 };
 
-/** @brief 语句的智能指针类型 */
+/** @brief 语句的独占指针类型（用于解析阶段） */
 using StatementPtr = std::unique_ptr<Statement>;
+
+/** @brief 语句的共享指针类型（用于函数体共享，避免克隆） */
+using SharedStatementPtr = std::shared_ptr<const Statement>;
+
+// 前向声明 BlockStatement 用于 SharedBlockPtr
+struct BlockStatement;
+
+/** @brief 代码块的共享指针类型 */
+using SharedBlockPtr = std::shared_ptr<const BlockStatement>;
 
 /**
  * @struct BlockStatement
@@ -177,6 +188,21 @@ struct ContinueStatement : Statement {
 struct Program {
     std::vector<StatementPtr> statements;  ///< 顶层语句列表
 };
+
+// ============================================================================
+// 辅助函数：语句共享转换
+// ============================================================================
+
+/**
+ * @brief 将 unique_ptr<BlockStatement> 转换为 shared_ptr<const BlockStatement>
+ * @param block 块语句的独占指针
+ * @return 块语句的共享指针（避免克隆）
+ *
+ * 用于在 ScriptFunction 中存储函数体，避免不必要的克隆。
+ */
+inline SharedBlockPtr make_shared_block(std::unique_ptr<BlockStatement> block) {
+    return SharedBlockPtr(block.release());
+}
 
 }  // namespace script
 

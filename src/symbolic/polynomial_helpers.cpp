@@ -29,10 +29,10 @@
 // 提供多项式处理的基础设施。
 // ============================================================================
 
-#include "symbolic_expression_internal.h"
+#include "symbolic/symbolic_expression_internal.h"
 
-#include "mymath.h"
-#include "polynomial.h"
+#include "math/mymath.h"
+#include "polynomial/polynomial.h"
 
 #include <algorithm>
 #include <map>
@@ -758,6 +758,15 @@ void collect_identifier_variables(const SymbolicExpression& expression,
             collect_identifier_variables(SymbolicExpression(node->left), names);
             collect_identifier_variables(SymbolicExpression(node->right), names);
             return;
+        case NodeType::kVector:
+        case NodeType::kTensor:
+            for (const auto& child : node->children) {
+                collect_identifier_variables(SymbolicExpression(child), names);
+            }
+            return;
+        case NodeType::kDifferentialOp:
+            collect_identifier_variables(SymbolicExpression(node->left), names);
+            return;
     }
 }
 
@@ -945,6 +954,9 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
         case NodeType::kVariable:
         case NodeType::kFunction:
         case NodeType::kNegate:
+        case NodeType::kVector:
+        case NodeType::kTensor:
+        case NodeType::kDifferentialOp:
             return finish(false);
     }
     return finish(false);

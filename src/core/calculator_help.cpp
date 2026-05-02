@@ -1,6 +1,7 @@
-#include "calculator.h"
-#include "calculator_internal_types.h"
-#include "calculator_module.h"
+#include "core/calculator.h"
+#include "core/calculator_internal_types.h"
+#include "core/calculator_module.h"
+#include "command/command_registry.h"
 
 #include <stdexcept>
 #include <string>

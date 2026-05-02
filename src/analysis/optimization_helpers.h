@@ -7,7 +7,7 @@
 #ifndef OPTIMIZATION_HELPERS_H
 #define OPTIMIZATION_HELPERS_H
 
-#include "matrix.h"
+#include "matrix/matrix.h"
 
 #include <functional>
 #include <string>

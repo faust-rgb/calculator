@@ -2,8 +2,8 @@
 // 精确小数实现
 // ============================================================================
 
-#include "types/precise_decimal.h"
-#include "types/rational.h"
+#include "precise_decimal.h"
+#include "rational.h"
 #include "types/stored_value.h"
 #include "core/calculator_exceptions.h"
 #include "math/mymath.h"

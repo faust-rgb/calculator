@@ -37,14 +37,12 @@ struct FlatScopeStack;
  * 在脚本执行或表达式求值时，用于在局部作用域栈、全局变量表和内置常量中
  * 按优先级查找变量。通过持有引用或指针，避免了 visible_variables() 的 Map 复制开销。
  *
- * 支持两种查找模式：
- * 1. FlatScopeStack 模式：高性能平坦数组查找
- * 2. 传统模式：std::map 红黑树查找（兼容旧代码）
+ * 统一使用 FlatScopeStack 进行高性能查找。
  */
 class VariableResolver {
 public:
     /// 默认构造函数，创建空解析器
-    VariableResolver() : global_vars_(nullptr), local_scopes_(nullptr),
+    VariableResolver() : global_vars_(nullptr),
                          flat_scopes_(nullptr), override_vars_(nullptr),
                          parent_(nullptr), is_owned_(false) {}
 
@@ -58,27 +56,12 @@ public:
                      std::nullptr_t,
                      const std::map<std::string, StoredValue>* override_vars = nullptr,
                      const VariableResolver* parent = nullptr)
-        : global_vars_(global_vars), local_scopes_(nullptr),
+        : global_vars_(global_vars),
           flat_scopes_(nullptr), override_vars_(override_vars),
           parent_(parent), is_owned_(false) {}
 
     /**
-     * @brief 构造变量解析器（传统模式）
-     * @param global_vars 全局变量表指针
-     * @param local_scopes 局部作用域栈指针
-     * @param override_vars 覆盖变量表指针（可选）
-     * @param parent 父解析器指针（可选）
-     */
-    VariableResolver(const std::map<std::string, StoredValue>* global_vars,
-                     const std::vector<std::map<std::string, StoredValue>>* local_scopes,
-                     const std::map<std::string, StoredValue>* override_vars = nullptr,
-                     const VariableResolver* parent = nullptr)
-        : global_vars_(global_vars), local_scopes_(local_scopes),
-          flat_scopes_(nullptr), override_vars_(override_vars),
-          parent_(parent), is_owned_(false) {}
-
-    /**
-     * @brief 构造变量解析器（高性能模式）
+     * @brief 构造变量解析器
      * @param global_vars 全局变量表指针
      * @param flat_scopes 平坦作用域栈指针
      * @param override_vars 覆盖变量表指针（可选）
@@ -88,7 +71,7 @@ public:
                      const FlatScopeStack* flat_scopes,
                      const std::map<std::string, StoredValue>* override_vars = nullptr,
                      const VariableResolver* parent = nullptr)
-        : global_vars_(global_vars), local_scopes_(nullptr),
+        : global_vars_(global_vars),
           flat_scopes_(flat_scopes), override_vars_(override_vars),
           parent_(parent), is_owned_(false) {}
 
@@ -144,15 +127,13 @@ public:
 
 private:
     const std::map<std::string, StoredValue>* global_vars_;      ///< 全局变量表
-    const std::vector<std::map<std::string, StoredValue>>* local_scopes_;  ///< 局部作用域栈（传统模式）
-    const FlatScopeStack* flat_scopes_;                          ///< 平坦作用域栈（高性能模式）
+    const FlatScopeStack* flat_scopes_;                          ///< 平坦作用域栈
     const std::map<std::string, StoredValue>* override_vars_;    ///< 覆盖变量表
     const VariableResolver* parent_;                             ///< 父解析器
 
     /// 所有权存储（用于 make_owned）
     bool is_owned_;
     std::shared_ptr<std::map<std::string, StoredValue>> owned_global_vars_;
-    std::shared_ptr<std::vector<std::map<std::string, StoredValue>>> owned_local_scopes_;
     std::shared_ptr<FlatScopeStack> owned_flat_scopes_;
     std::shared_ptr<VariableResolver> owned_parent_;
 };

@@ -13,27 +13,6 @@ namespace {
 
 using namespace matrix;
 
-// 辅助函数：解析尺寸参数
-std::size_t parse_size_argument(const std::string& expression,
-                                const ScalarEvaluator& scalar_evaluator) {
-    const double value = scalar_evaluator(expression);
-    if (!mymath::is_integer(value) || value < 0.0) {
-        throw std::runtime_error("matrix dimensions must be non-negative integers");
-    }
-    return static_cast<std::size_t>(value >= 0.0 ? value + 0.5 : value - 0.5);
-}
-
-// 辅助函数：解析整数参数
-long long parse_integer_argument(const std::string& expression,
-                                 const ScalarEvaluator& scalar_evaluator,
-                                 const std::string& func_name) {
-    const double value = scalar_evaluator(expression);
-    if (!mymath::is_integer(value)) {
-        throw std::runtime_error(func_name + " requires integer arguments");
-    }
-    return static_cast<long long>(value >= 0.0 ? value + 0.5 : value - 0.5);
-}
-
 // 辅助函数：解析索引参数
 std::size_t parse_index_argument(const std::string& expression,
                                  const ScalarEvaluator& scalar_evaluator,

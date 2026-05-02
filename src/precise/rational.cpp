@@ -2,7 +2,7 @@
 // 有理数实现
 // ============================================================================
 
-#include "types/rational.h"
+#include "rational.h"
 
 #include <stdexcept>
 #include <string>

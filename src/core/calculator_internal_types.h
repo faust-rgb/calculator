@@ -16,13 +16,13 @@
 #ifndef CALCULATOR_INTERNAL_TYPES_H
 #define CALCULATOR_INTERNAL_TYPES_H
 
-#include "calculator.h"
+#include "core/calculator.h"
 
-#include "matrix.h"
-#include "mymath.h"
-#include "script_ast.h"
-#include "types/rational.h"
-#include "types/precise_decimal.h"
+#include "matrix/matrix.h"
+#include "math/mymath.h"
+#include "script/script_ast.h"
+#include "precise/rational.h"
+#include "precise/precise_decimal.h"
 #include "types/stored_value.h"
 
 #include <cstdint>
@@ -35,9 +35,10 @@
 #include "statistics/statistics.h"
 #include "statistics/probability.h"
 
-#include "calculator_exceptions.h"
-#include "command_types.h"
-#include "utils.h"
+#include "core/calculator_exceptions.h"
+#include "core/command_types.h"
+#include "command/command_registry.h"
+#include "core/utils.h"
 
 // ============================================================================
 // 显示精度常量
@@ -66,10 +67,10 @@ constexpr int kMaxDisplayPrecision = 17;
 // 函数类型
 // ============================================================================
 
-#include "variable_resolver.h"
-#include "../parser/decimal_parser.h"
-#include "../parser/exact_parser.h"
-#include "../parser/symbolic_render_parser.h"
+#include "command/variable_resolver.h"
+#include "parser/decimal_parser.h"
+#include "parser/exact_parser.h"
+#include "parser/symbolic_render_parser.h"
 
 class CalculatorModule;
 
@@ -203,39 +204,6 @@ struct FlatScopeStack {
 };
 
 /**
- * @struct FramePool
- * @brief 函数调用栈帧池，用于复用 std::map 分配（已弃用，保留兼容）
- * @deprecated 使用 FlatScopeStack 替代
- */
-struct FramePool {
-    std::vector<std::map<std::string, StoredValue>> pool;
-    std::size_t next_available = 0;
-
-    std::map<std::string, StoredValue>* acquire() {
-        if (next_available >= pool.size()) {
-            pool.emplace_back();
-        }
-        return &pool[next_available++];
-    }
-
-    void release() {
-        if (next_available > 0) {
-            --next_available;
-        }
-    }
-
-    void clear_frame(std::map<std::string, StoredValue>* frame) {
-        if (frame) {
-            frame->clear();
-        }
-    }
-
-    void reset() {
-        next_available = 0;
-    }
-};
-
-/**
  * @struct Calculator::Impl
  * @brief Calculator 的内部实现
  *
@@ -248,12 +216,8 @@ struct Calculator::Impl {
     std::map<std::string, StoredValue> variables;          ///< 全局变量
     std::map<std::string, CustomFunction> functions;       ///< 简单函数
     std::map<std::string, ScriptFunction> script_functions; ///< 脚本函数
-    std::vector<std::map<std::string, StoredValue>> local_scopes; ///< 局部作用域栈（兼容旧代码）
 
-    FlatScopeStack flat_scopes;  ///< 高性能平坦作用域栈
-    bool use_flat_scopes = true; ///< 是否使用平坦作用域栈（可切换以兼容）
-
-    FramePool function_frame_pool;  ///< 函数调用栈帧池（已弃用）
+    FlatScopeStack flat_scopes;  ///< 统一的平坦作用域栈（移除旧的 local_scopes）
 
     std::vector<std::shared_ptr<CalculatorModule>> registered_modules; ///< 已注册的数学模块
     std::vector<std::shared_ptr<CalculatorModule>> implicit_evaluation_modules; ///< 优化后的隐式求值模块列表
@@ -268,6 +232,9 @@ struct Calculator::Impl {
     std::map<std::string, std::vector<std::shared_ptr<CalculatorModule>>> help_topic_to_modules;
     std::map<CommandKey, CommandBinding> command_to_module;
 
+    // 命令注册表（新架构）
+    CommandRegistry command_registry;
+
     bool symbolic_constants_mode = false;  ///< 符号常量模式（pi, e 保留符号形式）
     bool hex_prefix_mode = false;          ///< 十六进制输出前缀
     bool hex_uppercase_mode = true;        ///< 十六进制大写字母
@@ -275,7 +242,7 @@ struct Calculator::Impl {
     int script_call_depth = 0;             ///< 脚本递归深度计数器
 };
 
-#include "../script/script_signal.h"
+#include "script/script_signal.h"
 
 // ============================================================================
 // 格式化选项
@@ -291,14 +258,8 @@ struct HexFormatOptions {
 };
 
 // ============================================================================
-// 辅助函数声明
+// 辅助函数声明（前向声明或关键辅助）
 // ============================================================================
-
-#include "math/helpers/integer_helpers.h"
-#include "math/helpers/combinatorics.h"
-#include "math/helpers/bitwise_helpers.h"
-#include "math/helpers/unit_conversions.h"
-#include "math/helpers/base_conversions.h"
 
 // 显示格式化
 void set_process_display_precision(int precision);    ///< 设置进程级显示有效位数
@@ -306,18 +267,7 @@ int process_display_precision();                      ///< 查询进程级显示
 
 // 内置常量
 
-// 有理数运算（实现在 precise/rational.cpp）
-Rational pow_rational(Rational base, long long exponent); ///< 有理数幂
-Rational abs_rational(Rational value);  ///< 有理数绝对值
-double rational_to_double(const Rational& value); ///< 有理数转 double
-
-// 精确小数运算（实现在 precise/precise_decimal.cpp）
-PreciseDecimal add_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs);
-PreciseDecimal subtract_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs);
-PreciseDecimal multiply_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs);
-PreciseDecimal divide_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs);
-PreciseDecimal pow_precise_decimal(const PreciseDecimal& base, long long exponent);
-int compare_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs);
+// 有理数和精确小数的前向声明已由 types/ 包含
 
 // 字符串处理
 bool is_valid_variable_name(std::string_view name);  ///< 检查变量名合法性
@@ -338,6 +288,7 @@ bool split_named_call(std::string_view expression, std::string_view name, std::s
 bool split_named_call(std::string_view expression, std::string_view name, std::string* inside);
 bool split_named_call_with_arguments(std::string_view expression, std::string_view name, std::vector<std::string_view>* arguments);
 std::vector<std::string_view> split_top_level_arguments_view(std::string_view text);
+std::vector<std::string> split_top_level_arguments(std::string_view text);
 
 // 函数展开
 std::string expand_inline_function_commands(Calculator* calculator, std::string_view expression);
@@ -358,7 +309,7 @@ std::vector<double> solve_dense_linear_system(std::vector<std::vector<double>> m
 
 // 函数定义解析
 
-#include "../script/script_runtime.h"
+#include "script/script_runtime.h"
 
 // 模块注册
 void register_standard_modules(Calculator* calculator);

@@ -5,11 +5,15 @@
 #include <vector>
 #include <map>
 #include <functional>
-#include "../core/variable_resolver.h"
-#include "types/rational.h"
+#include "../command/variable_resolver.h"
+#include "../types/function.h"
+#include "precise/rational.h"
 
-/** @brief 检查脚本函数是否存在的回调类型 */
-using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
+// 前向声明
+struct ExpressionAST;
+
+// 回调类型定义（来自 types/function.h）
+// HasScriptFunctionCallback 已在 function.h 中定义
 
 /**
  * @class ExactParser
@@ -39,5 +43,14 @@ Rational parse_exact_expression(
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
     HasScriptFunctionCallback has_script_function = {});
+
+/**
+ * @brief 求值已编译的 AST（精确模式）
+ */
+Rational evaluate_ast_exact(
+    const ExpressionAST* ast,
+    const VariableResolver& variables,
+    const std::map<std::string, CustomFunction>* functions,
+    HasScriptFunctionCallback has_script_function);
 
 #endif

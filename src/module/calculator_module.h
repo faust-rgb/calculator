@@ -1,0 +1,82 @@
+#ifndef MODULE_CALCULATOR_MODULE_H
+#define MODULE_CALCULATOR_MODULE_H
+
+#include "core/service_interfaces.h"
+#include <string>
+#include <vector>
+#include <functional>
+#include <memory>
+#include <map>
+#include <array>
+
+/**
+ * @class CalculatorModule
+ * @brief 所有数学模块的基类，简化命令注册接口
+ */
+class CalculatorModule {
+public:
+    virtual ~CalculatorModule() = default;
+
+    // 模块基本信息
+    virtual std::string name() const = 0;
+
+    virtual void initialize(const CoreServices& /*services*/) {}
+
+    virtual void* query_service(const std::string& service_name) {
+        (void)service_name;
+        return nullptr;
+    }
+
+    virtual void on_settings_changed(const CalculatorSettings& /*settings*/) {}
+
+    // 命令注册接口
+    virtual std::vector<std::string> get_commands() const { return {}; }
+
+    virtual std::vector<CommandSpec> get_command_specs() const;
+
+    virtual std::string execute_args(const std::string& command,
+                                    const std::vector<std::string>& args,
+                                    const CoreServices& services);
+
+    virtual std::string execute_args_view(std::string_view command,
+                                          const std::vector<std::string_view>& args,
+                                          const CoreServices& services);
+
+    virtual std::string execute(const std::string& command,
+                               const std::string& inside,
+                               const CoreServices& services) {
+        (void)command; (void)inside; (void)services;
+        return "";
+    }
+
+    // 隐式求值接口
+    virtual std::string get_implicit_trigger_chars() const { return ""; }
+    virtual bool wants_implicit_evaluation() const { return false; }
+
+    const std::array<bool, 256>* get_cached_trigger_table() const;
+
+    virtual bool try_evaluate_implicit(const std::string&,
+                                      StoredValue*,
+                                      const std::map<std::string, StoredValue>&) const { return false; }
+
+    // 函数注册接口
+    virtual std::map<std::string, std::function<double(const std::vector<double>&)>> get_scalar_functions() const { return {}; }
+    virtual std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>> get_matrix_functions() const { return {}; }
+
+    using ValueFunction = matrix::ValueFunction;
+    virtual std::map<std::string, ValueFunction> get_value_functions() const { return {}; }
+
+    virtual std::vector<std::string> get_functions() const { return {}; }
+
+    // 帮助接口
+    virtual std::string get_help_snippet(const std::string& topic) const {
+        (void)topic;
+        return "";
+    }
+
+protected:
+    mutable std::array<bool, 256> trigger_table_{};
+    mutable bool trigger_table_cached_ = false;
+};
+
+#endif

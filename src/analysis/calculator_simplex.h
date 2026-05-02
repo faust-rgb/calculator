@@ -8,7 +8,7 @@
 #ifndef CALCULATOR_SIMPLEX_H
 #define CALCULATOR_SIMPLEX_H
 
-#include "matrix.h"
+#include "matrix/matrix.h"
 
 #include <string>
 #include <vector>

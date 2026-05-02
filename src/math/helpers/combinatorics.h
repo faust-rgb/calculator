@@ -1,7 +1,7 @@
 #ifndef COMBINATORICS_HELPERS_H
 #define COMBINATORICS_HELPERS_H
 
-#include "types/rational.h"
+#include "precise/rational.h"
 
 /** @brief 斐波那契数 */
 double fibonacci_value(long long n);

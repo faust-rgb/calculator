@@ -8,11 +8,11 @@
 // - milp_max / milp_min: 混合整数规划
 // - bip_max / bip_min: 二进制规划
 
-#include "calculator_optimization.h"
+#include "analysis/calculator_optimization.h"
 
-#include "mymath.h"
-#include "optimization_helpers.h"
-#include "calculator_simplex.h"
+#include "math/mymath.h"
+#include "analysis/optimization_helpers.h"
+#include "analysis/calculator_simplex.h"
 
 #include <algorithm>
 #include <vector>

@@ -12,10 +12,11 @@
 // - 事件检测
 // - 参数化方程
 
-#include "symbolic_expression.h"
-#include "symbolic_expression_internal.h"
-#include "calculator_ode.h"
-#include "ode_solver.h"
+#include "symbolic/symbolic_expression.h"
+#include "symbolic/symbolic_expression_internal.h"
+#include "analysis/calculator_ode.h"
+#include "analysis/ode_solver.h"
+#include "math/helpers/integer_helpers.h"
 
 #include <stdexcept>
 #include <vector>

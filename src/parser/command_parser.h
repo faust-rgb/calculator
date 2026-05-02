@@ -4,70 +4,37 @@
 //
 // 本模块实现统一的命令解析框架：
 //
-// 1. 命令 Token 类型 (CommandToken)
-//    - 标识符、字符串字面量、运算符、括号等
-//    - 单次扫描生成 Token 流，避免重复遍历
-//
-// 2. 命令 AST 节点 (CommandASTNode)
+// 1. 命令 AST 节点 (CommandASTNode)
 //    - 分类命令类型：元命令、函数定义、函数调用、表达式
 //    - 存储解析后的结构化信息，避免重复字符串操作
+//    - 支持表达式预编译（ExpressionInfo）
 //
-// 3. 命令解析器 (CommandParser)
-//    - 基于 Token 流的递归下降解析
+// 2. 命令解析器 (CommandParser)
+//    - 基于 LazyTokenStream 的惰性词法分析
 //    - 统一的语法错误处理
+//    - 检查点机制用于高效回溯
 //
 // 设计目标：
+// - 按需生成 Token，避免全量词法分析开销
 // - O(N) 单次扫描解析
 // - 统一的异常处理策略
 // - 精确的位置信息用于错误报告
+// - 支持进制前缀和虚数后缀
 // ============================================================================
 
 #ifndef COMMAND_PARSER_H
 #define COMMAND_PARSER_H
 
-#include "calculator_exceptions.h"
-#include "base_parser.h"
+#include "core/calculator_exceptions.h"
+#include "parser/lazy_token_stream.h"
+#include "parser/token_types.h"
+#include "command/expression_compiler.h"
+#include "command/expression_ast.h"
 #include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 #include <variant>
-
-// ============================================================================
-// 命令 Token 类型
-// ============================================================================
-
-/**
- * @enum CommandTokenType
- * @brief 命令 Token 类型
- */
-enum class CommandTokenType {
-    kEnd,           ///< 输入结束
-    kIdentifier,    ///< 标识符（变量名、函数名）
-    kString,        ///< 字符串字面量（已解码转义）
-    kNumber,        ///< 数字字面量
-    kLParen,        ///< 左圆括号 (
-    kRParen,        ///< 右圆括号 )
-    kLBracket,      ///< 左方括号 [
-    kRBracket,      ///< 右方括号 ]
-    kComma,         ///< 逗号 ,
-    kEqual,         ///< 等号 =（赋值或定义）
-    kColon,         ///< 冒号 :
-    kOperator,      ///< 运算符 + - * / ^ 等
-};
-
-/**
- * @struct CommandToken
- * @brief 命令 Token 结构
- */
-struct CommandToken {
-    CommandTokenType type;
-    std::string_view text;      ///< 原始文本视图
-    std::string string_value;   ///< 字符串值（仅 kString 类型使用）
-    std::size_t position = 0;   ///< 在源字符串中的起始位置
-
-    CommandToken() : type(CommandTokenType::kEnd) {}
-};
 
 // ============================================================================
 // 命令 AST 节点类型
@@ -88,22 +55,25 @@ enum class CommandKind {
 };
 
 /**
+ * @struct ExpressionInfo
+ * @brief 表达式信息（支持预编译）
+ */
+struct ExpressionInfo {
+    std::string_view text;                    ///< 原始文本视图
+    mutable std::shared_ptr<ExpressionCache> cache;  ///< 预编译缓存
+
+    ExpressionInfo() = default;
+    explicit ExpressionInfo(std::string_view t) : text(t) {}
+};
+
+/**
  * @struct FunctionDefinitionInfo
  * @brief 函数定义信息
  */
 struct FunctionDefinitionInfo {
     std::string_view name;                      ///< 函数名
     std::vector<std::string_view> parameters;   ///< 参数名列表
-    std::string_view body;                      ///< 函数体表达式
-};
-
-/**
- * @struct FunctionCallInfo
- * @brief 函数调用信息
- */
-struct FunctionCallInfo {
-    std::string_view name;                    ///< 函数名
-    std::vector<std::string_view> arguments;  ///< 参数列表（原始字符串形式）
+    ExpressionInfo body;                        ///< 函数体表达式（支持预编译）
 };
 
 /**
@@ -112,7 +82,7 @@ struct FunctionCallInfo {
  */
 struct AssignmentInfo {
     std::string_view variable;       ///< 变量名
-    std::string_view expression;     ///< 赋值表达式
+    ExpressionInfo expression;       ///< 赋值表达式（支持预编译）
 };
 
 /**
@@ -122,6 +92,15 @@ struct AssignmentInfo {
 struct MetaCommandInfo {
     std::string_view command;                    ///< 命令名（不含冒号）
     std::vector<std::string_view> arguments;     ///< 参数列表
+};
+
+/**
+ * @struct FunctionCallInfo
+ * @brief 函数调用信息
+ */
+struct FunctionCallInfo {
+    std::string_view name;                    ///< 函数名
+    std::vector<ExpressionInfo> arguments;    ///< 参数列表（支持预编译）
 };
 
 /**
@@ -138,11 +117,15 @@ public:
         FunctionDefinitionInfo,      // kFunctionDefinition
         FunctionCallInfo,            // kFunctionCall
         AssignmentInfo,              // kAssignment
-        std::string_view,            // kExpression
+        ExpressionInfo,              // kExpression (改为 ExpressionInfo 支持预编译)
         std::string                  // kStringLiteral
     > data;
 
     CommandASTNode() : kind(CommandKind::kEmpty), data(std::monostate{}) {}
+
+    // 直接接受 ExpressionInfo 的构造函数（支持预编译）
+    CommandASTNode(CommandKind k, ExpressionInfo info)
+        : kind(k), data(std::move(info)) {}
 
     static CommandASTNode make_empty();
     static CommandASTNode make_meta_command(std::string_view cmd,
@@ -174,8 +157,8 @@ public:
         return kind == CommandKind::kAssignment ? &std::get<AssignmentInfo>(data) : nullptr;
     }
 
-    const std::string_view* as_expression() const {
-        return kind == CommandKind::kExpression ? &std::get<std::string_view>(data) : nullptr;
+    const ExpressionInfo* as_expression() const {
+        return kind == CommandKind::kExpression ? &std::get<ExpressionInfo>(data) : nullptr;
     }
 
     const std::string* as_string_literal() const {
@@ -191,10 +174,17 @@ public:
  * @class CommandParser
  * @brief 统一的命令解析器
  *
- * 继承自 BaseParser 以复用基础词法分析工具。
- * 基于 Token 流实现 O(N) 单次扫描解析。
+ * 使用 LazyTokenStream 实现按需词法分析。
+ * 支持检查点机制用于高效回溯。
+ *
+ * 特性：
+ * - 支持进制前缀（0x, 0b, 0o）
+ * - 支持虚数后缀（i）
+ * - 保留数字原始文本
+ * - 基于 Token 的参数解析
+ * - 检查点回溯机制
  */
-class CommandParser : public BaseParser {
+class CommandParser {
 public:
     explicit CommandParser(std::string_view source);
 
@@ -207,51 +197,49 @@ public:
     /**
      * @brief 获取当前解析位置（用于错误报告）
      */
-    std::size_t current_position() const { return pos_; }
+    std::size_t current_position() const;
 
     /**
      * @brief 获取源字符串（用于错误报告）
      */
-    std::string_view source() const { return source_; }
+    std::string_view source() const { return tokens_.source(); }
 
 private:
     // ========================================================================
-    // 词法分析 (重载或补充 BaseParser)
+    // Token 访问
     // ========================================================================
 
-    /// 解析下一个 Token
-    CommandToken next_token();
+    /// 查看当前 Token（不消费）
+    const Token& peek_token();
 
-    /// 解析标识符 Token
-    CommandToken parse_identifier_token();
+    /// 查看指定偏移量的 Token
+    const Token& peek_token(std::size_t offset);
 
-    /// 解析数字 Token
-    CommandToken parse_number_token();
+    /// 消费并返回当前 Token
+    Token advance_token();
 
-    /// 解析字符串字面量 Token
-    CommandToken parse_string_token();
+    /// 检查当前 Token 类型
+    bool check_token(TokenKind kind) const;
 
-    /// 解析运算符 Token
-    CommandToken parse_operator_token();
+    /// 匹配并消费指定类型的 Token
+    bool match_token(TokenKind kind);
+
+    /// 期望指定类型的 Token，失败则抛出异常
+    Token expect_token(TokenKind kind, const char* message);
+
+    // ========================================================================
+    // 回溯支持
+    // ========================================================================
+
+    /// 保存当前解析状态
+    LazyTokenStream::Checkpoint save_checkpoint();
+
+    /// 恢复到指定解析状态
+    void restore_checkpoint(const LazyTokenStream::Checkpoint& cp);
 
     // ========================================================================
     // 语法分析
     // ========================================================================
-
-    /// 查看当前 Token（不消费）
-    const CommandToken& peek_token();
-
-    /// 消费并返回当前 Token
-    CommandToken advance_token();
-
-    /// 检查当前 Token 类型
-    bool check_token(CommandTokenType type) const;
-
-    /// 匹配并消费指定类型的 Token
-    bool match_token(CommandTokenType type);
-
-    /// 期望指定类型的 Token，失败则抛出异常
-    CommandToken expect_token(CommandTokenType type, const char* message);
 
     /// 解析命令
     CommandASTNode parse_command();
@@ -260,19 +248,13 @@ private:
     CommandASTNode parse_meta_command();
 
     /// 解析函数定义或赋值
-    CommandASTNode parse_definition_or_assignment(const CommandToken& id_token);
-
-    /// 解析参数名列表 (用于定义)
-    std::vector<std::string_view> parse_parameter_list();
+    CommandASTNode parse_definition_or_assignment(Token id_token);
 
     /// 解析函数调用
-    CommandASTNode parse_function_call(const CommandToken& id_token);
+    CommandASTNode parse_function_call(Token id_token);
 
-    /// 基于 Token 的参数列表解析
+    /// 基于 Token 流解析参数列表（不使用字符串切分）
     std::vector<std::string_view> parse_argument_list_by_tokens(bool stop_at_rparen);
-
-    /// 解析参数列表 (用于调用)
-    std::vector<std::string_view> parse_argument_list();
 
     /// 解析表达式（兜底）
     CommandASTNode parse_expression();
@@ -294,9 +276,7 @@ private:
     // 成员变量
     // ========================================================================
 
-    std::vector<CommandToken> tokens_;
-    std::size_t token_pos_ = 0;
-    bool tokens_scanned_ = false;
+    LazyTokenStream tokens_;
 };
 
 // ============================================================================
@@ -312,5 +292,24 @@ CommandASTNode parse_command(std::string_view source);
  * @brief 拆分顶层参数（正确处理嵌套和字符串）
  */
 std::vector<std::string_view> split_command_arguments(std::string_view text);
+
+// ============================================================================
+// 表达式预编译函数
+// ============================================================================
+
+/**
+ * @brief 预编译 CommandASTNode 中的所有表达式
+ * @param node AST 节点
+ *
+ * 遍历 AST 节点，为所有 ExpressionInfo 创建预编译缓存。
+ * 应在解析完成后、求值前调用。
+ */
+void compile_command_expressions(CommandASTNode& node);
+
+/**
+ * @brief 预编译单个 ExpressionInfo
+ * @param info 表达式信息
+ */
+void compile_expression_info(ExpressionInfo& info);
 
 #endif // COMMAND_PARSER_H

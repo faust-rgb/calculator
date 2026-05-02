@@ -2,8 +2,8 @@
 // 符号系数多项式实现
 // ============================================================================
 
-#include "symbolic_polynomial.h"
-#include "symbolic_expression_internal.h"
+#include "symbolic/symbolic_polynomial.h"
+#include "symbolic/symbolic_expression_internal.h"
 
 #include <algorithm>
 

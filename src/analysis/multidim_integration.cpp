@@ -2,9 +2,9 @@
 // 多维数值积分实现
 // ============================================================================
 
-#include "multidim_integration.h"
+#include "analysis/multidim_integration.h"
 
-#include "mymath.h"
+#include "math/mymath.h"
 
 #include <algorithm>
 #include <random>

@@ -112,13 +112,6 @@ const std::vector<std::string>& command_completion_words() {
     return words;
 }
 
-const std::vector<std::string>& builtin_expression_completion_words() {
-    static const std::vector<std::string> words = {
-        "help", "exit", "quit"
-    };
-    return words;
-}
-
 std::pair<std::size_t, std::string> current_token(const std::string& line) {
     // 从行尾向前扫描，找出当前正在输入的 token。
     // 这样 Tab 补全只会替换最后一段命令/函数前缀。

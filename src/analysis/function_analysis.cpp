@@ -9,13 +9,13 @@
  * - 极值点查找（导数变号检测 + 二分法）
  */
 
-#include "function_analysis.h"
+#include "analysis/function_analysis.h"
 
-#include "calculator.h"
-#include "mymath.h"
-#include "calculator_series.h"
-#include "symbolic_expression.h"
-#include "symbolic_expression_internal.h"
+#include "core/calculator.h"
+#include "math/mymath.h"
+#include "analysis/calculator_series.h"
+#include "symbolic/symbolic_expression.h"
+#include "symbolic/symbolic_expression_internal.h"
 #include "statistics/probability.h"
 
 #include <algorithm>
@@ -519,6 +519,10 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                     }
                     return SymbolicLimitProbeKind::kUnknown;
                 }
+                case NodeType::kVector:
+                case NodeType::kTensor:
+                case NodeType::kDifferentialOp:
+                    return SymbolicLimitProbeKind::kUnknown;
             }
             return SymbolicLimitProbeKind::kUnknown;
         }

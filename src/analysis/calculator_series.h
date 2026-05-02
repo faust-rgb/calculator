@@ -1,13 +1,13 @@
 #ifndef CALCULATOR_SERIES_H
 #define CALCULATOR_SERIES_H
 
-#include "calculator_internal_types.h"
-#include "symbolic_expression.h"
+#include "core/calculator_internal_types.h"
+#include "symbolic/symbolic_expression.h"
 #include <string>
 #include <vector>
 #include <map>
 #include <functional>
-#include "../core/calculator_module.h"
+#include "core/calculator_module.h"
 
 namespace series_ops {
 

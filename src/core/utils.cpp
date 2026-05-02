@@ -1,7 +1,13 @@
-#include "utils.h"
-#include "calculator_internal_types.h"
+#include "core/utils.h"
+#include "core/calculator_internal_types.h"
+#include "math/helpers/integer_helpers.h"
+#include "math/helpers/combinatorics.h"
+#include "math/helpers/bitwise_helpers.h"
+#include "math/helpers/unit_conversions.h"
+#include "math/helpers/base_conversions.h"
 #include "math/mymath.h"
-#include "calculator.h"
+#include "core/calculator.h"
+#include "parser/command_parser.h"
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
@@ -145,6 +151,12 @@ int& mutable_process_display_precision() {
     return precision;
 }
 
+} // namespace
+
+// ============================================================================
+// 格式化函数实现
+// ============================================================================
+
 std::string signed_center_text(double center) {
     if (mymath::is_near_zero(center, 1e-12)) {
         return "";
@@ -194,8 +206,6 @@ std::string format_term(double coefficient, const std::string& factor) {
     return coefficient < 0.0 ? "-" + coeff_text + " * " + factor
                              : coeff_text + " * " + factor;
 }
-
-} // namespace
 
 void set_process_display_precision(int precision) {
     mutable_process_display_precision() =
@@ -380,6 +390,10 @@ std::string decode_state_field(const std::string& text) {
     return decode_escaped_string(text);
 }
 
+// ============================================================================
+// 表达式拆分函数
+// ============================================================================
+
 bool split_assignment(std::string_view expression,
                       std::string_view* lhs,
                       std::string_view* rhs) {
@@ -559,7 +573,7 @@ std::vector<std::string_view> split_top_level_arguments_view(std::string_view te
     return arguments;
 }
 
-std::vector<std::string> split_top_level_arguments(const std::string& text) {
+std::vector<std::string> split_top_level_arguments(std::string_view text) {
     auto views = split_top_level_arguments_view(text);
     std::vector<std::string> results;
     results.reserve(views.size());
@@ -856,34 +870,26 @@ bool try_base_conversion_expression(std::string_view expression,
                                     const std::map<std::string, CustomFunction>* functions,
                                     const HexFormatOptions& hex_options,
                                     std::string* output) {
-    std::string_view inside;
-    std::string_view mode;
+    CommandASTNode ast = parse_command(expression);
+    const auto* call = ast.as_function_call();
+    if (!call) return false;
 
-    if (split_named_call(expression, "bin", &inside)) {
-        mode = "bin";
-    } else if (split_named_call(expression, "oct", &inside)) {
-        mode = "oct";
-    } else if (split_named_call(expression, "hex", &inside)) {
-        mode = "hex";
-    } else if (split_named_call(expression, "base", &inside)) {
-        mode = "base";
-    } else {
+    std::string_view mode = call->name;
+    if (mode != "bin" && mode != "oct" && mode != "hex" && mode != "base") {
         return false;
     }
 
-    const std::vector<std::string_view> arguments = split_top_level_arguments_view(inside);
     int base = 10;
-
     if (mode == "bin" || mode == "oct" || mode == "hex") {
-        if (arguments.size() != 1) {
+        if (call->arguments.size() != 1) {
             throw std::runtime_error(std::string(mode) + " expects exactly one argument");
         }
         base = mode == "bin" ? 2 : (mode == "oct" ? 8 : 16);
     } else {
-        if (arguments.size() != 2) {
+        if (call->arguments.size() != 2) {
             throw std::runtime_error("base expects exactly two arguments");
         }
-        DecimalParser base_parser(arguments[1], variables, functions);
+        DecimalParser base_parser(call->arguments[1].text, variables, functions);
         const double base_value = base_parser.parse();
         if (!is_integer_double(base_value)) {
             throw std::runtime_error("base conversion requires an integer base");
@@ -891,7 +897,7 @@ bool try_base_conversion_expression(std::string_view expression,
         base = static_cast<int>(round_to_long_long(base_value));
     }
 
-    DecimalParser value_parser(arguments[0], variables, functions);
+    DecimalParser value_parser(call->arguments[0].text, variables, functions);
     const double value = value_parser.parse();
     if (!is_integer_double(value)) {
         throw std::runtime_error("base conversion only accepts integers");

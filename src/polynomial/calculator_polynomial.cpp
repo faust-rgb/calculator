@@ -12,6 +12,8 @@
 #include "matrix_internal.h"
 #include "polynomial.h"
 #include "mymath.h"
+#include "math/helpers/integer_helpers.h"
+#include "parser/command_parser.h"
 
 #include <sstream>
 
@@ -43,59 +45,58 @@ void build_polynomial_recursive(
     std::vector<double>* coefficients) {
 
     const std::string trimmed_argument = trim_copy(argument);
-    std::string nested_inside;
+    CommandASTNode ast = parse_command(trimmed_argument);
 
     // 检查是否为嵌套的多项式操作
-    if (split_named_call(trimmed_argument, "poly_add", &nested_inside) ||
-        split_named_call(trimmed_argument, "poly_sub", &nested_inside) ||
-        split_named_call(trimmed_argument, "poly_mul", &nested_inside) ||
-        split_named_call(trimmed_argument, "poly_div", &nested_inside)) {
+    if (ast.kind == CommandKind::kFunctionCall) {
+        const auto* call = ast.as_function_call();
+        if (call->name == "poly_add" || call->name == "poly_sub" ||
+            call->name == "poly_mul" || call->name == "poly_div") {
 
-        const std::vector<std::string> nested_arguments =
-            split_top_level_arguments(nested_inside);
-        if (nested_arguments.size() != 2) {
-            throw std::runtime_error(
-                "polynomial operations expect exactly two arguments");
-        }
-
-        std::string lhs_variable;
-        std::string rhs_variable;
-        std::vector<double> lhs_coefficients;
-        std::vector<double> rhs_coefficients;
-        build_polynomial_recursive(ctx, nested_arguments[0],
-                                   &lhs_variable, &lhs_coefficients);
-        build_polynomial_recursive(ctx, nested_arguments[1],
-                                   &rhs_variable, &rhs_coefficients);
-
-        *variable_name = lhs_variable;
-        if (trimmed_argument.rfind("poly_add", 0) == 0) {
-            *coefficients = polynomial_add(lhs_coefficients, rhs_coefficients);
-            return;
-        }
-        if (trimmed_argument.rfind("poly_sub", 0) == 0) {
-            *coefficients = polynomial_subtract(lhs_coefficients, rhs_coefficients);
-            return;
-        }
-        if (trimmed_argument.rfind("poly_div", 0) == 0) {
-            const PolynomialDivisionResult division =
-                polynomial_divide(lhs_coefficients, rhs_coefficients);
-            bool zero_remainder = true;
-            for (double coefficient : division.remainder) {
-                if (!mymath::is_near_zero(coefficient, 1e-10)) {
-                    zero_remainder = false;
-                    break;
-                }
-            }
-            if (!zero_remainder) {
+            if (call->arguments.size() != 2) {
                 throw std::runtime_error(
-                    "nested poly_div requires zero remainder");
+                    "polynomial operations expect exactly two arguments");
             }
-            *coefficients = division.quotient;
+
+            std::string lhs_variable;
+            std::string rhs_variable;
+            std::vector<double> lhs_coefficients;
+            std::vector<double> rhs_coefficients;
+            build_polynomial_recursive(ctx, std::string(call->arguments[0].text),
+                                       &lhs_variable, &lhs_coefficients);
+            build_polynomial_recursive(ctx, std::string(call->arguments[1].text),
+                                       &rhs_variable, &rhs_coefficients);
+
+            *variable_name = lhs_variable;
+            if (call->name == "poly_add") {
+                *coefficients = polynomial_add(lhs_coefficients, rhs_coefficients);
+                return;
+            }
+            if (call->name == "poly_sub") {
+                *coefficients = polynomial_subtract(lhs_coefficients, rhs_coefficients);
+                return;
+            }
+            if (call->name == "poly_div") {
+                const PolynomialDivisionResult division =
+                    polynomial_divide(lhs_coefficients, rhs_coefficients);
+                bool zero_remainder = true;
+                for (double coefficient : division.remainder) {
+                    if (!mymath::is_near_zero(coefficient, 1e-10)) {
+                        zero_remainder = false;
+                        break;
+                    }
+                }
+                if (!zero_remainder) {
+                    throw std::runtime_error(
+                        "nested poly_div requires zero remainder");
+                }
+                *coefficients = division.quotient;
+                return;
+            }
+
+            *coefficients = polynomial_multiply(lhs_coefficients, rhs_coefficients);
             return;
         }
-
-        *coefficients = polynomial_multiply(lhs_coefficients, rhs_coefficients);
-        return;
     }
 
     // 从符号表达式构建多项式

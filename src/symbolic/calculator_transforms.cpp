@@ -2,8 +2,8 @@
 // 积分变换命令实现
 // ============================================================================
 
-#include "calculator_transforms.h"
-#include "../core/utils.h"
+#include "symbolic/calculator_transforms.h"
+#include "core/utils.h"
 
 #include <vector>
 #include <algorithm>

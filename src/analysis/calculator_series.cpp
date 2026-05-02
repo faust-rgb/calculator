@@ -15,12 +15,13 @@
 // - Newton-Puiseux 算法：处理代数曲线奇点
 // - Wynn-epsilon 加速：数值级数收敛加速
 
-#include "calculator_series.h"
-#include "symbolic_expression_internal.h"
+#include "analysis/calculator_series.h"
+#include "symbolic/symbolic_expression_internal.h"
 #include "statistics/probability.h"
+#include "math/helpers/integer_helpers.h"
 
-#include "polynomial.h"
-#include "mymath.h"
+#include "polynomial/polynomial.h"
+#include "math/mymath.h"
 #include <sstream>
 #include <iomanip>
 #include <tuple>
@@ -1462,8 +1463,6 @@ bool solve_tohplitz_stable(std::function<long double(int)> c, int n, std::vector
     q[0] = 1.0L;
 
     long double ef = c(1);  // 前向误差
-    long double eb = c(1);  // 后向误差
-
     for (int k = 0; k < n; ++k) {
         // 计算反射系数
         long double denom = ef;
@@ -2569,8 +2568,6 @@ bool detect_telescoping(const SymbolicExpression& summand,
                 // P(1) = 1 + (2a+1) + a(a+1) = a^2 + 3a + 2
                 // P(0) = a(a+1)
                 double p1 = p_values[0];  // P(1)
-                double p2 = p_values[1];  // P(2) = 4 + 2(2a+1) + a(a+1) = a^2 + 5a + 6
-
                 // 解 a^2 + 3a + 2 = p1
                 // a^2 + 3a + (2 - p1) = 0
                 double discriminant = 9.0 - 4.0 * (2.0 - p1);
@@ -2833,7 +2830,6 @@ bool levin_transform(const std::vector<double>& partial_sums,
 
     // 使用简化的 Levin 序列变换
     for (int k = 2; k < n - 1; ++k) {
-        double t_n = terms[k] * (k + 1);
         double beta = 1.0;
 
         // 计算分子和分母

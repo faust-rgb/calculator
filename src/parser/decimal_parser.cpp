@@ -1,10 +1,10 @@
 #include "decimal_parser.h"
 #include "calculator_internal_types.h"
-#include "base_parser.h"
+#include "parser/base_parser.h"
 #include "matrix.h"
 #include "mymath.h"
 #include "statistics/calculator_statistics.h"
-#include "expression_compiler.h"
+#include "command/expression_compiler.h"
 #include <algorithm>
 #include <map>
 
