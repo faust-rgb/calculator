@@ -6,6 +6,7 @@
  */
 
 #include "expression_ast.h"
+#include "expression_compiler.h"
 #include "base_parser.h"
 #include "calculator_exceptions.h"
 #include "calculator_internal_types.h"
@@ -29,42 +30,91 @@
  * @class ASTCompiler
  * @brief 将表达式字符串编译为 AST
  */
-class ASTCompiler : public BaseParser {
+class ASTCompiler {
 public:
-    ASTCompiler(std::string_view source)
-        : BaseParser(source) {}
+    ASTCompiler(const std::string& source) {
+        ExpressionLexer lexer(source);
+        if (!lexer.tokenize(&tokens_)) {
+            // Lexical error handled via parsing failure below
+        }
+    }
 
     std::unique_ptr<ExpressionAST> compile() {
+        if (tokens_.empty() || tokens_[0].kind == ExpressionTokenKind::kEOF) {
+            return nullptr;
+        }
         auto ast = parse_comparison();
-        skip_spaces();
         if (!is_at_end()) {
-            return nullptr;  // 无法完整解析
+            throw_syntax_error("unexpected token near: " + peek_token().text);
         }
         return ast;
     }
 
 private:
+    std::vector<ExpressionToken> tokens_;
+    std::size_t pos_ = 0;
+
+    bool is_at_end() const {
+        return pos_ >= tokens_.size() || tokens_[pos_].kind == ExpressionTokenKind::kEOF;
+    }
+
+    const ExpressionToken& peek_token() const {
+        return tokens_[pos_];
+    }
+
+    ExpressionToken advance_token() {
+        if (!is_at_end()) {
+            return tokens_[pos_++];
+        }
+        return tokens_.back();
+    }
+
+    bool match_operator(const std::string& op) {
+        if (!is_at_end() && peek_token().kind == ExpressionTokenKind::kOperator && peek_token().text == op) {
+            advance_token();
+            return true;
+        }
+        return false;
+    }
+
+    bool match_kind(ExpressionTokenKind kind) {
+        if (!is_at_end() && peek_token().kind == kind) {
+            advance_token();
+            return true;
+        }
+        return false;
+    }
+
+    void expect_kind(ExpressionTokenKind kind, const std::string& msg) {
+        if (!match_kind(kind)) {
+            throw_syntax_error(msg);
+        }
+    }
+
+    [[noreturn]] void throw_syntax_error(const std::string& message) const {
+        std::size_t error_pos = is_at_end() ? (tokens_.empty() ? 0 : tokens_.back().position) : peek_token().position;
+        std::ostringstream oss;
+        oss << message << " at position " << error_pos;
+        throw SyntaxError(oss.str());
+    }
+
     std::unique_ptr<ExpressionAST> parse_comparison() {
         auto left = parse_expression();
-        if (!left) return nullptr;
 
         while (true) {
-            skip_spaces();
             std::string op;
-
-            if (match_string("==")) op = "==";
-            else if (match_string("!=")) op = "!=";
-            else if (match_string("<=")) op = "<=";
-            else if (match_string(">=")) op = ">=";
-            else if (match('<')) op = "<";
-            else if (match('>')) op = ">";
+            if (match_operator("==")) op = "==";
+            else if (match_operator("!=")) op = "!=";
+            else if (match_operator("<=")) op = "<=";
+            else if (match_operator(">=")) op = ">=";
+            else if (match_operator("<")) op = "<";
+            else if (match_operator(">")) op = ">";
             else break;
 
             auto right = parse_expression();
-            if (!right) return nullptr;
-
             auto node = std::make_unique<ExpressionAST>(ExprKind::kComparison);
             node->comparison_op = op;
+            node->position = left ? left->position : 0;
             node->children.push_back(std::move(left));
             node->children.push_back(std::move(right));
             left = std::move(node);
@@ -74,20 +124,17 @@ private:
 
     std::unique_ptr<ExpressionAST> parse_expression() {
         auto left = parse_term();
-        if (!left) return nullptr;
 
         while (true) {
-            skip_spaces();
             char op = '\0';
-            if (match('+')) op = '+';
-            else if (match('-')) op = '-';
+            if (match_operator("+")) op = '+';
+            else if (match_operator("-")) op = '-';
             else break;
 
             auto right = parse_term();
-            if (!right) return nullptr;
-
             auto node = std::make_unique<ExpressionAST>(ExprKind::kBinaryOp);
             node->op_char = op;
+            node->position = left ? left->position : 0;
             node->children.push_back(std::move(left));
             node->children.push_back(std::move(right));
             left = std::move(node);
@@ -97,20 +144,17 @@ private:
 
     std::unique_ptr<ExpressionAST> parse_term() {
         auto left = parse_unary();
-        if (!left) return nullptr;
 
         while (true) {
-            skip_spaces();
             char op = '\0';
-            if (match('*')) op = '*';
-            else if (match('/')) op = '/';
+            if (match_operator("*")) op = '*';
+            else if (match_operator("/")) op = '/';
             else break;
 
             auto right = parse_unary();
-            if (!right) return nullptr;
-
             auto node = std::make_unique<ExpressionAST>(ExprKind::kBinaryOp);
             node->op_char = op;
+            node->position = left ? left->position : 0;
             node->children.push_back(std::move(left));
             node->children.push_back(std::move(right));
             left = std::move(node);
@@ -120,15 +164,12 @@ private:
 
     std::unique_ptr<ExpressionAST> parse_power() {
         auto base = parse_primary();
-        if (!base) return nullptr;
 
-        skip_spaces();
-        if (match('^')) {
+        if (match_operator("^")) {
             auto exponent = parse_unary();
-            if (!exponent) return nullptr;
-
             auto node = std::make_unique<ExpressionAST>(ExprKind::kBinaryOp);
             node->op_char = '^';
+            node->position = base ? base->position : 0;
             node->children.push_back(std::move(base));
             node->children.push_back(std::move(exponent));
             return node;
@@ -137,16 +178,16 @@ private:
     }
 
     std::unique_ptr<ExpressionAST> parse_unary() {
-        skip_spaces();
-        if (match('+')) {
+        if (match_operator("+")) {
             return parse_unary();
         }
-        if (match('-')) {
+        if (!is_at_end() && peek_token().kind == ExpressionTokenKind::kOperator && peek_token().text == "-") {
+            std::size_t pos = peek_token().position;
+            advance_token();
             auto operand = parse_unary();
-            if (!operand) return nullptr;
-
             auto node = std::make_unique<ExpressionAST>(ExprKind::kUnaryOp);
             node->op_char = '-';
+            node->position = pos;
             node->children.push_back(std::move(operand));
             return node;
         }
@@ -154,135 +195,58 @@ private:
     }
 
     std::unique_ptr<ExpressionAST> parse_primary() {
-        skip_spaces();
+        if (is_at_end()) throw_syntax_error("expected expression");
+        const auto& tok = peek_token();
 
         // 括号表达式
-        if (match('(')) {
-            auto expr = parse_expression();
-            if (!expr) return nullptr;
-            skip_spaces();
-            if (!match(')')) return nullptr;
+        if (match_kind(ExpressionTokenKind::kLParen)) {
+            auto expr = parse_comparison();
+            expect_kind(ExpressionTokenKind::kRParen, "expected ')' after expression");
             return expr;
         }
 
         // 标识符或函数调用
-        if (peek_is_alpha()) {
-            std::string name(parse_identifier());
-            skip_spaces();
+        if (tok.kind == ExpressionTokenKind::kIdentifier) {
+            std::string name = tok.text;
+            std::size_t pos = tok.position;
+            advance_token();
 
             // 函数调用
-            if (peek('(')) {
-                return parse_function_call(name);
+            if (match_kind(ExpressionTokenKind::kLParen)) {
+                std::vector<std::unique_ptr<ExpressionAST>> args;
+                if (!is_at_end() && peek_token().kind != ExpressionTokenKind::kRParen) {
+                    while (true) {
+                        args.push_back(parse_comparison());
+                        if (!match_kind(ExpressionTokenKind::kComma)) break;
+                    }
+                }
+                expect_kind(ExpressionTokenKind::kRParen, "expected ')' after arguments");
+
+                auto node = std::make_unique<ExpressionAST>(ExprKind::kFunctionCall);
+                node->identifier = name;
+                node->position = pos;
+                node->children = std::move(args);
+                return node;
             }
 
             // 变量引用
             auto node = std::make_unique<ExpressionAST>(ExprKind::kVariable);
             node->identifier = name;
+            node->position = pos;
             return node;
         }
 
         // 数字字面量
-        return parse_number_ast();
-    }
-
-    std::unique_ptr<ExpressionAST> parse_function_call(const std::string& name) {
-        expect('(');
-        std::vector<std::unique_ptr<ExpressionAST>> args;
-
-        skip_spaces();
-        if (!peek(')')) {
-            while (true) {
-                auto arg = parse_expression();
-                if (!arg) return nullptr;
-                args.push_back(std::move(arg));
-
-                skip_spaces();
-                if (!match(',')) break;
-            }
-        }
-        skip_spaces();
-        if (!match(')')) return nullptr;
-
-        auto node = std::make_unique<ExpressionAST>(ExprKind::kFunctionCall);
-        node->identifier = name;
-        node->children = std::move(args);
-        return node;
-    }
-
-    std::unique_ptr<ExpressionAST> parse_number_ast() {
-        skip_spaces();
-
-        // 十六进制/二进制/八进制
-        if (!is_at_end() && source_[pos_] == '0' && pos_ + 1 < source_.size()) {
-            int base = 10;
-            if (prefixed_base(source_[pos_ + 1], &base)) {
-                pos_ += 2;
-                while (!is_at_end()) {
-                    int digit = digit_value(source_[pos_]);
-                    if (digit < 0 || digit >= base) break;
-                    ++pos_;
-                }
-                // 简化处理：直接返回 0，实际使用时回退到 DecimalParser
-                return nullptr;
-            }
-        }
-
-        const std::size_t start = pos_;
-        bool has_digit = false;
-        bool seen_dot = false;
-
-        while (!is_at_end()) {
-            char ch = source_[pos_];
-            if (std::isdigit(static_cast<unsigned char>(ch))) {
-                has_digit = true;
-                ++pos_;
-            } else if (ch == '.' && !seen_dot) {
-                seen_dot = true;
-                ++pos_;
-            } else {
-                break;
-            }
-        }
-
-        // 科学计数法
-        if (!is_at_end() && (source_[pos_] == 'e' || source_[pos_] == 'E')) {
-            ++pos_;
-            if (!is_at_end() && (source_[pos_] == '+' || source_[pos_] == '-')) {
-                ++pos_;
-            }
-            while (!is_at_end() && std::isdigit(static_cast<unsigned char>(source_[pos_]))) {
-                ++pos_;
-            }
-        }
-
-        if (!has_digit) {
-            return nullptr;
-        }
-
-        try {
-            double value = std::stod(std::string(source_.substr(start, pos_ - start)));
+        if (tok.kind == ExpressionTokenKind::kNumber) {
             auto node = std::make_unique<ExpressionAST>(ExprKind::kNumber);
-            node->number_value = value;
+            node->number_value = tok.number_value;
+            node->string_value = tok.text;
+            node->position = tok.position;
+            advance_token();
             return node;
-        } catch (...) {
-            return nullptr;
         }
-    }
 
-    int prefixed_base(char prefix, int* base) {
-        switch (prefix) {
-            case 'x': case 'X': *base = 16; return 1;
-            case 'b': case 'B': *base = 2; return 1;
-            case 'o': case 'O': *base = 8; return 1;
-            default: return 0;
-        }
-    }
-
-    int digit_value(char ch) {
-        if (ch >= '0' && ch <= '9') return ch - '0';
-        if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
-        if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
-        return -1;
+        throw_syntax_error("unexpected token: " + tok.text);
     }
 };
 
@@ -293,6 +257,13 @@ private:
 /**
  * @brief 求值编译后的 AST
  */
+    template <typename ExceptionType = SyntaxError>
+    [[noreturn]] static void throw_ast_error(const std::string& message, std::size_t pos) {
+        std::ostringstream oss;
+        oss << message << " at position " << pos;
+        throw ExceptionType(oss.str());
+    }
+
 double evaluate_ast(const ExpressionAST* ast,
                     const VariableResolver& variables,
                     const std::map<std::string, CustomFunction>* functions,
@@ -314,7 +285,7 @@ double evaluate_ast(const ExpressionAST* ast,
                 if (found) {
                     if (found->is_matrix || found->is_complex ||
                         found->is_string || found->has_symbolic_text) {
-                        throw MathError("unsupported variable type: " + ast->identifier);
+                        throw_ast_error<MathError>("unsupported variable type: " + ast->identifier, ast->position);
                     }
                     return found->exact ? rational_to_double(found->rational) : found->decimal;
                 }
@@ -329,16 +300,16 @@ double evaluate_ast(const ExpressionAST* ast,
             if (found) {
                 if (found->is_matrix || found->is_complex ||
                     found->is_string || found->has_symbolic_text) {
-                    throw MathError("unsupported variable type: " + ast->identifier);
+                    throw_ast_error<MathError>("unsupported variable type: " + ast->identifier, ast->position);
                 }
                 return found->exact ? rational_to_double(found->rational) : found->decimal;
             }
-            throw UndefinedError("unknown variable: " + ast->identifier);
+            throw_ast_error<UndefinedError>("unknown variable: " + ast->identifier, ast->position);
         }
 
         case ExprKind::kBinaryOp: {
             if (ast->children.size() != 2) {
-                throw MathError("invalid binary operation");
+                throw_ast_error<MathError>("invalid binary operation", ast->position);
             }
             double left = evaluate_ast(ast->children[0].get(), variables,
                                        functions, scalar_functions,
@@ -352,17 +323,20 @@ double evaluate_ast(const ExpressionAST* ast,
                 case '-': return left - right;
                 case '*': return left * right;
                 case '/':
-                    if (right == 0.0) throw MathError("division by zero");
+                    if (right == 0.0) throw_ast_error<MathError>("division by zero", ast->position);
                     return left / right;
+                case '%':
+                    if (right == 0.0) throw_ast_error<MathError>("modulo by zero", ast->position);
+                    return std::fmod(left, right);
                 case '^': return mymath::pow(left, right);
                 default:
-                    throw MathError("unknown operator");
+                    throw_ast_error<MathError>("unknown operator", ast->position);
             }
         }
 
         case ExprKind::kUnaryOp: {
             if (ast->children.size() != 1) {
-                throw MathError("invalid unary operation");
+                throw_ast_error<MathError>("invalid unary operation", ast->position);
             }
             double operand = evaluate_ast(ast->children[0].get(), variables,
                                           functions, scalar_functions,
@@ -371,13 +345,13 @@ double evaluate_ast(const ExpressionAST* ast,
                 case '-': return -operand;
                 case '+': return operand;
                 default:
-                    throw MathError("unknown unary operator");
+                    throw_ast_error<MathError>("unknown unary operator", ast->position);
             }
         }
 
         case ExprKind::kComparison: {
             if (ast->children.size() != 2) {
-                throw MathError("invalid comparison");
+                throw_ast_error<MathError>("invalid comparison", ast->position);
             }
             double left = evaluate_ast(ast->children[0].get(), variables,
                                        functions, scalar_functions,
@@ -393,7 +367,7 @@ double evaluate_ast(const ExpressionAST* ast,
             if (ast->comparison_op == "<=") return left <= right ? 1.0 : 0.0;
             if (ast->comparison_op == ">=") return left >= right ? 1.0 : 0.0;
 
-            throw MathError("unknown comparison operator: " + ast->comparison_op);
+            throw_ast_error<MathError>("unknown comparison operator: " + ast->comparison_op, ast->position);
         }
 
         case ExprKind::kFunctionCall: {
@@ -410,11 +384,22 @@ double evaluate_ast(const ExpressionAST* ast,
                 auto it = functions->find(ast->identifier);
                 if (it != functions->end()) {
                     if (args.size() != it->second.parameter_names.size()) {
-                        throw MathError("custom function " + ast->identifier + " expects " +
-                                        std::to_string(it->second.parameter_names.size()) + " arguments");
+                        throw_ast_error<MathError>("custom function " + ast->identifier + " expects " +
+                                        std::to_string(it->second.parameter_names.size()) + " arguments", ast->position);
                     }
-                    // 简化处理：返回 0，实际使用时回退到 DecimalParser
-                    throw MathError("custom function in AST not supported");
+                    std::map<std::string, StoredValue> snapshot = variables.snapshot();
+                    for (std::size_t i = 0; i < args.size(); ++i) {
+                        StoredValue arg_value;
+                        arg_value.decimal = args[i];
+                        snapshot[it->second.parameter_names[i]] = arg_value;
+                    }
+                    // Evaluate the custom function expression properly via AST!
+                    VariableResolver custom_vars(&snapshot, nullptr);
+                    auto compiled = compile_expression_ast(std::string(it->second.expression));
+                    if (!compiled) {
+                        throw_ast_error<MathError>("failed to compile custom function " + ast->identifier, ast->position);
+                    }
+                    return evaluate_ast(compiled.get(), custom_vars, functions, scalar_functions, has_script_function, invoke_script_function);
                 }
             }
 
@@ -431,12 +416,12 @@ double evaluate_ast(const ExpressionAST* ast,
                 }
             }
 
-            throw UndefinedError("unknown function: " + ast->identifier);
+            throw_ast_error<UndefinedError>("unknown function: " + ast->identifier, ast->position);
         }
 
         case ExprKind::kConditional: {
             if (ast->children.size() != 3) {
-                throw MathError("invalid conditional");
+                throw_ast_error<MathError>("invalid conditional", ast->position);
             }
             double cond = evaluate_ast(ast->children[0].get(), variables,
                                        functions, scalar_functions,
@@ -452,7 +437,7 @@ double evaluate_ast(const ExpressionAST* ast,
         }
 
         default:
-            throw MathError("unknown AST node kind");
+            throw_ast_error<MathError>("unknown AST node kind", ast->position);
     }
 }
 
@@ -518,21 +503,7 @@ bool bind_variable_slots(ExpressionAST* ast, const VariableResolver& variables) 
 // ============================================================================
 
 bool can_compile_to_ast(const std::string& expression) {
-    // 排除无法编译的表达式类型
     if (expression.empty()) return false;
-
-    // 包含字符串字面量
-    if (expression.find('"') != std::string::npos) return false;
-
-    // 包含矩阵
-    if (expression.find('[') != std::string::npos) return false;
-
-    // 包含三元运算符（复杂，暂不支持）
-    if (expression.find('?') != std::string::npos) return false;
-
-    // 包含 rat() 调用（需要特殊处理）
-    if (expression.find("rat(") != std::string::npos) return false;
-
     return true;
 }
 
@@ -545,7 +516,8 @@ std::unique_ptr<ExpressionAST> compile_expression_ast(const std::string& express
     try {
         return compiler.compile();
     } catch (...) {
-        return nullptr;
+        // Will throw SyntaxError if not matching
+        throw;
     }
 }
 

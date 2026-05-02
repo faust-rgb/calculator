@@ -49,9 +49,13 @@ struct ExpressionAST {
 
     // 数值（kNumber）
     double number_value = 0.0;
+    std::string string_value; // 用于精确解析数字的原始文本
 
     // 标识符/函数名（kVariable, kFunctionCall）
     std::string identifier;
+
+    // 源字符串位置，用于求值时精准报错
+    std::size_t position = 0;
 
     // 子节点（kBinaryOp, kUnaryOp, kFunctionCall, kComparison, kConditional）
     std::vector<std::unique_ptr<ExpressionAST>> children;

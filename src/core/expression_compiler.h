@@ -109,6 +109,30 @@ struct ExpressionToken {
     std::size_t position = 0;   ///< 在源字符串中的位置
 };
 
+/**
+ * @class ExpressionLexer
+ * @brief 统一的表达式词法分析器，供 AST 编译器使用
+ */
+class ExpressionLexer {
+public:
+    explicit ExpressionLexer(std::string_view source);
+    bool tokenize(std::vector<ExpressionToken>* tokens);
+
+private:
+    std::string_view source_;
+    std::size_t pos_ = 0;
+
+    void skip_spaces();
+    bool is_at_end() const;
+    char peek() const;
+    void expect(char expected);
+    std::string_view parse_identifier();
+
+    bool parse_string_token(std::vector<ExpressionToken>* tokens);
+    bool parse_number_token(std::vector<ExpressionToken>* tokens);
+    bool parse_operator_token(std::vector<ExpressionToken>* tokens);
+};
+
 // ============================================================================
 // 表达式缓存
 // ============================================================================

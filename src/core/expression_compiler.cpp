@@ -10,86 +10,118 @@
 // 表达式词法分析器
 // ============================================================================
 
-namespace {
+ExpressionLexer::ExpressionLexer(std::string_view source)
+    : source_(source), pos_(0) {}
 
-/**
- * @class ExpressionLexer
- * @brief 表达式词法分析器
- */
-class ExpressionLexer : public BaseParser {
-public:
-    explicit ExpressionLexer(std::string_view source)
-        : BaseParser(source) {}
+void ExpressionLexer::skip_spaces() {
+    while (pos_ < source_.size() &&
+           std::isspace(static_cast<unsigned char>(source_[pos_]))) {
+        ++pos_;
+    }
+}
 
-    bool tokenize(std::vector<ExpressionToken>* tokens) {
-        tokens->clear();
+bool ExpressionLexer::is_at_end() const {
+    return pos_ >= source_.size();
+}
 
-        while (!is_at_end()) {
-            skip_spaces();
-            if (is_at_end()) break;
+char ExpressionLexer::peek() const {
+    if (is_at_end()) return '\0';
+    return source_[pos_];
+}
 
-            const char ch = peek();
-            const std::size_t pos = pos_;
+void ExpressionLexer::expect(char expected) {
+    if (peek() == expected) {
+        ++pos_;
+    } else {
+        // Simple error handling for lexer
+        throw std::runtime_error("Lexer expected character not found.");
+    }
+}
 
-            // 字符串字面量
-            if (ch == '"') {
-                if (!parse_string_token(tokens)) return false;
-                continue;
-            }
+std::string_view ExpressionLexer::parse_identifier() {
+    std::size_t start = pos_;
+    while (!is_at_end() && (std::isalnum(static_cast<unsigned char>(source_[pos_])) ||
+                            source_[pos_] == '_' || source_[pos_] == '\'')) {
+        ++pos_;
+    }
+    return source_.substr(start, pos_ - start);
+}
 
-            // 数字字面量
-            if (std::isdigit(static_cast<unsigned char>(ch)) ||
-                (ch == '.' && pos_ + 1 < source_.size() &&
-                 std::isdigit(static_cast<unsigned char>(source_[pos_ + 1])))) {
-                if (!parse_number_token(tokens)) return false;
-                continue;
-            }
+bool ExpressionLexer::tokenize(std::vector<ExpressionToken>* tokens) {
+    tokens->clear();
 
-            // 标识符
-            if (std::isalpha(static_cast<unsigned char>(ch)) || ch == '_') {
-                tokens->push_back({ExpressionTokenKind::kIdentifier, std::string(parse_identifier()), 0.0, pos});
-                continue;
-            }
+    while (!is_at_end()) {
+        skip_spaces();
+        if (is_at_end()) break;
 
-            // 运算符和符号
-            if (!parse_operator_token(tokens)) return false;
+        const char ch = peek();
+        const std::size_t pos = pos_;
+
+        // 字符串字面量
+        if (ch == '"') {
+            if (!parse_string_token(tokens)) return false;
+            continue;
         }
 
-        tokens->push_back({ExpressionTokenKind::kEOF, "", 0.0, pos_});
-        return true;
+        // 数字字面量
+        if (std::isdigit(static_cast<unsigned char>(ch)) ||
+            (ch == '.' && pos_ + 1 < source_.size() &&
+             std::isdigit(static_cast<unsigned char>(source_[pos_ + 1])))) {
+            if (!parse_number_token(tokens)) return false;
+            continue;
+        }
+
+        // 标识符
+        if (std::isalpha(static_cast<unsigned char>(ch)) || ch == '_') {
+            tokens->push_back({ExpressionTokenKind::kIdentifier, std::string(parse_identifier()), 0.0, pos});
+            continue;
+        }
+
+        // 运算符和符号
+        if (!parse_operator_token(tokens)) return false;
     }
 
-private:
-    void skip_spaces() {
-        while (pos_ < source_.size() &&
-               std::isspace(static_cast<unsigned char>(source_[pos_]))) {
-            ++pos_;
+    tokens->push_back({ExpressionTokenKind::kEOF, "", 0.0, pos_});
+    return true;
+}
+
+bool ExpressionLexer::parse_string_token(std::vector<ExpressionToken>* tokens) {
+    const std::size_t start = pos_;
+    expect('"');
+    bool escaping = false;
+
+    while (!is_at_end()) {
+        const char ch = source_[pos_++];
+        if (escaping) {
+            escaping = false;
+        } else if (ch == '\\') {
+            escaping = true;
+        } else if (ch == '"') {
+            std::string text = std::string(source_.substr(start, pos_ - start));
+            tokens->push_back({ExpressionTokenKind::kString, text, 0.0, start});
+            return true;
         }
     }
 
-    bool parse_string_token(std::vector<ExpressionToken>* tokens) {
-        const std::size_t start = pos_;
-        expect('"');
-        bool escaping = false;
+    return false; // 未终止的字符串
+}
 
-        while (!is_at_end()) {
-            const char ch = source_[pos_++];
-            if (escaping) {
-                escaping = false;
-            } else if (ch == '\\') {
-                escaping = true;
-            } else if (ch == '"') {
-                std::string text = std::string(source_.substr(start, pos_ - start));
-                tokens->push_back({ExpressionTokenKind::kString, text, 0.0, start});
-                return true;
+bool ExpressionLexer::parse_number_token(std::vector<ExpressionToken>* tokens) {
+    const std::size_t start = pos_;
+    
+    // 处理进制前缀 (0x, 0b, 0o)
+    if (peek() == '0' && pos_ + 1 < source_.size()) {
+        char base_char = std::tolower(static_cast<unsigned char>(source_[pos_ + 1]));
+        if (base_char == 'x' || base_char == 'b' || base_char == 'o') {
+            pos_ += 2;
+            while (!is_at_end() && std::isxdigit(static_cast<unsigned char>(peek()))) {
+                pos_++;
             }
+            goto end_num;
         }
-
-        return false; // 未终止的字符串
     }
 
-    bool parse_number_token(std::vector<ExpressionToken>* tokens) {
-        const std::size_t start = pos_;
+    { // 浮点数/普通数字解析
         bool seen_dot = false;
 
         // 处理前导小数点
@@ -122,23 +154,29 @@ private:
                 ++pos_;
             }
         }
+    }
 
-        // 虚数单位 i
-        if (!is_at_end() && peek() == 'i') {
-            // 检查 i 后面是否是标识符字符
-            if (pos_ + 1 >= source_.size() ||
-                (!std::isalnum(static_cast<unsigned char>(source_[pos_ + 1])) &&
-                 source_[pos_ + 1] != '_')) {
-                // 这是一个虚数，如 3i
-                ++pos_;
-            }
+end_num:
+    // 虚数单位 i
+    if (!is_at_end() && peek() == 'i') {
+        // 检查 i 后面是否是标识符字符
+        if (pos_ + 1 >= source_.size() ||
+            (!std::isalnum(static_cast<unsigned char>(source_[pos_ + 1])) &&
+             source_[pos_ + 1] != '_')) {
+            // 这是一个虚数，如 3i
+            ++pos_;
         }
+    }
 
-        std::string text = std::string(source_.substr(start, pos_ - start));
-        double value = 0.0;
-
-        // 解析数值
-        try {
+    std::string text = std::string(source_.substr(start, pos_ - start));
+    double value = 0.0;
+    
+    // 解析数值
+    try {
+        // 处理进制前缀 (0x, 0b, 0o)
+        if (text.size() > 2 && text[0] == '0' && std::isalpha(text[1])) {
+            value = static_cast<double>(parse_prefixed_integer_token(text));
+        } else {
             // 处理虚数
             std::string num_part = text;
             if (!text.empty() && text.back() == 'i') {
@@ -147,104 +185,102 @@ private:
             if (!num_part.empty()) {
                 value = std::stod(num_part);
             }
-        } catch (...) {
-            return false;
         }
+    } catch (...) {
+        return false;
+    }
 
-        tokens->push_back({ExpressionTokenKind::kNumber, text, value, start});
+    tokens->push_back({ExpressionTokenKind::kNumber, text, value, start});
+    return true;
+}
+
+bool ExpressionLexer::parse_operator_token(std::vector<ExpressionToken>* tokens) {
+    const char ch = peek();
+    const std::size_t pos = pos_;
+
+    // 多字符运算符
+    if (ch == '=' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '=') {
+        pos_ += 2;
+        tokens->push_back({ExpressionTokenKind::kOperator, "==", 0.0, pos});
+        return true;
+    }
+    if (ch == '!' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '=') {
+        pos_ += 2;
+        tokens->push_back({ExpressionTokenKind::kOperator, "!=", 0.0, pos});
+        return true;
+    }
+    if (ch == '<' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '=') {
+        pos_ += 2;
+        tokens->push_back({ExpressionTokenKind::kOperator, "<=", 0.0, pos});
+        return true;
+    }
+    if (ch == '>' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '=') {
+        pos_ += 2;
+        tokens->push_back({ExpressionTokenKind::kOperator, ">=", 0.0, pos});
+        return true;
+    }
+    if (ch == '&' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '&') {
+        pos_ += 2;
+        tokens->push_back({ExpressionTokenKind::kOperator, "&&", 0.0, pos});
+        return true;
+    }
+    if (ch == '|' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '|') {
+        pos_ += 2;
+        tokens->push_back({ExpressionTokenKind::kOperator, "||", 0.0, pos});
         return true;
     }
 
-    bool parse_operator_token(std::vector<ExpressionToken>* tokens) {
-        const char ch = peek();
-        const std::size_t pos = pos_;
-
-        // 多字符运算符
-        if (ch == '=' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '=') {
-            pos_ += 2;
-            tokens->push_back({ExpressionTokenKind::kOperator, "==", 0.0, pos});
+    // 单字符符号
+    ++pos_;
+    switch (ch) {
+        case '+':
+        case '-':
+        case '*':
+        case '/':
+        case '^':
+        case '%':
+            tokens->push_back({ExpressionTokenKind::kOperator, std::string(1, ch), 0.0, pos});
             return true;
-        }
-        if (ch == '!' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '=') {
-            pos_ += 2;
-            tokens->push_back({ExpressionTokenKind::kOperator, "!=", 0.0, pos});
+        case '(':
+            tokens->push_back({ExpressionTokenKind::kLParen, "(", 0.0, pos});
             return true;
-        }
-        if (ch == '<' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '=') {
-            pos_ += 2;
-            tokens->push_back({ExpressionTokenKind::kOperator, "<=", 0.0, pos});
+        case ')':
+            tokens->push_back({ExpressionTokenKind::kRParen, ")", 0.0, pos});
             return true;
-        }
-        if (ch == '>' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '=') {
-            pos_ += 2;
-            tokens->push_back({ExpressionTokenKind::kOperator, ">=", 0.0, pos});
+        case '[':
+            tokens->push_back({ExpressionTokenKind::kLBracket, "[", 0.0, pos});
             return true;
-        }
-        if (ch == '&' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '&') {
-            pos_ += 2;
-            tokens->push_back({ExpressionTokenKind::kOperator, "&&", 0.0, pos});
+        case ']':
+            tokens->push_back({ExpressionTokenKind::kRBracket, "]", 0.0, pos});
             return true;
-        }
-        if (ch == '|' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '|') {
-            pos_ += 2;
-            tokens->push_back({ExpressionTokenKind::kOperator, "||", 0.0, pos});
+        case ',':
+            tokens->push_back({ExpressionTokenKind::kComma, ",", 0.0, pos});
             return true;
-        }
-
-        // 单字符符号
-        ++pos_;
-        switch (ch) {
-            case '+':
-            case '-':
-            case '*':
-            case '/':
-            case '^':
-            case '%':
-                tokens->push_back({ExpressionTokenKind::kOperator, std::string(1, ch), 0.0, pos});
-                return true;
-            case '(':
-                tokens->push_back({ExpressionTokenKind::kLParen, "(", 0.0, pos});
-                return true;
-            case ')':
-                tokens->push_back({ExpressionTokenKind::kRParen, ")", 0.0, pos});
-                return true;
-            case '[':
-                tokens->push_back({ExpressionTokenKind::kLBracket, "[", 0.0, pos});
-                return true;
-            case ']':
-                tokens->push_back({ExpressionTokenKind::kRBracket, "]", 0.0, pos});
-                return true;
-            case ',':
-                tokens->push_back({ExpressionTokenKind::kComma, ",", 0.0, pos});
-                return true;
-            case ';':
-                tokens->push_back({ExpressionTokenKind::kSemicolon, ";", 0.0, pos});
-                return true;
-            case ':':
-                tokens->push_back({ExpressionTokenKind::kColon, ":", 0.0, pos});
-                return true;
-            case '?':
-                tokens->push_back({ExpressionTokenKind::kQuestion, "?", 0.0, pos});
-                return true;
-            case '=':
-                tokens->push_back({ExpressionTokenKind::kEqual, "=", 0.0, pos});
-                return true;
-            case '<':
-                tokens->push_back({ExpressionTokenKind::kOperator, "<", 0.0, pos});
-                return true;
-            case '>':
-                tokens->push_back({ExpressionTokenKind::kOperator, ">", 0.0, pos});
-                return true;
-            case '!':
-                tokens->push_back({ExpressionTokenKind::kOperator, "!", 0.0, pos});
-                return true;
-            default:
-                return false;
-        }
+        case ';':
+            tokens->push_back({ExpressionTokenKind::kSemicolon, ";", 0.0, pos});
+            return true;
+        case ':':
+            tokens->push_back({ExpressionTokenKind::kColon, ":", 0.0, pos});
+            return true;
+        case '?':
+            tokens->push_back({ExpressionTokenKind::kQuestion, "?", 0.0, pos});
+            return true;
+        case '=':
+            tokens->push_back({ExpressionTokenKind::kEqual, "=", 0.0, pos});
+            return true;
+        case '<':
+            tokens->push_back({ExpressionTokenKind::kOperator, "<", 0.0, pos});
+            return true;
+        case '>':
+            tokens->push_back({ExpressionTokenKind::kOperator, ">", 0.0, pos});
+            return true;
+        case '!':
+            tokens->push_back({ExpressionTokenKind::kOperator, "!", 0.0, pos});
+            return true;
+        default:
+            return false;
     }
-};
-
-} // namespace
+}
 
 // ============================================================================
 // 表达式分析函数
