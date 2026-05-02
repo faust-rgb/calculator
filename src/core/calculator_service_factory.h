@@ -9,7 +9,7 @@
 #ifndef CALCULATOR_SERVICE_FACTORY_H
 #define CALCULATOR_SERVICE_FACTORY_H
 
-#include "core/calculator_module.h"
+#include "module/calculator_module.h"
 #include "core/calculator.h"
 #include "core/calculator_internal_types.h"
 

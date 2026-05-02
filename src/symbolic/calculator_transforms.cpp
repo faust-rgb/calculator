@@ -3,7 +3,7 @@
 // ============================================================================
 
 #include "symbolic/calculator_transforms.h"
-#include "core/utils.h"
+#include "core/string_utils.h"
 
 #include <vector>
 #include <algorithm>

@@ -1,6 +1,6 @@
 #include "dsp_module.h"
 #include "residue.h"
-#include "../core/utils.h"
+#include "../core/string_utils.h"
 #include <stdexcept>
 
 std::vector<std::string> DspModule::get_commands() const {

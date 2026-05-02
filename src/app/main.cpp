@@ -11,7 +11,7 @@
  */
 
 #include "calculator.h"
-#include "utils.h"
+#include "string_utils.h"
 
 #include <algorithm>
 #include <cctype>

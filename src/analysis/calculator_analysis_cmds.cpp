@@ -6,7 +6,8 @@
 #include "symbolic/calculator_symbolic_commands.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "analysis/function_analysis.h"
-#include "core/utils.h"
+#include "core/string_utils.h"
+#include "core/format_utils.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include <algorithm>

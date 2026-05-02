@@ -2,7 +2,7 @@
 #include "matrix.h"
 #include "matrix_internal.h"
 #include "mymath.h"
-#include "../core/utils.h"
+#include "../core/string_utils.h"
 #include "../core/calculator_exceptions.h"
 #include <stdexcept>
 #include <cmath>

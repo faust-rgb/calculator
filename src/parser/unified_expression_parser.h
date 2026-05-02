@@ -18,7 +18,7 @@
 #ifndef PARSER_UNIFIED_EXPRESSION_PARSER_H
 #define PARSER_UNIFIED_EXPRESSION_PARSER_H
 
-#include "parser/unified_parser_factory.h"
+#include "parser/token_types.h"
 #include "precise/rational.h"
 #include "types/stored_value.h"
 #include "matrix.h"
@@ -32,6 +32,11 @@ class VariableResolver;
 struct CustomFunction;
 struct ExpressionAST;
 struct ExpressionCache;
+class UnifiedParserFactory;
+
+// 回调类型定义
+using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
+using InvokeScriptFunctionCallback = std::function<double(const std::string&, const std::vector<double>&)>;
 
 // ============================================================================
 // 统一表达式解析器
@@ -50,8 +55,6 @@ class UnifiedExpressionParser {
 public:
     using ScalarFunction = std::function<double(const std::vector<double>&)>;
     using MatrixFunction = std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>;
-    using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
-    using InvokeScriptFunctionCallback = std::function<double(const std::string&, const std::vector<double>&)>;
 
     /**
      * @brief 构造解析器
@@ -72,7 +75,7 @@ public:
     /**
      * @brief 分析表达式特征
      */
-    UnifiedParserFactory::AnalysisResult analyze(const std::string& expression);
+    ExpressionFeature analyze_features(const std::string& expression);
 
     /**
      * @brief 判断表达式是否可以编译为 AST
@@ -144,28 +147,54 @@ private:
     HasScriptFunctionCallback has_script_function_;
     InvokeScriptFunctionCallback invoke_script_function_;
 
-    UnifiedParserFactory factory_;
+    std::unique_ptr<UnifiedParserFactory> factory_;
 };
 
 // ============================================================================
-// 便捷函数
+// 便捷函数（替代 DecimalParser 和 ExactParser）
 // ============================================================================
 
 /**
- * @brief 快速求值十进制表达式
+ * @brief 快速求值十进制表达式（替代 parse_decimal_expression）
  */
-double evaluate_expression(
+double parse_decimal_expression(
     const std::string& expression,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions = nullptr,
-    const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions = nullptr);
+    const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions = nullptr,
+    HasScriptFunctionCallback has_script_function = {},
+    InvokeScriptFunctionCallback invoke_script_function = {});
 
 /**
- * @brief 快速求值精确有理数表达式
+ * @brief 快速求值精确有理数表达式（替代 parse_exact_expression）
  */
-Rational evaluate_expression_exact(
+Rational parse_exact_expression(
     const std::string& expression,
     const VariableResolver& variables,
-    const std::map<std::string, CustomFunction>* functions = nullptr);
+    const std::map<std::string, CustomFunction>* functions = nullptr,
+    HasScriptFunctionCallback has_script_function = {});
+
+/**
+ * @brief 尝试求值可能包含矩阵的表达式（替代 try_evaluate_matrix_expression）
+ */
+bool try_evaluate_matrix_expression(
+    const std::string& expression,
+    const VariableResolver& variables,
+    const std::map<std::string, CustomFunction>* functions,
+    const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions,
+    const std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>* matrix_functions,
+    const std::map<std::string, matrix::ValueFunction>* value_functions,
+    HasScriptFunctionCallback has_script_function,
+    InvokeScriptFunctionCallback invoke_script_function,
+    matrix::Value* value);
+
+/**
+ * @brief 求值已编译的 AST（精确有理数模式）
+ */
+Rational evaluate_ast_exact(
+    const ExpressionAST* ast,
+    const VariableResolver& variables,
+    const std::map<std::string, CustomFunction>* functions,
+    HasScriptFunctionCallback has_script_function);
 
 #endif // PARSER_UNIFIED_EXPRESSION_PARSER_H

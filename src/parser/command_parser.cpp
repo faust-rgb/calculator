@@ -4,10 +4,37 @@
 
 #include "parser/command_parser.h"
 #include "parser/syntax_validator.h"
-#include "core/utils.h"
+#include "core/string_utils.h"
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+
+// ============================================================================
+// 内部函数
+// ============================================================================
+
+namespace {
+
+void compile_expression_info(ExpressionInfo& info) {
+    if (info.text.empty() || info.cache) {
+        return;  // 已缓存或空表达式
+    }
+
+    info.cache = std::make_shared<ExpressionCache>();
+    info.cache->expanded = std::string(info.text);
+    info.cache->hint = analyze_expression_hint(info.cache->expanded);
+    info.cache->features = analyze_expression_features(info.cache->expanded);
+
+    // 尝试编译 AST（仅对标量表达式）
+    if (info.cache->hint == ExpressionHint::kScalar) {
+        info.cache->compiled_ast = compile_expression_ast(info.cache->expanded);
+        if (info.cache->compiled_ast) {
+            info.cache->is_compiled = true;
+        }
+    }
+}
+
+} // namespace
 
 // ============================================================================
 // CommandASTNode 实现
@@ -380,10 +407,15 @@ CommandASTNode CommandParser::parse_expression() {
 
     // 增强的语法预检：使用 SyntaxValidator
     static SyntaxValidator validator;
-    if (validator.has_errors(expr)) {
-        std::string error_msg = validator.get_first_error(expr);
-        // 记录错误信息，但不阻止解析
-        // 错误将在求值阶段报告
+    std::vector<SyntaxErrorInfo> syntax_errors = validator.validate(expr);
+    if (!syntax_errors.empty()) {
+        // 检查是否有严重错误
+        for (const auto& err : syntax_errors) {
+            if (err.severity == Severity::kError) {
+                // 抛出语法错误，提供精确的位置信息
+                throw_syntax_error(err.message + " at position " + std::to_string(err.position));
+            }
+        }
     }
 
     // 创建带预编译缓存的 ExpressionInfo
@@ -462,75 +494,4 @@ bool CommandParser::check_paren_balance(std::string_view expr) const {
 CommandASTNode parse_command(std::string_view source) {
     CommandParser parser(source);
     return parser.parse();
-}
-
-std::vector<std::string_view> split_command_arguments(std::string_view text) {
-    return split_top_level_arguments_view(text);
-}
-
-// ============================================================================
-// 表达式预编译实现
-// ============================================================================
-
-void compile_expression_info(ExpressionInfo& info) {
-    if (info.text.empty() || info.cache) {
-        return;  // 已缓存或空表达式
-    }
-
-    info.cache = std::make_shared<ExpressionCache>();
-    info.cache->expanded = std::string(info.text);
-    info.cache->hint = analyze_expression_hint(info.cache->expanded);
-    info.cache->features = analyze_expression_features(info.cache->expanded);
-
-    // 尝试编译 AST（仅对标量表达式）
-    if (info.cache->hint == ExpressionHint::kScalar) {
-        info.cache->compiled_ast = compile_expression_ast(info.cache->expanded);
-        if (info.cache->compiled_ast) {
-            info.cache->is_compiled = true;
-        }
-    }
-}
-
-void compile_command_expressions(CommandASTNode& node) {
-    switch (node.kind) {
-        case CommandKind::kEmpty:
-        case CommandKind::kMetaCommand:
-        case CommandKind::kStringLiteral:
-            // 无表达式需要编译
-            break;
-
-        case CommandKind::kFunctionDefinition: {
-            auto* info = const_cast<FunctionDefinitionInfo*>(node.as_function_definition());
-            if (info) {
-                compile_expression_info(info->body);
-            }
-            break;
-        }
-
-        case CommandKind::kFunctionCall: {
-            auto* info = const_cast<FunctionCallInfo*>(node.as_function_call());
-            if (info) {
-                for (auto& arg : info->arguments) {
-                    compile_expression_info(arg);
-                }
-            }
-            break;
-        }
-
-        case CommandKind::kAssignment: {
-            auto* info = const_cast<AssignmentInfo*>(node.as_assignment());
-            if (info) {
-                compile_expression_info(info->expression);
-            }
-            break;
-        }
-
-        case CommandKind::kExpression: {
-            auto* info = const_cast<ExpressionInfo*>(node.as_expression());
-            if (info) {
-                compile_expression_info(*info);
-            }
-            break;
-        }
-    }
 }

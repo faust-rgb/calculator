@@ -10,7 +10,7 @@
 #include "parser/base_parser.h"
 #include "command/expression_compiler.h"
 #include "parser/lazy_token_stream.h"
-#include "utils.h"
+#include "string_utils.h"
 
 #include <cctype>
 #include <stdexcept>

@@ -1,16 +1,26 @@
-#include "exact_parser.h"
-#include "calculator_internal_types.h"
-#include "parser/base_parser.h"
-#include "mymath.h"
-#include "command/expression_compiler.h"
+// ============================================================================
+// 精确有理数 AST 求值器
+// ============================================================================
+//
+// 提供表达式 AST 的精确有理数求值功能。
+// ============================================================================
+
+#include "parser/unified_expression_parser.h"
+#include "command/expression_ast.h"
+#include "calculator_exceptions.h"
+#include "variable_resolver.h"
+#include "types/function.h"
+#include "precise/rational.h"
 #include "math/helpers/base_conversions.h"
 #include "math/helpers/bitwise_helpers.h"
 #include "math/helpers/combinatorics.h"
 #include "math/helpers/integer_helpers.h"
+#include "core/calculator_internal_types.h"
+#include "mymath.h"
+
 #include <algorithm>
 #include <cctype>
 #include <sstream>
-#include <stdexcept>
 
 namespace {
 
@@ -73,7 +83,7 @@ Rational parse_rational_literal(const std::string& token) {
     return Rational(numerator, denominator);
 }
 
-Rational lookup_variable(const std::string& name, const VariableResolver& variables, std::size_t pos) {
+Rational lookup_variable_exact(const std::string& name, const VariableResolver& variables, std::size_t pos) {
     const StoredValue* found = variables.lookup(name);
     if (!found) {
         double constant_value = 0.0;
@@ -94,7 +104,7 @@ Rational lookup_variable(const std::string& name, const VariableResolver& variab
     return found->rational;
 }
 
-Rational apply_function(const std::string& name, 
+Rational apply_function_exact(const std::string& name,
                         const std::vector<Rational>& arguments,
                         const std::map<std::string, CustomFunction>* functions,
                         HasScriptFunctionCallback has_script_function,
@@ -275,17 +285,7 @@ Rational apply_function(const std::string& name,
         }
         return total;
     }
-    if (name == "avg") {
-        if (arguments.empty()) {
-            throw_ast_error<std::runtime_error>("avg expects at least one argument", pos);
-        }
-        Rational total(0, 1);
-        for (const Rational& value : arguments) {
-            total = total + value;
-        }
-        return total / Rational(static_cast<long long>(arguments.size()), 1);
-    }
-    if (name == "mean") {
+    if (name == "avg" || name == "mean") {
         if (arguments.empty()) {
             throw_ast_error<std::runtime_error>("mean expects at least one argument", pos);
         }
@@ -319,21 +319,12 @@ Rational apply_function(const std::string& name,
         }
         return factorial_rational(arguments[0].numerator);
     }
-    if (name == "nCr") {
+    if (name == "nCr" || name == "binom") {
         if (arguments.size() != 2) {
             throw_ast_error<std::runtime_error>("nCr expects exactly two arguments", pos);
         }
         if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
             throw_ast_error<std::runtime_error>("nCr only accepts integers", pos);
-        }
-        return combination_rational(arguments[0].numerator, arguments[1].numerator);
-    }
-    if (name == "binom") {
-        if (arguments.size() != 2) {
-            throw_ast_error<std::runtime_error>("binom expects exactly two arguments", pos);
-        }
-        if (!arguments[0].is_integer() || !arguments[1].is_integer()) {
-            throw_ast_error<std::runtime_error>("binom only accepts integers", pos);
         }
         return combination_rational(arguments[0].numerator, arguments[1].numerator);
     }
@@ -485,7 +476,7 @@ Rational evaluate_ast_exact(const ExpressionAST* ast,
         }
 
         case ExprKind::kVariable:
-            return lookup_variable(ast->identifier, variables, ast->position);
+            return lookup_variable_exact(ast->identifier, variables, ast->position);
 
         case ExprKind::kBinaryOp: {
             if (ast->children.size() != 2) {
@@ -553,7 +544,7 @@ Rational evaluate_ast_exact(const ExpressionAST* ast,
             for (const auto& child : ast->children) {
                 args.push_back(evaluate_ast_exact(child.get(), variables, functions, has_script_function));
             }
-            return apply_function(ast->identifier, args, functions, has_script_function, ast->position);
+            return apply_function_exact(ast->identifier, args, functions, has_script_function, ast->position);
         }
 
         case ExprKind::kConditional: {
@@ -570,31 +561,4 @@ Rational evaluate_ast_exact(const ExpressionAST* ast,
         default:
             throw_ast_error<std::runtime_error>("unknown AST node kind", ast->position);
     }
-}
-
-ExactParser::ExactParser(std::string source,
-                         const VariableResolver& variables,
-                         const std::map<std::string, CustomFunction>* functions,
-                         HasScriptFunctionCallback has_script_function)
-    : source_(std::move(source)),
-      variables_(variables),
-      functions_(functions),
-      has_script_function_(std::move(has_script_function)) {}
-
-Rational ExactParser::parse() {
-    return parse_exact_expression(source_, variables_, functions_, has_script_function_);
-}
-
-Rational parse_exact_expression(
-    const std::string& expression,
-    const VariableResolver& variables,
-    const std::map<std::string, CustomFunction>* functions,
-    HasScriptFunctionCallback has_script_function) {
-    
-    auto ast = compile_expression_ast(expression);
-    if (!ast) {
-        throw SyntaxError("Failed to parse exact expression: " + expression);
-    }
-    
-    return evaluate_ast_exact(ast.get(), variables, functions, std::move(has_script_function));
 }

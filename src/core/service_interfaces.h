@@ -1,7 +1,6 @@
 #ifndef CORE_SERVICE_INTERFACES_H
 #define CORE_SERVICE_INTERFACES_H
 
-#include "core/command_types.h"
 #include "core/calculator_internal_types.h"
 #include "symbolic/symbolic_expression.h"
 #include <string>
@@ -78,21 +77,5 @@ struct CoreServices {
     std::function<long long(double)> round_to_long_long;
 };
 
-struct CommandSpec {
-    CommandKey key;
-    std::string dispatch_name;
-};
-
-/**
- * @struct CalculatorSettings
- * @brief 汇总计算器的全局配置状态
- */
-struct CalculatorSettings {
-    int display_precision;
-    bool exact_mode;
-    bool symbolic_constants_mode;
-    bool hex_prefix_mode;
-    bool hex_uppercase_mode;
-};
 
 #endif

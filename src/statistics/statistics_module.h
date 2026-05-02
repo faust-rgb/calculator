@@ -1,7 +1,7 @@
 #ifndef STATISTICS_MODULE_H
 #define STATISTICS_MODULE_H
 
-#include "../core/calculator_module.h"
+#include "module/calculator_module.h"
 #include "calculator_statistics.h"
 #include <numeric>
 #include <sstream>

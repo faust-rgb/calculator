@@ -3,7 +3,8 @@
 #include "svg_renderer.h"
 #include "plot_styles.h"
 #include "../math/mymath.h"
-#include "utils.h"
+#include "string_utils.h"
+#include "parser/unified_expression_parser.h"
 #include <fstream>
 #include <iostream>
 #include <sstream>

@@ -3,7 +3,7 @@
 #include "math/helpers/integer_helpers.h"
 #include "../core/calculator_exceptions.h"
 #include "../core/calculator_internal_types.h"
-#include "../core/utils.h"
+#include "../core/string_utils.h"
 #include "../statistics/calculator_statistics.h"
 #include "../statistics/statistics.h"
 #include "../statistics/probability.h"

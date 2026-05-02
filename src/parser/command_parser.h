@@ -288,28 +288,4 @@ private:
  */
 CommandASTNode parse_command(std::string_view source);
 
-/**
- * @brief 拆分顶层参数（正确处理嵌套和字符串）
- */
-std::vector<std::string_view> split_command_arguments(std::string_view text);
-
-// ============================================================================
-// 表达式预编译函数
-// ============================================================================
-
-/**
- * @brief 预编译 CommandASTNode 中的所有表达式
- * @param node AST 节点
- *
- * 遍历 AST 节点，为所有 ExpressionInfo 创建预编译缓存。
- * 应在解析完成后、求值前调用。
- */
-void compile_command_expressions(CommandASTNode& node);
-
-/**
- * @brief 预编译单个 ExpressionInfo
- * @param info 表达式信息
- */
-void compile_expression_info(ExpressionInfo& info);
-
 #endif // COMMAND_PARSER_H

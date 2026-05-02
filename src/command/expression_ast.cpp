@@ -10,10 +10,9 @@
 #include "parser/base_parser.h"
 #include "calculator_exceptions.h"
 #include "calculator_internal_types.h"
-#include "decimal_parser.h"
 #include "mymath.h"
 #include "variable_resolver.h"
-#include "parser/lazy_token_stream.h"
+#include "lazy_token_stream.h"
 
 #include <algorithm>
 #include <cmath>

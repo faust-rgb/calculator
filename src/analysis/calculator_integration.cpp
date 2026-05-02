@@ -9,7 +9,8 @@
 #include "analysis/multidim_integration.h"
 #include "analysis/multivariable_integrator.h"
 #include "analysis/vector_field_theorems.h"
-#include "core/utils.h"
+#include "core/string_utils.h"
+#include "core/format_utils.h"
 
 #include <stdexcept>
 #include <vector>

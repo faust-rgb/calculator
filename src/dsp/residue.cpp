@@ -7,7 +7,7 @@
 #include "matrix.h"
 #include "polynomial.h"
 #include "calculator_exceptions.h"
-#include "../core/calculator_module.h"
+#include "module/calculator_module.h"
 
 namespace dsp_ops {
 

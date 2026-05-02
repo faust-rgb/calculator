@@ -149,9 +149,6 @@ private:
         if (found->has_symbolic_text) {
             used_symbolic_constant_ = true;
         }
-        // scalar_value_expression_text is in exact_and_symbolic_render.cpp, but here it might be redundant if we refactor.
-        // Actually, I should probably expose it or move it to a common place if needed.
-        // For now, I'll use the logic directly.
         if (found->has_symbolic_text) return "(" + found->symbolic_text + ")";
         if (found->exact) return "(" + found->rational.to_string() + ")";
         if (found->has_precise_decimal_text) return "(" + found->precise_decimal_text + ")";
@@ -199,7 +196,7 @@ private:
             used_symbolic_constant_ = used_symbolic_constant_ || nested_symbolic;
             return "(" + expanded + ")";
         }
-        
+
         static const auto is_supported_symbolic_unary_function = [](const std::string& n) {
             return n == "sin" || n == "cos" || n == "tan" ||
                    n == "asin" || n == "acos" || n == "atan" ||
@@ -278,20 +275,6 @@ private:
     int depth_ = 0;
     bool used_symbolic_constant_ = false;
 };
-
-SymbolicRenderParser::SymbolicRenderParser(std::string source,
-                                           const VariableResolver& variables,
-                                           const std::map<std::string, CustomFunction>* functions,
-                                           int depth)
-    : source_(std::move(source)),
-      variables_(variables),
-      functions_(functions),
-      depth_(depth) {}
-
-bool SymbolicRenderParser::parse(std::string* output, bool* used_symbolic_constant) {
-    SymbolicRenderParserImpl parser(source_, variables_, functions_, depth_);
-    return parser.parse(output, used_symbolic_constant);
-}
 
 bool try_symbolic_constant_expression(const std::string& expression,
                                       const VariableResolver& variables,

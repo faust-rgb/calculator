@@ -12,6 +12,17 @@
 #include <string>
 
 struct StoredValue;
+struct Rational;
+
+// ============================================================================
+// 有理数近似
+// ============================================================================
+
+/**
+ * @brief 尝试将 double 转换为简单的 Rational
+ */
+bool try_make_simple_rational(double value, int max_denominator, Rational* rational);
+
 
 // ============================================================================
 // 显示精度

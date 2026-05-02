@@ -4,7 +4,7 @@
 #include <string>
 #include <functional>
 #include <vector>
-#include "core/calculator_module.h"
+#include "module/calculator_module.h"
 
 namespace optimization {
 

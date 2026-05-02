@@ -16,6 +16,30 @@
 // 字符串修剪
 // ============================================================================
 
+namespace utils {
+    
+/**
+ * @brief 检查是否为保留函数名
+ */
+bool is_reserved_function_name(std::string_view name);
+
+/**
+ * @brief 修剪字符串两端的空白字符（返回视图）
+ */
+std::string_view trim_view(std::string_view text);
+
+/**
+ * @brief 修剪字符串两端的空白字符（返回副本）
+ */
+std::string trim_copy(std::string_view text);
+
+/**
+ * @brief 检查是否是有效的标识符
+ */
+bool is_valid_identifier(std::string_view name);
+
+} // namespace utils
+
 /**
  * @brief 修剪字符串两端的空白字符（返回视图）
  */

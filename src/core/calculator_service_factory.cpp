@@ -16,13 +16,14 @@
 #include "math/helpers/unit_conversions.h"
 #include "math/helpers/base_conversions.h"
 #include "command/variable_resolver.h"
-#include "parser/decimal_parser.h"
+#include "parser/unified_expression_parser.h"
 #include "script/script_runtime.h"
 #include "symbolic/calculator_symbolic_commands.h"
 #include "symbolic/symbolic_expression.h"
 #include "analysis/function_analysis.h"
 #include "plot/calculator_plot.h"
-#include "core/utils.h"
+#include "core/string_utils.h"
+#include "core/format_utils.h"
 #include <sstream>
 
 namespace core {
@@ -33,8 +34,7 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
 
     // Evaluation Service
     s.evaluation.parse_decimal = [calculator, impl](const std::string& arg) {
-        DecimalParser parser(arg, VariableResolver(&impl->variables, nullptr), &impl->functions, &impl->scalar_functions);
-        return parser.parse();
+        return parse_decimal_expression(arg, VariableResolver(&impl->variables, nullptr), &impl->functions, &impl->scalar_functions);
     };
     s.evaluation.evaluate_value = [calculator, impl](const std::string& arg, bool exact) {
         return evaluate_expression_value(calculator, impl, arg, exact);
@@ -54,8 +54,7 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
             const HasScriptFunctionCallback has_script_function = [calculator, impl](const std::string& name) { return has_visible_script_function(impl, name); };
             const InvokeScriptFunctionDecimalCallback invoke_script_function = [calculator, impl](const std::string& name, const std::vector<double>& args) { return invoke_script_function_decimal(calculator, impl, name, args); };
             VariableResolver chained_resolver(nullptr, nullptr, &override_vars, &variables);
-            DecimalParser parser(scoped_expression, chained_resolver, &impl->functions, &impl->scalar_functions, has_script_function, invoke_script_function);
-            return Calculator::normalize_result(parser.parse());
+            return parse_decimal_expression(scoped_expression, chained_resolver, &impl->functions, &impl->scalar_functions, has_script_function, invoke_script_function);
         };
     };
     

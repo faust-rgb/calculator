@@ -18,7 +18,7 @@
 #include <map>
 #include <functional>
 
-#include "../core/calculator_module.h"
+#include "module/calculator_module.h"
 
 namespace polynomial_ops {
 

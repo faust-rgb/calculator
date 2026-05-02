@@ -15,7 +15,8 @@
 #include "matrix/matrix.h"
 #include "math/mymath.h"
 #include "symbolic/symbolic_expression.h"
-#include "core/utils.h"
+#include "core/string_utils.h"
+#include "core/format_utils.h"
 #include "parser/command_parser.h"
 #include "core/calculator_service_factory.h"
 #include "script/script_runtime.h"
@@ -159,7 +160,7 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
 }
 
 bool is_reserved_user_function_name(const Calculator::Impl* impl, std::string_view name) {
-    if (is_reserved_function_name(name)) {
+    if (utils::is_reserved_function_name(name)) {
         return true;
     }
     if (impl == nullptr) {
@@ -551,8 +552,7 @@ std::string Calculator::factor_expression(const std::string& expression) const {
     }
 
     // 先允许 inside 是一个普通表达式或变量，再检查最终值是否为整数。
-    DecimalParser parser(call->arguments[0].text, VariableResolver(&impl_->variables, nullptr), &impl_->functions);
-    const double value = normalize_result(parser.parse());
+    const double value = parse_decimal_expression(std::string(call->arguments[0].text), VariableResolver(&impl_->variables, nullptr), &impl_->functions);
     if (!is_integer_double(value)) {
         throw std::runtime_error("factor only accepts integers");
     }

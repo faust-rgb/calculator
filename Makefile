@@ -3,7 +3,6 @@ BASE_CXXFLAGS := -std=c++17 -Wall -Wextra -pedantic
 OPT_CXXFLAGS ?= -O0 -g -static
 CXXFLAGS ?= $(BASE_CXXFLAGS) $(OPT_CXXFLAGS)
 LDFLAGS ?=
-
 BIN_DIR := bin
 BUILD_DIR := build
 APP := $(BIN_DIR)/calculator
@@ -14,16 +13,18 @@ TEST_SUITE_DIR := $(TEST_DIR)/suites
 SRC_DIRS := $(SRC_DIR)/app $(SRC_DIR)/core $(SRC_DIR)/math $(SRC_DIR)/matrix $(SRC_DIR)/analysis $(SRC_DIR)/polynomial $(SRC_DIR)/symbolic $(SRC_DIR)/script $(SRC_DIR)/statistics $(SRC_DIR)/dsp $(SRC_DIR)/plot $(SRC_DIR)/types $(SRC_DIR)/precise $(SRC_DIR)/parser $(SRC_DIR)/math/helpers $(SRC_DIR)/module $(SRC_DIR)/command
 INCLUDES := -I$(SRC_DIR) $(addprefix -I,$(SRC_DIRS)) -I$(TEST_DIR)
 CPPFLAGS += $(INCLUDES) -MMD -MP
-
 MAIN_SRC := $(SRC_DIR)/app/main.cpp
 COMMON_SRCS := $(SRC_DIR)/core/calculator_core.cpp \
 	$(SRC_DIR)/script/script_signal.cpp \
 	$(SRC_DIR)/command/variable_resolver.cpp \
-	$(SRC_DIR)/core/utils.cpp \
+	$(SRC_DIR)/core/string_utils.cpp \
+	$(SRC_DIR)/core/format_utils.cpp \
+	$(SRC_DIR)/core/expression_utils.cpp \
 	$(SRC_DIR)/core/calculator_help.cpp \
 	$(SRC_DIR)/module/system_module.cpp \
 	$(SRC_DIR)/command/expression_compiler.cpp \
 	$(SRC_DIR)/command/expression_ast.cpp \
+	$(SRC_DIR)/command/inline_expander.cpp \
 	$(SRC_DIR)/core/calculator_service_factory.cpp \
 	$(SRC_DIR)/module/module_registration.cpp \
 	$(SRC_DIR)/module/calculator_module.cpp \
@@ -37,9 +38,10 @@ COMMON_SRCS := $(SRC_DIR)/core/calculator_core.cpp \
 	$(SRC_DIR)/precise/precise_decimal.cpp \
 	$(SRC_DIR)/precise/precise_parser.cpp \
 	$(SRC_DIR)/precise/precise_module.cpp \
-	$(SRC_DIR)/parser/decimal_parser.cpp \
-	$(SRC_DIR)/parser/exact_parser.cpp \
+	$(SRC_DIR)/parser/exact_evaluator.cpp \
+	$(SRC_DIR)/parser/expression_splitter.cpp \
 	$(SRC_DIR)/parser/symbolic_render_parser.cpp \
+	$(SRC_DIR)/command/builtin_constants.cpp \
 	$(SRC_DIR)/math/helpers/integer_helpers.cpp \
 	$(SRC_DIR)/math/helpers/combinatorics.cpp \
 	$(SRC_DIR)/math/helpers/bitwise_helpers.cpp \
@@ -144,42 +146,28 @@ MAIN_OBJ := $(BUILD_DIR)/$(MAIN_SRC:.cpp=.o)
 TEST_SRCS := $(TEST_DIR)/main.cpp $(wildcard $(TEST_SUITE_DIR)/*.cpp)
 TEST_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(TEST_SRCS))
 DEPS := $(MAIN_OBJ:.o=.d) $(TEST_OBJS:.o=.d) $(COMMON_OBJS:.o=.d)
-
 .PHONY: all test script-test check debug asan ubsan clean
-
 all: $(APP)
-
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
-
 $(BUILD_DIR)/%.o: %.cpp
 	mkdir -p $(dir $@)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
-
 $(APP): $(MAIN_OBJ) $(COMMON_OBJS) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(APP)
-
 $(TEST_APP): $(TEST_OBJS) $(COMMON_OBJS) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(TEST_APP)
-
 test: $(TEST_APP)
 	$(TEST_APP)
-
 script-test: $(APP)
 	test/script/run_symbolic_cli_validation.sh
-
 check: test script-test
-
 debug:
 	$(MAKE) OPT_CXXFLAGS="-O0 -g"
-
 asan:
 	$(MAKE) OPT_CXXFLAGS="-O1 -g -fsanitize=address,undefined" LDFLAGS="-fsanitize=address,undefined"
-
 ubsan:
 	$(MAKE) OPT_CXXFLAGS="-O1 -g -fsanitize=undefined" LDFLAGS="-fsanitize=undefined"
-
 clean:
 	rm -rf $(BUILD_DIR) $(APP) $(TEST_APP)
-
 -include $(DEPS)

@@ -5,7 +5,7 @@
 #ifndef PRECISE_PRECISE_MODULE_H
 #define PRECISE_PRECISE_MODULE_H
 
-#include "core/calculator_module.h"
+#include "module/calculator_module.h"
 #include "types/stored_value.h"
 
 #include <map>

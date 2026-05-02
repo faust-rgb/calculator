@@ -36,9 +36,11 @@
 #include "statistics/probability.h"
 
 #include "core/calculator_exceptions.h"
-#include "core/command_types.h"
+#include "module/calculator_module.h"
 #include "command/command_registry.h"
-#include "core/utils.h"
+#include "core/string_utils.h"
+#include "core/format_utils.h"
+#include "core/expression_utils.h"
 
 // ============================================================================
 // 显示精度常量
@@ -68,8 +70,7 @@ constexpr int kMaxDisplayPrecision = 17;
 // ============================================================================
 
 #include "command/variable_resolver.h"
-#include "parser/decimal_parser.h"
-#include "parser/exact_parser.h"
+#include "parser/unified_expression_parser.h"
 #include "parser/symbolic_render_parser.h"
 
 class CalculatorModule;
@@ -282,16 +283,14 @@ bool is_reserved_user_function_name(const Calculator::Impl* impl, std::string_vi
 std::string encode_state_field(const std::string& text); ///< 编码状态字段
 std::string decode_state_field(const std::string& text); ///< 解码状态字段
 
-// 表达式分割
-bool split_assignment(std::string_view expression, std::string_view* lhs, std::string_view* rhs);
-bool split_named_call(std::string_view expression, std::string_view name, std::string_view* inside);
-bool split_named_call(std::string_view expression, std::string_view name, std::string* inside);
-bool split_named_call_with_arguments(std::string_view expression, std::string_view name, std::vector<std::string_view>* arguments);
-std::vector<std::string_view> split_top_level_arguments_view(std::string_view text);
-std::vector<std::string> split_top_level_arguments(std::string_view text);
+// 表达式分割（实现在 parser/expression_splitter.cpp）
+#include "parser/expression_splitter.h"
 
-// 函数展开
-std::string expand_inline_function_commands(Calculator* calculator, std::string_view expression);
+// 内置常量（实现在 command/builtin_constants.cpp）
+#include "command/builtin_constants.h"
+
+// 内联函数展开（实现在 command/inline_expander.cpp）
+#include "command/inline_expander.h"
 
 // 精确小数处理（实现在 precise/precise_decimal.cpp 和 precise/precise_parser.cpp）
 // stored_value_precise_decimal_text 和 parse_precise_decimal_expression

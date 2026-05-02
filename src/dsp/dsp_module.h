@@ -1,7 +1,7 @@
 #ifndef DSP_MODULE_H
 #define DSP_MODULE_H
 
-#include "../core/calculator_module.h"
+#include "module/calculator_module.h"
 
 /**
  * @class DspModule

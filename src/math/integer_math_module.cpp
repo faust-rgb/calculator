@@ -3,7 +3,6 @@
 #include "helpers/combinatorics.h"
 #include "helpers/bitwise_helpers.h"
 #include "helpers/base_conversions.h"
-#include "../core/utils.h"
 #include "../core/calculator_exceptions.h"
 #include "mymath.h"
 #include <cmath>
@@ -12,8 +11,6 @@
 #include <set>
 
 namespace {
-
-using namespace utils;
 
 long long require_integer(double x, const std::string& name, const std::string& func) {
     if (!is_integer_double(x)) {

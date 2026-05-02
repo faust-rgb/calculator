@@ -3,15 +3,15 @@
 // ============================================================================
 
 #include "unified_expression_parser.h"
+#include "unified_parser_factory.h"
 #include "command/expression_ast.h"
 #include "command/expression_compiler.h"
 #include "calculator_exceptions.h"
 #include "variable_resolver.h"
 #include "types/function.h"
 #include "precise/rational.h"
-#include "exact_parser.h"
-#include "decimal_parser.h"
 #include "core/string_utils.h"
+#include "mymath.h"
 
 // ============================================================================
 // 构造函数
@@ -31,22 +31,23 @@ UnifiedExpressionParser::UnifiedExpressionParser(
       matrix_functions_(matrix_functions),
       value_functions_(value_functions),
       has_script_function_(std::move(has_script_function)),
-      invoke_script_function_(std::move(invoke_script_function)) {}
+      invoke_script_function_(std::move(invoke_script_function)),
+      factory_(std::make_unique<UnifiedParserFactory>()) {}
 
 // ============================================================================
 // 特征分析
 // ============================================================================
 
-UnifiedParserFactory::AnalysisResult UnifiedExpressionParser::analyze(const std::string& expression) {
-    return factory_.analyze(expression);
+ExpressionFeature UnifiedExpressionParser::analyze_features(const std::string& expression) {
+    return factory_->analyze_features(expression);
 }
 
 bool UnifiedExpressionParser::can_compile_to_ast(const std::string& expression) {
-    return factory_.can_compile_to_ast(expression);
+    return factory_->can_compile_to_ast(expression);
 }
 
 ExpressionHint UnifiedExpressionParser::get_hint(const std::string& expression) {
-    return analyze(expression).hint;
+    return factory_->analyze(expression).hint;
 }
 
 // ============================================================================
@@ -71,7 +72,7 @@ Rational UnifiedExpressionParser::evaluate_exact(const std::string& expression) 
 
 bool UnifiedExpressionParser::try_evaluate_value(const std::string& expression, matrix::Value* value) {
     // 先分析表达式类型
-    auto result = analyze(expression);
+    auto result = factory_->analyze(expression);
 
     // 如果包含矩阵特征，使用矩阵求值器
     if (result.has_bracket || result.has_matrix_func) {
@@ -124,7 +125,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
                                                      bool symbolic_mode,
                                                      ExpressionCache* cache) {
     // 分析表达式
-    auto analysis = analyze(expression);
+    auto analysis = factory_->analyze(expression);
     ExpressionHint hint = analysis.hint;
 
     // 字符串字面量
@@ -212,8 +213,85 @@ std::unique_ptr<ExpressionAST> UnifiedExpressionParser::compile(const std::strin
 }
 
 // ============================================================================
-// 便捷函数
+// 便捷函数（替代 DecimalParser 和 ExactParser）
 // ============================================================================
+
+double parse_decimal_expression(
+    const std::string& expression,
+    const VariableResolver& variables,
+    const std::map<std::string, CustomFunction>* functions,
+    const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions,
+    HasScriptFunctionCallback has_script_function,
+    InvokeScriptFunctionCallback invoke_script_function) {
+
+    auto ast = compile_expression_ast(expression);
+    if (!ast) {
+        throw SyntaxError("Failed to parse expression: " + expression);
+    }
+    return evaluate_compiled_ast(ast.get(), variables, functions, scalar_functions,
+                                  has_script_function, invoke_script_function);
+}
+
+Rational parse_exact_expression(
+    const std::string& expression,
+    const VariableResolver& variables,
+    const std::map<std::string, CustomFunction>* functions,
+    HasScriptFunctionCallback has_script_function) {
+
+    auto ast = compile_expression_ast(expression);
+    if (!ast) {
+        throw SyntaxError("Failed to parse exact expression: " + expression);
+    }
+    return evaluate_ast_exact(ast.get(), variables, functions, has_script_function);
+}
+
+bool try_evaluate_matrix_expression(
+    const std::string& expression,
+    const VariableResolver& variables,
+    const std::map<std::string, CustomFunction>* functions,
+    const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions,
+    const std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>* matrix_functions,
+    const std::map<std::string, matrix::ValueFunction>* value_functions,
+    HasScriptFunctionCallback has_script_function,
+    InvokeScriptFunctionCallback invoke_script_function,
+    matrix::Value* value) {
+
+    const matrix::ScalarEvaluator scalar_evaluator =
+        [&](std::string_view text) {
+            const double scalar_value = parse_decimal_expression(
+                std::string(text), variables, functions, scalar_functions,
+                has_script_function, invoke_script_function);
+            return mymath::is_near_zero(scalar_value, 1e-10) ? 0.0 : scalar_value;
+        };
+
+    const matrix::MatrixLookup matrix_lookup =
+        [&variables](const std::string& name, matrix::Matrix* matrix_value) {
+            const StoredValue* found = variables.lookup(name);
+            if (!found || !found->is_matrix) {
+                return false;
+            }
+            *matrix_value = found->matrix;
+            return true;
+        };
+
+    const matrix::ComplexLookup complex_lookup =
+        [&variables](const std::string& name, matrix::ComplexNumber* complex_value) {
+            const StoredValue* found = variables.lookup(name);
+            if (!found || !found->is_complex) {
+                return false;
+            }
+            *complex_value = found->complex;
+            return true;
+        };
+
+    return matrix::try_evaluate_expression(expression,
+                                           scalar_evaluator,
+                                           matrix_lookup,
+                                           complex_lookup,
+                                           matrix_functions,
+                                           value_functions,
+                                           value);
+}
 
 double evaluate_expression(
     const std::string& expression,

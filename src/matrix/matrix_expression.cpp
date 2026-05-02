@@ -15,7 +15,7 @@
 #include "parser/base_parser.h"
 #include "statistics/calculator_statistics.h"
 #include "statistics/probability.h"
-#include "utils.h"
+#include "string_utils.h"
 
 #include "mymath.h"
 #include "polynomial.h"

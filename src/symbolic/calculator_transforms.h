@@ -4,7 +4,7 @@
 #include "symbolic/symbolic_expression.h"
 #include <string>
 #include <functional>
-#include "core/calculator_module.h"
+#include "module/calculator_module.h"
 
 namespace transforms {
 
