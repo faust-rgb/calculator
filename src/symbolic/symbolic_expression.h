@@ -223,6 +223,11 @@ public:
                                              const SymbolicExpression& replacement) const;
 
     /**
+     * @brief 幂运算
+     */
+    SymbolicExpression power(const SymbolicExpression& exponent) const;
+
+    /**
      * @brief 简化表达式
      * @return 简化后的表达式
      *

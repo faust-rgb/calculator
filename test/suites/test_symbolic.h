@@ -20,6 +20,19 @@ namespace test_suites {
      * 傅里叶变换、拉普拉斯变换、Z变换、脚本执行等功能。
      */
     int run_symbolic_tests(int& passed, int& failed);
+
+    /**
+     * @brief 运行 Risch 积分算法测试
+     */
+    void test_risch_rational();
+    void test_risch_logarithmic();
+    void test_risch_exponential();
+    void test_risch_trigonometric();
+    void test_risch_non_elementary();
+    void test_risch_mixed();
+    void test_risch_algebraic();
+    void test_risch_edge_cases();
+    void test_risch();
 }
 
 #endif

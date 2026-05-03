@@ -1600,6 +1600,10 @@ std::vector<std::pair<SymbolicExpression, int>> SymbolicExpression::common_subex
     return result;
 }
 
+SymbolicExpression SymbolicExpression::power(const SymbolicExpression& exponent) const {
+    return make_power(*this, exponent);
+}
+
 SymbolicExpression SymbolicExpression::simplify() const {
     static constexpr std::size_t kMaxSimplifyCacheSize = 4096;
     static thread_local SymbolicExpressionLruCache cache(kMaxSimplifyCacheSize);

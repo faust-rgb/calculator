@@ -33,6 +33,7 @@
 
 #include "symbolic/symbolic_expression.h"
 #include "symbolic/symbolic_polynomial.h"
+#include "symbolic/risch_algorithm.h"
 
 #include <functional>
 #include <memory>
@@ -113,6 +114,13 @@ private:
      * 处理：常数、变量、线性表达式 ax + b
      */
     IntegrationResult try_integrate_constant_linear(
+        const SymbolicExpression& expression,
+        const std::string& variable_name);
+
+    /**
+     * @brief 尝试 Risch 算法积分
+     */
+    IntegrationResult try_integrate_risch(
         const SymbolicExpression& expression,
         const std::string& variable_name);
 

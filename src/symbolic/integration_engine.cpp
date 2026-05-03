@@ -10,6 +10,29 @@
 
 using namespace symbolic_expression_internal;
 
+namespace {
+
+std::size_t expression_node_count(const SymbolicExpression& expression) {
+    std::function<std::size_t(const std::shared_ptr<SymbolicExpression::Node>&)> count =
+        [&](const std::shared_ptr<SymbolicExpression::Node>& node) -> std::size_t {
+        if (!node) {
+            return 0;
+        }
+
+        std::size_t total = 1;
+        total += count(node->left);
+        total += count(node->right);
+        for (const auto& child : node->children) {
+            total += count(child);
+        }
+        return total;
+    };
+
+    return count(expression.node_);
+}
+
+}  // namespace
+
 // ============================================================================
 // 构造函数与主入口
 // ============================================================================
@@ -74,37 +97,7 @@ IntegrationResult IntegrationEngine::integrate_recursive(
         }
     }
 
-    // 2. 有理函数
-    if (disabled_strategies_.count("rational") == 0) {
-        result = try_integrate_rational(expression, variable_name);
-        if (result.success) {
-            --current_depth_;
-            integration_stack_.erase(key);
-            return result;
-        }
-    }
-
-    // 3. 换元积分
-    if (disabled_strategies_.count("substitution") == 0) {
-        result = try_integrate_substitution(expression, variable_name);
-        if (result.success) {
-            --current_depth_;
-            integration_stack_.erase(key);
-            return result;
-        }
-    }
-
-    // 4. 分部积分
-    if (disabled_strategies_.count("by_parts") == 0) {
-        result = try_integrate_by_parts(expression, variable_name);
-        if (result.success) {
-            --current_depth_;
-            integration_stack_.erase(key);
-            return result;
-        }
-    }
-
-    // 5. 特殊积分
+    // 2. 常见初等函数先用直接公式，避免进入较重的 Risch 扩展路径
     if (disabled_strategies_.count("special") == 0) {
         result = try_integrate_special(expression, variable_name);
         if (result.success) {
@@ -114,7 +107,57 @@ IntegrationResult IntegrationEngine::integrate_recursive(
         }
     }
 
-    // 6. 回退
+    // 3. Risch 算法
+    if (disabled_strategies_.count("risch") == 0) {
+        result = try_integrate_risch(expression, variable_name);
+        if (result.success) {
+            --current_depth_;
+            integration_stack_.erase(key);
+            return result;
+        }
+    }
+
+    // 4. 有理函数
+    if (disabled_strategies_.count("rational") == 0) {
+        result = try_integrate_rational(expression, variable_name);
+        if (result.success) {
+            --current_depth_;
+            integration_stack_.erase(key);
+            return result;
+        }
+    }
+
+    // 5. 换元积分
+    if (disabled_strategies_.count("substitution") == 0) {
+        result = try_integrate_substitution(expression, variable_name);
+        if (result.success) {
+            --current_depth_;
+            integration_stack_.erase(key);
+            return result;
+        }
+    }
+
+    // 6. 分部积分
+    if (disabled_strategies_.count("by_parts") == 0) {
+        result = try_integrate_by_parts(expression, variable_name);
+        if (result.success) {
+            --current_depth_;
+            integration_stack_.erase(key);
+            return result;
+        }
+    }
+
+    // 7. 特殊积分兜底
+    if (disabled_strategies_.count("special") == 0) {
+        result = try_integrate_special(expression, variable_name);
+        if (result.success) {
+            --current_depth_;
+            integration_stack_.erase(key);
+            return result;
+        }
+    }
+
+    // 8. 回退
     result = try_integrate_fallback(expression, variable_name);
 
     --current_depth_;
@@ -161,6 +204,17 @@ IntegrationResult IntegrationEngine::try_integrate_constant_linear(
         return IntegrationResult::ok(result, "linear");
     }
 
+    return IntegrationResult::failed();
+}
+
+IntegrationResult IntegrationEngine::try_integrate_risch(
+    const SymbolicExpression& expression,
+    const std::string& variable_name) {
+
+    SymbolicExpression result;
+    if (RischAlgorithm::integrate(expression, variable_name, &result)) {
+        return IntegrationResult::ok(result, "risch");
+    }
     return IntegrationResult::failed();
 }
 
@@ -391,6 +445,16 @@ IntegrationResult IntegrationEngine::try_integrate_special(
                 return IntegrationResult::ok(result, "cos_linear");
             }
 
+            if (func_name == "tan") {
+                // ∫ tan(ax + b) dx = -ln|cos(ax + b)| / a
+                SymbolicExpression result = make_divide(
+                    make_negate(make_function(
+                        "ln",
+                        make_function("abs", make_function("cos", arg)))),
+                    a).simplify();
+                return IntegrationResult::ok(result, "tan_linear");
+            }
+
             // 1/(ax + b) -> ln|ax + b| / a
             // 这在 rational 中已处理
         }
@@ -424,6 +488,40 @@ IntegrationResult IntegrationEngine::try_integrate_special(
         SymbolicExpression base(node->left);
         SymbolicExpression exponent(node->right);
 
+        if (base.node_->type == NodeType::kFunction) {
+            double n = 0.0;
+            SymbolicExpression a, b;
+            SymbolicExpression arg(base.node_->left);
+            if (exponent.is_number(&n) &&
+                mymath::is_near_zero(n - 2.0, 1e-10) &&
+                symbolic_decompose_linear(arg, variable_name, &a, &b) &&
+                !expr_is_zero(a)) {
+                SymbolicExpression x = SymbolicExpression::variable(variable_name);
+                SymbolicExpression double_arg =
+                    (SymbolicExpression::number(2.0) * arg).simplify();
+
+                if (base.node_->text == "sin") {
+                    SymbolicExpression result =
+                        (x / SymbolicExpression::number(2.0) -
+                         make_function("sin", double_arg) /
+                             (SymbolicExpression::number(4.0) * a)).simplify();
+                    return IntegrationResult::ok(result, "sin_power_identity");
+                }
+                if (base.node_->text == "cos") {
+                    SymbolicExpression result =
+                        (x / SymbolicExpression::number(2.0) +
+                         make_function("sin", double_arg) /
+                             (SymbolicExpression::number(4.0) * a)).simplify();
+                    return IntegrationResult::ok(result, "cos_power_identity");
+                }
+                if (base.node_->text == "tan") {
+                    SymbolicExpression result =
+                        (make_function("tan", arg) / a - x).simplify();
+                    return IntegrationResult::ok(result, "tan_power_identity");
+                }
+            }
+        }
+
         if (base.is_variable_named(variable_name)) {
             double n = 0.0;
             if (exponent.is_number(&n)) {
@@ -453,12 +551,12 @@ IntegrationResult IntegrationEngine::try_integrate_fallback(
     const std::string& variable_name) {
 
     // 返回一个标记，表示无法积分
-    // 使用 Integral(expr, x) 形式
+    // 使用 Integral(expr, x) 形式，但标记为失败
     SymbolicExpression x = SymbolicExpression::variable(variable_name);
     SymbolicExpression result = make_function("Integral",
         make_multiply(expression, x));
 
-    return IntegrationResult::ok(result, "fallback", false);
+    return {result, false, "fallback", false};
 }
 
 // ============================================================================
@@ -584,9 +682,13 @@ bool IntegrationEngine::try_substitution_with_candidate(
 
     if (detect_derivative_pattern(expression, candidate, variable_name,
                                    &constant, &h_expr)) {
+        if (expression_node_count(h_expr) >= expression_node_count(expression)) {
+            return false;
+        }
+
         // 积分 H(u)
         IntegrationResult h_integral = integrate_recursive(h_expr, "u");
-        if (!h_integral.success) {
+        if (!h_integral.success || h_integral.method_used == "fallback") {
             return false;
         }
 
@@ -1062,26 +1164,20 @@ bool detect_derivative_pattern(
         return false;
     }
 
-    // 尝试将 expression 写成 c * du * H(candidate) 的形式
-    // 代换 u = candidate，检查是否可以提取 du
-
     SymbolicExpression u = SymbolicExpression::variable("u");
-    SymbolicExpression substituted = expression.substitute(variable_name,
-        candidate);  // 先不代换，需要分析
 
     // 简化方法：检查 expression / du 是否只含 candidate
     SymbolicExpression ratio = (expression / du).simplify();
 
     // 代换 candidate -> u
-    SymbolicExpression ratio_subst = ratio.substitute(variable_name,
-        SymbolicExpression::parse("u_subst_tmp"));
+    SymbolicExpression ratio_subst = ratio.substitute_expression(candidate, u).simplify();
 
     // 检查是否还含 variable_name
     auto vars = ratio_subst.identifier_variables();
     if (std::find(vars.begin(), vars.end(), variable_name) == vars.end()) {
         // 成功！ratio 只含 candidate
         *constant = 1.0;
-        *h_expr = ratio.substitute(variable_name, u);
+        *h_expr = ratio_subst;
         return true;
     }
 

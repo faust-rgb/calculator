@@ -1229,16 +1229,25 @@ bool symbolic_polynomial_coefficients_from_simplified(
                 *coefficients = {SymbolicExpression::number(1.0)};
                 return true;
             }
+            std::vector<SymbolicExpression> base_coeffs;
             if (symbolic_polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
                                                                 variable_name,
-                                                                coefficients)) {
-                // 简单的幂运算展开逻辑（仅针对单项式变量）
-                if (coefficients->size() == 2 && expr_is_zero((*coefficients)[0])) {
-                    const auto base_coeff = (*coefficients)[1];
-                    coefficients->assign(exp_int + 1, SymbolicExpression::number(0.0));
-                    (*coefficients)[exp_int] = make_power(base_coeff, SymbolicExpression::number(exponent)).simplify();
-                    return true;
+                                                                &base_coeffs)) {
+                // 实现通用的多项式幂运算
+                std::vector<SymbolicExpression> res = {SymbolicExpression::number(1.0)};
+                for (int p = 0; p < exp_int; ++p) {
+                    std::vector<SymbolicExpression> next_res(res.size() + base_coeffs.size() - 1, SymbolicExpression::number(0.0));
+                    for (std::size_t i = 0; i < res.size(); ++i) {
+                        for (std::size_t j = 0; j < base_coeffs.size(); ++j) {
+                            const auto prod = make_multiply(res[i], base_coeffs[j]).simplify();
+                            next_res[i + j] = make_add(next_res[i + j], prod).simplify();
+                        }
+                    }
+                    res = next_res;
                 }
+                *coefficients = res;
+                trim_symbolic_polynomial_coefficients(coefficients);
+                return true;
             }
         }
     }

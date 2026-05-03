@@ -133,6 +133,15 @@ public:
     SymbolicPolynomial derivative() const;
 
     /**
+     * @brief 多项式总导数 (针对微分域扩展 K(t))
+     * 计算 D(P) = dP/dx + (dP/dt) * t'
+     * @param x_var 主积分变量名 (x)
+     * @param t_prime t 的导数 (t' = dt/dx)
+     */
+    SymbolicPolynomial total_derivative(const std::string& x_var,
+                                         const SymbolicExpression& t_prime) const;
+
+    /**
      * @brief 多项式除法（带余除法）
      * @param other 除数
      * @param quotient 输出商
@@ -150,6 +159,30 @@ public:
      * 注意：对于符号系数，GCD 可能不精确。
      */
     SymbolicPolynomial gcd(const SymbolicPolynomial& other) const;
+
+    /**
+     * @brief 扩展欧几里得算法
+     * 求解 a*S + b*T = gcd(a, b)
+     * @param b 另一个多项式
+     * @param s 输出多项式 S
+     * @param t 输出多项式 T
+     * @return gcd(a, b)
+     */
+    SymbolicPolynomial extended_gcd(const SymbolicPolynomial& b,
+                                     SymbolicPolynomial* s,
+                                     SymbolicPolynomial* t) const;
+
+    /**
+     * @brief 子结果项 (Subresultant) GCD 算法
+     * 相比普通欧几里得算法，在符号系数下更稳定，避免系数爆炸。
+     */
+    SymbolicPolynomial subresultant_gcd(const SymbolicPolynomial& other) const;
+
+    /**
+     * @brief 计算多项式合式 (Resultant)
+     * 计算 resultant_x(A, B)
+     */
+    SymbolicExpression resultant(const SymbolicPolynomial& other) const;
 
     /**
      * @brief Square-free 分解
@@ -186,6 +219,14 @@ public:
      * 对于符号系数，返回 false（无法确定）。
      */
     bool is_irreducible_quadratic() const;
+
+    /**
+     * @brief 尝试因式分解为线性因子
+     *
+     * 对于数值系数的多项式，尝试找到所有线性因子。
+     * 返回 (factor, multiplicity) 对的列表。
+     */
+    std::vector<std::pair<SymbolicPolynomial, int>> factor_linear() const;
 
     /**
      * @brief 检查系数是否为零（静态公有方法）
@@ -261,5 +302,23 @@ bool solve_coefficient_identity(
     const std::vector<SymbolicExpression>& identity_coeffs,
     const std::vector<std::vector<SymbolicExpression>>& term_coeffs,
     std::vector<SymbolicExpression>* unknowns);
+
+/**
+ * @brief 部分分式分解
+ *
+ * 将有理函数 P/Q 分解为部分分式形式。
+ * Q 应该已经分解为因子。
+ *
+ * @param numerator 分子多项式 P
+ * @param denominator_factors 分母的因子分解 (因子, 幂次)
+ * @param variable_name 变量名
+ * @param partial_fractions 输出的部分分式系数列表
+ * @return true 如果成功分解
+ */
+bool partial_fraction_decomposition(
+    const SymbolicPolynomial& numerator,
+    const std::vector<std::pair<SymbolicPolynomial, int>>& denominator_factors,
+    const std::string& variable_name,
+    std::vector<std::pair<SymbolicExpression, SymbolicPolynomial>>* partial_fractions);
 
 #endif  // SYMBOLIC_POLYNOMIAL_H
