@@ -1,5 +1,5 @@
 #include "combinatorics.h"
-#include "../mymath.h"
+#include "mymath.h"
 #include <stdexcept>
 #include <algorithm>
 

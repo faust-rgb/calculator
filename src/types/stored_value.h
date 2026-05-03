@@ -15,7 +15,10 @@
 #include "rational.h"
 #include "matrix.h"
 
+#include <map>
+#include <memory>
 #include <string>
+#include <vector>
 
 /**
  * @struct StoredValue
@@ -28,6 +31,8 @@ struct StoredValue {
     bool is_matrix = false;              ///< 是否为矩阵
     bool is_complex = false;             ///< 是否为复数标量
     bool is_string = false;              ///< 是否为字符串
+    bool is_list = false;                ///< 是否为脚本列表
+    bool is_dict = false;                ///< 是否为脚本字典
     mutable bool has_symbolic_text = false;      ///< 是否有符号表达式文本（mutable 支持延迟计算）
     bool has_precise_decimal_text = false; ///< 是否有精确小数文本
     bool exact = false;                  ///< 是否在精确模式下创建
@@ -43,6 +48,8 @@ struct StoredValue {
     mutable std::string symbolic_text;   ///< 符号表达式文本（mutable 支持延迟计算）
     std::string precise_decimal_text;    ///< 精确小数文本
     matrix::Matrix matrix;               ///< 矩阵值
+    std::shared_ptr<std::vector<StoredValue>> list_value;       ///< 脚本列表值
+    std::shared_ptr<std::map<std::string, StoredValue>> dict_value; ///< 脚本字典值
 
     /**
      * @brief 获取符号文本（延迟计算）
@@ -50,7 +57,7 @@ struct StoredValue {
      * @return 符号文本，如果不需要或无法计算则返回空
      */
     const std::string& get_symbolic_text(bool need_symbolic) const {
-        if (!need_symbolic || is_matrix || is_complex || is_string) {
+        if (!need_symbolic || is_matrix || is_complex || is_string || is_list || is_dict) {
             static const std::string empty;
             return empty;
         }

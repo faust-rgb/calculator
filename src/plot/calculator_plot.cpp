@@ -2,7 +2,7 @@
 #include "plot_renderer.h"
 #include "svg_renderer.h"
 #include "plot_styles.h"
-#include "../math/mymath.h"
+#include "math/mymath.h"
 #include "string_utils.h"
 #include "parser/unified_expression_parser.h"
 #include <fstream>
@@ -358,14 +358,20 @@ std::string handle_plot_command(const PlotContext& ctx, const std::vector<std::s
 }
 
 std::string handle_export_command(const PlotContext& ctx, const std::string& line) {
-    // :export "file.csv" var
-    std::string trimmed = utils::trim_copy(line.substr(7));
+    // :export "file.csv" var 或直接是 "file.csv" var
+    std::string trimmed = utils::trim_copy(line);
+
+    // 如果以 :export 开头，去掉前缀
+    if (trimmed.compare(0, 7, ":export") == 0) {
+        trimmed = utils::trim_copy(trimmed.substr(7));
+    }
+
     size_t first_quote = trimmed.find('"');
     size_t last_quote = trimmed.rfind('"');
     if (first_quote == std::string::npos || last_quote == std::string::npos || first_quote == last_quote) {
         throw std::runtime_error("export expects :export \"filename\" var_name");
     }
-    
+
     std::string filename = trimmed.substr(first_quote + 1, last_quote - first_quote - 1);
     std::string var_name = utils::trim_copy(trimmed.substr(last_quote + 1));
     

@@ -27,6 +27,10 @@ int& mutable_process_display_precision() {
     return precision;
 }
 
+std::string format_dict_key(const std::string& key) {
+    return "\"" + key + "\"";
+}
+
 } // namespace
 
 int process_display_precision() {
@@ -168,12 +172,39 @@ std::string format_term(double coefficient, const std::string& factor) {
 // ============================================================================
 
 std::string format_stored_value(const StoredValue& value, bool symbolic_constants_mode) {
-    (void)symbolic_constants_mode;
     if (value.is_string) {
         return "\"" + value.string_value + "\"";
     }
-    if (value.has_symbolic_text && !value.symbolic_text.empty()) {
-        return value.symbolic_text;
+    if (value.is_list) {
+        std::ostringstream out;
+        out << "[";
+        if (value.list_value) {
+            for (std::size_t i = 0; i < value.list_value->size(); ++i) {
+                if (i != 0) out << ", ";
+                out << format_stored_value((*value.list_value)[i], symbolic_constants_mode);
+            }
+        }
+        out << "]";
+        return out.str();
+    }
+    if (value.is_dict) {
+        std::ostringstream out;
+        out << "{";
+        if (value.dict_value) {
+            bool first = true;
+            for (const auto& [key, dict_value] : *value.dict_value) {
+                if (!first) out << ", ";
+                first = false;
+                out << format_dict_key(key) << ": "
+                    << format_stored_value(dict_value, symbolic_constants_mode);
+            }
+        }
+        out << "}";
+        return out.str();
+    }
+    const std::string& symbolic_text = value.get_symbolic_text(symbolic_constants_mode);
+    if (!symbolic_text.empty()) {
+        return symbolic_text;
     }
     if (value.has_precise_decimal_text && !value.precise_decimal_text.empty()) {
         if (is_integer_double(value.decimal, kDisplayIntegerEps)) {

@@ -1,6 +1,8 @@
 #ifndef MODULE_CALCULATOR_MODULE_H
 #define MODULE_CALCULATOR_MODULE_H
 
+#include "core/service_interfaces.h"
+
 #include <string>
 #include <string_view>
 #include <vector>
@@ -55,9 +57,6 @@ inline CommandKey meta_command_key(std::string_view name) {
 inline std::string command_key_display(const CommandKey& key) {
     return key.syntax == CommandSyntax::kMeta ? ":" + key.name : key.name;
 }
-
-#include "core/service_interfaces.h"
-
 
 /**
  * @struct CalculatorSettings
@@ -133,6 +132,8 @@ public:
 
     using ValueFunction = matrix::ValueFunction;
     virtual std::map<std::string, ValueFunction> get_value_functions() const { return {}; }
+
+    virtual std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_native_functions() const { return {}; }
 
     virtual std::vector<std::string> get_functions() const { return {}; }
 

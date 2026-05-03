@@ -14,6 +14,8 @@
 #include "suites/test_plot.h"
 #include "suites/test_large_matrix.h"
 #include "suites/test_statistics_ext.h"
+#include "suites/test_io.h"
+#include "suites/test_script_features.h"
 #include <iostream>
 
 /**
@@ -62,6 +64,14 @@ int main() {
     // 运行扩展统计测试
     std::cout << "Running Extended Statistics Tests..." << std::endl;
     test_suites::run_statistics_ext_tests(total_passed, total_failed);
+
+    // 运行 IO 模块测试：测试文件读写、CSV、JSON
+    std::cout << "Running IO Module Tests..." << std::endl;
+    run_io_tests(total_passed, total_failed);
+
+    // 运行脚本功能测试：测试 match-case、for-in、列表/字典操作
+    std::cout << "Running Script Feature Tests..." << std::endl;
+    run_script_feature_tests(total_passed, total_failed);
 
     // 输出测试汇总结果
     std::cout << "\nTest Summary:" << std::endl;

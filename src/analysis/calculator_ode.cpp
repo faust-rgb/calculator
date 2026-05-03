@@ -16,6 +16,7 @@
 #include "symbolic/symbolic_expression_internal.h"
 #include "analysis/calculator_ode.h"
 #include "analysis/ode_solver.h"
+#include "parser/unified_expression_parser.h"
 #include "math/helpers/integer_helpers.h"
 
 #include <stdexcept>

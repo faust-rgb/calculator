@@ -59,6 +59,8 @@ struct ParseContext {
  * 通过单次 Token 扫描分析表达式特征，一次性决定使用哪个解析器，
  * 避免传统方法中依次尝试多个解析器的开销。
  */
+class VariableResolver;
+
 class UnifiedParserFactory {
 public:
     /**
@@ -97,6 +99,7 @@ public:
         bool has_rat_call;              ///< 是否包含 rat 调用
         bool has_string;                ///< 是否包含字符串
         bool has_assignment;            ///< 是否包含赋值
+        bool has_matrix_or_complex_var; ///< 是否引用了矩阵/复数变量
         int paren_depth;                ///< 括号深度
         int bracket_depth;              ///< 方括号深度
     };
@@ -104,9 +107,11 @@ public:
     /**
      * @brief 完整分析表达式
      * @param expression 表达式字符串
+     * @param variables 变量解析器（用于检测矩阵/复数变量引用）
      * @return 分析结果
      */
-    AnalysisResult analyze(const std::string& expression);
+    AnalysisResult analyze(const std::string& expression,
+                           const VariableResolver* variables = nullptr);
 
 private:
     /**
@@ -116,20 +121,6 @@ private:
      * @return 分析结果
      */
     AnalysisResult analyze_tokens(const std::vector<Token>& tokens, const ParseContext& ctx);
-
-    /**
-     * @brief 检查是否是矩阵函数
-     * @param name 函数名
-     * @return 如果是矩阵函数返回 true
-     */
-    bool is_matrix_function(std::string_view name) const;
-
-    /**
-     * @brief 检查是否是复数相关函数
-     * @param name 函数名
-     * @return 如果是复数相关函数返回 true
-     */
-    bool is_complex_function(std::string_view name) const;
 };
 
 #endif // CORE_UNIFIED_PARSER_FACTORY_H

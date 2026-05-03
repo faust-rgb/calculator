@@ -1,5 +1,5 @@
 #include "svg_renderer.h"
-#include "../math/mymath.h"
+#include "math/mymath.h"
 #include <sstream>
 #include <algorithm>
 #include <iomanip>

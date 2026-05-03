@@ -9,6 +9,7 @@
 
 #include "calculator_polynomial.h"
 
+#include "parser/unified_expression_parser.h"
 #include "matrix_internal.h"
 #include "polynomial.h"
 #include "mymath.h"

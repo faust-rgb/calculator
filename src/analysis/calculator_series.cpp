@@ -22,6 +22,7 @@
 
 #include "polynomial/polynomial.h"
 #include "math/mymath.h"
+#include "parser/unified_expression_parser.h"
 #include <sstream>
 #include <iomanip>
 #include <tuple>

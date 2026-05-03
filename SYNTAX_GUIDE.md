@@ -25,7 +25,7 @@ Script files should use the `.calc` extension.
 - Use `#` for line comments.
 - Write one statement per line.
 - Do not end statements with `;`.
-- Start `if`, `elif`, `else`, `while`, `for`, and `def` blocks with `:`.
+- Start `if`, `elif`, `else`, `while`, `for`, `def`, and `match` blocks with `:`.
 - Use consistent indentation to define block bodies. Spaces are recommended.
 - Matrix literals still use `;` inside brackets to separate rows, for example
   `[1, 2; 3, 4]`.
@@ -59,7 +59,7 @@ assign to it inside the block.
 Script keywords cannot be used as variable names:
 
 ```
-def, fn, if, elif, else, while, for, in, return, break, continue, pass
+def, fn, if, elif, else, while, for, in, match, case, return, break, continue, pass
 ```
 
 Reserved function names cannot be used for user-defined functions. See
@@ -86,7 +86,15 @@ distance = sqrt(3 ^ 2 + 4 ^ 2)
 ok = abs(sin(pi / 2) - 1) < 0.000001
 ```
 
-Use nested `if` statements instead of `&&` or `||` in script conditions.
+Logical operators `&&` (and) and `||` (or) are supported with short-circuit
+evaluation:
+
+```calc
+if x > 0 && x < 10:
+    print("x is in range (0, 10)")
+if a == 0 || b == 0:
+    print("at least one is zero")
+```
 
 ## Control Flow
 
@@ -115,6 +123,205 @@ for j in range(0, 10):
 
 `range(stop)`, `range(start, stop)`, and `range(start, stop, step)` are
 supported. The loop stops before `stop`, matching Python's convention.
+
+### For-In Loops
+
+The `for-in` loop supports iterating over lists, matrices (row-by-row), and
+strings (character-by-character):
+
+```calc
+# Iterate over a list
+for item in [1, 2, 3, 4, 5]:
+    print(item)
+
+# Iterate over matrix rows
+m = [1, 2; 3, 4; 5, 6]
+for row in m:
+    print("row: ", row)
+
+# Iterate over string characters
+for ch in "hello":
+    print(ch)
+```
+
+### Match-Case Pattern Matching
+
+Pattern matching similar to Python 3.10+ is supported:
+
+```calc
+match value:
+    case 0:
+        print("zero")
+    case 1:
+        print("one")
+    case _:
+        print("other")
+```
+
+Cases can have guard conditions with `if`:
+
+```calc
+match x:
+    case 0 if y > 0:
+        print("zero with positive y")
+    case 0:
+        print("zero")
+    case _:
+        print("other")
+```
+
+Match works with scalars, strings, and matrices:
+
+```calc
+match status:
+    case "ok":
+        print("success")
+    case "error":
+        print("failed")
+    case _:
+        print("unknown")
+```
+
+## Indexing and Assignment
+
+### List and Dictionary Indexing
+
+Lists and dictionaries support Python-style indexing:
+
+```calc
+lst = [1, 2, 3, 4, 5]
+print(lst[0])      # first element
+print(lst[-1])     # last element
+print(lst[1:3])    # slice [2, 3]
+lst[2] = 10        # assignment
+
+d = {"a": 1, "b": 2}
+print(d["a"])
+d["c"] = 3
+```
+
+### Matrix Indexing
+
+Matrices support bracket indexing for both reading and assignment:
+
+```calc
+m = [1, 2; 3, 4]
+print(m[0, 0])     # first element (1)
+print(m[1])        # linear index (2)
+m[0, 0] = 5        # assignment
+print(m)           # [5, 2; 3, 4]
+```
+
+Negative indices are supported:
+
+```calc
+print(m[-1, -1])   # last element (4)
+```
+
+## File I/O
+
+Scripts can read and write files using the I/O module:
+
+```calc
+# Write to a file
+fd = open("output.txt", "w")
+write(fd, "Hello, World!")
+close(fd)
+
+# Read from a file
+fd = open("input.txt", "r")
+content = read(fd)
+close(fd)
+print(content)
+
+# Read line by line
+fd = open("data.txt", "r")
+lines = read_lines(fd)
+close(fd)
+for line in lines:
+    print(line)
+
+# File positioning
+fd = open("data.txt", "r")
+seek(fd, 10)        # Move to position 10
+pos = tell(fd)      # Get current position
+line = readline(fd) # Read single line
+close(fd)
+
+# File management
+if exists("data.txt"):
+    delete("data.txt")
+```
+
+### File Functions
+
+| Function | Description |
+|----------|-------------|
+| `open(path, mode)` | Open a file, returns file descriptor |
+| `close(fd)` | Close a file |
+| `read(fd)` | Read entire file content as string |
+| `write(fd, text)` | Write text to file |
+| `read_lines(fd)` | Read all lines into a list |
+| `readline(fd)` | Read single line |
+| `seek(fd, pos)` | Set file position |
+| `tell(fd)` | Get current position |
+| `exists(path)` | Check if file exists (returns 1 or 0) |
+| `delete(path)` | Delete a file |
+
+### Open Modes
+
+| Mode | Description |
+|------|-------------|
+| `"r"` | Read only (default) |
+| `"w"` | Write (truncates existing file) |
+| `"a"` | Append |
+| `"rw"` or `"r+"` | Read and write |
+
+### CSV and JSON Support
+
+```calc
+# CSV file operations
+m = [1, 2, 3; 4, 5, 6]
+write_csv("matrix.csv", m)
+
+loaded = read_csv("matrix.csv")
+print("Loaded matrix: ", loaded)
+
+# JSON file operations
+data = {"name": "test", "values": [1, 2, 3]}
+write_json("data.json", data)
+
+loaded_data = read_json("data.json")
+print("Loaded data: ", loaded_data)
+```
+
+| Function | Description |
+|----------|-------------|
+| `read_csv(path)` | Read matrix from CSV file |
+| `write_csv(path, matrix)` | Write matrix to CSV file |
+| `read_json(path)` | Read data from JSON file |
+| `write_json(path, data)` | Write data to JSON file |
+
+### State Persistence
+
+Use `:save` and `:load` commands to persist calculator state:
+
+```text
+> :save state.txt        # Save all variables and functions
+> :load state.txt        # Restore saved state
+```
+
+### Exporting Data
+
+Export matrices to CSV files:
+
+```text
+> m = [1, 2; 3, 4]
+> :export "matrix.csv" m
+Exported m to matrix.csv
+```
+
+The matrix will be saved in CSV format with comma-separated values.
 
 ## Script Functions
 

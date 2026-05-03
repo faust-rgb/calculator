@@ -1,6 +1,7 @@
 #include "residue.h"
+#include "parser/unified_expression_parser.h"
 #include "calculator_internal_types.h"
-#include "../math/mymath.h"
+#include "math/mymath.h"
 #include "mymath_complex.h"
 #include "symbolic_expression.h"
 #include "symbolic_expression_internal.h"

@@ -14,6 +14,15 @@
 struct StoredValue;
 struct Rational;
 
+/**
+ * @struct HexFormatOptions
+ * @brief 十六进制格式化选项
+ */
+struct HexFormatOptions {
+    bool prefix = false;    ///< 是否添加 0x 前缀
+    bool uppercase = true;  ///< 是否使用大写字母
+};
+
 // ============================================================================
 // 有理数近似
 // ============================================================================

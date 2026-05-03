@@ -5,12 +5,11 @@
 // 提供表达式 AST 的精确有理数求值功能。
 // ============================================================================
 
-#include "parser/unified_expression_parser.h"
+#include "parser/exact_evaluator.h"
 #include "command/expression_ast.h"
 #include "calculator_exceptions.h"
-#include "variable_resolver.h"
+#include "command/variable_resolver.h"
 #include "types/function.h"
-#include "precise/rational.h"
 #include "math/helpers/base_conversions.h"
 #include "math/helpers/bitwise_helpers.h"
 #include "math/helpers/combinatorics.h"

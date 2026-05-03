@@ -30,7 +30,13 @@
  */
 class LazyTokenStream : public BaseParser {
 public:
-    explicit LazyTokenStream(std::string_view source);
+    enum class WhitespaceMode {
+        kCommand,
+        kScript
+    };
+
+    explicit LazyTokenStream(std::string_view source,
+                             WhitespaceMode whitespace_mode = WhitespaceMode::kCommand);
 
     // ========================================================================
     // Token 访问
@@ -175,6 +181,7 @@ private:
      * 按需生成 Token 直到缓存满足要求。
      */
     void ensure_cache_size(std::size_t required_index);
+    void skip_ignorable_for_mode();
 
     // ========================================================================
     // Token 类型解析
@@ -208,6 +215,7 @@ private:
     std::vector<Token> cache_;      ///< Token 缓存
     std::size_t cache_pos_ = 0;     ///< 当前缓存位置（消费进度）
     bool end_reached_ = false;      ///< 是否已生成 kEnd Token
+    WhitespaceMode whitespace_mode_ = WhitespaceMode::kCommand;
 
     // 静态 kEnd Token，用于返回末尾引用
     static Token end_token_;

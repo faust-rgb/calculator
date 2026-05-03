@@ -1,25 +1,39 @@
 #ifndef SCRIPT_RUNTIME_H
 #define SCRIPT_RUNTIME_H
 
-#include "core/calculator_internal_types.h"
 #include "script_signal.h"
 #include "script_ast.h"
+#include "parser/command_parser.h"
+#include "core/calculator.h"
 #include <string>
 #include <vector>
 #include <memory>
 
-// ============================================================================
-// 变量作用域
-// ============================================================================
+struct StoredValue;
+struct ExpressionCache;
+class VariableResolver;
 
-/** @brief 获取当前可见变量解析器 */
 VariableResolver visible_variables(const Calculator::Impl* impl);
-
-/** @brief 检查脚本函数是否可见 */
 bool has_visible_script_function(const Calculator::Impl* impl, const std::string& name);
+void assign_visible_variable(Calculator::Impl* impl,
+                             const std::string& name,
+                             const StoredValue& value);
 
-/** @brief 赋值到可见变量（遵循作用域规则） */
-void assign_visible_variable(Calculator::Impl* impl, const std::string& name, const StoredValue& value);
+// ============================================================================
+// 命令 AST 执行
+// ============================================================================
+
+/** @brief 执行命令 AST 节点并返回输出字符串 */
+std::string execute_command_ast(Calculator* calculator,
+                                Calculator::Impl* impl,
+                                const CommandASTNode& ast,
+                                bool exact_mode);
+
+/** @brief 求值命令 AST 节点为 StoredValue */
+StoredValue evaluate_command_ast_to_value(Calculator* calculator,
+                                          Calculator::Impl* impl,
+                                          const CommandASTNode& ast,
+                                          bool exact_mode);
 
 // ============================================================================
 // 表达式求值

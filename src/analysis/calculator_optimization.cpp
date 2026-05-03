@@ -13,8 +13,10 @@
 #include "math/mymath.h"
 #include "analysis/optimization_helpers.h"
 #include "analysis/calculator_simplex.h"
+#include "parser/unified_expression_parser.h"
 
 #include <algorithm>
+#include <stdexcept>
 #include <vector>
 
 namespace optimization {

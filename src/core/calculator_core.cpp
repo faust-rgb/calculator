@@ -10,6 +10,7 @@
 // ============================================================================
 
 #include "core/calculator_internal_types.h"
+#include "parser/unified_expression_parser.h"
 #include "parser/command_parser.h"
 #include "analysis/function_analysis.h"
 #include "matrix/matrix.h"
@@ -81,8 +82,16 @@ void broadcast_settings(Calculator* calculator, Calculator::Impl* impl) {
 
 Calculator::Calculator() : impl_(new Impl()) {
     apply_calculator_display_precision(impl_.get());
+    
+    // 初始化核心服务缓存
+    impl_->core_services = std::make_unique<CoreServices>(core::build_core_services(this, impl_.get()));
+    
     register_standard_modules(this);
     broadcast_settings(this, impl_.get());
+}
+
+const CoreServices& Calculator::get_core_services() const {
+    return *impl_->core_services;
 }
 
 Calculator::~Calculator() = default;
@@ -97,6 +106,12 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
     for (auto& [name, func] : new_matrix_funcs) impl_->matrix_functions[name] = std::move(func);
     auto new_value_funcs = module->get_value_functions();
     for (auto& [name, func] : new_value_funcs) impl_->value_functions[name] = std::move(func);
+    auto new_native_funcs = module->get_native_functions();
+    for (auto& [name, func] : new_native_funcs) {
+        impl_->native_functions[name] = std::move(func);
+        impl_->module_functions.push_back(name);
+        impl_->help_topic_to_modules[name].push_back(module);
+    }
 
     // 隐式求值路由优化
     if (module->wants_implicit_evaluation()) {
@@ -254,142 +269,16 @@ double Calculator::normalize_result(double value) {
 
 bool Calculator::try_process_function_command(const std::string& expression,
                                               std::string* output, bool exact_mode) {
-    // 使用统一的命令解析器构建 AST
-    CommandASTNode ast = parse_command(expression);
+    auto is_command = [this](std::string_view name) {
+        return impl_->command_registry.has_command(std::string(name)) ||
+               impl_->command_registry.has_command(":" + std::string(name));
+    };
 
-    // 1. 空输入
-    if (ast.kind == CommandKind::kEmpty) {
-        return false;
-    }
+    CommandASTNode root = parse_command(expression, is_command);
+    if (root.kind == CommandKind::kEmpty) return false;
 
-    // 2. 函数定义 f(x, y) = ...
-    if (ast.kind == CommandKind::kFunctionDefinition) {
-        const FunctionDefinitionInfo* def = ast.as_function_definition();
-        if (!def) return false;
-
-        std::string name(def->name);
-        if (is_reserved_user_function_name(impl_.get(), name)) {
-            throw std::runtime_error("function name is reserved: " + name);
-        }
-
-        // 存储参数列表和函数体
-        std::vector<std::string> params;
-        std::string params_display;
-        for (std::size_t i = 0; i < def->parameters.size(); ++i) {
-            params.emplace_back(def->parameters[i]);
-            params_display += def->parameters[i];
-            if (i + 1 < def->parameters.size()) params_display += ", ";
-        }
-
-        std::string body(def->body.text);
-
-        // 存储为 CustomFunction
-        impl_->functions[name] = { params, body };
-
-        *output = name + "(" + params_display + ") = " + body;
-        return true;
-    }
-
-    // 3. 元命令 :cmd ... 或 4. 函数调用 func(...)
-    if (ast.kind == CommandKind::kMetaCommand || ast.kind == CommandKind::kFunctionCall) {
-        std::string_view command_name;
-        std::vector<std::string_view> arg_views_temp;
-        const std::vector<std::string_view>* arg_views = nullptr;
-
-        if (ast.kind == CommandKind::kMetaCommand) {
-            const MetaCommandInfo* meta = ast.as_meta_command();
-            if (!meta) return false;
-            command_name = meta->command;
-            arg_views = &meta->arguments;
-        } else {
-            const FunctionCallInfo* call = ast.as_function_call();
-            if (!call) return false;
-            command_name = call->name;
-            // 从 ExpressionInfo 提取 text
-            arg_views_temp.reserve(call->arguments.size());
-            for (const auto& arg : call->arguments) {
-                arg_views_temp.push_back(arg.text);
-            }
-            arg_views = &arg_views_temp;
-        }
-
-        // 统一构建服务
-        CoreServices svc = core::build_core_services(this, impl_.get());
-
-        // 使用 CommandRegistry 进行命令分发
-        // 元命令需要添加冒号前缀
-        std::string cmd_name;
-        if (ast.kind == CommandKind::kMetaCommand) {
-            cmd_name = ":" + std::string(command_name);
-        } else {
-            cmd_name = std::string(command_name);
-        }
-
-        if (impl_->command_registry.has_command(cmd_name)) {
-            bool processed = impl_->command_registry.try_process(expression, *arg_views, output, exact_mode, svc);
-            if (processed) {
-                return true;
-            }
-        }
-
-        // 如果是函数调用样式但未识别为命令，则作为表达式回退处理
-        if (ast.kind == CommandKind::kFunctionCall) {
-            *output = this->evaluate_for_display(expression, exact_mode);
-            return true;
-        }
-
-        throw std::runtime_error("unknown command: " + cmd_name);
-    }
-
-    // 5. 赋值语句：直接利用 AST 信息，避免二次解析
-    if (ast.kind == CommandKind::kAssignment) {
-        const AssignmentInfo* assign = ast.as_assignment();
-        if (!assign) return false;
-
-        apply_calculator_display_precision(impl_.get());
-
-        std::string var_name(assign->variable);
-        if (!is_valid_variable_name(assign->variable)) {
-            throw std::runtime_error("invalid variable name: " + var_name);
-        }
-        if (assign->expression.text.empty()) {
-            throw std::runtime_error("assignment requires a value");
-        }
-
-        StoredValue stored = evaluate_expression_value(
-            this, impl_.get(), std::string(assign->expression.text), exact_mode);
-        if (impl_->symbolic_constants_mode) {
-            std::string symbolic_output;
-            if (try_symbolic_constant_expression(std::string(assign->expression.text),
-                                                 visible_variables(impl_.get()),
-                                                 &impl_->functions,
-                                                 &symbolic_output)) {
-                stored.has_symbolic_text = true;
-                stored.symbolic_text = symbolic_output;
-            }
-        }
-        assign_visible_variable(impl_.get(), var_name, stored);
-        *output = var_name + " = " + format_stored_value(stored, impl_->symbolic_constants_mode);
-        return true;
-    }
-
-    // 6. 字符串字面量：直接返回内容
-    if (ast.kind == CommandKind::kStringLiteral) {
-        const std::string* str = ast.as_string_literal();
-        if (!str) return false;
-        *output = "\"" + *str + "\"";
-        return true;
-    }
-
-    // 7. 纯表达式：直接求值，无需经过 process_line
-    if (ast.kind == CommandKind::kExpression) {
-        const ExpressionInfo* expr = ast.as_expression();
-        if (!expr) return false;
-        *output = this->evaluate_for_display(std::string(expr->text), exact_mode);
-        return true;
-    }
-
-    return false;
+    *output = execute_command_ast(this, impl_.get(), root, exact_mode);
+    return true;
 }
 
 bool Calculator::try_evaluate_implicit(std::string_view expression,
@@ -430,30 +319,17 @@ double Calculator::evaluate_raw(const std::string& expression) {
 std::string Calculator::evaluate_for_display(const std::string& expression, bool exact_mode) {
     apply_calculator_display_precision(impl_.get());
 
-    // 显示型功能优先于普通数值/分数显示，例如 hex(255) 应直接得到 "FF"。
-    const VariableResolver variables = visible_variables(impl_.get());
     std::string converted;
     if (try_base_conversion_expression(expression,
-                                       variables,
+                                       VariableResolver(&impl_->variables, nullptr),
                                        &impl_->functions,
                                        {impl_->hex_prefix_mode, impl_->hex_uppercase_mode},
                                        &converted)) {
         return converted;
     }
 
-    if (impl_->symbolic_constants_mode) {
-        std::string symbolic_output;
-        if (try_symbolic_constant_expression(expression,
-                                             variables,
-                                             &impl_->functions,
-                                             &symbolic_output)) {
-            return symbolic_output;
-        }
-    }
-
-    return format_stored_value(
-        evaluate_expression_value(this, impl_.get(), expression, exact_mode),
-        impl_->symbolic_constants_mode);
+    const StoredValue value = evaluate_expression_value(this, impl_.get(), expression, exact_mode);
+    return format_stored_value(value, impl_->symbolic_constants_mode);
 }
 
 std::string Calculator::process_line(const std::string& expression, bool exact_mode) {
@@ -464,16 +340,24 @@ std::string Calculator::process_line(const std::string& expression, bool exact_m
     return evaluate_for_display(expression, exact_mode);
 }
 
-std::string Calculator::execute_script(const std::string& source, bool exact_mode) {
-    apply_calculator_display_precision(impl_.get());
+namespace {
 
-    script::Program program = script::parse_program(source);
+std::string execute_script_source(Calculator* calculator,
+                                  Calculator::Impl* impl,
+                                  const std::string& source,
+                                  bool exact_mode,
+                                  bool suppress_implicit_output) {
+    auto is_command = [impl](std::string_view name) {
+        return impl->command_registry.has_command(std::string(name)) ||
+               impl->command_registry.has_command(":" + std::string(name));
+    };
+    script::Program program = script::parse_program(source, is_command);
     std::string accumulated_output;
     std::string last_statement_output;
     for (const auto& statement : program.statements) {
         std::string current_output;
         const ScriptSignal signal =
-            execute_script_statement(this, impl_.get(), *statement, exact_mode, &current_output, false);
+            execute_script_statement(calculator, impl, *statement, exact_mode, &current_output, false);
 
         // Accumulate output if:
         // 1. It's a print call (recognized by the script engine)
@@ -491,10 +375,12 @@ std::string Calculator::execute_script(const std::string& source, bool exact_mod
             else if (trimmed.find('=') == std::string::npos && !current_output.empty()) {
                 should_accumulate = true;
             }
+        } else if (statement->kind == script::Statement::Kind::kImport && !current_output.empty()) {
+            should_accumulate = true;
         }
 
         bool is_last = (statement == program.statements.back());
-        if (is_last) {
+        if (is_last && !suppress_implicit_output) {
             should_accumulate = true;
         }
 
@@ -507,7 +393,7 @@ std::string Calculator::execute_script(const std::string& source, bool exact_mod
         last_statement_output = current_output;
 
         if (signal.kind == ScriptSignal::Kind::kReturn) {
-            std::string return_val = signal.has_value ? format_stored_value(signal.value, impl_->symbolic_constants_mode)
+            std::string return_val = signal.has_value ? format_stored_value(signal.value, impl->symbolic_constants_mode)
                                                       : (last_statement_output.empty() ? "OK" : last_statement_output);
             if (accumulated_output.empty()) {
                 return return_val;
@@ -520,8 +406,64 @@ std::string Calculator::execute_script(const std::string& source, bool exact_mod
             throw std::runtime_error("break/continue can only be used inside loops");
         }
     }
-    return accumulated_output.empty() ? (last_statement_output.empty() ? "OK" : last_statement_output)
-                                      : accumulated_output;
+    if (!accumulated_output.empty()) return accumulated_output;
+    if (suppress_implicit_output) return "";
+    return last_statement_output.empty() ? "OK" : last_statement_output;
+}
+
+std::filesystem::path resolve_script_file_path(const Calculator::Impl* impl, const std::string& path_text) {
+    std::filesystem::path path(path_text);
+    if (path.is_relative()) {
+        const std::filesystem::path base =
+            impl->script_file_stack.empty()
+                ? std::filesystem::current_path()
+                : impl->script_file_stack.back().parent_path();
+        path = base / path;
+    }
+    return std::filesystem::weakly_canonical(path);
+}
+
+std::string read_script_file(const std::filesystem::path& path) {
+    std::ifstream in(path);
+    if (!in) {
+        throw std::runtime_error("unable to open script file: " + path.string());
+    }
+    std::ostringstream out;
+    out << in.rdbuf();
+    return out.str();
+}
+
+} // namespace
+
+std::string Calculator::execute_script(const std::string& source, bool exact_mode) {
+    apply_calculator_display_precision(impl_.get());
+    return execute_script_source(this, impl_.get(), source, exact_mode, false);
+}
+
+std::string Calculator::execute_script_file(const std::string& path,
+                                            bool exact_mode,
+                                            bool suppress_implicit_output) {
+    apply_calculator_display_precision(impl_.get());
+
+    const std::filesystem::path resolved = resolve_script_file_path(impl_.get(), path);
+    if (impl_->importing_script_files.find(resolved) != impl_->importing_script_files.end()) {
+        throw std::runtime_error("circular script import detected: " + resolved.string());
+    }
+
+    const std::string source = read_script_file(resolved);
+    impl_->importing_script_files.insert(resolved);
+    impl_->script_file_stack.push_back(resolved);
+    try {
+        const std::string output =
+            execute_script_source(this, impl_.get(), source, exact_mode, suppress_implicit_output);
+        impl_->script_file_stack.pop_back();
+        impl_->importing_script_files.erase(resolved);
+        return output;
+    } catch (...) {
+        impl_->script_file_stack.pop_back();
+        impl_->importing_script_files.erase(resolved);
+        throw;
+    }
 }
 
 std::string Calculator::list_variables() const {
@@ -545,14 +487,17 @@ std::string Calculator::list_variables() const {
 }
 
 std::string Calculator::factor_expression(const std::string& expression) const {
-    CommandASTNode ast = parse_command(expression);
+    auto is_command = [this](std::string_view name) {
+        return impl_->command_registry.has_command(std::string(name));
+    };
+    CommandASTNode ast = parse_command(expression, is_command);
     const auto* call = ast.as_function_call();
     if (!call || call->name != "factor" || call->arguments.size() != 1) {
         throw std::runtime_error("expected factor(expression)");
     }
 
     // 先允许 inside 是一个普通表达式或变量，再检查最终值是否为整数。
-    const double value = parse_decimal_expression(std::string(call->arguments[0].text), VariableResolver(&impl_->variables, nullptr), &impl_->functions);
+    const double value = parse_decimal_expression(std::string(call->arguments[0].text), VariableResolver(&impl_->variables, nullptr), &impl_->functions, &impl_->scalar_functions);
     if (!is_integer_double(value)) {
         throw std::runtime_error("factor only accepts integers");
     }
@@ -601,7 +546,10 @@ std::string Calculator::export_variable(const std::string& line) const {
 }
 
 std::string Calculator::base_conversion_expression(const std::string& expression) const {
-    CommandASTNode ast = parse_command(expression);
+    auto is_command = [this](std::string_view name) {
+        return impl_->command_registry.has_command(std::string(name));
+    };
+    CommandASTNode ast = parse_command(expression, is_command);
     const auto* call = ast.as_function_call();
     if (!call) {
         throw std::runtime_error("expected bin(...), oct(...), hex(...), or base(value, base)");

@@ -4,6 +4,7 @@
 
 #include "analysis/calculator_integration.h"
 #include "core/calculator_internal_types.h"
+#include "parser/unified_expression_parser.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include "analysis/multidim_integration.h"

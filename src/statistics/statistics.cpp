@@ -11,7 +11,7 @@
  */
 
 #include "statistics.h"
-#include "../math/mymath.h"
+#include "math/mymath.h"
 #include <algorithm>
 #include <stdexcept>
 #include <numeric>

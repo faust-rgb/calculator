@@ -1,5 +1,5 @@
 #include "integer_helpers.h"
-#include "../mymath.h"
+#include "mymath.h"
 #include <stdexcept>
 #include <sstream>
 

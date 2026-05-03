@@ -52,12 +52,11 @@ void CommandRegistry::unregister_command(const std::string& name) {
 // 命令处理
 // ============================================================================
 
-bool CommandRegistry::try_process(const std::string& input,
+bool CommandRegistry::try_process(const std::string& cmd_name,
                                    const std::vector<std::string_view>& args,
                                    std::string* output,
                                    bool exact_mode,
                                    const CoreServices& services) {
-    std::string cmd_name = extract_command_name(input);
     if (cmd_name.empty()) {
         return false;
     }
@@ -65,7 +64,7 @@ bool CommandRegistry::try_process(const std::string& input,
     // 先查找精确匹配
     auto it = commands_.find(cmd_name);
     if (it != commands_.end() && it->second.handler) {
-        return it->second.handler(input, args, output, exact_mode, services);
+        return it->second.handler(cmd_name, args, output, exact_mode, services);
     }
 
     // 再查找前缀匹配
@@ -73,7 +72,7 @@ bool CommandRegistry::try_process(const std::string& input,
         if (cmd_name.size() >= info.name.size() &&
             cmd_name.substr(0, info.name.size()) == info.name) {
             if (info.handler) {
-                return info.handler(input, args, output, exact_mode, services);
+                return info.handler(cmd_name, args, output, exact_mode, services);
             }
         }
     }

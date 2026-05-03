@@ -11,8 +11,10 @@
 #include "analysis/calculator_rootfinding.h"
 
 #include "math/mymath.h"
+#include "parser/unified_expression_parser.h"
 
 #include <algorithm>
+#include <stdexcept>
 #include <vector>
 
 namespace rootfinding {

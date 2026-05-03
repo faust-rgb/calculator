@@ -8,7 +8,6 @@
 #include <stdexcept>
 #include <sstream>
 #include "calculator_exceptions.h"
-#include "calculator_internal_types.h"
 
 /**
  * @class BaseParser

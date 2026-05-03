@@ -1,8 +1,9 @@
 #ifndef CORE_SERVICE_INTERFACES_H
 #define CORE_SERVICE_INTERFACES_H
 
-#include "core/calculator_internal_types.h"
+#include "matrix/matrix.h"
 #include "symbolic/symbolic_expression.h"
+#include "types/stored_value.h"
 #include <string>
 #include <vector>
 #include <functional>
@@ -50,6 +51,7 @@ struct IEnvironmentService {
     std::function<std::string(const std::string&)> load_state;
     std::function<std::string(const std::string&)> export_variable;
     std::function<std::string(const std::string&, bool)> execute_script;
+    std::function<std::string(const std::string&, bool)> execute_script_file;
 
     // 模式与配置管理
     std::function<std::string(bool)> set_exact_mode;

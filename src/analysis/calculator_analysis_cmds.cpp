@@ -6,6 +6,7 @@
 #include "symbolic/calculator_symbolic_commands.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "analysis/function_analysis.h"
+#include "parser/unified_expression_parser.h"
 #include "core/string_utils.h"
 #include "core/format_utils.h"
 #include "math/mymath.h"

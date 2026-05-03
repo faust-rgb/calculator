@@ -1,5 +1,5 @@
 #include "matrix.h"
-#include "../math/mymath.h"
+#include "math/mymath.h"
 #include "matrix_internal.h"
 #include "statistics/statistics.h"
 #include <stdexcept>

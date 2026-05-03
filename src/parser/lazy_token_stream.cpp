@@ -15,8 +15,8 @@ Token LazyTokenStream::end_token_;
 // 构造函数
 // ============================================================================
 
-LazyTokenStream::LazyTokenStream(std::string_view source)
-    : BaseParser(source, true) { // 启用注释跳过
+LazyTokenStream::LazyTokenStream(std::string_view source, WhitespaceMode whitespace_mode)
+    : BaseParser(source, true), whitespace_mode_(whitespace_mode) { // 启用注释跳过
     cache_.reserve(32);  // 预分配适量空间
 }
 
@@ -136,7 +136,7 @@ void LazyTokenStream::ensure_cache_size(std::size_t required_index) {
 }
 
 Token LazyTokenStream::generate_next() {
-    skip_ignorable();
+    skip_ignorable_for_mode();
 
     if (BaseParser::is_at_end()) {
         Token tok;
@@ -271,6 +271,36 @@ Token LazyTokenStream::generate_next() {
         default:
             // 未知字符，作为运算符处理
             return parse_operator_token();
+    }
+}
+
+void LazyTokenStream::skip_ignorable_for_mode() {
+    if (whitespace_mode_ == WhitespaceMode::kCommand) {
+        skip_ignorable();
+        return;
+    }
+
+    while (pos_ < source_.size()) {
+        const char ch = source_[pos_];
+        if (ch == ' ' || ch == '\t' || ch == '\r') {
+            ++pos_;
+            continue;
+        }
+        if (skip_comments_ && ch == '#') {
+            while (pos_ < source_.size() && source_[pos_] != '\n') {
+                ++pos_;
+            }
+            continue;
+        }
+        if (skip_comments_ && pos_ + 1 < source_.size() &&
+            source_[pos_] == '/' && source_[pos_ + 1] == '/') {
+            pos_ += 2;
+            while (pos_ < source_.size() && source_[pos_] != '\n') {
+                ++pos_;
+            }
+            continue;
+        }
+        break;
     }
 }
 

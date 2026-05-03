@@ -1,5 +1,5 @@
 #include "plot_renderer.h"
-#include "../math/mymath.h"
+#include "math/mymath.h"
 #include <algorithm>
 #include <iomanip>
 #include <iostream>

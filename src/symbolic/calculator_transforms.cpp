@@ -3,10 +3,12 @@
 // ============================================================================
 
 #include "symbolic/calculator_transforms.h"
+#include "parser/unified_expression_parser.h"
 #include "core/string_utils.h"
 
-#include <vector>
 #include <algorithm>
+#include <stdexcept>
+#include <vector>
 
 namespace transforms {
 

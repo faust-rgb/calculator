@@ -2,7 +2,9 @@
 #define STATISTICS_MODULE_H
 
 #include "module/calculator_module.h"
+#include "parser/unified_expression_parser.h"
 #include "calculator_statistics.h"
+#include "statistics.h"
 #include <numeric>
 #include <sstream>
 

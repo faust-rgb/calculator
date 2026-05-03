@@ -5,6 +5,7 @@
 #include "calculator_matrix_commands.h"
 
 #include "calculator_internal_types.h"
+#include "parser/unified_expression_parser.h"
 #include "matrix_internal.h"
 #include "mymath.h"
 

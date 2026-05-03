@@ -51,19 +51,36 @@ enum class CommandKind {
     kFunctionCall,       ///< 函数调用，如 sin(pi/4)
     kAssignment,         ///< 变量赋值，如 x = 5
     kExpression,         ///< 纯表达式，如 2 + 3
-    kStringLiteral       ///< 字符串字面量，如 "hello"
+    kStringLiteral,      ///< 字符串字面量，如 "hello"
+    kSequence            ///< 语句序列，如 x=1; y=2; x+y
 };
 
 /**
  * @struct ExpressionInfo
  * @brief 表达式信息（支持预编译）
+ *
+ * 优化设计：
+ * - text 是原始文本视图，不拥有内存
+ * - cache 是延迟分配的，只有需要时才创建
+ * - 避免重复存储文本
  */
 struct ExpressionInfo {
     std::string_view text;                    ///< 原始文本视图
-    mutable std::shared_ptr<ExpressionCache> cache;  ///< 预编译缓存
+    mutable std::shared_ptr<ExpressionCache> cache;  ///< 预编译缓存（延迟分配）
 
     ExpressionInfo() = default;
     explicit ExpressionInfo(std::string_view t) : text(t) {}
+
+    // 获取缓存（延迟创建）
+    ExpressionCache* get_or_create_cache() const {
+        if (!cache) {
+            cache = std::make_shared<ExpressionCache>(text);
+        }
+        return cache.get();
+    }
+
+    // 检查是否有缓存
+    bool has_cache() const { return cache != nullptr; }
 };
 
 /**
@@ -110,6 +127,7 @@ struct FunctionCallInfo {
 class CommandASTNode {
 public:
     CommandKind kind;
+    std::shared_ptr<const std::string> source_owner;
 
     std::variant<
         std::monostate,              // kEmpty
@@ -118,7 +136,8 @@ public:
         FunctionCallInfo,            // kFunctionCall
         AssignmentInfo,              // kAssignment
         ExpressionInfo,              // kExpression (改为 ExpressionInfo 支持预编译)
-        std::string                  // kStringLiteral
+        std::string,                 // kStringLiteral
+        std::vector<CommandASTNode>  // kSequence
     > data;
 
     CommandASTNode() : kind(CommandKind::kEmpty), data(std::monostate{}) {}
@@ -139,6 +158,7 @@ public:
                                           std::string_view expr);
     static CommandASTNode make_expression(std::string_view expr);
     static CommandASTNode make_string_literal(const std::string& value);
+    static CommandASTNode make_sequence(std::vector<CommandASTNode> nodes);
 
     // 类型安全访问器
     const MetaCommandInfo* as_meta_command() const {
@@ -164,6 +184,10 @@ public:
     const std::string* as_string_literal() const {
         return kind == CommandKind::kStringLiteral ? &std::get<std::string>(data) : nullptr;
     }
+
+    const std::vector<CommandASTNode>* as_sequence() const {
+        return kind == CommandKind::kSequence ? &std::get<std::vector<CommandASTNode>>(data) : nullptr;
+    }
 };
 
 // ============================================================================
@@ -186,7 +210,10 @@ public:
  */
 class CommandParser {
 public:
-    explicit CommandParser(std::string_view source);
+    /// 回调类型：判断一个标识符是否为已注册的命令
+    using IsCommandCallback = std::function<bool(std::string_view)>;
+
+    explicit CommandParser(std::string_view source, IsCommandCallback is_command = nullptr);
 
     /**
      * @brief 解析命令，构建 AST
@@ -242,41 +269,37 @@ private:
     // ========================================================================
 
     /// 解析命令
-    CommandASTNode parse_command();
+    CommandASTNode parse_command(bool single_statement = false);
 
     /// 解析元命令
     CommandASTNode parse_meta_command();
 
     /// 解析函数定义或赋值
-    CommandASTNode parse_definition_or_assignment(Token id_token);
+    CommandASTNode parse_definition_or_assignment(Token id_token, bool single_statement);
 
     /// 解析函数调用
-    CommandASTNode parse_function_call(Token id_token);
+    CommandASTNode parse_function_call(Token id_token,
+                                       bool single_statement,
+                                       const LazyTokenStream::Checkpoint& expression_checkpoint);
 
     /// 基于 Token 流解析参数列表（不使用字符串切分）
     std::vector<std::string_view> parse_argument_list_by_tokens(bool stop_at_rparen);
 
     /// 解析表达式（兜底）
-    CommandASTNode parse_expression();
+    CommandASTNode parse_expression(bool single_statement);
+
+    /// 收集当前语句尾部的表达式片段，停在顶层分号或输入结束
+    std::string_view collect_statement_expression();
 
     /// 抛出带有上下文信息的语法错误
     [[noreturn]] void throw_syntax_error(const std::string& message);
-
-    // ========================================================================
-    // 表达式预检验证
-    // ========================================================================
-
-    /// 检查表达式是否有明显的语法错误
-    bool has_obvious_syntax_error(std::string_view expr) const;
-
-    /// 检查括号是否匹配
-    bool check_paren_balance(std::string_view expr) const;
 
     // ========================================================================
     // 成员变量
     // ========================================================================
 
     LazyTokenStream tokens_;
+    IsCommandCallback is_command_;
 };
 
 // ============================================================================
@@ -286,6 +309,7 @@ private:
 /**
  * @brief 解析命令字符串，返回 AST
  */
-CommandASTNode parse_command(std::string_view source);
+CommandASTNode parse_command(std::string_view source,
+                             CommandParser::IsCommandCallback is_command = nullptr);
 
 #endif // COMMAND_PARSER_H

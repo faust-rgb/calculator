@@ -10,7 +10,7 @@
  */
 
 #include "signal_processing.h"
-#include "../math/mymath.h"
+#include "math/mymath.h"
 
 #include <algorithm>
 #include <stdexcept>

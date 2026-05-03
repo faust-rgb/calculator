@@ -32,11 +32,13 @@ using InvokeScriptFunctionDecimalCallback = std::function<double(const std::stri
  */
 enum class ExprKind {
     kNumber,       ///< 数字字面量
+    kString,       ///< 字符串字面量
     kVariable,     ///< 变量引用
     kBinaryOp,     ///< 二元运算 (+, -, *, /, ^)
     kUnaryOp,      ///< 一元运算 (-, +)
     kFunctionCall, ///< 函数调用
     kComparison,   ///< 比较运算 (==, !=, <, >, <=, >=)
+    kLogicalOp,    ///< 逻辑运算 (&&, ||)
     kConditional,  ///< 三元条件 (condition ? then : else)
 };
 

@@ -1,5 +1,5 @@
 #include "unit_conversions.h"
-#include "../mymath.h"
+#include "mymath.h"
 
 double degrees_to_radians(double value) {
     return value * mymath::kPi / 180.0;

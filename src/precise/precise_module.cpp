@@ -27,6 +27,8 @@ bool PreciseModule::try_evaluate_implicit(const std::string& expression,
         return true;
     } catch (const PreciseDecimalUnsupported&) {
         return false;
+    } catch (const std::exception&) {
+        return false;
     }
 }
 

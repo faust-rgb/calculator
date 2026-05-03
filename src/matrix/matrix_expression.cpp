@@ -402,7 +402,7 @@ public:
      * @throws 如果语法错误则抛出异常
      */
     Value parse() {
-        Value value = parse_comparison();
+        Value value = parse_logical();
         skip_spaces();
         if (!is_at_end()) {
             throw std::runtime_error("unexpected token near: " + std::string(source_.substr(pos_, 1)));
@@ -411,6 +411,54 @@ public:
     }
 
 private:
+    /**
+     * @brief 解析逻辑运算表达式
+     *
+     * 处理 && 和 || 运算符
+     */
+    Value parse_logical() {
+        Value value = parse_comparison();
+        while (true) {
+            skip_spaces();
+            std::string op;
+            if (match('&') && match('&')) {
+                op = "&&";
+            } else if (match('|') && match('|')) {
+                op = "||";
+            } else {
+                break;
+            }
+
+            double left_val = value.is_matrix ? norm(value.matrix) : (value.is_complex ? value.complex.real : value.scalar);
+            
+            if (op == "&&") {
+                if (mymath::is_near_zero(left_val, 1e-10)) {
+                    value = Value::from_scalar(0.0);
+                    // 短路求值：跳过右侧表达式的解析，但这在当前手写解析器结构中比较难做，
+                    // 临时做法是强制求值但结果丢弃。
+                    parse_comparison();
+                    continue;
+                }
+            } else if (op == "||") {
+                if (!mymath::is_near_zero(left_val, 1e-10)) {
+                    value = Value::from_scalar(1.0);
+                    parse_comparison();
+                    continue;
+                }
+            }
+
+            Value rhs = parse_comparison();
+            double right_val = rhs.is_matrix ? norm(rhs.matrix) : (rhs.is_complex ? rhs.complex.real : rhs.scalar);
+            
+            if (op == "&&") {
+                value = Value::from_scalar((!mymath::is_near_zero(left_val, 1e-10) && !mymath::is_near_zero(right_val, 1e-10)) ? 1.0 : 0.0);
+            } else {
+                value = Value::from_scalar((!mymath::is_near_zero(left_val, 1e-10) || !mymath::is_near_zero(right_val, 1e-10)) ? 1.0 : 0.0);
+            }
+        }
+        return value;
+    }
+
     /**
      * @brief 解析比较运算表达式（最低优先级）
      *
@@ -542,7 +590,7 @@ private:
     Value parse_primary() {
         skip_spaces();
         if (match('(')) {
-            Value value = parse_comparison();
+            Value value = parse_logical();
             skip_spaces();
             expect(')');
             return value;
@@ -2264,6 +2312,8 @@ bool try_evaluate_expression(const std::string& expression,
         trimmed.find(">=") != std::string::npos ||
         trimmed.find('<') != std::string::npos ||
         trimmed.find('>') != std::string::npos ||
+        trimmed.find("&&") != std::string::npos ||
+        trimmed.find("||") != std::string::npos ||
         is_complex_symbol(trimmed);
 
     const bool mentions_matrix_variable =

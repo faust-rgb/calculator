@@ -10,7 +10,7 @@
  */
 
 #include "probability.h"
-#include "../math/mymath.h"
+#include "math/mymath.h"
 #include <random>
 #include <stdexcept>
 #include <algorithm>

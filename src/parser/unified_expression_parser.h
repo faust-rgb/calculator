@@ -22,6 +22,7 @@
 #include "precise/rational.h"
 #include "types/stored_value.h"
 #include "matrix.h"
+#include "core/format_utils.h"
 #include <string>
 #include <map>
 #include <functional>
@@ -31,8 +32,10 @@
 class VariableResolver;
 struct CustomFunction;
 struct ExpressionAST;
-struct ExpressionCache;
 class UnifiedParserFactory;
+
+// 包含 exact_evaluator.h 以获取 evaluate_ast_exact 声明
+#include "parser/exact_evaluator.h"
 
 // 回调类型定义
 using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
@@ -94,12 +97,12 @@ public:
     /**
      * @brief 求值表达式（十进制）
      */
-    double evaluate(const std::string& expression);
+    double evaluate(const std::string& expression) const;
 
     /**
      * @brief 求值表达式（精确有理数）
      */
-    Rational evaluate_exact(const std::string& expression);
+    Rational evaluate_exact(const std::string& expression) const;
 
     /**
      * @brief 尝试求值可能包含矩阵的表达式
@@ -111,23 +114,21 @@ public:
      * @param expression 表达式字符串
      * @param exact_mode 是否精确模式
      * @param symbolic_mode 是否符号模式
-     * @param cache 表达式缓存（可选）
      * @return StoredValue 结果
      */
     StoredValue evaluate_stored(const std::string& expression,
                                 bool exact_mode = false,
-                                bool symbolic_mode = false,
-                                ExpressionCache* cache = nullptr);
+                                bool symbolic_mode = false);
 
     /**
      * @brief 求值已编译的 AST
      */
-    double evaluate_ast(const ExpressionAST* ast);
+    double evaluate_ast(const ExpressionAST* ast) const;
 
     /**
      * @brief 求值已编译的 AST（精确模式）
      */
-    Rational evaluate_ast_exact(const ExpressionAST* ast);
+    Rational evaluate_ast_exact(const ExpressionAST* ast) const;
 
     // ========================================================================
     // 编译
@@ -136,7 +137,7 @@ public:
     /**
      * @brief 编译表达式为 AST
      */
-    std::unique_ptr<ExpressionAST> compile(const std::string& expression);
+    std::unique_ptr<ExpressionAST> compile(const std::string& expression) const;
 
 private:
     const VariableResolver& variables_;
@@ -144,10 +145,19 @@ private:
     const std::map<std::string, ScalarFunction>* scalar_functions_;
     const std::map<std::string, MatrixFunction>* matrix_functions_;
     const std::map<std::string, matrix::ValueFunction>* value_functions_;
+    const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions_;
     HasScriptFunctionCallback has_script_function_;
     InvokeScriptFunctionCallback invoke_script_function_;
 
     std::unique_ptr<UnifiedParserFactory> factory_;
+
+    // 缓存的回调对象，避免重复创建
+    mutable matrix::ScalarEvaluator cached_scalar_evaluator_;
+    mutable matrix::MatrixLookup cached_matrix_lookup_;
+    mutable matrix::ComplexLookup cached_complex_lookup_;
+    mutable bool callbacks_initialized_ = false;
+
+    void ensure_callbacks_initialized() const;
 };
 
 // ============================================================================
@@ -188,13 +198,24 @@ bool try_evaluate_matrix_expression(
     InvokeScriptFunctionCallback invoke_script_function,
     matrix::Value* value);
 
-/**
- * @brief 求值已编译的 AST（精确有理数模式）
- */
-Rational evaluate_ast_exact(
-    const ExpressionAST* ast,
-    const VariableResolver& variables,
-    const std::map<std::string, CustomFunction>* functions,
-    HasScriptFunctionCallback has_script_function);
+    /**
+    * @brief 尝试在表达式中执行进制转换（如 bin(10)）
+    */
+    bool try_base_conversion_expression(
+        const std::string& expression,
+        const VariableResolver& variables,
+        const std::map<std::string, CustomFunction>* functions,
+        const HexFormatOptions& hex_options,
+        std::string* output);
 
-#endif // PARSER_UNIFIED_EXPRESSION_PARSER_H
+    /**
+     * @brief 拆分顶层参数列表
+     */
+    std::vector<std::string_view> split_top_level_arguments_view(std::string_view text);
+
+    /**
+     * @brief 拆分顶层参数列表（字符串版本）
+     */
+    std::vector<std::string> split_top_level_arguments(std::string_view text);
+
+    #endif // PARSER_UNIFIED_EXPRESSION_PARSER_H

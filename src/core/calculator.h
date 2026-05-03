@@ -8,6 +8,7 @@
 #include <map>
 
 struct StoredValue;
+struct CoreServices;
 class CalculatorModule;
 
 /**
@@ -41,6 +42,9 @@ public:
      * @param module 实现了 CalculatorModule 接口的对象指针
      */
     void register_module(std::shared_ptr<CalculatorModule> module);
+
+    /** @brief 获取核心服务接口 */
+    const CoreServices& get_core_services() const;
 
     /**
      * @brief 计算数学表达式的数值结果
@@ -82,6 +86,17 @@ public:
      * @return 脚本执行结果或最后表达式的值
      */
     std::string execute_script(const std::string& source, bool exact_mode);
+
+    /**
+     * @brief 执行脚本文件
+     * @param path 脚本文件路径，支持 .calc 文件
+     * @param exact_mode 是否使用精确模式
+     * @param suppress_implicit_output 是否只返回显式输出（用于 import）
+     * @return 脚本执行结果或最后表达式的值
+     */
+    std::string execute_script_file(const std::string& path,
+                                    bool exact_mode,
+                                    bool suppress_implicit_output = false);
 
     /**
      * @brief 获取帮助文本

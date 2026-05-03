@@ -1,0 +1,180 @@
+# Additional calculator script validation.
+# This file keeps coverage that is not already represented by example.calc.
+
+print("== additional script validation ==")
+
+# Placeholder variables used by nested symbolic commands in script expressions.
+x = 0
+y = 0
+z = 0
+t = 0
+n = 0
+s = 0
+w = 0
+
+# Multi-variable calculus and matrix decompositions.
+print("--- advanced symbolic and matrix ---")
+gradient(x^2 + y^2 + z^2, x, y, z)
+jacobian([x*y; y*z; z*x], x, y, z)
+hessian(x^2 * y, x, y)
+div([x^2, y^2, z^2], x, y, z)
+curl([y, -x, 0], x, y, z)
+
+M4 = [1, 2, 3, 4; 0, 1, 2, 3; 0, 0, 1, 2; 0, 0, 0, 1]
+V4 = [1, 1, 1, 1; 1, 2, 3, 4; 1, 4, 9, 16; 1, 8, 27, 64]
+print("M4 = ", M4)
+print("det(M4) = ", det(M4))
+print("trace(M4) = ", trace(M4))
+print("inverse(M4) = ", inverse(M4))
+print("det(V4) = ", det(V4))
+
+A3 = [1, 2, 3; 4, 5, 6; 7, 8, 10]
+print("eigvals(A3) = ", eigvals(A3))
+print("svd_s(A3) = ", svd_s(A3))
+print("qr_q(A3) = ", qr_q(A3))
+
+# Complex arithmetic.
+print("--- complex ---")
+z1 = 1 + 2 * complex(0, 1)
+z2 = 2 - complex(0, 1)
+print("z1 * z2 = ", z1 * z2)
+print("exp(i * 3.14159265) = ", exp(complex(0, 1) * 3.14159265))
+
+# Nested command calls across modules.
+print("--- nested commands ---")
+A2 = [1, 2; 3, 4]
+print("det(inverse(A2)) = ", det(inverse(A2)))
+print("det(inverse(A2) * 2) = ", det(inverse(A2) * 2))
+print("det(A2 * inverse(A2)) = ", det(A2 * inverse(A2)))
+print("fft(conv([1, 0], [1, 1])) = ", fft(conv([1, 0], [1, 1])))
+print("round(mean(10, 20, 30, 40)) = ", round(mean(10, 20, 30, 40)))
+print("sum(1, 2, mean(3, 4, 5)) = ", sum(1, 2, mean(3, 4, 5)))
+print("diff(diff(sin(x), x), x):")
+diff(diff(sin(x), x), x)
+print("diff(sin(x), x, x):")
+diff(sin(x), x, x)
+print("integral(diff(exp(x), x), x):")
+integral(diff(exp(x), x), x)
+print("diff(integral(sin(x), x), x):")
+diff(integral(sin(x), x), x)
+print("simplify(diff(sin(x)^2 + cos(x)^2)):")
+simplify(diff(sin(x)^2 + cos(x)^2))
+
+p_poly(x) = x^2 - 1
+q_poly(x) = x - 1
+r_poly(x) = x + 1
+poly_mul(poly_add(p_poly, q_poly), r_poly)
+
+# Polynomial, series, transforms, and multivariable integration.
+print("--- polynomial series transforms integration ---")
+poly_add(p_poly, q_poly)
+print("summation(n^2, n, 1, 10):")
+summation(n^2, n, 1, 10)
+print("series_sum((1/2)^n, n, 0, inf):")
+series_sum((1/2)^n, n, 0, inf)
+print("laplace(step(t)):")
+laplace(step(t), t, s)
+print("fourier(delta(t)):")
+fourier(delta(t), t, w)
+print("ztrans(step(n)):")
+ztrans(step(n), n, z)
+print("double_integral(x*y, 0, 1, 0, 1):")
+double_integral(x*y, 0, 1, 0, 1)
+print("triple_integral(1, 0, 1, 0, 1, 0, 1):")
+triple_integral(1, 0, 1, 0, 1, 0, 1)
+
+# ODE, optimization, statistics, plotting, exact arithmetic, and persistence values.
+print("--- other modules ---")
+print("ode(-y, 0, 1, 1) = ", ode(-y, 0, 1, 1))
+print("lp_max([1, 1], [1, 2], [3], [0, 0], [10, 10]):")
+lp_max([1, 1], [1, 2], [3], [0, 0], [10, 10])
+print("lp_max([3, 2], [1, 1; 2, 1], [4, 5], [0, 0], [10, 10]):")
+lp_max([3, 2], [1, 1; 2, 1], [4, 5], [0, 0], [10, 10])
+print("skewness(1, 2, 3, 4, 10) = ", skewness(1, 2, 3, 4, 10))
+print("kurtosis(1, 2, 3, 4, 10) = ", kurtosis(1, 2, 3, 4, 10))
+print("1/3 + 1/4 = ", 1/3 + 1/4)
+x_saved = 42
+m_saved = [1, 2; 3, 4]
+print("x_saved = ", x_saved)
+print("m_saved = ", m_saved)
+plot(sin(x), -pi, pi)
+plot(cos(x), -3.14, 3.14)
+
+# Performance-oriented script coverage: range loops, recursion, nested calls,
+# mixed scopes, many locals, and conditional loops.
+print("--- performance script coverage ---")
+nested_sum = 0
+for i in range(0, 100):
+    for j in range(0, 10):
+        nested_sum = nested_sum + i * j + j
+print("nested_sum = ", nested_sum)
+
+def my_fib(n):
+    if n <= 1:
+        return n
+    return my_fib(n - 1) + my_fib(n - 2)
+
+fib_result = my_fib(15)
+print("my_fib(15) = ", fib_result)
+
+result = 0
+a = 2
+b = 3
+c = 5
+for i in range(0, 500):
+    result = result + (a * b + c) * (i + 1) - i
+print("complex loop result = ", result)
+
+def add_one(x):
+    return x + 1
+
+def add_two(x):
+    return add_one(x) + 1
+
+def add_four(x):
+    return add_two(add_two(x))
+
+print("add_four(10) = ", add_four(10))
+
+global_var = 100
+def scope_test(local_var):
+    inner_result = global_var + local_var
+    return inner_result
+
+print("scope_test(50) = ", scope_test(50))
+
+def many_vars(a, b, c, d, e):
+    f = a + b
+    g = c + d
+    h = e + f
+    i = g + h
+    j = i * 2
+    k = j - a
+    l = k + b
+    m = l * c
+    n = m / d
+    o = n + e
+    return o
+
+print("many_vars result = ", many_vars(1, 2, 3, 4, 5))
+
+cond_sum = 0
+for i in range(0, 50):
+    if mod(i, 2) == 0:
+        cond_sum = cond_sum + i
+    else:
+        cond_sum = cond_sum - i
+print("conditional sum = ", cond_sum)
+
+math_sum = 0
+for i in range(1, 10):
+    math_sum = math_sum + sqrt(i)
+print("math sum = ", math_sum)
+
+def power_rec(a, b):
+    if b == 0:
+        return 1
+    return a * power_rec(a, b - 1)
+
+print("2^10 = ", power_rec(2, 10))
+print("== additional script validation done ==")

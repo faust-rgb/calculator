@@ -48,3 +48,47 @@ long long parse_prefixed_integer_token(const std::string& token) {
 
     return value;
 }
+
+std::string convert_to_base(long long value, int base, bool uppercase, bool prefix) {
+    if (base < 2 || base > 16) {
+        throw std::runtime_error("base must be in the range [2, 16]");
+    }
+
+    static const char upper_digits[] = "0123456789ABCDEF";
+    static const char lower_digits[] = "0123456789abcdef";
+    const char* digits = uppercase ? upper_digits : lower_digits;
+
+    if (value == 0) {
+        if (prefix) {
+            if (base == 2) return "0b0";
+            if (base == 8) return "0o0";
+            if (base == 16) return "0x0";
+        }
+        return "0";
+    }
+
+    bool negative = value < 0;
+    unsigned long long current = negative
+                                     ? static_cast<unsigned long long>(-(value + 1)) + 1ULL
+                                     : static_cast<unsigned long long>(value);
+
+    std::string reversed;
+    while (current > 0) {
+        reversed.push_back(digits[current % static_cast<unsigned long long>(base)]);
+        current /= static_cast<unsigned long long>(base);
+    }
+
+    std::string output;
+    if (negative) {
+        output.push_back('-');
+    }
+    if (prefix) {
+        if (base == 2) output += "0b";
+        else if (base == 8) output += "0o";
+        else if (base == 16) output += "0x";
+    }
+    for (std::size_t i = reversed.size(); i > 0; --i) {
+        output.push_back(reversed[i - 1]);
+    }
+    return output;
+}

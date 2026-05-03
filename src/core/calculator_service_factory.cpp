@@ -24,6 +24,8 @@
 #include "plot/calculator_plot.h"
 #include "core/string_utils.h"
 #include "core/format_utils.h"
+#include "statistics/statistics.h"
+#include "statistics/probability.h"
 #include <sstream>
 
 namespace core {
@@ -149,6 +151,18 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
     // Symbolic build_analysis is a special case that needs svc reference, 
     // it will be set by the caller if needed or we can wrap it here.
     s.symbolic.build_analysis = [calculator, impl, s_capture = s](const std::string& argument) mutable {
+        const std::string trimmed_argument = trim_copy(argument);
+        const auto direct_function = impl->functions.find(trimmed_argument);
+        if (direct_function != impl->functions.end() &&
+            direct_function->second.parameter_names.size() == 1) {
+            const std::string variable_name = direct_function->second.parameter_names.front();
+            const std::string expression = direct_function->second.expression;
+            FunctionAnalysis analysis(variable_name);
+            analysis.define(expression);
+            analysis.set_evaluator(s_capture.evaluation.build_decimal_evaluator(expression));
+            return analysis;
+        }
+
         std::string variable_name;
         SymbolicExpression expression;
         symbolic_commands::SymbolicResolverContext symbolic_resolver_ctx;
@@ -224,6 +238,7 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
     s.env.load_state = [calculator](const std::string& p) { return calculator->load_state(p); };
     s.env.export_variable = [calculator](const std::string& p) { return calculator->export_variable(p); };
     s.env.execute_script = [calculator](const std::string& c, bool e) { return calculator->execute_script(c, e); };
+    s.env.execute_script_file = [calculator](const std::string& p, bool e) { return calculator->execute_script_file(p, e); };
     s.env.clear_all_functions = [impl]() {
         impl->functions.clear();
         impl->script_functions.clear();

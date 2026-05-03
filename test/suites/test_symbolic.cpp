@@ -670,6 +670,60 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // Regression: command-looking calls followed by operators inside a
+    // semicolon sequence must rewind only to the current statement.
+    try {
+        Calculator sequence_calculator;
+        (void)sequence_calculator.process_line("x = 0; factor(12) + 2", false);
+        ++failed;
+        std::cout << "FAIL: command sequence tail expression should throw instead of evaluating\n";
+    } catch (const std::exception& ex) {
+        const std::string message = ex.what();
+        if (message.find("unknown function: factor") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: command sequence tail expression threw unexpected error: "
+                      << ex.what() << '\n';
+        }
+    }
+
+    // 测试 match/case 守卫条件
+    try {
+        Calculator script_calculator;
+        const std::string output = script_calculator.execute_script(
+            "v = 1\n"
+            "result = 0\n"
+            "match v:\n"
+            "    case 1 if v > 0:\n"
+            "        result = 10\n"
+            "    case _:\n"
+            "        result = 20\n"
+            "print(result)\n"
+            "v = 2\n"
+            "result = 0\n"
+            "match v:\n"
+            "    case 1:\n"
+            "        result = 30\n"
+            "    case _ if v != 1:\n"
+            "        result = 40\n"
+            "    case _:\n"
+            "        result = 50\n"
+            "print(result)\n",
+            false);
+        if (output == "10\n40") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: script match guard expected 10/40 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: script match guard threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
     // 测试脚本中的多项式运算
     try {
         Calculator script_calculator;
@@ -953,6 +1007,96 @@ int run_symbolic_tests(int& passed, int& failed) {
         ++failed;
         std::cout << "FAIL: script matrix loop threw unexpected error: "
                   << ex.what() << '\n';
+    }
+
+    // 测试脚本中的列表/字典字面量、索引、切片和列表推导式
+    try {
+        Calculator script_calculator;
+        const std::string output = script_calculator.execute_script(
+            "arr = [1, 2, 3, 4, 5]\n"
+            "arr[0] = 10\n"
+            "d = {\"a\": 1, \"b\": 2}\n"
+            "d[\"c\"] = arr[0]\n"
+            "squares = [x^2 for x in range(5)]\n"
+            "evens = [x for x in range(10) if x % 2 == 0]\n"
+            "print(arr[1])\n"
+            "print(arr[1:4])\n"
+            "print(d[\"c\"])\n"
+            "print(squares)\n"
+            "print(evens)\n",
+            false);
+        if (output == "2\n[2, 3, 4]\n10\n[0, 1, 4, 9, 16]\n[0, 2, 4, 6, 8]") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: script container features got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: script container features threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    // 测试脚本 import 语句：相对路径、变量/函数共享、显式输出透传
+    try {
+        const auto import_dir = make_test_path("script_import");
+        std::filesystem::create_directories(import_dir / "lib");
+        {
+            std::ofstream out(import_dir / "lib" / "helpers.calc");
+            out << "base = 40\n"
+                << "def add_base(n):\n"
+                << "  return base + n\n"
+                << "print(\"helpers loaded\")\n";
+        }
+        {
+            std::ofstream out(import_dir / "main.calc");
+            out << "import \"lib/helpers.calc\"\n"
+                << "print(add_base(2))\n";
+        }
+
+        Calculator script_calculator;
+        const std::string output =
+            script_calculator.execute_script_file((import_dir / "main.calc").string(), false);
+        if (output == "helpers loaded\n42") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: script import expected helpers loaded/42 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: script import threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    // 测试循环 import 会报错而不是递归卡死
+    try {
+        const auto import_dir = make_test_path("script_import_cycle");
+        std::filesystem::create_directories(import_dir);
+        {
+            std::ofstream out(import_dir / "a.calc");
+            out << "import \"b.calc\"\n";
+        }
+        {
+            std::ofstream out(import_dir / "b.calc");
+            out << "import \"a.calc\"\n";
+        }
+
+        Calculator script_calculator;
+        (void)script_calculator.execute_script_file((import_dir / "a.calc").string(), false);
+        ++failed;
+        std::cout << "FAIL: circular script import should throw\n";
+    } catch (const std::exception& ex) {
+        const std::string message = ex.what();
+        if (message.find("circular script import detected") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: circular script import threw unexpected error: "
+                      << ex.what() << '\n';
+        }
     }
 
     // ========== 状态持久化测试 ==========

@@ -23,7 +23,7 @@
 - 使用 `#` 进行行注释
 - 每行一条语句
 - 语句末尾不需要 `;`
-- `if`、`elif`、`else`、`while`、`for`、`def` 代码块以 `:` 开始
+- `if`、`elif`、`else`、`while`、`for`、`def`、`match` 代码块以 `:` 开始
 - 使用一致的缩进定义代码块体，推荐使用空格
 - 矩阵字面量内部仍使用 `;` 分隔行，例如 `[1, 2; 3, 4]`
 
@@ -53,7 +53,7 @@ n = mat(2, 2, 5, 6, 7, 8)
 脚本关键字不能用作变量名：
 
 ```
-def, fn, if, elif, else, while, for, in, return, break, continue, pass
+def, fn, if, elif, else, while, for, in, match, case, return, break, continue, pass
 ```
 
 保留函数名不能用于用户定义的函数。完整列表见 `KEYWORDS_REFERENCE.md`。常见示例：
@@ -79,7 +79,14 @@ distance = sqrt(3 ^ 2 + 4 ^ 2)
 ok = abs(sin(pi / 2) - 1) < 0.000001
 ```
 
-在脚本条件中，使用嵌套的 `if` 语句代替 `&&` 或 `||`。
+逻辑运算符 `&&`（与）和 `||`（或）支持短路求值：
+
+```calc
+if x > 0 && x < 10:
+    print("x 在 (0, 10) 范围内")
+if a == 0 || b == 0:
+    print("至少有一个为零")
+```
 
 ## 控制流
 
@@ -107,6 +114,204 @@ for j in range(0, 10):
 ```
 
 支持 `range(stop)`、`range(start, stop)` 和 `range(start, stop, step)`。循环在 `stop` 之前停止，与 Python 约定一致。
+
+### For-In 循环
+
+`for-in` 循环支持遍历列表、矩阵（按行遍历）和字符串（按字符遍历）：
+
+```calc
+# 遍历列表
+for item in [1, 2, 3, 4, 5]:
+    print(item)
+
+# 遍历矩阵行
+m = [1, 2; 3, 4; 5, 6]
+for row in m:
+    print("行: ", row)
+
+# 遍历字符串字符
+for ch in "hello":
+    print(ch)
+```
+
+### Match-Case 模式匹配
+
+支持类似 Python 3.10+ 的模式匹配：
+
+```calc
+match value:
+    case 0:
+        print("零")
+    case 1:
+        print("一")
+    case _:
+        print("其他")
+```
+
+Case 分支可以使用 `if` 添加守卫条件：
+
+```calc
+match x:
+    case 0 if y > 0:
+        print("零且 y 为正")
+    case 0:
+        print("零")
+    case _:
+        print("其他")
+```
+
+Match 支持标量、字符串和矩阵：
+
+```calc
+match status:
+    case "ok":
+        print("成功")
+    case "error":
+        print("失败")
+    case _:
+        print("未知")
+```
+
+## 索引与赋值
+
+### 列表和字典索引
+
+列表和字典支持 Python 风格的索引：
+
+```calc
+lst = [1, 2, 3, 4, 5]
+print(lst[0])      # 第一个元素
+print(lst[-1])     # 最后一个元素
+print(lst[1:3])    # 切片 [2, 3]
+lst[2] = 10        # 赋值
+
+d = {"a": 1, "b": 2}
+print(d["a"])
+d["c"] = 3
+```
+
+### 矩阵索引
+
+矩阵支持方括号索引，支持读取和赋值：
+
+```calc
+m = [1, 2; 3, 4]
+print(m[0, 0])     # 第一个元素 (1)
+print(m[1])        # 线性索引 (2)
+m[0, 0] = 5        # 赋值
+print(m)           # [5, 2; 3, 4]
+```
+
+支持负索引：
+
+```calc
+print(m[-1, -1])   # 最后一个元素 (4)
+```
+
+## 文件读写
+
+脚本可以使用 I/O 模块进行文件读写：
+
+```calc
+# 写入文件
+fd = open("output.txt", "w")
+write(fd, "Hello, World!")
+close(fd)
+
+# 读取文件
+fd = open("input.txt", "r")
+content = read(fd)
+close(fd)
+print(content)
+
+# 逐行读取
+fd = open("data.txt", "r")
+lines = read_lines(fd)
+close(fd)
+for line in lines:
+    print(line)
+
+# 文件定位
+fd = open("data.txt", "r")
+seek(fd, 10)        # 移动到位置 10
+pos = tell(fd)      # 获取当前位置
+line = readline(fd) # 读取单行
+close(fd)
+
+# 文件管理
+if exists("data.txt"):
+    delete("data.txt")
+```
+
+### 文件函数
+
+| 函数 | 描述 |
+|------|------|
+| `open(path, mode)` | 打开文件，返回文件描述符 |
+| `close(fd)` | 关闭文件 |
+| `read(fd)` | 读取整个文件内容为字符串 |
+| `write(fd, text)` | 写入文本到文件 |
+| `read_lines(fd)` | 读取所有行到列表 |
+| `readline(fd)` | 读取单行 |
+| `seek(fd, pos)` | 设置文件位置 |
+| `tell(fd)` | 获取当前位置 |
+| `exists(path)` | 检查文件是否存在（返回 1 或 0） |
+| `delete(path)` | 删除文件 |
+
+### 打开模式
+
+| 模式 | 描述 |
+|------|------|
+| `"r"` | 只读（默认） |
+| `"w"` | 写入（覆盖已有文件） |
+| `"a"` | 追加 |
+| `"rw"` 或 `"r+"` | 读写 |
+
+### CSV 和 JSON 支持
+
+```calc
+# CSV 文件操作
+m = [1, 2, 3; 4, 5, 6]
+write_csv("matrix.csv", m)
+
+loaded = read_csv("matrix.csv")
+print("加载的矩阵: ", loaded)
+
+# JSON 文件操作
+data = {"name": "test", "values": [1, 2, 3]}
+write_json("data.json", data)
+
+loaded_data = read_json("data.json")
+print("加载的数据: ", loaded_data)
+```
+
+| 函数 | 描述 |
+|------|------|
+| `read_csv(path)` | 从 CSV 文件读取矩阵 |
+| `write_csv(path, matrix)` | 将矩阵写入 CSV 文件 |
+| `read_json(path)` | 从 JSON 文件读取数据 |
+| `write_json(path, data)` | 将数据写入 JSON 文件 |
+
+### 状态持久化
+
+使用 `:save` 和 `:load` 命令保存和恢复计算器状态：
+
+```text
+> :save state.txt        # 保存所有变量和函数
+> :load state.txt        # 恢复保存的状态
+```
+
+### 导出数据
+
+将矩阵导出为 CSV 文件：
+
+```text
+> m = [1, 2; 3, 4]
+> :export "matrix.csv" m
+Exported m to matrix.csv
+```
+
+矩阵将以 CSV 格式保存，使用逗号分隔值。
 
 ## 脚本函数
 

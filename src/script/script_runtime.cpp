@@ -4,14 +4,19 @@
 #include "command/expression_compiler.h"
 #include "parser/unified_parser_factory.h"
 #include "parser/unified_expression_parser.h"
+#include "parser/symbolic_render_parser.h"
 #include "parser/command_parser.h"
 #include "core/string_utils.h"
 #include "core/format_utils.h"
+#include "core/calculator_service_factory.h"
 #include "math/helpers/integer_helpers.h"
 #include "mymath.h"
 #include "script_parser.h"
 
 #include <iomanip>
+#include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -23,28 +28,25 @@ VariableResolver visible_variables(const Calculator::Impl* impl) {
 }
 
 bool has_visible_script_function(const Calculator::Impl* impl, const std::string& name) {
+    if (impl->native_functions.find(name) != impl->native_functions.end()) return true;
     return impl->script_functions.find(name) != impl->script_functions.end();
 }
 
 void assign_visible_variable(Calculator::Impl* impl,
                              const std::string& name,
                              const StoredValue& value) {
-    // 先在 flat_scopes 中查找是否已存在
     if (VariableSlot* existing = impl->flat_scopes.find(name)) {
         existing->value = value;
         return;
     }
-    // 检查全局变量
     if (impl->variables.find(name) != impl->variables.end()) {
         impl->variables[name] = value;
         return;
     }
-    // 在当前作用域创建新变量
     if (impl->flat_scopes.scope_depth() > 0) {
         impl->flat_scopes.set(name, value);
         return;
     }
-    // 无局部作用域，创建全局变量
     impl->variables[name] = value;
 }
 
@@ -54,31 +56,6 @@ std::string indent_text(int indent) {
     return std::string(static_cast<std::size_t>(indent) * 2, ' ');
 }
 
-bool contains_builtin_constant_token(const std::string& expression) {
-    for (std::size_t i = 0; i < expression.size(); ++i) {
-        const char ch = expression[i];
-        if (!std::isalpha(static_cast<unsigned char>(ch)) && ch != '_') {
-            continue;
-        }
-
-        const std::size_t start = i;
-        ++i;
-        while (i < expression.size() &&
-               (std::isalnum(static_cast<unsigned char>(expression[i])) ||
-                expression[i] == '_')) {
-            ++i;
-        }
-        const std::string token = expression.substr(start, i - start);
-        --i;
-
-        double value = 0.0;
-        if (lookup_builtin_constant(token, &value)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 bool truthy_value(const StoredValue& value) {
     if (value.is_matrix) {
         throw std::runtime_error("matrix values cannot be used as script conditions");
@@ -86,312 +63,550 @@ bool truthy_value(const StoredValue& value) {
     if (value.is_complex) {
         throw std::runtime_error("complex values cannot be used as script conditions");
     }
+    if (value.is_string) {
+        return !value.string_value.empty();
+    }
+    if (value.is_list) {
+        return value.list_value && !value.list_value->empty();
+    }
+    if (value.is_dict) {
+        return value.dict_value && !value.dict_value->empty();
+    }
     return !mymath::is_near_zero(value.exact
                                      ? rational_to_double(value.rational)
                                      : value.decimal,
                                  1e-10);
 }
 
+double evaluate_scalar(Calculator* calculator, Calculator::Impl* impl, const CommandASTNode& ast, const char* context) {
+    StoredValue val = evaluate_command_ast_to_value(calculator, impl, ast, false);
+    if (val.is_matrix || val.is_complex || val.is_string) {
+        throw std::runtime_error(std::string(context) + " must be a scalar");
+    }
+    return val.exact ? rational_to_double(val.rational) : val.decimal;
+}
+
+bool is_wrapped_by(std::string_view text, char open, char close) {
+    const std::string trimmed = trim_copy(text);
+    if (trimmed.size() < 2 || trimmed.front() != open || trimmed.back() != close) return false;
+    int depth = 0;
+    bool in_string = false;
+    bool escaping = false;
+    for (std::size_t i = 0; i < trimmed.size(); ++i) {
+        const char ch = trimmed[i];
+        if (in_string) {
+            if (escaping) escaping = false;
+            else if (ch == '\\') escaping = true;
+            else if (ch == '"') in_string = false;
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+            continue;
+        }
+        if (ch == open) ++depth;
+        else if (ch == close) {
+            --depth;
+            if (depth == 0 && i + 1 != trimmed.size()) return false;
+        }
+    }
+    return depth == 0;
+}
+
+std::vector<std::string> split_script_top_level(std::string_view text, char delimiter) {
+    std::vector<std::string> parts;
+    std::size_t start = 0;
+    int paren = 0, bracket = 0, brace = 0;
+    bool in_string = false, escaping = false;
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        const char ch = text[i];
+        if (in_string) {
+            if (escaping) escaping = false;
+            else if (ch == '\\') escaping = true;
+            else if (ch == '"') in_string = false;
+            continue;
+        }
+        if (ch == '"') { in_string = true; continue; }
+        if (ch == '(') ++paren;
+        else if (ch == ')' && paren > 0) --paren;
+        else if (ch == '[') ++bracket;
+        else if (ch == ']' && bracket > 0) --bracket;
+        else if (ch == '{') ++brace;
+        else if (ch == '}' && brace > 0) --brace;
+        else if (ch == delimiter && paren == 0 && bracket == 0 && brace == 0) {
+            parts.push_back(trim_copy(text.substr(start, i - start)));
+            start = i + 1;
+        }
+    }
+    parts.push_back(trim_copy(text.substr(start)));
+    return parts;
+}
+
+std::size_t find_top_level_word(std::string_view text, std::string_view word, std::size_t start_at = 0) {
+    int paren = 0, bracket = 0, brace = 0;
+    bool in_string = false, escaping = false;
+    for (std::size_t i = start_at; i + word.size() <= text.size(); ++i) {
+        const char ch = text[i];
+        if (in_string) {
+            if (escaping) escaping = false;
+            else if (ch == '\\') escaping = true;
+            else if (ch == '"') in_string = false;
+            continue;
+        }
+        if (ch == '"') { in_string = true; continue; }
+        if (ch == '(') ++paren;
+        else if (ch == ')' && paren > 0) --paren;
+        else if (ch == '[') ++bracket;
+        else if (ch == ']' && bracket > 0) --bracket;
+        else if (ch == '{') ++brace;
+        else if (ch == '}' && brace > 0) --brace;
+        if (paren == 0 && bracket == 0 && brace == 0 &&
+            text.substr(i, word.size()) == word) {
+            const bool left_ok = i == 0 ||
+                !(std::isalnum(static_cast<unsigned char>(text[i - 1])) || text[i - 1] == '_');
+            const std::size_t after = i + word.size();
+            const bool right_ok = after >= text.size() ||
+                !(std::isalnum(static_cast<unsigned char>(text[after])) || text[after] == '_');
+            if (left_ok && right_ok) return i;
+        }
+    }
+    return std::string::npos;
+}
+
+std::size_t find_top_level_assignment(std::string_view text) {
+    int paren = 0, bracket = 0, brace = 0;
+    bool in_string = false, escaping = false;
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        const char ch = text[i];
+        if (in_string) {
+            if (escaping) escaping = false;
+            else if (ch == '\\') escaping = true;
+            else if (ch == '"') in_string = false;
+            continue;
+        }
+        if (ch == '"') { in_string = true; continue; }
+        if (ch == '(') ++paren;
+        else if (ch == ')' && paren > 0) --paren;
+        else if (ch == '[') ++bracket;
+        else if (ch == ']' && bracket > 0) --bracket;
+        else if (ch == '{') ++brace;
+        else if (ch == '}' && brace > 0) --brace;
+        else if (ch == '=' && paren == 0 && bracket == 0 && brace == 0) {
+            const char prev = i > 0 ? text[i - 1] : '\0';
+            const char next = i + 1 < text.size() ? text[i + 1] : '\0';
+            if (prev != '=' && prev != '!' && prev != '<' && prev != '>' && next != '=') return i;
+        }
+    }
+    return std::string::npos;
+}
+
+long long stored_to_index(const StoredValue& value, const char* context) {
+    if (value.is_matrix || value.is_complex || value.is_string || value.is_list || value.is_dict) {
+        throw std::runtime_error(std::string(context) + " must be an integer");
+    }
+    const double scalar = value.exact ? rational_to_double(value.rational) : value.decimal;
+    if (!is_integer_double(scalar)) {
+        throw std::runtime_error(std::string(context) + " must be an integer");
+    }
+    return round_to_long_long(scalar);
+}
+
+std::string stored_to_key(const StoredValue& value) {
+    if (value.is_string) return value.string_value;
+    if (value.is_matrix || value.is_complex || value.is_list || value.is_dict) {
+        throw std::runtime_error("dictionary key must be a string or scalar");
+    }
+    return value.exact ? value.rational.to_string() : format_stored_value(value, false);
+}
+
+bool parse_index_expression(std::string_view expression, std::string* base, std::string* index) {
+    const std::string text = trim_copy(expression);
+    if (text.empty() || text.back() != ']') return false;
+    int paren = 0, bracket = 0, brace = 0;
+    bool in_string = false, escaping = false;
+    std::size_t open_pos = std::string::npos;
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        const char ch = text[i];
+        if (in_string) {
+            if (escaping) escaping = false;
+            else if (ch == '\\') escaping = true;
+            else if (ch == '"') in_string = false;
+            continue;
+        }
+        if (ch == '"') { in_string = true; continue; }
+        if (ch == '(') ++paren;
+        else if (ch == ')' && paren > 0) --paren;
+        else if (ch == '{') ++brace;
+        else if (ch == '}' && brace > 0) --brace;
+        else if (ch == '[') {
+            if (paren == 0 && bracket == 0 && brace == 0) {
+                open_pos = i;
+            }
+            ++bracket;
+        } else if (ch == ']' && bracket > 0) {
+            --bracket;
+            if (bracket == 0 && i + 1 != text.size()) {
+                open_pos = std::string::npos;
+            }
+        }
+    }
+    if (open_pos == std::string::npos) return false;
+    *base = trim_copy(text.substr(0, open_pos));
+    *index = trim_copy(text.substr(open_pos + 1, text.size() - open_pos - 2));
+    return !base->empty();
+}
+
+bool has_top_level_semicolon(std::string_view text) {
+    return split_script_top_level(text, ';').size() > 1;
+}
+
+StoredValue evaluate_script_value_expression(Calculator* calculator,
+                                             Calculator::Impl* impl,
+                                             const std::string& expression,
+                                             bool exact_mode);
+
+StoredValue make_list_value(std::vector<StoredValue> values) {
+    StoredValue stored;
+    stored.is_list = true;
+    stored.list_value = std::make_shared<std::vector<StoredValue>>(std::move(values));
+    return stored;
+}
+
+StoredValue make_dict_value(std::map<std::string, StoredValue> values) {
+    StoredValue stored;
+    stored.is_dict = true;
+    stored.dict_value = std::make_shared<std::map<std::string, StoredValue>>(std::move(values));
+    return stored;
+}
+
+StoredValue evaluate_range_list(Calculator* calculator,
+                                Calculator::Impl* impl,
+                                const std::string& args_text,
+                                bool exact_mode) {
+    std::vector<std::string> args;
+    if (!trim_copy(args_text).empty()) args = split_script_top_level(args_text, ',');
+    if (args.empty() || args.size() > 3) throw std::runtime_error("range expects 1-3 arguments");
+    auto eval_scalar = [&](const std::string& arg) {
+        StoredValue value = evaluate_script_value_expression(calculator, impl, arg, exact_mode);
+        return static_cast<double>(stored_to_index(value, "range argument"));
+    };
+    double start = 0.0, stop = 0.0, step = 1.0;
+    if (args.size() == 1) {
+        stop = eval_scalar(args[0]);
+    } else if (args.size() == 2) {
+        start = eval_scalar(args[0]);
+        stop = eval_scalar(args[1]);
+    } else {
+        start = eval_scalar(args[0]);
+        stop = eval_scalar(args[1]);
+        step = eval_scalar(args[2]);
+    }
+    if (step == 0.0) throw std::runtime_error("range step cannot be zero");
+    std::vector<StoredValue> values;
+    for (double current = start; step > 0 ? current < stop : current > stop; current += step) {
+        StoredValue item;
+        item.decimal = current;
+        values.push_back(item);
+    }
+    return make_list_value(std::move(values));
+}
+
+StoredValue evaluate_list_comprehension(Calculator* calculator,
+                                        Calculator::Impl* impl,
+                                        const std::string& body,
+                                        bool exact_mode) {
+    const std::size_t for_pos = find_top_level_word(body, "for");
+    if (for_pos == std::string::npos) throw std::runtime_error("invalid list comprehension");
+    const std::string element_expr = trim_copy(body.substr(0, for_pos));
+    const std::string rest = trim_copy(body.substr(for_pos + 3));
+    const std::size_t in_pos = find_top_level_word(rest, "in");
+    if (in_pos == std::string::npos) throw std::runtime_error("invalid list comprehension");
+    const std::string var = trim_copy(rest.substr(0, in_pos));
+    if (var.empty()) throw std::runtime_error("invalid list comprehension variable");
+    std::string iterable_expr = trim_copy(rest.substr(in_pos + 2));
+    std::string filter_expr;
+    const std::size_t if_pos = find_top_level_word(iterable_expr, "if");
+    if (if_pos != std::string::npos) {
+        filter_expr = trim_copy(iterable_expr.substr(if_pos + 2));
+        iterable_expr = trim_copy(iterable_expr.substr(0, if_pos));
+    }
+
+    StoredValue iterable = evaluate_script_value_expression(calculator, impl, iterable_expr, exact_mode);
+    if (!iterable.is_list || !iterable.list_value) {
+        throw std::runtime_error("list comprehension requires a list iterable");
+    }
+
+    std::vector<StoredValue> result;
+    impl->flat_scopes.push_scope();
+    try {
+        for (const StoredValue& item : *iterable.list_value) {
+            impl->flat_scopes.set(var, item);
+            if (!filter_expr.empty() &&
+                !truthy_value(evaluate_script_value_expression(calculator, impl, filter_expr, exact_mode))) {
+                continue;
+            }
+            result.push_back(evaluate_script_value_expression(calculator, impl, element_expr, exact_mode));
+        }
+        impl->flat_scopes.pop_scope();
+    } catch (...) {
+        impl->flat_scopes.pop_scope();
+        throw;
+    }
+    return make_list_value(std::move(result));
+}
+
+StoredValue evaluate_list_literal(Calculator* calculator,
+                                  Calculator::Impl* impl,
+                                  const std::string& expression,
+                                  bool exact_mode) {
+    const std::string inner = trim_copy(expression.substr(1, expression.size() - 2));
+    if (inner.empty()) return make_list_value({});
+    if (has_top_level_semicolon(inner)) {
+        throw std::runtime_error("not a script list literal");
+    }
+    if (find_top_level_word(inner, "for") != std::string::npos) {
+        return evaluate_list_comprehension(calculator, impl, inner, exact_mode);
+    }
+    std::vector<StoredValue> values;
+    for (const std::string& part : split_script_top_level(inner, ',')) {
+        if (!part.empty()) values.push_back(evaluate_script_value_expression(calculator, impl, part, exact_mode));
+    }
+    return make_list_value(std::move(values));
+}
+
+StoredValue evaluate_dict_literal(Calculator* calculator,
+                                  Calculator::Impl* impl,
+                                  const std::string& expression,
+                                  bool exact_mode) {
+    const std::string inner = trim_copy(expression.substr(1, expression.size() - 2));
+    std::map<std::string, StoredValue> values;
+    if (inner.empty()) return make_dict_value(std::move(values));
+    for (const std::string& item : split_script_top_level(inner, ',')) {
+        const std::vector<std::string> kv = split_script_top_level(item, ':');
+        if (kv.size() != 2) throw std::runtime_error("invalid dictionary literal");
+        StoredValue key = evaluate_script_value_expression(calculator, impl, kv[0], exact_mode);
+        values[stored_to_key(key)] = evaluate_script_value_expression(calculator, impl, kv[1], exact_mode);
+    }
+    return make_dict_value(std::move(values));
+}
+
+StoredValue evaluate_index_or_slice(Calculator* calculator,
+                                    Calculator::Impl* impl,
+                                    const std::string& expression,
+                                    bool exact_mode) {
+    std::string base_expr;
+    std::string index_expr;
+    if (!parse_index_expression(expression, &base_expr, &index_expr)) {
+        throw std::runtime_error("invalid index expression");
+    }
+    StoredValue base = evaluate_script_value_expression(calculator, impl, base_expr, exact_mode);
+    if (base.is_list) {
+        if (!base.list_value) throw std::runtime_error("invalid list value");
+        const auto& list = *base.list_value;
+        const std::vector<std::string> slice_parts = split_script_top_level(index_expr, ':');
+        if (slice_parts.size() > 1) {
+            if (slice_parts.size() > 3) throw std::runtime_error("slice expects start:stop[:step]");
+            long long start = 0;
+            long long stop = static_cast<long long>(list.size());
+            long long step = 1;
+            if (!trim_copy(slice_parts[0]).empty()) start = stored_to_index(evaluate_script_value_expression(calculator, impl, slice_parts[0], exact_mode), "slice start");
+            if (slice_parts.size() > 1 && !trim_copy(slice_parts[1]).empty()) stop = stored_to_index(evaluate_script_value_expression(calculator, impl, slice_parts[1], exact_mode), "slice stop");
+            if (slice_parts.size() > 2 && !trim_copy(slice_parts[2]).empty()) step = stored_to_index(evaluate_script_value_expression(calculator, impl, slice_parts[2], exact_mode), "slice step");
+            if (step == 0) throw std::runtime_error("slice step cannot be zero");
+            auto normalize = [&](long long idx) {
+                if (idx < 0) idx += static_cast<long long>(list.size());
+                return std::max(0LL, std::min(idx, static_cast<long long>(list.size())));
+            };
+            start = normalize(start);
+            stop = normalize(stop);
+            std::vector<StoredValue> result;
+            if (step > 0) {
+                for (long long i = start; i < stop; i += step) result.push_back(list[static_cast<std::size_t>(i)]);
+            } else {
+                for (long long i = start; i > stop; i += step) result.push_back(list[static_cast<std::size_t>(i)]);
+            }
+            return make_list_value(std::move(result));
+        }
+        long long index = stored_to_index(evaluate_script_value_expression(calculator, impl, index_expr, exact_mode), "list index");
+        if (index < 0) index += static_cast<long long>(list.size());
+        if (index < 0 || index >= static_cast<long long>(list.size())) throw std::runtime_error("list index out of range");
+        return list[static_cast<std::size_t>(index)];
+    }
+    if (base.is_dict) {
+        if (!base.dict_value) throw std::runtime_error("invalid dictionary value");
+        const std::string key = stored_to_key(evaluate_script_value_expression(calculator, impl, index_expr, exact_mode));
+        auto it = base.dict_value->find(key);
+        if (it == base.dict_value->end()) throw std::runtime_error("dictionary key not found: " + key);
+        return it->second;
+    }
+    if (base.is_matrix) {
+        const std::vector<std::string> parts = split_script_top_level(index_expr, ',');
+        if (parts.size() == 1) {
+            long long index = stored_to_index(evaluate_script_value_expression(calculator, impl, parts[0], exact_mode), "matrix index");
+            if (index < 0) index += static_cast<long long>(base.matrix.data.size());
+            if (index < 0 || index >= static_cast<long long>(base.matrix.data.size())) throw std::runtime_error("matrix index out of range");
+            StoredValue result;
+            result.decimal = base.matrix.data[static_cast<std::size_t>(index)];
+            return result;
+        } else if (parts.size() == 2) {
+            long long row = stored_to_index(evaluate_script_value_expression(calculator, impl, parts[0], exact_mode), "matrix row");
+            long long col = stored_to_index(evaluate_script_value_expression(calculator, impl, parts[1], exact_mode), "matrix col");
+            if (row < 0) row += static_cast<long long>(base.matrix.rows);
+            if (col < 0) col += static_cast<long long>(base.matrix.cols);
+            if (row < 0 || row >= static_cast<long long>(base.matrix.rows) || col < 0 || col >= static_cast<long long>(base.matrix.cols)) {
+                throw std::runtime_error("matrix index out of range");
+            }
+            StoredValue result;
+            result.decimal = base.matrix.at(static_cast<std::size_t>(row), static_cast<std::size_t>(col));
+            return result;
+        } else {
+            throw std::runtime_error("matrix indexing requires 1 or 2 indices");
+        }
+    }
+    throw std::runtime_error("indexing requires a list, dictionary, or matrix");
+}
+
+StoredValue evaluate_script_value_expression(Calculator* calculator,
+                                             Calculator::Impl* impl,
+                                             const std::string& expression,
+                                             bool exact_mode) {
+    const std::string trimmed = trim_copy(expression);
+
+    // len() function - returns length of list, dict, or string
+    if (trimmed.rfind("len(", 0) == 0 && trimmed.back() == ')') {
+        std::string arg = trim_copy(trimmed.substr(4, trimmed.size() - 5));
+        if (arg.empty()) {
+            throw std::runtime_error("len() requires one argument");
+        }
+        StoredValue value = evaluate_script_value_expression(calculator, impl, arg, exact_mode);
+        StoredValue result;
+        result.decimal = 0.0;
+        if (value.is_list && value.list_value) {
+            result.decimal = static_cast<double>(value.list_value->size());
+        } else if (value.is_dict && value.dict_value) {
+            result.decimal = static_cast<double>(value.dict_value->size());
+        } else if (value.is_string) {
+            result.decimal = static_cast<double>(value.string_value.size());
+        } else {
+            throw std::runtime_error("len() requires a list, dict, or string");
+        }
+        return result;
+    }
+
+    // range() function
+    if (trimmed.rfind("range(", 0) == 0 && is_wrapped_by(trimmed.substr(5), '(', ')')) {
+        return evaluate_range_list(calculator, impl, trimmed.substr(6, trimmed.size() - 7), exact_mode);
+    }
+
+    // append() function - returns new list with element appended
+    if (trimmed.rfind("append(", 0) == 0 && trimmed.back() == ')') {
+        std::string args_text = trim_copy(trimmed.substr(7, trimmed.size() - 8));
+        std::vector<std::string> args = split_script_top_level(args_text, ',');
+        if (args.size() != 2) {
+            throw std::runtime_error("append() requires two arguments: list and element");
+        }
+        StoredValue list_val = evaluate_script_value_expression(calculator, impl, args[0], exact_mode);
+        if (!list_val.is_list || !list_val.list_value) {
+            throw std::runtime_error("append() first argument must be a list");
+        }
+        StoredValue elem = evaluate_script_value_expression(calculator, impl, args[1], exact_mode);
+        std::vector<StoredValue> new_list = *list_val.list_value;
+        new_list.push_back(elem);
+        return make_list_value(std::move(new_list));
+    }
+
+    if (is_wrapped_by(trimmed, '[', ']')) {
+        const std::string inner = trim_copy(trimmed.substr(1, trimmed.size() - 2));
+        if (!has_top_level_semicolon(inner)) {
+            return evaluate_list_literal(calculator, impl, trimmed, exact_mode);
+        }
+    }
+    if (is_wrapped_by(trimmed, '{', '}')) {
+        return evaluate_dict_literal(calculator, impl, trimmed, exact_mode);
+    }
+    std::string base;
+    std::string index;
+    if (parse_index_expression(trimmed, &base, &index)) {
+        return evaluate_index_or_slice(calculator, impl, trimmed, exact_mode);
+    }
+    return evaluate_expression_value(calculator, impl, trimmed, exact_mode);
+}
+
+bool try_execute_index_assignment(Calculator* calculator,
+                                  Calculator::Impl* impl,
+                                  const std::string& text,
+                                  bool exact_mode,
+                                  std::string* output) {
+    const std::size_t eq = find_top_level_assignment(text);
+    if (eq == std::string::npos) return false;
+    std::string target = trim_copy(text.substr(0, eq));
+    std::string value_expr = trim_copy(text.substr(eq + 1));
+    std::string base_name;
+    std::string index_expr;
+    if (!parse_index_expression(target, &base_name, &index_expr)) return false;
+    if (base_name.empty() || (!std::isalpha(static_cast<unsigned char>(base_name[0])) && base_name[0] != '_')) return false;
+
+    VariableSlot* slot = impl->flat_scopes.find(base_name);
+    StoredValue* base_value = slot ? &slot->value : nullptr;
+    if (!base_value) {
+        auto it = impl->variables.find(base_name);
+        if (it != impl->variables.end()) base_value = &it->second;
+    }
+    if (!base_value) throw std::runtime_error("unknown variable: " + base_name);
+
+    StoredValue new_value = evaluate_script_value_expression(calculator, impl, value_expr, exact_mode);
+    if (base_value->is_list) {
+        if (!base_value->list_value) base_value->list_value = std::make_shared<std::vector<StoredValue>>();
+        long long index = stored_to_index(evaluate_script_value_expression(calculator, impl, index_expr, exact_mode), "list index");
+        auto& list = *base_value->list_value;
+        if (index < 0) index += static_cast<long long>(list.size());
+        if (index < 0 || index >= static_cast<long long>(list.size())) throw std::runtime_error("list index out of range");
+        list[static_cast<std::size_t>(index)] = new_value;
+        *output = base_name + "[" + index_expr + "] = " + format_stored_value(new_value, impl->symbolic_constants_mode);
+        return true;
+    }
+    if (base_value->is_dict) {
+        if (!base_value->dict_value) base_value->dict_value = std::make_shared<std::map<std::string, StoredValue>>();
+        const std::string key = stored_to_key(evaluate_script_value_expression(calculator, impl, index_expr, exact_mode));
+        (*base_value->dict_value)[key] = new_value;
+        *output = base_name + "[" + index_expr + "] = " + format_stored_value(new_value, impl->symbolic_constants_mode);
+        return true;
+    }
+    if (base_value->is_matrix) {
+        if (new_value.is_matrix || new_value.is_list || new_value.is_dict || new_value.is_string) {
+            throw std::runtime_error("matrix element assignment requires a scalar value");
+        }
+        double val = new_value.exact ? rational_to_double(new_value.rational) : new_value.decimal;
+        const std::vector<std::string> parts = split_script_top_level(index_expr, ',');
+        if (parts.size() == 1) {
+            long long index = stored_to_index(evaluate_script_value_expression(calculator, impl, parts[0], exact_mode), "matrix index");
+            if (index < 0) index += static_cast<long long>(base_value->matrix.data.size());
+            if (index < 0 || index >= static_cast<long long>(base_value->matrix.data.size())) throw std::runtime_error("matrix index out of range");
+            base_value->matrix.data[static_cast<std::size_t>(index)] = val;
+            *output = base_name + "[" + index_expr + "] = " + format_stored_value(new_value, impl->symbolic_constants_mode);
+            return true;
+        } else if (parts.size() == 2) {
+            long long row = stored_to_index(evaluate_script_value_expression(calculator, impl, parts[0], exact_mode), "matrix row");
+            long long col = stored_to_index(evaluate_script_value_expression(calculator, impl, parts[1], exact_mode), "matrix col");
+            if (row < 0) row += static_cast<long long>(base_value->matrix.rows);
+            if (col < 0) col += static_cast<long long>(base_value->matrix.cols);
+            if (row < 0 || row >= static_cast<long long>(base_value->matrix.rows) || col < 0 || col >= static_cast<long long>(base_value->matrix.cols)) {
+                throw std::runtime_error("matrix index out of range");
+            }
+            base_value->matrix.at(static_cast<std::size_t>(row), static_cast<std::size_t>(col)) = val;
+            *output = base_name + "[" + index_expr + "] = " + format_stored_value(new_value, impl->symbolic_constants_mode);
+            return true;
+        } else {
+            throw std::runtime_error("matrix indexing requires 1 or 2 indices");
+        }
+    }
+    throw std::runtime_error("indexed assignment requires a list, dictionary, or matrix");
+}
+
 } // namespace
 
 // ============================================================================
-// 语句克隆函数
-// ============================================================================
-// 注意：这些函数目前仅用于兼容性。在大多数情况下，ScriptFunction 使用
-// shared_ptr 共享函数体，避免了不必要的克隆。如果未来需要修改 AST，
-// 可以重新启用这些函数。
-// ============================================================================
-
-std::unique_ptr<script::BlockStatement> clone_block_statement(const script::BlockStatement& block) {
-    auto clone = std::make_unique<script::BlockStatement>();
-    for (const auto& statement : block.statements) {
-        clone->statements.push_back(clone_statement(*statement));
-    }
-    return clone;
-}
-
-std::string render_script_block(const script::BlockStatement& block, int indent) {
-    std::ostringstream out;
-    out << "{\n";
-    for (const auto& statement : block.statements) {
-        out << render_script_statement(*statement, indent + 1);
-    }
-    out << indent_text(indent) << "}";
-    return out.str();
-}
-
-std::string render_script_statement(const script::Statement& statement, int indent) {
-    const std::string prefix = indent_text(indent);
-    switch (statement.kind) {
-        case script::Statement::Kind::kBlock:
-            return prefix + render_script_block(
-                                static_cast<const script::BlockStatement&>(statement),
-                                indent) + "\n";
-        case script::Statement::Kind::kSimple:
-            return prefix + static_cast<const script::SimpleStatement&>(statement).text + ";\n";
-        case script::Statement::Kind::kIf: {
-            const auto& source = static_cast<const script::IfStatement&>(statement);
-            std::string rendered =
-                prefix + "if (" + source.condition + ") " +
-                render_script_statement(*source.then_branch, indent).substr(prefix.size());
-            if (source.else_branch) {
-                rendered.pop_back();
-                rendered += prefix + "else " +
-                            render_script_statement(*source.else_branch, indent).substr(prefix.size());
-            }
-            return rendered;
-        }
-        case script::Statement::Kind::kWhile: {
-            const auto& source = static_cast<const script::WhileStatement&>(statement);
-            return prefix + "while (" + source.condition + ") " +
-                   render_script_statement(*source.body, indent).substr(prefix.size());
-        }
-        case script::Statement::Kind::kFor: {
-            const auto& source = static_cast<const script::ForStatement&>(statement);
-            return prefix + "for (" + source.initializer + "; " + source.condition + "; " +
-                   source.step + ") " +
-                   render_script_statement(*source.body, indent).substr(prefix.size());
-        }
-        case script::Statement::Kind::kForRange: {
-            const auto& source = static_cast<const script::ForRangeStatement&>(statement);
-            return prefix + "for " + source.variable + " in range(" +
-                   source.start_expr + ", " + source.stop_expr + ", " +
-                   source.step_expr + ") " +
-                   render_script_statement(*source.body, indent).substr(prefix.size());
-        }
-        case script::Statement::Kind::kFunction: {
-            const auto& source = static_cast<const script::FunctionStatement&>(statement);
-            std::ostringstream out;
-            out << prefix << "fn " << source.name << "(";
-            for (std::size_t i = 0; i < source.parameters.size(); ++i) {
-                if (i != 0) {
-                    out << ", ";
-                }
-                out << source.parameters[i];
-            }
-            out << ") " << render_script_block(*source.body, indent) << '\n';
-            return out.str();
-        }
-        case script::Statement::Kind::kReturn: {
-            const auto& source = static_cast<const script::ReturnStatement&>(statement);
-            return prefix + "return" +
-                   (source.has_expression ? " " + source.expression : "") +
-                   ";\n";
-        }
-        case script::Statement::Kind::kBreak:
-            return prefix + "break;\n";
-        case script::Statement::Kind::kContinue:
-            return prefix + "continue;\n";
-    }
-
-    throw std::runtime_error("unknown script statement kind");
-}
-
-script::StatementPtr clone_statement(const script::Statement& statement) {
-    switch (statement.kind) {
-        case script::Statement::Kind::kBlock:
-            return clone_block_statement(static_cast<const script::BlockStatement&>(statement));
-        case script::Statement::Kind::kSimple: {
-            const auto& source = static_cast<const script::SimpleStatement&>(statement);
-            auto clone = std::make_unique<script::SimpleStatement>();
-            clone->text = source.text;
-            clone->cache = source.cache;
-            return clone;
-        }
-        case script::Statement::Kind::kIf: {
-            const auto& source = static_cast<const script::IfStatement&>(statement);
-            auto clone = std::make_unique<script::IfStatement>();
-            clone->condition = source.condition;
-            clone->cache = source.cache;
-            clone->then_branch = clone_statement(*source.then_branch);
-            if (source.else_branch) {
-                clone->else_branch = clone_statement(*source.else_branch);
-            }
-            return clone;
-        }
-        case script::Statement::Kind::kWhile: {
-            const auto& source = static_cast<const script::WhileStatement&>(statement);
-            auto clone = std::make_unique<script::WhileStatement>();
-            clone->condition = source.condition;
-            clone->cache = source.cache;
-            clone->body = clone_statement(*source.body);
-            return clone;
-        }
-        case script::Statement::Kind::kFor: {
-            const auto& source = static_cast<const script::ForStatement&>(statement);
-            auto clone = std::make_unique<script::ForStatement>();
-            clone->initializer = source.initializer;
-            clone->condition = source.condition;
-            clone->step = source.step;
-            clone->init_cache = source.init_cache;
-            clone->cond_cache = source.cond_cache;
-            clone->step_cache = source.step_cache;
-            clone->body = clone_statement(*source.body);
-            return clone;
-        }
-        case script::Statement::Kind::kForRange: {
-            const auto& source = static_cast<const script::ForRangeStatement&>(statement);
-            auto clone = std::make_unique<script::ForRangeStatement>();
-            clone->variable = source.variable;
-            clone->start_expr = source.start_expr;
-            clone->stop_expr = source.stop_expr;
-            clone->step_expr = source.step_expr;
-            clone->step_is_negative = source.step_is_negative;
-            clone->start_cache = source.start_cache;
-            clone->stop_cache = source.stop_cache;
-            clone->step_cache = source.step_cache;
-            clone->body = clone_statement(*source.body);
-            return clone;
-        }
-        case script::Statement::Kind::kFunction: {
-            const auto& source = static_cast<const script::FunctionStatement&>(statement);
-            auto clone = std::make_unique<script::FunctionStatement>();
-            clone->name = source.name;
-            clone->parameters = source.parameters;
-            clone->body = clone_block_statement(*source.body);
-            return clone;
-        }
-        case script::Statement::Kind::kReturn: {
-            const auto& source = static_cast<const script::ReturnStatement&>(statement);
-            auto clone = std::make_unique<script::ReturnStatement>();
-            clone->has_expression = source.has_expression;
-            clone->expression = source.expression;
-            clone->cache = source.cache;
-            return clone;
-        }
-        case script::Statement::Kind::kBreak:
-            return std::make_unique<script::BreakStatement>();
-        case script::Statement::Kind::kContinue:
-            return std::make_unique<script::ContinueStatement>();
-    }
-
-    throw std::runtime_error("unknown script statement kind");
-}
-
-double invoke_script_function_decimal(Calculator* calculator,
-                                      Calculator::Impl* impl,
-                                      const std::string& name,
-                                      const std::vector<double>& arguments) {
-    // 转换参数为 StoredValue
-    std::vector<StoredValue> stored_args;
-    stored_args.reserve(arguments.size());
-    for (double arg : arguments) {
-        StoredValue sv;
-        sv.decimal = arg;
-        sv.exact = false;
-        stored_args.push_back(sv);
-    }
-
-    // 调用完整类型版本
-    StoredValue result = invoke_script_function(calculator, impl, name, stored_args);
-
-    // 提取标量值
-    if (result.is_matrix) {
-        throw std::runtime_error("script function " + name +
-                                 " returned a matrix, cannot be used as scalar");
-    }
-    if (result.is_complex) {
-        throw std::runtime_error("script function " + name +
-                                 " returned a complex number, cannot be used as scalar");
-    }
-    if (result.is_string) {
-        throw std::runtime_error("script function " + name +
-                                 " returned a string, cannot be used as scalar");
-    }
-
-    return result.exact ? rational_to_double(result.rational) : result.decimal;
-}
-
-StoredValue invoke_script_function(Calculator* calculator,
-                                   Calculator::Impl* impl,
-                                   const std::string& name,
-                                   const std::vector<StoredValue>& arguments) {
-    // 递归深度检查
-    static constexpr int kMaxScriptRecursionDepth = 4096;
-    if (impl->script_call_depth >= kMaxScriptRecursionDepth) {
-        throw std::runtime_error("maximum script recursion depth exceeded (" +
-                                 std::to_string(kMaxScriptRecursionDepth) + ")");
-    }
-
-    struct DepthGuard {
-        int* depth;
-        explicit DepthGuard(int* d) : depth(d) { (*depth)++; }
-        ~DepthGuard() { (*depth)--; }
-    } guard(&impl->script_call_depth);
-
-    auto it = impl->script_functions.find(name);
-    if (it == impl->script_functions.end()) {
-        // 尝试作为模块命令调用
-        std::ostringstream call_ss;
-        call_ss << name << "(";
-        for (std::size_t i = 0; i < arguments.size(); ++i) {
-            if (i != 0) call_ss << ", ";
-            if (arguments[i].is_string) {
-                call_ss << "\"" << arguments[i].string_value << "\"";
-            } else if (arguments[i].is_matrix) {
-                // 矩阵参数需要特殊处理
-                call_ss << "[matrix]";
-            } else if (arguments[i].is_complex) {
-                call_ss << arguments[i].complex.real << "+" << arguments[i].complex.imag << "i";
-            } else {
-                call_ss << std::setprecision(17)
-                        << (arguments[i].exact ? rational_to_double(arguments[i].rational)
-                                               : arguments[i].decimal);
-            }
-        }
-        call_ss << ")";
-
-        std::string output;
-        if (calculator->try_process_function_command(call_ss.str(), &output)) {
-            // 尝试解析输出
-            StoredValue result;
-            try {
-                result.decimal = std::stod(output);
-                result.exact = false;
-                return result;
-            } catch (...) {
-                // 输出不是数字，可能是字符串
-                result.is_string = true;
-                result.string_value = output;
-                return result;
-            }
-        }
-
-        throw std::runtime_error("unknown function: " + name);
-    }
-
-    const ScriptFunction& function = it->second;
-    if (arguments.size() != function.parameter_names.size()) {
-        throw std::runtime_error("script function " + name + " expects " +
-                                 std::to_string(function.parameter_names.size()) +
-                                 " arguments");
-    }
-
-    // 使用 FlatScopeStack 创建栈帧
-    impl->flat_scopes.push_scope();
-    for (std::size_t i = 0; i < arguments.size(); ++i) {
-        impl->flat_scopes.set(function.parameter_names[i], arguments[i]);
-    }
-
-    struct FlatScopeGuard {
-        Calculator::Impl* impl;
-        explicit FlatScopeGuard(Calculator::Impl* i) : impl(i) {}
-        ~FlatScopeGuard() { impl->flat_scopes.pop_scope(); }
-    } scope_guard(impl);
-
-    std::string ignored_output;
-    const ScriptSignal signal =
-        execute_script_block(calculator, impl, *function.body, false, &ignored_output, false);
-
-    if (signal.kind != ScriptSignal::Kind::kReturn || !signal.has_value) {
-        throw std::runtime_error("script function " + name + " must return a value");
-    }
-
-    return signal.value;
-}
-
-// ============================================================================
-// 优化后的表达式求值函数
+// 表达式求值
 // ============================================================================
 
 StoredValue evaluate_expression_value(Calculator* calculator,
@@ -399,320 +614,223 @@ StoredValue evaluate_expression_value(Calculator* calculator,
                                       const std::string& expression,
                                       bool exact_mode,
                                       std::shared_ptr<ExpressionCache>* cache) {
-    // 获取或创建缓存
-    std::shared_ptr<ExpressionCache> expr_cache;
-    if (cache && *cache) {
-        expr_cache = *cache;
-    } else {
-        expr_cache = std::make_shared<ExpressionCache>();
-        expr_cache->expanded = expand_inline_function_commands(calculator, expression);
-        expr_cache->hint = analyze_expression_hint(expr_cache->expanded);
-        expr_cache->features = analyze_expression_features(expr_cache->expanded);
-        if (cache) {
-            *cache = expr_cache;
-        }
+    const std::string special_expr = trim_copy(expression);
+    std::string index_base;
+    std::string index_expr;
+    if (parse_index_expression(special_expr, &index_base, &index_expr)) {
+        return evaluate_index_or_slice(calculator, impl, special_expr, exact_mode);
     }
 
-    const std::string& trimmed = expr_cache->expanded;
     const VariableResolver variables = visible_variables(impl);
-
-    // 创建统一解析器
-    const HasScriptFunctionCallback has_script_function =
-        [impl](const std::string& name) {
-            return has_visible_script_function(impl, name);
-        };
-    const InvokeScriptFunctionDecimalCallback invoke_script_function =
-        [calculator, impl](const std::string& name, const std::vector<double>& arguments) {
-            return invoke_script_function_decimal(calculator, impl, name, arguments);
-        };
-
-    UnifiedExpressionParser parser(variables,
-                                   &impl->functions,
-                                   &impl->scalar_functions,
-                                   &impl->matrix_functions,
-                                   &impl->value_functions,
-                                   has_script_function,
-                                   invoke_script_function);
-
-    // 根据 ExpressionHint 快速分发（使用缓存中的 hint）
-    switch (expr_cache->hint) {
-        case ExpressionHint::kStringLiteral: {
-            StoredValue stored;
-            stored.is_string = true;
-            stored.string_value = parse_string_literal_value(trimmed);
-            return stored;
-        }
-
-        case ExpressionHint::kIdentifier: {
-            const StoredValue* found = variables.lookup(trimmed);
-            if (found) {
-                return *found;
-            }
-            throw UndefinedError("unknown variable: " + trimmed);
-        }
-
-        case ExpressionHint::kRatCall: {
-            // rat() 特殊处理
-            CommandASTNode rat_ast = parse_command(trimmed);
-            const auto* call = rat_ast.as_function_call();
-            if (!call || call->name != "rat") {
-                break; // 回退到通用路径
-            }
-
-            if (call->arguments.size() != 1 && call->arguments.size() != 2) {
-                throw std::runtime_error(
-                    "rat expects one argument or expression plus max_denominator");
-            }
-
-            const StoredValue value =
-                evaluate_expression_value(calculator, impl, std::string(call->arguments[0].text), false, &call->arguments[0].cache);
-            if (value.is_matrix || value.is_complex) {
-                throw std::runtime_error("rat cannot approximate a matrix or complex value");
-            }
-            if (value.is_string) {
-                throw std::runtime_error("rat cannot approximate a string value");
-            }
-
-            long long max_denominator = 999;
-            if (call->arguments.size() == 2) {
-                const StoredValue max_denominator_value =
-                    evaluate_expression_value(calculator, impl, std::string(call->arguments[1].text), false, &call->arguments[1].cache);
-                if (max_denominator_value.is_matrix || max_denominator_value.is_complex ||
-                    max_denominator_value.is_string) {
-                    throw std::runtime_error("rat max_denominator must be a positive integer");
-                }
-                const double scalar =
-                    max_denominator_value.exact
-                        ? rational_to_double(max_denominator_value.rational)
-                        : max_denominator_value.decimal;
-                if (!is_integer_double(scalar) || scalar <= 0.0) {
-                    throw std::runtime_error("rat max_denominator must be a positive integer");
-                }
-                max_denominator = round_to_long_long(scalar);
-            }
-
-            if (value.exact && value.rational.denominator <= max_denominator) {
-                return value;
-            }
-
-            const double decimal_value = value.exact
-                                             ? rational_to_double(value.rational)
-                                             : value.decimal;
-            long long numerator = 0;
-            long long denominator = 1;
-            if (!mymath::best_rational_approximation(decimal_value,
-                                                     &numerator,
-                                                     &denominator,
-                                                     max_denominator)) {
-                throw std::runtime_error("rat could not compute a rational approximation");
-            }
-
-            StoredValue stored;
-            stored.exact = true;
-            stored.rational = Rational(numerator, denominator);
-            stored.decimal = rational_to_double(stored.rational);
-            return stored;
-        }
-
-        case ExpressionHint::kComplexCandidate:
-        case ExpressionHint::kMatrixCandidate: {
-            // 复数/矩阵表达式路径
-            matrix::Value matrix_val;
-            if (parser.try_evaluate_value(trimmed, &matrix_val)) {
-                StoredValue result;
-                if (matrix_val.is_matrix) {
-                    result.is_matrix = true;
-                    result.matrix = std::move(matrix_val.matrix);
-                } else if (matrix_val.is_complex) {
-                    result.is_complex = true;
-                    result.complex = matrix_val.complex;
-                } else {
-                    result.decimal = matrix_val.scalar;
-                }
-                return result;
-            }
-            // 失败则回退到标量路径
-            break;
-        }
-
-        case ExpressionHint::kScalar: {
-            // 标量路径 - 直接处理，无需尝试其他解析器
-            break;
-        }
-
-        default:
-            break;
-    }
-
-    // 检查字符串字面量
-    if (is_string_literal(trimmed)) {
-        StoredValue stored;
-        stored.is_string = true;
-        stored.string_value = parse_string_literal_value(trimmed);
-        return stored;
-    }
-
-    // 检查标识符
-    if (is_identifier_text(trimmed)) {
-        const StoredValue* found = variables.lookup(trimmed);
-        if (found && found->is_string) {
-            return *found;
-        }
-    }
-
-    // 精确模式
-    if (exact_mode) {
-        try {
-            StoredValue stored;
-            stored.rational = parser.evaluate_exact(trimmed);
-            stored.exact = true;
-            stored.decimal = rational_to_double(stored.rational);
-            return stored;
-        } catch (const ExactModeUnsupported&) {
-            // 回退到十进制模式
-        }
-    }
-
-    // 高精度小数需要先于普通标量求值，否则长小数字面量会被 double 截断。
-    if (!exact_mode) {
-        std::map<std::string, StoredValue> snapshot = variables.snapshot();
-        StoredValue stored;
-        for (const auto& module : impl->implicit_evaluation_modules) {
-            if (module->try_evaluate_implicit(trimmed, &stored, snapshot)) {
-                return stored;
-            }
-        }
-    }
-
-    // 矩阵/复数表达式
-    matrix::Value matrix_val;
-    if (parser.try_evaluate_value(trimmed, &matrix_val)) {
-        StoredValue stored;
-        if (matrix_val.is_matrix) {
-            stored.is_matrix = true;
-            stored.matrix = std::move(matrix_val.matrix);
-        } else if (matrix_val.is_complex) {
-            stored.is_complex = true;
-            stored.complex = matrix_val.complex;
-            stored.decimal = matrix_val.complex.real;
-        } else {
-            stored.decimal = matrix_val.scalar;
-        }
-        return stored;
-    }
-
-    // 标量解析 - 使用 UnifiedExpressionParser
-    try {
-        // 尝试使用编译后的 AST 进行快速求值
-        if (expr_cache->is_compiled && expr_cache->compiled_ast) {
-            try {
-                const double parsed_value = parser.evaluate_ast(expr_cache->compiled_ast.get());
-                StoredValue stored;
-                stored.decimal = parsed_value;
-                stored.exact = false;
-                if (impl->symbolic_constants_mode) {
-                    stored.set_source_expression(trimmed);
-                }
-                return stored;
-            } catch (const MathError&) {
-                // AST 求值失败，回退到完整解析器
-            }
-        } else if (!expr_cache->is_compiled && expr_cache->hint == ExpressionHint::kScalar) {
-            // 尝试编译 AST
-            expr_cache->compiled_ast = parser.compile(trimmed);
-            if (expr_cache->compiled_ast) {
-                expr_cache->is_compiled = true;
-                // 尝试绑定变量槽位（高性能路径）
-                bind_variable_slots(expr_cache->compiled_ast.get(), variables);
-                try {
-                    const double parsed_value = parser.evaluate_ast(expr_cache->compiled_ast.get());
-                    StoredValue stored;
-                    stored.decimal = parsed_value;
-                    stored.exact = false;
-                    if (impl->symbolic_constants_mode) {
-                        stored.set_source_expression(trimmed);
-                    }
-                    return stored;
-                } catch (const MathError&) {
-                    // AST 求值失败，回退到完整解析器
-                }
-            }
-        }
-
-        // 使用 UnifiedExpressionParser 求值
-        const double parsed_value = parser.evaluate(trimmed);
-        StoredValue stored;
-        stored.decimal = parsed_value;
-        stored.exact = false;
-        if (impl->symbolic_constants_mode) {
-            stored.set_source_expression(trimmed);
-        }
-        return stored;
-    } catch (const UndefinedError&) {
-        // 如果数值求值失败（由于变量未定义），但该表达式是由符号指令展开而来的，
-        // 则保留其原始文本作为符号结果返回。
-        if (trimmed != expression && (trimmed.find(' ') != std::string::npos || trimmed.find('*') != std::string::npos)) {
-            StoredValue stored;
-            stored.has_symbolic_text = true;
-            stored.symbolic_text = trimmed;
-            return stored;
-        }
-        throw;
-    }
-}
-
-// 兼容旧接口的包装函数
-StoredValue evaluate_expression_value_legacy(Calculator* calculator,
-                                             Calculator::Impl* impl,
-                                             const std::string& expression,
-                                             bool exact_mode,
-                                             std::shared_ptr<void>* cache) {
+    
     std::shared_ptr<ExpressionCache> expr_cache;
-    if (cache && *cache) {
-        expr_cache = std::static_pointer_cast<ExpressionCache>(*cache);
+    if (cache) {
+        if (!*cache) {
+            *cache = std::make_shared<ExpressionCache>(expression);
+            std::string expanded = expand_inline_function_commands(calculator, expression);
+            if (expanded != expression) (*cache)->set_expanded(std::move(expanded));
+        } else if (!(*cache)->has_expanded) {
+            std::string expanded = expand_inline_function_commands(calculator, std::string((*cache)->original_text));
+            if (expanded != (*cache)->original_text) (*cache)->set_expanded(std::move(expanded));
+        }
+        expr_cache = *cache;
     }
-    auto result = evaluate_expression_value(calculator, impl, expression, exact_mode,
-                                            cache ? &expr_cache : nullptr);
-    if (cache && expr_cache) {
-        *cache = expr_cache;
+
+    const std::string target_expr =
+        expr_cache ? std::string(expr_cache->effective_text())
+                   : expand_inline_function_commands(calculator, expression);
+
+    std::string trimmed_expr = trim_copy(target_expr);
+    if (is_string_literal(trimmed_expr)) {
+        StoredValue res; res.is_string = true; res.string_value = parse_string_literal_value(trimmed_expr);
+        return res;
     }
+
+    // 检查是否是原生函数调用（顶级函数调用）
+    // 避免与 UnifiedExpressionParser 冲突
+    auto is_cmd = [impl](std::string_view name) {
+        return impl->command_registry.has_command(std::string(name)) || impl->native_functions.count(std::string(name)) > 0;
+    };
+    try {
+        CommandASTNode ast = parse_command(trimmed_expr, is_cmd);
+        if (ast.kind == CommandKind::kFunctionCall) {
+            const auto* call = ast.as_function_call();
+            if (impl->native_functions.count(std::string(call->name)) > 0) {
+                return evaluate_command_ast_to_value(calculator, impl, ast, exact_mode);
+            }
+        }
+    } catch (...) {
+        // 解析失败则回退到统一表达式解析器
+    }
+
+    // 隐式求值（模块特定逻辑）
+    if (!exact_mode) {
+        StoredValue implicit_value;
+        if (calculator->try_evaluate_implicit(target_expr, &implicit_value, variables.snapshot())) {
+            return implicit_value;
+        }
+    }
+
+    // 进制转换检测
+    std::string converted;
+    if (try_base_conversion_expression(target_expr, variables, &impl->functions, {impl->hex_prefix_mode, impl->hex_uppercase_mode}, &converted)) {
+        StoredValue res; res.is_string = true; res.string_value = converted;
+        return res;
+    }
+
+    const HasScriptFunctionCallback has_script_function = [impl](const std::string& name) {
+        return has_visible_script_function(impl, name);
+    };
+    const InvokeScriptFunctionCallback invoke_script_function = [calculator, impl](const std::string& name, const std::vector<double>& arguments) {
+        return invoke_script_function_decimal(calculator, impl, name, arguments);
+    };
+
+    UnifiedExpressionParser parser(variables, &impl->functions, &impl->scalar_functions, &impl->matrix_functions, &impl->value_functions, has_script_function, invoke_script_function);
+    
+    StoredValue result = parser.evaluate_stored(target_expr, exact_mode, impl->symbolic_constants_mode);
+    
+    // 符号常量模式下的额外处理（如果解析器没处理完）
+    if (impl->symbolic_constants_mode && !result.has_symbolic_text && !result.is_string && !result.is_matrix) {
+        std::string symbolic_text;
+        if (try_symbolic_constant_expression(target_expr, variables, &impl->functions, &symbolic_text)) {
+            result.has_symbolic_text = true;
+            result.symbolic_text = symbolic_text;
+        }
+    }
+    
     return result;
 }
 
-std::string execute_simple_script_line(Calculator* calculator,
-                                       Calculator::Impl* impl,
-                                       const std::string& text,
-                                       bool exact_mode) {
-    const std::string trimmed = trim_copy(text);
-    if (trimmed.empty()) return "";
+// ============================================================================
+// 命令 AST 执行与求值
+// ============================================================================
 
-    // 1. 尝试作为内置/模块命令处理 (如 print, diff, plot 等)
-    // 所有的 print 逻辑现在都下沉到 System 或领域模块中，或者通过统一分发器处理
-    std::string command_output;
-    if (calculator->try_process_function_command(trimmed, &command_output, exact_mode)) {
-        return command_output;
+std::string execute_command_ast(Calculator* calculator,
+                                Calculator::Impl* impl,
+                                const CommandASTNode& ast,
+                                bool exact_mode) {
+    if (ast.kind == CommandKind::kEmpty) return "";
+    
+    if (ast.kind == CommandKind::kSequence) {
+        const auto* nodes = ast.as_sequence();
+        std::ostringstream oss;
+        for (std::size_t i = 0; i < nodes->size(); ++i) {
+            std::string out = execute_command_ast(calculator, impl, (*nodes)[i], exact_mode);
+            if (!out.empty()) {
+                oss << out;
+                if (i + 1 < nodes->size()) oss << "\n";
+            }
+        }
+        return oss.str();
     }
 
-    // 2. 使用统一的命令解析器处理 AST
-    CommandASTNode ast = parse_command(trimmed);
+    if (ast.kind == CommandKind::kFunctionDefinition) {
+        const FunctionDefinitionInfo* def = ast.as_function_definition();
+        std::string name(def->name);
+        if (is_reserved_user_function_name(impl, name)) throw std::runtime_error("function name is reserved: " + name);
+        std::vector<std::string> params;
+        std::string params_display;
+        for (std::size_t i = 0; i < def->parameters.size(); ++i) {
+            params.emplace_back(def->parameters[i]);
+            params_display += def->parameters[i];
+            if (i + 1 < def->parameters.size()) params_display += ", ";
+        }
+        impl->functions[name] = { params, std::string(def->body.text) };
+        return name + "(" + params_display + ") = " + std::string(def->body.text);
+    }
 
-    // 处理赋值语句
+    if (ast.kind == CommandKind::kMetaCommand || ast.kind == CommandKind::kFunctionCall) {
+        std::string_view command_name;
+        std::vector<std::string_view> arg_views;
+        if (ast.kind == CommandKind::kMetaCommand) {
+            const auto* meta = ast.as_meta_command();
+            command_name = meta->command;
+            arg_views = meta->arguments;
+        } else {
+            const auto* call = ast.as_function_call();
+            command_name = call->name;
+            for (const auto& arg : call->arguments) arg_views.push_back(arg.text);
+        }
+
+        std::string cmd_name = (ast.kind == CommandKind::kMetaCommand) ? ":" + std::string(command_name) : std::string(command_name);
+        if (ast.kind == CommandKind::kFunctionCall && cmd_name == "print") {
+            std::ostringstream out;
+            for (std::size_t i = 0; i < arg_views.size(); ++i) {
+                if (i != 0) out << ' ';
+                const StoredValue value =
+                    evaluate_script_value_expression(calculator, impl, std::string(arg_views[i]), exact_mode);
+                out << format_print_value(value, impl->symbolic_constants_mode);
+            }
+            return out.str();
+        }
+
+        const CoreServices& svc = calculator->get_core_services();
+        std::string output;
+        if (impl->command_registry.has_command(cmd_name)) {
+            if (impl->command_registry.try_process(cmd_name, arg_views, &output, exact_mode, svc)) return output;
+        }
+        if (ast.kind == CommandKind::kFunctionCall) {
+            return format_stored_value(evaluate_command_ast_to_value(calculator, impl, ast, exact_mode), impl->symbolic_constants_mode);
+        }
+        throw std::runtime_error("unknown command: " + cmd_name);
+    }
+
     if (ast.kind == CommandKind::kAssignment) {
         const auto* assign = ast.as_assignment();
-        if (!is_valid_variable_name(assign->variable)) {
-            throw std::runtime_error("invalid variable name: " + std::string(assign->variable));
-        }
-        const StoredValue stored = evaluate_expression_value(
-            calculator, impl, std::string(assign->expression.text), exact_mode, &assign->expression.cache);
-        assign_visible_variable(impl, std::string(assign->variable), stored);
-        return std::string(assign->variable) + " = " + 
-               format_stored_value(stored, impl->symbolic_constants_mode);
+        StoredValue val = evaluate_script_value_expression(calculator, impl, std::string(assign->expression.text), exact_mode);
+        assign_visible_variable(impl, std::string(assign->variable), val);
+        return std::string(assign->variable) + " = " + format_stored_value(val, impl->symbolic_constants_mode);
     }
 
-    // 3. 回退到标准表达式求值
-    return format_stored_value(evaluate_expression_value(calculator, impl, trimmed, exact_mode),
-                               impl->symbolic_constants_mode);
+    if (ast.kind == CommandKind::kExpression) {
+        const auto* expr = ast.as_expression();
+        return format_stored_value(evaluate_script_value_expression(calculator, impl, std::string(expr->text), exact_mode), impl->symbolic_constants_mode);
+    }
+
+    if (ast.kind == CommandKind::kStringLiteral) return "\"" + *ast.as_string_literal() + "\"";
+    return "";
 }
+
+StoredValue evaluate_command_ast_to_value(Calculator* calculator,
+                                          Calculator::Impl* impl,
+                                          const CommandASTNode& ast,
+                                          bool exact_mode) {
+    if (ast.kind == CommandKind::kExpression) {
+        const auto* expr = ast.as_expression();
+        return evaluate_script_value_expression(calculator, impl, std::string(expr->text), exact_mode);
+    }
+    if (ast.kind == CommandKind::kAssignment) {
+        const auto* assign = ast.as_assignment();
+        StoredValue val = evaluate_script_value_expression(calculator, impl, std::string(assign->expression.text), exact_mode);
+        assign_visible_variable(impl, std::string(assign->variable), val);
+        return val;
+    }
+    if (ast.kind == CommandKind::kFunctionCall) {
+        const auto* call = ast.as_function_call();
+        std::vector<StoredValue> args;
+        for (const auto& arg : call->arguments) args.push_back(evaluate_script_value_expression(calculator, impl, std::string(arg.text), exact_mode));
+        
+        auto it = impl->native_functions.find(std::string(call->name));
+        if (it != impl->native_functions.end()) {
+            return it->second(args);
+        }
+        
+        return invoke_script_function(calculator, impl, std::string(call->name), args);
+    }
+    if (ast.kind == CommandKind::kStringLiteral) {
+        StoredValue value;
+        value.is_string = true;
+        value.string_value = *ast.as_string_literal();
+        return value;
+    }
+    std::string out = execute_command_ast(calculator, impl, ast, exact_mode);
+    StoredValue res; res.is_string = true; res.string_value = out;
+    return res;
+}
+
+// ============================================================================
+// 脚本执行
+// ============================================================================
 
 ScriptSignal execute_script_statement(Calculator* calculator,
                                       Calculator::Impl* impl,
@@ -722,241 +840,261 @@ ScriptSignal execute_script_statement(Calculator* calculator,
                                       bool create_scope) {
     switch (statement.kind) {
         case script::Statement::Kind::kBlock:
-            return execute_script_block(calculator,
-                                        impl,
-                                        static_cast<const script::BlockStatement&>(statement),
-                                        exact_mode,
-                                        last_output,
-                                        create_scope);
+            return execute_script_block(calculator, impl, static_cast<const script::BlockStatement&>(statement), exact_mode, last_output, create_scope);
+        
         case script::Statement::Kind::kSimple: {
             const auto& simple = static_cast<const script::SimpleStatement&>(statement);
-            // 使用预编译缓存
-            std::shared_ptr<ExpressionCache> cache = simple.cache;
-            *last_output = execute_simple_script_line(calculator, impl,
-                cache ? cache->expanded : simple.text, exact_mode);
-            return {};
-        }
-        case script::Statement::Kind::kIf: {
-            const auto& if_statement = static_cast<const script::IfStatement&>(statement);
-            if (truthy_value(evaluate_expression_value(calculator, impl, if_statement.condition, false, &if_statement.cache))) {
-                return execute_script_statement(calculator,
-                                                impl,
-                                                *if_statement.then_branch,
-                                                exact_mode,
-                                                last_output,
-                                                true);
-            }
-            if (if_statement.else_branch) {
-                return execute_script_statement(calculator,
-                                                impl,
-                                                *if_statement.else_branch,
-                                                exact_mode,
-                                                last_output,
-                                                true);
+            try {
+                if (try_execute_index_assignment(calculator, impl, simple.text, exact_mode, last_output)) {
+                    return {};
+                }
+                if (simple.command_ast.kind != CommandKind::kEmpty) {
+                    *last_output = execute_command_ast(calculator, impl, simple.command_ast, exact_mode);
+                }
+            } catch (const std::exception& e) {
+                throw std::runtime_error("Line " + std::to_string(simple.line) + ": " + e.what());
             }
             return {};
         }
-        case script::Statement::Kind::kWhile: {
-            const auto& while_statement = static_cast<const script::WhileStatement&>(statement);
-            while (truthy_value(evaluate_expression_value(calculator,
-                                                          impl,
-                                                          while_statement.condition,
-                                                          false,
-                                                          &while_statement.cache))) {
-                const ScriptSignal signal =
-                    execute_script_statement(calculator,
-                                             impl,
-                                             *while_statement.body,
-                                             exact_mode,
-                                             last_output,
-                                             true);
-                if (signal.kind == ScriptSignal::Kind::kReturn) {
-                    return signal;
-                }
-                if (signal.kind == ScriptSignal::Kind::kBreak) {
-                    break;
-                }
-                if (signal.kind == ScriptSignal::Kind::kContinue) {
-                    continue;
-                }
-            }
-            return {};
-        }
-        case script::Statement::Kind::kFor: {
-            const auto& for_statement = static_cast<const script::ForStatement&>(statement);
 
+        case script::Statement::Kind::kIf: {
+            const auto& if_stmt = static_cast<const script::IfStatement&>(statement);
+            try {
+                if (truthy_value(evaluate_command_ast_to_value(calculator, impl, if_stmt.condition_ast, false))) {
+                    return execute_script_statement(calculator, impl, *if_stmt.then_branch, exact_mode, last_output, true);
+                } else if (if_stmt.else_branch) {
+                    return execute_script_statement(calculator, impl, *if_stmt.else_branch, exact_mode, last_output, true);
+                }
+            } catch (const std::exception& e) {
+                throw std::runtime_error("Line " + std::to_string(if_stmt.line) + ": " + e.what());
+            }
+            return {};
+        }
+
+        case script::Statement::Kind::kWhile: {
+            const auto& while_stmt = static_cast<const script::WhileStatement&>(statement);
+            try {
+                while (truthy_value(evaluate_command_ast_to_value(calculator, impl, while_stmt.condition_ast, false))) {
+                    const ScriptSignal signal = execute_script_statement(calculator, impl, *while_stmt.body, exact_mode, last_output, true);
+                    if (signal.kind == ScriptSignal::Kind::kReturn) return signal;
+                    if (signal.kind == ScriptSignal::Kind::kBreak) break;
+                    if (signal.kind == ScriptSignal::Kind::kContinue) continue;
+                }
+            } catch (const std::exception& e) {
+                throw std::runtime_error("Line " + std::to_string(while_stmt.line) + ": " + e.what());
+            }
+            return {};
+        }
+
+        case script::Statement::Kind::kFor: {
+            const auto& for_stmt = static_cast<const script::ForStatement&>(statement);
             impl->flat_scopes.push_scope();
             try {
-                if (!for_statement.initializer.empty()) {
-                    std::shared_ptr<ExpressionCache> init_cache = for_statement.init_cache;
-                    if (!init_cache) {
-                        init_cache = std::make_shared<ExpressionCache>();
-                        init_cache->expanded = expand_inline_function_commands(calculator, for_statement.initializer);
-                        for_statement.init_cache = init_cache;
-                    }
-                    (void)execute_simple_script_line(calculator,
-                                                     impl,
-                                                     init_cache->expanded,
-                                                     exact_mode);
-                }
-                while (for_statement.condition.empty() ||
-                       truthy_value(evaluate_expression_value(calculator,
-                                                              impl,
-                                                              for_statement.condition,
-                                                              false,
-                                                              &for_statement.cond_cache))) {
-                    const ScriptSignal signal =
-                        execute_script_statement(calculator,
-                                                 impl,
-                                                 *for_statement.body,
-                                                 exact_mode,
-                                                 last_output,
-                                                 true);
-                    if (signal.kind == ScriptSignal::Kind::kReturn) {
-                        impl->flat_scopes.pop_scope();
-                        return signal;
-                    }
-                    if (signal.kind == ScriptSignal::Kind::kBreak) {
-                        break;
-                    }
-                    if (!for_statement.step.empty()) {
-                        std::shared_ptr<ExpressionCache> step_cache = for_statement.step_cache;
-                        if (!step_cache) {
-                            step_cache = std::make_shared<ExpressionCache>();
-                            step_cache->expanded = expand_inline_function_commands(calculator, for_statement.step);
-                            for_statement.step_cache = step_cache;
-                        }
-                        (void)execute_simple_script_line(calculator,
-                                                         impl,
-                                                         step_cache->expanded,
-                                                         exact_mode);
-                    }
-                    if (signal.kind == ScriptSignal::Kind::kContinue) {
-                        continue;
-                    }
+                if (for_stmt.init_ast.kind != CommandKind::kEmpty) (void)evaluate_command_ast_to_value(calculator, impl, for_stmt.init_ast, exact_mode);
+                while (for_stmt.cond_ast.kind == CommandKind::kEmpty || truthy_value(evaluate_command_ast_to_value(calculator, impl, for_stmt.cond_ast, false))) {
+                    const ScriptSignal signal = execute_script_statement(calculator, impl, *for_stmt.body, exact_mode, last_output, true);
+                    if (signal.kind == ScriptSignal::Kind::kReturn) { impl->flat_scopes.pop_scope(); return signal; }
+                    if (signal.kind == ScriptSignal::Kind::kBreak) break;
+                    if (for_stmt.step_ast.kind != CommandKind::kEmpty) (void)evaluate_command_ast_to_value(calculator, impl, for_stmt.step_ast, exact_mode);
+                    if (signal.kind == ScriptSignal::Kind::kContinue) continue;
                 }
                 impl->flat_scopes.pop_scope();
                 return {};
-            } catch (...) {
+            } catch (const std::exception& e) {
                 impl->flat_scopes.pop_scope();
-                throw;
+                throw std::runtime_error("Line " + std::to_string(for_stmt.line) + ": " + e.what());
             }
         }
+
         case script::Statement::Kind::kForRange: {
             const auto& for_range = static_cast<const script::ForRangeStatement&>(statement);
-
             impl->flat_scopes.push_scope();
             try {
-                // 一次性求值 start, stop, step
-                const StoredValue start_val = evaluate_expression_value(
-                    calculator, impl, for_range.start_expr, false, &for_range.start_cache);
-                const StoredValue stop_val = evaluate_expression_value(
-                    calculator, impl, for_range.stop_expr, false, &for_range.stop_cache);
-                const StoredValue step_val = evaluate_expression_value(
-                    calculator, impl, for_range.step_expr, false, &for_range.step_cache);
-
-                if (start_val.is_matrix || start_val.is_complex || start_val.is_string) {
-                    throw std::runtime_error("range start must be a scalar");
-                }
-                if (stop_val.is_matrix || stop_val.is_complex || stop_val.is_string) {
-                    throw std::runtime_error("range stop must be a scalar");
-                }
-                if (step_val.is_matrix || step_val.is_complex || step_val.is_string) {
-                    throw std::runtime_error("range step must be a scalar");
-                }
-
-                double start = start_val.exact ? rational_to_double(start_val.rational) : start_val.decimal;
-                double stop = stop_val.exact ? rational_to_double(stop_val.rational) : stop_val.decimal;
-                double step = step_val.exact ? rational_to_double(step_val.rational) : step_val.decimal;
-
-                if (step == 0.0) {
-                    throw std::runtime_error("range step cannot be zero");
-                }
-
+                const double start = evaluate_scalar(calculator, impl, for_range.start_ast, "range start");
+                const double stop = evaluate_scalar(calculator, impl, for_range.stop_ast, "range stop");
+                const double step = evaluate_scalar(calculator, impl, for_range.step_ast, "range step");
+                if (step == 0.0) throw std::runtime_error("range step cannot be zero");
                 bool ascending = step > 0.0;
-
-                // 直接数值循环，无需每次重新解析表达式
-                double current = start;
-                while ((ascending && current < stop) || (!ascending && current > stop)) {
-                    // 设置循环变量（直接在 flat_scopes 中设置）
-                    StoredValue loop_val;
-                    loop_val.decimal = current;
-                    loop_val.exact = false;
+                for (double current = start; (ascending ? current < stop : current > stop); current += step) {
+                    StoredValue loop_val; loop_val.decimal = current; loop_val.exact = false;
                     impl->flat_scopes.set(for_range.variable, loop_val);
-
-                    // 执行循环体
-                    const ScriptSignal signal =
-                        execute_script_statement(calculator,
-                                                 impl,
-                                                 *for_range.body,
-                                                 exact_mode,
-                                                 last_output,
-                                                 true);
-                    if (signal.kind == ScriptSignal::Kind::kReturn) {
-                        impl->flat_scopes.pop_scope();
-                        return signal;
-                    }
-                    if (signal.kind == ScriptSignal::Kind::kBreak) {
-                        break;
-                    }
-
-                    current += step;
-
-                    if (signal.kind == ScriptSignal::Kind::kContinue) {
-                        continue;
-                    }
+                    const ScriptSignal signal = execute_script_statement(calculator, impl, *for_range.body, exact_mode, last_output, true);
+                    if (signal.kind == ScriptSignal::Kind::kReturn) { impl->flat_scopes.pop_scope(); return signal; }
+                    if (signal.kind == ScriptSignal::Kind::kBreak) break;
+                    if (signal.kind == ScriptSignal::Kind::kContinue) continue;
                 }
                 impl->flat_scopes.pop_scope();
                 return {};
-            } catch (...) {
+            } catch (const std::exception& e) {
                 impl->flat_scopes.pop_scope();
-                throw;
+                throw std::runtime_error("Line " + std::to_string(for_range.line) + ": " + e.what());
+            }
+        }
+
+        case script::Statement::Kind::kForIn: {
+            const auto& for_in = static_cast<const script::ForInStatement&>(statement);
+            impl->flat_scopes.push_scope();
+            try {
+                StoredValue iterable = evaluate_command_ast_to_value(calculator, impl, for_in.iterable_ast, exact_mode);
+
+                // 支持列表迭代
+                if (iterable.is_list && iterable.list_value) {
+                    for (const StoredValue& item : *iterable.list_value) {
+                        impl->flat_scopes.set(for_in.variable, item);
+                        const ScriptSignal signal = execute_script_statement(calculator, impl, *for_in.body, exact_mode, last_output, true);
+                        if (signal.kind == ScriptSignal::Kind::kReturn) { impl->flat_scopes.pop_scope(); return signal; }
+                        if (signal.kind == ScriptSignal::Kind::kBreak) break;
+                        if (signal.kind == ScriptSignal::Kind::kContinue) continue;
+                    }
+                }
+                // 支持矩阵行迭代
+                else if (iterable.is_matrix) {
+                    for (std::size_t row = 0; row < iterable.matrix.rows; ++row) {
+                        StoredValue row_value;
+                        row_value.is_matrix = true;
+                        row_value.matrix = matrix::Matrix(1, iterable.matrix.cols);
+                        for (std::size_t col = 0; col < iterable.matrix.cols; ++col) {
+                            row_value.matrix.at(0, col) = iterable.matrix.at(row, col);
+                        }
+                        impl->flat_scopes.set(for_in.variable, row_value);
+                        const ScriptSignal signal = execute_script_statement(calculator, impl, *for_in.body, exact_mode, last_output, true);
+                        if (signal.kind == ScriptSignal::Kind::kReturn) { impl->flat_scopes.pop_scope(); return signal; }
+                        if (signal.kind == ScriptSignal::Kind::kBreak) break;
+                        if (signal.kind == ScriptSignal::Kind::kContinue) continue;
+                    }
+                }
+                // 支持字符串字符迭代
+                else if (iterable.is_string) {
+                    for (char ch : iterable.string_value) {
+                        StoredValue char_value;
+                        char_value.is_string = true;
+                        char_value.string_value = std::string(1, ch);
+                        impl->flat_scopes.set(for_in.variable, char_value);
+                        const ScriptSignal signal = execute_script_statement(calculator, impl, *for_in.body, exact_mode, last_output, true);
+                        if (signal.kind == ScriptSignal::Kind::kReturn) { impl->flat_scopes.pop_scope(); return signal; }
+                        if (signal.kind == ScriptSignal::Kind::kBreak) break;
+                        if (signal.kind == ScriptSignal::Kind::kContinue) continue;
+                    }
+                }
+                else {
+                    throw std::runtime_error("for-in loop requires a list, matrix, or string iterable");
+                }
+                impl->flat_scopes.pop_scope();
+                return {};
+            } catch (const std::exception& e) {
+                impl->flat_scopes.pop_scope();
+                throw std::runtime_error("Line " + std::to_string(for_in.line) + ": " + e.what());
+            }
+        }
+
+        case script::Statement::Kind::kReturn: {
+            const auto& ret = static_cast<const script::ReturnStatement&>(statement);
+            if (!ret.has_expression) return ScriptSignal::make_return({});
+            try { return ScriptSignal::make_return(evaluate_command_ast_to_value(calculator, impl, ret.expr_ast, exact_mode)); }
+            catch (const std::exception& e) { throw std::runtime_error("Line " + std::to_string(ret.line) + ": " + e.what()); }
+        }
+
+        case script::Statement::Kind::kBreak: return ScriptSignal::make_break();
+        case script::Statement::Kind::kContinue: return ScriptSignal::make_continue();
+        case script::Statement::Kind::kImport: {
+            const auto& import_stmt = static_cast<const script::ImportStatement&>(statement);
+            try {
+                StoredValue path_value =
+                    evaluate_command_ast_to_value(calculator, impl, import_stmt.path_ast, exact_mode);
+                if (!path_value.is_string) {
+                    throw std::runtime_error("import path must be a string");
+                }
+                *last_output = calculator->execute_script_file(path_value.string_value, exact_mode, true);
+                return {};
+            } catch (const std::exception& e) {
+                throw std::runtime_error("Line " + std::to_string(import_stmt.line) + ": " + e.what());
             }
         }
         case script::Statement::Kind::kFunction: {
-            const auto& function_statement =
-                static_cast<const script::FunctionStatement&>(statement);
-            if (!is_valid_variable_name(function_statement.name)) {
-                throw std::runtime_error("invalid function name: " + function_statement.name);
-            }
-            if (is_reserved_user_function_name(impl, function_statement.name)) {
-                throw std::runtime_error("function name is reserved: " +
-                                         function_statement.name);
-            }
-            for (const std::string& parameter_name : function_statement.parameters) {
-                if (!is_valid_variable_name(parameter_name)) {
-                    throw std::runtime_error("invalid parameter name: " + parameter_name);
-                }
-            }
-            ScriptFunction function;
-            function.parameter_names = function_statement.parameters;
-            // 克隆函数体以共享
-            // 注意：由于 FunctionStatement 使用 unique_ptr 且 statement 是 const 引用，
-            // 我们需要克隆。未来可以考虑使用 shared_ptr 在解析阶段就共享。
-            function.body = std::shared_ptr<const script::BlockStatement>(
-                clone_block_statement(*function_statement.body).release());
-            impl->script_functions[function_statement.name] = function;
-            *last_output = function_statement.name + "(...)";
+            const auto& fs = static_cast<const script::FunctionStatement&>(statement);
+            ScriptFunction function; function.parameter_names = fs.parameters; function.body = fs.body;
+            impl->script_functions[fs.name] = function;
+            *last_output = fs.name + "(...)";
             return {};
         }
-        case script::Statement::Kind::kReturn: {
-            const auto& return_statement =
-                static_cast<const script::ReturnStatement&>(statement);
-            if (!return_statement.has_expression) {
-                ScriptSignal signal;
-                signal.kind = ScriptSignal::Kind::kReturn;
-                return signal;
-            }
-            return ScriptSignal::make_return(
-                evaluate_expression_value(calculator, impl, return_statement.expression, exact_mode, &return_statement.cache));
-        }
-        case script::Statement::Kind::kBreak:
-            return ScriptSignal::make_break();
-        case script::Statement::Kind::kContinue:
-            return ScriptSignal::make_continue();
-    }
 
-    throw std::runtime_error("unknown script statement kind");
+        case script::Statement::Kind::kMatch: {
+            const auto& match_stmt = static_cast<const script::MatchStatement&>(statement);
+            try {
+                // 求值匹配主体
+                StoredValue subject = evaluate_command_ast_to_value(calculator, impl, match_stmt.subject_ast, exact_mode);
+
+                // 遍历 case 分支
+                for (const auto& clause : match_stmt.cases) {
+                    bool matches = false;
+
+                    if (clause.is_default) {
+                        // 默认分支总是匹配
+                        matches = true;
+                    } else {
+                        // 求值模式并比较
+                        StoredValue pattern = evaluate_command_ast_to_value(calculator, impl, clause.pattern_ast, exact_mode);
+
+                        // 比较值
+                        if (subject.is_matrix || pattern.is_matrix) {
+                            if (subject.is_matrix && pattern.is_matrix) {
+                                if (subject.matrix.rows == pattern.matrix.rows && subject.matrix.cols == pattern.matrix.cols) {
+                                    matches = true;
+                                    for (std::size_t i = 0; i < subject.matrix.data.size(); ++i) {
+                                        if (!mymath::is_near_zero(subject.matrix.data[i] - pattern.matrix.data[i], 1e-10)) {
+                                            matches = false;
+                                            break;
+                                        }
+                                    }
+                                } else {
+                                    matches = false;
+                                }
+                            } else {
+                                matches = false;
+                            }
+                        } else if (subject.is_complex || pattern.is_complex) {
+                            // 复数比较
+                            if (subject.is_complex && pattern.is_complex) {
+                                matches = mymath::is_near_zero(subject.complex.real - pattern.complex.real, 1e-10) &&
+                                          mymath::is_near_zero(subject.complex.imag - pattern.complex.imag, 1e-10);
+                            } else {
+                                matches = false;
+                            }
+                        } else if (subject.is_string || pattern.is_string) {
+                            // 字符串比较
+                            if (subject.is_string && pattern.is_string) {
+                                matches = subject.string_value == pattern.string_value;
+                            } else {
+                                matches = false;
+                            }
+                        } else {
+                            // 标量比较
+                            double subj_val = subject.exact ? rational_to_double(subject.rational) : subject.decimal;
+                            double pat_val = pattern.exact ? rational_to_double(pattern.rational) : pattern.decimal;
+                            matches = mymath::is_near_zero(subj_val - pat_val, 1e-10);
+                        }
+
+                    }
+
+                    // 检查守卫条件。默认分支也允许 guard，例如 case _ if x > 0:
+                    if (matches && clause.is_guarded) {
+                        StoredValue guard_val = evaluate_command_ast_to_value(calculator, impl, clause.guard_ast, exact_mode);
+                        matches = truthy_value(guard_val);
+                    }
+
+                    if (matches) {
+                        // 执行匹配的 case 体
+                        return execute_script_statement(calculator, impl, *clause.body, exact_mode, last_output, true);
+                    }
+                }
+                // 没有匹配的分支，什么都不做
+            } catch (const std::exception& e) {
+                throw std::runtime_error("Line " + std::to_string(match_stmt.line) + ": " + e.what());
+            }
+            return {};
+        }
+    }
+    return {};
 }
 
 ScriptSignal execute_script_block(Calculator* calculator,
@@ -965,34 +1103,233 @@ ScriptSignal execute_script_block(Calculator* calculator,
                                   bool exact_mode,
                                   std::string* last_output,
                                   bool create_scope) {
-    if (create_scope) {
-        impl->flat_scopes.push_scope();
-    }
-
+    if (create_scope) impl->flat_scopes.push_scope();
     try {
-        for (const auto& statement : block.statements) {
-            const ScriptSignal signal =
-                execute_script_statement(calculator,
-                                         impl,
-                                         *statement,
-                                         exact_mode,
-                                         last_output,
-                                         true);
+        for (const auto& stmt : block.statements) {
+            const ScriptSignal signal = execute_script_statement(calculator, impl, *stmt, exact_mode, last_output, true);
             if (signal.kind != ScriptSignal::Kind::kNone) {
-                if (create_scope) {
-                    impl->flat_scopes.pop_scope();
-                }
+                if (create_scope) impl->flat_scopes.pop_scope();
                 return signal;
             }
         }
-        if (create_scope) {
-            impl->flat_scopes.pop_scope();
-        }
+        if (create_scope) impl->flat_scopes.pop_scope();
         return {};
     } catch (...) {
-        if (create_scope) {
-            impl->flat_scopes.pop_scope();
-        }
+        if (create_scope) impl->flat_scopes.pop_scope();
         throw;
     }
+}
+
+std::string execute_simple_script_line(Calculator* calculator,
+                                       Calculator::Impl* impl,
+                                       const std::string& text,
+                                       bool exact_mode) {
+    const std::string trimmed = trim_copy(text);
+    if (trimmed.empty()) return "";
+    auto is_command = [impl](std::string_view name) {
+        return impl->command_registry.has_command(std::string(name)) || impl->command_registry.has_command(":" + std::string(name));
+    };
+    CommandASTNode ast = parse_command(trimmed, is_command);
+    return execute_command_ast(calculator, impl, ast, exact_mode);
+}
+
+double invoke_script_function_decimal(Calculator* calculator,
+                                      Calculator::Impl* impl,
+                                      const std::string& name,
+                                      const std::vector<double>& arguments) {
+    std::vector<StoredValue> stored_args;
+    for (double arg : arguments) { StoredValue sv; sv.decimal = arg; sv.exact = false; stored_args.push_back(sv); }
+    StoredValue result = invoke_script_function(calculator, impl, name, stored_args);
+    return result.exact ? rational_to_double(result.rational) : result.decimal;
+}
+
+StoredValue invoke_script_function(Calculator* calculator,
+                                   Calculator::Impl* impl,
+                                   const std::string& name,
+                                   const std::vector<StoredValue>& arguments) {
+    auto nit = impl->native_functions.find(name);
+    if (nit != impl->native_functions.end()) {
+        return nit->second(arguments);
+    }
+    
+    auto it = impl->script_functions.find(name);
+    if (it == impl->script_functions.end()) throw std::runtime_error("unknown function: " + name);
+    const ScriptFunction& function = it->second;
+    impl->flat_scopes.push_scope();
+    for (std::size_t i = 0; i < arguments.size(); ++i) impl->flat_scopes.set(function.parameter_names[i], arguments[i]);
+    std::string ignored;
+    const ScriptSignal signal = execute_script_block(calculator, impl, *function.body, false, &ignored, false);
+    impl->flat_scopes.pop_scope();
+    if (signal.kind != ScriptSignal::Kind::kReturn || !signal.has_value) throw std::runtime_error("script function " + name + " must return a value");
+    return signal.value;
+}
+
+// 克隆与渲染逻辑 (省略或保持最简，脚本中目前主要使用 shared_ptr)
+script::StatementPtr clone_statement(const script::Statement& statement) { return nullptr; }
+
+namespace {
+
+std::string command_ast_to_source(const CommandASTNode& ast) {
+    switch (ast.kind) {
+        case CommandKind::kEmpty:
+            return "";
+        case CommandKind::kMetaCommand: {
+            const auto& meta = std::get<MetaCommandInfo>(ast.data);
+            std::string text = ":" + std::string(meta.command);
+            for (std::string_view arg : meta.arguments) {
+                text += " ";
+                text += std::string(arg);
+            }
+            return text;
+        }
+        case CommandKind::kFunctionDefinition: {
+            const auto& def = std::get<FunctionDefinitionInfo>(ast.data);
+            std::string text = std::string(def.name) + "(";
+            for (std::size_t i = 0; i < def.parameters.size(); ++i) {
+                if (i != 0) text += ", ";
+                text += std::string(def.parameters[i]);
+            }
+            text += ") = ";
+            text += std::string(def.body.text);
+            return text;
+        }
+        case CommandKind::kFunctionCall: {
+            const auto& call = std::get<FunctionCallInfo>(ast.data);
+            std::string text = std::string(call.name) + "(";
+            for (std::size_t i = 0; i < call.arguments.size(); ++i) {
+                if (i != 0) text += ", ";
+                text += std::string(call.arguments[i].text);
+            }
+            text += ")";
+            return text;
+        }
+        case CommandKind::kAssignment: {
+            const auto& assignment = std::get<AssignmentInfo>(ast.data);
+            return std::string(assignment.variable) + " = " +
+                   std::string(assignment.expression.text);
+        }
+        case CommandKind::kExpression:
+            return std::string(std::get<ExpressionInfo>(ast.data).text);
+        case CommandKind::kStringLiteral:
+            return "\"" + std::get<std::string>(ast.data) + "\"";
+        case CommandKind::kSequence: {
+            const auto& nodes = std::get<std::vector<CommandASTNode>>(ast.data);
+            std::string text;
+            for (std::size_t i = 0; i < nodes.size(); ++i) {
+                if (i != 0) text += "; ";
+                text += command_ast_to_source(nodes[i]);
+            }
+            return text;
+        }
+    }
+    return "";
+}
+
+}  // namespace
+
+std::string render_script_statement(const script::Statement& statement, int indent) {
+    const std::string pad = indent_text(indent);
+    switch (statement.kind) {
+        case script::Statement::Kind::kBlock:
+            return render_script_block(static_cast<const script::BlockStatement&>(statement), indent);
+        case script::Statement::Kind::kSimple: {
+            const auto& simple = static_cast<const script::SimpleStatement&>(statement);
+            const std::string text = simple.text.empty()
+                                         ? command_ast_to_source(simple.command_ast)
+                                         : simple.text;
+            return pad + (text.empty() ? "pass" : text);
+        }
+        case script::Statement::Kind::kIf: {
+            const auto& if_stmt = static_cast<const script::IfStatement&>(statement);
+            std::string text = pad + "if " + command_ast_to_source(if_stmt.condition_ast) +
+                               " " + render_script_statement(*if_stmt.then_branch, indent);
+            if (if_stmt.else_branch) {
+                text += "\n" + pad + "else " +
+                        render_script_statement(*if_stmt.else_branch, indent);
+            }
+            return text;
+        }
+        case script::Statement::Kind::kWhile: {
+            const auto& while_stmt = static_cast<const script::WhileStatement&>(statement);
+            return pad + "while " + command_ast_to_source(while_stmt.condition_ast) +
+                   " " + render_script_statement(*while_stmt.body, indent);
+        }
+        case script::Statement::Kind::kFor: {
+            const auto& for_stmt = static_cast<const script::ForStatement&>(statement);
+            return pad + "for (" + command_ast_to_source(for_stmt.init_ast) + "; " +
+                   command_ast_to_source(for_stmt.cond_ast) + "; " +
+                   command_ast_to_source(for_stmt.step_ast) + ") " +
+                   render_script_statement(*for_stmt.body, indent);
+        }
+        case script::Statement::Kind::kForRange: {
+            const auto& for_stmt = static_cast<const script::ForRangeStatement&>(statement);
+            return pad + "for " + for_stmt.variable + " in range(" +
+                   command_ast_to_source(for_stmt.start_ast) + ", " +
+                   command_ast_to_source(for_stmt.stop_ast) + ", " +
+                   command_ast_to_source(for_stmt.step_ast) + ") " +
+                   render_script_statement(*for_stmt.body, indent);
+        }
+        case script::Statement::Kind::kForIn: {
+            const auto& for_in = static_cast<const script::ForInStatement&>(statement);
+            return pad + "for " + for_in.variable + " in " +
+                   command_ast_to_source(for_in.iterable_ast) + ": " +
+                   render_script_statement(*for_in.body, indent);
+        }
+        case script::Statement::Kind::kFunction: {
+            const auto& function = static_cast<const script::FunctionStatement&>(statement);
+            std::string text = pad + "fn " + function.name + "(";
+            for (std::size_t i = 0; i < function.parameters.size(); ++i) {
+                if (i != 0) text += ", ";
+                text += function.parameters[i];
+            }
+            text += ") " + render_script_block(*function.body, indent);
+            return text;
+        }
+        case script::Statement::Kind::kReturn: {
+            const auto& ret = static_cast<const script::ReturnStatement&>(statement);
+            return pad + "return" +
+                   (ret.has_expression ? " " + command_ast_to_source(ret.expr_ast) : "");
+        }
+        case script::Statement::Kind::kBreak:
+            return pad + "break";
+        case script::Statement::Kind::kContinue:
+            return pad + "continue";
+        case script::Statement::Kind::kImport: {
+            const auto& import_stmt = static_cast<const script::ImportStatement&>(statement);
+            return pad + "import " +
+                   (import_stmt.path_text.empty()
+                        ? command_ast_to_source(import_stmt.path_ast)
+                        : import_stmt.path_text);
+        }
+        case script::Statement::Kind::kMatch: {
+            const auto& match_stmt = static_cast<const script::MatchStatement&>(statement);
+            std::ostringstream out;
+            out << pad << "match " << command_ast_to_source(match_stmt.subject_ast) << ":\n";
+            for (const auto& clause : match_stmt.cases) {
+                out << pad << "  case ";
+                if (clause.is_default) {
+                    out << "_";
+                } else {
+                    out << command_ast_to_source(clause.pattern_ast);
+                    if (clause.is_guarded) {
+                        out << " if " << command_ast_to_source(clause.guard_ast);
+                    }
+                }
+                out << ": " << render_script_statement(*clause.body, indent + 1) << "\n";
+            }
+            return out.str();
+        }
+    }
+    return pad + "pass";
+}
+
+std::string render_script_block(const script::BlockStatement& block, int indent) {
+    std::ostringstream out;
+    out << "{";
+    if (!block.statements.empty()) out << "\n";
+    for (const auto& stmt : block.statements) {
+        out << render_script_statement(*stmt, indent + 1) << "\n";
+    }
+    out << indent_text(indent) << "}";
+    return out.str();
 }

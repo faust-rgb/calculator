@@ -7,7 +7,7 @@
  */
 
 #include "calculator_statistics.h"
-#include "../math/mymath.h"
+#include "math/mymath.h"
 #include "statistics.h"
 #include "probability.h"
 #include <stdexcept>

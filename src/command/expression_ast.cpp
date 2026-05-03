@@ -39,8 +39,8 @@ class ASTCompiler {
         if (tokens_.is_at_end()) {
             return nullptr;
         }
-        auto ast = parse_comparison();
-        if (!tokens_.is_at_end()) {
+        auto ast = parse_logical();
+        if (tokens_.peek().kind != TokenKind::kEnd) {
             throw_syntax_error("unexpected token near: " + std::string(tokens_.peek().text));
         }
         return ast;
@@ -49,8 +49,8 @@ class ASTCompiler {
 private:
     LazyTokenStream tokens_;
 
-    bool is_at_end() const {
-        return tokens_.is_at_end();
+    bool is_at_end() {
+        return tokens_.peek().kind == TokenKind::kEnd;
     }
 
     const Token& peek_token() {
@@ -88,6 +88,26 @@ private:
         std::ostringstream oss;
         oss << message << " at position " << error_pos;
         throw SyntaxError(oss.str());
+    }
+
+    std::unique_ptr<ExpressionAST> parse_logical() {
+        auto left = parse_comparison();
+
+        while (true) {
+            std::string op;
+            if (match_operator("&&")) op = "&&";
+            else if (match_operator("||")) op = "||";
+            else break;
+
+            auto right = parse_comparison();
+            auto node = std::make_unique<ExpressionAST>(ExprKind::kLogicalOp);
+            node->comparison_op = op;  // 复用 comparison_op 存储逻辑运算符
+            node->position = left ? left->position : 0;
+            node->children.push_back(std::move(left));
+            node->children.push_back(std::move(right));
+            left = std::move(node);
+        }
+        return left;
     }
 
     std::unique_ptr<ExpressionAST> parse_comparison() {
@@ -141,6 +161,7 @@ private:
             char op = '\0';
             if (match_operator("*")) op = '*';
             else if (match_operator("/")) op = '/';
+            else if (match_operator("%")) op = '%';
             else break;
 
             auto right = parse_unary();
@@ -192,7 +213,7 @@ private:
 
         // 括号表达式
         if (match_kind(TokenKind::kLParen)) {
-            auto expr = parse_comparison();
+            auto expr = parse_logical();
             expect_kind(TokenKind::kRParen, "expected ')' after expression");
             return expr;
         }
@@ -208,7 +229,7 @@ private:
                 std::vector<std::unique_ptr<ExpressionAST>> args;
                 if (!is_at_end() && peek_token().kind != TokenKind::kRParen) {
                     while (true) {
-                        args.push_back(parse_comparison());
+                        args.push_back(parse_logical());
                         if (!match_kind(TokenKind::kComma)) break;
                     }
                 }
@@ -233,6 +254,15 @@ private:
             auto node = std::make_unique<ExpressionAST>(ExprKind::kNumber);
             node->number_value = tok.number_value;
             node->string_value = std::string(tok.text);
+            node->position = tok.position;
+            advance_token();
+            return node;
+        }
+
+        // 字符串字面量
+        if (tok.kind == TokenKind::kString) {
+            auto node = std::make_unique<ExpressionAST>(ExprKind::kString);
+            node->string_value = tok.string_value;
             node->position = tok.position;
             advance_token();
             return node;
@@ -269,6 +299,11 @@ double evaluate_ast(const ExpressionAST* ast,
     switch (ast->kind) {
         case ExprKind::kNumber:
             return ast->number_value;
+
+        case ExprKind::kString:
+            // 字符串不能作为标量求值，但在比较中可以使用
+            // 返回非零值表示字符串存在
+            return ast->string_value.empty() ? 0.0 : 1.0;
 
         case ExprKind::kVariable: {
             // 超快路径：已绑定到槽位索引
@@ -345,10 +380,56 @@ double evaluate_ast(const ExpressionAST* ast,
             if (ast->children.size() != 2) {
                 throw_ast_error<MathError>("invalid comparison", ast->position);
             }
-            double left = evaluate_ast(ast->children[0].get(), variables,
+
+            // 检查是否是字符串比较
+            auto* left_child = ast->children[0].get();
+            auto* right_child = ast->children[1].get();
+
+            if (left_child->kind == ExprKind::kString || right_child->kind == ExprKind::kString) {
+                // 至少有一个是字符串，进行字符串比较
+                std::string left_str, right_str;
+
+                if (left_child->kind == ExprKind::kString) {
+                    left_str = left_child->string_value;
+                } else if (left_child->kind == ExprKind::kVariable) {
+                    const StoredValue* val = variables.lookup(left_child->identifier);
+                    if (val && val->is_string) {
+                        left_str = val->string_value;
+                    } else {
+                        throw_ast_error<MathError>("cannot compare string with non-string", ast->position);
+                    }
+                } else {
+                    throw_ast_error<MathError>("cannot compare string with non-string", ast->position);
+                }
+
+                if (right_child->kind == ExprKind::kString) {
+                    right_str = right_child->string_value;
+                } else if (right_child->kind == ExprKind::kVariable) {
+                    const StoredValue* val = variables.lookup(right_child->identifier);
+                    if (val && val->is_string) {
+                        right_str = val->string_value;
+                    } else {
+                        throw_ast_error<MathError>("cannot compare string with non-string", ast->position);
+                    }
+                } else {
+                    throw_ast_error<MathError>("cannot compare string with non-string", ast->position);
+                }
+
+                if (ast->comparison_op == "==") return left_str == right_str ? 1.0 : 0.0;
+                if (ast->comparison_op == "!=") return left_str != right_str ? 1.0 : 0.0;
+                if (ast->comparison_op == "<") return left_str < right_str ? 1.0 : 0.0;
+                if (ast->comparison_op == ">") return left_str > right_str ? 1.0 : 0.0;
+                if (ast->comparison_op == "<=") return left_str <= right_str ? 1.0 : 0.0;
+                if (ast->comparison_op == ">=") return left_str >= right_str ? 1.0 : 0.0;
+
+                throw_ast_error<MathError>("unknown comparison operator: " + ast->comparison_op, ast->position);
+            }
+
+            // 标量比较
+            double left = evaluate_ast(left_child, variables,
                                        functions, scalar_functions,
                                        has_script_function, invoke_script_function);
-            double right = evaluate_ast(ast->children[1].get(), variables,
+            double right = evaluate_ast(right_child, variables,
                                         functions, scalar_functions,
                                         has_script_function, invoke_script_function);
 
@@ -360,6 +441,37 @@ double evaluate_ast(const ExpressionAST* ast,
             if (ast->comparison_op == ">=") return left >= right ? 1.0 : 0.0;
 
             throw_ast_error<MathError>("unknown comparison operator: " + ast->comparison_op, ast->position);
+        }
+
+        case ExprKind::kLogicalOp: {
+            if (ast->children.size() != 2) {
+                throw_ast_error<MathError>("invalid logical operation", ast->position);
+            }
+
+            // 逻辑运算符支持短路求值
+            double left = evaluate_ast(ast->children[0].get(), variables,
+                                       functions, scalar_functions,
+                                       has_script_function, invoke_script_function);
+
+            if (ast->comparison_op == "&&") {
+                // &&: 如果左边为假，直接返回 0，不计算右边
+                if (left == 0.0) return 0.0;
+                double right = evaluate_ast(ast->children[1].get(), variables,
+                                            functions, scalar_functions,
+                                            has_script_function, invoke_script_function);
+                return (right != 0.0) ? 1.0 : 0.0;
+            }
+
+            if (ast->comparison_op == "||") {
+                // ||: 如果左边为真，直接返回 1，不计算右边
+                if (left != 0.0) return 1.0;
+                double right = evaluate_ast(ast->children[1].get(), variables,
+                                            functions, scalar_functions,
+                                            has_script_function, invoke_script_function);
+                return (right != 0.0) ? 1.0 : 0.0;
+            }
+
+            throw_ast_error<MathError>("unknown logical operator: " + ast->comparison_op, ast->position);
         }
 
         case ExprKind::kFunctionCall: {
@@ -448,6 +560,7 @@ bool bind_variable_slots(ExpressionAST* ast, const VariableResolver& variables) 
 
     switch (ast->kind) {
         case ExprKind::kNumber:
+        case ExprKind::kString:
             return true;
 
         case ExprKind::kVariable: {
@@ -468,6 +581,7 @@ bool bind_variable_slots(ExpressionAST* ast, const VariableResolver& variables) 
         case ExprKind::kBinaryOp:
         case ExprKind::kUnaryOp:
         case ExprKind::kComparison:
+        case ExprKind::kLogicalOp:
             for (auto& child : ast->children) {
                 bind_variable_slots(child.get(), variables);
             }

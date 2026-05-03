@@ -28,6 +28,7 @@
 // ============================================================================
 
 #include "symbolic/calculator_symbolic_commands.h"
+#include "parser/unified_expression_parser.h"
 
 #include "core/calculator_internal_types.h"
 #include "analysis/calculator_integration.h"

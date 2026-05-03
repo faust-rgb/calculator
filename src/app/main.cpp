@@ -399,14 +399,8 @@ int run_script_file(Calculator& calculator, const std::string& script_path, bool
         return 1;
     }
 
-    std::ifstream in(script_path);
-    if (!in) {
-        std::cerr << "Error: unable to open script file: " << script_path << '\n';
-        return 1;
-    }
-
     try {
-        const std::string output = calculator.execute_script(read_all(in), exact_mode);
+        const std::string output = calculator.execute_script_file(script_path, exact_mode);
         if (!output.empty()) {
             std::cout << output << '\n';
         }

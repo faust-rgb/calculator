@@ -66,10 +66,7 @@ std::string SystemModule::execute_args(const std::string& command,
     if (command == ":export") return svc.env.export_variable(join_args());
     if (command == ":run") {
         const std::string script_path = join_args();
-        std::ifstream in(script_path);
-        if (!in) throw std::runtime_error("unable to open script file: " + script_path);
-        std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        return svc.env.execute_script(content, false);
+        return svc.env.execute_script_file(script_path, false);
     }
 
     if (command == ":exact") {

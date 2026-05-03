@@ -109,14 +109,14 @@ public:
 
     /**
      * @brief 尝试处理命令
-     * @param input 输入字符串
+     * @param cmd_name 命令名（由解析器提供）
      * @param args 已解析的参数列表
      * @param output 输出字符串指针
      * @param exact_mode 是否精确模式
      * @param services 核心服务接口
      * @return 如果命令被处理返回 true
      */
-    bool try_process(const std::string& input,
+    bool try_process(const std::string& cmd_name,
                      const std::vector<std::string_view>& args,
                      std::string* output,
                      bool exact_mode,

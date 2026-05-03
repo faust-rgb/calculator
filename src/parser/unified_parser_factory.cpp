@@ -4,6 +4,8 @@
 
 #include "parser/unified_parser_factory.h"
 #include "parser/lazy_token_stream.h"
+#include "parser/function_categories.h"
+#include "command/variable_resolver.h"
 #include <cctype>
 #include <algorithm>
 
@@ -46,7 +48,10 @@ bool UnifiedParserFactory::can_compile_to_ast(const std::string& expression) {
 // 完整分析
 // ============================================================================
 
-UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(const std::string& expression) {
+UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(
+    const std::string& expression,
+    const VariableResolver* variables) {
+
     AnalysisResult result;
     result.parser = ParserKind::kUnknown;
     result.hint = ExpressionHint::kUnknown;
@@ -57,6 +62,7 @@ UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(const std::st
     result.has_rat_call = false;
     result.has_string = false;
     result.has_assignment = false;
+    result.has_matrix_or_complex_var = false;
     result.paren_depth = 0;
     result.bracket_depth = 0;
 
@@ -91,27 +97,35 @@ UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(const std::st
     }
 
     // 快速路径：单个标识符
-    bool is_identifier = true;
-    for (char ch : expression) {
+    bool is_identifier = !expression.empty() &&
+                         (std::isalpha(static_cast<unsigned char>(expression.front())) ||
+                          expression.front() == '_');
+    for (std::size_t i = 1; i < expression.size() && is_identifier; ++i) {
+        const char ch = expression[i];
         if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '_') {
             is_identifier = false;
-            break;
         }
     }
-    if (is_identifier && !expression.empty()) {
+    if (is_identifier) {
         result.parser = ParserKind::kIdentifier;
         result.hint = ExpressionHint::kIdentifier;
         result.features = result.features | ExpressionFeature::kHasIdentifier;
+
+        // 检查单个标识符是否是矩阵/复数变量
+        if (variables) {
+            const StoredValue* found = variables->lookup(expression);
+            if (found && (found->is_matrix || found->is_complex)) {
+                result.has_matrix_or_complex_var = true;
+            }
+        }
         return result;
     }
 
-    // 使用 LazyTokenStream 进行完整分析
+    // 使用 LazyTokenStream 进行完整分析（不存储 token 列表）
     LazyTokenStream tokens(expression);
-    std::vector<Token> token_list;
 
     while (!tokens.is_at_end()) {
         Token tok = tokens.advance();
-        token_list.push_back(tok);
 
         // 分析 Token
         switch (tok.kind) {
@@ -134,6 +148,14 @@ UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(const std::st
                 if (is_matrix_function(tok.text) || is_complex_function(tok.text)) {
                     result.has_matrix_func = true;
                     result.features = result.features | ExpressionFeature::kHasMatrixFunc;
+                }
+
+                // 检查是否引用了矩阵/复数变量
+                if (variables && !result.has_matrix_or_complex_var) {
+                    const StoredValue* found = variables->lookup(std::string(tok.text));
+                    if (found && (found->is_matrix || found->is_complex)) {
+                        result.has_matrix_or_complex_var = true;
+                    }
                 }
                 break;
 
@@ -185,7 +207,7 @@ UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(const std::st
     if (result.has_rat_call) {
         result.parser = ParserKind::kRatCall;
         result.hint = ExpressionHint::kRatCall;
-    } else if (result.has_bracket || result.has_matrix_func) {
+    } else if (result.has_bracket || result.has_matrix_func || result.has_matrix_or_complex_var) {
         result.parser = ParserKind::kMatrix;
         result.hint = ExpressionHint::kMatrixCandidate;
     } else if (result.has_standalone_i) {
@@ -200,31 +222,4 @@ UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(const std::st
     }
 
     return result;
-}
-
-// ============================================================================
-// 辅助方法
-// ============================================================================
-
-bool UnifiedParserFactory::is_matrix_function(std::string_view name) const {
-    static const std::set<std::string_view> matrix_funcs = {
-        "mat", "vec", "zeros", "identity", "diag", "eye", "linspace", "logspace",
-        "get", "set", "resize", "append_row", "append_col", "transpose", "inverse",
-        "pinv", "dot", "outer", "kron", "hadamard", "null", "least_squares",
-        "qr_q", "qr_r", "lu_l", "lu_u", "lu_p", "svd_u", "svd_s", "svd_vt",
-        "solve", "norm", "cond", "trace", "det", "rank", "rref", "eigvals",
-        "eigvecs", "reshape", "cholesky", "hessenberg", "schur", "poly_eval",
-        "poly_deriv", "poly_integ", "poly_compose", "poly_gcd", "poly_fit",
-        "polynomial_fit", "lagrange", "linear_regression", "dft", "fft",
-        "idft", "ifft", "convolve", "hann", "hanning", "hamming", "blackman",
-        "divisors", "extended_gcd", "xgcd", "randmat", "random_matrix"
-    };
-    return matrix_funcs.find(name) != matrix_funcs.end();
-}
-
-bool UnifiedParserFactory::is_complex_function(std::string_view name) const {
-    static const std::set<std::string_view> complex_funcs = {
-        "complex", "polar", "real", "imag", "arg", "conj"
-    };
-    return complex_funcs.find(name) != complex_funcs.end();
 }
