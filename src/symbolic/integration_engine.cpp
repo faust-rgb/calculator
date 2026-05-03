@@ -271,7 +271,9 @@ IntegrationResult IntegrationEngine::try_integrate_rational(
                                                       variable_name, &result)) {
                 return IntegrationResult::ok(result, "partial_fractions");
             }
+
         }
+
     }
 
     return IntegrationResult::failed();

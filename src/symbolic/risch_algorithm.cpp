@@ -1,4 +1,5 @@
 #include "symbolic/risch_algorithm.h"
+#include "symbolic/risch_algorithm_internal.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include <map>
 #include <functional>
@@ -7,290 +8,154 @@
 #include <algorithm>
 #include <sstream>
 #include <queue>
+#include <complex>
 
 using namespace symbolic_expression_internal;
+using namespace risch_algorithm_internal;
 
 // ============================================================================
-// 辅助函数
+// 缓存系统实现
 // ============================================================================
 
-namespace {
+std::unordered_map<RischAlgorithm::CacheKey, RischAlgorithm::IntegrationResult, RischAlgorithm::CacheKeyHash>&
+RischAlgorithm::get_cache() {
+    static std::unordered_map<CacheKey, IntegrationResult, CacheKeyHash> cache;
+    return cache;
+}
 
-// 检查表达式是否包含指定变量
-bool contains_var(const SymbolicExpression& expr, const std::string& var) {
-    if (expr.node_->type == NodeType::kVariable && expr.node_->text == var) {
+void RischAlgorithm::clear_cache() {
+    get_cache().clear();
+}
+
+bool RischAlgorithm::check_cache(const SymbolicExpression& expr,
+                                  const std::string& var,
+                                  IntegrationResult* result) {
+    auto& cache = get_cache();
+    CacheKey key{expr.simplify().to_string(), var};
+    auto it = cache.find(key);
+    if (it != cache.end()) {
+        *result = it->second;
         return true;
-    }
-    if (expr.node_->left && contains_var(SymbolicExpression(expr.node_->left), var)) return true;
-    if (expr.node_->right && contains_var(SymbolicExpression(expr.node_->right), var)) return true;
-    for (const auto& child : expr.node_->children) {
-        if (contains_var(SymbolicExpression(child), var)) return true;
     }
     return false;
 }
 
-// 检查表达式是否包含塔中的任何扩展变量
-bool contains_tower_var(const SymbolicExpression& expr,
-                        const std::vector<RischAlgorithm::DifferentialExtension>& tower,
-                        int up_to_index) {
-    for (int i = 0; i <= up_to_index && i < (int)tower.size(); ++i) {
-        if (contains_var(expr, tower[i].t_name)) {
-            return true;
-        }
-    }
-    return false;
+void RischAlgorithm::store_cache(const SymbolicExpression& expr,
+                                  const std::string& var,
+                                  const IntegrationResult& result) {
+    auto& cache = get_cache();
+    CacheKey key{expr.simplify().to_string(), var};
+    cache[key] = result;
 }
 
-// 提取表达式中的所有变量
-std::set<std::string> extract_variables(const SymbolicExpression& expr) {
-    std::set<std::string> vars;
-    std::function<void(const SymbolicExpression&)> collect = [&](const SymbolicExpression& e) {
-        if (e.node_->type == NodeType::kVariable) {
-            vars.insert(e.node_->text);
-        }
-        if (e.node_->left) collect(SymbolicExpression(e.node_->left));
-        if (e.node_->right) collect(SymbolicExpression(e.node_->right));
-        for (const auto& child : e.node_->children) {
-            collect(SymbolicExpression(child));
-        }
-    };
-    collect(expr);
-    return vars;
+// ============================================================================
+// 特殊函数表达式构造
+// ============================================================================
+
+SymbolicExpression RischAlgorithm::make_special_function_expr(
+    SpecialFunction func,
+    const SymbolicExpression& arg) {
+    std::string func_name;
+    switch (func) {
+        case SpecialFunction::kEi: func_name = "Ei"; break;
+        case SpecialFunction::kErf: func_name = "erf"; break;
+        case SpecialFunction::kSi: func_name = "Si"; break;
+        case SpecialFunction::kCi: func_name = "Ci"; break;
+        case SpecialFunction::kLi: func_name = "li"; break;
+        case SpecialFunction::kGamma: func_name = "Gamma"; break;
+        case SpecialFunction::kPolyLog: func_name = "polylog"; break;
+        default: func_name = "unknown"; break;
+    }
+    return make_function(func_name, arg);
 }
 
-// 检查两个表达式是否结构相等
-bool structural_equals(const SymbolicExpression& a, const SymbolicExpression& b) {
-    return a.simplify().to_string() == b.simplify().to_string();
-}
+// ============================================================================
+// 特殊函数模式检测
+// ============================================================================
 
-bool polynomial_is_obviously_square_free(const SymbolicPolynomial& polynomial) {
-    const int degree = polynomial.degree();
-    if (degree <= 1) {
-        return true;
-    }
+std::pair<bool, std::pair<RischAlgorithm::SpecialFunction, SymbolicExpression>>
+RischAlgorithm::detect_special_function_pattern(const SymbolicExpression& expr,
+                                                 const std::string& x_var) {
+    // 检测 exp(x)/x -> Ei(x)
+    if (expr.node_->type == NodeType::kDivide) {
+        SymbolicExpression num(expr.node_->left);
+        SymbolicExpression den(expr.node_->right);
 
-    if (degree == 2) {
-        SymbolicExpression a = polynomial.coefficient(2);
-        SymbolicExpression b = polynomial.coefficient(1);
-        SymbolicExpression c = polynomial.coefficient(0);
-        SymbolicExpression discriminant =
-            (b * b - SymbolicExpression::number(4.0) * a * c).simplify();
-        return !SymbolicPolynomial::coeff_is_zero(discriminant);
-    }
-
-    return false;
-}
-
-bool try_remove_multiplicative_factor(const SymbolicExpression& expression,
-                                      const SymbolicExpression& factor,
-                                      SymbolicExpression* rest) {
-    if (structural_equals(expression, factor)) {
-        *rest = SymbolicExpression::number(1.0);
-        return true;
-    }
-
-    if (expression.node_->type != NodeType::kMultiply) {
-        return false;
-    }
-
-    SymbolicExpression left(expression.node_->left);
-    SymbolicExpression right(expression.node_->right);
-    SymbolicExpression reduced_child;
-
-    if (try_remove_multiplicative_factor(left, factor, &reduced_child)) {
-        *rest = (reduced_child * right).simplify();
-        return true;
-    }
-    if (try_remove_multiplicative_factor(right, factor, &reduced_child)) {
-        *rest = (left * reduced_child).simplify();
-        return true;
-    }
-
-    return false;
-}
-
-SymbolicExpression divide_by_derivative_factor(const SymbolicExpression& base,
-                                               const SymbolicExpression& derivative) {
-    if (derivative.node_->type == NodeType::kDivide) {
-        SymbolicExpression derivative_num(derivative.node_->left);
-        SymbolicExpression derivative_den(derivative.node_->right);
-
-        if (base.node_->type == NodeType::kDivide) {
-            SymbolicExpression base_num(base.node_->left);
-            SymbolicExpression base_den(base.node_->right);
-            SymbolicExpression reduced_den;
-            if (try_remove_multiplicative_factor(base_den, derivative_den, &reduced_den)) {
-                return (base_num / (reduced_den * derivative_num)).simplify();
+        // exp(x)/x
+        if (num.node_->type == NodeType::kFunction && num.node_->text == "exp") {
+            SymbolicExpression arg(num.node_->left);
+            if (structural_equals(arg, den)) {
+                return {true, {SpecialFunction::kEi, arg}};
             }
         }
 
-        return ((base * derivative_den) / derivative_num).simplify();
-    }
-    return (base / derivative).simplify();
-}
-
-bool try_integrate_low_degree_rational_in_variable(const SymbolicExpression& expression,
-                                                   const std::string& variable_name,
-                                                   SymbolicExpression* result) {
-    SymbolicExpression numerator_expr;
-    SymbolicExpression denominator_expr;
-    if (expression.node_->type == NodeType::kDivide) {
-        numerator_expr = SymbolicExpression(expression.node_->left);
-        denominator_expr = SymbolicExpression(expression.node_->right);
-    } else {
-        numerator_expr = expression;
-        denominator_expr = SymbolicExpression::number(1.0);
-    }
-
-    std::vector<SymbolicExpression> num_coeffs;
-    std::vector<SymbolicExpression> den_coeffs;
-    if (!symbolic_polynomial_coefficients_from_simplified(numerator_expr.simplify(),
-                                                          variable_name,
-                                                          &num_coeffs) ||
-        !symbolic_polynomial_coefficients_from_simplified(denominator_expr.simplify(),
-                                                          variable_name,
-                                                          &den_coeffs)) {
-        return false;
-    }
-
-    SymbolicPolynomial numerator(num_coeffs, variable_name);
-    SymbolicPolynomial denominator(den_coeffs, variable_name);
-    const int num_degree = numerator.degree();
-    const int den_degree = denominator.degree();
-    SymbolicExpression t = SymbolicExpression::variable(variable_name);
-
-    if (den_degree == 0) {
-        SymbolicExpression denominator_constant = denominator.coefficient(0);
-        if (SymbolicPolynomial::coeff_is_zero(denominator_constant)) {
-            return false;
-        }
-
-        SymbolicExpression integral = SymbolicExpression::number(0.0);
-        for (int i = 0; i <= num_degree; ++i) {
-            SymbolicExpression coeff = numerator.coefficient(i);
-            if (SymbolicPolynomial::coeff_is_zero(coeff)) {
-                continue;
+        // 1/ln(x) -> li(x)
+        double num_val = 0.0;
+        if (num.is_number(&num_val) && std::abs(num_val - 1.0) < 1e-9) {
+            if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
+                SymbolicExpression arg(den.node_->left);
+                if (structural_equals(arg, SymbolicExpression::variable(x_var))) {
+                    return {true, {SpecialFunction::kLi, arg}};
+                }
             }
-            SymbolicExpression new_power = SymbolicExpression::number(static_cast<double>(i + 1));
-            integral = (integral +
-                        (coeff / denominator_constant) *
-                            make_power(t, new_power) / new_power).simplify();
         }
-        *result = integral.simplify();
-        return true;
+
+        // sin(x)/x -> Si(x)
+        if (num.node_->type == NodeType::kFunction && num.node_->text == "sin") {
+            SymbolicExpression arg(num.node_->left);
+            if (structural_equals(arg, den)) {
+                return {true, {SpecialFunction::kSi, arg}};
+            }
+        }
+
+        // cos(x)/x -> Ci(x)
+        if (num.node_->type == NodeType::kFunction && num.node_->text == "cos") {
+            SymbolicExpression arg(num.node_->left);
+            if (structural_equals(arg, den)) {
+                return {true, {SpecialFunction::kCi, arg}};
+            }
+        }
     }
 
-    if (den_degree == 1 && num_degree <= 1) {
-        SymbolicExpression a = denominator.coefficient(1);
-        SymbolicExpression b = denominator.coefficient(0);
-        SymbolicExpression m = numerator.coefficient(1);
-        SymbolicExpression n = numerator.coefficient(0);
-        SymbolicExpression linear = (a * t + b).simplify();
-        *result = ((m / a) * t +
-                   ((n - m * b / a).simplify() / a) *
-                       make_function("ln", linear)).simplify();
-        return true;
+    // 检测 exp(-x^2) -> erf(x)
+    if (expr.node_->type == NodeType::kFunction && expr.node_->text == "exp") {
+        SymbolicExpression arg(expr.node_->left);
+
+        // exp(-x^2)
+        if (arg.node_->type == NodeType::kNegate) {
+            SymbolicExpression inner(arg.node_->left);
+            if (inner.node_->type == NodeType::kPower) {
+                SymbolicExpression base(inner.node_->left);
+                SymbolicExpression exp(inner.node_->right);
+                double exp_val = 0.0;
+                if (structural_equals(base, SymbolicExpression::variable(x_var)) &&
+                    exp.is_number(&exp_val) && std::abs(exp_val - 2.0) < 1e-9) {
+                    return {true, {SpecialFunction::kErf, SymbolicExpression::variable(x_var)}};
+                }
+            }
+        }
+
+        // 检查 a*x^2 形式
+        if (arg.node_->type == NodeType::kMultiply) {
+            SymbolicExpression left(arg.node_->left);
+            SymbolicExpression right(arg.node_->right);
+            double coeff = 0.0;
+            if (left.is_number(&coeff) && coeff < 0) {
+                if (right.node_->type == NodeType::kPower) {
+                    SymbolicExpression base(right.node_->left);
+                    SymbolicExpression exp(right.node_->right);
+                    double exp_val = 0.0;
+                    if (structural_equals(base, SymbolicExpression::variable(x_var)) &&
+                        exp.is_number(&exp_val) && std::abs(exp_val - 2.0) < 1e-9) {
+                        return {true, {SpecialFunction::kErf, SymbolicExpression::variable(x_var)}};
+                    }
+                }
+            }
+        }
     }
 
-    if (den_degree == 2 && num_degree <= 1) {
-        double a_val = 0.0;
-        double b_val = 0.0;
-        double c_val = 0.0;
-        if (!denominator.coefficient(2).is_number(&a_val) ||
-            !denominator.coefficient(1).is_number(&b_val) ||
-            !denominator.coefficient(0).is_number(&c_val) ||
-            std::abs(a_val) < 1e-12) {
-            return false;
-        }
-
-        double delta = 4.0 * a_val * c_val - b_val * b_val;
-        if (delta <= 0.0) {
-            return false;
-        }
-
-        SymbolicExpression a = denominator.coefficient(2);
-        SymbolicExpression b = denominator.coefficient(1);
-        SymbolicExpression denominator_expr_full = denominator.to_expression();
-        SymbolicExpression m = numerator.coefficient(1);
-        SymbolicExpression n = numerator.coefficient(0);
-
-        SymbolicExpression log_coeff = (m / (SymbolicExpression::number(2.0) * a)).simplify();
-        SymbolicExpression residual = (n - m * b / (SymbolicExpression::number(2.0) * a)).simplify();
-
-        const double sqrt_delta = std::sqrt(delta);
-        SymbolicExpression atan_arg =
-            ((SymbolicExpression::number(2.0 * a_val) * t + SymbolicExpression::number(b_val)) /
-             SymbolicExpression::number(sqrt_delta)).simplify();
-        SymbolicExpression atan_part =
-            (residual * SymbolicExpression::number(2.0 / sqrt_delta) *
-             make_function("atan", atan_arg)).simplify();
-
-        SymbolicExpression log_part = SymbolicExpression::number(0.0);
-        if (!SymbolicPolynomial::coeff_is_zero(log_coeff)) {
-            log_part = (log_coeff * make_function("ln", denominator_expr_full)).simplify();
-        }
-
-        *result = (log_part + atan_part).simplify();
-        return true;
-    }
-
-    return false;
+    return {false, {SpecialFunction::kEi, SymbolicExpression::number(0.0)}};
 }
-
-SymbolicExpression substitute_tower_variables_back(
-    const SymbolicExpression& expression,
-    const std::vector<RischAlgorithm::DifferentialExtension>& tower,
-    int tower_index) {
-    SymbolicExpression substituted = expression;
-    for (int i = tower_index; i >= 0; --i) {
-        const auto& e = tower[i];
-        SymbolicExpression actual;
-        if (e.kind == RischAlgorithm::DifferentialExtension::Kind::kLogarithmic) {
-            actual = make_function("ln", e.argument);
-        } else if (e.kind == RischAlgorithm::DifferentialExtension::Kind::kExponential) {
-            actual = make_function("exp", e.argument);
-        } else {
-            actual = make_function("sqrt", e.argument);
-        }
-        substituted = substituted.substitute(e.t_name, actual);
-    }
-    return substituted.simplify();
-}
-
-// 尝试将表达式分解为常数乘积
-bool try_decompose_constant_product(const SymbolicExpression& expr,
-                                   double* constant,
-                                   SymbolicExpression* remainder) {
-    if (expr.node_->type == NodeType::kMultiply) {
-        SymbolicExpression left(expr.node_->left);
-        SymbolicExpression right(expr.node_->right);
-        double c = 1.0;
-        if (left.is_number(&c)) {
-            *constant = c;
-            *remainder = right;
-            return true;
-        }
-        if (right.is_number(&c)) {
-            *constant = c;
-            *remainder = left;
-            return true;
-        }
-    }
-    *constant = 1.0;
-    *remainder = expr;
-    return false;
-}
-
-SymbolicExpression multiply_by_derivative_factor(const SymbolicExpression& base,
-                                                 const SymbolicExpression& derivative) {
-    if (derivative.node_->type == NodeType::kDivide) {
-        return ((base * SymbolicExpression(derivative.node_->left)) /
-                SymbolicExpression(derivative.node_->right)).simplify();
-    }
-    return (base * derivative).simplify();
-}
-
-} // anonymous namespace
 
 // ============================================================================
 // 代数独立性检查
@@ -342,157 +207,111 @@ bool RischAlgorithm::check_algebraic_independence(const SymbolicExpression& arg,
                                                    DifferentialExtension::Kind kind,
                                                    const std::vector<DifferentialExtension>& current_tower,
                                                    const std::string& x_var,
-                                                   SymbolicExpression* substitution) {
+                                                   SymbolicExpression* substitution,
+                                                   int recursion_depth) {
+    if (recursion_depth > RISCH_MAX_RECURSION_DEPTH) {
+        return true; // 超过深度，保守假设独立
+    }
+
     if (current_tower.empty()) {
         return true; // 空塔，总是独立的
     }
 
     if (kind == DifferentialExtension::Kind::kLogarithmic) {
-        // 检查 ∫(arg'/arg) dx 是否在当前域中
-        SymbolicExpression arg_deriv = arg.derivative(x_var).simplify();
-        SymbolicExpression integrand = (arg_deriv / arg).simplify();
-
-        IntegrationResult result = integrate_in_extension(integrand, current_tower,
-                                                          static_cast<int>(current_tower.size()) - 1, x_var);
-
-        if (result.success && result.type == IntegralType::kElementary) {
-            // 检查结果是否在当前塔中
-            if (!contains_tower_var(result.value, current_tower,
-                                    static_cast<int>(current_tower.size()) - 1)) {
-                *substitution = result.value;
-                return false; // 不独立，可以用现有塔表示
+        // 规范化参数：ln(u^n) = n*ln(u)
+        SymbolicExpression normalized_arg = arg.simplify();
+        if (normalized_arg.node_->type == NodeType::kPower) {
+            SymbolicExpression base(normalized_arg.node_->left);
+            SymbolicExpression exp(normalized_arg.node_->right);
+            double exp_val = 0.0;
+            if (exp.is_number(&exp_val)) {
+                SymbolicExpression sub_base;
+                if (!check_algebraic_independence(base, kind, current_tower, x_var, &sub_base, recursion_depth + 1)) {
+                    *substitution = (SymbolicExpression::number(exp_val) * sub_base).simplify();
+                    return false;
+                }
             }
         }
 
-        // 检查 ln(u^k) = k*ln(u)
-        if (arg.node_->type == NodeType::kPower) {
-            SymbolicExpression base(arg.node_->left);
-            SymbolicExpression exp(arg.node_->right);
-            double k = 1.0;
-            if (exp.is_number(&k)) {
-                // 检查 ln(base) 是否已在塔中
-                for (const auto& ext : current_tower) {
-                    if (ext.kind == DifferentialExtension::Kind::kLogarithmic) {
-                        if (structural_equals(ext.argument, base)) {
-                            *substitution = (SymbolicExpression::number(k) *
-                                           SymbolicExpression::variable(ext.t_name)).simplify();
-                            return false;
-                        }
-                    }
-                }
+        // 检查 ln(u*v) = ln(u) + ln(v)
+        if (normalized_arg.node_->type == NodeType::kMultiply) {
+            SymbolicExpression u(normalized_arg.node_->left);
+            SymbolicExpression v(normalized_arg.node_->right);
+            SymbolicExpression sub_u, sub_v;
+            bool ind_u = check_algebraic_independence(u, kind, current_tower, x_var, &sub_u, recursion_depth + 1);
+            bool ind_v = check_algebraic_independence(v, kind, current_tower, x_var, &sub_v, recursion_depth + 1);
+            if (!ind_u || !ind_v) {
+                SymbolicExpression term_u = ind_u ? make_function("ln", u) : sub_u;
+                SymbolicExpression term_v = ind_v ? make_function("ln", v) : sub_v;
+                *substitution = (term_u + term_v).simplify();
+                return false;
             }
+        }
+
+        // 检查 ∫(arg'/arg) dx 是否在当前域中
+        SymbolicExpression arg_deriv = normalized_arg.derivative(x_var).simplify();
+        SymbolicExpression integrand = (arg_deriv / normalized_arg).simplify();
+
+        IntegrationResult result = integrate_in_extension(integrand, current_tower,
+                                                          static_cast<int>(current_tower.size()) - 1, x_var, recursion_depth + 1);
+
+        if (result.success && result.type == IntegralType::kElementary) {
+            // 如果积分结果不包含新的超越变量（即只包含当前塔中的变量），则不独立
+            *substitution = result.value;
+            return false;
         }
 
     } else if (kind == DifferentialExtension::Kind::kExponential) {
-        // 检查 arg' = v'/v 对于某个 v 在当前域中
-        // 即检查 ∫arg' dx = ln(v) 是否在塔中
-        SymbolicExpression arg_deriv = arg.derivative(x_var).simplify();
-
-        IntegrationResult result = integrate_in_extension(arg_deriv, current_tower,
-                                                          static_cast<int>(current_tower.size()) - 1, x_var);
-
-        if (result.success && result.type == IntegralType::kElementary) {
-            // 检查结果是否是对数形式
-            if (result.value.node_->type == NodeType::kFunction &&
-                result.value.node_->text == "ln") {
-                SymbolicExpression v = SymbolicExpression(result.value.node_->left);
-                // exp(arg) = v，所以可以用 v 替代
-                *substitution = v;
+        SymbolicExpression normalized_arg = arg.simplify();
+        
+        // 检查 exp(u + v) = exp(u) * exp(v)
+        if (normalized_arg.node_->type == NodeType::kAdd) {
+            SymbolicExpression u(normalized_arg.node_->left);
+            SymbolicExpression v(normalized_arg.node_->right);
+            SymbolicExpression sub_u, sub_v;
+            bool ind_u = check_algebraic_independence(u, kind, current_tower, x_var, &sub_u, recursion_depth + 1);
+            bool ind_v = check_algebraic_independence(v, kind, current_tower, x_var, &sub_v, recursion_depth + 1);
+            if (!ind_u || !ind_v) {
+                SymbolicExpression term_u = ind_u ? make_function("exp", u) : sub_u;
+                SymbolicExpression term_v = ind_v ? make_function("exp", v) : sub_v;
+                *substitution = (term_u * term_v).simplify();
                 return false;
-            }
-            // 检查结果是否是塔中的对数变量
-            for (const auto& ext : current_tower) {
-                if (ext.kind == DifferentialExtension::Kind::kLogarithmic) {
-                    if (structural_equals(result.value, SymbolicExpression::variable(ext.t_name))) {
-                        *substitution = ext.argument;
-                        return false;
-                    }
-                }
             }
         }
 
         // 检查 exp(ln(u)) = u
-        if (arg.node_->type == NodeType::kFunction && arg.node_->text == "ln") {
-            SymbolicExpression u = SymbolicExpression(arg.node_->left);
-            *substitution = u;
+        if (normalized_arg.node_->type == NodeType::kFunction && normalized_arg.node_->text == "ln") {
+            *substitution = SymbolicExpression(normalized_arg.node_->left);
             return false;
         }
 
-        // 检查 exp(u + v) = exp(u) * exp(v)
-        if (arg.node_->type == NodeType::kAdd) {
-            SymbolicExpression left(arg.node_->left);
-            SymbolicExpression right(arg.node_->right);
+        // 检查 ∫ arg' dx 是否是对数形式
+        SymbolicExpression arg_deriv = normalized_arg.derivative(x_var).simplify();
 
-            // 检查 exp(left) 和 exp(right) 是否都在塔中
-            for (const auto& ext1 : current_tower) {
-                if (ext1.kind == DifferentialExtension::Kind::kExponential) {
-                    if (structural_equals(ext1.argument, left)) {
-                        for (const auto& ext2 : current_tower) {
-                            if (ext2.kind == DifferentialExtension::Kind::kExponential &&
-                                ext2.t_name != ext1.t_name) {
-                                if (structural_equals(ext2.argument, right)) {
-                                    // exp(left + right) = exp(left) * exp(right)
-                                    *substitution = (SymbolicExpression::variable(ext1.t_name) *
-                                                   SymbolicExpression::variable(ext2.t_name)).simplify();
-                                    return false;
-                                }
-                            }
-                        }
-                    }
-                    // 也检查交换律: arg = right + left
-                    if (structural_equals(ext1.argument, right)) {
-                        for (const auto& ext2 : current_tower) {
-                            if (ext2.kind == DifferentialExtension::Kind::kExponential &&
-                                ext2.t_name != ext1.t_name) {
-                                if (structural_equals(ext2.argument, left)) {
-                                    *substitution = (SymbolicExpression::variable(ext1.t_name) *
-                                                   SymbolicExpression::variable(ext2.t_name)).simplify();
-                                    return false;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        IntegrationResult result = integrate_in_extension(arg_deriv, current_tower,
+                                                          static_cast<int>(current_tower.size()) - 1, x_var, recursion_depth + 1);
 
-        // 检查 exp(k * u) = exp(u)^k 其中 exp(u) 在塔中
-        if (arg.node_->type == NodeType::kMultiply) {
-            SymbolicExpression left(arg.node_->left);
-            SymbolicExpression right(arg.node_->right);
-            double k = 1.0;
+        if (result.success && result.type == IntegralType::kElementary) {
+            // 如果 ∫ arg' = ln(v) + C，则 exp(arg) = k * v
+            // 检查 result.value 是否包含对数项
+            // 这里搜索对数项
+            auto find_log = [&](const SymbolicExpression& expr) -> SymbolicExpression {
+                if (expr.node_->type == NodeType::kFunction && expr.node_->text == "ln") {
+                    return SymbolicExpression(expr.node_->left);
+                }
+                // 递归搜索略... 简化处理：如果结果本身是 ln(...)
+                return SymbolicExpression();
+            };
 
-            // 检查左侧是常数的情况
-            if (left.is_number(&k)) {
-                for (const auto& ext : current_tower) {
-                    if (ext.kind == DifferentialExtension::Kind::kExponential) {
-                        if (structural_equals(ext.argument, right)) {
-                            // exp(k*u) = exp(u)^k = t^k
-                            *substitution = make_power(
-                                SymbolicExpression::variable(ext.t_name),
-                                SymbolicExpression::number(k)).simplify();
-                            return false;
-                        }
-                    }
-                }
-            }
-            // 检查右侧是常数的情况
-            if (right.is_number(&k)) {
-                for (const auto& ext : current_tower) {
-                    if (ext.kind == DifferentialExtension::Kind::kExponential) {
-                        if (structural_equals(ext.argument, left)) {
-                            *substitution = make_power(
-                                SymbolicExpression::variable(ext.t_name),
-                                SymbolicExpression::number(k)).simplify();
-                            return false;
-                        }
-                    }
-                }
+            SymbolicExpression log_arg = find_log(result.value);
+            if (log_arg.node_) {
+                *substitution = log_arg;
+                return false;
             }
         }
     }
 
-    return true; // 假设独立
+    return true;
 }
 
 // ============================================================================
@@ -633,7 +452,12 @@ void RischAlgorithm::topological_sort_tower(std::vector<DifferentialExtension>& 
 
 std::vector<RischAlgorithm::DifferentialExtension> RischAlgorithm::build_differential_tower(
     const SymbolicExpression& expression,
-    const std::string& variable_name) {
+    const std::string& variable_name,
+    int recursion_depth) {
+
+    if (recursion_depth > RISCH_MAX_RECURSION_DEPTH) {
+        return {};
+    }
 
     std::vector<DifferentialExtension> tower;
     std::map<std::string, int> key_to_idx;
@@ -645,7 +469,8 @@ std::vector<RischAlgorithm::DifferentialExtension> RischAlgorithm::build_differe
     // 添加每个扩展
     auto add_extension = [&](const SymbolicExpression& arg, DifferentialExtension::Kind kind) -> int {
         std::string prefix = (kind == DifferentialExtension::Kind::kLogarithmic) ? "ln(" :
-                             (kind == DifferentialExtension::Kind::kExponential) ? "exp(" : "sqrt(";
+                             (kind == DifferentialExtension::Kind::kExponential) ? "exp(" :
+                             (kind == DifferentialExtension::Kind::kTrigonometric) ? "trig(" : "sqrt(";
         std::string key = prefix + arg.simplify().to_string() + ")";
 
         // 检查是否已在塔中
@@ -655,7 +480,7 @@ std::vector<RischAlgorithm::DifferentialExtension> RischAlgorithm::build_differe
 
         // 检查代数独立性
         SymbolicExpression substitution;
-        if (!check_algebraic_independence(arg, kind, tower, variable_name, &substitution)) {
+        if (!check_algebraic_independence(arg, kind, tower, variable_name, &substitution, recursion_depth + 1)) {
             // 不独立，记录替换但不添加新扩展
             return -1;
         }
@@ -671,6 +496,8 @@ std::vector<RischAlgorithm::DifferentialExtension> RischAlgorithm::build_differe
         } else if (kind == DifferentialExtension::Kind::kExponential) {
             ext.derivation = (ext.argument.derivative(variable_name) *
                              SymbolicExpression::variable(ext.t_name)).simplify();
+        } else if (kind == DifferentialExtension::Kind::kTrigonometric) {
+            ext.derivation = ext.argument.derivative(variable_name).simplify();
         } else {
             // 代数扩展: t = sqrt(u), t' = u'/(2t)
             ext.derivation = (ext.argument.derivative(variable_name) /
@@ -694,6 +521,268 @@ std::vector<RischAlgorithm::DifferentialExtension> RischAlgorithm::build_differe
     topological_sort_tower(tower);
 
     return tower;
+}
+
+// ============================================================================
+// 直接三角函数积分
+// ============================================================================
+
+RischAlgorithm::IntegrationResult RischAlgorithm::integrate_trigonometric_directly(
+    const SymbolicExpression& expr,
+    const std::string& x_var,
+    int recursion_depth) {
+
+    if (recursion_depth > RISCH_MAX_RECURSION_DEPTH) {
+        return IntegrationResult::unknown("Max recursion depth exceeded");
+    }
+
+    SymbolicExpression x = SymbolicExpression::variable(x_var);
+
+    if (expr.node_->type == NodeType::kMultiply) {
+        SymbolicExpression left(expr.node_->left);
+        SymbolicExpression right(expr.node_->right);
+        if (left.node_->type == NodeType::kFunction &&
+            right.node_->type == NodeType::kFunction &&
+            ((left.node_->text == "sin" && right.node_->text == "cos") ||
+             (left.node_->text == "cos" && right.node_->text == "sin")) &&
+            structural_equals(SymbolicExpression(left.node_->left),
+                              SymbolicExpression(right.node_->left))) {
+            SymbolicExpression arg(left.node_->left);
+            SymbolicExpression a, b;
+            if (symbolic_decompose_linear(arg, x_var, &a, &b)) {
+                SymbolicExpression result =
+                    (make_power(make_function("sin", arg),
+                                SymbolicExpression::number(2.0)) /
+                     (SymbolicExpression::number(2.0) * a)).simplify();
+                return IntegrationResult::elementary(result);
+            }
+        }
+
+        auto try_polynomial_trig = [&](const SymbolicExpression& polynomial_factor,
+                                       const SymbolicExpression& trig_factor)
+            -> IntegrationResult {
+            if (trig_factor.node_->type != NodeType::kFunction ||
+                (trig_factor.node_->text != "sin" && trig_factor.node_->text != "cos")) {
+                return IntegrationResult::unknown("Not a polynomial-trig product");
+            }
+
+            std::vector<SymbolicExpression> coeffs;
+            if (!symbolic_polynomial_coefficients_from_simplified(polynomial_factor.simplify(),
+                                                                  x_var,
+                                                                  &coeffs)) {
+                return IntegrationResult::unknown("Not a polynomial factor");
+            }
+
+            SymbolicExpression arg(trig_factor.node_->left);
+            SymbolicExpression a, b;
+            if (!symbolic_decompose_linear(arg, x_var, &a, &b)) {
+                return IntegrationResult::unknown("Trig argument is not linear");
+            }
+
+            std::function<SymbolicExpression(const SymbolicExpression&)> integrate_sin_poly;
+            std::function<SymbolicExpression(const SymbolicExpression&)> integrate_cos_poly;
+
+            integrate_sin_poly = [&](const SymbolicExpression& poly) -> SymbolicExpression {
+                SymbolicExpression simplified_poly = poly.simplify();
+                if (expr_is_zero(simplified_poly)) {
+                    return SymbolicExpression::number(0.0);
+                }
+                SymbolicExpression derivative = simplified_poly.derivative(x_var).simplify();
+                return ((make_negate(simplified_poly * make_function("cos", arg)) +
+                         integrate_cos_poly(derivative)) / a).simplify();
+            };
+
+            integrate_cos_poly = [&](const SymbolicExpression& poly) -> SymbolicExpression {
+                SymbolicExpression simplified_poly = poly.simplify();
+                if (expr_is_zero(simplified_poly)) {
+                    return SymbolicExpression::number(0.0);
+                }
+                SymbolicExpression derivative = simplified_poly.derivative(x_var).simplify();
+                return ((simplified_poly * make_function("sin", arg) -
+                         integrate_sin_poly(derivative)) / a).simplify();
+            };
+
+            SymbolicExpression result =
+                trig_factor.node_->text == "sin"
+                    ? integrate_sin_poly(polynomial_factor)
+                    : integrate_cos_poly(polynomial_factor);
+            return IntegrationResult::elementary(result);
+        };
+
+        IntegrationResult polynomial_trig = try_polynomial_trig(left, right);
+        if (polynomial_trig.success && polynomial_trig.type == IntegralType::kElementary) {
+            return polynomial_trig;
+        }
+        polynomial_trig = try_polynomial_trig(right, left);
+        if (polynomial_trig.success && polynomial_trig.type == IntegralType::kElementary) {
+            return polynomial_trig;
+        }
+    }
+
+    // ∫ sin(ax + b) dx = -cos(ax + b) / a
+    if (expr.node_->type == NodeType::kFunction && expr.node_->text == "sin") {
+        SymbolicExpression arg(expr.node_->left);
+        SymbolicExpression a, b;
+        if (symbolic_decompose_linear(arg, x_var, &a, &b)) {
+            SymbolicExpression result = (make_negate(make_function("cos", arg)) / a).simplify();
+            return IntegrationResult::elementary(result);
+        }
+    }
+
+    // ∫ cos(ax + b) dx = sin(ax + b) / a
+    if (expr.node_->type == NodeType::kFunction && expr.node_->text == "cos") {
+        SymbolicExpression arg(expr.node_->left);
+        SymbolicExpression a, b;
+        if (symbolic_decompose_linear(arg, x_var, &a, &b)) {
+            SymbolicExpression result = (make_function("sin", arg) / a).simplify();
+            return IntegrationResult::elementary(result);
+        }
+    }
+
+    // ∫ tan(ax + b) dx = -ln(cos(ax + b)) / a
+    if (expr.node_->type == NodeType::kFunction && expr.node_->text == "tan") {
+        SymbolicExpression arg(expr.node_->left);
+        SymbolicExpression a, b;
+        if (symbolic_decompose_linear(arg, x_var, &a, &b)) {
+            SymbolicExpression result = (make_negate(make_function("ln", make_function("cos", arg))) / a).simplify();
+            return IntegrationResult::elementary(result);
+        }
+    }
+
+    // ∫ sinh(ax + b) dx = cosh(ax + b) / a
+    if (expr.node_->type == NodeType::kFunction && expr.node_->text == "sinh") {
+        SymbolicExpression arg(expr.node_->left);
+        SymbolicExpression a, b;
+        if (symbolic_decompose_linear(arg, x_var, &a, &b)) {
+            SymbolicExpression result = (make_function("cosh", arg) / a).simplify();
+            return IntegrationResult::elementary(result);
+        }
+    }
+
+    // ∫ cosh(ax + b) dx = sinh(ax + b) / a
+    if (expr.node_->type == NodeType::kFunction && expr.node_->text == "cosh") {
+        SymbolicExpression arg(expr.node_->left);
+        SymbolicExpression a, b;
+        if (symbolic_decompose_linear(arg, x_var, &a, &b)) {
+            SymbolicExpression result = (make_function("sinh", arg) / a).simplify();
+            return IntegrationResult::elementary(result);
+        }
+    }
+
+    // ∫ tanh(ax + b) dx = ln(cosh(ax + b)) / a
+    if (expr.node_->type == NodeType::kFunction && expr.node_->text == "tanh") {
+        SymbolicExpression arg(expr.node_->left);
+        SymbolicExpression a, b;
+        if (symbolic_decompose_linear(arg, x_var, &a, &b)) {
+            SymbolicExpression result = (make_function("ln", make_function("cosh", arg)) / a).simplify();
+            return IntegrationResult::elementary(result);
+        }
+    }
+
+    // ∫ sin^2(ax) dx = x/2 - sin(2ax)/(4a)
+    if (expr.node_->type == NodeType::kPower) {
+        SymbolicExpression base(expr.node_->left);
+        SymbolicExpression exp(expr.node_->right);
+        double exp_val = 0.0;
+        if (exp.is_number(&exp_val)) {
+            if (base.node_->type == NodeType::kFunction && base.node_->text == "sin") {
+                SymbolicExpression arg(base.node_->left);
+                SymbolicExpression a, b;
+                if (std::abs(exp_val - 2.0) < 1e-9 &&
+                    symbolic_decompose_linear(arg, x_var, &a, &b)) {
+                    double a_val = 1.0;
+                    a.is_number(&a_val);
+                    SymbolicExpression two_arg = (SymbolicExpression::number(2.0) * arg).simplify();
+                    SymbolicExpression result = (x / SymbolicExpression::number(2.0) -
+                                                make_function("sin", two_arg) / SymbolicExpression::number(4.0 * a_val)).simplify();
+                    return IntegrationResult::elementary(result);
+                }
+                if (std::abs(exp_val - 3.0) < 1e-9 &&
+                    symbolic_decompose_linear(arg, x_var, &a, &b)) {
+                    SymbolicExpression result =
+                        ((make_negate(make_function("cos", arg)) +
+                          make_power(make_function("cos", arg),
+                                     SymbolicExpression::number(3.0)) /
+                              SymbolicExpression::number(3.0)) / a).simplify();
+                    return IntegrationResult::elementary(result);
+                }
+                if (std::abs(exp_val - 4.0) < 1e-9 &&
+                    symbolic_decompose_linear(arg, x_var, &a, &b)) {
+                    SymbolicExpression two_arg = (SymbolicExpression::number(2.0) * arg).simplify();
+                    SymbolicExpression four_arg = (SymbolicExpression::number(4.0) * arg).simplify();
+                    SymbolicExpression result =
+                        ((SymbolicExpression::number(3.0) * arg / SymbolicExpression::number(8.0) -
+                          make_function("sin", two_arg) / SymbolicExpression::number(4.0) +
+                          make_function("sin", four_arg) / SymbolicExpression::number(32.0)) / a).simplify();
+                    return IntegrationResult::elementary(result);
+                }
+            }
+            if (base.node_->type == NodeType::kFunction && base.node_->text == "cos") {
+                SymbolicExpression arg(base.node_->left);
+                SymbolicExpression a, b;
+                if (std::abs(exp_val - 2.0) < 1e-9 &&
+                    symbolic_decompose_linear(arg, x_var, &a, &b)) {
+                    double a_val = 1.0;
+                    a.is_number(&a_val);
+                    SymbolicExpression two_arg = (SymbolicExpression::number(2.0) * arg).simplify();
+                    SymbolicExpression result = (x / SymbolicExpression::number(2.0) +
+                                                make_function("sin", two_arg) / SymbolicExpression::number(4.0 * a_val)).simplify();
+                    return IntegrationResult::elementary(result);
+                }
+                if (std::abs(exp_val - 3.0) < 1e-9 &&
+                    symbolic_decompose_linear(arg, x_var, &a, &b)) {
+                    SymbolicExpression result =
+                        ((make_function("sin", arg) -
+                          make_power(make_function("sin", arg),
+                                     SymbolicExpression::number(3.0)) /
+                              SymbolicExpression::number(3.0)) / a).simplify();
+                    return IntegrationResult::elementary(result);
+                }
+                if (std::abs(exp_val - 4.0) < 1e-9 &&
+                    symbolic_decompose_linear(arg, x_var, &a, &b)) {
+                    SymbolicExpression two_arg = (SymbolicExpression::number(2.0) * arg).simplify();
+                    SymbolicExpression four_arg = (SymbolicExpression::number(4.0) * arg).simplify();
+                    SymbolicExpression result =
+                        ((SymbolicExpression::number(3.0) * arg / SymbolicExpression::number(8.0) +
+                          make_function("sin", two_arg) / SymbolicExpression::number(4.0) +
+                          make_function("sin", four_arg) / SymbolicExpression::number(32.0)) / a).simplify();
+                    return IntegrationResult::elementary(result);
+                }
+            }
+            if (base.node_->type == NodeType::kFunction && base.node_->text == "tan") {
+                SymbolicExpression arg(base.node_->left);
+                SymbolicExpression a, b;
+                if (std::abs(exp_val - 3.0) < 1e-9 &&
+                    symbolic_decompose_linear(arg, x_var, &a, &b)) {
+                    SymbolicExpression result =
+                        ((make_power(make_function("tan", arg),
+                                     SymbolicExpression::number(2.0)) /
+                          SymbolicExpression::number(2.0) +
+                          make_function("ln", make_function("abs", make_function("cos", arg)))) / a).simplify();
+                    return IntegrationResult::elementary(result);
+                }
+            }
+        }
+    }
+
+    // ∫ sec^2(ax) dx = tan(ax) / a
+    if (expr.node_->type == NodeType::kPower) {
+        SymbolicExpression base(expr.node_->left);
+        SymbolicExpression exp(expr.node_->right);
+        double exp_val = 0.0;
+        if (exp.is_number(&exp_val) && std::abs(exp_val - 2.0) < 1e-9) {
+            if (base.node_->type == NodeType::kFunction && base.node_->text == "sec") {
+                SymbolicExpression arg(base.node_->left);
+                SymbolicExpression a, b;
+                if (symbolic_decompose_linear(arg, x_var, &a, &b)) {
+                    SymbolicExpression result = (make_function("tan", arg) / a).simplify();
+                    return IntegrationResult::elementary(result);
+                }
+            }
+        }
+    }
+
+    return IntegrationResult::unknown("Not a direct trigonometric integral");
 }
 
 // ============================================================================
@@ -792,12 +881,23 @@ RischAlgorithm::IntegralType RischAlgorithm::detect_non_elementary_pattern(
 
     auto is_exp_over_x = [&]() -> bool {
         // 检查 exp(u)/u 形式
-        if (expr.node_->type == NodeType::kDivide) {
-            SymbolicExpression num(expr.node_->left);
-            SymbolicExpression den(expr.node_->right);
+        SymbolicExpression base_expr = expr;
+        double coeff = 1.0;
+        if (expr.node_->type == NodeType::kMultiply) {
+            SymbolicExpression left(expr.node_->left);
+            if (left.is_number(&coeff)) {
+                base_expr = SymbolicExpression(expr.node_->right);
+            }
+        }
+
+        if (base_expr.node_->type == NodeType::kDivide) {
+            SymbolicExpression num(base_expr.node_->left);
+            SymbolicExpression den(base_expr.node_->right);
             if (num.node_->type == NodeType::kFunction && num.node_->text == "exp") {
                 SymbolicExpression arg(num.node_->left);
-                if (structural_equals(arg, den)) {
+                // 检查 exp(x)/x 或 exp(ax)/x
+                if (structural_equals(arg, den) || 
+                    (arg.node_->type == NodeType::kMultiply && structural_equals(SymbolicExpression(arg.node_->right), den))) {
                     return true;
                 }
             }
@@ -805,16 +905,26 @@ RischAlgorithm::IntegralType RischAlgorithm::detect_non_elementary_pattern(
         return false;
     };
 
-    auto is_exp_minus_x_squared = [&]() -> bool {
-        // 检查 exp(-x^2) 或 exp(-a*x^2)
+    auto is_exp_x_squared = [&]() -> bool {
+        // 检查 exp(x^2) 或 exp(a*x^2 + b*x + c)
         if (expr.node_->type == NodeType::kFunction && expr.node_->text == "exp") {
             SymbolicExpression arg(expr.node_->left);
-            // 检查是否是 -x^2 或 -a*x^2
-            if (arg.node_->type == NodeType::kNegate) {
-                SymbolicExpression inner(arg.node_->left);
-                if (inner.node_->type == NodeType::kPower) {
-                    SymbolicExpression base(inner.node_->left);
-                    SymbolicExpression exp(inner.node_->right);
+            if (arg.node_->type == NodeType::kPower) {
+                SymbolicExpression base(arg.node_->left);
+                SymbolicExpression exp(arg.node_->right);
+                double exp_val = 0.0;
+                if (structural_equals(base, SymbolicExpression::variable(x_var)) &&
+                    exp.is_number(&exp_val) && std::abs(exp_val - 2.0) < 1e-9) {
+                    return true;
+                }
+            }
+            // 检查 a*x^2
+            if (arg.node_->type == NodeType::kMultiply) {
+                SymbolicExpression left(arg.node_->left);
+                SymbolicExpression right(arg.node_->right);
+                if (right.node_->type == NodeType::kPower) {
+                    SymbolicExpression base(right.node_->left);
+                    SymbolicExpression exp(right.node_->right);
                     double exp_val = 0.0;
                     if (structural_equals(base, SymbolicExpression::variable(x_var)) &&
                         exp.is_number(&exp_val) && std::abs(exp_val - 2.0) < 1e-9) {
@@ -844,7 +954,22 @@ RischAlgorithm::IntegralType RischAlgorithm::detect_non_elementary_pattern(
         return false;
     };
 
-    if (is_exp_over_x() || is_exp_minus_x_squared() || is_one_over_ln()) {
+    auto is_trig_over_x = [&]() -> bool {
+        // 检查 sin(x)/x 或 cos(x)/x
+        if (expr.node_->type == NodeType::kDivide) {
+            SymbolicExpression num(expr.node_->left);
+            SymbolicExpression den(expr.node_->right);
+            if (num.node_->type == NodeType::kFunction && (num.node_->text == "sin" || num.node_->text == "cos")) {
+                SymbolicExpression arg(num.node_->left);
+                if (structural_equals(arg, den)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    if (is_exp_over_x() || is_exp_x_squared() || is_one_over_ln() || is_trig_over_x()) {
         return IntegralType::kNonElementary;
     }
 
@@ -893,1519 +1018,3 @@ SymbolicExpression RischAlgorithm::complex_log_to_real(const SymbolicExpression&
 }
 
 // ============================================================================
-// 主积分入口
-// ============================================================================
-
-bool RischAlgorithm::integrate(const SymbolicExpression& expression,
-                                const std::string& variable_name,
-                                SymbolicExpression* result) {
-    IntegrationResult full_result = integrate_full(expression, variable_name);
-    if (full_result.success && full_result.type == IntegralType::kElementary) {
-        *result = full_result.value;
-        return true;
-    }
-    return false;
-}
-
-RischAlgorithm::IntegrationResult RischAlgorithm::integrate_full(
-    const SymbolicExpression& expression,
-    const std::string& variable_name) {
-
-    // 检测非初等积分模式
-    IntegralType pattern = detect_non_elementary_pattern(expression, variable_name);
-    if (pattern == IntegralType::kNonElementary) {
-        return IntegrationResult::non_elementary("Detected non-elementary integral pattern");
-    }
-
-    // 转换三角函数为复指数
-    SymbolicExpression converted = convert_trig_to_exponential(expression);
-    SymbolicExpression simplified = converted.simplify();
-
-    // 构建微分塔
-    auto tower = build_differential_tower(simplified, variable_name);
-
-    // 递归积分
-    return integrate_in_extension(simplified, tower, static_cast<int>(tower.size()) - 1, variable_name);
-}
-
-// ============================================================================
-// 递归积分
-// ============================================================================
-
-RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_extension(
-    const SymbolicExpression& expression,
-    const std::vector<DifferentialExtension>& tower,
-    int tower_index,
-    const std::string& x_var) {
-
-    // 基本情况：有理函数积分
-    if (tower_index < 0) {
-        SymbolicExpression num_expr, den_expr;
-        if (expression.node_->type == NodeType::kDivide) {
-            num_expr = SymbolicExpression(expression.node_->left);
-            den_expr = SymbolicExpression(expression.node_->right);
-        } else {
-            num_expr = expression;
-            den_expr = SymbolicExpression::number(1.0);
-        }
-
-        std::vector<SymbolicExpression> num_coeffs, den_coeffs;
-        if (symbolic_polynomial_coefficients_from_simplified(num_expr.simplify(), x_var, &num_coeffs) &&
-            symbolic_polynomial_coefficients_from_simplified(den_expr.simplify(), x_var, &den_coeffs)) {
-            SymbolicPolynomial num_poly(num_coeffs, x_var);
-            SymbolicPolynomial den_poly(den_coeffs, x_var);
-
-            SymbolicExpression result;
-            if (integrate_rational(num_poly, den_poly, x_var, &result)) {
-                return IntegrationResult::elementary(result);
-            }
-        }
-        return IntegrationResult::unknown("Failed to integrate rational function");
-    }
-
-    const auto& ext = tower[tower_index];
-
-    // 替换塔变量
-    std::function<SymbolicExpression(const SymbolicExpression&)> tower_substitute = [&](const SymbolicExpression& expr) -> SymbolicExpression {
-        if (expr.node_->type == NodeType::kFunction) {
-            SymbolicExpression arg = tower_substitute(SymbolicExpression(expr.node_->left)).simplify();
-
-            if (expr.node_->text == "ln" || expr.node_->text == "exp" || expr.node_->text == "sqrt") {
-                DifferentialExtension::Kind kind;
-                if (expr.node_->text == "ln") kind = DifferentialExtension::Kind::kLogarithmic;
-                else if (expr.node_->text == "exp") kind = DifferentialExtension::Kind::kExponential;
-                else kind = DifferentialExtension::Kind::kAlgebraic;
-
-                for (int i = 0; i <= tower_index; ++i) {
-                    const auto& e = tower[i];
-                    if (e.kind == kind && structural_equals(e.argument, arg)) {
-                        return SymbolicExpression::variable(e.t_name);
-                    }
-                    // 检查规范化形式
-                    if (kind == DifferentialExtension::Kind::kLogarithmic && e.kind == kind) {
-                        // ln(u^k) = k*ln(u)
-                        if (arg.node_->type == NodeType::kPower) {
-                            SymbolicExpression base(arg.node_->left);
-                            SymbolicExpression exp(arg.node_->right);
-                            double k = 1.0;
-                            if (exp.is_number(&k) && structural_equals(e.argument, base)) {
-                                return (SymbolicExpression::number(k) *
-                                       SymbolicExpression::variable(e.t_name)).simplify();
-                            }
-                        }
-                    }
-                }
-            }
-            return make_function(expr.node_->text, arg);
-        }
-        if (expr.node_->type == NodeType::kPower) {
-            SymbolicExpression base = tower_substitute(SymbolicExpression(expr.node_->left)).simplify();
-            SymbolicExpression exp = tower_substitute(SymbolicExpression(expr.node_->right)).simplify();
-            double exp_val = 0.0;
-            if (exp.is_number(&exp_val) && std::abs(exp_val - 0.5) < 1e-9) {
-                for (int i = 0; i <= tower_index; ++i) {
-                    if (tower[i].kind == DifferentialExtension::Kind::kAlgebraic &&
-                        structural_equals(tower[i].argument, base)) {
-                        return SymbolicExpression::variable(tower[i].t_name);
-                    }
-                }
-            }
-            return make_power(base, exp).simplify();
-        }
-        if (expr.node_->type == NodeType::kAdd) {
-            return (tower_substitute(SymbolicExpression(expr.node_->left)) +
-                   tower_substitute(SymbolicExpression(expr.node_->right))).simplify();
-        }
-        if (expr.node_->type == NodeType::kSubtract) {
-            return (tower_substitute(SymbolicExpression(expr.node_->left)) -
-                   tower_substitute(SymbolicExpression(expr.node_->right))).simplify();
-        }
-        if (expr.node_->type == NodeType::kMultiply) {
-            return (tower_substitute(SymbolicExpression(expr.node_->left)) *
-                   tower_substitute(SymbolicExpression(expr.node_->right))).simplify();
-        }
-        if (expr.node_->type == NodeType::kDivide) {
-            return (tower_substitute(SymbolicExpression(expr.node_->left)) /
-                   tower_substitute(SymbolicExpression(expr.node_->right))).simplify();
-        }
-        if (expr.node_->type == NodeType::kNegate) {
-            return make_negate(tower_substitute(SymbolicExpression(expr.node_->left))).simplify();
-        }
-        return expr;
-    };
-
-    SymbolicExpression tower_simplified = tower_substitute(expression).simplify();
-
-    SymbolicExpression derivative_scaled =
-        divide_by_derivative_factor(tower_simplified, ext.derivation);
-    if (!contains_var(derivative_scaled, x_var) &&
-        !contains_tower_var(derivative_scaled, tower, tower_index - 1)) {
-        SymbolicExpression direct_t_integral;
-        if (try_integrate_low_degree_rational_in_variable(derivative_scaled,
-                                                          ext.t_name,
-                                                          &direct_t_integral)) {
-            return IntegrationResult::elementary(
-                substitute_tower_variables_back(direct_t_integral, tower, tower_index));
-        }
-    }
-
-    // 作为 t = ext.t_name 的有理函数处理
-    SymbolicExpression num_expr, den_expr;
-    if (tower_simplified.node_->type == NodeType::kDivide) {
-        num_expr = SymbolicExpression(tower_simplified.node_->left);
-        den_expr = SymbolicExpression(tower_simplified.node_->right);
-    } else {
-        num_expr = tower_simplified;
-        den_expr = SymbolicExpression::number(1.0);
-    }
-
-    std::vector<SymbolicExpression> num_coeffs, den_coeffs;
-    if (symbolic_polynomial_coefficients_from_simplified(num_expr.simplify(), ext.t_name, &num_coeffs) &&
-        symbolic_polynomial_coefficients_from_simplified(den_expr.simplify(), ext.t_name, &den_coeffs)) {
-
-        SymbolicPolynomial num_poly(num_coeffs, ext.t_name);
-        SymbolicPolynomial den_poly(den_coeffs, ext.t_name);
-
-        SymbolicExpression rt_result;
-        if (integrate_rational(num_poly, den_poly, ext.t_name, &rt_result,
-                              tower, tower_index, x_var, &ext.derivation, ext.kind)) {
-            // 替换回塔变量
-            return IntegrationResult::elementary(
-                substitute_tower_variables_back(rt_result, tower, tower_index));
-        }
-    }
-
-    // 尝试直接模式匹配作为后备
-    // 处理简单的 ln 和 exp 情况
-
-    // ∫ ln(u) dx = x*ln(u) - ∫ x*u'/u dx
-    if (tower_simplified.node_->type == NodeType::kFunction &&
-        tower_simplified.node_->text == "ln") {
-        SymbolicExpression u = SymbolicExpression(tower_simplified.node_->left);
-        SymbolicExpression x = SymbolicExpression::variable(x_var);
-        SymbolicExpression u_prime = u.derivative(x_var).simplify();
-        SymbolicExpression integrand = (x * u_prime / u).simplify();
-
-        IntegrationResult inner = integrate_in_extension(integrand, tower, tower_index - 1, x_var);
-        if (inner.success && inner.type == IntegralType::kElementary) {
-            SymbolicExpression result = (x * tower_simplified - inner.value).simplify();
-            return IntegrationResult::elementary(result);
-        }
-    }
-
-    // ∫ exp(u) dx 其中 u = ax + b
-    if (tower_simplified.node_->type == NodeType::kFunction &&
-        tower_simplified.node_->text == "exp") {
-        SymbolicExpression u = SymbolicExpression(tower_simplified.node_->left);
-        SymbolicExpression a, b;
-        if (symbolic_decompose_linear(u, x_var, &a, &b)) {
-            SymbolicExpression result = (tower_simplified / a).simplify();
-            return IntegrationResult::elementary(result);
-        }
-    }
-
-    return IntegrationResult::unknown("Could not integrate in extension");
-}
-
-// ============================================================================
-// 有理函数积分
-// ============================================================================
-
-bool RischAlgorithm::integrate_rational(const SymbolicPolynomial& numerator,
-                                        const SymbolicPolynomial& denominator,
-                                        const std::string& variable_name,
-                                        SymbolicExpression* result,
-                                        const std::vector<DifferentialExtension>& tower,
-                                        int tower_index,
-                                        const std::string& main_var,
-                                        const SymbolicExpression* t_prime,
-                                        DifferentialExtension::Kind kind) {
-    // 1. 多项式部分
-    SymbolicPolynomial Q, R;
-    numerator.divide(denominator, &Q, &R);
-
-    SymbolicExpression poly_int = SymbolicExpression::number(0.0);
-
-    if (!Q.is_zero()) {
-        const auto& q_coeffs = Q.coefficients();
-        for (std::size_t i = 0; i < q_coeffs.size(); ++i) {
-            if (SymbolicPolynomial::coeff_is_zero(q_coeffs[i])) continue;
-
-            SymbolicExpression term_int;
-
-            if (kind == DifferentialExtension::Kind::kNone) {
-                // 普通变量 x^i
-                term_int = (q_coeffs[i] / SymbolicExpression::number(static_cast<double>(i + 1)) *
-                           make_power(SymbolicExpression::variable(variable_name),
-                                      SymbolicExpression::number(static_cast<double>(i + 1)))).simplify();
-            } else if (kind == DifferentialExtension::Kind::kLogarithmic) {
-                // t = ln(u), ∫ a*t^n dx
-                // 使用递归公式: ∫ a*t^n = (∫a)*t^n - ∫(∫a)*n*t^(n-1)*t' dx
-                if (i == 0) {
-                    IntegrationResult res = integrate_in_extension(q_coeffs[i], tower, tower_index - 1, main_var);
-                    if (!res.success || res.type != IntegralType::kElementary) return false;
-                    term_int = res.value;
-                } else {
-                    IntegrationResult a_int_res = integrate_in_extension(q_coeffs[i], tower, tower_index - 1, main_var);
-                    if (!a_int_res.success || a_int_res.type != IntegralType::kElementary) return false;
-
-                    SymbolicExpression a_int = a_int_res.value;
-
-                    // 改进：允许 a_int 是 t 的常数倍
-                    SymbolicExpression t = SymbolicExpression::variable(variable_name);
-                    double t_coeff = 0.0;
-                    SymbolicExpression remainder;
-                    
-                    bool is_t_multiple = false;
-                    if (structural_equals(a_int, t)) {
-                        is_t_multiple = true;
-                        t_coeff = 1.0;
-                    } else if (a_int.node_->type == NodeType::kMultiply) {
-                        SymbolicExpression left(a_int.node_->left);
-                        SymbolicExpression right(a_int.node_->right);
-                        if (left.is_number(&t_coeff) && structural_equals(right, t)) {
-                            is_t_multiple = true;
-                        } else if (right.is_number(&t_coeff) && structural_equals(left, t)) {
-                            is_t_multiple = true;
-                        }
-                    }
-
-                    if (is_t_multiple) {
-                        // ∫ (c*t) * t^n dx 其中 a_int = c*t
-                        // 这意味着 a = c*t' (因为 ∫a = c*t)
-                        // 使用公式: ∫ a*t^n dx = ∫ c*t'*t^n dx = c * t^(n+1) / (n+1)
-                        term_int = (SymbolicExpression::number(t_coeff / (i + 1)) *
-                                   make_power(t, SymbolicExpression::number(i + 1))).simplify();
-                    } else if (contains_tower_var(a_int, tower, tower_index)) {
-                        // a_int 包含塔变量且不是简单的 t 倍数
-                        // 尝试使用 RDE 求解: y' + n*t'*y = q_coeffs[i]
-                        // 其中 y 是在基域中的解
-
-                        SymbolicExpression n_expr = SymbolicExpression::number(static_cast<double>(i));
-                        SymbolicExpression f = (n_expr * (*t_prime)).simplify();
-
-                        IntegrationResult y_res = solve_rde(f, q_coeffs[i], main_var, tower, tower_index);
-                        if (y_res.success && y_res.type == IntegralType::kElementary) {
-                            term_int = (y_res.value * make_power(t, n_expr)).simplify();
-                        } else {
-                            // RDE 失败，尝试分部积分递归
-                            // ∫ a t^n = a_int * t^n - ∫ a_int * n * t^(n-1) * t' dx
-                            SymbolicExpression first_part = (a_int * make_power(t, SymbolicExpression::number(i))).simplify();
-
-                            SymbolicExpression next_base = (a_int * SymbolicExpression::number(i) *
-                                                           make_power(t, SymbolicExpression::number(i - 1))).simplify();
-                            SymbolicExpression next_integrand =
-                                multiply_by_derivative_factor(next_base, *t_prime);
-
-                            IntegrationResult second_res = integrate_in_extension(next_integrand, tower, tower_index, main_var);
-                            if (!second_res.success || second_res.type != IntegralType::kElementary) return false;
-
-                            term_int = (first_part - second_res.value).simplify();
-                        }
-                    } else {
-                        SymbolicExpression first_part = (a_int * make_power(t, SymbolicExpression::number(i))).simplify();
-
-                        SymbolicExpression next_base = (a_int * SymbolicExpression::number(i) *
-                                                       make_power(t, SymbolicExpression::number(i - 1))).simplify();
-                        SymbolicExpression next_integrand =
-                            multiply_by_derivative_factor(next_base, *t_prime);
-
-                        IntegrationResult second_res = integrate_in_extension(next_integrand, tower, tower_index, main_var);
-                        if (!second_res.success || second_res.type != IntegralType::kElementary) return false;
-
-                        term_int = (first_part - second_res.value).simplify();
-                    }
-                }
-            } else if (kind == DifferentialExtension::Kind::kExponential) {
-                // t = exp(u), ∫ a*t^n dx = y*t^n 其中 y' + n*u'*y = a
-                if (i == 0) {
-                    IntegrationResult res = integrate_in_extension(q_coeffs[i], tower, tower_index - 1, main_var);
-                    if (!res.success || res.type != IntegralType::kElementary) return false;
-                    term_int = res.value;
-                } else {
-                    SymbolicExpression u_prime = ((*t_prime) / SymbolicExpression::variable(variable_name)).simplify();
-                    SymbolicExpression f = (SymbolicExpression::number(i) * u_prime).simplify();
-
-                    IntegrationResult y_res = solve_rde(f, q_coeffs[i], main_var, tower, tower_index);
-                    if (!y_res.success || y_res.type != IntegralType::kElementary) return false;
-
-                    term_int = (y_res.value * make_power(SymbolicExpression::variable(variable_name),
-                                                        SymbolicExpression::number(i))).simplify();
-                }
-            } else if (kind == DifferentialExtension::Kind::kAlgebraic) {
-                // 代数扩展
-                if (i == 0) {
-                    IntegrationResult res = integrate_in_extension(q_coeffs[i], tower, tower_index - 1, main_var);
-                    if (!res.success || res.type != IntegralType::kElementary) return false;
-                    term_int = res.value;
-                } else {
-                    // 尝试 RDE 求解
-                    SymbolicExpression f = (SymbolicExpression::number(static_cast<double>(i)) *
-                                           (*t_prime) / SymbolicExpression::variable(variable_name)).simplify();
-
-                    IntegrationResult y_res = solve_rde(f, q_coeffs[i], main_var, tower, tower_index);
-                    if (y_res.success && y_res.type == IntegralType::kElementary) {
-                        term_int = (y_res.value * make_power(SymbolicExpression::variable(variable_name),
-                                                            SymbolicExpression::number(static_cast<double>(i)))).simplify();
-                    } else {
-                        return false;
-                    }
-                }
-            }
-
-            poly_int = (poly_int + term_int).simplify();
-        }
-    }
-
-    if (R.is_zero()) {
-        *result = poly_int;
-        return true;
-    }
-
-    // 2. Hermite 约化
-    SymbolicExpression rational_part = SymbolicExpression::number(0.0);
-    SymbolicPolynomial reduced_num, reduced_den;
-
-    if (!hermite_reduction(R, denominator, &rational_part, &reduced_num, &reduced_den,
-                          tower, tower_index, main_var, t_prime, kind)) {
-        return false;
-    }
-
-    // 3. Rothstein-Trager 算法
-    SymbolicExpression log_part = SymbolicExpression::number(0.0);
-    if (!reduced_num.is_zero()) {
-        if (!rothstein_trager(reduced_num, reduced_den, variable_name, &log_part,
-                             tower, tower_index, main_var, t_prime, kind)) {
-            return false;
-        }
-    }
-
-    *result = (poly_int + rational_part + log_part).simplify();
-    return true;
-}
-
-// ============================================================================
-// Hermite 约化
-// ============================================================================
-
-bool RischAlgorithm::hermite_reduction(const SymbolicPolynomial& numerator,
-                                       const SymbolicPolynomial& denominator,
-                                       SymbolicExpression* rational_part,
-                                       SymbolicPolynomial* reduced_numerator,
-                                       SymbolicPolynomial* reduced_denominator,
-                                       const std::vector<DifferentialExtension>& tower,
-                                       int tower_index,
-                                       const std::string& main_var,
-                                       const SymbolicExpression* t_prime,
-                                       DifferentialExtension::Kind kind) {
-    auto poly_diff = [&](const SymbolicPolynomial& p) {
-        return t_prime ? p.total_derivative(main_var, *t_prime) : p.derivative();
-    };
-
-    if (denominator.is_zero()) {
-        return false;
-    }
-
-    if (numerator.is_zero()) {
-        *rational_part = SymbolicExpression::number(0.0);
-        *reduced_numerator = numerator;
-        *reduced_denominator = denominator;
-        return true;
-    }
-
-    if (polynomial_is_obviously_square_free(denominator)) {
-        *rational_part = SymbolicExpression::number(0.0);
-        *reduced_numerator = numerator;
-        *reduced_denominator = denominator;
-        return true;
-    }
-
-    // Square-free 分解
-    std::vector<SymbolicPolynomial> factors;
-    if (!denominator.square_free_decomposition(&factors) || factors.empty()) {
-        *rational_part = SymbolicExpression::number(0.0);
-        *reduced_numerator = numerator;
-        *reduced_denominator = denominator;
-        return true;
-    }
-
-    SymbolicExpression total_rational = SymbolicExpression::number(0.0);
-    SymbolicPolynomial current_num = numerator;
-    SymbolicPolynomial current_den = denominator;
-
-    // 从最高幂次开始处理
-    for (int i = static_cast<int>(factors.size()); i > 1; --i) {
-        SymbolicPolynomial v = factors[i - 1];
-        if (v.degree() <= 0) continue;
-
-        SymbolicPolynomial Vi = v.power(i);
-        SymbolicPolynomial U, R;
-        if (!current_den.divide(Vi, &U, &R)) {
-            continue;
-        }
-
-        for (int k = i; k > 1; --k) {
-            SymbolicPolynomial v_deriv = poly_diff(v);
-            SymbolicPolynomial UVp = U.multiply(v_deriv);
-
-            // 扩展 GCD
-            SymbolicPolynomial S, T;
-            SymbolicPolynomial g = UVp.extended_gcd(v, &S, &T);
-
-            // 处理非常量 GCD
-            if (!g.is_constant()) {
-                SymbolicPolynomial v_reduced, rem;
-                if (g.divide(g, &v_reduced, &rem)) {
-                    if (!v_reduced.is_zero() && v_reduced.degree() > 0) {
-                        v = v_reduced;
-                        Vi = v.power(k);
-                        if (!current_den.divide(Vi, &U, &R)) continue;
-                        v_deriv = poly_diff(v);
-                        UVp = U.multiply(v_deriv);
-                        g = UVp.extended_gcd(v, &S, &T);
-                    }
-                }
-            }
-
-            // 归一化
-            SymbolicExpression inv_g = SymbolicExpression::number(1.0);
-            if (!g.is_zero()) {
-                inv_g = (SymbolicExpression::number(1.0) / g.leading_coefficient()).simplify();
-            }
-
-            S = S.multiply(current_num).scale(inv_g);
-            T = T.multiply(current_num).scale(inv_g);
-
-            // 计算有理部分贡献
-            SymbolicExpression factor = (SymbolicExpression::number(-1.0) /
-                                        SymbolicExpression::number(static_cast<double>(k - 1))).simplify();
-            SymbolicPolynomial G = S.scale(factor);
-
-            SymbolicExpression term = (G.to_expression() /
-                                      make_power(v.to_expression(),
-                                                SymbolicExpression::number(static_cast<double>(k - 1)))).simplify();
-            total_rational = (total_rational + term).simplify();
-
-            // 更新分子
-            SymbolicPolynomial G_deriv = poly_diff(G);
-            current_num = T.subtract(G_deriv.multiply(U)).simplify();
-
-            // 更新分母
-            SymbolicPolynomial Vk_minus_1 = v.power(k - 1);
-            current_den = Vk_minus_1.multiply(U);
-
-            if (current_num.is_zero()) {
-                *rational_part = total_rational;
-                *reduced_numerator = current_num;
-                *reduced_denominator = current_den;
-                return true;
-            }
-        }
-    }
-
-    *rational_part = total_rational;
-    *reduced_numerator = current_num;
-    *reduced_denominator = current_den;
-
-    return true;
-}
-
-// ============================================================================
-// Rothstein-Trager 算法
-// ============================================================================
-
-bool RischAlgorithm::rothstein_trager(const SymbolicPolynomial& numerator,
-                                      const SymbolicPolynomial& denominator,
-                                      const std::string& variable_name,
-                                      SymbolicExpression* log_part,
-                                      const std::vector<DifferentialExtension>& tower,
-                                      int tower_index,
-                                      const std::string& main_var,
-                                      const SymbolicExpression* t_prime,
-                                      DifferentialExtension::Kind kind) {
-    auto poly_diff = [&](const SymbolicPolynomial& p) {
-        return t_prime ? p.total_derivative(main_var, *t_prime) : p.derivative();
-    };
-
-    SymbolicPolynomial D = denominator;
-    SymbolicPolynomial Dp = poly_diff(D);
-    SymbolicPolynomial A = numerator;
-
-    std::string c_var = "risch_c";
-
-    std::vector<SymbolicExpression> poly_c_coeffs;
-    int deg_a = A.degree();
-    int deg_dp = Dp.degree();
-    int max_deg = std::max(deg_a, deg_dp);
-
-    for (int i = 0; i <= max_deg; ++i) {
-        SymbolicExpression term = (A.coefficient(i) -
-                                  SymbolicExpression::variable(c_var) * Dp.coefficient(i)).simplify();
-        poly_c_coeffs.push_back(term);
-    }
-
-    SymbolicPolynomial poly_c(poly_c_coeffs, variable_name);
-    SymbolicExpression res_expr = poly_c.resultant(D).simplify();
-
-    std::vector<SymbolicExpression> res_roots_coeffs;
-    if (!symbolic_polynomial_coefficients_from_simplified(res_expr, c_var, &res_roots_coeffs)) {
-        return false;
-    }
-
-    std::size_t poly_degree = res_roots_coeffs.size() - 1;
-
-    if (poly_degree == 0) {
-        *log_part = SymbolicExpression::number(0.0);
-        return true;
-    }
-
-    // 查找所有根（包括复数根）
-    auto roots = find_all_roots(res_roots_coeffs, c_var);
-
-    if (roots.empty()) {
-        return false;
-    }
-
-    // 构建对数部分
-    SymbolicExpression final_log = SymbolicExpression::number(0.0);
-
-    for (const auto& root : roots) {
-        if (!root.is_complex) {
-            // 实数根处理
-            double c_val = 0.0;
-            if (root.real_part.is_number(&c_val) && std::abs(c_val) < 1e-10) continue;
-
-            std::vector<SymbolicExpression> cur_poly_coeffs;
-            for (int j = 0; j <= max_deg; ++j) {
-                cur_poly_coeffs.push_back((A.coefficient(j) - root.real_part * Dp.coefficient(j)).simplify());
-            }
-            SymbolicPolynomial poly_i(cur_poly_coeffs, variable_name);
-            SymbolicPolynomial v_i = poly_i.gcd(D);
-
-            if (!v_i.is_zero() && !v_i.is_constant()) {
-                final_log = (final_log + root.real_part * make_function("ln", v_i.to_expression())).simplify();
-            }
-        } else if (root.is_conjugate_pair) {
-            // 复数共轭对处理：c = a + bi 和 c' = a - bi
-            // 使用 Lazard-Rioboo-Trager 转换为实数域的 arctan 和 ln
-
-            double a_val = 0.0, b_val = 0.0;
-            root.real_part.is_number(&a_val);
-            root.imag_part.is_number(&b_val);
-
-            // 对于二次不可约分母 D = x^2 + px + q
-            // 结果 = (2*a / sqrt(4q - p^2)) * atan((2x + p) / sqrt(4q - p^2))
-            //      + (b / 2) * ln(D)  (如果 a != 0)
-            // 对于 a = 0 的特殊情况（如 1/(x^2+1)）：
-            // 结果 = (2*b / sqrt(4q - p^2)) * atan((2x + p) / sqrt(4q - p^2))
-
-            if (D.degree() == 2) {
-                // 获取二次多项式系数 D = a_d * x^2 + b_d * x + c_d
-                double a_d = 0.0, b_d = 0.0, c_d = 0.0;
-                D.coefficient(2).is_number(&a_d);
-                D.coefficient(1).is_number(&b_d);
-                D.coefficient(0).is_number(&c_d);
-
-                // 判别式 disc = b_d^2 - 4*a_d*c_d < 0 表示不可约
-                // 但我们使用 4*a_d*c_d - b_d^2 > 0 来计算 arctan 参数
-                double disc_neg = 4.0 * a_d * c_d - b_d * b_d;
-
-                if (disc_neg > 0) {
-                    double sqrt_disc = std::sqrt(disc_neg);
-                    SymbolicExpression x = SymbolicExpression::variable(variable_name);
-
-                    // atan 参数: (2*a_d*x + b_d) / sqrt_disc
-                    SymbolicExpression atan_arg = ((SymbolicExpression::number(2.0 * a_d) * x +
-                                                 SymbolicExpression::number(b_d)) /
-                                                 SymbolicExpression::number(sqrt_disc)).simplify();
-
-                    // arctan 系数
-                    // 对于 ∫ P(x)/(ax^2+bx+c) dx，其中 P 是常数或线性
-                    // Rothstein-Trager 根 c = a + bi 给出:
-                    // atan 系数 = 2 * Im(c) / sqrt_disc * leading_coeff_of_A_if_constant
-                    double atan_coeff = 2.0 * b_val / sqrt_disc;
-
-                    // 如果 A 是常数，需要乘以 A 的系数
-                    if (A.degree() == 0) {
-                        double a_coeff_val = 1.0;
-                        A.coefficient(0).is_number(&a_coeff_val);
-                        atan_coeff *= a_coeff_val;
-                    }
-
-                    final_log = (final_log + SymbolicExpression::number(atan_coeff) *
-                                make_function("atan", atan_arg)).simplify();
-
-                    // 如果 real_part != 0，还需要添加 ln(D) 项
-                    if (std::abs(a_val) > 1e-10) {
-                        double ln_coeff = a_val / a_d;
-                        final_log = (final_log + SymbolicExpression::number(ln_coeff) *
-                                    make_function("ln", D.to_expression())).simplify();
-                    }
-                }
-            } else {
-                // 更高次不可约多项式：需要更复杂的处理
-                // 这里简化处理，尝试直接使用复数根
-                // 对于一般情况，需要完整的 Lazard-Rioboo-Trager 算法
-
-                // 尝试计算 v = gcd(A - c*D', D) 的实部和虚部
-                // 由于我们没有复数多项式运算，这里跳过
-                // 但可以尝试一些特殊模式
-
-                // 检查是否 A 是常数且 D 是二次的幂
-                if (A.degree() == 0 && D.degree() > 2) {
-                    // 尝试分解 D 为二次因子
-                    // 这里简化处理
-                }
-            }
-        }
-    }
-
-    *log_part = final_log;
-    return true;
-}
-
-// ============================================================================
-// 根查找
-// ============================================================================
-
-std::vector<RischAlgorithm::ComplexRoot> RischAlgorithm::find_all_roots(
-    const std::vector<SymbolicExpression>& coeffs,
-    const std::string& var_name) {
-
-    std::vector<ComplexRoot> roots;
-
-    std::size_t poly_degree = coeffs.size() - 1;
-    if (poly_degree == 0) return roots;
-
-    if (poly_degree == 1) {
-        SymbolicExpression root = (make_negate(coeffs[0]) / coeffs[1]).simplify();
-        roots.push_back(ComplexRoot::real(root));
-        return roots;
-    }
-
-    // 尝试数值求解
-    bool all_numeric = true;
-    std::vector<double> num_coeffs;
-
-    for (const auto& c : coeffs) {
-        double val = 0.0;
-        if (c.is_number(&val)) {
-            num_coeffs.push_back(val);
-        } else {
-            all_numeric = false;
-            break;
-        }
-    }
-
-    if (all_numeric) {
-        // 二次
-        if (poly_degree == 2) {
-            double a = num_coeffs[2], b = num_coeffs[1], c = num_coeffs[0];
-            double delta = b * b - 4.0 * a * c;
-
-            if (delta >= 0) {
-                double sqrt_delta = std::sqrt(delta);
-                roots.push_back(ComplexRoot::real(SymbolicExpression::number((-b + sqrt_delta) / (2.0 * a))));
-                roots.push_back(ComplexRoot::real(SymbolicExpression::number((-b - sqrt_delta) / (2.0 * a))));
-            } else {
-                // 复数根：返回共轭对 (a + bi, a - bi) 作为单个条目
-                double real_part = -b / (2.0 * a);
-                double imag_part = std::sqrt(-delta) / (2.0 * a);
-                // 存储为一个共轭对，表示 a+bi 和 a-bi
-                roots.push_back(ComplexRoot::complex(
-                    SymbolicExpression::number(real_part),
-                    SymbolicExpression::number(imag_part),
-                    true));
-            }
-            return roots;
-        }
-
-        // 三次（Cardano 公式）
-        if (poly_degree == 3) {
-            double a = num_coeffs[3], b = num_coeffs[2], c = num_coeffs[1], d = num_coeffs[0];
-
-            double p = (3.0 * a * c - b * b) / (3.0 * a * a);
-            double q = (2.0 * b * b * b - 9.0 * a * b * c + 27.0 * a * a * d) / (27.0 * a * a * a);
-            double disc = q * q / 4.0 + p * p * p / 27.0;
-
-            if (disc > 0) {
-                double u = std::sqrt(disc);
-                double root1 = std::pow(-q / 2.0 + u, 1.0/3.0) + std::pow(-q / 2.0 - u, 1.0/3.0) - b / (3.0 * a);
-                roots.push_back(ComplexRoot::real(SymbolicExpression::number(root1)));
-            } else if (disc == 0) {
-                double root1 = 3.0 * q / p - b / (3.0 * a);
-                double root2 = -3.0 * q / (2.0 * p) - b / (3.0 * a);
-                roots.push_back(ComplexRoot::real(SymbolicExpression::number(root1)));
-                roots.push_back(ComplexRoot::real(SymbolicExpression::number(root2)));
-            } else {
-                double r = std::sqrt(-p * p * p / 27.0);
-                double theta = std::acos(-q / (2.0 * r)) / 3.0;
-                double root1 = 2.0 * std::pow(r, 1.0/3.0) * std::cos(theta) - b / (3.0 * a);
-                double root2 = 2.0 * std::pow(r, 1.0/3.0) * std::cos(theta + 2.0 * M_PI / 3.0) - b / (3.0 * a);
-                double root3 = 2.0 * std::pow(r, 1.0/3.0) * std::cos(theta + 4.0 * M_PI / 3.0) - b / (3.0 * a);
-                roots.push_back(ComplexRoot::real(SymbolicExpression::number(root1)));
-                roots.push_back(ComplexRoot::real(SymbolicExpression::number(root2)));
-                roots.push_back(ComplexRoot::real(SymbolicExpression::number(root3)));
-            }
-            return roots;
-        }
-
-        // 更高次：使用牛顿法
-        auto numeric_roots = find_numeric_roots_newton(num_coeffs);
-        for (const auto& r : numeric_roots) {
-            roots.push_back(ComplexRoot::real(r));
-        }
-        return roots;
-    }
-
-    // 符号系数：尝试整数和有理根
-    auto int_roots = find_integer_roots(coeffs, var_name);
-    for (const auto& r : int_roots) {
-        roots.push_back(ComplexRoot::real(r));
-    }
-
-    if (roots.empty()) {
-        auto rat_roots = find_rational_roots(coeffs, var_name);
-        for (const auto& r : rat_roots) {
-            roots.push_back(ComplexRoot::real(r));
-        }
-    }
-
-    return roots;
-}
-
-std::vector<SymbolicExpression> RischAlgorithm::find_integer_roots(
-    const std::vector<SymbolicExpression>& coeffs,
-    const std::string& var_name) {
-
-    std::vector<SymbolicExpression> roots;
-
-    SymbolicExpression lc = coeffs.back();
-    double lc_val = 1.0;
-    if (!lc.is_number(&lc_val)) lc_val = 1.0;
-
-    SymbolicExpression ct = coeffs.front();
-    double ct_val = 0.0;
-    if (!ct.is_number(&ct_val)) ct_val = 0.0;
-
-    int max_search = 100;
-    if (ct_val != 0.0 && std::abs(ct_val) < 1000) {
-        max_search = static_cast<int>(std::abs(ct_val)) + 1;
-    }
-
-    for (int i = -max_search; i <= max_search; ++i) {
-        if (i == 0 && coeffs.size() > 1 && !SymbolicPolynomial::coeff_is_zero(coeffs[0])) {
-            continue;
-        }
-
-        SymbolicExpression val = SymbolicExpression::number(0.0);
-        SymbolicExpression x_val = SymbolicExpression::number(i);
-        SymbolicExpression power = SymbolicExpression::number(1.0);
-
-        for (std::size_t j = 0; j < coeffs.size(); ++j) {
-            val = (val + coeffs[j] * power).simplify();
-            power = (power * x_val).simplify();
-        }
-
-        if (SymbolicPolynomial::coeff_is_zero(val)) {
-            roots.push_back(SymbolicExpression::number(i));
-        }
-    }
-
-    return roots;
-}
-
-std::vector<SymbolicExpression> RischAlgorithm::find_rational_roots(
-    const std::vector<SymbolicExpression>& coeffs,
-    const std::string& var_name) {
-
-    std::vector<SymbolicExpression> roots;
-
-    SymbolicExpression lc = coeffs.back();
-    SymbolicExpression ct = coeffs.front();
-
-    double lc_val = 1.0, ct_val = 0.0;
-    if (!lc.is_number(&lc_val) || !ct.is_number(&ct_val)) {
-        return roots;
-    }
-
-    auto get_divisors = [](double n) -> std::vector<int> {
-        std::vector<int> divisors;
-        int abs_n = static_cast<int>(std::abs(n) + 0.5);
-        if (abs_n == 0) return divisors;
-        for (int i = 1; i <= abs_n; ++i) {
-            if (abs_n % i == 0) {
-                divisors.push_back(i);
-                divisors.push_back(-i);
-            }
-        }
-        return divisors;
-    };
-
-    std::vector<int> p_divisors = get_divisors(ct_val);
-    std::vector<int> q_divisors = get_divisors(lc_val);
-
-    for (int p : p_divisors) {
-        for (int q : q_divisors) {
-            if (q == 0) continue;
-            double rational = static_cast<double>(p) / static_cast<double>(q);
-
-            SymbolicExpression val = SymbolicExpression::number(0.0);
-            SymbolicExpression x_val = SymbolicExpression::number(rational);
-            SymbolicExpression power = SymbolicExpression::number(1.0);
-
-            for (std::size_t j = 0; j < coeffs.size(); ++j) {
-                val = (val + coeffs[j] * power).simplify();
-                power = (power * x_val).simplify();
-            }
-
-            if (SymbolicPolynomial::coeff_is_zero(val)) {
-                roots.push_back(SymbolicExpression::number(rational));
-            }
-        }
-    }
-
-    return roots;
-}
-
-std::vector<SymbolicExpression> RischAlgorithm::find_numeric_roots_newton(
-    const std::vector<double>& coeffs) {
-
-    std::vector<SymbolicExpression> roots;
-    if (coeffs.empty()) return roots;
-
-    int deg = static_cast<int>(coeffs.size()) - 1;
-    if (deg <= 0) return roots;
-
-    auto eval_poly = [&coeffs](double x) -> double {
-        double result = 0.0;
-        double power = 1.0;
-        for (double c : coeffs) {
-            result += c * power;
-            power *= x;
-        }
-        return result;
-    };
-
-    auto eval_deriv = [&coeffs, deg](double x) -> double {
-        double result = 0.0;
-        double power = 1.0;
-        for (int i = 1; i <= deg; ++i) {
-            result += i * coeffs[i] * power;
-            power *= x;
-        }
-        return result;
-    };
-
-    std::vector<double> start_points = {-10.0, -5.0, -2.0, -1.0, -0.5, 0.5, 1.0, 2.0, 5.0, 10.0};
-
-    for (double start : start_points) {
-        double x = start;
-        for (int iter = 0; iter < 50; ++iter) {
-            double fx = eval_poly(x);
-            double fpx = eval_deriv(x);
-
-            if (std::abs(fpx) < 1e-12) break;
-
-            double next_x = x - fx / fpx;
-
-            if (std::abs(next_x - x) < 1e-10) {
-                if (std::abs(eval_poly(next_x)) < 1e-9) {
-                    bool already_found = false;
-                    for (const auto& r : roots) {
-                        double r_val = 0.0;
-                        if (r.is_number(&r_val) && std::abs(r_val - next_x) < 1e-6) {
-                            already_found = true;
-                            break;
-                        }
-                    }
-                    if (!already_found) {
-                        roots.push_back(SymbolicExpression::number(next_x));
-                    }
-                }
-                break;
-            }
-            x = next_x;
-        }
-    }
-
-    return roots;
-}
-
-// ============================================================================
-// Risch 微分方程求解器
-// ============================================================================
-
-int RischAlgorithm::compute_rde_degree_bound(const SymbolicPolynomial& f,
-                                              const SymbolicPolynomial& g,
-                                              const std::vector<DifferentialExtension>& tower,
-                                              int tower_index) {
-    int deg_f = f.degree();
-    int deg_g = g.degree();
-
-    // Bronstein 算法的度数界计算
-    // Case 1: deg(f) > 0
-    // 标准界: deg(g) - deg(f)
-    if (deg_f > 0) {
-        int bound = deg_g - deg_f;
-        return bound >= 0 ? bound : -1;  // -1 表示无多项式解
-    }
-
-    // Case 2: f 是常数 (deg_f <= 0)
-    if (deg_f <= 0) {
-        double f_val = 0.0;
-        if (f.is_constant() && f.leading_coefficient().is_number(&f_val)) {
-            // 对于指数扩展 t = exp(u)，检查 f = -n*u' 的情况
-            if (tower_index >= 0) {
-                const auto& ext = tower[tower_index];
-                if (ext.kind == DifferentialExtension::Kind::kExponential) {
-                    SymbolicExpression u_prime = (ext.derivation /
-                        SymbolicExpression::variable(ext.t_name)).simplify();
-                    double u_prime_val = 0.0;
-                    if (u_prime.is_number(&u_prime_val) && u_prime_val != 0) {
-                        double ratio = -f_val / u_prime_val;
-                        int n = static_cast<int>(std::round(ratio));
-                        if (std::abs(ratio - n) < 1e-9 && n > 0) {
-                            // f = -n*u'，可能需要 Laurent 多项式解
-                            // 度数界需要考虑负幂次
-                            return std::max(deg_g, 0);
-                        }
-                    }
-                }
-            }
-
-            // 一般常数 f 情况
-            // 检查无穷远处的消去条件
-            // 如果 f != 0，界 = deg(g)
-            if (std::abs(f_val) > 1e-10) {
-                return deg_g;
-            }
-        }
-    }
-
-    return deg_g;
-}
-
-bool RischAlgorithm::handle_exponential_special_case(
-    const SymbolicExpression& f,
-    const SymbolicExpression& g,
-    const std::string& x_var,
-    const std::vector<DifferentialExtension>& tower,
-    int tower_index,
-    SymbolicExpression* result) {
-
-    if (tower_index < 0) return false;
-
-    const auto& ext = tower[tower_index];
-    if (ext.kind != DifferentialExtension::Kind::kExponential) return false;
-
-    SymbolicExpression t = SymbolicExpression::variable(ext.t_name);
-
-    // 检查 f = -n * u' 对于某个整数 n > 0
-    SymbolicExpression u_prime = (ext.derivation / t).simplify();
-
-    double f_val = 0.0, u_prime_val = 0.0;
-    if (!f.is_number(&f_val)) return false;
-    if (!u_prime.is_number(&u_prime_val)) {
-        // u' 不是常数，尝试更复杂的处理
-        return false;
-    }
-
-    if (std::abs(u_prime_val) < 1e-10) return false;
-
-    double ratio = -f_val / u_prime_val;
-    int n = static_cast<int>(std::round(ratio));
-    if (n <= 0 || std::abs(ratio - n) > 1e-9) return false;
-
-    // RDE: y' - n*u'*y = g，其中 t = exp(u)
-    // 尝试 Laurent 多项式解: y = sum_{i=-n}^{m} c_i * t^i
-
-    // 首先将 g 表示为 t 的多项式
-    std::vector<SymbolicExpression> g_coeffs;
-    if (!symbolic_polynomial_coefficients_from_simplified(g.simplify(), ext.t_name, &g_coeffs)) {
-        // g 不是 t 的多项式，尝试直接积分
-        return false;
-    }
-
-    int deg_g_in_t = static_cast<int>(g_coeffs.size()) - 1;
-
-    // 对于 y = sum c_i * t^i，有 y' = sum (c_i' + i*u'*c_i) * t^i
-    // 代入 RDE: sum (c_i' + i*u'*c_i - n*u'*c_i) * t^i = sum g_i * t^i
-    // 即: c_i' + (i-n)*u'*c_i = g_i
-
-    // 从高次开始求解
-    std::vector<SymbolicExpression> y_coeffs(deg_g_in_t + 1, SymbolicExpression::number(0.0));
-
-    for (int i = deg_g_in_t; i >= 0; --i) {
-        double g_i_val = 0.0;
-        if (!g_coeffs[i].is_number(&g_i_val)) {
-            // 非常数系数，需要更复杂的处理
-            continue;
-        }
-
-        if (i == n) {
-            // c_i' = g_i，需要积分
-            IntegrationResult c_int = integrate_in_extension(g_coeffs[i], tower, tower_index - 1, x_var);
-            if (c_int.success && c_int.type == IntegralType::kElementary) {
-                y_coeffs[i] = c_int.value;
-            }
-        } else {
-            // c_i = g_i / ((i-n) * u')
-            double coeff = g_i_val / ((i - n) * u_prime_val);
-            y_coeffs[i] = SymbolicExpression::number(coeff);
-        }
-    }
-
-    // 构建结果
-    SymbolicExpression y = SymbolicExpression::number(0.0);
-    for (int i = 0; i <= deg_g_in_t; ++i) {
-        if (!SymbolicPolynomial::coeff_is_zero(y_coeffs[i])) {
-            y = (y + y_coeffs[i] * make_power(t, SymbolicExpression::number(i))).simplify();
-        }
-    }
-
-    *result = y;
-    return true;
-}
-
-RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde(
-    const SymbolicExpression& f,
-    const SymbolicExpression& g,
-    const std::string& x_var,
-    const std::vector<DifferentialExtension>& tower,
-    int tower_index) {
-
-    SymbolicExpression f_simplified = f.simplify();
-    SymbolicExpression g_simplified = g.simplify();
-
-    if (expr_is_zero(g_simplified)) {
-        return IntegrationResult::elementary(SymbolicExpression::number(0.0));
-    }
-
-    // f = 0: y' = g
-    if (expr_is_zero(f_simplified)) {
-        return integrate_in_extension(g_simplified, tower, tower_index, x_var);
-    }
-
-    // 尝试指数扩展特殊情况
-    SymbolicExpression special_result;
-    if (handle_exponential_special_case(f_simplified, g_simplified, x_var, tower, tower_index, &special_result)) {
-        return IntegrationResult::elementary(special_result);
-    }
-
-    // 提取分子分母
-    auto get_num_den = [&](const SymbolicExpression& expr,
-                          std::vector<SymbolicExpression>* num,
-                          std::vector<SymbolicExpression>* den) {
-        if (expr.node_->type == NodeType::kDivide) {
-            return symbolic_polynomial_coefficients_from_simplified(
-                SymbolicExpression(expr.node_->left).simplify(), x_var, num) &&
-                   symbolic_polynomial_coefficients_from_simplified(
-                SymbolicExpression(expr.node_->right).simplify(), x_var, den);
-        }
-        den->push_back(SymbolicExpression::number(1.0));
-        return symbolic_polynomial_coefficients_from_simplified(expr.simplify(), x_var, num);
-    };
-
-    std::vector<SymbolicExpression> f_num_coeffs, f_den_coeffs;
-    std::vector<SymbolicExpression> g_num_coeffs, g_den_coeffs;
-
-    if (!get_num_den(f_simplified, &f_num_coeffs, &f_den_coeffs) ||
-        !get_num_den(g_simplified, &g_num_coeffs, &g_den_coeffs)) {
-        return IntegrationResult::unknown("Cannot extract polynomial coefficients");
-    }
-
-    SymbolicPolynomial f_num(f_num_coeffs, x_var), f_den(f_den_coeffs, x_var);
-    SymbolicPolynomial g_num(g_num_coeffs, x_var), g_den(g_den_coeffs, x_var);
-
-    // 多项式情况
-    if (f_den.is_constant() && g_den.is_constant()) {
-        return solve_polynomial_rde(f_num, g_num, x_var, tower, tower_index);
-    }
-
-    // 有理函数情况
-    SymbolicPolynomial denom_lcm = f_den.gcd(g_den);
-    if (!denom_lcm.is_zero()) {
-        SymbolicPolynomial lcm_f, lcm_g;
-        f_den.divide(denom_lcm, &lcm_f, nullptr);
-        g_den.divide(denom_lcm, &lcm_g, nullptr);
-
-        SymbolicPolynomial y_den = f_den.multiply(lcm_g);
-        SymbolicPolynomial y_den_deriv = y_den.derivative();
-
-        SymbolicPolynomial rhs = g_num.multiply(y_den);
-        SymbolicPolynomial f_adjusted = f_num;
-
-        if (!f_den.is_constant()) {
-            rhs = rhs.multiply(f_den);
-            SymbolicPolynomial coeff_y = f_num.multiply(y_den).subtract(f_den.multiply(y_den_deriv));
-
-            int deg_rhs = rhs.degree();
-            int deg_coeff = coeff_y.degree();
-            int est_deg_y = deg_rhs - std::max(deg_coeff, f_den.degree() + y_den.degree() - 1);
-            if (est_deg_y < 0) est_deg_y = 0;
-
-            std::vector<SymbolicExpression> y_coeffs;
-            if (solve_coefficient_identity_for_rde(f_den.multiply(y_den), coeff_y, rhs, x_var, est_deg_y, &y_coeffs)) {
-                SymbolicExpression result = (SymbolicPolynomial(y_coeffs, x_var).to_expression() /
-                                           y_den.to_expression()).simplify();
-                return IntegrationResult::elementary(result);
-            }
-        } else {
-            SymbolicPolynomial coeff_y = f_num.multiply(y_den).subtract(
-                y_den_deriv.scale(f_den.leading_coefficient()));
-
-            int deg_rhs = rhs.degree();
-            int deg_coeff = coeff_y.degree();
-            int est_deg_y = deg_rhs - deg_coeff;
-            if (est_deg_y < 0) est_deg_y = 0;
-
-            std::vector<SymbolicExpression> y_coeffs;
-            if (solve_coefficient_identity_for_rde(y_den, coeff_y, rhs, x_var, est_deg_y, &y_coeffs)) {
-                SymbolicExpression result = (SymbolicPolynomial(y_coeffs, x_var).to_expression() /
-                                           y_den.to_expression()).simplify();
-                return IntegrationResult::elementary(result);
-            }
-        }
-    }
-
-    // 常数 f 情况：y = exp(-fx) * ∫ g*exp(fx) dx
-    double f_const = 0.0;
-    if (f_num.is_constant() && f_den.is_constant() &&
-        f_num.leading_coefficient().is_number(&f_const)) {
-
-        double f_den_val = 1.0;
-        f_den.leading_coefficient().is_number(&f_den_val);
-        f_const /= f_den_val;
-
-        if (tower_index >= 0 &&
-            tower[tower_index].kind == DifferentialExtension::Kind::kExponential) {
-            SymbolicExpression t = SymbolicExpression::variable(tower[tower_index].t_name);
-            SymbolicExpression u_prime = (tower[tower_index].derivation / t).simplify();
-            double u_prime_const = 0.0;
-            if (u_prime.is_number(&u_prime_const) &&
-                std::abs(u_prime_const - f_const) < 1e-10) {
-                return IntegrationResult::unknown("RDE integrating factor is current exponential extension");
-            }
-        }
-
-        SymbolicExpression x = SymbolicExpression::variable(x_var);
-        SymbolicExpression exp_fx = make_function("exp", (SymbolicExpression::number(f_const) * x).simplify());
-        SymbolicExpression exp_neg_fx = make_function("exp", (SymbolicExpression::number(-f_const) * x).simplify());
-
-        SymbolicExpression integrand = (g_simplified * exp_fx).simplify();
-        if (contains_tower_var(integrand, tower, tower_index)) {
-            return IntegrationResult::unknown("RDE integrating factor would recurse in current extension");
-        }
-
-        IntegrationResult integral = integrate_in_extension(integrand, tower, tower_index, x_var);
-
-        if (integral.success && integral.type == IntegralType::kElementary) {
-            SymbolicExpression result = (exp_neg_fx * integral.value).simplify();
-            return IntegrationResult::elementary(result);
-        }
-    }
-
-    return IntegrationResult::unknown("RDE solver failed");
-}
-
-RischAlgorithm::IntegrationResult RischAlgorithm::solve_polynomial_rde(
-    const SymbolicPolynomial& f_poly,
-    const SymbolicPolynomial& g_poly,
-    const std::string& x_var,
-    const std::vector<DifferentialExtension>& tower,
-    int tower_index) {
-
-    int deg_f = f_poly.degree();
-    int deg_g = g_poly.degree();
-
-    // f = 0: y' = g
-    if (deg_f < 0 || f_poly.is_zero()) {
-        return integrate_in_extension(g_poly.to_expression(), tower, tower_index, x_var);
-    }
-
-    // 计算度数界
-    int deg_y = compute_rde_degree_bound(f_poly, g_poly, tower, tower_index);
-
-    if (deg_y < 0) {
-        // 检查常数解
-        if (deg_g == deg_f) {
-            SymbolicExpression c = (g_poly.leading_coefficient() / f_poly.leading_coefficient()).simplify();
-            SymbolicPolynomial check = f_poly.scale(c);
-            if (check.subtract(g_poly).is_zero()) {
-                return IntegrationResult::elementary(c);
-            }
-        }
-        return IntegrationResult::non_elementary("No polynomial solution exists");
-    }
-
-    // 待定系数法
-    std::vector<SymbolicExpression> y_coeffs(deg_y + 1, SymbolicExpression::number(0.0));
-    SymbolicPolynomial current_g = g_poly;
-
-    for (int i = deg_y; i >= 0; --i) {
-        int target_deg;
-        if (deg_f > 0) {
-            target_deg = i + deg_f;
-        } else {
-            target_deg = i;
-        }
-
-        int current_deg = current_g.degree();
-
-        if (current_deg == target_deg) {
-            SymbolicExpression c_i = (current_g.leading_coefficient() / f_poly.leading_coefficient()).simplify();
-            y_coeffs[i] = c_i;
-
-            std::vector<SymbolicExpression> term_coeffs(i + 1, SymbolicExpression::number(0.0));
-            term_coeffs[i] = c_i;
-            SymbolicPolynomial y_term(term_coeffs, x_var);
-
-            current_g = current_g.subtract(y_term.multiply(f_poly)).subtract(y_term.derivative()).simplify();
-        } else if (current_deg > target_deg) {
-            return IntegrationResult::non_elementary("Degree mismatch in RDE");
-        } else {
-            y_coeffs[i] = SymbolicExpression::number(0.0);
-        }
-    }
-
-    if (!current_g.is_zero()) {
-        return IntegrationResult::non_elementary("RDE has no polynomial solution");
-    }
-
-    return IntegrationResult::elementary(SymbolicPolynomial(y_coeffs, x_var).to_expression());
-}
-
-// ============================================================================
-// 参数化 RDE 求解器
-// ============================================================================
-
-bool RischAlgorithm::solve_parametric_rde(
-    const SymbolicExpression& f,
-    const std::vector<SymbolicExpression>& g_list,
-    const std::string& x_var,
-    const std::vector<DifferentialExtension>& tower,
-    int tower_index,
-    SymbolicExpression* y_out,
-    std::vector<SymbolicExpression>* c_out) {
-
-    if (g_list.empty()) return false;
-
-    // 提取多项式系数
-    std::vector<SymbolicExpression> f_num_coeffs;
-    if (!symbolic_polynomial_coefficients_from_simplified(f.simplify(), x_var, &f_num_coeffs)) {
-        return false;
-    }
-    SymbolicPolynomial f_poly(f_num_coeffs, x_var);
-
-    std::vector<SymbolicPolynomial> g_polys;
-    int max_deg_g = 0;
-
-    for (const auto& g : g_list) {
-        std::vector<SymbolicExpression> g_num_coeffs;
-        if (!symbolic_polynomial_coefficients_from_simplified(g.simplify(), x_var, &g_num_coeffs)) {
-            return false;
-        }
-        SymbolicPolynomial g_poly(g_num_coeffs, x_var);
-        g_polys.push_back(g_poly);
-        max_deg_g = std::max(max_deg_g, g_poly.degree());
-    }
-
-    SymbolicPolynomial y_poly;
-    if (solve_polynomial_parametric_rde(f_poly, g_polys, x_var, tower, tower_index, &y_poly, c_out)) {
-        *y_out = y_poly.to_expression();
-        return true;
-    }
-
-    return false;
-}
-
-bool RischAlgorithm::solve_polynomial_parametric_rde(
-    const SymbolicPolynomial& f_poly,
-    const std::vector<SymbolicPolynomial>& g_polys,
-    const std::string& x_var,
-    const std::vector<DifferentialExtension>& tower,
-    int tower_index,
-    SymbolicPolynomial* y_out,
-    std::vector<SymbolicExpression>* c_out) {
-
-    int deg_f = f_poly.degree();
-    int max_deg_g = 0;
-    for (const auto& g : g_polys) {
-        max_deg_g = std::max(max_deg_g, g.degree());
-    }
-
-    int deg_y = (deg_f > 0) ? max_deg_g - deg_f : max_deg_g;
-    if (deg_y < 0) deg_y = 0;
-
-    int num_c = static_cast<int>(g_polys.size());
-    int num_y = deg_y + 1;
-    int num_unknowns = num_y + num_c;
-    int num_eqs = std::max(deg_y + deg_f, max_deg_g) + 1;
-
-    // 构建线性方程组
-    std::vector<std::vector<SymbolicExpression>> matrix(num_eqs,
-        std::vector<SymbolicExpression>(num_unknowns, SymbolicExpression::number(0.0)));
-    std::vector<SymbolicExpression> rhs(num_eqs, SymbolicExpression::number(0.0));
-
-    // y' + f*y 的系数
-    for (int j = 0; j < num_y; ++j) {
-        // y' 的贡献
-        if (j > 0 && j - 1 < num_eqs) {
-            matrix[j - 1][j] = SymbolicExpression::number(j);
-        }
-        // f*y 的贡献
-        for (int k = 0; k <= deg_f; ++k) {
-            if (j + k < num_eqs) {
-                matrix[j + k][j] = (matrix[j + k][j] + f_poly.coefficient(k)).simplify();
-            }
-        }
-    }
-
-    // -sum(c_i * g_i) 的贡献
-    for (int i = 0; i < num_c; ++i) {
-        for (int k = 0; k <= g_polys[i].degree(); ++k) {
-            if (k < num_eqs) {
-                matrix[k][num_y + i] = (SymbolicExpression::number(-1.0) * g_polys[i].coefficient(k)).simplify();
-            }
-        }
-    }
-
-    // 求解线性方程组
-    std::vector<SymbolicExpression> unknowns;
-    if (solve_linear_system(matrix, rhs, &unknowns) && unknowns.size() == static_cast<std::size_t>(num_unknowns)) {
-        std::vector<SymbolicExpression> y_coeffs(unknowns.begin(), unknowns.begin() + num_y);
-        *y_out = SymbolicPolynomial(y_coeffs, x_var);
-        c_out->assign(unknowns.begin() + num_y, unknowns.end());
-        return true;
-    }
-
-    return false;
-}
-
-// ============================================================================
-// 线性方程组求解
-// ============================================================================
-
-bool RischAlgorithm::solve_linear_system(
-    std::vector<std::vector<SymbolicExpression>>& matrix,
-    std::vector<SymbolicExpression>& rhs,
-    std::vector<SymbolicExpression>* solution) {
-
-    if (matrix.empty() || rhs.empty()) return false;
-
-    int n = static_cast<int>(matrix.size());
-    int m = static_cast<int>(matrix[0].size());
-
-    std::vector<std::size_t> pivot_cols;
-    std::vector<SymbolicExpression> aug_rhs = rhs;
-
-    // 前向消元
-    for (int row = 0, col = 0; row < n && col < m; ++col) {
-        // 找主元
-        int pivot = row;
-        bool found_pivot = false;
-        for (int r = row; r < n; ++r) {
-            if (!SymbolicPolynomial::coeff_is_zero(matrix[r][col])) {
-                pivot = r;
-                found_pivot = true;
-                break;
-            }
-        }
-
-        if (!found_pivot) continue;
-
-        // 交换行
-        if (pivot != row) {
-            std::swap(matrix[row], matrix[pivot]);
-            std::swap(aug_rhs[row], aug_rhs[pivot]);
-        }
-
-        // 消元
-        SymbolicExpression pivot_val = matrix[row][col];
-        for (int r = row + 1; r < n; ++r) {
-            if (!SymbolicPolynomial::coeff_is_zero(matrix[r][col])) {
-                SymbolicExpression factor = (matrix[r][col] / pivot_val).simplify();
-                for (int c = col; c < m; ++c) {
-                    matrix[r][c] = (matrix[r][c] - factor * matrix[row][c]).simplify();
-                }
-                aug_rhs[r] = (aug_rhs[r] - factor * aug_rhs[row]).simplify();
-            }
-        }
-
-        pivot_cols.push_back(col);
-        ++row;
-    }
-
-    // 检查一致性
-    for (std::size_t r = pivot_cols.size(); r < static_cast<std::size_t>(n); ++r) {
-        if (!SymbolicPolynomial::coeff_is_zero(aug_rhs[r])) {
-            return false;
-        }
-    }
-
-    // 回代
-    solution->assign(m, SymbolicExpression::number(0.0));
-    for (int i = static_cast<int>(pivot_cols.size()) - 1; i >= 0; --i) {
-        std::size_t row = static_cast<std::size_t>(i);
-        std::size_t col = pivot_cols[i];
-
-        SymbolicExpression sum = aug_rhs[row];
-        for (std::size_t c = col + 1; c < static_cast<std::size_t>(m); ++c) {
-            sum = (sum - matrix[row][c] * (*solution)[c]).simplify();
-        }
-        (*solution)[col] = (sum / matrix[row][col]).simplify();
-    }
-
-    return true;
-}
-
-bool RischAlgorithm::solve_coefficient_identity_for_rde(
-    const SymbolicPolynomial& D,
-    const SymbolicPolynomial& F,
-    const SymbolicPolynomial& G,
-    const std::string& x_var,
-    int max_deg,
-    std::vector<SymbolicExpression>* unknowns) {
-
-    int deg_D = D.degree();
-    int deg_F = F.degree();
-    int deg_G = G.degree();
-
-    int expected_deg = std::max(max_deg + deg_D - 1, max_deg + deg_F);
-    int n = std::max(expected_deg, deg_G);
-
-    std::vector<std::vector<SymbolicExpression>> matrix(n + 1,
-        std::vector<SymbolicExpression>(max_deg + 1, SymbolicExpression::number(0.0)));
-    std::vector<SymbolicExpression> rhs(n + 1, SymbolicExpression::number(0.0));
-
-    for (int k = 0; k <= deg_G; ++k) {
-        rhs[k] = G.coefficient(k);
-    }
-
-    for (int i = 0; i <= max_deg; ++i) {
-        // Y * F 的贡献
-        for (int j = 0; j <= deg_F; ++j) {
-            if (i + j <= n) {
-                matrix[i + j][i] = (matrix[i + j][i] + F.coefficient(j)).simplify();
-            }
-        }
-        // Y' * D 的贡献
-        if (i > 0) {
-            for (int j = 0; j <= deg_D; ++j) {
-                if (i - 1 + j <= n) {
-                    matrix[i - 1 + j][i] = (matrix[i - 1 + j][i] +
-                        SymbolicExpression::number(i) * D.coefficient(j)).simplify();
-                }
-            }
-        }
-    }
-
-    return solve_linear_system(matrix, rhs, unknowns);
-}
-
-bool RischAlgorithm::is_in_base_field(const SymbolicExpression& expr,
-                                       const std::vector<DifferentialExtension>& tower,
-                                       int tower_index) {
-    return !contains_tower_var(expr, tower, tower_index);
-}

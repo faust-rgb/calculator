@@ -53,6 +53,91 @@ SymbolicExpression resultant_linear_first(const SymbolicPolynomial& linear,
     return result.simplify();
 }
 
+SymbolicExpression determinant_bareiss(std::vector<std::vector<SymbolicExpression>> matrix) {
+    const int n = static_cast<int>(matrix.size());
+    if (n == 0) {
+        return SymbolicExpression::number(1.0);
+    }
+    if (n == 1) {
+        return matrix[0][0].simplify();
+    }
+
+    SymbolicExpression previous_pivot = SymbolicExpression::number(1.0);
+    int sign = 1;
+
+    for (int k = 0; k < n - 1; ++k) {
+        int pivot_row = k;
+        while (pivot_row < n && SymbolicPolynomial::coeff_is_zero(matrix[pivot_row][k])) {
+            ++pivot_row;
+        }
+        if (pivot_row == n) {
+            return SymbolicExpression::number(0.0);
+        }
+        if (pivot_row != k) {
+            std::swap(matrix[pivot_row], matrix[k]);
+            sign = -sign;
+        }
+
+        const SymbolicExpression pivot = matrix[k][k];
+        for (int i = k + 1; i < n; ++i) {
+            for (int j = k + 1; j < n; ++j) {
+                SymbolicExpression value =
+                    (matrix[i][j] * pivot - matrix[i][k] * matrix[k][j]).simplify();
+                if (k > 0) {
+                    value = (value / previous_pivot).simplify();
+                }
+                matrix[i][j] = value;
+            }
+        }
+
+        for (int i = k + 1; i < n; ++i) {
+            matrix[i][k] = SymbolicExpression::number(0.0);
+        }
+        previous_pivot = pivot;
+    }
+
+    SymbolicExpression det = matrix[n - 1][n - 1].simplify();
+    if (sign < 0) {
+        det = make_negate(det).simplify();
+    }
+    return det;
+}
+
+SymbolicExpression resultant_sylvester(const SymbolicPolynomial& first,
+                                       const SymbolicPolynomial& second) {
+    const int first_degree = first.degree();
+    const int second_degree = second.degree();
+    const int size = first_degree + second_degree;
+    std::vector<std::vector<SymbolicExpression>> matrix(
+        size, std::vector<SymbolicExpression>(size, SymbolicExpression::number(0.0)));
+
+    std::vector<SymbolicExpression> first_desc;
+    first_desc.reserve(first_degree + 1);
+    for (int i = first_degree; i >= 0; --i) {
+        first_desc.push_back(first.coefficient(i));
+    }
+
+    std::vector<SymbolicExpression> second_desc;
+    second_desc.reserve(second_degree + 1);
+    for (int i = second_degree; i >= 0; --i) {
+        second_desc.push_back(second.coefficient(i));
+    }
+
+    for (int row = 0; row < second_degree; ++row) {
+        for (int col = 0; col <= first_degree; ++col) {
+            matrix[row][row + col] = first_desc[col];
+        }
+    }
+
+    for (int row = 0; row < first_degree; ++row) {
+        for (int col = 0; col <= second_degree; ++col) {
+            matrix[second_degree + row][row + col] = second_desc[col];
+        }
+    }
+
+    return determinant_bareiss(matrix).simplify();
+}
+
 }  // namespace
 
 // ============================================================================
@@ -443,59 +528,7 @@ SymbolicExpression SymbolicPolynomial::resultant(const SymbolicPolynomial& other
         }
         return res;
     }
-
-    SymbolicPolynomial A = *this;
-    SymbolicPolynomial B = other;
-
-    int degA = A.degree();
-    int degB = B.degree();
-
-    bool swapped = false;
-    if (degA < degB) {
-        std::swap(A, B);
-        std::swap(degA, degB);
-        swapped = ((degA * degB) % 2 != 0);
-    }
-
-    SymbolicExpression R = SymbolicExpression::number(1.0);
-    SymbolicExpression g = SymbolicExpression::number(1.0);
-    SymbolicExpression h = SymbolicExpression::number(1.0);
-
-    while (!B.is_zero()) {
-        int delta = A.degree() - B.degree();
-
-        // pseudo-remainder: prem(A, B) = lc(B)^(delta+1) * A mod B
-        SymbolicExpression lcB = B.leading_coefficient();
-        SymbolicExpression multiplier = lcB.power(SymbolicExpression::number(delta + 1));
-        SymbolicPolynomial A_scaled = A.scale(multiplier);
-        
-        SymbolicPolynomial Q, rem;
-        A_scaled.divide(B, &Q, &rem);
-
-        A = B;
-        
-        if (A.degree() > 0) {
-            SymbolicExpression divisor = (g * h.power(SymbolicExpression::number(delta))).simplify();
-            B = rem.scale(SymbolicExpression::number(1.0) / divisor).simplify();
-        } else {
-            B = rem; // Reached constant
-        }
-
-        g = lcB;
-        if (delta > 0) {
-            h = (g.power(SymbolicExpression::number(delta)) / h.power(SymbolicExpression::number(delta - 1))).simplify();
-        }
-    }
-
-    SymbolicExpression final_resultant = SymbolicExpression::number(0.0);
-    if (A.degree() == 0) {
-        final_resultant = A.leading_coefficient();
-    } else {
-        // They share a non-trivial polynomial factor
-        final_resultant = SymbolicExpression::number(0.0);
-    }
-    
-    return swapped ? (SymbolicExpression::number(-1.0) * final_resultant).simplify() : final_resultant.simplify();
+    return resultant_sylvester(*this, other);
 }
 
 SymbolicPolynomial SymbolicPolynomial::gcd(const SymbolicPolynomial& other) const {
