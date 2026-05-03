@@ -663,6 +663,7 @@ void test_risch_rational_advanced() {
         std::cout << "∫ (x^5 + 2x^4 + 3x^3 + 4x^2 + 5x + 6) / (x^2 + 1) dx = "
                   << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
+        assert(result.value.to_string().find("4 * atan(x)") != std::string::npos);
     }
 
     // Test 2: 三次分母有理函数
@@ -1190,6 +1191,7 @@ void test_risch_mixed_advanced() {
         std::cout << "∫ exp(x) * sin(x) dx = " << result.value.to_string()
                   << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
+        assert(result.value.to_string() == "1/2 * exp(x) * (sin(x) - cos(x))");
     }
 
     // Test 5: 指数与余弦
@@ -1201,6 +1203,7 @@ void test_risch_mixed_advanced() {
         std::cout << "∫ exp(x) * cos(x) dx = " << result.value.to_string()
                   << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
+        assert(result.value.to_string() == "1/2 * exp(x) * (cos(x) + sin(x))");
     }
 
     // Test 6: 对数与有理复杂
@@ -1375,7 +1378,7 @@ void test_risch_non_elementary_advanced() {
         std::cout << "∫ 1 / ln(2x) dx = "
                   << (result.success ? result.value.to_string() : "non-elementary")
                   << " [" << result.method_used << "]" << std::endl;
-        // 预期非初等
+        assert(!result.success);
     }
 
     // Test 4: 正弦积分

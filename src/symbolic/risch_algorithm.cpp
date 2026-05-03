@@ -248,6 +248,68 @@ bool RischAlgorithm::check_algebraic_independence(const SymbolicExpression& arg,
             }
         }
 
+        // 改进：检查常数因子
+        // ln(c*u) = ln(c) + ln(u)，其中 c 是常数
+        // 如果 c > 0，ln(c) 是常数；如果 c < 0，ln(c) = ln(-c) + i*pi
+        double const_factor = 1.0;
+        SymbolicExpression rest;
+        if (decompose_constant_times_expression(normalized_arg, x_var, &const_factor, &rest)) {
+            if (std::abs(const_factor) > 1e-12 && std::abs(const_factor - 1.0) > 1e-12) {
+                // 检查 rest 是否已经在塔中
+                SymbolicExpression sub_rest;
+                if (!check_algebraic_independence(rest, kind, current_tower, x_var, &sub_rest, recursion_depth + 1)) {
+                    // rest 不独立
+                    if (const_factor > 0) {
+                        *substitution = (SymbolicExpression::number(std::log(const_factor)) + sub_rest).simplify();
+                    } else {
+                        // ln(-c) = ln(c) + i*pi，这里简化处理
+                        *substitution = (SymbolicExpression::number(std::log(-const_factor)) + sub_rest).simplify();
+                    }
+                    return false;
+                }
+            }
+        }
+
+        // 改进：检查塔中是否已存在 ln(arg) 或 ln(arg^k) 形式
+        for (const auto& ext : current_tower) {
+            if (ext.kind == DifferentialExtension::Kind::kLogarithmic) {
+                // 检查 arg / ext.argument 是否为常数幂
+                SymbolicExpression ratio = (normalized_arg / ext.argument).simplify();
+
+                // 检查 ratio 是否为常数
+                double ratio_val = 0.0;
+                if (ratio.is_number(&ratio_val)) {
+                    // arg = ratio * ext.argument
+                    // ln(arg) = ln(ratio) + ln(ext.argument) = ln(ratio) + t
+                    if (std::abs(ratio_val) > 1e-12) {
+                        if (ratio_val > 0) {
+                            *substitution = (SymbolicExpression::number(std::log(ratio_val)) +
+                                            SymbolicExpression::variable(ext.t_name)).simplify();
+                        } else {
+                            *substitution = (SymbolicExpression::number(std::log(-ratio_val)) +
+                                            SymbolicExpression::variable(ext.t_name)).simplify();
+                        }
+                        return false;
+                    }
+                }
+
+                // 检查 arg = ext.argument^k
+                if (ratio.node_->type == NodeType::kPower) {
+                    SymbolicExpression base(ratio.node_->left);
+                    SymbolicExpression exp(ratio.node_->right);
+                    double exp_val = 0.0;
+                    if (base.is_number() && base.is_number(&ratio_val) &&
+                        std::abs(ratio_val - 1.0) < 1e-9 && exp.is_number(&exp_val)) {
+                        // arg = ext.argument^k
+                        // ln(arg) = k * ln(ext.argument) = k * t
+                        *substitution = (SymbolicExpression::number(exp_val) *
+                                        SymbolicExpression::variable(ext.t_name)).simplify();
+                        return false;
+                    }
+                }
+            }
+        }
+
         // 检查 ∫(arg'/arg) dx 是否在当前域中
         SymbolicExpression arg_deriv = normalized_arg.derivative(x_var).simplify();
         SymbolicExpression integrand = (arg_deriv / normalized_arg).simplify();
@@ -263,7 +325,7 @@ bool RischAlgorithm::check_algebraic_independence(const SymbolicExpression& arg,
 
     } else if (kind == DifferentialExtension::Kind::kExponential) {
         SymbolicExpression normalized_arg = arg.simplify();
-        
+
         // 检查 exp(u + v) = exp(u) * exp(v)
         if (normalized_arg.node_->type == NodeType::kAdd) {
             SymbolicExpression u(normalized_arg.node_->left);
@@ -283,6 +345,21 @@ bool RischAlgorithm::check_algebraic_independence(const SymbolicExpression& arg,
         if (normalized_arg.node_->type == NodeType::kFunction && normalized_arg.node_->text == "ln") {
             *substitution = SymbolicExpression(normalized_arg.node_->left);
             return false;
+        }
+
+        // 改进：检查 exp(arg) 是否与塔中的 exp(other_arg) 相关
+        // 如果 arg - other_arg 是常数，则 exp(arg) = exp(constant) * exp(other_arg)
+        for (const auto& ext : current_tower) {
+            if (ext.kind == DifferentialExtension::Kind::kExponential) {
+                SymbolicExpression diff = (normalized_arg - ext.argument).simplify();
+                double diff_val = 0.0;
+                if (diff.is_number(&diff_val)) {
+                    // exp(arg) = exp(diff) * exp(ext.argument) = exp(diff) * t
+                    *substitution = (SymbolicExpression::number(std::exp(diff_val)) *
+                                    SymbolicExpression::variable(ext.t_name)).simplify();
+                    return false;
+                }
+            }
         }
 
         // 检查 ∫ arg' dx 是否是对数形式
@@ -989,17 +1066,252 @@ SymbolicExpression RischAlgorithm::complex_log_to_real(const SymbolicExpression&
                                                         const std::string& x_var) {
     // 将复对数形式转换为实三角函数形式
     // 例如: (1/2i) * ln((x-i)/(x+i)) -> arctan(x)
+    //       (1/2) * ln((x-1)/(x+1)) -> arctanh(x)
 
+    SymbolicExpression x = SymbolicExpression::variable(x_var);
+    SymbolicExpression i = SymbolicExpression::variable("i");
+
+    // 检测 arctan 模式: c * ln((a*x + b - i*d) / (a*x + b + i*d))
+    // 结果 = (c/d) * arctan((a*x + b)/d) 当 d > 0
+    auto try_arctan_pattern = [&](const SymbolicExpression& e) -> SymbolicExpression {
+        if (e.node_->type != NodeType::kMultiply) {
+            return SymbolicExpression();
+        }
+
+        // 尝试分解为系数 * ln(...)
+        SymbolicExpression coeff = SymbolicExpression::number(1.0);
+        SymbolicExpression log_part;
+
+        SymbolicExpression left(e.node_->left);
+        SymbolicExpression right(e.node_->right);
+
+        // 检查哪边是 ln
+        if (left.node_->type == NodeType::kFunction && left.node_->text == "ln") {
+            log_part = left;
+            coeff = right;
+        } else if (right.node_->type == NodeType::kFunction && right.node_->text == "ln") {
+            log_part = right;
+            coeff = left;
+        } else if (left.node_->type == NodeType::kDivide) {
+            // 可能是 (1/2i) 形式
+            SymbolicExpression num(left.node_->left);
+            SymbolicExpression den(left.node_->right);
+            if (right.node_->type == NodeType::kFunction && right.node_->text == "ln") {
+                coeff = left;
+                log_part = right;
+            }
+        }
+
+        if (!log_part.node_ || log_part.node_->type != NodeType::kFunction || log_part.node_->text != "ln") {
+            return SymbolicExpression();
+        }
+
+        // 检查 ln 的参数是否为 (something - i*d) / (something + i*d)
+        SymbolicExpression log_arg(log_part.node_->left);
+        if (log_arg.node_->type != NodeType::kDivide) {
+            return SymbolicExpression();
+        }
+
+        SymbolicExpression num(log_arg.node_->left);
+        SymbolicExpression den(log_arg.node_->right);
+
+        // 尝试提取线性部分和虚部
+        // 假设形式为 (a*x + b - i*d) / (a*x + b + i*d)
+        // 或 (x - i) / (x + i) 等
+
+        // 检查是否包含 i
+        bool has_i_num = contains_var(num, "i");
+        bool has_i_den = contains_var(den, "i");
+
+        if (!has_i_num && !has_i_den) {
+            // 可能是 arctanh 模式: (1/2) * ln((x-1)/(x+1))
+            // 检查是否为 (a*x + b - c) / (a*x + b + c) 形式
+            return SymbolicExpression(); // 暂不处理
+        }
+
+        // 尝试提取实部和虚部
+        // 简化处理：假设形式为 (x - i) / (x + i)
+        // 这对应于 arctan(x)
+
+        // 检查系数是否为 1/(2i)
+        double coeff_val = 1.0;
+        bool has_i_in_coeff = false;
+
+        if (coeff.node_->type == NodeType::kDivide) {
+            SymbolicExpression c_num(coeff.node_->left);
+            SymbolicExpression c_den(coeff.node_->right);
+            double c_num_val = 1.0, c_den_val = 1.0;
+
+            if (c_num.is_number(&c_num_val)) {
+                if (c_den.node_->type == NodeType::kMultiply) {
+                    SymbolicExpression d_left(c_den.node_->left);
+                    SymbolicExpression d_right(c_den.node_->right);
+                    double d_val = 1.0;
+                    if (d_left.is_number(&d_val) && d_right.is_variable_named("i")) {
+                        // 系数 = c_num_val / (d_val * i)
+                        coeff_val = c_num_val / d_val;
+                        has_i_in_coeff = true;
+                    } else if (d_right.is_number(&d_val) && d_left.is_variable_named("i")) {
+                        coeff_val = c_num_val / d_val;
+                        has_i_in_coeff = true;
+                    }
+                } else if (c_den.is_number(&c_den_val)) {
+                    coeff_val = c_num_val / c_den_val;
+                } else if (c_den.is_variable_named("i")) {
+                    coeff_val = c_num_val;
+                    has_i_in_coeff = true;
+                }
+            }
+        } else if (coeff.is_number(&coeff_val)) {
+            // 纯数值系数
+        }
+
+        if (has_i_in_coeff) {
+            // (coeff/i) * ln((x-i)/(x+i)) = 2*coeff * arctan(x)
+            // 检查 ln 参数
+            // 简化：假设是 (x-i)/(x+i)
+            SymbolicExpression x_var_expr = SymbolicExpression::variable(x_var);
+
+            // 尝试匹配 (x - i) / (x + i)
+            auto is_linear_minus_i = [&](const SymbolicExpression& e, SymbolicExpression& linear_part) -> bool {
+                if (e.node_->type == NodeType::kSubtract) {
+                    SymbolicExpression l(e.node_->left);
+                    SymbolicExpression r(e.node_->right);
+                    if (r.is_variable_named("i")) {
+                        linear_part = l;
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            auto is_linear_plus_i = [&](const SymbolicExpression& e, SymbolicExpression& linear_part) -> bool {
+                if (e.node_->type == NodeType::kAdd) {
+                    SymbolicExpression l(e.node_->left);
+                    SymbolicExpression r(e.node_->right);
+                    if (r.is_variable_named("i") || l.is_variable_named("i")) {
+                        linear_part = r.is_variable_named("i") ? l : r;
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            SymbolicExpression num_linear, den_linear;
+            if (is_linear_minus_i(num, num_linear) && is_linear_plus_i(den, den_linear)) {
+                if (structural_equals(num_linear.simplify(), den_linear.simplify())) {
+                    // 找到 (linear - i) / (linear + i) 模式
+                    // 结果 = 2 * coeff * arctan(linear)
+                    SymbolicExpression result = (SymbolicExpression::number(2.0 * coeff_val) *
+                                                make_function("atan", num_linear)).simplify();
+                    return result;
+                }
+            }
+        }
+
+        return SymbolicExpression();
+    };
+
+    // 检测 arctanh 模式: (1/2) * ln((x-a)/(x+a))
+    auto try_arctanh_pattern = [&](const SymbolicExpression& e) -> SymbolicExpression {
+        if (e.node_->type != NodeType::kMultiply) {
+            return SymbolicExpression();
+        }
+
+        SymbolicExpression left(e.node_->left);
+        SymbolicExpression right(e.node_->right);
+
+        double coeff_val = 1.0;
+        SymbolicExpression log_part;
+
+        if (left.is_number(&coeff_val) && right.node_->type == NodeType::kFunction && right.node_->text == "ln") {
+            log_part = right;
+        } else if (right.is_number(&coeff_val) && left.node_->type == NodeType::kFunction && left.node_->text == "ln") {
+            log_part = left;
+        } else if (left.node_->type == NodeType::kDivide) {
+            SymbolicExpression num(left.node_->left);
+            SymbolicExpression den(left.node_->right);
+            double num_val = 1.0, den_val = 1.0;
+            if (num.is_number(&num_val) && den.is_number(&den_val)) {
+                coeff_val = num_val / den_val;
+                if (right.node_->type == NodeType::kFunction && right.node_->text == "ln") {
+                    log_part = right;
+                }
+            }
+        }
+
+        if (!log_part.node_) {
+            return SymbolicExpression();
+        }
+
+        SymbolicExpression log_arg(log_part.node_->left);
+        if (log_arg.node_->type != NodeType::kDivide) {
+            return SymbolicExpression();
+        }
+
+        SymbolicExpression num(log_arg.node_->left);
+        SymbolicExpression den(log_arg.node_->right);
+
+        // 检查是否为 (x - a) / (x + a) 形式
+        auto extract_linear_and_const = [&](const SymbolicExpression& e, SymbolicExpression& linear, SymbolicExpression& constant) -> bool {
+            if (e.node_->type == NodeType::kSubtract || e.node_->type == NodeType::kAdd) {
+                SymbolicExpression l(e.node_->left);
+                SymbolicExpression r(e.node_->right);
+                double r_val = 0.0;
+                if (r.is_number(&r_val)) {
+                    linear = l;
+                    constant = r;
+                    return true;
+                }
+                if (l.is_number(&r_val)) {
+                    linear = r;
+                    constant = l;
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        SymbolicExpression num_linear, num_const, den_linear, den_const;
+        if (extract_linear_and_const(num, num_linear, num_const) &&
+            extract_linear_and_const(den, den_linear, den_const)) {
+            if (structural_equals(num_linear.simplify(), den_linear.simplify()) &&
+                structural_equals(num_const.simplify(), den_const.simplify())) {
+                // (x - a) / (x + a) 形式
+                // 结果 = coeff * arctanh(x/a) 或 coeff * (1/2) * ln((x-a)/(x+a))
+                // arctanh(z) = (1/2) * ln((1+z)/(1-z))
+                // 所以 (1/2) * ln((x-a)/(x+a)) = arctanh(x/a) 当 |x/a| < 1
+                SymbolicExpression ratio = (num_linear / num_const).simplify();
+                SymbolicExpression result = (SymbolicExpression::number(coeff_val) *
+                                            make_function("atanh", ratio)).simplify();
+                return result;
+            }
+        }
+
+        return SymbolicExpression();
+    };
+
+    // 主转换函数
     std::function<SymbolicExpression(const SymbolicExpression&)> convert = [&](const SymbolicExpression& e) -> SymbolicExpression {
-        // 检测 arctan 模式: (1/2i) * ln((x-i)/(x+i))
-        if (e.node_->type == NodeType::kMultiply) {
-            // 尝试检测系数和 ln 的组合
-            // 这里简化处理，实际需要更复杂的模式匹配
+        // 尝试 arctan 模式
+        SymbolicExpression arctan_result = try_arctan_pattern(e);
+        if (arctan_result.node_) {
+            return arctan_result;
+        }
+
+        // 尝试 arctanh 模式
+        SymbolicExpression arctanh_result = try_arctanh_pattern(e);
+        if (arctanh_result.node_) {
+            return arctanh_result;
         }
 
         // 递归处理子表达式
         if (e.node_->type == NodeType::kAdd) {
             return (convert(SymbolicExpression(e.node_->left)) +
+                   convert(SymbolicExpression(e.node_->right))).simplify();
+        }
+        if (e.node_->type == NodeType::kSubtract) {
+            return (convert(SymbolicExpression(e.node_->left)) -
                    convert(SymbolicExpression(e.node_->right))).simplify();
         }
         if (e.node_->type == NodeType::kMultiply) {
@@ -1009,6 +1321,9 @@ SymbolicExpression RischAlgorithm::complex_log_to_real(const SymbolicExpression&
         if (e.node_->type == NodeType::kDivide) {
             return (convert(SymbolicExpression(e.node_->left)) /
                    convert(SymbolicExpression(e.node_->right))).simplify();
+        }
+        if (e.node_->type == NodeType::kNegate) {
+            return make_negate(convert(SymbolicExpression(e.node_->left))).simplify();
         }
 
         return e;

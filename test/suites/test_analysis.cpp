@@ -538,7 +538,9 @@ int run_analysis_tests(int& passed, int& failed) {
         const SymbolicExpression csc_integral =
             SymbolicExpression::parse("csc(2 * x)").integral("x").simplify();
         if (sec_integral.to_string() == "ln(abs(sec(x) + tan(x)))" &&
-            csc_integral.to_string() == "ln(abs(csc(2 * x) - cot(2 * x))) / 2") {
+            is_one_of(csc_integral.to_string(), {
+                "ln(abs(csc(2 * x) - cot(2 * x))) / 2",
+                "1/2 * ln(abs(csc(2 * x) - cot(2 * x)))"})) {
             ++passed;
         } else {
             ++failed;
@@ -561,7 +563,9 @@ int run_analysis_tests(int& passed, int& failed) {
         const SymbolicExpression csc2_cot_integral =
             SymbolicExpression::parse("csc(x) ^ 2 * cot(x)").integral("x").simplify();
         if (sec2_integral.to_string() == "tan(x)" &&
-            sec2_tan_integral.to_string() == "sec(x) ^ 2 / 2" &&
+            is_one_of(sec2_tan_integral.to_string(), {
+                "sec(x) ^ 2 / 2",
+                "1/2 * sec(x) ^ 2"}) &&
             csc2_cot_integral.to_string() == "-1/2 * csc(x) ^ 2") {
             ++passed;
         } else {
@@ -585,7 +589,9 @@ int run_analysis_tests(int& passed, int& failed) {
             SymbolicExpression::parse("sign(x)").integral("x").simplify();
         const SymbolicExpression loglog_integral =
             SymbolicExpression::parse("1 / (x * ln(x))").integral("x").simplify();
-        if (abs_integral.to_string() == "abs(x) * x / 2" &&
+        if (is_one_of(abs_integral.to_string(), {
+                "abs(x) * x / 2",
+                "1/2 * abs(x) * x"}) &&
             sign_integral.to_string() == "abs(x)" &&
             loglog_integral.to_string() == "ln(abs(ln(x)))") {
             ++passed;

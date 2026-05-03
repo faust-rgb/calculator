@@ -195,6 +195,15 @@ private:
                                   int positive_bound,
                                   RDESolution* solution);
 
+    // 带 Laurent 支持的 RDE 求解器
+    static IntegrationResult solve_rde_with_laurent(
+        const SymbolicExpression& f,
+        const SymbolicExpression& g,
+        const std::string& x_var,
+        const std::vector<DifferentialExtension>& tower,
+        int tower_index,
+        int recursion_depth = 0);
+
     // 计算 Laurent 估值界
     static int compute_laurent_valuation(
         const SymbolicExpression& f,

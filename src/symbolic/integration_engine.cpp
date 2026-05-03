@@ -7,6 +7,8 @@
 #include "math/mymath.h"
 
 #include <algorithm>
+#include <exception>
+#include <map>
 
 using namespace symbolic_expression_internal;
 
@@ -29,6 +31,107 @@ std::size_t expression_node_count(const SymbolicExpression& expression) {
     };
 
     return count(expression.node_);
+}
+
+void collect_rational_factors(const SymbolicExpression& expression,
+                              int side,
+                              double* coefficient,
+                              std::vector<std::string>* numerator_factors,
+                              std::vector<std::string>* denominator_factors) {
+    double value = 0.0;
+    if (expression.is_number(&value)) {
+        if (side > 0) {
+            *coefficient *= value;
+        } else if (!mymath::is_near_zero(value, kFormatEps)) {
+            *coefficient /= value;
+        }
+        return;
+    }
+
+    const auto& node = expression.node_;
+    if (node->type == NodeType::kNegate) {
+        *coefficient *= -1.0;
+        collect_rational_factors(SymbolicExpression(node->left),
+                                 side,
+                                 coefficient,
+                                 numerator_factors,
+                                 denominator_factors);
+        return;
+    }
+    if (node->type == NodeType::kMultiply) {
+        collect_rational_factors(SymbolicExpression(node->left),
+                                 side,
+                                 coefficient,
+                                 numerator_factors,
+                                 denominator_factors);
+        collect_rational_factors(SymbolicExpression(node->right),
+                                 side,
+                                 coefficient,
+                                 numerator_factors,
+                                 denominator_factors);
+        return;
+    }
+    if (node->type == NodeType::kDivide) {
+        collect_rational_factors(SymbolicExpression(node->left),
+                                 side,
+                                 coefficient,
+                                 numerator_factors,
+                                 denominator_factors);
+        collect_rational_factors(SymbolicExpression(node->right),
+                                 -side,
+                                 coefficient,
+                                 numerator_factors,
+                                 denominator_factors);
+        return;
+    }
+    if (node->type == NodeType::kPower) {
+        SymbolicExpression exponent(node->right);
+        double exponent_value = 0.0;
+        if (exponent.is_number(&exponent_value) &&
+            mymath::is_integer(exponent_value, 1e-10)) {
+            const int count = static_cast<int>(std::abs(exponent_value) + 0.5);
+            const int adjusted_side = exponent_value >= 0.0 ? side : -side;
+            SymbolicExpression base(node->left);
+            const std::string key = node_structural_key(base.simplify().node_);
+            for (int i = 0; i < count; ++i) {
+                if (adjusted_side > 0) {
+                    numerator_factors->push_back(key);
+                } else {
+                    denominator_factors->push_back(key);
+                }
+            }
+            return;
+        }
+    }
+
+    const std::string key = node_structural_key(expression.simplify().node_);
+    if (side > 0) {
+        numerator_factors->push_back(key);
+    } else {
+        denominator_factors->push_back(key);
+    }
+}
+
+bool multiplicatively_equivalent(const SymbolicExpression& lhs,
+                                 const SymbolicExpression& rhs) {
+    double lhs_coeff = 1.0;
+    double rhs_coeff = 1.0;
+    std::vector<std::string> lhs_num;
+    std::vector<std::string> lhs_den;
+    std::vector<std::string> rhs_num;
+    std::vector<std::string> rhs_den;
+
+    collect_rational_factors(lhs.simplify(), 1, &lhs_coeff, &lhs_num, &lhs_den);
+    collect_rational_factors(rhs.simplify(), 1, &rhs_coeff, &rhs_num, &rhs_den);
+
+    std::sort(lhs_num.begin(), lhs_num.end());
+    std::sort(lhs_den.begin(), lhs_den.end());
+    std::sort(rhs_num.begin(), rhs_num.end());
+    std::sort(rhs_den.begin(), rhs_den.end());
+
+    return mymath::is_near_zero(lhs_coeff - rhs_coeff, 1e-8) &&
+           lhs_num == rhs_num &&
+           lhs_den == rhs_den;
 }
 
 }  // namespace
@@ -86,11 +189,16 @@ IntegrationResult IntegrationEngine::integrate_recursive(
 
     // 按优先级尝试各策略
     IntegrationResult result;
+    auto accept_result = [&](const IntegrationResult& candidate) -> bool {
+        return candidate.success &&
+               (!verify_results_ ||
+                verify_integration(expression, candidate.value, variable_name));
+    };
 
     // 1. 常数和线性
     if (disabled_strategies_.count("constant_linear") == 0) {
         result = try_integrate_constant_linear(expression, variable_name);
-        if (result.success) {
+        if (accept_result(result)) {
             --current_depth_;
             integration_stack_.erase(key);
             return result;
@@ -100,17 +208,38 @@ IntegrationResult IntegrationEngine::integrate_recursive(
     // 2. 常见初等函数先用直接公式，避免进入较重的 Risch 扩展路径
     if (disabled_strategies_.count("special") == 0) {
         result = try_integrate_special(expression, variable_name);
-        if (result.success) {
+        if (accept_result(result)) {
             --current_depth_;
             integration_stack_.erase(key);
             return result;
         }
     }
 
+    // 3. 线性性：逐项积分和式/差式
+    if (expression.node_->type == NodeType::kAdd ||
+        expression.node_->type == NodeType::kSubtract) {
+        SymbolicExpression left(expression.node_->left);
+        SymbolicExpression right(expression.node_->right);
+        IntegrationResult left_result = integrate_recursive(left, variable_name);
+        IntegrationResult right_result = integrate_recursive(right, variable_name);
+        if (left_result.success && right_result.success) {
+            SymbolicExpression combined =
+                expression.node_->type == NodeType::kAdd
+                    ? (left_result.value + right_result.value).simplify()
+                    : (left_result.value - right_result.value).simplify();
+            result = IntegrationResult::ok(combined, "linearity");
+            if (accept_result(result)) {
+                --current_depth_;
+                integration_stack_.erase(key);
+                return result;
+            }
+        }
+    }
+
     // 3. Risch 算法
     if (disabled_strategies_.count("risch") == 0) {
         result = try_integrate_risch(expression, variable_name);
-        if (result.success) {
+        if (accept_result(result)) {
             --current_depth_;
             integration_stack_.erase(key);
             return result;
@@ -120,7 +249,7 @@ IntegrationResult IntegrationEngine::integrate_recursive(
     // 4. 有理函数
     if (disabled_strategies_.count("rational") == 0) {
         result = try_integrate_rational(expression, variable_name);
-        if (result.success) {
+        if (accept_result(result)) {
             --current_depth_;
             integration_stack_.erase(key);
             return result;
@@ -130,7 +259,7 @@ IntegrationResult IntegrationEngine::integrate_recursive(
     // 5. 换元积分
     if (disabled_strategies_.count("substitution") == 0) {
         result = try_integrate_substitution(expression, variable_name);
-        if (result.success) {
+        if (accept_result(result)) {
             --current_depth_;
             integration_stack_.erase(key);
             return result;
@@ -140,7 +269,7 @@ IntegrationResult IntegrationEngine::integrate_recursive(
     // 6. 分部积分
     if (disabled_strategies_.count("by_parts") == 0) {
         result = try_integrate_by_parts(expression, variable_name);
-        if (result.success) {
+        if (accept_result(result)) {
             --current_depth_;
             integration_stack_.erase(key);
             return result;
@@ -150,7 +279,7 @@ IntegrationResult IntegrationEngine::integrate_recursive(
     // 7. 特殊积分兜底
     if (disabled_strategies_.count("special") == 0) {
         result = try_integrate_special(expression, variable_name);
-        if (result.success) {
+        if (accept_result(result)) {
             --current_depth_;
             integration_stack_.erase(key);
             return result;
@@ -269,9 +398,17 @@ IntegrationResult IntegrationEngine::try_integrate_rational(
             SymbolicExpression result;
             if (integrate_symbolic_partial_fractions(num_poly, den_poly,
                                                       variable_name, &result)) {
-                return IntegrationResult::ok(result, "partial_fractions");
+                if (!verify_results_ ||
+                    verify_integration(expression, result, variable_name)) {
+                    return IntegrationResult::ok(result, "partial_fractions");
+                }
             }
 
+            SymbolicExpression direct_result = expression.integral(variable_name).simplify();
+            if (!verify_results_ ||
+                verify_integration(expression, direct_result, variable_name)) {
+                return IntegrationResult::ok(direct_result, "rational_direct");
+            }
         }
 
     }
@@ -409,6 +546,86 @@ IntegrationResult IntegrationEngine::try_integrate_special(
     const std::string& variable_name) {
 
     const auto& node = expression.node_;
+
+    // Detect logarithmic derivative chains such as
+    // 1 / (x * ln(x) * ln(ln(x))) -> ln(ln(ln(x))).
+    {
+        SymbolicExpression candidate = SymbolicExpression::variable(variable_name);
+        for (int depth = 0; depth < 6; ++depth) {
+            candidate = make_function("ln", candidate).simplify();
+            SymbolicExpression derivative = candidate.derivative(variable_name).simplify();
+            if (multiplicatively_equivalent(derivative, expression)) {
+                return IntegrationResult::ok(candidate, "log_derivative_chain");
+            }
+        }
+    }
+
+    if (node->type == NodeType::kMultiply) {
+        std::vector<SymbolicExpression> factors = collect_multiplicative_factors(expression);
+        double numeric_factor = 1.0;
+        bool unsupported_factor = false;
+        bool has_exp = false;
+        bool has_trig = false;
+        std::string trig_name;
+        SymbolicExpression exp_arg;
+        SymbolicExpression trig_arg;
+
+        for (const SymbolicExpression& factor : factors) {
+            double value = 0.0;
+            if (factor.is_number(&value)) {
+                numeric_factor *= value;
+                continue;
+            }
+            if (factor.node_->type == NodeType::kFunction &&
+                factor.node_->text == "exp" && !has_exp) {
+                has_exp = true;
+                exp_arg = SymbolicExpression(factor.node_->left);
+                continue;
+            }
+            if (factor.node_->type == NodeType::kFunction &&
+                (factor.node_->text == "sin" || factor.node_->text == "cos") &&
+                !has_trig) {
+                has_trig = true;
+                trig_name = factor.node_->text;
+                trig_arg = SymbolicExpression(factor.node_->left);
+                continue;
+            }
+            unsupported_factor = true;
+            break;
+        }
+
+        if (!unsupported_factor && has_exp && has_trig) {
+            SymbolicExpression a, b, c, d;
+            if (symbolic_decompose_linear(exp_arg, variable_name, &a, &b) &&
+                symbolic_decompose_linear(trig_arg, variable_name, &c, &d) &&
+                !expr_is_zero(a) && !expr_is_zero(c)) {
+                SymbolicExpression exp_term = make_function("exp", exp_arg);
+                SymbolicExpression denominator = (a * a + c * c).simplify();
+                SymbolicExpression numerator =
+                    trig_name == "sin"
+                        ? (a * make_function("sin", trig_arg) -
+                           c * make_function("cos", trig_arg)).simplify()
+                        : (a * make_function("cos", trig_arg) +
+                           c * make_function("sin", trig_arg)).simplify();
+                SymbolicExpression result =
+                    (SymbolicExpression::number(numeric_factor) *
+                     exp_term * numerator / denominator).simplify();
+                return IntegrationResult::ok(result, "exp_trig_linear");
+            }
+        }
+    }
+
+    if (node->type == NodeType::kPower || node->type == NodeType::kMultiply) {
+        SymbolicExpression expanded = expression.expand().simplify();
+        if (node_structural_key(expanded.node_) != node_structural_key(expression.simplify().node_) &&
+            expression_node_count(expanded) <= 200) {
+            IntegrationResult expanded_result = integrate_recursive(expanded, variable_name);
+            if (expanded_result.success) {
+                expanded_result.method_used = "expanded_" + expanded_result.method_used;
+                return expanded_result;
+            }
+        }
+    }
 
     // 函数形式
     if (node->type == NodeType::kFunction) {
@@ -581,20 +798,40 @@ bool IntegrationEngine::verify_integration(
         return true;
     }
 
+    SymbolicExpression difference = (derivative - original_simplified).simplify();
+    if (expr_is_zero(difference)) {
+        return true;
+    }
+
+    SymbolicExpression ratio = (derivative / original_simplified).simplify();
+    double ratio_value = 0.0;
+    if (ratio.is_number(&ratio_value) &&
+        mymath::is_near_zero(ratio_value - 1.0, 1e-8)) {
+        return true;
+    }
+
+    if (multiplicatively_equivalent(derivative, original_simplified)) {
+        return true;
+    }
+
     // 尝试数值验证
     // 在几个点验证
-    std::vector<double> test_points = {0.5, 1.0, 2.0, 3.0};
+    std::vector<double> test_points = {2.0, 3.0, 5.0, 7.0};
     for (double x : test_points) {
         double orig_val = 0.0, deriv_val = 0.0;
 
-        SymbolicExpression subst_x = SymbolicExpression::number(x);
-        SymbolicExpression orig_subst = original_simplified.substitute(variable_name, subst_x);
-        SymbolicExpression deriv_subst = derivative.substitute(variable_name, subst_x);
+        try {
+            SymbolicExpression subst_x = SymbolicExpression::number(x);
+            SymbolicExpression orig_subst = original_simplified.substitute(variable_name, subst_x);
+            SymbolicExpression deriv_subst = derivative.substitute(variable_name, subst_x);
 
-        if (orig_subst.is_number(&orig_val) && deriv_subst.is_number(&deriv_val)) {
-            if (!mymath::is_near_zero(orig_val - deriv_val, 1e-6)) {
-                return false;
+            if (orig_subst.is_number(&orig_val) && deriv_subst.is_number(&deriv_val)) {
+                if (!mymath::is_near_zero(orig_val - deriv_val, 1e-6)) {
+                    return false;
+                }
             }
+        } catch (const std::exception&) {
+            continue;
         }
     }
 

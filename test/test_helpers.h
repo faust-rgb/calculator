@@ -14,6 +14,7 @@
 #include <vector>
 #include <iostream>
 #include <filesystem>
+#include <initializer_list>
 
 namespace test_helpers {
 
@@ -35,6 +36,14 @@ inline bool nearly_equal(double actual, double expected, double eps = 1e-8) {
  */
 inline std::filesystem::path make_test_path(const std::string& filename) {
     return std::filesystem::temp_directory_path() / filename;
+}
+
+inline bool is_one_of(const std::string& actual,
+                      std::initializer_list<const char*> expected_values) {
+    for (const char* expected : expected_values) {
+        if (actual == expected) return true;
+    }
+    return false;
 }
 
 /**

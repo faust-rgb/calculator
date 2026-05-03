@@ -30,11 +30,13 @@
 // ============================================================================
 
 #include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/symbolic_polynomial.h"
 
 #include "math/mymath.h"
 #include "polynomial/polynomial.h"
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -1124,6 +1126,7 @@ void trim_symbolic_polynomial_coefficients(std::vector<SymbolicExpression>* coef
 // ============================================================================
 
 /**
+
  * @brief 检查表达式是否为关于指定变量的符号多项式
  */
 bool is_symbolic_polynomial(const SymbolicExpression& expression,
@@ -1132,6 +1135,152 @@ bool is_symbolic_polynomial(const SymbolicExpression& expression,
     return symbolic_polynomial_coefficients_from_simplified(expression,
                                                             variable_name,
                                                             &coefficients);
+}
+
+/**
+ * @brief 从简化后的表达式提取 Laurent 多项式系数
+ *
+ * 与 symbolic_polynomial_coefficients_from_simplified 类似，
+ * 但支持负指数（如 1/x = x^(-1)）。
+ * 返回的 map 中，键为指数（可正可负），值为对应系数。
+ */
+bool symbolic_laurent_coefficients(
+    const SymbolicExpression& expression,
+    const std::string& variable_name,
+    std::map<int, SymbolicExpression>* coefficients) {
+
+    coefficients->clear();
+
+    SymbolicExpression simplified = expression.simplify();
+
+    // 基础情况：变量本身
+    if (simplified.is_variable_named(variable_name)) {
+        (*coefficients)[1] = SymbolicExpression::number(1.0);
+        return true;
+    }
+
+    // 基础情况：常数（不含变量）
+    if (simplified.is_constant(variable_name)) {
+        (*coefficients)[0] = simplified;
+        return true;
+    }
+
+    const auto& node = simplified.node_;
+
+    // 处理除法：可能产生负指数
+    if (node->type == NodeType::kDivide) {
+        SymbolicExpression num(node->left);
+        SymbolicExpression den(node->right);
+
+        // 检查分母是否为变量的幂
+        if (den.is_variable_named(variable_name)) {
+            // 1/t 的情况
+            std::map<int, SymbolicExpression> num_coeffs;
+            if (symbolic_laurent_coefficients(num, variable_name, &num_coeffs)) {
+                for (const auto& [power, coeff] : num_coeffs) {
+                    (*coefficients)[power - 1] = coeff;
+                }
+                return true;
+            }
+        }
+
+        // 检查分母是否为 t^n
+        if (node->type == NodeType::kPower) {
+            // 在递归调用中处理
+        }
+
+        // 尝试提取分子分母的多项式系数
+        std::vector<SymbolicExpression> num_poly, den_poly;
+        if (symbolic_polynomial_coefficients_from_simplified(num, variable_name, &num_poly) &&
+            symbolic_polynomial_coefficients_from_simplified(den, variable_name, &den_poly)) {
+
+            // 检查分母是否为单项式 c * t^k
+            int den_power = -1;
+            SymbolicExpression den_coeff;
+            for (int i = 0; i < static_cast<int>(den_poly.size()); ++i) {
+                if (!SymbolicPolynomial::coeff_is_zero(den_poly[i])) {
+                    if (den_power < 0) {
+                        den_power = i;
+                        den_coeff = den_poly[i];
+                    } else {
+                        // 分母不是单项式，无法表示为 Laurent 多项式
+                        return false;
+                    }
+                }
+            }
+
+            if (den_power >= 0) {
+                // 分子系数除以分母系数，指数减去分母指数
+                for (int i = 0; i < static_cast<int>(num_poly.size()); ++i) {
+                    if (!SymbolicPolynomial::coeff_is_zero(num_poly[i])) {
+                        SymbolicExpression coeff = (num_poly[i] / den_coeff).simplify();
+                        (*coefficients)[i - den_power] = coeff;
+                    }
+                }
+                return true;
+            }
+        }
+
+        // 一般情况：尝试分解为 Laurent 多项式
+        return false;
+    }
+
+    // 处理幂运算
+    if (node->type == NodeType::kPower) {
+        SymbolicExpression base(node->left);
+        SymbolicExpression exp(node->right);
+
+        double exp_val = 0.0;
+        if (exp.is_number(&exp_val)) {
+            int n = static_cast<int>(std::round(exp_val));
+
+            // 负指数：t^(-n) = 1/t^n
+            if (n < 0 && base.is_variable_named(variable_name)) {
+                (*coefficients)[n] = SymbolicExpression::number(1.0);
+                return true;
+            }
+
+            // 正整数指数：使用多项式幂运算
+            if (n >= 0 && std::abs(exp_val - n) < 1e-9) {
+                std::vector<SymbolicExpression> base_coeffs;
+                if (symbolic_polynomial_coefficients_from_simplified(base, variable_name, &base_coeffs)) {
+                    std::vector<SymbolicExpression> result = {SymbolicExpression::number(1.0)};
+                    for (int p = 0; p < n; ++p) {
+                        std::vector<SymbolicExpression> next(result.size() + base_coeffs.size() - 1,
+                                                             SymbolicExpression::number(0.0));
+                        for (std::size_t i = 0; i < result.size(); ++i) {
+                            for (std::size_t j = 0; j < base_coeffs.size(); ++j) {
+                                auto prod = make_multiply(result[i], base_coeffs[j]).simplify();
+                                next[i + j] = make_add(next[i + j], prod).simplify();
+                            }
+                        }
+                        result = next;
+                    }
+                    for (int i = 0; i < static_cast<int>(result.size()); ++i) {
+                        if (!SymbolicPolynomial::coeff_is_zero(result[i])) {
+                            (*coefficients)[i] = result[i];
+                        }
+                    }
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // 对于其他情况，尝试多项式系数提取
+    std::vector<SymbolicExpression> poly_coeffs;
+    if (symbolic_polynomial_coefficients_from_simplified(simplified, variable_name, &poly_coeffs)) {
+        for (int i = 0; i < static_cast<int>(poly_coeffs.size()); ++i) {
+            if (!SymbolicPolynomial::coeff_is_zero(poly_coeffs[i])) {
+                (*coefficients)[i] = poly_coeffs[i];
+            }
+        }
+        return true;
+    }
+
+    return false;
 }
 
 /**

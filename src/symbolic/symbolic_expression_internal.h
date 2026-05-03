@@ -8,6 +8,8 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <map>
+#include <set>
 #include <vector>
 
 // 前向声明
@@ -387,6 +389,11 @@ bool symbolic_polynomial_coefficients_from_simplified(
     const SymbolicExpression& expression,
     const std::string& variable_name,
     std::vector<SymbolicExpression>* coefficients);
+
+bool symbolic_laurent_coefficients(
+    const SymbolicExpression& expression,
+    const std::string& variable_name,
+    std::map<int, SymbolicExpression>* coefficients);
 
 /** @brief 裁剪符号多项式系数向量末尾的零 */
 void trim_symbolic_polynomial_coefficients(std::vector<SymbolicExpression>* coefficients);

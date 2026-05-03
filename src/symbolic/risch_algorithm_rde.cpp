@@ -151,6 +151,134 @@ bool RischAlgorithm::handle_exponential_special_case(
     return true;
 }
 
+// 计算 Laurent 估值界
+int RischAlgorithm::compute_laurent_valuation(
+    const SymbolicExpression& f,
+    const SymbolicExpression& g,
+    const std::vector<DifferentialExtension>& tower,
+    int tower_index) {
+
+    if (tower_index < 0) return 0;
+    const auto& ext = tower[tower_index];
+    if (ext.kind != DifferentialExtension::Kind::kExponential) return 0;
+
+    SymbolicExpression t = SymbolicExpression::variable(ext.t_name);
+    
+    // 提取 f 和 g 关于 t 的估值 (valuation at t=0)
+    auto get_valuation = [&](const SymbolicExpression& expr) -> int {
+        std::vector<SymbolicExpression> coeffs;
+        if (!symbolic_polynomial_coefficients_from_simplified(expr.simplify(), ext.t_name, &coeffs)) {
+            // 如果不是多项式，可能是分式，这里简化处理
+            return 0;
+        }
+        for (int i = 0; i < (int)coeffs.size(); ++i) {
+            if (!SymbolicPolynomial::coeff_is_zero(coeffs[i])) return i;
+        }
+        return 1000; // 代表无穷大 (零多项式)
+    };
+
+    int v_f = get_valuation(f);
+    int v_g = get_valuation(g);
+
+    // 对于 y' + fy = g，t=exp(u) => t' = u't
+    // 如果 y = sum c_i t^i, 则 y' = sum (c_i' + i u' c_i) t^i
+    // 估值界通常是 v_g - min(v_f, 1) if exponential
+    // 实际上 Bronstein 给出的界限更复杂，这里取一个实用的保守界
+    
+    return std::min(0, v_g - std::min(v_f, 1));
+}
+
+// 计算 Laurent 数界 (估值界和度数界)
+std::pair<int, int> RischAlgorithm::compute_laurent_degree_bounds(
+    const SymbolicExpression& f,
+    const SymbolicExpression& g,
+    const std::vector<DifferentialExtension>& tower,
+    int tower_index) {
+
+    int lower = compute_laurent_valuation(f, g, tower, tower_index);
+    
+    // 度数界计算
+    std::vector<SymbolicExpression> f_coeffs, g_coeffs;
+    symbolic_polynomial_coefficients_from_simplified(f.simplify(), tower[tower_index].t_name, &f_coeffs);
+    symbolic_polynomial_coefficients_from_simplified(g.simplify(), tower[tower_index].t_name, &g_coeffs);
+    
+    SymbolicPolynomial f_poly(f_coeffs, tower[tower_index].t_name);
+    SymbolicPolynomial g_poly(g_coeffs, tower[tower_index].t_name);
+    
+    int upper = compute_rde_degree_bound(f_poly, g_poly, tower, tower_index);
+    
+    return {lower, upper};
+}
+
+// Laurent 多项式 RDE 求解器
+bool RischAlgorithm::solve_laurent_rde(const SymbolicExpression& f,
+                                       const SymbolicExpression& g,
+                                       const std::string& x_var,
+                                       const std::vector<DifferentialExtension>& tower,
+                                       int tower_index,
+                                       int negative_bound,
+                                       int positive_bound,
+                                       RDESolution* solution) {
+
+    if (tower_index < 0) return false;
+    const auto& ext = tower[tower_index];
+    const std::string& t_var = ext.t_name;
+    SymbolicExpression t = SymbolicExpression::variable(t_var);
+    SymbolicExpression u_prime = (ext.derivation / t).simplify();
+
+    // y = sum_{i=lower}^{upper} c_i t^i
+    // 代入 y' + fy = g
+    // (sum c_i t^i)' + f * (sum c_i t^i) = g
+    // sum (c_i' + i*u'*c_i) t^i + f * sum c_i t^i = g
+
+    // 将 f 和 g 视为 t 的多项式（或 Laurent 多项式）
+    // 这里我们已经有了范围 [negative_bound, positive_bound]
+    
+    int num_terms = positive_bound - negative_bound + 1;
+    if (num_terms <= 0) return false;
+
+    // 提取 g 的系数（支持 Laurent）
+    std::map<int, SymbolicExpression> g_laurent_coeffs;
+    if (!symbolic_laurent_coefficients(g.expand().simplify(), t_var, &g_laurent_coeffs)) {
+        return false;
+    }
+
+    std::vector<SymbolicExpression> y_coeffs(num_terms, SymbolicExpression::number(0.0));
+
+    // 简化处理：目前主要处理 f 为基域元素的情况
+    if (is_in_base_field(f, tower, tower_index)) {
+        for (int i = negative_bound; i <= positive_bound; ++i) {
+            SymbolicExpression gi = g_laurent_coeffs.count(i) ? g_laurent_coeffs[i] : SymbolicExpression::number(0.0);
+            
+            // 如果 gi 为零，我们仍可能需要求解 c_i，因为可能存在齐次解消去
+            // 但在 Risch 理论中，如果没有非齐次项且没有边界情况，通常 c_i = 0
+            if (expr_is_zero(gi)) continue;
+
+            // 求解 c_i' + (f + i*u') c_i = gi
+            SymbolicExpression fi = (f + SymbolicExpression::number(static_cast<double>(i)) * u_prime).simplify();
+            IntegrationResult res = solve_rde(fi, gi, x_var, tower, tower_index - 1);
+            if (!res.success) return false;
+            y_coeffs[i - negative_bound] = res.value;
+        }
+    } else {
+        // f 依赖于 t，需要展开 f * sum c_i t^i = sum f_j c_i t^{i+j}
+        // 这里需要更复杂的待定系数法逻辑
+        // 暂时回退
+        return false;
+    }
+
+    SymbolicExpression result = SymbolicExpression::number(0.0);
+    for (int i = negative_bound; i <= positive_bound; ++i) {
+        if (!SymbolicPolynomial::coeff_is_zero(y_coeffs[i - negative_bound])) {
+            result = (result + y_coeffs[i - negative_bound] * make_power(t, SymbolicExpression::number(i))).simplify();
+        }
+    }
+
+    solution->has_logarithmic_part = true;
+    solution->logarithmic_part = result;
+    return true;
+}
+
 RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde(
     const SymbolicExpression& f,
     const SymbolicExpression& g,
@@ -175,8 +303,16 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde(
         return integrate_in_extension(g_simplified, tower, tower_index, x_var, recursion_depth + 1);
     }
 
-    if (tower_index < 0) {
-        // 有理情况
+    if (tower_index >= 0) {
+        const auto& ext = tower[tower_index];
+        if (ext.kind == DifferentialExtension::Kind::kExponential) {
+            // 尝试 Laurent RDE
+            auto bounds = compute_laurent_degree_bounds(f_simplified, g_simplified, tower, tower_index);
+            RDESolution sol;
+            if (solve_laurent_rde(f_simplified, g_simplified, x_var, tower, tower_index, bounds.first, bounds.second, &sol)) {
+                return IntegrationResult::elementary(sol.logarithmic_part);
+            }
+        }
     }
 
     const std::string& t_var = (tower_index >= 0) ? tower[tower_index].t_name : x_var;

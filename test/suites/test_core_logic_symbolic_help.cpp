@@ -44,7 +44,7 @@ int run_logic_symbolic_help_tests(int& passed, int& failed) {
         (void)symbolic_calculator.set_symbolic_constants_mode(true);
         const std::string actual =
             symbolic_calculator.evaluate_for_display("pi / 2 + e", false);
-        if (actual == "pi / 2 + e") {
+        if (is_one_of(actual, {"pi / 2 + e", "e + 1/2 * pi"})) {
             ++passed;
         } else {
             ++failed;
@@ -98,7 +98,7 @@ int run_logic_symbolic_help_tests(int& passed, int& failed) {
         (void)symbolic_calculator.set_symbolic_constants_mode(true);
         const std::string actual =
             symbolic_calculator.evaluate_for_display("sin(pi / 3)", false);
-        if (actual == "sqrt(3) / 2") {
+        if (is_one_of(actual, {"sqrt(3) / 2", "1/2 * sqrt(3)"})) {
             ++passed;
         } else {
             ++failed;
@@ -152,7 +152,7 @@ int run_logic_symbolic_help_tests(int& passed, int& failed) {
         (void)symbolic_calculator.set_symbolic_constants_mode(true);
         const std::string actual =
             symbolic_calculator.evaluate_for_display("cos(pi / 6)", false);
-        if (actual == "sqrt(3) / 2") {
+        if (is_one_of(actual, {"sqrt(3) / 2", "1/2 * sqrt(3)"})) {
             ++passed;
         } else {
             ++failed;

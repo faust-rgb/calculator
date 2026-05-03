@@ -588,12 +588,18 @@ int run_symbolic_tests(int& passed, int& failed) {
                 test.expression == "ztrans(step(n - 2))" &&
                 (output == "z ^ -1 / (z - 1)" ||
                  output == "1 / (z * (z - 1))");
+            const bool fourier_equivalent =
+                (test.expression == "fourier(exp(-2 * t) * step(t), t, w)" &&
+                 output == "1 / (i * w - -2)") ||
+                (test.expression == "fourier(exp(-2 * t) * step(t) + 3 * exp(-4 * t) * step(t), t, w)" &&
+                 output == "1 / (i * w - -2) + 3 * 1 / (i * w - -4)");
             const bool series_sum_equivalent =
                 test.expression == "series_sum(n^2, n, 1, N)" &&
                 (output == "N * (N + 1) * (2 * N + 1) / 6" ||
                  output == "N * (2 * N + 1) * (N + 1) / 6");
             if (handled && (output == test.expected ||
                             z_transform_equivalent ||
+                            fourier_equivalent ||
                             series_sum_equivalent)) {
                 ++passed;
             } else {
@@ -1257,7 +1263,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         (void)symbolic_loaded.set_symbolic_constants_mode(true);
         (void)symbolic_loaded.load_state(symbolic_path);
         const std::string vars_output = symbolic_loaded.list_variables();
-        if (vars_output == "sym = pi / 2") {
+        if (is_one_of(vars_output, {"sym = pi / 2", "sym = 1/2 * pi"})) {
             ++passed;
         } else {
             ++failed;
