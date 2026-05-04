@@ -14,7 +14,6 @@
 #include "symbolic/symbolic_expression_internal.h"
 #include "symbolic/symbolic_polynomial.h"
 #include <algorithm>
-#include <cmath>
 
 using namespace symbolic_expression_internal;
 
@@ -75,7 +74,7 @@ bool AlgebraicExtensionField::is_one(const Element& elem) const {
     if (!SymbolicPolynomial::coeff_is_zero(elem.coefficients[0])) {
         // 检查系数是否为 1
         double val = 0.0;
-        if (elem.coefficients[0].is_number(&val) && std::abs(val - 1.0) < 1e-12) {
+        if (elem.coefficients[0].is_number(&val) && mymath::abs(val - 1.0) < 1e-12) {
             // 检查其他系数是否为零
             for (int i = 1; i < degree_; ++i) {
                 if (!SymbolicPolynomial::coeff_is_zero(elem.coefficients[i])) {
@@ -173,7 +172,7 @@ bool AlgebraicExtensionField::inverse(const Element& a, Element* result) const {
     // 检查 GCD 是否为常数
     if (g.degree() == 0) {
         double g_val = 0.0;
-        if (g.coefficient(0).is_number(&g_val) && std::abs(g_val) > 1e-12) {
+        if (g.coefficient(0).is_number(&g_val) && mymath::abs(g_val) > 1e-12) {
             // 归一化
             SymbolicExpression g_inv = SymbolicExpression::number(1.0 / g_val);
             *result = zero();
@@ -544,9 +543,9 @@ bool AlgebraicExtensionField::trager_integrate(
 }
 
 bool AlgebraicExtensionField::trager_logarithmic_part(
-    const Element& numerator,
-    const Element& denominator,
-    const std::string& x_var,
+    const Element& /*numerator*/,
+    const Element& /*denominator*/,
+    const std::string& /*x_var*/,
     SymbolicExpression* result) const {
 
     if (!result) return false;
@@ -562,8 +561,8 @@ bool AlgebraicExtensionField::trager_logarithmic_part(
 
 std::vector<std::pair<AlgebraicExtensionField::Element, AlgebraicExtensionField::Element>>
 AlgebraicExtensionField::compute_algebraic_residues(
-    const Element& denominator,
-    const std::string& x_var) const {
+    const Element& /*denominator*/,
+    const std::string& /*x_var*/) const {
 
     std::vector<std::pair<Element, Element>> residues;
 
@@ -616,10 +615,10 @@ bool AlgebraicExtensionField::detect_nested_algebraic_transcendental(
             double exp_val = 0.0;
             if (exp.is_number(&exp_val)) {
                 double int_part;
-                if (std::abs(std::modf(exp_val, &int_part)) > 1e-12) {
+                if (mymath::abs(mymath::modf(exp_val, &int_part)) > 1e-12) {
                     // 分数幂 -> 代数扩展
                     AlgebraicExtensionInfo ext = AlgebraicExtensionInfo::nth_root(
-                        base, static_cast<int>(std::round(1.0 / (exp_val - int_part))), x_var);
+                        base, static_cast<int>(mymath::round(1.0 / (exp_val - int_part))), x_var);
                     algebraic_exts->push_back(ext);
                 }
             }

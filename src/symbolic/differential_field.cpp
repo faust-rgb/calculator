@@ -2,7 +2,6 @@
 #include "symbolic/symbolic_expression_internal.h"
 #include "symbolic/risch_algorithm_internal.h"
 #include <algorithm>
-#include <cmath>
 #include <sstream>
 
 using namespace symbolic_expression_internal;
@@ -14,15 +13,15 @@ using namespace risch_algorithm_internal;
 
 ExactRational ExactRational::from_double(double value, int64_t max_den) {
     // 使用连分数展开将有理数近似转换为精确分数
-    if (std::abs(value) < 1e-15) {
+    if (mymath::abs(value) < 1e-15) {
         return ExactRational(0, 1);
     }
 
     int sign = value < 0 ? -1 : 1;
-    value = std::abs(value);
+    value = mymath::abs(value);
 
     // 简化的连分数算法
-    int64_t a = static_cast<int64_t>(std::floor(value));
+    int64_t a = static_cast<int64_t>(mymath::floor(value));
     double frac = value - a;
 
     if (frac < 1e-15) {
@@ -31,7 +30,7 @@ ExactRational ExactRational::from_double(double value, int64_t max_den) {
 
     // 继续展开
     double inv = 1.0 / frac;
-    int64_t b = static_cast<int64_t>(std::floor(inv));
+    int64_t b = static_cast<int64_t>(mymath::floor(inv));
     frac = inv - b;
 
     // 二阶近似: a + 1/b ≈ (a*b + 1) / b
@@ -42,10 +41,10 @@ ExactRational ExactRational::from_double(double value, int64_t max_den) {
     if (den > max_den) {
         // 回退到一阶近似
         den = 1;
-        while (std::abs(value * den - std::round(value * den)) > 1e-9 && den <= max_den) {
+        while (mymath::abs(value * den - mymath::round(value * den)) > 1e-9 && den <= max_den) {
             den++;
         }
-        num = static_cast<int64_t>(std::round(value * den));
+        num = static_cast<int64_t>(mymath::round(value * den));
     }
 
     return ExactRational(sign * num, den);
@@ -558,7 +557,7 @@ void DifferentialTowerBuilder::collect_extensions(
 
             // 检查 x^(1/2) = sqrt(x) 形式
             double exp_val;
-            if (exp.is_number(&exp_val) && std::abs(exp_val - 0.5) < 1e-9) {
+            if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < 1e-9) {
                 if (contains_var(base, x_var)) {
                     extensions.push_back({base.simplify(), DifferentialExtension::Kind::kAlgebraic});
                 }
@@ -657,10 +656,10 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
                         // 检查 factor / ext.argument 是否为常数
                         SymbolicExpression ratio = (factor / ext.argument).simplify();
                         double ratio_val = 0.0;
-                        if (ratio.is_number(&ratio_val) && std::abs(ratio_val) > 1e-12) {
+                        if (ratio.is_number(&ratio_val) && mymath::abs(ratio_val) > 1e-12) {
                             // ln(factor) = ln(ratio) + ln(ext.argument)
                             substitution_sum = (substitution_sum +
-                                               SymbolicExpression::number(std::log(std::abs(ratio_val))) +
+                                               SymbolicExpression::number(mymath::log(mymath::abs(ratio_val))) +
                                                SymbolicExpression::variable(ext.t_name)).simplify();
                             factor_dependent = true;
                             any_dependent = true;
@@ -678,7 +677,7 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
                         SymbolicExpression simplified = factor.simplify();
                         if (simplified.is_number(&factor_val) && factor_val > 0) {
                             substitution_sum = (substitution_sum +
-                                               SymbolicExpression::number(std::log(factor_val))).simplify();
+                                               SymbolicExpression::number(mymath::log(factor_val))).simplify();
                             any_dependent = true;
                         }
                     }
@@ -698,15 +697,15 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
             if (ext.kind == DifferentialExtension::Kind::kLogarithmic) {
                 SymbolicExpression ratio = (normalized_arg / ext.argument).simplify();
                 double ratio_val = 0.0;
-                if (ratio.is_number(&ratio_val) && std::abs(ratio_val) > 1e-12) {
+                if (ratio.is_number(&ratio_val) && mymath::abs(ratio_val) > 1e-12) {
                     // ln(arg) = ln(ratio) + ln(ext.argument) = ln(ratio) + t
                     result.result = IndependenceResult::kDependent;
                     if (ratio_val > 0) {
-                        result.substitution = (SymbolicExpression::number(std::log(ratio_val)) +
+                        result.substitution = (SymbolicExpression::number(mymath::log(ratio_val)) +
                                               SymbolicExpression::variable(ext.t_name)).simplify();
                     } else {
                         // ln(-ratio) = ln(|ratio|) + i*pi，这里简化处理
-                        result.substitution = (SymbolicExpression::number(std::log(-ratio_val)) +
+                        result.substitution = (SymbolicExpression::number(mymath::log(-ratio_val)) +
                                               SymbolicExpression::variable(ext.t_name)).simplify();
                     }
                     result.reason = "ln(arg) = ln(ratio) + t where t = ln(ext.arg) in tower";
@@ -762,7 +761,7 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
                 SymbolicExpression ext_deriv = ext.derivation.simplify();
                 SymbolicExpression ratio = (integrand / ext_deriv).simplify();
                 double ratio_val = 0.0;
-                if (ratio.is_number(&ratio_val) && std::abs(ratio_val) > 1e-12) {
+                if (ratio.is_number(&ratio_val) && mymath::abs(ratio_val) > 1e-12) {
                     // integrand = ratio * t' => ∫integrand = ratio * t
                     result.result = IndependenceResult::kDependent;
                     result.substitution = (SymbolicExpression::number(ratio_val) *
@@ -822,7 +821,7 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
                             if (diff.is_number(&diff_val)) {
                                 // exp(term) = exp(diff) * exp(ext.argument) = exp(diff) * t
                                 substitution_prod = (substitution_prod *
-                                                    SymbolicExpression::number(std::exp(diff_val)) *
+                                                    SymbolicExpression::number(mymath::exp(diff_val)) *
                                                     SymbolicExpression::variable(ext.t_name)).simplify();
                                 term_dependent = true;
                                 any_dependent = true;
@@ -840,7 +839,7 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
                         SymbolicExpression simplified = term.simplify();
                         if (simplified.is_number(&term_val)) {
                             substitution_prod = (substitution_prod *
-                                                SymbolicExpression::number(std::exp(term_val))).simplify();
+                                                SymbolicExpression::number(mymath::exp(term_val))).simplify();
                             term_dependent = true;
                             any_dependent = true;
                         }
@@ -872,7 +871,7 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
                 double diff_val = 0.0;
                 if (diff.is_number(&diff_val)) {
                     result.result = IndependenceResult::kDependent;
-                    result.substitution = (SymbolicExpression::number(std::exp(diff_val)) *
+                    result.substitution = (SymbolicExpression::number(mymath::exp(diff_val)) *
                                           SymbolicExpression::variable(ext.t_name)).simplify();
                     result.reason = "exp(arg) = exp(diff) * t where t = exp(ext.arg) in tower";
                     return result;
@@ -885,11 +884,11 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
             if (ext.kind == DifferentialExtension::Kind::kExponential) {
                 SymbolicExpression ratio = (normalized_arg / ext.argument).simplify();
                 double ratio_val = 0.0;
-                if (ratio.is_number(&ratio_val) && std::abs(ratio_val) > 1e-12) {
+                if (ratio.is_number(&ratio_val) && mymath::abs(ratio_val) > 1e-12) {
                     // exp(arg) = exp(ratio * ext.argument) = t^ratio
                     // 但只有 ratio 是整数时才是代数关系
-                    int int_ratio = static_cast<int>(std::round(ratio_val));
-                    if (std::abs(ratio_val - int_ratio) < 1e-9) {
+                    int int_ratio = static_cast<int>(mymath::round(ratio_val));
+                    if (mymath::abs(ratio_val - int_ratio) < 1e-9) {
                         result.result = IndependenceResult::kDependent;
                         result.substitution = make_power(SymbolicExpression::variable(ext.t_name),
                                                          SymbolicExpression::number(ratio_val)).simplify();
@@ -948,11 +947,11 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
                 // 检查 u = ext.argument^k
                 SymbolicExpression ratio = (normalized_arg / ext.argument).simplify();
                 double ratio_val = 0.0;
-                if (ratio.is_number(&ratio_val) && std::abs(ratio_val) > 1e-12) {
+                if (ratio.is_number(&ratio_val) && mymath::abs(ratio_val) > 1e-12) {
                     // sqrt(u) = sqrt(ratio * ext.argument)
                     // 如果 ratio 是完全平方，可以简化
-                    double sqrt_ratio = std::sqrt(ratio_val);
-                    if (std::abs(sqrt_ratio * sqrt_ratio - ratio_val) < 1e-9) {
+                    double sqrt_ratio = mymath::sqrt(ratio_val);
+                    if (mymath::abs(sqrt_ratio * sqrt_ratio - ratio_val) < 1e-9) {
                         result.result = IndependenceResult::kDependent;
                         result.substitution = (SymbolicExpression::number(sqrt_ratio) *
                                               SymbolicExpression::variable(ext.t_name)).simplify();

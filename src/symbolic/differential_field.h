@@ -4,6 +4,7 @@
 #include "symbolic/symbolic_expression.h"
 #include "symbolic/symbolic_polynomial.h"
 #include "symbolic/risch_types.h"
+#include "math/mymath.h"
 #include <string>
 #include <vector>
 #include <set>
@@ -50,7 +51,7 @@ public:
             denominator = -denominator;
         }
         // GCD 约简
-        int64_t g = gcd(std::abs(numerator), std::abs(denominator));
+        int64_t g = mymath::gcd(mymath::abs(numerator), mymath::abs(denominator));
         if (g > 1) {
             numerator /= g;
             denominator /= g;

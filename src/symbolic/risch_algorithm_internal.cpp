@@ -1,6 +1,5 @@
 #include "symbolic/risch_algorithm_internal.h"
 #include "symbolic/symbolic_expression_internal.h"
-#include <cmath>
 #include <functional>
 
 using namespace symbolic_expression_internal;
@@ -190,7 +189,7 @@ bool try_integrate_low_degree_rational_in_variable(const SymbolicExpression& exp
         if (!denominator.coefficient(2).is_number(&a_val) ||
             !denominator.coefficient(1).is_number(&b_val) ||
             !denominator.coefficient(0).is_number(&c_val) ||
-            std::abs(a_val) < 1e-12) {
+            mymath::abs(a_val) < 1e-12) {
             return false;
         }
 
@@ -208,7 +207,7 @@ bool try_integrate_low_degree_rational_in_variable(const SymbolicExpression& exp
         SymbolicExpression log_coeff = (m / (SymbolicExpression::number(2.0) * a)).simplify();
         SymbolicExpression residual = (n - m * b / (SymbolicExpression::number(2.0) * a)).simplify();
 
-        const double sqrt_delta = std::sqrt(delta);
+        const double sqrt_delta = mymath::sqrt(delta);
         SymbolicExpression atan_arg =
             ((SymbolicExpression::number(2.0 * a_val) * t + SymbolicExpression::number(b_val)) /
              SymbolicExpression::number(sqrt_delta)).simplify();
@@ -288,13 +287,13 @@ std::vector<int> detect_possible_integer_ratios(const SymbolicExpression& ratio)
     // 尝试数值检测
     double val = 0.0;
     if (ratio.is_number(&val)) {
-        int n = static_cast<int>(std::round(val));
-        if (std::abs(val - n) < 1e-9) {
+        int n = static_cast<int>(mymath::round(val));
+        if (mymath::abs(val - n) < 1e-9) {
             candidates.push_back(n);
         }
         // 检查附近的整数
         for (int offset = -2; offset <= 2; ++offset) {
-            if (offset != 0 && std::abs(val - (n + offset)) < 0.1) {
+            if (offset != 0 && mymath::abs(val - (n + offset)) < 0.1) {
                 candidates.push_back(n + offset);
             }
         }
@@ -307,10 +306,10 @@ std::vector<int> detect_possible_integer_ratios(const SymbolicExpression& ratio)
         SymbolicExpression den(ratio.node_->right);
         double num_val = 0.0, den_val = 0.0;
         if (num.is_number(&num_val) && den.is_number(&den_val) &&
-            std::abs(den_val) > 1e-12) {
+            mymath::abs(den_val) > 1e-12) {
             double quotient = num_val / den_val;
-            int n = static_cast<int>(std::round(quotient));
-            if (std::abs(quotient - n) < 1e-9) {
+            int n = static_cast<int>(mymath::round(quotient));
+            if (mymath::abs(quotient - n) < 1e-9) {
                 candidates.push_back(n);
             }
         }

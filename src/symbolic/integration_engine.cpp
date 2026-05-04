@@ -8,7 +8,6 @@
 #include "math/mymath.h"
 
 #include <algorithm>
-#include <cmath>
 #include <exception>
 #include <map>
 
@@ -92,7 +91,7 @@ void collect_rational_factors(const SymbolicExpression& expression,
         double exponent_value = 0.0;
         if (exponent.is_number(&exponent_value) &&
             mymath::is_integer(exponent_value, 1e-10)) {
-            const int count = static_cast<int>(std::abs(exponent_value) + 0.5);
+            const int count = static_cast<int>(mymath::abs(exponent_value) + 0.5);
             const int adjusted_side = exponent_value >= 0.0 ? side : -side;
             SymbolicExpression base(node->left);
             const std::string key = node_structural_key(base.simplify().node_);
@@ -919,7 +918,7 @@ bool IntegrationEngine::try_non_elementary_pattern(
                 SymbolicExpression a, b;
                 if (symbolic_decompose_linear(arg, variable_name, &a, &b)) {
                     double a_val = 0.0;
-                    if (a.is_number(&a_val) && std::abs(a_val) > 1e-12) {
+                    if (a.is_number(&a_val) && mymath::abs(a_val) > 1e-12) {
                         *result = (SymbolicExpression::number(1.0 / a_val) *
                                   make_function("Ei", arg)).simplify();
                         *pattern_name = "Ei";
@@ -935,7 +934,7 @@ bool IntegrationEngine::try_non_elementary_pattern(
         SymbolicExpression arg(expression.node_->left);
         SymbolicExpression neg_x_sq = (make_negate(x * x)).simplify();
         if (structural_equals(arg.simplify(), neg_x_sq)) {
-            *result = (SymbolicExpression::number(std::sqrt(std::acos(-1.0)) / 2.0) *
+            *result = (SymbolicExpression::number(mymath::sqrt(mymath::acos(-1.0)) / 2.0) *
                       make_function("erf", x)).simplify();
             *pattern_name = "erf";
             return true;
@@ -953,7 +952,7 @@ bool IntegrationEngine::try_non_elementary_pattern(
                 SymbolicExpression a, b;
                 if (symbolic_decompose_linear(arg, variable_name, &a, &b)) {
                     double a_val = 0.0;
-                    if (a.is_number(&a_val) && std::abs(a_val) > 1e-12) {
+                    if (a.is_number(&a_val) && mymath::abs(a_val) > 1e-12) {
                         *result = (SymbolicExpression::number(1.0 / a_val) *
                                   make_function("Si", arg)).simplify();
                         *pattern_name = "Si";
@@ -975,7 +974,7 @@ bool IntegrationEngine::try_non_elementary_pattern(
                 SymbolicExpression a, b;
                 if (symbolic_decompose_linear(arg, variable_name, &a, &b)) {
                     double a_val = 0.0;
-                    if (a.is_number(&a_val) && std::abs(a_val) > 1e-12) {
+                    if (a.is_number(&a_val) && mymath::abs(a_val) > 1e-12) {
                         *result = (SymbolicExpression::number(1.0 / a_val) *
                                   make_function("Ci", arg)).simplify();
                         *pattern_name = "Ci";
@@ -992,7 +991,7 @@ bool IntegrationEngine::try_non_elementary_pattern(
         SymbolicExpression den(expression.node_->right);
 
         double num_val = 0.0;
-        if (num.is_number(&num_val) && std::abs(num_val - 1.0) < 1e-9) {
+        if (num.is_number(&num_val) && mymath::abs(num_val - 1.0) < 1e-9) {
             if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
                 SymbolicExpression arg(den.node_->left);
                 if (structural_equals(arg.simplify(), x.simplify())) {

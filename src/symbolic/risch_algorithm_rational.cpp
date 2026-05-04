@@ -3,7 +3,6 @@
 #include "symbolic/symbolic_algebraic_number.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "symbolic/differential_field.h"
-#include <cmath>
 #include <vector>
 
 using namespace symbolic_expression_internal;
@@ -20,7 +19,7 @@ SymbolicExpression real_log_abs(const SymbolicExpression& argument) {
 }
 
 void trim_numeric_polynomial(std::vector<double>* coefficients) {
-    while (!coefficients->empty() && std::abs(coefficients->back()) < 1e-10) {
+    while (!coefficients->empty() && mymath::abs(coefficients->back()) < 1e-10) {
         coefficients->pop_back();
     }
 }
@@ -72,7 +71,7 @@ bool numeric_polynomials_close(const std::vector<double>& lhs,
         return false;
     }
     for (std::size_t i = 0; i < left.size(); ++i) {
-        if (std::abs(left[i] - right[i]) > eps) {
+        if (mymath::abs(left[i] - right[i]) > eps) {
             return false;
         }
     }
@@ -82,7 +81,7 @@ bool numeric_polynomials_close(const std::vector<double>& lhs,
 bool divide_numeric_polynomial(const std::vector<double>& numerator,
                                const std::vector<double>& denominator,
                                std::vector<double>* quotient) {
-    if (denominator.empty() || std::abs(denominator.back()) < 1e-12 ||
+    if (denominator.empty() || mymath::abs(denominator.back()) < 1e-12 ||
         numerator.size() < denominator.size()) {
         return false;
     }
@@ -101,7 +100,7 @@ bool divide_numeric_polynomial(const std::vector<double>& numerator,
     }
 
     for (int i = 0; i < den_degree; ++i) {
-        if (std::abs(remainder[i]) > 1e-7) {
+        if (mymath::abs(remainder[i]) > 1e-7) {
             return false;
         }
     }
@@ -116,11 +115,11 @@ bool solve_numeric_linear_system(std::vector<std::vector<double>> matrix,
     for (int col = 0; col < n; ++col) {
         int pivot = col;
         for (int row = col + 1; row < n; ++row) {
-            if (std::abs(matrix[row][col]) > std::abs(matrix[pivot][col])) {
+            if (mymath::abs(matrix[row][col]) > mymath::abs(matrix[pivot][col])) {
                 pivot = row;
             }
         }
-        if (std::abs(matrix[pivot][col]) < 1e-12) {
+        if (mymath::abs(matrix[pivot][col]) < 1e-12) {
             return false;
         }
         if (pivot != col) {
@@ -139,7 +138,7 @@ bool solve_numeric_linear_system(std::vector<std::vector<double>> matrix,
                 continue;
             }
             const double factor = matrix[row][col];
-            if (std::abs(factor) < 1e-14) {
+            if (mymath::abs(factor) < 1e-14) {
                 continue;
             }
             for (int j = col; j < n; ++j) {
@@ -195,9 +194,9 @@ SymbolicExpression integrate_numeric_inverse_quadratic_power(const std::vector<d
         return SymbolicExpression::number(0.0);
     }
 
-    const double root = std::sqrt(disc_neg);
+    const double root = mymath::sqrt(disc_neg);
     SymbolicExpression arg;
-    if (std::abs(b) < 1e-12) {
+    if (mymath::abs(b) < 1e-12) {
         arg = make_divide(x, SymbolicExpression::number(root / (2.0 * a)));
     } else {
         arg =
@@ -239,7 +238,7 @@ SymbolicExpression integrate_numeric_quadratic_fraction(double slope,
 
     SymbolicExpression result = SymbolicExpression::number(0.0);
     const double log_coeff = slope / (2.0 * a);
-    if (std::abs(log_coeff) > 1e-12) {
+    if (mymath::abs(log_coeff) > 1e-12) {
         if (power == 1) {
             result = (result +
                       SymbolicExpression::number(log_coeff) *
@@ -252,7 +251,7 @@ SymbolicExpression integrate_numeric_quadratic_fraction(double slope,
     }
 
     const double remainder = constant - log_coeff * b;
-    if (std::abs(remainder) < 1e-12) {
+    if (mymath::abs(remainder) < 1e-12) {
         return result;
     }
 
@@ -364,9 +363,9 @@ bool try_integrate_distinct_even_quadratic_product(const SymbolicPolynomial& num
         !denominator.coefficient(2).is_number(&c2) ||
         !denominator.coefficient(3).is_number(&c3) ||
         !denominator.coefficient(4).is_number(&c4) ||
-        std::abs(c1) > 1e-10 ||
-        std::abs(c3) > 1e-10 ||
-        std::abs(c4 - 1.0) > 1e-10) {
+        mymath::abs(c1) > 1e-10 ||
+        mymath::abs(c3) > 1e-10 ||
+        mymath::abs(c4 - 1.0) > 1e-10) {
         return false;
     }
 
@@ -375,16 +374,16 @@ bool try_integrate_distinct_even_quadratic_product(const SymbolicPolynomial& num
         return false;
     }
 
-    double first = (c2 - std::sqrt(discriminant)) / 2.0;
-    double second = (c2 + std::sqrt(discriminant)) / 2.0;
-    if (first <= 0.0 || second <= 0.0 || std::abs(first - second) < 1e-12) {
+    double first = (c2 - mymath::sqrt(discriminant)) / 2.0;
+    double second = (c2 + mymath::sqrt(discriminant)) / 2.0;
+    if (first <= 0.0 || second <= 0.0 || mymath::abs(first - second) < 1e-12) {
         return false;
     }
 
     const SymbolicExpression x = SymbolicExpression::variable(variable_name);
     auto atan_scaled = [&](double constant) {
-        const double root = std::sqrt(constant);
-        SymbolicExpression arg = std::abs(root - 1.0) < 1e-12
+        const double root = mymath::sqrt(constant);
+        SymbolicExpression arg = mymath::abs(root - 1.0) < 1e-12
             ? x
             : make_multiply(SymbolicExpression::number(1.0 / root), x).simplify();
         return make_multiply(SymbolicExpression::number(1.0 / root),
@@ -425,15 +424,15 @@ bool try_integrate_numeric_quadratic_partial_fractions(const SymbolicPolynomial&
         const double leading = den_coeffs.back();
         const double constant = den_coeffs.front();
         if (leading > 0.0 && constant > 0.0) {
-            const double a = std::pow(leading, 1.0 / multiplicity);
-            const double c = std::pow(constant, 1.0 / multiplicity);
+            const double a = mymath::pow(leading, 1.0 / multiplicity);
+            const double c = mymath::pow(constant, 1.0 / multiplicity);
             const double b = den_coeffs[denominator_degree - 1] /
-                             (multiplicity * std::pow(a, multiplicity - 1));
+                             (multiplicity * mymath::pow(a, multiplicity - 1));
             std::vector<double> factor = {c, b, a};
             if (b * b - 4.0 * a * c < -1e-8 &&
                 numeric_polynomials_close(power_numeric_polynomial(factor, multiplicity),
                                           den_coeffs,
-                                          1e-6 * (1.0 + std::abs(leading) + std::abs(constant)))) {
+                                          1e-6 * (1.0 + mymath::abs(leading) + mymath::abs(constant)))) {
                 quadratics.push_back({factor, multiplicity});
                 used_power_factorization = true;
             }
@@ -446,14 +445,14 @@ bool try_integrate_numeric_quadratic_partial_fractions(const SymbolicPolynomial&
         }
         const double re = root.first;
         const double im = root.second;
-        if (std::abs(im) < 1e-8) {
+        if (mymath::abs(im) < 1e-8) {
             return false;
         }
         std::vector<double> factor = {re * re + im * im, -2.0 * re, 1.0};
         bool merged = false;
         for (auto& existing : quadratics) {
-            if (std::abs(existing.coefficients[0] - factor[0]) < 1e-6 &&
-                std::abs(existing.coefficients[1] - factor[1]) < 1e-6) {
+            if (mymath::abs(existing.coefficients[0] - factor[0]) < 1e-6 &&
+                mymath::abs(existing.coefficients[1] - factor[1]) < 1e-6) {
                 ++existing.multiplicity;
                 merged = true;
                 break;
@@ -874,6 +873,9 @@ bool RischAlgorithm::hermite_reduction(const SymbolicPolynomial& numerator,
                                        const std::string& main_var,
                                        const SymbolicExpression* t_prime,
                                        DifferentialExtension::Kind kind) {
+    (void)tower;
+    (void)tower_index;
+    (void)kind;
     auto poly_diff = [&](const SymbolicPolynomial& p) {
         return t_prime ? p.total_derivative(main_var, *t_prime) : p.derivative();
     };
@@ -1083,9 +1085,10 @@ bool RischAlgorithm::lazard_rioboo_trager(const SymbolicPolynomial& A,
             // 检查判别式是否为完全平方
             double disc_val = 0.0;
             if (disc.is_number(&disc_val)) {
-                double sqrt_disc = std::sqrt(disc_val);
-                if (std::abs(sqrt_disc * sqrt_disc - disc_val) < 1e-12) {
+                if (disc_val >= 0.0 &&
+                    mymath::abs(mymath::sqrt(disc_val) * mymath::sqrt(disc_val) - disc_val) < 1e-12) {
                     // 判别式是完全平方，根是有理数
+                    const double sqrt_disc = mymath::sqrt(disc_val);
                     SymbolicExpression c1 = ((make_negate(b) + SymbolicExpression::number(sqrt_disc)) /
                                             (SymbolicExpression::number(2.0) * a)).simplify();
                     SymbolicExpression c2 = ((make_negate(b) - SymbolicExpression::number(sqrt_disc)) /
@@ -1256,7 +1259,9 @@ bool RischAlgorithm::rothstein_trager(const SymbolicPolynomial& numerator,
                                       const std::string& main_var,
                                       const SymbolicExpression* t_prime,
                                       DifferentialExtension::Kind kind) {
-    
+    (void)tower;
+    (void)tower_index;
+
     // 优先尝试 Lazard-Rioboo-Trager，因为它更通用且处理高次项更稳健
     if (kind == DifferentialExtension::Kind::kNone) {
         if (lazard_rioboo_trager(numerator, denominator, variable_name, log_part)) {
@@ -1330,7 +1335,7 @@ bool RischAlgorithm::rothstein_trager(const SymbolicPolynomial& numerator,
         if (!root.is_complex) {
             // 实数根处理
             double c_val = 0.0;
-            if (root.real_part.is_number(&c_val) && std::abs(c_val) < 1e-10) continue;
+            if (root.real_part.is_number(&c_val) && mymath::abs(c_val) < 1e-10) continue;
 
             std::vector<SymbolicExpression> cur_poly_coeffs;
             for (int j = 0; j <= max_deg; ++j) {
@@ -1368,7 +1373,7 @@ bool RischAlgorithm::rothstein_trager(const SymbolicPolynomial& numerator,
                 double disc_neg = 4.0 * a_d * c_d - b_d * b_d;
 
                 if (disc_neg > 0) {
-                    double sqrt_disc = std::sqrt(disc_neg);
+                    double sqrt_disc = mymath::sqrt(disc_neg);
                     SymbolicExpression x = SymbolicExpression::variable(variable_name);
 
                     // atan 参数: (2*a_d*x + b_d) / sqrt_disc
@@ -1393,7 +1398,7 @@ bool RischAlgorithm::rothstein_trager(const SymbolicPolynomial& numerator,
                                 make_function("atan", atan_arg)).simplify();
 
                     // 如果 real_part != 0，还需要添加 ln(D) 项
-                    if (std::abs(a_val) > 1e-10) {
+                    if (mymath::abs(a_val) > 1e-10) {
                         double ln_coeff = a_val / a_d;
                         final_log = (final_log + SymbolicExpression::number(ln_coeff) *
                                     real_log_abs(D.to_expression())).simplify();

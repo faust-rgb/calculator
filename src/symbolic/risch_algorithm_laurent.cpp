@@ -1,8 +1,8 @@
 #include "symbolic/risch_algorithm.h"
 #include "symbolic/risch_algorithm_internal.h"
 #include "symbolic/symbolic_expression_internal.h"
+#include "mymath.h"
 #include <algorithm>
-#include <cmath>
 #include <vector>
 
 using namespace symbolic_expression_internal;
@@ -54,8 +54,8 @@ bool extract_laurent_coefficients(const SymbolicExpression& expr,
             SymbolicExpression exp(den.node_->right);
             double exp_val = 0.0;
             if (base.is_variable_named(t_var) && exp.is_number(&exp_val)) {
-                int n = static_cast<int>(std::round(exp_val));
-                if (n > 0 && std::abs(exp_val - n) < 1e-9) {
+                int n = static_cast<int>(mymath::round(exp_val));
+                if (n > 0 && mymath::abs(exp_val - n) < 1e-9) {
                     // num / t^n
                     if (!contains_var(num, t_var)) {
                         coefficients[-n] = num;
@@ -127,8 +127,9 @@ bool extract_laurent_coefficients(const SymbolicExpression& expr,
 }
 
 // Build Laurent polynomial expression from coefficients
-SymbolicExpression build_laurent_expression(const std::map<int, SymbolicExpression>& coefficients,
-                                             const std::string& t_var) {
+[[maybe_unused]] SymbolicExpression build_laurent_expression(
+    const std::map<int, SymbolicExpression>& coefficients,
+    const std::string& t_var) {
     SymbolicExpression result = SymbolicExpression::number(0.0);
     SymbolicExpression t = SymbolicExpression::variable(t_var);
 
@@ -189,10 +190,10 @@ int compute_laurent_valuation_bound(const SymbolicExpression& f,
         double f_val = 0.0;
         if (f_coeffs.at(0).is_number(&f_val)) {
             // Check if f = -n*u' for some integer n
-            if (std::abs(u_prime_val) > 1e-12) {
+            if (mymath::abs(u_prime_val) > 1e-12) {
                 double ratio = -f_val / u_prime_val;
-                int n = static_cast<int>(std::round(ratio));
-                if (std::abs(ratio - n) < 1e-9 && n > 0) {
+                int n = static_cast<int>(mymath::round(ratio));
+                if (mymath::abs(ratio - n) < 1e-9 && n > 0) {
                     // Special case: f = -n*u', solution may have term with t^(-n)
                     return std::min(-n, v_g);
                 }
@@ -230,13 +231,13 @@ int compute_laurent_degree_bound(const SymbolicExpression& f,
 
     // Check for cancellation case
     double u_prime_val = 0.0;
-    if (u_prime.is_number(&u_prime_val) && std::abs(u_prime_val) > 1e-12) {
+    if (u_prime.is_number(&u_prime_val) && mymath::abs(u_prime_val) > 1e-12) {
         if (f_coeffs.size() == 1 && f_coeffs.count(0)) {
             double f_val = 0.0;
             if (f_coeffs.at(0).is_number(&f_val)) {
                 double ratio = -f_val / u_prime_val;
-                int n = static_cast<int>(std::round(ratio));
-                if (std::abs(ratio - n) < 1e-9 && n > 0) {
+                int n = static_cast<int>(mymath::round(ratio));
+                if (mymath::abs(ratio - n) < 1e-9 && n > 0) {
                     // Cancellation possible, degree may be higher
                     return std::max(g_high, n) + 1;
                 }

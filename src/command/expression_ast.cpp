@@ -15,7 +15,6 @@
 #include "lazy_token_stream.h"
 
 #include <algorithm>
-#include <cmath>
 #include <functional>
 #include <memory>
 #include <string>
@@ -354,7 +353,7 @@ double evaluate_ast(const ExpressionAST* ast,
                     return left / right;
                 case '%':
                     if (right == 0.0) throw_ast_error<MathError>("modulo by zero", ast->position);
-                    return std::fmod(left, right);
+                    return mymath::fmod(left, right);
                 case '^': return mymath::pow(left, right);
                 default:
                     throw_ast_error<MathError>("unknown operator", ast->position);

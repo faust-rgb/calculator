@@ -1,7 +1,6 @@
 #include "symbolic/symbolic_algebraic_number.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include <algorithm>
-#include <cmath>
 #include <sstream>
 
 using namespace symbolic_expression_internal;
@@ -12,21 +11,27 @@ using namespace symbolic_expression_internal;
 
 AlgebraicNumber AlgebraicNumber::from_double(double value) {
     // 尝试识别常见的代数数
-    double sqrt2 = std::sqrt(2.0);
-    double sqrt3 = std::sqrt(3.0);
-    double sqrt5 = std::sqrt(5.0);
+    double sqrt2 = mymath::sqrt(2.0);
+    double sqrt3 = mymath::sqrt(3.0);
+    double sqrt5 = mymath::sqrt(5.0);
 
-    if (std::abs(value - sqrt2) < 1e-10) {
+    if (mymath::abs(value - sqrt2) < 1e-10) {
         return sqrt(2);
     }
-    if (std::abs(value + sqrt2) < 1e-10) {
+    if (mymath::abs(value + sqrt2) < 1e-10) {
         return sqrt(2).negate();
     }
-    if (std::abs(value - sqrt3) < 1e-10) {
+    if (mymath::abs(value - sqrt3) < 1e-10) {
         return sqrt(3);
     }
-    if (std::abs(value + sqrt3) < 1e-10) {
+    if (mymath::abs(value + sqrt3) < 1e-10) {
         return sqrt(3).negate();
+    }
+    if (mymath::abs(value - sqrt5) < 1e-10) {
+        return sqrt(5);
+    }
+    if (mymath::abs(value + sqrt5) < 1e-10) {
+        return sqrt(5).negate();
     }
 
     // 否则作为有理数近似
@@ -54,7 +59,7 @@ AlgebraicNumber AlgebraicNumber::sqrt(int n) {
     }
 
     // 检查是否是完全平方数
-    int root = static_cast<int>(std::sqrt(static_cast<double>(n)));
+    int root = static_cast<int>(mymath::sqrt(static_cast<double>(n)));
     if (root * root == n) {
         return from_integer(root);
     }
@@ -236,7 +241,7 @@ int AlgebraicNumber::compare(const AlgebraicNumber& other) const {
     double approx1 = approximate();
     double approx2 = other.approximate();
 
-    if (std::abs(approx1 - approx2) < 1e-10) {
+    if (mymath::abs(approx1 - approx2) < 1e-10) {
         // 可能相等，检查最小多项式
         if (minimal_polynomial.to_string() == other.minimal_polynomial.to_string()) {
             // 相同最小多项式，需要更精确的比较
@@ -254,6 +259,7 @@ void AlgebraicNumber::refine_interval() const {
     // 二分细化
     ExactRational mid = ExactRational((interval_lower.numerator + interval_upper.numerator),
                             (interval_lower.denominator + interval_upper.denominator) / 2);
+    (void)mid;
 
     // 评估多项式在 mid 的符号
     // 这里简化处理
@@ -284,7 +290,7 @@ SymbolicExpression AlgebraicNumber::to_expression() const {
             minimal_polynomial.coefficient(1).is_number(&b) &&
             minimal_polynomial.coefficient(0).is_number(&c)) {
 
-            if (std::abs(b) < 1e-10 && std::abs(a - 1.0) < 1e-10) {
+            if (mymath::abs(b) < 1e-10 && mymath::abs(a - 1.0) < 1e-10) {
                 // t^2 - c = 0, t = sqrt(-c)
                 double val = -c;
                 if (val > 0) {
@@ -424,8 +430,8 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
         // p2: a2*t^2 + b2*t + c2 = 0
 
         // 简化：假设 p1 = t^2 - r1, p2 = t^2 - r2 (即 sqrt(r1), sqrt(r2))
-        if (std::abs(a1 - 1.0) < 1e-10 && std::abs(b1) < 1e-10 &&
-            std::abs(a2 - 1.0) < 1e-10 && std::abs(b2) < 1e-10) {
+        if (mymath::abs(a1 - 1.0) < 1e-10 && mymath::abs(b1) < 1e-10 &&
+            mymath::abs(a2 - 1.0) < 1e-10 && mymath::abs(b2) < 1e-10) {
             double r1 = -c1;
             double r2 = -c2;
 
@@ -479,8 +485,8 @@ SymbolicPolynomial AlgebraicNumber::compute_product_minpoly(
 
     if (p1_numeric && p2_numeric) {
         // sqrt(r1) * sqrt(r2) = sqrt(r1 * r2)
-        if (std::abs(a1 - 1.0) < 1e-10 && std::abs(b1) < 1e-10 &&
-            std::abs(a2 - 1.0) < 1e-10 && std::abs(b2) < 1e-10) {
+        if (mymath::abs(a1 - 1.0) < 1e-10 && mymath::abs(b1) < 1e-10 &&
+            mymath::abs(a2 - 1.0) < 1e-10 && mymath::abs(b2) < 1e-10) {
             double r1 = -c1;
             double r2 = -c2;
             double r_product = r1 * r2;
@@ -516,6 +522,7 @@ SymbolicPolynomial AlgebraicNumber::compute_product_minpoly(
  */
 SymbolicExpression compute_resultant_symbolic(const SymbolicPolynomial& p, const SymbolicPolynomial& q,
                                                const std::string& var) {
+    (void)var;
     int m = p.degree();
     int n = q.degree();
 
@@ -585,8 +592,8 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
                       p2.coefficient(1).is_number(&b2) &&
                       p2.coefficient(0).is_number(&c2));
 
-    if (p1_numeric && p2_numeric && std::abs(a1 - 1.0) < 1e-10 && std::abs(b1) < 1e-10 &&
-        std::abs(a2 - 1.0) < 1e-10 && std::abs(b2) < 1e-10) {
+    if (p1_numeric && p2_numeric && mymath::abs(a1 - 1.0) < 1e-10 && mymath::abs(b1) < 1e-10 &&
+        mymath::abs(a2 - 1.0) < 1e-10 && mymath::abs(b2) < 1e-10) {
         double r1 = -c1;
         double r2 = -c2;
 
@@ -687,8 +694,8 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
                       p2.coefficient(1).is_number(&b2) &&
                       p2.coefficient(0).is_number(&c2));
 
-    if (p1_numeric && p2_numeric && std::abs(a1 - 1.0) < 1e-10 && std::abs(b1) < 1e-10 &&
-        std::abs(a2 - 1.0) < 1e-10 && std::abs(b2) < 1e-10) {
+    if (p1_numeric && p2_numeric && mymath::abs(a1 - 1.0) < 1e-10 && mymath::abs(b1) < 1e-10 &&
+        mymath::abs(a2 - 1.0) < 1e-10 && mymath::abs(b2) < 1e-10) {
         double r1 = -c1;
         double r2 = -c2;
         double r_product = r1 * r2;
@@ -837,9 +844,6 @@ AlgebraicNumber::complex_roots_of(const SymbolicPolynomial& poly) {
     // 如果实根数量等于次数，没有复根
     if (num_real >= deg) return complex_pairs;
 
-    // 计算复根对数量
-    int num_complex_pairs = (deg - num_real) / 2;
-
     // 使用实部隔离方法
     // 对于复根 a ± bi，实部 a 可以通过多项式的某些变换得到
 
@@ -860,7 +864,7 @@ AlgebraicNumber::complex_roots_of(const SymbolicPolynomial& poly) {
 
             double real_part = -b / (2.0 * a);
             double disc = b * b - 4.0 * a * c;  // 负数
-            double imag_part = std::sqrt(-disc) / (2.0 * std::abs(a));
+            double imag_part = mymath::sqrt(-disc) / (2.0 * mymath::abs(a));
 
             // 创建实部和虚部的代数数表示
             // 实部是有理数
@@ -953,7 +957,7 @@ int sign_variations(const SymbolicPolynomial& p, const ExactRational& x) {
     for (int i = 0; i <= p.degree(); ++i) {
         double coeff = 0.0;
         if (p.coefficient(i).is_number(&coeff)) {
-            val += coeff * std::pow(x_val, i);
+            val += coeff * mymath::pow(x_val, i);
         }
     }
 
@@ -1072,10 +1076,10 @@ SymbolicExpression norm(const AlgebraicNumber& a) {
     // 范数是最小多项式常数项的绝对值（对于首一多项式）
     double const_term = 0.0;
     if (a.minimal_polynomial.coefficient(0).is_number(&const_term)) {
-        return SymbolicExpression::number(std::abs(const_term));
+        return SymbolicExpression::number(mymath::abs(const_term));
     }
 
-    return SymbolicExpression::number(std::abs(a.approximate()));
+    return SymbolicExpression::number(mymath::abs(a.approximate()));
 }
 
 SymbolicExpression trace(const AlgebraicNumber& a) {
@@ -1115,6 +1119,7 @@ SymbolicExpression convert_complex_pair_to_real(
     const SymbolicPolynomial& v,
     const std::string& x_var) {
 
+    (void)x_var;
     // c * ln(v) + conj(c) * ln(conj(v))
     // = 2*Re(c) * ln(|v|) - 2*Im(c) * arg(v)
     // = 2*Re(c) * ln(sqrt(Re(v)^2 + Im(v)^2)) - 2*Im(c) * atan2(Im(v), Re(v))

@@ -5,7 +5,6 @@
 #include "symbolic/symbolic_algebraic_number.h"
 #include "symbolic/symbolic_polynomial.h"
 #include <algorithm>
-#include <cmath>
 #include <vector>
 #include <map>
 #include <set>
@@ -104,8 +103,8 @@ bool RischAlgorithm::detect_algebraic_extension(
             if (exp.is_number(&exp_val)) {
                 // exp = 1/n 意味着 n = 1/exp
                 if (exp_val > 0 && exp_val < 1) {
-                    int n = static_cast<int>(std::round(1.0 / exp_val));
-                    if (std::abs(1.0 / n - exp_val) < 1e-9) {
+                    int n = static_cast<int>(mymath::round(1.0 / exp_val));
+                    if (mymath::abs(1.0 / n - exp_val) < 1e-9) {
                         radicals.push_back({base.simplify(), n});
                         collect_radicals(base);
                         return;
@@ -115,13 +114,13 @@ bool RischAlgorithm::detect_algebraic_extension(
                 // exp = p/q 形式
                 // 检查是否为分数
                 double int_part;
-                double frac_part = std::modf(exp_val, &int_part);
-                if (std::abs(frac_part) > 1e-9) {
+                double frac_part = mymath::modf(exp_val, &int_part);
+                if (mymath::abs(frac_part) > 1e-9) {
                     // 尝试找到分母
                     for (int q = 2; q <= 10; ++q) {
                         double p = exp_val * q;
                         double p_int;
-                        if (std::abs(std::modf(p, &p_int)) < 1e-9) {
+                        if (mymath::abs(mymath::modf(p, &p_int)) < 1e-9) {
                             // exp = p/q
                             // 这意味着 u^(p/q) = (u^p)^(1/q)
                             SymbolicExpression new_base = make_power(base, SymbolicExpression::number(p)).simplify();
@@ -193,6 +192,7 @@ SubresultantChain compute_subresultant_chain_parametric(
     const SymbolicPolynomial& B,
     const std::string& param_var) {
 
+    (void)param_var;
     SubresultantChain chain;
 
     SymbolicPolynomial a = A;
@@ -224,6 +224,7 @@ SymbolicPolynomial compute_residue_polynomial(
     const SymbolicPolynomial& modulus,
     const std::string& c_var) {
 
+    (void)modulus;
     // R(c) = resultant_t(numerator - c * denominator', denominator)
     // 其中 t 是代数扩展变量
 
@@ -367,6 +368,8 @@ SymbolicExpression extract_logarithmic_terms(
     const AlgebraicExtensionInfo& ext,
     const std::string& x_var) {
 
+    (void)denominator;
+    (void)ext;
     SymbolicExpression result = SymbolicExpression::number(0.0);
 
     // 对残差多项式进行 square-free 分解
@@ -411,9 +414,6 @@ SymbolicExpression extract_logarithmic_terms(
         // 处理复根对
         int num_real = static_cast<int>(intervals.size());
         if (num_real < deg) {
-            // 存在复根，成对出现
-            int num_complex_pairs = (deg - num_real) / 2;
-
             // 使用代数数表示复根
             auto complex_pairs = AlgebraicNumber::complex_roots_of(R_k);
 
@@ -597,6 +597,7 @@ bool detect_nested_logarithm(
     int* depth,
     std::vector<SymbolicExpression>* chain) {
 
+    (void)x_var;
     if (!depth || !chain) return false;
 
     *depth = 0;
@@ -625,6 +626,7 @@ bool detect_nested_exponential(
     int* depth,
     std::vector<SymbolicExpression>* chain) {
 
+    (void)x_var;
     if (!depth || !chain) return false;
 
     *depth = 0;
@@ -660,6 +662,7 @@ bool prove_nested_log_non_elementary(
     const std::string& x_var,
     std::string* reason) {
 
+    (void)x_var;
     if (!reason) return false;
 
     int n = static_cast<int>(log_chain.size());
@@ -765,7 +768,7 @@ bool analyze_log_integral_form(
 
     // 分子应该是 1
     double num_val = 0.0;
-    if (!num.is_number(&num_val) || std::abs(num_val - 1.0) > 1e-9) {
+    if (!num.is_number(&num_val) || mymath::abs(num_val - 1.0) > 1e-9) {
         return false;
     }
 
@@ -806,7 +809,7 @@ bool analyze_log_integral_form(
         if (base.node_->type == NodeType::kFunction && base.node_->text == "ln") {
             double exp_val = 0.0;
             if (exp.is_number(&exp_val)) {
-                *log_power = static_cast<int>(std::round(exp_val));
+                *log_power = static_cast<int>(mymath::round(exp_val));
                 *inner_arg = SymbolicExpression(base.node_->left);
                 return true;
             }
@@ -872,6 +875,7 @@ bool prove_nested_exp_non_elementary(
     const std::string& x_var,
     std::string* reason) {
 
+    (void)x_var;
     if (!reason) return false;
 
     int n = static_cast<int>(exp_chain.size());
@@ -1192,7 +1196,7 @@ bool prove_non_elementary_liouville(
         SymbolicExpression den(f.node_->right);
 
         double num_val = 0.0;
-        if (num.is_number(&num_val) && std::abs(num_val - 1.0) < 1e-9) {
+        if (num.is_number(&num_val) && mymath::abs(num_val - 1.0) < 1e-9) {
             if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
                 SymbolicExpression ln_arg(den.node_->left);
                 if (contains_var(ln_arg, x_var)) {
@@ -1226,7 +1230,7 @@ bool prove_non_elementary_liouville(
                 SymbolicExpression base(inner.node_->left);
                 SymbolicExpression exp(inner.node_->right);
                 double exp_val = 0.0;
-                if (exp.is_number(&exp_val) && std::abs(exp_val - 2.0) < 1e-9) {
+                if (exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < 1e-9) {
                     if (base.is_variable_named(x_var)) {
                         *reason = "Liouville theorem: exp(-x^2) cannot be expressed in Liouville form (requires erf)";
                         return true;
@@ -1561,6 +1565,7 @@ bool extended_gcd_in_quotient_ring(
     SymbolicPolynomial* B,
     SymbolicPolynomial* G) {
 
+    (void)modulus;
     // 使用扩展欧几里得算法
     SymbolicPolynomial a = U;
     SymbolicPolynomial b = V;
@@ -1606,6 +1611,7 @@ bool hermite_step(
     QuotientRingElement* B_k,
     QuotientRingElement* remainder) {
 
+    (void)remainder;
     int n = ext.degree;
     SymbolicPolynomial modulus = ext.minimal_polynomial;
 
@@ -1623,7 +1629,7 @@ bool hermite_step(
 
     // 如果 GCD 是常数，可以求解
     double g_val = 0.0;
-    if (G.degree() == 0 && G.coefficient(0).is_number(&g_val) && std::abs(g_val) > 1e-12) {
+    if (G.degree() == 0 && G.coefficient(0).is_number(&g_val) && mymath::abs(g_val) > 1e-12) {
         // 归一化
         SymbolicExpression g_inv = SymbolicExpression::number(1.0 / g_val);
 
@@ -1710,6 +1716,7 @@ RischAlgorithm::compute_algebraic_residues(
     const AlgebraicExtensionInfo& ext,
     const std::string& x_var) {
 
+    (void)x_var;
     std::vector<std::pair<SymbolicExpression, SymbolicExpression>> residues;
 
     // Trager 算法的符号残差计算:
@@ -1760,8 +1767,8 @@ RischAlgorithm::compute_algebraic_residues(
         // 检查判别式是否为完全平方
         double delta_val = 0.0;
         if (delta.is_number(&delta_val)) {
-            double sqrt_delta = std::sqrt(delta_val);
-            if (std::abs(sqrt_delta * sqrt_delta - delta_val) < 1e-12) {
+            double sqrt_delta = mymath::sqrt(delta_val);
+            if (mymath::abs(sqrt_delta * sqrt_delta - delta_val) < 1e-12) {
                 // 判别式是完全平方，根是有理数
                 SymbolicExpression root1 = ((make_negate(b) + SymbolicExpression::number(sqrt_delta)) /
                                            (SymbolicExpression::number(2.0) * a)).simplify();
@@ -2187,7 +2194,7 @@ bool inverse_exact(
     if (g.degree() > 0) {
         // 检查 g 是否是常数多项式
         double g_val = 0.0;
-        if (g.degree() == 0 && g.coefficient(0).is_number(&g_val) && std::abs(g_val) > 1e-12) {
+        if (g.degree() == 0 && g.coefficient(0).is_number(&g_val) && mymath::abs(g_val) > 1e-12) {
             // g 是非零常数，可以归一化
             SymbolicExpression g_inv = SymbolicExpression::number(1.0 / g_val);
             for (int i = 0; i < n && i <= s.degree(); ++i) {
@@ -2333,7 +2340,7 @@ bool RischAlgorithm::generalized_euler_substitution(
             SymbolicExpression base(e.node_->left);
             SymbolicExpression exp(e.node_->right);
             double exp_val = 0.0;
-            if (exp.is_number(&exp_val) && std::abs(exp_val - 0.5) < 1e-9) {
+            if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < 1e-9) {
                 if (structural_equals(base.simplify(), u.simplify())) {
                     return t;
                 }
@@ -2486,7 +2493,7 @@ bool RischAlgorithm::integrate_rational_in_nth_root(
             if (structural_equals(base.simplify(), u.simplify()) && exp.is_number(&exp_val)) {
                 // u^(exp_val) = t^(n*exp_val)
                 double new_exp = n * exp_val;
-                if (std::abs(new_exp - std::round(new_exp)) < 1e-9) {
+                if (mymath::abs(new_exp - mymath::round(new_exp)) < 1e-9) {
                     return make_power(t, SymbolicExpression::number(new_exp)).simplify();
                 }
             }

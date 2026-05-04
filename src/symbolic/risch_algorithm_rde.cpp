@@ -3,8 +3,7 @@
 #include "symbolic/symbolic_expression_internal.h"
 #include "symbolic/differential_field.h"
 #include <algorithm>
-#include <cmath>
-#include <vector>
+//#include <vector>
 
 using namespace symbolic_expression_internal;
 using namespace risch_algorithm_internal;
@@ -24,13 +23,13 @@ std::vector<int> detect_possible_integer_ratios_impl(const SymbolicExpression& r
     // 尝试数值检测
     double val = 0.0;
     if (ratio.is_number(&val)) {
-        int n = static_cast<int>(std::round(val));
-        if (std::abs(val - n) < 1e-9) {
+        int n = static_cast<int>(mymath::round(val));
+        if (mymath::abs(val - n) < 1e-9) {
             candidates.push_back(n);
         }
         // 检查附近的整数
         for (int offset = -2; offset <= 2; ++offset) {
-            if (offset != 0 && std::abs(val - (n + offset)) < 0.1) {
+            if (offset != 0 && mymath::abs(val - (n + offset)) < 0.1) {
                 candidates.push_back(n + offset);
             }
         }
@@ -43,10 +42,10 @@ std::vector<int> detect_possible_integer_ratios_impl(const SymbolicExpression& r
         SymbolicExpression den(ratio.node_->right);
         double num_val = 0.0, den_val = 0.0;
         if (num.is_number(&num_val) && den.is_number(&den_val) &&
-            std::abs(den_val) > 1e-12) {
+            mymath::abs(den_val) > 1e-12) {
             double quotient = num_val / den_val;
-            int n = static_cast<int>(std::round(quotient));
-            if (std::abs(quotient - n) < 1e-9) {
+            int n = static_cast<int>(mymath::round(quotient));
+            if (mymath::abs(quotient - n) < 1e-9) {
                 candidates.push_back(n);
             }
         }
@@ -71,9 +70,9 @@ struct RationalValueForCancellation {
         std::vector<int> result;
         if (!is_valid) return result;
         double val = numerator / denominator;
-        int n = static_cast<int>(std::round(val));
+        int n = static_cast<int>(mymath::round(val));
         result.push_back(n);
-        if (std::abs(val - n) < 0.5) {
+        if (mymath::abs(val - n) < 0.5) {
             result.push_back(n - 1);
             result.push_back(n + 1);
         }
@@ -97,7 +96,7 @@ RationalValueForCancellation extract_rational_for_cancellation(const SymbolicExp
         SymbolicExpression den(expr.node_->right);
 
         double num_val = 0.0, den_val = 0.0;
-        if (num.is_number(&num_val) && den.is_number(&den_val) && std::abs(den_val) > 1e-12) {
+        if (num.is_number(&num_val) && den.is_number(&den_val) && mymath::abs(den_val) > 1e-12) {
             result.is_valid = true;
             result.numerator = num_val;
             result.denominator = den_val;
@@ -125,8 +124,8 @@ RationalValueForCancellation extract_rational_for_cancellation(const SymbolicExp
 bool is_integer_expression(const SymbolicExpression& expr, int* value = nullptr) {
     double val = 0.0;
     if (expr.is_number(&val)) {
-        int n = static_cast<int>(std::round(val));
-        if (std::abs(val - n) < 1e-9) {
+        int n = static_cast<int>(mymath::round(val));
+        if (mymath::abs(val - n) < 1e-9) {
             if (value) *value = n;
             return true;
         }
@@ -261,8 +260,8 @@ CancellationResult detect_cancellation_enhanced(
     // Case 1: ratio is a numeric constant
     double n_val = 0.0;
     if (ratio.is_number(&n_val)) {
-        int n = static_cast<int>(std::round(n_val));
-        if (std::abs(n_val - n) < 1e-9) {
+        int n = static_cast<int>(mymath::round(n_val));
+        if (mymath::abs(n_val - n) < 1e-9) {
             result.type = CancellationType::kConstantN;
             result.n_value = n;
             result.n_expr = SymbolicExpression::number(static_cast<double>(n));
@@ -304,8 +303,8 @@ CancellationResult detect_cancellation_enhanced(
             auto r = extract_rational_for_cancellation(ratio);
             if (r.is_valid) {
                 double quotient = r.numerator / r.denominator;
-                int n = static_cast<int>(std::round(quotient));
-                if (std::abs(quotient - n) < 1e-9) {
+                int n = static_cast<int>(mymath::round(quotient));
+                if (mymath::abs(quotient - n) < 1e-9) {
                     result.type = CancellationType::kConstantN;
                     result.n_value = n;
                     result.n_expr = ratio;
@@ -481,6 +480,7 @@ RDEBounds RischAlgorithm::compute_rde_bounds_complete(
     const std::vector<DifferentialExtension>& tower,
     int tower_index) {
 
+    (void)t_var;
     RDEBounds bounds;
     bounds.degree_bound = 0;
     bounds.valuation_bound = 0;
@@ -553,8 +553,8 @@ RDEBounds RischAlgorithm::compute_rde_bounds_complete(
             // 尝试检测整数比值
             double n_val = 0.0;
             if (ratio.is_number(&n_val)) {
-                int n = static_cast<int>(std::round(n_val));
-                if (std::abs(n_val - n) < 1e-9 && n > 0) {
+                int n = static_cast<int>(mymath::round(n_val));
+                if (mymath::abs(n_val - n) < 1e-9 && n > 0) {
                     // 存在消去: f = -n * u'/u
                     // 但对于对数扩展，这通常不增加度数界
                     // 因为 u'/u 不依赖于 t
@@ -596,14 +596,14 @@ RDEBounds RischAlgorithm::compute_rde_bounds_complete(
             double n_val = 0.0;
 
             if (ratio.is_number(&n_val)) {
-                int n = static_cast<int>(std::round(n_val));
-                if (std::abs(n_val - n) < 1e-9) {
+                int n = static_cast<int>(mymath::round(n_val));
+                if (mymath::abs(n_val - n) < 1e-9) {
                     // 存在消去: f_lc = -n * u'
                     // Bronstein 公式: bound = max(deg(g), n) + 1
                     bounds.has_cancellation = true;
                     bounds.cancellation_n = n;
                     bounds.cancellation_candidates.push_back(n);
-                    bounds.degree_bound = std::max(deg_g, std::abs(n)) + 1;
+                    bounds.degree_bound = std::max(deg_g, mymath::abs(n)) + 1;
                     bounds.valuation_bound = std::min(-n, 0);
                     bounds.reason = "Exponential: deg(f) > 0, cancellation f_lc = -n*u', n=" + std::to_string(n);
                 } else {
@@ -619,7 +619,7 @@ RDEBounds RischAlgorithm::compute_rde_bounds_complete(
                     // 使用最保守的估计
                     int max_candidate = 0;
                     for (int c : bounds.cancellation_candidates) {
-                        max_candidate = std::max(max_candidate, std::abs(c));
+                        max_candidate = std::max(max_candidate, mymath::abs(c));
                     }
                     bounds.degree_bound = std::max(deg_g, max_candidate) + 1;
                     bounds.reason = "Exponential: deg(f) > 0, symbolic cancellation candidates";
@@ -638,14 +638,14 @@ RDEBounds RischAlgorithm::compute_rde_bounds_complete(
             double n_val = 0.0;
 
             if (ratio.is_number(&n_val)) {
-                int n = static_cast<int>(std::round(n_val));
-                if (std::abs(n_val - n) < 1e-9) {
+                int n = static_cast<int>(mymath::round(n_val));
+                if (mymath::abs(n_val - n) < 1e-9) {
                     // 消去情况: f = -n*u'
                     // 解可能有 t^(-n) 项
                     bounds.has_cancellation = true;
                     bounds.cancellation_n = n;
                     bounds.cancellation_candidates.push_back(n);
-                    bounds.degree_bound = std::max(deg_g, std::abs(n)) + 1;
+                    bounds.degree_bound = std::max(deg_g, mymath::abs(n)) + 1;
                     bounds.valuation_bound = std::min(-n, 0);
                     bounds.reason = "Exponential: cancellation f = -n*u', n = " + std::to_string(n);
                 } else {
@@ -660,7 +660,7 @@ RDEBounds RischAlgorithm::compute_rde_bounds_complete(
                     bounds.has_cancellation = true;
                     int max_candidate = 0;
                     for (int c : bounds.cancellation_candidates) {
-                        max_candidate = std::max(max_candidate, std::abs(c));
+                        max_candidate = std::max(max_candidate, mymath::abs(c));
                     }
                     bounds.degree_bound = std::max(deg_g, max_candidate) + 1;
                     bounds.reason = "Exponential: symbolic cancellation detected";
@@ -691,7 +691,6 @@ RDEBounds RischAlgorithm::compute_rde_bounds_complete(
         if (deg_f > 0) {
             // f 依赖于 t
             // 度数界 = deg(g) - deg(f) + (n-1) 其中 n 是扩展度数
-            int n = 2; // 默认 sqrt
             // 尝试从塔中获取扩展度数
             // 这里简化处理
             bounds.degree_bound = std::max(0, deg_g - deg_f + 1);
@@ -783,6 +782,7 @@ CancellationResult RischAlgorithm::detect_cancellation(
     const std::vector<DifferentialExtension>& tower,
     int tower_index) {
 
+    (void)t_var;
     // 构建微分域用于增强检测
     DifferentialField field;
     field.base_variable = (tower_index >= 0 && tower_index < static_cast<int>(tower.size())) ?
@@ -809,7 +809,6 @@ bool RischAlgorithm::solve_spde(
     if (!y || !remainder) return false;
 
     int deg_f = f.degree();
-    int deg_g = g.degree();
 
     // 基本情况: g = 0
     if (g.is_zero()) {
@@ -948,8 +947,8 @@ bool RischAlgorithm::handle_exponential_special_case(
     SymbolicExpression ratio = (make_negate(f) / u_prime).simplify();
     double n_val = 0.0;
     if (ratio.is_number(&n_val)) {
-        int n = static_cast<int>(std::round(n_val));
-        if (std::abs(n_val - n) < 1e-9) {
+        int n = static_cast<int>(mymath::round(n_val));
+        if (mymath::abs(n_val - n) < 1e-9) {
             SymbolicExpression integrand = (g / make_power(t, SymbolicExpression::number(static_cast<double>(n)))).simplify();
             
             // 尝试在当前扩展中积分
@@ -1014,11 +1013,11 @@ int RischAlgorithm::compute_laurent_valuation(
     double u_prime_val = 0.0;
     if (f_coeffs.size() == 1 && f_coeffs.count(0) &&
         f_coeffs.at(0).is_number(&f_val) &&
-        u_prime.is_number(&u_prime_val) && std::abs(u_prime_val) > 1e-12) {
+        u_prime.is_number(&u_prime_val) && mymath::abs(u_prime_val) > 1e-12) {
         // 检查 f = -n*u' 对于某个整数 n
         double ratio = -f_val / u_prime_val;
-        int n = static_cast<int>(std::round(ratio));
-        if (std::abs(ratio - n) < 1e-9) {
+        int n = static_cast<int>(mymath::round(ratio));
+        if (mymath::abs(ratio - n) < 1e-9) {
             if (n > 0) {
                 // 特殊情况：解可能有 t^(-n) 项
                 return std::min(-n, g_low);
@@ -1400,7 +1399,7 @@ bool RischAlgorithm::solve_laurent_rde_complete(
             } else {
                 // 检查 fi 和 gk 是否都是常数
                 double fi_val = 0.0, gk_val = 0.0;
-                if (fi.is_number(&fi_val) && gk.is_number(&gk_val) && std::abs(fi_val) > 1e-12) {
+                if (fi.is_number(&fi_val) && gk.is_number(&gk_val) && mymath::abs(fi_val) > 1e-12) {
                     // c_k = gk / fi 是常数解
                     y_coeffs[k] = SymbolicExpression::number(gk_val / fi_val);
                 } else {
@@ -1460,7 +1459,7 @@ bool RischAlgorithm::solve_laurent_rde_complete(
             } else {
                 // 检查 fi 和 rhs 是否都是常数
                 double fi_val = 0.0, rhs_val = 0.0;
-                if (fi.is_number(&fi_val) && rhs.is_number(&rhs_val) && std::abs(fi_val) > 1e-12) {
+                if (fi.is_number(&fi_val) && rhs.is_number(&rhs_val) && mymath::abs(fi_val) > 1e-12) {
                     y_coeffs[k] = SymbolicExpression::number(rhs_val / fi_val);
                 } else {
                     IntegrationResult res = solve_rde(fi, rhs, x_var, tower, tower_index - 1);
@@ -1567,7 +1566,6 @@ RDEResult RischAlgorithm::solve_polynomial_rde_in_extension(
         SymbolicPolynomial g_poly(g_coeffs, t_var);
 
         int deg_f = f_poly.degree();
-        int deg_g = g_poly.degree();
 
         // 计算度数界
         RDEBounds bounds = compute_rde_bounds_complete(f_poly, g_poly, t_var, field.tower, tower_level);
@@ -1922,7 +1920,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde(
             SymbolicExpression u_prime = (tower[tower_index].derivation / t).simplify();
             double u_prime_const = 0.0;
             if (u_prime.is_number(&u_prime_const) &&
-                std::abs(u_prime_const - f_const) < 1e-10) {
+                mymath::abs(u_prime_const - f_const) < 1e-10) {
                 return IntegrationResult::unknown("RDE integrating factor is current exponential extension");
             }
         }
@@ -2110,8 +2108,6 @@ bool RischAlgorithm::solve_polynomial_parametric_rde(
     deg_y = std::max(deg_y, max_deg_g + 1);
 
     SymbolicExpression t_prime = (tower_index >= 0) ? tower[tower_index].derivation : SymbolicExpression::number(1.0);
-    DifferentialExtension::Kind kind = (tower_index >= 0) ? tower[tower_index].kind : DifferentialExtension::Kind::kNone;
-
     int num_c = static_cast<int>(g_polys.size());
     int num_y = deg_y + 1;
     int num_unknowns = num_y + num_c;
@@ -2196,7 +2192,7 @@ bool RischAlgorithm::solve_polynomial_parametric_rde(
     // Step 4: 如果标准方法失败，尝试消去检测
     if (bounds.has_cancellation && !bounds.cancellation_candidates.empty()) {
         // 存在消去情况，尝试特殊处理
-        for (int n : bounds.cancellation_candidates) {
+        for (std::size_t i = 0; i < bounds.cancellation_candidates.size(); ++i) {
             // 尝试 y = t^(-n) * z 的形式
             // 这需要更复杂的处理，这里简化
         }
@@ -2301,6 +2297,7 @@ bool RischAlgorithm::solve_coefficient_identity_for_rde(
     int max_deg,
     std::vector<SymbolicExpression>* unknowns) {
 
+    (void)x_var;
     int deg_D = D.degree();
     int deg_F = F.degree();
     int deg_G = G.degree();
@@ -2382,7 +2379,7 @@ bool RischAlgorithm::try_algebraic_substitution(
             SymbolicExpression base(e.node_->left);
             SymbolicExpression exp(e.node_->right);
             double exp_val = 0.0;
-            if (exp.is_number(&exp_val) && std::abs(exp_val - 0.5) < 1e-9) {
+            if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < 1e-9) {
                 return {true, base};
             }
         }
@@ -2413,7 +2410,7 @@ bool RischAlgorithm::try_algebraic_substitution(
     SymbolicExpression b = coeffs[0];
 
     double a_val = 0.0;
-    if (!a.is_number(&a_val) || std::abs(a_val) < 1e-9) {
+    if (!a.is_number(&a_val) || mymath::abs(a_val) < 1e-9) {
         // a 不是常数或为零，无法简单换元
         return false;
     }
@@ -2444,7 +2441,7 @@ bool RischAlgorithm::try_algebraic_substitution(
             SymbolicExpression base(e.node_->left);
             SymbolicExpression exp(e.node_->right);
             double exp_val = 0.0;
-            if (exp.is_number(&exp_val) && std::abs(exp_val - 0.5) < 1e-9) {
+            if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < 1e-9) {
                 // x^0.5 = sqrt(x)
                 SymbolicExpression base_sub = substitute(base);
                 if (structural_equals(base.simplify(), u.simplify())) {
@@ -2842,7 +2839,6 @@ RDEResult RischAlgorithm::solve_polynomial_rde_strict(
     }
 
     int deg_f = f.degree();
-    int deg_g = g.degree();
 
     if (deg_f < 0 || f.is_zero()) {
         IntegrationResult int_res = integrate_full(g.to_expression(), field.base_variable, recursion_depth + 1);
@@ -2910,6 +2906,7 @@ CancellationResult RischAlgorithm::detect_cancellation_strict(
     const SymbolicExpression& u_prime,
     const DifferentialField& field) {
 
+    (void)field;
     CancellationResult result;
     result.type = CancellationType::kNone;
 
@@ -2921,8 +2918,8 @@ CancellationResult RischAlgorithm::detect_cancellation_strict(
 
     double val = 0.0;
     if (ratio.is_number(&val)) {
-        int n = static_cast<int>(std::round(val));
-        if (std::abs(val - n) < 1e-9) {
+        int n = static_cast<int>(mymath::round(val));
+        if (mymath::abs(val - n) < 1e-9) {
             result.type = CancellationType::kConstantN;
             result.n_value = n;
             result.candidates.push_back(n);
@@ -2937,8 +2934,8 @@ CancellationResult RischAlgorithm::detect_cancellation_strict(
         double num_val = 0.0, den_val = 0.0;
         if (num.is_number(&num_val) && den.is_number(&den_val)) {
             double quotient = num_val / den_val;
-            int n = static_cast<int>(std::round(quotient));
-            if (std::abs(quotient - n) < 1e-9) {
+            int n = static_cast<int>(mymath::round(quotient));
+            if (mymath::abs(quotient - n) < 1e-9) {
                 result.type = CancellationType::kConstantN;
                 result.n_value = n;
                 result.candidates.push_back(n);
@@ -3240,6 +3237,8 @@ LiouvillianSolution RischAlgorithm::determine_liouvillian_type(
     const std::string& x_var,
     const std::vector<DifferentialExtension>& tower) {
 
+    (void)x_var;
+    (void)tower;
     LiouvillianSolution result;
     result.expression = solution;
 
@@ -3463,7 +3462,7 @@ bool has_fractional_power(const SymbolicExpression& expr) {
         double val = 0.0;
         if (exp.is_number(&val)) {
             double int_part;
-            if (std::abs(std::modf(val, &int_part)) > 1e-12) {
+            if (mymath::abs(mymath::modf(val, &int_part)) > 1e-12) {
                 return true;  // 分数幂
             }
         }

@@ -53,6 +53,18 @@ double abs(double x) {
     return x < 0.0 ? -x : x;
 }
 
+int abs(int x) {
+    return x < 0 ? -x : x;
+}
+
+long abs(long x) {
+    return x < 0 ? -x : x;
+}
+
+long long abs(long long x) {
+    return x < 0 ? -x : x;
+}
+
 long double abs_long_double(long double x) {
     return x < 0.0L ? -x : x;
 }
@@ -102,6 +114,14 @@ double round(double x) {
     return x >= 0.0 ? floor(x + 0.5) : ceil(x - 0.5);
 }
 
+double modf(double x, double* integer_part) {
+    const double integer = trunc(x);
+    if (integer_part) {
+        *integer_part = integer;
+    }
+    return x - integer;
+}
+
 double clamp(double value, double low, double high) {
     if (high < low) {
         const double temp = low;
@@ -115,6 +135,17 @@ double clamp(double value, double low, double high) {
         return high;
     }
     return value;
+}
+
+double fmod(double x, double y) {
+    if (is_near_zero(y)) {
+        throw std::domain_error("fmod divisor cannot be zero");
+    }
+    if (!isfinite(x) || !isfinite(y)) {
+        return quiet_nan();
+    }
+    const double quotient = trunc(x / y);
+    return x - quotient * y;
 }
 
 double remainder(double x, double y) {

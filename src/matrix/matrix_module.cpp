@@ -6,7 +6,6 @@
 #include "core/format_utils.h"
 #include "core/calculator_exceptions.h"
 #include <stdexcept>
-#include <cmath>
 #include <algorithm>
 #include <sstream>
 

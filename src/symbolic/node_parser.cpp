@@ -363,6 +363,7 @@ int precedence(const std::shared_ptr<SymbolicExpression::Node>& node) {
         case NodeType::kVector:
         case NodeType::kTensor:
         case NodeType::kDifferentialOp:
+        case NodeType::kRootOf:
             return 5;
     }
     return 5;
@@ -580,6 +581,9 @@ std::string node_structural_key(const std::shared_ptr<SymbolicExpression::Node>&
         }
         case NodeType::kDifferentialOp:
             key = "DOP(" + node->text + ":" + node_structural_key(node->left) + ")";
+            break;
+        case NodeType::kRootOf:
+            key = "ROOTOF(" + node->text + ")";
             break;
     }
     node->structural_key_cache = key;
@@ -953,6 +957,8 @@ SymbolicExpression substitute_impl(const SymbolicExpression& expression,
                                       .node_,
                                   node->text))
                 .simplify();
+        case NodeType::kRootOf:
+            return expression;
     }
     throw std::runtime_error("unsupported symbolic substitution");
 }
@@ -1035,6 +1041,8 @@ SymbolicExpression substitute_expression_impl(const SymbolicExpression& expressi
                                       .node_,
                                   node->text))
                 .simplify();
+        case NodeType::kRootOf:
+            return expression;
     }
     throw std::runtime_error("unsupported symbolic substitution");
 }
@@ -1105,6 +1113,7 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                 case NodeType::kVector:
                 case NodeType::kTensor:
                 case NodeType::kDifferentialOp:
+                case NodeType::kRootOf:
                     break;
             }
             return false;
@@ -1230,6 +1239,7 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
         case NodeType::kVector:
         case NodeType::kTensor:
         case NodeType::kDifferentialOp:
+        case NodeType::kRootOf:
             return false;
     }
     return false;
@@ -1320,6 +1330,7 @@ bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& nod
                 case NodeType::kVector:
                 case NodeType::kTensor:
                 case NodeType::kDifferentialOp:
+                case NodeType::kRootOf:
                     break;
             }
             return false;
@@ -1447,6 +1458,7 @@ bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& nod
         case NodeType::kVector:
         case NodeType::kTensor:
         case NodeType::kDifferentialOp:
+        case NodeType::kRootOf:
             return false;
     }
     return false;
@@ -1541,6 +1553,8 @@ bool SymbolicExpression::is_constant(const std::string& variable_name) const {
             return true;
         case NodeType::kDifferentialOp:
             return SymbolicExpression(node_->left).is_constant(variable_name);
+        case NodeType::kRootOf:
+            return true;
     }
     return false;
 }

@@ -486,6 +486,7 @@ std::vector<std::string_view> CommandParser::parse_argument_list_by_tokens(bool 
 }
 
 CommandASTNode CommandParser::parse_expression(bool single_statement) {
+    (void)single_statement;
     if (peek_token().kind == TokenKind::kEnd) {
         return CommandASTNode::make_expression("");
     }

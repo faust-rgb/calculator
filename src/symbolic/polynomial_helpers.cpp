@@ -36,7 +36,6 @@
 #include "polynomial/polynomial.h"
 
 #include <algorithm>
-#include <cmath>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -769,6 +768,8 @@ void collect_identifier_variables(const SymbolicExpression& expression,
         case NodeType::kDifferentialOp:
             collect_identifier_variables(SymbolicExpression(node->left), names);
             return;
+        case NodeType::kRootOf:
+            return;
     }
 }
 
@@ -959,6 +960,7 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
         case NodeType::kVector:
         case NodeType::kTensor:
         case NodeType::kDifferentialOp:
+        case NodeType::kRootOf:
             return finish(false);
     }
     return finish(false);
@@ -1258,8 +1260,8 @@ bool symbolic_laurent_coefficients(
             SymbolicExpression exp(den.node_->right);
             double exp_val = 0.0;
             if (base.is_variable_named(variable_name) && exp.is_number(&exp_val)) {
-                int n = static_cast<int>(std::round(exp_val));
-                if (n > 0 && std::abs(exp_val - n) < 1e-9) {
+                int n = static_cast<int>(mymath::round(exp_val));
+                if (n > 0 && mymath::abs(exp_val - n) < 1e-9) {
                     // num / t^n
                     std::map<int, SymbolicExpression> num_coeffs;
                     if (symbolic_laurent_coefficients(num, variable_name, &num_coeffs)) {
@@ -1311,7 +1313,7 @@ bool symbolic_laurent_coefficients(
             if (num_coeffs.empty()) return false;
             // 检查分母是否为常数
             double den_val = 0.0;
-            if (den.is_number(&den_val) && std::abs(den_val) > 1e-12) {
+            if (den.is_number(&den_val) && mymath::abs(den_val) > 1e-12) {
                 for (const auto& [power, coeff] : num_coeffs) {
                     (*coefficients)[power] = (coeff / den).simplify();
                 }
@@ -1329,7 +1331,7 @@ bool symbolic_laurent_coefficients(
 
         double exp_val = 0.0;
         if (exp.is_number(&exp_val)) {
-            int n = static_cast<int>(std::round(exp_val));
+            int n = static_cast<int>(mymath::round(exp_val));
 
             // 负指数：t^(-n) = 1/t^n
             if (n < 0 && base.is_variable_named(variable_name)) {
@@ -1338,7 +1340,7 @@ bool symbolic_laurent_coefficients(
             }
 
             // 正整数指数
-            if (n >= 0 && std::abs(exp_val - n) < 1e-9) {
+            if (n >= 0 && mymath::abs(exp_val - n) < 1e-9) {
                 // 特殊情况：base 是变量
                 if (base.is_variable_named(variable_name)) {
                     (*coefficients)[n] = SymbolicExpression::number(1.0);

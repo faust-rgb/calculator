@@ -65,6 +65,9 @@ constexpr double kEps = 1e-12;
  * @return |x|
  */
 double abs(double x);
+int abs(int x);
+long abs(long x);
+long long abs(long long x);
 long double abs_long_double(long double x);
 bool isnan(double x);
 bool isinf(double x);
@@ -73,7 +76,9 @@ double floor(double x);
 double ceil(double x);
 double round(double x);
 double trunc(double x);
+double modf(double x, double* integer_part);
 double clamp(double value, double low, double high);
+double fmod(double x, double y);
 double remainder(double x, double y);
 double infinity();
 double quiet_nan();

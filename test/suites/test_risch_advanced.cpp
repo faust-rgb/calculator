@@ -3,7 +3,6 @@
 #include "symbolic/symbolic_expression_internal.h"
 #include <iostream>
 #include <cassert>
-#include <cmath>
 
 using namespace symbolic_expression_internal;
 

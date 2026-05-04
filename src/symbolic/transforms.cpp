@@ -452,6 +452,7 @@ bool apply_linear_transform_rules(
         case NodeType::kVector:
         case NodeType::kTensor:
         case NodeType::kDifferentialOp:
+        case NodeType::kRootOf:
         case NodeType::kDivide:
         case NodeType::kPower:
         case NodeType::kFunction:
@@ -613,6 +614,7 @@ SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
         case NodeType::kVector:
         case NodeType::kTensor:
         case NodeType::kDifferentialOp:
+        case NodeType::kRootOf:
             break;
     }
 
@@ -854,6 +856,7 @@ SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expr
         case NodeType::kVector:
         case NodeType::kTensor:
         case NodeType::kDifferentialOp:
+        case NodeType::kRootOf:
         case NodeType::kPower:
             break;
     }
@@ -1351,6 +1354,7 @@ SymbolicExpression fourier_transform_impl(const SymbolicExpression& expression,
         case NodeType::kVector:
         case NodeType::kTensor:
         case NodeType::kDifferentialOp:
+        case NodeType::kRootOf:
         case NodeType::kPower:
             break;
     }
@@ -1531,6 +1535,7 @@ SymbolicExpression inverse_fourier_transform_impl(const SymbolicExpression& expr
         case NodeType::kVector:
         case NodeType::kTensor:
         case NodeType::kDifferentialOp:
+        case NodeType::kRootOf:
         case NodeType::kPower:
             break;
     }
@@ -1697,6 +1702,7 @@ SymbolicExpression z_transform_impl(const SymbolicExpression& expression,
         case NodeType::kVector:
         case NodeType::kTensor:
         case NodeType::kDifferentialOp:
+        case NodeType::kRootOf:
             break;
         case NodeType::kPower: {
             const SymbolicExpression base(simplified.node_->left);
@@ -1912,6 +1918,7 @@ SymbolicExpression inverse_z_transform_impl(const SymbolicExpression& expression
         case NodeType::kVector:
         case NodeType::kTensor:
         case NodeType::kDifferentialOp:
+        case NodeType::kRootOf:
         case NodeType::kPower:
             break;
     }

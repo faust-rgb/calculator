@@ -459,7 +459,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                         bool all_zero = true;
                         for (const auto& row : hessian_values) {
                             for (double val : row) {
-                                if (std::abs(val) > 1e-10) {
+                                if (mymath::abs(val) > 1e-10) {
                                     all_zero = false;
                                     break;
                                 }

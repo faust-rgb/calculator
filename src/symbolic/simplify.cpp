@@ -28,7 +28,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include <cmath>
 #include <algorithm>
 
 namespace symbolic_expression_internal {
@@ -233,8 +232,8 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                     return SymbolicExpression::number(mymath::gamma(numeric));
                 }
                 if (node->text == "abs") return SymbolicExpression::number(mymath::abs(numeric));
-                if (node->text == "floor") return SymbolicExpression::number(std::floor(numeric));
-                if (node->text == "ceil") return SymbolicExpression::number(std::ceil(numeric));
+                if (node->text == "floor") return SymbolicExpression::number(mymath::floor(numeric));
+                if (node->text == "ceil") return SymbolicExpression::number(mymath::ceil(numeric));
                 if (node->text == "cbrt") return SymbolicExpression::number(mymath::cbrt(numeric));
                 if (node->text == "sign") {
                     if (mymath::is_near_zero(numeric, kFormatEps)) return SymbolicExpression::number(0.0);
@@ -484,8 +483,8 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (left.is_variable_named("i")) {
                 double exp_v;
                 if (right.is_number(&exp_v)) {
-                    int exp_i = static_cast<int>(std::round(exp_v));
-                    if (std::abs(exp_v - exp_i) < 1e-10) {
+                    int exp_i = static_cast<int>(mymath::round(exp_v));
+                    if (mymath::abs(exp_v - exp_i) < 1e-10) {
                         int m4 = ((exp_i % 4) + 4) % 4;
                         if (m4 == 0) return SymbolicExpression::number(1.0);
                         if (m4 == 1) return left;

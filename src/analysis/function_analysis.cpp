@@ -585,6 +585,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                 case NodeType::kVector:
                 case NodeType::kTensor:
                 case NodeType::kDifferentialOp:
+                case NodeType::kRootOf:
                     return SymbolicLimitProbeKind::kUnknown;
             }
             return SymbolicLimitProbeKind::kUnknown;

@@ -7,7 +7,6 @@
 #include "symbolic/differential_field.h"
 #include <vector>
 #include <utility>
-#include <cmath>
 #include <memory>
 
 /**
@@ -112,7 +111,7 @@ public:
         if (!minimal_polynomial.coefficient(1).is_number(&a)) return false;
         if (!minimal_polynomial.coefficient(0).is_number(&b)) return false;
 
-        if (std::abs(a) < 1e-12) return false;
+        if (mymath::abs(a) < 1e-12) return false;
 
         if (value) {
             double val = -b / a;

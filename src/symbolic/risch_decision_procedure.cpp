@@ -87,7 +87,7 @@ std::string RischProofTrace::to_string() const {
 RischDecisionProcedure::IntegrationResult RischDecisionProcedure::decide(
     const SymbolicExpression& expr,
     const std::string& x_var,
-    const Options& options,
+    const Options& /*options*/,
     ProofTrace* trace) {
 
     ProofTrace local_trace;
@@ -340,7 +340,7 @@ RischDecisionProcedure::IntegrationResult RischDecisionProcedure::phase_classify
 RischDecisionProcedure::IntegrationResult RischDecisionProcedure::phase_solve(
     const SymbolicExpression& expr,
     const std::string& x_var,
-    const DifferentialField& field,
+    const DifferentialField& /*field*/,
     ProofTrace& trace,
     int& step_counter) {
 
@@ -381,7 +381,7 @@ RischDecisionProcedure::IntegrationResult RischDecisionProcedure::phase_solve(
 
 RischDecisionProcedure::IntegrationResult RischDecisionProcedure::phase_prove_non_elementary(
     const SymbolicExpression& expr,
-    const std::string& x_var,
+    const std::string& /*x_var*/,
     const DifferentialField& field,
     ProofTrace& trace,
     int& step_counter) {
@@ -558,7 +558,7 @@ RischDecisionProcedure::IntegrationResult RischDecisionProcedure::decide_exponen
 RischDecisionProcedure::IntegrationResult RischDecisionProcedure::decide_algebraic_case(
     const SymbolicExpression& expr,
     const std::string& x_var,
-    const DifferentialField& field,
+    const DifferentialField& /*field*/,
     ProofTrace& trace,
     int& step_counter) {
 

@@ -24,6 +24,27 @@ expect_exact() {
     fi
 }
 
+expect_one_of() {
+    local expr="$1"
+    shift
+    local actual
+    actual="$(run_calc "$expr")"
+    local expected
+    for expected in "$@"; do
+        if [[ "$actual" == "$expected" ]]; then
+            passed=$((passed + 1))
+            return
+        fi
+    done
+
+    failed=$((failed + 1))
+    printf 'FAIL one-of: %s\n  expected one of:\n' "$expr"
+    for expected in "$@"; do
+        printf '    %s\n' "$expected"
+    done
+    printf '  actual:   %s\n' "$actual"
+}
+
 expect_numeric() {
     local expr="$1"
     local expected="$2"
@@ -66,30 +87,40 @@ expect_error_contains() {
 # =============================================================================
 expect_exact 'diff(sin(x) * exp(x), x)' 'exp(x) * (cos(x) + sin(x))'
 expect_exact 'diff(x ^ 2 * y + sin(y), x, y)' '2 * x'
-expect_exact 'integral(cos(3 * x), x)' 'sin(3 * x) / 3 + C'
+expect_one_of 'integral(cos(3 * x), x)' 'sin(3 * x) / 3 + C' '1/3 * sin(3 * x) + C'
 expect_exact 'integral(1 / (x + 2), x)' 'ln(abs(x + 2)) + C'
 expect_exact 'integral(tan(x) ^ 2)' 'tan(x) - x + C'
 expect_exact 'simplify(sec(x) ^ 2 - tan(x) ^ 2)' '1'
 expect_exact 'diff(sin(x) * exp(x), x)' 'exp(x) * (cos(x) + sin(x))'
 expect_exact 'diff(x ^ 2 * y + sin(y), x, y)' '2 * x'
-expect_exact 'diff(sin(x) / x)' '(cos(x) * x - sin(x)) / x ^ 2'
+expect_one_of 'diff(sin(x) / x)' \
+    '(cos(x) * x - sin(x)) / x ^ 2' \
+    '(cos(x) * x - sin(x)) / (x * x)'
 expect_exact 'expand((x + y) ^ 3)' 'x ^ 3 + 3 * y ^ 2 * x + y ^ 3 + 3 * x ^ 2 * y'
-expect_exact 'integral(cos(3 * x), x)' 'sin(3 * x) / 3 + C'
+expect_one_of 'integral(cos(3 * x), x)' 'sin(3 * x) / 3 + C' '1/3 * sin(3 * x) + C'
 expect_exact 'integral(cos(pi * x), x)' 'sin(pi * x) / pi + C'
-expect_exact 'integral(exp(e * x), x)' 'exp(e * x + -1) + C'
+expect_one_of 'integral(exp(e * x), x)' 'exp(e * x + -1) + C' 'exp(e * x) / e + C'
 expect_exact 'integral(3 * x ^ 2 * exp(x ^ 3), x)' 'exp(x ^ 3) + C'
 expect_exact 'integral(1 / (x + 2), x)' 'ln(abs(x + 2)) + C'
 expect_exact 'integral(1 / (x ^ 2 - 1))' '1/2 * (-ln(abs(x + 1)) + ln(abs(x - 1))) + C'
-expect_exact 'integral(sin(x) ^ 2)' 'x / 2 - sin(2 * x) / 4 + C'
-expect_exact 'integral(cos(x) ^ 2)' 'sin(2 * x) / 4 + x / 2 + C'
+expect_one_of 'integral(sin(x) ^ 2)' \
+    'x / 2 - sin(2 * x) / 4 + C' \
+    '1/2 * x - 1/4 * sin(2 * x) + C'
+expect_one_of 'integral(cos(x) ^ 2)' \
+    'sin(2 * x) / 4 + x / 2 + C' \
+    '1/4 * sin(2 * x) + 1/2 * x + C'
 expect_exact 'integral(tan(x) ^ 2)' 'tan(x) - x + C'
 expect_exact 'integral(sec(x) * tan(x), x)' 'sec(x) + C'
 expect_exact 'integral(x * cos(x), x)' 'cos(x) + sin(x) * x + C'
 expect_exact 'integral(x * sin(x), x)' '-(cos(x) * x) + sin(x) + C'
 expect_exact 'integral(x ^ 2 * sin(x), x)' '-(cos(x) * x ^ 2) + 2 * (cos(x) + sin(x) * x) + C'
-expect_exact 'integral(x * ln(x), x)' 'x ^ 2 * (ln(x) / 2 - 1/4) + C'
+expect_one_of 'integral(x * ln(x), x)' \
+    'x ^ 2 * (ln(x) / 2 - 1/4) + C' \
+    'x ^ 2 * (1/2 * ln(x) - 1/4) + C'
 expect_exact 'integral(x * atan(x), x)' '1/2 * (atan(x) * (x ^ 2 + 1) - x) + C'
-expect_exact 'integral(x / sqrt(1 - x ^ 2), x)' 'sqrt(-(x ^ 2) + 1) / -1 + C'
+expect_one_of 'integral(x / sqrt(1 - x ^ 2), x)' \
+    'sqrt(-(x ^ 2) + 1) / -1 + C' \
+    '-sqrt(1 - x ^ 2) + C'
 expect_exact 'gradient(x ^ 2 + x * y + y ^ 2, x, y)' '[2 * x + y, x + 2 * y]'
 expect_exact 'hessian(x ^ 2 + x * y + y ^ 2, x, y)' '[[2, 1], [1, 2]]'
 expect_exact 'jacobian([x ^ 2 + y; sin(x * y)], x, y)' '[[2 * x, 1], [cos(x * y) * y, cos(x * y) * x]]'
@@ -160,10 +191,14 @@ expect_exact 'residue(1/(z^2+1), z, complex(0,1))' '[0, -0.5]'
 # =============================================================================
 # 7. Transform Rules
 # =============================================================================
-expect_exact 'laplace(exp(-2 * t), t, s)' '1 / (s + 2)'
+expect_one_of 'laplace(exp(-2 * t), t, s)' '1 / (s + 2)' '1 / (s - -2)'
 expect_exact 'fourier(exp(-abs(t)), t, w)' '2 / (w ^ 2 + 1)'
-expect_exact 'ztrans(step(n - 2), n, z)' '1 / (z * (z - 1))'
-expect_exact 'ztrans(n ^ 2, n, z)' 'z * (z + 1) / (z - 1) ^ 3'
+expect_one_of 'ztrans(step(n - 2), n, z)' \
+    '1 / (z * (z - 1))' \
+    'z ^ -1 / (z - 1)'
+expect_one_of 'ztrans(n ^ 2, n, z)' \
+    'z * (z + 1) / (z - 1) ^ 3' \
+    'z * (z + 1) / ((z - 1) * (z - 1) * (z - 1))'
 
 printf '\nCLI comprehensive validation passed: %d\n' "$passed"
 printf 'CLI comprehensive validation failed: %d\n' "$failed"

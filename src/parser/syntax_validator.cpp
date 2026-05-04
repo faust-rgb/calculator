@@ -189,9 +189,6 @@ bool SyntaxValidator::check_operand_context(std::string_view expr,
                                              std::vector<SyntaxErrorInfo>& errors) {
     if (expr.empty()) return true;
 
-    bool in_string = false;
-    bool escaping = false;
-
     // 检查开头
     char first = expr[0];
     if (first == '*' || first == '/' || first == '^' || first == '%') {
@@ -210,6 +207,7 @@ bool SyntaxValidator::check_operand_context(std::string_view expr,
 
 bool SyntaxValidator::check_function_syntax(std::string_view expr,
                                              std::vector<SyntaxErrorInfo>& errors) {
+    (void)errors;
     bool in_string = false;
     bool escaping = false;
 
@@ -234,7 +232,6 @@ bool SyntaxValidator::check_function_syntax(std::string_view expr,
 
         // 检查标识符后是否紧跟 '('（函数调用）
         if (std::isalpha(static_cast<unsigned char>(ch)) || ch == '_') {
-            std::size_t start = i;
             while (i < expr.size() &&
                    (std::isalnum(static_cast<unsigned char>(expr[i])) || expr[i] == '_')) {
                 ++i;

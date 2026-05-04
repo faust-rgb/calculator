@@ -2234,14 +2234,14 @@ bool detect_arith_geo_series(const SymbolicExpression& summand,
                     // 选主元
                     int max_row = i;
                     for (int k = i + 1; k < n; ++k) {
-                        if (std::abs(A[k][i]) > std::abs(A[max_row][i])) {
+                        if (mymath::abs(A[k][i]) > mymath::abs(A[max_row][i])) {
                             max_row = k;
                         }
                     }
                     std::swap(A[i], A[max_row]);
                     std::swap(b[i], b[max_row]);
 
-                    if (std::abs(A[i][i]) < 1e-12) {
+                    if (mymath::abs(A[i][i]) < 1e-12) {
                         return false;  // 矩阵奇异
                     }
 

@@ -5,7 +5,6 @@
 #include "math/mymath.h"
 #include <vector>
 #include <iostream>
-#include <cmath>
 
 namespace test_suites {
 

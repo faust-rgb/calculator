@@ -7,7 +7,6 @@
 #include "analysis/multivariable_integrator.h"
 #include "math/mymath.h"
 
-#include <cmath>
 #include <sstream>
 
 namespace integration_ops {
@@ -134,7 +133,7 @@ TheoremResult greens_theorem(
     });
 
     result.value = integrator.integrate(bounds, {subdivisions});
-    result.error_estimate = std::abs(result.value) * 1e-6;  // 简单估计
+    result.error_estimate = mymath::abs(result.value) * 1e-6;  // 简单估计
 
     return result;
 }
@@ -178,7 +177,7 @@ TheoremResult greens_theorem_area(
     });
 
     result.value = integrator.integrate(bounds, {subdivisions, subdivisions});
-    result.error_estimate = std::abs(result.value) * 1e-5;
+    result.error_estimate = mymath::abs(result.value) * 1e-5;
 
     return result;
 }
@@ -256,7 +255,7 @@ TheoremResult divergence_theorem(
     });
 
     result.value = integrator.integrate(bounds, {subdivisions, subdivisions});
-    result.error_estimate = std::abs(result.value) * 1e-5;
+    result.error_estimate = mymath::abs(result.value) * 1e-5;
 
     return result;
 }
@@ -309,7 +308,7 @@ TheoremResult divergence_theorem_volume(
     });
 
     result.value = integrator.integrate(bounds, {subdivisions, subdivisions, subdivisions});
-    result.error_estimate = std::abs(result.value) * 1e-4;
+    result.error_estimate = mymath::abs(result.value) * 1e-4;
 
     return result;
 }
@@ -408,8 +407,8 @@ TheoremResult stokes_theorem(
     result.value = line_result.value;
     result.method_used = "line_integral";
     result.verified = true;
-    result.verification_diff = std::abs(line_result.value - surface_result);
-    result.error_estimate = std::max(line_result.error_estimate, std::abs(result.verification_diff));
+    result.verification_diff = mymath::abs(line_result.value - surface_result);
+    result.error_estimate = std::max(line_result.error_estimate, mymath::abs(result.verification_diff));
 
     return result;
 }
@@ -463,7 +462,7 @@ TheoremResult stokes_theorem_line(
     });
 
     result.value = integrator.integrate(bounds, {subdivisions});
-    result.error_estimate = std::abs(result.value) * 1e-5;
+    result.error_estimate = mymath::abs(result.value) * 1e-5;
 
     return result;
 }

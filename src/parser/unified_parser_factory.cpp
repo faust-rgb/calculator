@@ -14,6 +14,7 @@
 // ============================================================================
 
 ParserKind UnifiedParserFactory::select_parser(const std::string& expression, const ParseContext& ctx) {
+    (void)ctx;
     AnalysisResult result = analyze(expression);
     return result.parser;
 }

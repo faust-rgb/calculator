@@ -715,7 +715,7 @@ struct QuotientRingElement {
         // a*s + modulus*t = c => a*(s/c) + modulus*(t/c) = 1
         SymbolicExpression gcd_const = g.coefficient(0);
         double gcd_val;
-        if (!gcd_const.is_number(&gcd_val) || std::abs(gcd_val) < 1e-10) {
+        if (!gcd_const.is_number(&gcd_val) || mymath::abs(gcd_val) < 1e-10) {
             // gcd 不是数值常数或为零，无法处理
             return false;
         }
@@ -764,7 +764,7 @@ struct QuotientRingElement {
      * Trace(a) = -coeff_{n-1} of characteristic polynomial
      * 对于简化情况，使用迹的定义: sum of conjugates
      */
-    SymbolicExpression trace(const SymbolicPolynomial& modulus) const {
+    SymbolicExpression trace(const SymbolicPolynomial& /*modulus*/) const {
         // 迹是特征多项式的 n-1 次系数的相反数
         // 特征多项式 = resultant_t(t - a(t), modulus(t))
         // 简化计算: 对于 t^i，迹 = 0 除非 i = 0

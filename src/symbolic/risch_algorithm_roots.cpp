@@ -1,7 +1,7 @@
 #include "symbolic/risch_algorithm.h"
 #include "symbolic/symbolic_expression_internal.h"
+#include "math/mymath.h"
 #include <algorithm>
-#include <cmath>
 #include <complex>
 #include <vector>
 
@@ -46,13 +46,13 @@ std::vector<RischAlgorithm::ComplexRoot> RischAlgorithm::find_all_roots(
             double delta = b * b - 4.0 * a * c;
 
             if (delta >= 0) {
-                double sqrt_delta = std::sqrt(delta);
+                double sqrt_delta = mymath::sqrt(delta);
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number((-b + sqrt_delta) / (2.0 * a))));
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number((-b - sqrt_delta) / (2.0 * a))));
             } else {
                 // 复数根：返回共轭对 (a + bi, a - bi) 作为单个条目
                 double real_part = -b / (2.0 * a);
-                double imag_part = std::sqrt(-delta) / (2.0 * a);
+                double imag_part = mymath::sqrt(-delta) / (2.0 * a);
                 // 存储为一个共轭对，表示 a+bi 和 a-bi
                 roots.push_back(ComplexRoot::complex(
                     SymbolicExpression::number(real_part),
@@ -71,8 +71,8 @@ std::vector<RischAlgorithm::ComplexRoot> RischAlgorithm::find_all_roots(
             double disc = q * q / 4.0 + p * p * p / 27.0;
 
             if (disc > 0) {
-                double u = std::sqrt(disc);
-                double root1 = std::pow(-q / 2.0 + u, 1.0/3.0) + std::pow(-q / 2.0 - u, 1.0/3.0) - b / (3.0 * a);
+                double u = mymath::sqrt(disc);
+                double root1 = mymath::pow(-q / 2.0 + u, 1.0/3.0) + mymath::pow(-q / 2.0 - u, 1.0/3.0) - b / (3.0 * a);
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number(root1)));
             } else if (disc == 0) {
                 double root1 = 3.0 * q / p - b / (3.0 * a);
@@ -80,11 +80,11 @@ std::vector<RischAlgorithm::ComplexRoot> RischAlgorithm::find_all_roots(
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number(root1)));
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number(root2)));
             } else {
-                double r = std::sqrt(-p * p * p / 27.0);
-                double theta = std::acos(-q / (2.0 * r)) / 3.0;
-                double root1 = 2.0 * std::pow(r, 1.0/3.0) * std::cos(theta) - b / (3.0 * a);
-                double root2 = 2.0 * std::pow(r, 1.0/3.0) * std::cos(theta + 2.0 * M_PI / 3.0) - b / (3.0 * a);
-                double root3 = 2.0 * std::pow(r, 1.0/3.0) * std::cos(theta + 4.0 * M_PI / 3.0) - b / (3.0 * a);
+                double r = mymath::sqrt(-p * p * p / 27.0);
+                double theta = mymath::acos(-q / (2.0 * r)) / 3.0;
+                double root1 = 2.0 * mymath::pow(r, 1.0/3.0) * mymath::cos(theta) - b / (3.0 * a);
+                double root2 = 2.0 * mymath::pow(r, 1.0/3.0) * mymath::cos(theta + 2.0 * mymath::kPi / 3.0) - b / (3.0 * a);
+                double root3 = 2.0 * mymath::pow(r, 1.0/3.0) * mymath::cos(theta + 4.0 * mymath::kPi / 3.0) - b / (3.0 * a);
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number(root1)));
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number(root2)));
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number(root3)));
@@ -120,6 +120,7 @@ std::vector<SymbolicExpression> RischAlgorithm::find_integer_roots(
     const std::vector<SymbolicExpression>& coeffs,
     const std::string& var_name) {
 
+    (void)var_name;
     std::vector<SymbolicExpression> roots;
 
     SymbolicExpression lc = coeffs.back();
@@ -131,8 +132,8 @@ std::vector<SymbolicExpression> RischAlgorithm::find_integer_roots(
     if (!ct.is_number(&ct_val)) ct_val = 0.0;
 
     int max_search = 100;
-    if (ct_val != 0.0 && std::abs(ct_val) < 1000) {
-        max_search = static_cast<int>(std::abs(ct_val)) + 1;
+    if (ct_val != 0.0 && mymath::abs(ct_val) < 1000) {
+        max_search = static_cast<int>(mymath::abs(ct_val)) + 1;
     }
 
     for (int i = -max_search; i <= max_search; ++i) {
@@ -161,6 +162,7 @@ std::vector<SymbolicExpression> RischAlgorithm::find_rational_roots(
     const std::vector<SymbolicExpression>& coeffs,
     const std::string& var_name) {
 
+    (void)var_name;
     std::vector<SymbolicExpression> roots;
 
     SymbolicExpression lc = coeffs.back();
@@ -173,7 +175,7 @@ std::vector<SymbolicExpression> RischAlgorithm::find_rational_roots(
 
     auto get_divisors = [](double n) -> std::vector<int> {
         std::vector<int> divisors;
-        int abs_n = static_cast<int>(std::abs(n) + 0.5);
+        int abs_n = static_cast<int>(mymath::abs(n) + 0.5);
         if (abs_n == 0) return divisors;
         for (int i = 1; i <= abs_n; ++i) {
             if (abs_n % i == 0) {
@@ -247,16 +249,16 @@ std::vector<SymbolicExpression> RischAlgorithm::find_numeric_roots_newton(
             double fx = eval_poly(x);
             double fpx = eval_deriv(x);
 
-            if (std::abs(fpx) < 1e-12) break;
+            if (mymath::abs(fpx) < 1e-12) break;
 
             double next_x = x - fx / fpx;
 
-            if (std::abs(next_x - x) < 1e-10) {
-                if (std::abs(eval_poly(next_x)) < 1e-9) {
+            if (mymath::abs(next_x - x) < 1e-10) {
+                if (mymath::abs(eval_poly(next_x)) < 1e-9) {
                     bool already_found = false;
                     for (const auto& r : roots) {
                         double r_val = 0.0;
-                        if (r.is_number(&r_val) && std::abs(r_val - next_x) < 1e-6) {
+                        if (r.is_number(&r_val) && mymath::abs(r_val - next_x) < 1e-6) {
                             already_found = true;
                             break;
                         }
@@ -301,8 +303,8 @@ std::vector<std::pair<double, double>> RischAlgorithm::find_complex_roots_aberth
     // 初始猜测：在单位圆上均匀分布
     std::vector<std::complex<double>> z(n);
     for (int i = 0; i < n; ++i) {
-        double angle = 2.0 * M_PI * i / n + 0.1;
-        z[i] = std::complex<double>(std::cos(angle), std::sin(angle));
+        double angle = 2.0 * mymath::kPi * i / n + 0.1;
+        z[i] = std::complex<double>(mymath::cos(angle), mymath::sin(angle));
     }
 
     // Durand-Kerner 迭代
@@ -342,7 +344,7 @@ std::vector<std::pair<double, double>> RischAlgorithm::find_complex_roots_aberth
         double im = z[i].imag();
 
         // 检查是否为实根
-        if (std::abs(im) < 1e-9) {
+        if (mymath::abs(im) < 1e-9) {
             roots.push_back({re, 0.0});
             used.insert(i);
         } else {
@@ -350,10 +352,10 @@ std::vector<std::pair<double, double>> RischAlgorithm::find_complex_roots_aberth
             bool found_conjugate = false;
             for (int j = i + 1; j < n; ++j) {
                 if (!used.count(j) &&
-                    std::abs(z[j].real() - re) < 1e-9 &&
-                    std::abs(z[j].imag() + im) < 1e-9) {
+                    mymath::abs(z[j].real() - re) < 1e-9 &&
+                    mymath::abs(z[j].imag() + im) < 1e-9) {
                     // 共轭对
-                    roots.push_back({re, std::abs(im)});
+                    roots.push_back({re, mymath::abs(im)});
                     used.insert(i);
                     used.insert(j);
                     found_conjugate = true;

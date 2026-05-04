@@ -7,7 +7,7 @@
 #include "symbolic/symbolic_expression_internal.h"
 
 #include <algorithm>
-#include <cmath>
+#include <mymath.h>
 
 using namespace symbolic_expression_internal;
 
@@ -706,19 +706,18 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
             val += c * power;
             power *= r;
         }
-        return std::abs(val) < 1e-9;
+        return mymath::abs(val) < 1e-9;
     };
 
     // 搜索整数根
     std::vector<double> roots;
     double constant_term = num_coeffs.empty() ? 0.0 : num_coeffs[0];
-    double leading_coeff = num_coeffs.back();
 
-    int max_search = static_cast<int>(std::abs(constant_term) + 1);
+    int max_search = static_cast<int>(mymath::abs(constant_term) + 1);
     max_search = std::min(max_search, 100);
 
     for (int i = -max_search; i <= max_search; ++i) {
-        if (i == 0 && num_coeffs.size() > 1 && std::abs(num_coeffs[0]) > 1e-9) continue;
+        if (i == 0 && num_coeffs.size() > 1 && mymath::abs(num_coeffs[0]) > 1e-9) continue;
 
         // 使用有理根定理：p 必须整除常数项，q 必须整除首项系数
         // 对于整数根 r = p/q，如果 q=1，则 p 整除常数项
@@ -766,11 +765,11 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
             current.coefficients_[0].is_number(&c)) {
             double disc = b * b - 4.0 * a * c;
             if (disc >= 0) {
-                double sqrt_disc = std::sqrt(disc);
+                double sqrt_disc = mymath::sqrt(disc);
                 double r1 = (-b + sqrt_disc) / (2.0 * a);
                 double r2 = (-b - sqrt_disc) / (2.0 * a);
 
-                if (std::abs(r1 - r2) < 1e-9) {
+                if (mymath::abs(r1 - r2) < 1e-9) {
                     // 两个相同的根
                     SymbolicPolynomial linear_factor({SymbolicExpression::number(-r1),
                                                      SymbolicExpression::number(1.0)}, variable_name_);
@@ -1156,7 +1155,9 @@ bool partial_fraction_decomposition(
 
         // 构建分子
         SymbolicExpression numer = SymbolicExpression::number(0.0);
-        for (std::size_t j = 0; j < coeffs.size() && unknown_idx < unknowns.size(); ++j) {
+        for (std::size_t j = 0;
+             j < coeffs.size() && static_cast<std::size_t>(unknown_idx) < unknowns.size();
+             ++j) {
             numer = (numer + unknowns[unknown_idx] * coeffs[j]).simplify();
             unknown_idx++;
         }

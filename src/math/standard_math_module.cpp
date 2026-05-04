@@ -7,7 +7,6 @@
 #include "statistics/calculator_statistics.h"
 #include "statistics/statistics.h"
 #include "statistics/probability.h"
-#include <cmath>
 #include <algorithm>
 #include <map>
 

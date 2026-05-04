@@ -2,7 +2,6 @@
 #include "symbolic/risch_algorithm_internal.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "symbolic/differential_field.h"
-#include <cmath>
 #include <algorithm>
 
 using namespace symbolic_expression_internal;
@@ -91,10 +90,11 @@ TowerDecomposition decompose_by_tower_level(
  * Returns true if the expression is a product of factors from different tower levels
  * and partial integration might succeed
  */
-bool can_use_partial_integration(
+[[maybe_unused]] bool can_use_partial_integration(
     const SymbolicExpression& expression,
     const DifferentialField& field) {
 
+    (void)field;  // Reserved for future use
     TowerDecomposition decomp = decompose_by_tower_level(expression, field);
 
     // Need at least two factors from different levels for partial integration
@@ -115,9 +115,9 @@ bool can_use_partial_integration(
  * For u*v where u and v are from different tower levels,
  * try ∫u*v dx = u*∫v dx - ∫u'*(∫v dx) dx
  */
-bool try_partial_integration_decomposed(
+[[maybe_unused]] bool try_partial_integration_decomposed(
     const TowerDecomposition& decomp,
-    const DifferentialField& field,
+    const DifferentialField& /*field*/,
     const std::string& x_var,
     int recursion_depth,
     SymbolicExpression* result) {
@@ -207,8 +207,8 @@ bool decompose_laurent_monomial(const SymbolicExpression& expression,
         double power_value = 0.0;
         if (structural_equals(base, SymbolicExpression::variable(variable_name)) &&
             power.is_number(&power_value)) {
-            const int integer_power = static_cast<int>(std::round(power_value));
-            if (std::abs(power_value - integer_power) < 1e-9) {
+            const int integer_power = static_cast<int>(mymath::round(power_value));
+            if (mymath::abs(power_value - integer_power) < 1e-9) {
                 *coefficient = SymbolicExpression::number(1.0);
                 *exponent = integer_power;
                 return true;
@@ -1149,7 +1149,7 @@ IntegralType RischAlgorithm::determine_integral_type(
                 SymbolicExpression base(inner.node_->left);
                 SymbolicExpression exp(inner.node_->right);
                 double exp_val = 0.0;
-                if (exp.is_number(&exp_val) && std::abs(exp_val - 2.0) < 1e-9 &&
+                if (exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < 1e-9 &&
                     structural_equals(base, SymbolicExpression::variable(field.base_variable))) {
                     // exp(-x^2) 形式，非初等
                     return IntegralType::kNonElementary;
@@ -1163,7 +1163,7 @@ IntegralType RischAlgorithm::determine_integral_type(
         SymbolicExpression num(simplified.node_->left);
         SymbolicExpression den(simplified.node_->right);
         double num_val = 0.0;
-        if (num.is_number(&num_val) && std::abs(num_val - 1.0) < 1e-9) {
+        if (num.is_number(&num_val) && mymath::abs(num_val - 1.0) < 1e-9) {
             if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
                 // 1/ln(u) 形式，非初等
                 return IntegralType::kNonElementary;
@@ -1469,7 +1469,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_mixed_algebraic(
     const SymbolicPolynomial& denominator,
     const DifferentialField& field,
     const DifferentialExtension& ext,
-    const std::vector<int>& tower_indices,
+    const std::vector<int>& /*tower_indices*/,
     int recursion_depth) {
 
     // 对于代数扩展 t = sqrt(u)，使用 Trager 算法
@@ -1506,7 +1506,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde_in_field(
     const SymbolicExpression& f,
     const SymbolicExpression& g,
     const DifferentialField& field,
-    const std::vector<int>& tower_indices,
+    const std::vector<int>& /*tower_indices*/,
     int recursion_depth) {
 
     if (recursion_depth > RISCH_MAX_RECURSION_DEPTH) {
@@ -1565,7 +1565,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde_in_field(
 bool RischAlgorithm::integrate_polynomial_coefficients(
     const SymbolicExpression& expr,
     const DifferentialField& field,
-    const std::vector<int>& tower_indices,
+    const std::vector<int>& /*tower_indices*/,
     int recursion_depth,
     SymbolicExpression* result) {
 
@@ -1616,6 +1616,7 @@ bool RischAlgorithm::lazard_rioboo_trager_mixed(
     SymbolicExpression* result) {
 
     if (!result) return false;
+    (void)recursion_depth;
 
     // 使用标准 LRT 算法，但系数的运算需要递归处理
     // 这里调用现有的 laazard_rioboo_trager_improved，然后处理结果
@@ -1655,7 +1656,7 @@ bool RischAlgorithm::integrate_exponential_rational_mixed(
     const SymbolicPolynomial& denominator,
     const DifferentialField& field,
     const DifferentialExtension& ext,
-    const std::vector<int>& tower_indices,
+    const std::vector<int>& /*tower_indices*/,
     int recursion_depth,
     SymbolicExpression* result) {
 

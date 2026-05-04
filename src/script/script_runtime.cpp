@@ -16,7 +16,6 @@
 #include <iomanip>
 #include <algorithm>
 #include <cctype>
-#include <cmath>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -1165,7 +1164,10 @@ StoredValue invoke_script_function(Calculator* calculator,
 }
 
 // 克隆与渲染逻辑 (省略或保持最简，脚本中目前主要使用 shared_ptr)
-script::StatementPtr clone_statement(const script::Statement& statement) { return nullptr; }
+script::StatementPtr clone_statement(const script::Statement& statement) {
+    (void)statement;
+    return nullptr;
+}
 
 namespace {
 

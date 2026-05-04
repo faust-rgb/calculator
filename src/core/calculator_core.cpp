@@ -147,6 +147,7 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
                 std::string* output,
                 bool exact_mode,
                 const CoreServices& services) -> bool {
+                (void)exact_mode;
                 auto mod = weak_module.lock();
                 if (!mod) return false;
 
