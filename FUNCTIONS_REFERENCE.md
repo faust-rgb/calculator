@@ -716,6 +716,64 @@ Notes:
 - `k` (Boltzmann Constant)
 - `NA` (Avogadro Number)
 
+## Time Functions
+
+- `now()`
+  Current Unix timestamp (seconds since 1970-01-01)
+- `time()`
+  Current time as string "YYYY-MM-DD HH:MM:SS"
+- `time(format)`
+  Current time formatted according to format string
+- `strftime(format, [timestamp])`
+  Format timestamp (or current time if omitted) to string
+- `strptime(time_string, format)`
+  Parse time string to Unix timestamp
+- `clock()`
+  High-resolution timer value in seconds (for performance measurement)
+- `sleep(seconds)`
+  Pause execution for the specified number of seconds
+- `timer_start()`
+  Start a timer and return its ID
+- `timer_elapsed(id)`
+  Get elapsed time for a timer in seconds
+- `timer_stop(id)`
+  Stop a timer and return total elapsed time in seconds
+
+### Time Format Specifiers
+
+- `%Y` - Year (4 digits)
+- `%m` - Month (01-12)
+- `%d` - Day (01-31)
+- `%H` - Hour (00-23)
+- `%M` - Minute (00-59)
+- `%S` - Second (00-59)
+- `%s` - Unix timestamp
+
+### Time Function Examples
+
+- `now()` -> `1714833600`
+- `time()` -> `"2024-05-04 12:00:00"`
+- `strftime("%Y-%m-%d")` -> `"2024-05-04"`
+- `strftime("%H:%M:%S")` -> `"12:00:00"`
+- `strptime("2024-05-04 12:00:00", "%Y-%m-%d %H:%M:%S")` -> `1714795200`
+
+### Timer Examples
+
+```
+t = timer_start()
+# ... some computation ...
+elapsed = timer_stop(t)
+print(elapsed)  # prints elapsed time in seconds
+```
+
+Notes:
+
+- `now()` returns an integer Unix timestamp
+- `time()` and `strftime()` return strings
+- `clock()` returns a high-precision floating-point value suitable for measuring intervals
+- `sleep()` accepts fractional seconds (e.g., `sleep(0.5)` for 500ms)
+- Timers are useful for benchmarking code execution time
+
 ## Symbolic Constants Mode
 
 When `:symbolic on` is enabled, scalar expressions involving `pi` or `e` are

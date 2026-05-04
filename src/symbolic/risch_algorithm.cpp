@@ -222,22 +222,19 @@ IndependenceCheck check_exponential_independence_enhanced(
     const std::string& x_var,
     int recursion_depth);
 
+} // namespace
+
+namespace risch_algorithm_internal {
+
 /**
  * @brief Express an expression as a sum of logarithmic terms
  *
  * Tries to write expr = sum(c_i * ln(v_i)) + w
  * where c_i are constants and w is in the base field.
  */
-struct LogarithmicRepresentation {
-    bool is_valid = false;
-    std::vector<std::pair<SymbolicExpression, SymbolicExpression>> terms; // (c_i, v_i)
-    SymbolicExpression remainder;
-    std::string reason;
-};
-
 LogarithmicRepresentation express_as_logarithmic_sum(
     const SymbolicExpression& expr,
-    const std::vector<DifferentialExtension>& tower,
+    const std::vector<RischAlgorithm::DifferentialExtension>& tower,
     const std::string& x_var) {
 
     LogarithmicRepresentation result;
@@ -262,6 +259,10 @@ LogarithmicRepresentation express_as_logarithmic_sum(
 
     return result;
 }
+
+} // namespace risch_algorithm_internal
+
+namespace {
 
 /**
  * @brief Check if two expressions are proportional by a rational factor

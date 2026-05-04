@@ -23,6 +23,7 @@
 #include "statistics/statistics_module.h"
 #include "module/system_module.h"
 #include "io/io_module.h"
+#include "time/time_module.h"
 
 // 分析模块
 #include "analysis/calculator_series.h"
@@ -57,6 +58,7 @@ void register_standard_modules(Calculator* calculator) {
     // 注册核心功能模块
     calculator->register_module(std::make_shared<SystemModule>());
     calculator->register_module(std::make_shared<IoModule>());
+    calculator->register_module(std::make_shared<TimeModule>());
     calculator->register_module(std::make_shared<polynomial_ops::PolynomialModule>());
     calculator->register_module(std::make_shared<series_ops::SeriesModule>());
     calculator->register_module(std::make_shared<transforms::TransformModule>());

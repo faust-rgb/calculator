@@ -1305,38 +1305,43 @@ bool RischAlgorithm::solve_laurent_rde_complete(
     int lower_bound = 0;
     for (const auto& [p, c] : g_coeffs) {
         if (!SymbolicPolynomial::coeff_is_zero(c)) {
-            lower_bound = std::min(lower_bound, p - 1);
-        }
-    }
-    for (const auto& [p, c] : f_coeffs) {
-        if (!SymbolicPolynomial::coeff_is_zero(c)) {
             lower_bound = std::min(lower_bound, p);
         }
     }
-
     // 计算度数界 (最高幂次)
     int upper_bound = 0;
     for (const auto& [p, c] : g_coeffs) {
-        if (!SymbolicPolynomial::coeff_is_zero(c)) {
-            upper_bound = std::max(upper_bound, p + 1);
-        }
-    }
-    for (const auto& [p, c] : f_coeffs) {
         if (!SymbolicPolynomial::coeff_is_zero(c)) {
             upper_bound = std::max(upper_bound, p);
         }
     }
 
+    bool f_has_t = false;
+    int max_f_power = 0;
+    for (const auto& [p, c] : f_coeffs) {
+        if (!SymbolicPolynomial::coeff_is_zero(c)) {
+            if (p != 0) f_has_t = true;
+            max_f_power = std::max(max_f_power, p);
+        }
+    }
+
+    if (f_has_t) {
+        // 如果 f 依赖于 t，度数和估值界需要包含 f 的项的影响
+        // 这是一个启发式的扩展，因为严格 RDE 中 f 应该在基域 K 中。
+        upper_bound = std::max(upper_bound, max_f_power + 1);
+    }
+
     // 根据消去情况调整界
     if (cancel.type == CancellationType::kConstantN) {
         // f = -n*u' 导致特殊解 y = t^(-n) * z
-        lower_bound = std::min(lower_bound, -cancel.n_value);
-        upper_bound = std::max(upper_bound, std::abs(cancel.n_value) + 1);
+        // 此时对于该次项 n，方程变为 z' = g_n
+        lower_bound = std::min(lower_bound, cancel.n_value);
+        upper_bound = std::max(upper_bound, cancel.n_value);
     } else if (cancel.type == CancellationType::kSymbolicN && !cancel.candidates.empty()) {
         // 符号消去，使用最保守的估计
         for (int n : cancel.candidates) {
-            lower_bound = std::min(lower_bound, -n);
-            upper_bound = std::max(upper_bound, std::abs(n) + 1);
+            lower_bound = std::min(lower_bound, n);
+            upper_bound = std::max(upper_bound, n);
         }
     }
 
@@ -1344,8 +1349,8 @@ bool RischAlgorithm::solve_laurent_rde_complete(
     int num_terms = upper_bound - lower_bound + 1;
     if (num_terms <= 0 || num_terms > 100) {
         // 范围太大，尝试更保守的估计
-        lower_bound = std::max(lower_bound, -10);
-        upper_bound = std::min(upper_bound, 10);
+        lower_bound = std::max(lower_bound, -20);
+        upper_bound = std::min(upper_bound, 20);
         if (upper_bound < lower_bound) {
             return false;
         }

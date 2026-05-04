@@ -21,6 +21,10 @@ using the standard math library implementations from `<cmath>` or `math.h`.
   Symbolic expression support
 - `src/script`
   Script AST and parser
+- `src/time`
+  Time functions (timestamp, formatting, timers, sleep)
+- `src/io`
+  File I/O operations
 - `test`
   Regression tests and runnable example scripts
 
@@ -124,6 +128,10 @@ Shared internal declarations for these splits live in private headers such as
 - Symbolic optimization with `cse(expr)` for common subexpression elimination
 - Improved numerical stability for large-angle trigonometric reduction, `beta`,
   `gamma`, `bessel`, and removable-singularity style `limit(...)` evaluations
+- Time functions: `now()` for Unix timestamp, `time()` for formatted time string,
+  `strftime(format, [timestamp])` and `strptime(string, format)` for time formatting/parsing,
+  `clock()` for high-resolution timing, `sleep(seconds)` for delays,
+  `timer_start()`, `timer_elapsed(id)`, `timer_stop(id)` for benchmarking
 
 ## Build
 

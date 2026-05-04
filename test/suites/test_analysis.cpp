@@ -328,6 +328,24 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 测试单侧定义域回退 (sqrt(x) 在 0 处)
+    try {
+        FunctionAnalysis function("x");
+        function.define("sqrt(x)");
+        const double actual = function.limit(0.0, 0); // 双侧极限请求
+        if (nearly_equal(actual, 0.0, 1e-8)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: single-sided fallback limit expected 0 got "
+                      << actual << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: single-sided fallback limit threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
     // 测试极值点求解
     try {
         FunctionAnalysis function("x");

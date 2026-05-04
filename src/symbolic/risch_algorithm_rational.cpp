@@ -653,88 +653,43 @@ bool RischAlgorithm::integrate_rational(const SymbolicPolynomial& numerator,
                                       SymbolicExpression::number(static_cast<double>(i + 1)))).simplify();
             } else if (kind == DifferentialExtension::Kind::kLogarithmic) {
                 // t = ln(u), ∫ a*t^n dx
-                // 使用递归公式: ∫ a*t^n = (∫a)*t^n - ∫(∫a)*n*t^(n-1)*t' dx
+                // 根据 Liouville 定理，如果 P(t) 在 K(t) 中有初等积分，
+                // 则最高次项系数 a_n 的积分必须在 K 中。
+                // 我们严格要求 a_int 在 K 中，否则积分非初等。
+
+                IntegrationResult a_int_res = integrate_in_extension(q_coeffs[i], tower, tower_index - 1, main_var);
+                if (!a_int_res.success || a_int_res.type != IntegralType::kElementary) return false;
+
+                SymbolicExpression a_int = a_int_res.value;
+
+                // 严格检查 a_int 是否在基域 K 中
+                // 如果 a_int 包含任何不应存在于 K 中的超越函数，则说明不符合形式
+                std::vector<std::pair<SymbolicExpression, SymbolicExpression>> dummy_logs;
+                SymbolicExpression dummy_rest = SymbolicExpression::number(0.0);
+                LogarithmicRepresentation log_rep = express_as_logarithmic_sum(a_int,
+                                                                               std::vector<DifferentialExtension>(tower.begin(), tower.begin() + tower_index),
+                                                                               main_var);
+                if (!log_rep.is_valid) {
+                    return false; // a_int 不在 K 中，非初等
+                }
+
                 if (i == 0) {
-                    IntegrationResult res = integrate_in_extension(q_coeffs[i], tower, tower_index - 1, main_var);
-                    if (!res.success || res.type != IntegralType::kElementary) return false;
-                    term_int = res.value;
+                    term_int = a_int;
                 } else {
-                    IntegrationResult a_int_res = integrate_in_extension(q_coeffs[i], tower, tower_index - 1, main_var);
-                    if (!a_int_res.success || a_int_res.type != IntegralType::kElementary) return false;
-
-                    SymbolicExpression a_int = a_int_res.value;
-
-                    // 改进：允许 a_int 是 t 的常数倍
                     SymbolicExpression t = SymbolicExpression::variable(variable_name);
-                    double t_coeff = 0.0;
-                    SymbolicExpression remainder;
-                    
-                    bool is_t_multiple = false;
-                    if (structural_equals(a_int, t)) {
-                        is_t_multiple = true;
-                        t_coeff = 1.0;
-                    } else if (a_int.node_->type == NodeType::kMultiply) {
-                        SymbolicExpression left(a_int.node_->left);
-                        SymbolicExpression right(a_int.node_->right);
-                        if (left.is_number(&t_coeff) && structural_equals(right, t)) {
-                            is_t_multiple = true;
-                        } else if (right.is_number(&t_coeff) && structural_equals(left, t)) {
-                            is_t_multiple = true;
-                        }
-                    }
+                    SymbolicExpression first_part = (a_int * make_power(t, SymbolicExpression::number(static_cast<double>(i)))).simplify();
 
-                    if (is_t_multiple) {
-                        // ∫ (c*t) * t^n dx 其中 a_int = c*t
-                        // 这意味着 a = c*t' (因为 ∫a = c*t)
-                        // 使用公式: ∫ a*t^n dx = ∫ c*t'*t^n dx = c * t^(n+1) / (n+1)
-                        term_int = (SymbolicExpression::number(t_coeff / (i + 1)) *
-                                   make_power(t, SymbolicExpression::number(i + 1))).simplify();
-                    } else if (contains_tower_var(a_int, tower, tower_index)) {
-                        // a_int 包含塔变量且不是简单的 t 倍数
-                        // 尝试使用 RDE 求解: y' + n*t'*y = q_coeffs[i]
-                        // 其中 y 是在基域中的解
+                    // 计算校正项: ∫ a_int * i * t^(i-1) * t' dx
+                    SymbolicExpression t_prime_val = t_prime ? *t_prime : SymbolicExpression::number(1.0);
+                    SymbolicExpression correction_integrand =
+                        (a_int * SymbolicExpression::number(static_cast<double>(i)) *
+                         make_power(t, SymbolicExpression::number(static_cast<double>(i - 1))) *
+                         t_prime_val).simplify();
 
-                        SymbolicExpression n_expr = SymbolicExpression::number(static_cast<double>(i));
-                        SymbolicExpression f = (n_expr * (*t_prime)).simplify();
+                    IntegrationResult correction_res = integrate_in_extension(correction_integrand, tower, tower_index, main_var);
+                    if (!correction_res.success || correction_res.type != IntegralType::kElementary) return false;
 
-                        IntegrationResult y_res = solve_rde(f, q_coeffs[i], main_var, tower, tower_index - 1);
-                        if (y_res.success && y_res.type == IntegralType::kElementary) {
-                            term_int = (y_res.value * make_power(t, n_expr)).simplify();
-                        } else if (y_res.type == IntegralType::kNonElementary) {
-                            // RDE 证明无初等解
-                            return false;
-                        } else {
-                            // RDE 失败或未知，使用分部积分递归
-                            // 注意：这不是启发式回退，而是 Risch 算法中的标准步骤
-                            // 对于对数扩展，分部积分是正确的处理方式
-                            // ∫ a t^n = a_int * t^n - ∫ a_int * n * t^(n-1) * t' dx
-                            SymbolicExpression first_part = (a_int * make_power(t, SymbolicExpression::number(i))).simplify();
-
-                            SymbolicExpression next_base = (a_int * SymbolicExpression::number(i) *
-                                                           make_power(t, SymbolicExpression::number(i - 1))).simplify();
-                            SymbolicExpression next_integrand =
-                                multiply_by_derivative_factor(next_base, *t_prime);
-
-                            IntegrationResult second_res = integrate_in_extension(next_integrand, tower, tower_index, main_var);
-                            if (!second_res.success) return false;
-                            if (second_res.type == IntegralType::kNonElementary) return false;
-                            if (second_res.type != IntegralType::kElementary) return false;
-
-                            term_int = (first_part - second_res.value).simplify();
-                        }
-                    } else {
-                        SymbolicExpression first_part = (a_int * make_power(t, SymbolicExpression::number(i))).simplify();
-
-                        SymbolicExpression next_base = (a_int * SymbolicExpression::number(i) *
-                                                       make_power(t, SymbolicExpression::number(i - 1))).simplify();
-                        SymbolicExpression next_integrand =
-                            multiply_by_derivative_factor(next_base, *t_prime);
-
-                        IntegrationResult second_res = integrate_in_extension(next_integrand, tower, tower_index, main_var);
-                        if (!second_res.success || second_res.type != IntegralType::kElementary) return false;
-
-                        term_int = (first_part - second_res.value).simplify();
-                    }
+                    term_int = (first_part - correction_res.value).simplify();
                 }
             } else if (kind == DifferentialExtension::Kind::kExponential) {
                 // t = exp(u), ∫ a*t^n dx = y*t^n 其中 y' + n*u'*y = a

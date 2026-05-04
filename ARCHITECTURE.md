@@ -93,6 +93,10 @@ the main functions.
   Script AST and parser
 - `src/statistics`
   Statistics, probability distributions, and hypothesis testing
+- `src/time`
+  Time functions (timestamp, formatting, timers, sleep)
+- `src/io`
+  File I/O operations
 - `test`
   Regression tests and runnable example scripts
 - `bin`

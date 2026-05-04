@@ -517,6 +517,69 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                             return SymbolicLimitProbeKind::kFinite;
                         }
                     }
+                    if (name == "sin" || name == "cos") {
+                        if (argument_kind == SymbolicLimitProbeKind::kFinite) {
+                            *finite_value = (name == "sin") ? mymath::sin(argument_value)
+                                                            : mymath::cos(argument_value);
+                            return SymbolicLimitProbeKind::kFinite;
+                        }
+                        return SymbolicLimitProbeKind::kUnknown;
+                    }
+                    if (name == "tan") {
+                        if (argument_kind == SymbolicLimitProbeKind::kFinite) {
+                            *finite_value = mymath::tan(argument_value);
+                            return mymath::isfinite(*finite_value)
+                                       ? SymbolicLimitProbeKind::kFinite
+                                       : SymbolicLimitProbeKind::kUnknown;
+                        }
+                        return SymbolicLimitProbeKind::kUnknown;
+                    }
+                    if (name == "sqrt") {
+                        if (argument_kind == SymbolicLimitProbeKind::kPositiveInfinity) {
+                            return SymbolicLimitProbeKind::kPositiveInfinity;
+                        }
+                        if (argument_kind == SymbolicLimitProbeKind::kFinite &&
+                            argument_value >= 0.0) {
+                            *finite_value = mymath::sqrt(argument_value);
+                            return SymbolicLimitProbeKind::kFinite;
+                        }
+                        return SymbolicLimitProbeKind::kUnknown;
+                    }
+                    if (name == "sinh") {
+                        if (argument_kind == SymbolicLimitProbeKind::kPositiveInfinity) {
+                            return SymbolicLimitProbeKind::kPositiveInfinity;
+                        }
+                        if (argument_kind == SymbolicLimitProbeKind::kNegativeInfinity) {
+                            return SymbolicLimitProbeKind::kNegativeInfinity;
+                        }
+                        if (argument_kind == SymbolicLimitProbeKind::kFinite) {
+                            *finite_value = mymath::sinh(argument_value);
+                            return SymbolicLimitProbeKind::kFinite;
+                        }
+                    }
+                    if (name == "cosh") {
+                        if (is_infinite_probe(argument_kind)) {
+                            return SymbolicLimitProbeKind::kPositiveInfinity;
+                        }
+                        if (argument_kind == SymbolicLimitProbeKind::kFinite) {
+                            *finite_value = mymath::cosh(argument_value);
+                            return SymbolicLimitProbeKind::kFinite;
+                        }
+                    }
+                    if (name == "tanh") {
+                        if (argument_kind == SymbolicLimitProbeKind::kPositiveInfinity) {
+                            *finite_value = 1.0;
+                            return SymbolicLimitProbeKind::kFinite;
+                        }
+                        if (argument_kind == SymbolicLimitProbeKind::kNegativeInfinity) {
+                            *finite_value = -1.0;
+                            return SymbolicLimitProbeKind::kFinite;
+                        }
+                        if (argument_kind == SymbolicLimitProbeKind::kFinite) {
+                            *finite_value = mymath::tanh(argument_value);
+                            return SymbolicLimitProbeKind::kFinite;
+                        }
+                    }
                     return SymbolicLimitProbeKind::kUnknown;
                 }
                 case NodeType::kVector:
@@ -550,56 +613,164 @@ bool is_zero_probe(SymbolicLimitProbeKind kind, double value) {
            mymath::is_near_zero(value, kLimitTolerance);
 }
 
+/**
+ * @brief 处理极点极限
+ *
+ * 根据 Laurent 级数的位移和前导系数判定无穷极限。
+ *
+ * @param shift Laurent 位移（负数表示极点阶数）
+ * @param leading_coefficient 前导系数
+ * @param direction 方向：-1 左极限，1 右极限，0 双侧极限
+ * @return 极限值（+inf 或 -inf）
+ * @throw std::runtime_error 当双侧极限不存在时
+ */
+double handle_pole_limit(int shift, double leading_coefficient, int direction) {
+    if (direction == 0) {
+        // 双侧极限：只有当 shift 为偶数时才存在
+        if (shift % 2 == 0) {
+            return (leading_coefficient > 0) ? mymath::infinity() : -mymath::infinity();
+        } else {
+            throw std::runtime_error("two-sided limit does not exist (pole with odd shift)");
+        }
+    } else if (direction == 1) {
+        // 右极限：(x - x0) > 0，符号不变
+        return (leading_coefficient > 0) ? mymath::infinity() : -mymath::infinity();
+    } else {
+        // 左极限：(x - x0) < 0，奇数 shift 时符号翻转
+        bool flip_sign = (shift % 2 != 0);
+        double effective_c = flip_sign ? -leading_coefficient : leading_coefficient;
+        return (effective_c > 0) ? mymath::infinity() : -mymath::infinity();
+    }
+}
+
 bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
                                  const std::string& variable_name,
                                  double point,
+                                 int direction,
                                  double* result) {
     SymbolicExpression current = expression.simplify();
-    static constexpr int kMaxLhopitalDepth = 8;
+    if (current.node_->type != NodeType::kDivide) {
+        return false;
+    }
+
+    SymbolicExpression numerator(current.node_->left);
+    SymbolicExpression denominator(current.node_->right);
+    double numerator_value = 0.0;
+    double denominator_value = 0.0;
+    const SymbolicLimitProbeKind numerator_kind =
+        probe_symbolic_value_at(numerator,
+                                variable_name,
+                                point,
+                                &numerator_value);
+    const SymbolicLimitProbeKind denominator_kind =
+        probe_symbolic_value_at(denominator,
+                                variable_name,
+                                point,
+                                &denominator_value);
+
+    const bool zero_over_zero =
+        is_zero_probe(numerator_kind, numerator_value) &&
+        is_zero_probe(denominator_kind, denominator_value);
+    const bool infinity_over_infinity =
+        is_infinite_probe(numerator_kind) &&
+        is_infinite_probe(denominator_kind);
+
+    if (!zero_over_zero && !infinity_over_infinity) {
+        return false;
+    }
+
+    // 对于有限点，使用 PSA 提取 Laurent 信息，这比符号求导更稳健且高效
+    if (mymath::isfinite(point)) {
+        series_ops::SeriesContext ctx;
+        ctx.evaluate_at = [](const SymbolicExpression& e, const std::string& /*v*/, double /*p*/) {
+            double val = 0.0;
+            if (e.is_number(&val)) return val;
+            return 0.0;
+        };
+
+        struct LaurentInfo {
+            int degree = 0;
+            double coefficient = 0.0;
+            bool valid = false;
+        };
+
+        auto get_laurent_info = [&](const SymbolicExpression& e) -> LaurentInfo {
+            LaurentInfo info;
+            std::vector<double> coeffs;
+            try {
+                // 展开到 4 阶足以判断大多数 0/0 或 inf/inf 情况
+                if (series_ops::internal::evaluate_psa(e, variable_name, point, 4, coeffs, ctx)) {
+                    for (int i = 0; i < static_cast<int>(coeffs.size()); ++i) {
+                        if (!mymath::is_near_zero(coeffs[i], 1e-15)) {
+                            info.degree = i;
+                            info.coefficient = coeffs[i];
+                            info.valid = true;
+                            return info;
+                        }
+                    }
+                    // 如果所有项都为 0，视为 0（高阶零点）
+                    info.degree = 100;
+                    info.coefficient = 0.0;
+                    info.valid = true;
+                    return info;
+                }
+            } catch (const series_ops::internal::PoleException& ex) {
+                info.degree = ex.shift;
+                info.coefficient = ex.leading_coefficient;
+                info.valid = true;
+                return info;
+            } catch (...) {
+            }
+            return info;
+        };
+
+        LaurentInfo infoN = get_laurent_info(numerator);
+        LaurentInfo infoD = get_laurent_info(denominator);
+
+        if (infoN.valid && infoD.valid) {
+            int res_degree = infoN.degree - infoD.degree;
+            double res_coeff = infoN.coefficient / infoD.coefficient;
+
+            if (res_degree > 0) {
+                *result = 0.0;
+                return true;
+            } else if (res_degree == 0) {
+                *result = res_coeff;
+                return true;
+            } else {
+                // 无限极限：利用 handle_pole_limit 判断符号
+                try {
+                    *result = handle_pole_limit(res_degree, res_coeff, direction);
+                    return true;
+                } catch (...) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    // 对于无法使用 PSA 的情况（如本质奇点或无限远点），尝试有限步数的符号求导（传统洛必达）
+    static constexpr int kMaxLhopitalDepth = 3; // 限制深度避免膨胀
+    SymbolicExpression iter_expr = current;
     for (int depth = 0; depth < kMaxLhopitalDepth; ++depth) {
-        if (current.node_->type != NodeType::kDivide) {
-            return false;
+        SymbolicExpression n(iter_expr.node_->left);
+        SymbolicExpression d(iter_expr.node_->right);
+        iter_expr = (n.derivative(variable_name).simplify() /
+                     d.derivative(variable_name).simplify()).simplify();
+
+        double val = 0.0;
+        const SymbolicLimitProbeKind kind =
+            probe_symbolic_value_at(iter_expr, variable_name, point, &val);
+        if (kind == SymbolicLimitProbeKind::kFinite) {
+            *result = val;
+            return true;
         }
-
-        SymbolicExpression numerator(current.node_->left);
-        SymbolicExpression denominator(current.node_->right);
-        double numerator_value = 0.0;
-        double denominator_value = 0.0;
-        const SymbolicLimitProbeKind numerator_kind =
-            probe_symbolic_value_at(numerator,
-                                    variable_name,
-                                    point,
-                                    &numerator_value);
-        const SymbolicLimitProbeKind denominator_kind =
-            probe_symbolic_value_at(denominator,
-                                    variable_name,
-                                    point,
-                                    &denominator_value);
-
-        const bool zero_over_zero =
-            is_zero_probe(numerator_kind, numerator_value) &&
-            is_zero_probe(denominator_kind, denominator_value);
-        const bool infinity_over_infinity =
-            is_infinite_probe(numerator_kind) &&
-            is_infinite_probe(denominator_kind);
-        if (!zero_over_zero && !infinity_over_infinity) {
-            return false;
-        }
-
-        current = (numerator.derivative(variable_name).simplify() /
-                   denominator.derivative(variable_name).simplify()).simplify();
-
-        double current_value = 0.0;
-        const SymbolicLimitProbeKind current_kind =
-            probe_symbolic_value_at(current,
-                                    variable_name,
-                                    point,
-                                    &current_value);
-        if (current_kind == SymbolicLimitProbeKind::kFinite) {
-            *result = current_value;
+        if (is_infinite_probe(kind)) {
+            *result = (kind == SymbolicLimitProbeKind::kPositiveInfinity) ? mymath::infinity() : -mymath::infinity();
             return true;
         }
     }
+
     return false;
 }
 
@@ -649,83 +820,51 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
             }
         }
     } catch (const series_ops::internal::PoleException& e) {
-        // 代换后的表达式在 t=0 处有极点
-        // 检查原表达式的主导项来确定极限行为
-        // 对于多项式类表达式，最高次项决定行为
-        // 对于有理函数，比较分子分母的最高次
-
-        // 尝试在非常大的点处展开，获取渐近行为
-        double large_x = positive ? 1e6 : -1e6;
-        try {
-            std::vector<double> large_coeffs;
-            if (series_ops::internal::evaluate_psa(expression, variable_name, large_x, 1, large_coeffs, ctx)) {
-                if (!large_coeffs.empty()) {
-                    // 使用线性近似估计极限趋势
-                    double val_at_large = large_coeffs[0];
-                    double slope = (large_coeffs.size() > 1) ? large_coeffs[1] : 0.0;
-
-                    // 如果值已经很大且在增长，极限是无穷
-                    if (mymath::abs(val_at_large) > 1e10) {
-                        *result = (val_at_large > 0) ? mymath::infinity() : -mymath::infinity();
-                        return true;
-                    }
-
-                    // 如果值很小且斜率也很小，极限可能是有限值
-                    if (mymath::abs(val_at_large) < 1e-6 && mymath::abs(slope) < 1e-6) {
-                        *result = val_at_large;
-                        return true;
-                    }
-                }
-            }
-        } catch (...) {
-            // 忽略，回退到其他方法
+        // PSA 检测到极点。这可能是极限本身为无穷，也可能是中间过程的未定式。
+        // 优先尝试洛必达法则，因为它能处理 ln(x)/x 这种 PSA 引擎目前无法直接抵消极点的未定式。
+        double lhopital_result = 0.0;
+        if (try_symbolic_lhopital_limit(expression, variable_name,
+                                         positive ? mymath::infinity()
+                                                  : -mymath::infinity(),
+                                         1,
+                                         &lhopital_result)) {
+            *result = lhopital_result;
+            return true;
         }
 
-        // 如果上述方法失败，返回 false 让数值方法处理
-        return false;
+        // 验证极点是否真实代表整个表达式的渐近行为。
+        // 如果在很大的点处求值结果是有限的，说明极点只是中间过程，应回退到数值方法。
+        try {
+            double large_x = positive ? 1e12 : -1e12;
+            double val = ctx.evaluate_at(expression, variable_name, large_x);
+            if (mymath::isfinite(val) && mymath::abs(val) < 1e10) {
+                return false;
+            }
+        } catch (...) {
+            // 求值失败通常意味着确实存在奇异性
+        }
+
+        // 如果洛必达法则不适用或失败，且大值采样显示趋向无穷，利用极点信息判定无穷极限。
+        try {
+            *result = handle_pole_limit(e.shift, e.leading_coefficient, 1);
+            return true;
+        } catch (...) {
+            // 失败则继续尝试其他方法
+        }
     }
 
-    // 尝试 L'Hopital 规则（对于无穷点）
+    // 如果 PSA 正常返回但结果不符合要求，或没进入 catch，尝试洛必达
     double lhopital_result = 0.0;
     if (try_symbolic_lhopital_limit(expression, variable_name,
                                      positive ? mymath::infinity()
                                               : -mymath::infinity(),
+                                     1, // direction = 1, 对应 t -> 0+
                                      &lhopital_result)) {
         *result = lhopital_result;
         return true;
     }
 
     return false;
-}
-
-/**
- * @brief 处理极点极限
- *
- * 根据 Laurent 级数的位移和前导系数判定无穷极限。
- *
- * @param shift Laurent 位移（负数表示极点阶数）
- * @param leading_coefficient 前导系数
- * @param direction 方向：-1 左极限，1 右极限，0 双侧极限
- * @return 极限值（+inf 或 -inf）
- * @throw std::runtime_error 当双侧极限不存在时
- */
-double handle_pole_limit(int shift, double leading_coefficient, int direction) {
-    if (direction == 0) {
-        // 双侧极限：只有当 shift 为偶数时才存在
-        if (shift % 2 == 0) {
-            return (leading_coefficient > 0) ? mymath::infinity() : -mymath::infinity();
-        } else {
-            throw std::runtime_error("two-sided limit does not exist (pole with odd shift)");
-        }
-    } else if (direction == 1) {
-        // 右极限：(x - x0) > 0，符号不变
-        return (leading_coefficient > 0) ? mymath::infinity() : -mymath::infinity();
-    } else {
-        // 左极限：(x - x0) < 0，奇数 shift 时符号翻转
-        bool flip_sign = (shift % 2 != 0);
-        double effective_c = flip_sign ? -leading_coefficient : leading_coefficient;
-        return (effective_c > 0) ? mymath::infinity() : -mymath::infinity();
-    }
 }
 
 }  // namespace
@@ -924,6 +1063,7 @@ double FunctionAnalysis::limit(double x, int direction) const {
         try_symbolic_lhopital_limit(expr,
                                     variable_name_,
                                     x,
+                                    direction,
                                     &lhopital_value)) {
         return lhopital_value;
     }
@@ -957,6 +1097,7 @@ double FunctionAnalysis::compute_numerical_limit(double x, int direction) const 
         long double prev_val = 0.0L;
         bool have_prev = false;
         int oscillation_count = 0;
+        long double total_amplitude = 0.0L;
 
         for (int row = 0; row < 14; ++row) {
             // 使用自适应步长
@@ -1002,12 +1143,19 @@ double FunctionAnalysis::compute_numerical_limit(double x, int direction) const 
                 continue;
             }
 
-            // 振荡检测：检测符号频繁变化
+            // 振荡检测：检测符号频繁变化和振幅
             if (have_prev) {
+                const long double diff = mymath::abs_long_double(val - prev_val);
+                total_amplitude += diff;
                 if ((val > 0 && prev_val < 0) || (val < 0 && prev_val > 0)) {
                     oscillation_count++;
-                    if (oscillation_count >= 4) {
-                        // 可能是高频振荡函数，使用更小的步长
+                    if (oscillation_count >= 5) {
+                        // 检查平均振幅是否仍然很大
+                        const long double avg_amp = total_amplitude / static_cast<long double>(row + 1);
+                        if (avg_amp > 1e-2) {
+                            throw std::runtime_error("limit does not exist (oscillation)");
+                        }
+                        // 可能是高频振荡函数，使用更小的步长尝试
                         adaptive_h *= 0.25;
                         oscillation_count = 0;
                     }
@@ -1095,17 +1243,40 @@ double FunctionAnalysis::compute_numerical_limit(double x, int direction) const 
     if (direction == -1) return compute_limit_at(x, -1);
     if (direction == 1) return compute_limit_at(x, 1);
 
-    // 双侧极限
-    const double left = compute_limit_at(x, -1);
-    const double right = compute_limit_at(x, 1);
+    // 双侧极限：尝试回退到有效的单侧极限（处理定义域边缘）
+    double left = 0.0, right = 0.0;
+    bool left_ok = false, right_ok = false;
+    std::string left_err, right_err;
 
-    // 如果两侧极限非常接近，或者是符号一致的无穷大
-    if (mymath::abs(left - right) <= kLimitTolerance * 100.0 ||
-        (!mymath::isfinite(left) && !mymath::isfinite(right) && ((left > 0) == (right > 0)))) {
-        return (left + right) * 0.5;
+    try {
+        left = compute_limit_at(x, -1);
+        left_ok = true;
+    } catch (const std::exception& e) {
+        left_err = e.what();
     }
 
-    throw std::runtime_error("two-sided limit does not exist");
+    try {
+        right = compute_limit_at(x, 1);
+        right_ok = true;
+    } catch (const std::exception& e) {
+        right_err = e.what();
+    }
+
+    if (left_ok && right_ok) {
+        // 两侧都成功，检查一致性
+        if (mymath::abs(left - right) <= kLimitTolerance * 100.0 ||
+            (!mymath::isfinite(left) && !mymath::isfinite(right) && ((left > 0) == (right > 0)))) {
+            return (left + right) * 0.5;
+        }
+        throw std::runtime_error("two-sided limit does not exist (left=" +
+                                 std::to_string(left) + ", right=" + std::to_string(right) + ")");
+    } else if (left_ok) {
+        return left;
+    } else if (right_ok) {
+        return right;
+    }
+
+    throw std::runtime_error("limit did not converge on either side: " + left_err + " / " + right_err);
 }
 
 double FunctionAnalysis::definite_integral(double lower_bound,

@@ -73,6 +73,31 @@ bool decompose_constant_times_expression(
     double* constant,
     SymbolicExpression* rest);
 
+// ============================================================================
+// 代数独立性判定辅助结构
+// ============================================================================
+
+/**
+ * @brief Representation of an expression as a sum of logarithmic terms
+ */
+struct LogarithmicRepresentation {
+    bool is_valid = false;
+    std::vector<std::pair<SymbolicExpression, SymbolicExpression>> terms; // (c_i, v_i)
+    SymbolicExpression remainder;
+    std::string reason;
+};
+
+/**
+ * @brief Express an expression as a sum of logarithmic terms
+ *
+ * Tries to write expr = sum(c_i * ln(v_i)) + w
+ * where c_i are constants and w is in the base field.
+ */
+LogarithmicRepresentation express_as_logarithmic_sum(
+    const SymbolicExpression& expr,
+    const std::vector<RischAlgorithm::DifferentialExtension>& tower,
+    const std::string& x_var);
+
 } // namespace risch_algorithm_internal
 
 #endif // RISCH_ALGORITHM_INTERNAL_H

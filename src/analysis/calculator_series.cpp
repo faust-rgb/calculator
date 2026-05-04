@@ -426,8 +426,15 @@ std::vector<double> ps_pow_const(const std::vector<double>& a, double n, int deg
         }
 
         // 情况4：分数幂，位移非整数 - 需要 Puiseux 级数
-        // 这里我们返回一个特殊的标记，让上层 puiseux 命令处理
-        // 或者尝试使用广义二项式展开
+        // 对于极限计算，如果位移为正，则极限为 0；如果位移为负，则极限为无穷大。
+        if (shifted_power > 1e-10) {
+            return std::vector<double>(degree + 1, 0.0);
+        } else if (shifted_power < -1e-10) {
+            double leading_coeff = mymath::pow(a[leading], n);
+            // 抛出极点异常，虽然这实际上是支点，但对于极限判定是等价的
+            throw series_ops::internal::PoleException(-1, leading_coeff);
+        }
+
         return ps_pow_const_puiseux(a, n, degree, leading);
     }
 
