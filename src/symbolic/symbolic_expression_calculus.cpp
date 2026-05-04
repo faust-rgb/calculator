@@ -2755,6 +2755,9 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
         }
         case NodeType::kDifferentialOp:
             throw std::runtime_error("symbolic derivative does not support differential operator: " + node_->text);
+        case NodeType::kRootOf:
+            // RootOf 表示代数数，是常数，导数为 0
+            return SymbolicExpression::number(0.0);
     }
     throw std::runtime_error("unsupported symbolic derivative");
 }
@@ -3056,6 +3059,7 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
         case NodeType::kVector:
         case NodeType::kTensor:
         case NodeType::kDifferentialOp:
+        case NodeType::kRootOf:
             break;
     }
 
@@ -3432,6 +3436,13 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
         throw std::runtime_error("symbolic integral does not support function: " + node_->text);
     }
 
+    // Handle RootOf (algebraic number constant)
+    if (node_->type == NodeType::kRootOf) {
+        // RootOf 表示代数数，是常数
+        // 积分: c * x
+        return make_multiply(*this, variable(variable_name)).simplify();
+    }
+
     throw std::runtime_error("unsupported symbolic integral");
 }
 
@@ -3534,6 +3545,24 @@ bool integrate_symbolic_partial_fractions(
     SymbolicExpression* integrated) {
 
     if (denominator.is_zero() || denominator.degree() < 1) {
+        return false;
+    }
+
+    // The square-free path below uses polynomial GCD/division over a numeric
+    // coefficient field.  Running it over arbitrary symbolic parameters (for
+    // example (x-a)(x-b)) can make Euclidean remainders grow without bound.
+    // Parameterized rational forms are handled by the symbolic factor rules in
+    // SymbolicExpression::integral instead.
+    auto has_only_numeric_coefficients = [](const SymbolicPolynomial& polynomial) {
+        for (const SymbolicExpression& coefficient : polynomial.coefficients()) {
+            if (!coefficient.is_number(nullptr)) {
+                return false;
+            }
+        }
+        return true;
+    };
+    if (!has_only_numeric_coefficients(numerator) ||
+        !has_only_numeric_coefficients(denominator)) {
         return false;
     }
 

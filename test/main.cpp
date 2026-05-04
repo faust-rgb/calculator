@@ -16,6 +16,7 @@
 #include "suites/test_statistics_ext.h"
 #include "suites/test_io.h"
 #include "suites/test_script_features.h"
+#include "suites/test_risch_advanced.h"
 #include <iostream>
 
 /**
@@ -48,6 +49,7 @@ int main() {
     // 运行 Risch 算法测试
     std::cout << "Running Risch Algorithm Tests..." << std::endl;
     test_suites::test_risch();
+    test_suites::run_risch_advanced_tests();
     total_passed++; 
 
     // 运行分析测试：测试函数分析、微分方程求解等

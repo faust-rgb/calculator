@@ -51,6 +51,28 @@ SymbolicExpression multiply_by_derivative_factor(
     const SymbolicExpression& base,
     const SymbolicExpression& derivation);
 
+// 辅助函数: 检测可能的整数比值
+std::vector<int> detect_possible_integer_ratios(const SymbolicExpression& ratio);
+
+// 辅助函数: 检查表达式是否在给定域中
+bool is_expression_in_field(
+    const SymbolicExpression& expr,
+    const std::vector<RischAlgorithm::DifferentialExtension>& tower = {},
+    int tower_index = -1);
+
+// 辅助函数: 收集对数项
+void collect_log_terms(
+    const SymbolicExpression& expr,
+    std::vector<std::pair<SymbolicExpression, SymbolicExpression>>& logs,
+    SymbolicExpression* rest);
+
+// 辅助函数: 分解常数乘积
+bool decompose_constant_times_expression(
+    const SymbolicExpression& expr,
+    const std::string& x_var,
+    double* constant,
+    SymbolicExpression* rest);
+
 } // namespace risch_algorithm_internal
 
 #endif // RISCH_ALGORITHM_INTERNAL_H

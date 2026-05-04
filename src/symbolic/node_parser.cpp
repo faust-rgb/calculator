@@ -465,6 +465,17 @@ std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node
         case NodeType::kDifferentialOp:
             text = node->text + "(" + to_string_impl(node->left, 0) + ")";
             break;
+        case NodeType::kRootOf: {
+            // RootOf(poly, var, index)
+            text = "RootOf(";
+            if (!node->children.empty()) {
+                text += to_string_impl(node->children[0], 0);
+            }
+            text += ", " + node->text;
+            text += ", " + std::to_string(static_cast<int>(node->number_value));
+            text += ")";
+            break;
+        }
     }
 
     // 分数作幂运算底数时需要括号：如 (1/2)^x
@@ -1144,10 +1155,16 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                 return true;
             }
             if (node->text == "ln") {
+                if (argument <= 0.0) {
+                    return false;
+                }
                 *value = mymath::ln(argument);
                 return true;
             }
             if (node->text == "sqrt") {
+                if (argument < 0.0) {
+                    return false;
+                }
                 double root = mymath::sqrt(argument);
                 // Only evaluate to number if it's a perfect square
                 if (mymath::is_near_zero(root * root - argument, 1e-12) && mymath::is_integer(root, 1e-10)) {

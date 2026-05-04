@@ -60,6 +60,10 @@ struct IntegrationResult {
                                  bool needs_c = true) {
         return {expr, true, method, needs_c};
     }
+
+    static IntegrationResult non_elementary(const std::string& method) {
+        return {SymbolicExpression::number(0.0), false, method, true};
+    }
 };
 
 /**
@@ -182,6 +186,42 @@ private:
     IntegrationResult try_integrate_fallback(
         const SymbolicExpression& expression,
         const std::string& variable_name);
+
+    /**
+     * @brief 非初等函数模式匹配
+     *
+     * 检测常见的非初等积分模式：
+     * - exp(x)/x -> Ei(x)
+     * - exp(-x^2) -> sqrt(pi)/2 * erf(x)
+     * - sin(x)/x -> Si(x)
+     * - cos(x)/x -> Ci(x)
+     * - 1/ln(x) -> li(x)
+     */
+    bool try_non_elementary_pattern(
+        const SymbolicExpression& expression,
+        const std::string& variable_name,
+        SymbolicExpression* result,
+        std::string* pattern_name);
+
+    /**
+     * @brief 级数展开积分
+     *
+     * 对于无法初等积分的表达式，尝试泰勒级数展开后逐项积分。
+     */
+    bool try_series_integration(
+        const SymbolicExpression& expression,
+        const std::string& variable_name,
+        SymbolicExpression* result);
+
+    /**
+     * @brief 数值积分占位符
+     *
+     * 创建数值积分的占位符表达式。
+     */
+    bool try_numeric_integration_placeholder(
+        const SymbolicExpression& expression,
+        const std::string& variable_name,
+        SymbolicExpression* result);
 
     // ========================================================================
     // 辅助方法

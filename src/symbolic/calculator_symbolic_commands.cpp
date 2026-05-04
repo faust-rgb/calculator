@@ -36,6 +36,7 @@
 #include "analysis/multidim_integration.h"
 #include "polynomial/polynomial.h"
 #include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/integration_engine.h"
 #include "parser/command_parser.h"
 #include "math/mymath.h"
 
@@ -1149,17 +1150,49 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             if (arguments.size() >= 2) {
                 variable_name = trim_copy(arguments[1]);
             }
-            SymbolicExpression integrated = expression;
-            if (arguments.size() == 1) {
-                integrated = integrated.integral(variable_name).simplify();
-            } else {
+
+            if (arguments.size() > 2) {
+                SymbolicExpression integrated = expression;
                 for (std::size_t i = 1; i < arguments.size(); ++i) {
-                    integrated =
-                        integrated.integral(trim_copy(arguments[i])).simplify();
+                    const std::string current_variable = trim_copy(arguments[i]);
+                    RischAlgorithm::IntegrationResult risch_result =
+                        RischAlgorithm::integrate_full(integrated, current_variable);
+                    if (!risch_result.success ||
+                        risch_result.type != IntegralType::kElementary) {
+                        throw std::runtime_error("Integration failed: Risch could not integrate with respect to " +
+                                                 current_variable);
+                    }
+                    integrated = risch_result.value.simplify();
                 }
+                *output = integrated.simplify().to_string() + " + C";
+                return true;
             }
-            *output = integrated.simplify().to_string() + " + C";
-            return true;
+
+            // 使用 IntegrationEngine 进行积分
+            IntegrationEngine engine;
+            IntegrationResult result = engine.integrate(expression, variable_name);
+
+            if (result.success) {
+                *output = result.value.simplify().to_string() + " + C";
+                return true;
+            }
+
+            // 如果 IntegrationEngine 失败，回退到直接调用 integral()
+            try {
+                SymbolicExpression integrated = expression;
+                if (arguments.size() == 1) {
+                    integrated = integrated.integral(variable_name).simplify();
+                } else {
+                    for (std::size_t i = 1; i < arguments.size(); ++i) {
+                        integrated =
+                            integrated.integral(trim_copy(arguments[i])).simplify();
+                    }
+                }
+                *output = integrated.simplify().to_string() + " + C";
+                return true;
+            } catch (const std::runtime_error& e) {
+                throw std::runtime_error("Integration failed: " + std::string(e.what()));
+            }
         }
 
         if (arguments.size() != 2 && arguments.size() != 3 && arguments.size() != 4) {

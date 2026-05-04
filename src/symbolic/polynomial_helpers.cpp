@@ -1167,14 +1167,82 @@ bool symbolic_laurent_coefficients(
 
     const auto& node = simplified.node_;
 
+    // 处理取负
+    if (node->type == NodeType::kNegate) {
+        std::map<int, SymbolicExpression> inner_coeffs;
+        if (symbolic_laurent_coefficients(SymbolicExpression(node->left), variable_name, &inner_coeffs)) {
+            for (const auto& [power, coeff] : inner_coeffs) {
+                (*coefficients)[power] = make_negate(coeff).simplify();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // 处理加法
+    if (node->type == NodeType::kAdd) {
+        std::map<int, SymbolicExpression> left_coeffs, right_coeffs;
+        if (symbolic_laurent_coefficients(SymbolicExpression(node->left), variable_name, &left_coeffs) &&
+            symbolic_laurent_coefficients(SymbolicExpression(node->right), variable_name, &right_coeffs)) {
+            *coefficients = left_coeffs;
+            for (const auto& [power, coeff] : right_coeffs) {
+                if (coefficients->count(power)) {
+                    (*coefficients)[power] = make_add((*coefficients)[power], coeff).simplify();
+                } else {
+                    (*coefficients)[power] = coeff;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // 处理减法
+    if (node->type == NodeType::kSubtract) {
+        std::map<int, SymbolicExpression> left_coeffs, right_coeffs;
+        if (symbolic_laurent_coefficients(SymbolicExpression(node->left), variable_name, &left_coeffs) &&
+            symbolic_laurent_coefficients(SymbolicExpression(node->right), variable_name, &right_coeffs)) {
+            *coefficients = left_coeffs;
+            for (const auto& [power, coeff] : right_coeffs) {
+                if (coefficients->count(power)) {
+                    (*coefficients)[power] = make_subtract((*coefficients)[power], coeff).simplify();
+                } else {
+                    (*coefficients)[power] = make_negate(coeff).simplify();
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // 处理乘法
+    if (node->type == NodeType::kMultiply) {
+        std::map<int, SymbolicExpression> left_coeffs, right_coeffs;
+        if (symbolic_laurent_coefficients(SymbolicExpression(node->left), variable_name, &left_coeffs) &&
+            symbolic_laurent_coefficients(SymbolicExpression(node->right), variable_name, &right_coeffs)) {
+            for (const auto& [p1, c1] : left_coeffs) {
+                for (const auto& [p2, c2] : right_coeffs) {
+                    int power = p1 + p2;
+                    SymbolicExpression coeff = make_multiply(c1, c2).simplify();
+                    if (coefficients->count(power)) {
+                        (*coefficients)[power] = make_add((*coefficients)[power], coeff).simplify();
+                    } else {
+                        (*coefficients)[power] = coeff;
+                    }
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
     // 处理除法：可能产生负指数
     if (node->type == NodeType::kDivide) {
         SymbolicExpression num(node->left);
         SymbolicExpression den(node->right);
 
-        // 检查分母是否为变量的幂
+        // 检查分母是否为变量本身
         if (den.is_variable_named(variable_name)) {
-            // 1/t 的情况
             std::map<int, SymbolicExpression> num_coeffs;
             if (symbolic_laurent_coefficients(num, variable_name, &num_coeffs)) {
                 for (const auto& [power, coeff] : num_coeffs) {
@@ -1184,9 +1252,24 @@ bool symbolic_laurent_coefficients(
             }
         }
 
-        // 检查分母是否为 t^n
-        if (node->type == NodeType::kPower) {
-            // 在递归调用中处理
+        // 检查分母是否为 t^n 形式
+        if (den.node_->type == NodeType::kPower) {
+            SymbolicExpression base(den.node_->left);
+            SymbolicExpression exp(den.node_->right);
+            double exp_val = 0.0;
+            if (base.is_variable_named(variable_name) && exp.is_number(&exp_val)) {
+                int n = static_cast<int>(std::round(exp_val));
+                if (n > 0 && std::abs(exp_val - n) < 1e-9) {
+                    // num / t^n
+                    std::map<int, SymbolicExpression> num_coeffs;
+                    if (symbolic_laurent_coefficients(num, variable_name, &num_coeffs)) {
+                        for (const auto& [power, coeff] : num_coeffs) {
+                            (*coefficients)[power - n] = coeff;
+                        }
+                        return true;
+                    }
+                }
+            }
         }
 
         // 尝试提取分子分母的多项式系数
@@ -1197,19 +1280,20 @@ bool symbolic_laurent_coefficients(
             // 检查分母是否为单项式 c * t^k
             int den_power = -1;
             SymbolicExpression den_coeff;
+            bool is_monomial = true;
             for (int i = 0; i < static_cast<int>(den_poly.size()); ++i) {
                 if (!SymbolicPolynomial::coeff_is_zero(den_poly[i])) {
                     if (den_power < 0) {
                         den_power = i;
                         den_coeff = den_poly[i];
                     } else {
-                        // 分母不是单项式，无法表示为 Laurent 多项式
-                        return false;
+                        is_monomial = false;
+                        break;
                     }
                 }
             }
 
-            if (den_power >= 0) {
+            if (is_monomial && den_power >= 0) {
                 // 分子系数除以分母系数，指数减去分母指数
                 for (int i = 0; i < static_cast<int>(num_poly.size()); ++i) {
                     if (!SymbolicPolynomial::coeff_is_zero(num_poly[i])) {
@@ -1221,7 +1305,20 @@ bool symbolic_laurent_coefficients(
             }
         }
 
-        // 一般情况：尝试分解为 Laurent 多项式
+        // 分子是 Laurent 多项式，分母是常数
+        std::map<int, SymbolicExpression> num_coeffs;
+        if (symbolic_laurent_coefficients(num, variable_name, &num_coeffs)) {
+            if (num_coeffs.empty()) return false;
+            // 检查分母是否为常数
+            double den_val = 0.0;
+            if (den.is_number(&den_val) && std::abs(den_val) > 1e-12) {
+                for (const auto& [power, coeff] : num_coeffs) {
+                    (*coefficients)[power] = (coeff / den).simplify();
+                }
+                return true;
+            }
+        }
+
         return false;
     }
 
@@ -1240,26 +1337,35 @@ bool symbolic_laurent_coefficients(
                 return true;
             }
 
-            // 正整数指数：使用多项式幂运算
+            // 正整数指数
             if (n >= 0 && std::abs(exp_val - n) < 1e-9) {
-                std::vector<SymbolicExpression> base_coeffs;
-                if (symbolic_polynomial_coefficients_from_simplified(base, variable_name, &base_coeffs)) {
-                    std::vector<SymbolicExpression> result = {SymbolicExpression::number(1.0)};
+                // 特殊情况：base 是变量
+                if (base.is_variable_named(variable_name)) {
+                    (*coefficients)[n] = SymbolicExpression::number(1.0);
+                    return true;
+                }
+
+                // 一般情况：使用 Laurent 系数的幂运算
+                std::map<int, SymbolicExpression> base_coeffs;
+                if (symbolic_laurent_coefficients(base, variable_name, &base_coeffs)) {
+                    // 初始化为 1
+                    *coefficients = {{0, SymbolicExpression::number(1.0)}};
+
+                    // 幂运算通过重复乘法
                     for (int p = 0; p < n; ++p) {
-                        std::vector<SymbolicExpression> next(result.size() + base_coeffs.size() - 1,
-                                                             SymbolicExpression::number(0.0));
-                        for (std::size_t i = 0; i < result.size(); ++i) {
-                            for (std::size_t j = 0; j < base_coeffs.size(); ++j) {
-                                auto prod = make_multiply(result[i], base_coeffs[j]).simplify();
-                                next[i + j] = make_add(next[i + j], prod).simplify();
+                        std::map<int, SymbolicExpression> next;
+                        for (const auto& [p1, c1] : *coefficients) {
+                            for (const auto& [p2, c2] : base_coeffs) {
+                                int power = p1 + p2;
+                                SymbolicExpression coeff = make_multiply(c1, c2).simplify();
+                                if (next.count(power)) {
+                                    next[power] = make_add(next[power], coeff).simplify();
+                                } else {
+                                    next[power] = coeff;
+                                }
                             }
                         }
-                        result = next;
-                    }
-                    for (int i = 0; i < static_cast<int>(result.size()); ++i) {
-                        if (!SymbolicPolynomial::coeff_is_zero(result[i])) {
-                            (*coefficients)[i] = result[i];
-                        }
+                        *coefficients = next;
                     }
                     return true;
                 }

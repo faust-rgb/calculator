@@ -281,4 +281,192 @@ SymbolicExpression multiply_by_derivative_factor(const SymbolicExpression& base,
     return (base * derivative).simplify();
 }
 
+// 检测可能的整数比值
+std::vector<int> detect_possible_integer_ratios(const SymbolicExpression& ratio) {
+    std::vector<int> candidates;
+
+    // 尝试数值检测
+    double val = 0.0;
+    if (ratio.is_number(&val)) {
+        int n = static_cast<int>(std::round(val));
+        if (std::abs(val - n) < 1e-9) {
+            candidates.push_back(n);
+        }
+        // 检查附近的整数
+        for (int offset = -2; offset <= 2; ++offset) {
+            if (offset != 0 && std::abs(val - (n + offset)) < 0.1) {
+                candidates.push_back(n + offset);
+            }
+        }
+        return candidates;
+    }
+
+    // 尝试符号检测: ratio = a/b 其中 a, b 是整数
+    if (ratio.node_->type == NodeType::kDivide) {
+        SymbolicExpression num(ratio.node_->left);
+        SymbolicExpression den(ratio.node_->right);
+        double num_val = 0.0, den_val = 0.0;
+        if (num.is_number(&num_val) && den.is_number(&den_val) &&
+            std::abs(den_val) > 1e-12) {
+            double quotient = num_val / den_val;
+            int n = static_cast<int>(std::round(quotient));
+            if (std::abs(quotient - n) < 1e-9) {
+                candidates.push_back(n);
+            }
+        }
+    }
+
+    return candidates;
+}
+
+// 检查表达式是否在给定域中
+bool is_expression_in_field(
+    const SymbolicExpression& expr,
+    const std::vector<RischAlgorithm::DifferentialExtension>& tower,
+    int tower_index) {
+
+    // 检查表达式是否只包含塔中变量和常数
+    std::set<std::string> vars = extract_variables(expr);
+
+    // 获取主变量（通常是 x）
+    std::string main_var;
+    if (!vars.empty()) {
+        // 假设第一个非塔变量是主变量
+        for (const auto& v : vars) {
+            bool is_tower_var = false;
+            for (int i = 0; i <= tower_index && i < static_cast<int>(tower.size()); ++i) {
+                if (tower[i].t_name == v) {
+                    is_tower_var = true;
+                    break;
+                }
+            }
+            if (!is_tower_var) {
+                main_var = v;
+                break;
+            }
+        }
+    }
+
+    // 检查是否包含不在域中的函数
+    std::function<bool(const SymbolicExpression&)> check_functions;
+    check_functions = [&](const SymbolicExpression& e) -> bool {
+        if (e.node_->type == NodeType::kFunction) {
+            std::string func_name = e.node_->text;
+            // 允许的函数：塔中已有的 ln, exp, sqrt
+            if (func_name == "ln" || func_name == "exp" || func_name == "sqrt") {
+                // 检查参数是否在域中
+                return check_functions(SymbolicExpression(e.node_->left));
+            }
+            // 其他函数不在域中
+            return false;
+        }
+        if (e.node_->left && !check_functions(SymbolicExpression(e.node_->left))) return false;
+        if (e.node_->right && !check_functions(SymbolicExpression(e.node_->right))) return false;
+        return true;
+    };
+
+    return check_functions(expr);
+}
+
+// 收集对数项
+void collect_log_terms(
+    const SymbolicExpression& expr,
+    std::vector<std::pair<SymbolicExpression, SymbolicExpression>>& logs,
+    SymbolicExpression* rest) {
+
+    *rest = SymbolicExpression::number(0.0);
+
+    std::function<void(const SymbolicExpression&, SymbolicExpression)> collect;
+    collect = [&](const SymbolicExpression& e, SymbolicExpression coeff) {
+        if (e.node_->type == NodeType::kFunction && e.node_->text == "ln") {
+            logs.push_back({coeff, SymbolicExpression(e.node_->left)});
+            return;
+        }
+
+        if (e.node_->type == NodeType::kAdd) {
+            collect(SymbolicExpression(e.node_->left), coeff);
+            collect(SymbolicExpression(e.node_->right), coeff);
+            return;
+        }
+
+        if (e.node_->type == NodeType::kSubtract) {
+            collect(SymbolicExpression(e.node_->left), coeff);
+            collect(SymbolicExpression(e.node_->right),
+                    (SymbolicExpression::number(-1.0) * coeff).simplify());
+            return;
+        }
+
+        if (e.node_->type == NodeType::kMultiply) {
+            SymbolicExpression left(e.node_->left);
+            SymbolicExpression right(e.node_->right);
+            double c = 1.0;
+            if (left.is_number(&c)) {
+                collect(right, (coeff * SymbolicExpression::number(c)).simplify());
+            } else if (right.is_number(&c)) {
+                collect(left, (coeff * SymbolicExpression::number(c)).simplify());
+            } else {
+                *rest = (*rest + coeff * e).simplify();
+            }
+            return;
+        }
+
+        // 其他情况加入剩余部分
+        if (!expr_is_zero(e)) {
+            *rest = (*rest + coeff * e).simplify();
+        }
+    };
+
+    collect(expr, SymbolicExpression::number(1.0));
+}
+
+// 分解常数乘积
+bool decompose_constant_times_expression(
+    const SymbolicExpression& expr,
+    const std::string& x_var,
+    double* constant,
+    SymbolicExpression* rest) {
+
+    *constant = 1.0;
+    *rest = expr;
+
+    // 收集所有乘法因子
+    std::vector<SymbolicExpression> factors;
+    std::function<void(const SymbolicExpression&)> collect_factors;
+    collect_factors = [&](const SymbolicExpression& e) {
+        if (e.node_->type == NodeType::kMultiply) {
+            collect_factors(SymbolicExpression(e.node_->left));
+            collect_factors(SymbolicExpression(e.node_->right));
+        } else {
+            factors.push_back(e);
+        }
+    };
+    collect_factors(expr);
+
+    // 分离常数因子
+    SymbolicExpression remaining = SymbolicExpression::number(1.0);
+    double total_const = 1.0;
+
+    for (const auto& factor : factors) {
+        double c = 1.0;
+        if (factor.is_number(&c)) {
+            total_const *= c;
+        } else if (factor.is_constant(x_var)) {
+            // 关于 x_var 是常数
+            double v = 0.0;
+            SymbolicExpression simplified = factor.simplify();
+            if (simplified.is_number(&v)) {
+                total_const *= v;
+            } else {
+                remaining = (remaining * factor).simplify();
+            }
+        } else {
+            remaining = (remaining * factor).simplify();
+        }
+    }
+
+    *constant = total_const;
+    *rest = remaining;
+    return true;
+}
+
 } // namespace risch_algorithm_internal

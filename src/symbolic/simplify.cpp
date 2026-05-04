@@ -200,8 +200,12 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 if (node->text == "sinh") return SymbolicExpression::number(mymath::sinh(numeric));
                 if (node->text == "cosh") return SymbolicExpression::number(mymath::cosh(numeric));
                 if (node->text == "tanh") return SymbolicExpression::number(mymath::tanh(numeric));
-                if (node->text == "ln") return SymbolicExpression::number(mymath::ln(numeric));
+                if (node->text == "ln") {
+                    if (numeric <= 0.0) return make_function(node->text, argument);
+                    return SymbolicExpression::number(mymath::ln(numeric));
+                }
                 if (node->text == "sqrt") {
+                    if (numeric < 0.0) return make_function(node->text, argument);
                     double root = mymath::sqrt(numeric);
                     if (mymath::is_near_zero(root * root - numeric, 1e-12) && mymath::is_integer(root, 1e-10)) {
                         return SymbolicExpression::number(root);
@@ -242,6 +246,26 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (node->text == "exp" && argument.node_->type == NodeType::kFunction && argument.node_->text == "ln") {
                 const SymbolicExpression inner(argument.node_->left);
                 if (is_known_positive_expression(inner.simplify())) return inner.simplify();
+            }
+            if (node->text == "exp" && argument.node_->type == NodeType::kAdd) {
+                SymbolicExpression left(argument.node_->left);
+                SymbolicExpression right(argument.node_->right);
+                if (left.node_->type == NodeType::kFunction && left.node_->text == "ln") {
+                    return (SymbolicExpression(left.node_->left) * make_function("exp", right)).simplify();
+                }
+                if (right.node_->type == NodeType::kFunction && right.node_->text == "ln") {
+                    return (SymbolicExpression(right.node_->left) * make_function("exp", left)).simplify();
+                }
+            }
+            if (node->text == "exp" && argument.node_->type == NodeType::kSubtract) {
+                SymbolicExpression left(argument.node_->left);
+                SymbolicExpression right(argument.node_->right);
+                if (left.node_->type == NodeType::kFunction && left.node_->text == "ln") {
+                    return (SymbolicExpression(left.node_->left) / make_function("exp", right)).simplify();
+                }
+                if (right.node_->type == NodeType::kFunction && right.node_->text == "ln") {
+                    return (make_function("exp", left) / SymbolicExpression(right.node_->left)).simplify();
+                }
             }
             if (node->text == "ln" && argument.node_->type == NodeType::kFunction && argument.node_->text == "exp") {
                 return SymbolicExpression(argument.node_->left).simplify();
@@ -616,6 +640,9 @@ SymbolicExpression expand_impl(const SymbolicExpression& expression) {
             return SymbolicExpression::tensor(rows).simplify();
         }
         case NodeType::kDifferentialOp:
+            return expression;
+        case NodeType::kRootOf:
+            // RootOf 节点不需要展开，保持原样
             return expression;
     }
     return expression;

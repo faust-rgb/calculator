@@ -3,14 +3,17 @@
 // ============================================================================
 
 #include "symbolic/integration_engine.h"
+#include "symbolic/risch_algorithm_internal.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "math/mymath.h"
 
 #include <algorithm>
+#include <cmath>
 #include <exception>
 #include <map>
 
 using namespace symbolic_expression_internal;
+using risch_algorithm_internal::structural_equals;
 
 namespace {
 
@@ -244,6 +247,14 @@ IntegrationResult IntegrationEngine::integrate_recursive(
             integration_stack_.erase(key);
             return result;
         }
+        // Only a proven non-elementary Risch result may stop the strategy chain.
+        // Proof failures/unknowns must fall through to rational, substitution,
+        // by-parts, and other non-strict strategies.
+        if (result.method_used == "risch_non_elementary" && !result.success) {
+            --current_depth_;
+            integration_stack_.erase(key);
+            return result;
+        }
     }
 
     // 4. 有理函数
@@ -340,10 +351,27 @@ IntegrationResult IntegrationEngine::try_integrate_risch(
     const SymbolicExpression& expression,
     const std::string& variable_name) {
 
-    SymbolicExpression result;
-    if (RischAlgorithm::integrate(expression, variable_name, &result)) {
-        return IntegrationResult::ok(result, "risch");
+    // Use integrate_full to get detailed result type
+    auto risch_result = RischAlgorithm::integrate_full(expression, variable_name);
+
+    if (risch_result.success && risch_result.type == IntegralType::kElementary) {
+        return IntegrationResult::ok(risch_result.value, "risch");
     }
+
+    // Check for special function result (Ei, erf, Si, Ci, li, etc.)
+    // These are non-elementary integrals that can be expressed as special functions
+    if (risch_result.success && risch_result.type == IntegralType::kSpecialFunction) {
+        // Return as non-elementary with risch method
+        return IntegrationResult::non_elementary("risch_non_elementary");
+    }
+
+    // Check if the integral was determined to be non-elementary
+    if (risch_result.type == IntegralType::kNonElementary) {
+        // Return a non-elementary result with "risch" method to indicate
+        // the Risch algorithm successfully determined it's non-elementary
+        return IntegrationResult::non_elementary("risch_non_elementary");
+    }
+
     return IntegrationResult::failed();
 }
 
@@ -404,10 +432,15 @@ IntegrationResult IntegrationEngine::try_integrate_rational(
                 }
             }
 
-            SymbolicExpression direct_result = expression.integral(variable_name).simplify();
-            if (!verify_results_ ||
-                verify_integration(expression, direct_result, variable_name)) {
-                return IntegrationResult::ok(direct_result, "rational_direct");
+            try {
+                SymbolicExpression direct_result = expression.integral(variable_name).simplify();
+                if (!verify_results_ ||
+                    verify_integration(expression, direct_result, variable_name)) {
+                    return IntegrationResult::ok(direct_result, "rational_direct");
+                }
+            } catch (const std::runtime_error& e) {
+                // integral() 抛出错误，返回 failed 让其他策略处理
+                return IntegrationResult::failed();
             }
         }
 
@@ -457,6 +490,10 @@ IntegrationResult IntegrationEngine::try_integrate_by_parts(
     const SymbolicExpression& expression,
     const std::string& variable_name) {
 
+    if (current_depth_ > 2) {
+        return IntegrationResult::failed();
+    }
+
     // 只处理乘法表达式
     if (expression.node_->type != NodeType::kMultiply) {
         return IntegrationResult::failed();
@@ -468,6 +505,8 @@ IntegrationResult IntegrationEngine::try_integrate_by_parts(
     if (factors.size() < 2) {
         return IntegrationResult::failed();
     }
+
+    const std::string expression_key = node_structural_key(expression.node_);
 
     // 计算每个因子的 LIATE 评分
     std::vector<std::pair<int, std::size_t>> scored_factors;
@@ -504,7 +543,12 @@ IntegrationResult IntegrationEngine::try_integrate_by_parts(
         SymbolicExpression v = v_result.value;
 
         // 计算 du = u'
-        SymbolicExpression du = u.derivative(variable_name).simplify();
+        SymbolicExpression du;
+        try {
+            du = u.derivative(variable_name).simplify();
+        } catch (const std::exception&) {
+            continue;
+        }
 
         // 分部积分公式：∫ u dv = u*v - ∫ v du
         SymbolicExpression uv = (u * v).simplify();
@@ -512,6 +556,9 @@ IntegrationResult IntegrationEngine::try_integrate_by_parts(
 
         // 检测循环积分
         std::string v_du_key = node_structural_key(v_du.node_);
+        if (v_du_key.size() > expression_key.size() + 32) {
+            continue;
+        }
         if (integration_stack_.count(v_du_key) > 0) {
             // 尝试求解循环积分方程
             SymbolicExpression cyclic_result;
@@ -555,6 +602,15 @@ IntegrationResult IntegrationEngine::try_integrate_special(
             candidate = make_function("ln", candidate).simplify();
             SymbolicExpression derivative = candidate.derivative(variable_name).simplify();
             if (multiplicatively_equivalent(derivative, expression)) {
+                if (candidate.node_->type == NodeType::kFunction &&
+                    candidate.node_->text == "ln" &&
+                    SymbolicExpression(candidate.node_->left).is_variable_named(variable_name)) {
+                    return IntegrationResult::ok(
+                        make_function("ln",
+                                      make_function("abs",
+                                                    SymbolicExpression::variable(variable_name))),
+                        "log_derivative_chain");
+                }
                 return IntegrationResult::ok(candidate, "log_derivative_chain");
             }
         }
@@ -769,13 +825,229 @@ IntegrationResult IntegrationEngine::try_integrate_fallback(
     const SymbolicExpression& expression,
     const std::string& variable_name) {
 
-    // 返回一个标记，表示无法积分
-    // 使用 Integral(expr, x) 形式，但标记为失败
+    // Phase 5.1: 统一后备框架
+    // 按优先级尝试多种后备策略
+
+    // 1. 尝试模式表匹配 (非初等函数积分)
+    SymbolicExpression pattern_result;
+    std::string pattern_name;
+    if (try_non_elementary_pattern(expression, variable_name, &pattern_result, &pattern_name)) {
+        return IntegrationResult::non_elementary("pattern_" + pattern_name);
+    }
+
+    // 2. Do not run speculative Taylor expansion as a fallback here.  It is
+    // non-elementary heuristic output, can differentiate very large recursive
+    // by-parts candidates, and is not accepted as a successful integral anyway.
+
+    // 3. 尝试数值积分占位符
+    SymbolicExpression numeric_result;
+    if (try_numeric_integration_placeholder(expression, variable_name, &numeric_result)) {
+        return {numeric_result, false, "numeric", false};
+    }
+
+    // 4. 返回未积分标记
     SymbolicExpression x = SymbolicExpression::variable(variable_name);
     SymbolicExpression result = make_function("Integral",
         make_multiply(expression, x));
 
     return {result, false, "fallback", false};
+}
+
+// 非初等函数模式匹配
+bool IntegrationEngine::try_non_elementary_pattern(
+    const SymbolicExpression& expression,
+    const std::string& variable_name,
+    SymbolicExpression* result,
+    std::string* pattern_name) {
+
+    SymbolicExpression x = SymbolicExpression::variable(variable_name);
+
+    // 模式 1: exp(x)/x -> Ei(x)
+    // 检测 exp(u)/u 其中 u 是线性函数
+    if (expression.node_->type == NodeType::kDivide) {
+        SymbolicExpression num(expression.node_->left);
+        SymbolicExpression den(expression.node_->right);
+
+        // 检查分子是否为 exp(u)
+        if (num.node_->type == NodeType::kFunction && num.node_->text == "exp") {
+            SymbolicExpression arg(num.node_->left);
+
+            // 检查分母是否等于参数
+            if (structural_equals(den.simplify(), arg.simplify())) {
+                // 检查 arg 是否为线性
+                SymbolicExpression a, b;
+                if (symbolic_decompose_linear(arg, variable_name, &a, &b)) {
+                    double a_val = 0.0;
+                    if (a.is_number(&a_val) && std::abs(a_val) > 1e-12) {
+                        *result = (SymbolicExpression::number(1.0 / a_val) *
+                                  make_function("Ei", arg)).simplify();
+                        *pattern_name = "Ei";
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    // 模式 2: exp(-x^2) -> sqrt(pi)/2 * erf(x)
+    if (expression.node_->type == NodeType::kFunction && expression.node_->text == "exp") {
+        SymbolicExpression arg(expression.node_->left);
+        SymbolicExpression neg_x_sq = (make_negate(x * x)).simplify();
+        if (structural_equals(arg.simplify(), neg_x_sq)) {
+            *result = (SymbolicExpression::number(std::sqrt(std::acos(-1.0)) / 2.0) *
+                      make_function("erf", x)).simplify();
+            *pattern_name = "erf";
+            return true;
+        }
+    }
+
+    // 模式 3: sin(x)/x -> Si(x)
+    if (expression.node_->type == NodeType::kDivide) {
+        SymbolicExpression num(expression.node_->left);
+        SymbolicExpression den(expression.node_->right);
+
+        if (num.node_->type == NodeType::kFunction && num.node_->text == "sin") {
+            SymbolicExpression arg(num.node_->left);
+            if (structural_equals(den.simplify(), arg.simplify())) {
+                SymbolicExpression a, b;
+                if (symbolic_decompose_linear(arg, variable_name, &a, &b)) {
+                    double a_val = 0.0;
+                    if (a.is_number(&a_val) && std::abs(a_val) > 1e-12) {
+                        *result = (SymbolicExpression::number(1.0 / a_val) *
+                                  make_function("Si", arg)).simplify();
+                        *pattern_name = "Si";
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    // 模式 4: cos(x)/x -> Ci(x)
+    if (expression.node_->type == NodeType::kDivide) {
+        SymbolicExpression num(expression.node_->left);
+        SymbolicExpression den(expression.node_->right);
+
+        if (num.node_->type == NodeType::kFunction && num.node_->text == "cos") {
+            SymbolicExpression arg(num.node_->left);
+            if (structural_equals(den.simplify(), arg.simplify())) {
+                SymbolicExpression a, b;
+                if (symbolic_decompose_linear(arg, variable_name, &a, &b)) {
+                    double a_val = 0.0;
+                    if (a.is_number(&a_val) && std::abs(a_val) > 1e-12) {
+                        *result = (SymbolicExpression::number(1.0 / a_val) *
+                                  make_function("Ci", arg)).simplify();
+                        *pattern_name = "Ci";
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    // 模式 5: 1/ln(x) -> li(x)
+    if (expression.node_->type == NodeType::kDivide) {
+        SymbolicExpression num(expression.node_->left);
+        SymbolicExpression den(expression.node_->right);
+
+        double num_val = 0.0;
+        if (num.is_number(&num_val) && std::abs(num_val - 1.0) < 1e-9) {
+            if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
+                SymbolicExpression arg(den.node_->left);
+                if (structural_equals(arg.simplify(), x.simplify())) {
+                    *result = make_function("li", x);
+                    *pattern_name = "li";
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+// 级数展开积分
+bool IntegrationEngine::try_series_integration(
+    const SymbolicExpression& expression,
+    const std::string& variable_name,
+    SymbolicExpression* result) {
+    try {
+
+    // 对于某些无法初等积分的表达式，尝试级数展开
+    // 这里简化处理，仅对特定模式有效
+
+    // 检测是否可以在 x=0 处展开
+    SymbolicExpression x = SymbolicExpression::variable(variable_name);
+
+    // 尝试计算前几项泰勒级数
+    SymbolicExpression series = SymbolicExpression::number(0.0);
+    SymbolicExpression current = expression;
+    SymbolicExpression x_power = SymbolicExpression::number(1.0);
+    double factorial = 1.0;
+
+    for (int n = 0; n < 5; ++n) {
+        // 计算 f^(n)(0)
+        SymbolicExpression deriv = (n == 0) ? expression : current.derivative(variable_name);
+        SymbolicExpression val_at_zero = deriv.substitute(variable_name, SymbolicExpression::number(0.0)).simplify();
+
+        double coeff = 0.0;
+        if (val_at_zero.is_number(&coeff)) {
+            if (n > 0) factorial *= n;
+            SymbolicExpression term = (SymbolicExpression::number(coeff / factorial) * x_power).simplify();
+            series = (series + term).simplify();
+        }
+
+        current = deriv;
+        x_power = (x_power * x).simplify();
+    }
+
+    // 积分级数
+    SymbolicExpression integrated = SymbolicExpression::number(0.0);
+    x_power = x;
+    factorial = 1.0;
+
+    for (int n = 0; n < 5; ++n) {
+        SymbolicExpression deriv = (n == 0) ? expression : expression;
+        for (int d = 0; d < n; ++d) {
+            deriv = deriv.derivative(variable_name);
+        }
+        SymbolicExpression val_at_zero = deriv.substitute(variable_name, SymbolicExpression::number(0.0)).simplify();
+
+        double coeff = 0.0;
+        if (val_at_zero.is_number(&coeff)) {
+            if (n > 0) factorial *= n;
+            double new_coeff = coeff / factorial / (n + 1);
+            SymbolicExpression term = (SymbolicExpression::number(new_coeff) * x_power).simplify();
+            integrated = (integrated + term).simplify();
+        }
+
+        x_power = (x_power * x).simplify();
+    }
+
+    // 检查级数是否非平凡
+    if (!expr_is_zero(integrated)) {
+        *result = integrated;
+        return true;
+    }
+
+    return false;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+// 数值积分占位符
+bool IntegrationEngine::try_numeric_integration_placeholder(
+    const SymbolicExpression& expression,
+    const std::string& variable_name,
+    SymbolicExpression* result) {
+
+    // 创建数值积分占位符
+    // 使用 NIntegral(expr, x) 形式
+    SymbolicExpression x = SymbolicExpression::variable(variable_name);
+    *result = make_function("NIntegral", make_multiply(expression, x));
+
+    return true;
 }
 
 // ============================================================================
@@ -786,6 +1058,7 @@ bool IntegrationEngine::verify_integration(
     const SymbolicExpression& original,
     const SymbolicExpression& result,
     const std::string& variable_name) {
+    try {
 
     SymbolicExpression derivative = result.derivative(variable_name).simplify();
     SymbolicExpression original_simplified = original.simplify();
@@ -836,6 +1109,9 @@ bool IntegrationEngine::verify_integration(
     }
 
     return true;
+    } catch (const std::exception&) {
+        return false;
+    }
 }
 
 std::vector<SymbolicExpression> IntegrationEngine::collect_substitution_candidates(

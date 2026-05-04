@@ -49,6 +49,10 @@ enum class NodeType {
     kVector,         ///< 向量节点: children 存储各分量
     kTensor,         ///< 张量节点: children 存储各行（每行为 kVector）
     kDifferentialOp, ///< 微分算子节点: text 为算子名，left 为操作数
+    kRootOf,         ///< 代数数节点: RootOf(poly, var, root_index)
+                     ///< - children[0]: 最小多项式（多项式表达式）
+                     ///< - text: 变量名
+                     ///< - number_value: 根编号（第几个实根）
 };
 
 // ============================================================================
@@ -258,6 +262,30 @@ SymbolicExpression make_power(SymbolicExpression lhs, SymbolicExpression rhs);
  * @return 函数调用表达式
  */
 SymbolicExpression make_function(const std::string& name, SymbolicExpression argument);
+
+/**
+ * @brief 创建 RootOf 表达式（代数数）
+ * @param polynomial 最小多项式（作为表达式）
+ * @param var_name 变量名
+ * @param root_index 根编号（第几个实根，从 0 开始）
+ * @return RootOf 表达式，表示多项式的指定根
+ *
+ * 例如: make_rootof(x^3 - 2, "x", 0) 表示 x^3 - 2 = 0 的第一个实根
+ */
+SymbolicExpression make_rootof(
+    const SymbolicExpression& polynomial,
+    const std::string& var_name,
+    int root_index);
+
+/**
+ * @brief 从多项式创建 RootOf 表达式
+ * @param polynomial 符号多项式
+ * @param root_index 根编号
+ * @return RootOf 表达式
+ */
+SymbolicExpression make_rootof_from_polynomial(
+    const SymbolicPolynomial& polynomial,
+    int root_index);
 
 // ============================================================================
 // 字符串转换与结构键

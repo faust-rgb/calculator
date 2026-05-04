@@ -1497,6 +1497,37 @@ void test_risch_regression() {
     std::cout << "Regression Tests Passed!" << std::endl;
 }
 
+void test_risch_strict_semantics() {
+    std::cout << "\nRunning Strict Risch Semantics Tests..." << std::endl;
+
+    {
+        SymbolicExpression x = SymbolicExpression::variable("x");
+        auto result = RischAlgorithm::integrate_strict(x, "x");
+        assert(result.success);
+        assert(result.type == IntegralType::kElementary);
+    }
+
+    {
+        SymbolicExpression x = SymbolicExpression::variable("x");
+        SymbolicExpression expr = make_function("exp", x) / x;
+        auto result = RischAlgorithm::integrate_strict(expr, "x");
+        assert(!result.success);
+        assert(result.type != IntegralType::kElementary);
+        assert(result.type != IntegralType::kSpecialFunction);
+    }
+
+    {
+        SymbolicExpression x = SymbolicExpression::variable("x");
+        SymbolicExpression expr = SymbolicExpression::number(1.0) /
+            (make_power(x, SymbolicExpression::number(4.0)) + SymbolicExpression::number(1.0));
+        auto result = RischAlgorithm::integrate_strict(expr, "x");
+        assert(!result.success);
+        assert(result.type == IntegralType::kProofFailed);
+    }
+
+    std::cout << "Strict Risch Semantics Tests Passed!" << std::endl;
+}
+
 void test_risch() {
     std::cout << "============================================" << std::endl;
     std::cout << "Running Complete Risch Algorithm Test Suite" << std::endl;
@@ -1524,6 +1555,7 @@ void test_risch() {
 
     // 回归测试
     test_risch_regression();
+    test_risch_strict_semantics();
 
     std::cout << "\n============================================" << std::endl;
     std::cout << "All Risch Algorithm Tests Completed!" << std::endl;

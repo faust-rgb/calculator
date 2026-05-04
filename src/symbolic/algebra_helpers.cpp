@@ -35,6 +35,7 @@
 // ============================================================================
 
 #include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/symbolic_polynomial.h"
 
 #include "math/mymath.h"
 
@@ -846,6 +847,29 @@ SymbolicExpression make_negate(SymbolicExpression operand) {
 /** @brief 创建函数调用表达式 */
 SymbolicExpression make_function(const std::string& name, SymbolicExpression argument) {
     return SymbolicExpression(make_unary(NodeType::kFunction, argument.node_, name));
+}
+
+/** @brief 创建 RootOf 表达式（代数数） */
+SymbolicExpression make_rootof(
+    const SymbolicExpression& polynomial,
+    const std::string& var_name,
+    int root_index) {
+
+    auto node = std::make_shared<SymbolicExpression::Node>();
+    node->type = NodeType::kRootOf;
+    node->text = var_name;
+    node->number_value = static_cast<double>(root_index);
+    node->children.push_back(polynomial.node_);
+
+    return SymbolicExpression(node);
+}
+
+/** @brief 从多项式创建 RootOf 表达式 */
+SymbolicExpression make_rootof_from_polynomial(
+    const SymbolicPolynomial& polynomial,
+    int root_index) {
+
+    return make_rootof(polynomial.to_expression(), polynomial.variable_name(), root_index);
 }
 
 /**

@@ -321,4 +321,22 @@ bool partial_fraction_decomposition(
     const std::string& variable_name,
     std::vector<std::pair<SymbolicExpression, SymbolicPolynomial>>* partial_fractions);
 
+/**
+ * @brief 部分分式分解
+ *
+ * 将有理函数 P/Q 分解为部分分式形式。
+ * Q 应该已经分解为因子。
+ *
+ * @param numerator 分子多项式 P
+ * @param denominator_factors 分母的因子分解 (因子, 幂次)
+ * @param variable_name 变量名
+ * @param partial_fractions 输出的部分分式系数列表
+ * @return true 如果成功分解
+ */
+bool partial_fraction_decomposition(
+    const SymbolicPolynomial& numerator,
+    const std::vector<std::pair<SymbolicPolynomial, int>>& denominator_factors,
+    const std::string& variable_name,
+    std::vector<std::pair<SymbolicExpression, SymbolicPolynomial>>* partial_fractions);
+
 #endif  // SYMBOLIC_POLYNOMIAL_H
