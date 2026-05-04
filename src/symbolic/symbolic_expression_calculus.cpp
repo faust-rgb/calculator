@@ -3673,4 +3673,49 @@ bool integrate_symbolic_partial_fractions(
     return true;
 }
 
+bool integrate_symbolic_rational_rules(
+    const SymbolicExpression& numerator,
+    const SymbolicExpression& denominator,
+    const std::string& variable_name,
+    SymbolicExpression* integrated) {
+
+    if (try_integrate_symbolic_two_linear_factors(numerator,
+                                                  denominator,
+                                                  variable_name,
+                                                  integrated) ||
+        try_integrate_symbolic_repeated_linear_and_linear(numerator,
+                                                          denominator,
+                                                          variable_name,
+                                                          integrated) ||
+        try_integrate_symbolic_two_linear_times_pure_quadratic(numerator,
+                                                               denominator,
+                                                               variable_name,
+                                                               integrated) ||
+        try_integrate_symbolic_linear_times_pure_quadratic(numerator,
+                                                           denominator,
+                                                           variable_name,
+                                                           integrated) ||
+        try_integrate_symbolic_repeated_linear_times_pure_quadratic(numerator,
+                                                                    denominator,
+                                                                    variable_name,
+                                                                    integrated) ||
+        try_integrate_symbolic_repeated_pure_quadratic(numerator,
+                                                       denominator,
+                                                       variable_name,
+                                                       integrated) ||
+        try_integrate_symbolic_two_pure_quadratics(numerator,
+                                                   denominator,
+                                                   variable_name,
+                                                   integrated) ||
+        try_integrate_polynomial_quotient(numerator,
+                                          denominator,
+                                          variable_name,
+                                          integrated)) {
+        *integrated = integrated->simplify();
+        return true;
+    }
+
+    return false;
+}
+
 }  // namespace symbolic_expression_internal

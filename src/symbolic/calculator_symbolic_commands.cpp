@@ -180,7 +180,14 @@ void resolve_symbolic_expression(const SymbolicResolverContext& ctx,
                 }
                 *variable_name = integral_variable;
             }
-            *expression = nested_expression.integral(*variable_name).simplify();
+            RischAlgorithm::IntegrationResult risch_result =
+                RischAlgorithm::integrate_full(nested_expression, *variable_name);
+            if (!risch_result.success ||
+                risch_result.type != IntegralType::kElementary) {
+                throw std::runtime_error(
+                    "Integration failed: Risch could not integrate nested expression");
+            }
+            *expression = risch_result.value.simplify();
             return;
         }
         if (call->name == "poly_add" || call->name == "poly_sub" ||
@@ -1177,22 +1184,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
                 return true;
             }
 
-            // 如果 IntegrationEngine 失败，回退到直接调用 integral()
-            try {
-                SymbolicExpression integrated = expression;
-                if (arguments.size() == 1) {
-                    integrated = integrated.integral(variable_name).simplify();
-                } else {
-                    for (std::size_t i = 1; i < arguments.size(); ++i) {
-                        integrated =
-                            integrated.integral(trim_copy(arguments[i])).simplify();
-                    }
-                }
-                *output = integrated.simplify().to_string() + " + C";
-                return true;
-            } catch (const std::runtime_error& e) {
-                throw std::runtime_error("Integration failed: " + std::string(e.what()));
-            }
+            throw std::runtime_error("Integration failed: Risch could not integrate expression");
         }
 
         if (arguments.size() != 2 && arguments.size() != 3 && arguments.size() != 4) {

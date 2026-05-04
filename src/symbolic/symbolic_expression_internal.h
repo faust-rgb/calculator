@@ -836,6 +836,18 @@ bool integrate_symbolic_partial_fractions(
     const std::string& variable_name,
     SymbolicExpression* integrated);
 
+/**
+ * @brief 确定性的符号有理函数规则
+ *
+ * Handles parameterized rational forms whose coefficients are symbolic
+ * parameters rather than numeric field elements.
+ */
+bool integrate_symbolic_rational_rules(
+    const SymbolicExpression& numerator,
+    const SymbolicExpression& denominator,
+    const std::string& variable_name,
+    SymbolicExpression* integrated);
+
 // ============================================================================
 // 特殊函数构造
 // ============================================================================

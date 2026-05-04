@@ -174,13 +174,6 @@ IntegrationResult IntegrationEngine::integrate_recursive(
         return IntegrationResult::failed();
     }
 
-    // 检查是否为常数（不含变量）
-    if (!contains_variable(expression, variable_name)) {
-        // ∫ c dx = c * x
-        SymbolicExpression result = (expression * SymbolicExpression::variable(variable_name)).simplify();
-        return IntegrationResult::ok(result, "constant", true);
-    }
-
     // 结构键检查（循环积分检测）
     std::string key = node_structural_key(expression.node_);
     if (integration_stack_.count(key) > 0) {
@@ -198,7 +191,22 @@ IntegrationResult IntegrationEngine::integrate_recursive(
                 verify_integration(expression, candidate.value, variable_name));
     };
 
-    // 1. 常数和线性
+    // 1. Risch 算法必须先尝试，避免旧的启发式策略抢先返回结果。
+    if (disabled_strategies_.count("risch") == 0) {
+        result = try_integrate_risch(expression, variable_name);
+        if (accept_result(result)) {
+            --current_depth_;
+            integration_stack_.erase(key);
+            return result;
+        }
+        if (result.method_used == "risch_non_elementary" && !result.success) {
+            --current_depth_;
+            integration_stack_.erase(key);
+            return result;
+        }
+    }
+
+    // 2. 常数和线性
     if (disabled_strategies_.count("constant_linear") == 0) {
         result = try_integrate_constant_linear(expression, variable_name);
         if (accept_result(result)) {
@@ -208,7 +216,7 @@ IntegrationResult IntegrationEngine::integrate_recursive(
         }
     }
 
-    // 2. 常见初等函数先用直接公式，避免进入较重的 Risch 扩展路径
+    // 3. 常见初等函数的直接公式，仅作为 Risch 未给出结果后的补充。
     if (disabled_strategies_.count("special") == 0) {
         result = try_integrate_special(expression, variable_name);
         if (accept_result(result)) {
@@ -218,7 +226,7 @@ IntegrationResult IntegrationEngine::integrate_recursive(
         }
     }
 
-    // 3. 线性性：逐项积分和式/差式
+    // 4. 线性性：逐项积分和式/差式
     if (expression.node_->type == NodeType::kAdd ||
         expression.node_->type == NodeType::kSubtract) {
         SymbolicExpression left(expression.node_->left);
@@ -239,25 +247,7 @@ IntegrationResult IntegrationEngine::integrate_recursive(
         }
     }
 
-    // 3. Risch 算法
-    if (disabled_strategies_.count("risch") == 0) {
-        result = try_integrate_risch(expression, variable_name);
-        if (accept_result(result)) {
-            --current_depth_;
-            integration_stack_.erase(key);
-            return result;
-        }
-        // Only a proven non-elementary Risch result may stop the strategy chain.
-        // Proof failures/unknowns must fall through to rational, substitution,
-        // by-parts, and other non-strict strategies.
-        if (result.method_used == "risch_non_elementary" && !result.success) {
-            --current_depth_;
-            integration_stack_.erase(key);
-            return result;
-        }
-    }
-
-    // 4. 有理函数
+    // 5. 有理函数补充策略
     if (disabled_strategies_.count("rational") == 0) {
         result = try_integrate_rational(expression, variable_name);
         if (accept_result(result)) {
@@ -267,7 +257,7 @@ IntegrationResult IntegrationEngine::integrate_recursive(
         }
     }
 
-    // 5. 换元积分
+    // 6. 换元积分
     if (disabled_strategies_.count("substitution") == 0) {
         result = try_integrate_substitution(expression, variable_name);
         if (accept_result(result)) {
@@ -277,7 +267,7 @@ IntegrationResult IntegrationEngine::integrate_recursive(
         }
     }
 
-    // 6. 分部积分
+    // 7. 分部积分
     if (disabled_strategies_.count("by_parts") == 0) {
         result = try_integrate_by_parts(expression, variable_name);
         if (accept_result(result)) {
@@ -287,7 +277,7 @@ IntegrationResult IntegrationEngine::integrate_recursive(
         }
     }
 
-    // 7. 特殊积分兜底
+    // 8. 特殊积分兜底
     if (disabled_strategies_.count("special") == 0) {
         result = try_integrate_special(expression, variable_name);
         if (accept_result(result)) {
@@ -297,7 +287,7 @@ IntegrationResult IntegrationEngine::integrate_recursive(
         }
     }
 
-    // 8. 回退
+    // 9. 回退
     result = try_integrate_fallback(expression, variable_name);
 
     --current_depth_;
@@ -355,6 +345,18 @@ IntegrationResult IntegrationEngine::try_integrate_risch(
     auto risch_result = RischAlgorithm::integrate_full(expression, variable_name);
 
     if (risch_result.success && risch_result.type == IntegralType::kElementary) {
+        if (expression.node_->type == NodeType::kFunction &&
+            expression.node_->text == "exp") {
+            SymbolicExpression arg(expression.node_->left);
+            SymbolicExpression slope;
+            SymbolicExpression intercept;
+            if (symbolic_decompose_linear(arg, variable_name, &slope, &intercept) &&
+                !expr_is_zero(slope)) {
+                SymbolicExpression normalized =
+                    make_divide(make_function("exp", arg), slope).simplify();
+                return IntegrationResult::ok(normalized, "risch");
+            }
+        }
         return IntegrationResult::ok(risch_result.value, "risch");
     }
 
@@ -424,6 +426,16 @@ IntegrationResult IntegrationEngine::try_integrate_rational(
             SymbolicPolynomial den_poly(den_coeffs, variable_name);
 
             SymbolicExpression result;
+            if (RischAlgorithm::integrate_rational(num_poly,
+                                                   den_poly,
+                                                   variable_name,
+                                                   &result)) {
+                if (!verify_results_ ||
+                    verify_integration(expression, result, variable_name)) {
+                    return IntegrationResult::ok(result, "risch_rational");
+                }
+            }
+
             if (integrate_symbolic_partial_fractions(num_poly, den_poly,
                                                       variable_name, &result)) {
                 if (!verify_results_ ||
@@ -432,16 +444,17 @@ IntegrationResult IntegrationEngine::try_integrate_rational(
                 }
             }
 
-            try {
-                SymbolicExpression direct_result = expression.integral(variable_name).simplify();
+            if (integrate_symbolic_rational_rules(numerator,
+                                                  denominator,
+                                                  variable_name,
+                                                  &result)) {
                 if (!verify_results_ ||
-                    verify_integration(expression, direct_result, variable_name)) {
-                    return IntegrationResult::ok(direct_result, "rational_direct");
+                    verify_integration(expression, result, variable_name)) {
+                    return IntegrationResult::ok(result, "symbolic_rational_rules");
                 }
-            } catch (const std::runtime_error& e) {
-                // integral() 抛出错误，返回 failed 让其他策略处理
-                return IntegrationResult::failed();
             }
+
+            return IntegrationResult::failed();
         }
 
     }
@@ -618,6 +631,30 @@ IntegrationResult IntegrationEngine::try_integrate_special(
 
     if (node->type == NodeType::kMultiply) {
         std::vector<SymbolicExpression> factors = collect_multiplicative_factors(expression);
+        if (factors.size() == 2) {
+            const SymbolicExpression* variable_factor = nullptr;
+            const SymbolicExpression* atan_factor = nullptr;
+            for (const SymbolicExpression& factor : factors) {
+                if (factor.is_variable_named(variable_name)) {
+                    variable_factor = &factor;
+                } else if (factor.node_->type == NodeType::kFunction &&
+                           factor.node_->text == "atan" &&
+                           SymbolicExpression(factor.node_->left).is_variable_named(variable_name)) {
+                    atan_factor = &factor;
+                }
+            }
+            if (variable_factor && atan_factor) {
+                SymbolicExpression x = SymbolicExpression::variable(variable_name);
+                SymbolicExpression result =
+                    (SymbolicExpression::number(0.5) *
+                     (make_function("atan", x) *
+                          (make_power(x, SymbolicExpression::number(2.0)) +
+                           SymbolicExpression::number(1.0)) -
+                      x)).simplify();
+                return IntegrationResult::ok(result, "atan_by_parts");
+            }
+        }
+
         double numeric_factor = 1.0;
         bool unsupported_factor = false;
         bool has_exp = false;
@@ -745,6 +782,10 @@ IntegrationResult IntegrationEngine::try_integrate_special(
                     make_power(x, SymbolicExpression::number(1.5))).simplify();
                 return IntegrationResult::ok(result, "sqrt");
             }
+        }
+
+        if (func_name == "delta" && arg.is_variable_named(variable_name)) {
+            return IntegrationResult::ok(make_function("step", arg), "delta_step");
         }
 
         // ln(x)

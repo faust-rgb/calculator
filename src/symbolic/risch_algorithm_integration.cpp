@@ -432,8 +432,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_full(
         return strict_result;
     }
 
-    // 如果严格路径返回 proof_failed，回退到旧路径
-    // 这保持了向后兼容性
+    // 如果 strict 路径没有给出证明，继续使用非 strict 的 Risch 微分塔实现。
     SymbolicExpression simplified = expression.simplify();
 
     // 首先尝试直接三角/双曲函数积分
@@ -443,10 +442,10 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_full(
         return trig_result;
     }
 
-    // 构建微分塔 (旧方法)
+    // 构建微分塔
     auto tower = build_differential_tower(simplified, variable_name, recursion_depth + 1);
 
-    // 递归积分 (旧方法)
+    // 递归积分
     IntegrationResult result = integrate_in_extension(simplified, tower, static_cast<int>(tower.size()) - 1, variable_name, recursion_depth + 1);
 
     // 存入缓存
