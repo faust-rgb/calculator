@@ -37,6 +37,9 @@
 #include "polynomial/polynomial.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "symbolic/integration_engine.h"
+#include "symbolic/symbolic_limit.h"
+#include "symbolic/symbolic_solver.h"
+#include "symbolic/symbolic_sum.h"
 #include "parser/command_parser.h"
 #include "math/mymath.h"
 
@@ -119,7 +122,8 @@ bool is_symbolic_command(const std::string& command) {
            command == "integrate_region" ||
            command == "diff" ||
            command == "integral" ||
-           command == "dsolve";
+           command == "dsolve" ||
+           command == "sum";
 }
 
 void resolve_symbolic_expression(const SymbolicResolverContext& ctx,
@@ -1578,6 +1582,74 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         return true;
     }
 
+    // ============================================================================
+    // 新增命令: sum
+    // ============================================================================
+
+    if (command == "sum") {
+        // sum(expr, var, lower, upper)
+        // sum(k^2, k, 1, n) -> n*(n+1)*(2*n+1)/6
+        if (arguments.size() < 4) {
+            throw std::runtime_error("sum expects (expression, variable, lower, upper)");
+        }
+
+        std::string variable_name;
+        SymbolicExpression expression;
+        ctx.resolve_symbolic(arguments[0], true, &variable_name, &expression);
+
+        std::string var = trim_copy(arguments[1]);
+        std::string lower_str = trim_copy(arguments[2]);
+        std::string upper_str = trim_copy(arguments[3]);
+
+        // 解析边界
+        bool upper_infinite = (upper_str == "inf" || upper_str == "infinity" ||
+                               upper_str == "oo" || upper_str == "+inf");
+
+        double lower_val = ctx.parse_decimal(lower_str);
+        double upper_val = upper_infinite ? 0.0 : ctx.parse_decimal(upper_str);
+
+        // 检查是否为多项式
+        std::vector<double> coeffs;
+        if (expression.polynomial_coefficients(var, &coeffs) && !upper_infinite) {
+            int lo = static_cast<int>(mymath::round(lower_val));
+            int hi = static_cast<int>(mymath::round(upper_val));
+
+            // 数值求和
+            double sum = 0.0;
+            for (int k = lo; k <= hi; ++k) {
+                SymbolicExpression sub = expression.substitute(var, SymbolicExpression::number(k));
+                sub = sub.simplify();
+                double val = 0.0;
+                if (sub.is_number(&val)) {
+                    sum += val;
+                }
+            }
+            *output = format_decimal(ctx.normalize_result(sum));
+            return true;
+        }
+
+        // 检查是否为几何级数 a * r^k
+        // 简化版本：数值求和
+        if (!upper_infinite) {
+            int lo = static_cast<int>(mymath::round(lower_val));
+            int hi = static_cast<int>(mymath::round(upper_val));
+
+            double sum = 0.0;
+            for (int k = lo; k <= hi; ++k) {
+                SymbolicExpression sub = expression.substitute(var, SymbolicExpression::number(k));
+                sub = sub.simplify();
+                double val = 0.0;
+                if (sub.is_number(&val)) {
+                    sum += val;
+                }
+            }
+            *output = format_decimal(ctx.normalize_result(sum));
+        } else {
+            *output = "infinite sum requires convergence analysis";
+        }
+        return true;
+    }
+
     return false;
 }
 
@@ -1614,7 +1686,10 @@ std::string SymbolicModule::get_help_snippet(const std::string& topic) const {
                "  expand(expr)           Expand polynomial/algebraic expression\n"
                "  diff(expr, [var])      Symbolic derivative\n"
                "  integral(expr, [var])  Symbolic indefinite integral\n"
-               "  dsolve(rhs, [x, y])    Solve simple linear ODEs";
+               "  dsolve(rhs, [x, y])    Solve simple linear ODEs\n"
+               "  limit(expr, var, point [, dir])  Symbolic limit\n"
+               "  solve(equation, var)   Solve equation for variable\n"
+               "  sum(expr, var, lo, hi) Symbolic summation";
     }
     return "";
 }

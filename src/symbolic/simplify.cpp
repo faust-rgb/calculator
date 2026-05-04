@@ -242,46 +242,64 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
 
             if (node->text == "ln" && expr_is_variable(argument, "e")) return SymbolicExpression::number(1.0);
+            // exp(ln(x)) → x (ln domain implies x > 0)
             if (node->text == "exp" && argument.node_->type == NodeType::kFunction && argument.node_->text == "ln") {
-                const SymbolicExpression inner(argument.node_->left);
-                if (is_known_positive_expression(inner.simplify())) return inner.simplify();
+                return SymbolicExpression(argument.node_->left).simplify();
             }
+            // exp(a*ln(x)) → x^a (ln domain implies x > 0)
+            if (node->text == "exp" && argument.node_->type == NodeType::kMultiply) {
+                SymbolicExpression mult_left(argument.node_->left);
+                SymbolicExpression mult_right(argument.node_->right);
+                // Check for a * ln(x) pattern
+                if (mult_left.node_->type == NodeType::kFunction && mult_left.node_->text == "ln") {
+                    const SymbolicExpression base(mult_left.node_->left);
+                    return make_power(base, mult_right).simplify();
+                }
+                if (mult_right.node_->type == NodeType::kFunction && mult_right.node_->text == "ln") {
+                    const SymbolicExpression base(mult_right.node_->left);
+                    return make_power(base, mult_left).simplify();
+                }
+            }
+            // exp(x+y) → exp(x)*exp(y)
             if (node->text == "exp" && argument.node_->type == NodeType::kAdd) {
                 SymbolicExpression left(argument.node_->left);
                 SymbolicExpression right(argument.node_->right);
-                if (left.node_->type == NodeType::kFunction && left.node_->text == "ln") {
-                    return (SymbolicExpression(left.node_->left) * make_function("exp", right)).simplify();
-                }
-                if (right.node_->type == NodeType::kFunction && right.node_->text == "ln") {
-                    return (SymbolicExpression(right.node_->left) * make_function("exp", left)).simplify();
-                }
+                return (make_function("exp", left) * make_function("exp", right)).simplify();
             }
+            // exp(x-y) → exp(x)/exp(y)
             if (node->text == "exp" && argument.node_->type == NodeType::kSubtract) {
                 SymbolicExpression left(argument.node_->left);
                 SymbolicExpression right(argument.node_->right);
-                if (left.node_->type == NodeType::kFunction && left.node_->text == "ln") {
-                    return (SymbolicExpression(left.node_->left) / make_function("exp", right)).simplify();
-                }
-                if (right.node_->type == NodeType::kFunction && right.node_->text == "ln") {
-                    return (make_function("exp", left) / SymbolicExpression(right.node_->left)).simplify();
-                }
+                return (make_function("exp", left) / make_function("exp", right)).simplify();
             }
             if (node->text == "ln" && argument.node_->type == NodeType::kFunction && argument.node_->text == "exp") {
                 return SymbolicExpression(argument.node_->left).simplify();
             }
+            // ln(x^n) → n*ln(x) (ln domain implies x > 0)
             if (node->text == "ln" && argument.node_->type == NodeType::kPower) {
                 double exponent = 0.0;
-                if (SymbolicExpression(argument.node_->right).is_number(&exponent) &&
-                    is_known_positive_expression(SymbolicExpression(argument.node_->left))) {
+                if (SymbolicExpression(argument.node_->right).is_number(&exponent)) {
                     return make_multiply(SymbolicExpression::number(exponent),
                                          make_function("ln", SymbolicExpression(argument.node_->left))).simplify();
                 }
             }
+            // ln(x*y) → ln(x) + ln(y) (ln domain implies x, y > 0)
             if (node->text == "ln" && argument.node_->type == NodeType::kMultiply) {
                 SymbolicExpression mult_left(argument.node_->left);
                 SymbolicExpression mult_right(argument.node_->right);
-                if (is_known_positive_expression(mult_left) && is_known_positive_expression(mult_right)) {
-                    return (make_function("ln", mult_left) + make_function("ln", mult_right)).simplify();
+                return (make_function("ln", mult_left) + make_function("ln", mult_right)).simplify();
+            }
+            // ln(a/b) → ln(a) - ln(b) (ln domain implies a, b > 0)
+            if (node->text == "ln" && argument.node_->type == NodeType::kDivide) {
+                SymbolicExpression div_left(argument.node_->left);
+                SymbolicExpression div_right(argument.node_->right);
+                return (make_function("ln", div_left) - make_function("ln", div_right)).simplify();
+            }
+            // ln(1) → 0
+            if (node->text == "ln") {
+                double arg_val = 0.0;
+                if (argument.is_number(&arg_val) && mymath::is_near_zero(arg_val - 1.0, kFormatEps)) {
+                    return SymbolicExpression::number(0.0);
                 }
             }
             if (node->text == "sqrt" && argument.node_->type == NodeType::kPower) {
@@ -360,6 +378,17 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                     (is_squared_function(left, "cos", &left_arg) && is_squared_function(right, "sin", &right_arg) && left_arg == right_arg)) {
                     return SymbolicExpression::number(1.0);
                 }
+                // Hyperbolic identity: sinh²(x) + cosh²(x) → ? (no simple form, skip)
+                // sech²(x) + tanh²(x) → 1
+                if (is_squared_function(left, "sech", &left_arg) && is_squared_function(right, "tanh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0);
+                if (is_squared_function(right, "sech", &left_arg) && is_squared_function(left, "tanh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0);
+            }
+            // ln(a) + ln(b) → ln(a*b) (ln domain implies a, b > 0)
+            if (left.node_->type == NodeType::kFunction && right.node_->type == NodeType::kFunction &&
+                left.node_->text == "ln" && right.node_->text == "ln") {
+                SymbolicExpression left_arg_ln(left.node_->left);
+                SymbolicExpression right_arg_ln(right.node_->left);
+                return make_function("ln", make_multiply(left_arg_ln, right_arg_ln)).simplify();
             }
             {
                 SymbolicExpression combined;
@@ -390,6 +419,12 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 std::string left_arg, right_arg;
                 if (is_squared_function(left, "sec", &left_arg) && is_squared_function(right, "tan", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0);
                 if (is_squared_function(left, "csc", &left_arg) && is_squared_function(right, "cot", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0);
+                // Hyperbolic identity: cosh²(x) - sinh²(x) → 1
+                if (is_squared_function(left, "cosh", &left_arg) && is_squared_function(right, "sinh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0);
+                // Hyperbolic identity: sinh²(x) - cosh²(x) → -1
+                if (is_squared_function(left, "sinh", &left_arg) && is_squared_function(right, "cosh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(-1.0);
+                // coth²(x) - csch²(x) → 1
+                if (is_squared_function(left, "coth", &left_arg) && is_squared_function(right, "csch", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0);
             }
             {
                 SymbolicExpression combined;

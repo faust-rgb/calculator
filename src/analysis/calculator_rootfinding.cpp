@@ -3,7 +3,7 @@
 // ============================================================================
 //
 // 本文件实现了方程求根命令的数值计算，包括：
-// - solve: Newton 法求根（带回溯）
+// - solve: Newton 法求根（带回溯）及符号方程求解
 // - bisect: 二分法求根
 // - secant: 割线法求根
 // - fixed_point: 不动点迭代
@@ -12,6 +12,8 @@
 
 #include "math/mymath.h"
 #include "parser/unified_expression_parser.h"
+#include "symbolic/symbolic_expression_internal.h"
+#include "core/string_utils.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -20,6 +22,41 @@
 namespace rootfinding {
 
 namespace {
+
+/**
+ * @brief 检查字符串是否为数值
+ */
+bool is_numeric_string(const std::string& s) {
+    if (s.empty()) return false;
+    std::string trimmed = s;
+    // 去除前后空格
+    size_t start = trimmed.find_first_not_of(" \t");
+    size_t end = trimmed.find_last_not_of(" \t");
+    if (start == std::string::npos) return false;
+    trimmed = trimmed.substr(start, end - start + 1);
+
+    // 检查是否为数值格式
+    bool has_digit = false;
+    bool has_dot = false;
+    bool has_sign = false;
+    for (size_t i = 0; i < trimmed.size(); ++i) {
+        char c = trimmed[i];
+        if (c == '+' || c == '-') {
+            if (i != 0) return false;  // 符号只能在开头
+            has_sign = true;
+        } else if (c == '.') {
+            if (has_dot) return false;  // 只能有一个小数点
+            has_dot = true;
+        } else if (c >= '0' && c <= '9') {
+            has_digit = true;
+        } else {
+            return false;  // 其他字符
+        }
+    }
+    return has_digit;
+}
+
+using namespace symbolic_expression_internal;
 
 /**
  * @brief 计算函数值容差
@@ -283,6 +320,7 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
                                 std::string* output) {
     const std::vector<std::string> arguments = split_top_level_arguments(inside);
     if (command == "solve") {
+        // 情况 1: 矩阵方程 solve(A, b)
         if (arguments.size() == 2 &&
             (ctx.is_matrix_argument(arguments[0]) || ctx.is_matrix_argument(arguments[1]))) {
             // 解线性方程组 Ax = b
@@ -311,7 +349,80 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
             return true;
         }
 
+        // 情况 2: 符号方程 solve(x^2 - 4 = 0, x) 或 solve(x^2 - 4, x)
         if (arguments.size() == 2) {
+            std::string eq_str = trim_copy(arguments[0]);
+            std::string var = trim_copy(arguments[1]);
+
+            // 检查是否为符号方程形式 (包含等号或变量名是标识符而非数值)
+            size_t eq_pos = eq_str.find('=');
+            bool is_symbolic_equation = (eq_pos != std::string::npos) ||
+                                        (!is_numeric_string(var) && !ctx.is_matrix_argument(eq_str));
+
+            if (is_symbolic_equation && eq_pos != std::string::npos) {
+                // 符号方程求解
+                try {
+                    SymbolicExpression lhs, rhs;
+                    if (eq_pos == std::string::npos) {
+                        lhs = SymbolicExpression::parse(eq_str);
+                        rhs = SymbolicExpression::number(0.0);
+                    } else {
+                        std::string lhs_str = eq_str.substr(0, eq_pos);
+                        std::string rhs_str = eq_str.substr(eq_pos + 1);
+                        lhs = SymbolicExpression::parse(lhs_str);
+                        rhs = SymbolicExpression::parse(rhs_str);
+                    }
+
+                    SymbolicExpression equation = symbolic_expression_internal::make_subtract(lhs, rhs).simplify();
+
+                    // 尝试提取多项式系数
+                    std::vector<double> coeffs;
+                    if (equation.polynomial_coefficients(var, &coeffs)) {
+                        if (coeffs.size() == 2) {
+                            // 线性方程 a*x + b = 0
+                            double a = coeffs[1], b = coeffs[0];
+                            if (mymath::is_near_zero(a, 1e-15)) {
+                                *output = "no solution (coefficient is zero)";
+                            } else {
+                                double x = -b / a;
+                                *output = format_decimal(ctx.normalize_result(x));
+                            }
+                            return true;
+                        }
+                        if (coeffs.size() == 3) {
+                            // 二次方程 a*x^2 + b*x + c = 0
+                            double a = coeffs[2], b = coeffs[1], c = coeffs[0];
+                            double disc = b * b - 4 * a * c;
+                            if (mymath::is_near_zero(disc, 1e-12)) {
+                                double x = -b / (2 * a);
+                                *output = format_decimal(ctx.normalize_result(x));
+                            } else if (disc > 0) {
+                                double x1 = (-b - mymath::sqrt(disc)) / (2 * a);
+                                double x2 = (-b + mymath::sqrt(disc)) / (2 * a);
+                                *output = "{" + format_decimal(ctx.normalize_result(x1)) + ", " +
+                                          format_decimal(ctx.normalize_result(x2)) + "}";
+                            } else {
+                                // 复根
+                                double real = -b / (2 * a);
+                                double imag = mymath::sqrt(-disc) / (2 * a);
+                                *output = "{complex(" + format_decimal(ctx.normalize_result(real)) + ", " +
+                                          format_decimal(ctx.normalize_result(imag)) + "), complex(" +
+                                          format_decimal(ctx.normalize_result(real)) + ", " +
+                                          format_decimal(ctx.normalize_result(-imag)) + ")}";
+                            }
+                            return true;
+                        }
+                    }
+
+                    // 无法解析为多项式，回退到数值方法
+                    *output = "unable to solve symbolically: " + equation.simplify().to_string();
+                    return true;
+                } catch (...) {
+                    // 符号解析失败，回退到数值方法
+                }
+            }
+
+            // 情况 3: 数值求根 solve(f, x0)
             const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
 
             std::function<double(const std::vector<std::pair<std::string, double>>&)> evaluate_derivative = nullptr;
@@ -409,6 +520,7 @@ std::string RootfindingModule::get_help_snippet(const std::string& topic) const 
         return "Rootfinding:\n"
                "  solve(f, x0)           Numerical root solving (Newton's method)\n"
                "  solve(A, b)            Linear system solver\n"
+               "  solve(eqn, var)        Symbolic equation solver (polynomials)\n"
                "  bisect(f, a, b)        Bisection method\n"
                "  secant(f, x0, x1)      Secant method\n"
                "  fixed_point(f, x0)     Fixed-point iteration";

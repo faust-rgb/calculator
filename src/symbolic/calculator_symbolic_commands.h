@@ -44,7 +44,8 @@ public:
                 "jacobian", "hessian", "divergence", "div",
                 "curl", "curl_2d", "laplacian", "implicit_diff", "param_deriv", "directional",
                 "line_integral", "line_integral_vector", "surface_integral", "greens_theorem",
-                "stokes_theorem", "divergence_theorem", "integrate_region", "integral", "dsolve"};
+                "stokes_theorem", "divergence_theorem", "integrate_region", "integral", "dsolve",
+                "sum"};
     }
 
 
