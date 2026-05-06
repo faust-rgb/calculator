@@ -28,6 +28,27 @@ namespace signal {
 using Complex = mymath::complex<double>;
 
 // ============================================================================
+// 窗函数类型定义
+// ============================================================================
+
+/**
+ * @enum WindowType
+ * @brief 窗函数类型
+ */
+enum class WindowType {
+    Rectangular,    ///< 矩形窗
+    Hanning,        ///< 汉宁窗
+    Hamming,        ///< 汉明窗
+    Blackman,       ///< 布莱克曼窗
+    BlackmanHarris, ///< 布莱克曼-哈里斯窗
+    Bartlett,       ///< 巴特利特窗（三角窗）
+    Kaiser,         ///< 凯撒窗
+    Gaussian,       ///< 高斯窗
+    Flattop,        ///< 平顶窗
+    Tukey           ///< Tukey 窗
+};
+
+// ============================================================================
 // FFT 相关结构体
 // ============================================================================
 
@@ -49,6 +70,7 @@ struct STFTResult {
     std::vector<std::vector<Complex>> stft_matrix; ///< STFT 矩阵（时间 × 频率）
     std::vector<double> time_vector;               ///< 时间轴
     std::vector<double> freq_vector;               ///< 频率轴
+    WindowType window_type = WindowType::Hanning;  ///< 使用的窗函数
 };
 
 // ============================================================================
@@ -201,23 +223,6 @@ std::vector<double> normalized_xcorr(const std::vector<double>& signal1,
 // ============================================================================
 
 /**
- * @enum WindowType
- * @brief 窗函数类型
- */
-enum class WindowType {
-    Rectangular,    ///< 矩形窗
-    Hanning,        ///< 汉宁窗
-    Hamming,        ///< 汉明窗
-    Blackman,       ///< 布莱克曼窗
-    BlackmanHarris, ///< 布莱克曼-哈里斯窗
-    Bartlett,       ///< 巴特利特窗（三角窗）
-    Kaiser,         ///< 凯撒窗
-    Gaussian,       ///< 高斯窗
-    Flattop,        ///< 平顶窗
-    Tukey           ///< Tukey 窗
-};
-
-/**
  * @brief 生成窗函数
  * @param type 窗函数类型
  * @param length 窗长度
@@ -319,8 +324,6 @@ struct FilterCoefficients {
 /**
  * @struct SOS
  * @brief 二阶节 (Second-Order Section) 系数
-...
- * 用于实现高阶 IIR 滤波器，增强数值稳定性。
  */
 struct SOS {
     double b0, b1, b2;  ///< 分子系数
@@ -464,19 +467,22 @@ std::vector<double> grpdelay(const std::vector<double>& b,
  * @param nfft FFT 点数
  * @param window_type 窗函数类型
  * @param noverlap 重叠点数
+ * @param sample_rate 采样率
  * @return 功率谱密度
  */
 std::vector<double> pwelch(const std::vector<double>& signal,
                             std::size_t nfft,
                             WindowType window_type = WindowType::Hanning,
-                            std::size_t noverlap = 0);
+                            std::size_t noverlap = 0,
+                            double sample_rate = 1.0);
 
 /**
  * @brief 计算功率谱密度（周期图法）
  * @param signal 输入信号
+ * @param sample_rate 采样率
  * @return 功率谱密度
  */
-std::vector<double> periodogram(const std::vector<double>& signal);
+std::vector<double> periodogram(const std::vector<double>& signal, double sample_rate = 1.0);
 
 /**
  * @brief 短时傅里叶变换

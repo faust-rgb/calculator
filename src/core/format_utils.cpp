@@ -17,6 +17,142 @@
 #include <sstream>
 
 // ============================================================================
+// 常数和符号识别表格
+// ============================================================================
+
+namespace {
+
+struct NamedConstant {
+    double value;
+    const char* name;
+};
+
+static const NamedConstant kNamedConstants[] = {
+    {mymath::kPi, "pi"},
+    {mymath::kE, "e"},
+    {0.6931471805599453, "ln(2)"},
+    {2.302585092994046, "ln(10)"},
+    {1.618033988749895, "phi"}, // 黄金分割比
+};
+
+std::string format_rational_with_constant(const Rational& r, const std::string& name, bool reciprocal) {
+    if (reciprocal) {
+        // value = r / name => (r.num / r.den) / name
+        if (r.numerator == 1 && r.denominator == 1) return "1 / " + name;
+        if (r.denominator == 1) return std::to_string(r.numerator) + " / " + name;
+        return std::to_string(r.numerator) + " / (" + std::to_string(r.denominator) + " * " + name + ")";
+    } else {
+        // value = r * name => (r.num / r.den) * name
+        if (r.numerator == 1 && r.denominator == 1) return name;
+        if (r.denominator == 1) return std::to_string(r.numerator) + " * " + name;
+        if (r.numerator == 1) return name + " / " + std::to_string(r.denominator);
+        return std::to_string(r.numerator) + " * " + name + " / " + std::to_string(r.denominator);
+    }
+}
+
+std::string try_format_with_named_constants(double value, [[maybe_unused]] double eps) {
+    const double abs_value = mymath::abs(value);
+    Rational r;
+
+    for (const auto& const_entry : kNamedConstants) {
+        // 尝试 value = r * C
+        if (try_make_simple_rational(abs_value / const_entry.value, 20, &r)) {
+            return format_rational_with_constant(r, const_entry.name, false);
+        }
+        // 尝试 value = r / C
+        if (try_make_simple_rational(abs_value * const_entry.value, 20, &r)) {
+            return format_rational_with_constant(r, const_entry.name, true);
+        }
+    }
+    return "";
+}
+
+std::string try_format_as_sqrt(double value, [[maybe_unused]] double eps) {
+    const double abs_value = mymath::abs(value);
+    const double squared = abs_value * abs_value;
+    
+    Rational r;
+    // 尝试识别平方后是有理数的情况
+    if (try_make_simple_rational(squared, 100, &r)) {
+        long long n = r.numerator;
+        long long d = r.denominator;
+
+        // 完美平方检测
+        auto is_perfect_square = [](long long x) {
+            if (x < 0) return false;
+            long long s = static_cast<long long>(mymath::sqrt(static_cast<double>(x)) + 0.5);
+            return s * s == x;
+        };
+
+        if (is_perfect_square(n) && is_perfect_square(d)) {
+            // 这其实应该在普通有理数识别中被捕获，但以防万一
+            return ""; 
+        }
+
+        // 格式化为 sqrt(n) / sqrt(d) -> sqrt(n*d) / d
+        long long inner = n * d;
+        // 提取 inner 中的平方因子
+        long long factor = 1;
+        for (long long i = 2; i * i <= inner; ++i) {
+            while (inner % (i * i) == 0) {
+                factor *= i;
+                inner /= (i * i);
+            }
+        }
+
+        std::string res;
+        if (inner == 1) {
+            res = std::to_string(factor);
+        } else {
+            res = (factor == 1 ? "" : std::to_string(factor) + " * ") + "sqrt(" + std::to_string(inner) + ")";
+        }
+
+        if (d == 1) return res;
+        
+        // 如果 n=1, d=2, value = sqrt(1/2) = sqrt(2)/2
+        // res 此时已经是 "sqrt(2)"，需要除以 d (d=2? 不，应该是 sqrt(d^2) = d)
+        // 这里的逻辑：value = sqrt(n/d) = sqrt(n*d)/d
+        return res + " / " + std::to_string(d);
+    }
+    return "";
+}
+
+} // namespace
+
+// ============================================================================
+// 符号识别入口
+// ============================================================================
+
+std::string try_format_symbolic_extended(double value, double eps) {
+    if (!mymath::isfinite(value) || mymath::is_near_zero(value, eps)) {
+        return "";
+    }
+
+    const bool negative = value < 0.0;
+    const double abs_value = mymath::abs(value);
+
+    // 1. 尝试命名常数比例 (pi, e, 等)
+    std::string named_form = try_format_with_named_constants(abs_value, eps);
+    if (!named_form.empty()) {
+        return negative ? "-" + named_form : named_form;
+    }
+
+    // 2. 尝试平方根形式
+    std::string sqrt_form = try_format_as_sqrt(abs_value, eps);
+    if (!sqrt_form.empty()) {
+        return negative ? "-" + sqrt_form : sqrt_form;
+    }
+
+    return "";
+}
+
+std::string try_format_as_pi_fraction(double value, double eps) {
+    // 保持向前兼容，调用新的扩展识别
+    return try_format_symbolic_extended(value, eps);
+}
+
+
+// ============================================================================
 // 显示精度
 // ============================================================================
 
@@ -101,6 +237,13 @@ std::string format_symbolic_number(double value) {
         return std::to_string(round_to_long_long(value));
     }
 
+    // 1. 尝试扩展符号识别（常数、根式）
+    std::string extended_form = try_format_symbolic_extended(value, 1e-9);
+    if (!extended_form.empty()) {
+        return extended_form;
+    }
+
+    // 2. 尝试普通有理数识别
     Rational rational;
     if (try_make_simple_rational(value, 999, &rational)) {
         return rational.to_string();

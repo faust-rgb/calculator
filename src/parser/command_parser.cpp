@@ -5,6 +5,7 @@
 #include "parser/command_parser.h"
 #include "parser/syntax_validator.h"
 #include "core/string_utils.h"
+#include "parser/parser_utils.h"
 #include <algorithm>
 #include <cctype>
 #include <sstream>
@@ -14,31 +15,6 @@
 // ============================================================================
 
 namespace {
-
-bool contains_script_container_syntax(std::string_view expr) {
-    bool in_string = false;
-    bool escaping = false;
-    for (char ch : expr) {
-        if (in_string) {
-            if (escaping) {
-                escaping = false;
-            } else if (ch == '\\') {
-                escaping = true;
-            } else if (ch == '"') {
-                in_string = false;
-            }
-            continue;
-        }
-        if (ch == '"') {
-            in_string = true;
-            continue;
-        }
-        if (ch == '{' || ch == '}') {
-            return true;
-        }
-    }
-    return false;
-}
 
 void compile_expression_info(ExpressionInfo& info) {
     if (info.text.empty()) {
@@ -62,7 +38,7 @@ void compile_expression_info(ExpressionInfo& info) {
     cache->analyzed = true;
 
     // 尝试编译 AST（仅对标量表达式）
-    if (cache->hint == ExpressionHint::kScalar && !contains_script_container_syntax(expr)) {
+    if (cache->hint == ExpressionHint::kScalar && !parser_utils::contains_script_syntax(expr)) {
         cache->compiled_ast = compile_expression_ast(std::string(expr));
         if (cache->compiled_ast) {
             cache->is_compiled = true;

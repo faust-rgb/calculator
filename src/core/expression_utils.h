@@ -4,7 +4,7 @@
 //
 // 提供表达式展开和级数处理的函数。
 // 表达式拆分函数已移至 parser/unified_expression_parser.h
-// 内联函数展开已移至 command/inline_expander.h
+// 内联函数展开已移至 execution/inline_expander.h
 // ============================================================================
 
 #ifndef CORE_EXPRESSION_UTILS_H

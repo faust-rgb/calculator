@@ -38,12 +38,10 @@ bool is_numeric_string(const std::string& s) {
     // 检查是否为数值格式
     bool has_digit = false;
     bool has_dot = false;
-    bool has_sign = false;
     for (size_t i = 0; i < trimmed.size(); ++i) {
         char c = trimmed[i];
         if (c == '+' || c == '-') {
             if (i != 0) return false;  // 符号只能在开头
-            has_sign = true;
         } else if (c == '.') {
             if (has_dot) return false;  // 只能有一个小数点
             has_dot = true;
@@ -80,7 +78,8 @@ double root_position_tolerance(double x) {
  * @brief 计算数值导数的步长
  */
 double root_derivative_step(double x) {
-    return 1e-6 * std::max(1.0, mymath::abs(x));
+    // 使用 sqrt(epsilon) 约为 1e-8 作为基础比例
+    return 1e-7 * std::max(1.0, mymath::abs(x));
 }
 
 }  // namespace

@@ -50,6 +50,18 @@ public:
     double integrate(const std::vector<BoundFunc>& bounds,
                      const std::vector<int>& subdivisions) const;
 
+    /**
+     * @brief 自适应计算多重积分
+     *
+     * @param bounds 各维度的边界函数列表
+     * @param tolerance 相对容差
+     * @param max_depth 最大递归深度
+     * @return 积分值
+     */
+    double integrate_adaptive(const std::vector<BoundFunc>& bounds,
+                              double tolerance = 1e-6,
+                              int max_depth = 5) const;
+
 private:
     /**
      * @brief 计算 Simpson 法则的权重
@@ -82,6 +94,21 @@ private:
                                std::vector<double>* point,
                                std::size_t dimension,
                                double accumulated_weight) const;
+
+    /**
+     * @brief 自适应递归积分实现
+     */
+    double integrate_adaptive_recursive(const std::vector<BoundFunc>& bounds,
+                                        std::vector<double>* point,
+                                        std::size_t dimension,
+                                        double lower,
+                                        double upper,
+                                        double fa,
+                                        double fb,
+                                        double fc,
+                                        double whole,
+                                        double tolerance,
+                                        int depth) const;
 
     Integrand integrand_;  ///< 被积函数
 };

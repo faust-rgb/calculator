@@ -31,6 +31,7 @@
 #include "parser/unified_expression_parser.h"
 
 #include "core/calculator_internal_types.h"
+#include "core/string_utils.h"
 #include "analysis/calculator_integration.h"
 #include "analysis/multivariable_integrator.h"
 #include "analysis/multidim_integration.h"

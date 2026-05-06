@@ -28,8 +28,8 @@
 #include "core/calculator_exceptions.h"
 #include "parser/lazy_token_stream.h"
 #include "parser/token_types.h"
-#include "command/expression_compiler.h"
-#include "command/expression_ast.h"
+#include "parser/expression_compiler.h"
+#include "parser/expression_ast.h"
 #include <memory>
 #include <string>
 #include <string_view>

@@ -25,7 +25,7 @@ constexpr double kPi = 3.14159265358979323846;
 // 功率谱密度（周期图法）
 // ============================================================================
 
-std::vector<double> periodogram(const std::vector<double>& signal) {
+std::vector<double> periodogram(const std::vector<double>& signal, double sample_rate) {
     if (signal.empty()) {
         return {};
     }
@@ -37,11 +37,15 @@ std::vector<double> periodogram(const std::vector<double>& signal) {
 
     // 计算功率谱
     std::vector<double> psd(spectrum.size());
-    const double scale = 1.0 / static_cast<double>(n * n);
+    const double scale = 2.0 / (static_cast<double>(n) * sample_rate);
 
     for (std::size_t i = 0; i < spectrum.size(); ++i) {
-        psd[i] = scale * mymath::norm(spectrum[i]);
+        psd[i] = scale * mymath::norm(spectrum[i]) / static_cast<double>(n);
     }
+    
+    // 处理 DC 和 Nyquist (不需要乘2)
+    if (!psd.empty()) psd[0] /= 2.0;
+    if (n % 2 == 0 && psd.size() > 1) psd.back() /= 2.0;
 
     return psd;
 }
@@ -53,7 +57,8 @@ std::vector<double> periodogram(const std::vector<double>& signal) {
 std::vector<double> pwelch(const std::vector<double>& signal,
                             std::size_t nfft,
                             WindowType window_type,
-                            std::size_t noverlap) {
+                            std::size_t noverlap,
+                            double sample_rate) {
     if (signal.empty()) {
         return {};
     }
@@ -78,14 +83,14 @@ std::vector<double> pwelch(const std::vector<double>& signal,
 
     // 生成窗函数
     std::vector<double> win = window(window_type, nfft);
-    const double win_energy = mymath::sqrt(std::inner_product(win.begin(), win.end(), win.begin(), 0.0));
+    const double win_power = std::inner_product(win.begin(), win.end(), win.begin(), 0.0);
 
     // 计算分段数
     const std::size_t step = nfft - noverlap;
     const std::size_t n_segments = (n - nfft) / step + 1;
 
     if (n_segments == 0) {
-        return periodogram(signal);
+        return periodogram(signal, sample_rate);
     }
 
     // 初始化 PSD 累加器
@@ -112,11 +117,15 @@ std::vector<double> pwelch(const std::vector<double>& signal,
 
     // 平均并归一化
     std::vector<double> psd(psd_sum.size());
-    const double scale = 1.0 / (static_cast<double>(n_segments) * win_energy * win_energy);
+    const double scale = 2.0 / (static_cast<double>(n_segments) * sample_rate * win_power);
 
     for (std::size_t k = 0; k < psd.size(); ++k) {
         psd[k] = psd_sum[k] * scale;
     }
+
+    // 处理 DC 和 Nyquist
+    if (!psd.empty()) psd[0] /= 2.0;
+    if (nfft % 2 == 0 && psd.size() > 1) psd.back() /= 2.0;
 
     return psd;
 }
@@ -175,6 +184,7 @@ STFTResult stft(const std::vector<double>& signal,
 
     // STFT 矩阵
     result.stft_matrix.resize(n_frames);
+    result.window_type = window_type;
 
     for (std::size_t frame = 0; frame < n_frames; ++frame) {
         const std::size_t start = frame * step;
@@ -212,8 +222,8 @@ std::vector<double> istft(const STFTResult& stft_result) {
     std::vector<double> signal(n_samples, 0.0);
     std::vector<double> window_sum(n_samples, 0.0);
 
-    // 使用汉宁窗进行重叠相加
-    std::vector<double> win = hanning_window(nfft);
+    // 使用 STFT 使用的窗函数进行重叠相加
+    std::vector<double> win = window(stft_result.window_type, nfft);
 
     for (std::size_t frame = 0; frame < n_frames; ++frame) {
         // IFFT

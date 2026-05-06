@@ -18,145 +18,33 @@ double get_scalar(const StoredValue& val, const char* context) {
     return val.exact ? rational_to_double(val.rational) : val.decimal;
 }
 
-std::string format_time(const std::string& format, std::time_t timestamp) {
-    std::tm* tm_info = std::localtime(&timestamp);
+std::string format_time(const std::string& format, std::time_t timestamp, bool use_local = true) {
+    std::tm* tm_info = use_local ? std::localtime(&timestamp) : std::gmtime(&timestamp);
     if (!tm_info) {
-        throw std::runtime_error("Failed to get local time");
+        throw std::runtime_error("Failed to get time info");
     }
 
-    // 处理自定义格式说明符
-    std::string result;
-    std::size_t i = 0;
-    while (i < format.size()) {
-        if (format[i] == '%' && i + 1 < format.size()) {
-            char spec = format[i + 1];
-            switch (spec) {
-                case 'Y':
-                    result += std::to_string(1900 + tm_info->tm_year);
-                    break;
-                case 'm':
-                    result += (tm_info->tm_mon + 1 < 10 ? "0" : "") +
-                              std::to_string(tm_info->tm_mon + 1);
-                    break;
-                case 'd':
-                    result += (tm_info->tm_mday < 10 ? "0" : "") +
-                              std::to_string(tm_info->tm_mday);
-                    break;
-                case 'H':
-                    result += (tm_info->tm_hour < 10 ? "0" : "") +
-                              std::to_string(tm_info->tm_hour);
-                    break;
-                case 'M':
-                    result += (tm_info->tm_min < 10 ? "0" : "") +
-                              std::to_string(tm_info->tm_min);
-                    break;
-                case 'S':
-                    result += (tm_info->tm_sec < 10 ? "0" : "") +
-                              std::to_string(tm_info->tm_sec);
-                    break;
-                case 's':
-                    result += std::to_string(timestamp);
-                    break;
-                case '%':
-                    result += '%';
-                    break;
-                default:
-                    // 未知格式说明符，原样保留
-                    result += format.substr(i, 2);
-                    break;
-            }
-            i += 2;
-        } else {
-            result += format[i];
-            ++i;
-        }
-    }
-    return result;
+    std::ostringstream oss;
+    oss << std::put_time(tm_info, format.c_str());
+    return oss.str();
 }
 
 std::time_t parse_time(const std::string& time_str, const std::string& format) {
-    // 简单解析：仅支持常见格式
-    std::tm tm_info = {};
-    tm_info.tm_year = 70;  // 默认 1970
-    tm_info.tm_mday = 1;   // 默认 1 日
-
-    std::size_t ti = 0, fi = 0;
-    while (ti < time_str.size() && fi < format.size()) {
-        if (format[fi] == '%' && fi + 1 < format.size()) {
-            char spec = format[fi + 1];
-            switch (spec) {
-                case 'Y': {
-                    // 四位年份
-                    if (ti + 4 <= time_str.size()) {
-                        int year = std::stoi(time_str.substr(ti, 4));
-                        tm_info.tm_year = year - 1900;
-                        ti += 4;
-                    }
-                    break;
-                }
-                case 'm': {
-                    // 两位月份
-                    if (ti + 2 <= time_str.size()) {
-                        int month = std::stoi(time_str.substr(ti, 2));
-                        tm_info.tm_mon = month - 1;
-                        ti += 2;
-                    }
-                    break;
-                }
-                case 'd': {
-                    // 两位日期
-                    if (ti + 2 <= time_str.size()) {
-                        tm_info.tm_mday = std::stoi(time_str.substr(ti, 2));
-                        ti += 2;
-                    }
-                    break;
-                }
-                case 'H': {
-                    // 小时
-                    if (ti + 2 <= time_str.size()) {
-                        tm_info.tm_hour = std::stoi(time_str.substr(ti, 2));
-                        ti += 2;
-                    }
-                    break;
-                }
-                case 'M': {
-                    // 分钟
-                    if (ti + 2 <= time_str.size()) {
-                        tm_info.tm_min = std::stoi(time_str.substr(ti, 2));
-                        ti += 2;
-                    }
-                    break;
-                }
-                case 'S': {
-                    // 秒
-                    if (ti + 2 <= time_str.size()) {
-                        tm_info.tm_sec = std::stoi(time_str.substr(ti, 2));
-                        ti += 2;
-                    }
-                    break;
-                }
-                case 's': {
-                    // Unix 时间戳
-                    std::size_t end = ti;
-                    while (end < time_str.size() && std::isdigit(time_str[end])) ++end;
-                    if (end > ti) {
-                        return static_cast<std::time_t>(std::stoll(time_str.substr(ti, end - ti)));
-                    }
-                    break;
-                }
-                default:
-                    break;
-            }
-            fi += 2;
-        } else {
-            // 字面字符匹配
-            if (time_str[ti] == format[fi]) {
-                ++ti;
-            }
-            ++fi;
+    // 优先处理 Unix 时间戳
+    if (format == "%s") {
+        try {
+            return static_cast<std::time_t>(std::stoll(time_str));
+        } catch (...) {
+            throw std::runtime_error("Failed to parse Unix timestamp: " + time_str);
         }
     }
 
+    std::tm tm_info = {};
+    std::istringstream iss(time_str);
+    iss >> std::get_time(&tm_info, format.c_str());
+    if (iss.fail()) {
+        throw std::runtime_error("Failed to parse time string: '" + time_str + "' with format: '" + format + "'");
+    }
     return std::mktime(&tm_info);
 }
 
@@ -168,14 +56,15 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
     // now() - 获取当前 Unix 时间戳（秒）
     funcs["now"] = [](const std::vector<StoredValue>& /*args*/) -> StoredValue {
         auto now = std::chrono::system_clock::now();
-        auto timestamp = std::chrono::system_clock::to_time_t(now);
+        auto duration = now.time_since_epoch();
+        double seconds = std::chrono::duration<double>(duration).count();
         StoredValue res;
-        res.decimal = static_cast<double>(timestamp);
+        res.decimal = seconds;
         res.exact = false;
         return res;
     };
 
-    // time() - 获取当前时间字符串
+    // time() - 获取当前本地时间字符串
     funcs["time"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         auto now = std::chrono::system_clock::now();
         auto timestamp = std::chrono::system_clock::to_time_t(now);
@@ -187,11 +76,27 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
 
         StoredValue res;
         res.is_string = true;
-        res.string_value = format_time(fmt, timestamp);
+        res.string_value = format_time(fmt, timestamp, true);
         return res;
     };
 
-    // strftime(format, [timestamp]) - 格式化时间
+    // utctime() - 获取当前 UTC 时间字符串
+    funcs["utctime"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        auto now = std::chrono::system_clock::now();
+        auto timestamp = std::chrono::system_clock::to_time_t(now);
+
+        std::string fmt = "%Y-%m-%d %H:%M:%S";
+        if (!args.empty() && args[0].is_string) {
+            fmt = args[0].string_value;
+        }
+
+        StoredValue res;
+        res.is_string = true;
+        res.string_value = format_time(fmt, timestamp, false);
+        return res;
+    };
+
+    // strftime(format, [timestamp]) - 格式化本地时间
     funcs["strftime"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) {
             throw std::runtime_error("strftime expects at least 1 argument (format)");
@@ -213,7 +118,33 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
 
         StoredValue res;
         res.is_string = true;
-        res.string_value = format_time(format, timestamp);
+        res.string_value = format_time(format, timestamp, true);
+        return res;
+    };
+
+    // strftime_utc(format, [timestamp]) - 格式化 UTC 时间
+    funcs["strftime_utc"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.empty()) {
+            throw std::runtime_error("strftime_utc expects at least 1 argument (format)");
+        }
+        if (!args[0].is_string) {
+            throw std::runtime_error("strftime_utc format must be a string");
+        }
+
+        std::string format = args[0].string_value;
+        std::time_t timestamp;
+
+        if (args.size() > 1) {
+            double ts = get_scalar(args[1], "strftime_utc timestamp");
+            timestamp = static_cast<std::time_t>(ts);
+        } else {
+            auto now = std::chrono::system_clock::now();
+            timestamp = std::chrono::system_clock::to_time_t(now);
+        }
+
+        StoredValue res;
+        res.is_string = true;
+        res.string_value = format_time(format, timestamp, false);
         return res;
     };
 

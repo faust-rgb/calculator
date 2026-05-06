@@ -4,6 +4,10 @@
  */
 
 #include "calculator_signal_commands.h"
+#include "parser/unified_expression_parser.h"
+#include "execution/variable_resolver.h"
+#include "parser/parser_utils.h"
+#include "core/string_utils.h"
 
 #include <algorithm>
 #include <iomanip>
@@ -19,34 +23,23 @@ constexpr double kPi = 3.14159265358979323846;
 // 辅助函数
 // ============================================================================
 
-// 解析向量参数（如 [1, 2, 3] 或 1, 2, 3）
-static std::vector<double> parse_vector(const std::string& str) {
+// 使用统一解析器解析向量
+static std::vector<double> parse_vector(const SignalContext& ctx, const std::string& str) {
+    if (utils::trim_view(str).empty()) return {};
+
+    UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+    StoredValue val = parser.evaluate_stored(str);
+
     std::vector<double> result;
-    std::string s = str;
-
-    // 移除方括号
-    if (!s.empty() && s.front() == '[') {
-        s = s.substr(1);
-    }
-    if (!s.empty() && s.back() == ']') {
-        s = s.substr(0, s.size() - 1);
-    }
-
-    std::stringstream ss(s);
-    std::string token;
-    while (std::getline(ss, token, ',')) {
-        // 去除空格
-        token.erase(0, token.find_first_not_of(" \t\n\r"));
-        token.erase(token.find_last_not_of(" \t\n\r") + 1);
-        if (!token.empty()) {
-            try {
-                result.push_back(std::stod(token));
-            } catch (...) {
-                // 忽略解析错误
-            }
+    if (val.is_matrix) {
+        for (double d : val.matrix.data) result.push_back(d);
+    } else if (val.is_list && val.list_value) {
+        for (const auto& item : *val.list_value) {
+            result.push_back(item.exact ? rational_to_double(item.rational) : item.decimal);
         }
+    } else {
+        result.push_back(val.exact ? rational_to_double(val.rational) : val.decimal);
     }
-
     return result;
 }
 
@@ -80,38 +73,12 @@ static std::string format_complex_vector(const std::vector<signal::Complex>& vec
     return oss.str();
 }
 
-// 解析参数列表（逗号分隔）
+// 解析参数列表（使用 parser_utils）
 static std::vector<std::string> parse_args(const std::string& args) {
-    std::vector<std::string> result;
-    std::stringstream ss(args);
-    std::string token;
-    int bracket_depth = 0;
-
-    std::string current;
-    for (char c : args) {
-        if (c == '[') {
-            bracket_depth++;
-            current += c;
-        } else if (c == ']') {
-            bracket_depth--;
-            current += c;
-        } else if (c == ',' && bracket_depth == 0) {
-            result.push_back(current);
-            current.clear();
-        } else {
-            current += c;
-        }
-    }
-    if (!current.empty()) {
-        result.push_back(current);
-    }
-
-    // 去除每个参数的空格
+    auto result = parser_utils::split_top_level(args, ',');
     for (auto& arg : result) {
-        arg.erase(0, arg.find_first_not_of(" \t\n\r"));
-        arg.erase(arg.find_last_not_of(" \t\n\r") + 1);
+        arg = utils::trim_copy(arg);
     }
-
     return result;
 }
 
@@ -119,7 +86,7 @@ static std::vector<std::string> parse_args(const std::string& args) {
 // FFT 命令
 // ============================================================================
 
-bool handle_fft_command(const SignalContext&,
+bool handle_fft_command(const SignalContext& ctx,
                         const std::string& args,
                         std::string* output) {
     auto arg_list = parse_args(args);
@@ -128,7 +95,7 @@ bool handle_fft_command(const SignalContext&,
         return false;
     }
 
-    std::vector<double> signal = parse_vector(arg_list[0]);
+    std::vector<double> signal = parse_vector(ctx, arg_list[0]);
     if (signal.empty()) {
         *output = "Error: empty signal";
         return false;
@@ -147,7 +114,7 @@ bool handle_fft_command(const SignalContext&,
     return true;
 }
 
-bool handle_ifft_command(const SignalContext&,
+bool handle_ifft_command(const SignalContext& ctx,
                          const std::string& args,
                          std::string* output) {
     auto arg_list = parse_args(args);
@@ -156,8 +123,8 @@ bool handle_ifft_command(const SignalContext&,
         return false;
     }
 
-    // 解析复数频谱（简化处理：假设输入是实数向量）
-    std::vector<double> spectrum_real = parse_vector(arg_list[0]);
+    // 解析复数频谱（简化处理：目前暂只支持实数输入向量）
+    std::vector<double> spectrum_real = parse_vector(ctx, arg_list[0]);
     if (spectrum_real.empty()) {
         *output = "Error: empty spectrum";
         return false;
@@ -180,7 +147,7 @@ bool handle_ifft_command(const SignalContext&,
     return true;
 }
 
-bool handle_rfft_command(const SignalContext&,
+bool handle_rfft_command(const SignalContext& ctx,
                          const std::string& args,
                          std::string* output) {
     auto arg_list = parse_args(args);
@@ -189,7 +156,7 @@ bool handle_rfft_command(const SignalContext&,
         return false;
     }
 
-    std::vector<double> signal = parse_vector(arg_list[0]);
+    std::vector<double> signal = parse_vector(ctx, arg_list[0]);
     if (signal.empty()) {
         *output = "Error: empty signal";
         return false;
@@ -205,7 +172,7 @@ bool handle_rfft_command(const SignalContext&,
 // 卷积与相关命令
 // ============================================================================
 
-bool handle_conv_command(const SignalContext&,
+bool handle_conv_command(const SignalContext& ctx,
                          const std::string& args,
                          std::string* output) {
     auto arg_list = parse_args(args);
@@ -214,8 +181,8 @@ bool handle_conv_command(const SignalContext&,
         return false;
     }
 
-    std::vector<double> signal1 = parse_vector(arg_list[0]);
-    std::vector<double> signal2 = parse_vector(arg_list[1]);
+    std::vector<double> signal1 = parse_vector(ctx, arg_list[0]);
+    std::vector<double> signal2 = parse_vector(ctx, arg_list[1]);
 
     if (signal1.empty() || signal2.empty()) {
         *output = "Error: empty signal";
@@ -228,7 +195,7 @@ bool handle_conv_command(const SignalContext&,
     return true;
 }
 
-bool handle_cconv_command(const SignalContext&,
+bool handle_cconv_command(const SignalContext& ctx,
                           const std::string& args,
                           std::string* output) {
     auto arg_list = parse_args(args);
@@ -237,8 +204,8 @@ bool handle_cconv_command(const SignalContext&,
         return false;
     }
 
-    std::vector<double> signal1 = parse_vector(arg_list[0]);
-    std::vector<double> signal2 = parse_vector(arg_list[1]);
+    std::vector<double> signal1 = parse_vector(ctx, arg_list[0]);
+    std::vector<double> signal2 = parse_vector(ctx, arg_list[1]);
 
     if (signal1.empty() || signal2.empty()) {
         *output = "Error: empty signal";
@@ -248,7 +215,8 @@ bool handle_cconv_command(const SignalContext&,
     std::size_t n = 0;
     if (arg_list.size() >= 3) {
         try {
-            n = static_cast<std::size_t>(std::stod(arg_list[2]));
+            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+            n = static_cast<std::size_t>(parser.evaluate(arg_list[2]));
         } catch (...) {
             // 使用默认值
         }
@@ -260,7 +228,7 @@ bool handle_cconv_command(const SignalContext&,
     return true;
 }
 
-bool handle_xcorr_command(const SignalContext&,
+bool handle_xcorr_command(const SignalContext& ctx,
                           const std::string& args,
                           std::string* output) {
     auto arg_list = parse_args(args);
@@ -269,8 +237,8 @@ bool handle_xcorr_command(const SignalContext&,
         return false;
     }
 
-    std::vector<double> signal1 = parse_vector(arg_list[0]);
-    std::vector<double> signal2 = parse_vector(arg_list[1]);
+    std::vector<double> signal1 = parse_vector(ctx, arg_list[0]);
+    std::vector<double> signal2 = parse_vector(ctx, arg_list[1]);
 
     if (signal1.empty() || signal2.empty()) {
         *output = "Error: empty signal";
@@ -283,7 +251,7 @@ bool handle_xcorr_command(const SignalContext&,
     return true;
 }
 
-bool handle_autocorr_command(const SignalContext&,
+bool handle_autocorr_command(const SignalContext& ctx,
                              const std::string& args,
                              std::string* output) {
     auto arg_list = parse_args(args);
@@ -292,7 +260,7 @@ bool handle_autocorr_command(const SignalContext&,
         return false;
     }
 
-    std::vector<double> signal = parse_vector(arg_list[0]);
+    std::vector<double> signal = parse_vector(ctx, arg_list[0]);
     if (signal.empty()) {
         *output = "Error: empty signal";
         return false;
@@ -308,7 +276,7 @@ bool handle_autocorr_command(const SignalContext&,
 // 窗函数命令
 // ============================================================================
 
-bool handle_window_command(const SignalContext&,
+bool handle_window_command(const SignalContext& ctx,
                            const std::string& args,
                            std::string* output) {
     auto arg_list = parse_args(args);
@@ -317,11 +285,14 @@ bool handle_window_command(const SignalContext&,
         return false;
     }
 
+    UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+    
     std::string type_str = arg_list[0];
-    std::size_t length = 0;
+    if (type_str.front() == '"' || type_str.front() == '\'') type_str = type_str.substr(1, type_str.size() - 2);
 
+    std::size_t length = 0;
     try {
-        length = static_cast<std::size_t>(std::stod(arg_list[1]));
+        length = static_cast<std::size_t>(parser.evaluate(arg_list[1]));
     } catch (...) {
         *output = "Error: invalid length";
         return false;
@@ -330,7 +301,7 @@ bool handle_window_command(const SignalContext&,
     double param = 0.0;
     if (arg_list.size() >= 3) {
         try {
-            param = std::stod(arg_list[2]);
+            param = parser.evaluate(arg_list[2]);
         } catch (...) {
             // 使用默认值
         }
@@ -351,7 +322,7 @@ bool handle_window_command(const SignalContext&,
 // 滤波器命令
 // ============================================================================
 
-bool handle_filter_command(const SignalContext&,
+bool handle_filter_command(const SignalContext& ctx,
                            const std::string& args,
                            std::string* output) {
     auto arg_list = parse_args(args);
@@ -360,9 +331,9 @@ bool handle_filter_command(const SignalContext&,
         return false;
     }
 
-    std::vector<double> b = parse_vector(arg_list[0]);
-    std::vector<double> a = parse_vector(arg_list[1]);
-    std::vector<double> signal = parse_vector(arg_list[2]);
+    std::vector<double> b = parse_vector(ctx, arg_list[0]);
+    std::vector<double> a = parse_vector(ctx, arg_list[1]);
+    std::vector<double> signal = parse_vector(ctx, arg_list[2]);
 
     if (b.empty() || a.empty() || signal.empty()) {
         *output = "Error: empty coefficients or signal";
@@ -379,7 +350,7 @@ bool handle_filter_command(const SignalContext&,
     }
 }
 
-bool handle_fir_design_command(const SignalContext&,
+bool handle_fir_design_command(const SignalContext& ctx,
                                const std::string& args,
                                std::string* output) {
     auto arg_list = parse_args(args);
@@ -388,18 +359,22 @@ bool handle_fir_design_command(const SignalContext&,
         return false;
     }
 
+    UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+
     int order = 0;
     double cutoff = 0.0;
 
     try {
-        order = static_cast<int>(std::stod(arg_list[0]));
-        cutoff = std::stod(arg_list[1]);
+        order = static_cast<int>(parser.evaluate(arg_list[0]));
+        cutoff = parser.evaluate(arg_list[1]);
     } catch (...) {
         *output = "Error: invalid order or cutoff";
         return false;
     }
 
     std::string type_str = arg_list[2];
+    if (type_str.front() == '"' || type_str.front() == '\'') type_str = type_str.substr(1, type_str.size() - 2);
+
     signal::FilterType type;
     try {
         type = signal::string_to_filter_type(type_str);
@@ -409,9 +384,11 @@ bool handle_fir_design_command(const SignalContext&,
     }
 
     signal::WindowType win_type = signal::WindowType::Hamming;
-    if (arg_list.size() >= 4) {
+    if (arg_list.size() >= 4 && !std::isdigit(static_cast<unsigned char>(arg_list[3][0]))) {
         try {
-            win_type = signal::string_to_window_type(arg_list[3]);
+            std::string win_str = arg_list[3];
+            if (win_str.front() == '"' || win_str.front() == '\'') win_str = win_str.substr(1, win_str.size() - 2);
+            win_type = signal::string_to_window_type(win_str);
         } catch (...) {
             // 使用默认值
         }
@@ -424,7 +401,7 @@ bool handle_fir_design_command(const SignalContext&,
                 *output = "Error: band filters require two cutoff frequencies";
                 return false;
             }
-            double cutoff2 = std::stod(arg_list[3]);
+            double cutoff2 = parser.evaluate(arg_list[3]);
             coeffs = signal::design_fir_band(order, cutoff, cutoff2, type, win_type);
         } else {
             coeffs = signal::design_fir(order, cutoff, type, win_type);
@@ -441,7 +418,7 @@ bool handle_fir_design_command(const SignalContext&,
     }
 }
 
-bool handle_iir_design_command(const SignalContext&,
+bool handle_iir_design_command(const SignalContext& ctx,
                                const std::string& args,
                                std::string* output) {
     auto arg_list = parse_args(args);
@@ -450,18 +427,22 @@ bool handle_iir_design_command(const SignalContext&,
         return false;
     }
 
+    UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+
     int order = 0;
     double cutoff = 0.0;
 
     try {
-        order = static_cast<int>(std::stod(arg_list[0]));
-        cutoff = std::stod(arg_list[1]);
+        order = static_cast<int>(parser.evaluate(arg_list[0]));
+        cutoff = parser.evaluate(arg_list[1]);
     } catch (...) {
         *output = "Error: invalid order or cutoff";
         return false;
     }
 
     std::string type_str = arg_list[2];
+    if (type_str.front() == '"' || type_str.front() == '\'') type_str = type_str.substr(1, type_str.size() - 2);
+
     signal::FilterType type;
     try {
         type = signal::string_to_filter_type(type_str);
@@ -484,7 +465,7 @@ bool handle_iir_design_command(const SignalContext&,
     }
 }
 
-bool handle_freqz_command(const SignalContext&,
+bool handle_freqz_command(const SignalContext& ctx,
                           const std::string& args,
                           std::string* output) {
     auto arg_list = parse_args(args);
@@ -493,8 +474,8 @@ bool handle_freqz_command(const SignalContext&,
         return false;
     }
 
-    std::vector<double> b = parse_vector(arg_list[0]);
-    std::vector<double> a = parse_vector(arg_list[1]);
+    std::vector<double> b = parse_vector(ctx, arg_list[0]);
+    std::vector<double> a = parse_vector(ctx, arg_list[1]);
 
     if (b.empty() || a.empty()) {
         *output = "Error: empty coefficients";
@@ -504,7 +485,8 @@ bool handle_freqz_command(const SignalContext&,
     std::size_t n = 512;
     if (arg_list.size() >= 3) {
         try {
-            n = static_cast<std::size_t>(std::stod(arg_list[2]));
+            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+            n = static_cast<std::size_t>(parser.evaluate(arg_list[2]));
         } catch (...) {
             // 使用默认值
         }
@@ -524,7 +506,7 @@ bool handle_freqz_command(const SignalContext&,
 // 时频分析命令
 // ============================================================================
 
-bool handle_psd_command(const SignalContext&,
+bool handle_psd_command(const SignalContext& ctx,
                         const std::string& args,
                         std::string* output) {
     auto arg_list = parse_args(args);
@@ -533,7 +515,7 @@ bool handle_psd_command(const SignalContext&,
         return false;
     }
 
-    std::vector<double> signal = parse_vector(arg_list[0]);
+    std::vector<double> signal = parse_vector(ctx, arg_list[0]);
     if (signal.empty()) {
         *output = "Error: empty signal";
         return false;
@@ -542,7 +524,8 @@ bool handle_psd_command(const SignalContext&,
     std::size_t nfft = 256;
     if (arg_list.size() >= 2) {
         try {
-            nfft = static_cast<std::size_t>(std::stod(arg_list[1]));
+            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+            nfft = static_cast<std::size_t>(parser.evaluate(arg_list[1]));
         } catch (...) {
             // 使用默认值
         }
@@ -553,7 +536,7 @@ bool handle_psd_command(const SignalContext&,
     return true;
 }
 
-bool handle_stft_command(const SignalContext&,
+bool handle_stft_command(const SignalContext& ctx,
                          const std::string& args,
                          std::string* output) {
     auto arg_list = parse_args(args);
@@ -562,7 +545,7 @@ bool handle_stft_command(const SignalContext&,
         return false;
     }
 
-    std::vector<double> signal = parse_vector(arg_list[0]);
+    std::vector<double> signal = parse_vector(ctx, arg_list[0]);
     if (signal.empty()) {
         *output = "Error: empty signal";
         return false;
@@ -571,7 +554,8 @@ bool handle_stft_command(const SignalContext&,
     std::size_t nfft = 256;
     if (arg_list.size() >= 2) {
         try {
-            nfft = static_cast<std::size_t>(std::stod(arg_list[1]));
+            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+            nfft = static_cast<std::size_t>(parser.evaluate(arg_list[1]));
         } catch (...) {
             // 使用默认值
         }
@@ -590,7 +574,7 @@ bool handle_stft_command(const SignalContext&,
     return true;
 }
 
-bool handle_spectrogram_command(const SignalContext&,
+bool handle_spectrogram_command(const SignalContext& ctx,
                                 const std::string& args,
                                 std::string* output) {
     auto arg_list = parse_args(args);
@@ -599,7 +583,7 @@ bool handle_spectrogram_command(const SignalContext&,
         return false;
     }
 
-    std::vector<double> signal = parse_vector(arg_list[0]);
+    std::vector<double> signal = parse_vector(ctx, arg_list[0]);
     if (signal.empty()) {
         *output = "Error: empty signal";
         return false;
@@ -608,7 +592,8 @@ bool handle_spectrogram_command(const SignalContext&,
     std::size_t nfft = 256;
     if (arg_list.size() >= 2) {
         try {
-            nfft = static_cast<std::size_t>(std::stod(arg_list[1]));
+            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+            nfft = static_cast<std::size_t>(parser.evaluate(arg_list[1]));
         } catch (...) {
             // 使用默认值
         }

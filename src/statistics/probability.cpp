@@ -149,27 +149,26 @@ double nPr(double n, double r) {
 double bernoulli(int n) {
     if (n < 0) return 0.0;
     // 静态缓存已计算的伯努利数 (B_n+ convention)
-    static std::vector<double> B = {1.0, 0.5};
+    static std::vector<long double> B = {1.0L, 0.5L};
+    if (n == 0) return 1.0;
     if (n == 1) return 0.5;
     if (n > 1 && n % 2 != 0) return 0.0; // B_n = 0 for odd n > 1
 
     while (B.size() <= static_cast<std::size_t>(n)) {
         int m = B.size();
         if (m % 2 != 0) {
-            B.push_back(0.0);
+            B.push_back(0.0L);
             continue;
         }
-        double sum = 0.0;
+        long double sum = 0.0L;
         // 递推公式: sum_{k=0}^m C(m+1, k) * B_k = m + 1
-        // 对于 Bn+，递推公式略有不同，或者我们可以计算 Bn- 然后将 B1 取反。
-        // 这里使用 Bn- 的公式计算然后转换，或者直接用 Bn+ 的递推：
-        // sum_{k=0}^m C(m+1, k) * B_k = m + 1
         for (int k = 0; k < m; ++k) {
-            sum += nCr(m + 1, k) * B[k];
+            // 使用 nCr 计算组合数，并转换为 long double 以减少舍入误差
+            sum += static_cast<long double>(nCr(m + 1, k)) * B[k];
         }
-        B.push_back((m + 1.0 - sum) / (m + 1.0));
+        B.push_back((static_cast<long double>(m) + 1.0L - sum) / (static_cast<long double>(m) + 1.0L));
     }
-    return B[n];
+    return static_cast<double>(B[n]);
 }
 
 /**

@@ -5,7 +5,7 @@
 #include "parser/unified_parser_factory.h"
 #include "parser/lazy_token_stream.h"
 #include "parser/function_categories.h"
-#include "command/variable_resolver.h"
+#include "execution/variable_resolver.h"
 #include <cctype>
 #include <algorithm>
 

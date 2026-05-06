@@ -19,7 +19,8 @@
 #include "symbolic/symbolic_expression_internal.h"
 #include "statistics/probability.h"
 #include "math/helpers/integer_helpers.h"
-
+#include "expression_utils.h"
+#include "string_utils.h"
 #include "polynomial/polynomial.h"
 #include "math/mymath.h"
 #include "parser/unified_expression_parser.h"

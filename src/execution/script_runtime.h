@@ -107,4 +107,14 @@ std::string render_script_statement(const script::Statement& statement, int inde
 /** @brief 渲染脚本块为字符串 */
 std::string render_script_block(const script::BlockStatement& block, int indent);
 
+// ============================================================================
+// 统一执行接口
+// ============================================================================
+
+namespace execution {
+class ExecutableNode;
+/** @brief 创建命令执行器 */
+std::unique_ptr<ExecutableNode> create_command_executable(CommandASTNode node);
+}
+
 #endif // SCRIPT_RUNTIME_H

@@ -135,3 +135,87 @@ double MultivariableIntegrator::integrate_recursive(
 
     return static_cast<double>(sum * scale);
 }
+
+/**
+ * @brief 自适应计算多重积分
+ */
+double MultivariableIntegrator::integrate_adaptive(
+    const std::vector<BoundFunc>& bounds,
+    double tolerance,
+    int max_depth) const {
+    if (bounds.empty()) {
+        throw std::runtime_error("multivariable integrator requires at least one bound");
+    }
+
+    std::vector<double> point(bounds.size(), 0.0);
+    
+    // 自适应积分目前主要支持一维和二维的高精度化
+    // 这里实现一个简化的自适应逻辑：对最外层维度进行自适应细分
+    const std::pair<double, double> b = bounds[0](point);
+    const double a = b.first;
+    const double d = b.second;
+    if (a == d) return 0.0;
+
+    auto f = [&](double x) {
+        point[0] = x;
+        if (bounds.size() == 1) return integrand_(point);
+        
+        // 对于多维，内层暂时使用固定的 Simpson（可以递归调用，但开销极大）
+        // 为了简单起见，这里假设内层已经足够精确或用户通过 integrate 调用
+        std::vector<int> sub(bounds.size() - 1, 32);
+        std::vector<BoundFunc> inner_bounds(bounds.begin() + 1, bounds.end());
+        std::vector<double> inner_point(point.begin() + 1, point.end());
+        
+        // 构造一个新的积分器用于内层
+        MultivariableIntegrator inner_integrator(integrand_);
+        return inner_integrator.integrate_recursive(bounds, std::vector<int>(bounds.size(), 32), &point, 1, 1.0);
+    };
+
+    double fa = f(a);
+    double fb = f(d);
+    double c = (a + d) / 2.0;
+    double fc = f(c);
+    double whole = (d - a) / 6.0 * (fa + 4.0 * fc + fb);
+
+    return integrate_adaptive_recursive(bounds, &point, 0, a, d, fa, fb, fc, whole, tolerance, max_depth);
+}
+
+double MultivariableIntegrator::integrate_adaptive_recursive(
+    const std::vector<BoundFunc>& bounds,
+    std::vector<double>* point,
+    std::size_t dimension,
+    double a,
+    double b,
+    double fa,
+    double fb,
+    double fc,
+    double whole,
+    double tolerance,
+    int depth) const {
+    
+    double c = (a + b) / 2.0;
+    double h = b - a;
+    double d = (a + c) / 2.0;
+    double e = (c + b) / 2.0;
+    
+    auto get_f = [&](double x) {
+        (*point)[dimension] = x;
+        if (dimension + 1 == bounds.size()) return integrand_(*point);
+        // 递归处理内层
+        return integrate_recursive(bounds, std::vector<int>(bounds.size(), 16), point, dimension + 1, 1.0);
+    };
+
+    double fd = get_f(d);
+    double fe = get_f(e);
+    
+    double left = h / 12.0 * (fa + 4.0 * fd + fc);
+    double right = h / 12.0 * (fc + 4.0 * fe + fb);
+    double total = left + right;
+
+    if (depth <= 0 || std::abs(total - whole) <= 15.0 * tolerance) {
+        return total + (total - whole) / 15.0;
+    }
+
+    return integrate_adaptive_recursive(bounds, point, dimension, a, c, fa, fc, fd, left, tolerance / 2.0, depth - 1) +
+           integrate_adaptive_recursive(bounds, point, dimension, c, b, fc, fb, fe, right, tolerance / 2.0, depth - 1);
+}

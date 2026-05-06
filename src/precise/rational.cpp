@@ -9,6 +9,9 @@
 
 namespace {
 
+constexpr long long kLongLongMin = -9223372036854775807LL - 1LL;
+constexpr long long kLongLongMax = 9223372036854775807LL;
+
 long long gcd_ll(long long a, long long b) {
     a = a < 0 ? -a : a;
     b = b < 0 ? -b : b;
@@ -24,6 +27,40 @@ long long gcd_ll(long long a, long long b) {
         b = t;
     }
     return a;
+}
+
+// 检查乘法是否会溢出
+bool multiplication_would_overflow(long long a, long long b) {
+    if (a == 0 || b == 0) return false;
+    const long long abs_a = a < 0 ? -a : a;
+    const long long abs_b = b < 0 ? -b : b;
+    // 使用除法检查：如果 a > LLONG_MAX / b，则 a * b 会溢出
+    return abs_a > kLongLongMax / abs_b;
+}
+
+// 检查加法是否会溢出
+bool addition_would_overflow(long long a, long long b) {
+    if (b > 0) {
+        return a > kLongLongMax - b;
+    } else {
+        return a < kLongLongMin - b;
+    }
+}
+
+// 安全乘法，溢出时抛出异常
+long long safe_multiply(long long a, long long b) {
+    if (multiplication_would_overflow(a, b)) {
+        throw std::overflow_error("rational arithmetic overflow in multiplication");
+    }
+    return a * b;
+}
+
+// 安全加法，溢出时抛出异常
+long long safe_add(long long a, long long b) {
+    if (addition_would_overflow(a, b)) {
+        throw std::overflow_error("rational arithmetic overflow in addition");
+    }
+    return a + b;
 }
 
 } // namespace
@@ -59,26 +96,38 @@ std::string Rational::to_string() const {
 }
 
 Rational operator+(const Rational& lhs, const Rational& rhs) {
-    return Rational(lhs.numerator * rhs.denominator + rhs.numerator * lhs.denominator,
-                    lhs.denominator * rhs.denominator);
+    // 使用安全运算避免溢出
+    const long long cross1 = safe_multiply(lhs.numerator, rhs.denominator);
+    const long long cross2 = safe_multiply(rhs.numerator, lhs.denominator);
+    const long long num = safe_add(cross1, cross2);
+    const long long den = safe_multiply(lhs.denominator, rhs.denominator);
+    return Rational(num, den);
 }
 
 Rational operator-(const Rational& lhs, const Rational& rhs) {
-    return Rational(lhs.numerator * rhs.denominator - rhs.numerator * lhs.denominator,
-                    lhs.denominator * rhs.denominator);
+    // 使用安全运算避免溢出
+    const long long cross1 = safe_multiply(lhs.numerator, rhs.denominator);
+    const long long cross2 = safe_multiply(rhs.numerator, lhs.denominator);
+    const long long num = safe_add(cross1, -cross2);
+    const long long den = safe_multiply(lhs.denominator, rhs.denominator);
+    return Rational(num, den);
 }
 
 Rational operator*(const Rational& lhs, const Rational& rhs) {
-    return Rational(lhs.numerator * rhs.numerator,
-                    lhs.denominator * rhs.denominator);
+    // 使用安全运算避免溢出
+    const long long num = safe_multiply(lhs.numerator, rhs.numerator);
+    const long long den = safe_multiply(lhs.denominator, rhs.denominator);
+    return Rational(num, den);
 }
 
 Rational operator/(const Rational& lhs, const Rational& rhs) {
     if (rhs.numerator == 0) {
         throw std::runtime_error("division by zero");
     }
-    return Rational(lhs.numerator * rhs.denominator,
-                    lhs.denominator * rhs.numerator);
+    // 使用安全运算避免溢出
+    const long long num = safe_multiply(lhs.numerator, rhs.denominator);
+    const long long den = safe_multiply(lhs.denominator, rhs.numerator);
+    return Rational(num, den);
 }
 
 Rational pow_rational(Rational base, long long exponent) {

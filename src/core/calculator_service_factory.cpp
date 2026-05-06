@@ -15,9 +15,9 @@
 #include "math/helpers/bitwise_helpers.h"
 #include "math/helpers/unit_conversions.h"
 #include "math/helpers/base_conversions.h"
-#include "command/variable_resolver.h"
+#include "execution/variable_resolver.h"
 #include "parser/unified_expression_parser.h"
-#include "script/script_runtime.h"
+#include "execution/script_runtime.h"
 #include "symbolic/calculator_symbolic_commands.h"
 #include "symbolic/symbolic_expression.h"
 #include "analysis/function_analysis.h"
@@ -26,6 +26,8 @@
 #include "core/format_utils.h"
 #include "statistics/statistics.h"
 #include "statistics/probability.h"
+#include "execution/inline_expander.h"
+#include "mymath.h"
 #include <sstream>
 
 namespace core {

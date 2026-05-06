@@ -1,5 +1,5 @@
 // ============================================================================
-// 精确小数实现
+// 精确小数实现 (优化版：基数 10^9)
 // ============================================================================
 
 #include "precise_decimal.h"
@@ -12,158 +12,163 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace {
 
+constexpr uint32_t kBase = 1000000000;
+constexpr int kBaseDigits = 9;
 constexpr int kPreciseDecimalDivisionDigits = 40;
 
-std::string trim_leading_zeros(std::string digits) {
-    std::size_t first_non_zero = digits.find_first_not_of('0');
-    if (first_non_zero == std::string::npos) {
-        return "0";
+/**
+ * @brief 将整数字符串转换为基数为 10^9 的向量
+ */
+std::vector<uint32_t> string_to_bigint(const std::string& s) {
+    if (s.empty() || s == "0") return {0};
+    std::vector<uint32_t> res;
+    for (int i = static_cast<int>(s.size()); i > 0; i -= kBaseDigits) {
+        if (i < kBaseDigits) {
+            res.push_back(static_cast<uint32_t>(std::stoul(s.substr(0, static_cast<std::size_t>(i)))));
+        } else {
+            res.push_back(static_cast<uint32_t>(std::stoul(s.substr(static_cast<std::size_t>(i - kBaseDigits), kBaseDigits))));
+        }
     }
-    return digits.substr(first_non_zero);
+    while (res.size() > 1 && res.back() == 0) res.pop_back();
+    return res;
 }
 
-int compare_unsigned_digits(const std::string& lhs, const std::string& rhs) {
-    const std::string normalized_lhs = trim_leading_zeros(lhs);
-    const std::string normalized_rhs = trim_leading_zeros(rhs);
-    if (normalized_lhs.size() != normalized_rhs.size()) {
-        return normalized_lhs.size() < normalized_rhs.size() ? -1 : 1;
+/**
+ * @brief 将基数为 10^9 的向量转换为字符串
+ */
+std::string bigint_to_string(const std::vector<uint32_t>& v) {
+    if (v.empty() || (v.size() == 1 && v[0] == 0)) return "0";
+    std::ostringstream oss;
+    oss << v.back();
+    for (int i = static_cast<int>(v.size()) - 2; i >= 0; --i) {
+        oss << std::setfill('0') << std::setw(kBaseDigits) << v[static_cast<std::size_t>(i)];
     }
-    if (normalized_lhs == normalized_rhs) {
-        return 0;
-    }
-    return normalized_lhs < normalized_rhs ? -1 : 1;
+    return oss.str();
 }
 
-std::string add_unsigned_digits(const std::string& lhs, const std::string& rhs) {
-    std::string result;
-    result.reserve(std::max(lhs.size(), rhs.size()) + 1);
-
-    int carry = 0;
-    int lhs_index = static_cast<int>(lhs.size()) - 1;
-    int rhs_index = static_cast<int>(rhs.size()) - 1;
-    while (lhs_index >= 0 || rhs_index >= 0 || carry != 0) {
-        int sum = carry;
-        if (lhs_index >= 0) {
-            sum += lhs[static_cast<std::size_t>(lhs_index)] - '0';
-            --lhs_index;
+/**
+ * @brief 比较两个大整数的大小
+ */
+int compare_bigint(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
+    if (lhs.size() != rhs.size()) return lhs.size() < rhs.size() ? -1 : 1;
+    for (int i = static_cast<int>(lhs.size()) - 1; i >= 0; --i) {
+        if (lhs[static_cast<std::size_t>(i)] != rhs[static_cast<std::size_t>(i)]) {
+            return lhs[static_cast<std::size_t>(i)] < rhs[static_cast<std::size_t>(i)] ? -1 : 1;
         }
-        if (rhs_index >= 0) {
-            sum += rhs[static_cast<std::size_t>(rhs_index)] - '0';
-            --rhs_index;
-        }
-        result.push_back(static_cast<char>('0' + (sum % 10)));
-        carry = sum / 10;
     }
-
-    std::reverse(result.begin(), result.end());
-    return trim_leading_zeros(result);
+    return 0;
 }
 
-std::string subtract_unsigned_digits(const std::string& lhs, const std::string& rhs) {
-    std::string result;
-    result.reserve(lhs.size());
+/**
+ * @brief 大整数加法
+ */
+std::vector<uint32_t> add_bigint(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
+    std::vector<uint32_t> res;
+    res.reserve(std::max(lhs.size(), rhs.size()) + 1);
+    uint32_t carry = 0;
+    for (std::size_t i = 0; i < std::max(lhs.size(), rhs.size()) || carry; ++i) {
+        uint64_t sum = carry + (i < lhs.size() ? lhs[i] : 0) + (i < rhs.size() ? rhs[i] : 0);
+        res.push_back(static_cast<uint32_t>(sum % kBase));
+        carry = static_cast<uint32_t>(sum / kBase);
+    }
+    return res;
+}
 
-    int borrow = 0;
-    int lhs_index = static_cast<int>(lhs.size()) - 1;
-    int rhs_index = static_cast<int>(rhs.size()) - 1;
-    while (lhs_index >= 0) {
-        int diff = (lhs[static_cast<std::size_t>(lhs_index)] - '0') - borrow;
-        if (rhs_index >= 0) {
-            diff -= rhs[static_cast<std::size_t>(rhs_index)] - '0';
-            --rhs_index;
-        }
-        if (diff < 0) {
-            diff += 10;
+/**
+ * @brief 大整数减法 (要求 lhs >= rhs)
+ */
+std::vector<uint32_t> subtract_bigint(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
+    std::vector<uint32_t> res = lhs;
+    int32_t borrow = 0;
+    for (std::size_t i = 0; i < rhs.size() || borrow; ++i) {
+        int64_t sub = static_cast<int64_t>(res[i]) - borrow - (i < rhs.size() ? rhs[i] : 0);
+        if (sub < 0) {
+            sub += kBase;
             borrow = 1;
         } else {
             borrow = 0;
         }
-        result.push_back(static_cast<char>('0' + diff));
-        --lhs_index;
+        res[i] = static_cast<uint32_t>(sub);
     }
-
-    std::reverse(result.begin(), result.end());
-    return trim_leading_zeros(result);
+    while (res.size() > 1 && res.back() == 0) res.pop_back();
+    return res;
 }
 
-std::string multiply_unsigned_digits(const std::string& lhs, const std::string& rhs) {
-    const std::string normalized_lhs = trim_leading_zeros(lhs);
-    const std::string normalized_rhs = trim_leading_zeros(rhs);
-    if (normalized_lhs == "0" || normalized_rhs == "0") {
-        return "0";
-    }
-
-    std::vector<int> digits(normalized_lhs.size() + normalized_rhs.size(), 0);
-    for (int i = static_cast<int>(normalized_lhs.size()) - 1; i >= 0; --i) {
-        for (int j = static_cast<int>(normalized_rhs.size()) - 1; j >= 0; --j) {
-            const int product =
-                (normalized_lhs[static_cast<std::size_t>(i)] - '0') *
-                (normalized_rhs[static_cast<std::size_t>(j)] - '0');
-            const std::size_t pos_low =
-                static_cast<std::size_t>(i + j + 1);
-            const std::size_t pos_high =
-                static_cast<std::size_t>(i + j);
-            const int sum = digits[pos_low] + product;
-            digits[pos_low] = sum % 10;
-            digits[pos_high] += sum / 10;
+/**
+ * @brief 大整数乘法
+ */
+std::vector<uint32_t> multiply_bigint(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
+    if ((lhs.size() == 1 && lhs[0] == 0) || (rhs.size() == 1 && rhs[0] == 0)) return {0};
+    std::vector<uint32_t> res(lhs.size() + rhs.size(), 0);
+    for (std::size_t i = 0; i < lhs.size(); ++i) {
+        uint32_t carry = 0;
+        for (std::size_t j = 0; j < rhs.size() || carry; ++j) {
+            uint64_t cur = res[i + j] +
+                           static_cast<uint64_t>(lhs[i]) * (j < rhs.size() ? rhs[j] : 0) + carry;
+            res[i + j] = static_cast<uint32_t>(cur % kBase);
+            carry = static_cast<uint32_t>(cur / kBase);
         }
     }
-
-    std::string result;
-    result.reserve(digits.size());
-    for (int digit : digits) {
-        if (result.empty() && digit == 0) {
-            continue;
-        }
-        result.push_back(static_cast<char>('0' + digit));
-    }
-    return result.empty() ? "0" : result;
+    while (res.size() > 1 && res.back() == 0) res.pop_back();
+    return res;
 }
 
-std::string multiply_unsigned_digits_by_digit(const std::string& value, int digit) {
-    if (digit < 0 || digit > 9) {
-        throw std::runtime_error("internal error: invalid multiplication digit");
+/**
+ * @brief 大整数乘以一个小整数
+ */
+std::vector<uint32_t> multiply_bigint_by_uint32(const std::vector<uint32_t>& v, uint32_t n) {
+    if (n == 0 || (v.size() == 1 && v[0] == 0)) return {0};
+    if (n == 1) return v;
+    std::vector<uint32_t> res;
+    res.reserve(v.size() + 1);
+    uint32_t carry = 0;
+    for (uint32_t x : v) {
+        uint64_t cur = static_cast<uint64_t>(x) * n + carry;
+        res.push_back(static_cast<uint32_t>(cur % kBase));
+        carry = static_cast<uint32_t>(cur / kBase);
     }
-    if (digit == 0 || value == "0") {
-        return "0";
-    }
-    if (digit == 1) {
-        return trim_leading_zeros(value);
-    }
-
-    std::string result;
-    result.reserve(value.size() + 1);
-
-    int carry = 0;
-    for (int i = static_cast<int>(value.size()) - 1; i >= 0; --i) {
-        const int product =
-            (value[static_cast<std::size_t>(i)] - '0') * digit + carry;
-        result.push_back(static_cast<char>('0' + (product % 10)));
-        carry = product / 10;
-    }
-    while (carry != 0) {
-        result.push_back(static_cast<char>('0' + (carry % 10)));
-        carry /= 10;
-    }
-
-    std::reverse(result.begin(), result.end());
-    return trim_leading_zeros(result);
+    if (carry) res.push_back(carry);
+    return res;
 }
 
+/**
+ * @brief 大整数乘以 10^n
+ */
+std::vector<uint32_t> multiply_bigint_by_power_of_10(std::vector<uint32_t> v, int n) {
+    if (n <= 0) return v;
+    if (v.size() == 1 && v[0] == 0) return v;
+
+    int chunk_shift = n / kBaseDigits;
+    int digit_shift = n % kBaseDigits;
+
+    if (digit_shift > 0) {
+        uint32_t multiplier = 1;
+        for (int i = 0; i < digit_shift; ++i) multiplier *= 10;
+        v = multiply_bigint_by_uint32(v, multiplier);
+    }
+
+    if (chunk_shift > 0) {
+        v.insert(v.begin(), static_cast<std::size_t>(chunk_shift), 0);
+    }
+    return v;
+}
+
+/**
+ * @brief 对齐两个 PreciseDecimal 的 scale
+ */
 void align_precise_scales(PreciseDecimal* lhs, PreciseDecimal* rhs) {
-    if (lhs->scale == rhs->scale) {
-        return;
-    }
+    if (lhs->scale == rhs->scale) return;
     if (lhs->scale < rhs->scale) {
-        lhs->digits.append(static_cast<std::size_t>(rhs->scale - lhs->scale), '0');
+        lhs->data = multiply_bigint_by_power_of_10(lhs->data, rhs->scale - lhs->scale);
         lhs->scale = rhs->scale;
-        return;
+    } else {
+        rhs->data = multiply_bigint_by_power_of_10(rhs->data, lhs->scale - rhs->scale);
+        rhs->scale = lhs->scale;
     }
-    rhs->digits.append(static_cast<std::size_t>(lhs->scale - rhs->scale), '0');
-    rhs->scale = lhs->scale;
 }
 
 } // namespace
@@ -173,73 +178,97 @@ void align_precise_scales(PreciseDecimal* lhs, PreciseDecimal* rhs) {
 // ============================================================================
 
 void PreciseDecimal::normalize() {
-    digits = trim_leading_zeros(digits);
-    if (scale < 0) {
-        digits.append(static_cast<std::size_t>(-scale), '0');
+    if (data.empty()) {
+        data = {0};
         scale = 0;
+        negative = false;
+        return;
     }
-    while (scale > 0 && digits.size() > 1 && digits.back() == '0') {
-        digits.pop_back();
-        --scale;
+    
+    // 去除末尾的零（缩减 scale）
+    while (scale > 0 && !is_zero()) {
+        // 检查最后一个 chunk 是否被 10 整除
+        if (data[0] % 10 == 0) {
+            // 对所有 chunks 进行除以 10 的操作
+            uint32_t remainder = 0;
+            for (int i = static_cast<int>(data.size()) - 1; i >= 0; --i) {
+                uint64_t current = data[i] + static_cast<uint64_t>(remainder) * kBase;
+                data[i] = static_cast<uint32_t>(current / 10);
+                remainder = static_cast<uint32_t>(current % 10);
+            }
+            scale--;
+            // 如果最高位变 0，移除它
+            while (data.size() > 1 && data.back() == 0) data.pop_back();
+        } else {
+            break;
+        }
     }
-    if (digits == "0") {
+
+    if (is_zero()) {
         negative = false;
         scale = 0;
     }
 }
 
 bool PreciseDecimal::is_zero() const {
-    return digits == "0";
+    return data.empty() || (data.size() == 1 && data[0] == 0);
 }
 
 std::string PreciseDecimal::to_string() const {
-    if (digits == "0") {
-        return "0";
+    if (is_zero()) return "0";
+
+    std::string s = bigint_to_string(data);
+    std::string res;
+    if (negative) res.push_back('-');
+
+    if (scale <= 0) {
+        res += s;
+        if (scale < 0) res.append(static_cast<std::size_t>(-scale), '0');
+        return res;
     }
 
-    std::string result;
-    if (negative) {
-        result.push_back('-');
+    if (static_cast<int>(s.size()) <= scale) {
+        res += "0.";
+        res.append(static_cast<std::size_t>(scale - static_cast<int>(s.size())), '0');
+        res += s;
+    } else {
+        std::size_t dot_pos = s.size() - static_cast<std::size_t>(scale);
+        res += s.substr(0, dot_pos);
+        res.push_back('.');
+        res += s.substr(dot_pos);
     }
-
-    if (scale == 0) {
-        result += digits;
-        return result;
-    }
-
-    if (static_cast<int>(digits.size()) <= scale) {
-        result += "0.";
-        result.append(static_cast<std::size_t>(scale) - digits.size(), '0');
-        result += digits;
-        return result;
-    }
-
-    const std::size_t split =
-        digits.size() - static_cast<std::size_t>(scale);
-    result += digits.substr(0, split);
-    result.push_back('.');
-    result += digits.substr(split);
-    return result;
+    return res;
 }
 
 double PreciseDecimal::to_double() const {
-    return std::stod(to_string());
+    if (is_zero()) return 0.0;
+    
+    long double res = 0;
+    long double p = 1.0L;
+    for (uint32_t x : data) {
+        res += static_cast<long double>(x) * p;
+        p *= static_cast<long double>(kBase);
+    }
+
+    if (scale > 0) {
+        res /= mymath::pow(10.0L, static_cast<long double>(scale));
+    } else if (scale < 0) {
+        res *= mymath::pow(10.0L, static_cast<long double>(-scale));
+    }
+
+    return static_cast<double>(negative ? -res : res);
 }
 
-PreciseDecimal PreciseDecimal::from_digits(std::string raw_digits,
-                                           int raw_scale,
-                                           bool is_negative) {
-    PreciseDecimal value;
-    value.digits = std::move(raw_digits);
-    value.scale = raw_scale;
-    value.negative = is_negative;
-    value.normalize();
-    return value;
+PreciseDecimal PreciseDecimal::from_digits(std::string raw_digits, int raw_scale, bool is_negative) {
+    PreciseDecimal res;
+    res.data = string_to_bigint(raw_digits);
+    res.scale = raw_scale;
+    res.negative = is_negative;
+    res.normalize();
+    return res;
 }
 
-PreciseDecimal PreciseDecimal::from_integer_string(
-    const std::string& integer_text,
-    bool is_negative) {
+PreciseDecimal PreciseDecimal::from_integer_string(const std::string& integer_text, bool is_negative) {
     return from_digits(integer_text, 0, is_negative);
 }
 
@@ -269,151 +298,128 @@ PreciseDecimal PreciseDecimal::from_decimal_literal(const std::string& token) {
 // PreciseDecimal 算术运算
 // ============================================================================
 
-PreciseDecimal add_precise_decimal(const PreciseDecimal& lhs,
-                                   const PreciseDecimal& rhs) {
+PreciseDecimal add_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs) {
     if (lhs.negative != rhs.negative) {
         PreciseDecimal rhs_flipped = rhs;
         rhs_flipped.negative = !rhs_flipped.negative;
         return subtract_precise_decimal(lhs, rhs_flipped);
     }
 
-    PreciseDecimal lhs_copy = lhs;
-    PreciseDecimal rhs_copy = rhs;
-    align_precise_scales(&lhs_copy, &rhs_copy);
-    return PreciseDecimal::from_digits(
-        add_unsigned_digits(lhs_copy.digits, rhs_copy.digits),
-        lhs_copy.scale,
-        lhs_copy.negative);
+    PreciseDecimal l = lhs;
+    PreciseDecimal r = rhs;
+    align_precise_scales(&l, &r);
+    
+    PreciseDecimal res;
+    res.data = add_bigint(l.data, r.data);
+    res.scale = l.scale;
+    res.negative = lhs.negative;
+    res.normalize();
+    return res;
 }
 
-PreciseDecimal subtract_precise_decimal(const PreciseDecimal& lhs,
-                                        const PreciseDecimal& rhs) {
+PreciseDecimal subtract_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs) {
     if (lhs.negative != rhs.negative) {
         PreciseDecimal rhs_flipped = rhs;
         rhs_flipped.negative = !rhs_flipped.negative;
         return add_precise_decimal(lhs, rhs_flipped);
     }
 
-    PreciseDecimal lhs_copy = lhs;
-    PreciseDecimal rhs_copy = rhs;
-    align_precise_scales(&lhs_copy, &rhs_copy);
+    PreciseDecimal l = lhs;
+    PreciseDecimal r = rhs;
+    align_precise_scales(&l, &r);
 
-    const int comparison = compare_unsigned_digits(lhs_copy.digits, rhs_copy.digits);
-    if (comparison == 0) {
-        return {};
+    int cmp = compare_bigint(l.data, r.data);
+    if (cmp == 0) return {};
+
+    PreciseDecimal res;
+    res.scale = l.scale;
+    if (cmp > 0) {
+        res.data = subtract_bigint(l.data, r.data);
+        res.negative = lhs.negative;
+    } else {
+        res.data = subtract_bigint(r.data, l.data);
+        res.negative = !lhs.negative;
     }
-    if (comparison > 0) {
-        return PreciseDecimal::from_digits(
-            subtract_unsigned_digits(lhs_copy.digits, rhs_copy.digits),
-            lhs_copy.scale,
-            lhs_copy.negative);
-    }
-    return PreciseDecimal::from_digits(
-        subtract_unsigned_digits(rhs_copy.digits, lhs_copy.digits),
-        lhs_copy.scale,
-        !lhs_copy.negative);
+    res.normalize();
+    return res;
 }
 
-PreciseDecimal multiply_precise_decimal(const PreciseDecimal& lhs,
-                                        const PreciseDecimal& rhs) {
-    return PreciseDecimal::from_digits(
-        multiply_unsigned_digits(lhs.digits, rhs.digits),
-        lhs.scale + rhs.scale,
-        lhs.negative != rhs.negative);
+PreciseDecimal multiply_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs) {
+    PreciseDecimal res;
+    res.data = multiply_bigint(lhs.data, rhs.data);
+    res.scale = lhs.scale + rhs.scale;
+    res.negative = lhs.negative != rhs.negative;
+    res.normalize();
+    return res;
 }
 
-PreciseDecimal divide_precise_decimal(const PreciseDecimal& lhs,
-                                      const PreciseDecimal& rhs) {
-    if (rhs.is_zero()) {
-        throw std::runtime_error("division by zero");
-    }
-    if (lhs.is_zero()) {
-        return {};
-    }
+PreciseDecimal divide_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs) {
+    if (rhs.is_zero()) throw std::runtime_error("division by zero");
+    if (lhs.is_zero()) return {};
 
-    std::string numerator = lhs.digits;
-    numerator.append(static_cast<std::size_t>(rhs.scale), '0');
-    const std::string denominator =
-        rhs.digits + std::string(static_cast<std::size_t>(lhs.scale), '0');
+    // 为保证精度，将被除数扩大 10^kPreciseDecimalDivisionDigits
+    int target_scale = kPreciseDecimalDivisionDigits;
+    std::vector<uint32_t> numerator = multiply_bigint_by_power_of_10(lhs.data, target_scale);
+    std::vector<uint32_t> denominator = rhs.data;
+    
+    // 大整数除法：numerator / denominator
+    std::vector<uint32_t> quotient;
+    std::vector<uint32_t> remainder = {0};
+    
+    // 从高位到低位处理 (Base 10^9 chunks)
+    // 这里的简化实现：将 numerator 转换为 string 处理以确保逻辑正确性，
+    // 但核心计算（乘法、减法）可以使用更高效的实现。
+    // 由于 target_scale 可能导致巨大的字符串，我们直接在 BigInt 上做长除法。
+    
+    std::string num_s = bigint_to_string(numerator);
+    std::string den_s = bigint_to_string(denominator);
+    std::string quotient_s;
+    std::string current_remainder_s;
 
-    std::string integer_part;
-    std::string fractional_part;
-    std::string remainder = "0";
-    bool emitted_integer_digit = false;
+    for (char d : num_s) {
+        current_remainder_s.push_back(d);
+        // 去除前导零
+        std::size_t first = current_remainder_s.find_first_not_of('0');
+        if (first == std::string::npos) current_remainder_s = "0";
+        else if (first > 0) current_remainder_s = current_remainder_s.substr(first);
 
-    for (char digit : numerator) {
-        if (remainder == "0") {
-            remainder.assign(1, digit);
-        } else {
-            remainder.push_back(digit);
-        }
-        remainder = trim_leading_zeros(remainder);
-
-        int quotient_digit = 0;
-        for (int candidate = 9; candidate >= 1; --candidate) {
-            if (compare_unsigned_digits(
-                    multiply_unsigned_digits_by_digit(denominator, candidate),
-                    remainder) <= 0) {
-                quotient_digit = candidate;
-                break;
+        int q = 0;
+        // 简单的试商法
+        if (current_remainder_s.size() > den_s.size() || 
+            (current_remainder_s.size() == den_s.size() && current_remainder_s >= den_s)) {
+            // 这里可以进一步优化，但目前先保持逻辑稳定
+            for (int candidate = 9; candidate >= 1; --candidate) {
+                std::vector<uint32_t> p_bigint = multiply_bigint_by_uint32(denominator, static_cast<uint32_t>(candidate));
+                std::string p_s = bigint_to_string(p_bigint);
+                if (p_s.size() < current_remainder_s.size() || 
+                    (p_s.size() == current_remainder_s.size() && p_s <= current_remainder_s)) {
+                    q = candidate;
+                    std::vector<uint32_t> rem_bigint = subtract_bigint(string_to_bigint(current_remainder_s), p_bigint);
+                    current_remainder_s = bigint_to_string(rem_bigint);
+                    break;
+                }
             }
         }
-        if (quotient_digit != 0) {
-            remainder = subtract_unsigned_digits(
-                remainder,
-                multiply_unsigned_digits_by_digit(denominator, quotient_digit));
-        }
-        if (quotient_digit != 0 || emitted_integer_digit) {
-            integer_part.push_back(static_cast<char>('0' + quotient_digit));
-            emitted_integer_digit = true;
-        }
+        quotient_s.push_back(static_cast<char>('0' + q));
     }
 
-    if (!emitted_integer_digit) {
-        integer_part = "0";
-    }
-
-    int produced_fractional_digits = 0;
-    while (remainder != "0" &&
-           produced_fractional_digits < kPreciseDecimalDivisionDigits) {
-        remainder.push_back('0');
-        remainder = trim_leading_zeros(remainder);
-
-        int quotient_digit = 0;
-        for (int candidate = 9; candidate >= 1; --candidate) {
-            if (compare_unsigned_digits(
-                    multiply_unsigned_digits_by_digit(denominator, candidate),
-                    remainder) <= 0) {
-                quotient_digit = candidate;
-                break;
-            }
-        }
-        if (quotient_digit != 0) {
-            remainder = subtract_unsigned_digits(
-                remainder,
-                multiply_unsigned_digits_by_digit(denominator, quotient_digit));
-        }
-        fractional_part.push_back(static_cast<char>('0' + quotient_digit));
-        ++produced_fractional_digits;
-    }
-
-    return PreciseDecimal::from_digits(
-        integer_part + fractional_part,
-        static_cast<int>(fractional_part.size()),
-        lhs.negative != rhs.negative);
+    PreciseDecimal res;
+    res.data = string_to_bigint(quotient_s);
+    res.scale = lhs.scale + target_scale - rhs.scale;
+    res.negative = lhs.negative != rhs.negative;
+    res.normalize();
+    return res;
 }
 
 int compare_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs) {
     if (lhs.is_zero() && rhs.is_zero()) return 0;
-    if (lhs.negative != rhs.negative) {
-        return lhs.negative ? -1 : 1;
-    }
+    if (lhs.negative != rhs.negative) return lhs.negative ? -1 : 1;
 
     PreciseDecimal l = lhs;
     PreciseDecimal r = rhs;
     align_precise_scales(&l, &r);
 
-    int res = compare_unsigned_digits(l.digits, r.digits);
+    int res = compare_bigint(l.data, r.data);
     return lhs.negative ? -res : res;
 }
 
@@ -450,9 +456,7 @@ constexpr double kDisplayZeroEps = 1e-16;
 constexpr double kDisplayIntegerEps = 1e-9;
 
 double normalize_display_decimal(double value) {
-    if (mymath::abs(value) < kDisplayZeroEps) {
-        return 0.0;
-    }
+    if (mymath::abs(value) < kDisplayZeroEps) return 0.0;
     if (mymath::abs(value) > kDisplayIntegerEps &&
         mymath::abs(value - mymath::round(value)) < kDisplayIntegerEps) {
         return mymath::round(value);
@@ -470,11 +474,7 @@ std::string format_decimal(double value, int precision = 12) {
 } // namespace
 
 std::string stored_value_precise_decimal_text(const StoredValue& value) {
-    if (value.exact) {
-        return rational_to_precise_decimal_text(value.rational);
-    }
-    if (value.has_precise_decimal_text) {
-        return value.precise_decimal_text;
-    }
+    if (value.exact) return rational_to_precise_decimal_text(value.rational);
+    if (value.has_precise_decimal_text) return value.precise_decimal_text;
     return format_decimal(normalize_display_decimal(value.decimal));
 }

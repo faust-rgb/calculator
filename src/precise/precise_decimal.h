@@ -9,18 +9,20 @@
 #define TYPES_PRECISE_DECIMAL_H
 
 #include <string>
+#include <vector>
+#include <cstdint>
 
 /**
  * @struct PreciseDecimal
  * @brief 精确小数表示
  *
- * 内部表示：digits 存储有效数字，scale 表示小数点位置。
- * 例如：123.45 → digits="12345", scale=2
+ * 内部表示：data 存储以 10^9 为基数的有效数字（小端序），scale 表示小数点后的总位数。
+ * 例如：123.45 → data={12345}, scale=2
  */
 struct PreciseDecimal {
-    std::string digits = "0";  ///< 有效数字字符串
-    int scale = 0;             ///< 小数点后的位数
-    bool negative = false;     ///< 是否为负数
+    std::vector<uint32_t> data = {0}; ///< 基数为 10^9 的有效数字
+    int scale = 0;                    ///< 小数点后的位数
+    bool negative = false;            ///< 是否为负数
 
     /** @brief 规范化表示（去除前导零、末尾零） */
     void normalize();

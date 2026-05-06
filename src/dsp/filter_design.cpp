@@ -350,21 +350,14 @@ FilterCoefficients design_chebyshev1(int order,
 FilterCoefficients design_elliptic(int order,
                                     double cutoff,
                                     double ripple,
-                                    double,
+                                    double stopband_atten,
                                     FilterType type) {
-    // 椭圆滤波器设计较复杂，这里使用简化的近似方法
-    // 实际实现需要计算椭圆积分和雅可比椭圆函数
-
-    if (order < 1) {
-        throw std::runtime_error("Filter order must be at least 1");
-    }
-    if (cutoff <= 0.0 || cutoff >= 1.0) {
-        throw std::runtime_error("Cutoff frequency must be in (0, 1)");
-    }
-
-    // 简化：使用切比雪夫作为近似
-    // 实际椭圆滤波器需要更复杂的计算
-    return design_chebyshev1(order, cutoff, ripple, type);
+    (void)order;
+    (void)cutoff;
+    (void)ripple;
+    (void)stopband_atten;
+    (void)type;
+    throw std::runtime_error("Elliptic filter design is not fully implemented yet (requires Jacobi elliptic functions).");
 }
 
 // ============================================================================
@@ -418,7 +411,10 @@ std::vector<SOS> tf2sos(const std::vector<double>& b, const std::vector<double>&
         return {s};
     }
     
-    throw std::runtime_error("tf2sos for high-order filters requires polynomial root finding (not yet fully implemented)");
+    throw std::runtime_error("tf2sos for high-order filters requires polynomial root pairing into sections. "
+                             "This is not yet fully implemented. It is recommended to use "
+                             "IIR design functions that generate SOS directly, or stick to lower-order IIR filters "
+                             "to avoid numerical instability.");
 }
 
 // ============================================================================
@@ -481,8 +477,30 @@ std::vector<double> filtfilt(const std::vector<double>& b,
         return {};
     }
 
+    // 计算填充长度
+    std::size_t padlen = 3 * std::max(b.size(), a.size());
+    if (signal.size() <= padlen) {
+        padlen = signal.size() - 1;
+    }
+
+    std::vector<double> padded_signal;
+    padded_signal.reserve(signal.size() + 2 * padlen);
+
+    // 奇对称延拓 (Odd Extension) 左侧
+    for (std::size_t i = padlen; i > 0; --i) {
+        padded_signal.push_back(2.0 * signal[0] - signal[i]);
+    }
+
+    // 原始信号
+    padded_signal.insert(padded_signal.end(), signal.begin(), signal.end());
+
+    // 奇对称延拓 (Odd Extension) 右侧
+    for (std::size_t i = 1; i <= padlen; ++i) {
+        padded_signal.push_back(2.0 * signal.back() - signal[signal.size() - 1 - i]);
+    }
+
     // 前向滤波
-    std::vector<double> forward = filter(b, a, signal);
+    std::vector<double> forward = filter(b, a, padded_signal);
 
     // 反向
     std::vector<double> reversed(forward.rbegin(), forward.rend());
@@ -490,8 +508,13 @@ std::vector<double> filtfilt(const std::vector<double>& b,
     // 反向滤波
     std::vector<double> backward = filter(b, a, reversed);
 
-    // 再反向恢复原顺序
-    return std::vector<double>(backward.rbegin(), backward.rend());
+    // 再反向恢复原顺序，并截取有效部分
+    std::vector<double> result(signal.size());
+    for (std::size_t i = 0; i < signal.size(); ++i) {
+        result[i] = backward[backward.size() - 1 - (padlen + i)];
+    }
+
+    return result;
 }
 
 // ============================================================================
@@ -546,21 +569,35 @@ std::vector<double> grpdelay(const std::vector<double>& b,
     std::vector<Complex> h = freqz(b, a, n);
     std::vector<double> gd(n);
 
+    if (n < 2) return std::vector<double>(n, 0.0);
+
+    // 提取相位并展开 (unwrap)
+    std::vector<double> phase(n);
+    for (std::size_t k = 0; k < n; ++k) {
+        phase[k] = mymath::arg(h[k]);
+    }
+
+    for (std::size_t k = 1; k < n; ++k) {
+        double dp = phase[k] - phase[k - 1];
+        while (dp > kPi) { phase[k] -= 2.0 * kPi; dp -= 2.0 * kPi; }
+        while (dp < -kPi) { phase[k] += 2.0 * kPi; dp += 2.0 * kPi; }
+    }
+
     // 数值微分计算群延迟
     const double dw = kPi / static_cast<double>(n);
 
     for (std::size_t k = 0; k < n; ++k) {
         if (k == 0) {
             // 前向差分
-            const double dphi = mymath::arg(h[1]) - mymath::arg(h[0]);
+            const double dphi = phase[1] - phase[0];
             gd[k] = -dphi / dw;
         } else if (k == n - 1) {
             // 后向差分
-            const double dphi = mymath::arg(h[k]) - mymath::arg(h[k - 1]);
+            const double dphi = phase[k] - phase[k - 1];
             gd[k] = -dphi / dw;
         } else {
             // 中心差分
-            const double dphi = mymath::arg(h[k + 1]) - mymath::arg(h[k - 1]);
+            const double dphi = phase[k + 1] - phase[k - 1];
             gd[k] = -dphi / (2.0 * dw);
         }
     }

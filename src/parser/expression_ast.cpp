@@ -2,14 +2,15 @@
  * @file expression_ast.cpp
  * @brief 编译表达式 AST 实现
  *
- * 提供表达式的编译和求值功能，解决循环中重复解析问题。
+ * 提供表达式的编译、求值和分析功能，解决循环中重复解析问题。
  */
 
 #include "expression_ast.h"
-#include "expression_compiler.h"
 #include "parser/base_parser.h"
+#include "parser/unified_parser_factory.h"
 #include "calculator_exceptions.h"
 #include "calculator_internal_types.h"
+#include "execution/builtin_constants.h"
 #include "mymath.h"
 #include "variable_resolver.h"
 #include "lazy_token_stream.h"
@@ -496,9 +497,9 @@ double evaluate_ast(const ExpressionAST* ast,
                         arg_value.decimal = args[i];
                         snapshot[it->second.parameter_names[i]] = arg_value;
                     }
-                    // Evaluate the custom function expression properly via AST!
+                    // 使用缓存的 AST，避免每次调用重新编译
                     VariableResolver custom_vars(&snapshot, nullptr);
-                    auto compiled = compile_expression_ast(std::string(it->second.expression));
+                    auto compiled = it->second.get_or_compile_ast();
                     if (!compiled) {
                         throw_ast_error<MathError>("failed to compile custom function " + ast->identifier, ast->position);
                     }
@@ -634,4 +635,23 @@ double evaluate_compiled_ast(const ExpressionAST* ast,
                              const InvokeScriptFunctionDecimalCallback& invoke_script_function) {
     return evaluate_ast(ast, variables, functions, scalar_functions,
                         has_script_function, invoke_script_function);
+}
+
+// ============================================================================
+// 表达式分析函数（委托给 UnifiedParserFactory）
+// ============================================================================
+
+namespace {
+    UnifiedParserFactory& get_global_factory() {
+        static UnifiedParserFactory factory;
+        return factory;
+    }
+}
+
+ExpressionFeature analyze_expression_features(const std::string& expression) {
+    return get_global_factory().analyze_features(expression);
+}
+
+ExpressionHint analyze_expression_hint(const std::string& expression) {
+    return get_global_factory().analyze(expression).hint;
 }

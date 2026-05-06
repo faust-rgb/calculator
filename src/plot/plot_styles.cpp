@@ -1,5 +1,6 @@
 #include "plot_styles.h"
 #include "calculator_internal_types.h"
+#include "core/string_utils.h"
 #include <sstream>
 
 namespace plot {

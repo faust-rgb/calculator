@@ -71,6 +71,11 @@ public:
         HasScriptFunctionCallback has_script_function = {},
         InvokeScriptFunctionCallback invoke_script_function = {});
 
+    /**
+     * @brief 析构函数
+     */
+    ~UnifiedExpressionParser();
+
     // ========================================================================
     // 特征分析
     // ========================================================================

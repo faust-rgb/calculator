@@ -281,11 +281,11 @@ int run_logic_calculus_tests(int& passed, int& failed) {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("simplify(exp(ln(x)))", &output);
-        if (handled && output == "exp(ln(x))") {
+        if (handled && output == "x") {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: simplify(exp(ln(x))) expected exp(ln(x)) got "
+            std::cout << "FAIL: simplify(exp(ln(x))) expected x got "
                       << output << '\n';
         }
     } catch (const std::exception& ex) {

@@ -6,10 +6,10 @@
 #include "unified_parser_factory.h"
 #include "parser/command_parser.h"
 #include "parser/exact_evaluator.h"
-#include "command/expression_ast.h"
-#include "command/expression_compiler.h"
+#include "parser/expression_ast.h"
+#include "parser/expression_compiler.h"
 #include "calculator_exceptions.h"
-#include "command/variable_resolver.h"
+#include "execution/variable_resolver.h"
 #include "types/function.h"
 #include "precise/rational.h"
 #include "core/string_utils.h"
@@ -93,6 +93,8 @@ UnifiedExpressionParser::UnifiedExpressionParser(
       has_script_function_(std::move(has_script_function)),
       invoke_script_function_(std::move(invoke_script_function)),
       factory_(std::make_unique<UnifiedParserFactory>()) {}
+
+UnifiedExpressionParser::~UnifiedExpressionParser() = default;
 
 // ============================================================================
 // 缓存回调初始化

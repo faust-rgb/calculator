@@ -59,24 +59,36 @@ LuResult lu_decompose_with_pivoting(const Matrix& matrix) {
 
     const std::size_t n = matrix.rows;
 
-    const double max_entry = max_abs_entry(matrix);
-    const double tolerance = std::max(kMatrixPivotAbsoluteEps,
-                                      max_entry * kMatrixPivotRelativeEps * n);
-
     LuResult result;
     result.lu = matrix;
     result.p.resize(n);
-    result.row_scales.assign(n, 1.0);  // 保持兼容性，但不用于均衡化
+    result.row_scales.assign(n, 1.0);
     for (std::size_t i = 0; i < n; ++i) {
         result.p[i] = i;
+        // 计算每一层的行缩放因子（均衡化）
+        double max_row_entry = 0.0;
+        for (std::size_t j = 0; j < n; ++j) {
+            max_row_entry = std::max(max_row_entry, mymath::abs(result.lu.at(i, j)));
+        }
+        if (max_row_entry > 0.0) {
+            result.row_scales[i] = 1.0 / max_row_entry;
+        } else {
+            // 全零行，矩阵奇异
+            result.det_sign = 0;
+            return result;
+        }
     }
     result.det_sign = 1;
+
+    const double max_entry = max_abs_entry(matrix);
+    const double tolerance = std::max(kMatrixPivotAbsoluteEps,
+                                      max_entry * kMatrixPivotRelativeEps * n);
 
     for (std::size_t col = 0; col < n; ++col) {
         std::size_t pivot_row = col;
         double pivot_value = mymath::abs(result.lu.at(col, col));
 
-        // 部分选主元 (Partial Pivoting)
+        // 标准部分选主元 (Partial Pivoting)
         for (std::size_t row = col + 1; row < n; ++row) {
             const double current = mymath::abs(result.lu.at(row, col));
             if (current > pivot_value) {
@@ -94,6 +106,7 @@ LuResult lu_decompose_with_pivoting(const Matrix& matrix) {
         if (pivot_row != col) {
             swap_rows(&result.lu, col, pivot_row);
             std::swap(result.p[col], result.p[pivot_row]);
+            std::swap(result.row_scales[col], result.row_scales[pivot_row]);
             result.det_sign *= -1;
         }
 
@@ -103,10 +116,6 @@ LuResult lu_decompose_with_pivoting(const Matrix& matrix) {
             result.lu.at(row, col) = factor;
             for (std::size_t inner = col + 1; inner < n; ++inner) {
                 result.lu.at(row, inner) -= factor * result.lu.at(col, inner);
-                // 对极小值进行归零处理，防止舍入误差累积
-                if (mymath::abs(result.lu.at(row, inner)) <= tolerance * 1e-2) {
-                    result.lu.at(row, inner) = 0.0;
-                }
             }
         }
     }
@@ -600,9 +609,7 @@ Matrix lu_solve_with_partial_pivoting(const Matrix& coefficients,
     std::vector<double> y(n, 0.0);
     for (std::size_t row = 0; row < n; ++row) {
         const std::size_t pivot_idx = lu.p[row];
-        long double value =
-            static_cast<long double>(rhs_column.at(pivot_idx, 0)) * 
-            static_cast<long double>(lu.row_scales[pivot_idx]);
+        long double value = static_cast<long double>(rhs_column.at(pivot_idx, 0));
         for (std::size_t col = 0; col < row; ++col) {
             value -= static_cast<long double>(lu.lu.at(row, col)) *
                      static_cast<long double>(y[col]);

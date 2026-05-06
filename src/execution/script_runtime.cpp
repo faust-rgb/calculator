@@ -1,14 +1,16 @@
 #include "script_runtime.h"
 #include "calculator_module.h"
-#include "command/expression_ast.h"
-#include "command/expression_compiler.h"
+#include "parser/expression_ast.h"
+#include "parser/expression_compiler.h"
 #include "parser/unified_parser_factory.h"
 #include "parser/unified_expression_parser.h"
 #include "parser/symbolic_render_parser.h"
 #include "parser/command_parser.h"
 #include "core/string_utils.h"
 #include "core/format_utils.h"
+#include "parser/parser_utils.h"
 #include "core/calculator_service_factory.h"
+#include "execution/inline_expander.h"
 #include "math/helpers/integer_helpers.h"
 #include "mymath.h"
 #include "script_parser.h"
@@ -86,58 +88,12 @@ double evaluate_scalar(Calculator* calculator, Calculator::Impl* impl, const Com
 }
 
 bool is_wrapped_by(std::string_view text, char open, char close) {
-    const std::string trimmed = trim_copy(text);
-    if (trimmed.size() < 2 || trimmed.front() != open || trimmed.back() != close) return false;
-    int depth = 0;
-    bool in_string = false;
-    bool escaping = false;
-    for (std::size_t i = 0; i < trimmed.size(); ++i) {
-        const char ch = trimmed[i];
-        if (in_string) {
-            if (escaping) escaping = false;
-            else if (ch == '\\') escaping = true;
-            else if (ch == '"') in_string = false;
-            continue;
-        }
-        if (ch == '"') {
-            in_string = true;
-            continue;
-        }
-        if (ch == open) ++depth;
-        else if (ch == close) {
-            --depth;
-            if (depth == 0 && i + 1 != trimmed.size()) return false;
-        }
-    }
-    return depth == 0;
+    return parser_utils::is_wrapped_by(text, open, close);
 }
 
 std::vector<std::string> split_script_top_level(std::string_view text, char delimiter) {
-    std::vector<std::string> parts;
-    std::size_t start = 0;
-    int paren = 0, bracket = 0, brace = 0;
-    bool in_string = false, escaping = false;
-    for (std::size_t i = 0; i < text.size(); ++i) {
-        const char ch = text[i];
-        if (in_string) {
-            if (escaping) escaping = false;
-            else if (ch == '\\') escaping = true;
-            else if (ch == '"') in_string = false;
-            continue;
-        }
-        if (ch == '"') { in_string = true; continue; }
-        if (ch == '(') ++paren;
-        else if (ch == ')' && paren > 0) --paren;
-        else if (ch == '[') ++bracket;
-        else if (ch == ']' && bracket > 0) --bracket;
-        else if (ch == '{') ++brace;
-        else if (ch == '}' && brace > 0) --brace;
-        else if (ch == delimiter && paren == 0 && bracket == 0 && brace == 0) {
-            parts.push_back(trim_copy(text.substr(start, i - start)));
-            start = i + 1;
-        }
-    }
-    parts.push_back(trim_copy(text.substr(start)));
+    auto parts = parser_utils::split_top_level(text, delimiter);
+    for (auto& p : parts) p = trim_copy(p);
     return parts;
 }
 
@@ -734,7 +690,10 @@ std::string execute_command_ast(Calculator* calculator,
             params_display += def->parameters[i];
             if (i + 1 < def->parameters.size()) params_display += ", ";
         }
-        impl->functions[name] = { params, std::string(def->body.text) };
+        CustomFunction function;
+        function.parameter_names = std::move(params);
+        function.expression = std::string(def->body.text);
+        impl->functions[name] = std::move(function);
         return name + "(" + params_display + ") = " + std::string(def->body.text);
     }
 
@@ -1335,3 +1294,46 @@ std::string render_script_block(const script::BlockStatement& block, int indent)
     out << indent_text(indent) << "}";
     return out.str();
 }
+
+// ============================================================================
+// 统一执行接口实现
+// ============================================================================
+
+#include "core/executable_node.h"
+
+namespace script {
+
+StoredValue Statement::execute(Calculator* calculator, bool exact_mode) const {
+    std::string dummy_output;
+    ScriptSignal signal = execute_script_statement(calculator, calculator->get_impl_internal(), *this, exact_mode, &dummy_output, false);
+    return signal.has_value ? signal.value : StoredValue();
+}
+
+} // namespace script
+
+namespace execution {
+
+/**
+ * @class CommandExecutable
+ * @brief 包装 CommandASTNode 的执行器
+ */
+class CommandExecutable : public ExecutableNode {
+public:
+    explicit CommandExecutable(CommandASTNode node) : node_(std::move(node)) {}
+
+    StoredValue execute(Calculator* calculator, bool exact_mode) const override {
+        return evaluate_command_ast_to_value(calculator, calculator->get_impl_internal(), node_, exact_mode);
+    }
+
+private:
+    CommandASTNode node_;
+};
+
+/**
+ * @brief 创建命令执行器
+ */
+std::unique_ptr<ExecutableNode> create_command_executable(CommandASTNode node) {
+    return std::make_unique<CommandExecutable>(std::move(node));
+}
+
+} // namespace execution

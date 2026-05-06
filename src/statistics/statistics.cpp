@@ -59,6 +59,8 @@ double mode(const std::vector<double>& data) {
     if (data.empty()) {
         throw std::runtime_error("mode expects at least one value");
     }
+    if (data.size() == 1) return data[0];
+
     std::vector<double> sorted = data;
     std::sort(sorted.begin(), sorted.end());
 
@@ -68,7 +70,7 @@ double mode(const std::vector<double>& data) {
     int current_count = 0;
 
     for (double val : sorted) {
-        if (mymath::is_near_zero(val - current_value, 1e-10)) {
+        if (mymath::abs(val - current_value) < 1e-10) {
             ++current_count;
         } else {
             if (current_count > best_count) {

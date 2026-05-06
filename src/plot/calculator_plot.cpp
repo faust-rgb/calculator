@@ -5,6 +5,8 @@
 #include "math/mymath.h"
 #include "string_utils.h"
 #include "parser/unified_expression_parser.h"
+#include "parser/unified_parser_factory.h"
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -12,69 +14,83 @@
 
 namespace plot {
 
-static std::vector<Point> sample_points(const PlotContext& ctx, const std::vector<std::string>& args, std::string* expr_out, std::string* var_out, size_t* next_idx = nullptr) {
-    if (args.size() < 3) {
-        throw std::runtime_error("plot expects (expr, start, end) or more");
+static std::vector<DataSeries> sample_multiple_series(const PlotContext& ctx, const std::vector<std::string>& args, PlotOptions& /*options*/, size_t* next_idx = nullptr) {
+    if (args.empty()) {
+        throw std::runtime_error("plot expects at least an expression");
     }
 
-    std::string expr_str;
-    std::string var_name = "x";
-    double start = 0;
-    double end = 0;
-    int num_points = 100;
-    size_t consumed = 0;
+    std::vector<std::string> expressions;
+    std::string first_arg = trim_copy(args[0]);
+    
+    if (first_arg.front() == '[' && first_arg.back() == ']') {
+        std::string content = first_arg.substr(1, first_arg.size() - 2);
+        expressions = split_top_level_arguments(content);
+    } else {
+        expressions.push_back(first_arg);
+    }
 
-    auto eval = [&](const std::string& e) {
-        return parse_decimal_expression(e, ctx.variables, ctx.functions, ctx.scalar_functions, ctx.has_script_function, ctx.invoke_script_function);
-    };
+    std::string var_name = "x";
+    double start = -10, end = 10;
+    int num_points = 100;
+    size_t consumed = 1;
+
+    UnifiedExpressionParser parser(ctx.variables, ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
 
     if (args.size() >= 3 && !trim_copy(args[1]).empty() && args[1][0] != ':' && !is_identifier_text(trim_copy(args[1]))) {
-        // plot(expr, start, end, ...)
-        expr_str = args[0];
-        start = eval(args[1]);
-        end = eval(args[2]);
+        start = parser.evaluate(args[1]);
+        end = parser.evaluate(args[2]);
         consumed = 3;
+        if (args.size() >= 4 && !args[3].empty() && args[3][0] != ':') {
+             num_points = static_cast<int>(parser.evaluate(args[3]));
+             consumed = 4;
+        }
     } else if (args.size() >= 4 && is_identifier_text(trim_copy(args[1]))) {
-        // plot(expr, var, start, end, ...)
-        expr_str = args[0];
         var_name = trim_copy(args[1]);
-        start = eval(args[2]);
-        end = eval(args[3]);
+        start = parser.evaluate(args[2]);
+        end = parser.evaluate(args[3]);
         consumed = 4;
         if (args.size() >= 5 && !args[4].empty() && args[4][0] != ':') {
-             num_points = static_cast<int>(eval(args[4]));
+             num_points = static_cast<int>(parser.evaluate(args[4]));
              consumed = 5;
         }
     } else {
-        throw std::runtime_error("invalid plot arguments");
+        // Default range [-10, 10]
     }
 
     if (next_idx) *next_idx = consumed;
-    if (num_points <= 1) num_points = 100;
-    if (num_points > 2000) num_points = 2000;
+    if (num_points < 2) num_points = 100;
+    if (num_points > 5000) num_points = 5000;
 
-    std::vector<Point> points;
-    points.reserve(num_points);
-
-    std::map<std::string, StoredValue> scoped_variables = ctx.variables.snapshot();
-
-    for (int i = 0; i < num_points; ++i) {
-        double x = start + (end - start) * i / (num_points - 1);
-        StoredValue x_val;
-        x_val.decimal = x;
-        scoped_variables[var_name] = x_val;
-
-        try {
-            double y = parse_decimal_expression(expr_str, VariableResolver(&scoped_variables, nullptr), ctx.functions, ctx.scalar_functions, ctx.has_script_function, ctx.invoke_script_function);
-            points.push_back({x, y});
-        } catch (...) {
-            points.push_back({x, std::nan("")});
+    std::vector<DataSeries> all_series;
+    for (size_t s = 0; s < expressions.size(); ++s) {
+        DataSeries series;
+        series.style.label = expressions[s];
+        series.style.color = Color::from_index(s).hex;
+        series.points.reserve(num_points);
+        
+        std::map<std::string, StoredValue> scoped_variables = ctx.variables.snapshot();
+        for (int i = 0; i < num_points; ++i) {
+            double x = start + (end - start) * i / (num_points - 1);
+            StoredValue x_val;
+            x_val.decimal = x;
+            scoped_variables[var_name] = x_val;
+            
+            try {
+                // We need to re-create parser or update its variable resolver for each x
+                // But parser holds a reference to variables. 
+                // So we use a local resolver.
+                VariableResolver resolver(&scoped_variables, nullptr);
+                UnifiedExpressionParser local_parser(resolver, ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+                double y = local_parser.evaluate(expressions[s]);
+                series.points.push_back({x, y});
+            } catch (...) {
+                series.points.push_back({x, std::nan("")});
+            }
         }
+        all_series.push_back(std::move(series));
     }
 
-    if (expr_out) *expr_out = expr_str;
-    if (var_out) *var_out = var_name;
-    return points;
+    return all_series;
 }
 
 std::string handle_imshow_command(const PlotContext& ctx, const std::vector<std::string>& arguments) {
@@ -331,16 +347,30 @@ std::string handle_hist_command(const PlotContext& ctx, const std::vector<std::s
 }
 
 std::string handle_plot_command(const PlotContext& ctx, const std::vector<std::string>& arguments) {
-    std::string expr, var;
+    PlotOptions options;
     size_t next_idx = 0;
-    std::vector<Point> points = sample_points(ctx, arguments, &expr, &var, &next_idx);
-    PlotOptions options = parse_options(arguments, next_idx);
+    std::vector<DataSeries> all_series = sample_multiple_series(ctx, arguments, options, &next_idx);
+    PlotOptions user_options = parse_options(arguments, next_idx);
+
+    // 合并选项
+    if (!user_options.title.empty()) options.title = user_options.title;
+    if (!user_options.xlabel.empty()) options.xlabel = user_options.xlabel;
+    if (!user_options.ylabel.empty()) options.ylabel = user_options.ylabel;
+    options.grid = user_options.grid;
+    options.log_x = user_options.log_x;
+    options.log_y = user_options.log_y;
+    options.show_legend = user_options.show_legend;
+    options.export_path = user_options.export_path;
+    options.format = user_options.format;
+    options.width = user_options.width;
+    options.height = user_options.height;
+    options.x_min = user_options.x_min;
+    options.x_max = user_options.x_max;
+    options.y_min = user_options.y_min;
+    options.y_max = user_options.y_max;
+    options.auto_range = user_options.auto_range;
 
     if (options.format == "svg" || !options.export_path.empty()) {
-        DataSeries series;
-        series.points = points;
-        series.style.label = expr;
-        std::vector<DataSeries> all_series = {series};
         std::string svg = SvgRenderer::render(all_series, options);
         
         if (!options.export_path.empty()) {
@@ -354,7 +384,13 @@ std::string handle_plot_command(const PlotContext& ctx, const std::vector<std::s
         return svg;
     }
 
-    return PlotRenderer::render(points, 60, 15);
+    // 终端绘图
+    int term_w = 60, term_h = 15;
+    if (user_options.width != 600) term_w = user_options.width / 10;
+    if (user_options.height != 400) term_h = user_options.height / 25;
+    
+    // 目前终端渲染器只支持单曲线，取第一条
+    return PlotRenderer::render(all_series[0].points, term_w, term_h);
 }
 
 std::string handle_export_command(const PlotContext& ctx, const std::string& line) {
@@ -401,31 +437,50 @@ std::string handle_export_command(const PlotContext& ctx, const std::string& lin
 }
 
 std::string handle_gnuplot_command(const PlotContext& ctx, const std::vector<std::string>& arguments) {
-    std::string expr, var;
-    std::vector<Point> points = sample_points(ctx, arguments, &expr, &var);
+    PlotOptions opts;
+    std::vector<DataSeries> all_series = sample_multiple_series(ctx, arguments, opts);
 
-    const std::string data_file = "/tmp/calculator_plot.dat";
+    // 使用更加安全的临时文件名
+    std::string temp_dir = "/tmp";
+    #ifdef _WIN32
+    char path_buf[MAX_PATH];
+    if (GetTempPathA(MAX_PATH, path_buf)) temp_dir = path_buf;
+    else temp_dir = ".";
+    #endif
+    
+    std::string data_file = temp_dir + "/calc_plot_" + std::to_string(std::time(nullptr)) + "_" + std::to_string(std::rand() % 1000) + ".dat";
     std::ofstream out(data_file);
     if (!out) {
-        throw std::runtime_error("failed to create temporary data file for gnuplot");
+        throw std::runtime_error("failed to create temporary data file for gnuplot at " + data_file);
     }
 
-    for (const auto& p : points) {
-        if (mymath::isnan(p.y) || mymath::isinf(p.y)) {
-            out << p.x << " nan\n";
-        } else {
-            out << p.x << " " << p.y << "\n";
+    for (size_t s = 0; s < all_series.size(); ++s) {
+        out << "# Series: " << all_series[s].style.label << "\n";
+        for (const auto& p : all_series[s].points) {
+            if (mymath::isnan(p.y) || mymath::isinf(p.y)) {
+                out << p.x << " nan\n";
+            } else {
+                out << p.x << " " << p.y << "\n";
+            }
         }
+        out << "\n\n"; // Gnuplot datasets separator
     }
     out.close();
 
-    std::string cmd = "gnuplot -p -e \"set grid; set title 'f(" + var + ") = " + expr + "'; plot '" + data_file + "' with lines title 'data'\" > /dev/null 2>&1";
-    int ret = std::system(cmd.c_str());
-    if (ret != 0) {
-        return "Gnuplot not found or failed to execute. Ensure 'gnuplot' is installed in your PATH.";
+    std::ostringstream gnu_script;
+    gnu_script << "set grid; set title 'Calculator Plot'; plot ";
+    for (size_t s = 0; s < all_series.size(); ++s) {
+        if (s > 0) gnu_script << ", ";
+        gnu_script << "'" << data_file << "' index " << s << " with lines title '" << all_series[s].style.label << "'";
     }
 
-    return "Gnuplot window opened for: " + expr;
+    std::string cmd = "gnuplot -p -e \"" + gnu_script.str() + "\" > /dev/null 2>&1";
+    int ret = std::system(cmd.c_str());
+    if (ret != 0) {
+        return "Gnuplot failed to execute. Ensure it is installed and in your PATH.";
+    }
+
+    return "Gnuplot window opened with " + std::to_string(all_series.size()) + " series.";
 }
 
 } // namespace plot

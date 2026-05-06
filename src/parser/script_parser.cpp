@@ -5,8 +5,9 @@
 
 #include "script_parser.h"
 #include "parser/base_parser.h"
-#include "command/expression_compiler.h"
+#include "parser/expression_compiler.h"
 #include "parser/lazy_token_stream.h"
+#include "parser/parser_utils.h"
 #include "string_utils.h"
 
 #include <cctype>
@@ -23,72 +24,20 @@ using utils::trim_copy;
 
 /**
  * @brief 检查表达式是否为索引赋值（如 x[i] = value 或 m[r, c] = value）
- *
- * 使用状态机跟踪括号深度，确保只在顶层查找赋值符号。
- * 正确处理嵌套表达式如 x[f(a, b)] = c
  */
 bool looks_like_index_assignment(std::string_view text) {
-    int paren = 0;
-    int bracket = 0;
-    int brace = 0;
-    bool in_string = false;
-    bool escaping = false;
-    std::size_t equal_pos = std::string_view::npos;
-
-    for (std::size_t i = 0; i < text.size(); ++i) {
-        const char ch = text[i];
-        if (in_string) {
-            if (escaping) {
-                escaping = false;
-            } else if (ch == '\\') {
-                escaping = true;
-            } else if (ch == '"') {
-                in_string = false;
-            }
-            continue;
-        }
-        if (ch == '"') {
-            in_string = true;
-            continue;
-        }
-        if (ch == '(') ++paren;
-        else if (ch == ')') {
-            if (paren > 0) --paren;
-        }
-        else if (ch == '[') ++bracket;
-        else if (ch == ']') {
-            if (bracket > 0) --bracket;
-        }
-        else if (ch == '{') ++brace;
-        else if (ch == '}') {
-            if (brace > 0) --brace;
-        }
-        else if (ch == '=' && paren == 0 && bracket == 0 && brace == 0) {
-            // 跳过 ==, !=, <=, >=
-            if (i + 1 < text.size() && text[i + 1] == '=') {
-                ++i;
-                continue;
-            }
-            if (i > 0 && (text[i - 1] == '!' || text[i - 1] == '<' || text[i - 1] == '>')) {
-                continue;
-            }
-            equal_pos = i;
-            break;
-        }
-    }
-
+    std::size_t equal_pos = parser_utils::find_top_level(text, '=');
     if (equal_pos == std::string_view::npos) return false;
-    const std::string lhs = trim_copy(text.substr(0, equal_pos));
-    // 检查左侧是否为有效的索引表达式：identifier[...] 或 identifier[...][...]
-    if (lhs.empty()) return false;
+    
+    // Check for compound assignments or comparison operators
+    if (equal_pos + 1 < text.size() && text[equal_pos + 1] == '=') return false; // ==
+    if (equal_pos > 0 && (text[equal_pos - 1] == '!' || text[equal_pos - 1] == '<' || text[equal_pos - 1] == '>')) return false; // !=, <=, >=
 
-    // 验证左侧以 ] 结尾且包含 [
-    if (lhs.back() != ']') return false;
-    if (lhs.find('[') == std::string::npos) return false;
+    const std::string lhs = trim_copy(std::string(text.substr(0, equal_pos)));
+    if (lhs.empty() || lhs.back() != ']' || lhs.find('[') == std::string::npos) return false;
 
-    // 验证左侧第一个字符是标识符开头
     const std::size_t first_bracket = lhs.find('[');
-    if (first_bracket == 0) return false;  // 不能以 [ 开头
+    if (first_bracket == 0) return false;
     const char first_char = lhs[0];
     if (!std::isalpha(static_cast<unsigned char>(first_char)) && first_char != '_') return false;
 

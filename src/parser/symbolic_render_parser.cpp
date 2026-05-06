@@ -1,5 +1,7 @@
 #include "symbolic_render_parser.h"
 #include "calculator_internal_types.h"
+#include "core/format_utils.h"
+#include "execution/builtin_constants.h"
 #include "parser/base_parser.h"
 #include "math/helpers/base_conversions.h"
 #include "mymath.h"

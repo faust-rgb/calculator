@@ -60,26 +60,6 @@ long long binomial(long long n, long long k) {
     return result;
 }
 
-// 检查表达式是否为变量的幂次 k^m
-bool is_power_of_var(const SymbolicExpression& expr, const std::string& var, int* power) {
-    if (expr.node_->type == NodeType::kVariable && expr.node_->text == var) {
-        *power = 1;
-        return true;
-    }
-    if (expr.node_->type == NodeType::kPower) {
-        SymbolicExpression base(expr.node_->left);
-        double exp = 0.0;
-        if (base.node_->type == NodeType::kVariable && base.node_->text == var &&
-            SymbolicExpression(expr.node_->right).is_number(&exp)) {
-            if (mymath::is_integer(exp, 1e-10) && exp >= 0) {
-                *power = static_cast<int>(mymath::round(exp));
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 // 检查表达式是否包含变量
 bool contains_variable(const SymbolicExpression& expr, const std::string& var) {
     std::string str = expr.to_string();
@@ -389,6 +369,9 @@ bool SymbolicSumEngine::gosper_algorithm(
     int lower,
     int upper,
     SumResult* result) {
+    (void)lower;
+    (void)upper;
+    (void)result;
 
     // Gosper 算法用于超几何级数求和
     // 检查 t_{k+1}/t_k 是否为有理函数
@@ -415,6 +398,7 @@ bool SymbolicSumEngine::detect_telescoping(
     const SymbolicExpression& term,
     const std::string& var,
     SymbolicExpression* f) {
+    (void)f;
 
     // 检测伸缩级数: term = f(k+1) - f(k)
     // 方法：尝试积分或猜测

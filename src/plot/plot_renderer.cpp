@@ -47,19 +47,20 @@ std::string PlotRenderer::render_braille(const std::vector<Point>& points, int w
 
     int canvas_w = width * 2;
     int canvas_h = height * 4;
-    std::vector<std::vector<bool>> canvas(canvas_h, std::vector<bool>(canvas_w, false));
+    // 使用 enum 或 bitmask 表示点的类型（0:空, 1:轴, 2:数据）
+    std::vector<std::vector<int>> canvas(canvas_h, std::vector<int>(canvas_w, 0));
 
     // Draw axes if they are within range
     if (x_min <= 0 && x_max >= 0 && x_max > x_min) {
         int ax = static_cast<int>((0 - x_min) / (x_max - x_min) * (canvas_w - 1));
         if (ax >= 0 && ax < canvas_w) {
-            for (int y = 0; y < canvas_h; ++y) canvas[y][ax] = true;
+            for (int y = 0; y < canvas_h; ++y) canvas[y][ax] = 1;
         }
     }
     if (y_min <= 0 && y_max >= 0 && y_max > y_min) {
         int ay = static_cast<int>((0 - y_min) / (y_max - y_min) * (canvas_h - 1));
         if (ay >= 0 && ay < canvas_h) {
-            for (int x = 0; x < canvas_w; ++x) canvas[canvas_h - 1 - ay][x] = true;
+            for (int x = 0; x < canvas_w; ++x) canvas[canvas_h - 1 - ay][x] = 1;
         }
     }
 
@@ -68,15 +69,18 @@ std::string PlotRenderer::render_braille(const std::vector<Point>& points, int w
         int px = static_cast<int>((p.x - x_min) / (x_max - x_min) * (canvas_w - 1));
         int py = static_cast<int>((p.y - y_min) / (y_max - y_min) * (canvas_h - 1));
         if (px >= 0 && px < canvas_w && py >= 0 && py < canvas_h) {
-            canvas[canvas_h - 1 - py][px] = true;
+            canvas[canvas_h - 1 - py][px] = 2;
         }
     }
 
     std::ostringstream out;
     out << std::fixed << std::setprecision(4);
-    out << "y: [" << y_min << ", " << y_max << "]\n";
+    // ANSI Colors: 34 (Blue) for data, 37 (Gray) for axes, 0 (Reset)
+    const char* color_data = "\033[34m";
+    const char* color_axis = "\033[37m";
+    const char* color_reset = "\033[0m";
 
-    // Draw top border
+    out << "y: [" << y_min << ", " << y_max << "]\n";
     out << " +";
     for (int i = 0; i < width; ++i) out << "-";
     out << "+\n";
@@ -85,20 +89,31 @@ std::string PlotRenderer::render_braille(const std::vector<Point>& points, int w
         out << " |";
         for (int x = 0; x < width; ++x) {
             int mask = 0;
-            if (canvas[y * 4 + 0][x * 2 + 0]) mask |= 0x01;
-            if (canvas[y * 4 + 1][x * 2 + 0]) mask |= 0x02;
-            if (canvas[y * 4 + 2][x * 2 + 0]) mask |= 0x04;
-            if (canvas[y * 4 + 0][x * 2 + 1]) mask |= 0x08;
-            if (canvas[y * 4 + 1][x * 2 + 1]) mask |= 0x10;
-            if (canvas[y * 4 + 2][x * 2 + 1]) mask |= 0x20;
-            if (canvas[y * 4 + 3][x * 2 + 0]) mask |= 0x40;
-            if (canvas[y * 4 + 3][x * 2 + 1]) mask |= 0x80;
-            out << encode_braille(mask);
+            int type = 0; // 0:empty, 1:axis predominates, 2:data predominates
+            
+            auto check = [&](int dy, int dx, int bit) {
+                int val = canvas[y * 4 + dy][x * 2 + dx];
+                if (val > 0) {
+                    mask |= bit;
+                    if (val > type) type = val;
+                }
+            };
+
+            check(0, 0, 0x01); check(1, 0, 0x02); check(2, 0, 0x04);
+            check(0, 1, 0x08); check(1, 1, 0x10); check(2, 1, 0x20);
+            check(3, 0, 0x40); check(3, 1, 0x80);
+
+            if (mask > 0) {
+                if (type == 2) out << color_data;
+                else out << color_axis;
+                out << encode_braille(mask) << color_reset;
+            } else {
+                out << " ";
+            }
         }
         out << "|\n";
     }
 
-    // Draw bottom border
     out << " +";
     for (int i = 0; i < width; ++i) out << "-";
     out << "+\n";

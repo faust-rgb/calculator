@@ -20,8 +20,8 @@ namespace internal {
 
 // 矩阵计算中使用的数值精度常量
 constexpr double kMatrixEps = 1e-10;                ///< 通用矩阵计算容差
-constexpr double kMatrixPivotRelativeEps = 1e-13;  ///< 相对主元容差
-constexpr double kMatrixPivotAbsoluteEps = 1e-15;  ///< 绝对主元容差
+constexpr double kMatrixPivotRelativeEps = 1e-13;    ///< 相对选主元容差
+constexpr double kMatrixPivotAbsoluteEps = 1e-16;    ///< 绝对选主元容差
 
 /// 紧缩型 SVD 分解结果结构体
 struct ReducedSvd {

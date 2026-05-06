@@ -2,6 +2,7 @@
 #define CALCULATOR_PLOT_H
 
 #include "calculator_internal_types.h"
+#include "execution/variable_resolver.h"
 #include <string>
 #include <vector>
 

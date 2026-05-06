@@ -46,6 +46,10 @@ public:
     /** @brief 获取核心服务接口 */
     const CoreServices& get_core_services() const;
 
+    /** @brief 获取内部实现（仅供执行引擎使用） */
+    Impl* get_impl_internal() { return impl_.get(); }
+    const Impl* get_impl_internal() const { return impl_.get(); }
+
     /**
      * @brief 计算数学表达式的数值结果
      * @param expression 数学表达式字符串，如 "2 + 3 * sin(pi/4)"

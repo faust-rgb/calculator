@@ -25,60 +25,6 @@ namespace {
 
 using namespace symbolic_expression_internal;
 
-// 检查表达式是否为数值常量
-bool is_numeric_constant(const SymbolicExpression& expr) {
-    return expr.node_->type == NodeType::kNumber ||
-           expr.node_->type == NodeType::kPi ||
-           expr.node_->type == NodeType::kE;
-}
-
-// 获取表达式的数值（如果是常量）
-std::optional<double> get_numeric_value(const SymbolicExpression& expr) {
-    if (expr.node_->type == NodeType::kNumber) {
-        return expr.node_->number_value;
-    }
-    if (expr.node_->type == NodeType::kPi) {
-        return mymath::kPi;
-    }
-    if (expr.node_->type == NodeType::kE) {
-        return mymath::kE;
-    }
-    return std::nullopt;
-}
-
-// 判断表达式在变量趋于某值时是否趋于 0
-bool tends_to_zero(const SymbolicExpression& expr, const std::string& var, const BoundArgument& point) {
-    // 简单情况：表达式不包含变量
-    if (expr.to_string().find(var) == std::string::npos) {
-        auto val = get_numeric_value(expr);
-        return val.has_value() && mymath::is_near_zero(*val, 1e-12);
-    }
-    // 变量本身趋于某值
-    if (expr.node_->type == NodeType::kVariable && expr.node_->text == var) {
-        if (point.is_finite()) {
-            return mymath::is_near_zero(point.value, 1e-12);
-        }
-        return false;
-    }
-    return false;
-}
-
-// 判断表达式在变量趋于某值时是否趋于无穷
-bool tends_to_infinity(const SymbolicExpression& expr, const std::string& var, const BoundArgument& point) {
-    if (expr.node_->type == NodeType::kVariable && expr.node_->text == var) {
-        return point.is_infinite();
-    }
-    if (expr.node_->type == NodeType::kDivide) {
-        SymbolicExpression num(expr.node_->left);
-        SymbolicExpression den(expr.node_->right);
-        // 如果分母趋于 0 且分子不趋于 0
-        if (tends_to_zero(den, var, point) && !tends_to_zero(num, var, point)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 // 提取分式的分子和分母
 bool extract_numerator_denominator(const SymbolicExpression& expr,
                                    SymbolicExpression* numerator,

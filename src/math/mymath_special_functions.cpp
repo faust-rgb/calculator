@@ -166,6 +166,10 @@ double atan(double x) {
 }
 
 double asin(double x) {
+    // 处理 NaN 输入
+    if (isnan(x)) {
+        return x;  // NaN 传播
+    }
     if (x < -1.0 || x > 1.0) {
         throw std::domain_error("asin is only defined for values in [-1, 1]");
     }
@@ -203,6 +207,10 @@ double asin(double x) {
 }
 
 double acos(double x) {
+    // 处理 NaN 输入
+    if (isnan(x)) {
+        return x;  // NaN 传播
+    }
     if (x < -1.0 || x > 1.0) {
         throw std::domain_error("acos is only defined for values in [-1, 1]");
     }
@@ -260,6 +268,10 @@ double acot(double x) {
 }
 
 double sqrt(double x) {
+    // 处理 NaN 输入
+    if (isnan(x)) {
+        return x;  // NaN 传播
+    }
     if (x < 0.0) {
         throw std::domain_error("sqrt is only defined for non-negative numbers");
     }
@@ -275,7 +287,9 @@ double sqrt(double x) {
     const long double target = static_cast<long double>(x);
     for (int i = 0; i < 100; ++i) {
         const long double next = 0.5L * (guess + target / guess);
-        if (abs_long_double(next - guess) < static_cast<long double>(kEps)) {
+        // 使用相对误差判断收敛，对极大/极小数更稳健
+        const long double rel_err = abs_long_double(next - guess) / (abs_long_double(next) + abs_long_double(guess) + 1e-300L);
+        if (rel_err < static_cast<long double>(kEps)) {
             return static_cast<double>(next);
         }
         guess = next;
@@ -284,6 +298,10 @@ double sqrt(double x) {
 }
 
 double cbrt(double x) {
+    // 处理 NaN 输入
+    if (isnan(x)) {
+        return x;  // NaN 传播
+    }
     if (is_near_zero(x)) {
         return 0.0;
     }
@@ -292,11 +310,13 @@ double cbrt(double x) {
     // g_{n+1} = (2*g_n + x / g_n^2) / 3
     double guess = x > 0.0 ? exp(ln(x) / 3.0) : -exp(ln(-x) / 3.0);
     const long double target = static_cast<long double>(x);
-    
+
     for (int i = 0; i < 10; ++i) {
         long double g = static_cast<long double>(guess);
         long double next = (2.0L * g + target / (g * g)) / 3.0L;
-        if (abs_long_double(next - g) < 1e-15L) {
+        // 使用相对误差判断收敛
+        const long double rel_err = abs_long_double(next - g) / (abs_long_double(next) + 1e-300L);
+        if (rel_err < 1e-15L) {
             return static_cast<double>(next);
         }
         guess = static_cast<double>(next);

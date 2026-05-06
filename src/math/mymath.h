@@ -17,11 +17,14 @@ namespace mymath {
 // 数学常量
 // ============================================================================
 
-/** @brief 圆周率 π，精确到小数点后20位 */
-constexpr double kPi = 3.14159265358979323846;
+/** @brief 圆周率 π，精确到小数点后 30 位 */
+constexpr double kPi = 3.141592653589793238462643383279;
 
-/** @brief 自然对数的底 e，精确到小数点后20位 */
-constexpr double kE = 2.71828182845904523536;
+/** @brief 圆周率 π (long double)，用于高精度范围归约 */
+constexpr long double kPiL = 3.1415926535897932384626433832795028841971L;
+
+/** @brief 自然对数的底 e，精确到小数点后 30 位 */
+constexpr double kE = 2.718281828459045235360287471352;
 
 /** @brief 光速 c (m/s) */
 constexpr double kSpeedOfLight = 299792458.0;
@@ -332,6 +335,16 @@ double acsc(double x);
  * @return acot(x)
  */
 double acot(double x);
+
+/**
+ * @brief 计算欧几里得范数 sqrt(x^2 + y^2)
+ * @param x 第一个值
+ * @param y 第二个值
+ * @return sqrt(x^2 + y^2)
+ *
+ * 使用数值稳定的算法避免中间计算溢出。
+ */
+double hypot(double x, double y);
 
 // ============================================================================
 // 幂函数和根函数

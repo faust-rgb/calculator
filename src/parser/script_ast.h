@@ -2,6 +2,7 @@
 #define SCRIPT_AST_H
 
 #include "parser/command_parser.h"
+#include "core/executable_node.h"
 
 #include <memory>
 #include <string>
@@ -21,7 +22,7 @@ using SharedBlockPtr = std::shared_ptr<const BlockStatement>;
  * @struct Statement
  * @brief 所有语句类型的抽象基类
  */
-struct Statement {
+struct Statement : public execution::ExecutableNode {
     enum class Kind {
         kBlock,
         kSimple,
@@ -40,6 +41,9 @@ struct Statement {
 
     explicit Statement(Kind kind_value) : kind(kind_value), line(0) {}
     virtual ~Statement() = default;
+
+    // 默认实现，由 script_runtime.cpp 中的子类具体实现或包装
+    StoredValue execute(Calculator* calc, bool exact_mode) const override;
 
     Kind kind;
     int line;

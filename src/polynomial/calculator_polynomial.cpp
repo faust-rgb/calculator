@@ -15,6 +15,7 @@
 #include "mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include "parser/command_parser.h"
+#include "core/string_utils.h"
 
 #include <sstream>
 

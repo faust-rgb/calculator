@@ -1,8 +1,10 @@
 #include "variable_resolver.h"
-#include "calculator_internal_types.h"
+#include "core/scope.h"
+#include "execution/builtin_constants.h"
+
 #include <map>
-#include <vector>
 #include <memory>
+#include <vector>
 
 VariableResolver VariableResolver::make_owned(const VariableResolver& other) {
     VariableResolver owned;

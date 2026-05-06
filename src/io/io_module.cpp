@@ -289,9 +289,14 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         
         std::ios_base::openmode std_mode = std::ios_base::in;
         if (mode == "w") std_mode = std::ios_base::out | std::ios_base::trunc;
+        else if (mode == "wb") std_mode = std::ios_base::out | std::ios_base::trunc | std::ios_base::binary;
         else if (mode == "a") std_mode = std::ios_base::out | std::ios_base::app;
+        else if (mode == "ab") std_mode = std::ios_base::out | std::ios_base::app | std::ios_base::binary;
+        else if (mode == "r") std_mode = std::ios_base::in;
+        else if (mode == "rb") std_mode = std::ios_base::in | std::ios_base::binary;
         else if (mode == "rw" || mode == "r+") std_mode = std::ios_base::in | std::ios_base::out;
-        else if (mode != "r") throw std::runtime_error("Invalid open mode: " + mode);
+        else if (mode == "rw+" || mode == "rb+") std_mode = std::ios_base::in | std::ios_base::out | std::ios_base::binary;
+        else throw std::runtime_error("Invalid open mode: " + mode);
 
         auto fs = std::make_shared<std::fstream>(path, std_mode);
         if (!fs->is_open()) {
@@ -472,10 +477,20 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
             std::string cell;
 
             while (std::getline(ss, cell, ',')) {
-                try {
-                    row.push_back(std::stod(trim_copy(cell)));
-                } catch (...) {
+                std::string trimmed = trim_copy(cell);
+                if (trimmed.empty()) {
                     row.push_back(0.0);
+                    continue;
+                }
+                try {
+                    std::size_t processed = 0;
+                    double val = std::stod(trimmed, &processed);
+                    if (processed != trimmed.size()) {
+                        throw std::runtime_error("Invalid numeric data in CSV: " + trimmed);
+                    }
+                    row.push_back(val);
+                } catch (const std::exception& e) {
+                    throw std::runtime_error("CSV parsing error: " + std::string(e.what()));
                 }
             }
 

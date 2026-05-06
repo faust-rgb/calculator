@@ -13,8 +13,8 @@
 namespace {
 
 // 事件检测的容差
-constexpr double kEventValueTolerance = 1e-10;
-constexpr double kEventPositionTolerance = 1e-10;
+constexpr double kEventValueTolerance = 2e-11;
+constexpr double kEventPositionTolerance = 2e-11;
 
 /**
  * @brief 检查事件是否触发

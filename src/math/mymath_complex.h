@@ -257,6 +257,7 @@ T norm(const complex<T>& value) {
 
 template <typename T>
 T abs(const complex<T>& value) {
+    // 使用 hypot 算法避免溢出
     const T real_abs = mymath::abs(value.real());
     const T imag_abs = mymath::abs(value.imag());
     if (real_abs == T()) return imag_abs;
@@ -294,6 +295,45 @@ complex<T> proj(const complex<T>& value) {
 
 template <typename T>
 complex<T> exp(const complex<T>& value) {
+    // 处理 NaN 输入
+    if (mymath::isnan(value.real())) {
+        return complex<T>(value.real(), value.imag());
+    }
+    if (mymath::isnan(value.imag())) {
+        return complex<T>(value.real(), value.imag());
+    }
+
+    // 处理无穷大情况（遵循 IEEE 754 / C99 标准）
+    const bool real_inf = mymath::isinf(value.real());
+    const bool imag_inf = mymath::isinf(value.imag());
+
+    if (real_inf && imag_inf) {
+        // exp(inf + i*inf) = inf + i*nan
+        // exp(-inf + i*inf) = 0 + i*0 (带信号)
+        if (value.real() > T()) {
+            return complex<T>(mymath::infinity(), mymath::quiet_nan());
+        }
+        return complex<T>(T(), T());
+    }
+
+    if (imag_inf) {
+        // exp(finite + i*inf) = nan + i*nan
+        // exp(±inf + i*inf) 已在上面处理
+        return complex<T>(mymath::quiet_nan(), mymath::quiet_nan());
+    }
+
+    if (real_inf) {
+        if (value.real() > T()) {
+            // exp(inf + i*finite) = inf * (cos + i*sin)
+            // 结果取决于虚部，但幅度为 inf
+            return complex<T>(mymath::infinity(), mymath::infinity());
+        } else {
+            // exp(-inf + i*finite) = 0
+            return complex<T>(T(), T());
+        }
+    }
+
+    // 正常情况
     const T scale = mymath::exp(value.real());
     return complex<T>(scale * mymath::cos(value.imag()),
                       scale * mymath::sin(value.imag()));

@@ -12,6 +12,7 @@
 #include "signal_processing.h"
 
 #include <algorithm>
+#include <map>
 #include <stdexcept>
 #include <vector>
 
@@ -298,16 +299,28 @@ std::vector<Complex> fft_bluestein(const std::vector<Complex>& input) {
     // 找到合适的 FFT 长度（至少 2n-1，且为 2 的幂）
     const std::size_t m = next_power_of_two(2 * n - 1);
 
-    // 生成 chirp 信号
-    std::vector<Complex> chirp(m, 0.0);
-    for (std::size_t k = 0; k < n; ++k) {
-        const double angle = -kPi * static_cast<double>(k * k) / static_cast<double>(n);
-        chirp[k] = mymath::polar(1.0, angle);
-    }
-    for (std::size_t k = m - n + 1; k < m; ++k) {
-        const std::size_t kk = k - m;  // 负索引
-        const double angle = -kPi * static_cast<double>(kk * kk) / static_cast<double>(n);
-        chirp[k] = mymath::polar(1.0, angle);
+    // 线程本地缓存以优化重复调用
+    thread_local std::map<std::size_t, std::vector<Complex>> chirp_fft_cache;
+    
+    std::vector<Complex> chirp_fft;
+    auto cache_it = chirp_fft_cache.find(n);
+    
+    if (cache_it != chirp_fft_cache.end()) {
+        chirp_fft = cache_it->second;
+    } else {
+        // 生成 chirp 信号
+        std::vector<Complex> chirp(m, 0.0);
+        for (std::size_t k = 0; k < n; ++k) {
+            const double angle = -kPi * static_cast<double>(k * k) / static_cast<double>(n);
+            chirp[k] = mymath::polar(1.0, angle);
+        }
+        for (std::size_t k = m - n + 1; k < m; ++k) {
+            const std::size_t kk = k - m;  // 负索引
+            const double angle = -kPi * static_cast<double>(kk * kk) / static_cast<double>(n);
+            chirp[k] = mymath::polar(1.0, angle);
+        }
+        chirp_fft = fft_radix2(chirp);
+        chirp_fft_cache[n] = chirp_fft;
     }
 
     // 输入信号乘以 chirp
@@ -317,9 +330,8 @@ std::vector<Complex> fft_bluestein(const std::vector<Complex>& input) {
         y[k] = input[k] * mymath::polar(1.0, angle);
     }
 
-    // FFT(y) 和 FFT(chirp)
+    // FFT(y)
     std::vector<Complex> y_fft = fft_radix2(y);
-    std::vector<Complex> chirp_fft = fft_radix2(chirp);
 
     // 逐点相乘
     for (std::size_t k = 0; k < m; ++k) {

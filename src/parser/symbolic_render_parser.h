@@ -3,7 +3,7 @@
 
 #include <string>
 #include <map>
-#include "command/variable_resolver.h"
+#include "execution/variable_resolver.h"
 
 /**
  * @brief 尝试以符号常量形式计算表达式

@@ -99,8 +99,9 @@ std::vector<double> circular_convolve(const std::vector<double>& signal1,
 
     std::vector<double> x1(n, 0.0);
     std::vector<double> x2(n, 0.0);
-    for (std::size_t i = 0; i < std::min(len1, n); ++i) x1[i] = signal1[i];
-    for (std::size_t i = 0; i < std::min(len2, n); ++i) x2[i] = signal2[i];
+    // 处理混叠
+    for (std::size_t i = 0; i < len1; ++i) x1[i % n] += signal1[i];
+    for (std::size_t i = 0; i < len2; ++i) x2[i % n] += signal2[i];
 
     std::vector<Complex> X1 = rfft(x1);
     std::vector<Complex> X2 = rfft(x2);

@@ -20,8 +20,8 @@
 #include "core/format_utils.h"
 #include "parser/command_parser.h"
 #include "core/calculator_service_factory.h"
-#include "script/script_runtime.h"
-#include "script/script_parser.h"
+#include "execution/script_runtime.h"
+#include "parser/script_parser.h"
 #include "module/module_registration.h"
 #include "math/helpers/integer_helpers.h"
 #include "plot/calculator_plot.h"
@@ -822,7 +822,10 @@ std::string Calculator::load_state(const std::string& path) {
                         for (auto p : def->parameters) {
                             params.emplace_back(p);
                         }
-                        loaded_functions[std::string(def->name)] = {params, std::string(def->body.text)};
+                        CustomFunction function;
+                        function.parameter_names = std::move(params);
+                        function.expression = std::string(def->body.text);
+                        loaded_functions[std::string(def->name)] = std::move(function);
                     }
                 } else {
                     throw std::runtime_error("invalid save file format");

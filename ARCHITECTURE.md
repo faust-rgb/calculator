@@ -12,6 +12,110 @@ The implementation is intentionally lightweight and self-contained. Core math is
 implemented in project code instead of relying on the standard math library for
 the main functions.
 
+## Module Layering
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        app/ (应用层)                         │
+│                     main.cpp, CLI 入口                       │
+├─────────────────────────────────────────────────────────────┤
+│                       module/ (模块层)                       │
+│              CalculatorModule, 外部功能扩展点                 │
+├─────────────────────────────────────────────────────────────┤
+│                      analysis/ (分析层)                      │
+│            微积分、极限、ODE、向量场等高级数学功能              │
+├─────────────────────────────────────────────────────────────┤
+│    ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
+│    │  plot/   │  │  stats/  │  │  dsp/    │  │ symbolic/│   │
+│    │  绘图    │  │  统计    │  │  信号处理 │  │  符号计算 │   │
+│    └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
+├─────────────────────────────────────────────────────────────┤
+│                       core/ (核心层)                         │
+│     Calculator, Scope, Exceptions, Utils, Services          │
+├─────────────────────────────────────────────────────────────┤
+│                     execution/ (执行层)                      │
+│    CommandRegistry, ScriptRuntime, VariableResolver         │
+├─────────────────────────────────────────────────────────────┤
+│                       parser/ (解析层)                       │
+│   ExpressionParser, CommandParser, ScriptParser, AST        │
+├─────────────────────────────────────────────────────────────┤
+│                        io/ (IO层)                            │
+│                  文件读写、导入导出                            │
+├─────────────────────────────────────────────────────────────┤
+│                       types/ (类型层)                        │
+│          StoredValue, Function, Matrix, Rational            │
+├─────────────────────────────────────────────────────────────┤
+│                        math/ (数学层)                        │
+│              基础数学函数、数值计算、辅助工具                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Dependency Rules
+
+1. **Upward dependency prohibited**: Lower layers cannot depend on upper layers
+2. **Same-layer dependency**: Same-layer modules can depend on each other, but minimize
+3. **Cross-layer dependency**: Can only depend downward, never upward
+
+### Module Responsibilities
+
+#### types/ (Type Layer)
+- `stored_value.h` - Stored value types (scalar, matrix, string, etc.)
+- `function.h` - Function type definitions
+
+#### math/ (Math Layer)
+- `mymath.h` - Basic math functions
+- `helpers/` - Math helper tools (base conversion, integer operations, etc.)
+- `matrix/` - Matrix operations
+- `precise/` - Precise computation (rational, high-precision decimal)
+
+#### parser/ (Parser Layer)
+- `expression_ast.h` - Expression AST definition and compilation
+- `command_parser.h` - Command parser
+- `script_parser.h` - Script parser
+- `unified_expression_parser.h` - Unified expression parsing
+- `parser_utils.h` - Parsing utility functions
+- `token_types.h` - Token type definitions
+- `lazy_token_stream.h` - Lazy token stream
+
+#### execution/ (Execution Layer)
+- `command_registry.h` - Command registry
+- `script_runtime.h` - Script runtime
+- `variable_resolver.h` - Variable resolver
+- `builtin_constants.h` - Built-in constants
+- `inline_expander.h` - Inline function expansion
+- `script_signal.h` - Script control flow signals
+
+#### core/ (Core Layer)
+- `calculator.h` - Main calculator class (Pimpl pattern)
+- `calculator_impl.h` - Calculator implementation
+- `scope.h` - Scope management
+- `calculator_exceptions.h` - Exception types
+- `service_interfaces.h` - Service interfaces
+- `string_utils.h` - String utilities
+- `format_utils.h` - Formatting utilities
+- `expression_utils.h` - Expression utilities
+
+#### module/ (Module Layer)
+- `calculator_module.h` - Module interface definition
+
+#### analysis/ (Analysis Layer)
+- Calculus, limits, Taylor expansion, ODE, etc.
+
+#### plot/ (Plot Layer)
+- Function plotting, 3D plotting
+
+#### statistics/ (Statistics Layer)
+- Probability distributions, statistical functions
+
+#### dsp/ (Signal Processing Layer)
+- FFT, filter design, spectrum analysis
+
+#### symbolic/ (Symbolic Layer)
+- Symbolic expressions, symbolic integration/differentiation
+
+#### io/ (IO Layer)
+- File read/write, state persistence
+
 ## Main Files
 
 - `src/app/main.cpp`

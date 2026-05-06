@@ -188,11 +188,11 @@ int run_logic_symbolic_help_tests(int& passed, int& failed) {
         (void)symbolic_calculator.set_symbolic_constants_mode(true);
         const std::string actual =
             symbolic_calculator.evaluate_for_display("exp(1)", false);
-        if (actual.find("2.71828") == 0) {
+        if (actual == "e") {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: symbolic exp(1) expected numeric e got "
+            std::cout << "FAIL: symbolic exp(1) expected symbolic e got "
                       << actual << '\n';
         }
     } catch (const std::exception& ex) {

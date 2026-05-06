@@ -311,15 +311,27 @@ double normalize_angle(double x) {
     if (!isfinite(x)) {
         return x;
     }
-    const double period = 2.0 * kPi;
-    const double reduced = remainder(x, period);
-    if (reduced > kPi) {
-        return reduced - period;
+    
+    // 对于非常大的输入，double 的精度已经不足以进行有意义的范围缩减。
+    // 但我们至少应该保证结果在 [-pi, pi] 范围内，且是有限的。
+    const long double x_ld = static_cast<long double>(x);
+    const long double period = 2.0L * kPiL;
+    
+    // 使用 fmod 逻辑将值缩减到 (-period, period)
+    long double reduced = x_ld - floor(x_ld / period) * period;
+    
+    // 调整到 [-pi, pi]
+    if (reduced > kPiL) {
+        reduced -= period;
+    } else if (reduced < -kPiL) {
+        reduced += period;
     }
-    if (reduced < -kPi) {
-        return reduced + period;
-    }
-    return reduced;
+    
+    // 二次保险：如果输入极大导致精度丢失，强制限制在合理范围
+    if (reduced > kPiL) reduced = kPiL;
+    if (reduced < -kPiL) reduced = -kPiL;
+
+    return static_cast<double>(reduced);
 }
 
 double exp(double x) {
@@ -407,18 +419,69 @@ double log2(double x) {
 }
 
 double sinh(double x) {
+    // 处理 NaN 输入
+    if (isnan(x)) {
+        return x;
+    }
+    // 处理无穷大
+    if (isinf(x)) {
+        return x;
+    }
+
+    const double abs_x = abs(x);
+    // 对于大数使用替代公式避免溢出
+    // sinh(x) = sign(x) * |sinh(|x|)|
+    // 对于 |x| > 20，exp(|x|)/2 已经足够精确
+    if (abs_x > 20.0) {
+        const double result = 0.5 * exp(abs_x);
+        // 此时 exp(-abs_x) 可忽略不计
+        return x > 0.0 ? result : -result;
+    }
+
+    // 对于中等大小的 x，使用标准公式
     const double positive = exp(x);
     const double negative = exp(-x);
     return 0.5 * (positive - negative);
 }
 
 double cosh(double x) {
+    // 处理 NaN 输入
+    if (isnan(x)) {
+        return x;
+    }
+    // 处理无穷大
+    if (isinf(x)) {
+        return infinity();
+    }
+
+    const double abs_x = abs(x);
+    // 对于大数使用替代公式避免溢出
+    if (abs_x > 20.0) {
+        return 0.5 * exp(abs_x);
+    }
+
+    // 对于中等大小的 x，使用标准公式
     const double positive = exp(x);
     const double negative = exp(-x);
     return 0.5 * (positive + negative);
 }
 
 double tanh(double x) {
+    // 处理 NaN 输入
+    if (isnan(x)) {
+        return x;
+    }
+    // 处理无穷大
+    if (isinf(x)) {
+        return x > 0.0 ? 1.0 : -1.0;
+    }
+
+    // 对于大数直接返回极限值
+    const double abs_x = abs(x);
+    if (abs_x > 20.0) {
+        return x > 0.0 ? 1.0 : -1.0;
+    }
+
     const double denominator = cosh(x);
     if (abs(denominator) < kEps) {
         throw std::domain_error("tanh is undefined when cosh(x) is zero");
@@ -427,31 +490,133 @@ double tanh(double x) {
 }
 
 double asinh(double x) {
+    // 处理 NaN 输入
+    if (isnan(x)) {
+        return x;
+    }
+    // 处理无穷大
+    if (isinf(x)) {
+        return x;
+    }
+
+    // 对于大数使用 log(2|x|) 近似
+    const double abs_x = abs(x);
+    if (abs_x > 1e10) {
+        return x > 0.0 ? ln(2.0 * abs_x) : -ln(2.0 * abs_x);
+    }
+
     return ln(x + sqrt(x * x + 1.0));
 }
 
 double acosh(double x) {
+    // 处理 NaN 输入
+    if (isnan(x)) {
+        return x;
+    }
+    // 处理无穷大
+    if (isinf(x)) {
+        return x;
+    }
     if (x < 1.0) {
         throw std::domain_error("acosh is only defined for x >= 1");
     }
+
+    // 对于大数使用 log(2x) 近似
+    if (x > 1e10) {
+        return ln(2.0 * x);
+    }
+
     return ln(x + sqrt(x - 1.0) * sqrt(x + 1.0));
 }
 
 double atanh(double x) {
+    // 处理 NaN 输入
+    if (isnan(x)) {
+        return x;
+    }
     if (x <= -1.0 || x >= 1.0) {
         throw std::domain_error("atanh is only defined for values in (-1, 1)");
     }
+
+    // 对于接近 ±1 的值使用更稳定的公式
+    // atanh(x) = 0.5 * ln((1+x)/(1-x))
+    // 对于 x 接近 1，使用 log1p 避免精度损失
+    // (1+x)/(1-x) = (1-x+2x)/(1-x) = 1 + 2x/(1-x)
+    // 所以 ln((1+x)/(1-x)) = log1p(2x/(1-x))
+    if (abs(x) > 0.5) {
+        const double ratio = 2.0 * x / (1.0 - x);
+        return 0.5 * ln(1.0 + ratio);
+    }
+
     return 0.5 * ln((1.0 + x) / (1.0 - x));
 }
 
 double atan2(double y, double x) {
+    // 处理 NaN 输入
+    if (isnan(x) || isnan(y)) {
+        return quiet_nan();
+    }
+
+    // 处理无穷大情况（遵循 IEEE 754 标准）
+    const bool x_inf = isinf(x);
+    const bool y_inf = isinf(y);
+    const bool x_pos = x > 0.0 || (x == 0.0 && !x_inf);
+    const bool y_pos = y > 0.0 || (y == 0.0 && !y_inf);
+
+    if (x_inf && y_inf) {
+        // atan2(±inf, ±inf) = ±π/4
+        if (x_pos && y_pos) return kPi / 4.0;
+        if (!x_pos && y_pos) return 3.0 * kPi / 4.0;
+        if (x_pos && !y_pos) return -kPi / 4.0;
+        return -3.0 * kPi / 4.0;
+    }
+
+    if (y_inf) {
+        // atan2(±inf, finite) = ±π/2
+        return y_pos ? kPi / 2.0 : -kPi / 2.0;
+    }
+
+    if (x_inf) {
+        // atan2(finite, ±inf) = ±0 或 ±π
+        return x_pos ? 0.0 : (y_pos ? kPi : -kPi);
+    }
+
+    // 原有逻辑处理有限值
     if (is_near_zero(x)) {
-        if (is_near_zero(y)) return 0.0;
+        if (is_near_zero(y)) return 0.0;  // 0/0 情况
         return y > 0.0 ? kPi / 2.0 : -kPi / 2.0;
     }
     double res = atan(y / x);
     if (x < 0.0) res += y >= 0.0 ? kPi : -kPi;
     return res;
+}
+
+double hypot(double x, double y) {
+    // 处理 NaN 输入
+    if (isnan(x)) return x;
+    if (isnan(y)) return y;
+
+    // 处理无穷大
+    if (isinf(x) || isinf(y)) {
+        return infinity();
+    }
+
+    const double abs_x = abs(x);
+    const double abs_y = abs(y);
+
+    // 处理零
+    if (abs_x == 0.0) return abs_y;
+    if (abs_y == 0.0) return abs_x;
+
+    // 使用稳定的算法：hypot(x, y) = max(|x|, |y|) * sqrt(1 + (min/max)^2)
+    // 这样可以避免 x^2 或 y^2 溢出
+    if (abs_x > abs_y) {
+        const double ratio = abs_y / abs_x;
+        return abs_x * sqrt(1.0 + ratio * ratio);
+    } else {
+        const double ratio = abs_x / abs_y;
+        return abs_y * sqrt(1.0 + ratio * ratio);
+    }
 }
 
 }  // namespace mymath

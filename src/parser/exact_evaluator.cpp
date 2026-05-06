@@ -6,9 +6,10 @@
 // ============================================================================
 
 #include "parser/exact_evaluator.h"
-#include "command/expression_ast.h"
+#include "parser/expression_ast.h"
 #include "calculator_exceptions.h"
-#include "command/variable_resolver.h"
+#include "execution/builtin_constants.h"
+#include "execution/variable_resolver.h"
 #include "types/function.h"
 #include "math/helpers/base_conversions.h"
 #include "math/helpers/bitwise_helpers.h"

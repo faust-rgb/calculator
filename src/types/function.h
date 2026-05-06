@@ -5,6 +5,8 @@
 // 支持两种用户定义函数：
 // - CustomFunction: 单参数简单函数
 // - ScriptFunction: 多参数脚本函数
+//
+// CustomFunction 现在支持 AST 缓存，避免每次调用重新编译表达式。
 
 #ifndef TYPES_FUNCTION_H
 #define TYPES_FUNCTION_H
@@ -17,6 +19,9 @@
 namespace script {
 struct BlockStatement;
 }
+
+// 前向声明
+struct ExpressionAST;
 
 // ============================================================================
 // 回调类型定义（统一放置，避免重复定义）
@@ -43,10 +48,22 @@ using InvokeScriptFunctionDecimalCallback =
  *
  * 存储用户定义的简单函数，如 f(x, y) = x^2 + y^2。
  * 参数名列表和表达式以字符串形式存储。
+ *
+ * 优化：支持 AST 缓存，避免每次调用重新编译表达式。
  */
 struct CustomFunction {
     std::vector<std::string> parameter_names; ///< 参数名列表
     std::string expression;                   ///< 函数体表达式
+
+    // AST 缓存（延迟编译）
+    mutable std::shared_ptr<ExpressionAST> cached_ast;
+    mutable bool ast_compiled = false;
+
+    /**
+     * @brief 获取编译后的 AST（延迟编译）
+     * @return 编译后的 AST，如果编译失败返回 nullptr
+     */
+    std::shared_ptr<ExpressionAST> get_or_compile_ast() const;
 };
 
 /**

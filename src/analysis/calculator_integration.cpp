@@ -55,6 +55,15 @@ std::function<double(const std::vector<double>&)> make_scalar_bound_func(
     };
 }
 
+/**
+ * @brief 计算数值导数的自适应步长
+ */
+double adaptive_derivative_step(double x) {
+    // 基础步长为 sqrt(epsilon) * max(1.0, |x|)
+    // 对于 double，sqrt(epsilon) 约为 1e-8
+    return 1e-7 * std::max(1.0, mymath::abs(x));
+}
+
 }  // namespace
 
 
@@ -71,7 +80,7 @@ double line_integral(const IntegrationContext& ctx, const std::string& expr,
 
     auto integrand = [&](const std::vector<double>& pt) {
         double t = pt[0];
-        double h = 1e-6;
+        const double h = adaptive_derivative_step(t);
         double x_val = x_eval({{t_var, t}});
         double y_val = y_eval({{t_var, t}});
         double z_val = has_z ? z_eval({{t_var, t}}) : 0.0;
@@ -110,19 +119,20 @@ double surface_integral(const IntegrationContext& ctx, const std::string& expr,
     auto integrand = [&](const std::vector<double>& pt) {
         double u = pt[0];
         double v = pt[1];
-        double h = 1e-5;
+        const double hu = adaptive_derivative_step(u);
+        const double hv = adaptive_derivative_step(v);
         
         double x_val = x_eval({{u_var, u}, {v_var, v}});
         double y_val = y_eval({{u_var, u}, {v_var, v}});
         double z_val = z_eval({{u_var, u}, {v_var, v}});
         
-        double xu = (x_eval({{u_var, u + h}, {v_var, v}}) - x_eval({{u_var, u - h}, {v_var, v}})) / (2 * h);
-        double yu = (y_eval({{u_var, u + h}, {v_var, v}}) - y_eval({{u_var, u - h}, {v_var, v}})) / (2 * h);
-        double zu = (z_eval({{u_var, u + h}, {v_var, v}}) - z_eval({{u_var, u - h}, {v_var, v}})) / (2 * h);
+        double xu = (x_eval({{u_var, u + hu}, {v_var, v}}) - x_eval({{u_var, u - hu}, {v_var, v}})) / (2 * hu);
+        double yu = (y_eval({{u_var, u + hu}, {v_var, v}}) - y_eval({{u_var, u - hu}, {v_var, v}})) / (2 * hu);
+        double zu = (z_eval({{u_var, u + hu}, {v_var, v}}) - z_eval({{u_var, u - hu}, {v_var, v}})) / (2 * hu);
         
-        double xv = (x_eval({{u_var, u}, {v_var, v + h}}) - x_eval({{u_var, u}, {v_var, v - h}})) / (2 * h);
-        double yv = (y_eval({{u_var, u}, {v_var, v + h}}) - y_eval({{u_var, u}, {v_var, v - h}})) / (2 * h);
-        double zv = (z_eval({{u_var, u}, {v_var, v + h}}) - z_eval({{u_var, u}, {v_var, v - h}})) / (2 * h);
+        double xv = (x_eval({{u_var, u}, {v_var, v + hv}}) - x_eval({{u_var, u}, {v_var, v - hv}})) / (2 * hv);
+        double yv = (y_eval({{u_var, u}, {v_var, v + hv}}) - y_eval({{u_var, u}, {v_var, v - hv}})) / (2 * hv);
+        double zv = (z_eval({{u_var, u}, {v_var, v + hv}}) - z_eval({{u_var, u}, {v_var, v - hv}})) / (2 * hv);
         
         double cx = yu * zv - zu * yv;
         double cy = zu * xv - xu * zv;

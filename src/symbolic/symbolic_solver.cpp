@@ -25,45 +25,6 @@ namespace {
 
 using namespace symbolic_expression_internal;
 
-// 判断表达式是否包含变量
-bool contains_variable(const SymbolicExpression& expr, const std::string& var) {
-    std::string str = expr.to_string();
-    // 简单检查：变量名出现在字符串中
-    return str.find(var) != std::string::npos;
-}
-
-// 计算组合数 C(n, k)
-long long binomial(long long n, long long k) {
-    if (k < 0 || k > n) return 0;
-    if (k == 0 || k == n) return 1;
-    if (k > n - k) k = n - k;
-    long long result = 1;
-    for (long long i = 0; i < k; ++i) {
-        result = result * (n - i) / (i + 1);
-    }
-    return result;
-}
-
-// 判断表达式是否为变量的幂次
-bool is_power_of_variable(const SymbolicExpression& expr, const std::string& var, int* power) {
-    if (expr.node_->type == NodeType::kVariable && expr.node_->text == var) {
-        *power = 1;
-        return true;
-    }
-    if (expr.node_->type == NodeType::kPower) {
-        SymbolicExpression base(expr.node_->left);
-        double exp = 0.0;
-        if (base.node_->type == NodeType::kVariable && base.node_->text == var &&
-            SymbolicExpression(expr.node_->right).is_number(&exp)) {
-            if (mymath::is_integer(exp, 1e-10) && exp >= 0) {
-                *power = static_cast<int>(mymath::round(exp));
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 }  // namespace
 
 // ============================================================================
@@ -342,6 +303,7 @@ Solution SymbolicSolver::solve_quadratic(
 Solution SymbolicSolver::solve_cubic(
     const std::vector<SymbolicExpression>& coeffs,
     const std::string& variable) {
+    (void)variable;
 
     // a*x^3 + b*x^2 + c*x + d = 0
     // 使用 Cardano 公式
@@ -427,6 +389,7 @@ Solution SymbolicSolver::solve_cubic(
 Solution SymbolicSolver::solve_quartic(
     const std::vector<SymbolicExpression>& coeffs,
     const std::string& variable) {
+    (void)variable;
 
     // a*x^4 + b*x^3 + c*x^2 + d*x + e = 0
     // Ferrari 方法的实现较为复杂，这里使用数值回退
@@ -529,11 +492,12 @@ bool SymbolicSolver::try_lambert_w(
     const SymbolicExpression& equation,
     const std::string& variable,
     Solution* result) {
+    (void)equation;
+    (void)variable;
+    (void)result;
 
     // 检测 x * exp(x) = a 形式 → x = W(a)
     // 检测 x * exp(k*x) = a 形式 → x = W(k*a) / k
-
-    std::string expr_str = equation.to_string();
 
     // 简化版本：检测特定模式
     // x * exp(x) - a = 0
@@ -553,24 +517,8 @@ bool SymbolicSolver::extract_polynomial_coefficients(
     std::vector<SymbolicExpression> terms;
     collect_additive_expressions(expr, &terms);
 
-    // 找到最高次幂
-    int max_degree = 0;
-    for (const auto& term : terms) {
-        int degree = 0;
-        // 检查项中变量的幂次
-        std::string term_str = term.to_string();
-        // 简化版本：使用正则表达式或字符串匹配
-        // 实际需要更精确的分析
-    }
-
     // 简化版本：尝试数值系数提取
     // 假设表达式已经是多项式形式
-
-    // 尝试直接提取系数
-    for (int deg = 0; deg <= 10; ++deg) {  // 最多 10 次
-        SymbolicExpression coeff = SymbolicExpression::number(0.0);
-        // 这需要更复杂的实现
-    }
 
     // 回退：使用数值方法估计系数
     double test_values[] = {0.0, 1.0, 2.0, 3.0, 4.0};
@@ -719,6 +667,8 @@ bool parse_equation(const std::string& equation_str,
 
 bool parse_equation_system(const std::string& system_str,
                            std::vector<SymbolicExpression>* equations) {
+    (void)system_str;
+    (void)equations;
 
     // 解析 {eq1, eq2, ...} 形式
     // 简化版本

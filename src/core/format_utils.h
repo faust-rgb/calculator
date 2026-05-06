@@ -32,6 +32,18 @@ struct HexFormatOptions {
  */
 bool try_make_simple_rational(double value, int max_denominator, Rational* rational);
 
+// ============================================================================
+// Pi 分数格式化
+// ============================================================================
+
+/**
+ * @brief 尝试将数值格式化为含 pi 的分数形式
+ * @param value 输入数值
+ * @param eps 匹配误差阈值
+ * @return 格式化后的字符串，如 "pi / 4", "1 / 2pi"；无法匹配时返回空字符串
+ */
+std::string try_format_as_pi_fraction(double value, double eps = 1e-9);
+
 
 // ============================================================================
 // 显示精度
