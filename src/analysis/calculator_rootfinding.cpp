@@ -14,14 +14,45 @@
 #include "parser/unified_expression_parser.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "core/string_utils.h"
+#include "precise/precise_decimal.h"
 
 #include <algorithm>
+#include <cmath>
 #include <stdexcept>
 #include <vector>
+#include <type_traits>
 
 namespace rootfinding {
 
 namespace {
+
+/**
+ * @brief 泛型绝对值函数
+ */
+template <typename T>
+T t_abs(const T& val) {
+    if constexpr (std::is_floating_point_v<T>) {
+        return std::abs(val);
+    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        return precise::abs(val);
+    } else {
+        return val < T(static_cast<long long>(0)) ? -val : val;
+    }
+}
+
+/**
+ * @brief 泛型平方根函数
+ */
+template <typename T>
+T t_sqrt(const T& val) {
+    if constexpr (std::is_floating_point_v<T>) {
+        return std::sqrt(val);
+    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        return precise::sqrt(val);
+    } else {
+        throw std::runtime_error("t_sqrt not implemented for this type");
+    }
+}
 
 /**
  * @brief 检查字符串是否为数值
@@ -61,8 +92,9 @@ using namespace symbolic_expression_internal;
  *
  * 容差随函数值大小自适应调整。
  */
-double root_function_tolerance(double fx) {
-    return 1e-10 * std::max(1.0, mymath::abs(fx));
+template <typename T>
+T root_function_tolerance(T fx) {
+    return T(1e-10) * std::max(T(static_cast<long long>(1)), t_abs(fx));
 }
 
 /**
@@ -70,16 +102,18 @@ double root_function_tolerance(double fx) {
  *
  * 容差随位置大小自适应调整。
  */
-double root_position_tolerance(double x) {
-    return 1e-10 * std::max(1.0, mymath::abs(x));
+template <typename T>
+T root_position_tolerance(T x) {
+    return T(1e-10) * std::max(T(static_cast<long long>(1)), t_abs(x));
 }
 
 /**
  * @brief 计算数值导数的步长
  */
-double root_derivative_step(double x) {
+template <typename T>
+T root_derivative_step(T x) {
     // 使用 sqrt(epsilon) 约为 1e-8 作为基础比例
-    return 1e-7 * std::max(1.0, mymath::abs(x));
+    return T(1e-7) * std::max(T(static_cast<long long>(1)), t_abs(x));
 }
 
 }  // namespace
@@ -97,56 +131,57 @@ double root_derivative_step(double x) {
  * @param evaluate_derivative 导数求值器（可选）
  * @return 求得的根
  */
-double newton_solve(
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>& evaluate,
-    double initial,
-    const std::function<double(double)>& normalize,
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>& evaluate_derivative) {
+template <typename T>
+T newton_solve(
+    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
+    T initial,
+    const std::function<T(T)>& normalize,
+    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate_derivative) {
 
-    double x = initial;
+    T x = initial;
     for (int iteration = 0; iteration < 100; ++iteration) {
-        const double fx = evaluate({{"x", x}});
+        const T fx = evaluate({{"x", x}});
 
         // 检查是否已收敛（函数值足够小）
-        if (mymath::abs(fx) <= root_function_tolerance(fx)) {
+        if (t_abs(fx) <= root_function_tolerance(fx)) {
             return normalize(x);
         }
 
         // 计算导数（解析或数值）
-        long double derivative = 0.0L;
+        T derivative = T(static_cast<long long>(0));
         if (evaluate_derivative) {
             // 使用解析导数
-            derivative = static_cast<long double>(evaluate_derivative({{"x", x}}));
+            derivative = evaluate_derivative({{"x", x}});
         } else {
             // 使用中心差分近似导数
-            const double h = root_derivative_step(x);
+            const T h = root_derivative_step(x);
             derivative =
-                (static_cast<long double>(evaluate({{"x", x + h}})) -
-                 static_cast<long double>(evaluate({{"x", x - h}}))) /
-                (2.0L * static_cast<long double>(h));
+                (evaluate({{"x", x + h}}) -
+                 evaluate({{"x", x - h}})) /
+                (T(static_cast<long long>(2)) * h);
         }
 
         // 检查导数是否为零
-        if (mymath::abs_long_double(derivative) <=
-            1e-13L * std::max(1.0L, mymath::abs_long_double(static_cast<long double>(fx)))) {
+        if (t_abs(derivative) <=
+            T(1e-13) * std::max(T(static_cast<long long>(1)), t_abs(fx))) {
             throw std::runtime_error("solve failed because the derivative vanished");
         }
 
-        const double raw_step = static_cast<double>(static_cast<long double>(fx) / derivative);
+        const T raw_step = fx / derivative;
 
         // 回溯搜索：确保 |f(x)| 减小
-        double factor = 1.0;
-        double next = x - raw_step;
+        T factor = T(1.0);
+        T next = x - raw_step;
         bool step_accepted = false;
 
         for (int retry = 0; retry < 10; ++retry) {
-            const double f_next = evaluate({{"x", next}});
+            const T f_next = evaluate({{"x", next}});
             // Armijo 类条件：检查是否确实改进
-            if (mymath::abs(f_next) < mymath::abs(fx) || mymath::abs(f_next) <= root_function_tolerance(f_next)) {
+            if (t_abs(f_next) < t_abs(fx) || t_abs(f_next) <= root_function_tolerance(f_next)) {
                 step_accepted = true;
                 break;
             }
-            factor *= 0.5;
+            factor *= T(0.5);
             next = x - factor * raw_step;
         }
 
@@ -155,8 +190,8 @@ double newton_solve(
         }
 
         // 检查位置收敛
-        if (mymath::abs(next - x) <=
-            root_position_tolerance(std::max(mymath::abs(next), mymath::abs(x)))) {
+        if (t_abs(next - x) <=
+            root_position_tolerance(std::max(t_abs(next), t_abs(x)))) {
             return normalize(next);
         }
         x = next;
@@ -176,39 +211,40 @@ double newton_solve(
  * @param normalize 结果归一化函数
  * @return 求得的根
  */
-double bisection_solve(
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>& evaluate,
-    double left,
-    double right,
-    const std::function<double(double)>& normalize) {
+template <typename T>
+T bisection_solve(
+    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
+    T left,
+    T right,
+    const std::function<T(T)>& normalize) {
 
     // 确保 left <= right
     if (left > right) {
         std::swap(left, right);
     }
 
-    double left_value = evaluate({{"x", left}});
-    double right_value = evaluate({{"x", right}});
+    T left_value = evaluate({{"x", left}});
+    T right_value = evaluate({{"x", right}});
 
     // 检查端点是否异号
-    if (left_value * right_value > 0.0) {
+    if (left_value * right_value > T(static_cast<long long>(0))) {
         throw std::runtime_error("bisect requires f(a) and f(b) to have opposite signs");
     }
 
     for (int iteration = 0; iteration < 100; ++iteration) {
-        const double mid = 0.5 * (left + right);
-        const double mid_value = evaluate({{"x", mid}});
+        const T mid = T(0.5) * (left + right);
+        const T mid_value = evaluate({{"x", mid}});
 
         // 检查收敛
-        if (mymath::abs(mid_value) <= root_function_tolerance(mid_value) ||
-            mymath::abs(right - left) <=
-                root_position_tolerance(std::max(mymath::abs(left), mymath::abs(right)))) {
+        if (t_abs(mid_value) <= root_function_tolerance(mid_value) ||
+            t_abs(right - left) <=
+                root_position_tolerance(std::max(t_abs(left), t_abs(right)))) {
             return normalize(mid);
         }
 
         // 更新区间
-        if ((left_value < 0.0 && mid_value > 0.0) ||
-            (left_value > 0.0 && mid_value < 0.0)) {
+        if ((left_value < T(static_cast<long long>(0)) && mid_value > T(static_cast<long long>(0))) ||
+            (left_value > T(static_cast<long long>(0)) && mid_value < T(static_cast<long long>(0)))) {
             right = mid;
             right_value = mid_value;
         } else {
@@ -216,7 +252,7 @@ double bisection_solve(
             left_value = mid_value;
         }
     }
-    return normalize(0.5 * (left + right));
+    return normalize(T(0.5) * (left + right));
 }
 
 /**
@@ -231,36 +267,30 @@ double bisection_solve(
  * @param normalize 结果归一化函数
  * @return 求得的根
  */
-double secant_solve(
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>& evaluate,
-    double x0,
-    double x1,
-    const std::function<double(double)>& normalize) {
+template <typename T>
+T secant_solve(
+    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
+    T x0,
+    T x1,
+    const std::function<T(T)>& normalize) {
 
     for (int iteration = 0; iteration < 64; ++iteration) {
-        const double f0 = evaluate({{"x", x0}});
-        const double f1 = evaluate({{"x", x1}});
+        const T f0 = evaluate({{"x", x0}});
+        const T f1 = evaluate({{"x", x1}});
 
         // 计算 f1 - f0（避免分母为零）
-        const long double denominator =
-            static_cast<long double>(f1) - static_cast<long double>(f0);
-        if (mymath::abs_long_double(denominator) <=
-            1e-12L * std::max({1.0L,
-                               mymath::abs_long_double(static_cast<long double>(f0)),
-                               mymath::abs_long_double(static_cast<long double>(f1))})) {
+        const T denominator = f1 - f0;
+        if (t_abs(denominator) <=
+            T(1e-12) * std::max({T(1.0), t_abs(f0), t_abs(f1)})) {
             throw std::runtime_error("secant failed because consecutive function values matched");
         }
 
         // 割线法公式：next = x1 - f1 * (x1 - x0) / (f1 - f0)
-        const double next = static_cast<double>(
-            static_cast<long double>(x1) -
-            static_cast<long double>(f1) *
-                (static_cast<long double>(x1) - static_cast<long double>(x0)) /
-            denominator);
+        const T next = x1 - f1 * (x1 - x0) / denominator;
 
         // 检查收敛
-        if (mymath::abs(next - x1) <=
-            root_position_tolerance(std::max(mymath::abs(next), mymath::abs(x1)))) {
+        if (t_abs(next - x1) <=
+            root_position_tolerance(std::max(t_abs(next), t_abs(x1)))) {
             return normalize(next);
         }
         x0 = x1;
@@ -280,17 +310,18 @@ double secant_solve(
  * @param normalize 结果归一化函数
  * @return 求得的不动点
  */
-double fixed_point_solve(
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>& evaluate,
-    double initial,
-    const std::function<double(double)>& normalize) {
+template <typename T>
+T fixed_point_solve(
+    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
+    T initial,
+    const std::function<T(T)>& normalize) {
 
-    double x = initial;
+    T x = initial;
     for (int iteration = 0; iteration < 128; ++iteration) {
-        const double next = evaluate({{"x", x}});
+        const T next = evaluate({{"x", x}});
         // 检查收敛
-        if (mymath::abs(next - x) <=
-            root_position_tolerance(std::max(mymath::abs(next), mymath::abs(x)))) {
+        if (t_abs(next - x) <=
+            root_position_tolerance(std::max(t_abs(next), t_abs(x)))) {
             return normalize(next);
         }
         x = next;
@@ -432,7 +463,7 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
                 }
             }
             double x = ctx.parse_decimal(arguments[1]);
-            double result = newton_solve(evaluate_expression, x, ctx.normalize_result, evaluate_derivative);
+            double result = newton_solve<double>(evaluate_expression, x, ctx.normalize_result, evaluate_derivative);
             *output = format_decimal(result);
             return true;
         }
@@ -446,7 +477,7 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
         const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
         double left = ctx.parse_decimal(arguments[1]);
         double right = ctx.parse_decimal(arguments[2]);
-        double result = bisection_solve(evaluate_expression, left, right, ctx.normalize_result);
+        double result = bisection_solve<double>(evaluate_expression, left, right, ctx.normalize_result);
         *output = format_decimal(result);
         return true;
     }
@@ -458,7 +489,7 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
         const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
         double x0 = ctx.parse_decimal(arguments[1]);
         double x1 = ctx.parse_decimal(arguments[2]);
-        double result = secant_solve(evaluate_expression, x0, x1, ctx.normalize_result);
+        double result = secant_solve<double>(evaluate_expression, x0, x1, ctx.normalize_result);
         *output = format_decimal(result);
         return true;
     }
@@ -469,7 +500,7 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
         }
         const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
         double x = ctx.parse_decimal(arguments[1]);
-        double result = fixed_point_solve(evaluate_expression, x, ctx.normalize_result);
+        double result = fixed_point_solve<double>(evaluate_expression, x, ctx.normalize_result);
         *output = format_decimal(result);
         return true;
     }
@@ -526,5 +557,75 @@ std::string RootfindingModule::get_help_snippet(const std::string& topic) const 
     }
     return "";
 }
+
+// 显式模板实例化
+template double newton_solve<double>(
+    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
+    double,
+    const std::function<double(double)>&,
+    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&);
+
+template PreciseDecimal newton_solve<PreciseDecimal>(
+    const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
+    PreciseDecimal,
+    const std::function<PreciseDecimal(PreciseDecimal)>&,
+    const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&);
+
+template long double newton_solve<long double>(
+    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
+    long double,
+    const std::function<long double(long double)>&,
+    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&);
+
+template double bisection_solve<double>(
+    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
+    double,
+    double,
+    const std::function<double(double)>&);
+
+template PreciseDecimal bisection_solve<PreciseDecimal>(
+    const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
+    PreciseDecimal,
+    PreciseDecimal,
+    const std::function<PreciseDecimal(PreciseDecimal)>&);
+
+template long double bisection_solve<long double>(
+    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
+    long double,
+    long double,
+    const std::function<long double(long double)>&);
+
+template double secant_solve<double>(
+    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
+    double,
+    double,
+    const std::function<double(double)>&);
+
+template PreciseDecimal secant_solve<PreciseDecimal>(
+    const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
+    PreciseDecimal,
+    PreciseDecimal,
+    const std::function<PreciseDecimal(PreciseDecimal)>&);
+
+template long double secant_solve<long double>(
+    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
+    long double,
+    long double,
+    const std::function<long double(long double)>&);
+
+template double fixed_point_solve<double>(
+    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
+    double,
+    const std::function<double(double)>&);
+
+template PreciseDecimal fixed_point_solve<PreciseDecimal>(
+    const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
+    PreciseDecimal,
+    const std::function<PreciseDecimal(PreciseDecimal)>&);
+
+template long double fixed_point_solve<long double>(
+    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
+    long double,
+    const std::function<long double(long double)>&);
 
 }  // namespace rootfinding

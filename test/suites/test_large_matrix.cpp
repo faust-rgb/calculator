@@ -111,8 +111,6 @@ double relative_error(const Matrix& computed, const Matrix& expected) {
  * @brief 测试大矩阵创建和基本属性
  */
 void test_large_matrix_creation(int& passed, int& failed) {
-    std::cout << "  Testing large matrix creation..." << std::endl;
-
     // 测试 100x100 零矩阵
     {
         Matrix m = Matrix::zero(100, 100);
@@ -187,8 +185,6 @@ void test_large_matrix_creation(int& passed, int& failed) {
  * @brief 测试大矩阵加法和减法
  */
 void test_large_matrix_add_sub(int& passed, int& failed) {
-    std::cout << "  Testing large matrix addition and subtraction..." << std::endl;
-
     // 测试 100x100 矩阵加法
     {
         Matrix A = generate_random_matrix(100, 100, -10.0, 10.0, 12345);
@@ -268,8 +264,6 @@ void test_large_matrix_add_sub(int& passed, int& failed) {
  * @brief 测试大矩阵乘法
  */
 void test_large_matrix_multiplication(int& passed, int& failed) {
-    std::cout << "  Testing large matrix multiplication..." << std::endl;
-
     // 测试 50x50 * 50x50 矩阵乘法
     {
         Matrix A = generate_random_matrix(50, 50, -1.0, 1.0, 100);
@@ -382,8 +376,6 @@ void test_large_matrix_multiplication(int& passed, int& failed) {
  * @brief 测试大矩阵转置
  */
 void test_large_matrix_transpose(int& passed, int& failed) {
-    std::cout << "  Testing large matrix transpose..." << std::endl;
-
     // 测试 100x200 矩阵转置
     {
         Matrix A = generate_random_matrix(100, 200, -10.0, 10.0, 700);
@@ -432,8 +424,6 @@ void test_large_matrix_transpose(int& passed, int& failed) {
  * @brief 测试大矩阵求逆
  */
 void test_large_matrix_inverse(int& passed, int& failed) {
-    std::cout << "  Testing large matrix inverse..." << std::endl;
-
     // 测试 30x30 随机矩阵求逆
     {
         Matrix A = generate_spd_matrix(30, 900);
@@ -496,8 +486,6 @@ void test_large_matrix_inverse(int& passed, int& failed) {
  * @brief 测试大矩阵 QR 分解
  */
 void test_large_matrix_qr(int& passed, int& failed) {
-    std::cout << "  Testing large matrix QR decomposition..." << std::endl;
-
     // 测试 50x50 矩阵 QR 分解
     {
         Matrix A = generate_random_matrix(50, 50, -1.0, 1.0, 1100);
@@ -545,8 +533,6 @@ void test_large_matrix_qr(int& passed, int& failed) {
  * @brief 测试大矩阵 LU 分解
  */
 void test_large_matrix_lu(int& passed, int& failed) {
-    std::cout << "  Testing large matrix LU decomposition..." << std::endl;
-
     // 测试 50x50 矩阵 LU 分解
     {
         Matrix A = generate_random_matrix(50, 50, -1.0, 1.0, 1300);
@@ -618,8 +604,6 @@ void test_large_matrix_lu(int& passed, int& failed) {
  * @brief 测试大矩阵 SVD 分解
  */
 void test_large_matrix_svd(int& passed, int& failed) {
-    std::cout << "  Testing large matrix SVD decomposition..." << std::endl;
-
     // 注意：当前实现的 SVD 对于大矩阵（n > 3）使用占位符特征值
     // 因此我们只测试小矩阵的 SVD
     // 测试 3x3 矩阵 SVD 分解
@@ -693,8 +677,6 @@ void test_large_matrix_svd(int& passed, int& failed) {
  * @brief 测试大矩阵 Cholesky 分解
  */
 void test_large_matrix_cholesky(int& passed, int& failed) {
-    std::cout << "  Testing large matrix Cholesky decomposition..." << std::endl;
-
     // 测试 40x40 对称正定矩阵 Cholesky 分解
     {
         Matrix A = generate_spd_matrix(40, 1700);
@@ -746,8 +728,6 @@ void test_large_matrix_cholesky(int& passed, int& failed) {
  * @brief 测试大矩阵线性方程组求解
  */
 void test_large_matrix_solve(int& passed, int& failed) {
-    std::cout << "  Testing large matrix linear system solving..." << std::endl;
-
     // 测试 50x50 线性方程组
     {
         Matrix A = generate_spd_matrix(50, 2000);
@@ -818,8 +798,6 @@ void test_large_matrix_solve(int& passed, int& failed) {
  * @brief 测试大矩阵行列式和迹
  */
 void test_large_matrix_det_trace(int& passed, int& failed) {
-    std::cout << "  Testing large matrix determinant and trace..." << std::endl;
-
     // 测试单位矩阵的行列式
     {
         Matrix I = Matrix::identity(100);
@@ -897,8 +875,6 @@ void test_large_matrix_det_trace(int& passed, int& failed) {
  * @brief 测试大矩阵特征值和特征向量
  */
 void test_large_matrix_eigen(int& passed, int& failed) {
-    std::cout << "  Testing large matrix eigenvalue computation..." << std::endl;
-
     // 注意：当前实现对于大矩阵（n > 3）使用占位符特征值
     // 因此我们只测试小矩阵的特征值计算
 
@@ -1047,8 +1023,6 @@ void test_large_matrix_eigen(int& passed, int& failed) {
  * @brief 测试大矩阵范数和条件数
  */
 void test_large_matrix_norm_cond(int& passed, int& failed) {
-    std::cout << "  Testing large matrix norm and condition number..." << std::endl;
-
     // 测试 Frobenius 范数
     {
         Matrix A = generate_random_matrix(50, 50, -1.0, 1.0, 3000);
@@ -1105,8 +1079,6 @@ void test_large_matrix_norm_cond(int& passed, int& failed) {
  * @brief 测试大矩阵秩和 RREF
  */
 void test_large_matrix_rank_rref(int& passed, int& failed) {
-    std::cout << "  Testing large matrix rank and RREF..." << std::endl;
-
     // 测试满秩矩阵
     {
         Matrix A = generate_spd_matrix(40, 3200);
@@ -1156,8 +1128,6 @@ void test_large_matrix_rank_rref(int& passed, int& failed) {
  * @brief 测试大矩阵幂运算
  */
 void test_large_matrix_power(int& passed, int& failed) {
-    std::cout << "  Testing large matrix power operations..." << std::endl;
-
     // 测试 A^0 = I
     {
         Matrix A = generate_random_matrix(30, 30, -1.0, 1.0, 3400);
@@ -1238,8 +1208,6 @@ void test_large_matrix_power(int& passed, int& failed) {
  * @brief 测试大矩阵 Kronecker 积
  */
 void test_large_matrix_kronecker(int& passed, int& failed) {
-    std::cout << "  Testing large matrix Kronecker product..." << std::endl;
-
     // 测试 20x20 与 5x5 的 Kronecker 积
     {
         Matrix A = generate_random_matrix(20, 20, -1.0, 1.0, 3900);
@@ -1284,8 +1252,6 @@ void test_large_matrix_kronecker(int& passed, int& failed) {
  * @brief 测试大矩阵 Hadamard 积
  */
 void test_large_matrix_hadamard(int& passed, int& failed) {
-    std::cout << "  Testing large matrix Hadamard product..." << std::endl;
-
     // 测试 100x100 Hadamard 积
     {
         Matrix A = generate_random_matrix(100, 100, -10.0, 10.0, 4100);
@@ -1316,8 +1282,6 @@ void test_large_matrix_hadamard(int& passed, int& failed) {
  * @brief 测试数值稳定性
  */
 void test_numerical_stability(int& passed, int& failed) {
-    std::cout << "  Testing numerical stability..." << std::endl;
-
     // 测试 Hilbert 矩阵（病态矩阵）
     {
         std::size_t n = 10;  // Hilbert 矩阵高度病态，n=10 已经很困难
@@ -1384,8 +1348,6 @@ void test_numerical_stability(int& passed, int& failed) {
  * @brief 运行大维度矩阵测试
  */
 int run_large_matrix_tests(int& passed, int& failed) {
-    std::cout << "\n========== Large Matrix Validation Tests ==========\n" << std::endl;
-
     auto start = std::chrono::high_resolution_clock::now();
 
     test_large_matrix_creation(passed, failed);
@@ -1409,8 +1371,6 @@ int run_large_matrix_tests(int& passed, int& failed) {
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-
-    std::cout << "\nLarge matrix tests completed in " << duration.count() << " ms" << std::endl;
 
     return failed == 0 ? 0 : 1;
 }

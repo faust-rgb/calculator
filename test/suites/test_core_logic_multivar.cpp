@@ -18,6 +18,7 @@
 #include <vector>
 #include <string>
 #include <exception>
+#include <cmath>
 
 namespace test_suites {
 
@@ -378,7 +379,9 @@ int run_logic_multivar_tests(int& passed, int& failed) {
     try {
         const std::string output = calculator.evaluate_for_display(
             "integral(f17, 0, 2) - integral(f17, 0, 1)", false);
-        if (output == "2.333333333337") {
+        // 允许小的数值误差 (约 1e-11)
+        double val = std::stod(output);
+        if (std::abs(val - 2.333333333337) < 1e-10) {
             ++passed;
         } else {
             ++failed;

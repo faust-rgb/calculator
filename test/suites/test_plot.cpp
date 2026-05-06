@@ -7,7 +7,6 @@
 namespace test_suites {
 
 int run_plot_tests(int& passed, int& failed) {
-    std::cout << "Running Plot Tests...\n";
     Calculator calculator;
 
     // Test 1: Basic plot command (3 arguments)
@@ -15,7 +14,6 @@ int run_plot_tests(int& passed, int& failed) {
         std::string output = calculator.plot_expression("plot(sin(x), -3.14, 3.14)");
         if (!output.empty() && output.find("y: [") != std::string::npos) {
             passed++;
-            std::cout << "  PASS: Basic plot(sin(x), -3.14, 3.14)\n";
         } else {
             failed++;
             std::cout << "  FAIL: Basic plot(sin(x), -3.14, 3.14) - unexpected output\n";
@@ -30,7 +28,6 @@ int run_plot_tests(int& passed, int& failed) {
         std::string output = calculator.plot_expression("plot(t^2, t, 0, 10)");
         if (!output.empty() && output.find("y: [0.0000, 100.0000]") != std::string::npos) {
             passed++;
-            std::cout << "  PASS: Plot with variable plot(t^2, t, 0, 10)\n";
         } else {
             failed++;
             std::cout << "  FAIL: Plot with variable plot(t^2, t, 0, 10) - unexpected output\n";
@@ -45,7 +42,6 @@ int run_plot_tests(int& passed, int& failed) {
         std::string output = calculator.plot_expression("plot(x, x, 0, 1, 10)");
         if (!output.empty() && output.find("x: [0.0000, 1.0000]") != std::string::npos) {
             passed++;
-            std::cout << "  PASS: Plot with points plot(x, x, 0, 1, 10)\n";
         } else {
             failed++;
             std::cout << "  FAIL: Plot with points plot(x, x, 0, 1, 10) - unexpected output\n";
@@ -62,7 +58,6 @@ int run_plot_tests(int& passed, int& failed) {
         std::string output = calculator.plot_expression("plot(f(x), -2, 2)");
         if (!output.empty() && output.find("y: [-8.0000, 8.0000]") != std::string::npos) {
             passed++;
-            std::cout << "  PASS: Plot with custom function\n";
         } else {
             failed++;
             std::cout << "  FAIL: Plot with custom function - unexpected output\n";
@@ -78,7 +73,6 @@ int run_plot_tests(int& passed, int& failed) {
         const bool handled = calculator.try_process_function_command("plot(sin(x), -1, 1)", &output);
         if (handled && !output.empty() && output.find("y: [") != std::string::npos) {
             passed++;
-            std::cout << "  PASS: Dispatcher plot(sin(x), -1, 1)\n";
         } else {
             failed++;
             std::cout << "  FAIL: Dispatcher plot(sin(x), -1, 1) - unexpected output\n";

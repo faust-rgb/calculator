@@ -95,8 +95,14 @@ T max_abs_entry(const TMatrix<T>& m) {
 
 template <typename T>
 T matrix_tolerance(T scale) {
-    if constexpr (std::is_same_v<T, PreciseDecimal>) return scale * PreciseDecimal("1e-35");
-    else return std::max(kMatrixPivotAbsoluteEps, scale * kMatrixPivotRelativeEps);
+    if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        // 使用更动态的容差：基于当前默认 scale 的 1e-(scale-5)
+        int current_scale = PrecisionContext::get_default_scale();
+        std::string tol_s = "1e-" + std::to_string(std::max(10, current_scale - 5));
+        return scale * PreciseDecimal(tol_s);
+    } else {
+        return std::max(kMatrixPivotAbsoluteEps, scale * kMatrixPivotRelativeEps);
+    }
 }
 
 template <typename T>

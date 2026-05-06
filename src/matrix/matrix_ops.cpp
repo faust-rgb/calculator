@@ -128,6 +128,32 @@ TMatrix<double> multiply<double>(const TMatrix<double>& lhs, const TMatrix<doubl
     return result;
 }
 
+// 针对 PreciseDecimal 的优化版本 (延迟规范化)
+template <>
+TMatrix<PreciseDecimal> multiply<PreciseDecimal>(const TMatrix<PreciseDecimal>& lhs, const TMatrix<PreciseDecimal>& rhs) {
+    if (lhs.cols != rhs.rows) {
+        throw std::runtime_error("matrix multiplication requires lhs.cols == rhs.rows");
+    }
+    TMatrix<PreciseDecimal> result(lhs.rows, rhs.cols, PreciseDecimal(0LL));
+    for (std::size_t i = 0; i < lhs.rows; ++i) {
+        for (std::size_t k = 0; k < lhs.cols; ++k) {
+            const PreciseDecimal& lv = lhs.at(i, k);
+            if (lv.is_zero()) continue;
+            const std::size_t row_off = i * rhs.cols;
+            const std::size_t rhs_off = k * rhs.cols;
+            for (std::size_t j = 0; j < rhs.cols; ++j) {
+                // 核心优化：这里的 += 和 * 内部仍会 normalize，
+                // 但我们至少避免了最外层的多余操作。
+                // 真正的延迟规范化需要 PreciseDecimal 暴露更底层的接口。
+                result.data[row_off + j] += lv * rhs.data[rhs_off + j];
+            }
+        }
+    }
+    // 最终对结果矩阵全量规范化
+    for (auto& val : result.data) val.normalize();
+    return result;
+}
+
 template <typename T>
 TMatrix<T> multiply(const TMatrix<T>& lhs, T scalar) {
     TMatrix<T> result = lhs;

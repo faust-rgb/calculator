@@ -9,6 +9,7 @@
 #include "math/mymath.h"
 
 #include <algorithm>
+#include <cctype>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -21,6 +22,13 @@ constexpr int kBaseDigits = 9;
 int g_default_scale = 40;
 constexpr double kDisplayZeroEps = 1e-16;
 constexpr double kDisplayIntegerEps = 1e-9;
+
+PreciseDecimal one();
+PreciseDecimal two();
+PreciseDecimal half();
+PreciseDecimal decimal_from_uint(uint32_t value);
+PreciseDecimal scale_epsilon(int extra_digits = 4);
+int series_iteration_limit(int minimum);
 
 double normalize_display_decimal(double value) {
     if (mymath::abs(value) < kDisplayZeroEps) return 0.0;
@@ -41,7 +49,7 @@ std::string format_decimal(double value, int precision = 12) {
 /**
  * @brief 计算 a / b，返回商和余数 (均为 BigInt)
  */
-void div_bigint(const std::vector<uint32_t>& num, 
+void div_bigint(const std::vector<uint32_t>& num,
                 const std::vector<uint32_t>& den,
                 std::vector<uint32_t>* quotient,
                 std::vector<uint32_t>* remainder);
@@ -125,9 +133,170 @@ std::vector<uint32_t> subtract_bigint(const std::vector<uint32_t>& lhs, const st
 }
 
 /**
- * @brief 大整数乘法
+ * @brief Karatsuba 乘法阈值 - 小于此规模使用朴素乘法
  */
-std::vector<uint32_t> multiply_bigint(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
+constexpr std::size_t KARATSUBA_THRESHOLD = 32;
+
+/**
+ * @brief NTT 乘法阈值 - 大于此规模使用 NTT
+ */
+constexpr std::size_t NTT_THRESHOLD = 256;
+
+// ============================================================================
+// NTT (数论变换) 乘法实现
+// ============================================================================
+
+namespace ntt {
+
+template <uint32_t P>
+struct NTTConfig {
+    static constexpr uint32_t mod = P;
+    static constexpr uint32_t g = 3;
+
+    static uint32_t power(uint32_t a, uint32_t b) {
+        uint32_t res = 1;
+        a %= mod;
+        while (b > 0) {
+            if (b & 1) res = static_cast<uint32_t>((static_cast<uint64_t>(res) * a) % mod);
+            a = static_cast<uint32_t>((static_cast<uint64_t>(a) * a) % mod);
+            b >>= 1;
+        }
+        return res;
+    }
+
+    static uint32_t inv(uint32_t n) {
+        return power(n, mod - 2);
+    }
+
+    static void transform(std::vector<uint32_t>& a, bool invert) {
+        std::size_t n = a.size();
+        for (std::size_t i = 1, j = 0; i < n; i++) {
+            std::size_t bit = n >> 1;
+            for (; j & bit; bit >>= 1) j ^= bit;
+            j ^= bit;
+            if (i < j) std::swap(a[i], a[j]);
+        }
+
+        for (std::size_t len = 2; len <= n; len <<= 1) {
+            uint32_t wlen = power(g, (mod - 1) / static_cast<uint32_t>(len));
+            if (invert) wlen = inv(wlen);
+            for (std::size_t i = 0; i < n; i += len) {
+                uint32_t w = 1;
+                for (std::size_t j = 0; j < len / 2; j++) {
+                    uint32_t u = a[i + j];
+                    uint32_t v = static_cast<uint32_t>((static_cast<uint64_t>(a[i + j + len / 2]) * w) % mod);
+                    a[i + j] = (u + v < mod) ? (u + v) : (u + v - mod);
+                    a[i + j + len / 2] = (u >= v) ? (u - v) : (u + mod - v);
+                    w = static_cast<uint32_t>((static_cast<uint64_t>(w) * wlen) % mod);
+                }
+            }
+        }
+
+        if (invert) {
+            uint32_t n_inv = inv(static_cast<uint32_t>(n));
+            for (uint32_t& x : a) x = static_cast<uint32_t>((static_cast<uint64_t>(x) * n_inv) % mod);
+        }
+    }
+};
+
+// 三个适用于 NTT 的质数
+constexpr uint32_t P1 = 998244353;
+constexpr uint32_t P2 = 1004535809;
+constexpr uint32_t P3 = 469762049;
+
+// CRT 合并结果
+// 使用 __int128_t 处理中间大数
+std::vector<uint32_t> crt(const std::vector<uint32_t>& r1,
+                          const std::vector<uint32_t>& r2,
+                          const std::vector<uint32_t>& r3,
+                          uint32_t base) {
+    std::size_t n = r1.size();
+    std::vector<uint32_t> res;
+    res.reserve(n + 2);
+
+    const uint64_t M12 = static_cast<uint64_t>(P1) * P2;
+    const uint32_t invP1P2 = NTTConfig<P2>::inv(P1);
+    const uint32_t invM12P3 = NTTConfig<P3>::inv(static_cast<uint32_t>(M12 % P3));
+
+    unsigned __int128 carry = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        // r = r1 (mod P1)
+        // r = r1 + P1 * k1 (mod P2) => k1 = (r2 - r1) * invP1 (mod P2)
+        uint32_t k1 = static_cast<uint32_t>((static_cast<uint64_t>(r2[i] + P2 - r1[i]) * invP1P2) % P2);
+        uint64_t r12 = r1[i] + static_cast<uint64_t>(k1) * P1;
+
+        // r = r12 + M12 * k2 (mod P3) => k2 = (r3 - r12) * invM12 (mod P3)
+        uint32_t r12_mod_p3 = static_cast<uint32_t>(r12 % P3);
+        uint32_t k2 = static_cast<uint32_t>((static_cast<uint64_t>(r3[i] + P3 - r12_mod_p3) * invM12P3) % P3);
+        
+        unsigned __int128 val = carry + r12 + (unsigned __int128)k2 * M12;
+        res.push_back(static_cast<uint32_t>(val % base));
+        carry = val / base;
+    }
+    
+    while (carry > 0) {
+        res.push_back(static_cast<uint32_t>(carry % base));
+        carry /= base;
+    }
+    
+    return res;
+}
+
+} // namespace ntt
+
+/**
+ * @brief 大整数乘法 - NTT 算法
+ *
+ * 时间复杂度 O(N log N)，适合超大规模计算
+ */
+std::vector<uint32_t> multiply_bigint_ntt(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
+    std::size_t n = 1;
+    while (n < lhs.size() + rhs.size()) n <<= 1;
+
+    std::vector<uint32_t> fa1(n, 0), fb1(n, 0);
+    std::vector<uint32_t> fa2(n, 0), fb2(n, 0);
+    std::vector<uint32_t> fa3(n, 0), fb3(n, 0);
+
+    for (std::size_t i = 0; i < lhs.size(); ++i) {
+        fa1[i] = fa2[i] = fa3[i] = lhs[i];
+    }
+    for (std::size_t i = 0; i < rhs.size(); ++i) {
+        fb1[i] = fb2[i] = fb3[i] = rhs[i];
+    }
+
+    ntt::NTTConfig<ntt::P1>::transform(fa1, false);
+    ntt::NTTConfig<ntt::P1>::transform(fb1, false);
+    ntt::NTTConfig<ntt::P2>::transform(fa2, false);
+    ntt::NTTConfig<ntt::P2>::transform(fb2, false);
+    ntt::NTTConfig<ntt::P3>::transform(fa3, false);
+    ntt::NTTConfig<ntt::P3>::transform(fb3, false);
+
+    for (std::size_t i = 0; i < n; ++i) {
+        fa1[i] = static_cast<uint32_t>((static_cast<uint64_t>(fa1[i]) * fb1[i]) % ntt::P1);
+        fa2[i] = static_cast<uint32_t>((static_cast<uint64_t>(fa2[i]) * fb2[i]) % ntt::P2);
+        fa3[i] = static_cast<uint32_t>((static_cast<uint64_t>(fa3[i]) * fb3[i]) % ntt::P3);
+    }
+
+    ntt::NTTConfig<ntt::P1>::transform(fa1, true);
+    ntt::NTTConfig<ntt::P2>::transform(fa2, true);
+    ntt::NTTConfig<ntt::P3>::transform(fa3, true);
+
+    std::vector<uint32_t> result = ntt::crt(fa1, fa2, fa3, 1000000000); // kBase = 10^9
+    while (result.size() > 1 && result.back() == 0) result.pop_back();
+    return result;
+}
+
+/**
+ * @brief 大整数乘法 - Karatsuba 算法
+ *
+ * 时间复杂度 O(n^1.585)，比朴素 O(n²) 更快
+ */
+std::vector<uint32_t> multiply_bigint_karatsuba(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs);
+
+/**
+ * @brief 朴素大整数乘法 (用于小规模数据)
+ */
+std::vector<uint32_t> multiply_bigint_naive(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
     if ((lhs.size() == 1 && lhs[0] == 0) || (rhs.size() == 1 && rhs[0] == 0)) return {0};
     std::vector<uint32_t> res(lhs.size() + rhs.size(), 0);
     for (std::size_t i = 0; i < lhs.size(); ++i) {
@@ -141,6 +310,104 @@ std::vector<uint32_t> multiply_bigint(const std::vector<uint32_t>& lhs, const st
     }
     while (res.size() > 1 && res.back() == 0) res.pop_back();
     return res;
+}
+
+/**
+ * @brief 大整数移位 (相当于乘以 base^n)
+ */
+std::vector<uint32_t> shift_bigint(const std::vector<uint32_t>& v, std::size_t n) {
+    if (v.empty() || (v.size() == 1 && v[0] == 0)) return {0};
+    if (n == 0) return v;
+    std::vector<uint32_t> res(n, 0);
+    res.insert(res.end(), v.begin(), v.end());
+    return res;
+}
+
+/**
+ * @brief 大整数截取低位 n 个 chunk
+ */
+std::vector<uint32_t> bigint_low(const std::vector<uint32_t>& v, std::size_t n) {
+    if (n >= v.size()) return v;
+    return std::vector<uint32_t>(v.begin(), v.begin() + static_cast<std::ptrdiff_t>(n));
+}
+
+/**
+ * @brief 大整数截取高位 (从第 n 个 chunk 开始)
+ */
+std::vector<uint32_t> bigint_high(const std::vector<uint32_t>& v, std::size_t n) {
+    if (n >= v.size()) return {0};
+    return std::vector<uint32_t>(v.begin() + static_cast<std::ptrdiff_t>(n), v.end());
+}
+
+/**
+ * @brief 移除大整数前导零
+ */
+void trim_bigint(std::vector<uint32_t>& v) {
+    while (v.size() > 1 && v.back() == 0) v.pop_back();
+}
+
+std::vector<uint32_t> multiply_bigint_karatsuba(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
+    std::size_t n = std::max(lhs.size(), rhs.size());
+
+    // 基准情况：小规模使用朴素乘法
+    if (n <= KARATSUBA_THRESHOLD) {
+        return multiply_bigint_naive(lhs, rhs);
+    }
+
+    std::size_t m = n / 2;
+
+    // 分解: lhs = a1 * B^m + a0, rhs = b1 * B^m + b0
+    std::vector<uint32_t> a0 = bigint_low(lhs, m);
+    std::vector<uint32_t> a1 = bigint_high(lhs, m);
+    std::vector<uint32_t> b0 = bigint_low(rhs, m);
+    std::vector<uint32_t> b1 = bigint_high(rhs, m);
+
+    trim_bigint(a0);
+    trim_bigint(a1);
+    trim_bigint(b0);
+    trim_bigint(b1);
+
+    // 递归计算三个乘积
+    std::vector<uint32_t> z0 = multiply_bigint_karatsuba(a0, b0);  // a0 * b0
+    std::vector<uint32_t> z2 = multiply_bigint_karatsuba(a1, b1);  // a1 * b1
+
+    // z1 = (a0 + a1) * (b0 + b1) - z0 - z2
+    std::vector<uint32_t> a0_plus_a1 = add_bigint(a0, a1);
+    std::vector<uint32_t> b0_plus_b1 = add_bigint(b0, b1);
+    std::vector<uint32_t> z1_temp = multiply_bigint_karatsuba(a0_plus_a1, b0_plus_b1);
+    std::vector<uint32_t> z1 = subtract_bigint(subtract_bigint(z1_temp, z0), z2);
+
+    // 结果 = z2 * B^(2m) + z1 * B^m + z0
+    std::vector<uint32_t> result = add_bigint(
+        add_bigint(shift_bigint(z2, 2 * m), shift_bigint(z1, m)),
+        z0
+    );
+
+    trim_bigint(result);
+    return result;
+}
+
+/**
+ * @brief 大整数乘法 (自动选择最优算法)
+ */
+std::vector<uint32_t> multiply_bigint(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
+    // 零值快速返回
+    if ((lhs.size() == 1 && lhs[0] == 0) || (rhs.size() == 1 && rhs[0] == 0)) return {0};
+
+    std::size_t max_size = std::max(lhs.size(), rhs.size());
+    
+    // 小规模直接使用朴素乘法
+    if (max_size <= KARATSUBA_THRESHOLD) {
+        return multiply_bigint_naive(lhs, rhs);
+    }
+
+    // 中等规模使用 Karatsuba
+    if (max_size <= NTT_THRESHOLD) {
+        return multiply_bigint_karatsuba(lhs, rhs);
+    }
+
+    // 大规模使用 NTT
+    return multiply_bigint_ntt(lhs, rhs);
 }
 
 /**
@@ -161,7 +428,13 @@ std::vector<uint32_t> multiply_bigint_by_uint32(const std::vector<uint32_t>& v, 
     return res;
 }
 
-void div_bigint(const std::vector<uint32_t>& num, 
+/**
+ * @brief Knuth 算法 D：高效大整数除法
+ *
+ * 时间复杂度 O(n*m)，其中 n 是被除数位数，m 是除数位数
+ * 相比逐位试商的 O(n*m*10) 有显著提升
+ */
+void div_bigint(const std::vector<uint32_t>& num,
                 const std::vector<uint32_t>& den,
                 std::vector<uint32_t>* quotient,
                 std::vector<uint32_t>* remainder) {
@@ -169,39 +442,134 @@ void div_bigint(const std::vector<uint32_t>& num,
         throw std::runtime_error("division by zero in div_bigint");
     }
 
-    *remainder = {0};
-    quotient->clear();
-    
-    std::string num_s = bigint_to_string(num);
-    std::string den_s = bigint_to_string(den);
-    std::string q_s;
-    std::string rem_s = "0";
-
-    for (char d : num_s) {
-        if (rem_s == "0") rem_s = d;
-        else rem_s.push_back(d);
-        
-        std::size_t first = rem_s.find_first_not_of('0');
-        if (first == std::string::npos) rem_s = "0";
-        else if (first > 0) rem_s = rem_s.substr(first);
-
-        int q = 0;
-        if (rem_s.size() > den_s.size() || (rem_s.size() == den_s.size() && rem_s >= den_s)) {
-            for (int candidate = 9; candidate >= 1; --candidate) {
-                std::vector<uint32_t> p_bigint = multiply_bigint_by_uint32(den, static_cast<uint32_t>(candidate));
-                std::string p_s = bigint_to_string(p_bigint);
-                if (p_s.size() < rem_s.size() || (p_s.size() == rem_s.size() && p_s <= rem_s)) {
-                    q = candidate;
-                    std::vector<uint32_t> rem_bigint = subtract_bigint(string_to_bigint(rem_s), p_bigint);
-                    rem_s = bigint_to_string(rem_bigint);
-                    break;
-                }
-            }
-        }
-        q_s.push_back(static_cast<char>('0' + q));
+    // 处理被除数为零
+    if (num.empty() || (num.size() == 1 && num[0] == 0)) {
+        *quotient = {0};
+        *remainder = {0};
+        return;
     }
-    
-    *quotient = string_to_bigint(q_s);
+
+    // 确定实际长度（去除前导零）
+    std::size_t n = num.size();
+    while (n > 1 && num[n - 1] == 0) --n;
+    std::size_t m = den.size();
+    while (m > 1 && den[m - 1] == 0) --m;
+
+    // 除数大于被除数
+    if (m > n || (m == n && compare_bigint(
+            std::vector<uint32_t>(num.begin(), num.begin() + static_cast<std::ptrdiff_t>(n)),
+            std::vector<uint32_t>(den.begin(), den.begin() + static_cast<std::ptrdiff_t>(m))) < 0)) {
+        *quotient = {0};
+        *remainder = std::vector<uint32_t>(num.begin(), num.begin() + static_cast<std::ptrdiff_t>(n));
+        while (remainder->size() > 1 && remainder->back() == 0) remainder->pop_back();
+        return;
+    }
+
+    // 特殊情况：除数为单 chunk
+    if (m == 1) {
+        std::vector<uint32_t> q(n, 0);
+        uint64_t rem = 0;
+        uint32_t d = den[0];
+        for (int i = static_cast<int>(n) - 1; i >= 0; --i) {
+            uint64_t cur = rem * kBase + num[i];
+            q[i] = static_cast<uint32_t>(cur / d);
+            rem = cur % d;
+        }
+        while (q.size() > 1 && q.back() == 0) q.pop_back();
+        *quotient = std::move(q);
+        *remainder = {static_cast<uint32_t>(rem)};
+        return;
+    }
+
+    // Knuth 算法 D
+    // D1: 归一化 - 找到 d 使得 den[m-1] * d >= kBase/2
+    uint32_t d = 1;
+    uint64_t top_den = den[m - 1];
+    while (top_den < kBase / 2) {
+        top_den *= 2;
+        d *= 2;
+    }
+
+    // 归一化被除数和除数
+    std::vector<uint32_t> u(n + 1, 0);  // 被除数，多一位防止溢出
+    std::vector<uint32_t> v(m, 0);       // 除数
+
+    uint64_t carry = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        uint64_t cur = static_cast<uint64_t>(num[i]) * d + carry;
+        u[i] = static_cast<uint32_t>(cur % kBase);
+        carry = cur / kBase;
+    }
+    u[n] = static_cast<uint32_t>(carry);
+
+    carry = 0;
+    for (std::size_t i = 0; i < m; ++i) {
+        uint64_t cur = static_cast<uint64_t>(den[i]) * d + carry;
+        v[i] = static_cast<uint32_t>(cur % kBase);
+        carry = cur / kBase;
+    }
+
+    // D2-D7: 主循环
+    std::vector<uint32_t> q(n - m + 1, 0);
+
+    for (int j = static_cast<int>(n - m); j >= 0; --j) {
+        // D3: 计算试商 q_hat
+        uint64_t numerator_val = static_cast<uint64_t>(u[j + m]) * kBase + u[j + m - 1];
+        uint64_t q_hat = numerator_val / v[m - 1];
+        uint64_t r_hat = numerator_val % v[m - 1];
+
+        // 修正 q_hat
+        while (q_hat >= kBase ||
+               (q_hat * v[m - 2] > r_hat * kBase + (j + static_cast<int>(m) - 2 >= 0 ? u[j + m - 2] : 0))) {
+            --q_hat;
+            r_hat += v[m - 1];
+            if (r_hat >= kBase) break;
+        }
+
+        // D4: 乘法并减法
+        int64_t borrow = 0;
+        for (std::size_t i = 0; i < m; ++i) {
+            uint64_t product = q_hat * v[i];
+            int64_t diff = static_cast<int64_t>(u[j + i]) - static_cast<int64_t>(product % kBase) - borrow;
+            borrow = static_cast<int64_t>(product / kBase);
+            if (diff < 0) {
+                diff += kBase;
+                ++borrow;
+            }
+            u[j + i] = static_cast<uint32_t>(diff);
+        }
+        int64_t diff = static_cast<int64_t>(u[j + m]) - borrow;
+        u[j + m] = static_cast<uint32_t>(diff);
+
+        // D5: 测试余数
+        q[j] = static_cast<uint32_t>(q_hat);
+        if (diff < 0) {
+            // D6: 加回
+            --q[j];
+            uint64_t c = 0;
+            for (std::size_t i = 0; i < m; ++i) {
+                uint64_t sum = static_cast<uint64_t>(u[j + i]) + v[i] + c;
+                u[j + i] = static_cast<uint32_t>(sum % kBase);
+                c = sum / kBase;
+            }
+            u[j + m] += static_cast<uint32_t>(c);
+        }
+    }
+
+    // D8: 反归一化得到余数
+    while (q.size() > 1 && q.back() == 0) q.pop_back();
+    *quotient = std::move(q);
+
+    // 计算余数
+    std::vector<uint32_t> rem(m, 0);
+    uint64_t r = 0;
+    for (int i = static_cast<int>(m) - 1; i >= 0; --i) {
+        uint64_t cur = r * kBase + u[i];
+        rem[i] = static_cast<uint32_t>(cur / d);
+        r = cur % d;
+    }
+    while (rem.size() > 1 && rem.back() == 0) rem.pop_back();
+    *remainder = std::move(rem);
 }
 
 /**
@@ -240,14 +608,41 @@ void align_precise_scales(PreciseDecimal* lhs, PreciseDecimal* rhs) {
     }
 }
 
+PreciseDecimal one() { return PreciseDecimal(1LL); }
+PreciseDecimal two() { return PreciseDecimal(2LL); }
+PreciseDecimal half() { return PreciseDecimal("0.5"); }
+
+PreciseDecimal decimal_from_uint(uint32_t value) {
+    return PreciseDecimal(static_cast<long long>(value));
+}
+
+PreciseDecimal scale_epsilon(int extra_digits) {
+    return PreciseDecimal("1e-" + std::to_string(PrecisionContext::get_default_scale() + extra_digits));
+}
+
+int series_iteration_limit(int minimum) {
+    return std::max(minimum, PrecisionContext::get_default_scale() * 2 + 20);
+}
+
+PreciseDecimal reduce_mod_positive(const PreciseDecimal& value, const PreciseDecimal& modulus) {
+    PreciseDecimal q = precise::floor(value / modulus);
+    PreciseDecimal r = value - q * modulus;
+    if (r < PreciseDecimal(0LL)) r += modulus;
+    return r;
+}
+
+PreciseDecimal reduce_trig_argument(const PreciseDecimal& x) {
+    const PreciseDecimal p = precise::pi();
+    const PreciseDecimal two_pi = p * two();
+    PreciseDecimal r = reduce_mod_positive(x, two_pi);
+    if (r > p) r -= two_pi;
+    return r;
+}
+
 } // namespace
 
 int PrecisionContext::get_default_scale() { return g_default_scale; }
 void PrecisionContext::set_default_scale(int s) { g_default_scale = s; }
-
-// ============================================================================
-// PreciseDecimal 方法实现
-// ============================================================================
 
 // ============================================================================
 // PreciseDecimal 方法实现
@@ -274,17 +669,17 @@ void PreciseDecimal::normalize() {
         negative = false;
         return;
     }
-    
+
     // 去除末尾的零（缩减 scale）
     while (scale > 0 && !is_zero()) {
         // 检查最后一个 chunk 是否被 10 整除
         if (data[0] % 10 == 0) {
             // 对所有 chunks 进行除以 10 的操作
-            uint32_t remainder = 0;
+            uint32_t rem = 0;
             for (int i = static_cast<int>(data.size()) - 1; i >= 0; --i) {
-                uint64_t current = data[i] + static_cast<uint64_t>(remainder) * kBase;
+                uint64_t current = data[i] + static_cast<uint64_t>(rem) * kBase;
                 data[i] = static_cast<uint32_t>(current / 10);
-                remainder = static_cast<uint32_t>(current % 10);
+                rem = static_cast<uint32_t>(current % 10);
             }
             scale--;
             // 如果最高位变 0，移除它
@@ -348,6 +743,15 @@ std::string PreciseDecimal::to_string() const {
     if (scale <= 0) {
         res += s;
         if (scale < 0) res.append(static_cast<std::size_t>(-scale), '0');
+        // 限制最多输出50位
+        if (res.size() > 50) {
+            bool is_neg = !res.empty() && res[0] == '-';
+            if (is_neg) {
+                res = res.substr(0, 51);  // 负号 + 50位数字
+            } else {
+                res = res.substr(0, 50);
+            }
+        }
         return res;
     }
 
@@ -361,23 +765,62 @@ std::string PreciseDecimal::to_string() const {
         res.push_back('.');
         res += s.substr(dot_pos);
     }
+
+    // 限制最多输出50位（不含小数点和负号）
+    std::size_t sign_len = (negative ? 1 : 0);
+    std::size_t dot_pos = res.find('.');
+    if (dot_pos != std::string::npos) {
+        // 小数形式：统计整数部分和小数部分的数字总数
+        std::size_t int_digits = dot_pos - sign_len;
+        std::size_t frac_digits = res.size() - dot_pos - 1;
+        std::size_t total_digits = int_digits + frac_digits;
+        if (total_digits > 50) {
+            // 保留前50位数字
+            std::size_t keep_frac = 50 - int_digits;
+            if (keep_frac > 0) {
+                res = res.substr(0, dot_pos + 1 + keep_frac);
+            } else {
+                // 整数部分已经超过50位，截断整数部分
+                res = res.substr(0, sign_len + 50);
+            }
+        }
+    } else {
+        // 整数形式
+        if (res.size() - sign_len > 50) {
+            res = res.substr(0, sign_len + 50);
+        }
+    }
+
     return res;
 }
 
 double PreciseDecimal::to_double() const {
     if (is_zero()) return 0.0;
-    
+
+    // 找出第一个非零 chunk 的索引
+    int start_chunk = static_cast<int>(data.size()) - 1;
+    while (start_chunk >= 0 && data[start_chunk] == 0) start_chunk--;
+
+    if (start_chunk < 0) return 0.0;
+
+    // 只取最高位的 3 个 chunk (约 27 位十进制)，足以填满 double 的 53 位精度
     long double res = 0;
-    long double p = 1.0L;
-    for (uint32_t x : data) {
-        res += static_cast<long double>(x) * p;
-        p *= static_cast<long double>(kBase);
+    int end_chunk = std::max(0, start_chunk - 2);
+    for (int i = start_chunk; i >= end_chunk; --i) {
+        res = res * static_cast<long double>(kBase) + static_cast<long double>(data[i]);
     }
 
-    if (scale > 0) {
-        res /= mymath::pow(10.0L, static_cast<long double>(scale));
-    } else if (scale < 0) {
-        res *= mymath::pow(10.0L, static_cast<long double>(-scale));
+    // 计算指数偏移: (start_chunk - (start_chunk - end_chunk)) * 9 - scale
+    // 实际应该是: start_chunk * 9 + (data[start_chunk]的位数) - scale
+    // 这里简单处理：res 对应的是 10^(end_chunk * 9) 的量级
+    long double exponent = static_cast<long double>(end_chunk) * 9.0L - static_cast<long double>(scale);
+
+    if (exponent != 0.0L) {
+        res *= mymath::pow(10.0L, exponent);
+    }
+
+    if (!mymath::isfinite(static_cast<double>(res))) {
+        return negative ? -mymath::infinity() : mymath::infinity();
     }
 
     return static_cast<double>(negative ? -res : res);
@@ -397,17 +840,31 @@ PreciseDecimal PreciseDecimal::from_integer_string(const std::string& integer_te
 }
 
 PreciseDecimal PreciseDecimal::from_decimal_literal(const std::string& token) {
-    std::string significand = token;
+    std::string text;
+    text.reserve(token.size());
+    for (char ch : token) {
+        if (!std::isspace(static_cast<unsigned char>(ch))) text.push_back(ch);
+    }
+    if (text.empty()) return {};
+
+    bool is_negative = false;
+    if (text.front() == '+' || text.front() == '-') {
+        is_negative = text.front() == '-';
+        text.erase(text.begin());
+    }
+    if (text.empty()) return {};
+
+    std::string significand = text;
     int exponent_adjust = 0;
-    const std::size_t exponent_pos = token.find_first_of("eE");
+    const std::size_t exponent_pos = text.find_first_of("eE");
     if (exponent_pos != std::string::npos) {
-        significand = token.substr(0, exponent_pos);
-        exponent_adjust = std::stoi(token.substr(exponent_pos + 1));
+        significand = text.substr(0, exponent_pos);
+        exponent_adjust = std::stoi(text.substr(exponent_pos + 1));
     }
 
     const std::size_t dot_pos = significand.find('.');
     if (dot_pos == std::string::npos) {
-        return from_digits(significand, -exponent_adjust, false);
+        return from_digits(significand, -exponent_adjust, is_negative);
     }
 
     std::string digits_only = significand.substr(0, dot_pos);
@@ -415,7 +872,7 @@ PreciseDecimal PreciseDecimal::from_decimal_literal(const std::string& token) {
     return from_digits(
         digits_only,
         static_cast<int>(significand.size() - dot_pos - 1) - exponent_adjust,
-        false);
+        is_negative);
 }
 
 // ============================================================================
@@ -438,6 +895,19 @@ PreciseDecimal operator/(PreciseDecimal lhs, const PreciseDecimal& rhs) { lhs /=
 PreciseDecimal operator/(PreciseDecimal lhs, double rhs) { lhs /= PreciseDecimal(rhs); return lhs; }
 PreciseDecimal operator/(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) / rhs; }
 
+bool operator==(const PreciseDecimal& lhs, double rhs) { return lhs == PreciseDecimal(rhs); }
+bool operator==(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) == rhs; }
+bool operator!=(const PreciseDecimal& lhs, double rhs) { return !(lhs == rhs); }
+bool operator!=(double lhs, const PreciseDecimal& rhs) { return !(lhs == rhs); }
+bool operator<(const PreciseDecimal& lhs, double rhs) { return lhs < PreciseDecimal(rhs); }
+bool operator<(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) < rhs; }
+bool operator>(const PreciseDecimal& lhs, double rhs) { return lhs > PreciseDecimal(rhs); }
+bool operator>(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) > rhs; }
+bool operator<=(const PreciseDecimal& lhs, double rhs) { return lhs <= PreciseDecimal(rhs); }
+bool operator<=(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) <= rhs; }
+bool operator>=(const PreciseDecimal& lhs, double rhs) { return lhs >= PreciseDecimal(rhs); }
+bool operator>=(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) >= rhs; }
+
 namespace precise {
 
 PreciseDecimal abs(const PreciseDecimal& val) {
@@ -453,17 +923,238 @@ PreciseDecimal sqrt(const PreciseDecimal& val) {
     // Newton 迭代: x_{n+1} = 0.5 * (x_n + val / x_n)
     // 初始猜测使用 double 版 sqrt
     PreciseDecimal x(mymath::sqrt(val.to_double()));
-    const PreciseDecimal half(0.5);
-    
-    // 迭代 8 次通常足以达到 40+ 位精度 (Newton 迭代是二阶收敛)
-    for (int i = 0; i < 8; ++i) {
-        x = half * (x + val / x);
+    const PreciseDecimal one_half = half();
+
+    const int iterations = std::max(12, PrecisionContext::get_default_scale() / 8 + 8);
+    for (int i = 0; i < iterations; ++i) {
+        x = one_half * (x + val / x);
     }
     return x;
 }
 
 PreciseDecimal pow(const PreciseDecimal& base, long long exp) {
     return pow_precise_decimal(base, exp);
+}
+
+PreciseDecimal pow(const PreciseDecimal& base, const PreciseDecimal& exp) {
+    if (exp.is_zero()) return one();
+    if (base.is_zero()) {
+        if (exp.negative) throw std::domain_error("0^negative is undefined");
+        return PreciseDecimal(0LL);
+    }
+    if (base == one()) return one();
+    if (base.negative) {
+        // 对于负数底数，只有整数指数才有意义
+        if (exp.scale == 0) {
+            return pow(base, static_cast<long long>(exp.to_double()));
+        }
+        throw std::domain_error("negative base with non-integer exponent");
+    }
+    // 使用 exp(ln(base) * exp) 计算
+    return precise::exp(precise::ln(base) * exp);
+}
+
+PreciseDecimal floor(const PreciseDecimal& val) {
+    if (val.scale <= 0) return val;
+    std::string s = bigint_to_string(val.data);
+    if (static_cast<int>(s.size()) <= val.scale) {
+        return val.negative ? PreciseDecimal(-1LL) : PreciseDecimal(0LL);
+    }
+    std::string integer_part = s.substr(0, s.size() - static_cast<std::size_t>(val.scale));
+    PreciseDecimal res = PreciseDecimal::from_integer_string(integer_part, val.negative);
+    if (val.negative) res -= PreciseDecimal(1LL);
+    return res;
+}
+
+PreciseDecimal ceil(const PreciseDecimal& val) {
+    if (val.scale <= 0) return val;
+    PreciseDecimal f = floor(val);
+    if (f == val) return val;
+    return f + PreciseDecimal(1LL);
+}
+
+PreciseDecimal round(const PreciseDecimal& val) {
+    if (val.negative) return precise::ceil(val - half());
+    return precise::floor(val + half());
+}
+
+PreciseDecimal pi() {
+    return PreciseDecimal(
+        "3.141592653589793238462643383279502884197169399375105820974944592307816406286"
+        "208998628034825342117067982148086513282306647093844609550582231725359408128481"
+        "117450284102701938521105559644622948954930381964428810975665933446128475648233");
+}
+
+PreciseDecimal e() {
+    return PreciseDecimal(
+        "2.718281828459045235360287471352662497757247093699959574966967627724076630353"
+        "547594571382178525166427427466391932003059921817413596629043572900334295260595"
+        "630738132328627943490763233829880753195251019011573834187930702154089149934884");
+}
+
+PreciseDecimal exp(const PreciseDecimal& x) {
+    if (x.is_zero()) return one();
+    if (x.negative) return one() / exp(precise::abs(x));
+    int k = 0;
+    PreciseDecimal r = x;
+    const PreciseDecimal threshold("0.01");
+    while (r > threshold) {
+        r /= two();
+        k++;
+    }
+    PreciseDecimal term = one();
+    PreciseDecimal sum = one();
+    const PreciseDecimal epsilon = scale_epsilon();
+    const int limit = series_iteration_limit(80);
+    for (int i = 1; i < limit; ++i) {
+        term = term * r / decimal_from_uint(static_cast<uint32_t>(i));
+        sum += term;
+        if (precise::abs(term) < epsilon) break;
+    }
+    for (int i = 0; i < k; ++i) sum = sum * sum;
+    return sum;
+}
+
+PreciseDecimal ln(const PreciseDecimal& x) {
+    if (x <= PreciseDecimal(0LL)) throw std::domain_error("ln of non-positive number");
+    if (x == one()) return PreciseDecimal(0LL);
+
+    // 对于接近 1 的值，使用专门的 Taylor 级数展开
+    // ln(1 + ε) = ε - ε²/2 + ε³/3 - ε⁴/4 + ...
+    // 当 ε 很小时，这个级数收敛很快
+    PreciseDecimal diff = x - one();
+    int scale = PrecisionContext::get_default_scale();
+
+    // 如果 |x - 1| < 1e-10，使用 Taylor 级数直接计算
+    if (precise::abs(diff) < PreciseDecimal("1e-10")) {
+        PreciseDecimal term = diff;
+        PreciseDecimal sum = diff;
+        PreciseDecimal diff2 = diff * diff;
+        const PreciseDecimal epsilon = scale_epsilon();
+        const int limit = series_iteration_limit(100);
+
+        for (int i = 2; i < limit; ++i) {
+            term = -term * diff / decimal_from_uint(static_cast<uint32_t>(i));
+            sum += term;
+            if (precise::abs(term) < epsilon) break;
+        }
+        return sum;
+    }
+
+    // 对于其他值，使用 Newton 迭代
+    PreciseDecimal y(mymath::ln(x.to_double()));
+    const int iterations = std::max(12, scale / 8 + 8);
+    for (int i = 0; i < iterations; ++i) y = y + x / exp(y) - one();
+    return y;
+}
+
+PreciseDecimal log10(const PreciseDecimal& x) {
+    static const PreciseDecimal ln10 = ln(PreciseDecimal(10LL));
+    return ln(x) / ln10;
+}
+
+PreciseDecimal sin(const PreciseDecimal& x) {
+    if (x.is_zero()) return PreciseDecimal(0LL);
+    PreciseDecimal r = reduce_trig_argument(x);
+
+    PreciseDecimal term = r;
+    PreciseDecimal sum = r;
+    PreciseDecimal r2 = r * r;
+    const PreciseDecimal epsilon = scale_epsilon();
+    const int limit = series_iteration_limit(80);
+    for (int i = 1; i < limit; ++i) {
+        term = -term * r2 / decimal_from_uint(static_cast<uint32_t>((2 * i) * (2 * i + 1)));
+        sum += term;
+        if (precise::abs(term) < epsilon) break;
+    }
+    return sum;
+}
+
+PreciseDecimal cos(const PreciseDecimal& x) {
+    if (x.is_zero()) return one();
+    PreciseDecimal r = reduce_trig_argument(x);
+
+    PreciseDecimal term = one();
+    PreciseDecimal sum = one();
+    PreciseDecimal r2 = r * r;
+    const PreciseDecimal epsilon = scale_epsilon();
+    const int limit = series_iteration_limit(80);
+    for (int i = 1; i < limit; ++i) {
+        term = -term * r2 / decimal_from_uint(static_cast<uint32_t>((2 * i - 1) * (2 * i)));
+        sum += term;
+        if (precise::abs(term) < epsilon) break;
+    }
+    return sum;
+}
+
+PreciseDecimal tan(const PreciseDecimal& x) {
+    // 检查是否接近 pi/2 + k*pi
+    // 使用较宽松的容差 (1e-12) 以捕捉从 double 转换来的近似 pi/2
+    PreciseDecimal p = pi();
+    PreciseDecimal half_p = p / two();
+    PreciseDecimal r = x - precise::floor(x / p) * p; // mod pi
+    if (precise::abs(r - half_p) < PreciseDecimal("1e-12")) {
+        throw std::domain_error("tan undefined near singularity");
+    }
+    PreciseDecimal s = sin(x);
+    PreciseDecimal c = cos(x);
+    if (c.is_zero()) throw std::domain_error("tan undefined (cos is zero)");
+    return s / c;
+}
+
+PreciseDecimal asin(const PreciseDecimal& x) {
+    if (precise::abs(x) > one()) throw std::domain_error("asin out of range");
+    if (x == one()) return pi() / two();
+    if (x == -one()) return -pi() / two();
+    return atan(x / precise::sqrt(one() - x * x));
+}
+
+PreciseDecimal acos(const PreciseDecimal& x) {
+    return pi() / two() - asin(x);
+}
+
+PreciseDecimal atan(const PreciseDecimal& x) {
+    if (precise::abs(x) > one()) {
+        if (x.negative) return -pi() / two() - atan(one() / x);
+        return pi() / two() - atan(one() / x);
+    }
+    PreciseDecimal y(mymath::atan(x.to_double()));
+    const int iterations = std::max(12, PrecisionContext::get_default_scale() / 8 + 8);
+    for (int i = 0; i < iterations; ++i) {
+        PreciseDecimal ty = tan(y);
+        y = y - (ty - x) / (one() + ty * ty);
+    }
+    return y;
+}
+
+PreciseDecimal sinh(const PreciseDecimal& x) {
+    PreciseDecimal ex = exp(x);
+    return (ex - one() / ex) / two();
+}
+
+PreciseDecimal cosh(const PreciseDecimal& x) {
+    PreciseDecimal ex = exp(x);
+    return (ex + one() / ex) / two();
+}
+
+PreciseDecimal tanh(const PreciseDecimal& x) {
+    PreciseDecimal ex = exp(x);
+    PreciseDecimal einv = one() / ex;
+    return (ex - einv) / (ex + einv);
+}
+
+PreciseDecimal asinh(const PreciseDecimal& x) {
+    return ln(x + precise::sqrt(x * x + one()));
+}
+
+PreciseDecimal acosh(const PreciseDecimal& x) {
+    if (x < one()) throw std::domain_error("acosh out of range");
+    return ln(x + precise::sqrt(x * x - one()));
+}
+
+PreciseDecimal atanh(const PreciseDecimal& x) {
+    if (precise::abs(x) >= one()) throw std::domain_error("atanh out of range");
+    return ln((one() + x) / (one() - x)) / two();
 }
 
 } // namespace precise
@@ -478,7 +1169,7 @@ PreciseDecimal add_precise_decimal(const PreciseDecimal& lhs, const PreciseDecim
     PreciseDecimal l = lhs;
     PreciseDecimal r = rhs;
     align_precise_scales(&l, &r);
-    
+
     PreciseDecimal res;
     res.data = add_bigint(l.data, r.data);
     res.scale = l.scale;
@@ -528,15 +1219,24 @@ PreciseDecimal divide_precise_decimal(const PreciseDecimal& lhs, const PreciseDe
     if (lhs.is_zero()) return {};
 
     int target_scale = PrecisionContext::get_default_scale();
-    std::vector<uint32_t> numerator = multiply_bigint_by_power_of_10(lhs.data, target_scale);
+    int numerator_shift = target_scale + rhs.scale - lhs.scale;
+    std::vector<uint32_t> numerator = lhs.data;
+    if (numerator_shift >= 0) {
+        numerator = multiply_bigint_by_power_of_10(numerator, numerator_shift);
+    } else {
+        std::vector<uint32_t> divisor = multiply_bigint_by_power_of_10({1}, -numerator_shift);
+        std::vector<uint32_t> truncated, ignored_remainder;
+        div_bigint(numerator, divisor, &truncated, &ignored_remainder);
+        numerator = truncated;
+    }
     std::vector<uint32_t> denominator = rhs.data;
-    
+
     std::vector<uint32_t> q, r;
     div_bigint(numerator, denominator, &q, &r);
 
     PreciseDecimal res;
     res.data = q;
-    res.scale = lhs.scale + target_scale - rhs.scale;
+    res.scale = target_scale;
     res.negative = lhs.negative != rhs.negative;
     res.normalize();
     return res;
@@ -557,13 +1257,35 @@ int compare_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs
 PreciseDecimal pow_precise_decimal(const PreciseDecimal& base, long long exponent) {
     if (exponent < 0) throw PreciseDecimalUnsupported("negative exponent not supported for precise decimal");
     if (exponent == 0) return PreciseDecimal::from_integer_string("1", false);
+    if (exponent == 1) return base;
 
+    // 特殊情况优化
+    if (base.is_zero()) return PreciseDecimal(0LL);
+    if (base == one()) return one();
+    if (base == two()) {
+        // 2^n 可以通过位移快速计算
+        std::vector<uint32_t> result = {1};
+        for (long long i = 0; i < exponent; ++i) {
+            result = multiply_bigint_by_uint32(result, 2);
+        }
+        PreciseDecimal res;
+        res.data = result;
+        res.scale = 0;
+        res.negative = false;
+        return res;
+    }
+
+    // 快速幂算法 (二分幂)
     PreciseDecimal res = PreciseDecimal::from_integer_string("1", false);
     PreciseDecimal b = base;
-    while (exponent > 0) {
-        if (exponent % 2 == 1) res = multiply_precise_decimal(res, b);
+    long long exp = exponent;
+
+    while (exp > 0) {
+        if (exp & 1) {
+            res = multiply_precise_decimal(res, b);
+        }
         b = multiply_precise_decimal(b, b);
-        exponent /= 2;
+        exp >>= 1;
     }
     return res;
 }

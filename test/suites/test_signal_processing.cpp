@@ -26,8 +26,6 @@ constexpr double kEps = 1e-10;
 // ============================================================================
 
 static void test_fft_radix2(int& passed, int& failed) {
-    std::cout << "  Testing FFT radix-2..." << std::endl;
-
     // 测试简单信号
     std::vector<signal::Complex> sig = {1.0, 0.0, 0.0, 0.0};
     std::vector<signal::Complex> spectrum = signal::fft_radix2(sig);
@@ -52,8 +50,6 @@ static void test_fft_radix2(int& passed, int& failed) {
 }
 
 static void test_fft_ifft_roundtrip(int& passed, int& failed) {
-    std::cout << "  Testing FFT/IFFT roundtrip..." << std::endl;
-
     std::vector<signal::Complex> original = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
 
     std::vector<signal::Complex> spectrum = signal::fft(original);
@@ -79,8 +75,6 @@ static void test_fft_ifft_roundtrip(int& passed, int& failed) {
 }
 
 static void test_fft_non_power_of_two(int& passed, int& failed) {
-    std::cout << "  Testing FFT non-power-of-two..." << std::endl;
-
     std::vector<signal::Complex> sig = {1.0, 2.0, 3.0, 4.0, 5.0};
 
     std::vector<signal::Complex> spectrum = signal::fft(sig);
@@ -105,8 +99,6 @@ static void test_fft_non_power_of_two(int& passed, int& failed) {
 }
 
 static void test_rfft(int& passed, int& failed) {
-    std::cout << "  Testing RFFT..." << std::endl;
-
     std::vector<double> sig = {1.0, 1.0, 0.0, 0.0};
 
     std::vector<signal::Complex> spectrum = signal::rfft(sig);
@@ -125,8 +117,6 @@ static void test_rfft(int& passed, int& failed) {
 }
 
 static void test_fftshift(int& passed, int& failed) {
-    std::cout << "  Testing FFT shift..." << std::endl;
-
     std::vector<signal::Complex> spectrum = {1.0, 2.0, 3.0, 4.0};
 
     std::vector<signal::Complex> shifted = signal::fftshift(spectrum);
@@ -162,8 +152,6 @@ static void test_fftshift(int& passed, int& failed) {
 // ============================================================================
 
 static void test_convolve(int& passed, int& failed) {
-    std::cout << "  Testing convolution..." << std::endl;
-
     std::vector<double> signal1 = {1.0, 2.0, 3.0};
     std::vector<double> signal2 = {1.0, 1.0};
 
@@ -186,8 +174,6 @@ static void test_convolve(int& passed, int& failed) {
 }
 
 static void test_circular_convolve(int& passed, int& failed) {
-    std::cout << "  Testing circular convolution..." << std::endl;
-
     std::vector<double> signal1 = {1.0, 2.0, 3.0};
     std::vector<double> signal2 = {1.0, 1.0, 0.0};
 
@@ -204,8 +190,6 @@ static void test_circular_convolve(int& passed, int& failed) {
 }
 
 static void test_xcorr(int& passed, int& failed) {
-    std::cout << "  Testing cross-correlation..." << std::endl;
-
     std::vector<double> signal1 = {1.0, 2.0, 3.0};
     std::vector<double> signal2 = {1.0, 2.0};
 
@@ -222,8 +206,6 @@ static void test_xcorr(int& passed, int& failed) {
 }
 
 static void test_autocorr(int& passed, int& failed) {
-    std::cout << "  Testing auto-correlation..." << std::endl;
-
     std::vector<double> sig = {1.0, 2.0, 3.0};
 
     std::vector<double> result = signal::autocorr(sig);
@@ -249,8 +231,6 @@ static void test_autocorr(int& passed, int& failed) {
 // ============================================================================
 
 static void test_hanning_window(int& passed, int& failed) {
-    std::cout << "  Testing Hanning window..." << std::endl;
-
     std::vector<double> win = signal::hanning_window(8);
 
     bool ok = (win.size() == 8u);
@@ -273,8 +253,6 @@ static void test_hanning_window(int& passed, int& failed) {
 }
 
 static void test_hamming_window(int& passed, int& failed) {
-    std::cout << "  Testing Hamming window..." << std::endl;
-
     std::vector<double> win = signal::hamming_window(8);
 
     bool ok = (win.size() == 8u);
@@ -301,8 +279,6 @@ static void test_hamming_window(int& passed, int& failed) {
 }
 
 static void test_kaiser_window(int& passed, int& failed) {
-    std::cout << "  Testing Kaiser window..." << std::endl;
-
     std::vector<double> win = signal::kaiser_window(16, 5.0);
 
     bool ok = (win.size() == 16u);
@@ -325,8 +301,6 @@ static void test_kaiser_window(int& passed, int& failed) {
 }
 
 static void test_window_function(int& passed, int& failed) {
-    std::cout << "  Testing generic window function..." << std::endl;
-
     std::vector<double> hann = signal::window(signal::WindowType::Hanning, 8);
     std::vector<double> rect = signal::window(signal::WindowType::Rectangular, 8);
 
@@ -354,8 +328,6 @@ static void test_window_function(int& passed, int& failed) {
 // ============================================================================
 
 static void test_fir_lowpass(int& passed, int& failed) {
-    std::cout << "  Testing FIR lowpass filter design..." << std::endl;
-
     signal::FilterCoefficients fir = signal::design_fir(16, 0.2, signal::FilterType::LowPass);
 
     bool ok = !fir.b.empty() && fir.a.size() == 1u;
@@ -382,8 +354,6 @@ static void test_fir_lowpass(int& passed, int& failed) {
 }
 
 static void test_filter_application(int& passed, int& failed) {
-    std::cout << "  Testing filter application..." << std::endl;
-
     std::vector<double> b = {0.5, 0.5};
     std::vector<double> a = {1.0};
     std::vector<double> sig = {1.0, 2.0, 3.0, 4.0, 5.0};
@@ -406,8 +376,6 @@ static void test_filter_application(int& passed, int& failed) {
 }
 
 static void test_freqz(int& passed, int& failed) {
-    std::cout << "  Testing frequency response..." << std::endl;
-
     std::vector<double> b = {1.0, 0.0};
     std::vector<double> a = {1.0, -0.5};
 
@@ -432,8 +400,6 @@ static void test_freqz(int& passed, int& failed) {
 // ============================================================================
 
 static void test_periodogram(int& passed, int& failed) {
-    std::cout << "  Testing periodogram..." << std::endl;
-
     std::vector<double> sig(64);
     for (std::size_t i = 0; i < sig.size(); ++i) {
         sig[i] = mymath::sin(2.0 * mymath::kPi * 8.0 * static_cast<double>(i) / 64.0);
@@ -465,8 +431,6 @@ static void test_periodogram(int& passed, int& failed) {
 }
 
 static void test_pwelch(int& passed, int& failed) {
-    std::cout << "  Testing Welch PSD..." << std::endl;
-
     std::vector<double> sig(256);
     for (std::size_t i = 0; i < sig.size(); ++i) {
         sig[i] = mymath::sin(2.0 * mymath::kPi * 32.0 * static_cast<double>(i) / 256.0);
@@ -485,8 +449,6 @@ static void test_pwelch(int& passed, int& failed) {
 }
 
 static void test_stft(int& passed, int& failed) {
-    std::cout << "  Testing STFT..." << std::endl;
-
     std::vector<double> sig(128);
     for (std::size_t i = 0; i < sig.size(); ++i) {
         sig[i] = mymath::sin(2.0 * mymath::kPi * 16.0 * static_cast<double>(i) / 128.0);
@@ -507,8 +469,6 @@ static void test_stft(int& passed, int& failed) {
 }
 
 static void test_spectrogram(int& passed, int& failed) {
-    std::cout << "  Testing spectrogram..." << std::endl;
-
     std::vector<double> sig(128);
     for (std::size_t i = 0; i < sig.size(); ++i) {
         sig[i] = mymath::sin(2.0 * mymath::kPi * 16.0 * static_cast<double>(i) / 128.0);
@@ -531,8 +491,6 @@ static void test_spectrogram(int& passed, int& failed) {
 // ============================================================================
 
 static void test_is_power_of_two(int& passed, int& failed) {
-    std::cout << "  Testing is_power_of_two..." << std::endl;
-
     bool ok = signal::is_power_of_two(1) &&
               signal::is_power_of_two(2) &&
               signal::is_power_of_two(4) &&
@@ -553,8 +511,6 @@ static void test_is_power_of_two(int& passed, int& failed) {
 }
 
 static void test_next_power_of_two(int& passed, int& failed) {
-    std::cout << "  Testing next_power_of_two..." << std::endl;
-
     bool ok = signal::next_power_of_two(0) == 1u &&
               signal::next_power_of_two(1) == 1u &&
               signal::next_power_of_two(2) == 2u &&
@@ -571,8 +527,6 @@ static void test_next_power_of_two(int& passed, int& failed) {
 }
 
 static void test_gcd_lcm(int& passed, int& failed) {
-    std::cout << "  Testing GCD and LCM..." << std::endl;
-
     bool ok = signal::gcd(12, 8) == 4u &&
               signal::gcd(17, 13) == 1u &&
               signal::lcm(12, 8) == 24u &&
@@ -587,8 +541,6 @@ static void test_gcd_lcm(int& passed, int& failed) {
 }
 
 static void test_window_type_conversion(int& passed, int& failed) {
-    std::cout << "  Testing window type conversion..." << std::endl;
-
     bool ok = signal::window_type_to_string(signal::WindowType::Hanning) == "hanning" &&
               signal::window_type_to_string(signal::WindowType::Hamming) == "hamming" &&
               signal::window_type_to_string(signal::WindowType::Kaiser) == "kaiser" &&
@@ -605,8 +557,6 @@ static void test_window_type_conversion(int& passed, int& failed) {
 }
 
 static void test_filter_type_conversion(int& passed, int& failed) {
-    std::cout << "  Testing filter type conversion..." << std::endl;
-
     bool ok = signal::filter_type_to_string(signal::FilterType::LowPass) == "lowpass" &&
               signal::filter_type_to_string(signal::FilterType::HighPass) == "highpass" &&
               signal::filter_type_to_string(signal::FilterType::BandPass) == "bandpass" &&
@@ -627,8 +577,6 @@ static void test_filter_type_conversion(int& passed, int& failed) {
 // ============================================================================
 
 int run_signal_processing_tests(int& passed, int& failed) {
-    std::cout << "Running Signal Processing Tests..." << std::endl;
-
     // FFT 测试
     test_fft_radix2(passed, failed);
     test_fft_ifft_roundtrip(passed, failed);

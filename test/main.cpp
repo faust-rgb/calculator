@@ -17,6 +17,7 @@
 #include "suites/test_io.h"
 #include "suites/test_script_features.h"
 #include "suites/test_risch_advanced.h"
+#include "suites/test_precise_deep.h"
 #include <iostream>
 
 /**
@@ -47,7 +48,7 @@ int main() {
     test_suites::run_symbolic_tests(total_passed, total_failed);
 
     // 运行 Risch 算法测试
-    std::cout << "Running Risch Algorithm Tests..." << std::endl;
+    //std::cout << "Running Risch Algorithm Tests..." << std::endl;
     test_suites::test_risch();
     test_suites::run_risch_advanced_tests();
     total_passed++; 
@@ -79,6 +80,10 @@ int main() {
     // 运行脚本功能测试：测试 match-case、for-in、列表/字典操作
     std::cout << "Running Script Feature Tests..." << std::endl;
     run_script_feature_tests(total_passed, total_failed);
+
+    // 运行深度高精度测试
+    std::cout << "Running Deep High-Precision Tests..." << std::endl;
+    test_suites::run_precise_deep_tests(total_passed, total_failed);
 
     // 输出测试汇总结果
     std::cout << "\nTest Summary:" << std::endl;

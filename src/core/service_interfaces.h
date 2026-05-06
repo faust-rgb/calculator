@@ -10,7 +10,8 @@
 #include <map>
 
 // Forward declarations
-class FunctionAnalysis;
+template <typename T> class TFunctionAnalysis;
+using FunctionAnalysis = TFunctionAnalysis<double>;
 
 /**
  * @struct IEvaluationService

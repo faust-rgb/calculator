@@ -48,7 +48,7 @@ public:
      * @throw std::runtime_error 当参数无效时抛出
      */
     double integrate(const std::vector<BoundFunc>& bounds,
-                     const std::vector<int>& subdivisions) const;
+                const std::vector<int>& subdivisions) const;
 
     /**
      * @brief 自适应计算多重积分
@@ -59,8 +59,8 @@ public:
      * @return 积分值
      */
     double integrate_adaptive(const std::vector<BoundFunc>& bounds,
-                              double tolerance = 1e-6,
-                              int max_depth = 5) const;
+                         double tolerance = 1e-6,
+                         int max_depth = 5) const;
 
 private:
     /**
@@ -90,25 +90,25 @@ private:
      * @return 该维度及内层维度的积分值
      */
     double integrate_recursive(const std::vector<BoundFunc>& bounds,
-                               const std::vector<int>& subdivisions,
-                               std::vector<double>* point,
-                               std::size_t dimension,
-                               double accumulated_weight) const;
+                          const std::vector<int>& subdivisions,
+                          std::vector<double>* point,
+                          std::size_t dimension,
+                          double accumulated_weight) const;
 
     /**
      * @brief 自适应递归积分实现
      */
     double integrate_adaptive_recursive(const std::vector<BoundFunc>& bounds,
-                                        std::vector<double>* point,
-                                        std::size_t dimension,
-                                        double lower,
-                                        double upper,
-                                        double fa,
-                                        double fb,
-                                        double fc,
-                                        double whole,
-                                        double tolerance,
-                                        int depth) const;
+                                   std::vector<double>* point,
+                                   std::size_t dimension,
+                                   double lower,
+                                   double upper,
+                                   double fa,
+                                   double fb,
+                                   double fc,
+                                   double whole,
+                                   double tolerance,
+                                   int depth) const;
 
     Integrand integrand_;  ///< 被积函数
 };

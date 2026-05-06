@@ -6,6 +6,7 @@
 
 #include "string_utils.h"
 #include "format_utils.h"
+#include "precise/precise_decimal.h"
 
 #include <fstream>
 #include <iterator>
@@ -21,7 +22,7 @@ std::string SystemModule::name() const {
 std::vector<std::string> SystemModule::get_commands() const {
     return { ":vars", ":funcs", ":clear", ":clearfuncs", ":clearfunc",
              ":history", ":save", ":load", ":export", ":run",
-             ":exact", ":symbolic", ":precision", ":hexprefix", ":hexcase",
+             ":exact", ":symbolic", ":precision", ":scale", ":hexprefix", ":hexcase",
              "print" };
 }
 
@@ -91,6 +92,17 @@ std::string SystemModule::execute_args(const std::string& command,
             return "Invalid precision value";
         }
     }
+    if (command == ":scale") {
+        if (args.empty()) return "Internal scale: " + std::to_string(PrecisionContext::get_default_scale());
+        try {
+            int s = std::stoi(args[0]);
+            if (s < 1 || s > 2000) return "Scale must be in range 1..2000";
+            PrecisionContext::set_default_scale(s);
+            return "Internal calculation scale set to " + std::to_string(s);
+        } catch (...) {
+            return "Invalid scale value";
+        }
+    }
     if (command == ":hexprefix") {
         if (args.empty()) return "Usage: :hexprefix on|off";
         const std::string arg = trim_copy(args[0]);
@@ -120,6 +132,7 @@ std::string SystemModule::get_help_snippet(const std::string& topic) const {
                "  :exact on|off       Toggle exact mode\n"
                "  :symbolic on|off    Toggle symbolic constants\n"
                "  :precision n        Set display precision\n"
+               "  :scale n            Set internal calculation scale\n"
                "  :hexprefix on|off   Toggle 0x prefix for hex output\n"
                "  :hexcase upper|lower Set hex letter case\n"
                "  :save [path]        Save state to file\n"

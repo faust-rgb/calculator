@@ -70,11 +70,19 @@ TLuResult<T> lu_decompose_with_pivoting(const TMatrix<T>& matrix) {
     }
     result.det_sign = 1;
 
-    const T max_entry = max_abs_entry(matrix);
-    const T tolerance = (t_abs(max_entry) > T(static_cast<long long>(0))) ? 
-        (std::max<T>(T(kMatrixPivotAbsoluteEps),
-                  max_entry * T(kMatrixPivotRelativeEps) * T(static_cast<long long>(n)))) :
-        T(kMatrixPivotAbsoluteEps);
+    // 对于高精度类型，使用更小的 tolerance
+    T tolerance;
+    if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        // 对于高精度，使用基于当前精度的动态 tolerance
+        int scale = PrecisionContext::get_default_scale();
+        tolerance = PreciseDecimal("1e-" + std::to_string(scale - 5));
+    } else {
+        const T max_entry = max_abs_entry(matrix);
+        tolerance = (t_abs(max_entry) > T(static_cast<long long>(0))) ?
+            (std::max<T>(T(kMatrixPivotAbsoluteEps),
+                      max_entry * T(kMatrixPivotRelativeEps) * T(static_cast<long long>(n)))) :
+            T(kMatrixPivotAbsoluteEps);
+    }
 
     for (std::size_t col = 0; col < n; ++col) {
         std::size_t pivot_row = col;

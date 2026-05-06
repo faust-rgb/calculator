@@ -104,11 +104,25 @@ PreciseDecimal operator/(PreciseDecimal lhs, const PreciseDecimal& rhs);
 PreciseDecimal operator/(PreciseDecimal lhs, double rhs);
 PreciseDecimal operator/(double lhs, const PreciseDecimal& rhs);
 
+bool operator==(const PreciseDecimal& lhs, double rhs);
+bool operator==(double lhs, const PreciseDecimal& rhs);
+bool operator!=(const PreciseDecimal& lhs, double rhs);
+bool operator!=(double lhs, const PreciseDecimal& rhs);
+bool operator<(const PreciseDecimal& lhs, double rhs);
+bool operator<(double lhs, const PreciseDecimal& rhs);
+bool operator>(const PreciseDecimal& lhs, double rhs);
+bool operator>(double lhs, const PreciseDecimal& rhs);
+bool operator<=(const PreciseDecimal& lhs, double rhs);
+bool operator<=(double lhs, const PreciseDecimal& rhs);
+bool operator>=(const PreciseDecimal& lhs, double rhs);
+bool operator>=(double lhs, const PreciseDecimal& rhs);
+
 // 基础数学函数 (高精度版)
 namespace precise {
 PreciseDecimal abs(const PreciseDecimal& val);
 PreciseDecimal sqrt(const PreciseDecimal& val);
 PreciseDecimal pow(const PreciseDecimal& base, long long exp);
+PreciseDecimal pow(const PreciseDecimal& base, const PreciseDecimal& exp);
 PreciseDecimal floor(const PreciseDecimal& val);
 PreciseDecimal ceil(const PreciseDecimal& val);
 PreciseDecimal round(const PreciseDecimal& val);
@@ -116,6 +130,24 @@ PreciseDecimal round(const PreciseDecimal& val);
 // 高精度常量
 PreciseDecimal pi();
 PreciseDecimal e();
+
+// 超越函数 (高精度原生实现)
+PreciseDecimal exp(const PreciseDecimal& x);
+PreciseDecimal ln(const PreciseDecimal& x);
+PreciseDecimal log10(const PreciseDecimal& x);
+PreciseDecimal sin(const PreciseDecimal& x);
+PreciseDecimal cos(const PreciseDecimal& x);
+PreciseDecimal tan(const PreciseDecimal& x);
+PreciseDecimal asin(const PreciseDecimal& x);
+PreciseDecimal acos(const PreciseDecimal& x);
+PreciseDecimal atan(const PreciseDecimal& x);
+
+PreciseDecimal sinh(const PreciseDecimal& x);
+PreciseDecimal cosh(const PreciseDecimal& x);
+PreciseDecimal tanh(const PreciseDecimal& x);
+PreciseDecimal asinh(const PreciseDecimal& x);
+PreciseDecimal acosh(const PreciseDecimal& x);
+PreciseDecimal atanh(const PreciseDecimal& x);
 }
 
 // 保持对旧接口的兼容性
