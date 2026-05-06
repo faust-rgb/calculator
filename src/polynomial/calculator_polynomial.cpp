@@ -223,7 +223,7 @@ std::string roots(const PolynomialData& poly) {
         if (mymath::is_near_zero(imag, 1e-8)) {
             out << format_symbolic_scalar(real);
         } else {
-            out << matrix::internal::format_complex({real, imag});
+            out << matrix::internal::format_complex<double>({real, imag});
         }
         previous_root = {real, imag};
         wrote_root = true;

@@ -18,7 +18,33 @@ namespace {
 
 constexpr uint32_t kBase = 1000000000;
 constexpr int kBaseDigits = 9;
-constexpr int kPreciseDecimalDivisionDigits = 40;
+int g_default_scale = 40;
+constexpr double kDisplayZeroEps = 1e-16;
+constexpr double kDisplayIntegerEps = 1e-9;
+
+double normalize_display_decimal(double value) {
+    if (mymath::abs(value) < kDisplayZeroEps) return 0.0;
+    if (mymath::abs(value) > kDisplayIntegerEps &&
+        mymath::abs(value - mymath::round(value)) < kDisplayIntegerEps) {
+        return mymath::round(value);
+    }
+    return value;
+}
+
+std::string format_decimal(double value, int precision = 12) {
+    value = normalize_display_decimal(value);
+    std::ostringstream out;
+    out << std::setprecision(precision) << value;
+    return out.str();
+}
+
+/**
+ * @brief 计算 a / b，返回商和余数 (均为 BigInt)
+ */
+void div_bigint(const std::vector<uint32_t>& num, 
+                const std::vector<uint32_t>& den,
+                std::vector<uint32_t>* quotient,
+                std::vector<uint32_t>* remainder);
 
 /**
  * @brief 将整数字符串转换为基数为 10^9 的向量
@@ -135,6 +161,49 @@ std::vector<uint32_t> multiply_bigint_by_uint32(const std::vector<uint32_t>& v, 
     return res;
 }
 
+void div_bigint(const std::vector<uint32_t>& num, 
+                const std::vector<uint32_t>& den,
+                std::vector<uint32_t>* quotient,
+                std::vector<uint32_t>* remainder) {
+    if (den.empty() || (den.size() == 1 && den[0] == 0)) {
+        throw std::runtime_error("division by zero in div_bigint");
+    }
+
+    *remainder = {0};
+    quotient->clear();
+    
+    std::string num_s = bigint_to_string(num);
+    std::string den_s = bigint_to_string(den);
+    std::string q_s;
+    std::string rem_s = "0";
+
+    for (char d : num_s) {
+        if (rem_s == "0") rem_s = d;
+        else rem_s.push_back(d);
+        
+        std::size_t first = rem_s.find_first_not_of('0');
+        if (first == std::string::npos) rem_s = "0";
+        else if (first > 0) rem_s = rem_s.substr(first);
+
+        int q = 0;
+        if (rem_s.size() > den_s.size() || (rem_s.size() == den_s.size() && rem_s >= den_s)) {
+            for (int candidate = 9; candidate >= 1; --candidate) {
+                std::vector<uint32_t> p_bigint = multiply_bigint_by_uint32(den, static_cast<uint32_t>(candidate));
+                std::string p_s = bigint_to_string(p_bigint);
+                if (p_s.size() < rem_s.size() || (p_s.size() == rem_s.size() && p_s <= rem_s)) {
+                    q = candidate;
+                    std::vector<uint32_t> rem_bigint = subtract_bigint(string_to_bigint(rem_s), p_bigint);
+                    rem_s = bigint_to_string(rem_bigint);
+                    break;
+                }
+            }
+        }
+        q_s.push_back(static_cast<char>('0' + q));
+    }
+    
+    *quotient = string_to_bigint(q_s);
+}
+
 /**
  * @brief 大整数乘以 10^n
  */
@@ -173,9 +242,30 @@ void align_precise_scales(PreciseDecimal* lhs, PreciseDecimal* rhs) {
 
 } // namespace
 
+int PrecisionContext::get_default_scale() { return g_default_scale; }
+void PrecisionContext::set_default_scale(int s) { g_default_scale = s; }
+
 // ============================================================================
 // PreciseDecimal 方法实现
 // ============================================================================
+
+// ============================================================================
+// PreciseDecimal 方法实现
+// ============================================================================
+
+PreciseDecimal::PreciseDecimal(long long value) {
+    negative = value < 0;
+    data = string_to_bigint(std::to_string(negative ? -value : value));
+    scale = 0;
+}
+
+PreciseDecimal::PreciseDecimal(double value) {
+    *this = from_decimal_literal(format_decimal(value, 15));
+}
+
+PreciseDecimal::PreciseDecimal(const std::string& token) {
+    *this = from_decimal_literal(token);
+}
 
 void PreciseDecimal::normalize() {
     if (data.empty()) {
@@ -212,6 +302,40 @@ void PreciseDecimal::normalize() {
 
 bool PreciseDecimal::is_zero() const {
     return data.empty() || (data.size() == 1 && data[0] == 0);
+}
+
+PreciseDecimal PreciseDecimal::operator-() const {
+    PreciseDecimal res = *this;
+    if (!res.is_zero()) res.negative = !res.negative;
+    return res;
+}
+
+PreciseDecimal& PreciseDecimal::operator+=(const PreciseDecimal& rhs) {
+    *this = add_precise_decimal(*this, rhs);
+    return *this;
+}
+
+PreciseDecimal& PreciseDecimal::operator-=(const PreciseDecimal& rhs) {
+    *this = subtract_precise_decimal(*this, rhs);
+    return *this;
+}
+
+PreciseDecimal& PreciseDecimal::operator*=(const PreciseDecimal& rhs) {
+    *this = multiply_precise_decimal(*this, rhs);
+    return *this;
+}
+
+PreciseDecimal& PreciseDecimal::operator/=(const PreciseDecimal& rhs) {
+    *this = divide_precise_decimal(*this, rhs);
+    return *this;
+}
+
+bool PreciseDecimal::operator==(const PreciseDecimal& rhs) const {
+    return compare_precise_decimal(*this, rhs) == 0;
+}
+
+bool PreciseDecimal::operator<(const PreciseDecimal& rhs) const {
+    return compare_precise_decimal(*this, rhs) < 0;
 }
 
 std::string PreciseDecimal::to_string() const {
@@ -298,6 +422,52 @@ PreciseDecimal PreciseDecimal::from_decimal_literal(const std::string& token) {
 // PreciseDecimal 算术运算
 // ============================================================================
 
+PreciseDecimal operator+(PreciseDecimal lhs, const PreciseDecimal& rhs) { lhs += rhs; return lhs; }
+PreciseDecimal operator+(PreciseDecimal lhs, double rhs) { lhs += PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator+(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) + rhs; }
+
+PreciseDecimal operator-(PreciseDecimal lhs, const PreciseDecimal& rhs) { lhs -= rhs; return lhs; }
+PreciseDecimal operator-(PreciseDecimal lhs, double rhs) { lhs -= PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator-(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) - rhs; }
+
+PreciseDecimal operator*(PreciseDecimal lhs, const PreciseDecimal& rhs) { lhs *= rhs; return lhs; }
+PreciseDecimal operator*(PreciseDecimal lhs, double rhs) { lhs *= PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator*(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) * rhs; }
+
+PreciseDecimal operator/(PreciseDecimal lhs, const PreciseDecimal& rhs) { lhs /= rhs; return lhs; }
+PreciseDecimal operator/(PreciseDecimal lhs, double rhs) { lhs /= PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator/(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) / rhs; }
+
+namespace precise {
+
+PreciseDecimal abs(const PreciseDecimal& val) {
+    PreciseDecimal res = val;
+    res.negative = false;
+    return res;
+}
+
+PreciseDecimal sqrt(const PreciseDecimal& val) {
+    if (val.is_zero()) return PreciseDecimal(0LL);
+    if (val.negative) throw PreciseDecimalUnsupported("sqrt of negative number");
+
+    // Newton 迭代: x_{n+1} = 0.5 * (x_n + val / x_n)
+    // 初始猜测使用 double 版 sqrt
+    PreciseDecimal x(mymath::sqrt(val.to_double()));
+    const PreciseDecimal half(0.5);
+    
+    // 迭代 8 次通常足以达到 40+ 位精度 (Newton 迭代是二阶收敛)
+    for (int i = 0; i < 8; ++i) {
+        x = half * (x + val / x);
+    }
+    return x;
+}
+
+PreciseDecimal pow(const PreciseDecimal& base, long long exp) {
+    return pow_precise_decimal(base, exp);
+}
+
+} // namespace precise
+
 PreciseDecimal add_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs) {
     if (lhs.negative != rhs.negative) {
         PreciseDecimal rhs_flipped = rhs;
@@ -357,54 +527,15 @@ PreciseDecimal divide_precise_decimal(const PreciseDecimal& lhs, const PreciseDe
     if (rhs.is_zero()) throw std::runtime_error("division by zero");
     if (lhs.is_zero()) return {};
 
-    // 为保证精度，将被除数扩大 10^kPreciseDecimalDivisionDigits
-    int target_scale = kPreciseDecimalDivisionDigits;
+    int target_scale = PrecisionContext::get_default_scale();
     std::vector<uint32_t> numerator = multiply_bigint_by_power_of_10(lhs.data, target_scale);
     std::vector<uint32_t> denominator = rhs.data;
     
-    // 大整数除法：numerator / denominator
-    std::vector<uint32_t> quotient;
-    std::vector<uint32_t> remainder = {0};
-    
-    // 从高位到低位处理 (Base 10^9 chunks)
-    // 这里的简化实现：将 numerator 转换为 string 处理以确保逻辑正确性，
-    // 但核心计算（乘法、减法）可以使用更高效的实现。
-    // 由于 target_scale 可能导致巨大的字符串，我们直接在 BigInt 上做长除法。
-    
-    std::string num_s = bigint_to_string(numerator);
-    std::string den_s = bigint_to_string(denominator);
-    std::string quotient_s;
-    std::string current_remainder_s;
-
-    for (char d : num_s) {
-        current_remainder_s.push_back(d);
-        // 去除前导零
-        std::size_t first = current_remainder_s.find_first_not_of('0');
-        if (first == std::string::npos) current_remainder_s = "0";
-        else if (first > 0) current_remainder_s = current_remainder_s.substr(first);
-
-        int q = 0;
-        // 简单的试商法
-        if (current_remainder_s.size() > den_s.size() || 
-            (current_remainder_s.size() == den_s.size() && current_remainder_s >= den_s)) {
-            // 这里可以进一步优化，但目前先保持逻辑稳定
-            for (int candidate = 9; candidate >= 1; --candidate) {
-                std::vector<uint32_t> p_bigint = multiply_bigint_by_uint32(denominator, static_cast<uint32_t>(candidate));
-                std::string p_s = bigint_to_string(p_bigint);
-                if (p_s.size() < current_remainder_s.size() || 
-                    (p_s.size() == current_remainder_s.size() && p_s <= current_remainder_s)) {
-                    q = candidate;
-                    std::vector<uint32_t> rem_bigint = subtract_bigint(string_to_bigint(current_remainder_s), p_bigint);
-                    current_remainder_s = bigint_to_string(rem_bigint);
-                    break;
-                }
-            }
-        }
-        quotient_s.push_back(static_cast<char>('0' + q));
-    }
+    std::vector<uint32_t> q, r;
+    div_bigint(numerator, denominator, &q, &r);
 
     PreciseDecimal res;
-    res.data = string_to_bigint(quotient_s);
+    res.data = q;
     res.scale = lhs.scale + target_scale - rhs.scale;
     res.negative = lhs.negative != rhs.negative;
     res.normalize();
@@ -449,29 +580,6 @@ std::string rational_to_precise_decimal_text(const Rational& value) {
         PreciseDecimal::from_integer_string(std::to_string(value.denominator), false);
     return divide_precise_decimal(numerator, denominator).to_string();
 }
-
-namespace {
-
-constexpr double kDisplayZeroEps = 1e-16;
-constexpr double kDisplayIntegerEps = 1e-9;
-
-double normalize_display_decimal(double value) {
-    if (mymath::abs(value) < kDisplayZeroEps) return 0.0;
-    if (mymath::abs(value) > kDisplayIntegerEps &&
-        mymath::abs(value - mymath::round(value)) < kDisplayIntegerEps) {
-        return mymath::round(value);
-    }
-    return value;
-}
-
-std::string format_decimal(double value, int precision = 12) {
-    value = normalize_display_decimal(value);
-    std::ostringstream out;
-    out << std::setprecision(precision) << value;
-    return out.str();
-}
-
-} // namespace
 
 std::string stored_value_precise_decimal_text(const StoredValue& value) {
     if (value.exact) return rational_to_precise_decimal_text(value.rational);

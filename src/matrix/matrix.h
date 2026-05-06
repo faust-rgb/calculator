@@ -9,33 +9,39 @@
 
 namespace matrix {
 
-struct ComplexNumber {
-    double real = 0.0;
-    double imag = 0.0;
+/**
+ * @struct TComplex
+ * @brief 泛型复数表示
+ */
+template <typename T>
+struct TComplex {
+    T real = T(0);
+    T imag = T(0);
 };
+
+using ComplexNumber = TComplex<double>;
 
 /**
  * @namespace matrix
  * @brief 矩阵运算库
  *
  * 提供完整的矩阵操作功能，包括基本运算、线性代数运算和矩阵分解。
- * 使用行优先存储布局，便于与常见数学软件兼容。
  */
 
 /**
- * @struct Matrix
- * @brief 矩阵数据结构
+ * @struct TMatrix
+ * @brief 泛型矩阵数据结构
  *
  * 使用一维向量存储二维矩阵数据，行优先布局。
- * 元素 (i, j) 在 data 中的索引为 i * cols + j。
  */
-struct Matrix {
+template <typename T>
+struct TMatrix {
     std::size_t rows = 0;        ///< 行数
     std::size_t cols = 0;        ///< 列数
-    std::vector<double> data;    ///< 行优先存储的矩阵元素
+    std::vector<T> data;         ///< 行优先存储的矩阵元素
 
     /** @brief 默认构造函数，创建空矩阵 */
-    Matrix() = default;
+    TMatrix() = default;
 
     /**
      * @brief 构造指定大小的矩阵
@@ -43,14 +49,14 @@ struct Matrix {
      * @param col_count 列数
      * @param fill_value 填充值，默认为 0
      */
-    Matrix(std::size_t row_count, std::size_t col_count, double fill_value = 0.0);
+    TMatrix(std::size_t row_count, std::size_t col_count, T fill_value = T(0));
 
     /**
      * @brief 从向量创建列向量
      * @param values 向量元素
      * @return 列向量矩阵 (n×1)
      */
-    static Matrix vector(const std::vector<double>& values);
+    static TMatrix vector(const std::vector<T>& values);
 
     /**
      * @brief 创建零矩阵
@@ -58,14 +64,14 @@ struct Matrix {
      * @param col_count 列数
      * @return 零矩阵
      */
-    static Matrix zero(std::size_t row_count, std::size_t col_count);
+    static TMatrix zero(std::size_t row_count, std::size_t col_count);
 
     /**
      * @brief 创建单位矩阵
      * @param size 矩阵大小
      * @return 单位矩阵 I_n
      */
-    static Matrix identity(std::size_t size);
+    static TMatrix identity(std::size_t size);
 
     /** @brief 检查是否为向量（单列或单行） */
     bool is_vector() const;
@@ -74,10 +80,10 @@ struct Matrix {
     bool is_square() const;
 
     /** @brief 获取元素引用，用于修改 */
-    double& at(std::size_t row, std::size_t col);
+    T& at(std::size_t row, std::size_t col);
 
     /** @brief 获取元素值 */
-    double at(std::size_t row, std::size_t col) const;
+    T at(std::size_t row, std::size_t col) const;
 
     /**
      * @brief 调整矩阵大小
@@ -87,54 +93,50 @@ struct Matrix {
      */
     void resize(std::size_t new_rows,
                 std::size_t new_cols,
-                double fill_value = 0.0);
+                T fill_value = T(0));
 
     /** @brief 追加一行 */
-    void append_row(const std::vector<double>& values);
+    void append_row(const std::vector<T>& values);
 
     /** @brief 追加一列 */
-    void append_col(const std::vector<double>& values);
+    void append_col(const std::vector<T>& values);
 
     /** @brief 转换为可读字符串 */
     std::string to_string() const;
 
     // In-place operators
-    Matrix& operator+=(const Matrix& rhs);
-    Matrix& operator-=(const Matrix& rhs);
-    Matrix& operator*=(double scalar);
-    Matrix& operator/=(double scalar);
+    TMatrix& operator+=(const TMatrix& rhs);
+    TMatrix& operator-=(const TMatrix& rhs);
+    TMatrix& operator*=(T scalar);
+    TMatrix& operator/=(T scalar);
 };
+
+/** @brief 默认双精度矩阵 */
+using Matrix = TMatrix<double>;
 
 /** @brief 设置矩阵字符串输出的十进制显示有效位数 */
 void set_display_precision(int precision);
 
 /**
- * @struct Value
- * @brief 矩阵表达式求值结果
- *
- * 矩阵表达式可能返回标量（如行列式）或矩阵，
- * 此联合类型统一处理两种结果。
+ * @struct TValue
+ * @brief 泛型矩阵表达式求值结果
  */
-struct Value {
+template <typename T>
+struct TValue {
     bool is_matrix = false;   ///< true 表示矩阵，false 表示标量
     bool is_complex = false;  ///< true 表示复数标量
-    double scalar = 0.0;      ///< 标量值（当 is_matrix 为 false 时有效）
-    ComplexNumber complex;    ///< 复数值（当 is_complex 为 true 时有效）
-    Matrix matrix;            ///< 矩阵值（当 is_matrix 为 true 时有效）
+    T scalar = T(0);          ///< 标量值
+    TComplex<T> complex;      ///< 复数值
+    TMatrix<T> matrix;        ///< 矩阵值
 
-    /** @brief 从标量创建 Value */
-    static Value from_scalar(double scalar_value);
-
-    /** @brief 从复数创建 Value */
-    static Value from_complex(double real, double imag);
-    static Value from_complex(ComplexNumber complex_value);
-
-    /** @brief 从矩阵创建 Value */
-    static Value from_matrix(const Matrix& matrix_value);
-
-    /** @brief 从矩阵移动创建 Value */
-    static Value from_matrix(Matrix&& matrix_value);
+    static TValue from_scalar(T scalar_value);
+    static TValue from_complex(T real, T imag);
+    static TValue from_complex(TComplex<T> complex_value);
+    static TValue from_matrix(const TMatrix<T>& matrix_value);
+    static TValue from_matrix(TMatrix<T>&& matrix_value);
 };
+
+using Value = TValue<double>;
 
 /** @brief 标量求值函数类型，用于表达式解析 */
 using ScalarEvaluator = std::function<double(const std::string&)>;
@@ -147,9 +149,6 @@ using ComplexLookup = std::function<bool(const std::string&, ComplexNumber*)>;
 
 /**
  * @brief 值多态函数类型
- *
- * 这种函数可以处理标量、复数、矩阵等多种输入类型，
- * 并根据输入类型返回相应的结果。
  */
 using ValueFunction = std::function<Value(
     const std::vector<std::string>& arguments,
@@ -159,225 +158,95 @@ using ValueFunction = std::function<Value(
     const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* matrix_functions)>;
 
 // ============================================================================
-// 基本矩阵运算
+// 基本矩阵运算 (泛型)
 // ============================================================================
 
-/** @brief 矩阵加法 */
-Matrix add(const Matrix& lhs, const Matrix& rhs);
-Matrix add(Matrix&& lhs, const Matrix& rhs);
-Matrix add(const Matrix& lhs, Matrix&& rhs);
+template <typename T> TMatrix<T> add(const TMatrix<T>& lhs, const TMatrix<T>& rhs);
+template <typename T> TMatrix<T> add(TMatrix<T>&& lhs, const TMatrix<T>& rhs);
+template <typename T> TMatrix<T> add(const TMatrix<T>& lhs, TMatrix<T>&& rhs);
+template <typename T> TMatrix<T> add(const TMatrix<T>& lhs, T scalar);
+template <typename T> TMatrix<T> add(TMatrix<T>&& lhs, T scalar);
 
-/** @brief 矩阵与标量加法 */
-Matrix add(const Matrix& lhs, double scalar);
-Matrix add(Matrix&& lhs, double scalar);
+template <typename T> TMatrix<T> subtract(const TMatrix<T>& lhs, const TMatrix<T>& rhs);
+template <typename T> TMatrix<T> subtract(TMatrix<T>&& lhs, const TMatrix<T>& rhs);
+template <typename T> TMatrix<T> subtract(const TMatrix<T>& lhs, TMatrix<T>&& rhs);
+template <typename T> TMatrix<T> subtract(const TMatrix<T>& lhs, T scalar);
+template <typename T> TMatrix<T> subtract(TMatrix<T>&& lhs, T scalar);
 
-/** @brief 矩阵减法 */
-Matrix subtract(const Matrix& lhs, const Matrix& rhs);
-Matrix subtract(Matrix&& lhs, const Matrix& rhs);
-Matrix subtract(const Matrix& lhs, Matrix&& rhs);
+template <typename T> TMatrix<T> multiply(const TMatrix<T>& lhs, const TMatrix<T>& rhs);
+template <typename T> TMatrix<T> multiply(const TMatrix<T>& lhs, T scalar);
+template <typename T> TMatrix<T> multiply(TMatrix<T>&& lhs, T scalar);
 
-/** @brief 矩阵与标量减法 */
-Matrix subtract(const Matrix& lhs, double scalar);
-Matrix subtract(Matrix&& lhs, double scalar);
+template <typename T> TMatrix<T> divide(const TMatrix<T>& lhs, T scalar);
+template <typename T> TMatrix<T> divide(TMatrix<T>&& lhs, T scalar);
 
-/** @brief 矩阵乘法 */
-Matrix multiply(const Matrix& lhs, const Matrix& rhs);
+template <typename T> TMatrix<T> transpose(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> inverse(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> pseudo_inverse(const TMatrix<T>& matrix);
 
-/** @brief 矩阵与标量乘法 */
-Matrix multiply(const Matrix& lhs, double scalar);
-Matrix multiply(Matrix&& lhs, double scalar);
-
-/** @brief 矩阵与标量除法 */
-Matrix divide(const Matrix& lhs, double scalar);
-Matrix divide(Matrix&& lhs, double scalar);
-
-/** @brief 矩阵转置 */
-Matrix transpose(const Matrix& matrix);
-
-/** @brief 矩阵求逆 */
-Matrix inverse(const Matrix& matrix);
-
-/** @brief Moore-Penrose 伪逆 */
-Matrix pseudo_inverse(const Matrix& matrix);
-
-/** @brief 向量点积 */
-double dot(const Matrix& lhs, const Matrix& rhs);
-
-/** @brief 向量外积 */
-Matrix outer(const Matrix& lhs, const Matrix& rhs);
-
-/** @brief 向量叉积 (仅限 3D 向量) */
-Matrix cross(const Matrix& lhs, const Matrix& rhs);
-
-/** @brief 向量投影 (lhs 在 rhs 上的投影) */
-Matrix project(const Matrix& lhs, const Matrix& rhs);
-
-/** @brief 向量单位化 */
-Matrix normalize(const Matrix& matrix);
-
-/** @brief Kronecker 积 */
-Matrix kronecker(const Matrix& lhs, const Matrix& rhs);
-
-/** @brief Hadamard 积（逐元素乘） */
-Matrix hadamard(const Matrix& lhs, const Matrix& rhs);
+template <typename T> T dot(const TMatrix<T>& lhs, const TMatrix<T>& rhs);
+template <typename T> TMatrix<T> outer(const TMatrix<T>& lhs, const TMatrix<T>& rhs);
+template <typename T> TMatrix<T> cross(const TMatrix<T>& lhs, const TMatrix<T>& rhs);
+template <typename T> TMatrix<T> project(const TMatrix<T>& lhs, const TMatrix<T>& rhs);
+template <typename T> TMatrix<T> normalize(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> kronecker(const TMatrix<T>& lhs, const TMatrix<T>& rhs);
+template <typename T> TMatrix<T> hadamard(const TMatrix<T>& lhs, const TMatrix<T>& rhs);
 
 // ============================================================================
-// 高级线性代数运算
+// 高级线性代数运算 (泛型)
 // ============================================================================
 
-/** @brief 计算矩阵的零空间 */
-Matrix nullspace(const Matrix& matrix);
-
-/** @brief 最小二乘求解 */
-Matrix least_squares(const Matrix& coefficients, const Matrix& rhs);
-
-/** @brief QR 分解：返回 Q 矩阵 */
-Matrix qr_q(const Matrix& matrix);
-
-/** @brief QR 分解：返回 R 矩阵 */
-Matrix qr_r(const Matrix& matrix);
-
-/** @brief LU 分解：返回单位下三角矩阵 L (带部分主元) */
-Matrix lu_l(const Matrix& matrix);
-
-/** @brief LU 分解：返回上三角矩阵 U (带部分主元) */
-Matrix lu_u(const Matrix& matrix);
-
-/** @brief LU 分解：返回置换矩阵 P */
-Matrix lu_p(const Matrix& matrix);
-
-/** @brief SVD 分解：返回 U 矩阵 */
-Matrix svd_u(const Matrix& matrix);
-
-/** @brief SVD 分解：返回奇异值对角矩阵 S */
-Matrix svd_s(const Matrix& matrix);
-
-/** @brief SVD 分解：返回 V^T 矩阵 */
-Matrix svd_vt(const Matrix& matrix);
-
-/** @brief 求解线性方程组 Ax = b */
-Matrix solve(const Matrix& coefficients, const Matrix& rhs);
-
-/** @brief 矩阵幂运算 */
-Matrix power(Matrix base, long long exponent);
-
-/** @brief 2-范数条件数 */
-double condition_number(const Matrix& matrix);
-
-/** @brief Cholesky 分解（返回下三角矩阵） */
-Matrix cholesky(const Matrix& matrix);
-
-/** @brief 检查是否为对称矩阵 */
-bool is_symmetric(const Matrix& matrix);
-
-/** @brief 检查是否为正交矩阵 */
-bool is_orthogonal(const Matrix& matrix);
-
-/** @brief Hessenberg 形式 */
-Matrix hessenberg(const Matrix& matrix);
-
-/** @brief 实 Schur 近似形式 */
-Matrix schur(const Matrix& matrix);
+template <typename T> TMatrix<T> nullspace(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> least_squares(const TMatrix<T>& coefficients, const TMatrix<T>& rhs);
+template <typename T> std::pair<TMatrix<T>, TMatrix<T>> qr_decompose(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> qr_q(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> qr_r(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> lu_l(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> lu_u(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> lu_p(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> svd_u(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> svd_s(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> svd_vt(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> solve(const TMatrix<T>& coefficients, const TMatrix<T>& rhs);
+template <typename T> TMatrix<T> power(TMatrix<T> base, long long exponent);
+template <typename T> T condition_number(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> cholesky(const TMatrix<T>& matrix);
+template <typename T> bool is_symmetric(const TMatrix<T>& matrix);
+template <typename T> bool is_orthogonal(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> hessenberg(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> schur(const TMatrix<T>& matrix);
 
 // ============================================================================
-// 元素访问和属性
+// 元素访问和属性 (泛型)
 // ============================================================================
 
-/** @brief 获取指定位置的元素 */
-double get(const Matrix& matrix, std::size_t row, std::size_t col);
-
-/** @brief 获取向量指定索引的元素 */
-double get(const Matrix& matrix, std::size_t index);
-
-/** @brief 设置指定位置的元素 */
-Matrix set(Matrix matrix, std::size_t row, std::size_t col, double value);
-
-/** @brief 设置向量指定索引的元素 */
-Matrix set(Matrix matrix, std::size_t index, double value);
-
-/** @brief 计算矩阵范数（Frobenius 范数） */
-double norm(const Matrix& matrix);
-
-/** @brief 计算矩阵迹（对角线元素之和） */
-double trace(const Matrix& matrix);
-
-/** @brief 计算矩阵行列式 */
-double determinant(const Matrix& matrix);
-
-/** @brief 计算矩阵秩 */
-double rank(const Matrix& matrix);
-
-/** @brief 计算行最简形（RREF） */
-Matrix rref(Matrix matrix);
-
-/** @brief 计算特征值（返回对角矩阵） */
-Matrix eigenvalues(const Matrix& matrix);
-
-/** @brief 计算特征向量（每列是一个特征向量） */
-Matrix eigenvectors(const Matrix& matrix);
-
-/** @brief 行优先 reshape */
-Matrix reshape(const Matrix& matrix, std::size_t rows, std::size_t cols);
-
-/** @brief 矩阵向量化 */
-Matrix vectorize(const Matrix& matrix);
-
-/** @brief 提取或构造对角矩阵 */
-Matrix diag(const Matrix& matrix);
+template <typename T> T get(const TMatrix<T>& matrix, std::size_t row, std::size_t col);
+template <typename T> T get(const TMatrix<T>& matrix, std::size_t index);
+template <typename T> TMatrix<T> set(TMatrix<T> matrix, std::size_t row, std::size_t col, T value);
+template <typename T> TMatrix<T> set(TMatrix<T> matrix, std::size_t index, T value);
+template <typename T> T norm(const TMatrix<T>& matrix);
+template <typename T> T trace(const TMatrix<T>& matrix);
+template <typename T> T determinant(const TMatrix<T>& matrix);
+template <typename T> T rank(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> rref(TMatrix<T> matrix);
+template <typename T> TMatrix<T> eigenvalues(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> eigenvectors(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> reshape(const TMatrix<T>& matrix, std::size_t rows, std::size_t cols);
+template <typename T> TMatrix<T> vectorize(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> diag(const TMatrix<T>& matrix);
 
 // ============================================================================
-// 信号处理运算
+// 信号处理运算 (泛型)
 // ============================================================================
 
-/**
- * @brief 线性滤波
- * @param b 分子系数向量
- * @param a 分母系数向量
- * @param x 输入信号向量
- * @return 滤波后的输出向量
- */
-Matrix filter(const Matrix& b, const Matrix& a, const Matrix& x);
-
-/**
- * @brief 计算频率响应
- * @param b 分子系数向量
- * @param a 分母系数向量
- * @param n 采样点数
- * @return Nx2 矩阵，第一列为实部，第二列为虚部
- */
-Matrix freqz(const Matrix& b, const Matrix& a, std::size_t n = 512);
-
-/**
- * @brief 部分分式展开 (Residue)
- * @param b 分子系数向量
- * @param a 分母系数向量
- * @return 包含结果的矩阵：
- *         第一列：留数 (Residues)
- *         第二列：极点 (Poles)
- *         第三列（可选）：常数项 (Direct term, k)
- */
-Matrix residue(const Matrix& b, const Matrix& a);
+template <typename T> TMatrix<T> filter(const TMatrix<T>& b, const TMatrix<T>& a, const TMatrix<T>& x);
+template <typename T> TMatrix<T> freqz(const TMatrix<T>& b, const TMatrix<T>& a, std::size_t n = 512);
+template <typename T> TMatrix<T> residue(const TMatrix<T>& b, const TMatrix<T>& a);
 
 // ============================================================================
 // 表达式求值
 // ============================================================================
 
-/**
- * @brief 尝试求值矩阵表达式
- * @param expression 表达式字符串
- * @param scalar_evaluator 标量求值回调
- * @param matrix_lookup 矩阵查找回调
- * @param complex_lookup 复数查找回调
- * @param matrix_functions 矩阵函数表
- * @param value_functions 值多态函数表
- * @param value 输出结果
- * @return true 如果成功解析并求值
- *
- * 支持语法：
- * - 矩阵字面量：[1, 2; 3, 4]
- * - 矩阵运算：A + B, A * B, A', inv(A)
- * - 函数调用：det(A), trace(A), rank(A) 等
- */
 bool try_evaluate_expression(const std::string& expression,
                                const ScalarEvaluator& scalar_evaluator,
                                const MatrixLookup& matrix_lookup,

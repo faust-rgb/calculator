@@ -81,7 +81,7 @@ std::string format_eigenvalue_matrix(const Matrix& values) {
         if (row != 0) {
             out << ", ";
         }
-        out << internal::format_complex({values.at(row, 0), values.at(row, 1)});
+        out << internal::format_complex<double>({values.at(row, 0), values.at(row, 1)});
     }
     out << "]";
     return out.str();
