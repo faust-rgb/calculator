@@ -33,10 +33,10 @@ namespace multidim {
  * @brief 积分区域边界
  */
 struct IntegrationBounds {
-    double lower = 0.0;  ///< 下界
-    double upper = 0.0;  ///< 上界
+    long double lower = 0.0L;  ///< 下界
+    long double upper = 0.0L;  ///< 上界
 
-    IntegrationBounds(double l, double u) : lower(l), upper(u) {}
+    IntegrationBounds(long double l, long double u) : lower(l), upper(u) {}
 };
 
 /**
@@ -44,8 +44,8 @@ struct IntegrationBounds {
  * @brief 积分结果
  */
 struct IntegrationResult {
-    double value = 0.0;         ///< 积分值
-    double error_estimate = 0.0; ///< 误差估计
+    long double value = 0.0L;         ///< 积分值
+    long double error_estimate = 0.0L; ///< 误差估计
     int function_evaluations = 0; ///< 函数求值次数
     bool converged = false;     ///< 是否收敛
     int subdivisions_used = 0;  ///< 使用的细分数
@@ -68,8 +68,8 @@ enum class IntegrationMethod {
  * @brief 积分选项
  */
 struct IntegrationOptions {
-    double relative_tolerance = 1e-8;  ///< 相对容差
-    double absolute_tolerance = 1e-10; ///< 绝对容差
+    long double relative_tolerance = 1e-8L;  ///< 相对容差
+    long double absolute_tolerance = 1e-10L; ///< 绝对容差
     int max_evaluations = 100000;      ///< 最大函数求值次数
     int max_depth = 20;                ///< 自适应细分最大深度
     int initial_subdivisions = 16;     ///< 初始分割数
@@ -82,10 +82,10 @@ struct IntegrationOptions {
 // ============================================================================
 
 /// 多维函数类型: f(x1, x2, ..., xd)
-using MultidimFunction = std::function<double(const std::vector<double>&)>;
+using MultidimFunction = std::function<long double(const std::vector<long double>&)>;
 
 /// 区域约束函数类型: g(x1, x2, ..., xd) <= 0 表示在区域内
-using RegionConstraint = std::function<double(const std::vector<double>&)>;
+using RegionConstraint = std::function<long double(const std::vector<long double>&)>;
 
 // ============================================================================
 // 矩形区域积分
@@ -106,8 +106,8 @@ using RegionConstraint = std::function<double(const std::vector<double>&)>;
 IntegrationResult integrate_rectangular(
     const MultidimFunction& function,
     const std::vector<IntegrationBounds>& bounds,
-    double relative_tolerance = 1e-8,
-    double absolute_tolerance = 1e-10,
+    long double relative_tolerance = 1e-8L,
+    long double absolute_tolerance = 1e-10L,
     int max_evaluations = 100000);
 
 /**
@@ -129,7 +129,7 @@ IntegrationResult integrate_rectangular(
  * @param points_per_dimension 每维度的积分点数
  * @return 积分值
  */
-double integrate_tensor_product(
+long double integrate_tensor_product(
     const MultidimFunction& function,
     const std::vector<IntegrationBounds>& bounds,
     int points_per_dimension = 15);
@@ -151,10 +151,10 @@ double integrate_tensor_product(
  * @param points_per_dimension 积分点数
  * @return 积分值
  */
-double integrate_with_transform(
+long double integrate_with_transform(
     const MultidimFunction& function,
-    const std::function<std::vector<double>(const std::vector<double>&)>& transform,
-    const std::function<double(const std::vector<double>&)>& jacobian,
+    const std::function<std::vector<long double>(const std::vector<long double>&)>& transform,
+    const std::function<long double(const std::vector<long double>&)>& jacobian,
     const std::vector<IntegrationBounds>& bounds,
     int points_per_dimension = 15);
 
@@ -251,11 +251,11 @@ IntegrationResult integrate_implicit_region(
  * @param points_per_dimension 积分点数
  * @return 积分值
  */
-double integrate_over_circle(
-    const std::function<double(double, double)>& function,
-    double center_x,
-    double center_y,
-    double radius,
+long double integrate_over_circle(
+    const std::function<long double(double, double)>& function,
+    long double center_x,
+    long double center_y,
+    long double radius,
     int points_per_dimension = 15);
 
 /**
@@ -269,10 +269,10 @@ double integrate_over_circle(
  * @param points_per_dimension 积分点数
  * @return 积分值
  */
-double integrate_over_sphere(
-    const std::function<double(double, double, double)>& function,
-    const std::vector<double>& center,
-    double radius,
+long double integrate_over_sphere(
+    const std::function<long double(double, double, double)>& function,
+    const std::vector<long double>& center,
+    long double radius,
     int points_per_dimension = 15);
 
 /**
@@ -285,9 +285,9 @@ double integrate_over_sphere(
  * @param points_per_dimension 积分点数
  * @return 积分值
  */
-double integrate_over_triangle(
-    const std::function<double(double, double)>& function,
-    const std::vector<std::vector<double>>& vertices,
+long double integrate_over_triangle(
+    const std::function<long double(double, double)>& function,
+    const std::vector<std::vector<long double>>& vertices,
     int points_per_dimension = 15);
 
 /**
@@ -300,9 +300,9 @@ double integrate_over_triangle(
  * @param points_per_dimension 积分点数
  * @return 积分值
  */
-double integrate_over_polygon(
-    const std::function<double(double, double)>& function,
-    const std::vector<std::vector<double>>& vertices,
+long double integrate_over_polygon(
+    const std::function<long double(double, double)>& function,
+    const std::vector<std::vector<long double>>& vertices,
     int points_per_dimension = 15);
 
 // ============================================================================
@@ -320,7 +320,7 @@ double integrate_over_polygon(
  * @param level 网格层级（控制精度）
  * @return 积分值
  */
-double integrate_sparse_grid(
+long double integrate_sparse_grid(
     const MultidimFunction& function,
     const std::vector<IntegrationBounds>& bounds,
     int level = 5);
@@ -350,21 +350,21 @@ IntegrationResult integrate_sparse_grid_with_error(
  * @return 积分结果
  */
 IntegrationResult integrate_2d_adaptive(
-    const std::function<double(double, double)>& function,
+    const std::function<long double(double, double)>& function,
     const IntegrationBounds& x_bounds,
     const IntegrationBounds& y_bounds,
-    double relative_tolerance = 1e-8,
+    long double relative_tolerance = 1e-8,
     int max_depth = 15);
 
 /**
  * @brief 三维自适应积分
  */
 IntegrationResult integrate_3d_adaptive(
-    const std::function<double(double, double, double)>& function,
+    const std::function<long double(double, double, double)>& function,
     const IntegrationBounds& x_bounds,
     const IntegrationBounds& y_bounds,
     const IntegrationBounds& z_bounds,
-    double relative_tolerance = 1e-6,
+    long double relative_tolerance = 1e-6,
     int max_depth = 10);
 
 // ============================================================================
@@ -381,7 +381,7 @@ IntegrationResult integrate_3d_adaptive(
  * @param order 方法阶数
  * @return 误差估计
  */
-double estimate_error(double fine, double coarse, int order = 4);
+long double estimate_error(long double fine, long double coarse, int order = 4);
 
 /**
  * @brief 自动选择积分方法

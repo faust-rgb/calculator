@@ -9,9 +9,9 @@ using namespace symbolic_expression_internal;
 namespace test_suites {
 
 // 辅助函数：检查两个表达式是否数值相等
-bool expressions_nearly_equal(const SymbolicExpression& a, const SymbolicExpression& b, double tol = 1e-6) {
+bool expressions_nearly_equal(const SymbolicExpression& a, const SymbolicExpression& b, long double tol = 1e-6) {
     // 尝试数值比较
-    double a_val = 0.0, b_val = 0.0;
+    long double a_val = 0.0L, b_val = 0.0L;
     if (a.is_number(&a_val) && b.is_number(&b_val)) {
         return std::abs(a_val - b_val) < tol;
     }
@@ -28,8 +28,8 @@ void test_risch_rational() {
     // ∫ 1/(x^2 + 1) dx = arctan(x) 或对数形式
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = SymbolicExpression::number(1.0) /
-            (make_power(x, SymbolicExpression::number(2.0)) + SymbolicExpression::number(1.0));
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) /
+            (make_power(x, SymbolicExpression::number(2.0)) + SymbolicExpression::number(1.0L));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1/(x^2 + 1) dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
@@ -39,9 +39,9 @@ void test_risch_rational() {
     // ∫ 1/(x^2 + 1)^2 dx
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression den = make_power(x * x + SymbolicExpression::number(1.0),
+        SymbolicExpression den = make_power(x * x + SymbolicExpression::number(1.0L),
                                             SymbolicExpression::number(2.0));
-        SymbolicExpression expr = SymbolicExpression::number(1.0) / den;
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / den;
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1/(x^2 + 1)^2 dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
@@ -51,8 +51,8 @@ void test_risch_rational() {
     // ∫ 1 / ((x+1)(x+2)) dx = ln(x+1) - ln(x+2)
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = SymbolicExpression::number(1.0) /
-            ((x + SymbolicExpression::number(1.0)) * (x + SymbolicExpression::number(2.0)));
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) /
+            ((x + SymbolicExpression::number(1.0L)) * (x + SymbolicExpression::number(2.0)));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1 / ((x+1)(x+2)) dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
@@ -66,7 +66,7 @@ void test_risch_rational() {
                                  SymbolicExpression::number(2.0) * make_power(x, SymbolicExpression::number(2.0)) +
                                  SymbolicExpression::number(3.0) * x +
                                  SymbolicExpression::number(4.0)).simplify();
-        SymbolicExpression expr = (num / (x + SymbolicExpression::number(1.0))).simplify();
+        SymbolicExpression expr = (num / (x + SymbolicExpression::number(1.0L))).simplify();
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ (x^3 + 2x^2 + 3x + 4) / (x + 1) dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
@@ -95,7 +95,7 @@ void test_risch_logarithmic() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression ln_x = make_function("ln", x);
-        SymbolicExpression expr = SymbolicExpression::number(1.0) / (x * ln_x);
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / (x * ln_x);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1/(x * ln(x)) dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
@@ -116,8 +116,8 @@ void test_risch_logarithmic() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression ln_x = make_function("ln", x);
-        SymbolicExpression expr = SymbolicExpression::number(1.0) /
-            (x * (make_power(ln_x, SymbolicExpression::number(2.0)) + SymbolicExpression::number(1.0)));
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) /
+            (x * (make_power(ln_x, SymbolicExpression::number(2.0)) + SymbolicExpression::number(1.0L)));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1 / (x * (ln(x)^2 + 1)) dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
@@ -129,7 +129,7 @@ void test_risch_logarithmic() {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression ln_x = make_function("ln", x);
         SymbolicExpression ln_ln_x = make_function("ln", ln_x);
-        SymbolicExpression expr = SymbolicExpression::number(1.0) / (x * ln_x * ln_ln_x);
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / (x * ln_x * ln_ln_x);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1/(x * ln(x) * ln(ln(x))) dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         // 这个测试可能因为复杂性而失败，我们只检查不会崩溃
@@ -187,7 +187,7 @@ void test_risch_exponential() {
     // ∫ (x + 1) * exp(x) dx = x * exp(x)
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = (x + SymbolicExpression::number(1.0)) * make_function("exp", x);
+        SymbolicExpression expr = (x + SymbolicExpression::number(1.0L)) * make_function("exp", x);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ (x + 1) * exp(x) dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
@@ -295,7 +295,7 @@ void test_risch_non_elementary() {
     // ∫ 1/ln(x) dx = li(x) (非初等)
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = SymbolicExpression::number(1.0) / make_function("ln", x);
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / make_function("ln", x);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1/ln(x) dx = " << (result.success ? result.value.to_string() : "non-elementary")
                   //<< " [" << result.method_used << "]" << std::endl;
@@ -374,7 +374,7 @@ void test_risch_algebraic() {
     // ∫ 1/sqrt(x) dx = 2 * sqrt(x)
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = SymbolicExpression::number(1.0) / make_function("sqrt", x);
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / make_function("sqrt", x);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1/sqrt(x) dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
@@ -384,7 +384,7 @@ void test_risch_algebraic() {
     // ∫ x * sqrt(x + 1) dx
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = x * make_function("sqrt", x + SymbolicExpression::number(1.0));
+        SymbolicExpression expr = x * make_function("sqrt", x + SymbolicExpression::number(1.0L));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ x * sqrt(x + 1) dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         // 可能需要换元积分
@@ -415,7 +415,7 @@ void test_risch_advanced() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression ln_x = make_function("ln", x);
-        SymbolicExpression expr = SymbolicExpression::number(1.0) /
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) /
             (x * (ln_x + SymbolicExpression::number(2.0)));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1/(x * (ln(x) + 2)) dx = " << result.value.to_string()
@@ -428,7 +428,7 @@ void test_risch_advanced() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression ln_x = make_function("ln", x);
-        SymbolicExpression expr = SymbolicExpression::number(1.0) /
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) /
             (x * (make_power(ln_x, SymbolicExpression::number(2.0)) +
                   SymbolicExpression::number(4.0)));
         IntegrationResult result = engine.integrate(expr, "x");
@@ -444,7 +444,7 @@ void test_risch_advanced() {
         SymbolicExpression exponent =
             (make_power(x, SymbolicExpression::number(2.0)) + x).simplify();
         SymbolicExpression expr =
-            (SymbolicExpression::number(2.0) * x + SymbolicExpression::number(1.0)) *
+            (SymbolicExpression::number(2.0) * x + SymbolicExpression::number(1.0L)) *
             make_function("exp", exponent);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ (2x + 1) * exp(x^2 + x) dx = " << result.value.to_string()
@@ -520,7 +520,7 @@ void test_risch_advanced() {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression ln_x = make_function("ln", x);
         SymbolicExpression ln_ln_x = make_function("ln", ln_x);
-        SymbolicExpression expr = SymbolicExpression::number(1.0) / (x * ln_x * ln_ln_x);
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / (x * ln_x * ln_ln_x);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1/(x * ln(x) * ln(ln(x))) dx = "
                   //<< (result.success ? result.value.to_string() : "failed")
@@ -568,7 +568,7 @@ void test_risch_advanced() {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression ln_x = make_function("ln", x);
         SymbolicExpression ln_ln_x = make_function("ln", ln_x);
-        SymbolicExpression expr = SymbolicExpression::number(1.0) / (ln_x + ln_ln_x);
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / (ln_x + ln_ln_x);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1/(ln(x) + ln(ln(x))) dx stability check: "
                   //<< (result.success ? "success" : "handled") << std::endl;
@@ -604,7 +604,7 @@ void test_risch_edge_cases() {
     // Test 3: 零
     // ∫ 0 dx = 0
     {
-        SymbolicExpression expr = SymbolicExpression::number(0.0);
+        SymbolicExpression expr = SymbolicExpression::number(0.0L);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 0 dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
@@ -656,7 +656,7 @@ void test_risch_rational_advanced() {
                                  SymbolicExpression::number(5.0) * x +
                                  SymbolicExpression::number(6.0)).simplify();
         SymbolicExpression den = (make_power(x, SymbolicExpression::number(2.0)) +
-                                 SymbolicExpression::number(1.0)).simplify();
+                                 SymbolicExpression::number(1.0L)).simplify();
         SymbolicExpression expr = (num / den).simplify();
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ (x^5 + 2x^4 + 3x^3 + 4x^2 + 5x + 6) / (x^2 + 1) dx = "
@@ -669,9 +669,9 @@ void test_risch_rational_advanced() {
     // ∫ (x + 1) / (x^3 - 1) dx
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression num = (x + SymbolicExpression::number(1.0)).simplify();
+        SymbolicExpression num = (x + SymbolicExpression::number(1.0L)).simplify();
         SymbolicExpression den = (make_power(x, SymbolicExpression::number(3.0)) -
-                                 SymbolicExpression::number(1.0)).simplify();
+                                 SymbolicExpression::number(1.0L)).simplify();
         SymbolicExpression expr = (num / den).simplify();
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ (x + 1) / (x^3 - 1) dx = "
@@ -683,8 +683,8 @@ void test_risch_rational_advanced() {
     // ∫ 1 / (x^4 + 1) dx (需要复数根)
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = SymbolicExpression::number(1.0) /
-            (make_power(x, SymbolicExpression::number(4.0)) + SymbolicExpression::number(1.0));
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) /
+            (make_power(x, SymbolicExpression::number(4.0)) + SymbolicExpression::number(1.0L));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1 / (x^4 + 1) dx = "
                   //<< result.value.to_string() << " [" << result.method_used << "]" << std::endl;
@@ -696,9 +696,9 @@ void test_risch_rational_advanced() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression den = make_power(
-            make_power(x, SymbolicExpression::number(2.0)) + SymbolicExpression::number(1.0),
+            make_power(x, SymbolicExpression::number(2.0)) + SymbolicExpression::number(1.0L),
             SymbolicExpression::number(3.0));
-        SymbolicExpression expr = SymbolicExpression::number(1.0) / den;
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / den;
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1 / (x^2 + 1)^3 dx = "
                   //<< result.value.to_string() << " [" << result.method_used << "]" << std::endl;
@@ -711,7 +711,7 @@ void test_risch_rational_advanced() {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression num = (SymbolicExpression::number(2.0) * x +
                                  SymbolicExpression::number(3.0)).simplify();
-        SymbolicExpression den = ((x - SymbolicExpression::number(1.0)) *
+        SymbolicExpression den = ((x - SymbolicExpression::number(1.0L)) *
                                  make_power(x + SymbolicExpression::number(2.0),
                                            SymbolicExpression::number(2.0))).simplify();
         SymbolicExpression expr = (num / den).simplify();
@@ -727,7 +727,7 @@ void test_risch_rational_advanced() {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression num = (x + SymbolicExpression::number(2.0)).simplify();
         SymbolicExpression den = (make_power(x, SymbolicExpression::number(2.0)) + x +
-                                 SymbolicExpression::number(1.0)).simplify();
+                                 SymbolicExpression::number(1.0L)).simplify();
         SymbolicExpression expr = (num / den).simplify();
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ (x + 2) / (x^2 + x + 1) dx = "
@@ -741,7 +741,7 @@ void test_risch_rational_advanced() {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression num = make_power(x, SymbolicExpression::number(2.0));
         SymbolicExpression den = make_power(
-            make_power(x, SymbolicExpression::number(2.0)) + x + SymbolicExpression::number(1.0),
+            make_power(x, SymbolicExpression::number(2.0)) + x + SymbolicExpression::number(1.0L),
             SymbolicExpression::number(2.0));
         SymbolicExpression expr = (num / den).simplify();
         IntegrationResult result = engine.integrate(expr, "x");
@@ -791,7 +791,7 @@ void test_risch_logarithmic_advanced() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression ln_x = make_function("ln", x);
-        SymbolicExpression expr = ln_x / (x * (ln_x + SymbolicExpression::number(1.0)));
+        SymbolicExpression expr = ln_x / (x * (ln_x + SymbolicExpression::number(1.0L)));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ ln(x) / (x * (ln(x) + 1)) dx = " << result.value.to_string()
                   //<< " [" << result.method_used << "]" << std::endl;
@@ -803,7 +803,7 @@ void test_risch_logarithmic_advanced() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression ln_x = make_function("ln", x);
-        SymbolicExpression expr = SymbolicExpression::number(1.0) /
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) /
                                   (x * make_power(ln_x, SymbolicExpression::number(3.0)));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1 / (x * ln(x)^3) dx = " << result.value.to_string()
@@ -816,7 +816,7 @@ void test_risch_logarithmic_advanced() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression ln_x = make_function("ln", x);
-        SymbolicExpression expr = (ln_x + SymbolicExpression::number(1.0)) / x;
+        SymbolicExpression expr = (ln_x + SymbolicExpression::number(1.0L)) / x;
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ (ln(x) + 1) / x dx = " << result.value.to_string()
                   //<< " [" << result.method_used << "]" << std::endl;
@@ -828,7 +828,7 @@ void test_risch_logarithmic_advanced() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression ln_x = make_function("ln", x);
-        SymbolicExpression expr = SymbolicExpression::number(1.0) /
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) /
             (x * (SymbolicExpression::number(2.0) * ln_x + SymbolicExpression::number(3.0)));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1 / (x * (2*ln(x) + 3)) dx = " << result.value.to_string()
@@ -841,7 +841,7 @@ void test_risch_logarithmic_advanced() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression ln_x = make_function("ln", x);
-        SymbolicExpression expr = SymbolicExpression::number(1.0) /
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) /
             (x * (make_power(ln_x, SymbolicExpression::number(2.0)) +
                   SymbolicExpression::number(2.0) * ln_x +
                   SymbolicExpression::number(2.0)));
@@ -915,7 +915,7 @@ void test_risch_exponential_advanced() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression exponent = (make_power(x, SymbolicExpression::number(2.0)) +
-                                      SymbolicExpression::number(1.0)).simplify();
+                                      SymbolicExpression::number(1.0L)).simplify();
         SymbolicExpression expr = x * make_function("exp", exponent);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ x * exp(x^2 + 1) dx = " << result.value.to_string()
@@ -963,7 +963,7 @@ void test_risch_exponential_advanced() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression expr = (SymbolicExpression::number(2.0) * x +
-                                  SymbolicExpression::number(1.0)) *
+                                  SymbolicExpression::number(1.0L)) *
                                   make_function("exp", SymbolicExpression::number(2.0) * x);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ (2x + 1) * exp(2x) dx = " << result.value.to_string()
@@ -1210,7 +1210,7 @@ void test_risch_mixed_advanced() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression ln_x = make_function("ln", x);
-        SymbolicExpression expr = make_power(ln_x + SymbolicExpression::number(1.0),
+        SymbolicExpression expr = make_power(ln_x + SymbolicExpression::number(1.0L),
                                             SymbolicExpression::number(2.0)) / x;
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ (ln(x) + 1)^2 / x dx = " << result.value.to_string()
@@ -1225,7 +1225,7 @@ void test_risch_mixed_advanced() {
         SymbolicExpression ln_x = make_function("ln", x);
         SymbolicExpression expr = (make_power(ln_x, SymbolicExpression::number(2.0)) +
                                   SymbolicExpression::number(2.0) * ln_x +
-                                  SymbolicExpression::number(1.0)) / x;
+                                  SymbolicExpression::number(1.0L)) / x;
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ (ln(x)^2 + 2*ln(x) + 1) / x dx = " << result.value.to_string()
                   //<< " [" << result.method_used << "]" << std::endl;
@@ -1272,7 +1272,7 @@ void test_risch_algebraic_advanced() {
     // ∫ (x + 1) * sqrt(x) dx
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = (x + SymbolicExpression::number(1.0)) *
+        SymbolicExpression expr = (x + SymbolicExpression::number(1.0L)) *
                                   make_function("sqrt", x);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ (x + 1) * sqrt(x) dx = " << result.value.to_string()
@@ -1286,7 +1286,7 @@ void test_risch_algebraic_advanced() {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression expr = make_function("sqrt",
                                   SymbolicExpression::number(2.0) * x +
-                                  SymbolicExpression::number(1.0));
+                                  SymbolicExpression::number(1.0L));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ sqrt(2*x + 1) dx = " << result.value.to_string()
                   //<< " [" << result.method_used << "]" << std::endl;
@@ -1297,10 +1297,10 @@ void test_risch_algebraic_advanced() {
     // ∫ 1 / sqrt(2*x + 1) dx = sqrt(2*x + 1)
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = SymbolicExpression::number(1.0) /
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) /
                                   make_function("sqrt",
                                               SymbolicExpression::number(2.0) * x +
-                                              SymbolicExpression::number(1.0));
+                                              SymbolicExpression::number(1.0L));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1 / sqrt(2*x + 1) dx = " << result.value.to_string()
                   //<< " [" << result.method_used << "]" << std::endl;
@@ -1311,7 +1311,7 @@ void test_risch_algebraic_advanced() {
     // ∫ x * sqrt(x + 1) dx
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = x * make_function("sqrt", x + SymbolicExpression::number(1.0));
+        SymbolicExpression expr = x * make_function("sqrt", x + SymbolicExpression::number(1.0L));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ x * sqrt(x + 1) dx = " << result.value.to_string()
                   //<< " [" << result.method_used << "]" << std::endl;
@@ -1322,7 +1322,7 @@ void test_risch_algebraic_advanced() {
     // ∫ x / sqrt(x + 1) dx
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = x / make_function("sqrt", x + SymbolicExpression::number(1.0));
+        SymbolicExpression expr = x / make_function("sqrt", x + SymbolicExpression::number(1.0L));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ x / sqrt(x + 1) dx = " << result.value.to_string()
                   //<< " [" << result.method_used << "]" << std::endl;
@@ -1371,7 +1371,7 @@ void test_risch_non_elementary_advanced() {
     // ∫ 1 / ln(2x) dx (非初等)
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = SymbolicExpression::number(1.0) /
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) /
                                   make_function("ln", SymbolicExpression::number(2.0) * x);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1 / ln(2x) dx = "
@@ -1431,7 +1431,7 @@ void test_risch_regression() {
     // Test 1: 确保简单情况不会因复杂路径而失败
     // ∫ 1 dx = x
     {
-        SymbolicExpression expr = SymbolicExpression::number(1.0);
+        SymbolicExpression expr = SymbolicExpression::number(1.0L);
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1 dx = " << result.value.to_string()
                   //<< " [" << result.method_used << "]" << std::endl;
@@ -1442,7 +1442,7 @@ void test_risch_regression() {
     // ∫ x^10 dx = x^11 / 11
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = make_power(x, SymbolicExpression::number(10.0));
+        SymbolicExpression expr = make_power(x, SymbolicExpression::number(10.0L));
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ x^10 dx = " << result.value.to_string()
                   //<< " [" << result.method_used << "]" << std::endl;
@@ -1453,7 +1453,7 @@ void test_risch_regression() {
     // ∫ 1/x dx = ln(x)
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = SymbolicExpression::number(1.0) / x;
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / x;
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1/x dx = " << result.value.to_string()
                   //<< " [" << result.method_used << "]" << std::endl;
@@ -1517,8 +1517,8 @@ void test_risch_strict_semantics() {
 
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = SymbolicExpression::number(1.0) /
-            (make_power(x, SymbolicExpression::number(4.0)) + SymbolicExpression::number(1.0));
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) /
+            (make_power(x, SymbolicExpression::number(4.0)) + SymbolicExpression::number(1.0L));
         auto result = RischAlgorithm::integrate_strict(expr, "x");
         assert(!result.success);
         assert(result.type == IntegralType::kProofFailed);

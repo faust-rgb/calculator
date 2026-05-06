@@ -52,7 +52,7 @@ public:
  */
 struct PolynomialData {
     std::string variable_name;
-    std::vector<double> coefficients;
+    std::vector<long double> coefficients;
 };
 
 /**

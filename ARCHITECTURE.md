@@ -347,7 +347,7 @@ Version 1.5 introduced dedicated node types for `pi` and `e` (`NodeType::kPi` an
 - **Navigation:** Left/Right arrow keys for inline cursor movement, Home (`Ctrl+A`), and End (`Ctrl+E`).
 - **History:** Up/Down arrow keys for command recall.
 - **Editing:** `Backspace`, `Ctrl+D` (delete character at cursor), and `Ctrl+K` (clear to end of line).
-- **Autocomplete:** Single `Tab` for completion, double `Tab` for listing candidates.
+- **Autocomplete:** Single `Tab` for completion, long double `Tab` for listing candidates.
 - **Fallback:** Transparently falls back to standard `getline` when input is not a TTY.
 
 ## Persistence

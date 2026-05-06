@@ -23,7 +23,7 @@ struct TODEPoint {
     T y = T(0);
 };
 
-using ODEPoint = TODEPoint<double>;
+using ODEPoint = TODEPoint<long double>;
 
 /**
  * @struct TODESystemPoint
@@ -35,7 +35,7 @@ struct TODESystemPoint {
     std::vector<T> y;
 };
 
-using ODESystemPoint = TODESystemPoint<double>;
+using ODESystemPoint = TODESystemPoint<long double>;
 
 // ============================================================================
 // 单方程求解器
@@ -54,7 +54,7 @@ public:
     explicit TODESolver(RHSFunction rhs,
                         EventFunction event = EventFunction(),
                         T relative_tolerance = T(1e-9),
-                        T absolute_tolerance = T(1e-12));
+                        T absolute_tolerance = T(1e-12L));
 
     T solve(T x0, T y0, T x1, int steps = 100) const;
 
@@ -71,7 +71,7 @@ private:
     T absolute_tolerance_;
 };
 
-using ODESolver = TODESolver<double>;
+using ODESolver = TODESolver<long double>;
 
 // ============================================================================
 // 方程组求解器
@@ -90,7 +90,7 @@ public:
     explicit TODESystemSolver(RHSFunction rhs,
                               EventFunction event = EventFunction(),
                               T relative_tolerance = T(1e-9),
-                              T absolute_tolerance = T(1e-12));
+                              T absolute_tolerance = T(1e-12L));
 
     std::vector<T> solve(T x0, const std::vector<T>& y0, T x1, int steps = 100) const;
 
@@ -108,7 +108,7 @@ private:
     T absolute_tolerance_;
 };
 
-using ODESystemSolver = TODESystemSolver<double>;
+using ODESystemSolver = TODESystemSolver<long double>;
 
 // ============================================================================
 // 刚性 ODE 求解器 (BDF 方法)
@@ -139,7 +139,7 @@ private:
     T absolute_tolerance_;
 };
 
-using StiffODESolver = TStiffODESolver<double>;
+using StiffODESolver = TStiffODESolver<long double>;
 
 template <typename T>
 class TStiffODESystemSolver {
@@ -167,6 +167,6 @@ private:
     T absolute_tolerance_;
 };
 
-using StiffODESystemSolver = TStiffODESystemSolver<double>;
+using StiffODESystemSolver = TStiffODESystemSolver<long double>;
 
 #endif

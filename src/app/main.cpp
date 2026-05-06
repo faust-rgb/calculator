@@ -499,7 +499,7 @@ int main(int argc, char* argv[]) {
         if (arg == "--plain") {
             plain_mode = true;
         } else if (arg == "--version") {
-            std::cout << "Calculator Version 2.0.0\n";
+            std::cout << "Calculator Version 2.0.0L\n";
             return 0;
         } else if (arg == "--help" || arg == "-h") {
             std::cout << "Usage: " << argv[0] << " [options] [script.calc]\n"

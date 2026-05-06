@@ -9,11 +9,11 @@ using namespace symbolic_expression_internal;
 // AlgebraicNumber 实现
 // ============================================================================
 
-AlgebraicNumber AlgebraicNumber::from_double(double value) {
+AlgebraicNumber AlgebraicNumber::from_double(long double value) {
     // 尝试识别常见的代数数
-    double sqrt2 = mymath::sqrt(2.0);
-    double sqrt3 = mymath::sqrt(3.0);
-    double sqrt5 = mymath::sqrt(5.0);
+    long double sqrt2 = mymath::sqrt(2.0);
+    long double sqrt3 = mymath::sqrt(3.0);
+    long double sqrt5 = mymath::sqrt(5.0);
 
     if (mymath::abs(value - sqrt2) < 1e-10) {
         return sqrt(2);
@@ -59,7 +59,7 @@ AlgebraicNumber AlgebraicNumber::sqrt(int n) {
     }
 
     // 检查是否是完全平方数
-    int root = static_cast<int>(mymath::sqrt(static_cast<double>(n)));
+    int root = static_cast<int>(mymath::sqrt(static_cast<long double>(n)));
     if (root * root == n) {
         return from_integer(root);
     }
@@ -67,8 +67,8 @@ AlgebraicNumber AlgebraicNumber::sqrt(int n) {
     // 创建最小多项式 t^2 - n = 0
     std::vector<SymbolicExpression> coeffs;
     coeffs.push_back(SymbolicExpression::number(-n));
-    coeffs.push_back(SymbolicExpression::number(0.0));
-    coeffs.push_back(SymbolicExpression::number(1.0));
+    coeffs.push_back(SymbolicExpression::number(0.0L));
+    coeffs.push_back(SymbolicExpression::number(1.0L));
     SymbolicPolynomial poly(coeffs, "_t");
 
     // 隔离区间: sqrt(n) 在 (floor(sqrt(n)), ceil(sqrt(n))) 中
@@ -83,11 +83,11 @@ AlgebraicNumber AlgebraicNumber::root_of_unity(int n, int k) {
     // 这里简化处理，仅返回标记
 
     std::vector<SymbolicExpression> coeffs;
-    coeffs.push_back(SymbolicExpression::number(-1.0));
+    coeffs.push_back(SymbolicExpression::number(-1.0L));
     for (int i = 1; i < n; ++i) {
-        coeffs.push_back(SymbolicExpression::number(0.0));
+        coeffs.push_back(SymbolicExpression::number(0.0L));
     }
-    coeffs.push_back(SymbolicExpression::number(1.0));
+    coeffs.push_back(SymbolicExpression::number(1.0L));
     SymbolicPolynomial poly(coeffs, "_z");
 
     // 单位根在单位圆上
@@ -109,9 +109,9 @@ AlgebraicNumber AlgebraicNumber::add(const AlgebraicNumber& other) const {
     SymbolicPolynomial sum_poly = compute_sum_minpoly(minimal_polynomial, other.minimal_polynomial);
 
     // 计算新的隔离区间
-    double approx1 = approximate();
-    double approx2 = other.approximate();
-    double sum_approx = approx1 + approx2;
+    long double approx1 = approximate();
+    long double approx2 = other.approximate();
+    long double sum_approx = approx1 + approx2;
 
     ExactRational new_lower = ExactRational::from_double(sum_approx - 0.1);
     ExactRational new_upper = ExactRational::from_double(sum_approx + 0.1);
@@ -135,9 +135,9 @@ AlgebraicNumber AlgebraicNumber::multiply(const AlgebraicNumber& other) const {
     SymbolicPolynomial prod_poly = compute_product_minpoly(minimal_polynomial, other.minimal_polynomial);
 
     // 计算新的隔离区间
-    double approx1 = approximate();
-    double approx2 = other.approximate();
-    double prod_approx = approx1 * approx2;
+    long double approx1 = approximate();
+    long double approx2 = other.approximate();
+    long double prod_approx = approx1 * approx2;
 
     ExactRational new_lower = ExactRational::from_double(prod_approx - 0.1);
     ExactRational new_upper = ExactRational::from_double(prod_approx + 0.1);
@@ -157,7 +157,7 @@ AlgebraicNumber AlgebraicNumber::negate() const {
         SymbolicExpression coeff = minimal_polynomial.coefficient(i);
         if (i % 2 == 1) {
             // 奇次项取负
-            coeff = (SymbolicExpression::number(-1.0) * coeff).simplify();
+            coeff = (SymbolicExpression::number(-1.0L) * coeff).simplify();
         }
         new_coeffs.push_back(coeff);
     }
@@ -238,8 +238,8 @@ int AlgebraicNumber::compare(const AlgebraicNumber& other) const {
 
     // 区间重叠，需要细化
     // 这里简化处理，使用数值近似
-    double approx1 = approximate();
-    double approx2 = other.approximate();
+    long double approx1 = approximate();
+    long double approx2 = other.approximate();
 
     if (mymath::abs(approx1 - approx2) < 1e-10) {
         // 可能相等，检查最小多项式
@@ -285,14 +285,14 @@ SymbolicExpression AlgebraicNumber::to_expression() const {
 
     // 检查是否是 sqrt 形式
     if (minimal_polynomial.degree() == 2) {
-        double a = 0.0, b = 0.0, c = 0.0;
+        long double a = 0.0L, b = 0.0L, c = 0.0L;
         if (minimal_polynomial.coefficient(2).is_number(&a) &&
             minimal_polynomial.coefficient(1).is_number(&b) &&
             minimal_polynomial.coefficient(0).is_number(&c)) {
 
-            if (mymath::abs(b) < 1e-10 && mymath::abs(a - 1.0) < 1e-10) {
+            if (mymath::abs(b) < 1e-10 && mymath::abs(a - 1.0L) < 1e-10) {
                 // t^2 - c = 0, t = sqrt(-c)
-                double val = -c;
+                long double val = -c;
                 if (val > 0) {
                     SymbolicExpression sqrt_val = make_function("sqrt", SymbolicExpression::number(val));
                     if (approximate() < 0) {
@@ -359,7 +359,7 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
 
     // 构造 p1(x - t)
     // 使用二项式展开: (x - t)^i = sum_{j=0}^{i} C(i,j) * x^j * (-t)^{i-j}
-    std::vector<SymbolicExpression> p1_shifted_coeffs(d1 + 1, SymbolicExpression::number(0.0));
+    std::vector<SymbolicExpression> p1_shifted_coeffs(d1 + 1, SymbolicExpression::number(0.0L));
 
     for (int i = 0; i <= d1; ++i) {
         SymbolicExpression a_i = p1.coefficient(i);
@@ -368,7 +368,7 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
         // (x - t)^i 的展开
         for (int j = 0; j <= i; ++j) {
             // C(i, j) * x^j * (-t)^{i-j}
-            double binom = 1.0;
+            long double binom = 1.0L;
             for (int k = 0; k < j; ++k) {
                 binom = binom * (i - k) / (k + 1);
             }
@@ -379,15 +379,15 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
             // x^j 部分
             if (j > 0) {
                 term = (term * make_power(SymbolicExpression::variable(x_var),
-                                         SymbolicExpression::number(static_cast<double>(j)))).simplify();
+                                         SymbolicExpression::number(static_cast<long double>(j)))).simplify();
             }
 
             // (-t)^{i-j} 部分
             if (i - j > 0) {
-                double sign = ((i - j) % 2 == 0) ? 1.0 : -1.0;
+                long double sign = ((i - j) % 2 == 0) ? 1.0L : -1.0L;
                 term = (term * SymbolicExpression::number(sign)).simplify();
                 term = (term * make_power(SymbolicExpression::variable(t_var),
-                                         SymbolicExpression::number(static_cast<double>(i - j)))).simplify();
+                                         SymbolicExpression::number(static_cast<long double>(i - j)))).simplify();
             }
 
             // 将项添加到对应 x^j 的系数
@@ -410,8 +410,8 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
     // alpha + beta 的最小多项式可以通过消元得到
 
     // 对于简单情况（数值系数），使用直接方法
-    double a1 = 0.0, b1 = 0.0, c1 = 0.0;
-    double a2 = 0.0, b2 = 0.0, c2 = 0.0;
+    long double a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
+    long double a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
 
     bool p1_numeric = (d1 == 2 &&
                       p1.coefficient(2).is_number(&a1) &&
@@ -430,18 +430,18 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
         // p2: a2*t^2 + b2*t + c2 = 0
 
         // 简化：假设 p1 = t^2 - r1, p2 = t^2 - r2 (即 sqrt(r1), sqrt(r2))
-        if (mymath::abs(a1 - 1.0) < 1e-10 && mymath::abs(b1) < 1e-10 &&
-            mymath::abs(a2 - 1.0) < 1e-10 && mymath::abs(b2) < 1e-10) {
-            double r1 = -c1;
-            double r2 = -c2;
+        if (mymath::abs(a1 - 1.0L) < 1e-10 && mymath::abs(b1) < 1e-10 &&
+            mymath::abs(a2 - 1.0L) < 1e-10 && mymath::abs(b2) < 1e-10) {
+            long double r1 = -c1;
+            long double r2 = -c2;
 
             // sqrt(r1) + sqrt(r2) 的最小多项式是 t^4 - 2*(r1+r2)*t^2 + (r1-r2)^2
             std::vector<SymbolicExpression> coeffs(5);
             coeffs[0] = SymbolicExpression::number((r1 - r2) * (r1 - r2));  // (r1-r2)^2
-            coeffs[1] = SymbolicExpression::number(0.0);
+            coeffs[1] = SymbolicExpression::number(0.0L);
             coeffs[2] = SymbolicExpression::number(-2.0 * (r1 + r2));  // -2*(r1+r2)
-            coeffs[3] = SymbolicExpression::number(0.0);
-            coeffs[4] = SymbolicExpression::number(1.0);  // t^4
+            coeffs[3] = SymbolicExpression::number(0.0L);
+            coeffs[4] = SymbolicExpression::number(1.0L);  // t^4
 
             return SymbolicPolynomial(coeffs, "_t");
         }
@@ -449,9 +449,9 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
 
     // 一般情况：返回占位多项式
     // 完整实现需要符号结式计算
-    std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0));
-    coeffs[0] = SymbolicExpression::number(-1.0);
-    coeffs[new_deg] = SymbolicExpression::number(1.0);
+    std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0L));
+    coeffs[0] = SymbolicExpression::number(-1.0L);
+    coeffs[new_deg] = SymbolicExpression::number(1.0L);
 
     return SymbolicPolynomial(coeffs, "_t");
 }
@@ -470,8 +470,8 @@ SymbolicPolynomial AlgebraicNumber::compute_product_minpoly(
     if (d2 <= 0) return p1;
 
     // 对于简单情况（数值系数），使用直接方法
-    double a1 = 0.0, b1 = 0.0, c1 = 0.0;
-    double a2 = 0.0, b2 = 0.0, c2 = 0.0;
+    long double a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
+    long double a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
 
     bool p1_numeric = (d1 == 2 &&
                       p1.coefficient(2).is_number(&a1) &&
@@ -485,17 +485,17 @@ SymbolicPolynomial AlgebraicNumber::compute_product_minpoly(
 
     if (p1_numeric && p2_numeric) {
         // sqrt(r1) * sqrt(r2) = sqrt(r1 * r2)
-        if (mymath::abs(a1 - 1.0) < 1e-10 && mymath::abs(b1) < 1e-10 &&
-            mymath::abs(a2 - 1.0) < 1e-10 && mymath::abs(b2) < 1e-10) {
-            double r1 = -c1;
-            double r2 = -c2;
-            double r_product = r1 * r2;
+        if (mymath::abs(a1 - 1.0L) < 1e-10 && mymath::abs(b1) < 1e-10 &&
+            mymath::abs(a2 - 1.0L) < 1e-10 && mymath::abs(b2) < 1e-10) {
+            long double r1 = -c1;
+            long double r2 = -c2;
+            long double r_product = r1 * r2;
 
             // sqrt(r1 * r2) 的最小多项式是 t^2 - r1*r2
             std::vector<SymbolicExpression> coeffs(3);
             coeffs[0] = SymbolicExpression::number(-r_product);
-            coeffs[1] = SymbolicExpression::number(0.0);
-            coeffs[2] = SymbolicExpression::number(1.0);
+            coeffs[1] = SymbolicExpression::number(0.0L);
+            coeffs[2] = SymbolicExpression::number(1.0L);
 
             return SymbolicPolynomial(coeffs, "_t");
         }
@@ -504,9 +504,9 @@ SymbolicPolynomial AlgebraicNumber::compute_product_minpoly(
     int new_deg = d1 * d2;
 
     // 一般情况：返回占位多项式
-    std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0));
-    coeffs[0] = SymbolicExpression::number(-1.0);
-    coeffs[new_deg] = SymbolicExpression::number(1.0);
+    std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0L));
+    coeffs[0] = SymbolicExpression::number(-1.0L);
+    coeffs[new_deg] = SymbolicExpression::number(1.0L);
 
     return SymbolicPolynomial(coeffs, "_t");
 }
@@ -527,16 +527,16 @@ SymbolicExpression compute_resultant_symbolic(const SymbolicPolynomial& p, const
     int n = q.degree();
 
     if (m < 0 || n < 0) {
-        return SymbolicExpression::number(0.0);
+        return SymbolicExpression::number(0.0L);
     }
 
     if (m == 0 && n == 0) {
-        return SymbolicExpression::number(1.0);
+        return SymbolicExpression::number(1.0L);
     }
 
     if (m == 0) {
         // Resultant is p^m
-        SymbolicExpression result = SymbolicExpression::number(1.0);
+        SymbolicExpression result = SymbolicExpression::number(1.0L);
         SymbolicExpression p_lc = p.leading_coefficient();
         for (int i = 0; i < n; ++i) {
             result = (result * p_lc).simplify();
@@ -546,7 +546,7 @@ SymbolicExpression compute_resultant_symbolic(const SymbolicPolynomial& p, const
 
     if (n == 0) {
         // Resultant is q^n
-        SymbolicExpression result = SymbolicExpression::number(1.0);
+        SymbolicExpression result = SymbolicExpression::number(1.0L);
         SymbolicExpression q_lc = q.leading_coefficient();
         for (int i = 0; i < m; ++i) {
             result = (result * q_lc).simplify();
@@ -579,8 +579,8 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
     if (d2 <= 0) return p1;
 
     // Special case: both are quadratic with no linear term (sqrt case)
-    double a1 = 0.0, b1 = 0.0, c1 = 0.0;
-    double a2 = 0.0, b2 = 0.0, c2 = 0.0;
+    long double a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
+    long double a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
 
     bool p1_numeric = (d1 == 2 &&
                       p1.coefficient(2).is_number(&a1) &&
@@ -592,18 +592,18 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
                       p2.coefficient(1).is_number(&b2) &&
                       p2.coefficient(0).is_number(&c2));
 
-    if (p1_numeric && p2_numeric && mymath::abs(a1 - 1.0) < 1e-10 && mymath::abs(b1) < 1e-10 &&
-        mymath::abs(a2 - 1.0) < 1e-10 && mymath::abs(b2) < 1e-10) {
-        double r1 = -c1;
-        double r2 = -c2;
+    if (p1_numeric && p2_numeric && mymath::abs(a1 - 1.0L) < 1e-10 && mymath::abs(b1) < 1e-10 &&
+        mymath::abs(a2 - 1.0L) < 1e-10 && mymath::abs(b2) < 1e-10) {
+        long double r1 = -c1;
+        long double r2 = -c2;
 
         // sqrt(r1) + sqrt(r2) has minpoly t^4 - 2*(r1+r2)*t^2 + (r1-r2)^2
         std::vector<SymbolicExpression> coeffs(5);
         coeffs[0] = SymbolicExpression::number((r1 - r2) * (r1 - r2));
-        coeffs[1] = SymbolicExpression::number(0.0);
+        coeffs[1] = SymbolicExpression::number(0.0L);
         coeffs[2] = SymbolicExpression::number(-2.0 * (r1 + r2));
-        coeffs[3] = SymbolicExpression::number(0.0);
-        coeffs[4] = SymbolicExpression::number(1.0);
+        coeffs[3] = SymbolicExpression::number(0.0L);
+        coeffs[4] = SymbolicExpression::number(1.0L);
 
         return SymbolicPolynomial(coeffs, "_t");
     }
@@ -618,7 +618,7 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
     // Check if all coefficients are numeric
     bool all_numeric = true;
     for (int i = 0; i <= d1; ++i) {
-        double val;
+        long double val;
         if (!p1.coefficient(i).is_number(&val)) {
             all_numeric = false;
             break;
@@ -626,7 +626,7 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
     }
     if (all_numeric) {
         for (int i = 0; i <= d2; ++i) {
-            double val;
+            long double val;
             if (!p2.coefficient(i).is_number(&val)) {
                 all_numeric = false;
                 break;
@@ -636,7 +636,7 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
 
     if (all_numeric) {
         // Extract numeric coefficients
-        std::vector<double> p1_coeffs(d1 + 1), p2_coeffs(d2 + 1);
+        std::vector<long double> p1_coeffs(d1 + 1), p2_coeffs(d2 + 1);
         for (int i = 0; i <= d1; ++i) {
             p1.coefficient(i).is_number(&p1_coeffs[i]);
         }
@@ -650,16 +650,16 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
 
         // This requires expanding (x - t)^i and collecting coefficients
         // For simplicity, use the existing resultant method
-        return SymbolicPolynomial({SymbolicExpression::number(-1.0),
-                                   SymbolicExpression::number(0.0),
-                                   SymbolicExpression::number(1.0)}, "_t");
+        return SymbolicPolynomial({SymbolicExpression::number(-1.0L),
+                                   SymbolicExpression::number(0.0L),
+                                   SymbolicExpression::number(1.0L)}, "_t");
     }
 
     // Fallback: return placeholder polynomial
     int new_deg = d1 * d2;
-    std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0));
-    coeffs[0] = SymbolicExpression::number(-1.0);
-    coeffs[new_deg] = SymbolicExpression::number(1.0);
+    std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0L));
+    coeffs[0] = SymbolicExpression::number(-1.0L);
+    coeffs[new_deg] = SymbolicExpression::number(1.0L);
 
     return SymbolicPolynomial(coeffs, "_t");
 }
@@ -681,8 +681,8 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
     if (d2 <= 0) return p1;
 
     // Special case: both are quadratic with no linear term (sqrt case)
-    double a1 = 0.0, b1 = 0.0, c1 = 0.0;
-    double a2 = 0.0, b2 = 0.0, c2 = 0.0;
+    long double a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
+    long double a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
 
     bool p1_numeric = (d1 == 2 &&
                       p1.coefficient(2).is_number(&a1) &&
@@ -694,17 +694,17 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
                       p2.coefficient(1).is_number(&b2) &&
                       p2.coefficient(0).is_number(&c2));
 
-    if (p1_numeric && p2_numeric && mymath::abs(a1 - 1.0) < 1e-10 && mymath::abs(b1) < 1e-10 &&
-        mymath::abs(a2 - 1.0) < 1e-10 && mymath::abs(b2) < 1e-10) {
-        double r1 = -c1;
-        double r2 = -c2;
-        double r_product = r1 * r2;
+    if (p1_numeric && p2_numeric && mymath::abs(a1 - 1.0L) < 1e-10 && mymath::abs(b1) < 1e-10 &&
+        mymath::abs(a2 - 1.0L) < 1e-10 && mymath::abs(b2) < 1e-10) {
+        long double r1 = -c1;
+        long double r2 = -c2;
+        long double r_product = r1 * r2;
 
         // sqrt(r1) * sqrt(r2) = sqrt(r1 * r2)
         std::vector<SymbolicExpression> coeffs(3);
         coeffs[0] = SymbolicExpression::number(-r_product);
-        coeffs[1] = SymbolicExpression::number(0.0);
-        coeffs[2] = SymbolicExpression::number(1.0);
+        coeffs[1] = SymbolicExpression::number(0.0L);
+        coeffs[2] = SymbolicExpression::number(1.0L);
 
         return SymbolicPolynomial(coeffs, "_t");
     }
@@ -715,7 +715,7 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
     // For numerical coefficients, compute directly
     bool all_numeric = true;
     for (int i = 0; i <= d1; ++i) {
-        double val;
+        long double val;
         if (!p1.coefficient(i).is_number(&val)) {
             all_numeric = false;
             break;
@@ -723,7 +723,7 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
     }
     if (all_numeric) {
         for (int i = 0; i <= d2; ++i) {
-            double val;
+            long double val;
             if (!p2.coefficient(i).is_number(&val)) {
                 all_numeric = false;
                 break;
@@ -744,17 +744,17 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
 
         // If we can't extract coefficients, return a placeholder
         int new_deg = d1 * d2;
-        std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0));
-        coeffs[0] = SymbolicExpression::number(-1.0);
-        coeffs[new_deg] = SymbolicExpression::number(1.0);
+        std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0L));
+        coeffs[0] = SymbolicExpression::number(-1.0L);
+        coeffs[new_deg] = SymbolicExpression::number(1.0L);
         return SymbolicPolynomial(coeffs, "_t");
     }
 
     // Fallback: return placeholder polynomial
     int new_deg = d1 * d2;
-    std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0));
-    coeffs[0] = SymbolicExpression::number(-1.0);
-    coeffs[new_deg] = SymbolicExpression::number(1.0);
+    std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0L));
+    coeffs[0] = SymbolicExpression::number(-1.0L);
+    coeffs[new_deg] = SymbolicExpression::number(1.0L);
 
     return SymbolicPolynomial(coeffs, "_t");
 }
@@ -857,14 +857,14 @@ AlgebraicNumber::complex_roots_of(const SymbolicPolynomial& poly) {
         // ax^2 + bx + c = 0 的根为 (-b ± sqrt(b^2-4ac)) / (2a)
         // 当判别式 < 0 时，实部为 -b/(2a)
 
-        double a = 0.0, b = 0.0, c = 0.0;
+        long double a = 0.0L, b = 0.0L, c = 0.0L;
         if (poly.coefficient(2).is_number(&a) &&
             poly.coefficient(1).is_number(&b) &&
             poly.coefficient(0).is_number(&c)) {
 
-            double real_part = -b / (2.0 * a);
-            double disc = b * b - 4.0 * a * c;  // 负数
-            double imag_part = mymath::sqrt(-disc) / (2.0 * mymath::abs(a));
+            long double real_part = -b / (2.0 * a);
+            long double disc = b * b - 4.0 * a * c;  // 负数
+            long double imag_part = mymath::sqrt(-disc) / (2.0 * mymath::abs(a));
 
             // 创建实部和虚部的代数数表示
             // 实部是有理数
@@ -874,8 +874,8 @@ AlgebraicNumber::complex_roots_of(const SymbolicPolynomial& poly) {
             // 构造 t^2 - imag_part^2 = 0 的根
             std::vector<SymbolicExpression> coeffs(3);
             coeffs[0] = SymbolicExpression::number(-imag_part * imag_part);
-            coeffs[1] = SymbolicExpression::number(0.0);
-            coeffs[2] = SymbolicExpression::number(1.0);
+            coeffs[1] = SymbolicExpression::number(0.0L);
+            coeffs[2] = SymbolicExpression::number(1.0L);
             SymbolicPolynomial imag_poly(coeffs, "_t");
 
             AlgebraicNumber imag_alg(imag_poly, ExactRational(0), ExactRational(static_cast<int>(imag_part) + 1),
@@ -938,7 +938,7 @@ std::vector<SymbolicPolynomial> sturm_sequence(const SymbolicPolynomial& p) {
             // 取负: 将每个系数取负
             std::vector<SymbolicExpression> neg_coeffs;
             for (int i = 0; i <= r.degree(); ++i) {
-                neg_coeffs.push_back((SymbolicExpression::number(-1.0) * r.coefficient(i)).simplify());
+                neg_coeffs.push_back((SymbolicExpression::number(-1.0L) * r.coefficient(i)).simplify());
             }
             seq.push_back(SymbolicPolynomial(neg_coeffs, r.variable_name()));
         } else {
@@ -951,11 +951,11 @@ std::vector<SymbolicPolynomial> sturm_sequence(const SymbolicPolynomial& p) {
 
 int sign_variations(const SymbolicPolynomial& p, const ExactRational& x) {
     // 计算多项式在 x 处的符号
-    double x_val = x.to_double();
-    double val = 0.0;
+    long double x_val = x.to_double();
+    long double val = 0.0L;
 
     for (int i = 0; i <= p.degree(); ++i) {
-        double coeff = 0.0;
+        long double coeff = 0.0L;
         if (p.coefficient(i).is_number(&coeff)) {
             val += coeff * mymath::pow(x_val, i);
         }
@@ -1074,7 +1074,7 @@ SymbolicExpression norm(const AlgebraicNumber& a) {
     }
 
     // 范数是最小多项式常数项的绝对值（对于首一多项式）
-    double const_term = 0.0;
+    long double const_term = 0.0L;
     if (a.minimal_polynomial.coefficient(0).is_number(&const_term)) {
         return SymbolicExpression::number(mymath::abs(const_term));
     }
@@ -1089,7 +1089,7 @@ SymbolicExpression trace(const AlgebraicNumber& a) {
     }
 
     // 迹是次高次系数的相反数（对于首一多项式）
-    double coeff = 0.0;
+    long double coeff = 0.0L;
     if (a.minimal_polynomial.coefficient(a.minimal_polynomial.degree() - 1).is_number(&coeff)) {
         return SymbolicExpression::number(-coeff);
     }
@@ -1100,7 +1100,7 @@ SymbolicExpression trace(const AlgebraicNumber& a) {
 SymbolicExpression algebraic_sum_to_expression(
     const std::vector<std::pair<AlgebraicNumber, SymbolicPolynomial>>& terms) {
 
-    SymbolicExpression result = SymbolicExpression::number(0.0);
+    SymbolicExpression result = SymbolicExpression::number(0.0L);
 
     for (const auto& [coeff, poly] : terms) {
         SymbolicExpression term = coeff.to_expression();

@@ -47,7 +47,7 @@ int run_logic_limit_root_tests(int& passed, int& failed) {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("limit(h, 0)", &output);
-        if (handled && nearly_equal(calculator.evaluate(output), 1.0, 1e-8)) {
+        if (handled && nearly_equal(calculator.evaluate(output), 1.0L, 1e-8)) {
             ++passed;
         } else {
             ++failed;
@@ -64,7 +64,7 @@ int run_logic_limit_root_tests(int& passed, int& failed) {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("limit(h, 0, 1)", &output);
-        if (handled && nearly_equal(calculator.evaluate(output), 1.0, 1e-8)) {
+        if (handled && nearly_equal(calculator.evaluate(output), 1.0L, 1e-8)) {
             ++passed;
         } else {
             ++failed;
@@ -146,7 +146,7 @@ int run_logic_limit_root_tests(int& passed, int& failed) {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("limit(ecl, 0)", &output);
-        if (handled && nearly_equal(calculator.evaluate(output), 1.0, 1e-8)) {
+        if (handled && nearly_equal(calculator.evaluate(output), 1.0L, 1e-8)) {
             ++passed;
         } else {
             ++failed;

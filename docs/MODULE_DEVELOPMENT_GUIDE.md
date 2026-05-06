@@ -46,7 +46,7 @@ private:
         auto args = split_arguments(inside);
 
         // 使用上下文
-        double value = ctx.parse_decimal(args[0]);
+        long double value = ctx.parse_decimal(args[0]);
 
         // 返回结果
         *output = std::to_string(value * 2);
@@ -97,9 +97,9 @@ struct CommandContext {
     std::map<std::string, ScriptFunction>* script_functions;
 
     // 回调函数
-    std::function<double(const std::string&)> parse_decimal;
+    std::function<long double(const std::string&)> parse_decimal;
     std::function<std::string(const std::string&, bool)> evaluate_for_display;
-    std::function<double(double)> normalize_result;
+    std::function<long double(double)> normalize_result;
 
     // 配置
     bool symbolic_constants_mode;
@@ -148,7 +148,7 @@ if (args.size() < 2) {
 
 ```cpp
 // 解析数值
-double value = ctx.parse_decimal(expression);
+long double value = ctx.parse_decimal(expression);
 
 // 访问变量
 auto it = ctx.variables->find(var_name);

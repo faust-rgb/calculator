@@ -19,7 +19,7 @@ T t_abs(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::abs(val);
     } else {
-        return mymath::abs(static_cast<double>(val));
+        return mymath::abs(static_cast<long double>(val));
     }
 }
 
@@ -28,7 +28,7 @@ T t_sqrt(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::sqrt(val);
     } else {
-        return mymath::sqrt(static_cast<double>(val));
+        return mymath::sqrt(static_cast<long double>(val));
     }
 }
 
@@ -37,7 +37,7 @@ T t_pow(const T& base, const T& exponent) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::pow(base, exponent);
     } else {
-        return mymath::pow(static_cast<double>(base), static_cast<double>(exponent));
+        return mymath::pow(static_cast<long double>(base), static_cast<long double>(exponent));
     }
 }
 
@@ -46,7 +46,7 @@ bool t_isfinite(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::isfinite(val);
     } else {
-        return mymath::isfinite(static_cast<double>(val));
+        return mymath::isfinite(static_cast<long double>(val));
     }
 }
 
@@ -148,13 +148,13 @@ std::vector<T> combine_rkf_state(const std::vector<T>& y,
 }
 
 // BDF 系数表 (阶数 1-5)
-constexpr double kBdfCoefficients[][7] = {
+constexpr long double kBdfCoefficients[][7] = {
     {},  // 占位，阶数从 1 开始
-    {1.0, -1.0, 1.0},                                    // BDF1: y_{n+1} - y_n = h * f_{n+1}
-    {3.0/2.0, -2.0, 1.0/2.0, 1.0},                       // BDF2
-    {11.0/6.0, -3.0, 3.0/2.0, -1.0/3.0, 1.0},            // BDF3
-    {25.0/12.0, -4.0, 3.0, -4.0/3.0, 1.0/4.0, 1.0},      // BDF4
-    {137.0/60.0, -5.0, 5.0, -10.0/3.0, 5.0/4.0, -1.0/5.0, 1.0}  // BDF5
+    {1.0L, -1.0L, 1.0L},                                    // BDF1: y_{n+1} - y_n = h * f_{n+1}
+    {3.0/2.0, -2.0, 1.0L/2.0, 1.0L},                       // BDF2
+    {11.0L/6.0, -3.0, 3.0/2.0, -1.0L/3.0, 1.0L},            // BDF3
+    {25.0/12.0, -4.0, 3.0, -4.0/3.0, 1.0L/4.0, 1.0L},      // BDF4
+    {137.0/60.0L, -5.0, 5.0, -10.0L/3.0, 5.0/4.0, -1.0L/5.0, 1.0L}  // BDF5
 };
 
 }  // namespace
@@ -235,12 +235,12 @@ T TODESolver<T>::integrate_segment(T x0, T y0, T x1) const {
         return y0;
     }
 
-    const T direction = segment > T(0) ? T(1.0) : T(-1.0);
+    const T direction = segment > T(0) ? T(1.0L) : T(-1.0L);
     const T segment_abs = t_abs(segment);
-    const T min_step = std::max(T(1e-12), segment_abs * T(1e-9));
+    const T min_step = std::max(T(1e-12L), segment_abs * T(1e-9));
     const T max_step = segment_abs;
     const T tolerance = absolute_tolerance_ + relative_tolerance_ *
-        std::max({T(1.0), t_abs(segment), t_abs(x0), t_abs(x1)});
+        std::max({T(1.0L), t_abs(segment), t_abs(x0), t_abs(x1)});
 
     T x = x0;
     T y = y0;
@@ -259,7 +259,7 @@ T TODESolver<T>::integrate_segment(T x0, T y0, T x1) const {
         const auto step = rkf45_step(x, y, h);
         const T candidate_y = step.first;
         const T error = step.second;
-        const T scale = std::max({T(1.0), t_abs(y), t_abs(candidate_y)});
+        const T scale = std::max({T(1.0L), t_abs(y), t_abs(candidate_y)});
 
         const T allowed_error = tolerance + relative_tolerance_ * scale;
 
@@ -272,7 +272,7 @@ T TODESolver<T>::integrate_segment(T x0, T y0, T x1) const {
 
             const T growth =
                 error == T(0) ? T(2.0) : t_clamp(T(0.9) * t_pow(allowed_error / error, T(0.2)),
-                                                 T(0.5),
+                                                 T(0.5L),
                                                  T(2.0));
             h = direction *
                 std::min(max_step, std::max(min_step, t_abs(h) * growth));
@@ -281,7 +281,7 @@ T TODESolver<T>::integrate_segment(T x0, T y0, T x1) const {
 
         const T shrink = t_clamp(T(0.9) * t_pow(allowed_error / error, T(0.25)),
                                  T(0.1),
-                                 T(0.5));
+                                 T(0.5L));
         h = direction * std::max(min_step, t_abs(h) * shrink);
     }
 
@@ -310,12 +310,12 @@ TODEPoint<T> TODESolver<T>::integrate_segment_with_event(T x0,
         return {x0, y0};
     }
 
-    const T direction = segment > T(0) ? T(1.0) : T(-1.0);
+    const T direction = segment > T(0) ? T(1.0L) : T(-1.0L);
     const T segment_abs = t_abs(segment);
-    const T min_step = std::max(T(1e-12), segment_abs * T(1e-9));
+    const T min_step = std::max(T(1e-12L), segment_abs * T(1e-9));
     const T max_step = segment_abs;
     const T tolerance = absolute_tolerance_ + relative_tolerance_ *
-        std::max({T(1.0), t_abs(segment), t_abs(x0), t_abs(x1)});
+        std::max({T(1.0L), t_abs(segment), t_abs(x0), t_abs(x1)});
 
     T x = x0;
     T y = y0;
@@ -335,14 +335,14 @@ TODEPoint<T> TODESolver<T>::integrate_segment_with_event(T x0,
         const auto step = rkf45_step(x, y, h);
         const T candidate_y = step.first;
         const T error = step.second;
-        const T scale = std::max({T(1.0), t_abs(y), t_abs(candidate_y)});
+        const T scale = std::max({T(1.0L), t_abs(y), t_abs(candidate_y)});
 
         const T allowed_error = tolerance + relative_tolerance_ * scale;
 
         if (error > allowed_error && t_abs(h) > min_step) {
             const T shrink = t_clamp(T(0.9) * t_pow(allowed_error / error, T(0.25)),
                                      T(0.1),
-                                     T(0.5));
+                                     T(0.5L));
             h = direction * std::max(min_step, t_abs(h) * shrink);
             continue;
         }
@@ -359,11 +359,11 @@ TODEPoint<T> TODESolver<T>::integrate_segment_with_event(T x0,
             const T step_h = candidate_x - x;
 
             T t_low = T(0);
-            T t_high = T(1.0);
-            T t_root = T(0.5);
+            T t_high = T(1.0L);
+            T t_root = T(0.5L);
 
             for (int i = 0; i < 15; ++i) {
-                t_root = (t_low + t_high) * T(0.5);
+                t_root = (t_low + t_high) * T(0.5L);
                 const T t2 = t_root * t_root;
                 const T t3 = t2 * t_root;
 
@@ -391,7 +391,7 @@ TODEPoint<T> TODESolver<T>::integrate_segment_with_event(T x0,
 
         const T growth =
             error == T(0) ? T(2.0) : t_clamp(T(0.9) * t_pow(allowed_error / error, T(0.2)),
-                                             T(0.5),
+                                             T(0.5L),
                                              T(2.0));
         h = direction *
             std::min(max_step, std::max(min_step, t_abs(h) * growth));
@@ -406,21 +406,21 @@ std::pair<T, T> TODESolver<T>::rkf45_step(T x, T y, T h) const {
     const T k2 = h * rhs_(x + T(0.25) * h, y + T(0.25) * k1);
     const T k3 = h * rhs_(x + T(3.0) * h / T(8.0), y + T(3.0) * k1 / T(32.0) + T(9.0) * k2 / T(32.0));
     const T k4 = h * rhs_(x + T(12.0) * h / T(13.0), y + T(1932.0) * k1 / T(2197.0) -
-                                                     T(7200.0) * k2 / T(2197.0) +
+                                                     T(7200.0L) * k2 / T(2197.0) +
                                                      T(7296.0) * k3 / T(2197.0));
     const T k5 = h * rhs_(x + h, y + T(439.0) * k1 / T(216.0) -
                                  T(8.0) * k2 +
-                                 T(3680.0) * k3 / T(513.0) -
+                                 T(3680.0L) * k3 / T(513.0) -
                                  T(845.0) * k4 / T(4104.0));
-    const T k6 = h * rhs_(x + T(0.5) * h, y - T(8.0) * k1 / T(27.0) +
+    const T k6 = h * rhs_(x + T(0.5L) * h, y - T(8.0) * k1 / T(27.0) +
                                           T(2.0) * k2 -
                                           T(3544.0) * k3 / T(2565.0) +
                                           T(1859.0) * k4 / T(4104.0) -
-                                          T(11.0) * k5 / T(40.0));
+                                          T(11.0L) * k5 / T(40.0L));
     const T fourth = y + T(25.0) * k1 / T(216.0) + T(1408.0) * k3 / T(2565.0) +
                      T(2197.0) * k4 / T(4104.0) - k5 / T(5.0);
     const T fifth = y + T(16.0) * k1 / T(135.0) + T(6656.0) * k3 / T(12825.0) +
-                    T(28561.0) * k4 / T(56430.0) - T(9.0) * k5 / T(50.0) +
+                    T(28561.0L) * k4 / T(56430.0L) - T(9.0) * k5 / T(50.0L) +
                     T(2.0) * k6 / T(55.0);
     return {fifth, t_abs(fifth - fourth)};
 }
@@ -509,12 +509,12 @@ std::vector<T> TODESystemSolver<T>::integrate_segment(T x0,
         return y0;
     }
 
-    const T direction = segment > T(0) ? T(1.0) : T(-1.0);
+    const T direction = segment > T(0) ? T(1.0L) : T(-1.0L);
     const T segment_abs = t_abs(segment);
-    const T min_step = std::max(T(1e-12), segment_abs * T(1e-9));
+    const T min_step = std::max(T(1e-12L), segment_abs * T(1e-9));
     const T max_step = segment_abs;
     const T tolerance = absolute_tolerance_ + relative_tolerance_ *
-        std::max({T(1.0), t_abs(segment), t_abs(x0), t_abs(x1)});
+        std::max({T(1.0L), t_abs(segment), t_abs(x0), t_abs(x1)});
 
     T x = x0;
     std::vector<T> y = y0;
@@ -533,7 +533,7 @@ std::vector<T> TODESystemSolver<T>::integrate_segment(T x0,
         const auto step = rkf45_step(x, y, h);
         const std::vector<T>& candidate_y = step.first;
         const T error = step.second;
-        const T scale = std::max({T(1.0), max_abs_component(y), max_abs_component(candidate_y)});
+        const T scale = std::max({T(1.0L), max_abs_component(y), max_abs_component(candidate_y)});
 
         const T allowed_error = tolerance + relative_tolerance_ * scale;
         if (error <= allowed_error || t_abs(h) <= min_step) {
@@ -547,7 +547,7 @@ std::vector<T> TODESystemSolver<T>::integrate_segment(T x0,
 
             const T growth =
                 error == T(0) ? T(2.0) : t_clamp(T(0.9) * t_pow(allowed_error / error, T(0.2)),
-                                                 T(0.5),
+                                                 T(0.5L),
                                                  T(2.0));
             h = direction *
                 std::min(max_step, std::max(min_step, t_abs(h) * growth));
@@ -556,7 +556,7 @@ std::vector<T> TODESystemSolver<T>::integrate_segment(T x0,
 
         const T shrink = t_clamp(T(0.9) * t_pow(allowed_error / error, T(0.25)),
                                  T(0.1),
-                                 T(0.5));
+                                 T(0.5L));
         h = direction * std::max(min_step, t_abs(h) * shrink);
     }
 
@@ -585,12 +585,12 @@ TODESystemPoint<T> TODESystemSolver<T>::integrate_segment_with_event(T x0,
         return {x0, y0};
     }
 
-    const T direction = segment > T(0) ? T(1.0) : T(-1.0);
+    const T direction = segment > T(0) ? T(1.0L) : T(-1.0L);
     const T segment_abs = t_abs(segment);
-    const T min_step = std::max(T(1e-12), segment_abs * T(1e-9));
+    const T min_step = std::max(T(1e-12L), segment_abs * T(1e-9));
     const T max_step = segment_abs;
     const T tolerance = absolute_tolerance_ + relative_tolerance_ *
-        std::max({T(1.0), t_abs(segment), t_abs(x0), t_abs(x1)});
+        std::max({T(1.0L), t_abs(segment), t_abs(x0), t_abs(x1)});
 
     T x = x0;
     std::vector<T> y = y0;
@@ -610,13 +610,13 @@ TODESystemPoint<T> TODESystemSolver<T>::integrate_segment_with_event(T x0,
         const auto step = rkf45_step(x, y, h);
         const std::vector<T>& candidate_y = step.first;
         const T error = step.second;
-        const T scale = std::max({T(1.0), max_abs_component(y), max_abs_component(candidate_y)});
+        const T scale = std::max({T(1.0L), max_abs_component(y), max_abs_component(candidate_y)});
 
         const T allowed_error = tolerance + relative_tolerance_ * scale;
         if (error > allowed_error && t_abs(h) > min_step) {
             const T shrink = t_clamp(T(0.9) * t_pow(allowed_error / error, T(0.25)),
                                      T(0.1),
-                                     T(0.5));
+                                     T(0.5L));
             h = direction * std::max(min_step, t_abs(h) * shrink);
             continue;
         }
@@ -635,11 +635,11 @@ TODESystemPoint<T> TODESystemSolver<T>::integrate_segment_with_event(T x0,
             const T step_h = candidate_x - x;
             
             T t_low = T(0);
-            T t_high = T(1.0);
-            T t_root = T(0.5);
+            T t_high = T(1.0L);
+            T t_root = T(0.5L);
             
             for (int i = 0; i < 15; ++i) {
-                t_root = (t_low + t_high) * T(0.5);
+                t_root = (t_low + t_high) * T(0.5L);
                 const T t2 = t_root * t_root;
                 const T t3 = t2 * t_root;
                 const T h00 = T(2)*t3 - T(3)*t2 + T(1);
@@ -679,7 +679,7 @@ TODESystemPoint<T> TODESystemSolver<T>::integrate_segment_with_event(T x0,
 
         const T growth =
             error == T(0) ? T(2.0) : t_clamp(T(0.9) * t_pow(allowed_error / error, T(0.2)),
-                                             T(0.5),
+                                             T(0.5L),
                                              T(2.0));
         h = direction *
             std::min(max_step, std::max(min_step, t_abs(h) * growth));
@@ -693,8 +693,8 @@ std::vector<T> TODESystemSolver<T>::rk4_step(T x,
                                              const std::vector<T>& y,
                                              T h) const {
     const std::vector<T> k1 = rhs_(x, y);
-    const std::vector<T> k2 = rhs_(x + T(0.5) * h, add_scaled(y, k1, T(0.5) * h));
-    const std::vector<T> k3 = rhs_(x + T(0.5) * h, add_scaled(y, k2, T(0.5) * h));
+    const std::vector<T> k2 = rhs_(x + T(0.5L) * h, add_scaled(y, k1, T(0.5L) * h));
+    const std::vector<T> k3 = rhs_(x + T(0.5L) * h, add_scaled(y, k2, T(0.5L) * h));
     const std::vector<T> k4 = rhs_(x + h, add_scaled(y, k3, h));
     if (k1.size() != y.size() || k2.size() != y.size() ||
         k3.size() != y.size() || k4.size() != y.size()) {
@@ -723,7 +723,7 @@ std::pair<std::vector<T>, T> TODESystemSolver<T>::rkf45_step(
         k1[i] = h * f1[i];
     }
 
-    const std::vector<T> y2 = combine_rkf_state(y, T(1.0) / T(4.0), k1, T(0), k1, T(0), k1, T(0), k1, T(0), k1);
+    const std::vector<T> y2 = combine_rkf_state(y, T(1.0L) / T(4.0), k1, T(0), k1, T(0), k1, T(0), k1, T(0), k1);
     const std::vector<T> f2 = rhs_(x + h / T(4.0), y2);
     std::vector<T> k2(y.size(), T(0));
     for (std::size_t i = 0; i < y.size(); ++i) {
@@ -739,7 +739,7 @@ std::pair<std::vector<T>, T> TODESystemSolver<T>::rkf45_step(
     }
 
     const std::vector<T> y4 =
-        combine_rkf_state(y, T(1932.0) / T(2197.0), k1, T(-7200.0) / T(2197.0), k2,
+        combine_rkf_state(y, T(1932.0) / T(2197.0), k1, T(-7200.0L) / T(2197.0), k2,
                           T(7296.0) / T(2197.0), k3, T(0), k1, T(0), k1);
     const std::vector<T> f4 = rhs_(x + T(12.0) * h / T(13.0), y4);
     std::vector<T> k4(y.size(), T(0));
@@ -749,7 +749,7 @@ std::pair<std::vector<T>, T> TODESystemSolver<T>::rkf45_step(
 
     const std::vector<T> y5 =
         combine_rkf_state(y, T(439.0) / T(216.0), k1, T(-8.0), k2,
-                          T(3680.0) / T(513.0), k3, T(-845.0) / T(4104.0), k4, T(0), k1);
+                          T(3680.0L) / T(513.0), k3, T(-845.0) / T(4104.0), k4, T(0), k1);
     const std::vector<T> f5 = rhs_(x + h, y5);
     std::vector<T> k5(y.size(), T(0));
     for (std::size_t i = 0; i < y.size(); ++i) {
@@ -759,7 +759,7 @@ std::pair<std::vector<T>, T> TODESystemSolver<T>::rkf45_step(
     const std::vector<T> y6 =
         combine_rkf_state(y, T(-8.0) / T(27.0), k1, T(2.0), k2,
                           T(-3544.0) / T(2565.0), k3, T(1859.0) / T(4104.0), k4,
-                          T(-11.0) / T(40.0), k5);
+                          T(-11.0L) / T(40.0L), k5);
     const std::vector<T> f6 = rhs_(x + h / T(2.0), y6);
     if (f2.size() != y.size() || f3.size() != y.size() ||
         f4.size() != y.size() || f5.size() != y.size() ||
@@ -781,8 +781,8 @@ std::pair<std::vector<T>, T> TODESystemSolver<T>::rkf45_step(
                     k5[i] / T(5.0);
         fifth[i] = y[i] + T(16.0) * k1[i] / T(135.0) +
                    T(6656.0) * k3[i] / T(12825.0) +
-                   T(28561.0) * k4[i] / T(56430.0) -
-                   T(9.0) * k5[i] / T(50.0) +
+                   T(28561.0L) * k4[i] / T(56430.0L) -
+                   T(9.0) * k5[i] / T(50.0L) +
                    T(2.0) * k6[i] / T(55.0);
     }
 
@@ -829,9 +829,9 @@ std::vector<TODEPoint<T>> TStiffODESolver<T>::solve_trajectory(T x0, T y0, T x1,
         return points;
     }
 
-    const T direction = x1 > x0 ? T(1.0) : T(-1.0);
+    const T direction = x1 > x0 ? T(1.0L) : T(-1.0L);
     const T segment_abs = t_abs(x1 - x0);
-    const T min_step = std::max(T(1e-14), segment_abs * T(1e-12));
+    const T min_step = std::max(T(1e-14), segment_abs * T(1e-12L));
 
     T h = direction * std::min(segment_abs / T(static_cast<long long>(steps)), segment_abs * T(0.1));
 
@@ -867,7 +867,7 @@ std::vector<TODEPoint<T>> TStiffODESolver<T>::solve_trajectory(T x0, T y0, T x1,
                 next_y = bdf_step(x, y, h, current_order, prev_y, prev_h);
 
                 if (!t_isfinite(next_y)) {
-                    h *= T(0.5);
+                    h *= T(0.5L);
                     if (t_abs(h) < min_step) {
                         throw std::runtime_error("Stiff ODE solver step size too small");
                     }
@@ -876,18 +876,18 @@ std::vector<TODEPoint<T>> TStiffODESolver<T>::solve_trajectory(T x0, T y0, T x1,
 
                 const T euler_y = y + h * rhs_(x, y);
                 const T error = t_abs(next_y - euler_y);
-                const T scale = std::max({T(1.0), t_abs(y), t_abs(next_y)});
+                const T scale = std::max({T(1.0L), t_abs(y), t_abs(next_y)});
                 const T tolerance = absolute_tolerance_ + relative_tolerance_ * scale;
 
-                if (error > tolerance * T(10.0) && t_abs(h) > min_step * T(2.0)) {
-                    h *= T(0.5);
+                if (error > tolerance * T(10.0L) && t_abs(h) > min_step * T(2.0)) {
+                    h *= T(0.5L);
                     continue;
                 }
 
                 step_accepted = true;
 
             } catch (...) {
-                h *= T(0.5);
+                h *= T(0.5L);
                 if (t_abs(h) < min_step) {
                     throw std::runtime_error("Stiff ODE solver Newton iteration failed");
                 }
@@ -909,8 +909,8 @@ std::vector<TODEPoint<T>> TStiffODESolver<T>::solve_trajectory(T x0, T y0, T x1,
             ++current_order;
         }
 
-        const T scale = std::max(T(1.0), t_abs(y));
-        const T optimal_h = h * t_pow(relative_tolerance_ * scale / std::max(T(1e-15), t_abs(next_y - y)), T(0.2));
+        const T scale = std::max(T(1.0L), t_abs(y));
+        const T optimal_h = h * t_pow(relative_tolerance_ * scale / std::max(T(1e-15L), t_abs(next_y - y)), T(0.2));
         h = direction * t_clamp(t_abs(optimal_h), min_step, segment_abs * T(0.1));
     }
 
@@ -922,7 +922,7 @@ T TStiffODESolver<T>::bdf_step(T x, T y, T h, int order,
                                const std::vector<T>& prev_y,
                                const std::vector<T>&) const {
     const int k = std::min(order, 5);
-    const double* coeffs_d = kBdfCoefficients[k];
+    const long double* coeffs_d = kBdfCoefficients[k];
     const T alpha0 = T(coeffs_d[0]);
     const T beta = T(coeffs_d[k + 1]);
 
@@ -942,7 +942,7 @@ T TStiffODESolver<T>::bdf_step(T x, T y, T h, int order,
 template <typename T>
 T TStiffODESolver<T>::newton_implicit(T x, T y_pred, T h,
                                       T gamma, T) const {
-    const T kNewtonTolerance = T(1e-12);
+    const T kNewtonTolerance = T(1e-12L);
     const int kMaxNewtonIterations = 20;
     T y = y_pred;
 
@@ -950,13 +950,13 @@ T TStiffODESolver<T>::newton_implicit(T x, T y_pred, T h,
         const T f = rhs_(x, y);
         const T g = y - y_pred - gamma * h * f;
 
-        if (t_abs(g) < kNewtonTolerance * std::max(T(1.0), t_abs(y))) {
+        if (t_abs(g) < kNewtonTolerance * std::max(T(1.0L), t_abs(y))) {
             return y;
         }
 
         const T jac = jacobian_ ? jacobian_(x, y) : numerical_jacobian(x, y);
-        const T dg_dy = T(1.0) - gamma * h * jac;
-        if (t_abs(dg_dy) < T(1e-15)) {
+        const T dg_dy = T(1.0L) - gamma * h * jac;
+        if (t_abs(dg_dy) < T(1e-15L)) {
             throw std::runtime_error("Newton iteration Jacobian singular");
         }
 
@@ -968,7 +968,7 @@ T TStiffODESolver<T>::newton_implicit(T x, T y_pred, T h,
 
 template <typename T>
 T TStiffODESolver<T>::numerical_jacobian(T x, T y) const {
-    const T eps = T(1e-8) * std::max(T(1.0), t_abs(y));
+    const T eps = T(1e-8L) * std::max(T(1.0L), t_abs(y));
     return (rhs_(x, y + eps) - rhs_(x, y - eps)) / (T(2.0) * eps);
 }
 
@@ -1020,9 +1020,9 @@ std::vector<TODESystemPoint<T>> TStiffODESystemSolver<T>::solve_trajectory(
         return points;
     }
 
-    const T direction = x1 > x0 ? T(1.0) : T(-1.0);
+    const T direction = x1 > x0 ? T(1.0L) : T(-1.0L);
     const T segment_abs = t_abs(x1 - x0);
-    const T min_step = std::max(T(1e-14), segment_abs * T(1e-12));
+    const T min_step = std::max(T(1e-14), segment_abs * T(1e-12L));
 
     T h = direction * std::min(segment_abs / T(static_cast<long long>(steps)), segment_abs * T(0.1));
 
@@ -1066,14 +1066,14 @@ std::vector<TODESystemPoint<T>> TStiffODESystemSolver<T>::solve_trajectory(
                 }
 
                 if (!all_finite) {
-                    h *= T(0.5);
+                    h *= T(0.5L);
                     continue;
                 }
 
                 step_accepted = true;
 
             } catch (...) {
-                h *= T(0.5);
+                h *= T(0.5L);
                 if (t_abs(h) < min_step) {
                     throw std::runtime_error("Stiff ODE system solver step failed");
                 }
@@ -1111,7 +1111,7 @@ std::vector<T> TStiffODESystemSolver<T>::bdf_step(
     const std::vector<T>&) const {
 
     const int k = std::min(order, 5);
-    const double* coeffs_d = kBdfCoefficients[k];
+    const long double* coeffs_d = kBdfCoefficients[k];
     const T alpha0 = T(coeffs_d[0]);
     const T beta = T(coeffs_d[k + 1]);
     const T gamma = beta / alpha0;
@@ -1129,7 +1129,7 @@ std::vector<T> TStiffODESystemSolver<T>::newton_implicit_system(
     T gamma,
     const std::vector<T>&) const {
 
-    const T kNewtonTolerance = T(1e-12);
+    const T kNewtonTolerance = T(1e-12L);
     const int kMaxNewtonIterations = 20;
     const std::size_t n = y_pred.size();
     std::vector<T> y = y_pred;
@@ -1144,7 +1144,7 @@ std::vector<T> TStiffODESystemSolver<T>::newton_implicit_system(
             max_g = std::max(max_g, t_abs(g[i]));
         }
 
-        if (max_g < kNewtonTolerance * std::max(T(1.0), max_abs_component(y))) {
+        if (max_g < kNewtonTolerance * std::max(T(1.0L), max_abs_component(y))) {
             return y;
         }
 
@@ -1157,7 +1157,7 @@ std::vector<T> TStiffODESystemSolver<T>::newton_implicit_system(
             for (std::size_t j = 0; j < n; ++j) {
                 A.at(i, j) = -gamma * h * J[i][j];
             }
-            A.at(i, i) += T(1.0);
+            A.at(i, i) += T(1.0L);
         }
 
         matrix::TMatrix<T> g_mat = matrix::TMatrix<T>::vector(g);
@@ -1182,7 +1182,7 @@ std::vector<std::vector<T>> TStiffODESystemSolver<T>::numerical_jacobian_matrix(
     const std::vector<T> f0 = rhs_(x, y);
 
     for (std::size_t j = 0; j < n; ++j) {
-        const T eps = T(1e-8) * std::max(T(1.0), t_abs(y[j]));
+        const T eps = T(1e-8L) * std::max(T(1.0L), t_abs(y[j]));
         std::vector<T> y_pert = y;
         y_pert[j] += eps;
         std::vector<T> f_pert = rhs_(x, y_pert);
@@ -1199,7 +1199,7 @@ std::vector<std::vector<T>> TStiffODESystemSolver<T>::numerical_jacobian_matrix(
 // 显式模板实例化
 // ============================================================================
 
-template class TODESolver<double>;
-template class TODESystemSolver<double>;
-template class TStiffODESolver<double>;
-template class TStiffODESystemSolver<double>;
+template class TODESolver<long double>;
+template class TODESystemSolver<long double>;
+template class TStiffODESolver<long double>;
+template class TStiffODESystemSolver<long double>;

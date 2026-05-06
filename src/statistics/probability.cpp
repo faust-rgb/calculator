@@ -33,11 +33,11 @@ static std::mt19937& global_rng() {
 }
 
 /**
- * @brief 检查 double 值是否为整数
+ * @brief 检查 long double 值是否为整数
  * @param value 待检查的值
  * @return 如果是整数返回 true
  */
-static bool is_integer(double value) {
+static bool is_integer(long double value) {
     return mymath::isfinite(value) && mymath::floor(value) == value;
 }
 
@@ -51,7 +51,7 @@ static bool is_integer(double value) {
  * @return exp(log_value)
  * @throws std::runtime_error 如果结果溢出
  */
-static double checked_exp(double log_value, const char* name) {
+static long double checked_exp(long double log_value, const char* name) {
     if (log_value > mymath::log(mymath::kDoubleMax)) {
         throw std::runtime_error(std::string(name) + " result overflows double");
     }
@@ -62,21 +62,21 @@ static double checked_exp(double log_value, const char* name) {
  * @brief 计算阶乘 n!
  *
  * 使用 Gamma 函数计算阶乘：n! = Gamma(n+1)。
- * 受限于 double 精度，最大支持 n = 170。
+ * 受限于 long double 精度，最大支持 n = 170。
  *
  * @param n 非负整数
  * @return n 的阶乘
  * @throws std::runtime_error 如果 n 为负数、非整数或超过 170
  */
-double factorial(double n) {
+long double factorial(long double n) {
     if (n < 0 || !is_integer(n)) {
         throw std::runtime_error("factorial only accepts non-negative integers");
     }
     if (n > 170) {
-        // 171! 超过 double 的最大值
+        // 171! 超过 long double 的最大值
         throw std::runtime_error("factorial is limited to n <= 170 to avoid overflow");
     }
-    return mymath::gamma(n + 1.0);
+    return mymath::gamma(n + 1.0L);
 }
 
 /**
@@ -91,7 +91,7 @@ double factorial(double n) {
  * @return 组合数
  * @throws std::runtime_error 如果参数无效
  */
-double nCr(double n, double r) {
+long double nCr(long double n, long double r) {
     if (n < 0 || r < 0 || !is_integer(n) || !is_integer(r)) {
         throw std::runtime_error("nCr only accepts non-negative integers");
     }
@@ -99,12 +99,12 @@ double nCr(double n, double r) {
         throw std::runtime_error("nCr requires r <= n");
     }
     // 边界情况优化
-    if (r == 0 || r == n) return 1.0;
+    if (r == 0 || r == n) return 1.0L;
     // 利用对称性：C(n, r) = C(n, n-r)，选择较小的一边计算
     if (r > n / 2) r = n - r;
 
     // 使用对数空间计算以避免溢出
-    const double log_value = lgamma(n + 1.0) - lgamma(r + 1.0) - lgamma(n - r + 1.0);
+    const long double log_value = lgamma(n + 1.0L) - lgamma(r + 1.0L) - lgamma(n - r + 1.0L);
     return checked_exp(log_value, "nCr");
 }
 
@@ -120,7 +120,7 @@ double nCr(double n, double r) {
  * @return 排列数
  * @throws std::runtime_error 如果参数无效
  */
-double nPr(double n, double r) {
+long double nPr(long double n, long double r) {
     if (n < 0 || r < 0 || !is_integer(n) || !is_integer(r)) {
         throw std::runtime_error("nPr only accepts non-negative integers");
     }
@@ -128,7 +128,7 @@ double nPr(double n, double r) {
         throw std::runtime_error("nPr requires r <= n");
     }
     // 使用对数空间计算以避免溢出
-    const double log_value = lgamma(n + 1.0) - lgamma(n - r + 1.0);
+    const long double log_value = lgamma(n + 1.0L) - lgamma(n - r + 1.0L);
     return checked_exp(log_value, "nPr");
 }
 
@@ -146,13 +146,13 @@ double nPr(double n, double r) {
  * 使用递推公式计算伯努利数 (Standard B_n+ convention: B_1 = 0.5)。
  * 该约定常用于 Faulhaber 公式。
  */
-double bernoulli(int n) {
-    if (n < 0) return 0.0;
+long double bernoulli(int n) {
+    if (n < 0) return 0.0L;
     // 静态缓存已计算的伯努利数 (B_n+ convention)
     static std::vector<long double> B = {1.0L, 0.5L};
-    if (n == 0) return 1.0;
+    if (n == 0) return 1.0L;
     if (n == 1) return 0.5;
-    if (n > 1 && n % 2 != 0) return 0.0; // B_n = 0 for odd n > 1
+    if (n > 1 && n % 2 != 0) return 0.0L; // B_n = 0 for odd n > 1
 
     while (B.size() <= static_cast<std::size_t>(n)) {
         int m = B.size();
@@ -168,7 +168,7 @@ double bernoulli(int n) {
         }
         B.push_back((static_cast<long double>(m) + 1.0L - sum) / (static_cast<long double>(m) + 1.0L));
     }
-    return static_cast<double>(B[n]);
+    return static_cast<long double>(B[n]);
 }
 
 /**
@@ -176,7 +176,7 @@ double bernoulli(int n) {
  * @param x 输入值
  * @return Gamma(x)
  */
-double gamma(double x) {
+long double gamma(long double x) {
     return mymath::gamma(x);
 }
 
@@ -188,7 +188,7 @@ double gamma(double x) {
  * @param x 输入值
  * @return ln(|Gamma(x)|)
  */
-double lgamma(double x) {
+long double lgamma(long double x) {
     // 使用标准库的 lgamma 函数
     // 注意：mymath 可能没有直接暴露 lgamma，但通常内部有 log_gamma_positive
     return mymath::lgamma(x);
@@ -205,14 +205,14 @@ double lgamma(double x) {
  * @return PDF 值
  * @throws std::runtime_error 如果 sigma <= 0
  */
-double normal_pdf(double x, double mean, double sigma) {
+long double normal_pdf(long double x, long double mean, long double sigma) {
     if (sigma <= 0) {
         throw std::runtime_error("normal distribution sigma must be positive");
     }
     // 计算指数部分
-    double exponent = -0.5 * mymath::pow((x - mean) / sigma, 2);
+    long double exponent = -0.5 * mymath::pow((x - mean) / sigma, 2);
     // 计算归一化常数和 PDF 值
-    return (1.0 / (sigma * mymath::sqrt(2.0 * mymath::kPi))) * mymath::exp(exponent);
+    return (1.0L / (sigma * mymath::sqrt(2.0 * mymath::kPi))) * mymath::exp(exponent);
 }
 
 /**
@@ -227,12 +227,12 @@ double normal_pdf(double x, double mean, double sigma) {
  * @return CDF 值
  * @throws std::runtime_error 如果 sigma <= 0
  */
-double normal_cdf(double x, double mean, double sigma) {
+long double normal_cdf(long double x, long double mean, long double sigma) {
     if (sigma <= 0) {
         throw std::runtime_error("normal distribution sigma must be positive");
     }
     // 使用误差函数计算 CDF
-    return 0.5 * (1.0 + mymath::erf((x - mean) / (sigma * mymath::sqrt(2.0))));
+    return 0.5 * (1.0L + mymath::erf((x - mean) / (sigma * mymath::sqrt(2.0))));
 }
 
 /**
@@ -247,42 +247,42 @@ double normal_cdf(double x, double mean, double sigma) {
  * @return P(X = k)
  * @throws std::runtime_error 如果 lambda 无效
  */
-double poisson_pmf(int k, double lambda) {
-    if (!mymath::isfinite(lambda) || lambda < 0.0) {
+long double poisson_pmf(int k, long double lambda) {
+    if (!mymath::isfinite(lambda) || lambda < 0.0L) {
         throw std::runtime_error("poisson lambda must be non-negative");
     }
     // 边界情况
-    if (k < 0) return 0.0;
-    if (lambda == 0.0) return k == 0 ? 1.0 : 0.0;
+    if (k < 0) return 0.0L;
+    if (lambda == 0.0L) return k == 0 ? 1.0L : 0.0L;
     // 使用对数空间计算：P(X=k) = exp(k * ln(lambda) - lambda - ln(k!))
-    return mymath::exp(static_cast<double>(k) * mymath::log(lambda) - lambda - lgamma(static_cast<double>(k + 1.0)));
+    return mymath::exp(static_cast<long double>(k) * mymath::log(lambda) - lambda - lgamma(static_cast<long double>(k + 1.0L)));
 }
 
 /**
  * @brief 计算泊松分布累积分布函数（CDF）
  * 使用递推公式优化，大 lambda 使用正态近似。
  */
-double poisson_cdf(int k, double lambda) {
-    if (!mymath::isfinite(lambda) || lambda < 0.0) {
+long double poisson_cdf(int k, long double lambda) {
+    if (!mymath::isfinite(lambda) || lambda < 0.0L) {
         throw std::runtime_error("poisson lambda must be non-negative");
     }
     // 边界情况
-    if (k < 0) return 0.0;
-    if (lambda == 0.0) return 1.0;
+    if (k < 0) return 0.0L;
+    if (lambda == 0.0L) return 1.0L;
 
-    if (lambda > 100.0) {
+    if (lambda > 100.0L) {
         // 使用正态近似优化：N(lambda, lambda)，带连续性校正
-        return normal_cdf(static_cast<double>(k) + 0.5, lambda, mymath::sqrt(lambda));
+        return normal_cdf(static_cast<long double>(k) + 0.5, lambda, mymath::sqrt(lambda));
     }
     
-    double term = mymath::exp(-lambda); // P(X=0)
-    double sum = term;
+    long double term = mymath::exp(-lambda); // P(X=0)
+    long double sum = term;
     for (int i = 1; i <= k; ++i) {
         term *= (lambda / i);
         sum += term;
-        if (sum >= 1.0) return 1.0;
+        if (sum >= 1.0L) return 1.0L;
     }
-    return std::min(sum, 1.0);
+    return std::min(sum, 1.0L);
 }
 
 /**
@@ -297,24 +297,24 @@ double poisson_cdf(int k, double lambda) {
  * @return P(X = k)
  * @throws std::runtime_error 如果参数无效
  */
-double binom_pmf(int n, int k, double p) {
+long double binom_pmf(int n, int k, long double p) {
     if (n < 0) {
         throw std::runtime_error("binomial n must be non-negative");
     }
-    if (!mymath::isfinite(p) || p < 0.0 || p > 1.0) {
+    if (!mymath::isfinite(p) || p < 0.0L || p > 1.0L) {
         throw std::runtime_error("binomial p must be in [0, 1]");
     }
     // 边界情况
-    if (k < 0 || k > n) return 0.0;
-    if (p == 0.0) return k == 0 ? 1.0 : 0.0;
-    if (p == 1.0) return k == n ? 1.0 : 0.0;
+    if (k < 0 || k > n) return 0.0L;
+    if (p == 0.0L) return k == 0 ? 1.0L : 0.0L;
+    if (p == 1.0L) return k == n ? 1.0L : 0.0L;
     // 使用对数空间计算
     // log(P) = lgamma(n+1) - lgamma(k+1) - lgamma(n-k+1) + k*ln(p) + (n-k)*ln(1-p)
-    const double log_value = lgamma(static_cast<double>(n) + 1.0) -
-                             lgamma(static_cast<double>(k) + 1.0) -
-                             lgamma(static_cast<double>(n - k) + 1.0) +
-                             static_cast<double>(k) * mymath::log(p) +
-                             static_cast<double>(n - k) * mymath::log1p(-p);
+    const long double log_value = lgamma(static_cast<long double>(n) + 1.0L) -
+                             lgamma(static_cast<long double>(k) + 1.0L) -
+                             lgamma(static_cast<long double>(n - k) + 1.0L) +
+                             static_cast<long double>(k) * mymath::log(p) +
+                             static_cast<long double>(n - k) * mymath::log1p(-p);
     return mymath::exp(log_value);
 }
 
@@ -333,22 +333,22 @@ double binom_pmf(int n, int k, double p) {
  * @brief 计算二项分布累积分布函数（CDF）
  * 使用递推公式结合 log-sum-exp 稳定累加。
  */
-double binom_cdf(int n, int k, double p) {
-    if (n < 0 || !mymath::isfinite(p) || p < 0.0 || p > 1.0) {
+long double binom_cdf(int n, int k, long double p) {
+    if (n < 0 || !mymath::isfinite(p) || p < 0.0L || p > 1.0L) {
         throw std::runtime_error("invalid binomial parameters");
     }
     // 边界情况
-    if (k < 0) return 0.0;
-    if (k >= n) return 1.0;
-    if (p == 0.0) return 1.0;
-    if (p == 1.0) return 0.0;
+    if (k < 0) return 0.0L;
+    if (k >= n) return 1.0L;
+    if (p == 0.0L) return 1.0L;
+    if (p == 1.0L) return 0.0L;
 
-    double log_term = n * mymath::log1p(-p); // P(X=0)
-    double log_sum = log_term;
-    double p_ratio = p / (1.0 - p);
+    long double log_term = n * mymath::log1p(-p); // P(X=0)
+    long double log_sum = log_term;
+    long double p_ratio = p / (1.0L - p);
 
     for (int i = 1; i <= k; ++i) {
-        log_term += mymath::log(static_cast<double>(n - i + 1) / i * p_ratio);
+        log_term += mymath::log(static_cast<long double>(n - i + 1) / i * p_ratio);
         // Log-Sum-Exp 稳定累加
         if (log_term > log_sum) {
             log_sum = log_term + mymath::log1p(mymath::exp(log_sum - log_term));
@@ -356,78 +356,78 @@ double binom_cdf(int n, int k, double p) {
             log_sum = log_sum + mymath::log1p(mymath::exp(log_term - log_sum));
         }
     }
-    return std::min(mymath::exp(log_sum), 1.0);
+    return std::min(mymath::exp(log_sum), 1.0L);
 }
 
-double student_t_pdf(double x, double df) {
+long double student_t_pdf(long double x, long double df) {
     if (df <= 0) throw std::runtime_error("student_t df must be positive");
-    double log_pdf = mymath::lgamma((df + 1.0) / 2.0) - 
+    long double log_pdf = mymath::lgamma((df + 1.0L) / 2.0) - 
                      (0.5 * mymath::log(df * mymath::kPi) + mymath::lgamma(df / 2.0)) -
-                     ((df + 1.0) / 2.0) * mymath::log(1.0 + x * x / df);
+                     ((df + 1.0L) / 2.0) * mymath::log(1.0L + x * x / df);
     return mymath::exp(log_pdf);
 }
 
-double student_t_cdf(double x, double df) {
+long double student_t_cdf(long double x, long double df) {
     if (df <= 0) throw std::runtime_error("student_t df must be positive");
-    double x2 = x * x;
-    double z = df / (df + x2);
-    double ib = mymath::inc_beta(df / 2.0, 0.5, z);
-    return x > 0 ? 1.0 - 0.5 * ib : 0.5 * ib;
+    long double x2 = x * x;
+    long double z = df / (df + x2);
+    long double ib = mymath::inc_beta(df / 2.0, 0.5, z);
+    return x > 0 ? 1.0L - 0.5 * ib : 0.5 * ib;
 }
 
-double chi2_pdf(double x, double df) {
+long double chi2_pdf(long double x, long double df) {
     if (df <= 0) throw std::runtime_error("chi2 df must be positive");
-    if (x < 0) return 0.0;
+    if (x < 0) return 0.0L;
     if (x == 0 && df < 2.0) return mymath::infinity();
     if (x == 0 && df == 2.0) return 0.5;
-    if (x == 0 && df > 2.0) return 0.0;
+    if (x == 0 && df > 2.0) return 0.0L;
     
-    double log_pdf = (df / 2.0 - 1.0) * mymath::log(x) - x / 2.0 - 
+    long double log_pdf = (df / 2.0 - 1.0L) * mymath::log(x) - x / 2.0 - 
                      (df / 2.0 * mymath::log(2.0) + mymath::lgamma(df / 2.0));
     return mymath::exp(log_pdf);
 }
 
-double chi2_cdf(double x, double df) {
+long double chi2_cdf(long double x, long double df) {
     if (df <= 0) throw std::runtime_error("chi2 df must be positive");
-    if (x <= 0) return 0.0;
+    if (x <= 0) return 0.0L;
     return mymath::inc_gamma(df / 2.0, x / 2.0);
 }
 
-double f_pdf(double x, double df1, double df2) {
+long double f_pdf(long double x, long double df1, long double df2) {
     if (df1 <= 0 || df2 <= 0) throw std::runtime_error("F-distribution df must be positive");
-    if (x <= 0) return 0.0;
+    if (x <= 0) return 0.0L;
     
-    double log_pdf = 0.5 * df1 * mymath::log(df1) + 0.5 * df2 * mymath::log(df2) +
-                     (0.5 * df1 - 1.0) * mymath::log(x) -
+    long double log_pdf = 0.5 * df1 * mymath::log(df1) + 0.5 * df2 * mymath::log(df2) +
+                     (0.5 * df1 - 1.0L) * mymath::log(x) -
                      0.5 * (df1 + df2) * mymath::log(df1 * x + df2) -
                      (mymath::lgamma(0.5 * df1) + mymath::lgamma(0.5 * df2) - mymath::lgamma(0.5 * (df1 + df2)));
     return mymath::exp(log_pdf);
 }
 
-double f_cdf(double x, double df1, double df2) {
+long double f_cdf(long double x, long double df1, long double df2) {
     if (df1 <= 0 || df2 <= 0) throw std::runtime_error("F-distribution df must be positive");
-    if (x <= 0) return 0.0;
+    if (x <= 0) return 0.0L;
     return mymath::inc_beta(df1 / 2.0, df2 / 2.0, (df1 * x) / (df1 * x + df2));
 }
 
-double exp_pdf(double x, double lambda) {
+long double exp_pdf(long double x, long double lambda) {
     if (lambda <= 0) throw std::runtime_error("exponential lambda must be positive");
-    if (x < 0) return 0.0;
+    if (x < 0) return 0.0L;
     return lambda * mymath::exp(-lambda * x);
 }
 
-double exp_cdf(double x, double lambda) {
+long double exp_cdf(long double x, long double lambda) {
     if (lambda <= 0) throw std::runtime_error("exponential lambda must be positive");
-    if (x < 0) return 0.0;
-    return 1.0 - mymath::exp(-lambda * x);
+    if (x < 0) return 0.0L;
+    return 1.0L - mymath::exp(-lambda * x);
 }
 
 /**
  * @brief 生成 [0, 1) 区间均匀分布随机数
  * @return 随机数
  */
-double rand() {
-    std::uniform_real_distribution<double> dist(0.0, 1.0);
+long double rand() {
+    std::uniform_real_distribution<long double> dist(0.0L, 1.0L);
     return dist(global_rng());
 }
 
@@ -438,8 +438,8 @@ double rand() {
  *
  * @return 随机数
  */
-double randn() {
-    std::normal_distribution<double> dist(0.0, 1.0);
+long double randn() {
+    std::normal_distribution<long double> dist(0.0L, 1.0L);
     return dist(global_rng());
 }
 
@@ -450,15 +450,15 @@ double randn() {
  *
  * @param min 最小值
  * @param max 最大值
- * @return 随机整数（转换为 double 返回）
+ * @return 随机整数（转换为 long double 返回）
  * @throws std::runtime_error 如果 min > max
  */
-double randint(long long min, long long max) {
+long double randint(long long min, long long max) {
     if (min > max) {
         throw std::runtime_error("randint requires min <= max");
     }
     std::uniform_int_distribution<long long> dist(min, max);
-    return static_cast<double>(dist(global_rng()));
+    return static_cast<long double>(dist(global_rng()));
 }
 
 } // namespace prob

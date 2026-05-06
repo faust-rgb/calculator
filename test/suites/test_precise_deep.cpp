@@ -26,7 +26,7 @@ void run_precise_deep_tests(int& passed, int& failed) {
             failed++;
         }
 
-        PreciseDecimal e_val = precise::exp(PreciseDecimal(1.0));
+        PreciseDecimal e_val = precise::exp(PreciseDecimal(1.0L));
         PreciseDecimal e_const = precise::e();
         if (precise::abs(e_val - e_const) < PreciseDecimal("1e-95")) {
             passed++;
@@ -38,11 +38,11 @@ void run_precise_deep_tests(int& passed, int& failed) {
         // 2. Hilbert 矩阵测试 (10x10)
         const int n = 10;
         TMatrix<PreciseDecimal> H(n, n);
-        TMatrix<PreciseDecimal> x_expected(n, 1, PreciseDecimal(1.0));
+        TMatrix<PreciseDecimal> x_expected(n, 1, PreciseDecimal(1.0L));
 
         for (int i = 0; i < n; ++i) {
             for (int j = 0; j < n; ++j) {
-                H.at(i, j) = PreciseDecimal(1.0) / PreciseDecimal(static_cast<long long>(i + j + 1));
+                H.at(i, j) = PreciseDecimal(1.0L) / PreciseDecimal(static_cast<long long>(i + j + 1));
             }
         }
 
@@ -56,9 +56,9 @@ void run_precise_deep_tests(int& passed, int& failed) {
             x_computed = matrix::add(x_computed, correction);
         }
 
-        PreciseDecimal max_err(0.0);
+        PreciseDecimal max_err(0.0L);
         for (int i = 0; i < n; ++i) {
-            PreciseDecimal err = precise::abs(x_computed.at(i, 0) - PreciseDecimal(1.0));
+            PreciseDecimal err = precise::abs(x_computed.at(i, 0) - PreciseDecimal(1.0L));
             if (err > max_err) max_err = err;
         }
 
@@ -72,7 +72,7 @@ void run_precise_deep_tests(int& passed, int& failed) {
         // 3. 超大输入范围归约测试
         PreciseDecimal huge("1e50");
         PreciseDecimal sin_huge = precise::sin(huge);
-        if (precise::abs(sin_huge) <= 1.0) {
+        if (precise::abs(sin_huge) <= 1.0L) {
             passed++;
         } else {
             std::cout << "  FAIL: sin(1e50) out of range: " << sin_huge.to_string() << std::endl;

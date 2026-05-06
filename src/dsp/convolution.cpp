@@ -19,14 +19,14 @@
 namespace signal {
 
 // 数学常量
-constexpr double kPi = 3.14159265358979323846;
+constexpr long double kPi = 3.14159265358979323846;
 
 // ============================================================================
 // 线性卷积（直接法）
 // ============================================================================
 
-std::vector<double> convolve(const std::vector<double>& signal1,
-                               const std::vector<double>& signal2) {
+std::vector<long double> convolve(const std::vector<long double>& signal1,
+                               const std::vector<long double>& signal2) {
     const std::size_t n = signal1.size();
     const std::size_t m = signal2.size();
 
@@ -35,7 +35,7 @@ std::vector<double> convolve(const std::vector<double>& signal1,
     }
 
     const std::size_t out_len = n + m - 1;
-    std::vector<double> result(out_len, 0.0);
+    std::vector<long double> result(out_len, 0.0L);
 
     // 对于小信号使用直接卷积
     if (n * m <= 1024) {
@@ -55,8 +55,8 @@ std::vector<double> convolve(const std::vector<double>& signal1,
 // FFT 快速卷积
 // ============================================================================
 
-std::vector<double> fast_convolve(const std::vector<double>& signal1,
-                                   const std::vector<double>& signal2) {
+std::vector<long double> fast_convolve(const std::vector<long double>& signal1,
+                                   const std::vector<long double>& signal2) {
     const std::size_t n = signal1.size();
     const std::size_t m = signal2.size();
     if (n == 0 || m == 0) return {};
@@ -64,8 +64,8 @@ std::vector<double> fast_convolve(const std::vector<double>& signal1,
     const std::size_t out_len = n + m - 1;
     const std::size_t fft_len = next_power_of_two(out_len);
 
-    std::vector<double> x1(fft_len, 0.0);
-    std::vector<double> x2(fft_len, 0.0);
+    std::vector<long double> x1(fft_len, 0.0L);
+    std::vector<long double> x2(fft_len, 0.0L);
     std::copy(signal1.begin(), signal1.end(), x1.begin());
     std::copy(signal2.begin(), signal2.end(), x2.begin());
 
@@ -77,18 +77,18 @@ std::vector<double> fast_convolve(const std::vector<double>& signal1,
         X1[i] *= X2[i];
     }
 
-    std::vector<double> full_result = irfft(X1, fft_len);
+    std::vector<long double> full_result = irfft(X1, fft_len);
     full_result.resize(out_len);
     return full_result;
 }
 
-std::vector<double> fft_convolve(const std::vector<double>& signal1,
-                                  const std::vector<double>& signal2) {
+std::vector<long double> fft_convolve(const std::vector<long double>& signal1,
+                                  const std::vector<long double>& signal2) {
     return fast_convolve(signal1, signal2);
 }
 
-std::vector<double> circular_convolve(const std::vector<double>& signal1,
-                                       const std::vector<double>& signal2,
+std::vector<long double> circular_convolve(const std::vector<long double>& signal1,
+                                       const std::vector<long double>& signal2,
                                        std::size_t n) {
     const std::size_t len1 = signal1.size();
     const std::size_t len2 = signal2.size();
@@ -97,8 +97,8 @@ std::vector<double> circular_convolve(const std::vector<double>& signal1,
     // 改进：默认使用 max(len1, len2) 而非 lcm，避免内存爆炸
     if (n == 0) n = std::max(len1, len2);
 
-    std::vector<double> x1(n, 0.0);
-    std::vector<double> x2(n, 0.0);
+    std::vector<long double> x1(n, 0.0L);
+    std::vector<long double> x2(n, 0.0L);
     // 处理混叠
     for (std::size_t i = 0; i < len1; ++i) x1[i % n] += signal1[i];
     for (std::size_t i = 0; i < len2; ++i) x2[i % n] += signal2[i];
@@ -110,8 +110,8 @@ std::vector<double> circular_convolve(const std::vector<double>& signal1,
     return irfft(X1, n);
 }
 
-std::vector<double> xcorr(const std::vector<double>& signal1,
-                           const std::vector<double>& signal2) {
+std::vector<long double> xcorr(const std::vector<long double>& signal1,
+                           const std::vector<long double>& signal2) {
     const std::size_t n = signal1.size();
     const std::size_t m = signal2.size();
     if (n == 0 || m == 0) return {};
@@ -119,8 +119,8 @@ std::vector<double> xcorr(const std::vector<double>& signal1,
     const std::size_t out_len = n + m - 1;
     const std::size_t fft_len = next_power_of_two(out_len);
 
-    std::vector<double> x1(fft_len, 0.0);
-    std::vector<double> x2(fft_len, 0.0);
+    std::vector<long double> x1(fft_len, 0.0L);
+    std::vector<long double> x2(fft_len, 0.0L);
     std::copy(signal1.begin(), signal1.end(), x1.begin());
     std::copy(signal2.begin(), signal2.end(), x2.begin());
 
@@ -132,7 +132,7 @@ std::vector<double> xcorr(const std::vector<double>& signal1,
         X1[i] *= mymath::conj(X2[i]);
     }
 
-    std::vector<double> result = irfft(X1, fft_len);
+    std::vector<long double> result = irfft(X1, fft_len);
     result.resize(out_len);
     return result;
 }
@@ -141,7 +141,7 @@ std::vector<double> xcorr(const std::vector<double>& signal1,
 // 自相关函数
 // ============================================================================
 
-std::vector<double> autocorr(const std::vector<double>& signal) {
+std::vector<long double> autocorr(const std::vector<long double>& signal) {
     return xcorr(signal, signal);
 }
 
@@ -149,8 +149,8 @@ std::vector<double> autocorr(const std::vector<double>& signal) {
 // 归一化互相关
 // ============================================================================
 
-std::vector<double> normalized_xcorr(const std::vector<double>& signal1,
-                                      const std::vector<double>& signal2) {
+std::vector<long double> normalized_xcorr(const std::vector<long double>& signal1,
+                                      const std::vector<long double>& signal2) {
     const std::size_t n = signal1.size();
     const std::size_t m = signal2.size();
 
@@ -159,8 +159,8 @@ std::vector<double> normalized_xcorr(const std::vector<double>& signal1,
     }
 
     // 计算能量
-    double energy1 = 0.0;
-    double energy2 = 0.0;
+    long double energy1 = 0.0L;
+    long double energy2 = 0.0L;
     for (std::size_t i = 0; i < n; ++i) {
         energy1 += signal1[i] * signal1[i];
     }
@@ -168,16 +168,16 @@ std::vector<double> normalized_xcorr(const std::vector<double>& signal1,
         energy2 += signal2[i] * signal2[i];
     }
 
-    if (energy1 == 0.0 || energy2 == 0.0) {
-        return std::vector<double>(n + m - 1, 0.0);
+    if (energy1 == 0.0L || energy2 == 0.0L) {
+        return std::vector<long double>(n + m - 1, 0.0L);
     }
 
     // 计算互相关
-    std::vector<double> corr = xcorr(signal1, signal2);
+    std::vector<long double> corr = xcorr(signal1, signal2);
 
     // 归一化
-    const double norm_factor = mymath::sqrt(energy1 * energy2);
-    for (double& value : corr) {
+    const long double norm_factor = mymath::sqrt(energy1 * energy2);
+    for (long double& value : corr) {
         value /= norm_factor;
     }
 

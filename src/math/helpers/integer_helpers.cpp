@@ -22,29 +22,29 @@ long long lcm_ll(long long a, long long b) {
     return result < 0 ? -result : result;
 }
 
-bool is_integer_double(double x, double eps) {
+bool is_integer_double(long double x, long double eps) {
     return mymath::is_integer(x, eps);
 }
 
-long long round_to_long_long(double x) {
-    return static_cast<long long>(x >= 0.0 ? x + 0.5 : x - 0.5);
+long long round_to_long_long(long double x) {
+    return static_cast<long long>(x >= 0.0L ? x + 0.5 : x - 0.5);
 }
 
-long long trunc_to_long_long(double x) {
+long long trunc_to_long_long(long double x) {
     return static_cast<long long>(x);
 }
 
-long long floor_to_long_long(double x) {
+long long floor_to_long_long(long double x) {
     long long truncated = static_cast<long long>(x);
-    if (x < 0.0 && static_cast<double>(truncated) != x) {
+    if (x < 0.0L && static_cast<long double>(truncated) != x) {
         --truncated;
     }
     return truncated;
 }
 
-long long ceil_to_long_long(double x) {
+long long ceil_to_long_long(long double x) {
     long long truncated = static_cast<long long>(x);
-    if (x > 0.0 && static_cast<double>(truncated) != x) {
+    if (x > 0.0L && static_cast<long double>(truncated) != x) {
         ++truncated;
     }
     return truncated;

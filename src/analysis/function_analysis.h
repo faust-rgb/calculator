@@ -24,7 +24,7 @@ struct TExtremumPoint {
     bool is_maximum = false;  ///< true 表示极大值，false 表示极小值
 };
 
-using ExtremumPoint = TExtremumPoint<double>;
+using ExtremumPoint = TExtremumPoint<long double>;
 
 /**
  * @class TFunctionAnalysis
@@ -99,6 +99,6 @@ private:
     mutable std::unordered_map<std::string, typename std::list<std::pair<std::string, T>>::iterator> evaluation_cache_index_;
 };
 
-using FunctionAnalysis = TFunctionAnalysis<double>;
+using FunctionAnalysis = TFunctionAnalysis<long double>;
 
 #endif

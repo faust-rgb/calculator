@@ -38,16 +38,16 @@ namespace simplex {
  * @return 是否找到最优解
  */
 bool solve_linear_box_problem(
-    const std::vector<double>& objective,
+    const std::vector<long double>& objective,
     const matrix::Matrix& inequality_matrix,
-    const std::vector<double>& inequality_rhs,
+    const std::vector<long double>& inequality_rhs,
     const matrix::Matrix& equality_matrix,
-    const std::vector<double>& equality_rhs,
-    const std::vector<double>& lower_bounds,
-    const std::vector<double>& upper_bounds,
-    double tolerance,
-    std::vector<double>* solution,
-    double* objective_value,
+    const std::vector<long double>& equality_rhs,
+    const std::vector<long double>& lower_bounds,
+    const std::vector<long double>& upper_bounds,
+    long double tolerance,
+    std::vector<long double>* solution,
+    long double* objective_value,
     std::string* diagnostic);
 
 }  // namespace simplex

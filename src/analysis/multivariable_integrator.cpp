@@ -25,7 +25,7 @@ MultivariableIntegrator::MultivariableIntegrator(Integrand integrand)
  * 使用 Simpson 法则递归计算各维度的积分。
  * 首先规范化分割数，然后从最外层维度开始递归。
  */
-double MultivariableIntegrator::integrate(
+long double MultivariableIntegrator::integrate(
     const std::vector<BoundFunc>& bounds,
     const std::vector<int>& subdivisions) const {
     if (bounds.empty()) {
@@ -43,15 +43,15 @@ double MultivariableIntegrator::integrate(
     }
 
     // 初始化积分点坐标
-    std::vector<double> point(bounds.size(), 0.0);
+    std::vector<long double> point(bounds.size(), 0.0L);
 
     // 从第 0 维开始递归积分
-    return static_cast<double>(
+    return static_cast<long double>(
         integrate_recursive(bounds,
                            normalized_subdivisions,
                            &point,
                            0,
-                           1.0));
+                           1.0L));
 }
 
 /**
@@ -59,9 +59,9 @@ double MultivariableIntegrator::integrate(
  *
  * Simpson 法则的权重序列为：1, 4, 2, 4, 2, ..., 4, 1
  */
-double MultivariableIntegrator::simpson_weight(int index, int subdivisions) {
+long double MultivariableIntegrator::simpson_weight(int index, int subdivisions) {
     if (index == 0 || index == subdivisions) {
-        return 1.0;  // 端点权重为 1
+        return 1.0L;  // 端点权重为 1
     }
     return index % 2 == 0 ? 2.0 : 4.0;  // 偶数索引为 2，奇数索引为 4
 }
@@ -89,29 +89,29 @@ int MultivariableIntegrator::normalize_subdivision_count(int subdivisions) {
  *
  * 当达到最内层维度时，直接计算被积函数值。
  */
-double MultivariableIntegrator::integrate_recursive(
+long double MultivariableIntegrator::integrate_recursive(
     const std::vector<BoundFunc>& bounds,
     const std::vector<int>& subdivisions,
-    std::vector<double>* point,
+    std::vector<long double>* point,
     std::size_t dimension,
-    double accumulated_weight) const {
+    long double accumulated_weight) const {
     // 到达最内层维度，计算被积函数值
     if (dimension == bounds.size()) {
         return accumulated_weight * integrand_(*point);
     }
 
     // 获取当前维度的积分边界
-    const std::pair<double, double> current_bounds = bounds[dimension](*point);
-    const double lower = current_bounds.first;
-    const double upper = current_bounds.second;
+    const std::pair<long double, long double> current_bounds = bounds[dimension](*point);
+    const long double lower = current_bounds.first;
+    const long double upper = current_bounds.second;
 
     // 边界相同，积分为零
     if (lower == upper) {
-        return 0.0;
+        return 0.0L;
     }
 
     const int subdivision_count = subdivisions[dimension];
-    const double step = (upper - lower) / static_cast<double>(subdivision_count);
+    const long double step = (upper - lower) / static_cast<long double>(subdivision_count);
 
     // Simpson 法则的比例因子：h / 3
     const long double scale = static_cast<long double>(upper - lower) /
@@ -121,7 +121,7 @@ double MultivariableIntegrator::integrate_recursive(
     long double sum = 0.0L;
     for (int i = 0; i <= subdivision_count; ++i) {
         // 设置当前维度的坐标
-        (*point)[dimension] = lower + step * static_cast<double>(i);
+        (*point)[dimension] = lower + step * static_cast<long double>(i);
 
         // 递归计算内层积分，并乘以 Simpson 权重
         sum += static_cast<long double>(
@@ -133,30 +133,30 @@ double MultivariableIntegrator::integrate_recursive(
                                     simpson_weight(i, subdivision_count)));
     }
 
-    return static_cast<double>(sum * scale);
+    return static_cast<long double>(sum * scale);
 }
 
 /**
  * @brief 自适应计算多重积分
  */
-double MultivariableIntegrator::integrate_adaptive(
+long double MultivariableIntegrator::integrate_adaptive(
     const std::vector<BoundFunc>& bounds,
-    double tolerance,
+    long double tolerance,
     int max_depth) const {
     if (bounds.empty()) {
         throw std::runtime_error("multivariable integrator requires at least one bound");
     }
 
-    std::vector<double> point(bounds.size(), 0.0);
+    std::vector<long double> point(bounds.size(), 0.0L);
     
     // 自适应积分目前主要支持一维和二维的高精度化
     // 这里实现一个简化的自适应逻辑：对最外层维度进行自适应细分
-    const std::pair<double, double> b = bounds[0](point);
-    const double a = b.first;
-    const double d = b.second;
-    if (a == d) return 0.0;
+    const std::pair<long double, long double> b = bounds[0](point);
+    const long double a = b.first;
+    const long double d = b.second;
+    if (a == d) return 0.0L;
 
-    auto f = [&](double x) {
+    auto f = [&](long double x) {
         point[0] = x;
         if (bounds.size() == 1) return integrand_(point);
         
@@ -164,53 +164,53 @@ double MultivariableIntegrator::integrate_adaptive(
         // 为了简单起见，这里假设内层已经足够精确或用户通过 integrate 调用
         std::vector<int> sub(bounds.size() - 1, 32);
         std::vector<BoundFunc> inner_bounds(bounds.begin() + 1, bounds.end());
-        std::vector<double> inner_point(point.begin() + 1, point.end());
+        std::vector<long double> inner_point(point.begin() + 1, point.end());
         
         // 构造一个新的积分器用于内层
         MultivariableIntegrator inner_integrator(integrand_);
-        return inner_integrator.integrate_recursive(bounds, std::vector<int>(bounds.size(), 32), &point, 1, 1.0);
+        return inner_integrator.integrate_recursive(bounds, std::vector<int>(bounds.size(), 32), &point, 1, 1.0L);
     };
 
-    double fa = f(a);
-    double fb = f(d);
-    double c = (a + d) / 2.0;
-    double fc = f(c);
-    double whole = (d - a) / 6.0 * (fa + 4.0 * fc + fb);
+    long double fa = f(a);
+    long double fb = f(d);
+    long double c = (a + d) / 2.0;
+    long double fc = f(c);
+    long double whole = (d - a) / 6.0 * (fa + 4.0 * fc + fb);
 
     return integrate_adaptive_recursive(bounds, &point, 0, a, d, fa, fb, fc, whole, tolerance, max_depth);
 }
 
-double MultivariableIntegrator::integrate_adaptive_recursive(
+long double MultivariableIntegrator::integrate_adaptive_recursive(
     const std::vector<BoundFunc>& bounds,
-    std::vector<double>* point,
+    std::vector<long double>* point,
     std::size_t dimension,
-    double a,
-    double b,
-    double fa,
-    double fb,
-    double fc,
-    double whole,
-    double tolerance,
+    long double a,
+    long double b,
+    long double fa,
+    long double fb,
+    long double fc,
+    long double whole,
+    long double tolerance,
     int depth) const {
     
-    double c = (a + b) / 2.0;
-    double h = b - a;
-    double d = (a + c) / 2.0;
-    double e = (c + b) / 2.0;
+    long double c = (a + b) / 2.0;
+    long double h = b - a;
+    long double d = (a + c) / 2.0;
+    long double e = (c + b) / 2.0;
     
-    auto get_f = [&](double x) {
+    auto get_f = [&](long double x) {
         (*point)[dimension] = x;
         if (dimension + 1 == bounds.size()) return integrand_(*point);
         // 递归处理内层
-        return integrate_recursive(bounds, std::vector<int>(bounds.size(), 16), point, dimension + 1, 1.0);
+        return integrate_recursive(bounds, std::vector<int>(bounds.size(), 16), point, dimension + 1, 1.0L);
     };
 
-    double fd = get_f(d);
-    double fe = get_f(e);
+    long double fd = get_f(d);
+    long double fe = get_f(e);
     
-    double left = h / 12.0 * (fa + 4.0 * fd + fc);
-    double right = h / 12.0 * (fc + 4.0 * fe + fb);
-    double total = left + right;
+    long double left = h / 12.0 * (fa + 4.0 * fd + fc);
+    long double right = h / 12.0 * (fc + 4.0 * fe + fb);
+    long double total = left + right;
 
     if (depth <= 0 || std::abs(total - whole) <= 15.0 * tolerance) {
         return total + (total - whole) / 15.0;

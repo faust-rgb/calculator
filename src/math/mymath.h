@@ -1,6 +1,7 @@
 #ifndef MYMATH_H
 #define MYMATH_H
 
+#include <limits>
 #include <string>
 
 namespace mymath {
@@ -18,33 +19,33 @@ namespace mymath {
 // ============================================================================
 
 /** @brief 圆周率 π，精确到小数点后 30 位 */
-constexpr double kPi = 3.141592653589793238462643383279;
+constexpr long double kPi = 3.141592653589793238462643383279;
 
 /** @brief 圆周率 π (long double)，用于高精度范围归约 */
 constexpr long double kPiL = 3.1415926535897932384626433832795028841971L;
 
 /** @brief 自然对数的底 e，精确到小数点后 30 位 */
-constexpr double kE = 2.718281828459045235360287471352;
+constexpr long double kE = 2.718281828459045235360287471352;
 
 /** @brief 光速 c (m/s) */
-constexpr double kSpeedOfLight = 299792458.0;
+constexpr long double kSpeedOfLight = 299792458.0;
 
 /** @brief 万有引力常数 G (m^3 kg^-1 s^-2) */
-constexpr double kGravitationalConstant = 6.67430e-11;
+constexpr long double kGravitationalConstant = 6.67430e-11;
 
 /** @brief 普朗克常数 h (J·s) */
-constexpr double kPlanckConstant = 6.62607015e-34;
+constexpr long double kPlanckConstant = 6.62607015e-34;
 
 /** @brief 玻尔兹曼常数 k (J/K) */
-constexpr double kBoltzmannConstant = 1.380649e-23;
+constexpr long double kBoltzmannConstant = 1.380649e-23;
 
 /** @brief 阿伏伽德罗常数 NA (mol^-1) */
-constexpr double kAvogadroNumber = 6.02214076e23;
+constexpr long double kAvogadroNumber = 6.02214076e23;
 
-constexpr double kDoubleMax = 1.7976931348623157e308;
-constexpr double kDoubleDenormMin = 4.9406564584124654e-324;
-constexpr double kLnDoubleMax = 709.78271289338397;
-constexpr double kLnDoubleDenormMin = -744.44007192138122;
+constexpr long double kDoubleMax = std::numeric_limits<long double>::max();
+constexpr long double kDoubleDenormMin = std::numeric_limits<long double>::denorm_min();
+constexpr long double kLnDoubleMax = 11356.52340629414394949L;
+constexpr long double kLnDoubleDenormMin = -11398.80538430830061441L;
 constexpr int kIntMin = -2147483647 - 1;
 constexpr int kIntMax = 2147483647;
 constexpr long long kLongLongMin = -9223372036854775807LL - 1LL;
@@ -56,7 +57,7 @@ constexpr long long kLongLongMax = 9223372036854775807LL;
  * 用于判断两个浮点数是否”足够接近”，在数值算法中广泛使用。
  * 例如：判断迭代是否收敛、检测除零等。
  */
-constexpr double kEps = 1e-12;
+constexpr long double kEps = 1e-12;
 
 // ============================================================================
 // 基础工具函数
@@ -67,24 +68,24 @@ constexpr double kEps = 1e-12;
  * @param x 输入值
  * @return |x|
  */
-double abs(double x);
+long double abs(long double x);
 int abs(int x);
 long abs(long x);
 long long abs(long long x);
 long double abs_long_double(long double x);
-bool isnan(double x);
-bool isinf(double x);
-bool isfinite(double x);
-double floor(double x);
-double ceil(double x);
-double round(double x);
-double trunc(double x);
-double modf(double x, double* integer_part);
-double clamp(double value, double low, double high);
-double fmod(double x, double y);
-double remainder(double x, double y);
-double infinity();
-double quiet_nan();
+bool isnan(long double x);
+bool isinf(long double x);
+bool isfinite(long double x);
+long double floor(long double x);
+long double ceil(long double x);
+long double round(long double x);
+long double trunc(long double x);
+long double modf(long double x, long double* integer_part);
+long double clamp(long double value, long double low, long double high);
+long double fmod(long double x, long double y);
+long double remainder(long double x, long double y);
+long double infinity();
+long double quiet_nan();
 long long gcd(long long a, long long b);
 
 /**
@@ -93,7 +94,7 @@ long long gcd(long long a, long long b);
  * @param eps 误差阈值，默认为 kEps
  * @return true 如果 |x| <= eps
  */
-bool is_near_zero(double x, double eps = kEps);
+bool is_near_zero(long double x, long double eps = kEps);
 
 /**
  * @brief 判断数值是否接近整数
@@ -101,7 +102,7 @@ bool is_near_zero(double x, double eps = kEps);
  * @param eps 误差阈值，默认为 1e-10
  * @return true 如果 x 与最近整数的距离 <= eps
  */
-bool is_integer(double x, double eps = 1e-10);
+bool is_integer(long double x, long double eps = 1e-10);
 
 /**
  * @brief 将浮点数识别为“足够接近”的简单分数
@@ -114,11 +115,11 @@ bool is_integer(double x, double eps = 1e-10);
  *
  * 适合做显示优化或识别原本就应当是分数的值，例如 0.3333333333 -> 1/3。
  */
-bool approximate_fraction(double value,
+bool approximate_fraction(long double value,
                           long long* numerator,
                           long long* denominator,
                           int max_denominator = 999,
-                          double eps = 1e-10);
+                          long double eps = 1e-10);
 
 /**
  * @brief 计算给定最大分母约束下的最佳有理逼近
@@ -130,7 +131,7 @@ bool approximate_fraction(double value,
  *
  * 使用连分数方法，为显式的“有理逼近”功能提供结果，例如 pi -> 355/113。
  */
-bool best_rational_approximation(double value,
+bool best_rational_approximation(long double value,
                                  long long* numerator,
                                  long long* denominator,
                                  long long max_denominator = 999);
@@ -142,7 +143,7 @@ bool best_rational_approximation(double value,
  *
  * 用于三角函数计算前的范围缩减，提高泰勒展开的收敛速度和精度。
  */
-double normalize_angle(double x);
+long double normalize_angle(long double x);
 
 // ============================================================================
 // 指数和对数函数
@@ -157,7 +158,7 @@ double normalize_angle(double x);
  * - 对于大 x，使用 e^x = (e^(x/2))^2 进行缩减
  * - 对于负 x，使用 e^(-x) = 1/e^x
  */
-double exp(double x);
+long double exp(long double x);
 
 /**
  * @brief 计算自然对数 ln(x)
@@ -168,9 +169,9 @@ double exp(double x);
  * 使用范围缩减将 x 缩放到 [0.75, 1.5] 区间，
  * 然后使用基于 (x-1)/(x+1) 的级数展开。
  */
-double ln(double x);
-double log(double x);
-double log1p(double x);
+long double ln(long double x);
+long double log(long double x);
+long double log1p(long double x);
 
 /**
  * @brief 计算常用对数 log10(x)
@@ -180,50 +181,50 @@ double log1p(double x);
  *
  * 使用换底公式：log10(x) = ln(x) / ln(10)
  */
-double log10(double x);
-double log2(double x);
+long double log10(long double x);
+long double log2(long double x);
 
 /**
  * @brief 计算双曲正弦
  * @param x 输入值
  * @return sinh(x)
  */
-double sinh(double x);
+long double sinh(long double x);
 
 /**
  * @brief 计算双曲余弦
  * @param x 输入值
  * @return cosh(x)
  */
-double cosh(double x);
+long double cosh(long double x);
 
 /**
  * @brief 计算双曲正切
  * @param x 输入值
  * @return tanh(x)
  */
-double tanh(double x);
+long double tanh(long double x);
 
 /**
  * @brief 计算反双曲正弦
  * @param x 输入值
  * @return asinh(x)
  */
-double asinh(double x);
+long double asinh(long double x);
 
 /**
  * @brief 计算反双曲余弦
  * @param x 输入值，必须 >= 1
  * @return acosh(x)
  */
-double acosh(double x);
+long double acosh(long double x);
 
 /**
  * @brief 计算反双曲正切
  * @param x 输入值，必须满足 |x| < 1
  * @return atanh(x)
  */
-double atanh(double x);
+long double atanh(long double x);
 
 /**
  * @brief 计算伽马函数 Γ(x)
@@ -231,8 +232,8 @@ double atanh(double x);
  * @return Γ(x)
  * @throw std::domain_error 当 x 为非正整数时抛出
  */
-double gamma(double x);
-double lgamma(double x);
+long double gamma(long double x);
+long double lgamma(long double x);
 
 // ============================================================================
 // 三角函数
@@ -245,7 +246,7 @@ double lgamma(double x);
  *
  * 使用泰勒级数展开，先进行角度归约。
  */
-double sin(double x);
+long double sin(long double x);
 
 /**
  * @brief 计算余弦值
@@ -254,7 +255,7 @@ double sin(double x);
  *
  * 使用泰勒级数展开，先进行角度归约。
  */
-double cos(double x);
+long double cos(long double x);
 
 /**
  * @brief 计算正切值
@@ -262,7 +263,7 @@ double cos(double x);
  * @return tan(x) = sin(x) / cos(x)
  * @throw std::domain_error 当 cos(x) 接近零时抛出
  */
-double tan(double x);
+long double tan(long double x);
 
 /**
  * @brief 计算反正切值
@@ -271,8 +272,8 @@ double tan(double x);
  *
  * 使用恒等式将输入范围缩减到 [0, 0.5]，然后使用泰勒级数。
  */
-double atan(double x);
-double atan2(double y, double x);
+long double atan(long double x);
+long double atan2(long double y, long double x);
 
 /**
  * @brief 计算反正弦值
@@ -282,7 +283,7 @@ double atan2(double y, double x);
  *
  * 使用牛顿迭代法求解 sin(θ) = x。
  */
-double asin(double x);
+long double asin(long double x);
 
 /**
  * @brief 计算反余弦值
@@ -292,49 +293,49 @@ double asin(double x);
  *
  * 使用恒等式：acos(x) = π/2 - asin(x)
  */
-double acos(double x);
+long double acos(long double x);
 
 /**
  * @brief 计算正割
  * @param x 角度（弧度）
  * @return sec(x) = 1 / cos(x)
  */
-double sec(double x);
+long double sec(long double x);
 
 /**
  * @brief 计算余割
  * @param x 角度（弧度）
  * @return csc(x) = 1 / sin(x)
  */
-double csc(double x);
+long double csc(long double x);
 
 /**
  * @brief 计算余切
  * @param x 角度（弧度）
  * @return cot(x) = cos(x) / sin(x)
  */
-double cot(double x);
+long double cot(long double x);
 
 /**
  * @brief 计算反正割
  * @param x 输入值，必须满足 |x| >= 1
  * @return asec(x)
  */
-double asec(double x);
+long double asec(long double x);
 
 /**
  * @brief 计算反余割
  * @param x 输入值，必须满足 |x| >= 1
  * @return acsc(x)
  */
-double acsc(double x);
+long double acsc(long double x);
 
 /**
  * @brief 计算反余切
  * @param x 输入值
  * @return acot(x)
  */
-double acot(double x);
+long double acot(long double x);
 
 /**
  * @brief 计算欧几里得范数 sqrt(x^2 + y^2)
@@ -344,7 +345,7 @@ double acot(double x);
  *
  * 使用数值稳定的算法避免中间计算溢出。
  */
-double hypot(double x, double y);
+long double hypot(long double x, long double y);
 
 // ============================================================================
 // 幂函数和根函数
@@ -358,7 +359,7 @@ double hypot(double x, double y);
  *
  * 使用牛顿迭代法（牛顿-拉夫森方法）。
  */
-double sqrt(double x);
+long double sqrt(long double x);
 
 /**
  * @brief 计算立方根
@@ -367,7 +368,7 @@ double sqrt(double x);
  *
  * 使用公式：cbrt(x) = exp(ln(|x|) / 3) * sign(x)
  */
-double cbrt(double x);
+long double cbrt(long double x);
 
 /**
  * @brief 计算 n 次方根
@@ -378,7 +379,7 @@ double cbrt(double x);
  *
  * 支持负数次方根（即 1 / value^(1/|degree|)）。
  */
-double root(double value, double degree);
+long double root(long double value, long double degree);
 
 /**
  * @brief 计算幂函数
@@ -392,21 +393,21 @@ double root(double value, double degree);
  * - 负底数的分数指数仅在分母为奇数时有效（如 (-8)^(1/3) = -2）
  * - 一般情况使用 a^b = e^(b*ln(a))
  */
-double pow(double base, double exponent);
+long double pow(long double base, long double exponent);
 
 /**
  * @brief 计算误差函数
  * @param x 输入值
  * @return erf(x)
  */
-double erf(double x);
+long double erf(long double x);
 
 /**
  * @brief 计算互补误差函数
  * @param x 输入值
  * @return erfc(x) = 1 - erf(x)
  */
-double erfc(double x);
+long double erfc(long double x);
 
 /**
  * @brief 计算正则化下不完全伽马函数 P(a, x)
@@ -414,7 +415,7 @@ double erfc(double x);
  * @param x 参数 x
  * @return P(a, x)
  */
-double inc_gamma(double a, double x);
+long double inc_gamma(long double a, long double x);
 
 /**
  * @brief 计算正则化不完全贝塔函数 I_x(a, b)
@@ -423,7 +424,7 @@ double inc_gamma(double a, double x);
  * @param x 参数 x
  * @return I_x(a, b)
  */
-double inc_beta(double a, double b, double x);
+long double inc_beta(long double a, long double b, long double x);
 
 /**
  * @brief 计算贝塔函数
@@ -431,14 +432,14 @@ double inc_beta(double a, double b, double x);
  * @param b 参数 b
  * @return B(a, b)
  */
-double beta(double a, double b);
+long double beta(long double a, long double b);
 
 /**
  * @brief 计算黎曼 ζ 函数（实数输入）
  * @param s 输入值，s = 1 处无定义
  * @return zeta(s)
  */
-double zeta(double s);
+long double zeta(long double s);
 
 /**
  * @brief 计算第一类整数阶贝塞尔函数 J_n(x)
@@ -446,7 +447,7 @@ double zeta(double s);
  * @param x 输入值
  * @return J_order(x)
  */
-double bessel_j(int order, double x);
+long double bessel_j(int order, long double x);
 
 }  // namespace mymath
 

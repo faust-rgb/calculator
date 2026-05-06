@@ -319,7 +319,7 @@ Token LazyTokenStream::parse_number_token() {
         std::string num_str(tok.text);
         if (num_str.size() > 2 && num_str[0] == '0' &&
             std::isalpha(static_cast<unsigned char>(num_str[1]))) {
-            tok.number_value = static_cast<double>(parse_prefixed_integer_token(num_str));
+            tok.number_value = static_cast<long double>(parse_prefixed_integer_token(num_str));
         } else {
             tok.number_value = std::stod(num_str);
         }

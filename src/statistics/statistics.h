@@ -19,49 +19,49 @@ namespace stats {
  * @param data 数据集
  * @return 平均值
  */
-double mean(const std::vector<double>& data);
+long double mean(const std::vector<long double>& data);
 
 /**
  * @brief 计算中位数
  * @param data 数据集
  * @return 中位数（若数据量为偶数则取中间两数的平均值）
  */
-double median(const std::vector<double>& data);
+long double median(const std::vector<long double>& data);
 
 /**
  * @brief 计算众数
  * @param data 数据集
  * @return 出现次数最多的值
  */
-double mode(const std::vector<double>& data);
+long double mode(const std::vector<long double>& data);
 
 /**
  * @brief 计算方差（总体方差）
  * @param data 数据集
  * @return 总体方差（使用 n 作为分母）
  */
-double variance(const std::vector<double>& data);
+long double variance(const std::vector<long double>& data);
 
 /**
  * @brief 计算样本方差
  * @param data 数据集
  * @return 样本方差（使用 n-1 作为分母，即 Bessel 校正）
  */
-double sample_variance(const std::vector<double>& data);
+long double sample_variance(const std::vector<long double>& data);
 
 /**
  * @brief 计算标准差
  * @param data 数据集
  * @return 总体标准差
  */
-double stddev(const std::vector<double>& data);
+long double stddev(const std::vector<long double>& data);
 
 /**
  * @brief 计算样本标准差
  * @param data 数据集
  * @return 样本标准差（使用 n-1 作为分母）
  */
-double sample_stddev(const std::vector<double>& data);
+long double sample_stddev(const std::vector<long double>& data);
 
 /**
  * @brief 计算偏度（Skewness）
@@ -74,7 +74,7 @@ double sample_stddev(const std::vector<double>& data);
  * @param data 数据集
  * @return 偏度值
  */
-double skewness(const std::vector<double>& data);
+long double skewness(const std::vector<long double>& data);
 
 /**
  * @brief 计算峰度（Kurtosis）
@@ -87,7 +87,7 @@ double skewness(const std::vector<double>& data);
  * @param data 数据集
  * @return 超额峰度值
  */
-double kurtosis(const std::vector<double>& data);
+long double kurtosis(const std::vector<long double>& data);
 
 /**
  * @brief 计算百分位数
@@ -95,7 +95,7 @@ double kurtosis(const std::vector<double>& data);
  * @param p 百分比（0-100）
  * @return 第 p 百分位数的值
  */
-double percentile(const std::vector<double>& data, double p);
+long double percentile(const std::vector<long double>& data, long double p);
 
 /**
  * @brief 计算四分位数
@@ -103,7 +103,7 @@ double percentile(const std::vector<double>& data, double p);
  * @param q 第几个四分位数（0-4，其中 0 为最小值，4 为最大值）
  * @return 第 q 四分位数的值
  */
-double quartile(const std::vector<double>& data, int q);
+long double quartile(const std::vector<long double>& data, int q);
 
 /**
  * @brief 计算协方差
@@ -111,7 +111,7 @@ double quartile(const std::vector<double>& data, int q);
  * @param y 第二个变量数据
  * @return 协方差值
  */
-double covariance(const std::vector<double>& x, const std::vector<double>& y);
+long double covariance(const std::vector<long double>& x, const std::vector<long double>& y);
 
 /**
  * @brief 计算皮尔逊相关系数
@@ -119,7 +119,7 @@ double covariance(const std::vector<double>& x, const std::vector<double>& y);
  * @param y 第二个变量数据
  * @return 相关系数（-1 到 1 之间）
  */
-double correlation(const std::vector<double>& x, const std::vector<double>& y);
+long double correlation(const std::vector<long double>& x, const std::vector<long double>& y);
 
 /**
  * @brief 线性回归
@@ -130,21 +130,21 @@ double correlation(const std::vector<double>& x, const std::vector<double>& y);
  * @param y 因变量数据
  * @return 返回包含 [截距, 斜率] 的向量
  */
-std::vector<double> linear_regression(const std::vector<double>& x, const std::vector<double>& y);
+std::vector<long double> linear_regression(const std::vector<long double>& x, const std::vector<long double>& y);
 
 /**
  * @brief 计算四分位距（IQR）
  * @param data 数据集
  * @return IQR 值
  */
-double iqr(const std::vector<double>& data);
+long double iqr(const std::vector<long double>& data);
 
 /**
  * @brief 计算中位数绝对偏差（MAD）
  * @param data 数据集
  * @return MAD 值
  */
-double mad(const std::vector<double>& data);
+long double mad(const std::vector<long double>& data);
 
 /**
  * @brief 计算加权平均值
@@ -152,7 +152,7 @@ double mad(const std::vector<double>& data);
  * @param weights 权重集
  * @return 加权平均值
  */
-double weighted_mean(const std::vector<double>& data, const std::vector<double>& weights);
+long double weighted_mean(const std::vector<long double>& data, const std::vector<long double>& weights);
 
 /**
  * @brief 计算斯皮尔曼等级相关系数
@@ -160,7 +160,7 @@ double weighted_mean(const std::vector<double>& data, const std::vector<double>&
  * @param y 第二个变量数据
  * @return 相关系数（-1 到 1 之间）
  */
-double spearman_correlation(const std::vector<double>& x, const std::vector<double>& y);
+long double spearman_correlation(const std::vector<long double>& x, const std::vector<long double>& y);
 
 } // namespace stats
 

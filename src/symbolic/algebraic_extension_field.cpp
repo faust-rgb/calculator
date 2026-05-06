@@ -33,7 +33,7 @@ AlgebraicExtensionField::Element AlgebraicExtensionField::zero() const {
 }
 
 AlgebraicExtensionField::Element AlgebraicExtensionField::one() const {
-    return Element::constant(SymbolicExpression::number(1.0), t_var_, degree_);
+    return Element::constant(SymbolicExpression::number(1.0L), t_var_, degree_);
 }
 
 AlgebraicExtensionField::Element AlgebraicExtensionField::from_polynomial(
@@ -51,7 +51,7 @@ AlgebraicExtensionField::Element AlgebraicExtensionField::from_expression(
     std::vector<SymbolicExpression> coeffs;
     if (symbolic_polynomial_coefficients_from_simplified(expr.simplify(), t_var_, &coeffs)) {
         // 截断或扩展到 degree_
-        coeffs.resize(degree_, SymbolicExpression::number(0.0));
+        coeffs.resize(degree_, SymbolicExpression::number(0.0L));
         return Element{coeffs, t_var_, degree_};
     }
     return zero();
@@ -73,8 +73,8 @@ bool AlgebraicExtensionField::is_zero(const Element& elem) const {
 bool AlgebraicExtensionField::is_one(const Element& elem) const {
     if (!SymbolicPolynomial::coeff_is_zero(elem.coefficients[0])) {
         // 检查系数是否为 1
-        double val = 0.0;
-        if (elem.coefficients[0].is_number(&val) && mymath::abs(val - 1.0) < 1e-12) {
+        long double val = 0.0L;
+        if (elem.coefficients[0].is_number(&val) && mymath::abs(val - 1.0L) < 1e-12) {
             // 检查其他系数是否为零
             for (int i = 1; i < degree_; ++i) {
                 if (!SymbolicPolynomial::coeff_is_zero(elem.coefficients[i])) {
@@ -113,7 +113,7 @@ AlgebraicExtensionField::Element AlgebraicExtensionField::multiply(
     const Element& a, const Element& b) const {
     // 先做普通多项式乘法
     int prod_degree = 2 * degree_ - 1;
-    std::vector<SymbolicExpression> prod_coeffs(prod_degree, SymbolicExpression::number(0.0));
+    std::vector<SymbolicExpression> prod_coeffs(prod_degree, SymbolicExpression::number(0.0L));
 
     for (int i = 0; i < degree_; ++i) {
         for (int j = 0; j < degree_; ++j) {
@@ -132,7 +132,7 @@ AlgebraicExtensionField::Element AlgebraicExtensionField::multiply(
                 SymbolicExpression term = (prod_coeffs[i] * make_negate(c_j)).simplify();
                 prod_coeffs[i - degree_ + j] = (prod_coeffs[i - degree_ + j] + term).simplify();
             }
-            prod_coeffs[i] = SymbolicExpression::number(0.0);
+            prod_coeffs[i] = SymbolicExpression::number(0.0L);
         }
     }
 
@@ -171,10 +171,10 @@ bool AlgebraicExtensionField::inverse(const Element& a, Element* result) const {
 
     // 检查 GCD 是否为常数
     if (g.degree() == 0) {
-        double g_val = 0.0;
+        long double g_val = 0.0L;
         if (g.coefficient(0).is_number(&g_val) && mymath::abs(g_val) > 1e-12) {
             // 归一化
-            SymbolicExpression g_inv = SymbolicExpression::number(1.0 / g_val);
+            SymbolicExpression g_inv = SymbolicExpression::number(1.0L / g_val);
             *result = zero();
             for (int i = 0; i < degree_ && i <= s.degree(); ++i) {
                 result->coefficients[i] = (s.coefficient(i) * g_inv).simplify();
@@ -346,7 +346,7 @@ SymbolicExpression AlgebraicExtensionField::discriminant(const Element& a) const
     SymbolicExpression res = compute_resultant(a_poly, a_deriv);
 
     int n = a_poly.degree();
-    double sign = ((n * (n - 1) / 2) % 2 == 0) ? 1.0 : -1.0;
+    long double sign = ((n * (n - 1) / 2) % 2 == 0) ? 1.0L : -1.0L;
 
     SymbolicExpression lc = a_poly.leading_coefficient();
     return (SymbolicExpression::number(sign) * res / lc).simplify();
@@ -376,10 +376,10 @@ SymbolicPolynomial AlgebraicExtensionField::resultant_sum(
 
     for (int i = 0; i <= deg_beta; ++i) {
         // (z - t)^i 的展开
-        SymbolicExpression term = SymbolicExpression::number(0.0);
+        SymbolicExpression term = SymbolicExpression::number(0.0L);
         for (int k = 0; k <= i; ++k) {
             // C(i,k) * z^k * (-t)^(i-k)
-            double binom = 1.0;
+            long double binom = 1.0L;
             for (int j = 0; j < k; ++j) binom *= (i - j);
             for (int j = 1; j <= k; ++j) binom /= j;
 
@@ -399,7 +399,7 @@ SymbolicPolynomial AlgebraicExtensionField::resultant_sum(
     int matrix_size = n + m;
 
     std::vector<std::vector<SymbolicExpression>> sylvester(matrix_size,
-        std::vector<SymbolicExpression>(matrix_size, SymbolicExpression::number(0.0)));
+        std::vector<SymbolicExpression>(matrix_size, SymbolicExpression::number(0.0L)));
 
     // 填充 P_α 的行
     for (int i = 0; i < m; ++i) {
@@ -419,10 +419,10 @@ SymbolicPolynomial AlgebraicExtensionField::resultant_sum(
 
     // 计算行列式 (简化实现)
     // 实际实现需要符号行列式计算
-    SymbolicExpression det = SymbolicExpression::number(1.0);
+    SymbolicExpression det = SymbolicExpression::number(1.0L);
 
     // 返回结果多项式 (简化)
-    std::vector<SymbolicExpression> result_coeffs(deg_alpha * deg_beta + 1, SymbolicExpression::number(0.0));
+    std::vector<SymbolicExpression> result_coeffs(deg_alpha * deg_beta + 1, SymbolicExpression::number(0.0L));
     result_coeffs[deg_alpha * deg_beta] = det;
 
     return SymbolicPolynomial(result_coeffs, z_var);
@@ -454,8 +454,8 @@ SymbolicPolynomial AlgebraicExtensionField::resultant_product(
     }
 
     // 类似 resultant_sum 的处理
-    std::vector<SymbolicExpression> result_coeffs(deg_alpha * deg_beta + 1, SymbolicExpression::number(0.0));
-    result_coeffs[deg_alpha * deg_beta] = SymbolicExpression::number(1.0);
+    std::vector<SymbolicExpression> result_coeffs(deg_alpha * deg_beta + 1, SymbolicExpression::number(0.0L));
+    result_coeffs[deg_alpha * deg_beta] = SymbolicExpression::number(1.0L);
 
     return SymbolicPolynomial(result_coeffs, z_var);
 }
@@ -472,9 +472,9 @@ SymbolicPolynomial AlgebraicExtensionField::resultant_power(
     int deg_alpha = P_alpha.degree();
 
     // z - t^n 的系数
-    std::vector<SymbolicExpression> power_coeffs(n + 1, SymbolicExpression::number(0.0));
+    std::vector<SymbolicExpression> power_coeffs(n + 1, SymbolicExpression::number(0.0L));
     power_coeffs[0] = SymbolicExpression::variable(z_var);  // z
-    power_coeffs[n] = SymbolicExpression::number(-1.0);     // -t^n
+    power_coeffs[n] = SymbolicExpression::number(-1.0L);     // -t^n
 
     SymbolicPolynomial power_poly(power_coeffs, t_var);
 
@@ -482,7 +482,7 @@ SymbolicPolynomial AlgebraicExtensionField::resultant_power(
     SymbolicExpression res = compute_resultant(P_alpha, power_poly);
 
     // 返回结果多项式
-    std::vector<SymbolicExpression> result_coeffs(deg_alpha + 1, SymbolicExpression::number(0.0));
+    std::vector<SymbolicExpression> result_coeffs(deg_alpha + 1, SymbolicExpression::number(0.0L));
     result_coeffs[deg_alpha] = res;
 
     return SymbolicPolynomial(result_coeffs, z_var);
@@ -535,7 +535,7 @@ bool AlgebraicExtensionField::trager_integrate(
     SymbolicExpression log_result;
     if (trager_logarithmic_part(numerator, denominator, x_var, &log_result)) {
         *log_part = log_result;
-        *rational_part = SymbolicExpression::number(0.0);
+        *rational_part = SymbolicExpression::number(0.0L);
         return true;
     }
 
@@ -555,7 +555,7 @@ bool AlgebraicExtensionField::trager_logarithmic_part(
     // 然后提取对数部分
 
     // 简化实现
-    *result = SymbolicExpression::number(0.0);
+    *result = SymbolicExpression::number(0.0L);
     return true;
 }
 
@@ -612,13 +612,13 @@ bool AlgebraicExtensionField::detect_nested_algebraic_transcendental(
             SymbolicExpression exp(e.node_->right);
 
             // 检查分数幂
-            double exp_val = 0.0;
+            long double exp_val = 0.0L;
             if (exp.is_number(&exp_val)) {
-                double int_part;
+                long double int_part;
                 if (mymath::abs(mymath::modf(exp_val, &int_part)) > 1e-12) {
                     // 分数幂 -> 代数扩展
                     AlgebraicExtensionInfo ext = AlgebraicExtensionInfo::nth_root(
-                        base, static_cast<int>(mymath::round(1.0 / (exp_val - int_part))), x_var);
+                        base, static_cast<int>(mymath::round(1.0L / (exp_val - int_part))), x_var);
                     algebraic_exts->push_back(ext);
                 }
             }
@@ -689,7 +689,7 @@ SymbolicExpression AlgebraicExtensionField::trace(const Element& a) const {
     // 对于 t^n = u 形式的模多项式，Trace(a) = n * a_0
 
     // 简化实现
-    return (SymbolicExpression::number(static_cast<double>(degree_)) * a.coefficients[0]).simplify();
+    return (SymbolicExpression::number(static_cast<long double>(degree_)) * a.coefficients[0]).simplify();
 }
 
 AlgebraicExtensionField::Element AlgebraicExtensionField::reduce(const Element& a) const {
@@ -710,7 +710,7 @@ std::vector<std::vector<SymbolicExpression>> AlgebraicExtensionField::build_sylv
     int size = n + m;
 
     std::vector<std::vector<SymbolicExpression>> matrix(size,
-        std::vector<SymbolicExpression>(size, SymbolicExpression::number(0.0)));
+        std::vector<SymbolicExpression>(size, SymbolicExpression::number(0.0L)));
 
     // 填充 A 的行
     for (int i = 0; i < m; ++i) {
@@ -738,7 +738,7 @@ SymbolicExpression AlgebraicExtensionField::compute_resultant(
     int m = B.degree();
 
     if (n < 0 || m < 0) {
-        return SymbolicExpression::number(0.0);
+        return SymbolicExpression::number(0.0L);
     }
 
     if (n == 0) {
@@ -758,7 +758,7 @@ SymbolicExpression AlgebraicExtensionField::compute_resultant(
     // 计算行列式 (简化实现)
     // 实际需要完整的符号行列式计算
 
-    SymbolicExpression det = SymbolicExpression::number(1.0);
+    SymbolicExpression det = SymbolicExpression::number(1.0L);
     for (int i = 0; i < n + m; ++i) {
         det = (det * matrix[i][i]).simplify();
     }

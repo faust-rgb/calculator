@@ -26,7 +26,7 @@ bool extract_laurent_coefficients(const SymbolicExpression& expr,
 
     // Handle direct power: t^n
     if (simplified.is_variable_named(t_var)) {
-        coefficients[1] = SymbolicExpression::number(1.0);
+        coefficients[1] = SymbolicExpression::number(1.0L);
         lowest_power = 1;
         highest_power = 1;
         return true;
@@ -52,7 +52,7 @@ bool extract_laurent_coefficients(const SymbolicExpression& expr,
         if (den.node_->type == NodeType::kPower) {
             SymbolicExpression base(den.node_->left);
             SymbolicExpression exp(den.node_->right);
-            double exp_val = 0.0;
+            long double exp_val = 0.0L;
             if (base.is_variable_named(t_var) && exp.is_number(&exp_val)) {
                 int n = static_cast<int>(mymath::round(exp_val));
                 if (n > 0 && mymath::abs(exp_val - n) < 1e-9) {
@@ -130,7 +130,7 @@ bool extract_laurent_coefficients(const SymbolicExpression& expr,
 [[maybe_unused]] SymbolicExpression build_laurent_expression(
     const std::map<int, SymbolicExpression>& coefficients,
     const std::string& t_var) {
-    SymbolicExpression result = SymbolicExpression::number(0.0);
+    SymbolicExpression result = SymbolicExpression::number(0.0L);
     SymbolicExpression t = SymbolicExpression::variable(t_var);
 
     for (const auto& [power, coeff] : coefficients) {
@@ -140,10 +140,10 @@ bool extract_laurent_coefficients(const SymbolicExpression& expr,
         if (power == 0) {
             term = coeff;
         } else if (power > 0) {
-            term = (coeff * make_power(t, SymbolicExpression::number(static_cast<double>(power)))).simplify();
+            term = (coeff * make_power(t, SymbolicExpression::number(static_cast<long double>(power)))).simplify();
         } else {
             // Negative power: t^(-n) = 1/t^n
-            term = (coeff / make_power(t, SymbolicExpression::number(static_cast<double>(-power)))).simplify();
+            term = (coeff / make_power(t, SymbolicExpression::number(static_cast<long double>(-power)))).simplify();
         }
         result = (result + term).simplify();
     }
@@ -182,16 +182,16 @@ int compute_laurent_valuation_bound(const SymbolicExpression& f,
 
     // Check if f has a special form that affects the bound
     // If f = -n*u' for some integer n, there may be cancellation at power n
-    double u_prime_val = 0.0;
+    long double u_prime_val = 0.0L;
     bool u_prime_is_const = u_prime.is_number(&u_prime_val);
 
     if (u_prime_is_const && f_coeffs.size() == 1 && f_coeffs.count(0)) {
         // f is a constant (power 0)
-        double f_val = 0.0;
+        long double f_val = 0.0L;
         if (f_coeffs.at(0).is_number(&f_val)) {
             // Check if f = -n*u' for some integer n
             if (mymath::abs(u_prime_val) > 1e-12) {
-                double ratio = -f_val / u_prime_val;
+                long double ratio = -f_val / u_prime_val;
                 int n = static_cast<int>(mymath::round(ratio));
                 if (mymath::abs(ratio - n) < 1e-9 && n > 0) {
                     // Special case: f = -n*u', solution may have term with t^(-n)
@@ -230,12 +230,12 @@ int compute_laurent_degree_bound(const SymbolicExpression& f,
     }
 
     // Check for cancellation case
-    double u_prime_val = 0.0;
+    long double u_prime_val = 0.0L;
     if (u_prime.is_number(&u_prime_val) && mymath::abs(u_prime_val) > 1e-12) {
         if (f_coeffs.size() == 1 && f_coeffs.count(0)) {
-            double f_val = 0.0;
+            long double f_val = 0.0L;
             if (f_coeffs.at(0).is_number(&f_val)) {
-                double ratio = -f_val / u_prime_val;
+                long double ratio = -f_val / u_prime_val;
                 int n = static_cast<int>(mymath::round(ratio));
                 if (mymath::abs(ratio - n) < 1e-9 && n > 0) {
                     // Cancellation possible, degree may be higher

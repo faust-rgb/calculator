@@ -21,7 +21,7 @@ namespace internal {
  * @param x 输入值，必须为正数
  * @return ln(Γ(x))
  */
-double log_gamma_positive(double x);
+long double log_gamma_positive(long double x);
 
 /**
  * @brief 从对数值转换为有限值或无穷
@@ -32,7 +32,7 @@ double log_gamma_positive(double x);
  * @param log_value 对数值
  * @return exp(log_value) 或边界值
  */
-double finite_or_infinity_from_log(double log_value);
+long double finite_or_infinity_from_log(long double log_value);
 
 }  // namespace internal
 }  // namespace mymath

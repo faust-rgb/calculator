@@ -9,20 +9,20 @@ long long gcd_ll(long long a, long long b);
 /** @brief 最小公倍数 */
 long long lcm_ll(long long a, long long b);
 
-/** @brief 检查 double 是否为整数 */
-bool is_integer_double(double x, double eps = 1e-10);
+/** @brief 检查 long double 是否为整数 */
+bool is_integer_double(long double x, long double eps = 1e-10);
 
 /** @brief 四舍五入 */
-long long round_to_long_long(double x);
+long long round_to_long_long(long double x);
 
 /** @brief 向零截断 */
-long long trunc_to_long_long(double x);
+long long trunc_to_long_long(long double x);
 
 /** @brief 向下取整 */
-long long floor_to_long_long(double x);
+long long floor_to_long_long(long double x);
 
 /** @brief 向上取整 */
-long long ceil_to_long_long(double x);
+long long ceil_to_long_long(long double x);
 
 /** @brief 素数判断 */
 bool is_prime_ll(long long value);

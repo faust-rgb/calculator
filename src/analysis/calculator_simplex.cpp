@@ -36,21 +36,21 @@ namespace {
  */
 bool update_basis_inverse(
     matrix::Matrix& B_inv,
-    const std::vector<double>& a_enter,
+    const std::vector<long double>& a_enter,
     std::size_t leaving_idx,
-    double eps) {
+    long double eps) {
 
     const std::size_t m = B_inv.rows;
 
     // 计算 w = B_inv * a_enter
-    std::vector<double> w(m, 0.0);
+    std::vector<long double> w(m, 0.0L);
     for (std::size_t i = 0; i < m; ++i) {
         for (std::size_t j = 0; j < m; ++j) {
             w[i] += B_inv.at(i, j) * a_enter[j];
         }
     }
 
-    const double pivot = w[leaving_idx];
+    const long double pivot = w[leaving_idx];
     if (mymath::abs(pivot) < eps * 1e-3) {
         return false; // 数值不稳定
     }
@@ -58,7 +58,7 @@ bool update_basis_inverse(
     // 更新 B_inv 的非出基行
     for (std::size_t i = 0; i < m; ++i) {
         if (i == leaving_idx) continue;
-        const double factor = w[i] / pivot;
+        const long double factor = w[i] / pivot;
         for (std::size_t j = 0; j < m; ++j) {
             B_inv.at(i, j) -= factor * B_inv.at(leaving_idx, j);
         }
@@ -80,11 +80,11 @@ bool update_basis_inverse(
 bool reinvert_basis(
     matrix::Matrix& B_inv,
     const std::vector<std::size_t>& basis_curr,
-    const std::vector<std::vector<double>>& A_full,
+    const std::vector<std::vector<long double>>& A_full,
     std::size_t m) {
 
     // 构建基矩阵
-    matrix::Matrix B(m, m, 0.0);
+    matrix::Matrix B(m, m, 0.0L);
     for (std::size_t i = 0; i < m; ++i) {
         for (std::size_t k = 0; k < m; ++k) {
             B.at(i, k) = A_full[i][basis_curr[k]];
@@ -122,20 +122,20 @@ bool reinvert_basis(
  * @return 是否找到最优解
  */
 bool simplex_iterate(
-    std::vector<double>& x_curr,
+    std::vector<long double>& x_curr,
     std::vector<std::size_t>& basis_curr,
-    const std::vector<double>& c_obj,
-    const std::vector<std::vector<double>>& A_full,
-    const std::vector<double>& lb_full,
-    const std::vector<double>& ub_full,
+    const std::vector<long double>& c_obj,
+    const std::vector<std::vector<long double>>& A_full,
+    const std::vector<long double>& lb_full,
+    const std::vector<long double>& ub_full,
     std::size_t m_total,
     std::size_t n_full,
     bool minimize,
     std::size_t max_iters,
-    double eps) {
+    long double eps) {
 
     // 初始化基矩阵之逆
-    matrix::Matrix B_inv(m_total, m_total, 0.0);
+    matrix::Matrix B_inv(m_total, m_total, 0.0L);
     if (!reinvert_basis(B_inv, basis_curr, A_full, m_total)) {
         return false;
     }
@@ -147,9 +147,9 @@ bool simplex_iterate(
         }
 
         // 计算对偶变量 y: y' = c_B' * B_inv
-        std::vector<double> y(m_total, 0.0);
+        std::vector<long double> y(m_total, 0.0L);
         for (std::size_t j = 0; j < m_total; ++j) {
-            const double cB_val = c_obj[basis_curr[j]];
+            const long double cB_val = c_obj[basis_curr[j]];
             for (std::size_t i = 0; i < m_total; ++i) {
                 y[i] += cB_val * B_inv.at(j, i);
             }
@@ -157,7 +157,7 @@ bool simplex_iterate(
 
         // 寻找入基变量（定价阶段）
         std::size_t entering = n_full;
-        double best_rc = 0.0;
+        long double best_rc = 0.0L;
         for (std::size_t j = 0; j < n_full; ++j) {
             // 检查是否已在基中
             bool is_basic = false;
@@ -167,13 +167,13 @@ bool simplex_iterate(
             if (is_basic) continue;
 
             // 计算检验数（reduced cost）
-            double rc = c_obj[j];
+            long double rc = c_obj[j];
             for (std::size_t i = 0; i < m_total; ++i) {
                 rc -= y[i] * A_full[i][j];
             }
 
             // 根据变量当前状态选择入基
-            double xj = x_curr[j];
+            long double xj = x_curr[j];
             bool at_lower = mymath::abs(xj - lb_full[j]) <= eps;
             bool at_upper = (ub_full[j] < mymath::infinity()) &&
                             mymath::abs(xj - ub_full[j]) <= eps;
@@ -201,10 +201,10 @@ bool simplex_iterate(
         }
 
         // 计算搜索方向 d = B_inv * A_entering
-        std::vector<double> a_enter(m_total);
+        std::vector<long double> a_enter(m_total);
         for (std::size_t i = 0; i < m_total; ++i) a_enter[i] = A_full[i][entering];
 
-        std::vector<double> d(m_total, 0.0);
+        std::vector<long double> d(m_total, 0.0L);
         for (std::size_t i = 0; i < m_total; ++i) {
             for (std::size_t j = 0; j < m_total; ++j) {
                 d[i] += B_inv.at(i, j) * a_enter[j];
@@ -212,7 +212,7 @@ bool simplex_iterate(
         }
 
         // 比值检验确定步长
-        double theta = mymath::infinity();
+        long double theta = mymath::infinity();
         std::size_t leaving = m_total;
 
         // 检查入基变量是否从上界减少
@@ -223,7 +223,7 @@ bool simplex_iterate(
         }
 
         // 计算最大步长
-        double max_theta = (ub_full[entering] < mymath::infinity())
+        long double max_theta = (ub_full[entering] < mymath::infinity())
                             ? (ub_full[entering] - lb_full[entering])
                             : mymath::infinity();
 
@@ -232,17 +232,17 @@ bool simplex_iterate(
         // 对每个基变量进行比值检验
         for (std::size_t i = 0; i < m_total; ++i) {
             std::size_t j = basis_curr[i];
-            double di = decreasing_entering ? -d[i] : d[i];
+            long double di = decreasing_entering ? -d[i] : d[i];
             if (mymath::abs(di) <= eps) continue;
 
             if (di > 0) {
                 // 基变量可能到达下界
-                double ratio = (x_curr[j] - lb_full[j]) / di;
+                long double ratio = (x_curr[j] - lb_full[j]) / di;
                 if (ratio < theta) { theta = ratio; leaving = i; }
             } else {
                 // 基变量可能到达上界
                 if (ub_full[j] < mymath::infinity()) {
-                    double ratio = (ub_full[j] - x_curr[j]) / (-di);
+                    long double ratio = (ub_full[j] - x_curr[j]) / (-di);
                     if (ratio < theta) { theta = ratio; leaving = i; }
                 }
             }
@@ -253,7 +253,7 @@ bool simplex_iterate(
         }
 
         // 更新当前解
-        double shift = decreasing_entering ? -theta : theta;
+        long double shift = decreasing_entering ? -theta : theta;
         x_curr[entering] += shift;
         for (std::size_t i = 0; i < m_total; ++i) {
             x_curr[basis_curr[i]] -= shift * d[i];
@@ -287,16 +287,16 @@ bool simplex_iterate(
  * 第二阶段：删除人工变量，优化原目标函数
  */
 bool solve_linear_box_problem(
-    const std::vector<double>& objective,
+    const std::vector<long double>& objective,
     const matrix::Matrix& inequality_matrix,
-    const std::vector<double>& inequality_rhs,
+    const std::vector<long double>& inequality_rhs,
     const matrix::Matrix& equality_matrix,
-    const std::vector<double>& equality_rhs,
-    const std::vector<double>& lower_bounds,
-    const std::vector<double>& upper_bounds,
-    double tolerance,
-    std::vector<double>* solution,
-    double* objective_value,
+    const std::vector<long double>& equality_rhs,
+    const std::vector<long double>& lower_bounds,
+    const std::vector<long double>& upper_bounds,
+    long double tolerance,
+    std::vector<long double>* solution,
+    long double* objective_value,
     std::string* diagnostic) {
 
     const std::size_t n = objective.size();
@@ -311,7 +311,7 @@ bool solve_linear_box_problem(
 
     if (n == 0) {
         *solution = {};
-        *objective_value = 0.0;
+        *objective_value = 0.0L;
         return true;
     }
 
@@ -320,8 +320,8 @@ bool solve_linear_box_problem(
     const std::size_t m_total = m_ineq + m_eq;
 
     if (m_total == 0) {
-        std::vector<double> best(n, 0.0);
-        double best_val = 0.0;
+        std::vector<long double> best(n, 0.0L);
+        long double best_val = 0.0L;
         for (std::size_t j = 0; j < n; ++j) {
             if (objective[j] >= 0) {
                 best[j] = lower_bounds[j];
@@ -338,26 +338,26 @@ bool solve_linear_box_problem(
     const std::size_t n_slack = m_ineq;
     const std::size_t n_total = n + n_slack;
 
-    std::vector<double> c(n_total, 0.0);
+    std::vector<long double> c(n_total, 0.0L);
     for (std::size_t j = 0; j < n; ++j) {
         c[j] = objective[j];
     }
 
-    std::vector<double> lb(n_total, 0.0);
-    std::vector<double> ub(n_total, mymath::infinity());
+    std::vector<long double> lb(n_total, 0.0L);
+    std::vector<long double> ub(n_total, mymath::infinity());
     for (std::size_t j = 0; j < n; ++j) {
         lb[j] = lower_bounds[j];
         ub[j] = upper_bounds[j];
     }
 
-    std::vector<std::vector<double>> A(m_total, std::vector<double>(n_total, 0.0));
-    std::vector<double> b(m_total, 0.0);
+    std::vector<std::vector<long double>> A(m_total, std::vector<long double>(n_total, 0.0L));
+    std::vector<long double> b(m_total, 0.0L);
 
     for (std::size_t i = 0; i < m_ineq; ++i) {
         for (std::size_t j = 0; j < n; ++j) {
             A[i][j] = inequality_matrix.at(i, j);
         }
-        A[i][n + i] = 1.0;
+        A[i][n + i] = 1.0L;
         b[i] = inequality_rhs[i];
     }
 
@@ -380,24 +380,24 @@ bool solve_linear_box_problem(
     const std::size_t n_art = m_total;
     const std::size_t n_full = n_total + n_art;
 
-    std::vector<std::vector<double>> A_full(m_total, std::vector<double>(n_full, 0.0));
+    std::vector<std::vector<long double>> A_full(m_total, std::vector<long double>(n_full, 0.0L));
     for (std::size_t i = 0; i < m_total; ++i) {
         for (std::size_t j = 0; j < n_total; ++j) {
             A_full[i][j] = A[i][j];
         }
-        A_full[i][n_total + i] = 1.0;
+        A_full[i][n_total + i] = 1.0L;
     }
 
-    std::vector<double> lb_full(n_full, 0.0);
-    std::vector<double> ub_full(n_full, mymath::infinity());
+    std::vector<long double> lb_full(n_full, 0.0L);
+    std::vector<long double> ub_full(n_full, mymath::infinity());
     for (std::size_t j = 0; j < n_total; ++j) {
         lb_full[j] = lb[j];
         ub_full[j] = ub[j];
     }
 
-    std::vector<double> c_phase1(n_full, 0.0);
+    std::vector<long double> c_phase1(n_full, 0.0L);
     for (std::size_t j = n_total; j < n_full; ++j) {
-        c_phase1[j] = 1.0;
+        c_phase1[j] = 1.0L;
     }
 
     std::vector<std::size_t> basis(m_total);
@@ -405,7 +405,7 @@ bool solve_linear_box_problem(
         basis[i] = n_total + i;
     }
 
-    std::vector<double> x(n_full, 0.0);
+    std::vector<long double> x(n_full, 0.0L);
     for (std::size_t j = 0; j < n_total; ++j) {
         x[j] = lb_full[j];
     }
@@ -422,11 +422,11 @@ bool solve_linear_box_problem(
         return false;
     }
 
-    double art_sum = 0.0;
+    long double art_sum = 0.0L;
     for (std::size_t j = n_total; j < n_full; ++j) {
         art_sum += mymath::abs(x[j]);
     }
-    if (art_sum > tolerance * static_cast<double>(m_total)) {
+    if (art_sum > tolerance * static_cast<long double>(m_total)) {
         if (diagnostic) *diagnostic = "no feasible solution found";
         return false;
     }
@@ -455,7 +455,7 @@ bool solve_linear_box_problem(
         }
     }
 
-    std::vector<double> c_phase2(n_full, 0.0);
+    std::vector<long double> c_phase2(n_full, 0.0L);
     for (std::size_t j = 0; j < n; ++j) {
         c_phase2[j] = -objective[j];
     }
@@ -468,7 +468,7 @@ bool solve_linear_box_problem(
         return false;
     }
 
-    std::vector<double> result(n, 0.0);
+    std::vector<long double> result(n, 0.0L);
     for (std::size_t j = 0; j < n; ++j) {
         result[j] = x[j];
         if (result[j] < lower_bounds[j] - tolerance ||
@@ -478,7 +478,7 @@ bool solve_linear_box_problem(
     }
 
     for (std::size_t i = 0; i < m_ineq; ++i) {
-        double lhs = 0.0;
+        long double lhs = 0.0L;
         for (std::size_t j = 0; j < n; ++j) {
             lhs += inequality_matrix.at(i, j) * result[j];
         }
@@ -488,7 +488,7 @@ bool solve_linear_box_problem(
         }
     }
     for (std::size_t i = 0; i < m_eq; ++i) {
-        double lhs = 0.0;
+        long double lhs = 0.0L;
         for (std::size_t j = 0; j < n; ++j) {
             lhs += equality_matrix.at(i, j) * result[j];
         }
@@ -499,7 +499,7 @@ bool solve_linear_box_problem(
     }
 
     *solution = result;
-    *objective_value = 0.0;
+    *objective_value = 0.0L;
     for (std::size_t j = 0; j < n; ++j) {
         *objective_value += objective[j] * result[j];
     }

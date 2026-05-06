@@ -498,7 +498,7 @@ std::istream& operator>>(std::istream& is, complex<T>& value) {
 }
 
 using complex_float = complex<float>;
-using complex_double = complex<double>;
+using complex_double = complex<long double>;
 using complex_long_double = complex<long double>;
 
 }  // namespace mymath

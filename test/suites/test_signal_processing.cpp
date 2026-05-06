@@ -19,7 +19,7 @@
 namespace test_suites {
 
 // 容差
-constexpr double kEps = 1e-10;
+constexpr long double kEps = 1e-10;
 
 // ============================================================================
 // FFT 测试
@@ -27,14 +27,14 @@ constexpr double kEps = 1e-10;
 
 static void test_fft_radix2(int& passed, int& failed) {
     // 测试简单信号
-    std::vector<signal::Complex> sig = {1.0, 0.0, 0.0, 0.0};
+    std::vector<signal::Complex> sig = {1.0L, 0.0L, 0.0L, 0.0L};
     std::vector<signal::Complex> spectrum = signal::fft_radix2(sig);
 
     bool ok = (spectrum.size() == 4);
     if (ok) {
         for (const auto& c : spectrum) {
-            if (!test_helpers::nearly_equal(c.real(), 1.0, kEps) ||
-                !test_helpers::nearly_equal(c.imag(), 0.0, kEps)) {
+            if (!test_helpers::nearly_equal(c.real(), 1.0L, kEps) ||
+                !test_helpers::nearly_equal(c.imag(), 0.0L, kEps)) {
                 ok = false;
                 break;
             }
@@ -50,7 +50,7 @@ static void test_fft_radix2(int& passed, int& failed) {
 }
 
 static void test_fft_ifft_roundtrip(int& passed, int& failed) {
-    std::vector<signal::Complex> original = {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
+    std::vector<signal::Complex> original = {1.0L, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0};
 
     std::vector<signal::Complex> spectrum = signal::fft(original);
     std::vector<signal::Complex> reconstructed = signal::ifft(spectrum);
@@ -59,7 +59,7 @@ static void test_fft_ifft_roundtrip(int& passed, int& failed) {
     if (ok) {
         for (std::size_t i = 0; i < original.size(); ++i) {
             if (!test_helpers::nearly_equal(reconstructed[i].real(), original[i].real(), kEps) ||
-                !test_helpers::nearly_equal(reconstructed[i].imag(), 0.0, kEps)) {
+                !test_helpers::nearly_equal(reconstructed[i].imag(), 0.0L, kEps)) {
                 ok = false;
                 break;
             }
@@ -75,7 +75,7 @@ static void test_fft_ifft_roundtrip(int& passed, int& failed) {
 }
 
 static void test_fft_non_power_of_two(int& passed, int& failed) {
-    std::vector<signal::Complex> sig = {1.0, 2.0, 3.0, 4.0, 5.0};
+    std::vector<signal::Complex> sig = {1.0L, 2.0, 3.0, 4.0, 5.0};
 
     std::vector<signal::Complex> spectrum = signal::fft(sig);
     std::vector<signal::Complex> reconstructed = signal::ifft(spectrum);
@@ -99,7 +99,7 @@ static void test_fft_non_power_of_two(int& passed, int& failed) {
 }
 
 static void test_rfft(int& passed, int& failed) {
-    std::vector<double> sig = {1.0, 1.0, 0.0, 0.0};
+    std::vector<long double> sig = {1.0L, 1.0L, 0.0L, 0.0L};
 
     std::vector<signal::Complex> spectrum = signal::rfft(sig);
 
@@ -117,7 +117,7 @@ static void test_rfft(int& passed, int& failed) {
 }
 
 static void test_fftshift(int& passed, int& failed) {
-    std::vector<signal::Complex> spectrum = {1.0, 2.0, 3.0, 4.0};
+    std::vector<signal::Complex> spectrum = {1.0L, 2.0, 3.0, 4.0};
 
     std::vector<signal::Complex> shifted = signal::fftshift(spectrum);
     std::vector<signal::Complex> unshifted = signal::ifftshift(shifted);
@@ -126,7 +126,7 @@ static void test_fftshift(int& passed, int& failed) {
     if (ok) {
         ok = test_helpers::nearly_equal(shifted[0].real(), 3.0, kEps) &&
              test_helpers::nearly_equal(shifted[1].real(), 4.0, kEps) &&
-             test_helpers::nearly_equal(shifted[2].real(), 1.0, kEps) &&
+             test_helpers::nearly_equal(shifted[2].real(), 1.0L, kEps) &&
              test_helpers::nearly_equal(shifted[3].real(), 2.0, kEps);
     }
 
@@ -152,14 +152,14 @@ static void test_fftshift(int& passed, int& failed) {
 // ============================================================================
 
 static void test_convolve(int& passed, int& failed) {
-    std::vector<double> signal1 = {1.0, 2.0, 3.0};
-    std::vector<double> signal2 = {1.0, 1.0};
+    std::vector<long double> signal1 = {1.0L, 2.0, 3.0};
+    std::vector<long double> signal2 = {1.0L, 1.0L};
 
-    std::vector<double> result = signal::convolve(signal1, signal2);
+    std::vector<long double> result = signal::convolve(signal1, signal2);
 
     bool ok = (result.size() == 4u);
     if (ok) {
-        ok = test_helpers::nearly_equal(result[0], 1.0, kEps) &&
+        ok = test_helpers::nearly_equal(result[0], 1.0L, kEps) &&
              test_helpers::nearly_equal(result[1], 3.0, kEps) &&
              test_helpers::nearly_equal(result[2], 5.0, kEps) &&
              test_helpers::nearly_equal(result[3], 3.0, kEps);
@@ -174,10 +174,10 @@ static void test_convolve(int& passed, int& failed) {
 }
 
 static void test_circular_convolve(int& passed, int& failed) {
-    std::vector<double> signal1 = {1.0, 2.0, 3.0};
-    std::vector<double> signal2 = {1.0, 1.0, 0.0};
+    std::vector<long double> signal1 = {1.0L, 2.0, 3.0};
+    std::vector<long double> signal2 = {1.0L, 1.0L, 0.0L};
 
-    std::vector<double> result = signal::circular_convolve(signal1, signal2, 3);
+    std::vector<long double> result = signal::circular_convolve(signal1, signal2, 3);
 
     bool ok = (result.size() == 3u);
 
@@ -190,10 +190,10 @@ static void test_circular_convolve(int& passed, int& failed) {
 }
 
 static void test_xcorr(int& passed, int& failed) {
-    std::vector<double> signal1 = {1.0, 2.0, 3.0};
-    std::vector<double> signal2 = {1.0, 2.0};
+    std::vector<long double> signal1 = {1.0L, 2.0, 3.0};
+    std::vector<long double> signal2 = {1.0L, 2.0};
 
-    std::vector<double> result = signal::xcorr(signal1, signal2);
+    std::vector<long double> result = signal::xcorr(signal1, signal2);
 
     bool ok = (result.size() == 4u);
 
@@ -206,9 +206,9 @@ static void test_xcorr(int& passed, int& failed) {
 }
 
 static void test_autocorr(int& passed, int& failed) {
-    std::vector<double> sig = {1.0, 2.0, 3.0};
+    std::vector<long double> sig = {1.0L, 2.0, 3.0};
 
-    std::vector<double> result = signal::autocorr(sig);
+    std::vector<long double> result = signal::autocorr(sig);
 
     bool ok = (result.size() == 5u);
     if (ok) {
@@ -231,7 +231,7 @@ static void test_autocorr(int& passed, int& failed) {
 // ============================================================================
 
 static void test_hanning_window(int& passed, int& failed) {
-    std::vector<double> win = signal::hanning_window(8);
+    std::vector<long double> win = signal::hanning_window(8);
 
     bool ok = (win.size() == 8u);
     if (ok) {
@@ -253,7 +253,7 @@ static void test_hanning_window(int& passed, int& failed) {
 }
 
 static void test_hamming_window(int& passed, int& failed) {
-    std::vector<double> win = signal::hamming_window(8);
+    std::vector<long double> win = signal::hamming_window(8);
 
     bool ok = (win.size() == 8u);
     if (ok) {
@@ -267,7 +267,7 @@ static void test_hamming_window(int& passed, int& failed) {
     }
     if (ok) {
         // 端点不应该为零
-        ok = (win[0] > 0.0 && win[7] > 0.0);
+        ok = (win[0] > 0.0L && win[7] > 0.0L);
     }
 
     if (ok) {
@@ -279,7 +279,7 @@ static void test_hamming_window(int& passed, int& failed) {
 }
 
 static void test_kaiser_window(int& passed, int& failed) {
-    std::vector<double> win = signal::kaiser_window(16, 5.0);
+    std::vector<long double> win = signal::kaiser_window(16, 5.0);
 
     bool ok = (win.size() == 16u);
     if (ok) {
@@ -301,14 +301,14 @@ static void test_kaiser_window(int& passed, int& failed) {
 }
 
 static void test_window_function(int& passed, int& failed) {
-    std::vector<double> hann = signal::window(signal::WindowType::Hanning, 8);
-    std::vector<double> rect = signal::window(signal::WindowType::Rectangular, 8);
+    std::vector<long double> hann = signal::window(signal::WindowType::Hanning, 8);
+    std::vector<long double> rect = signal::window(signal::WindowType::Rectangular, 8);
 
     bool ok = (hann.size() == 8u && rect.size() == 8u);
     if (ok) {
         // 矩形窗应该全为 1
-        for (double v : rect) {
-            if (!test_helpers::nearly_equal(v, 1.0, kEps)) {
+        for (long double v : rect) {
+            if (!test_helpers::nearly_equal(v, 1.0L, kEps)) {
                 ok = false;
                 break;
             }
@@ -332,7 +332,7 @@ static void test_fir_lowpass(int& passed, int& failed) {
 
     bool ok = !fir.b.empty() && fir.a.size() == 1u;
     if (ok) {
-        ok = test_helpers::nearly_equal(fir.a[0], 1.0, kEps);
+        ok = test_helpers::nearly_equal(fir.a[0], 1.0L, kEps);
     }
     if (ok) {
         // 检查对称性
@@ -354,11 +354,11 @@ static void test_fir_lowpass(int& passed, int& failed) {
 }
 
 static void test_filter_application(int& passed, int& failed) {
-    std::vector<double> b = {0.5, 0.5};
-    std::vector<double> a = {1.0};
-    std::vector<double> sig = {1.0, 2.0, 3.0, 4.0, 5.0};
+    std::vector<long double> b = {0.5, 0.5};
+    std::vector<long double> a = {1.0L};
+    std::vector<long double> sig = {1.0L, 2.0, 3.0, 4.0, 5.0};
 
-    std::vector<double> filtered = signal::filter(b, a, sig);
+    std::vector<long double> filtered = signal::filter(b, a, sig);
 
     bool ok = (filtered.size() == sig.size());
     if (ok) {
@@ -376,8 +376,8 @@ static void test_filter_application(int& passed, int& failed) {
 }
 
 static void test_freqz(int& passed, int& failed) {
-    std::vector<double> b = {1.0, 0.0};
-    std::vector<double> a = {1.0, -0.5};
+    std::vector<long double> b = {1.0L, 0.0L};
+    std::vector<long double> a = {1.0L, -0.5};
 
     std::vector<signal::Complex> response = signal::freqz(b, a, 64);
 
@@ -400,18 +400,18 @@ static void test_freqz(int& passed, int& failed) {
 // ============================================================================
 
 static void test_periodogram(int& passed, int& failed) {
-    std::vector<double> sig(64);
+    std::vector<long double> sig(64);
     for (std::size_t i = 0; i < sig.size(); ++i) {
-        sig[i] = mymath::sin(2.0 * mymath::kPi * 8.0 * static_cast<double>(i) / 64.0);
+        sig[i] = mymath::sin(2.0 * mymath::kPi * 8.0 * static_cast<long double>(i) / 64.0);
     }
 
-    std::vector<double> psd = signal::periodogram(sig);
+    std::vector<long double> psd = signal::periodogram(sig);
 
     bool ok = !psd.empty();
     if (ok) {
         // 找峰值位置
         std::size_t peak_idx = 0;
-        double max_val = 0.0;
+        long double max_val = 0.0L;
         for (std::size_t i = 0; i < psd.size(); ++i) {
             if (psd[i] > max_val) {
                 max_val = psd[i];
@@ -431,12 +431,12 @@ static void test_periodogram(int& passed, int& failed) {
 }
 
 static void test_pwelch(int& passed, int& failed) {
-    std::vector<double> sig(256);
+    std::vector<long double> sig(256);
     for (std::size_t i = 0; i < sig.size(); ++i) {
-        sig[i] = mymath::sin(2.0 * mymath::kPi * 32.0 * static_cast<double>(i) / 256.0);
+        sig[i] = mymath::sin(2.0 * mymath::kPi * 32.0 * static_cast<long double>(i) / 256.0);
     }
 
-    std::vector<double> psd = signal::pwelch(sig, 64);
+    std::vector<long double> psd = signal::pwelch(sig, 64);
 
     bool ok = !psd.empty();
 
@@ -449,9 +449,9 @@ static void test_pwelch(int& passed, int& failed) {
 }
 
 static void test_stft(int& passed, int& failed) {
-    std::vector<double> sig(128);
+    std::vector<long double> sig(128);
     for (std::size_t i = 0; i < sig.size(); ++i) {
-        sig[i] = mymath::sin(2.0 * mymath::kPi * 16.0 * static_cast<double>(i) / 128.0);
+        sig[i] = mymath::sin(2.0 * mymath::kPi * 16.0 * static_cast<long double>(i) / 128.0);
     }
 
     signal::STFTResult result = signal::stft(sig, 32);
@@ -469,12 +469,12 @@ static void test_stft(int& passed, int& failed) {
 }
 
 static void test_spectrogram(int& passed, int& failed) {
-    std::vector<double> sig(128);
+    std::vector<long double> sig(128);
     for (std::size_t i = 0; i < sig.size(); ++i) {
-        sig[i] = mymath::sin(2.0 * mymath::kPi * 16.0 * static_cast<double>(i) / 128.0);
+        sig[i] = mymath::sin(2.0 * mymath::kPi * 16.0 * static_cast<long double>(i) / 128.0);
     }
 
-    std::vector<std::vector<double>> spec = signal::spectrogram(sig, 32);
+    std::vector<std::vector<long double>> spec = signal::spectrogram(sig, 32);
 
     bool ok = !spec.empty() && !spec[0].empty();
 

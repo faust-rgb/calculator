@@ -31,25 +31,25 @@ std::vector<int> parse_subdivisions(const IntegrationContext& ctx,
     if (arguments.size() <= offset) return subdivisions;
     std::size_t count = std::min(arguments.size() - offset, defaults.size());
     for (std::size_t i = 0; i < count; ++i) {
-        const double value = ctx.parse_decimal(arguments[offset + i]);
-        if (!is_integer_double(value) || value <= 0.0) throw std::runtime_error("integration subdivision counts must be positive integers");
+        const long double value = ctx.parse_decimal(arguments[offset + i]);
+        if (!is_integer_double(value) || value <= 0.0L) throw std::runtime_error("integration subdivision counts must be positive integers");
         subdivisions[i] = static_cast<int>(round_to_long_long(value));
     }
     return subdivisions;
 }
 
-std::function<double(const std::vector<double>&)> make_scalar_bound_func(
+std::function<long double(const std::vector<long double>&)> make_scalar_bound_func(
     const IntegrationContext& ctx,
     const std::string& bound_expr,
     const std::vector<std::string>& var_names,
     std::size_t current_dim) {
     try {
-        double val = ctx.parse_decimal(bound_expr);
-        return [val](const std::vector<double>&) { return val; };
+        long double val = ctx.parse_decimal(bound_expr);
+        return [val](const std::vector<long double>&) { return val; };
     } catch (...) {}
     auto evaluator = ctx.build_scoped_evaluator(bound_expr);
-    return [evaluator, var_names, current_dim](const std::vector<double>& point) {
-        std::vector<std::pair<std::string, double>> scope;
+    return [evaluator, var_names, current_dim](const std::vector<long double>& point) {
+        std::vector<std::pair<std::string, long double>> scope;
         for (std::size_t i = 0; i < current_dim; ++i) scope.push_back({var_names[i], point[i]});
         return evaluator(scope);
     };
@@ -58,40 +58,40 @@ std::function<double(const std::vector<double>&)> make_scalar_bound_func(
 /**
  * @brief 计算数值导数的自适应步长
  */
-double adaptive_derivative_step(double x) {
-    // 基础步长为 sqrt(epsilon) * max(1.0, |x|)
+long double adaptive_derivative_step(long double x) {
+    // 基础步长为 sqrt(epsilon) * max(1.0L, |x|)
     // 对于 double，sqrt(epsilon) 约为 1e-8
-    return 1e-7 * std::max(1.0, mymath::abs(x));
+    return 1e-7 * std::max(1.0L, mymath::abs(x));
 }
 
 }  // namespace
 
 
-double line_integral(const IntegrationContext& ctx, const std::string& expr,
-                     const std::string& t_var, double t0, double t1,
+long double line_integral(const IntegrationContext& ctx, const std::string& expr,
+                     const std::string& t_var, long double t0, long double t1,
                      const std::string& x_expr, const std::string& y_expr, const std::string& z_expr,
                      int subdivides) {
     auto f_eval = ctx.build_scoped_evaluator(expr);
     auto x_eval = ctx.build_scoped_evaluator(x_expr);
     auto y_eval = ctx.build_scoped_evaluator(y_expr);
     bool has_z = !z_expr.empty() && z_expr != "0" && z_expr != """";
-    std::function<double(const std::vector<std::pair<std::string, double>>&)> z_eval;
+    std::function<long double(const std::vector<std::pair<std::string, long double>>&)> z_eval;
     if (has_z) z_eval = ctx.build_scoped_evaluator(z_expr);
 
-    auto integrand = [&](const std::vector<double>& pt) {
-        double t = pt[0];
-        const double h = adaptive_derivative_step(t);
-        double x_val = x_eval({{t_var, t}});
-        double y_val = y_eval({{t_var, t}});
-        double z_val = has_z ? z_eval({{t_var, t}}) : 0.0;
+    auto integrand = [&](const std::vector<long double>& pt) {
+        long double t = pt[0];
+        const long double h = adaptive_derivative_step(t);
+        long double x_val = x_eval({{t_var, t}});
+        long double y_val = y_eval({{t_var, t}});
+        long double z_val = has_z ? z_eval({{t_var, t}}) : 0.0L;
         
-        double dx = (x_eval({{t_var, t + h}}) - x_eval({{t_var, t - h}})) / (2 * h);
-        double dy = (y_eval({{t_var, t + h}}) - y_eval({{t_var, t - h}})) / (2 * h);
-        double dz = has_z ? (z_eval({{t_var, t + h}}) - z_eval({{t_var, t - h}})) / (2 * h) : 0.0;
+        long double dx = (x_eval({{t_var, t + h}}) - x_eval({{t_var, t - h}})) / (2 * h);
+        long double dy = (y_eval({{t_var, t + h}}) - y_eval({{t_var, t - h}})) / (2 * h);
+        long double dz = has_z ? (z_eval({{t_var, t + h}}) - z_eval({{t_var, t - h}})) / (2 * h) : 0.0L;
         
-        double ds = mymath::sqrt(dx*dx + dy*dy + dz*dz);
+        long double ds = mymath::sqrt(dx*dx + dy*dy + dz*dz);
         
-        std::vector<std::pair<std::string, double>> scope = {
+        std::vector<std::pair<std::string, long double>> scope = {
             {t_var, t}, {"x", x_val}, {"y", y_val}
         };
         if (has_z) scope.push_back({"z", z_val});
@@ -101,14 +101,14 @@ double line_integral(const IntegrationContext& ctx, const std::string& expr,
 
     MultivariableIntegrator integrator(integrand);
     std::vector<MultivariableIntegrator::BoundFunc> bounds = {
-        [t0, t1](const std::vector<double>&) -> std::pair<double, double> { return {t0, t1}; }
+        [t0, t1](const std::vector<long double>&) -> std::pair<long double, long double> { return {t0, t1}; }
     };
     return integrator.integrate(bounds, {subdivides});
 }
 
-double surface_integral(const IntegrationContext& ctx, const std::string& expr,
-                        const std::string& u_var, double u0, double u1,
-                        const std::string& v_var, double v0, double v1,
+long double surface_integral(const IntegrationContext& ctx, const std::string& expr,
+                        const std::string& u_var, long double u0, long double u1,
+                        const std::string& v_var, long double v0, long double v1,
                         const std::string& x_expr, const std::string& y_expr, const std::string& z_expr,
                         int nu, int nv) {
     auto f_eval = ctx.build_scoped_evaluator(expr);
@@ -116,53 +116,53 @@ double surface_integral(const IntegrationContext& ctx, const std::string& expr,
     auto y_eval = ctx.build_scoped_evaluator(y_expr);
     auto z_eval = ctx.build_scoped_evaluator(z_expr);
 
-    auto integrand = [&](const std::vector<double>& pt) {
-        double u = pt[0];
-        double v = pt[1];
-        const double hu = adaptive_derivative_step(u);
-        const double hv = adaptive_derivative_step(v);
+    auto integrand = [&](const std::vector<long double>& pt) {
+        long double u = pt[0];
+        long double v = pt[1];
+        const long double hu = adaptive_derivative_step(u);
+        const long double hv = adaptive_derivative_step(v);
         
-        double x_val = x_eval({{u_var, u}, {v_var, v}});
-        double y_val = y_eval({{u_var, u}, {v_var, v}});
-        double z_val = z_eval({{u_var, u}, {v_var, v}});
+        long double x_val = x_eval({{u_var, u}, {v_var, v}});
+        long double y_val = y_eval({{u_var, u}, {v_var, v}});
+        long double z_val = z_eval({{u_var, u}, {v_var, v}});
         
-        double xu = (x_eval({{u_var, u + hu}, {v_var, v}}) - x_eval({{u_var, u - hu}, {v_var, v}})) / (2 * hu);
-        double yu = (y_eval({{u_var, u + hu}, {v_var, v}}) - y_eval({{u_var, u - hu}, {v_var, v}})) / (2 * hu);
-        double zu = (z_eval({{u_var, u + hu}, {v_var, v}}) - z_eval({{u_var, u - hu}, {v_var, v}})) / (2 * hu);
+        long double xu = (x_eval({{u_var, u + hu}, {v_var, v}}) - x_eval({{u_var, u - hu}, {v_var, v}})) / (2 * hu);
+        long double yu = (y_eval({{u_var, u + hu}, {v_var, v}}) - y_eval({{u_var, u - hu}, {v_var, v}})) / (2 * hu);
+        long double zu = (z_eval({{u_var, u + hu}, {v_var, v}}) - z_eval({{u_var, u - hu}, {v_var, v}})) / (2 * hu);
         
-        double xv = (x_eval({{u_var, u}, {v_var, v + hv}}) - x_eval({{u_var, u}, {v_var, v - hv}})) / (2 * hv);
-        double yv = (y_eval({{u_var, u}, {v_var, v + hv}}) - y_eval({{u_var, u}, {v_var, v - hv}})) / (2 * hv);
-        double zv = (z_eval({{u_var, u}, {v_var, v + hv}}) - z_eval({{u_var, u}, {v_var, v - hv}})) / (2 * hv);
+        long double xv = (x_eval({{u_var, u}, {v_var, v + hv}}) - x_eval({{u_var, u}, {v_var, v - hv}})) / (2 * hv);
+        long double yv = (y_eval({{u_var, u}, {v_var, v + hv}}) - y_eval({{u_var, u}, {v_var, v - hv}})) / (2 * hv);
+        long double zv = (z_eval({{u_var, u}, {v_var, v + hv}}) - z_eval({{u_var, u}, {v_var, v - hv}})) / (2 * hv);
         
-        double cx = yu * zv - zu * yv;
-        double cy = zu * xv - xu * zv;
-        double cz = xu * yv - yu * xv;
+        long double cx = yu * zv - zu * yv;
+        long double cy = zu * xv - xu * zv;
+        long double cz = xu * yv - yu * xv;
         
-        double dS = mymath::sqrt(cx*cx + cy*cy + cz*cz);
+        long double dS = mymath::sqrt(cx*cx + cy*cy + cz*cz);
         
         return f_eval({{u_var, u}, {v_var, v}, {"x", x_val}, {"y", y_val}, {"z", z_val}}) * dS;
     };
 
     MultivariableIntegrator integrator(integrand);
     std::vector<MultivariableIntegrator::BoundFunc> bounds = {
-        [u0, u1](const std::vector<double>&) -> std::pair<double, double> { return {u0, u1}; },
-        [v0, v1](const std::vector<double>&) -> std::pair<double, double> { return {v0, v1}; }
+        [u0, u1](const std::vector<long double>&) -> std::pair<long double, long double> { return {u0, u1}; },
+        [v0, v1](const std::vector<long double>&) -> std::pair<long double, long double> { return {v0, v1}; }
     };
     return integrator.integrate(bounds, {nu, nv});
 }
 
-double double_integral(
+long double double_integral(
     const IntegrationContext& ctx,
     const std::string& expr,
-    const std::string& x_var, double x0, double x1,
+    const std::string& x_var, long double x0, long double x1,
     const std::string& y_var, const std::string& y0_expr, const std::string& y1_expr,
-    int nx, int ny, const std::string& method, double tol) {
+    int nx, int ny, const std::string& method, long double tol) {
     const auto evaluate_expression = ctx.build_scoped_evaluator(expr);
     auto y0_f = make_scalar_bound_func(ctx, y0_expr, {x_var}, 1);
     auto y1_f = make_scalar_bound_func(ctx, y1_expr, {x_var}, 1);
     
     bool is_constant_bounds = false;
-    double y0_c = 0.0, y1_c = 0.0;
+    long double y0_c = 0.0L, y1_c = 0.0L;
     try {
         y0_c = ctx.parse_decimal(y0_expr);
         y1_c = ctx.parse_decimal(y1_expr);
@@ -170,7 +170,7 @@ double double_integral(
     } catch (...) {}
     
     if (is_constant_bounds && method != "simpson") {
-        auto integrand = [evaluate_expression, x_var, y_var](const std::vector<double>& pt) {
+        auto integrand = [evaluate_expression, x_var, y_var](const std::vector<long double>& pt) {
             return evaluate_expression({{x_var, pt[0]}, {y_var, pt[1]}});
         };
         std::vector<multidim::IntegrationBounds> rect_bounds = {{x0, x1}, {y0_c, y1_c}};
@@ -186,38 +186,38 @@ double double_integral(
     }
 
     const MultivariableIntegrator integrator(
-        [evaluate_expression, x_var, y_var](const std::vector<double>& point) {
+        [evaluate_expression, x_var, y_var](const std::vector<long double>& point) {
             return evaluate_expression({{x_var, point[0]}, {y_var, point[1]}});
         });
     std::vector<MultivariableIntegrator::BoundFunc> bounds;
-    bounds.push_back([x0, x1](const std::vector<double>&) -> std::pair<double, double> { return {x0, x1}; });
-    bounds.push_back([y0_f, y1_f](const std::vector<double>& pt) -> std::pair<double, double> { return {y0_f(pt), y1_f(pt)}; });
+    bounds.push_back([x0, x1](const std::vector<long double>&) -> std::pair<long double, long double> { return {x0, x1}; });
+    bounds.push_back([y0_f, y1_f](const std::vector<long double>& pt) -> std::pair<long double, long double> { return {y0_f(pt), y1_f(pt)}; });
     return integrator.integrate(bounds, {nx, ny});
 }
 
-double double_integral_polar(
+long double double_integral_polar(
     const IntegrationContext& ctx,
     const std::string& expr,
-    const std::string& theta_var, double theta0, double theta1,
+    const std::string& theta_var, long double theta0, long double theta1,
     const std::string& r_var, const std::string& r0_expr, const std::string& r1_expr,
-    int ntheta, int nr, const std::string& method, double tol) {
+    int ntheta, int nr, const std::string& method, long double tol) {
     (void)method;
     (void)tol;
     const auto evaluate_expression = ctx.build_scoped_evaluator(expr);
     const MultivariableIntegrator integrator(
-        [evaluate_expression, theta_var, r_var](const std::vector<double>& point) {
-            const double theta = point[0], r = point[1];
+        [evaluate_expression, theta_var, r_var](const std::vector<long double>& point) {
+            const long double theta = point[0], r = point[1];
             return evaluate_expression({{r_var, r}, {theta_var, theta}, {"x", r * mymath::cos(theta)}, {"y", r * mymath::sin(theta)}}) * r;
         });
     std::vector<MultivariableIntegrator::BoundFunc> bounds;
-    bounds.push_back([theta0, theta1](const std::vector<double>&) -> std::pair<double, double> { return {theta0, theta1}; });
+    bounds.push_back([theta0, theta1](const std::vector<long double>&) -> std::pair<long double, long double> { return {theta0, theta1}; });
     auto r0_f = make_scalar_bound_func(ctx, r0_expr, {theta_var}, 1);
     auto r1_f = make_scalar_bound_func(ctx, r1_expr, {theta_var}, 1);
-    bounds.push_back([r0_f, r1_f](const std::vector<double>& pt) -> std::pair<double, double> { return {r0_f(pt), r1_f(pt)}; });
+    bounds.push_back([r0_f, r1_f](const std::vector<long double>& pt) -> std::pair<long double, long double> { return {r0_f(pt), r1_f(pt)}; });
     return integrator.integrate(bounds, {ntheta, nr});
 }
 
-double triple_integral(const IntegrationContext& ctx, const std::string& expr, const std::string& x_v, double x0, double x1, const std::string& y_v, const std::string& y0_e, const std::string& y1_e, const std::string& z_v, const std::string& z0_e, const std::string& z1_e, int nx, int ny, int nz, const std::string& method, double tol) {
+long double triple_integral(const IntegrationContext& ctx, const std::string& expr, const std::string& x_v, long double x0, long double x1, const std::string& y_v, const std::string& y0_e, const std::string& y1_e, const std::string& z_v, const std::string& z0_e, const std::string& z1_e, int nx, int ny, int nz, const std::string& method, long double tol) {
     const auto evaluate_expression = ctx.build_scoped_evaluator(expr);
     auto y0_f = make_scalar_bound_func(ctx, y0_e, {x_v}, 1);
     auto y1_f = make_scalar_bound_func(ctx, y1_e, {x_v}, 1);
@@ -225,7 +225,7 @@ double triple_integral(const IntegrationContext& ctx, const std::string& expr, c
     auto z1_f = make_scalar_bound_func(ctx, z1_e, {x_v, y_v}, 2);
     
     bool is_constant_bounds = false;
-    double y0_c = 0.0, y1_c = 0.0, z0_c = 0.0, z1_c = 0.0;
+    long double y0_c = 0.0L, y1_c = 0.0L, z0_c = 0.0L, z1_c = 0.0L;
     try {
         y0_c = ctx.parse_decimal(y0_e); y1_c = ctx.parse_decimal(y1_e);
         z0_c = ctx.parse_decimal(z0_e); z1_c = ctx.parse_decimal(z1_e);
@@ -233,7 +233,7 @@ double triple_integral(const IntegrationContext& ctx, const std::string& expr, c
     } catch (...) {}
     
     if (is_constant_bounds && method != "simpson") {
-        auto integrand = [evaluate_expression, x_v, y_v, z_v](const std::vector<double>& pt) {
+        auto integrand = [evaluate_expression, x_v, y_v, z_v](const std::vector<long double>& pt) {
             return evaluate_expression({{x_v, pt[0]}, {y_v, pt[1]}, {z_v, pt[2]}});
         };
         std::vector<multidim::IntegrationBounds> rect_bounds = {{x0, x1}, {y0_c, y1_c}, {z0_c, z1_c}};
@@ -248,47 +248,47 @@ double triple_integral(const IntegrationContext& ctx, const std::string& expr, c
         return multidim::integrate_rectangular(integrand, rect_bounds, opts).value;
     }
 
-    const MultivariableIntegrator integrator([evaluate_expression, x_v, y_v, z_v](const std::vector<double>& pt) { return evaluate_expression({{x_v, pt[0]}, {y_v, pt[1]}, {z_v, pt[2]}}); });
+    const MultivariableIntegrator integrator([evaluate_expression, x_v, y_v, z_v](const std::vector<long double>& pt) { return evaluate_expression({{x_v, pt[0]}, {y_v, pt[1]}, {z_v, pt[2]}}); });
     std::vector<MultivariableIntegrator::BoundFunc> bounds;
-    bounds.push_back([x0, x1](const std::vector<double>&) -> std::pair<double, double> { return std::make_pair(x0, x1); });
-    bounds.push_back([y0_f, y1_f](const std::vector<double>& pt) -> std::pair<double, double> { return std::make_pair(y0_f(pt), y1_f(pt)); });
-    bounds.push_back([z0_f, z1_f](const std::vector<double>& pt) -> std::pair<double, double> { return std::make_pair(z0_f(pt), z1_f(pt)); });
+    bounds.push_back([x0, x1](const std::vector<long double>&) -> std::pair<long double, long double> { return std::make_pair(x0, x1); });
+    bounds.push_back([y0_f, y1_f](const std::vector<long double>& pt) -> std::pair<long double, long double> { return std::make_pair(y0_f(pt), y1_f(pt)); });
+    bounds.push_back([z0_f, z1_f](const std::vector<long double>& pt) -> std::pair<long double, long double> { return std::make_pair(z0_f(pt), z1_f(pt)); });
     return integrator.integrate(bounds, {nx, ny, nz});
 }
 
-double triple_integral_cyl(const IntegrationContext& ctx, const std::string& expr, const std::string& t_v, double t0, double t1, const std::string& r_v, const std::string& r0_e, const std::string& r1_e, const std::string& z_v, const std::string& z0_e, const std::string& z1_e, int nt, int nr, int nz, const std::string& method, double tol) {
+long double triple_integral_cyl(const IntegrationContext& ctx, const std::string& expr, const std::string& t_v, long double t0, long double t1, const std::string& r_v, const std::string& r0_e, const std::string& r1_e, const std::string& z_v, const std::string& z0_e, const std::string& z1_e, int nt, int nr, int nz, const std::string& method, long double tol) {
     (void)method;
     (void)tol;
     const auto evaluate_expression = ctx.build_scoped_evaluator(expr);
-    const MultivariableIntegrator integrator([evaluate_expression, t_v, r_v, z_v](const std::vector<double>& pt) { 
-        double t = pt[0], r = pt[1], z = pt[2];
+    const MultivariableIntegrator integrator([evaluate_expression, t_v, r_v, z_v](const std::vector<long double>& pt) { 
+        long double t = pt[0], r = pt[1], z = pt[2];
         return evaluate_expression({{r_v, r}, {t_v, t}, {z_v, z}, {"x", r * mymath::cos(t)}, {"y", r * mymath::sin(t)}}) * r;
     });
     std::vector<MultivariableIntegrator::BoundFunc> bounds;
-    bounds.push_back([t0, t1](const std::vector<double>&) -> std::pair<double, double> { return std::make_pair(t0, t1); });
+    bounds.push_back([t0, t1](const std::vector<long double>&) -> std::pair<long double, long double> { return std::make_pair(t0, t1); });
     auto r0_f = make_scalar_bound_func(ctx, r0_e, {t_v}, 1);
     auto r1_f = make_scalar_bound_func(ctx, r1_e, {t_v}, 1);
-    bounds.push_back([r0_f, r1_f](const std::vector<double>& pt) -> std::pair<double, double> { return std::make_pair(r0_f(pt), r1_f(pt)); });
+    bounds.push_back([r0_f, r1_f](const std::vector<long double>& pt) -> std::pair<long double, long double> { return std::make_pair(r0_f(pt), r1_f(pt)); });
     auto z0_f = make_scalar_bound_func(ctx, z0_e, {t_v, r_v}, 2);
     auto z1_f = make_scalar_bound_func(ctx, z1_e, {t_v, r_v}, 2);
-    bounds.push_back([z0_f, z1_f](const std::vector<double>& pt) -> std::pair<double, double> { return std::make_pair(z0_f(pt), z1_f(pt)); });
+    bounds.push_back([z0_f, z1_f](const std::vector<long double>& pt) -> std::pair<long double, long double> { return std::make_pair(z0_f(pt), z1_f(pt)); });
     return integrator.integrate(bounds, {nt, nr, nz});
 }
 
-double triple_integral_sph(const IntegrationContext& ctx, const std::string& expr, const std::string& t_v, double t0, double t1, const std::string& p_v, double p0, double p1, const std::string& r_v, const std::string& r0_e, const std::string& r1_e, int nt, int np, int nr, const std::string& method, double tol) {
+long double triple_integral_sph(const IntegrationContext& ctx, const std::string& expr, const std::string& t_v, long double t0, long double t1, const std::string& p_v, long double p0, long double p1, const std::string& r_v, const std::string& r0_e, const std::string& r1_e, int nt, int np, int nr, const std::string& method, long double tol) {
     (void)method;
     (void)tol;
     const auto evaluate_expression = ctx.build_scoped_evaluator(expr);
-    const MultivariableIntegrator integrator([evaluate_expression, t_v, p_v, r_v](const std::vector<double>& pt) {
-        double t = pt[0], p = pt[1], r = pt[2], sp = mymath::sin(p);
+    const MultivariableIntegrator integrator([evaluate_expression, t_v, p_v, r_v](const std::vector<long double>& pt) {
+        long double t = pt[0], p = pt[1], r = pt[2], sp = mymath::sin(p);
         return evaluate_expression({{r_v, r}, {t_v, t}, {p_v, p}, {"x", r * sp * mymath::cos(t)}, {"y", r * sp * mymath::sin(t)}, {"z", r * mymath::cos(p)}}) * r * r * sp;
     });
     std::vector<MultivariableIntegrator::BoundFunc> bounds;
-    bounds.push_back([t0, t1](const std::vector<double>&) -> std::pair<double, double> { return std::make_pair(t0, t1); });
-    bounds.push_back([p0, p1](const std::vector<double>&) -> std::pair<double, double> { return std::make_pair(p0, p1); });
+    bounds.push_back([t0, t1](const std::vector<long double>&) -> std::pair<long double, long double> { return std::make_pair(t0, t1); });
+    bounds.push_back([p0, p1](const std::vector<long double>&) -> std::pair<long double, long double> { return std::make_pair(p0, p1); });
     auto r0_f = make_scalar_bound_func(ctx, r0_e, {t_v, p_v}, 2);
     auto r1_f = make_scalar_bound_func(ctx, r1_e, {t_v, p_v}, 2);
-    bounds.push_back([r0_f, r1_f](const std::vector<double>& pt) -> std::pair<double, double> { return std::make_pair(r0_f(pt), r1_f(pt)); });
+    bounds.push_back([r0_f, r1_f](const std::vector<long double>& pt) -> std::pair<long double, long double> { return std::make_pair(r0_f(pt), r1_f(pt)); });
     return integrator.integrate(bounds, {nt, np, nr});
 }
 
@@ -308,21 +308,21 @@ bool handle_integration_command(const IntegrationContext& ctx,
     if (arguments.empty()) return false;
     if (command == "integral") {
         if (arguments.size() < 3) throw std::runtime_error("integral expects expr, x0, x1");
-        std::string x_var = "x"; double x0, x1;
+        std::string x_var = "x"; long double x0, x1;
         if (arguments.size() >= 4 && is_identifier_text(utils::trim_copy(arguments[1]))) {
             x_var = utils::trim_copy(arguments[1]); x0 = ctx.parse_decimal(arguments[2]); x1 = ctx.parse_decimal(arguments[3]);
         } else {
             x0 = ctx.parse_decimal(arguments[1]); x1 = ctx.parse_decimal(arguments[2]);
         }
         auto f = ctx.build_scoped_evaluator(arguments[0]);
-        MultivariableIntegrator integrator([&f, x_var](const std::vector<double>& pt) { return f({{ x_var, pt[0] }}); });
-        std::vector<MultivariableIntegrator::BoundFunc> bounds = { [x0, x1](const std::vector<double>&) -> std::pair<double, double> { return {x0, x1}; } };
+        MultivariableIntegrator integrator([&f, x_var](const std::vector<long double>& pt) { return f({{ x_var, pt[0] }}); });
+        std::vector<MultivariableIntegrator::BoundFunc> bounds = { [x0, x1](const std::vector<long double>&) -> std::pair<long double, long double> { return {x0, x1}; } };
         *output = format_decimal(ctx.normalize_result(integrator.integrate(bounds, {1024})));
         return true;
     }
     std::string coord_system = "rect";
     std::string method = "simpson";
-    double tol = 1e-6;
+    long double tol = 1e-6;
     bool has_options = true;
     while (arguments.size() >= 2 && has_options) {
         has_options = false;
@@ -352,8 +352,8 @@ bool handle_integration_command(const IntegrationContext& ctx,
     if (command == "line_integral") {
         if (arguments.size() < 6) throw std::runtime_error("line_integral expects expr, t_var, t0, t1, x_expr, y_expr, [z_expr], [subdivides]");
         std::string t_var = utils::trim_copy(arguments[1]);
-        double t0 = ctx.parse_decimal(arguments[2]);
-        double t1 = ctx.parse_decimal(arguments[3]);
+        long double t0 = ctx.parse_decimal(arguments[2]);
+        long double t1 = ctx.parse_decimal(arguments[3]);
         std::string x_expr = arguments[4];
         std::string y_expr = arguments[5];
         std::string z_expr = "";
@@ -376,11 +376,11 @@ bool handle_integration_command(const IntegrationContext& ctx,
     if (command == "surface_integral") {
         if (arguments.size() < 10) throw std::runtime_error("surface_integral expects expr, u_var, u0, u1, v_var, v0, v1, x_expr, y_expr, z_expr, [nu], [nv]");
         std::string u_var = utils::trim_copy(arguments[1]);
-        double u0 = ctx.parse_decimal(arguments[2]);
-        double u1 = ctx.parse_decimal(arguments[3]);
+        long double u0 = ctx.parse_decimal(arguments[2]);
+        long double u1 = ctx.parse_decimal(arguments[3]);
         std::string v_var = utils::trim_copy(arguments[4]);
-        double v0 = ctx.parse_decimal(arguments[5]);
-        double v1 = ctx.parse_decimal(arguments[6]);
+        long double v0 = ctx.parse_decimal(arguments[5]);
+        long double v1 = ctx.parse_decimal(arguments[6]);
         std::string x_expr = arguments[7];
         std::string y_expr = arguments[8];
         std::string z_expr = arguments[9];
@@ -398,7 +398,7 @@ bool handle_integration_command(const IntegrationContext& ctx,
                 *output = format_decimal(ctx.normalize_result(double_integral_polar(ctx, arguments[0], "theta", ctx.parse_decimal(arguments[3]), ctx.parse_decimal(arguments[4]), "r", arguments[1], arguments[2], subs[1], subs[0], method, tol)));
             }
         } else {
-            std::string xv = "x", yv = "y"; double x0, x1; std::string y0e, y1e; size_t next;
+            std::string xv = "x", yv = "y"; long double x0, x1; std::string y0e, y1e; size_t next;
             if (is_identifier_text(utils::trim_copy(arguments[1])) && arguments.size() >= 7) { xv = utils::trim_copy(arguments[1]); x0 = ctx.parse_decimal(arguments[2]); x1 = ctx.parse_decimal(arguments[3]); yv = utils::trim_copy(arguments[4]); y0e = arguments[5]; y1e = arguments[6]; next = 7; }
             else { x0 = ctx.parse_decimal(arguments[1]); x1 = ctx.parse_decimal(arguments[2]); y0e = arguments[3]; y1e = arguments[4]; next = 5; }
             auto subs = parse_subdivisions(ctx, arguments, next, {32, 32});
@@ -435,7 +435,7 @@ bool handle_integration_command(const IntegrationContext& ctx,
                 *output = format_decimal(ctx.normalize_result(triple_integral_sph(ctx, arguments[0], "theta", ctx.parse_decimal(arguments[3]), ctx.parse_decimal(arguments[4]), "phi", ctx.parse_decimal(arguments[5]), ctx.parse_decimal(arguments[6]), "rho", arguments[1], arguments[2], s[1], s[2], s[0], method, tol)));
             }
         } else {
-            std::string xv = "x", yv = "y", zv = "z"; double x0, x1; std::string y0e, y1e, z0e, z1e; size_t next;
+            std::string xv = "x", yv = "y", zv = "z"; long double x0, x1; std::string y0e, y1e, z0e, z1e; size_t next;
             if (is_identifier_text(utils::trim_copy(arguments[1])) && arguments.size() >= 10) { xv = utils::trim_copy(arguments[1]); x0 = ctx.parse_decimal(arguments[2]); x1 = ctx.parse_decimal(arguments[3]); yv = utils::trim_copy(arguments[4]); y0e = arguments[5]; y1e = arguments[6]; zv = utils::trim_copy(arguments[7]); z0e = arguments[8]; z1e = arguments[9]; next = 10; }
             else { x0 = ctx.parse_decimal(arguments[1]); x1 = ctx.parse_decimal(arguments[2]); y0e = arguments[3]; y1e = arguments[4]; z0e = arguments[5]; z1e = arguments[6]; next = 7; }
             auto s = parse_subdivisions(ctx, arguments, next, {16, 16, 16});
@@ -470,13 +470,13 @@ bool handle_integration_command(const IntegrationContext& ctx,
         std::string constraint_expr = arguments[1];
 
         // 解析边界框
-        double x0 = ctx.parse_decimal(arguments[2]);
-        double x1 = ctx.parse_decimal(arguments[3]);
-        double y0 = ctx.parse_decimal(arguments[4]);
-        double y1 = ctx.parse_decimal(arguments[5]);
+        long double x0 = ctx.parse_decimal(arguments[2]);
+        long double x1 = ctx.parse_decimal(arguments[3]);
+        long double y0 = ctx.parse_decimal(arguments[4]);
+        long double y1 = ctx.parse_decimal(arguments[5]);
 
         bool is_3d = arguments.size() >= 8 && is_identifier_text(utils::trim_copy(arguments[6]));
-        double z0 = 0.0, z1 = 0.0;
+        long double z0 = 0.0L, z1 = 0.0L;
         std::string z_var = "z";
 
         if (is_3d) {
@@ -507,10 +507,10 @@ bool handle_integration_command(const IntegrationContext& ctx,
 
         if (is_3d) {
             // 三维隐式区域积分
-            multidim::MultidimFunction integrand = [f_eval, z_var](const std::vector<double>& pt) {
+            multidim::MultidimFunction integrand = [f_eval, z_var](const std::vector<long double>& pt) {
                 return f_eval({{"x", pt[0]}, {"y", pt[1]}, {z_var, pt[2]}});
             };
-            multidim::RegionConstraint constraint = [constraint_eval, z_var](const std::vector<double>& pt) {
+            multidim::RegionConstraint constraint = [constraint_eval, z_var](const std::vector<long double>& pt) {
                 return constraint_eval({{"x", pt[0]}, {"y", pt[1]}, {z_var, pt[2]}});
             };
 
@@ -533,10 +533,10 @@ bool handle_integration_command(const IntegrationContext& ctx,
             }
         } else {
             // 二维隐式区域积分
-            multidim::MultidimFunction integrand = [f_eval](const std::vector<double>& pt) {
+            multidim::MultidimFunction integrand = [f_eval](const std::vector<long double>& pt) {
                 return f_eval({{"x", pt[0]}, {"y", pt[1]}});
             };
-            multidim::RegionConstraint constraint = [constraint_eval](const std::vector<double>& pt) {
+            multidim::RegionConstraint constraint = [constraint_eval](const std::vector<long double>& pt) {
                 return constraint_eval({{"x", pt[0]}, {"y", pt[1]}});
             };
 
@@ -573,8 +573,8 @@ bool handle_integration_command(const IntegrationContext& ctx,
         if (arguments.size() >= 10 && is_identifier_text(utils::trim_copy(arguments[5]))) {
             // 区域积分形式
             std::string x_var = utils::trim_copy(arguments[2]);
-            double x0 = ctx.parse_decimal(arguments[3]);
-            double x1 = ctx.parse_decimal(arguments[4]);
+            long double x0 = ctx.parse_decimal(arguments[3]);
+            long double x1 = ctx.parse_decimal(arguments[4]);
             std::string y_var = utils::trim_copy(arguments[5]);
             std::string y0_expr = arguments[6];
             std::string y1_expr = arguments[7];
@@ -591,8 +591,8 @@ bool handle_integration_command(const IntegrationContext& ctx,
             std::string curve_x = arguments[2];
             std::string curve_y = arguments[3];
             std::string t_var = utils::trim_copy(arguments[4]);
-            double t0 = ctx.parse_decimal(arguments[5]);
-            double t1 = ctx.parse_decimal(arguments[6]);
+            long double t0 = ctx.parse_decimal(arguments[5]);
+            long double t1 = ctx.parse_decimal(arguments[6]);
 
             int subdivides = 64;
             if (arguments.size() > 7) {
@@ -629,11 +629,11 @@ bool handle_integration_command(const IntegrationContext& ctx,
             std::string surface_y = arguments[4];
             std::string surface_z = arguments[5];
             std::string u_var = utils::trim_copy(arguments[6]);
-            double u0 = ctx.parse_decimal(arguments[7]);
-            double u1 = ctx.parse_decimal(arguments[8]);
+            long double u0 = ctx.parse_decimal(arguments[7]);
+            long double u1 = ctx.parse_decimal(arguments[8]);
             std::string v_var = utils::trim_copy(arguments[9]);
-            double v0 = ctx.parse_decimal(arguments[10]);
-            double v1 = ctx.parse_decimal(arguments[11]);
+            long double v0 = ctx.parse_decimal(arguments[10]);
+            long double v1 = ctx.parse_decimal(arguments[11]);
 
             std::string orientation = "outward";
             int subdivides = 32;
@@ -656,8 +656,8 @@ bool handle_integration_command(const IntegrationContext& ctx,
         } else {
             // 体积分形式
             std::string x_var = utils::trim_copy(arguments[3]);
-            double x0 = ctx.parse_decimal(arguments[4]);
-            double x1 = ctx.parse_decimal(arguments[5]);
+            long double x0 = ctx.parse_decimal(arguments[4]);
+            long double x1 = ctx.parse_decimal(arguments[5]);
             std::string y_var = utils::trim_copy(arguments[6]);
             std::string y0_expr = arguments[7];
             std::string y1_expr = arguments[8];
@@ -696,8 +696,8 @@ bool handle_integration_command(const IntegrationContext& ctx,
         std::string curve_y = arguments[4];
         std::string curve_z = arguments[5];
         std::string t_var = utils::trim_copy(arguments[6]);
-        double t0 = ctx.parse_decimal(arguments[7]);
-        double t1 = ctx.parse_decimal(arguments[8]);
+        long double t0 = ctx.parse_decimal(arguments[7]);
+        long double t1 = ctx.parse_decimal(arguments[8]);
 
         int subdivides = 64;
         if (arguments.size() > 9 && !is_identifier_text(utils::trim_copy(arguments[9]))) {
@@ -713,11 +713,11 @@ bool handle_integration_command(const IntegrationContext& ctx,
             std::string surface_y = arguments[10];
             std::string surface_z = arguments[11];
             std::string u_var = utils::trim_copy(arguments[12]);
-            double u0 = ctx.parse_decimal(arguments[13]);
-            double u1 = ctx.parse_decimal(arguments[14]);
+            long double u0 = ctx.parse_decimal(arguments[13]);
+            long double u1 = ctx.parse_decimal(arguments[14]);
             std::string v_var = utils::trim_copy(arguments[15]);
-            double v0 = ctx.parse_decimal(arguments[16]);
-            double v1 = ctx.parse_decimal(arguments[17]);
+            long double v0 = ctx.parse_decimal(arguments[16]);
+            long double v1 = ctx.parse_decimal(arguments[17]);
 
             std::string orientation = "outward";
             subdivides = 32;

@@ -74,10 +74,10 @@ ScriptSignal execute_script_block(Calculator* calculator,
                                   bool create_scope);
 
 /** @brief 调用脚本函数（标量返回，兼容旧接口） */
-double invoke_script_function_decimal(Calculator* calculator,
+long double invoke_script_function_decimal(Calculator* calculator,
                                       Calculator::Impl* impl,
                                       const std::string& name,
-                                      const std::vector<double>& arguments);
+                                      const std::vector<long double>& arguments);
 
 /** @brief 调用脚本函数（完整类型返回） */
 StoredValue invoke_script_function(Calculator* calculator,

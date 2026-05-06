@@ -164,7 +164,7 @@ Rational abs_rational(Rational value) {
     return value;
 }
 
-double rational_to_double(const Rational& value) {
-    return static_cast<double>(value.numerator) /
-           static_cast<double>(value.denominator);
+long double rational_to_double(const Rational& value) {
+    return static_cast<long double>(value.numerator) /
+           static_cast<long double>(value.denominator);
 }

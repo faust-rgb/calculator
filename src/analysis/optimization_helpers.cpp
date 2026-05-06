@@ -18,7 +18,7 @@ namespace optimization_helpers {
 // 向量运算
 // ============================================================================
 
-double dot_product(const std::vector<double>& lhs, const std::vector<double>& rhs) {
+long double dot_product(const std::vector<long double>& lhs, const std::vector<long double>& rhs) {
     if (lhs.size() != rhs.size()) {
         throw std::runtime_error("vector dimension mismatch");
     }
@@ -26,10 +26,10 @@ double dot_product(const std::vector<double>& lhs, const std::vector<double>& rh
     for (std::size_t i = 0; i < lhs.size(); ++i) {
         total += static_cast<long double>(lhs[i]) * static_cast<long double>(rhs[i]);
     }
-    return static_cast<double>(total);
+    return static_cast<long double>(total);
 }
 
-std::string format_planning_result(const std::vector<double>& solution, double objective) {
+std::string format_planning_result(const std::vector<long double>& solution, long double objective) {
     std::ostringstream out;
     out << "x = " << matrix::Matrix::vector(solution).to_string()
         << "\nobjective = " << objective;
@@ -43,9 +43,9 @@ std::string format_planning_result(const std::vector<double>& solution, double o
 namespace {
 
 struct Node {
-    std::vector<double> lower;
-    std::vector<double> upper;
-    double estimated_value;
+    std::vector<long double> lower;
+    std::vector<long double> upper;
+    long double estimated_value;
 
     // 用于优先队列 (Best-First Search)
     // 假设是最大化问题：估计值越大越优先
@@ -54,15 +54,15 @@ struct Node {
     }
 };
 
-bool is_integer_val(double val, double eps) {
+bool is_integer_val(long double val, long double eps) {
     return mymath::abs(val - mymath::round(val)) <= eps;
 }
 
 }  // namespace
 
 void search_integer_branch_and_bound(IntegerSearchContext& ctx,
-                                      const std::vector<double>& initial_lower,
-                                      const std::vector<double>& initial_upper) {
+                                      const std::vector<long double>& initial_lower,
+                                      const std::vector<long double>& initial_upper) {
 
     std::priority_queue<Node> nodes;
     
@@ -81,8 +81,8 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
                 std::to_string(ctx.max_nodes) + " nodes");
         }
 
-        std::vector<double> sol;
-        double obj_val = 0.0;
+        std::vector<long double> sol;
+        long double obj_val = 0.0L;
         std::string diag;
 
         // 求解当前节点的 LP 松弛子问题
@@ -103,13 +103,13 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
 
         // 检查所有应为整数的变量
         std::size_t branch_var = ctx.variable_count;
-        double max_fractionality = -1.0;
+        long double max_fractionality = -1.0L;
 
         for (std::size_t idx : *ctx.integer_indices) {
-            double val = sol[idx];
+            long double val = sol[idx];
             if (!is_integer_val(val, ctx.tolerance)) {
                 // 分支策略：选取最接近 0.5 的变量（Most fractional）
-                double fractionality = mymath::abs(val - mymath::round(val));
+                long double fractionality = mymath::abs(val - mymath::round(val));
                 if (fractionality > max_fractionality) {
                     max_fractionality = fractionality;
                     branch_var = idx;
@@ -124,7 +124,7 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
             *ctx.best_solution = sol;
         } else {
             // 需要分支
-            double val = sol[branch_var];
+            long double val = sol[branch_var];
             
             // 下分支节点: x_i <= floor(v)
             Node left = current;

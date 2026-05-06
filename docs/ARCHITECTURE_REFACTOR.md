@@ -83,7 +83,7 @@ class Calculator {
 public:
     std::string evaluate(const std::string& expr);
     std::string execute_script(const std::string& source);
-    void set_variable(const std::string& name, double value);
+    void set_variable(const std::string& name, long double value);
     // ...
 };
 
@@ -131,7 +131,7 @@ protected:
     void skip_spaces();
     bool match(char c);
     std::string parse_identifier();
-    double parse_number();
+    long double parse_number();
     // ...
 };
 
@@ -151,7 +151,7 @@ public:
 ```cpp
 // types/stored_value.h - 存储值 (拆分自 calculator_internal_types.h)
 struct StoredValue {
-    double decimal;
+    long double decimal;
     Matrix matrix;
     std::string string;
     ValueType type;
@@ -216,7 +216,7 @@ protected:
     bool match(char c);
     bool match_string(const std::string& s);
     std::string parse_identifier();
-    double parse_number();
+    long double parse_number();
     std::string parse_string_literal();
     // ...
 };
@@ -224,19 +224,19 @@ protected:
 // parser/decimal_parser.h
 class DecimalParser : public BaseParser {
 public:
-    double parse() override;
+    long double parse() override;
     
 private:
-    double parse_expression();
-    double parse_term();
-    double parse_factor();
+    long double parse_expression();
+    long double parse_term();
+    long double parse_factor();
     // ...
 };
 
 // parser/parser_factory.h - 统一入口
 class ParserFactory {
 public:
-    static double parse_decimal(const std::string& source, Context& ctx);
+    static long double parse_decimal(const std::string& source, Context& ctx);
     static Rational parse_exact(const std::string& source, Context& ctx);
     static Matrix parse_matrix(const std::string& source, Context& ctx);
     static SymbolicExpr parse_symbolic(const std::string& source, Context& ctx);

@@ -37,7 +37,7 @@ struct TRootfindingContext {
     std::function<T(T)> normalize_result;
 };
 
-using RootfindingContext = TRootfindingContext<double>;
+using RootfindingContext = TRootfindingContext<long double>;
 
 bool is_rootfinding_command(const std::string& command);
 

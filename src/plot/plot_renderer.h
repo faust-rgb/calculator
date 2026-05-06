@@ -11,8 +11,8 @@ namespace plot {
  * @brief Represents a 2D point for plotting.
  */
 struct Point {
-    double x;
-    double y;
+    long double x;
+    long double y;
 };
 
 /**

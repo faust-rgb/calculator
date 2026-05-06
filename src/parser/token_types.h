@@ -126,7 +126,7 @@ struct Token {
     TokenKind kind = TokenKind::kEnd;
     std::string_view text;      ///< 原始文本视图
     std::string string_value;   ///< 字符串值（仅 kString 类型使用）
-    double number_value = 0.0;  ///< 数值（仅 kNumber 类型，可选）
+    long double number_value = 0.0L;  ///< 数值（仅 kNumber 类型，可选）
     std::size_t position = 0;   ///< 在源字符串中的起始位置
 
     Token() = default;

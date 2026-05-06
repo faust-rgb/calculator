@@ -18,7 +18,7 @@ public:
                        const std::string& inside, 
                        const CoreServices& svc) override {
         auto args_str = split_top_level_arguments(inside);
-        std::vector<double> data;
+        std::vector<long double> data;
         for (const auto& arg_str : args_str) {
             auto val = svc.evaluation.evaluate_value(arg_str, false);
             auto vec = stats_ops::extract_vector(val);
@@ -30,18 +30,18 @@ public:
         }
 
         if (command == "stat_summary" || command == "describe") {
-            double mean = stats::mean(data);
-            double stddev = stats::sample_stddev(data);
-            double variance = stats::sample_variance(data);
-            double median = stats::median(data);
-            double min = stats::percentile(data, 0);
-            double max = stats::percentile(data, 100);
-            double q1 = stats::percentile(data, 25);
-            double q3 = stats::percentile(data, 75);
-            double iqr = q3 - q1;
-            double skew = stats::skewness(data);
-            double kurt = stats::kurtosis(data);
-            double mad = stats::mad(data);
+            long double mean = stats::mean(data);
+            long double stddev = stats::sample_stddev(data);
+            long double variance = stats::sample_variance(data);
+            long double median = stats::median(data);
+            long double min = stats::percentile(data, 0);
+            long double max = stats::percentile(data, 100);
+            long double q1 = stats::percentile(data, 25);
+            long double q3 = stats::percentile(data, 75);
+            long double iqr = q3 - q1;
+            long double skew = stats::skewness(data);
+            long double kurt = stats::kurtosis(data);
+            long double mad = stats::mad(data);
 
             std::ostringstream out;
             out << "--- Statistical Summary ---\n"
@@ -71,7 +71,7 @@ public:
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_native_functions() const override {
         std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
-        auto wrap_scalar = [](double val) -> StoredValue {
+        auto wrap_scalar = [](long double val) -> StoredValue {
             StoredValue res;
             res.decimal = val;
             res.exact = false;
@@ -79,7 +79,7 @@ public:
         };
 
         funcs["mean"] = [wrap_scalar](const std::vector<StoredValue>& args) {
-            std::vector<double> data;
+            std::vector<long double> data;
             for (const auto& arg : args) {
                 auto v = stats_ops::extract_vector(arg);
                 data.insert(data.end(), v.begin(), v.end());
@@ -89,7 +89,7 @@ public:
         funcs["avg"] = funcs["mean"];
 
         funcs["median"] = [wrap_scalar](const std::vector<StoredValue>& args) {
-            std::vector<double> data;
+            std::vector<long double> data;
             for (const auto& arg : args) {
                 auto v = stats_ops::extract_vector(arg);
                 data.insert(data.end(), v.begin(), v.end());
@@ -98,7 +98,7 @@ public:
         };
 
         funcs["std"] = [wrap_scalar](const std::vector<StoredValue>& args) {
-            std::vector<double> data;
+            std::vector<long double> data;
             for (const auto& arg : args) {
                 auto v = stats_ops::extract_vector(arg);
                 data.insert(data.end(), v.begin(), v.end());
@@ -107,7 +107,7 @@ public:
         };
 
         funcs["var"] = [wrap_scalar](const std::vector<StoredValue>& args) {
-            std::vector<double> data;
+            std::vector<long double> data;
             for (const auto& arg : args) {
                 auto v = stats_ops::extract_vector(arg);
                 data.insert(data.end(), v.begin(), v.end());
@@ -116,12 +116,12 @@ public:
         };
 
         funcs["t_test2"] = [wrap_scalar](const std::vector<StoredValue>& args) {
-            std::vector<double> x, y;
+            std::vector<long double> x, y;
             if (args.size() == 2) {
                 x = stats_ops::extract_vector(args[0]);
                 y = stats_ops::extract_vector(args[1]);
             } else {
-                std::vector<double> all;
+                std::vector<long double> all;
                 for (const auto& arg : args) {
                     auto v = stats_ops::extract_vector(arg);
                     all.insert(all.end(), v.begin(), v.end());
@@ -132,27 +132,27 @@ public:
                 y.assign(all.begin() + n, all.end());
             }
             
-            double m1 = stats::mean(x);
-            double m2 = stats::mean(y);
-            double s1 = stats::sample_variance(x);
-            double s2 = stats::sample_variance(y);
-            double n1 = static_cast<double>(x.size());
-            double n2 = static_cast<double>(y.size());
+            long double m1 = stats::mean(x);
+            long double m2 = stats::mean(y);
+            long double s1 = stats::sample_variance(x);
+            long double s2 = stats::sample_variance(y);
+            long double n1 = static_cast<long double>(x.size());
+            long double n2 = static_cast<long double>(y.size());
             
-            double t = (m1 - m2) / mymath::sqrt(s1/n1 + s2/n2);
-            double df = mymath::pow(s1/n1 + s2/n2, 2) / 
-                        (mymath::pow(s1/n1, 2)/(n1-1.0) + mymath::pow(s2/n2, 2)/(n2-1.0));
+            long double t = (m1 - m2) / mymath::sqrt(s1/n1 + s2/n2);
+            long double df = mymath::pow(s1/n1 + s2/n2, 2) / 
+                        (mymath::pow(s1/n1, 2)/(n1-1.0L) + mymath::pow(s2/n2, 2)/(n2-1.0L));
             
             return wrap_scalar(2.0 * prob::student_t_cdf(-mymath::abs(t), df));
         };
 
         funcs["chi2_test"] = [wrap_scalar](const std::vector<StoredValue>& args) {
-            std::vector<double> obs, exp;
+            std::vector<long double> obs, exp;
             if (args.size() == 2) {
                 obs = stats_ops::extract_vector(args[0]);
                 exp = stats_ops::extract_vector(args[1]);
             } else {
-                std::vector<double> all;
+                std::vector<long double> all;
                 for (const auto& arg : args) {
                     auto v = stats_ops::extract_vector(arg);
                     all.insert(all.end(), v.begin(), v.end());
@@ -167,14 +167,14 @@ public:
                 throw std::runtime_error("chi2_test expects obs and exp datasets of same length");
             }
 
-            double chi2 = 0;
+            long double chi2 = 0;
             for (size_t i = 0; i < obs.size(); i++) {
                 if (exp[i] <= 0) throw std::runtime_error("chi2_test expected values must be positive");
                 chi2 += mymath::pow(obs[i] - exp[i], 2) / exp[i];
             }
-            double df = static_cast<double>(obs.size() - 1);
+            long double df = static_cast<long double>(obs.size() - 1);
             if (df < 1) throw std::runtime_error("chi2_test requires at least 2 categories");
-            return wrap_scalar(1.0 - prob::chi2_cdf(chi2, df));
+            return wrap_scalar(1.0L - prob::chi2_cdf(chi2, df));
         };
 
         return funcs;

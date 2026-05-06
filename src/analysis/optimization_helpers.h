@@ -20,10 +20,10 @@ namespace optimization_helpers {
 // ============================================================================
 
 /** @brief 计算两个向量的点积 */
-double dot_product(const std::vector<double>& lhs, const std::vector<double>& rhs);
+long double dot_product(const std::vector<long double>& lhs, const std::vector<long double>& rhs);
 
 /** @brief 格式化规划问题结果 */
-std::string format_planning_result(const std::vector<double>& solution, double objective);
+std::string format_planning_result(const std::vector<long double>& solution, long double objective);
 
 // ============================================================================
 // 整数规划分支定界
@@ -37,18 +37,18 @@ std::string format_planning_result(const std::vector<double>& solution, double o
 struct IntegerSearchContext {
     // 问题数据
     std::size_t variable_count;
-    const std::vector<double>* objective;
+    const std::vector<long double>* objective;
     const matrix::Matrix* inequality_matrix;
-    const std::vector<double>* inequality_rhs;
+    const std::vector<long double>* inequality_rhs;
     const matrix::Matrix* equality_matrix;
-    const std::vector<double>* equality_rhs;
+    const std::vector<long double>* equality_rhs;
     const std::vector<std::size_t>* integer_indices;
-    double tolerance;
+    long double tolerance;
 
     // 搜索状态
     bool* found;
-    double* best_value;
-    std::vector<double>* best_solution;
+    long double* best_value;
+    std::vector<long double>* best_solution;
     std::size_t* visited_nodes;
 
     // 搜索限制
@@ -64,8 +64,8 @@ struct IntegerSearchContext {
  * @param initial_upper 初始变量上界
  */
 void search_integer_branch_and_bound(IntegerSearchContext& ctx,
-                                      const std::vector<double>& initial_lower,
-                                      const std::vector<double>& initial_upper);
+                                      const std::vector<long double>& initial_lower,
+                                      const std::vector<long double>& initial_upper);
 
 }  // namespace optimization_helpers
 

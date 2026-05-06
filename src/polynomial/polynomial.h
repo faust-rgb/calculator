@@ -23,8 +23,8 @@
  * 包含商式和余式，满足：被除数 = 除数 × 商 + 余
  */
 struct PolynomialDivisionResult {
-    std::vector<double> quotient;   ///< 商式系数
-    std::vector<double> remainder;  ///< 余式系数（次数严格小于除数）
+    std::vector<long double> quotient;   ///< 商式系数
+    std::vector<long double> remainder;  ///< 余式系数（次数严格小于除数）
 };
 
 /**
@@ -33,8 +33,8 @@ struct PolynomialDivisionResult {
  * @param rhs 右操作数
  * @return lhs + rhs
  */
-std::vector<double> polynomial_add(const std::vector<double>& lhs,
-                                   const std::vector<double>& rhs);
+std::vector<long double> polynomial_add(const std::vector<long double>& lhs,
+                                   const std::vector<long double>& rhs);
 
 /**
  * @brief 多项式减法
@@ -42,8 +42,8 @@ std::vector<double> polynomial_add(const std::vector<double>& lhs,
  * @param rhs 右操作数
  * @return lhs - rhs
  */
-std::vector<double> polynomial_subtract(const std::vector<double>& lhs,
-                                        const std::vector<double>& rhs);
+std::vector<long double> polynomial_subtract(const std::vector<long double>& lhs,
+                                        const std::vector<long double>& rhs);
 
 /**
  * @brief 多项式乘法
@@ -53,8 +53,8 @@ std::vector<double> polynomial_subtract(const std::vector<double>& lhs,
  *
  * 使用直接卷积算法，时间复杂度 O(n×m)。
  */
-std::vector<double> polynomial_multiply(const std::vector<double>& lhs,
-                                        const std::vector<double>& rhs);
+std::vector<long double> polynomial_multiply(const std::vector<long double>& lhs,
+                                        const std::vector<long double>& rhs);
 
 /**
  * @brief 多项式除法
@@ -65,8 +65,8 @@ std::vector<double> polynomial_multiply(const std::vector<double>& lhs,
  *
  * 使用标准的多项式长除法算法。
  */
-PolynomialDivisionResult polynomial_divide(const std::vector<double>& dividend,
-                                           const std::vector<double>& divisor);
+PolynomialDivisionResult polynomial_divide(const std::vector<long double>& dividend,
+                                           const std::vector<long double>& divisor);
 
 /**
  * @brief 计算多项式的所有实根
@@ -80,15 +80,15 @@ PolynomialDivisionResult polynomial_divide(const std::vector<double>& dividend,
  * 3. 用临界点将区间分段，每段内多项式单调
  * 4. 在符号变化的区间使用二分法求根
  */
-std::vector<double> polynomial_real_roots(const std::vector<double>& coefficients);
+std::vector<long double> polynomial_real_roots(const std::vector<long double>& coefficients);
 
 /**
  * @brief 计算多项式的全部复根
  * @param coefficients 多项式系数
  * @return 按实部、虚部排序的复根列表
  */
-std::vector<mymath::complex<double>> polynomial_complex_roots(
-    const std::vector<double>& coefficients);
+std::vector<mymath::complex<long double>> polynomial_complex_roots(
+    const std::vector<long double>& coefficients);
 
 /**
  * @brief 使用 Horner 法计算多项式在 x 处的值
@@ -96,21 +96,21 @@ std::vector<mymath::complex<double>> polynomial_complex_roots(
  * @param x 求值点
  * @return p(x)
  */
-double polynomial_evaluate(const std::vector<double>& coefficients, double x);
+long double polynomial_evaluate(const std::vector<long double>& coefficients, long double x);
 
 /**
  * @brief 计算多项式导数系数
  * @param coefficients 原多项式系数
  * @return 导数系数
  */
-std::vector<double> polynomial_derivative(const std::vector<double>& coefficients);
+std::vector<long double> polynomial_derivative(const std::vector<long double>& coefficients);
 
 /**
  * @brief 计算多项式积分系数，积分常数取 0
  * @param coefficients 原多项式系数
  * @return 不定积分系数
  */
-std::vector<double> polynomial_integral(const std::vector<double>& coefficients);
+std::vector<long double> polynomial_integral(const std::vector<long double>& coefficients);
 
 /**
  * @brief 计算多项式复合 p(q(x))
@@ -118,8 +118,8 @@ std::vector<double> polynomial_integral(const std::vector<double>& coefficients)
  * @param inner 内层多项式 q
  * @return 复合后的多项式系数
  */
-std::vector<double> polynomial_compose(const std::vector<double>& outer,
-                                       const std::vector<double>& inner);
+std::vector<long double> polynomial_compose(const std::vector<long double>& outer,
+                                       const std::vector<long double>& inner);
 
 /**
  * @brief 计算多项式最大公因式
@@ -127,8 +127,8 @@ std::vector<double> polynomial_compose(const std::vector<double>& outer,
  * @param rhs 右多项式
  * @return 单位首项化后的最大公因式
  */
-std::vector<double> polynomial_gcd(const std::vector<double>& lhs,
-                                   const std::vector<double>& rhs);
+std::vector<long double> polynomial_gcd(const std::vector<long double>& lhs,
+                                   const std::vector<long double>& rhs);
 
 /**
  * @brief 使用最小二乘做多项式拟合
@@ -137,8 +137,8 @@ std::vector<double> polynomial_gcd(const std::vector<double>& lhs,
  * @param degree 多项式次数
  * @return 拟合得到的系数向量（低次到高次）
  */
-std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
-                                   const std::vector<double>& y_samples,
+std::vector<long double> polynomial_fit(const std::vector<long double>& x_samples,
+                                   const std::vector<long double>& y_samples,
                                    int degree);
 
 /**
@@ -152,7 +152,7 @@ std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
  * - 整数系数的格式化
  * - 符号连接（使用 "+" 和 "-"）
  */
-std::string polynomial_to_string(const std::vector<double>& coefficients,
+std::string polynomial_to_string(const std::vector<long double>& coefficients,
                                  const std::string& variable_name = "x");
 
 #endif

@@ -94,7 +94,7 @@ using namespace symbolic_expression_internal;
  */
 template <typename T>
 T root_function_tolerance(T fx) {
-    return T(1e-10) * std::max(T(static_cast<long long>(1)), t_abs(fx));
+    return T(1e-10L) * std::max(T(static_cast<long long>(1)), t_abs(fx));
 }
 
 /**
@@ -104,7 +104,7 @@ T root_function_tolerance(T fx) {
  */
 template <typename T>
 T root_position_tolerance(T x) {
-    return T(1e-10) * std::max(T(static_cast<long long>(1)), t_abs(x));
+    return T(1e-10L) * std::max(T(static_cast<long long>(1)), t_abs(x));
 }
 
 /**
@@ -113,7 +113,7 @@ T root_position_tolerance(T x) {
 template <typename T>
 T root_derivative_step(T x) {
     // 使用 sqrt(epsilon) 约为 1e-8 作为基础比例
-    return T(1e-7) * std::max(T(static_cast<long long>(1)), t_abs(x));
+    return T(1e-7L) * std::max(T(static_cast<long long>(1)), t_abs(x));
 }
 
 }  // namespace
@@ -163,14 +163,14 @@ T newton_solve(
 
         // 检查导数是否为零
         if (t_abs(derivative) <=
-            T(1e-13) * std::max(T(static_cast<long long>(1)), t_abs(fx))) {
+            T(1e-13L) * std::max(T(static_cast<long long>(1)), t_abs(fx))) {
             throw std::runtime_error("solve failed because the derivative vanished");
         }
 
         const T raw_step = fx / derivative;
 
         // 回溯搜索：确保 |f(x)| 减小
-        T factor = T(1.0);
+        T factor = T(1.0L);
         T next = x - raw_step;
         bool step_accepted = false;
 
@@ -181,7 +181,7 @@ T newton_solve(
                 step_accepted = true;
                 break;
             }
-            factor *= T(0.5);
+            factor *= T(0.5L);
             next = x - factor * raw_step;
         }
 
@@ -232,7 +232,7 @@ T bisection_solve(
     }
 
     for (int iteration = 0; iteration < 100; ++iteration) {
-        const T mid = T(0.5) * (left + right);
+        const T mid = T(0.5L) * (left + right);
         const T mid_value = evaluate({{"x", mid}});
 
         // 检查收敛
@@ -252,7 +252,7 @@ T bisection_solve(
             left_value = mid_value;
         }
     }
-    return normalize(T(0.5) * (left + right));
+    return normalize(T(0.5L) * (left + right));
 }
 
 /**
@@ -281,7 +281,7 @@ T secant_solve(
         // 计算 f1 - f0（避免分母为零）
         const T denominator = f1 - f0;
         if (t_abs(denominator) <=
-            T(1e-12) * std::max({T(1.0), t_abs(f0), t_abs(f1)})) {
+            T(1e-12L) * std::max({T(1.0L), t_abs(f0), t_abs(f1)})) {
             throw std::runtime_error("secant failed because consecutive function values matched");
         }
 
@@ -372,7 +372,7 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
             }
 
             matrix::Matrix solution = matrix::solve(a, b);
-            for (double& val : solution.data) {
+            for (long double& val : solution.data) {
                 val = ctx.normalize_result(val);
             }
             *output = solution.to_string();
@@ -395,7 +395,7 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
                     SymbolicExpression lhs, rhs;
                     if (eq_pos == std::string::npos) {
                         lhs = SymbolicExpression::parse(eq_str);
-                        rhs = SymbolicExpression::number(0.0);
+                        rhs = SymbolicExpression::number(0.0L);
                     } else {
                         std::string lhs_str = eq_str.substr(0, eq_pos);
                         std::string rhs_str = eq_str.substr(eq_pos + 1);
@@ -406,35 +406,35 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
                     SymbolicExpression equation = symbolic_expression_internal::make_subtract(lhs, rhs).simplify();
 
                     // 尝试提取多项式系数
-                    std::vector<double> coeffs;
+                    std::vector<long double> coeffs;
                     if (equation.polynomial_coefficients(var, &coeffs)) {
                         if (coeffs.size() == 2) {
                             // 线性方程 a*x + b = 0
-                            double a = coeffs[1], b = coeffs[0];
+                            long double a = coeffs[1], b = coeffs[0];
                             if (mymath::is_near_zero(a, 1e-15)) {
                                 *output = "no solution (coefficient is zero)";
                             } else {
-                                double x = -b / a;
+                                long double x = -b / a;
                                 *output = format_decimal(ctx.normalize_result(x));
                             }
                             return true;
                         }
                         if (coeffs.size() == 3) {
                             // 二次方程 a*x^2 + b*x + c = 0
-                            double a = coeffs[2], b = coeffs[1], c = coeffs[0];
-                            double disc = b * b - 4 * a * c;
+                            long double a = coeffs[2], b = coeffs[1], c = coeffs[0];
+                            long double disc = b * b - 4 * a * c;
                             if (mymath::is_near_zero(disc, 1e-12)) {
-                                double x = -b / (2 * a);
+                                long double x = -b / (2 * a);
                                 *output = format_decimal(ctx.normalize_result(x));
                             } else if (disc > 0) {
-                                double x1 = (-b - mymath::sqrt(disc)) / (2 * a);
-                                double x2 = (-b + mymath::sqrt(disc)) / (2 * a);
+                                long double x1 = (-b - mymath::sqrt(disc)) / (2 * a);
+                                long double x2 = (-b + mymath::sqrt(disc)) / (2 * a);
                                 *output = "{" + format_decimal(ctx.normalize_result(x1)) + ", " +
                                           format_decimal(ctx.normalize_result(x2)) + "}";
                             } else {
                                 // 复根
-                                double real = -b / (2 * a);
-                                double imag = mymath::sqrt(-disc) / (2 * a);
+                                long double real = -b / (2 * a);
+                                long double imag = mymath::sqrt(-disc) / (2 * a);
                                 *output = "{complex(" + format_decimal(ctx.normalize_result(real)) + ", " +
                                           format_decimal(ctx.normalize_result(imag)) + "), complex(" +
                                           format_decimal(ctx.normalize_result(real)) + ", " +
@@ -455,15 +455,15 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
             // 情况 3: 数值求根 solve(f, x0)
             const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
 
-            std::function<double(const std::vector<std::pair<std::string, double>>&)> evaluate_derivative = nullptr;
+            std::function<long double(const std::vector<std::pair<std::string, long double>>&)> evaluate_derivative = nullptr;
             if (ctx.get_derivative_expression) {
                 const std::string deriv_expr = ctx.get_derivative_expression(arguments[0], "x");
                 if (!deriv_expr.empty()) {
                     evaluate_derivative = ctx.build_scoped_evaluator(deriv_expr);
                 }
             }
-            double x = ctx.parse_decimal(arguments[1]);
-            double result = newton_solve<double>(evaluate_expression, x, ctx.normalize_result, evaluate_derivative);
+            long double x = ctx.parse_decimal(arguments[1]);
+            long double result = newton_solve<long double>(evaluate_expression, x, ctx.normalize_result, evaluate_derivative);
             *output = format_decimal(result);
             return true;
         }
@@ -475,9 +475,9 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
             throw std::runtime_error("bisect expects expression, a, b");
         }
         const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
-        double left = ctx.parse_decimal(arguments[1]);
-        double right = ctx.parse_decimal(arguments[2]);
-        double result = bisection_solve<double>(evaluate_expression, left, right, ctx.normalize_result);
+        long double left = ctx.parse_decimal(arguments[1]);
+        long double right = ctx.parse_decimal(arguments[2]);
+        long double result = bisection_solve<long double>(evaluate_expression, left, right, ctx.normalize_result);
         *output = format_decimal(result);
         return true;
     }
@@ -487,9 +487,9 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
             throw std::runtime_error("secant expects expression, x0, x1");
         }
         const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
-        double x0 = ctx.parse_decimal(arguments[1]);
-        double x1 = ctx.parse_decimal(arguments[2]);
-        double result = secant_solve<double>(evaluate_expression, x0, x1, ctx.normalize_result);
+        long double x0 = ctx.parse_decimal(arguments[1]);
+        long double x1 = ctx.parse_decimal(arguments[2]);
+        long double result = secant_solve<long double>(evaluate_expression, x0, x1, ctx.normalize_result);
         *output = format_decimal(result);
         return true;
     }
@@ -499,8 +499,8 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
             throw std::runtime_error("fixed_point expects expression, x0");
         }
         const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
-        double x = ctx.parse_decimal(arguments[1]);
-        double result = fixed_point_solve<double>(evaluate_expression, x, ctx.normalize_result);
+        long double x = ctx.parse_decimal(arguments[1]);
+        long double result = fixed_point_solve<long double>(evaluate_expression, x, ctx.normalize_result);
         *output = format_decimal(result);
         return true;
     }
@@ -559,12 +559,6 @@ std::string RootfindingModule::get_help_snippet(const std::string& topic) const 
 }
 
 // 显式模板实例化
-template double newton_solve<double>(
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
-    double,
-    const std::function<double(double)>&,
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&);
-
 template PreciseDecimal newton_solve<PreciseDecimal>(
     const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
     PreciseDecimal,
@@ -576,12 +570,6 @@ template long double newton_solve<long double>(
     long double,
     const std::function<long double(long double)>&,
     const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&);
-
-template double bisection_solve<double>(
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
-    double,
-    double,
-    const std::function<double(double)>&);
 
 template PreciseDecimal bisection_solve<PreciseDecimal>(
     const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
@@ -595,12 +583,6 @@ template long double bisection_solve<long double>(
     long double,
     const std::function<long double(long double)>&);
 
-template double secant_solve<double>(
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
-    double,
-    double,
-    const std::function<double(double)>&);
-
 template PreciseDecimal secant_solve<PreciseDecimal>(
     const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
     PreciseDecimal,
@@ -612,11 +594,6 @@ template long double secant_solve<long double>(
     long double,
     long double,
     const std::function<long double(long double)>&);
-
-template double fixed_point_solve<double>(
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
-    double,
-    const std::function<double(double)>&);
 
 template PreciseDecimal fixed_point_solve<PreciseDecimal>(
     const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,

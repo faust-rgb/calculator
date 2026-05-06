@@ -20,8 +20,8 @@ namespace {
 constexpr uint32_t kBase = 1000000000;
 constexpr int kBaseDigits = 9;
 int g_default_scale = 40;
-constexpr double kDisplayZeroEps = 1e-16;
-constexpr double kDisplayIntegerEps = 1e-9;
+constexpr long double kDisplayZeroEps = 1e-16;
+constexpr long double kDisplayIntegerEps = 1e-9;
 
 PreciseDecimal one();
 PreciseDecimal two();
@@ -30,8 +30,8 @@ PreciseDecimal decimal_from_uint(uint32_t value);
 PreciseDecimal scale_epsilon(int extra_digits = 4);
 int series_iteration_limit(int minimum);
 
-double normalize_display_decimal(double value) {
-    if (mymath::abs(value) < kDisplayZeroEps) return 0.0;
+long double normalize_display_decimal(long double value) {
+    if (mymath::abs(value) < kDisplayZeroEps) return 0.0L;
     if (mymath::abs(value) > kDisplayIntegerEps &&
         mymath::abs(value - mymath::round(value)) < kDisplayIntegerEps) {
         return mymath::round(value);
@@ -39,7 +39,7 @@ double normalize_display_decimal(double value) {
     return value;
 }
 
-std::string format_decimal(double value, int precision = 12) {
+std::string format_decimal(long double value, int precision = 12) {
     value = normalize_display_decimal(value);
     std::ostringstream out;
     out << std::setprecision(precision) << value;
@@ -654,7 +654,7 @@ PreciseDecimal::PreciseDecimal(long long value) {
     scale = 0;
 }
 
-PreciseDecimal::PreciseDecimal(double value) {
+PreciseDecimal::PreciseDecimal(long double value) {
     *this = from_decimal_literal(format_decimal(value, 15));
 }
 
@@ -794,16 +794,16 @@ std::string PreciseDecimal::to_string() const {
     return res;
 }
 
-double PreciseDecimal::to_double() const {
-    if (is_zero()) return 0.0;
+long double PreciseDecimal::to_double() const {
+    if (is_zero()) return 0.0L;
 
     // 找出第一个非零 chunk 的索引
     int start_chunk = static_cast<int>(data.size()) - 1;
     while (start_chunk >= 0 && data[start_chunk] == 0) start_chunk--;
 
-    if (start_chunk < 0) return 0.0;
+    if (start_chunk < 0) return 0.0L;
 
-    // 只取最高位的 3 个 chunk (约 27 位十进制)，足以填满 double 的 53 位精度
+    // 只取最高位的 3 个 chunk (约 27 位十进制)，足以填满 long double 的 53 位精度
     long double res = 0;
     int end_chunk = std::max(0, start_chunk - 2);
     for (int i = start_chunk; i >= end_chunk; --i) {
@@ -819,11 +819,11 @@ double PreciseDecimal::to_double() const {
         res *= mymath::pow(10.0L, exponent);
     }
 
-    if (!mymath::isfinite(static_cast<double>(res))) {
+    if (!mymath::isfinite(static_cast<long double>(res))) {
         return negative ? -mymath::infinity() : mymath::infinity();
     }
 
-    return static_cast<double>(negative ? -res : res);
+    return static_cast<long double>(negative ? -res : res);
 }
 
 PreciseDecimal PreciseDecimal::from_digits(std::string raw_digits, int raw_scale, bool is_negative) {
@@ -880,33 +880,33 @@ PreciseDecimal PreciseDecimal::from_decimal_literal(const std::string& token) {
 // ============================================================================
 
 PreciseDecimal operator+(PreciseDecimal lhs, const PreciseDecimal& rhs) { lhs += rhs; return lhs; }
-PreciseDecimal operator+(PreciseDecimal lhs, double rhs) { lhs += PreciseDecimal(rhs); return lhs; }
-PreciseDecimal operator+(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) + rhs; }
+PreciseDecimal operator+(PreciseDecimal lhs, long double rhs) { lhs += PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator+(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) + rhs; }
 
 PreciseDecimal operator-(PreciseDecimal lhs, const PreciseDecimal& rhs) { lhs -= rhs; return lhs; }
-PreciseDecimal operator-(PreciseDecimal lhs, double rhs) { lhs -= PreciseDecimal(rhs); return lhs; }
-PreciseDecimal operator-(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) - rhs; }
+PreciseDecimal operator-(PreciseDecimal lhs, long double rhs) { lhs -= PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator-(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) - rhs; }
 
 PreciseDecimal operator*(PreciseDecimal lhs, const PreciseDecimal& rhs) { lhs *= rhs; return lhs; }
-PreciseDecimal operator*(PreciseDecimal lhs, double rhs) { lhs *= PreciseDecimal(rhs); return lhs; }
-PreciseDecimal operator*(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) * rhs; }
+PreciseDecimal operator*(PreciseDecimal lhs, long double rhs) { lhs *= PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator*(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) * rhs; }
 
 PreciseDecimal operator/(PreciseDecimal lhs, const PreciseDecimal& rhs) { lhs /= rhs; return lhs; }
-PreciseDecimal operator/(PreciseDecimal lhs, double rhs) { lhs /= PreciseDecimal(rhs); return lhs; }
-PreciseDecimal operator/(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) / rhs; }
+PreciseDecimal operator/(PreciseDecimal lhs, long double rhs) { lhs /= PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator/(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) / rhs; }
 
-bool operator==(const PreciseDecimal& lhs, double rhs) { return lhs == PreciseDecimal(rhs); }
-bool operator==(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) == rhs; }
-bool operator!=(const PreciseDecimal& lhs, double rhs) { return !(lhs == rhs); }
-bool operator!=(double lhs, const PreciseDecimal& rhs) { return !(lhs == rhs); }
-bool operator<(const PreciseDecimal& lhs, double rhs) { return lhs < PreciseDecimal(rhs); }
-bool operator<(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) < rhs; }
-bool operator>(const PreciseDecimal& lhs, double rhs) { return lhs > PreciseDecimal(rhs); }
-bool operator>(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) > rhs; }
-bool operator<=(const PreciseDecimal& lhs, double rhs) { return lhs <= PreciseDecimal(rhs); }
-bool operator<=(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) <= rhs; }
-bool operator>=(const PreciseDecimal& lhs, double rhs) { return lhs >= PreciseDecimal(rhs); }
-bool operator>=(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) >= rhs; }
+bool operator==(const PreciseDecimal& lhs, long double rhs) { return lhs == PreciseDecimal(rhs); }
+bool operator==(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) == rhs; }
+bool operator!=(const PreciseDecimal& lhs, long double rhs) { return !(lhs == rhs); }
+bool operator!=(long double lhs, const PreciseDecimal& rhs) { return !(lhs == rhs); }
+bool operator<(const PreciseDecimal& lhs, long double rhs) { return lhs < PreciseDecimal(rhs); }
+bool operator<(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) < rhs; }
+bool operator>(const PreciseDecimal& lhs, long double rhs) { return lhs > PreciseDecimal(rhs); }
+bool operator>(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) > rhs; }
+bool operator<=(const PreciseDecimal& lhs, long double rhs) { return lhs <= PreciseDecimal(rhs); }
+bool operator<=(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) <= rhs; }
+bool operator>=(const PreciseDecimal& lhs, long double rhs) { return lhs >= PreciseDecimal(rhs); }
+bool operator>=(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) >= rhs; }
 
 namespace precise {
 
@@ -921,7 +921,7 @@ PreciseDecimal sqrt(const PreciseDecimal& val) {
     if (val.negative) throw PreciseDecimalUnsupported("sqrt of negative number");
 
     // Newton 迭代: x_{n+1} = 0.5 * (x_n + val / x_n)
-    // 初始猜测使用 double 版 sqrt
+    // 初始猜测使用 long double 版 sqrt
     PreciseDecimal x(mymath::sqrt(val.to_double()));
     const PreciseDecimal one_half = half();
 
@@ -1089,7 +1089,7 @@ PreciseDecimal cos(const PreciseDecimal& x) {
 
 PreciseDecimal tan(const PreciseDecimal& x) {
     // 检查是否接近 pi/2 + k*pi
-    // 使用较宽松的容差 (1e-12) 以捕捉从 double 转换来的近似 pi/2
+    // 使用较宽松的容差 (1e-12) 以捕捉从 long double 转换来的近似 pi/2
     PreciseDecimal p = pi();
     PreciseDecimal half_p = p / two();
     PreciseDecimal r = x - precise::floor(x / p) * p; // mod pi

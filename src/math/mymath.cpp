@@ -7,12 +7,12 @@ namespace mymath {
 
 namespace internal {
 
-double log_gamma_positive(double x) {
-    if (x <= 0.0) {
+long double log_gamma_positive(long double x) {
+    if (x <= 0.0L) {
         throw std::domain_error("log-gamma is only defined for positive inputs");
     }
 
-    static const double kLanczosCoefficients[] = {
+    static const long double kLanczosCoefficients[] = {
         0.99999999999980993,
         676.5203681218851,
         -1259.1392167224028,
@@ -24,22 +24,22 @@ double log_gamma_positive(double x) {
         1.5056327351493116e-7,
     };
 
-    const double z = x - 1.0;
-    double series = kLanczosCoefficients[0];
+    const long double z = x - 1.0L;
+    long double series = kLanczosCoefficients[0];
     for (int i = 1; i < 9; ++i) {
-        series += kLanczosCoefficients[i] / (z + static_cast<double>(i));
+        series += kLanczosCoefficients[i] / (z + static_cast<long double>(i));
     }
 
-    const double t = z + 7.5;
+    const long double t = z + 7.5;
     return 0.5 * ln(2.0 * kPi) + (z + 0.5) * ln(t) - t + ln(series);
 }
 
-double finite_or_infinity_from_log(double log_value) {
+long double finite_or_infinity_from_log(long double log_value) {
     if (log_value >= kLnDoubleMax) {
         return infinity();
     }
     if (log_value <= kLnDoubleDenormMin) {
-        return 0.0;
+        return 0.0L;
     }
     return exp(log_value);
 }
@@ -49,8 +49,8 @@ double finite_or_infinity_from_log(double log_value) {
 using internal::finite_or_infinity_from_log;
 using internal::log_gamma_positive;
 
-double abs(double x) {
-    return x < 0.0 ? -x : x;
+long double abs(long double x) {
+    return x < 0.0L ? -x : x;
 }
 
 int abs(int x) {
@@ -69,62 +69,62 @@ long double abs_long_double(long double x) {
     return x < 0.0L ? -x : x;
 }
 
-bool isnan(double x) {
+bool isnan(long double x) {
     return x != x;
 }
 
-bool isinf(double x) {
+bool isinf(long double x) {
     return !isnan(x) && (x > kDoubleMax || x < -kDoubleMax);
 }
 
-bool isfinite(double x) {
+bool isfinite(long double x) {
     return !isnan(x) && !isinf(x);
 }
 
-double trunc(double x) {
+long double trunc(long double x) {
     if (!isfinite(x)) {
         return x;
     }
     if (abs(x) >= 9.22e18) {
         return x;
     }
-    return static_cast<double>(static_cast<long long>(x));
+    return static_cast<long double>(static_cast<long long>(x));
 }
 
-double floor(double x) {
+long double floor(long double x) {
     if (!isfinite(x)) {
         return x;
     }
-    const double integer = trunc(x);
-    return (integer > x) ? integer - 1.0 : integer;
+    const long double integer = trunc(x);
+    return (integer > x) ? integer - 1.0L : integer;
 }
 
-double ceil(double x) {
+long double ceil(long double x) {
     if (!isfinite(x)) {
         return x;
     }
-    const double integer = trunc(x);
-    return (integer < x) ? integer + 1.0 : integer;
+    const long double integer = trunc(x);
+    return (integer < x) ? integer + 1.0L : integer;
 }
 
-double round(double x) {
+long double round(long double x) {
     if (!isfinite(x)) {
         return x;
     }
-    return x >= 0.0 ? floor(x + 0.5) : ceil(x - 0.5);
+    return x >= 0.0L ? floor(x + 0.5) : ceil(x - 0.5);
 }
 
-double modf(double x, double* integer_part) {
-    const double integer = trunc(x);
+long double modf(long double x, long double* integer_part) {
+    const long double integer = trunc(x);
     if (integer_part) {
         *integer_part = integer;
     }
     return x - integer;
 }
 
-double clamp(double value, double low, double high) {
+long double clamp(long double value, long double low, long double high) {
     if (high < low) {
-        const double temp = low;
+        const long double temp = low;
         low = high;
         high = temp;
     }
@@ -137,18 +137,18 @@ double clamp(double value, double low, double high) {
     return value;
 }
 
-double fmod(double x, double y) {
+long double fmod(long double x, long double y) {
     if (is_near_zero(y)) {
         throw std::domain_error("fmod divisor cannot be zero");
     }
     if (!isfinite(x) || !isfinite(y)) {
         return quiet_nan();
     }
-    const double quotient = trunc(x / y);
+    const long double quotient = trunc(x / y);
     return x - quotient * y;
 }
 
-double remainder(double x, double y) {
+long double remainder(long double x, long double y) {
     if (is_near_zero(y)) {
         throw std::domain_error("remainder divisor cannot be zero");
     }
@@ -173,16 +173,16 @@ double remainder(double x, double y) {
             nearest = (truncated % 2 == 0) ? lower : upper;
         }
     }
-    return static_cast<double>(
+    return static_cast<long double>(
         static_cast<long double>(x) - nearest * static_cast<long double>(y));
 }
 
-double infinity() {
+long double infinity() {
     return kDoubleMax * kDoubleMax;
 }
 
-double quiet_nan() {
-    const volatile double zero = 0.0;
+long double quiet_nan() {
+    const volatile long double zero = 0.0L;
     return zero / zero;
 }
 
@@ -195,22 +195,22 @@ long long gcd(long long a, long long b) {
     return a < 0 ? -a : a;
 }
 
-bool approximate_fraction(double value,
+bool approximate_fraction(long double value,
                           long long* numerator,
                           long long* denominator,
                           int max_denominator,
-                          double eps) {
-    const double positive = value < 0.0 ? -value : value;
+                          long double eps) {
+    const long double positive = value < 0.0L ? -value : value;
 
     for (int den = 1; den <= max_denominator; ++den) {
-        const double scaled = positive * static_cast<double>(den);
+        const long double scaled = positive * static_cast<long double>(den);
         const long long num = static_cast<long long>(scaled + 0.5);
-        const double candidate =
-            static_cast<double>(num) / static_cast<double>(den);
+        const long double candidate =
+            static_cast<long double>(num) / static_cast<long double>(den);
 
         if (abs(candidate - positive) <= eps) {
             const long long divisor = gcd(num, den);
-            *numerator = (value < 0.0 ? -num : num) / divisor;
+            *numerator = (value < 0.0L ? -num : num) / divisor;
             *denominator = den / divisor;
             return true;
         }
@@ -219,7 +219,7 @@ bool approximate_fraction(double value,
     return false;
 }
 
-bool best_rational_approximation(double value,
+bool best_rational_approximation(long double value,
                                  long long* numerator,
                                  long long* denominator,
                                  long long max_denominator) {
@@ -229,20 +229,20 @@ bool best_rational_approximation(double value,
     if (!isfinite(value)) {
         return false;
     }
-    if (value == 0.0) {
+    if (value == 0.0L) {
         *numerator = 0;
         *denominator = 1;
         return true;
     }
 
-    const bool negative = value < 0.0;
-    double target = negative ? -value : value;
+    const bool negative = value < 0.0L;
+    long double target = negative ? -value : value;
 
     long long h0 = 0;
     long long k0 = 1;
     long long h1 = 1;
     long long k1 = 0;
-    double x = target;
+    long double x = target;
 
     while (true) {
         const long long a = static_cast<long long>(x);
@@ -258,28 +258,28 @@ bool best_rational_approximation(double value,
         h1 = h2;
         k1 = k2;
 
-        const double fractional = x - static_cast<double>(a);
+        const long double fractional = x - static_cast<long double>(a);
         if (is_near_zero(fractional)) {
             break;
         }
-        x = 1.0 / fractional;
+        x = 1.0L / fractional;
     }
 
     long long best_num = h1;
     long long best_den = k1;
 
     if (k1 != 0 && k1 < max_denominator &&
-        !is_near_zero(x - static_cast<double>(static_cast<long long>(x)))) {
+        !is_near_zero(x - static_cast<long double>(static_cast<long long>(x)))) {
         const long long remaining = max_denominator - k0;
         const long long step = k1 == 0 ? 0 : remaining / k1;
         const long long candidate_step = step > 0 ? step : 0;
         const long long num2 = h0 + candidate_step * h1;
         const long long den2 = k0 + candidate_step * k1;
 
-        const double error1 =
-            abs(target - static_cast<double>(best_num) / static_cast<double>(best_den));
-        const double error2 = den2 > 0
-                                  ? abs(target - static_cast<double>(num2) / static_cast<double>(den2))
+        const long double error1 =
+            abs(target - static_cast<long double>(best_num) / static_cast<long double>(best_den));
+        const long double error2 = den2 > 0
+                                  ? abs(target - static_cast<long double>(num2) / static_cast<long double>(den2))
                                   : infinity();
         if (den2 > 0 && error2 <= error1) {
             best_num = num2;
@@ -297,22 +297,22 @@ bool best_rational_approximation(double value,
     return true;
 }
 
-bool is_near_zero(double x, double eps) {
+bool is_near_zero(long double x, long double eps) {
     return abs(x) <= eps;
 }
 
-bool is_integer(double x, double eps) {
+bool is_integer(long double x, long double eps) {
     long long truncated = static_cast<long long>(x);
-    return abs(x - static_cast<double>(truncated)) <= eps ||
-           abs(x - static_cast<double>(truncated + (x >= 0 ? 1 : -1))) <= eps;
+    return abs(x - static_cast<long double>(truncated)) <= eps ||
+           abs(x - static_cast<long double>(truncated + (x >= 0 ? 1 : -1))) <= eps;
 }
 
-double normalize_angle(double x) {
+long double normalize_angle(long double x) {
     if (!isfinite(x)) {
         return x;
     }
     
-    // 对于非常大的输入，double 的精度已经不足以进行有意义的范围缩减。
+    // 对于非常大的输入，long double 的精度已经不足以进行有意义的范围缩减。
     // 但我们至少应该保证结果在 [-pi, pi] 范围内，且是有限的。
     const long double x_ld = static_cast<long double>(x);
     const long double period = 2.0L * kPiL;
@@ -331,18 +331,18 @@ double normalize_angle(double x) {
     if (reduced > kPiL) reduced = kPiL;
     if (reduced < -kPiL) reduced = -kPiL;
 
-    return static_cast<double>(reduced);
+    return static_cast<long double>(reduced);
 }
 
-double exp(double x) {
+long double exp(long double x) {
     if (x >= kLnDoubleMax) {
         return infinity();
     }
     if (x <= kLnDoubleDenormMin) {
-        return 0.0;
+        return 0.0L;
     }
-    if (x < 0.0) {
-        return 1.0 / exp(-x);
+    if (x < 0.0L) {
+        return 1.0L / exp(-x);
     }
 
     int halvings = 0;
@@ -361,7 +361,7 @@ double exp(double x) {
         }
     }
 
-    double result = static_cast<double>(sum);
+    long double result = static_cast<long double>(sum);
     for (int i = 0; i < halvings; ++i) {
         result *= result;
         if (!isfinite(result)) {
@@ -371,8 +371,8 @@ double exp(double x) {
     return result;
 }
 
-double ln(double x) {
-    if (x <= 0.0) {
+long double ln(long double x) {
+    if (x <= 0.0L) {
         throw std::domain_error("ln is only defined for positive numbers");
     }
 
@@ -386,39 +386,39 @@ double ln(double x) {
         --shifts;
     }
 
-    const double y = (x - 1.0) / (x + 1.0);
-    const double y2 = y * y;
-    double term = y;
-    double sum = 0.0;
+    const long double y = (x - 1.0L) / (x + 1.0L);
+    const long double y2 = y * y;
+    long double term = y;
+    long double sum = 0.0L;
 
     for (int n = 1; n <= 199; n += 2) {
-        sum += term / static_cast<double>(n);
+        sum += term / static_cast<long double>(n);
         term *= y2;
         if (abs(term) < kEps) {
             break;
         }
     }
 
-    return 2.0 * sum + static_cast<double>(shifts);
+    return 2.0 * sum + static_cast<long double>(shifts);
 }
 
-double log(double x) {
+long double log(long double x) {
     return ln(x);
 }
 
-double log1p(double x) {
-    return ln(1.0 + x);
+long double log1p(long double x) {
+    return ln(1.0L + x);
 }
 
-double log10(double x) {
-    return ln(x) / ln(10.0);
+long double log10(long double x) {
+    return ln(x) / ln(10.0L);
 }
 
-double log2(double x) {
+long double log2(long double x) {
     return ln(x) / ln(2.0);
 }
 
-double sinh(double x) {
+long double sinh(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
         return x;
@@ -428,23 +428,23 @@ double sinh(double x) {
         return x;
     }
 
-    const double abs_x = abs(x);
+    const long double abs_x = abs(x);
     // 对于大数使用替代公式避免溢出
     // sinh(x) = sign(x) * |sinh(|x|)|
     // 对于 |x| > 20，exp(|x|)/2 已经足够精确
-    if (abs_x > 20.0) {
-        const double result = 0.5 * exp(abs_x);
+    if (abs_x > 20.0L) {
+        const long double result = 0.5 * exp(abs_x);
         // 此时 exp(-abs_x) 可忽略不计
-        return x > 0.0 ? result : -result;
+        return x > 0.0L ? result : -result;
     }
 
     // 对于中等大小的 x，使用标准公式
-    const double positive = exp(x);
-    const double negative = exp(-x);
+    const long double positive = exp(x);
+    const long double negative = exp(-x);
     return 0.5 * (positive - negative);
 }
 
-double cosh(double x) {
+long double cosh(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
         return x;
@@ -454,42 +454,42 @@ double cosh(double x) {
         return infinity();
     }
 
-    const double abs_x = abs(x);
+    const long double abs_x = abs(x);
     // 对于大数使用替代公式避免溢出
-    if (abs_x > 20.0) {
+    if (abs_x > 20.0L) {
         return 0.5 * exp(abs_x);
     }
 
     // 对于中等大小的 x，使用标准公式
-    const double positive = exp(x);
-    const double negative = exp(-x);
+    const long double positive = exp(x);
+    const long double negative = exp(-x);
     return 0.5 * (positive + negative);
 }
 
-double tanh(double x) {
+long double tanh(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
         return x;
     }
     // 处理无穷大
     if (isinf(x)) {
-        return x > 0.0 ? 1.0 : -1.0;
+        return x > 0.0L ? 1.0L : -1.0L;
     }
 
     // 对于大数直接返回极限值
-    const double abs_x = abs(x);
-    if (abs_x > 20.0) {
-        return x > 0.0 ? 1.0 : -1.0;
+    const long double abs_x = abs(x);
+    if (abs_x > 20.0L) {
+        return x > 0.0L ? 1.0L : -1.0L;
     }
 
-    const double denominator = cosh(x);
+    const long double denominator = cosh(x);
     if (abs(denominator) < kEps) {
         throw std::domain_error("tanh is undefined when cosh(x) is zero");
     }
     return sinh(x) / denominator;
 }
 
-double asinh(double x) {
+long double asinh(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
         return x;
@@ -500,15 +500,15 @@ double asinh(double x) {
     }
 
     // 对于大数使用 log(2|x|) 近似
-    const double abs_x = abs(x);
+    const long double abs_x = abs(x);
     if (abs_x > 1e10) {
-        return x > 0.0 ? ln(2.0 * abs_x) : -ln(2.0 * abs_x);
+        return x > 0.0L ? ln(2.0 * abs_x) : -ln(2.0 * abs_x);
     }
 
-    return ln(x + sqrt(x * x + 1.0));
+    return ln(x + sqrt(x * x + 1.0L));
 }
 
-double acosh(double x) {
+long double acosh(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
         return x;
@@ -517,7 +517,7 @@ double acosh(double x) {
     if (isinf(x)) {
         return x;
     }
-    if (x < 1.0) {
+    if (x < 1.0L) {
         throw std::domain_error("acosh is only defined for x >= 1");
     }
 
@@ -526,15 +526,15 @@ double acosh(double x) {
         return ln(2.0 * x);
     }
 
-    return ln(x + sqrt(x - 1.0) * sqrt(x + 1.0));
+    return ln(x + sqrt(x - 1.0L) * sqrt(x + 1.0L));
 }
 
-double atanh(double x) {
+long double atanh(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
         return x;
     }
-    if (x <= -1.0 || x >= 1.0) {
+    if (x <= -1.0L || x >= 1.0L) {
         throw std::domain_error("atanh is only defined for values in (-1, 1)");
     }
 
@@ -544,14 +544,14 @@ double atanh(double x) {
     // (1+x)/(1-x) = (1-x+2x)/(1-x) = 1 + 2x/(1-x)
     // 所以 ln((1+x)/(1-x)) = log1p(2x/(1-x))
     if (abs(x) > 0.5) {
-        const double ratio = 2.0 * x / (1.0 - x);
-        return 0.5 * ln(1.0 + ratio);
+        const long double ratio = 2.0 * x / (1.0L - x);
+        return 0.5 * ln(1.0L + ratio);
     }
 
-    return 0.5 * ln((1.0 + x) / (1.0 - x));
+    return 0.5 * ln((1.0L + x) / (1.0L - x));
 }
 
-double atan2(double y, double x) {
+long double atan2(long double y, long double x) {
     // 处理 NaN 输入
     if (isnan(x) || isnan(y)) {
         return quiet_nan();
@@ -560,8 +560,8 @@ double atan2(double y, double x) {
     // 处理无穷大情况（遵循 IEEE 754 标准）
     const bool x_inf = isinf(x);
     const bool y_inf = isinf(y);
-    const bool x_pos = x > 0.0 || (x == 0.0 && !x_inf);
-    const bool y_pos = y > 0.0 || (y == 0.0 && !y_inf);
+    const bool x_pos = x > 0.0L || (x == 0.0L && !x_inf);
+    const bool y_pos = y > 0.0L || (y == 0.0L && !y_inf);
 
     if (x_inf && y_inf) {
         // atan2(±inf, ±inf) = ±π/4
@@ -578,20 +578,20 @@ double atan2(double y, double x) {
 
     if (x_inf) {
         // atan2(finite, ±inf) = ±0 或 ±π
-        return x_pos ? 0.0 : (y_pos ? kPi : -kPi);
+        return x_pos ? 0.0L : (y_pos ? kPi : -kPi);
     }
 
     // 原有逻辑处理有限值
     if (is_near_zero(x)) {
-        if (is_near_zero(y)) return 0.0;  // 0/0 情况
-        return y > 0.0 ? kPi / 2.0 : -kPi / 2.0;
+        if (is_near_zero(y)) return 0.0L;  // 0/0 情况
+        return y > 0.0L ? kPi / 2.0 : -kPi / 2.0;
     }
-    double res = atan(y / x);
-    if (x < 0.0) res += y >= 0.0 ? kPi : -kPi;
+    long double res = atan(y / x);
+    if (x < 0.0L) res += y >= 0.0L ? kPi : -kPi;
     return res;
 }
 
-double hypot(double x, double y) {
+long double hypot(long double x, long double y) {
     // 处理 NaN 输入
     if (isnan(x)) return x;
     if (isnan(y)) return y;
@@ -601,21 +601,21 @@ double hypot(double x, double y) {
         return infinity();
     }
 
-    const double abs_x = abs(x);
-    const double abs_y = abs(y);
+    const long double abs_x = abs(x);
+    const long double abs_y = abs(y);
 
     // 处理零
-    if (abs_x == 0.0) return abs_y;
-    if (abs_y == 0.0) return abs_x;
+    if (abs_x == 0.0L) return abs_y;
+    if (abs_y == 0.0L) return abs_x;
 
     // 使用稳定的算法：hypot(x, y) = max(|x|, |y|) * sqrt(1 + (min/max)^2)
     // 这样可以避免 x^2 或 y^2 溢出
     if (abs_x > abs_y) {
-        const double ratio = abs_y / abs_x;
-        return abs_x * sqrt(1.0 + ratio * ratio);
+        const long double ratio = abs_y / abs_x;
+        return abs_x * sqrt(1.0L + ratio * ratio);
     } else {
-        const double ratio = abs_x / abs_y;
-        return abs_y * sqrt(1.0 + ratio * ratio);
+        const long double ratio = abs_x / abs_y;
+        return abs_y * sqrt(1.0L + ratio * ratio);
     }
 }
 

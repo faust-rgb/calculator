@@ -17,32 +17,32 @@
 // 数值容差
 // ============================================================================
 
-double root_position_tolerance(double value) {
-    return 1e-10 * std::max(1.0, mymath::abs(value));
+long double root_position_tolerance(long double value) {
+    return 1e-10 * std::max(1.0L, mymath::abs(value));
 }
 
-double root_function_tolerance(double value) {
-    return 1e-10 * std::max(1.0, mymath::abs(value));
+long double root_function_tolerance(long double value) {
+    return 1e-10 * std::max(1.0L, mymath::abs(value));
 }
 
-double root_derivative_step(double value) {
-    return 1e-6 * std::max(1.0, mymath::abs(value));
+long double root_derivative_step(long double value) {
+    return 1e-6 * std::max(1.0L, mymath::abs(value));
 }
 
 // ============================================================================
 // 级数格式化
 // ============================================================================
 
-std::string shifted_series_base(const std::string& variable_name, double center) {
+std::string shifted_series_base(const std::string& variable_name, long double center) {
     if (mymath::is_near_zero(center, 1e-12)) {
         return variable_name;
     }
     return "(" + variable_name + signed_center_text(center) + ")";
 }
 
-std::string generalized_series_to_string(const std::vector<double>& coefficients,
+std::string generalized_series_to_string(const std::vector<long double>& coefficients,
                                          const std::string& variable_name,
-                                         double center,
+                                         long double center,
                                          int denominator) {
     if (denominator <= 0) {
         throw std::runtime_error("series denominator must be positive");
@@ -51,7 +51,7 @@ std::string generalized_series_to_string(const std::vector<double>& coefficients
     const std::string base = shifted_series_base(variable_name, center);
     std::vector<std::string> terms;
     for (std::size_t i = 0; i < coefficients.size(); ++i) {
-        const double coefficient = coefficients[i];
+        const long double coefficient = coefficients[i];
         if (mymath::is_near_zero(coefficient, 1e-12)) {
             continue;
         }
@@ -81,8 +81,8 @@ std::string generalized_series_to_string(const std::vector<double>& coefficients
     return result;
 }
 
-std::string taylor_series_to_string(const std::vector<double>& coefficients,
+std::string taylor_series_to_string(const std::vector<long double>& coefficients,
                                     const std::string& variable_name,
-                                    double center) {
+                                    long double center) {
     return generalized_series_to_string(coefficients, variable_name, center, 1);
 }

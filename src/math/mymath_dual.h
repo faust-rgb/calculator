@@ -16,8 +16,8 @@ namespace mymath {
  * using the chain rule automatically.
  *
  * Example: If f(x) = x^2, then at x=3:
- *   dual<double> x(3, 1);  // value=3, derivative=1 (dx/dx=1)
- *   dual<double> y = x * x;  // y = (9, 6) because d(x^2)/dx = 2x = 6
+ *   dual<long double> x(3, 1);  // value=3, derivative=1 (dx/dx=1)
+ *   dual<long double> y = x * x;  // y = (9, 6) because d(x^2)/dx = 2x = 6
  */
 template <typename T>
 class dual {
@@ -494,7 +494,7 @@ std::ostream& operator<<(std::ostream& os, const dual<T>& d) {
 }
 
 using dual_float = dual<float>;
-using dual_double = dual<double>;
+using dual_double = dual<long double>;
 using dual_long_double = dual<long double>;
 
 }  // namespace mymath

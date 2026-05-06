@@ -27,26 +27,26 @@ T lagrange_interpolate(const std::vector<T>& x,
             const T denominator = x[i] - x[j];
             
             bool is_zero = false;
-            if constexpr (std::is_same_v<T, double>) {
+            if constexpr (std::is_same_v<T, long double>) {
                 is_zero = mymath::is_near_zero(denominator, 1e-12);
             } else {
-                is_zero = internal::t_abs<T>(denominator) <= T(1e-12);
+                is_zero = internal::t_abs<T>(denominator) <= T(1e-12L);
             }
             
             if (is_zero) {
                 throw std::runtime_error("lagrange requires distinct x values");
             }
             
-            if constexpr (std::is_same_v<T, double>) {
-                basis = static_cast<double>(static_cast<long double>(basis) * (static_cast<long double>(xi) - static_cast<long double>(x[j])) /
+            if constexpr (std::is_same_v<T, long double>) {
+                basis = static_cast<long double>(static_cast<long double>(basis) * (static_cast<long double>(xi) - static_cast<long double>(x[j])) /
                          static_cast<long double>(denominator));
             } else {
                 basis *= (xi - x[j]) / denominator;
             }
         }
         
-        if constexpr (std::is_same_v<T, double>) {
-             result = static_cast<double>(static_cast<long double>(result) + static_cast<long double>(y[i]) * static_cast<long double>(basis));
+        if constexpr (std::is_same_v<T, long double>) {
+             result = static_cast<long double>(static_cast<long double>(result) + static_cast<long double>(y[i]) * static_cast<long double>(basis));
         } else {
              result += y[i] * basis;
         }
@@ -77,7 +77,7 @@ T spline_interpolate(const std::vector<T>& x,
 
     std::vector<T> alpha(n, T(static_cast<long long>(0)));
     for (std::size_t i = 1; i + 1 < n; ++i) {
-        if constexpr (std::is_same_v<T, double>) {
+        if constexpr (std::is_same_v<T, long double>) {
             alpha[i] = static_cast<T>(
                 (3.0L / static_cast<long double>(h[i])) *
                     (static_cast<long double>(a[i + 1]) - static_cast<long double>(a[i])) -
@@ -98,7 +98,7 @@ T spline_interpolate(const std::vector<T>& x,
 
     l[0] = T(static_cast<long long>(1));
     for (std::size_t i = 1; i + 1 < n; ++i) {
-        if constexpr (std::is_same_v<T, double>) {
+        if constexpr (std::is_same_v<T, long double>) {
             l[i] = static_cast<T>(
                 2.0L * (static_cast<long double>(x[i + 1]) - static_cast<long double>(x[i - 1])) -
                 static_cast<long double>(h[i - 1]) * static_cast<long double>(mu[i - 1]));
@@ -118,7 +118,7 @@ T spline_interpolate(const std::vector<T>& x,
 
     for (std::size_t j = n - 1; j-- > 0;) {
         c[j] = z[j] - mu[j] * c[j + 1];
-        if constexpr (std::is_same_v<T, double>) {
+        if constexpr (std::is_same_v<T, long double>) {
             b[j] = static_cast<T>(
                 (static_cast<long double>(a[j + 1]) - static_cast<long double>(a[j])) /
                     static_cast<long double>(h[j]) -
@@ -149,10 +149,10 @@ T spline_interpolate(const std::vector<T>& x,
 }
 
 // Explicit template instantiations
-template double lagrange_interpolate<double>(const std::vector<double>&, const std::vector<double>&, double);
+template long double lagrange_interpolate<long double>(const std::vector<long double>&, const std::vector<long double>&, long double);
 template PreciseDecimal lagrange_interpolate<PreciseDecimal>(const std::vector<PreciseDecimal>&, const std::vector<PreciseDecimal>&, PreciseDecimal);
 
-template double spline_interpolate<double>(const std::vector<double>&, const std::vector<double>&, double);
+template long double spline_interpolate<long double>(const std::vector<long double>&, const std::vector<long double>&, long double);
 template PreciseDecimal spline_interpolate<PreciseDecimal>(const std::vector<PreciseDecimal>&, const std::vector<PreciseDecimal>&, PreciseDecimal);
 
 } // namespace internal

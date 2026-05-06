@@ -43,11 +43,11 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
     s.evaluation.evaluate_value = [calculator, impl](const std::string& arg, bool exact) {
         return evaluate_expression_value(calculator, impl, arg, exact);
     };
-    s.evaluation.normalize_result = [](double v) { return Calculator::normalize_result(v); };
+    s.evaluation.normalize_result = [](long double v) { return Calculator::normalize_result(v); };
     
     s.evaluation.build_decimal_evaluator = [calculator, impl, variables = VariableResolver::make_owned(visible_variables(impl))](const std::string& arg) {
         const std::string scoped_expression = trim_copy(expand_inline_function_commands(calculator, arg));
-        return [calculator, impl, scoped_expression, variables](const std::vector<std::pair<std::string, double>>& assignments) {
+        return [calculator, impl, scoped_expression, variables](const std::vector<std::pair<std::string, long double>>& assignments) {
             std::map<std::string, StoredValue> override_vars;
             for (const auto& [name, value] : assignments) {
                 StoredValue stored;
@@ -56,7 +56,7 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
                 override_vars[name] = stored;
             }
             const HasScriptFunctionCallback has_script_function = [calculator, impl](const std::string& name) { return has_visible_script_function(impl, name); };
-            const InvokeScriptFunctionDecimalCallback invoke_script_function = [calculator, impl](const std::string& name, const std::vector<double>& args) { return invoke_script_function_decimal(calculator, impl, name, args); };
+            const InvokeScriptFunctionDecimalCallback invoke_script_function = [calculator, impl](const std::string& name, const std::vector<long double>& args) { return invoke_script_function_decimal(calculator, impl, name, args); };
             VariableResolver chained_resolver(nullptr, nullptr, &override_vars, &variables);
             return parse_decimal_expression(scoped_expression, chained_resolver, &impl->functions, &impl->scalar_functions, has_script_function, invoke_script_function);
         };
@@ -87,7 +87,7 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
             std::map<std::string, StoredValue> scoped_variables = visible_variables(impl).snapshot();
             for (const auto& [name, value] : assignments) scoped_variables[name] = value;
             const HasScriptFunctionCallback has_script_function = [calculator, impl](const std::string& name) { return has_visible_script_function(impl, name); };
-            const InvokeScriptFunctionDecimalCallback invoke_script_function = [calculator, impl](const std::string& name, const std::vector<double>& args) { return invoke_script_function_decimal(calculator, impl, name, args); };
+            const InvokeScriptFunctionDecimalCallback invoke_script_function = [calculator, impl](const std::string& name, const std::vector<long double>& args) { return invoke_script_function_decimal(calculator, impl, name, args); };
             matrix::Value val;
             if (!try_evaluate_matrix_expression(scoped_expression, VariableResolver(&scoped_variables, nullptr), &impl->functions, &impl->scalar_functions, &impl->matrix_functions, &impl->value_functions, has_script_function, invoke_script_function, &val) || !val.is_matrix)
                 throw std::runtime_error("expected a matrix-valued expression");
@@ -121,7 +121,7 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
     };
     s.symbolic.expand_inline = [calculator](const std::string& arg) { return expand_inline_function_commands(calculator, arg); };
     s.symbolic.simplify_symbolic = [](const std::string& text) { return SymbolicExpression::parse(text).simplify().to_string(); };
-    s.symbolic.evaluate_symbolic_at = [calculator, impl](const SymbolicExpression& expr, const std::string& var, double p) {
+    s.symbolic.evaluate_symbolic_at = [calculator, impl](const SymbolicExpression& expr, const std::string& var, long double p) {
         const auto existing = impl->variables.find(var);
         const bool had_existing = existing != impl->variables.end();
         StoredValue backup;
@@ -135,7 +135,7 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
             else impl->variables.erase(var);
         };
         try {
-            const double value = calculator->evaluate(expr.to_string());
+            const long double value = calculator->evaluate(expr.to_string());
             cleanup();
             if (!mymath::isfinite(value)) throw std::runtime_error("Non-finite value");
             return value;
@@ -257,7 +257,7 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
     s.is_matrix_argument = [calculator, impl](const std::string& arg) {
         const VariableResolver visible = visible_variables(impl);
         const HasScriptFunctionCallback has_script_function = [calculator, impl](const std::string& name) { return has_visible_script_function(impl, name); };
-        const InvokeScriptFunctionDecimalCallback invoke_script_function = [calculator, impl](const std::string& name, const std::vector<double>& args) { return invoke_script_function_decimal(calculator, impl, name, args); };
+        const InvokeScriptFunctionDecimalCallback invoke_script_function = [calculator, impl](const std::string& name, const std::vector<long double>& args) { return invoke_script_function_decimal(calculator, impl, name, args); };
         matrix::Value value;
         return try_evaluate_matrix_expression(trim_copy(arg), visible, &impl->functions, &impl->scalar_functions, &impl->matrix_functions, &impl->value_functions, has_script_function, invoke_script_function, &value) && value.is_matrix;
     };
@@ -274,14 +274,14 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
         ctx.has_script_function = [impl](const std::string& name) {
             return has_visible_script_function(impl, name);
         };
-        ctx.invoke_script_function = [calculator, impl](const std::string& name, const std::vector<double>& call_args) {
+        ctx.invoke_script_function = [calculator, impl](const std::string& name, const std::vector<long double>& call_args) {
             return invoke_script_function_decimal(calculator, impl, name, call_args);
         };
         return gnuplot ? plot::handle_gnuplot_command(ctx, args)
                        : plot::handle_plot_command(ctx, args);
     };
-    s.is_integer_double = [](double x, double eps) { return is_integer_double(x, eps); };
-    s.round_to_long_long = [](double x) { return round_to_long_long(x); };
+    s.is_integer_double = [](long double x, long double eps) { return is_integer_double(x, eps); };
+    s.round_to_long_long = [](long double x) { return round_to_long_long(x); };
 
     return s;
 }

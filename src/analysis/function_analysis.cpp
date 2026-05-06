@@ -158,7 +158,7 @@ template <typename T>
 T t_pi() {
     if constexpr (std::is_same_v<T, long double>) {
         return 3.1415926535897932384626433832795029L;
-    } else if constexpr (std::is_same_v<T, double>) {
+    } else if constexpr (std::is_same_v<T, long double>) {
         return mymath::kPi;
     } else {
         return T(3.14159265358979323846);
@@ -238,7 +238,7 @@ T kLimitTolerance_v() {
     if constexpr (std::is_same_v<T, long double>) {
         return 1e-15L;
     } else {
-        return T(1e-10);
+        return T(1e-10L);
     }
 }
 
@@ -248,7 +248,7 @@ T kRootTolerance_v() {
     if constexpr (std::is_same_v<T, long double>) {
         return 1e-12L;
     } else {
-        return T(1e-7);
+        return T(1e-7L);
     }
 }
 
@@ -258,7 +258,7 @@ T kIntegralTolerance_v() {
     if constexpr (std::is_same_v<T, long double>) {
         return 1e-12L;
     } else {
-        return T(1e-8);
+        return T(1e-8L);
     }
 }
 
@@ -315,12 +315,12 @@ T scale_aware_step(T x) {
 
 template <typename T>
 T central_difference_step_value(T scale, T factor) {
-    T base_step = T(1e-7);
+    T base_step = T(1e-7L);
     return std::max(base_step * scale, kDerivativeBaseStep_v<T>() * scale * factor);
 }
 
 template <typename T>
-T numeric_control_value(const char*, double fallback) {
+T numeric_control_value(const char*, long double fallback) {
     return T(fallback);
 }
 
@@ -457,8 +457,8 @@ T gauss_kronrod_15_callable(const std::function<T(T)>& function,
         T(0.4179591836734694),
     };
 
-    const T center = (left + right) * T(0.5);
-    const T half_width = (right - left) * T(0.5);
+    const T center = (left + right) * T(0.5L);
+    const T half_width = (right - left) * T(0.5L);
     T kronrod_sum = T(static_cast<long long>(0));
     T gauss_sum = T(static_cast<long long>(0));
     T kronrod_compensation = T(static_cast<long long>(0));
@@ -508,7 +508,7 @@ T adaptive_gauss_kronrod_callable_recursive(
         return whole;
     }
 
-    const T mid = (left + right) * T(0.5);
+    const T mid = (left + right) * T(0.5L);
     T left_error = T(static_cast<long long>(0));
     T right_error = T(static_cast<long long>(0));
     const T left_area =
@@ -519,7 +519,7 @@ T adaptive_gauss_kronrod_callable_recursive(
         adaptive_gauss_kronrod_callable_recursive(function,
                                                   left,
                                                   mid,
-                                                  eps * T(0.5),
+                                                  eps * T(0.5L),
                                                   left_area,
                                                   left_error,
                                                   depth - 1);
@@ -527,7 +527,7 @@ T adaptive_gauss_kronrod_callable_recursive(
         adaptive_gauss_kronrod_callable_recursive(function,
                                                   mid,
                                                   right,
-                                                  eps * T(0.5),
+                                                  eps * T(0.5L),
                                                   right_area,
                                                   right_error,
                                                   depth - 1);
@@ -611,9 +611,9 @@ bool try_symbolic_one_to_infinity_limit(const SymbolicExpression& base,
     const SymbolicExpression transformed =
         symbolic_expression_internal::make_function(
             "exp",
-            ((base - SymbolicExpression::number(1.0)) * exponent).simplify()).simplify();
+            ((base - SymbolicExpression::number(1.0L)) * exponent).simplify()).simplify();
     const SymbolicExpression product =
-        ((base - SymbolicExpression::number(1.0)) * exponent).simplify();
+        ((base - SymbolicExpression::number(1.0L)) * exponent).simplify();
     T product_limit = T(static_cast<long long>(0));
     if (symbolic_limit_at_infinity(product, variable_name, point > T(static_cast<long long>(0)), &product_limit)) {
         *result = t_exp(product_limit);
@@ -645,7 +645,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                 case NodeType::kPi:
                 case NodeType::kE:
                 case NodeType::kInfinity: {
-                    double value = 0.0;
+                    long double value = 0.0L;
                     if (expression.is_number(&value)) {
                         *finite_value = T(value);
                         return SymbolicLimitProbeKind::kFinite;
@@ -799,7 +799,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                         return SymbolicLimitProbeKind::kFinite;
                     }
 
-                    double exponent_number = 0.0;
+                    long double exponent_number = 0.0L;
                     if (!exponent.is_number(&exponent_number)) {
                         T base_value = T(static_cast<long long>(0));
                         T exponent_value = T(static_cast<long long>(0));
@@ -838,7 +838,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                                    : SymbolicLimitProbeKind::kUnknown;
                     }
                     if (is_infinite_probe(base_kind)) {
-                        if (exponent_number > 0.0) {
+                        if (exponent_number > 0.0L) {
                             if (base_kind == SymbolicLimitProbeKind::kNegativeInfinity &&
                                 t_is_integer(exponent_value) &&
                                 t_llround(exponent_value) % 2 != 0) {
@@ -846,7 +846,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                             }
                             return SymbolicLimitProbeKind::kPositiveInfinity;
                         }
-                        if (exponent_number < 0.0) {
+                        if (exponent_number < 0.0L) {
                             *finite_value = T(static_cast<long long>(0));
                             return SymbolicLimitProbeKind::kFinite;
                         }
@@ -958,9 +958,9 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
             return SymbolicLimitProbeKind::kUnknown;
         }
 
-        double p_val;
+        long double p_val;
         if constexpr (std::is_floating_point_v<T>) {
-            p_val = static_cast<double>(point);
+            p_val = static_cast<long double>(point);
         } else {
             p_val = point.to_double();
         }
@@ -968,7 +968,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
         SymbolicExpression sub_expr = expression.substitute(
             variable_name,
             SymbolicExpression::number(p_val)).simplify();
-        double value = 0.0;
+        long double value = 0.0L;
         if (!sub_expr.is_number(&value)) {
             return SymbolicLimitProbeKind::kUnknown;
         }
@@ -976,7 +976,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
             *finite_value = T(value);
             return SymbolicLimitProbeKind::kFinite;
         }
-        return value > 0.0 ? SymbolicLimitProbeKind::kPositiveInfinity
+        return value > 0.0L ? SymbolicLimitProbeKind::kPositiveInfinity
                            : SymbolicLimitProbeKind::kNegativeInfinity;
     } catch (...) {
         return SymbolicLimitProbeKind::kUnknown;
@@ -1052,10 +1052,10 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
     // 对于有限点，使用 PSA 提取 Laurent 信息
     if (t_isfinite(point)) {
         series_ops::SeriesContext ctx;
-        ctx.evaluate_at = [](const SymbolicExpression& e, const std::string& /*v*/, double /*p*/) {
-            double val = 0.0;
+        ctx.evaluate_at = [](const SymbolicExpression& e, const std::string& /*v*/, long double /*p*/) {
+            long double val = 0.0L;
             if (e.is_number(&val)) return val;
-            return 0.0;
+            return 0.0L;
         };
 
         struct LaurentInfo {
@@ -1066,10 +1066,10 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
 
         auto get_laurent_info = [&](const SymbolicExpression& e) -> LaurentInfo {
             LaurentInfo info;
-            std::vector<double> coeffs;
+            std::vector<long double> coeffs;
             try {
-                double p_val;
-                if constexpr (std::is_floating_point_v<T>) p_val = static_cast<double>(point);
+                long double p_val;
+                if constexpr (std::is_floating_point_v<T>) p_val = static_cast<long double>(point);
                 else p_val = point.to_double();
 
                 if (series_ops::internal::evaluate_psa(e, variable_name, p_val, 4, coeffs, ctx)) {
@@ -1163,24 +1163,24 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
     }
 
     series_ops::SeriesContext ctx;
-    ctx.evaluate_at = [](const SymbolicExpression& e, const std::string& /*v*/, double /*p*/) {
-        double val = 0.0;
+    ctx.evaluate_at = [](const SymbolicExpression& e, const std::string& /*v*/, long double /*p*/) {
+        long double val = 0.0L;
         if (e.is_number(&val)) return val;
-        return 0.0;
+        return 0.0L;
     };
 
     SymbolicExpression t_var = SymbolicExpression::variable("t_limit_inf_tmp");
     SymbolicExpression inv_t;
     if (positive) {
-        inv_t = SymbolicExpression::number(1.0) / t_var;
+        inv_t = SymbolicExpression::number(1.0L) / t_var;
     } else {
-        inv_t = SymbolicExpression::number(-1.0) / t_var;
+        inv_t = SymbolicExpression::number(-1.0L) / t_var;
     }
     SymbolicExpression substituted = expression.substitute(variable_name, inv_t).simplify();
 
-    std::vector<double> coeffs;
+    std::vector<long double> coeffs;
     try {
-        if (series_ops::internal::evaluate_psa(substituted, "t_limit_inf_tmp", 0.0, 2, coeffs, ctx)) {
+        if (series_ops::internal::evaluate_psa(substituted, "t_limit_inf_tmp", 0.0L, 2, coeffs, ctx)) {
             if (!coeffs.empty() && mymath::isfinite(coeffs[0])) {
                 *result = T(coeffs[0]);
                 return true;
@@ -1198,8 +1198,8 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
         }
 
         try {
-            double large_x = positive ? 1e12 : -1e12;
-            double val = ctx.evaluate_at(expression, variable_name, large_x);
+            long double large_x = positive ? 1e12 : -1e12;
+            long double val = ctx.evaluate_at(expression, variable_name, large_x);
             if (mymath::isfinite(val) && mymath::abs(val) < 1e10) {
                 return false;
             }
@@ -1302,7 +1302,7 @@ T TFunctionAnalysis<T>::derivative(T x) const {
     const T curvature_scale =
         std::max(T(static_cast<long long>(1)),
                  t_abs(curvature_probe) /
-                     std::max(T(1e-12), t_abs(center)));
+                     std::max(T(1e-12L), t_abs(center)));
 
     T base_step = central_difference_step_value(
         scale,
@@ -1317,7 +1317,7 @@ T TFunctionAnalysis<T>::derivative(T x) const {
         const T step = base_step / t_pow(T(static_cast<long long>(2)), T(static_cast<long long>(row)));
         const T forward_x = x + step;
         const T backward_x = x - step;
-        const T actual_step = (forward_x - backward_x) * T(0.5);
+        const T actual_step = (forward_x - backward_x) * T(0.5L);
         if (actual_step <= T(static_cast<long long>(0))) {
             continue;
         }
@@ -1353,7 +1353,7 @@ T TFunctionAnalysis<T>::derivative(T x) const {
                 best_error = error_estimate;
                 best_value = candidate;
 
-                T tol = std::max(T(1e-12), t_abs(best_value) * T(1e-14));
+                T tol = std::max(T(1e-12L), t_abs(best_value) * T(1e-14));
 
                 if (error_estimate < tol) break;
             }
@@ -1402,11 +1402,11 @@ T TFunctionAnalysis<T>::limit(T x, int direction) const {
     }
 
     series_ops::SeriesContext ctx;
-    ctx.evaluate_at = [this](const SymbolicExpression& e, const std::string& v, double p) {
+    ctx.evaluate_at = [this](const SymbolicExpression& e, const std::string& v, long double p) {
         if (v == variable_name_) return p;
-        double val = 0.0;
+        long double val = 0.0L;
         if (e.is_number(&val)) return val;
-        return 0.0;
+        return 0.0L;
     };
 
     if (t_is_effective_infinity_point(x)) {
@@ -1416,10 +1416,10 @@ T TFunctionAnalysis<T>::limit(T x, int direction) const {
             return inf_result;
         }
     } else if (t_isfinite(x)) {
-        std::vector<double> coeffs;
+        std::vector<long double> coeffs;
         try {
-            double p_val;
-            if constexpr (std::is_floating_point_v<T>) p_val = static_cast<double>(x);
+            long double p_val;
+            if constexpr (std::is_floating_point_v<T>) p_val = static_cast<long double>(x);
             else p_val = x.to_double();
 
             if (series_ops::internal::evaluate_psa(expr, variable_name_, p_val, 2, coeffs, ctx)) {
@@ -1477,7 +1477,7 @@ T TFunctionAnalysis<T>::compute_numerical_limit(T x, int direction) const {
             try {
                 val = evaluate_with_variable(sample_x);
             } catch (...) {
-                adaptive_h *= T(0.5);
+                adaptive_h *= T(0.5L);
                 consecutive_bad++;
                 if (consecutive_bad >= kMaxBadSamples) {
                     throw std::runtime_error("limit did not converge (sampling failures)");
@@ -1493,7 +1493,7 @@ T TFunctionAnalysis<T>::compute_numerical_limit(T x, int direction) const {
                         return -t_infinity<T>();
                     }
                 }
-                adaptive_h *= T(0.5);
+                adaptive_h *= T(0.5L);
                 consecutive_bad++;
                 if (consecutive_bad >= kMaxBadSamples) {
                     throw std::runtime_error("limit appears to be infinite (numerical evidence)");
@@ -1527,7 +1527,7 @@ T TFunctionAnalysis<T>::compute_numerical_limit(T x, int direction) const {
                     numeric_control_value<T>("1e-10", 1e-10);
                 const T actual_change = t_abs(val - best_value);
                 if (actual_change > expected_change * T(1e6)) {
-                    adaptive_h *= T(0.5);
+                    adaptive_h *= T(0.5L);
                     consecutive_bad++;
                     if (consecutive_bad >= kMaxBadSamples) {
                         break;
@@ -1616,7 +1616,7 @@ T TFunctionAnalysis<T>::compute_numerical_limit(T x, int direction) const {
     if (left_ok && right_ok) {
         if (t_abs(left - right) <= kLimitTolerance_v<T>() * T(static_cast<long long>(100)) ||
             (!t_isfinite(left) && !t_isfinite(right) && ((left > T(static_cast<long long>(0))) == (right > T(static_cast<long long>(0)))))) {
-            return (left + right) * T(0.5);
+            return (left + right) * T(0.5L);
         }
         throw std::runtime_error("two-sided limit does not exist (left=" +
                                  format_t(left) + ", right=" + format_t(right) + ")");
@@ -1632,7 +1632,7 @@ T TFunctionAnalysis<T>::compute_numerical_limit(T x, int direction) const {
 template <typename T>
 T TFunctionAnalysis<T>::definite_integral(T lower_bound,
                                            T upper_bound) const {
-    if (t_is_near_zero(lower_bound - upper_bound, T(1e-15))) {
+    if (t_is_near_zero(lower_bound - upper_bound, T(1e-15L))) {
         return T(static_cast<long long>(0));
     }
     if (lower_bound > upper_bound) {
@@ -1646,7 +1646,7 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
                 throw std::runtime_error("invalid infinite integration bounds");
             }
             auto transformed = [this](T t) {
-                const T angle = t_pi<T>() * (t - T(0.5));
+                const T angle = t_pi<T>() * (t - T(0.5L));
                 const T cos_angle = t_cos(angle);
                 const T x = t_tan(angle);
                 return evaluate_with_variable(x) * t_pi<T>() / (cos_angle * cos_angle);
@@ -1737,7 +1737,7 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
     for (int i = 1; i <= 40; ++i) {
         const T x =
             lower_bound + (upper_bound - lower_bound) *
-                              (T(static_cast<double>(i)) / T(40.0));
+                              (T(static_cast<long double>(i)) / T(40.0L));
         T value = evaluate_with_variable(x);
         if (!t_isfinite(value)) {
             throw std::runtime_error("integral did not converge");
@@ -1746,7 +1746,7 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
             T prev_abs = t_abs(prev_scan_val);
             T curr_abs = t_abs(value);
             if ((prev_scan_val > T(static_cast<long long>(0))) != (value > T(static_cast<long long>(0))) &&
-                (prev_abs > T(100.0) || curr_abs > T(100.0))) {
+                (prev_abs > T(100.0L) || curr_abs > T(100.0L))) {
                 throw std::runtime_error("potential internal discontinuity detected");
             }
         }
@@ -1758,7 +1758,7 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
     T prev_x = lower_bound;
     prev_scan_val = evaluate_with_variable(lower_bound);
     for (int i = 1; i <= coarse_scan_points; ++i) {
-        const T x = lower_bound + (upper_bound - lower_bound) * T(static_cast<double>(i)) / T(static_cast<double>(coarse_scan_points));
+        const T x = lower_bound + (upper_bound - lower_bound) * T(static_cast<long double>(i)) / T(static_cast<long double>(coarse_scan_points));
         T val;
         try {
             val = evaluate_with_variable(x);
@@ -1776,7 +1776,7 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
         } else if (t_isfinite(prev_scan_val)) {
             T jump = t_abs(val - prev_scan_val);
             T avg = (t_abs(val) + t_abs(prev_scan_val)) / T(2.0);
-            if (avg > T(1e-10) && jump > T(10.0) * avg) {
+            if (avg > T(1e-10L) && jump > T(10.0L) * avg) {
                 suspicious_points.push_back({prev_x, x});
             }
         }
@@ -1786,16 +1786,16 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
 
     for (const auto& susp : suspicious_points) {
         T l = susp.first, r = susp.second;
-        for (int iter = 0; iter < 30 && (r - l) > T(1e-12); ++iter) {
-            T mid = (l + r) * T(0.5);
+        for (int iter = 0; iter < 30 && (r - l) > T(1e-12L); ++iter) {
+            T mid = (l + r) * T(0.5L);
             T mid_val;
             try {
                 mid_val = evaluate_with_variable(mid);
                 if (!t_isfinite(mid_val) || t_abs(mid_val) > T(1e10)) {
                     r = mid;
                 } else {
-                    T left_mid = (l + mid) * T(0.5);
-                    T right_mid = (mid + r) * T(0.5);
+                    T left_mid = (l + mid) * T(0.5L);
+                    T right_mid = (mid + r) * T(0.5L);
                     T left_val = evaluate_with_variable(left_mid);
                     T right_val = evaluate_with_variable(right_mid);
                     if (!t_isfinite(left_val) || t_abs(left_val) > T(1e10)) {
@@ -1812,7 +1812,7 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
         }
         if ((r - l) < T(1e-6)) {
             throw std::runtime_error("potential internal discontinuity detected near x = " +
-                                     format_t((l + r) * T(0.5)));
+                                     format_t((l + r) * T(0.5L)));
         }
     }
 
@@ -1848,8 +1848,8 @@ std::vector<TExtremumPoint<T>> TFunctionAnalysis<T>::solve_extrema(T left_bound,
     for (int i = 1; i <= scan_segments; ++i) {
         const T current_x =
             left_bound +
-            (right_bound - left_bound) * T(static_cast<double>(i)) /
-                T(static_cast<double>(scan_segments));
+            (right_bound - left_bound) * T(static_cast<long double>(i)) /
+                T(static_cast<long double>(scan_segments));
         const T current_derivative = derivative(current_x);
 
         if (t_is_near_zero(previous_derivative, T(1e-5))) {
@@ -1951,7 +1951,7 @@ T TFunctionAnalysis<T>::second_derivative(T x) const {
     const T center = evaluate_with_variable(x);
     const T left_x = x - step;
     const T right_x = x + step;
-    const T actual_step = (right_x - left_x) * T(0.5);
+    const T actual_step = (right_x - left_x) * T(0.5L);
     const T left = evaluate_with_variable(left_x);
     const T right = evaluate_with_variable(right_x);
     const T numerator = compensated_pair_sum(left - center, right - center);
@@ -1963,7 +1963,7 @@ T TFunctionAnalysis<T>::bisect_stationary_point(T left, T right) const {
     T left_derivative = derivative(left);
 
     for (int i = 0; i < 80; ++i) {
-        const T mid = (left + right) * T(0.5);
+        const T mid = (left + right) * T(0.5L);
         const T mid_derivative = derivative(mid);
         if (t_abs(mid_derivative) <= kRootTolerance_v<T>() ||
             t_abs(right - left) <=
@@ -1981,7 +1981,7 @@ T TFunctionAnalysis<T>::bisect_stationary_point(T left, T right) const {
         }
     }
 
-    return (left + right) * T(0.5);
+    return (left + right) * T(0.5L);
 }
 
 // 自适应 Simpson 积分辅助函数
@@ -2060,7 +2060,7 @@ T TFunctionAnalysis<T>::adaptive_gauss_kronrod_recursive(T left,
         return whole;
     }
 
-    const T mid = (left + right) * T(0.5);
+    const T mid = (left + right) * T(0.5L);
     T left_error = T(static_cast<long long>(0));
     T right_error = T(static_cast<long long>(0));
     const T left_area = gauss_kronrod_15(left, mid, &left_error);
@@ -2068,14 +2068,14 @@ T TFunctionAnalysis<T>::adaptive_gauss_kronrod_recursive(T left,
     const T left_result =
         adaptive_gauss_kronrod_recursive(left,
                                          mid,
-                                         eps * T(0.5),
+                                         eps * T(0.5L),
                                          left_area,
                                          left_error,
                                          depth - 1);
     const T right_result =
         adaptive_gauss_kronrod_recursive(mid,
                                          right,
-                                         eps * T(0.5),
+                                         eps * T(0.5L),
                                          right_area,
                                          right_error,
                                          depth - 1);
@@ -2117,8 +2117,8 @@ T TFunctionAnalysis<T>::gauss_kronrod_15(T left,
         T(0.4179591836734694),
     };
 
-    const T center = (left + right) * T(0.5);
-    const T half_width = (right - left) * T(0.5);
+    const T center = (left + right) * T(0.5L);
+    const T half_width = (right - left) * T(0.5L);
     T kronrod_sum = T(static_cast<long long>(0));
     T gauss_sum = T(static_cast<long long>(0));
     T kronrod_compensation = T(static_cast<long long>(0));
@@ -2155,5 +2155,4 @@ T TFunctionAnalysis<T>::gauss_kronrod_15(T left,
 }
 
 // 显式模板实例化
-template class TFunctionAnalysis<double>;
 template class TFunctionAnalysis<long double>;

@@ -121,10 +121,10 @@ private:
         LimitResult* result);
 
     // 直接代入
-    std::optional<double> try_direct_substitution(
+    std::optional<long double> try_direct_substitution(
         const SymbolicExpression& expr,
         const std::string& var,
-        double point);
+        long double point);
 
     // 处理无穷远点极限
     LimitResult limit_at_infinity(

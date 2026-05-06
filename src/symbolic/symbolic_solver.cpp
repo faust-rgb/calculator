@@ -87,9 +87,9 @@ Solution SymbolicSolver::solve_system(
             SymbolicExpression a, b;
             // 简化版本：假设是线性方程
             // 实际需要更复杂的系数提取
-            matrix[i][j] = SymbolicExpression::number(0.0);
+            matrix[i][j] = SymbolicExpression::number(0.0L);
         }
-        rhs[i] = SymbolicExpression::number(0.0);
+        rhs[i] = SymbolicExpression::number(0.0L);
     }
 
     return solve_linear_system(matrix, rhs, variables);
@@ -223,7 +223,7 @@ Solution SymbolicSolver::solve_quadratic(
     c = c.simplify();
 
     // 检查 a 是否为零
-    double a_val = 0.0;
+    long double a_val = 0.0L;
     if (a.is_number(&a_val) && mymath::is_near_zero(a_val, 1e-15)) {
         // 退化为线性方程
         if (b.is_number(nullptr)) {
@@ -238,7 +238,7 @@ Solution SymbolicSolver::solve_quadratic(
     ).simplify();
 
     // 检查判别式是否为数值
-    double disc_val = 0.0;
+    long double disc_val = 0.0L;
     if (discriminant.is_number(&disc_val)) {
         if (mymath::is_near_zero(disc_val, 1e-15)) {
             // 重根: x = -b/(2a)
@@ -266,7 +266,7 @@ Solution SymbolicSolver::solve_quadratic(
 
         // 复根
         SymbolicExpression abs_disc = make_function("sqrt",
-            make_multiply(SymbolicExpression::number(-1.0), discriminant));
+            make_multiply(SymbolicExpression::number(-1.0L), discriminant));
         SymbolicExpression two_a = make_multiply(SymbolicExpression::number(2.0), a);
 
         SymbolicExpression real_part = make_negate(make_divide(b, two_a)).simplify();
@@ -319,18 +319,18 @@ Solution SymbolicSolver::solve_cubic(
     d = d.simplify();
 
     // 检查是否为数值系数
-    double a_val = 0.0, b_val = 0.0, c_val = 0.0, d_val = 0.0;
+    long double a_val = 0.0L, b_val = 0.0L, c_val = 0.0L, d_val = 0.0L;
     bool all_numeric = a.is_number(&a_val) && b.is_number(&b_val) &&
                        c.is_number(&c_val) && d.is_number(&d_val);
 
     if (all_numeric && !mymath::is_near_zero(a_val, 1e-15)) {
         // 规范化为 x^3 + px + q = 0
-        double p = (3.0 * a_val * c_val - b_val * b_val) / (3.0 * a_val * a_val);
-        double q = (2.0 * b_val * b_val * b_val - 9.0 * a_val * b_val * c_val + 27.0 * a_val * a_val * d_val) /
+        long double p = (3.0 * a_val * c_val - b_val * b_val) / (3.0 * a_val * a_val);
+        long double q = (2.0 * b_val * b_val * b_val - 9.0 * a_val * b_val * c_val + 27.0 * a_val * a_val * d_val) /
                    (27.0 * a_val * a_val * a_val);
 
         // 判别式
-        double delta = (q * q / 4.0) + (p * p * p / 27.0);
+        long double delta = (q * q / 4.0) + (p * p * p / 27.0);
 
         std::vector<SymbolicExpression> roots;
 
@@ -338,27 +338,27 @@ Solution SymbolicSolver::solve_cubic(
             // 重根情况
             if (mymath::is_near_zero(p, 1e-15) && mymath::is_near_zero(q, 1e-15)) {
                 // 三重根 x = -b/(3a)
-                double x = -b_val / (3.0 * a_val);
+                long double x = -b_val / (3.0 * a_val);
                 roots.push_back(SymbolicExpression::number(x));
             } else {
                 // 一个单根，一个二重根
-                double x1 = 3.0 * q / p - b_val / (3.0 * a_val);
-                double x2 = -3.0 * q / (2.0 * p) - b_val / (3.0 * a_val);
+                long double x1 = 3.0 * q / p - b_val / (3.0 * a_val);
+                long double x2 = -3.0 * q / (2.0 * p) - b_val / (3.0 * a_val);
                 roots.push_back(SymbolicExpression::number(x1));
                 roots.push_back(SymbolicExpression::number(x2));
             }
         } else if (delta > 0) {
             // 一个实根，两个复根
-            double sqrt_delta = mymath::sqrt(delta);
-            double u = mymath::cbrt(-q / 2.0 + sqrt_delta);
-            double v = mymath::cbrt(-q / 2.0 - sqrt_delta);
+            long double sqrt_delta = mymath::sqrt(delta);
+            long double u = mymath::cbrt(-q / 2.0 + sqrt_delta);
+            long double v = mymath::cbrt(-q / 2.0 - sqrt_delta);
 
-            double x1 = u + v - b_val / (3.0 * a_val);
+            long double x1 = u + v - b_val / (3.0 * a_val);
             roots.push_back(SymbolicExpression::number(x1));
 
             // 复根
-            double real_part = -(u + v) / 2.0 - b_val / (3.0 * a_val);
-            double imag_part = mymath::sqrt(3.0) * (u - v) / 2.0;
+            long double real_part = -(u + v) / 2.0 - b_val / (3.0 * a_val);
+            long double imag_part = mymath::sqrt(3.0) * (u - v) / 2.0;
 
             roots.push_back(make_function("complex",
                 SymbolicExpression::vector({SymbolicExpression::number(real_part),
@@ -368,11 +368,11 @@ Solution SymbolicSolver::solve_cubic(
                                            SymbolicExpression::number(-imag_part)})));
         } else {
             // 三个实根 (使用三角形式)
-            double r = mymath::sqrt(-p * p * p / 27.0);
-            double theta = mymath::acos(-q / (2.0 * r));
+            long double r = mymath::sqrt(-p * p * p / 27.0);
+            long double theta = mymath::acos(-q / (2.0 * r));
 
             for (int k = 0; k < 3; ++k) {
-                double xk = 2.0 * mymath::cbrt(r) * mymath::cos((theta + 2.0 * mymath::kPi * k) / 3.0) -
+                long double xk = 2.0 * mymath::cbrt(r) * mymath::cos((theta + 2.0 * mymath::kPi * k) / 3.0) -
                            b_val / (3.0 * a_val);
                 roots.push_back(SymbolicExpression::number(xk));
             }
@@ -395,9 +395,9 @@ Solution SymbolicSolver::solve_quartic(
     // Ferrari 方法的实现较为复杂，这里使用数值回退
 
     // 检查是否为数值系数
-    std::vector<double> num_coeffs;
+    std::vector<long double> num_coeffs;
     for (const auto& c : coeffs) {
-        double val = 0.0;
+        long double val = 0.0L;
         if (c.is_number(&val)) {
             num_coeffs.push_back(val);
         } else {
@@ -422,11 +422,11 @@ Solution SymbolicSolver::solve_linear_system(
     size_t n = variables.size();
 
     // 检查是否为数值矩阵
-    std::vector<std::vector<double>> num_matrix(n, std::vector<double>(n));
-    std::vector<double> num_rhs(n);
+    std::vector<std::vector<long double>> num_matrix(n, std::vector<long double>(n));
+    std::vector<long double> num_rhs(n);
 
     for (size_t i = 0; i < n; ++i) {
-        double val = 0.0;
+        long double val = 0.0L;
         if (!rhs[i].is_number(&val)) {
             return Solution::no_solution("symbolic rhs not supported");
         }
@@ -461,7 +461,7 @@ Solution SymbolicSolver::solve_linear_system(
 
         // 消元
         for (size_t k = i + 1; k < n; ++k) {
-            double factor = num_matrix[k][i] / num_matrix[i][i];
+            long double factor = num_matrix[k][i] / num_matrix[i][i];
             for (size_t j = i; j < n; ++j) {
                 num_matrix[k][j] -= factor * num_matrix[i][j];
             }
@@ -470,7 +470,7 @@ Solution SymbolicSolver::solve_linear_system(
     }
 
     // 回代
-    std::vector<double> solution(n);
+    std::vector<long double> solution(n);
     for (int i = static_cast<int>(n) - 1; i >= 0; --i) {
         solution[i] = num_rhs[i];
         for (size_t j = i + 1; j < n; ++j) {
@@ -521,12 +521,12 @@ bool SymbolicSolver::extract_polynomial_coefficients(
     // 假设表达式已经是多项式形式
 
     // 回退：使用数值方法估计系数
-    double test_values[] = {0.0, 1.0, 2.0, 3.0, 4.0};
-    std::vector<double> values;
-    for (double t : test_values) {
+    long double test_values[] = {0.0L, 1.0L, 2.0, 3.0, 4.0};
+    std::vector<long double> values;
+    for (long double t : test_values) {
         SymbolicExpression sub = expr.substitute(variable, SymbolicExpression::number(t));
         sub = sub.simplify();
-        double val = 0.0;
+        long double val = 0.0L;
         if (sub.is_number(&val)) {
             values.push_back(val);
         } else {
@@ -537,17 +537,17 @@ bool SymbolicSolver::extract_polynomial_coefficients(
     // 从值反推系数（简化版本，仅适用于低次）
     if (values.size() >= 3) {
         // 假设是二次多项式
-        double f0 = values[0];
-        double f1 = values[1];
-        double f2 = values[2];
+        long double f0 = values[0];
+        long double f1 = values[1];
+        long double f2 = values[2];
 
         // f(0) = c
         // f(1) = a + b + c
         // f(2) = 4a + 2b + c
 
-        double c = f0;
-        double a = (f2 - 2.0 * f1 + f0) / 2.0;
-        double b = f1 - f0 - a;
+        long double c = f0;
+        long double a = (f2 - 2.0 * f1 + f0) / 2.0;
+        long double b = f1 - f0 - a;
 
         coeffs->push_back(SymbolicExpression::number(c));
         coeffs->push_back(SymbolicExpression::number(b));
@@ -594,8 +594,8 @@ bool SymbolicSolver::extract_linear_coefficients(
     std::vector<SymbolicExpression> terms;
     collect_additive_expressions(expr, &terms);
 
-    *a = SymbolicExpression::number(0.0);
-    *b = SymbolicExpression::number(0.0);
+    *a = SymbolicExpression::number(0.0L);
+    *b = SymbolicExpression::number(0.0L);
 
     for (const auto& term : terms) {
         // 检查项是否包含 var
@@ -607,7 +607,7 @@ bool SymbolicSolver::extract_linear_coefficients(
             // 包含 var 的项
             // 尝试提取系数
             if (term.node_->type == NodeType::kVariable && term.node_->text == var) {
-                *a = make_add(*a, SymbolicExpression::number(1.0)).simplify();
+                *a = make_add(*a, SymbolicExpression::number(1.0L)).simplify();
             } else if (term.node_->type == NodeType::kMultiply) {
                 // k * var 形式
                 SymbolicExpression left(term.node_->left);
@@ -643,7 +643,7 @@ bool parse_equation(const std::string& equation_str,
     if (eq_pos == std::string::npos) {
         // 没有等号，假设 = 0
         *lhs = SymbolicExpression::parse(equation_str);
-        *rhs = SymbolicExpression::number(0.0);
+        *rhs = SymbolicExpression::number(0.0L);
         return true;
     }
 

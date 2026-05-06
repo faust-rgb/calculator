@@ -46,7 +46,7 @@ TowerDecomposition decompose_by_tower_level(
     const DifferentialField& field) {
 
     TowerDecomposition result;
-    result.remainder = SymbolicExpression::number(1.0);
+    result.remainder = SymbolicExpression::number(1.0L);
 
     // Collect all factors in a multiplication
     std::vector<SymbolicExpression> factors;
@@ -176,7 +176,7 @@ bool decompose_laurent_monomial(const SymbolicExpression& expression,
                                 int* exponent) {
     if (expression.node_->type == NodeType::kVariable &&
         expression.node_->text == variable_name) {
-        *coefficient = SymbolicExpression::number(1.0);
+        *coefficient = SymbolicExpression::number(1.0L);
         *exponent = 1;
         return true;
     }
@@ -204,12 +204,12 @@ bool decompose_laurent_monomial(const SymbolicExpression& expression,
     if (expression.node_->type == NodeType::kPower) {
         SymbolicExpression base(expression.node_->left);
         SymbolicExpression power(expression.node_->right);
-        double power_value = 0.0;
+        long double power_value = 0.0L;
         if (structural_equals(base, SymbolicExpression::variable(variable_name)) &&
             power.is_number(&power_value)) {
             const int integer_power = static_cast<int>(mymath::round(power_value));
             if (mymath::abs(power_value - integer_power) < 1e-9) {
-                *coefficient = SymbolicExpression::number(1.0);
+                *coefficient = SymbolicExpression::number(1.0L);
                 *exponent = integer_power;
                 return true;
             }
@@ -264,7 +264,7 @@ bool try_integrate_laurent_monomial(const SymbolicExpression& expression,
     if (exponent == -1) {
         *result = (coefficient * make_function("ln", make_function("abs", x))).simplify();
     } else {
-        SymbolicExpression new_power = SymbolicExpression::number(static_cast<double>(exponent + 1));
+        SymbolicExpression new_power = SymbolicExpression::number(static_cast<long double>(exponent + 1));
         *result = (coefficient * make_power(x, new_power) / new_power).simplify();
     }
     return true;
@@ -283,7 +283,7 @@ bool polynomial_coefficients_for_var(const SymbolicExpression& expression,
         coefficients->pop_back();
     }
     if (coefficients->empty()) {
-        coefficients->push_back(SymbolicExpression::number(0.0));
+        coefficients->push_back(SymbolicExpression::number(0.0L));
     }
     return true;
 }
@@ -306,7 +306,7 @@ bool try_integrate_strict_algebraic_quadratic(
     SymbolicExpression* result) {
     const SymbolicExpression x = SymbolicExpression::variable(variable_name);
     const SymbolicExpression one_minus_x2 =
-        make_subtract(SymbolicExpression::number(1.0),
+        make_subtract(SymbolicExpression::number(1.0L),
                       make_power(x, SymbolicExpression::number(2.0))).simplify();
     const SymbolicExpression sqrt_one_minus_x2 =
         make_function("sqrt", one_minus_x2);
@@ -483,7 +483,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_extension(
             den_expr = SymbolicExpression(expression.node_->right);
         } else {
             num_expr = expression;
-            den_expr = SymbolicExpression::number(1.0);
+            den_expr = SymbolicExpression::number(1.0L);
         }
 
         std::vector<SymbolicExpression> num_coeffs, den_coeffs;
@@ -542,7 +542,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_extension(
             for (int i = 0; i <= tower_index; ++i) {
                 if (tower[i].kind == DifferentialExtension::Kind::kAlgebraic &&
                     structural_equals(tower[i].argument, base)) {
-                    double exp_val = 0.0;
+                    long double exp_val = 0.0L;
                     if (exp.is_number(&exp_val)) {
                         return make_power(SymbolicExpression::variable(tower[i].t_name),
                                          SymbolicExpression::number(exp_val * 2.0)).simplify();
@@ -581,7 +581,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_extension(
         bool has_single_log_factor = false;
 
         if (structural_equals(tower_simplified, t)) {
-            coefficient = SymbolicExpression::number(1.0);
+            coefficient = SymbolicExpression::number(1.0L);
             has_single_log_factor = true;
         } else if (tower_simplified.node_->type == NodeType::kMultiply) {
             SymbolicExpression left(tower_simplified.node_->left);
@@ -598,7 +598,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_extension(
             SymbolicExpression denominator(tower_simplified.node_->right);
             if (structural_equals(numerator, t) &&
                 !contains_tower_var(denominator, tower, tower_index)) {
-                coefficient = (SymbolicExpression::number(1.0) / denominator).simplify();
+                coefficient = (SymbolicExpression::number(1.0L) / denominator).simplify();
                 has_single_log_factor = true;
             }
         }
@@ -646,7 +646,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_extension(
         den_expr = SymbolicExpression(tower_simplified.node_->right);
     } else {
         num_expr = tower_simplified;
-        den_expr = SymbolicExpression::number(1.0);
+        den_expr = SymbolicExpression::number(1.0L);
     }
 
     std::vector<SymbolicExpression> num_coeffs, den_coeffs;
@@ -825,13 +825,13 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_extension(
             if (symbolic_polynomial_coefficients_from_simplified(tower_simplified.simplify(), ext.t_name, &num_coeffs)) {
                 // 构造分母 (1 + t²) 或 (1 - t²)
                 std::vector<SymbolicExpression> trig_den_coeffs;
-                trig_den_coeffs.push_back(SymbolicExpression::number(1.0));  // 常数项
-                trig_den_coeffs.push_back(SymbolicExpression::number(0.0));  // t 项
-                trig_den_coeffs.push_back(SymbolicExpression::number(1.0));  // t² 项
+                trig_den_coeffs.push_back(SymbolicExpression::number(1.0L));  // 常数项
+                trig_den_coeffs.push_back(SymbolicExpression::number(0.0L));  // t 项
+                trig_den_coeffs.push_back(SymbolicExpression::number(1.0L));  // t² 项
 
                 if (ext.original_function_name == "tanh") {
                     // tanh: 分母是 1 - t²
-                    trig_den_coeffs[2] = SymbolicExpression::number(-1.0);
+                    trig_den_coeffs[2] = SymbolicExpression::number(-1.0L);
                 }
 
                 SymbolicPolynomial trig_den(trig_den_coeffs, ext.t_name);
@@ -940,7 +940,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_field_strict(
             den_expr = SymbolicExpression(simplified.node_->right);
         } else {
             num_expr = simplified;
-            den_expr = SymbolicExpression::number(1.0);
+            den_expr = SymbolicExpression::number(1.0L);
         }
 
         std::vector<SymbolicExpression> num_coeffs, den_coeffs;
@@ -1019,7 +1019,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_field_strict(
             den_expr = SymbolicExpression(tower_expr.node_->right);
         } else {
             num_expr = tower_expr;
-            den_expr = SymbolicExpression::number(1.0);
+            den_expr = SymbolicExpression::number(1.0L);
         }
 
         std::vector<SymbolicExpression> num_coeffs, den_coeffs;
@@ -1076,7 +1076,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_field_strict(
                 // 分离为有理部分 + 对数部分候选
 
                 // 使用严格 RDE 求解器
-                SymbolicExpression f = SymbolicExpression::number(0.0);  // 简化
+                SymbolicExpression f = SymbolicExpression::number(0.0L);  // 简化
                 SymbolicExpression g = num_poly.to_expression() / den_poly.to_expression();
 
                 RDEResult rde_result = solve_rde_strict(f, g.simplify(), field.base_variable, field, recursion_depth + 1);
@@ -1148,7 +1148,7 @@ IntegralType RischAlgorithm::determine_integral_type(
             if (inner.node_->type == NodeType::kPower) {
                 SymbolicExpression base(inner.node_->left);
                 SymbolicExpression exp(inner.node_->right);
-                double exp_val = 0.0;
+                long double exp_val = 0.0L;
                 if (exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < 1e-9 &&
                     structural_equals(base, SymbolicExpression::variable(field.base_variable))) {
                     // exp(-x^2) 形式，非初等
@@ -1162,8 +1162,8 @@ IntegralType RischAlgorithm::determine_integral_type(
     if (simplified.node_->type == NodeType::kDivide) {
         SymbolicExpression num(simplified.node_->left);
         SymbolicExpression den(simplified.node_->right);
-        double num_val = 0.0;
-        if (num.is_number(&num_val) && mymath::abs(num_val - 1.0) < 1e-9) {
+        long double num_val = 0.0L;
+        if (num.is_number(&num_val) && mymath::abs(num_val - 1.0L) < 1e-9) {
             if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
                 // 1/ln(u) 形式，非初等
                 return IntegralType::kNonElementary;
@@ -1260,8 +1260,8 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_mixed_extensions(
     TowerDecomposition decomp = decompose_by_tower_level(expression, field);
     if (decomp.factors.size() >= 2) {
         // 尝试识别 exp 和 ln 的组合
-        SymbolicExpression exp_factor = SymbolicExpression::number(1.0);
-        SymbolicExpression ln_factor = SymbolicExpression::number(1.0);
+        SymbolicExpression exp_factor = SymbolicExpression::number(1.0L);
+        SymbolicExpression ln_factor = SymbolicExpression::number(1.0L);
         SymbolicExpression other_factors = decomp.remainder;
 
         for (const auto& [factor, level] : decomp.factors) {
@@ -1279,8 +1279,8 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_mixed_extensions(
         }
 
         // 如果有 exp 和 ln 的组合，尝试特殊处理
-        if (!structural_equals(exp_factor, SymbolicExpression::number(1.0)) &&
-            !structural_equals(ln_factor, SymbolicExpression::number(1.0))) {
+        if (!structural_equals(exp_factor, SymbolicExpression::number(1.0L)) &&
+            !structural_equals(ln_factor, SymbolicExpression::number(1.0L))) {
             // exp(u) * ln(v) 形式
             // 尝试: 设 y = exp(u) * z，则 y' = exp(u) * (u' * z + z')
             // 积分 exp(u) * ln(v) = exp(u) * (ln(v) - v'/v * ∫exp(u) dx)
@@ -1329,7 +1329,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_mixed_extensions(
 
     // 将表达式视为 t_var 的有理函数，系数在其他扩展中
     SymbolicExpression num_expr = expression;
-    SymbolicExpression den_expr = SymbolicExpression::number(1.0);
+    SymbolicExpression den_expr = SymbolicExpression::number(1.0L);
     if (expression.node_->type == NodeType::kDivide) {
         num_expr = SymbolicExpression(expression.node_->left);
         den_expr = SymbolicExpression(expression.node_->right);
@@ -1435,12 +1435,12 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_mixed_exponential(
                 // 设 y = c * t^i，则 y' + i*u'*y = q_i
                 // c' + i*u'*c = q_i
                 SymbolicExpression u_prime = (ext.derivation / t).simplify();
-                SymbolicExpression f = (SymbolicExpression::number(static_cast<double>(i)) * u_prime).simplify();
+                SymbolicExpression f = (SymbolicExpression::number(static_cast<long double>(i)) * u_prime).simplify();
 
                 // 求解 c' + f*c = q_i
                 IntegrationResult c_result = solve_rde_in_field(f, q_i, field, tower_indices, recursion_depth + 1);
                 if (c_result.success && c_result.type == IntegralType::kElementary) {
-                    SymbolicExpression term = (c_result.value * make_power(t, SymbolicExpression::number(static_cast<double>(i)))).simplify();
+                    SymbolicExpression term = (c_result.value * make_power(t, SymbolicExpression::number(static_cast<long double>(i)))).simplify();
                     poly_integral = (poly_integral + term).simplify();
                 } else {
                     return IntegrationResult::proof_failed("RDE for exponential coefficient failed");
@@ -1540,7 +1540,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde_in_field(
         } else if (f_integral.type == IntegralType::kNonElementary) {
             // 如果 ∫f 非初等，但 f 在基域中，这通常意味着 y = 0 或无解
             if (expr_is_zero(g)) {
-                return IntegrationResult::elementary(SymbolicExpression::number(0.0));
+                return IntegrationResult::elementary(SymbolicExpression::number(0.0L));
             }
             return IntegrationResult::non_elementary("RDE: integral of f is non-elementary");
         }
@@ -1570,7 +1570,7 @@ bool RischAlgorithm::integrate_polynomial_coefficients(
     SymbolicExpression* result) {
 
     if (!result) return false;
-    *result = SymbolicExpression::number(0.0);
+    *result = SymbolicExpression::number(0.0L);
 
     // 将表达式分解为各塔变量的多项式
     // 然后逐项积分
@@ -1669,7 +1669,7 @@ bool RischAlgorithm::integrate_exponential_rational_mixed(
     // R/P(t) 其中 R 的次数 < P 的次数
 
     // 使用 Laurent RDE 求解
-    SymbolicExpression f = SymbolicExpression::number(0.0);
+    SymbolicExpression f = SymbolicExpression::number(0.0L);
     SymbolicExpression g = (numerator.to_expression() / denominator.to_expression()).simplify();
 
     IntegrationResult rde_result = solve_rde_with_laurent(f, g, field.base_variable, field.tower,

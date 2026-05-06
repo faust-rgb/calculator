@@ -8,7 +8,7 @@
 #include <stdexcept>
 
 namespace {
-    double get_scalar(const StoredValue& val, const std::string& ctx) {
+    long double get_scalar(const StoredValue& val, const std::string& ctx) {
         if (val.is_matrix || val.is_complex || val.is_string || val.is_list || val.is_dict) {
             throw std::runtime_error(ctx + " must be a scalar");
         }
@@ -204,7 +204,7 @@ namespace {
 
                 if (is_2d_matrix && cols > 0) {
                     // 转换为矩阵
-                    matrix::Matrix mat(items.size(), cols, 0.0);
+                    matrix::Matrix mat(items.size(), cols, 0.0L);
                     for (std::size_t r = 0; r < items.size(); ++r) {
                         const auto& item = items[r];
                         for (std::size_t c = 0; c < item.list_value->size(); ++c) {
@@ -427,7 +427,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         std::streampos pos = it->second->tellg();
 
         StoredValue res;
-        res.decimal = static_cast<double>(pos);
+        res.decimal = static_cast<long double>(pos);
         res.exact = false;
         return res;
     };
@@ -438,7 +438,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         std::string path = get_string(args[0], "exists path");
 
         StoredValue res;
-        res.decimal = std::filesystem::exists(path) ? 1.0 : 0.0;
+        res.decimal = std::filesystem::exists(path) ? 1.0L : 0.0L;
         res.exact = false;
         return res;
     };
@@ -451,7 +451,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         bool removed = std::filesystem::remove(path);
 
         StoredValue res;
-        res.decimal = removed ? 1.0 : 0.0;
+        res.decimal = removed ? 1.0L : 0.0L;
         res.exact = false;
         return res;
     };
@@ -466,25 +466,25 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
             throw std::runtime_error("Failed to open file: " + path);
         }
 
-        std::vector<std::vector<double>> rows;
+        std::vector<std::vector<long double>> rows;
         std::string line;
 
         while (std::getline(file, line)) {
             if (line.empty()) continue;
 
-            std::vector<double> row;
+            std::vector<long double> row;
             std::stringstream ss(line);
             std::string cell;
 
             while (std::getline(ss, cell, ',')) {
                 std::string trimmed = trim_copy(cell);
                 if (trimmed.empty()) {
-                    row.push_back(0.0);
+                    row.push_back(0.0L);
                     continue;
                 }
                 try {
                     std::size_t processed = 0;
-                    double val = std::stod(trimmed, &processed);
+                    long double val = std::stod(trimmed, &processed);
                     if (processed != trimmed.size()) {
                         throw std::runtime_error("Invalid numeric data in CSV: " + trimmed);
                     }
@@ -502,12 +502,12 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         if (rows.empty()) {
             StoredValue res;
             res.is_matrix = true;
-            res.matrix = matrix::Matrix(0, 0, 0.0);
+            res.matrix = matrix::Matrix(0, 0, 0.0L);
             return res;
         }
 
         std::size_t cols = rows[0].size();
-        matrix::Matrix result(rows.size(), cols, 0.0);
+        matrix::Matrix result(rows.size(), cols, 0.0L);
 
         for (std::size_t r = 0; r < rows.size(); ++r) {
             for (std::size_t c = 0; c < std::min(rows[r].size(), cols); ++c) {

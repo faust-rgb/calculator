@@ -25,7 +25,7 @@ std::string format_eigenvalue_matrix(const matrix::Matrix& values) {
         if (row != 0) {
             out << ", ";
         }
-        out << matrix::internal::format_complex<double>({values.at(row, 0),
+        out << matrix::internal::format_complex<long double>({values.at(row, 0),
                                                            values.at(row, 1)});    }
     out << "]";
     return out.str();
@@ -76,12 +76,12 @@ bool handle_matrix_command(const MatrixCommandContext& ctx,
         return true;
     } catch (const std::exception&) {
         if (matrix_value.rows == 2 && matrix_value.cols == 2) {
-            const double trace = matrix_value.at(0, 0) + matrix_value.at(1, 1);
-            const double det = matrix::determinant(matrix_value);
-            const double discriminant = trace * trace - 4.0 * det;
-            if (discriminant < 0.0) {
-                const double real = trace * 0.5;
-                const double imag = mymath::sqrt(-discriminant) * 0.5;
+            const long double trace = matrix_value.at(0, 0) + matrix_value.at(1, 1);
+            const long double det = matrix::determinant(matrix_value);
+            const long double discriminant = trace * trace - 4.0 * det;
+            if (discriminant < 0.0L) {
+                const long double real = trace * 0.5;
+                const long double imag = mymath::sqrt(-discriminant) * 0.5;
                 std::ostringstream out;
                 out << "values: [complex(" << format_decimal(real) << ", "
                     << format_decimal(imag) << "), complex("

@@ -31,7 +31,7 @@ namespace {
 /**
  * @brief 创建标量存储值
  */
-StoredValue make_scalar_stored(const ODEContext& ctx, double value) {
+StoredValue make_scalar_stored(const ODEContext& ctx, long double value) {
     StoredValue stored;
     stored.decimal = ctx.normalize_result(value);
     return stored;
@@ -40,13 +40,13 @@ StoredValue make_scalar_stored(const ODEContext& ctx, double value) {
 /**
  * @brief 将矩阵转换为向量（用于初始状态）
  */
-std::vector<double> matrix_to_vector_values(const matrix::Matrix& value,
+std::vector<long double> matrix_to_vector_values(const matrix::Matrix& value,
                                             const std::string& context) {
     if (!value.is_vector()) {
         throw std::runtime_error(context + " expects vector arguments");
     }
     const std::size_t size = value.rows == 1 ? value.cols : value.rows;
-    std::vector<double> result(size, 0.0);
+    std::vector<long double> result(size, 0.0L);
     for (std::size_t i = 0; i < size; ++i) {
         result[i] = value.rows == 1 ? value.at(0, i) : value.at(i, 0);
     }
@@ -57,8 +57,8 @@ std::vector<double> matrix_to_vector_values(const matrix::Matrix& value,
  * @brief 将向量转换为列矩阵
  */
 matrix::Matrix vector_to_column_matrix(const ODEContext& ctx,
-                                       const std::vector<double>& values) {
-    matrix::Matrix result(values.size(), 1, 0.0);
+                                       const std::vector<long double>& values) {
+    matrix::Matrix result(values.size(), 1, 0.0L);
     for (std::size_t i = 0; i < values.size(); ++i) {
         result.at(i, 0) = ctx.normalize_result(values[i]);
     }
@@ -84,7 +84,7 @@ void append_parameter_assignments(
             ? parameter_value.matrix.cols
             : parameter_value.matrix.rows;
     for (std::size_t i = 0; i < size; ++i) {
-        const double component_value =
+        const long double component_value =
             parameter_value.matrix.rows == 1
                 ? parameter_value.matrix.at(0, i)
                 : parameter_value.matrix.at(i, 0);
@@ -100,8 +100,8 @@ bool try_parse_positive_step_argument(const ODEContext& ctx,
                                       const std::string& argument,
                                       int* steps) {
     try {
-        const double value = ctx.parse_decimal(argument);
-        if (!is_integer_double(value) || value <= 0.0) {
+        const long double value = ctx.parse_decimal(argument);
+        if (!is_integer_double(value) || value <= 0.0L) {
             return false;
         }
         *steps = static_cast<int>(round_to_long_long(value));
@@ -187,7 +187,7 @@ ODEInfo analyze_ode_expression(const std::string& expr_str) {
     // 简单线性求解: E = A * highest_var + B = 0 => highest_var = -B/A
     SymbolicExpression coeff_A = expr.derivative(highest_var).simplify();
     if (coeff_A.is_constant(highest_var) && !symbolic_expression_internal::expr_is_zero(coeff_A)) {
-        SymbolicExpression term_B = expr.substitute(highest_var, SymbolicExpression::number(0.0)).simplify();
+        SymbolicExpression term_B = expr.substitute(highest_var, SymbolicExpression::number(0.0L)).simplify();
         info.rhs = ((-term_B) / coeff_A).simplify();
     } else {
         throw std::runtime_error("Could not solve for highest derivative " + highest_var + ". The equation must be linear in the highest derivative.");
@@ -231,8 +231,8 @@ bool handle_ode_command(const ODEContext& ctx,
 
         ODEInfo info = analyze_ode_expression(arguments[0]);
         
-        double x0 = ctx.parse_decimal(arguments[1]);
-        std::vector<double> initial_state;
+        long double x0 = ctx.parse_decimal(arguments[1]);
+        std::vector<long double> initial_state;
         
         // Handle y0 as scalar or vector
         StoredValue y0_val = ctx.evaluate_expression_value(arguments[2], false);
@@ -245,7 +245,7 @@ bool handle_ode_command(const ODEContext& ctx,
         if (info.is_high_order) {
             // Ensure initial state matches order
             if (initial_state.size() < (std::size_t)info.order) {
-                initial_state.resize(info.order, 0.0);
+                initial_state.resize(info.order, 0.0L);
             } else if (initial_state.size() > (std::size_t)info.order) {
                 initial_state.resize(info.order);
             }
@@ -297,7 +297,7 @@ bool handle_ode_command(const ODEContext& ctx,
             // Redirect to ode_system
             std::vector<std::string> new_args = arguments;
             new_args[0] = system_arg;
-            matrix::Matrix y0_mat(initial_state.size(), 1, 0.0);
+            matrix::Matrix y0_mat(initial_state.size(), 1, 0.0L);
             for (std::size_t i = 0; i < initial_state.size(); ++i) y0_mat.at(i, 0) = initial_state[i];
             new_args[2] = matrix_literal_expression(y0_mat);
 
@@ -312,8 +312,8 @@ bool handle_ode_command(const ODEContext& ctx,
         }
 
         // Original scalar ODE logic
-        double y0 = initial_state[0];
-        double x1 = ctx.parse_decimal(arguments[3]);
+        long double y0 = initial_state[0];
+        long double x1 = ctx.parse_decimal(arguments[3]);
         int steps = command == "ode" ? 100 : 10;
 
         std::size_t optional_index = 4;
@@ -353,13 +353,13 @@ bool handle_ode_command(const ODEContext& ctx,
         }
 
         const auto evaluate_rhs = ctx.build_scoped_scalar_evaluator(arguments[0]);
-        std::function<double(const std::vector<std::pair<std::string, StoredValue>>&)> evaluate_event;
+        std::function<long double(const std::vector<std::pair<std::string, StoredValue>>&)> evaluate_event;
         if (has_event) {
             evaluate_event = ctx.build_scoped_scalar_evaluator(event_expression);
         }
 
         const ODESolver solver(
-            [evaluate_rhs, has_parameter, parameter_value, &ctx](double x_value, double y_value) {
+            [evaluate_rhs, has_parameter, parameter_value, &ctx](long double x_value, long double y_value) {
                 std::vector<std::pair<std::string, StoredValue>> assignments;
                 assignments.reserve(has_parameter ? 4 : 2);
                 assignments.push_back({"x", make_scalar_stored(ctx, x_value)});
@@ -371,7 +371,7 @@ bool handle_ode_command(const ODEContext& ctx,
             },
             has_event
                 ? ODESolver::EventFunction(
-                      [evaluate_event, has_parameter, parameter_value, &ctx](double x_value, double y_value) {
+                      [evaluate_event, has_parameter, parameter_value, &ctx](long double x_value, long double y_value) {
                           std::vector<std::pair<std::string, StoredValue>> assignments;
                           assignments.reserve(has_parameter ? 4 : 2);
                           assignments.push_back({"x", make_scalar_stored(ctx, x_value)});
@@ -389,7 +389,7 @@ bool handle_ode_command(const ODEContext& ctx,
         }
 
         const std::vector<ODEPoint> points = solver.solve_trajectory(x0, y0, x1, steps);
-        matrix::Matrix table(points.size(), 2, 0.0);
+        matrix::Matrix table(points.size(), 2, 0.0L);
         for (std::size_t i = 0; i < points.size(); ++i) {
             table.at(i, 0) = ctx.normalize_result(points[i].x);
             table.at(i, 1) = ctx.normalize_result(points[i].y);
@@ -406,15 +406,15 @@ bool handle_ode_command(const ODEContext& ctx,
                 " expects rhs_vector, x0, y0_vector, x1, optional steps, optional event, and optional params");
         }
 
-        const double x0 = ctx.parse_decimal(arguments[1]);
-        const double x1 = ctx.parse_decimal(arguments[3]);
-        const std::vector<double> initial_state =
+        const long double x0 = ctx.parse_decimal(arguments[1]);
+        const long double x1 = ctx.parse_decimal(arguments[3]);
+        const std::vector<long double> initial_state =
             matrix_to_vector_values(ctx.parse_matrix_argument(arguments[2], command),
                                     "ODE initial state");
 
         const auto evaluate_rhs_matrix =
             ctx.build_scoped_matrix_evaluator(arguments[0]);
-        std::function<double(const std::vector<std::pair<std::string, StoredValue>>&)> evaluate_event;
+        std::function<long double(const std::vector<std::pair<std::string, StoredValue>>&)> evaluate_event;
 
         int steps = command == "ode_system" ? 100 : 10;
         std::size_t optional_index = 4;
@@ -455,7 +455,7 @@ bool handle_ode_command(const ODEContext& ctx,
 
         const ODESystemSolver solver(
             [evaluate_rhs_matrix, has_parameter, parameter_value, &ctx](
-                double x_value, const std::vector<double>& y_value) {
+                long double x_value, const std::vector<long double>& y_value) {
                 std::vector<std::pair<std::string, StoredValue>> assignments;
                 assignments.reserve(y_value.size() + (has_parameter ? 4 : 2));
                 assignments.push_back({"x", make_scalar_stored(ctx, x_value)});
@@ -483,7 +483,7 @@ bool handle_ode_command(const ODEContext& ctx,
                     throw std::runtime_error("ODE system right-hand side dimension mismatch");
                 }
 
-                std::vector<double> result(result_size, 0.0);
+                std::vector<long double> result(result_size, 0.0L);
                 for (std::size_t i = 0; i < result_size; ++i) {
                     result[i] = rhs_matrix.rows == 1
                                     ? rhs_matrix.at(0, i)
@@ -494,7 +494,7 @@ bool handle_ode_command(const ODEContext& ctx,
             has_event
                 ? ODESystemSolver::EventFunction(
                       [evaluate_event, has_parameter, parameter_value, &ctx](
-                          double x_value, const std::vector<double>& y_value) {
+                          long double x_value, const std::vector<long double>& y_value) {
                           std::vector<std::pair<std::string, StoredValue>> assignments;
                           assignments.reserve(y_value.size() + (has_parameter ? 4 : 2));
                           assignments.push_back({"x", make_scalar_stored(ctx, x_value)});
@@ -516,7 +516,7 @@ bool handle_ode_command(const ODEContext& ctx,
                 : ODESystemSolver::EventFunction());
 
         if (command == "ode_system") {
-            const std::vector<double> final_state =
+            const std::vector<long double> final_state =
                 solver.solve(x0, initial_state, x1, steps);
             *output = matrix::Matrix::vector(final_state).to_string();
             return true;
@@ -524,7 +524,7 @@ bool handle_ode_command(const ODEContext& ctx,
 
         const std::vector<ODESystemPoint> points =
             solver.solve_trajectory(x0, initial_state, x1, steps);
-        matrix::Matrix table(points.size(), initial_state.size() + 1, 0.0);
+        matrix::Matrix table(points.size(), initial_state.size() + 1, 0.0L);
         for (std::size_t row = 0; row < points.size(); ++row) {
             table.at(row, 0) = ctx.normalize_result(points[row].x);
             for (std::size_t col = 0; col < points[row].y.size(); ++col) {

@@ -14,9 +14,9 @@ namespace matrix {
 namespace internal {
 
 // 矩阵计算中使用的数值精度常量
-constexpr double kMatrixEps = 1e-10;
-constexpr double kMatrixPivotRelativeEps = 1e-13;
-constexpr double kMatrixPivotAbsoluteEps = 1e-16;
+constexpr long double kMatrixEps = 1e-10;
+constexpr long double kMatrixPivotRelativeEps = 1e-13;
+constexpr long double kMatrixPivotAbsoluteEps = 1e-16;
 
 /// 紧缩型 SVD 分解结果结构体
 template <typename T>
@@ -26,7 +26,7 @@ struct TReducedSvd {
     TMatrix<T> vt;
 };
 
-using ReducedSvd = TReducedSvd<double>;
+using ReducedSvd = TReducedSvd<long double>;
 
 /// LU 分解结果结构体
 template <typename T>
@@ -37,7 +37,7 @@ struct TLuResult {
     int det_sign = 1;
 };
 
-using LuResult = TLuResult<double>;
+using LuResult = TLuResult<long double>;
 
 /// 复数采样点结构体
 template <typename T>
@@ -46,7 +46,7 @@ struct TComplexSample {
     T imag = T(0);
 };
 
-using ComplexSample = TComplexSample<double>;
+using ComplexSample = TComplexSample<long double>;
 
 template <typename T> std::string format_complex(TComplex<T> value);
 template <typename T> std::string format_number(T value);
@@ -86,7 +86,7 @@ struct TEigenResult {
     std::vector<std::vector<T>> vectors;
 };
 
-using EigenResult = TEigenResult<double>;
+using EigenResult = TEigenResult<long double>;
 
 template <typename T> TEigenResult<T> eigenvalues_with_vectors(const TMatrix<T>& matrix);
 

@@ -78,7 +78,7 @@ enum class NodeType {
  */
 struct SymbolicExpression::Node {
     NodeType type = NodeType::kNumber;  ///< 节点类型
-    double number_value = 0.0;          ///< 数值（仅 kNumber 类型使用）
+    long double number_value = 0.0L;          ///< 数值（仅 kNumber 类型使用）
     std::string text;                   ///< 变量名、函数名或微分算子名
     std::shared_ptr<Node> left;         ///< 左子节点/唯一子节点
     std::shared_ptr<Node> right;        ///< 右子节点（二元运算使用）
@@ -93,7 +93,7 @@ struct SymbolicExpression::Node {
      * @brief 从数值构造节点
      * @param value 数值
      */
-    explicit Node(double value) : type(NodeType::kNumber), number_value(value) {}
+    explicit Node(long double value) : type(NodeType::kNumber), number_value(value) {}
 };
 
 // ============================================================================
@@ -118,7 +118,7 @@ enum class BoundKind {
  */
 struct BoundArgument {
     BoundKind kind = BoundKind::kFinite;
-    double value = 0.0;  ///< 仅当 kind == kFinite 时有效
+    long double value = 0.0L;  ///< 仅当 kind == kFinite 时有效
 
     /** @brief 是否为有限值 */
     bool is_finite() const { return kind == BoundKind::kFinite; }
@@ -133,10 +133,10 @@ struct BoundArgument {
     bool is_neg_inf() const { return kind == BoundKind::kNegInf; }
 
     /** @brief 获取数值（无穷大返回 ±inf） */
-    double to_double() const;
+    long double to_double() const;
 
     /** @brief 创建有限边界 */
-    static BoundArgument finite(double v);
+    static BoundArgument finite(long double v);
 
     /** @brief 创建正无穷边界 */
     static BoundArgument pos_inf();
@@ -182,7 +182,7 @@ namespace symbolic_expression_internal {
  * - 简化规则中的等式检验
  * - 多项式系数的零值裁剪
  */
-constexpr double kFormatEps = 1e-12;
+constexpr long double kFormatEps = 1e-12;
 
 // ============================================================================
 // 节点构造函数
@@ -193,7 +193,7 @@ constexpr double kFormatEps = 1e-12;
  * @param value 数值
  * @return 驻留后的节点指针
  */
-std::shared_ptr<SymbolicExpression::Node> make_number(double value);
+std::shared_ptr<SymbolicExpression::Node> make_number(long double value);
 
 /**
  * @brief 创建变量节点（带驻留）
@@ -331,7 +331,7 @@ bool expr_is_one(const SymbolicExpression& expression);
 bool expr_is_minus_one(const SymbolicExpression& expression);
 
 /** @brief 检查表达式是否为数值，可选输出该数值 */
-bool expr_is_number(const SymbolicExpression& expression, double* value = nullptr);
+bool expr_is_number(const SymbolicExpression& expression, long double* value = nullptr);
 
 /**
  * @brief 检查表达式是否为无穷大
@@ -350,27 +350,27 @@ bool expr_is_infinity(const SymbolicExpression& expression, bool* positive = nul
  * 递归求值表达式树，遇到变量则失败。
  */
 bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& node,
-                               double* value);
+                               long double* value);
 
 /**
  * @brief Context for dual number evaluation (forward-mode AutoDiff)
  */
 struct DualEvaluationContext {
     std::string differentiation_variable;  ///< Variable to differentiate w.r.t.
-    double point_value;                     ///< Value of the variable at the point
-    std::unordered_map<std::string, double> other_values;  ///< Values of other variables
+    long double point_value;                     ///< Value of the variable at the point
+    std::unordered_map<std::string, long double> other_values;  ///< Values of other variables
 };
 
 /**
  * @brief Evaluate expression node with dual numbers for automatic differentiation.
  *
- * For the differentiation variable, returns dual(point_value, 1.0).
- * For other variables, returns dual(their_value, 0.0).
+ * For the differentiation variable, returns dual(point_value, 1.0L).
+ * For other variables, returns dual(their_value, 0.0L).
  * All operations propagate derivatives using dual arithmetic.
  */
 bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& node,
                             const DualEvaluationContext& ctx,
-                            mymath::dual<double>* result);
+                            mymath::dual<long double>* result);
 
 // ============================================================================
 // Expression size monitoring
@@ -388,19 +388,19 @@ std::size_t count_nodes(const std::shared_ptr<SymbolicExpression::Node>& node);
 // ============================================================================
 
 /** @brief 裁剪多项式系数向量末尾的零 */
-void trim_polynomial_coefficients(std::vector<double>* coefficients);
+void trim_polynomial_coefficients(std::vector<long double>* coefficients);
 
 /** @brief 多项式加法（系数向量形式） */
-std::vector<double> polynomial_add_impl(const std::vector<double>& lhs,
-                                        const std::vector<double>& rhs);
+std::vector<long double> polynomial_add_impl(const std::vector<long double>& lhs,
+                                        const std::vector<long double>& rhs);
 
 /** @brief 多项式减法（系数向量形式） */
-std::vector<double> polynomial_subtract_impl(const std::vector<double>& lhs,
-                                             const std::vector<double>& rhs);
+std::vector<long double> polynomial_subtract_impl(const std::vector<long double>& lhs,
+                                             const std::vector<long double>& rhs);
 
 /** @brief 多项式乘法（系数向量形式），朴素 O(n²) 算法 */
-std::vector<double> polynomial_multiply_impl(const std::vector<double>& lhs,
-                                             const std::vector<double>& rhs);
+std::vector<long double> polynomial_multiply_impl(const std::vector<long double>& lhs,
+                                             const std::vector<long double>& rhs);
 
 /** @brief 检查表达式是否为关于指定变量的多项式（支持符号系数） */
 bool is_symbolic_polynomial(const SymbolicExpression& expression,
@@ -436,7 +436,7 @@ void trim_symbolic_polynomial_coefficients(std::vector<SymbolicExpression>* coef
 bool polynomial_coefficients_from_simplified(
     const SymbolicExpression& expression,
     const std::string& variable_name,
-    std::vector<double>* coefficients);
+    std::vector<long double>* coefficients);
 
 /**
  * @brief 从系数向量构建多项式表达式
@@ -445,7 +445,7 @@ bool polynomial_coefficients_from_simplified(
  * @return 多项式表达式
  */
 SymbolicExpression build_polynomial_expression_from_coefficients(
-    const std::vector<double>& coefficients,
+    const std::vector<long double>& coefficients,
     const std::string& variable_name);
 
 // ============================================================================
@@ -543,13 +543,13 @@ bool is_known_positive_expression(const SymbolicExpression& expression);
  */
 bool decompose_constant_times_expression(const SymbolicExpression& expression,
                                          const std::string& variable_name,
-                                         double* constant,
+                                         long double* constant,
                                          SymbolicExpression* remainder);
 
 bool decompose_linear(const SymbolicExpression& expression,
                       const std::string& variable_name,
-                      double* a,
-                      double* b);
+                      long double* a,
+                      long double* b);
 
 /** @brief 分解符号线性表达式 a*x + b */
 bool symbolic_decompose_linear(const SymbolicExpression& expression,
@@ -566,7 +566,7 @@ bool symbolic_decompose_linear(const SymbolicExpression& expression,
  */
 bool decompose_power_factor(const SymbolicExpression& expression,
                             SymbolicExpression* base,
-                            double* exponent);
+                            long double* exponent);
 
 // ============================================================================
 // 乘积项收集与重建
@@ -581,7 +581,7 @@ bool decompose_power_factor(const SymbolicExpression& expression,
  * 例如 2 * x * 3 * y 收集为 numeric_factor=6, symbolic_factors=[x, y]
  */
 void collect_multiplicative_terms(const SymbolicExpression& expression,
-                                  double* numeric_factor,
+                                  long double* numeric_factor,
                                   std::vector<SymbolicExpression>* symbolic_factors);
 
 /**
@@ -593,7 +593,7 @@ void collect_multiplicative_terms(const SymbolicExpression& expression,
  * 例如 x^3 收集为 [x, x, x]，便于后续约分。
  */
 void collect_division_factors(const SymbolicExpression& expression,
-                              double* numeric_factor,
+                              long double* numeric_factor,
                               std::vector<SymbolicExpression>* symbolic_factors);
 
 /**
@@ -611,7 +611,7 @@ void collect_additive_expressions(const SymbolicExpression& expression,
  * @return 乘积表达式
  */
 SymbolicExpression rebuild_product_expression(
-    double numeric_factor,
+    long double numeric_factor,
     const std::vector<SymbolicExpression>& factors);
 
 /**
@@ -627,7 +627,7 @@ SymbolicExpression make_sorted_sum(std::vector<SymbolicExpression> terms);
  * @param factors 因子列表
  * @return 规范化的乘积表达式
  */
-SymbolicExpression make_sorted_product(double numeric_factor,
+SymbolicExpression make_sorted_product(long double numeric_factor,
                                        std::vector<SymbolicExpression> factors);
 
 /**
@@ -637,7 +637,7 @@ SymbolicExpression make_sorted_product(double numeric_factor,
  * @return base^exponent 或 1/base^(-exponent)
  */
 SymbolicExpression rebuild_power_difference(const SymbolicExpression& base,
-                                            double exponent);
+                                            long double exponent);
 
 // ============================================================================
 // 多项式简化规则
@@ -674,7 +674,7 @@ bool polynomial_expression(const SymbolicExpression& expression,
  */
 bool try_combine_like_terms(const SymbolicExpression& left,
                             const SymbolicExpression& right,
-                            double right_sign,
+                            long double right_sign,
                             SymbolicExpression* combined);
 
 /**
@@ -689,7 +689,7 @@ bool try_combine_like_terms(const SymbolicExpression& left,
  */
 bool try_factor_common_terms(const SymbolicExpression& left,
                              const SymbolicExpression& right,
-                             double right_sign,
+                             long double right_sign,
                              SymbolicExpression* combined);
 
 /**
@@ -753,7 +753,7 @@ bool is_squared_function(const SymbolicExpression& expression,
  */
 bool decompose_numeric_multiple_of_symbol(const SymbolicExpression& expression,
                                           const std::string& symbol_name,
-                                          double* coefficient);
+                                          long double* coefficient);
 
 /**
  * @brief 检查数值是否匹配候选列表之一
@@ -761,8 +761,8 @@ bool decompose_numeric_multiple_of_symbol(const SymbolicExpression& expression,
  * @param candidates 候选值列表
  * @return true 如果 value 近似等于某个候选值
  */
-bool numeric_matches_any(double value,
-                         const std::initializer_list<double>& candidates);
+bool numeric_matches_any(long double value,
+                         const std::initializer_list<long double>& candidates);
 
 /** @brief 创建 sqrt(3) 符号表达式 */
 SymbolicExpression sqrt3_symbol();
@@ -779,7 +779,7 @@ SymbolicExpression half_symbol();
  * @param exponent 非负整数
  * @return exponent! 作为 double
  */
-double factorial_double(int exponent);
+long double factorial_double(int exponent);
 
 /**
  * @brief 积分多项式乘函数
@@ -859,7 +859,7 @@ bool integrate_symbolic_rational_rules(
  * @return step 表达式
  */
 SymbolicExpression make_step_expression(const std::string& variable_name,
-                                        double location);
+                                        long double location);
 
 /**
  * @brief 创建 Dirac delta 函数 delta(variable - shift)
@@ -868,7 +868,7 @@ SymbolicExpression make_step_expression(const std::string& variable_name,
  * @return delta 表达式
  */
 SymbolicExpression make_delta_expression(const std::string& variable_name,
-                                         double shift);
+                                         long double shift);
 
 // ============================================================================
 // 积分变换实现

@@ -11,20 +11,20 @@
 
 // Forward declarations
 template <typename T> class TFunctionAnalysis;
-using FunctionAnalysis = TFunctionAnalysis<double>;
+using FunctionAnalysis = TFunctionAnalysis<long double>;
 
 /**
  * @struct IEvaluationService
  * @brief 核心提供的求值服务接口
  */
 struct IEvaluationService {
-    std::function<double(const std::string&)> parse_decimal;
+    std::function<long double(const std::string&)> parse_decimal;
     std::function<StoredValue(const std::string&, bool)> evaluate_value;
-    std::function<double(double)> normalize_result;
+    std::function<long double(double)> normalize_result;
 
     // 作用域求值器构造
-    std::function<std::function<double(const std::vector<std::pair<std::string, double>>&)>(const std::string&)> build_decimal_evaluator;
-    std::function<std::function<double(const std::vector<std::pair<std::string, StoredValue>>&)>(const std::string&)> build_scalar_evaluator;
+    std::function<std::function<long double(const std::vector<std::pair<std::string, long double>>&)>(const std::string&)> build_decimal_evaluator;
+    std::function<std::function<long double(const std::vector<std::pair<std::string, StoredValue>>&)>(const std::string&)> build_scalar_evaluator;
     std::function<std::function<matrix::Matrix(const std::vector<std::pair<std::string, StoredValue>>&)>(const std::string&)> build_matrix_evaluator;
 };
 
@@ -32,7 +32,7 @@ struct ISymbolicService {
     std::function<void(const std::string&, bool, std::string*, SymbolicExpression*)> resolve_symbolic;
     std::function<std::string(const std::string&)> expand_inline;
     std::function<std::string(const std::string&)> simplify_symbolic;
-    std::function<double(const SymbolicExpression&, const std::string&, double)> evaluate_symbolic_at;
+    std::function<long double(const SymbolicExpression&, const std::string&, double)> evaluate_symbolic_at;
     std::function<std::vector<SymbolicExpression>(const std::string&)> parse_symbolic_expr_list;
     std::function<FunctionAnalysis(const std::string&)> build_analysis;
 };

@@ -20,25 +20,25 @@ namespace {
 // ============================================================================
 
 /** @brief 多项式运算的数值精度阈值 */
-constexpr double kPolynomialEps = 1e-10;
+constexpr long double kPolynomialEps = 1e-10;
 
 /** @brief 根隔离过程的精度阈值 */
-constexpr double kRootIsolationEps = 1e-8;
+constexpr long double kRootIsolationEps = 1e-8;
 
 /**
  * @brief 移除系数向量末尾的零系数
  * @param coefficients 系数向量（会被原地修改）
  *
  * 多项式运算后可能产生尾随零，此函数用于规范化结果。
- * 注意：零多项式保留为 [0.0]。
+ * 注意：零多项式保留为 [0.0L]。
  */
-void trim_trailing_zeros(std::vector<double>* coefficients) {
+void trim_trailing_zeros(std::vector<long double>* coefficients) {
     while (coefficients->size() > 1 &&
            mymath::is_near_zero(coefficients->back(), kPolynomialEps)) {
         coefficients->pop_back();
     }
     if (coefficients->empty()) {
-        coefficients->push_back(0.0);
+        coefficients->push_back(0.0L);
     }
 }
 
@@ -52,10 +52,10 @@ void trim_trailing_zeros(std::vector<double>* coefficients) {
  * - 可近似为分数：显示分数形式
  * - 其他：显示小数形式（去除尾部多余的零）
  */
-std::string format_coefficient(double value) {
+std::string format_coefficient(long double value) {
     if (mymath::is_integer(value, 1e-10)) {
         long long rounded =
-            static_cast<long long>(value >= 0.0 ? value + 0.5 : value - 0.5);
+            static_cast<long long>(value >= 0.0L ? value + 0.5 : value - 0.5);
         return std::to_string(rounded);
     }
 
@@ -92,8 +92,8 @@ std::string format_coefficient(double value) {
  * p(x) = (...((a_n * x + a_{n-1}) * x + a_{n-2}) * x + ...) + a_0
  * 这种形式减少了乘法次数，提高计算效率。
  */
-double polynomial_evaluate_impl(const std::vector<double>& coefficients, double x) {
-    double result = 0.0;
+long double polynomial_evaluate_impl(const std::vector<long double>& coefficients, long double x) {
+    long double result = 0.0L;
     for (std::size_t i = coefficients.size(); i > 0; --i) {
         result = result * x + coefficients[i - 1];
     }
@@ -108,13 +108,13 @@ double polynomial_evaluate_impl(const std::vector<double>& coefficients, double 
  * 使用公式：d/dx(a_i * x^i) = i * a_i * x^(i-1)
  * 常数项的导数为零。
  */
-std::vector<double> polynomial_derivative_impl(const std::vector<double>& coefficients) {
+std::vector<long double> polynomial_derivative_impl(const std::vector<long double>& coefficients) {
     if (coefficients.size() <= 1) {
-        return {0.0};
+        return {0.0L};
     }
-    std::vector<double> derivative(coefficients.size() - 1, 0.0);
+    std::vector<long double> derivative(coefficients.size() - 1, 0.0L);
     for (std::size_t i = 1; i < coefficients.size(); ++i) {
-        derivative[i - 1] = coefficients[i] * static_cast<double>(i);
+        derivative[i - 1] = coefficients[i] * static_cast<long double>(i);
     }
     trim_trailing_zeros(&derivative);
     return derivative;
@@ -128,14 +128,14 @@ std::vector<double> polynomial_derivative_impl(const std::vector<double>& coeffi
  * 使用柯西界公式：所有实根的绝对值不超过 1 + max|a_i/a_n|
  * 其中 a_n 是首项系数。
  */
-double polynomial_root_bound(const std::vector<double>& coefficients) {
-    const double leading = coefficients.back();
-    double bound = 0.0;
+long double polynomial_root_bound(const std::vector<long double>& coefficients) {
+    const long double leading = coefficients.back();
+    long double bound = 0.0L;
     for (std::size_t i = 0; i + 1 < coefficients.size(); ++i) {
-        const double ratio = mymath::abs(coefficients[i] / leading);
+        const long double ratio = mymath::abs(coefficients[i] / leading);
         if (ratio > bound) bound = ratio;
     }
-    return 1.0 + bound;
+    return 1.0L + bound;
 }
 
 /**
@@ -148,16 +148,16 @@ double polynomial_root_bound(const std::vector<double>& coefficients) {
  * 前提条件：多项式在 left 和 right 处的值符号相反。
  * 进行最多 100 次迭代，直到区间宽度或函数值足够小。
  */
-double bisect_root(const std::vector<double>& coefficients, double left, double right) {
-    double left_value = polynomial_evaluate_impl(coefficients, left);
+long double bisect_root(const std::vector<long double>& coefficients, long double left, long double right) {
+    long double left_value = polynomial_evaluate_impl(coefficients, left);
     for (int i = 0; i < 100; ++i) {
-        const double mid = (left + right) * 0.5;
-        const double mid_value = polynomial_evaluate_impl(coefficients, mid);
+        const long double mid = (left + right) * 0.5;
+        const long double mid_value = polynomial_evaluate_impl(coefficients, mid);
         if (mymath::is_near_zero(mid_value, kRootIsolationEps) ||
             mymath::abs(right - left) <= kRootIsolationEps) {
             return mid;
         }
-        if ((left_value < 0.0) == (mid_value < 0.0)) {
+        if ((left_value < 0.0L) == (mid_value < 0.0L)) {
             left = mid;
             left_value = mid_value;
         } else {
@@ -174,8 +174,8 @@ double bisect_root(const std::vector<double>& coefficients, double left, double 
  *
  * 如果候选根与已有根的差值在 1e-6 以内，则不重复添加。
  */
-void add_unique_root(std::vector<double>* roots, double candidate) {
-    for (double existing : *roots) {
+void add_unique_root(std::vector<long double>* roots, long double candidate) {
+    for (long double existing : *roots) {
         if (mymath::abs(existing - candidate) <= 1e-6) return;
     }
     roots->push_back(candidate);
@@ -187,11 +187,11 @@ void add_unique_root(std::vector<double>* roots, double candidate) {
 // 公共接口实现
 // ============================================================================
 
-double polynomial_evaluate(const std::vector<double>& coefficients, double x) {
+long double polynomial_evaluate(const std::vector<long double>& coefficients, long double x) {
     return polynomial_evaluate_impl(coefficients, x);
 }
 
-std::vector<double> polynomial_derivative(const std::vector<double>& coefficients) {
+std::vector<long double> polynomial_derivative(const std::vector<long double>& coefficients) {
     return polynomial_derivative_impl(coefficients);
 }
 
@@ -203,10 +203,10 @@ std::vector<double> polynomial_derivative(const std::vector<double>& coefficient
  *
  * 对应系数相加，结果长度取两多项式长度的较大值。
  */
-std::vector<double> polynomial_add(const std::vector<double>& lhs,
-                                   const std::vector<double>& rhs) {
+std::vector<long double> polynomial_add(const std::vector<long double>& lhs,
+                                   const std::vector<long double>& rhs) {
     const std::size_t size = lhs.size() > rhs.size() ? lhs.size() : rhs.size();
-    std::vector<double> result(size, 0.0);
+    std::vector<long double> result(size, 0.0L);
     for (std::size_t i = 0; i < lhs.size(); ++i) result[i] += lhs[i];
     for (std::size_t i = 0; i < rhs.size(); ++i) result[i] += rhs[i];
     trim_trailing_zeros(&result);
@@ -221,10 +221,10 @@ std::vector<double> polynomial_add(const std::vector<double>& lhs,
  *
  * 对应系数相减，结果长度取两多项式长度的较大值。
  */
-std::vector<double> polynomial_subtract(const std::vector<double>& lhs,
-                                        const std::vector<double>& rhs) {
+std::vector<long double> polynomial_subtract(const std::vector<long double>& lhs,
+                                        const std::vector<long double>& rhs) {
     const std::size_t size = lhs.size() > rhs.size() ? lhs.size() : rhs.size();
-    std::vector<double> result(size, 0.0);
+    std::vector<long double> result(size, 0.0L);
     for (std::size_t i = 0; i < lhs.size(); ++i) result[i] += lhs[i];
     for (std::size_t i = 0; i < rhs.size(); ++i) result[i] -= rhs[i];
     trim_trailing_zeros(&result);
@@ -240,9 +240,9 @@ std::vector<double> polynomial_subtract(const std::vector<double>& lhs,
  * 使用直接卷积算法，时间复杂度 O(n*m)。
  * 结果的次数为两多项式次数之和。
  */
-std::vector<double> polynomial_multiply(const std::vector<double>& lhs,
-                                        const std::vector<double>& rhs) {
-    std::vector<double> result(lhs.size() + rhs.size() - 1, 0.0);
+std::vector<long double> polynomial_multiply(const std::vector<long double>& lhs,
+                                        const std::vector<long double>& rhs) {
+    std::vector<long double> result(lhs.size() + rhs.size() - 1, 0.0L);
     for (std::size_t i = 0; i < lhs.size(); ++i) {
         for (std::size_t j = 0; j < rhs.size(); ++j) {
             result[i + j] += lhs[i] * rhs[j];
@@ -261,10 +261,10 @@ std::vector<double> polynomial_multiply(const std::vector<double>& lhs,
  *
  * 使用标准的多项式长除法算法，迭代地消去最高次项。
  */
-PolynomialDivisionResult polynomial_divide(const std::vector<double>& dividend,
-                                           const std::vector<double>& divisor) {
-    std::vector<double> normalized_dividend = dividend;
-    std::vector<double> normalized_divisor = divisor;
+PolynomialDivisionResult polynomial_divide(const std::vector<long double>& dividend,
+                                           const std::vector<long double>& divisor) {
+    std::vector<long double> normalized_dividend = dividend;
+    std::vector<long double> normalized_divisor = divisor;
     trim_trailing_zeros(&normalized_dividend);
     trim_trailing_zeros(&normalized_divisor);
 
@@ -274,17 +274,17 @@ PolynomialDivisionResult polynomial_divide(const std::vector<double>& dividend,
     }
 
     if (normalized_dividend.size() < normalized_divisor.size()) {
-        return {{0.0}, normalized_dividend};
+        return {{0.0L}, normalized_dividend};
     }
 
-    std::vector<double> quotient(
-        normalized_dividend.size() - normalized_divisor.size() + 1, 0.0);
-    std::vector<double> remainder = normalized_dividend;
+    std::vector<long double> quotient(
+        normalized_dividend.size() - normalized_divisor.size() + 1, 0.0L);
+    std::vector<long double> remainder = normalized_dividend;
 
     while (remainder.size() >= normalized_divisor.size() &&
            !(remainder.size() == 1 && mymath::is_near_zero(remainder[0], kPolynomialEps))) {
         const std::size_t degree_diff = remainder.size() - normalized_divisor.size();
-        const double factor = remainder.back() / normalized_divisor.back();
+        const long double factor = remainder.back() / normalized_divisor.back();
         quotient[degree_diff] = factor;
         for (std::size_t i = 0; i < normalized_divisor.size(); ++i) {
             remainder[degree_diff + i] -= factor * normalized_divisor[i];
@@ -309,8 +309,8 @@ PolynomialDivisionResult polynomial_divide(const std::vector<double>& dividend,
  * 3. 用临界点将区间分段，每段内多项式单调
  * 4. 在符号变化的区间使用二分法求根
  */
-std::vector<double> polynomial_real_roots(const std::vector<double>& coefficients) {
-    std::vector<double> normalized = coefficients;
+std::vector<long double> polynomial_real_roots(const std::vector<long double>& coefficients) {
+    std::vector<long double> normalized = coefficients;
     trim_trailing_zeros(&normalized);
 
     if (normalized.size() <= 1) {
@@ -318,36 +318,36 @@ std::vector<double> polynomial_real_roots(const std::vector<double>& coefficient
     }
 
     if (normalized.size() == 2) {
-        double r = -normalized[0] / normalized[1];
+        long double r = -normalized[0] / normalized[1];
         long long num, den;
         if (mymath::approximate_fraction(r, &num, &den, 100, 1e-9)) {
-            r = static_cast<double>(num) / static_cast<double>(den);
+            r = static_cast<long double>(num) / static_cast<long double>(den);
         }
         return {r};
     }
 
-    const std::vector<double> derivative = polynomial_derivative(normalized);
-    std::vector<double> critical_points = polynomial_real_roots(derivative);
+    const std::vector<long double> derivative = polynomial_derivative(normalized);
+    std::vector<long double> critical_points = polynomial_real_roots(derivative);
     std::sort(critical_points.begin(), critical_points.end());
 
-    const double bound = polynomial_root_bound(normalized);
-    std::vector<double> points;
+    const long double bound = polynomial_root_bound(normalized);
+    std::vector<long double> points;
     points.push_back(-bound);
-    for (double point : critical_points) points.push_back(point);
+    for (long double point : critical_points) points.push_back(point);
     points.push_back(bound);
 
-    std::vector<double> roots;
-    for (double point : critical_points) {
+    std::vector<long double> roots;
+    for (long double point : critical_points) {
         if (mymath::is_near_zero(polynomial_evaluate(normalized, point), 1e-6)) {
             add_unique_root(&roots, point);
         }
     }
 
     for (std::size_t i = 1; i < points.size(); ++i) {
-        const double left = points[i - 1];
-        const double right = points[i];
-        const double left_value = polynomial_evaluate(normalized, left);
-        const double right_value = polynomial_evaluate(normalized, right);
+        const long double left = points[i - 1];
+        const long double right = points[i];
+        const long double left_value = polynomial_evaluate(normalized, left);
+        const long double right_value = polynomial_evaluate(normalized, right);
 
         if (mymath::is_near_zero(left_value, 1e-6)) {
             add_unique_root(&roots, left);
@@ -358,11 +358,11 @@ std::vector<double> polynomial_real_roots(const std::vector<double>& coefficient
             continue;
         }
 
-        if ((left_value < 0.0) != (right_value < 0.0)) {
-            double r = bisect_root(normalized, left, right);
+        if ((left_value < 0.0L) != (right_value < 0.0L)) {
+            long double r = bisect_root(normalized, left, right);
             long long num, den;
             if (mymath::approximate_fraction(r, &num, &den, 100, 1e-9)) {
-                r = static_cast<double>(num) / static_cast<double>(den);
+                r = static_cast<long double>(num) / static_cast<long double>(den);
             }
             add_unique_root(&roots, r);
         }
@@ -383,9 +383,9 @@ std::vector<double> polynomial_real_roots(const std::vector<double>& coefficient
  * 2. 迭代更新每个根的估计值
  * 3. 收敛后清理接近整数的实部和虚部
  */
-std::vector<mymath::complex<double>> polynomial_complex_roots(
-    const std::vector<double>& coefficients) {
-    std::vector<double> normalized = coefficients;
+std::vector<mymath::complex<long double>> polynomial_complex_roots(
+    const std::vector<long double>& coefficients) {
+    std::vector<long double> normalized = coefficients;
     trim_trailing_zeros(&normalized);
 
     if (normalized.size() <= 1) {
@@ -394,23 +394,23 @@ std::vector<mymath::complex<double>> polynomial_complex_roots(
 
     const std::size_t degree = normalized.size() - 1;
     if (degree == 1) {
-        return {mymath::complex<double>(-normalized[0] / normalized[1], 0.0)};
+        return {mymath::complex<long double>(-normalized[0] / normalized[1], 0.0L)};
     }
 
-    const double leading = normalized.back();
-    const double radius = std::max(1.0, polynomial_root_bound(normalized));
-    std::vector<mymath::complex<double>> roots;
+    const long double leading = normalized.back();
+    const long double radius = std::max(1.0L, polynomial_root_bound(normalized));
+    std::vector<mymath::complex<long double>> roots;
     roots.reserve(degree);
     for (std::size_t k = 0; k < degree; ++k) {
-        const double angle =
-            2.0 * mymath::kPi * (static_cast<double>(k) + 0.25) /
-            static_cast<double>(degree);
+        const long double angle =
+            2.0 * mymath::kPi * (static_cast<long double>(k) + 0.25) /
+            static_cast<long double>(degree);
         roots.emplace_back(radius * mymath::cos(angle),
                            radius * mymath::sin(angle));
     }
 
-    auto evaluate_complex = [&](mymath::complex<double> x) {
-        mymath::complex<double> result(0.0, 0.0);
+    auto evaluate_complex = [&](mymath::complex<long double> x) {
+        mymath::complex<long double> result(0.0L, 0.0L);
         for (std::size_t i = normalized.size(); i > 0; --i) {
             result = result * x + normalized[i - 1] / leading;
         }
@@ -418,17 +418,17 @@ std::vector<mymath::complex<double>> polynomial_complex_roots(
     };
 
     for (int iteration = 0; iteration < 2000; ++iteration) {
-        double max_delta = 0.0;
+        long double max_delta = 0.0L;
         for (std::size_t i = 0; i < roots.size(); ++i) {
-            mymath::complex<double> denominator(1.0, 0.0);
+            mymath::complex<long double> denominator(1.0L, 0.0L);
             for (std::size_t j = 0; j < roots.size(); ++j) {
                 if (i == j) continue;
                 denominator *= roots[i] - roots[j];
             }
             if (mymath::abs(denominator) <= 1e-24) {
-                denominator = mymath::complex<double>(1e-12, 1e-12);
+                denominator = mymath::complex<long double>(1e-12, 1e-12);
             }
-            const mymath::complex<double> delta = evaluate_complex(roots[i]) / denominator;
+            const mymath::complex<long double> delta = evaluate_complex(roots[i]) / denominator;
             roots[i] -= delta;
             max_delta = std::max(max_delta, mymath::abs(delta));
         }
@@ -437,11 +437,11 @@ std::vector<mymath::complex<double>> polynomial_complex_roots(
         }
     }
 
-    for (mymath::complex<double>& root : roots) {
-        double real = root.real();
-        double imag = root.imag();
-        if (mymath::is_near_zero(real, 1e-9)) real = 0.0;
-        if (mymath::is_near_zero(imag, 1e-9)) imag = 0.0;
+    for (mymath::complex<long double>& root : roots) {
+        long double real = root.real();
+        long double imag = root.imag();
+        if (mymath::is_near_zero(real, 1e-9)) real = 0.0L;
+        if (mymath::is_near_zero(imag, 1e-9)) imag = 0.0L;
         if (mymath::is_integer(real)) {
             real = mymath::round(real);
         }
@@ -467,10 +467,10 @@ std::vector<mymath::complex<double>> polynomial_complex_roots(
  *
  * 使用公式：integral(a_i * x^i) = a_i * x^(i+1) / (i+1)
  */
-std::vector<double> polynomial_integral(const std::vector<double>& coefficients) {
-    std::vector<double> integral(coefficients.size() + 1, 0.0);
+std::vector<long double> polynomial_integral(const std::vector<long double>& coefficients) {
+    std::vector<long double> integral(coefficients.size() + 1, 0.0L);
     for (std::size_t i = 0; i < coefficients.size(); ++i) {
-        integral[i + 1] = coefficients[i] / static_cast<double>(i + 1);
+        integral[i + 1] = coefficients[i] / static_cast<long double>(i + 1);
     }
     trim_trailing_zeros(&integral);
     return integral;
@@ -485,12 +485,12 @@ std::vector<double> polynomial_integral(const std::vector<double>& coefficients)
  * 使用 Horner 法的推广形式：
  * p(q(x)) = (...((a_n * q + a_{n-1}) * q + a_{n-2}) * q + ...) + a_0
  */
-std::vector<double> polynomial_compose(const std::vector<double>& outer,
-                                       const std::vector<double>& inner) {
-    std::vector<double> result = {0.0};
+std::vector<long double> polynomial_compose(const std::vector<long double>& outer,
+                                       const std::vector<long double>& inner) {
+    std::vector<long double> result = {0.0L};
     for (std::size_t i = outer.size(); i > 0; --i) {
         result = polynomial_multiply(result, inner);
-        if (result.empty()) result.push_back(0.0);
+        if (result.empty()) result.push_back(0.0L);
         result[0] += outer[i - 1];
         trim_trailing_zeros(&result);
     }
@@ -508,21 +508,21 @@ std::vector<double> polynomial_compose(const std::vector<double>& outer,
  *
  * 采用动态容差以处理不同量级的系数。
  */
-std::vector<double> polynomial_gcd(const std::vector<double>& lhs,
-                                   const std::vector<double>& rhs) {
-    std::vector<double> a = lhs;
-    std::vector<double> b = rhs;
+std::vector<long double> polynomial_gcd(const std::vector<long double>& lhs,
+                                   const std::vector<long double>& rhs) {
+    std::vector<long double> a = lhs;
+    std::vector<long double> b = rhs;
     trim_trailing_zeros(&a);
     trim_trailing_zeros(&b);
     
     // 动态容差：根据输入多项式系数的最大绝对值决定
-    auto get_max_coeff = [](const std::vector<double>& p) {
-        double m = 0.0;
-        for (double c : p) m = std::max(m, mymath::abs(c));
+    auto get_max_coeff = [](const std::vector<long double>& p) {
+        long double m = 0.0L;
+        for (long double c : p) m = std::max(m, mymath::abs(c));
         return m;
     };
-    const double scale = std::max(get_max_coeff(a), get_max_coeff(b));
-    const double dynamic_eps = std::max(kPolynomialEps, scale * 1e-12);
+    const long double scale = std::max(get_max_coeff(a), get_max_coeff(b));
+    const long double dynamic_eps = std::max(kPolynomialEps, scale * 1e-12);
 
     while (!(b.size() == 1 && mymath::is_near_zero(b[0], dynamic_eps))) {
         const PolynomialDivisionResult division = polynomial_divide(a, b);
@@ -533,12 +533,12 @@ std::vector<double> polynomial_gcd(const std::vector<double>& lhs,
     }
     
     if (a.empty() || (a.size() == 1 && mymath::is_near_zero(a[0], dynamic_eps))) {
-        return {0.0};
+        return {0.0L};
     }
 
-    const double leading = a.back();
+    const long double leading = a.back();
     if (!mymath::is_near_zero(leading, dynamic_eps)) {
-        for (double& coefficient : a) coefficient /= leading;
+        for (long double& coefficient : a) coefficient /= leading;
     }
     trim_trailing_zeros(&a);
     return a;
@@ -558,8 +558,8 @@ std::vector<double> polynomial_gcd(const std::vector<double>& lhs,
  * 3. 使用最小二乘法求解
  * 4. 将结果转换回原始坐标系
  */
-std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
-                                   const std::vector<double>& y_samples,
+std::vector<long double> polynomial_fit(const std::vector<long double>& x_samples,
+                                   const std::vector<long double>& y_samples,
                                    int degree) {
     if (degree < 0) throw std::runtime_error("polynomial degree must be non-negative");
     if (x_samples.size() != y_samples.size() || x_samples.empty()) {
@@ -570,19 +570,19 @@ std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
 
     const std::size_t n = x_samples.size();
     long double x_sum = 0.0L;
-    for (double x : x_samples) x_sum += static_cast<long double>(x);
-    const double center = static_cast<double>(x_sum / static_cast<long double>(n));
-    double scale = 0.0;
-    for (double x : x_samples) {
-        const double d = mymath::abs(x - center);
+    for (long double x : x_samples) x_sum += static_cast<long double>(x);
+    const long double center = static_cast<long double>(x_sum / static_cast<long double>(n));
+    long double scale = 0.0L;
+    for (long double x : x_samples) {
+        const long double d = mymath::abs(x - center);
         if (d > scale) scale = d;
     }
-    if (scale < 1e-9) scale = 1.0;
+    if (scale < 1e-9) scale = 1.0L;
 
     matrix::Matrix A(n, m_vars);
     for (std::size_t i = 0; i < n; ++i) {
-        const double sx = (x_samples[i] - center) / scale;
-        double p = 1.0;
+        const long double sx = (x_samples[i] - center) / scale;
+        long double p = 1.0L;
         for (std::size_t j = 0; j < m_vars; ++j) {
             A.at(i, j) = p;
             p *= sx;
@@ -591,10 +591,10 @@ std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
     matrix::Matrix b = matrix::Matrix::vector(y_samples);
     try {
         matrix::Matrix solution = matrix::least_squares(A, b);
-        std::vector<double> scaled_coeffs(m_vars);
+        std::vector<long double> scaled_coeffs(m_vars);
         for (std::size_t i = 0; i < m_vars; ++i) scaled_coeffs[i] = solution.at(i, 0);
-        const std::vector<double> linear_map = {-center / scale, 1.0 / scale};
-        std::vector<double> coefficients = polynomial_compose(scaled_coeffs, linear_map);
+        const std::vector<long double> linear_map = {-center / scale, 1.0L / scale};
+        std::vector<long double> coefficients = polynomial_compose(scaled_coeffs, linear_map);
         trim_trailing_zeros(&coefficients);
         return coefficients;
     } catch (const std::exception& e) {
@@ -613,23 +613,23 @@ std::vector<double> polynomial_fit(const std::vector<double>& x_samples,
  * - 整数系数的格式化
  * - 符号连接（使用 "+" 和 "-"）
  */
-std::string polynomial_to_string(const std::vector<double>& coefficients,
+std::string polynomial_to_string(const std::vector<long double>& coefficients,
                                  const std::string& variable_name) {
-    std::vector<double> normalized = coefficients;
+    std::vector<long double> normalized = coefficients;
     trim_trailing_zeros(&normalized);
     if (normalized.size() == 1 && mymath::is_near_zero(normalized[0], kPolynomialEps)) return "0";
     std::string result;
     bool first = true;
     for (std::size_t index = normalized.size(); index > 0; --index) {
         const std::size_t degree = index - 1;
-        const double coefficient = normalized[degree];
+        const long double coefficient = normalized[degree];
         if (mymath::is_near_zero(coefficient, kPolynomialEps)) continue;
-        const bool negative = coefficient < 0.0;
-        const double abs_value = negative ? -coefficient : coefficient;
+        const bool negative = coefficient < 0.0L;
+        const long double abs_value = negative ? -coefficient : coefficient;
         std::string term;
         if (degree == 0) term = format_coefficient(abs_value);
         else {
-            if (!mymath::is_near_zero(abs_value - 1.0, kPolynomialEps)) term += format_coefficient(abs_value) + " * ";
+            if (!mymath::is_near_zero(abs_value - 1.0L, kPolynomialEps)) term += format_coefficient(abs_value) + " * ";
             term += variable_name;
             if (degree > 1) term += " ^ " + std::to_string(degree);
         }

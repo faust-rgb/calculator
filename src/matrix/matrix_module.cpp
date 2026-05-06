@@ -17,11 +17,11 @@ using namespace matrix;
 std::size_t parse_index_argument(const std::string& expression,
                                  const ScalarEvaluator& scalar_evaluator,
                                  const std::string& func_name) {
-    const double value = scalar_evaluator(expression);
-    if (!mymath::is_integer(value) || value < 0.0) {
+    const long double value = scalar_evaluator(expression);
+    if (!mymath::is_integer(value) || value < 0.0L) {
         throw std::runtime_error(func_name + " requires non-negative integer index");
     }
-    return static_cast<std::size_t>(value >= 0.0 ? value + 0.5 : value - 0.5);
+    return static_cast<std::size_t>(value >= 0.0L ? value + 0.5 : value - 0.5);
 }
 
 // 辅助函数：要求参数为矩阵
@@ -47,7 +47,7 @@ bool try_complex_from_value(const Value& v, ComplexNumber* z) {
     }
     if (!v.is_matrix) {
         z->real = v.scalar;
-        z->imag = 0.0;
+        z->imag = 0.0L;
         return true;
     }
     return false;
@@ -81,7 +81,7 @@ std::string format_eigenvalue_matrix(const Matrix& values) {
         if (row != 0) {
             out << ", ";
         }
-        out << internal::format_complex<double>({values.at(row, 0), values.at(row, 1)});
+        out << internal::format_complex<long double>({values.at(row, 0), values.at(row, 1)});
     }
     out << "]";
     return out.str();
@@ -135,12 +135,12 @@ std::string MatrixModule::execute_args(const std::string& command,
                "\nvectors: " + eigenvectors(matrix_value).to_string();
     } catch (const std::exception&) {
         if (matrix_value.rows == 2 && matrix_value.cols == 2) {
-            const double trace = matrix_value.at(0, 0) + matrix_value.at(1, 1);
-            const double det = determinant(matrix_value);
-            const double discriminant = trace * trace - 4.0 * det;
-            if (discriminant < 0.0) {
-                const double real = trace * 0.5;
-                const double imag = mymath::sqrt(-discriminant) * 0.5;
+            const long double trace = matrix_value.at(0, 0) + matrix_value.at(1, 1);
+            const long double det = determinant(matrix_value);
+            const long double discriminant = trace * trace - 4.0 * det;
+            if (discriminant < 0.0L) {
+                const long double real = trace * 0.5;
+                const long double imag = mymath::sqrt(-discriminant) * 0.5;
                 std::ostringstream out;
                 out << "values: [complex(" << format_decimal(real) << ", "
                     << format_decimal(imag) << "), complex("
@@ -321,8 +321,8 @@ MatrixModule::get_value_functions() const {
                         const ComplexLookup&,
                         const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>*) -> Value {
         if (args.size() != 2) throw std::runtime_error("polar expects 2 arguments");
-        const double r = se(args[0]);
-        const double theta = se(args[1]);
+        const long double r = se(args[0]);
+        const long double theta = se(args[1]);
         return Value::from_complex(r * mymath::cos(theta), r * mymath::sin(theta));
     };
 
@@ -356,17 +356,17 @@ MatrixModule::get_value_functions() const {
                       const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
         if (args.size() != 1) throw std::runtime_error("arg expects 1 argument");
         const ComplexNumber z = require_complex_argument(args[0], "arg", se, ml, cl, mf);
-        const double real = z.real;
-        const double imag = z.imag;
+        const long double real = z.real;
+        const long double imag = z.imag;
         if (mymath::is_near_zero(real, 1e-12)) {
             if (mymath::is_near_zero(imag, 1e-12)) {
-                return Value::from_scalar(0.0);
+                return Value::from_scalar(0.0L);
             }
-            return Value::from_scalar(imag > 0.0 ? mymath::kPi / 2.0 : -mymath::kPi / 2.0);
+            return Value::from_scalar(imag > 0.0L ? mymath::kPi / 2.0 : -mymath::kPi / 2.0);
         }
-        double angle = mymath::atan(imag / real);
-        if (real < 0.0) {
-            angle += imag >= 0.0 ? mymath::kPi : -mymath::kPi;
+        long double angle = mymath::atan(imag / real);
+        if (real < 0.0L) {
+            angle += imag >= 0.0L ? mymath::kPi : -mymath::kPi;
         }
         return Value::from_scalar(angle);
     };
@@ -393,7 +393,7 @@ MatrixModule::get_value_functions() const {
         if (try_evaluate_expression(args[0], se, ml, cl, mf, nullptr, &v)) {
             ComplexNumber z;
             if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                const double r = z.real, i = z.imag;
+                const long double r = z.real, i = z.imag;
                 return Value::from_scalar(mymath::sqrt(r * r + i * i));
             } else if (v.is_matrix) {
                 return Value::from_scalar(norm(v.matrix));
@@ -415,7 +415,7 @@ MatrixModule::get_value_functions() const {
         if (try_evaluate_expression(args[0], se, ml, cl, mf, nullptr, &v)) {
             ComplexNumber z;
             if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                const double r = z.real, i = z.imag, m = mymath::exp(r);
+                const long double r = z.real, i = z.imag, m = mymath::exp(r);
                 return Value::from_complex(m * mymath::cos(i), m * mymath::sin(i));
             } else if (!v.is_matrix) {
                 return Value::from_scalar(mymath::exp(v.scalar));
@@ -435,7 +435,7 @@ MatrixModule::get_value_functions() const {
         if (try_evaluate_expression(args[0], se, ml, cl, mf, nullptr, &v)) {
             ComplexNumber z;
             if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                const double r = z.real, i = z.imag;
+                const long double r = z.real, i = z.imag;
                 return Value::from_complex(0.5 * mymath::ln(r * r + i * i), mymath::atan2(i, r));
             } else if (!v.is_matrix) {
                 return Value::from_scalar(mymath::ln(v.scalar));
@@ -455,7 +455,7 @@ MatrixModule::get_value_functions() const {
         if (try_evaluate_expression(args[0], se, ml, cl, mf, nullptr, &v)) {
             ComplexNumber z;
             if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                const double r = z.real, i = z.imag;
+                const long double r = z.real, i = z.imag;
                 return Value::from_complex(mymath::sin(r) * mymath::cosh(i), mymath::cos(r) * mymath::sinh(i));
             } else if (!v.is_matrix) {
                 return Value::from_scalar(mymath::sin(v.scalar));
@@ -475,7 +475,7 @@ MatrixModule::get_value_functions() const {
         if (try_evaluate_expression(args[0], se, ml, cl, mf, nullptr, &v)) {
             ComplexNumber z;
             if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                const double r = z.real, i = z.imag;
+                const long double r = z.real, i = z.imag;
                 return Value::from_complex(mymath::cos(r) * mymath::cosh(i), -mymath::sin(r) * mymath::sinh(i));
             } else if (!v.is_matrix) {
                 return Value::from_scalar(mymath::cos(v.scalar));
@@ -548,7 +548,7 @@ MatrixModule::get_value_functions() const {
                        const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
         if (args.size() != 1) throw std::runtime_error("rank expects 1 argument");
         const Matrix m = require_matrix(args[0], "rank", se, ml, cl, mf);
-        return Value::from_scalar(static_cast<double>(rank(m)));
+        return Value::from_scalar(static_cast<long double>(rank(m)));
     };
 
     // rref - 行最简形

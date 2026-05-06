@@ -28,7 +28,7 @@ namespace test_suites {
 // ============================================================================
 
 bool contains_critical_point_near(const std::string& output,
-                                  double expected_x,
+                                  long double expected_x,
                                   const std::string& classification) {
     std::size_t pos = 0;
     while ((pos = output.find("x = ", pos)) != std::string::npos) {
@@ -37,7 +37,7 @@ bool contains_critical_point_near(const std::string& output,
         if (value_end == std::string::npos) {
             return false;
         }
-        const double actual_x = std::stod(output.substr(value_start,
+        const long double actual_x = std::stod(output.substr(value_start,
                                                         value_end - value_start));
         const std::size_t class_start = output.find(classification, value_end);
         if (mymath::abs(actual_x - expected_x) <= 1e-5 &&

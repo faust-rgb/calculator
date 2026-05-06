@@ -71,7 +71,7 @@ bool combine_all_like_additive_terms(const SymbolicExpression& expression,
         bool merged = false;
         for (SymbolicExpression& existing : combined_terms) {
             SymbolicExpression combined;
-            if (try_combine_like_terms(existing, term, 1.0, &combined)) {
+            if (try_combine_like_terms(existing, term, 1.0L, &combined)) {
                 existing = combined;
                 changed = true;
                 merged = true;
@@ -108,14 +108,14 @@ bool try_extract_common_symbolic_factor(const SymbolicExpression& expression,
     collect_additive_expressions(expression, &terms);
     if (terms.size() < 2) return false;
     
-    double dummy_num = 1.0;
+    long double dummy_num = 1.0L;
     std::vector<SymbolicExpression> common_factors;
     collect_multiplicative_terms(terms[0], &dummy_num, &common_factors);
     
     if (common_factors.empty()) return false;
     
     for (size_t i = 1; i < terms.size(); ++i) {
-        double t_num = 1.0;
+        long double t_num = 1.0L;
         std::vector<SymbolicExpression> t_factors;
         collect_multiplicative_terms(terms[i], &t_num, &t_factors);
         
@@ -137,7 +137,7 @@ bool try_extract_common_symbolic_factor(const SymbolicExpression& expression,
     
     if (common_factors.empty()) return false;
     
-    *common_factor = make_sorted_product(1.0, common_factors).simplify();
+    *common_factor = make_sorted_product(1.0L, common_factors).simplify();
     
     std::vector<SymbolicExpression> new_terms;
     for (const auto& term : terms) {
@@ -187,7 +187,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
         
         case NodeType::kFunction: {
             const SymbolicExpression argument = SymbolicExpression(node->left).simplify();
-            double numeric = 0.0;
+            long double numeric = 0.0L;
             if (argument.is_number(&numeric)) {
                 if (node->text == "asin") return SymbolicExpression::number(mymath::asin(numeric));
                 if (node->text == "acos") return SymbolicExpression::number(mymath::acos(numeric));
@@ -200,16 +200,16 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 if (node->text == "cosh") return SymbolicExpression::number(mymath::cosh(numeric));
                 if (node->text == "tanh") return SymbolicExpression::number(mymath::tanh(numeric));
                 if (node->text == "ln") {
-                    if (numeric <= 0.0) return make_function(node->text, argument);
+                    if (numeric <= 0.0L) return make_function(node->text, argument);
                     return SymbolicExpression::number(mymath::ln(numeric));
                 }
                 if (node->text == "sqrt") {
-                    if (numeric < 0.0) return make_function(node->text, argument);
-                    double root = mymath::sqrt(numeric);
+                    if (numeric < 0.0L) return make_function(node->text, argument);
+                    long double root = mymath::sqrt(numeric);
                     if (mymath::is_near_zero(root * root - numeric, 1e-12) && mymath::is_integer(root, 1e-10)) {
                         return SymbolicExpression::number(root);
                     }
-                    if (mymath::is_integer(numeric, 1e-10) && numeric > 0.0) {
+                    if (mymath::is_integer(numeric, 1e-10) && numeric > 0.0L) {
                         long long val = static_cast<long long>(numeric + 0.5);
                         long long extracted = 1;
                         for (long long i = 2; i * i <= val; ++i) {
@@ -219,8 +219,8 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                             }
                         }
                         if (extracted > 1) {
-                            return make_multiply(SymbolicExpression::number(static_cast<double>(extracted)),
-                                                 make_function("sqrt", SymbolicExpression::number(static_cast<double>(val)))).simplify();
+                            return make_multiply(SymbolicExpression::number(static_cast<long double>(extracted)),
+                                                 make_function("sqrt", SymbolicExpression::number(static_cast<long double>(val)))).simplify();
                         }
                     }
                     return make_function("sqrt", SymbolicExpression::number(numeric));
@@ -236,12 +236,12 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 if (node->text == "ceil") return SymbolicExpression::number(mymath::ceil(numeric));
                 if (node->text == "cbrt") return SymbolicExpression::number(mymath::cbrt(numeric));
                 if (node->text == "sign") {
-                    if (mymath::is_near_zero(numeric, kFormatEps)) return SymbolicExpression::number(0.0);
-                    return SymbolicExpression::number(numeric > 0.0 ? 1.0 : -1.0);
+                    if (mymath::is_near_zero(numeric, kFormatEps)) return SymbolicExpression::number(0.0L);
+                    return SymbolicExpression::number(numeric > 0.0L ? 1.0L : -1.0L);
                 }
             }
 
-            if (node->text == "ln" && expr_is_variable(argument, "e")) return SymbolicExpression::number(1.0);
+            if (node->text == "ln" && expr_is_variable(argument, "e")) return SymbolicExpression::number(1.0L);
             // exp(ln(x)) → x (ln domain implies x > 0)
             if (node->text == "exp" && argument.node_->type == NodeType::kFunction && argument.node_->text == "ln") {
                 return SymbolicExpression(argument.node_->left).simplify();
@@ -277,7 +277,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             // ln(x^n) → n*ln(x) (ln domain implies x > 0)
             if (node->text == "ln" && argument.node_->type == NodeType::kPower) {
-                double exponent = 0.0;
+                long double exponent = 0.0L;
                 if (SymbolicExpression(argument.node_->right).is_number(&exponent)) {
                     return make_multiply(SymbolicExpression::number(exponent),
                                          make_function("ln", SymbolicExpression(argument.node_->left))).simplify();
@@ -297,13 +297,13 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             // ln(1) → 0
             if (node->text == "ln") {
-                double arg_val = 0.0;
-                if (argument.is_number(&arg_val) && mymath::is_near_zero(arg_val - 1.0, kFormatEps)) {
-                    return SymbolicExpression::number(0.0);
+                long double arg_val = 0.0L;
+                if (argument.is_number(&arg_val) && mymath::is_near_zero(arg_val - 1.0L, kFormatEps)) {
+                    return SymbolicExpression::number(0.0L);
                 }
             }
             if (node->text == "sqrt" && argument.node_->type == NodeType::kPower) {
-                double exponent = 0.0;
+                long double exponent = 0.0L;
                 if (SymbolicExpression(argument.node_->right).is_number(&exponent) && mymath::is_near_zero(exponent - 2.0, kFormatEps)) {
                     return make_function("abs", SymbolicExpression(argument.node_->left)).simplify();
                 }
@@ -318,34 +318,34 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 return make_function(node->text, SymbolicExpression(argument.node_->left)).simplify();
             }
 
-            double pi_multiple = 0.0;
+            long double pi_multiple = 0.0L;
             if (decompose_numeric_multiple_of_symbol(argument, "pi", &pi_multiple)) {
                 if (node->text == "sin") {
-                    if (numeric_matches_any(pi_multiple, {0.0, 1.0, -1.0})) return SymbolicExpression::number(0.0);
-                    if (numeric_matches_any(pi_multiple, {0.5})) return SymbolicExpression::number(1.0);
-                    if (numeric_matches_any(pi_multiple, {-0.5})) return SymbolicExpression::number(-1.0);
-                    if (numeric_matches_any(pi_multiple, {1.0 / 6.0, 5.0 / 6.0})) return half_symbol();
-                    if (numeric_matches_any(pi_multiple, {-1.0 / 6.0, -5.0 / 6.0})) return make_negate(half_symbol()).simplify();
-                    if (numeric_matches_any(pi_multiple, {1.0 / 3.0, 2.0 / 3.0})) return make_divide(sqrt3_symbol(), SymbolicExpression::number(2.0)).simplify();
-                    if (numeric_matches_any(pi_multiple, {-1.0 / 3.0, -2.0 / 3.0})) return make_negate(make_divide(sqrt3_symbol(), SymbolicExpression::number(2.0))).simplify();
+                    if (numeric_matches_any(pi_multiple, {0.0L, 1.0L, -1.0L})) return SymbolicExpression::number(0.0L);
+                    if (numeric_matches_any(pi_multiple, {0.5})) return SymbolicExpression::number(1.0L);
+                    if (numeric_matches_any(pi_multiple, {-0.5})) return SymbolicExpression::number(-1.0L);
+                    if (numeric_matches_any(pi_multiple, {1.0L / 6.0, 5.0 / 6.0})) return half_symbol();
+                    if (numeric_matches_any(pi_multiple, {-1.0L / 6.0, -5.0 / 6.0})) return make_negate(half_symbol()).simplify();
+                    if (numeric_matches_any(pi_multiple, {1.0L / 3.0, 2.0 / 3.0})) return make_divide(sqrt3_symbol(), SymbolicExpression::number(2.0)).simplify();
+                    if (numeric_matches_any(pi_multiple, {-1.0L / 3.0, -2.0 / 3.0})) return make_negate(make_divide(sqrt3_symbol(), SymbolicExpression::number(2.0))).simplify();
                 }
                 if (node->text == "cos") {
-                    if (numeric_matches_any(pi_multiple, {0.0})) return SymbolicExpression::number(1.0);
-                    if (numeric_matches_any(pi_multiple, {1.0, -1.0})) return SymbolicExpression::number(-1.0);
-                    if (numeric_matches_any(pi_multiple, {0.5, -0.5})) return SymbolicExpression::number(0.0);
-                    if (numeric_matches_any(pi_multiple, {1.0 / 3.0, -1.0 / 3.0})) return half_symbol();
+                    if (numeric_matches_any(pi_multiple, {0.0L})) return SymbolicExpression::number(1.0L);
+                    if (numeric_matches_any(pi_multiple, {1.0L, -1.0L})) return SymbolicExpression::number(-1.0L);
+                    if (numeric_matches_any(pi_multiple, {0.5, -0.5})) return SymbolicExpression::number(0.0L);
+                    if (numeric_matches_any(pi_multiple, {1.0L / 3.0, -1.0L / 3.0})) return half_symbol();
                     if (numeric_matches_any(pi_multiple, {2.0 / 3.0, -2.0 / 3.0})) return make_negate(half_symbol()).simplify();
-                    if (numeric_matches_any(pi_multiple, {1.0 / 6.0, -1.0 / 6.0})) return make_divide(sqrt3_symbol(), SymbolicExpression::number(2.0)).simplify();
+                    if (numeric_matches_any(pi_multiple, {1.0L / 6.0, -1.0L / 6.0})) return make_divide(sqrt3_symbol(), SymbolicExpression::number(2.0)).simplify();
                     if (numeric_matches_any(pi_multiple, {5.0 / 6.0, -5.0 / 6.0})) return make_negate(make_divide(sqrt3_symbol(), SymbolicExpression::number(2.0))).simplify();
                 }
                 if (node->text == "tan") {
-                    if (numeric_matches_any(pi_multiple, {0.0, 1.0, -1.0})) return SymbolicExpression::number(0.0);
-                    if (numeric_matches_any(pi_multiple, {0.25})) return SymbolicExpression::number(1.0);
-                    if (numeric_matches_any(pi_multiple, {-0.25})) return SymbolicExpression::number(-1.0);
-                    if (numeric_matches_any(pi_multiple, {1.0 / 6.0, -5.0 / 6.0})) return make_divide(SymbolicExpression::number(1.0), sqrt3_symbol()).simplify();
-                    if (numeric_matches_any(pi_multiple, {-1.0 / 6.0, 5.0 / 6.0})) return make_negate(make_divide(SymbolicExpression::number(1.0), sqrt3_symbol())).simplify();
-                    if (numeric_matches_any(pi_multiple, {1.0 / 3.0, -2.0 / 3.0})) return sqrt3_symbol();
-                    if (numeric_matches_any(pi_multiple, {-1.0 / 3.0, 2.0 / 3.0})) return make_negate(sqrt3_symbol()).simplify();
+                    if (numeric_matches_any(pi_multiple, {0.0L, 1.0L, -1.0L})) return SymbolicExpression::number(0.0L);
+                    if (numeric_matches_any(pi_multiple, {0.25})) return SymbolicExpression::number(1.0L);
+                    if (numeric_matches_any(pi_multiple, {-0.25})) return SymbolicExpression::number(-1.0L);
+                    if (numeric_matches_any(pi_multiple, {1.0L / 6.0, -5.0 / 6.0})) return make_divide(SymbolicExpression::number(1.0L), sqrt3_symbol()).simplify();
+                    if (numeric_matches_any(pi_multiple, {-1.0L / 6.0, 5.0 / 6.0})) return make_negate(make_divide(SymbolicExpression::number(1.0L), sqrt3_symbol())).simplify();
+                    if (numeric_matches_any(pi_multiple, {1.0L / 3.0, -2.0 / 3.0})) return sqrt3_symbol();
+                    if (numeric_matches_any(pi_multiple, {-1.0L / 3.0, 2.0 / 3.0})) return make_negate(sqrt3_symbol()).simplify();
                 }
             }
             return make_function(node->text, argument);
@@ -353,7 +353,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
 
         case NodeType::kNegate: {
             const SymbolicExpression operand = SymbolicExpression(node->left).simplify();
-            double value = 0.0;
+            long double value = 0.0L;
             if (operand.is_number(&value)) return SymbolicExpression::number(-value);
             if (operand.node_->type == NodeType::kNegate) return SymbolicExpression(operand.node_->left).simplify();
             return make_negate(operand);
@@ -364,8 +364,8 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
 
     const SymbolicExpression left = SymbolicExpression(node->left).simplify();
     const SymbolicExpression right = SymbolicExpression(node->right).simplify();
-    double left_value = 0.0;
-    double right_value = 0.0;
+    long double left_value = 0.0L;
+    long double right_value = 0.0L;
 
     switch (node->type) {
         case NodeType::kAdd:
@@ -376,12 +376,12 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 std::string left_arg, right_arg;
                 if ((is_squared_function(left, "sin", &left_arg) && is_squared_function(right, "cos", &right_arg) && left_arg == right_arg) ||
                     (is_squared_function(left, "cos", &left_arg) && is_squared_function(right, "sin", &right_arg) && left_arg == right_arg)) {
-                    return SymbolicExpression::number(1.0);
+                    return SymbolicExpression::number(1.0L);
                 }
                 // Hyperbolic identity: sinh²(x) + cosh²(x) → ? (no simple form, skip)
                 // sech²(x) + tanh²(x) → 1
-                if (is_squared_function(left, "sech", &left_arg) && is_squared_function(right, "tanh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0);
-                if (is_squared_function(right, "sech", &left_arg) && is_squared_function(left, "tanh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0);
+                if (is_squared_function(left, "sech", &left_arg) && is_squared_function(right, "tanh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0L);
+                if (is_squared_function(right, "sech", &left_arg) && is_squared_function(left, "tanh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0L);
             }
             // ln(a) + ln(b) → ln(a*b) (ln domain implies a, b > 0)
             if (left.node_->type == NodeType::kFunction && right.node_->type == NodeType::kFunction &&
@@ -392,7 +392,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             {
                 SymbolicExpression combined;
-                if (try_combine_like_terms(left, right, 1.0, &combined)) return combined;
+                if (try_combine_like_terms(left, right, 1.0L, &combined)) return combined;
             }
             {
                 const SymbolicExpression sum = make_add(left, right);
@@ -400,7 +400,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             {
                 SymbolicExpression factored;
-                if (try_factor_common_terms(left, right, 1.0, &factored)) return factored;
+                if (try_factor_common_terms(left, right, 1.0L, &factored)) return factored;
             }
             {
                 std::vector<SymbolicExpression> terms;
@@ -417,31 +417,31 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (right.node_->type == NodeType::kNegate) return make_add(left, SymbolicExpression(right.node_->left)).simplify();
             {
                 std::string left_arg, right_arg;
-                if (is_squared_function(left, "sec", &left_arg) && is_squared_function(right, "tan", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0);
-                if (is_squared_function(left, "csc", &left_arg) && is_squared_function(right, "cot", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0);
+                if (is_squared_function(left, "sec", &left_arg) && is_squared_function(right, "tan", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0L);
+                if (is_squared_function(left, "csc", &left_arg) && is_squared_function(right, "cot", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0L);
                 // Hyperbolic identity: cosh²(x) - sinh²(x) → 1
-                if (is_squared_function(left, "cosh", &left_arg) && is_squared_function(right, "sinh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0);
+                if (is_squared_function(left, "cosh", &left_arg) && is_squared_function(right, "sinh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0L);
                 // Hyperbolic identity: sinh²(x) - cosh²(x) → -1
-                if (is_squared_function(left, "sinh", &left_arg) && is_squared_function(right, "cosh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(-1.0);
+                if (is_squared_function(left, "sinh", &left_arg) && is_squared_function(right, "cosh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(-1.0L);
                 // coth²(x) - csch²(x) → 1
-                if (is_squared_function(left, "coth", &left_arg) && is_squared_function(right, "csch", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0);
+                if (is_squared_function(left, "coth", &left_arg) && is_squared_function(right, "csch", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(1.0L);
             }
             {
                 SymbolicExpression combined;
-                if (try_combine_like_terms(left, right, -1.0, &combined)) return combined;
+                if (try_combine_like_terms(left, right, -1.0L, &combined)) return combined;
             }
             {
                 SymbolicExpression factored;
-                if (try_factor_common_terms(left, right, -1.0, &factored)) return factored;
+                if (try_factor_common_terms(left, right, -1.0L, &factored)) return factored;
             }
             return make_subtract(left, right);
 
         case NodeType::kMultiply:
             if (left.is_number(&left_value) && right.is_number(&right_value)) return SymbolicExpression::number(left_value * right_value);
-            if (expr_is_zero(left) || expr_is_zero(right)) return SymbolicExpression::number(0.0);
+            if (expr_is_zero(left) || expr_is_zero(right)) return SymbolicExpression::number(0.0L);
             if (expr_is_one(left)) return right;
             if (expr_is_one(right)) return left;
-            if (left.is_variable_named("i") && right.is_variable_named("i")) return SymbolicExpression::number(-1.0);
+            if (left.is_variable_named("i") && right.is_variable_named("i")) return SymbolicExpression::number(-1.0L);
             if (expr_is_minus_one(left)) return make_negate(right).simplify();
             if (expr_is_minus_one(right)) return make_negate(left).simplify();
             if (left.node_->type == NodeType::kFunction && right.node_->type == NodeType::kFunction && left.node_->text == "exp" && right.node_->text == "exp") {
@@ -449,13 +449,13 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             {
                 SymbolicExpression left_base, right_base;
-                double left_exp, right_exp;
+                long double left_exp, right_exp;
                 decompose_power_factor(left, &left_base, &left_exp);
                 decompose_power_factor(right, &right_base, &right_exp);
                 if (expressions_match(left_base, right_base)) return rebuild_power_difference(left_base, left_exp + right_exp);
             }
             {
-                double numeric_factor = 1.0;
+                long double numeric_factor = 1.0L;
                 std::vector<SymbolicExpression> symbolic_factors;
                 collect_multiplicative_terms(left, &numeric_factor, &symbolic_factors);
                 collect_multiplicative_terms(right, &numeric_factor, &symbolic_factors);
@@ -464,7 +464,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
 
         case NodeType::kDivide:
             if (left.is_number(&left_value) && right.is_number(&right_value)) return SymbolicExpression::number(left_value / right_value);
-            if (expr_is_zero(left)) return SymbolicExpression::number(0.0);
+            if (expr_is_zero(left)) return SymbolicExpression::number(0.0L);
             if (expr_is_one(right)) return left;
             {
                 SymbolicExpression reduced;
@@ -473,7 +473,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             {
                 SymbolicExpression left_base, right_base;
-                double left_exp, right_exp;
+                long double left_exp, right_exp;
                 decompose_power_factor(left, &left_base, &left_exp);
                 decompose_power_factor(right, &right_base, &right_exp);
                 if (expressions_match(left_base, right_base)) return rebuild_power_difference(left_base, left_exp - right_exp);
@@ -484,7 +484,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 if (try_extract_common_symbolic_factor(right, &common, &rest)) return make_divide(left, make_multiply(common, rest)).simplify();
             }
             {
-                double num_c = 1.0, den_c = 1.0;
+                long double num_c = 1.0L, den_c = 1.0L;
                 std::vector<SymbolicExpression> num_f, den_f;
                 collect_division_factors(left, &num_c, &num_f);
                 collect_division_factors(right, &den_c, &den_f);
@@ -506,7 +506,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                     std::vector<SymbolicExpression> red_den;
                     for (size_t i = 0; i < den_f.size(); ++i) if (!den_used[i]) red_den.push_back(den_f[i]);
                     SymbolicExpression num_expr = rebuild_product_expression(num_c / den_c, red_num);
-                    SymbolicExpression den_expr = rebuild_product_expression(1.0, red_den);
+                    SymbolicExpression den_expr = rebuild_product_expression(1.0L, red_den);
                     if (expr_is_one(den_expr)) return num_expr;
                     return make_divide(num_expr, den_expr);
                 }
@@ -516,30 +516,30 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
         case NodeType::kPower:
             if (left.node_->type == NodeType::kE) return make_function("exp", right).simplify();
             if (left.is_variable_named("i")) {
-                double exp_v;
+                long double exp_v;
                 if (right.is_number(&exp_v)) {
                     int exp_i = static_cast<int>(mymath::round(exp_v));
                     if (mymath::abs(exp_v - exp_i) < 1e-10) {
                         int m4 = ((exp_i % 4) + 4) % 4;
-                        if (m4 == 0) return SymbolicExpression::number(1.0);
+                        if (m4 == 0) return SymbolicExpression::number(1.0L);
                         if (m4 == 1) return left;
-                        if (m4 == 2) return SymbolicExpression::number(-1.0);
+                        if (m4 == 2) return SymbolicExpression::number(-1.0L);
                         if (m4 == 3) return make_negate(left).simplify();
                     }
                 }
             }
             if (left.is_number(&left_value)) {
                 if (mymath::is_near_zero(left_value, kFormatEps)) {
-                    if (right.is_number(&right_value)) return mymath::is_near_zero(right_value, kFormatEps) ? SymbolicExpression::number(1.0) : SymbolicExpression::number(0.0);
+                    if (right.is_number(&right_value)) return mymath::is_near_zero(right_value, kFormatEps) ? SymbolicExpression::number(1.0L) : SymbolicExpression::number(0.0L);
                 }
-                if (mymath::is_near_zero(left_value - 1.0, kFormatEps)) return SymbolicExpression::number(1.0);
+                if (mymath::is_near_zero(left_value - 1.0L, kFormatEps)) return SymbolicExpression::number(1.0L);
             }
             if (right.is_number(&right_value)) {
-                if (mymath::is_near_zero(right_value, kFormatEps)) return SymbolicExpression::number(1.0);
-                if (mymath::is_near_zero(right_value - 1.0, kFormatEps)) return left;
+                if (mymath::is_near_zero(right_value, kFormatEps)) return SymbolicExpression::number(1.0L);
+                if (mymath::is_near_zero(right_value - 1.0L, kFormatEps)) return left;
             }
             if (left.node_->type == NodeType::kPower) {
-                double inner_exp;
+                long double inner_exp;
                 if (SymbolicExpression(left.node_->right).is_number(&inner_exp) && right.is_number(&right_value)) {
                     return make_power(SymbolicExpression(left.node_->left).simplify(), SymbolicExpression::number(inner_exp * right_value)).simplify();
                 }
@@ -568,8 +568,8 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
         case NodeType::kDifferentialOp: {
             SymbolicExpression op = simplify_once(SymbolicExpression(node->left));
             if (node->text == "div" && op.node_->type == NodeType::kDifferentialOp && op.node_->text == "grad") return make_function("laplacian", simplify_once(SymbolicExpression(op.node_->left)));
-            if (node->text == "div" && op.node_->type == NodeType::kDifferentialOp && op.node_->text == "curl") return SymbolicExpression::number(0.0);
-            if (node->text == "curl" && op.node_->type == NodeType::kDifferentialOp && op.node_->text == "grad") return SymbolicExpression::number(0.0);
+            if (node->text == "div" && op.node_->type == NodeType::kDifferentialOp && op.node_->text == "curl") return SymbolicExpression::number(0.0L);
+            if (node->text == "curl" && op.node_->type == NodeType::kDifferentialOp && op.node_->text == "grad") return SymbolicExpression::number(0.0L);
             return SymbolicExpression(make_function(node->text, op).node_);
         }
 
@@ -650,10 +650,10 @@ SymbolicExpression expand_impl(const SymbolicExpression& expression) {
         case NodeType::kPower: {
             SymbolicExpression left = expand_impl(SymbolicExpression(node->left));
             SymbolicExpression right = expand_impl(SymbolicExpression(node->right));
-            double n = 0.0;
-            if (right.is_number(&n) && n > 1.0 && mymath::is_integer(n, 1e-10)) {
+            long double n = 0.0L;
+            if (right.is_number(&n) && n > 1.0L && mymath::is_integer(n, 1e-10)) {
                 if (left.node_->type == NodeType::kAdd || left.node_->type == NodeType::kSubtract) {
-                    SymbolicExpression rest = make_power(left, SymbolicExpression::number(n - 1.0));
+                    SymbolicExpression rest = make_power(left, SymbolicExpression::number(n - 1.0L));
                     return expand_impl(make_multiply(left, rest));
                 }
             }

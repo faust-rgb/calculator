@@ -28,13 +28,13 @@ namespace {
 /**
  * @brief 将矩阵转换为向量
  */
-std::vector<double> matrix_to_vector_values(const matrix::Matrix& value,
+std::vector<long double> matrix_to_vector_values(const matrix::Matrix& value,
                                             const std::string& context) {
     if (!value.is_vector()) {
         throw std::runtime_error(context + " expects vector arguments");
     }
     const std::size_t size = value.rows == 1 ? value.cols : value.rows;
-    std::vector<double> result(size, 0.0);
+    std::vector<long double> result(size, 0.0L);
     for (std::size_t i = 0; i < size; ++i) {
         result[i] = value.rows == 1 ? value.at(0, i) : value.at(i, 0);
     }
@@ -45,8 +45,8 @@ std::vector<double> matrix_to_vector_values(const matrix::Matrix& value,
  * @brief 格式化规划问题结果
  */
 std::string format_planning_result(const OptimizationContext& ctx,
-                                   const std::vector<double>& solution,
-                                   double objective) {
+                                   const std::vector<long double>& solution,
+                                   long double objective) {
     return "x = " + matrix::Matrix::vector(solution).to_string() +
            "\nobjective = " + format_decimal(ctx.normalize_result(objective));
 }
@@ -104,16 +104,16 @@ std::string normalize_optimization_command(const std::string& command) {
  *
  * 委托给单纯形法实现。
  */
-bool solve_linear_box_problem(const std::vector<double>& objective,
+bool solve_linear_box_problem(const std::vector<long double>& objective,
                               const matrix::Matrix& inequality_matrix,
-                              const std::vector<double>& inequality_rhs,
+                              const std::vector<long double>& inequality_rhs,
                               const matrix::Matrix& equality_matrix,
-                              const std::vector<double>& equality_rhs,
-                              const std::vector<double>& lower_bounds,
-                              const std::vector<double>& upper_bounds,
-                              double planning_tolerance,
-                              std::vector<double>* solution,
-                              double* objective_value,
+                              const std::vector<long double>& equality_rhs,
+                              const std::vector<long double>& lower_bounds,
+                              const std::vector<long double>& upper_bounds,
+                              long double planning_tolerance,
+                              std::vector<long double>* solution,
+                              long double* objective_value,
                               std::string* diagnostic) {
     // 委托给专业的单纯形法实现
     return simplex::solve_linear_box_problem(
@@ -139,10 +139,10 @@ bool handle_optimization_command(const OptimizationContext& ctx,
 
     const ProblemType problem_type = get_problem_type(normalized);
     const bool maximize = is_maximize(normalized);
-    const double planning_tolerance = 1e-8;
+    const long double planning_tolerance = 1e-8;
 
     // 解析目标函数系数
-    const std::vector<double> objective = matrix_to_vector_values(
+    const std::vector<long double> objective = matrix_to_vector_values(
         ctx.parse_matrix_argument(arguments[0], normalized), normalized);
     const std::size_t variable_count = objective.size();
 
@@ -150,15 +150,15 @@ bool handle_optimization_command(const OptimizationContext& ctx,
     std::size_t argument_index = 1;
     const matrix::Matrix inequality_matrix =
         ctx.parse_matrix_argument(arguments[argument_index++], normalized);
-    const std::vector<double> inequality_rhs = matrix_to_vector_values(
+    const std::vector<long double> inequality_rhs = matrix_to_vector_values(
         ctx.parse_matrix_argument(arguments[argument_index++], normalized), normalized);
 
     // 初始化可选约束
-    matrix::Matrix equality_matrix(0, variable_count, 0.0);
-    std::vector<double> equality_rhs;
-    std::vector<double> lower_bounds(variable_count, 0.0);
-    std::vector<double> upper_bounds(variable_count, 1e20); // 默认无上限
-    std::vector<double> integrality(variable_count, 0.0);
+    matrix::Matrix equality_matrix(0, variable_count, 0.0L);
+    std::vector<long double> equality_rhs;
+    std::vector<long double> lower_bounds(variable_count, 0.0L);
+    std::vector<long double> upper_bounds(variable_count, 1e20); // 默认无上限
+    std::vector<long double> integrality(variable_count, 0.0L);
 
     // 根据问题类型解析不同参数
     if (problem_type == ProblemType::BIP) {
@@ -170,9 +170,9 @@ bool handle_optimization_command(const OptimizationContext& ctx,
             equality_matrix = ctx.parse_matrix_argument(arguments[argument_index++], normalized);
             equality_rhs = matrix_to_vector_values(ctx.parse_matrix_argument(arguments[argument_index++], normalized), normalized);
         }
-        std::fill(lower_bounds.begin(), lower_bounds.end(), 0.0);
-        std::fill(upper_bounds.begin(), upper_bounds.end(), 1.0);
-        std::fill(integrality.begin(), integrality.end(), 1.0);
+        std::fill(lower_bounds.begin(), lower_bounds.end(), 0.0L);
+        std::fill(upper_bounds.begin(), upper_bounds.end(), 1.0L);
+        std::fill(integrality.begin(), integrality.end(), 1.0L);
     } else if (problem_type == ProblemType::MILP) {
         // 混合整数规划：部分变量必须为整数
         if (arguments.size() != 6 && arguments.size() != 8) {
@@ -198,14 +198,14 @@ bool handle_optimization_command(const OptimizationContext& ctx,
         upper_bounds = matrix_to_vector_values(ctx.parse_matrix_argument(arguments[argument_index++], normalized), normalized);
         if (problem_type == ProblemType::ILP) {
             // 整数规划：所有变量必须为整数
-            std::fill(integrality.begin(), integrality.end(), 1.0);
+            std::fill(integrality.begin(), integrality.end(), 1.0L);
         }
     }
 
     // 转换最小化为最大化（改变目标函数符号）
-    std::vector<double> simplex_objective = objective;
+    std::vector<long double> simplex_objective = objective;
     if (!maximize) {
-        for (double& val : simplex_objective) val = -val;
+        for (long double& val : simplex_objective) val = -val;
     }
 
     // 识别整数变量索引
@@ -214,8 +214,8 @@ bool handle_optimization_command(const OptimizationContext& ctx,
         if (mymath::abs(integrality[i]) > planning_tolerance) integer_indices.push_back(i);
     }
 
-    std::vector<double> final_solution;
-    double final_obj = 0.0;
+    std::vector<long double> final_solution;
+    long double final_obj = 0.0L;
 
     if (integer_indices.empty()) {
         // 纯线性规划：直接使用单纯形法
@@ -228,8 +228,8 @@ bool handle_optimization_command(const OptimizationContext& ctx,
     } else {
         // 整数/混合整数规划：使用分支定界法
         bool found = false;
-        double best_val = -mymath::infinity();
-        std::vector<double> best_sol;
+        long double best_val = -mymath::infinity();
+        std::vector<long double> best_sol;
         std::size_t visited = 0;
 
         // 设置分支定界上下文

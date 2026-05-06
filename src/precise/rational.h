@@ -41,6 +41,6 @@ Rational operator/(const Rational& lhs, const Rational& rhs);
 // 有理数运算
 Rational pow_rational(Rational base, long long exponent);
 Rational abs_rational(Rational value);
-double rational_to_double(const Rational& value);
+long double rational_to_double(const Rational& value);
 
 #endif // TYPES_RATIONAL_H

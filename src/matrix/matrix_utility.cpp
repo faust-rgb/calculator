@@ -24,22 +24,22 @@ int clamp_display_precision(int precision) {
 template <typename T>
 T t_abs(T v) {
     if constexpr (std::is_same_v<T, PreciseDecimal>) return precise::abs(v);
-    else return static_cast<T>(mymath::abs(static_cast<double>(v)));
+    else return static_cast<T>(mymath::abs(static_cast<long double>(v)));
 }
 
 template <typename T>
 T t_sqrt(T v) {
     if constexpr (std::is_same_v<T, PreciseDecimal>) return precise::sqrt(v);
-    else return static_cast<T>(mymath::sqrt(static_cast<double>(v)));
+    else return static_cast<T>(mymath::sqrt(static_cast<long double>(v)));
 }
 
 template <typename T>
 std::string format_number(T value) {
     if constexpr (std::is_same_v<T, PreciseDecimal>) return value.to_string();
     else {
-        if (mymath::is_near_zero(static_cast<double>(value), 1e-10)) value = T(0);
+        if (mymath::is_near_zero(static_cast<long double>(value), 1e-10)) value = T(0);
         std::ostringstream out;
-        out << std::setprecision(mutable_display_precision()) << static_cast<double>(value);
+        out << std::setprecision(mutable_display_precision()) << static_cast<long double>(value);
         return out.str();
     }
 }
@@ -71,16 +71,16 @@ T vector_norm_squared(const std::vector<T>& values) {
 }
 
 template <>
-double vector_norm_squared<double>(const std::vector<double>& values) {
+long double vector_norm_squared<long double>(const std::vector<long double>& values) {
     long double sum = 0.0L, compensation = 0.0L;
-    for (double v : values) {
+    for (long double v : values) {
         long double val = static_cast<long double>(v);
         long double term = val * val - compensation;
         long double next = sum + term;
         compensation = (next - sum) - term;
         sum = next;
     }
-    return static_cast<double>(sum);
+    return static_cast<long double>(sum);
 }
 
 template <typename T>
@@ -247,7 +247,7 @@ TMatrix<T> complex_sequence_to_matrix(const std::vector<TComplexSample<T>>& valu
 
 template <typename T>
 std::vector<TComplexSample<T>> discrete_fourier_transform(const std::vector<TComplexSample<T>>& input, bool inverse) {
-    if constexpr (std::is_same_v<T, double>) {
+    if constexpr (std::is_same_v<T, long double>) {
         std::vector<signal::Complex> v;
         for (const auto& s : input) v.emplace_back(s.real, s.imag);
         auto trans = inverse ? signal::ifft(v) : signal::fft(v);
@@ -317,5 +317,5 @@ void set_display_precision(int precision) {
     template std::vector<matrix::internal::TComplexSample<TYPE>> matrix::internal::discrete_fourier_transform(const std::vector<matrix::internal::TComplexSample<TYPE>>&, bool); \
     template std::vector<matrix::internal::TComplexSample<TYPE>> matrix::internal::convolve_sequences(const std::vector<matrix::internal::TComplexSample<TYPE>>&, const std::vector<matrix::internal::TComplexSample<TYPE>>&);
 
-INSTANTIATE_UTIL(double)
+INSTANTIATE_UTIL(long double)
 INSTANTIATE_UTIL(PreciseDecimal)

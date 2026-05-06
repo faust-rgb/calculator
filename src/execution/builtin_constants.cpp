@@ -9,7 +9,7 @@
 #include "builtin_constants.h"
 #include "math/mymath.h"
 
-bool lookup_builtin_constant(const std::string& name, double* value) {
+bool lookup_builtin_constant(const std::string& name, long double* value) {
     if (name == "pi") {
         *value = mymath::kPi;
         return true;

@@ -86,7 +86,7 @@ Rational parse_rational_literal(const std::string& token) {
 Rational lookup_variable_exact(const std::string& name, const VariableResolver& variables, std::size_t pos) {
     const StoredValue* found = variables.lookup(name);
     if (!found) {
-        double constant_value = 0.0;
+        long double constant_value = 0.0L;
         if (lookup_builtin_constant(name, &constant_value)) {
             throw_ast_error<ExactModeUnsupported>("built-in constants are not rational", pos);
         }

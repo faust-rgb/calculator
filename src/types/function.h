@@ -36,7 +36,7 @@ using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
  * @brief 调用脚本函数的回调类型（返回 double）
  */
 using InvokeScriptFunctionDecimalCallback =
-    std::function<double(const std::string&, const std::vector<double>&)>;
+    std::function<long double(const std::string&, const std::vector<long double>&)>;
 
 // ============================================================================
 // 用户函数结构

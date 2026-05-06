@@ -52,7 +52,7 @@ struct IntegrationResult {
     bool needs_constant = true;     ///< 是否需要加常数 C
 
     static IntegrationResult failed() {
-        return {SymbolicExpression::number(0.0), false, "", true};
+        return {SymbolicExpression::number(0.0L), false, "", true};
     }
 
     static IntegrationResult ok(const SymbolicExpression& expr,
@@ -62,7 +62,7 @@ struct IntegrationResult {
     }
 
     static IntegrationResult non_elementary(const std::string& method) {
-        return {SymbolicExpression::number(0.0), false, method, true};
+        return {SymbolicExpression::number(0.0L), false, method, true};
     }
 };
 
@@ -362,7 +362,7 @@ private:
      * 如果 expression = constant * rest，提取常数
      */
     bool extract_constant_factor(const SymbolicExpression& expression,
-                                  double* constant,
+                                  long double* constant,
                                   SymbolicExpression* rest);
 };
 
@@ -385,7 +385,7 @@ private:
 bool detect_derivative_pattern(const SymbolicExpression& expression,
                                const SymbolicExpression& candidate,
                                const std::string& variable_name,
-                               double* constant,
+                               long double* constant,
                                SymbolicExpression* h_expr);
 
 /**

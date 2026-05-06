@@ -38,7 +38,7 @@ struct ComplexRoot {
     bool is_conjugate_pair;            // true 如果表示共轭对 a+bi 和 a-bi
 
     static ComplexRoot real(const SymbolicExpression& r) {
-        return {r, SymbolicExpression::number(0.0), false, false};
+        return {r, SymbolicExpression::number(0.0L), false, false};
     }
     static ComplexRoot complex(const SymbolicExpression& re, const SymbolicExpression& im, bool conjugate = true) {
         return {re, im, true, conjugate};
@@ -78,16 +78,16 @@ struct RischIntegrationResult {
         return {true, IntegralType::kElementary, value, "", SpecialFunction::kEi};
     }
     static RischIntegrationResult non_elementary(const std::string& msg = "") {
-        return {false, IntegralType::kNonElementary, SymbolicExpression::number(0.0), msg, SpecialFunction::kEi};
+        return {false, IntegralType::kNonElementary, SymbolicExpression::number(0.0L), msg, SpecialFunction::kEi};
     }
     static RischIntegrationResult proof_failed(const std::string& msg = "") {
-        return {false, IntegralType::kProofFailed, SymbolicExpression::number(0.0), msg, SpecialFunction::kEi};
+        return {false, IntegralType::kProofFailed, SymbolicExpression::number(0.0L), msg, SpecialFunction::kEi};
     }
     static RischIntegrationResult special_function(SpecialFunction func, const SymbolicExpression& arg) {
         return {true, IntegralType::kSpecialFunction, arg, "", func};
     }
     static RischIntegrationResult unknown(const std::string& msg = "") {
-        return {false, IntegralType::kUnknown, SymbolicExpression::number(0.0), msg, SpecialFunction::kEi};
+        return {false, IntegralType::kUnknown, SymbolicExpression::number(0.0L), msg, SpecialFunction::kEi};
     }
 
     // 检查结果类型
@@ -140,11 +140,11 @@ struct RDEResult {
     }
 
     static RDEResult no_solution(const std::string& reason) {
-        return {RDEResultType::kNoSolution, SymbolicExpression::number(0.0), reason};
+        return {RDEResultType::kNoSolution, SymbolicExpression::number(0.0L), reason};
     }
 
     static RDEResult cannot_prove(const std::string& reason) {
-        return {RDEResultType::kCannotProve, SymbolicExpression::number(0.0), reason};
+        return {RDEResultType::kCannotProve, SymbolicExpression::number(0.0L), reason};
     }
 
     bool has_solution() const { return type == RDEResultType::kHasSolution; }
@@ -365,8 +365,8 @@ struct AlgebraicNumberRepresentation {
     // 创建整数
     static AlgebraicNumberRepresentation integer(int n) {
         std::vector<SymbolicExpression> coeffs = {
-            SymbolicExpression::number(-static_cast<double>(n)),
-            SymbolicExpression::number(1.0)
+            SymbolicExpression::number(-static_cast<long double>(n)),
+            SymbolicExpression::number(1.0L)
         };
         AlgebraicNumberRepresentation num;
         num.minimal_polynomial = SymbolicPolynomial(coeffs, "_t");
@@ -379,8 +379,8 @@ struct AlgebraicNumberRepresentation {
     // 创建有理数
     static AlgebraicNumberRepresentation rational(int p, int q) {
         std::vector<SymbolicExpression> coeffs = {
-            SymbolicExpression::number(-static_cast<double>(p) / static_cast<double>(q)),
-            SymbolicExpression::number(1.0)
+            SymbolicExpression::number(-static_cast<long double>(p) / static_cast<long double>(q)),
+            SymbolicExpression::number(1.0L)
         };
         AlgebraicNumberRepresentation num;
         num.minimal_polynomial = SymbolicPolynomial(coeffs, "_t");
@@ -415,16 +415,16 @@ struct AlgebraicExtensionInfo {
         ext.root_index = 0;
 
         // 最小多项式: t^n - u = 0
-        std::vector<SymbolicExpression> coeffs(n + 1, SymbolicExpression::number(0.0));
+        std::vector<SymbolicExpression> coeffs(n + 1, SymbolicExpression::number(0.0L));
         coeffs[0] = symbolic_expression_internal::make_negate(u).simplify();  // -u
-        coeffs[n] = SymbolicExpression::number(1.0);  // t^n
+        coeffs[n] = SymbolicExpression::number(1.0L);  // t^n
         ext.minimal_polynomial = SymbolicPolynomial(coeffs, t_name);
 
         // 导数: t' = u'/(n*t^(n-1)) = u'/(n*t^(n-1))
         SymbolicExpression t = SymbolicExpression::variable(t_name);
         SymbolicExpression u_deriv = u.derivative(x_var).simplify();
-        SymbolicExpression t_n_minus_1 = symbolic_expression_internal::make_power(t, SymbolicExpression::number(static_cast<double>(n - 1)));
-        ext.derivation = (u_deriv / (SymbolicExpression::number(static_cast<double>(n)) * t_n_minus_1)).simplify();
+        SymbolicExpression t_n_minus_1 = symbolic_expression_internal::make_power(t, SymbolicExpression::number(static_cast<long double>(n - 1)));
+        ext.derivation = (u_deriv / (SymbolicExpression::number(static_cast<long double>(n)) * t_n_minus_1)).simplify();
 
         // 创建 RootOf 表示
         ext.root_of_rep = RootOfRepresentation::create(ext.minimal_polynomial, 0, t_name, x_var);
@@ -492,7 +492,7 @@ struct QuotientRingElement {
     // 构造零元素
     static QuotientRingElement zero(const std::string& t_var, int degree) {
         return QuotientRingElement{
-            std::vector<SymbolicExpression>(degree, SymbolicExpression::number(0.0)),
+            std::vector<SymbolicExpression>(degree, SymbolicExpression::number(0.0L)),
             t_var,
             degree
         };
@@ -500,7 +500,7 @@ struct QuotientRingElement {
 
     // 构造常数元素
     static QuotientRingElement constant(const SymbolicExpression& c, const std::string& t_var, int degree) {
-        std::vector<SymbolicExpression> coeffs(degree, SymbolicExpression::number(0.0));
+        std::vector<SymbolicExpression> coeffs(degree, SymbolicExpression::number(0.0L));
         coeffs[0] = c;
         return QuotientRingElement{coeffs, t_var, degree};
     }
@@ -514,7 +514,7 @@ struct QuotientRingElement {
                                                 const SymbolicPolynomial& modulus,
                                                 const std::string& t_var) {
         int n = modulus.degree();
-        std::vector<SymbolicExpression> coeffs(n, SymbolicExpression::number(0.0));
+        std::vector<SymbolicExpression> coeffs(n, SymbolicExpression::number(0.0L));
 
         // 如果多项式度数 < n，直接复制系数
         if (poly.degree() < n) {
@@ -533,13 +533,13 @@ struct QuotientRingElement {
             }
         } else {
             // 除法失败，手动归约
-            std::vector<SymbolicExpression> temp_coeffs(poly.degree() + 1, SymbolicExpression::number(0.0));
+            std::vector<SymbolicExpression> temp_coeffs(poly.degree() + 1, SymbolicExpression::number(0.0L));
             for (int i = 0; i <= poly.degree(); ++i) {
                 temp_coeffs[i] = poly.coefficient(i);
             }
 
             // 提取模多项式系数
-            std::vector<SymbolicExpression> mod_coeffs(n, SymbolicExpression::number(0.0));
+            std::vector<SymbolicExpression> mod_coeffs(n, SymbolicExpression::number(0.0L));
             for (int k = 0; k < n; ++k) {
                 mod_coeffs[k] = modulus.coefficient(k);
             }
@@ -554,13 +554,13 @@ struct QuotientRingElement {
                 for (int i = static_cast<int>(temp_coeffs.size()) - 1; i >= n; --i) {
                     if (SymbolicPolynomial::coeff_is_zero(temp_coeffs[i])) continue;
                     SymbolicExpression c = temp_coeffs[i];
-                    temp_coeffs[i] = SymbolicExpression::number(0.0);
+                    temp_coeffs[i] = SymbolicExpression::number(0.0L);
                     for (int k = 0; k < n; ++k) {
                         SymbolicExpression a_k = mod_coeffs[k];
                         if (!SymbolicPolynomial::coeff_is_zero(a_k)) {
                             int target = i - n + k;
                             while (target >= static_cast<int>(temp_coeffs.size())) {
-                                temp_coeffs.push_back(SymbolicExpression::number(0.0));
+                                temp_coeffs.push_back(SymbolicExpression::number(0.0L));
                             }
                             temp_coeffs[target] = (temp_coeffs[target] - c * a_k).simplify();
                             if (target >= n) changed = true;
@@ -586,14 +586,14 @@ struct QuotientRingElement {
 
     // 转换为符号表达式
     SymbolicExpression to_expression() const {
-        SymbolicExpression result = SymbolicExpression::number(0.0);
+        SymbolicExpression result = SymbolicExpression::number(0.0L);
         SymbolicExpression t = SymbolicExpression::variable(t_var);
         for (int i = 0; i < static_cast<int>(coefficients.size()); ++i) {
             if (!SymbolicPolynomial::coeff_is_zero(coefficients[i])) {
                 if (i == 0) {
                     result = (result + coefficients[i]).simplify();
                 } else {
-                    result = (result + coefficients[i] * symbolic_expression_internal::make_power(t, SymbolicExpression::number(static_cast<double>(i)))).simplify();
+                    result = (result + coefficients[i] * symbolic_expression_internal::make_power(t, SymbolicExpression::number(static_cast<long double>(i)))).simplify();
                 }
             }
         }
@@ -615,7 +615,7 @@ struct QuotientRingElement {
         // 先做普通乘法，然后模 modulus
         // 结果最多有 2*modulus_degree - 2 项
         int prod_degree = 2 * modulus_degree - 1;
-        std::vector<SymbolicExpression> prod_coeffs(prod_degree, SymbolicExpression::number(0.0));
+        std::vector<SymbolicExpression> prod_coeffs(prod_degree, SymbolicExpression::number(0.0L));
 
         for (int i = 0; i < modulus_degree; ++i) {
             for (int j = 0; j < modulus_degree; ++j) {
@@ -629,7 +629,7 @@ struct QuotientRingElement {
 
         // 提取模多项式的系数（首一化）
         // 假设 modulus 是首一的: t^n + a_{n-1}t^{n-1} + ... + a_0
-        std::vector<SymbolicExpression> mod_coeffs(modulus_degree, SymbolicExpression::number(0.0));
+        std::vector<SymbolicExpression> mod_coeffs(modulus_degree, SymbolicExpression::number(0.0L));
         for (int k = 0; k < modulus_degree; ++k) {
             mod_coeffs[k] = modulus.coefficient(k);
         }
@@ -650,7 +650,7 @@ struct QuotientRingElement {
                 // t^i = t^{i-n} * t^n = t^{i-n} * (-a_{n-1}t^{n-1} - ... - a_0)
                 // = -sum_{k=0}^{n-1} a_k * t^{i-n+k}
                 SymbolicExpression coeff = prod_coeffs[i];
-                prod_coeffs[i] = SymbolicExpression::number(0.0);
+                prod_coeffs[i] = SymbolicExpression::number(0.0L);
 
                 for (int k = 0; k < modulus_degree; ++k) {
                     SymbolicExpression a_k = mod_coeffs[k];
@@ -714,14 +714,14 @@ struct QuotientRingElement {
         // gcd 是常数 c，需要将 s 除以 c 得到真正的逆元
         // a*s + modulus*t = c => a*(s/c) + modulus*(t/c) = 1
         SymbolicExpression gcd_const = g.coefficient(0);
-        double gcd_val;
+        long double gcd_val;
         if (!gcd_const.is_number(&gcd_val) || mymath::abs(gcd_val) < 1e-10) {
             // gcd 不是数值常数或为零，无法处理
             return false;
         }
 
         // 将 s 的所有系数除以 gcd
-        std::vector<SymbolicExpression> inv_coeffs(modulus_degree, SymbolicExpression::number(0.0));
+        std::vector<SymbolicExpression> inv_coeffs(modulus_degree, SymbolicExpression::number(0.0L));
         for (int i = 0; i <= s.degree() && i < modulus_degree; ++i) {
             inv_coeffs[i] = (s.coefficient(i) / gcd_const).simplify();
         }
@@ -770,10 +770,10 @@ struct QuotientRingElement {
         // 简化计算: 对于 t^i，迹 = 0 除非 i = 0
         // 对于常数项，迹 = n * constant
 
-        SymbolicExpression result = SymbolicExpression::number(0.0);
+        SymbolicExpression result = SymbolicExpression::number(0.0L);
         for (int i = 0; i < modulus_degree; ++i) {
             if (i == 0) {
-                result = (result + SymbolicExpression::number(static_cast<double>(modulus_degree)) * coefficients[i]).simplify();
+                result = (result + SymbolicExpression::number(static_cast<long double>(modulus_degree)) * coefficients[i]).simplify();
             }
             // 对于 t^i (i > 0)，迹为 0
         }
@@ -788,8 +788,8 @@ private:
                              SymbolicPolynomial* g, SymbolicPolynomial* s, SymbolicPolynomial* t) {
         if (b.degree() < 0) {
             *g = a;
-            *s = SymbolicPolynomial({SymbolicExpression::number(1.0)}, a.variable_name());
-            *t = SymbolicPolynomial({SymbolicExpression::number(0.0)}, a.variable_name());
+            *s = SymbolicPolynomial({SymbolicExpression::number(1.0L)}, a.variable_name());
+            *t = SymbolicPolynomial({SymbolicExpression::number(0.0L)}, a.variable_name());
             return true;
         }
 
@@ -823,7 +823,7 @@ public:
             result.coefficients[i] = (result.coefficients[i] + a_i_deriv).simplify();
 
             if (i > 0) {
-                SymbolicExpression term = (SymbolicExpression::number(static_cast<double>(i)) *
+                SymbolicExpression term = (SymbolicExpression::number(static_cast<long double>(i)) *
                                           coefficients[i] * t_prime).simplify();
                 result.coefficients[i - 1] = (result.coefficients[i - 1] + term).simplify();
             }

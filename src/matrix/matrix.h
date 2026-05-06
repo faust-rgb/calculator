@@ -19,7 +19,7 @@ struct TComplex {
     T imag = T(0);
 };
 
-using ComplexNumber = TComplex<double>;
+using ComplexNumber = TComplex<long double>;
 
 /**
  * @namespace matrix
@@ -112,7 +112,7 @@ struct TMatrix {
 };
 
 /** @brief 默认双精度矩阵 */
-using Matrix = TMatrix<double>;
+using Matrix = TMatrix<long double>;
 
 /** @brief 设置矩阵字符串输出的十进制显示有效位数 */
 void set_display_precision(int precision);
@@ -136,10 +136,10 @@ struct TValue {
     static TValue from_matrix(TMatrix<T>&& matrix_value);
 };
 
-using Value = TValue<double>;
+using Value = TValue<long double>;
 
 /** @brief 标量求值函数类型，用于表达式解析 */
-using ScalarEvaluator = std::function<double(const std::string&)>;
+using ScalarEvaluator = std::function<long double(const std::string&)>;
 
 /** @brief 矩阵查找函数类型，用于变量解析 */
 using MatrixLookup = std::function<bool(const std::string&, Matrix*)>;

@@ -11,7 +11,7 @@
 
 namespace {
 
-double get_scalar(const StoredValue& val, const char* context) {
+long double get_scalar(const StoredValue& val, const char* context) {
     if (val.is_matrix || val.is_complex || val.is_string || val.is_list || val.is_dict) {
         throw std::runtime_error(std::string(context) + " expects a scalar value");
     }
@@ -57,7 +57,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
     funcs["now"] = [](const std::vector<StoredValue>& /*args*/) -> StoredValue {
         auto now = std::chrono::system_clock::now();
         auto duration = now.time_since_epoch();
-        double seconds = std::chrono::duration<double>(duration).count();
+        long double seconds = std::chrono::duration<long double>(duration).count();
         StoredValue res;
         res.decimal = seconds;
         res.exact = false;
@@ -109,7 +109,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         std::time_t timestamp;
 
         if (args.size() > 1) {
-            double ts = get_scalar(args[1], "strftime timestamp");
+            long double ts = get_scalar(args[1], "strftime timestamp");
             timestamp = static_cast<std::time_t>(ts);
         } else {
             auto now = std::chrono::system_clock::now();
@@ -135,7 +135,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         std::time_t timestamp;
 
         if (args.size() > 1) {
-            double ts = get_scalar(args[1], "strftime_utc timestamp");
+            long double ts = get_scalar(args[1], "strftime_utc timestamp");
             timestamp = static_cast<std::time_t>(ts);
         } else {
             auto now = std::chrono::system_clock::now();
@@ -160,7 +160,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         std::time_t timestamp = parse_time(args[0].string_value, args[1].string_value);
 
         StoredValue res;
-        res.decimal = static_cast<double>(timestamp);
+        res.decimal = static_cast<long double>(timestamp);
         res.exact = false;
         return res;
     };
@@ -169,7 +169,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
     funcs["clock"] = [](const std::vector<StoredValue>& /*args*/) -> StoredValue {
         auto now = std::chrono::steady_clock::now();
         auto duration = now.time_since_epoch();
-        double seconds = std::chrono::duration<double>(duration).count();
+        long double seconds = std::chrono::duration<long double>(duration).count();
 
         StoredValue res;
         res.decimal = seconds;
@@ -182,15 +182,15 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         if (args.empty()) {
             throw std::runtime_error("sleep expects 1 argument (seconds)");
         }
-        double seconds = get_scalar(args[0], "sleep duration");
+        long double seconds = get_scalar(args[0], "sleep duration");
         if (seconds < 0) {
             throw std::runtime_error("sleep duration must be non-negative");
         }
 
-        std::this_thread::sleep_for(std::chrono::duration<double>(seconds));
+        std::this_thread::sleep_for(std::chrono::duration<long double>(seconds));
 
         StoredValue res;
-        res.decimal = 1.0;
+        res.decimal = 1.0L;
         res.exact = false;
         return res;
     };
@@ -219,7 +219,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         }
 
         auto now = std::chrono::steady_clock::now();
-        double elapsed = std::chrono::duration<double>(now - it->second).count();
+        long double elapsed = std::chrono::duration<long double>(now - it->second).count();
 
         StoredValue res;
         res.decimal = elapsed;
@@ -240,7 +240,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         }
 
         auto now = std::chrono::steady_clock::now();
-        double elapsed = std::chrono::duration<double>(now - it->second).count();
+        long double elapsed = std::chrono::duration<long double>(now - it->second).count();
         timers_.erase(it);
 
         StoredValue res;

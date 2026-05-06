@@ -19,13 +19,13 @@
 namespace signal {
 
 // 数学常量
-constexpr double kPi = 3.14159265358979323846;
+constexpr long double kPi = 3.14159265358979323846;
 
 // ============================================================================
 // 功率谱密度（周期图法）
 // ============================================================================
 
-std::vector<double> periodogram(const std::vector<double>& signal, double sample_rate) {
+std::vector<long double> periodogram(const std::vector<long double>& signal, long double sample_rate) {
     if (signal.empty()) {
         return {};
     }
@@ -36,11 +36,11 @@ std::vector<double> periodogram(const std::vector<double>& signal, double sample
     std::vector<Complex> spectrum = rfft(signal);
 
     // 计算功率谱
-    std::vector<double> psd(spectrum.size());
-    const double scale = 2.0 / (static_cast<double>(n) * sample_rate);
+    std::vector<long double> psd(spectrum.size());
+    const long double scale = 2.0 / (static_cast<long double>(n) * sample_rate);
 
     for (std::size_t i = 0; i < spectrum.size(); ++i) {
-        psd[i] = scale * mymath::norm(spectrum[i]) / static_cast<double>(n);
+        psd[i] = scale * mymath::norm(spectrum[i]) / static_cast<long double>(n);
     }
     
     // 处理 DC 和 Nyquist (不需要乘2)
@@ -54,11 +54,11 @@ std::vector<double> periodogram(const std::vector<double>& signal, double sample
 // 功率谱密度（Welch 方法）
 // ============================================================================
 
-std::vector<double> pwelch(const std::vector<double>& signal,
+std::vector<long double> pwelch(const std::vector<long double>& signal,
                             std::size_t nfft,
                             WindowType window_type,
                             std::size_t noverlap,
-                            double sample_rate) {
+                            long double sample_rate) {
     if (signal.empty()) {
         return {};
     }
@@ -82,8 +82,8 @@ std::vector<double> pwelch(const std::vector<double>& signal,
     }
 
     // 生成窗函数
-    std::vector<double> win = window(window_type, nfft);
-    const double win_power = std::inner_product(win.begin(), win.end(), win.begin(), 0.0);
+    std::vector<long double> win = window(window_type, nfft);
+    const long double win_power = std::inner_product(win.begin(), win.end(), win.begin(), 0.0L);
 
     // 计算分段数
     const std::size_t step = nfft - noverlap;
@@ -94,14 +94,14 @@ std::vector<double> pwelch(const std::vector<double>& signal,
     }
 
     // 初始化 PSD 累加器
-    std::vector<double> psd_sum(nfft / 2 + 1, 0.0);
+    std::vector<long double> psd_sum(nfft / 2 + 1, 0.0L);
 
     // 对每个分段计算周期图
     for (std::size_t seg = 0; seg < n_segments; ++seg) {
         const std::size_t start = seg * step;
 
         // 提取并加窗
-        std::vector<double> segment(nfft);
+        std::vector<long double> segment(nfft);
         for (std::size_t i = 0; i < nfft; ++i) {
             segment[i] = signal[start + i] * win[i];
         }
@@ -116,8 +116,8 @@ std::vector<double> pwelch(const std::vector<double>& signal,
     }
 
     // 平均并归一化
-    std::vector<double> psd(psd_sum.size());
-    const double scale = 2.0 / (static_cast<double>(n_segments) * sample_rate * win_power);
+    std::vector<long double> psd(psd_sum.size());
+    const long double scale = 2.0 / (static_cast<long double>(n_segments) * sample_rate * win_power);
 
     for (std::size_t k = 0; k < psd.size(); ++k) {
         psd[k] = psd_sum[k] * scale;
@@ -134,7 +134,7 @@ std::vector<double> pwelch(const std::vector<double>& signal,
 // 短时傅里叶变换（STFT）
 // ============================================================================
 
-STFTResult stft(const std::vector<double>& signal,
+STFTResult stft(const std::vector<long double>& signal,
                 std::size_t nfft,
                 WindowType window_type,
                 std::size_t noverlap) {
@@ -159,7 +159,7 @@ STFTResult stft(const std::vector<double>& signal,
     }
 
     // 生成窗函数
-    std::vector<double> win = window(window_type, nfft);
+    std::vector<long double> win = window(window_type, nfft);
 
     // 计算分段数
     const std::size_t step = nfft - noverlap;
@@ -173,13 +173,13 @@ STFTResult stft(const std::vector<double>& signal,
     const std::size_t n_freqs = nfft / 2 + 1;
     result.freq_vector.resize(n_freqs);
     for (std::size_t k = 0; k < n_freqs; ++k) {
-        result.freq_vector[k] = static_cast<double>(k) / static_cast<double>(nfft);
+        result.freq_vector[k] = static_cast<long double>(k) / static_cast<long double>(nfft);
     }
 
     // 时间轴
     result.time_vector.resize(n_frames);
     for (std::size_t frame = 0; frame < n_frames; ++frame) {
-        result.time_vector[frame] = static_cast<double>(frame * step + nfft / 2);
+        result.time_vector[frame] = static_cast<long double>(frame * step + nfft / 2);
     }
 
     // STFT 矩阵
@@ -190,7 +190,7 @@ STFTResult stft(const std::vector<double>& signal,
         const std::size_t start = frame * step;
 
         // 提取并加窗
-        std::vector<double> frame_data(nfft);
+        std::vector<long double> frame_data(nfft);
         for (std::size_t i = 0; i < nfft; ++i) {
             frame_data[i] = signal[start + i] * win[i];
         }
@@ -206,7 +206,7 @@ STFTResult stft(const std::vector<double>& signal,
 // 逆短时傅里叶变换
 // ============================================================================
 
-std::vector<double> istft(const STFTResult& stft_result) {
+std::vector<long double> istft(const STFTResult& stft_result) {
     if (stft_result.stft_matrix.empty()) {
         return {};
     }
@@ -219,15 +219,15 @@ std::vector<double> istft(const STFTResult& stft_result) {
     const std::size_t step = nfft / 2;
     const std::size_t n_samples = (n_frames - 1) * step + nfft;
 
-    std::vector<double> signal(n_samples, 0.0);
-    std::vector<double> window_sum(n_samples, 0.0);
+    std::vector<long double> signal(n_samples, 0.0L);
+    std::vector<long double> window_sum(n_samples, 0.0L);
 
     // 使用 STFT 使用的窗函数进行重叠相加
-    std::vector<double> win = window(stft_result.window_type, nfft);
+    std::vector<long double> win = window(stft_result.window_type, nfft);
 
     for (std::size_t frame = 0; frame < n_frames; ++frame) {
         // IFFT
-        std::vector<double> frame_time = irfft(stft_result.stft_matrix[frame], nfft);
+        std::vector<long double> frame_time = irfft(stft_result.stft_matrix[frame], nfft);
 
         // 重叠相加
         const std::size_t start = frame * step;
@@ -251,7 +251,7 @@ std::vector<double> istft(const STFTResult& stft_result) {
 // 语谱图
 // ============================================================================
 
-std::vector<std::vector<double>> spectrogram(const std::vector<double>& signal,
+std::vector<std::vector<long double>> spectrogram(const std::vector<long double>& signal,
                                                std::size_t nfft,
                                                WindowType window_type,
                                                std::size_t noverlap) {
@@ -264,7 +264,7 @@ std::vector<std::vector<double>> spectrogram(const std::vector<double>& signal,
     const std::size_t n_frames = stft_data.stft_matrix.size();
     const std::size_t n_freqs = stft_data.stft_matrix[0].size();
 
-    std::vector<std::vector<double>> spec(n_freqs, std::vector<double>(n_frames));
+    std::vector<std::vector<long double>> spec(n_freqs, std::vector<long double>(n_frames));
 
     // 转置并计算功率
     for (std::size_t frame = 0; frame < n_frames; ++frame) {

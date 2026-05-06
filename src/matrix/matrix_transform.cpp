@@ -164,28 +164,28 @@ std::string TMatrix<T>::to_string() const {
 }
 
 // Explicit template instantiations
-template TMatrix<double> reshape<double>(const TMatrix<double>&, std::size_t, std::size_t);
+template TMatrix<long double> reshape<long double>(const TMatrix<long double>&, std::size_t, std::size_t);
 template TMatrix<PreciseDecimal> reshape<PreciseDecimal>(const TMatrix<PreciseDecimal>&, std::size_t, std::size_t);
 
-template TMatrix<double> vectorize<double>(const TMatrix<double>&);
+template TMatrix<long double> vectorize<long double>(const TMatrix<long double>&);
 template TMatrix<PreciseDecimal> vectorize<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
 
-template TMatrix<double> diag<double>(const TMatrix<double>&);
+template TMatrix<long double> diag<long double>(const TMatrix<long double>&);
 template TMatrix<PreciseDecimal> diag<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
 
-template TMatrix<double> transpose<double>(const TMatrix<double>&);
+template TMatrix<long double> transpose<long double>(const TMatrix<long double>&);
 template TMatrix<PreciseDecimal> transpose<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
 
-template void TMatrix<double>::resize(std::size_t, std::size_t, double);
+template void TMatrix<long double>::resize(std::size_t, std::size_t, long double);
 template void TMatrix<PreciseDecimal>::resize(std::size_t, std::size_t, PreciseDecimal);
 
-template void TMatrix<double>::append_row(const std::vector<double>&);
+template void TMatrix<long double>::append_row(const std::vector<long double>&);
 template void TMatrix<PreciseDecimal>::append_row(const std::vector<PreciseDecimal>&);
 
-template void TMatrix<double>::append_col(const std::vector<double>&);
+template void TMatrix<long double>::append_col(const std::vector<long double>&);
 template void TMatrix<PreciseDecimal>::append_col(const std::vector<PreciseDecimal>&);
 
-template std::string TMatrix<double>::to_string() const;
+template std::string TMatrix<long double>::to_string() const;
 template std::string TMatrix<PreciseDecimal>::to_string() const;
 
 } // namespace matrix

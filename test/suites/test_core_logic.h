@@ -25,7 +25,7 @@ namespace test_suites {
  * @return 如果找到匹配的临界点，返回true
  */
 bool contains_critical_point_near(const std::string& output,
-                                  double expected_x,
+                                  long double expected_x,
                                   const std::string& classification);
 
 // ============================================================================

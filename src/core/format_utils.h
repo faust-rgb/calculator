@@ -28,9 +28,9 @@ struct HexFormatOptions {
 // ============================================================================
 
 /**
- * @brief 尝试将 double 转换为简单的 Rational
+ * @brief 尝试将 long double 转换为简单的 Rational
  */
-bool try_make_simple_rational(double value, int max_denominator, Rational* rational);
+bool try_make_simple_rational(long double value, int max_denominator, Rational* rational);
 
 // ============================================================================
 // Pi 分数格式化
@@ -42,7 +42,7 @@ bool try_make_simple_rational(double value, int max_denominator, Rational* ratio
  * @param eps 匹配误差阈值
  * @return 格式化后的字符串，如 "pi / 4", "1 / 2pi"；无法匹配时返回空字符串
  */
-std::string try_format_as_pi_fraction(double value, double eps = 1e-9);
+std::string try_format_as_pi_fraction(long double value, long double eps = 1e-9);
 
 
 // ============================================================================
@@ -58,7 +58,7 @@ void set_process_display_precision(int precision);
 /**
  * @brief 规范化显示的小数值（处理接近零和接近整数的情况）
  */
-double normalize_display_decimal(double value);
+long double normalize_display_decimal(long double value);
 
 // ============================================================================
 // 数值格式化
@@ -67,14 +67,14 @@ double normalize_display_decimal(double value);
 /**
  * @brief 格式化小数值
  */
-std::string format_decimal(double value);
-std::string format_decimal(double value, int precision);
+std::string format_decimal(long double value);
+std::string format_decimal(long double value, int precision);
 
 /**
  * @brief 格式化符号数值（如 pi, e）
  */
-std::string format_symbolic_number(double value);
-std::string format_symbolic_scalar(double value);
+std::string format_symbolic_number(long double value);
+std::string format_symbolic_scalar(long double value);
 
 /**
  * @brief 格式化幂次项
@@ -84,12 +84,12 @@ std::string power_term(const std::string& base, int numerator, int denominator);
 /**
  * @brief 格式化带符号的中心文本
  */
-std::string signed_center_text(double center);
+std::string signed_center_text(long double center);
 
 /**
  * @brief 格式化项
  */
-std::string format_term(double coefficient, const std::string& factor);
+std::string format_term(long double coefficient, const std::string& factor);
 
 // ============================================================================
 // 存储值格式化

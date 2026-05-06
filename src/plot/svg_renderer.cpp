@@ -13,9 +13,9 @@ std::string SvgRenderer::color_to_hex(const std::string& color) {
     return color;
 }
 
-std::string SvgRenderer::colormap_color(double normalized_value, const std::string& colormap) {
+std::string SvgRenderer::colormap_color(long double normalized_value, const std::string& colormap) {
     // 确保 normalized_value 在 [0, 1] 范围内
-    normalized_value = std::max(0.0, std::min(1.0, normalized_value));
+    normalized_value = std::max(0.0L, std::min(1.0L, normalized_value));
 
     if (colormap == "viridis") {
         // Viridis 近似
@@ -80,7 +80,7 @@ std::string SvgRenderer::colormap_color(double normalized_value, const std::stri
     return colormap_color(normalized_value, "viridis");
 }
 
-std::string SvgRenderer::interpolate_color(const std::string& c1, const std::string& c2, double t) {
+std::string SvgRenderer::interpolate_color(const std::string& c1, const std::string& c2, long double t) {
     // 解析十六进制颜色
     auto parse_hex = [](const std::string& hex, int& r, int& g, int& b) {
         std::string h = hex;
@@ -108,7 +108,7 @@ std::string SvgRenderer::interpolate_color(const std::string& c1, const std::str
     return std::string(buf);
 }
 
-std::string SvgRenderer::marker_path(MarkerStyle style, double cx, double cy, double size) {
+std::string SvgRenderer::marker_path(MarkerStyle style, long double cx, long double cy, long double size) {
     std::ostringstream path;
     path << std::fixed << std::setprecision(2);
 
@@ -145,13 +145,13 @@ std::string SvgRenderer::marker_path(MarkerStyle style, double cx, double cy, do
             break;
         case MarkerStyle::Star:
             {
-                double r1 = size, r2 = size * 0.5;
+                long double r1 = size, r2 = size * 0.5;
                 path << "<polygon points=\"";
                 for (int i = 0; i < 10; ++i) {
-                    double angle = mymath::kPi / 2 + i * mymath::kPi / 5;
-                    double r = (i % 2 == 0) ? r1 : r2;
-                    double x = cx + r * mymath::cos(angle);
-                    double y = cy - r * mymath::sin(angle);
+                    long double angle = mymath::kPi / 2 + i * mymath::kPi / 5;
+                    long double r = (i % 2 == 0) ? r1 : r2;
+                    long double x = cx + r * mymath::cos(angle);
+                    long double y = cy - r * mymath::sin(angle);
                     path << x << "," << y << " ";
                 }
                 path << "\"/>";
@@ -163,38 +163,38 @@ std::string SvgRenderer::marker_path(MarkerStyle style, double cx, double cy, do
     return path.str();
 }
 
-std::vector<double> SvgRenderer::compute_ticks(double min_val, double max_val, int max_ticks) {
-    std::vector<double> ticks;
+std::vector<long double> SvgRenderer::compute_ticks(long double min_val, long double max_val, int max_ticks) {
+    std::vector<long double> ticks;
     if (min_val >= max_val) {
         ticks.push_back(min_val);
         return ticks;
     }
 
-    double range = max_val - min_val;
-    double rough_step = range / max_ticks;
+    long double range = max_val - min_val;
+    long double rough_step = range / max_ticks;
 
     // 找到最接近的"漂亮"步长
-    double magnitude = mymath::pow(10, mymath::floor(mymath::log10(rough_step)));
-    double residual = rough_step / magnitude;
+    long double magnitude = mymath::pow(10, mymath::floor(mymath::log10(rough_step)));
+    long double residual = rough_step / magnitude;
 
-    double nice_step;
+    long double nice_step;
     if (residual <= 1.5) nice_step = magnitude;
     else if (residual <= 3) nice_step = 2 * magnitude;
     else if (residual <= 7) nice_step = 5 * magnitude;
     else nice_step = 10 * magnitude;
 
-    double tick_start = mymath::ceil(min_val / nice_step) * nice_step;
-    for (double t = tick_start; t <= max_val + nice_step * 0.01; t += nice_step) {
+    long double tick_start = mymath::ceil(min_val / nice_step) * nice_step;
+    for (long double t = tick_start; t <= max_val + nice_step * 0.01; t += nice_step) {
         ticks.push_back(t);
     }
 
     return ticks;
 }
 
-std::string SvgRenderer::format_tick(double value, int precision) {
+std::string SvgRenderer::format_tick(long double value, int precision) {
     if (mymath::abs(value) < 1e-10) return "0";
 
-    double abs_val = mymath::abs(value);
+    long double abs_val = mymath::abs(value);
     if (abs_val >= 1000 || abs_val < 0.01) {
         std::ostringstream ss;
         ss << std::scientific << std::setprecision(precision - 1) << value;
@@ -236,14 +236,14 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
     int margin_bottom = 50;
 
     // 计算数据范围
-    double x_min = mymath::infinity(), x_max = -mymath::infinity();
-    double y_min = mymath::infinity(), y_max = -mymath::infinity();
+    long double x_min = mymath::infinity(), x_max = -mymath::infinity();
+    long double y_min = mymath::infinity(), y_max = -mymath::infinity();
 
     for (const auto& series : all_series) {
         for (const auto& p : series.points) {
             if (mymath::isnan(p.x) || mymath::isnan(p.y) || mymath::isinf(p.x) || mymath::isinf(p.y)) continue;
-            double x = options.log_x && p.x > 0 ? mymath::log10(p.x) : p.x;
-            double y = options.log_y && p.y > 0 ? mymath::log10(p.y) : p.y;
+            long double x = options.log_x && p.x > 0 ? mymath::log10(p.x) : p.x;
+            long double y = options.log_y && p.y > 0 ? mymath::log10(p.y) : p.y;
             x_min = std::min(x_min, x);
             x_max = std::max(x_max, x);
             y_min = std::min(y_min, y);
@@ -271,10 +271,10 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
     int chart_w = width - margin_left - margin_right;
     int chart_h = height - margin_top - margin_bottom;
 
-    auto map_x = [&](double x) {
+    auto map_x = [&](long double x) {
         return margin_left + (x - x_min) / (x_max - x_min) * chart_w;
     };
-    auto map_y = [&](double y) {
+    auto map_y = [&](long double y) {
         return height - margin_bottom - (y - y_min) / (y_max - y_min) * chart_h;
     };
 
@@ -282,7 +282,7 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
     svg << std::fixed << std::setprecision(3);
 
     // SVG 头部
-    svg << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n";
+    svg << "<?xml version=\"1.0L\" encoding=\"UTF-8\" standalone=\"no\"?>\n";
     svg << "<svg width=\"" << width << "\" height=\"" << height
         << "\" xmlns=\"http://www.w3.org/2000/svg\">\n";
 
@@ -299,15 +299,15 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
         svg << "<g stroke=\"#E0E0E0\" stroke-width=\"1\">\n";
 
         auto x_ticks = compute_ticks(x_min, x_max, 8);
-        for (double t : x_ticks) {
-            double tx = map_x(t);
+        for (long double t : x_ticks) {
+            long double tx = map_x(t);
             svg << "<line x1=\"" << tx << "\" y1=\"" << margin_top
                 << "\" x2=\"" << tx << "\" y2=\"" << (height - margin_bottom) << "\"/>\n";
         }
 
         auto y_ticks = compute_ticks(y_min, y_max, 6);
-        for (double t : y_ticks) {
-            double ty = map_y(t);
+        for (long double t : y_ticks) {
+            long double ty = map_y(t);
             svg << "<line x1=\"" << margin_left << "\" y1=\"" << ty
                 << "\" x2=\"" << (width - margin_right) << "\" y2=\"" << ty << "\"/>\n";
         }
@@ -326,25 +326,25 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
     svg << "<g font-family=\"Arial, sans-serif\" font-size=\"11\" fill=\"#333\">\n";
 
     auto x_ticks = compute_ticks(x_min, x_max, 8);
-    for (double t : x_ticks) {
-        double tx = map_x(t);
+    for (long double t : x_ticks) {
+        long double tx = map_x(t);
         svg << "<line x1=\"" << tx << "\" y1=\"" << (height - margin_bottom)
             << "\" x2=\"" << tx << "\" y2=\"" << (height - margin_bottom + 5)
             << "\" stroke=\"#333\"/>\n";
 
-        double display_val = options.log_x ? mymath::pow(10, t) : t;
+        long double display_val = options.log_x ? mymath::pow(10, t) : t;
         svg << "<text x=\"" << tx << "\" y=\"" << (height - margin_bottom + 18)
             << "\" text-anchor=\"middle\">" << format_tick(display_val) << "</text>\n";
     }
 
     auto y_ticks = compute_ticks(y_min, y_max, 6);
-    for (double t : y_ticks) {
-        double ty = map_y(t);
+    for (long double t : y_ticks) {
+        long double ty = map_y(t);
         svg << "<line x1=\"" << (margin_left - 5) << "\" y1=\"" << ty
             << "\" x2=\"" << margin_left << "\" y2=\"" << ty
             << "\" stroke=\"#333\"/>\n";
 
-        double display_val = options.log_y ? mymath::pow(10, t) : t;
+        long double display_val = options.log_y ? mymath::pow(10, t) : t;
         svg << "<text x=\"" << (margin_left - 10) << "\" y=\"" << (ty + 4)
             << "\" text-anchor=\"end\">" << format_tick(display_val) << "</text>\n";
     }
@@ -392,8 +392,8 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
             bool first = true;
             for (const auto& p : series.points) {
                 if (mymath::isnan(p.x) || mymath::isnan(p.y) || mymath::isinf(p.x) || mymath::isinf(p.y)) continue;
-                double x = options.log_x && p.x > 0 ? mymath::log10(p.x) : p.x;
-                double y = options.log_y && p.y > 0 ? mymath::log10(p.y) : p.y;
+                long double x = options.log_x && p.x > 0 ? mymath::log10(p.x) : p.x;
+                long double y = options.log_y && p.y > 0 ? mymath::log10(p.y) : p.y;
                 if (x < x_min || x > x_max || y < y_min || y > y_max) continue;
                 if (!first) svg << " ";
                 svg << map_x(x) << "," << map_y(y);
@@ -407,8 +407,8 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
             svg << "<g fill=\"" << color << "\" stroke=\"" << color << "\">\n";
             for (const auto& p : series.points) {
                 if (mymath::isnan(p.x) || mymath::isnan(p.y) || mymath::isinf(p.x) || mymath::isinf(p.y)) continue;
-                double x = options.log_x && p.x > 0 ? mymath::log10(p.x) : p.x;
-                double y = options.log_y && p.y > 0 ? mymath::log10(p.y) : p.y;
+                long double x = options.log_x && p.x > 0 ? mymath::log10(p.x) : p.x;
+                long double y = options.log_y && p.y > 0 ? mymath::log10(p.y) : p.y;
                 if (x < x_min || x > x_max || y < y_min || y > y_max) continue;
                 svg << marker_path(series.style.marker_style, map_x(x), map_y(y), series.style.marker_size) << "\n";
             }
@@ -454,8 +454,8 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
 }
 
 std::string SvgRenderer::render_heatmap(const matrix::Matrix& z,
-                                         const std::vector<double>&,
-                                         const std::vector<double>&,
+                                         const std::vector<long double>&,
+                                         const std::vector<long double>&,
                                          const HeatmapOptions& options) {
     if (z.rows == 0 || z.cols == 0) return "<svg></svg>";
 
@@ -470,13 +470,13 @@ std::string SvgRenderer::render_heatmap(const matrix::Matrix& z,
     int chart_h = height - margin_top - margin_bottom;
 
     // 计算数据范围
-    double z_min = options.auto_range ? z.at(0, 0) : options.z_min;
-    double z_max = options.auto_range ? z.at(0, 0) : options.z_max;
+    long double z_min = options.auto_range ? z.at(0, 0) : options.z_min;
+    long double z_max = options.auto_range ? z.at(0, 0) : options.z_max;
 
     if (options.auto_range) {
         for (size_t r = 0; r < z.rows; ++r) {
             for (size_t c = 0; c < z.cols; ++c) {
-                double val = z.at(r, c);
+                long double val = z.at(r, c);
                 if (mymath::isfinite(val)) {
                     z_min = std::min(z_min, val);
                     z_max = std::max(z_max, val);
@@ -486,13 +486,13 @@ std::string SvgRenderer::render_heatmap(const matrix::Matrix& z,
     }
     if (z_min == z_max) { z_min -= 1; z_max += 1; }
 
-    double cell_w = static_cast<double>(chart_w) / z.cols;
-    double cell_h = static_cast<double>(chart_h) / z.rows;
+    long double cell_w = static_cast<long double>(chart_w) / z.cols;
+    long double cell_h = static_cast<long double>(chart_h) / z.rows;
 
     std::ostringstream svg;
     svg << std::fixed << std::setprecision(3);
 
-    svg << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n";
+    svg << "<?xml version=\"1.0L\" encoding=\"UTF-8\" standalone=\"no\"?>\n";
     svg << "<svg width=\"" << width << "\" height=\"" << height
         << "\" xmlns=\"http://www.w3.org/2000/svg\">\n";
     svg << "<rect width=\"100%\" height=\"100%\" fill=\"white\"/>\n";
@@ -500,12 +500,12 @@ std::string SvgRenderer::render_heatmap(const matrix::Matrix& z,
     // 绘制热力图单元格
     for (size_t r = 0; r < z.rows; ++r) {
         for (size_t c = 0; c < z.cols; ++c) {
-            double val = z.at(z.rows - 1 - r, c);  // Y 轴翻转
-            double normalized = (val - z_min) / (z_max - z_min);
+            long double val = z.at(z.rows - 1 - r, c);  // Y 轴翻转
+            long double normalized = (val - z_min) / (z_max - z_min);
             std::string color = colormap_color(normalized, options.colormap);
 
-            double x = margin_left + c * cell_w;
-            double y = margin_top + r * cell_h;
+            long double x = margin_left + c * cell_w;
+            long double y = margin_top + r * cell_h;
 
             svg << "<rect x=\"" << x << "\" y=\"" << y
                 << "\" width=\"" << cell_w << "\" height=\"" << cell_h
@@ -557,7 +557,7 @@ std::string SvgRenderer::render_heatmap(const matrix::Matrix& z,
 
         // 绘制颜色条
         for (int i = 0; i < bar_h; ++i) {
-            double normalized = 1.0 - static_cast<double>(i) / bar_h;
+            long double normalized = 1.0L - static_cast<long double>(i) / bar_h;
             std::string color = colormap_color(normalized, options.colormap);
             svg << "<rect x=\"" << bar_x << "\" y=\"" << (margin_top + i)
                 << "\" width=\"" << bar_w << "\" height=\"1\" fill=\"" << color << "\"/>\n";
@@ -581,7 +581,7 @@ std::string SvgRenderer::render_heatmap(const matrix::Matrix& z,
     return svg.str();
 }
 
-std::string SvgRenderer::render_bar(const std::vector<double>& values,
+std::string SvgRenderer::render_bar(const std::vector<long double>& values,
                                      const std::vector<std::string>& labels,
                                      const BarOptions& options) {
     if (values.empty()) return "<svg></svg>";
@@ -596,19 +596,19 @@ std::string SvgRenderer::render_bar(const std::vector<double>& values,
     int chart_w = width - margin_left - margin_right;
     int chart_h = height - margin_top - margin_bottom;
 
-    double max_val = values[0];
-    for (double v : values) {
+    long double max_val = values[0];
+    for (long double v : values) {
         max_val = std::max(max_val, v);
     }
     if (max_val <= 0) max_val = 1;
 
-    double bar_width = static_cast<double>(chart_w) / values.size() * 0.8;
-    double bar_gap = static_cast<double>(chart_w) / values.size() * 0.2;
+    long double bar_width = static_cast<long double>(chart_w) / values.size() * 0.8;
+    long double bar_gap = static_cast<long double>(chart_w) / values.size() * 0.2;
 
     std::ostringstream svg;
     svg << std::fixed << std::setprecision(2);
 
-    svg << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n";
+    svg << "<?xml version=\"1.0L\" encoding=\"UTF-8\" standalone=\"no\"?>\n";
     svg << "<svg width=\"" << width << "\" height=\"" << height
         << "\" xmlns=\"http://www.w3.org/2000/svg\">\n";
     svg << "<rect width=\"100%\" height=\"100%\" fill=\"white\"/>\n";
@@ -616,7 +616,7 @@ std::string SvgRenderer::render_bar(const std::vector<double>& values,
     // 网格线
     svg << "<g stroke=\"#E0E0E0\" stroke-width=\"1\">\n";
     for (int i = 0; i <= 5; ++i) {
-        double y = margin_top + i * chart_h / 5.0;
+        long double y = margin_top + i * chart_h / 5.0;
         svg << "<line x1=\"" << margin_left << "\" y1=\"" << y
             << "\" x2=\"" << (width - margin_right) << "\" y2=\"" << y << "\"/>\n";
     }
@@ -633,8 +633,8 @@ std::string SvgRenderer::render_bar(const std::vector<double>& values,
     // Y 轴刻度
     svg << "<g font-family=\"Arial, sans-serif\" font-size=\"10\" fill=\"#333\">\n";
     for (int i = 0; i <= 5; ++i) {
-        double val = max_val * (5 - i) / 5.0;
-        double y = margin_top + i * chart_h / 5.0;
+        long double val = max_val * (5 - i) / 5.0;
+        long double y = margin_top + i * chart_h / 5.0;
         svg << "<text x=\"" << (margin_left - 10) << "\" y=\"" << (y + 4)
             << "\" text-anchor=\"end\">" << format_tick(val) << "</text>\n";
     }
@@ -642,9 +642,9 @@ std::string SvgRenderer::render_bar(const std::vector<double>& values,
 
     // 绘制柱子
     for (size_t i = 0; i < values.size(); ++i) {
-        double bar_h = values[i] / max_val * chart_h;
-        double x = margin_left + i * (bar_width + bar_gap) + bar_gap / 2;
-        double y = height - margin_bottom - bar_h;
+        long double bar_h = values[i] / max_val * chart_h;
+        long double x = margin_left + i * (bar_width + bar_gap) + bar_gap / 2;
+        long double y = height - margin_bottom - bar_h;
 
         svg << "<rect x=\"" << x << "\" y=\"" << y
             << "\" width=\"" << bar_width << "\" height=\"" << bar_h
@@ -684,7 +684,7 @@ std::string SvgRenderer::render_bar(const std::vector<double>& values,
     return svg.str();
 }
 
-std::string SvgRenderer::render_histogram(const std::vector<double>& data,
+std::string SvgRenderer::render_histogram(const std::vector<long double>& data,
                                            const HistogramOptions& options) {
     if (data.empty()) return "<svg></svg>";
 
@@ -692,18 +692,18 @@ std::string SvgRenderer::render_histogram(const std::vector<double>& data,
     if (bins <= 0) bins = 10;
 
     // 计算数据范围
-    double min_val = data[0], max_val = data[0];
-    for (double v : data) {
+    long double min_val = data[0], max_val = data[0];
+    for (long double v : data) {
         min_val = std::min(min_val, v);
         max_val = std::max(max_val, v);
     }
     if (min_val == max_val) { min_val -= 1; max_val += 1; }
 
-    double bin_width = (max_val - min_val) / bins;
+    long double bin_width = (max_val - min_val) / bins;
 
     // 计算直方图
     std::vector<int> counts(bins, 0);
-    for (double v : data) {
+    for (long double v : data) {
         int bin = static_cast<int>((v - min_val) / bin_width);
         if (bin >= bins) bin = bins - 1;
         if (bin < 0) bin = 0;
@@ -711,12 +711,12 @@ std::string SvgRenderer::render_histogram(const std::vector<double>& data,
     }
 
     // 归一化
-    std::vector<double> heights(bins);
-    double max_count = 0;
-    for (int c : counts) max_count = std::max(max_count, static_cast<double>(c));
+    std::vector<long double> heights(bins);
+    long double max_count = 0;
+    for (int c : counts) max_count = std::max(max_count, static_cast<long double>(c));
 
     if (options.normalized) {
-        double total = static_cast<double>(data.size()) * bin_width;
+        long double total = static_cast<long double>(data.size()) * bin_width;
         for (int i = 0; i < bins; ++i) {
             heights[i] = counts[i] / total;
         }
@@ -737,12 +737,12 @@ std::string SvgRenderer::render_histogram(const std::vector<double>& data,
     int chart_w = width - margin_left - margin_right;
     int chart_h = height - margin_top - margin_bottom;
 
-    double bar_w = static_cast<double>(chart_w) / bins;
+    long double bar_w = static_cast<long double>(chart_w) / bins;
 
     std::ostringstream svg;
     svg << std::fixed << std::setprecision(2);
 
-    svg << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n";
+    svg << "<?xml version=\"1.0L\" encoding=\"UTF-8\" standalone=\"no\"?>\n";
     svg << "<svg width=\"" << width << "\" height=\"" << height
         << "\" xmlns=\"http://www.w3.org/2000/svg\">\n";
     svg << "<rect width=\"100%\" height=\"100%\" fill=\"white\"/>\n";
@@ -750,7 +750,7 @@ std::string SvgRenderer::render_histogram(const std::vector<double>& data,
     // 网格线
     svg << "<g stroke=\"#E0E0E0\" stroke-width=\"1\">\n";
     for (int i = 0; i <= 5; ++i) {
-        double y = margin_top + i * chart_h / 5.0;
+        long double y = margin_top + i * chart_h / 5.0;
         svg << "<line x1=\"" << margin_left << "\" y1=\"" << y
             << "\" x2=\"" << (width - margin_right) << "\" y2=\"" << y << "\"/>\n";
     }
@@ -767,8 +767,8 @@ std::string SvgRenderer::render_histogram(const std::vector<double>& data,
     // Y 轴刻度
     svg << "<g font-family=\"Arial, sans-serif\" font-size=\"10\" fill=\"#333\">\n";
     for (int i = 0; i <= 5; ++i) {
-        double val = max_count * (5 - i) / 5.0;
-        double y = margin_top + i * chart_h / 5.0;
+        long double val = max_count * (5 - i) / 5.0;
+        long double y = margin_top + i * chart_h / 5.0;
         svg << "<text x=\"" << (margin_left - 10) << "\" y=\"" << (y + 4)
             << "\" text-anchor=\"end\">" << format_tick(val) << "</text>\n";
     }
@@ -776,9 +776,9 @@ std::string SvgRenderer::render_histogram(const std::vector<double>& data,
 
     // 绘制柱子
     for (int i = 0; i < bins; ++i) {
-        double bar_h = heights[i] / max_count * chart_h;
-        double x = margin_left + i * bar_w;
-        double y = height - margin_bottom - bar_h;
+        long double bar_h = heights[i] / max_count * chart_h;
+        long double x = margin_left + i * bar_w;
+        long double y = height - margin_bottom - bar_h;
 
         svg << "<rect x=\"" << x << "\" y=\"" << y
             << "\" width=\"" << bar_w << "\" height=\"" << bar_h
@@ -788,8 +788,8 @@ std::string SvgRenderer::render_histogram(const std::vector<double>& data,
     // X 轴刻度
     svg << "<g font-family=\"Arial, sans-serif\" font-size=\"9\" fill=\"#333\">\n";
     for (int i = 0; i <= bins; i += std::max(1, bins / 5)) {
-        double val = min_val + i * bin_width;
-        double x = margin_left + i * bar_w;
+        long double val = min_val + i * bin_width;
+        long double x = margin_left + i * bar_w;
         svg << "<text x=\"" << x << "\" y=\"" << (height - margin_bottom + 15)
             << "\" text-anchor=\"middle\">" << format_tick(val) << "</text>\n";
     }

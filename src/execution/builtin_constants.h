@@ -19,7 +19,7 @@
  *
  * 支持的常量：pi, e, tau, phi, sqrt2, sqrt3, ln2, ln10
  */
-bool lookup_builtin_constant(const std::string& name, double* value);
+bool lookup_builtin_constant(const std::string& name, long double* value);
 
 /**
  * @brief 检查名称是否是内置常量

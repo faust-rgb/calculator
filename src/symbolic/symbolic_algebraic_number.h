@@ -71,7 +71,7 @@ public:
     static AlgebraicNumber from_rational(const ExactRational& r) {
         std::vector<SymbolicExpression> coeffs;
         coeffs.push_back(SymbolicExpression::number(-r.to_double()));
-        coeffs.push_back(SymbolicExpression::number(1.0));
+        coeffs.push_back(SymbolicExpression::number(1.0L));
         SymbolicPolynomial poly(coeffs, "_a");
 
         return AlgebraicNumber(poly, r, r, true, 0, 0);
@@ -85,9 +85,9 @@ public:
     }
 
     /**
-     * @brief 从 double 创建 (近似，仅用于数值输入)
+     * @brief 从 long double 创建 (近似，仅用于数值输入)
      */
-    static AlgebraicNumber from_double(double value);
+    static AlgebraicNumber from_double(long double value);
 
     /**
      * @brief 创建 sqrt(n) 形式的代数数
@@ -107,14 +107,14 @@ public:
     bool is_rational(ExactRational* value = nullptr) const {
         if (minimal_polynomial.degree() != 1) return false;
 
-        double a = 0.0, b = 0.0;
+        long double a = 0.0L, b = 0.0L;
         if (!minimal_polynomial.coefficient(1).is_number(&a)) return false;
         if (!minimal_polynomial.coefficient(0).is_number(&b)) return false;
 
         if (mymath::abs(a) < 1e-12) return false;
 
         if (value) {
-            double val = -b / a;
+            long double val = -b / a;
             *value = ExactRational::from_double(val);
         }
         return true;
@@ -123,7 +123,7 @@ public:
     /**
      * @brief 获取数值近似 (用于显示，不用于计算)
      */
-    double approximate() const {
+    long double approximate() const {
         ExactRational r;
         if (is_rational(&r)) {
             return r.to_double();

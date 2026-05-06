@@ -15,10 +15,10 @@ namespace {
 
 SymbolicExpression pow_non_negative(SymbolicExpression base, int exponent) {
     if (exponent == 0) {
-        return SymbolicExpression::number(1.0);
+        return SymbolicExpression::number(1.0L);
     }
 
-    SymbolicExpression result = SymbolicExpression::number(1.0);
+    SymbolicExpression result = SymbolicExpression::number(1.0L);
     while (exponent > 0) {
         if (exponent & 1) {
             result = (result * base).simplify();
@@ -35,14 +35,14 @@ SymbolicExpression resultant_linear_first(const SymbolicPolynomial& linear,
                                           const SymbolicPolynomial& other) {
     const int other_degree = other.degree();
     if (other_degree < 0) {
-        return SymbolicExpression::number(0.0);
+        return SymbolicExpression::number(0.0L);
     }
 
     const SymbolicExpression a = linear.coefficient(1);
     const SymbolicExpression b = linear.coefficient(0);
     const SymbolicExpression neg_b = make_negate(b).simplify();
 
-    SymbolicExpression result = SymbolicExpression::number(0.0);
+    SymbolicExpression result = SymbolicExpression::number(0.0L);
     for (int i = 0; i <= other_degree; ++i) {
         SymbolicExpression term = other.coefficient(i);
         term = (term * pow_non_negative(neg_b, i)).simplify();
@@ -56,13 +56,13 @@ SymbolicExpression resultant_linear_first(const SymbolicPolynomial& linear,
 SymbolicExpression determinant_bareiss(std::vector<std::vector<SymbolicExpression>> matrix) {
     const int n = static_cast<int>(matrix.size());
     if (n == 0) {
-        return SymbolicExpression::number(1.0);
+        return SymbolicExpression::number(1.0L);
     }
     if (n == 1) {
         return matrix[0][0].simplify();
     }
 
-    SymbolicExpression previous_pivot = SymbolicExpression::number(1.0);
+    SymbolicExpression previous_pivot = SymbolicExpression::number(1.0L);
     int sign = 1;
 
     for (int k = 0; k < n - 1; ++k) {
@@ -71,7 +71,7 @@ SymbolicExpression determinant_bareiss(std::vector<std::vector<SymbolicExpressio
             ++pivot_row;
         }
         if (pivot_row == n) {
-            return SymbolicExpression::number(0.0);
+            return SymbolicExpression::number(0.0L);
         }
         if (pivot_row != k) {
             std::swap(matrix[pivot_row], matrix[k]);
@@ -91,7 +91,7 @@ SymbolicExpression determinant_bareiss(std::vector<std::vector<SymbolicExpressio
         }
 
         for (int i = k + 1; i < n; ++i) {
-            matrix[i][k] = SymbolicExpression::number(0.0);
+            matrix[i][k] = SymbolicExpression::number(0.0L);
         }
         previous_pivot = pivot;
     }
@@ -109,7 +109,7 @@ SymbolicExpression resultant_sylvester(const SymbolicPolynomial& first,
     const int second_degree = second.degree();
     const int size = first_degree + second_degree;
     std::vector<std::vector<SymbolicExpression>> matrix(
-        size, std::vector<SymbolicExpression>(size, SymbolicExpression::number(0.0)));
+        size, std::vector<SymbolicExpression>(size, SymbolicExpression::number(0.0L)));
 
     std::vector<SymbolicExpression> first_desc;
     first_desc.reserve(first_degree + 1);
@@ -186,13 +186,13 @@ bool SymbolicPolynomial::is_constant() const {
 
 SymbolicExpression SymbolicPolynomial::leading_coefficient() const {
     int deg = degree();
-    if (deg < 0) return SymbolicExpression::number(0.0);
+    if (deg < 0) return SymbolicExpression::number(0.0L);
     return coefficients_[deg];
 }
 
 SymbolicExpression SymbolicPolynomial::coefficient(int power) const {
     if (power < 0 || power >= static_cast<int>(coefficients_.size())) {
-        return SymbolicExpression::number(0.0);
+        return SymbolicExpression::number(0.0L);
     }
     return coefficients_[power];
 }
@@ -234,7 +234,7 @@ SymbolicPolynomial SymbolicPolynomial::add(const SymbolicPolynomial& other) cons
     result.reserve(max_size);
 
     for (std::size_t i = 0; i < max_size; ++i) {
-        SymbolicExpression sum = SymbolicExpression::number(0.0);
+        SymbolicExpression sum = SymbolicExpression::number(0.0L);
         if (i < coefficients_.size()) {
             sum = sum + coefficients_[i];
         }
@@ -257,7 +257,7 @@ SymbolicPolynomial SymbolicPolynomial::subtract(const SymbolicPolynomial& other)
     result.reserve(max_size);
 
     for (std::size_t i = 0; i < max_size; ++i) {
-        SymbolicExpression diff = SymbolicExpression::number(0.0);
+        SymbolicExpression diff = SymbolicExpression::number(0.0L);
         if (i < coefficients_.size()) {
             diff = diff + coefficients_[i];
         }
@@ -277,7 +277,7 @@ SymbolicPolynomial SymbolicPolynomial::multiply(const SymbolicPolynomial& other)
 
     const int deg1 = degree();
     const int deg2 = other.degree();
-    std::vector<SymbolicExpression> result(deg1 + deg2 + 1, SymbolicExpression::number(0.0));
+    std::vector<SymbolicExpression> result(deg1 + deg2 + 1, SymbolicExpression::number(0.0L));
 
     for (int i = 0; i <= deg1; ++i) {
         for (int j = 0; j <= deg2; ++j) {
@@ -307,14 +307,14 @@ SymbolicPolynomial SymbolicPolynomial::power(int power) const {
         return SymbolicPolynomial();  // 不支持负幂
     }
     if (power == 0) {
-        return SymbolicPolynomial({SymbolicExpression::number(1.0)}, variable_name_);
+        return SymbolicPolynomial({SymbolicExpression::number(1.0L)}, variable_name_);
     }
     if (power == 1) {
         return *this;
     }
 
     // 快速幂
-    SymbolicPolynomial result({SymbolicExpression::number(1.0)}, variable_name_);
+    SymbolicPolynomial result({SymbolicExpression::number(1.0L)}, variable_name_);
     SymbolicPolynomial base = *this;
     while (power > 0) {
         if (power % 2 == 1) {
@@ -357,7 +357,7 @@ SymbolicPolynomial SymbolicPolynomial::derivative() const {
     result.reserve(deg);
 
     for (int i = 1; i <= deg; ++i) {
-        result.push_back((coefficients_[i] * SymbolicExpression::number(static_cast<double>(i))).simplify());
+        result.push_back((coefficients_[i] * SymbolicExpression::number(static_cast<long double>(i))).simplify());
     }
 
     return SymbolicPolynomial(result, variable_name_);
@@ -383,7 +383,7 @@ bool SymbolicPolynomial::divide(const SymbolicPolynomial& other,
         return true;
     }
 
-    std::vector<SymbolicExpression> q_coeffs(deg_num - deg_den + 1, SymbolicExpression::number(0.0));
+    std::vector<SymbolicExpression> q_coeffs(deg_num - deg_den + 1, SymbolicExpression::number(0.0L));
     std::vector<SymbolicExpression> r_coeffs = coefficients_;
 
     SymbolicExpression lc_den = other.leading_coefficient();
@@ -412,15 +412,15 @@ SymbolicPolynomial SymbolicPolynomial::extended_gcd(const SymbolicPolynomial& b_
                                                   SymbolicPolynomial* s_out,
                                                   SymbolicPolynomial* t_out) const {
     if (b_poly.is_zero()) {
-        if (s_out) *s_out = SymbolicPolynomial({SymbolicExpression::number(1.0)}, variable_name_);
+        if (s_out) *s_out = SymbolicPolynomial({SymbolicExpression::number(1.0L)}, variable_name_);
         if (t_out) *t_out = SymbolicPolynomial();
         return *this;
     }
 
-    SymbolicPolynomial s0({SymbolicExpression::number(1.0)}, variable_name_);
-    SymbolicPolynomial s1({SymbolicExpression::number(0.0)}, variable_name_);
-    SymbolicPolynomial t0({SymbolicExpression::number(0.0)}, variable_name_);
-    SymbolicPolynomial t1({SymbolicExpression::number(1.0)}, variable_name_);
+    SymbolicPolynomial s0({SymbolicExpression::number(1.0L)}, variable_name_);
+    SymbolicPolynomial s1({SymbolicExpression::number(0.0L)}, variable_name_);
+    SymbolicPolynomial t0({SymbolicExpression::number(0.0L)}, variable_name_);
+    SymbolicPolynomial t1({SymbolicExpression::number(1.0L)}, variable_name_);
 
     SymbolicPolynomial r0 = *this;
     SymbolicPolynomial r1 = b_poly;
@@ -455,7 +455,7 @@ SymbolicPolynomial SymbolicPolynomial::extended_gcd(const SymbolicPolynomial& b_
     if (!r0.is_zero()) {
         SymbolicExpression lc = r0.leading_coefficient();
         if (!coeff_is_zero(lc) && !coeff_is_one(lc)) {
-            SymbolicExpression inv_lc = (SymbolicExpression::number(1.0) / lc).simplify();
+            SymbolicExpression inv_lc = (SymbolicExpression::number(1.0L) / lc).simplify();
             r0 = r0.scale(inv_lc);
             if (s_out) *s_out = s_out->scale(inv_lc);
             if (t_out) *t_out = t_out->scale(inv_lc);
@@ -479,7 +479,7 @@ SymbolicPolynomial SymbolicPolynomial::subresultant_gcd(const SymbolicPolynomial
     SymbolicPolynomial g1 = A;
     SymbolicPolynomial g2 = B;
     
-    SymbolicExpression beta = SymbolicExpression::number(1.0);
+    SymbolicExpression beta = SymbolicExpression::number(1.0L);
 
     int last_degree = g1.degree() + 1;
 
@@ -495,19 +495,19 @@ SymbolicPolynomial SymbolicPolynomial::subresultant_gcd(const SymbolicPolynomial
         // 伪余数 (Pseudo-remainder)
         // prem(g1, g2) = (lc(g2)^(delta+1) * g1) mod g2
         SymbolicExpression lc2 = g2.leading_coefficient();
-        SymbolicPolynomial g1_scaled = g1.scale(lc2.power(SymbolicExpression::number(static_cast<double>(delta + 1))));
+        SymbolicPolynomial g1_scaled = g1.scale(lc2.power(SymbolicExpression::number(static_cast<long double>(delta + 1))));
         SymbolicPolynomial q, r;
         g1_scaled.divide(g2, &q, &r);
         
         g1 = g2;
         // g2 = r / beta
-        g2 = r.scale(SymbolicExpression::number(1.0) / beta);
+        g2 = r.scale(SymbolicExpression::number(1.0L) / beta);
         
         // 更新 beta
         SymbolicExpression lc1 = g1.leading_coefficient();
         
         // 这里实现一个简化的子结果项 PRS，主要目的是避免除以复杂的符号表达式
-        beta = lc1.power(SymbolicExpression::number(static_cast<double>(delta))); 
+        beta = lc1.power(SymbolicExpression::number(static_cast<long double>(delta))); 
     }
 
     if (g2.is_zero()) return g1.simplify();
@@ -515,7 +515,7 @@ SymbolicPolynomial SymbolicPolynomial::subresultant_gcd(const SymbolicPolynomial
 }
 
 SymbolicExpression SymbolicPolynomial::resultant(const SymbolicPolynomial& other) const {
-    if (is_zero() || other.is_zero()) return SymbolicExpression::number(0.0);
+    if (is_zero() || other.is_zero()) return SymbolicExpression::number(0.0L);
     if (is_constant()) return leading_coefficient().power(SymbolicExpression::number(other.degree()));
     if (other.is_constant()) return other.leading_coefficient().power(SymbolicExpression::number(degree()));
     if (degree() == 1) {
@@ -558,7 +558,7 @@ SymbolicPolynomial SymbolicPolynomial::gcd(const SymbolicPolynomial& other) cons
     if (!a.is_zero()) {
         SymbolicExpression lc = a.leading_coefficient();
         if (!coeff_is_zero(lc) && !coeff_is_one(lc)) {
-            a = a.scale(SymbolicExpression::number(1.0) / lc);
+            a = a.scale(SymbolicExpression::number(1.0L) / lc);
         }
     }
 
@@ -621,7 +621,7 @@ bool SymbolicPolynomial::square_free_decomposition(std::vector<SymbolicPolynomia
 
 SymbolicExpression SymbolicPolynomial::evaluate(const SymbolicExpression& point) const {
     if (is_zero()) {
-        return SymbolicExpression::number(0.0);
+        return SymbolicExpression::number(0.0L);
     }
 
     // Horner 方法
@@ -663,11 +663,11 @@ bool SymbolicPolynomial::is_irreducible_quadratic() const {
 
     // 对于符号系数，无法确定判别式
     // 只有当系数都是数值时才能判断
-    double a_val = 0.0, b_val = 0.0, c_val = 0.0;
+    long double a_val = 0.0L, b_val = 0.0L, c_val = 0.0L;
     if (coefficients_[2].is_number(&a_val) &&
         coefficients_[1].is_number(&b_val) &&
         coefficients_[0].is_number(&c_val)) {
-        double discriminant = b_val * b_val - 4.0 * a_val * c_val;
+        long double discriminant = b_val * b_val - 4.0 * a_val * c_val;
         return discriminant < 0;
     }
 
@@ -684,9 +684,9 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
     if (is_zero()) return factors;
 
     // 检查是否所有系数都是数值
-    std::vector<double> num_coeffs;
+    std::vector<long double> num_coeffs;
     for (const auto& coeff : coefficients_) {
-        double val;
+        long double val;
         if (!coeff.is_number(&val)) {
             // 符号系数，无法进行数值因子分解
             return factors;
@@ -698,11 +698,11 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
     SymbolicPolynomial current = *this;
 
     // 尝试整数根
-    auto try_root = [&](double r) -> bool {
+    auto try_root = [&](long double r) -> bool {
         // 检查 r 是否是根
-        double val = 0.0;
-        double power = 1.0;
-        for (double c : num_coeffs) {
+        long double val = 0.0L;
+        long double power = 1.0L;
+        for (long double c : num_coeffs) {
             val += c * power;
             power *= r;
         }
@@ -710,8 +710,8 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
     };
 
     // 搜索整数根
-    std::vector<double> roots;
-    double constant_term = num_coeffs.empty() ? 0.0 : num_coeffs[0];
+    std::vector<long double> roots;
+    long double constant_term = num_coeffs.empty() ? 0.0L : num_coeffs[0];
 
     int max_search = static_cast<int>(mymath::abs(constant_term) + 1);
     max_search = std::min(max_search, 100);
@@ -728,14 +728,14 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
     }
 
     // 对每个找到的根，提取线性因子 (x - r)
-    for (double r : roots) {
+    for (long double r : roots) {
         SymbolicPolynomial linear_factor;
         if (r == 0) {
-            linear_factor = SymbolicPolynomial({SymbolicExpression::number(0.0),
-                                                SymbolicExpression::number(1.0)}, variable_name_);
+            linear_factor = SymbolicPolynomial({SymbolicExpression::number(0.0L),
+                                                SymbolicExpression::number(1.0L)}, variable_name_);
         } else {
             linear_factor = SymbolicPolynomial({SymbolicExpression::number(-r),
-                                                SymbolicExpression::number(1.0)}, variable_name_);
+                                                SymbolicExpression::number(1.0L)}, variable_name_);
         }
 
         // 计算重数
@@ -758,28 +758,28 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
     // 如果还有剩余的多项式（二次或更高），检查是否可以进一步分解
     if (!current.is_zero() && current.degree() == 2) {
         // 检查二次多项式是否可分解
-        double a = 0.0, b = 0.0, c = 0.0;
+        long double a = 0.0L, b = 0.0L, c = 0.0L;
         if (current.coefficients_.size() == 3 &&
             current.coefficients_[2].is_number(&a) &&
             current.coefficients_[1].is_number(&b) &&
             current.coefficients_[0].is_number(&c)) {
-            double disc = b * b - 4.0 * a * c;
+            long double disc = b * b - 4.0 * a * c;
             if (disc >= 0) {
-                double sqrt_disc = mymath::sqrt(disc);
-                double r1 = (-b + sqrt_disc) / (2.0 * a);
-                double r2 = (-b - sqrt_disc) / (2.0 * a);
+                long double sqrt_disc = mymath::sqrt(disc);
+                long double r1 = (-b + sqrt_disc) / (2.0 * a);
+                long double r2 = (-b - sqrt_disc) / (2.0 * a);
 
                 if (mymath::abs(r1 - r2) < 1e-9) {
                     // 两个相同的根
                     SymbolicPolynomial linear_factor({SymbolicExpression::number(-r1),
-                                                     SymbolicExpression::number(1.0)}, variable_name_);
+                                                     SymbolicExpression::number(1.0L)}, variable_name_);
                     factors.push_back({linear_factor, 2});
                 } else {
                     // 两个不同的根
                     SymbolicPolynomial linear1({SymbolicExpression::number(-r1),
-                                               SymbolicExpression::number(1.0)}, variable_name_);
+                                               SymbolicExpression::number(1.0L)}, variable_name_);
                     SymbolicPolynomial linear2({SymbolicExpression::number(-r2),
-                                               SymbolicExpression::number(1.0)}, variable_name_);
+                                               SymbolicExpression::number(1.0L)}, variable_name_);
                     factors.push_back({linear1, 1});
                     factors.push_back({linear2, 1});
                 }
@@ -847,10 +847,10 @@ SymbolicExpression build_symbolic_polynomial_expression(
     const std::string& variable_name) {
 
     if (coefficients.empty()) {
-        return SymbolicExpression::number(0.0);
+        return SymbolicExpression::number(0.0L);
     }
 
-    SymbolicExpression result = SymbolicExpression::number(0.0);
+    SymbolicExpression result = SymbolicExpression::number(0.0L);
     SymbolicExpression x = SymbolicExpression::variable(variable_name);
 
     for (std::size_t i = 0; i < coefficients.size(); ++i) {
@@ -861,7 +861,7 @@ SymbolicExpression build_symbolic_polynomial_expression(
                 result = (result + coefficients[i] * x).simplify();
             } else {
                 result = (result + coefficients[i] *
-                          make_power(x, SymbolicExpression::number(static_cast<double>(i)))).simplify();
+                          make_power(x, SymbolicExpression::number(static_cast<long double>(i)))).simplify();
             }
         }
     }
@@ -885,8 +885,8 @@ bool solve_coefficient_identity(
 
     // 构建系数矩阵
     // 每行对应一个幂次，每列对应一个未知数
-    std::vector<std::vector<SymbolicExpression>> matrix(max_degree, std::vector<SymbolicExpression>(num_unknowns, SymbolicExpression::number(0.0)));
-    std::vector<SymbolicExpression> rhs(max_degree, SymbolicExpression::number(0.0));
+    std::vector<std::vector<SymbolicExpression>> matrix(max_degree, std::vector<SymbolicExpression>(num_unknowns, SymbolicExpression::number(0.0L)));
+    std::vector<SymbolicExpression> rhs(max_degree, SymbolicExpression::number(0.0L));
 
     for (std::size_t i = 0; i < identity_coeffs.size(); ++i) {
         rhs[i] = identity_coeffs[i];
@@ -900,7 +900,7 @@ bool solve_coefficient_identity(
 
     // 高斯消元法求解符号线性方程组
     // 注意：这是一个简化版本，对于符号系数可能不完全正确
-    unknowns->assign(num_unknowns, SymbolicExpression::number(0.0));
+    unknowns->assign(num_unknowns, SymbolicExpression::number(0.0L));
 
     // 对于简单情况（对角占优），直接求解
     // 这里使用一个简化的方法：假设矩阵是方阵且可解
@@ -1015,7 +1015,7 @@ bool partial_fraction_decomposition(
     }
 
     // 计算分母多项式
-    SymbolicPolynomial denominator({SymbolicExpression::number(1.0)}, variable_name);
+    SymbolicPolynomial denominator({SymbolicExpression::number(1.0L)}, variable_name);
     for (const auto& [factor, power] : denominator_factors) {
         SymbolicPolynomial factor_power = factor.power(power);
         denominator = denominator.multiply(factor_power);
@@ -1049,22 +1049,22 @@ bool partial_fraction_decomposition(
             // 确定分子的形式
             if (factor.degree() == 1) {
                 // 线性因子：分子是常数
-                term_coefficients.push_back({SymbolicExpression::number(1.0)});
+                term_coefficients.push_back({SymbolicExpression::number(1.0L)});
             } else if (factor.degree() == 2) {
                 // 二次因子：分子是线性式 Bx + C
                 term_coefficients.push_back({
                     SymbolicExpression::variable(variable_name),
-                    SymbolicExpression::number(1.0)
+                    SymbolicExpression::number(1.0L)
                 });
             } else {
                 // 更高次因子：分子是 (degree-1) 次多项式
                 std::vector<SymbolicExpression> coeffs;
                 for (int d = 0; d < factor.degree(); ++d) {
                     if (d == 0) {
-                        coeffs.push_back(SymbolicExpression::number(1.0));
+                        coeffs.push_back(SymbolicExpression::number(1.0L));
                     } else {
                         coeffs.push_back(SymbolicExpression::variable(variable_name).power(
-                            SymbolicExpression::number(static_cast<double>(d))));
+                            SymbolicExpression::number(static_cast<long double>(d))));
                     }
                 }
                 term_coefficients.push_back(coeffs);
@@ -1087,7 +1087,7 @@ bool partial_fraction_decomposition(
 
     // 计算每个未知数对应的项的系数
     std::vector<std::vector<SymbolicExpression>> identity_terms;
-    SymbolicPolynomial product_denom({SymbolicExpression::number(1.0)}, variable_name);
+    SymbolicPolynomial product_denom({SymbolicExpression::number(1.0L)}, variable_name);
 
     // 计算公分母（所有项的分母的乘积）
     for (const auto& term_denom : term_denominators) {
@@ -1122,7 +1122,7 @@ bool partial_fraction_decomposition(
             }
 
             // 将多项式系数添加到恒等式矩阵
-            std::vector<SymbolicExpression> poly_coeffs(product_denom.degree() + 1, SymbolicExpression::number(0.0));
+            std::vector<SymbolicExpression> poly_coeffs(product_denom.degree() + 1, SymbolicExpression::number(0.0L));
             for (int d = 0; d <= term_poly.degree(); ++d) {
                 if (d < static_cast<int>(poly_coeffs.size())) {
                     poly_coeffs[d] = term_poly.coefficient(d);
@@ -1134,7 +1134,7 @@ bool partial_fraction_decomposition(
     }
 
     // 构建右边（proper_num 的系数）
-    std::vector<SymbolicExpression> rhs(product_denom.degree() + 1, SymbolicExpression::number(0.0));
+    std::vector<SymbolicExpression> rhs(product_denom.degree() + 1, SymbolicExpression::number(0.0L));
     for (int d = 0; d <= proper_num.degree(); ++d) {
         if (d < static_cast<int>(rhs.size())) {
             rhs[d] = proper_num.coefficient(d);
@@ -1154,7 +1154,7 @@ bool partial_fraction_decomposition(
         const auto& term_denom = term_denominators[i];
 
         // 构建分子
-        SymbolicExpression numer = SymbolicExpression::number(0.0);
+        SymbolicExpression numer = SymbolicExpression::number(0.0L);
         for (std::size_t j = 0;
              j < coeffs.size() && static_cast<std::size_t>(unknown_idx) < unknowns.size();
              ++j) {

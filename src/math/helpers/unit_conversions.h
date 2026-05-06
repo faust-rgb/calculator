@@ -2,15 +2,15 @@
 #define UNIT_CONVERSIONS_H
 
 /** @brief 角度转弧度 */
-double degrees_to_radians(double value);
+long double degrees_to_radians(long double value);
 
 /** @brief 弧度转角度 */
-double radians_to_degrees(double value);
+long double radians_to_degrees(long double value);
 
 /** @brief 摄氏转华氏 */
-double celsius_to_fahrenheit(double value);
+long double celsius_to_fahrenheit(long double value);
 
 /** @brief 华氏转摄氏 */
-double fahrenheit_to_celsius(double value);
+long double fahrenheit_to_celsius(long double value);
 
 #endif

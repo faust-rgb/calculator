@@ -20,7 +20,7 @@ public:
                              const std::vector<std::string>& args,
                              const CoreServices& services) override;
 
-    std::map<std::string, std::function<double(const std::vector<double>&)>> get_scalar_functions() const override;
+    std::map<std::string, std::function<long double(const std::vector<long double>&)>> get_scalar_functions() const override;
 
     std::vector<std::string> get_functions() const override;
 

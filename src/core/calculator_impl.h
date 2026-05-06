@@ -34,10 +34,10 @@ struct CommandKey;
 // ============================================================================
 
 /** @brief 判断数值是否为零的显示阈值 */
-constexpr double kDisplayZeroEps = 1e-290;  // 近似 double 最小值
+constexpr long double kDisplayZeroEps = 1e-290;  // 近似 long double 最小值
 
 /** @brief 判断数值是否为整数的显示阈值 */
-constexpr double kDisplayIntegerEps = 1e-9;
+constexpr long double kDisplayIntegerEps = 1e-9;
 
 /** @brief 默认十进制显示有效位数 */
 constexpr int kDefaultDisplayPrecision = 12;
@@ -83,7 +83,7 @@ struct Calculator::Impl {
     std::vector<std::shared_ptr<CalculatorModule>> implicit_evaluation_modules;
 
     // 函数汇总（由模块注册）
-    std::map<std::string, std::function<double(const std::vector<double>&)>> scalar_functions;
+    std::map<std::string, std::function<long double(const std::vector<long double>&)>> scalar_functions;
     std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>> matrix_functions;
     std::map<std::string, matrix::ValueFunction> value_functions;
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> native_functions;
@@ -135,9 +135,9 @@ std::string decode_state_field(const std::string& text);
 void apply_calculator_display_precision(const Calculator::Impl* impl);
 
 // 线性方程组
-std::vector<double> solve_dense_linear_system(
-    std::vector<std::vector<double>> matrix,
-    std::vector<double> rhs,
+std::vector<long double> solve_dense_linear_system(
+    std::vector<std::vector<long double>> matrix,
+    std::vector<long double> rhs,
     const std::string& context);
 
 // 模块注册

@@ -95,7 +95,7 @@ template <typename T> TValue<T> TValue<T>::from_matrix(TMatrix<T>&& m) { TValue<
 } // namespace matrix
 
 // 显式实例化 (Core)
-template class matrix::TMatrix<double>;
+template class matrix::TMatrix<long double>;
 template class matrix::TMatrix<PreciseDecimal>;
-template class matrix::TValue<double>;
+template class matrix::TValue<long double>;
 template class matrix::TValue<PreciseDecimal>;

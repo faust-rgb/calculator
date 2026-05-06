@@ -35,8 +35,8 @@ std::vector<std::size_t> rref_in_place(TMatrix<T>* matrix) {
 
     T pivot = matrix->at(pivot_row, col);
     for (std::size_t current_col = 0; current_col < matrix->cols; ++current_col) {
-        if constexpr (std::is_same_v<T, double>) {
-            matrix->at(pivot_row, current_col) = static_cast<double>(
+        if constexpr (std::is_same_v<T, long double>) {
+            matrix->at(pivot_row, current_col) = static_cast<long double>(
                 static_cast<long double>(matrix->at(pivot_row, current_col)) / static_cast<long double>(pivot));
         } else {
             matrix->at(pivot_row, current_col) = matrix->at(pivot_row, current_col) / pivot;
@@ -52,8 +52,8 @@ std::vector<std::size_t> rref_in_place(TMatrix<T>* matrix) {
             continue;
         }
         for (std::size_t current_col = 0; current_col < matrix->cols; ++current_col) {
-            if constexpr (std::is_same_v<T, double>) {
-                matrix->at(row, current_col) = static_cast<double>(
+            if constexpr (std::is_same_v<T, long double>) {
+                matrix->at(row, current_col) = static_cast<long double>(
                     static_cast<long double>(matrix->at(row, current_col)) -
                     static_cast<long double>(factor) *
                         static_cast<long double>(matrix->at(pivot_row, current_col)));
@@ -158,7 +158,7 @@ TReducedSvd<T> compute_reduced_svd(const TMatrix<T>& matrix) {
     const std::size_t m = A.rows;
     const std::size_t n = A.cols; // n <= m
     TMatrix<T> V = TMatrix<T>::identity(n);
-    const T tol = T(1e-13);
+    const T tol = T(1e-13L);
     const int max_sweeps = 100;
 
     for (int sweep = 0; sweep < max_sweeps; ++sweep) {
@@ -262,16 +262,16 @@ TReducedSvd<T> compute_reduced_svd(const TMatrix<T>& matrix) {
 }
 
 // Explicit template instantiations
-template std::vector<std::size_t> rref_in_place<double>(TMatrix<double>*);
+template std::vector<std::size_t> rref_in_place<long double>(TMatrix<long double>*);
 template std::vector<std::size_t> rref_in_place<PreciseDecimal>(TMatrix<PreciseDecimal>*);
 
-template std::vector<double> nullspace_vector<double>(const TMatrix<double>&);
+template std::vector<long double> nullspace_vector<long double>(const TMatrix<long double>&);
 template std::vector<PreciseDecimal> nullspace_vector<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
 
-template TMatrix<double> nullspace_basis<double>(const TMatrix<double>&);
+template TMatrix<long double> nullspace_basis<long double>(const TMatrix<long double>&);
 template TMatrix<PreciseDecimal> nullspace_basis<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
 
-template TReducedSvd<double> compute_reduced_svd<double>(const TMatrix<double>&);
+template TReducedSvd<long double> compute_reduced_svd<long double>(const TMatrix<long double>&);
 template TReducedSvd<PreciseDecimal> compute_reduced_svd<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
 
 } // namespace internal

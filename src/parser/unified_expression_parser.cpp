@@ -148,7 +148,7 @@ ExpressionHint UnifiedExpressionParser::get_hint(const std::string& expression) 
 // 求值
 // ============================================================================
 
-double UnifiedExpressionParser::evaluate(const std::string& expression) const {
+long double UnifiedExpressionParser::evaluate(const std::string& expression) const {
     auto ast = compile(expression);
     if (!ast) {
         throw SyntaxError("Failed to parse expression: " + expression);
@@ -183,7 +183,7 @@ bool UnifiedExpressionParser::try_evaluate_value(const std::string& expression, 
 
     // 否则使用标量求值
     try {
-        double scalar_value = evaluate(expression);
+        long double scalar_value = evaluate(expression);
         *value = matrix::Value::from_scalar(scalar_value);
         return true;
     } catch (...) {
@@ -260,11 +260,11 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
                     max_denominator_value.is_string) {
                     throw std::runtime_error("rat max_denominator must be a positive integer");
                 }
-                const double scalar =
+                const long double scalar =
                     max_denominator_value.exact
                         ? rational_to_double(max_denominator_value.rational)
                         : max_denominator_value.decimal;
-                if (!is_integer_double(scalar) || scalar <= 0.0) {
+                if (!is_integer_double(scalar) || scalar <= 0.0L) {
                     throw std::runtime_error("rat max_denominator must be a positive integer");
                 }
                 max_denominator = round_to_long_long(scalar);
@@ -274,7 +274,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
                 return value;
             }
 
-            const double decimal_value = value.exact
+            const long double decimal_value = value.exact
                                              ? rational_to_double(value.rational)
                                              : value.decimal;
             long long numerator = 0;
@@ -309,7 +309,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
 
     // 标量求值
     try {
-        double value = evaluate(expression);
+        long double value = evaluate(expression);
         StoredValue stored;
         stored.decimal = value;
         stored.exact = false;
@@ -321,7 +321,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
     }
 }
 
-double UnifiedExpressionParser::evaluate_ast(const ExpressionAST* ast) const {
+long double UnifiedExpressionParser::evaluate_ast(const ExpressionAST* ast) const {
     return evaluate_compiled_ast(ast, variables_, functions_, scalar_functions_,
                                   has_script_function_, invoke_script_function_);
 }
@@ -342,11 +342,11 @@ std::unique_ptr<ExpressionAST> UnifiedExpressionParser::compile(const std::strin
 // 便捷函数（替代 DecimalParser 和 ExactParser）
 // ============================================================================
 
-double parse_decimal_expression(
+long double parse_decimal_expression(
     const std::string& expression,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
-    const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions,
+    const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions,
     HasScriptFunctionCallback has_script_function,
     InvokeScriptFunctionCallback invoke_script_function) {
 
@@ -375,7 +375,7 @@ bool try_evaluate_matrix_expression(
     const std::string& expression,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
-    const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions,
+    const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions,
     const std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>* matrix_functions,
     const std::map<std::string, matrix::ValueFunction>* value_functions,
     HasScriptFunctionCallback has_script_function,
@@ -384,10 +384,10 @@ bool try_evaluate_matrix_expression(
 
     const matrix::ScalarEvaluator scalar_evaluator =
         [&](std::string_view text) {
-            const double scalar_value = parse_decimal_expression(
+            const long double scalar_value = parse_decimal_expression(
                 std::string(text), variables, functions, scalar_functions,
                 has_script_function, invoke_script_function);
-            return mymath::is_near_zero(scalar_value, 1e-10) ? 0.0 : scalar_value;
+            return mymath::is_near_zero(scalar_value, 1e-10) ? 0.0L : scalar_value;
         };
 
     const matrix::MatrixLookup matrix_lookup =
@@ -445,14 +445,14 @@ bool try_base_conversion_expression(
         if (call->arguments.size() != 2) {
             throw std::runtime_error("base expects exactly two arguments");
         }
-        const double base_value = parse_decimal_expression(std::string(call->arguments[1].text), variables, functions);
+        const long double base_value = parse_decimal_expression(std::string(call->arguments[1].text), variables, functions);
         if (!is_integer_double(base_value)) {
             throw std::runtime_error("base conversion requires an integer base");
         }
         base = static_cast<int>(round_to_long_long(base_value));
     }
 
-    const double value = parse_decimal_expression(std::string(call->arguments[0].text), variables, functions);
+    const long double value = parse_decimal_expression(std::string(call->arguments[0].text), variables, functions);
     if (!is_integer_double(value)) {
         throw std::runtime_error("base conversion only accepts integers");
     }
@@ -516,11 +516,11 @@ std::vector<std::string> split_top_level_arguments(std::string_view text) {
     return results;
 }
 
-double evaluate_expression(
+long double evaluate_expression(
     const std::string& expression,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
-    const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions) {
+    const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions) {
 
     UnifiedExpressionParser parser(variables, functions, scalar_functions);
     return parser.evaluate(expression);

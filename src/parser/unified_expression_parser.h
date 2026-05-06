@@ -39,7 +39,7 @@ class UnifiedParserFactory;
 
 // 回调类型定义
 using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
-using InvokeScriptFunctionCallback = std::function<double(const std::string&, const std::vector<double>&)>;
+using InvokeScriptFunctionCallback = std::function<long double(const std::string&, const std::vector<long double>&)>;
 
 // ============================================================================
 // 统一表达式解析器
@@ -56,7 +56,7 @@ using InvokeScriptFunctionCallback = std::function<double(const std::string&, co
  */
 class UnifiedExpressionParser {
 public:
-    using ScalarFunction = std::function<double(const std::vector<double>&)>;
+    using ScalarFunction = std::function<long double(const std::vector<long double>&)>;
     using MatrixFunction = std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>;
 
     /**
@@ -102,7 +102,7 @@ public:
     /**
      * @brief 求值表达式（十进制）
      */
-    double evaluate(const std::string& expression) const;
+    long double evaluate(const std::string& expression) const;
 
     /**
      * @brief 求值表达式（精确有理数）
@@ -128,7 +128,7 @@ public:
     /**
      * @brief 求值已编译的 AST
      */
-    double evaluate_ast(const ExpressionAST* ast) const;
+    long double evaluate_ast(const ExpressionAST* ast) const;
 
     /**
      * @brief 求值已编译的 AST（精确模式）
@@ -172,11 +172,11 @@ private:
 /**
  * @brief 快速求值十进制表达式（替代 parse_decimal_expression）
  */
-double parse_decimal_expression(
+long double parse_decimal_expression(
     const std::string& expression,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions = nullptr,
-    const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions = nullptr,
+    const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions = nullptr,
     HasScriptFunctionCallback has_script_function = {},
     InvokeScriptFunctionCallback invoke_script_function = {});
 
@@ -196,7 +196,7 @@ bool try_evaluate_matrix_expression(
     const std::string& expression,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
-    const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions,
+    const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions,
     const std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>* matrix_functions,
     const std::map<std::string, matrix::ValueFunction>* value_functions,
     HasScriptFunctionCallback has_script_function,

@@ -52,7 +52,7 @@ void collect_log_terms_recursive_local(const SymbolicExpression& expr,
     } else if (expr.node_->type == NodeType::kSubtract) {
         collect_log_terms_recursive_local(SymbolicExpression(expr.node_->left), logs, rest_acc);
         std::vector<std::pair<SymbolicExpression, SymbolicExpression>> right_logs;
-        SymbolicExpression right_rest = SymbolicExpression::number(0.0);
+        SymbolicExpression right_rest = SymbolicExpression::number(0.0L);
         collect_log_terms_recursive_local(SymbolicExpression(expr.node_->right), right_logs, &right_rest);
         for (const auto& log : right_logs) {
             logs.push_back({make_negate(log.first).simplify(), log.second});
@@ -60,14 +60,14 @@ void collect_log_terms_recursive_local(const SymbolicExpression& expr,
         *rest_acc = (*rest_acc - right_rest).simplify();
     } else if (expr.node_->type == NodeType::kNegate) {
         std::vector<std::pair<SymbolicExpression, SymbolicExpression>> inner_logs;
-        SymbolicExpression inner_rest = SymbolicExpression::number(0.0);
+        SymbolicExpression inner_rest = SymbolicExpression::number(0.0L);
         collect_log_terms_recursive_local(SymbolicExpression(expr.node_->left), inner_logs, &inner_rest);
         for (const auto& log : inner_logs) {
             logs.push_back({make_negate(log.first).simplify(), log.second});
         }
         *rest_acc = (*rest_acc - inner_rest).simplify();
     } else if (expr.node_->type == NodeType::kFunction && expr.node_->text == "ln") {
-        logs.push_back({SymbolicExpression::number(1.0), SymbolicExpression(expr.node_->left)});
+        logs.push_back({SymbolicExpression::number(1.0L), SymbolicExpression(expr.node_->left)});
     } else if (expr.node_->type == NodeType::kMultiply) {
         SymbolicExpression left(expr.node_->left);
         SymbolicExpression right(expr.node_->right);
@@ -86,7 +86,7 @@ void collect_log_terms_recursive_local(const SymbolicExpression& expr,
 void collect_log_terms_local(const SymbolicExpression& expr,
                        std::vector<std::pair<SymbolicExpression, SymbolicExpression>>& logs,
                        SymbolicExpression* rest) {
-    *rest = SymbolicExpression::number(0.0);
+    *rest = SymbolicExpression::number(0.0L);
     collect_log_terms_recursive_local(expr, logs, rest);
 }
 
@@ -102,13 +102,13 @@ void collect_log_terms_local(const SymbolicExpression& expr,
  */
 struct RationalValue {
     bool is_valid = false;
-    double numerator = 0.0;
-    double denominator = 1.0;
+    long double numerator = 0.0L;
+    long double denominator = 1.0L;
 
     std::vector<int> nearby_integers() const {
         std::vector<int> result;
         if (!is_valid) return result;
-        double val = numerator / denominator;
+        long double val = numerator / denominator;
         int n = static_cast<int>(mymath::round(val));
         result.push_back(n);
         // Add nearby integers for robustness
@@ -123,11 +123,11 @@ struct RationalValue {
 RationalValue extract_rational_value(const SymbolicExpression& expr) {
     RationalValue result;
 
-    double val = 0.0;
+    long double val = 0.0L;
     if (expr.is_number(&val)) {
         result.is_valid = true;
         result.numerator = val;
-        result.denominator = 1.0;
+        result.denominator = 1.0L;
         return result;
     }
 
@@ -136,7 +136,7 @@ RationalValue extract_rational_value(const SymbolicExpression& expr) {
         SymbolicExpression num(expr.node_->left);
         SymbolicExpression den(expr.node_->right);
 
-        double num_val = 0.0, den_val = 0.0;
+        long double num_val = 0.0L, den_val = 0.0L;
         if (num.is_number(&num_val) && den.is_number(&den_val) && mymath::abs(den_val) > 1e-12) {
             result.is_valid = true;
             result.numerator = num_val;
@@ -164,7 +164,7 @@ RationalValue extract_rational_value(const SymbolicExpression& expr) {
  * @brief Check if expression is an integer value
  */
 bool is_integer_value(const SymbolicExpression& expr, int* value = nullptr) {
-    double val = 0.0;
+    long double val = 0.0L;
     if (expr.is_number(&val)) {
         int n = static_cast<int>(mymath::round(val));
         if (mymath::abs(val - n) < 1e-9) {
@@ -183,8 +183,8 @@ bool is_rational_value(const SymbolicExpression& expr, int* num = nullptr, int* 
     if (!r.is_valid) return false;
 
     // Check if it's a ratio of integers
-    double n_val = r.numerator;
-    double d_val = r.denominator;
+    long double n_val = r.numerator;
+    long double d_val = r.denominator;
 
     int n_int = static_cast<int>(mymath::round(n_val));
     int d_int = static_cast<int>(mymath::round(d_val));
@@ -237,7 +237,7 @@ LogarithmicRepresentation express_as_logarithmic_sum(
     const std::string& /*x_var*/) {
 
     LogarithmicRepresentation result;
-    result.remainder = SymbolicExpression::number(0.0);
+    result.remainder = SymbolicExpression::number(0.0L);
 
     SymbolicExpression simplified = expr.simplify();
 
@@ -368,7 +368,7 @@ IndependenceCheck check_log_independence_strict(
                 if (is_rational_value(ratio, &num, &den) && den != 0) {
                     // Found a logarithmic relation
                     log_terms.push_back({ratio, v});
-                    remainder = SymbolicExpression::number(0.0);  // Simplified
+                    remainder = SymbolicExpression::number(0.0L);  // Simplified
                 }
             }
         }
@@ -395,7 +395,7 @@ IndependenceCheck check_log_independence_strict(
     } else if (!log_terms.empty()) {
         // Found logarithmic relation
         result.result = IndependenceResult::kDependent;
-        SymbolicExpression substitution = SymbolicExpression::number(0.0);
+        SymbolicExpression substitution = SymbolicExpression::number(0.0L);
         for (const auto& [coeff, v] : log_terms) {
             substitution = (substitution + coeff * make_function("ln", v)).simplify();
         }
@@ -474,19 +474,19 @@ IndependenceCheck check_exp_independence_strict(
             for (int n = -5; n <= 5; ++n) {
                 if (n == 0) continue;
 
-                SymbolicExpression diff = (u_simplified - SymbolicExpression::number(static_cast<double>(n)) * v_simplified).simplify();
+                SymbolicExpression diff = (u_simplified - SymbolicExpression::number(static_cast<long double>(n)) * v_simplified).simplify();
 
                 // Check if diff is simpler (e.g., a constant or in base field)
-                double diff_val = 0.0;
+                long double diff_val = 0.0L;
                 if (diff.is_number(&diff_val) || !contains_var(diff, x_var)) {
                     // Found a relation: u = n*v + diff
                     // exp(u) = exp(diff) * exp(v)^n
                     result.result = IndependenceResult::kDependent;
                     SymbolicExpression t = SymbolicExpression::variable(ext.t_name);
                     if (n > 0) {
-                        result.substitution = (make_function("exp", diff) * make_power(t, SymbolicExpression::number(static_cast<double>(n)))).simplify();
+                        result.substitution = (make_function("exp", diff) * make_power(t, SymbolicExpression::number(static_cast<long double>(n)))).simplify();
                     } else {
-                        result.substitution = (make_function("exp", diff) / make_power(t, SymbolicExpression::number(static_cast<double>(-n)))).simplify();
+                        result.substitution = (make_function("exp", diff) / make_power(t, SymbolicExpression::number(static_cast<long double>(-n)))).simplify();
                     }
                     result.reason = "exp(u) = exp(diff) * t^n where t = exp(v) in tower";
                     return result;
@@ -512,7 +512,7 @@ IndependenceCheck check_exp_independence_strict(
                     // u' = (num/den) * v' => u = (num/den) * v + constant
                     result.result = IndependenceResult::kDependent;
                     SymbolicExpression t = SymbolicExpression::variable(ext.t_name);
-                    double exp_coeff = static_cast<double>(num) / static_cast<double>(den);
+                    long double exp_coeff = static_cast<long double>(num) / static_cast<long double>(den);
                     result.substitution = make_power(t, SymbolicExpression::number(exp_coeff));
                     result.reason = "u = c * v + constant, so exp(u) = constant * t^c";
                     return result;
@@ -539,7 +539,7 @@ IndependenceCheck check_exp_independence_strict(
                         // exp(u) = exp(constant) * exp(v)
                         result.result = IndependenceResult::kDependent;
                         SymbolicExpression t = SymbolicExpression::variable(ext.t_name);
-                        SymbolicExpression c = diff.degree() < 0 ? SymbolicExpression::number(0.0) : diff.coefficient(0);
+                        SymbolicExpression c = diff.degree() < 0 ? SymbolicExpression::number(0.0L) : diff.coefficient(0);
                         result.substitution = (make_function("exp", c) * t).simplify();
                         result.reason = "exp(u) = exp(c) * exp(v) where exp(v) in tower";
                         return result;
@@ -621,7 +621,7 @@ IndependenceCheck check_logarithmic_independence_enhanced(
             auto base_check = check_logarithmic_independence_enhanced(base, current_tower, x_var, recursion_depth + 1);
             if (base_check.result == IndependenceResult::kDependent) {
                 result.result = IndependenceResult::kDependent;
-                result.substitution = (SymbolicExpression::number(static_cast<double>(n_int)) * base_check.substitution).simplify();
+                result.substitution = (SymbolicExpression::number(static_cast<long double>(n_int)) * base_check.substitution).simplify();
                 result.reason = "ln(u^n) = n*ln(u) with dependent base";
                 return result;
             }
@@ -634,8 +634,8 @@ IndependenceCheck check_logarithmic_independence_enhanced(
             auto base_check = check_logarithmic_independence_enhanced(base, current_tower, x_var, recursion_depth + 1);
             if (base_check.result == IndependenceResult::kDependent) {
                 result.result = IndependenceResult::kDependent;
-                SymbolicExpression coeff = (SymbolicExpression::number(static_cast<double>(p)) /
-                                           SymbolicExpression::number(static_cast<double>(q))).simplify();
+                SymbolicExpression coeff = (SymbolicExpression::number(static_cast<long double>(p)) /
+                                           SymbolicExpression::number(static_cast<long double>(q))).simplify();
                 result.substitution = (coeff * base_check.substitution).simplify();
                 result.reason = "ln(u^(p/q)) = (p/q)*ln(u) with dependent base";
                 return result;
@@ -648,7 +648,7 @@ IndependenceCheck check_logarithmic_independence_enhanced(
         std::vector<SymbolicExpression> factors;
         factor_into_multiplicative_components(normalized_arg, factors);
 
-        SymbolicExpression total_substitution = SymbolicExpression::number(0.0);
+        SymbolicExpression total_substitution = SymbolicExpression::number(0.0L);
         bool any_dependent = false;
 
         for (const auto& factor : factors) {
@@ -801,7 +801,7 @@ IndependenceCheck check_exponential_independence_enhanced(
 
             // Check if one factor is an exponential from the tower
             bool found_exp_factor = false;
-            SymbolicExpression other_factor = SymbolicExpression::number(1.0);
+            SymbolicExpression other_factor = SymbolicExpression::number(1.0L);
 
             for (const auto& ext : current_tower) {
                 if (ext.kind == DifferentialExtension::Kind::kExponential) {
@@ -883,7 +883,7 @@ IndependenceCheck check_exponential_independence_enhanced(
         SymbolicExpression left(normalized_arg.node_->left);
         SymbolicExpression right(normalized_arg.node_->right);
 
-        double c_val = 0.0;
+        long double c_val = 0.0L;
         if (left.is_number(&c_val)) {
             auto u_check = check_exponential_independence_enhanced(right, current_tower, x_var, recursion_depth + 1);
             if (u_check.result == IndependenceResult::kDependent) {
@@ -908,7 +908,7 @@ IndependenceCheck check_exponential_independence_enhanced(
     for (const auto& ext : current_tower) {
         if (ext.kind == DifferentialExtension::Kind::kExponential) {
             SymbolicExpression diff = (normalized_arg - ext.argument).simplify();
-            double diff_val = 0.0;
+            long double diff_val = 0.0L;
             if (diff.is_number(&diff_val)) {
                 // exp(arg) = exp(diff) * exp(ext.arg) = exp(diff) * t
                 result.result = IndependenceResult::kDependent;
@@ -933,7 +933,7 @@ IndependenceCheck check_exponential_independence_enhanced(
 
         if (log_rep.is_valid) {
             // Check if remainder is a constant
-            double const_val = 0.0;
+            long double const_val = 0.0L;
             if (log_rep.remainder.is_number(&const_val)) {
                 // exp(arg) = exp(const) * prod(v_i^c_i)
                 result.result = IndependenceResult::kDependent;
@@ -1038,8 +1038,8 @@ RischAlgorithm::detect_special_function_pattern(const SymbolicExpression& expr,
         }
 
         // 1/ln(x) -> li(x)
-        double num_val = 0.0;
-        if (num.is_number(&num_val) && mymath::abs(num_val - 1.0) < 1e-9) {
+        long double num_val = 0.0L;
+        if (num.is_number(&num_val) && mymath::abs(num_val - 1.0L) < 1e-9) {
             if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
                 SymbolicExpression arg(den.node_->left);
                 if (structural_equals(arg, SymbolicExpression::variable(x_var))) {
@@ -1075,7 +1075,7 @@ RischAlgorithm::detect_special_function_pattern(const SymbolicExpression& expr,
             if (inner.node_->type == NodeType::kPower) {
                 SymbolicExpression base(inner.node_->left);
                 SymbolicExpression exp(inner.node_->right);
-                double exp_val = 0.0;
+                long double exp_val = 0.0L;
                 if (structural_equals(base, SymbolicExpression::variable(x_var)) &&
                     exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < 1e-9) {
                     return {true, {SpecialFunction::kErf, SymbolicExpression::variable(x_var)}};
@@ -1087,12 +1087,12 @@ RischAlgorithm::detect_special_function_pattern(const SymbolicExpression& expr,
         if (arg.node_->type == NodeType::kMultiply) {
             SymbolicExpression left(arg.node_->left);
             SymbolicExpression right(arg.node_->right);
-            double coeff = 0.0;
+            long double coeff = 0.0L;
             if (left.is_number(&coeff) && coeff < 0) {
                 if (right.node_->type == NodeType::kPower) {
                     SymbolicExpression base(right.node_->left);
                     SymbolicExpression exp(right.node_->right);
-                    double exp_val = 0.0;
+                    long double exp_val = 0.0L;
                     if (structural_equals(base, SymbolicExpression::variable(x_var)) &&
                         exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < 1e-9) {
                         return {true, {SpecialFunction::kErf, SymbolicExpression::variable(x_var)}};
@@ -1102,7 +1102,7 @@ RischAlgorithm::detect_special_function_pattern(const SymbolicExpression& expr,
         }
     }
 
-    return {false, {SpecialFunction::kEi, SymbolicExpression::number(0.0)}};
+    return {false, {SpecialFunction::kEi, SymbolicExpression::number(0.0L)}};
 }
 
 // ============================================================================
@@ -1117,8 +1117,8 @@ SymbolicExpression RischAlgorithm::normalize_logarithm(const SymbolicExpression&
     if (simplified.node_->type == NodeType::kPower) {
         SymbolicExpression base(simplified.node_->left);
         SymbolicExpression exp(simplified.node_->right);
-        double k = 1.0;
-        if (exp.is_number(&k) && mymath::abs(k - 1.0) > 1e-9) {
+        long double k = 1.0L;
+        if (exp.is_number(&k) && mymath::abs(k - 1.0L) > 1e-9) {
             // Recursively normalize the base
             SymbolicExpression normalized_base = normalize_logarithm(base, x_var);
             return (SymbolicExpression::number(k) * make_function("ln", normalized_base)).simplify();
@@ -1149,10 +1149,10 @@ SymbolicExpression RischAlgorithm::normalize_logarithm(const SymbolicExpression&
     }
 
     // Case 5: ln(constant * u) -> ln(constant) + ln(u)
-    double const_factor = 1.0;
+    long double const_factor = 1.0L;
     SymbolicExpression rest;
     if (risch_algorithm_internal::decompose_constant_times_expression(simplified, x_var, &const_factor, &rest)) {
-        if (mymath::abs(const_factor) > 1e-12 && mymath::abs(const_factor - 1.0) > 1e-12) {
+        if (mymath::abs(const_factor) > 1e-12 && mymath::abs(const_factor - 1.0L) > 1e-12) {
             if (const_factor > 0) {
                 SymbolicExpression norm_rest = normalize_logarithm(rest, x_var);
                 return (SymbolicExpression::number(mymath::log(const_factor)) + make_function("ln", norm_rest)).simplify();
@@ -1180,12 +1180,12 @@ SymbolicExpression RischAlgorithm::normalize_exponential(const SymbolicExpressio
     if (simplified.node_->type == NodeType::kMultiply) {
         SymbolicExpression left(simplified.node_->left);
         SymbolicExpression right(simplified.node_->right);
-        double k = 1.0;
-        if (left.is_number(&k) && mymath::abs(k - 1.0) > 1e-9) {
+        long double k = 1.0L;
+        if (left.is_number(&k) && mymath::abs(k - 1.0L) > 1e-9) {
             SymbolicExpression norm_right = normalize_exponential(right, x_var);
             return make_power(make_function("exp", norm_right), SymbolicExpression::number(k)).simplify();
         }
-        if (right.is_number(&k) && mymath::abs(k - 1.0) > 1e-9) {
+        if (right.is_number(&k) && mymath::abs(k - 1.0L) > 1e-9) {
             SymbolicExpression norm_left = normalize_exponential(left, x_var);
             return make_power(make_function("exp", norm_left), SymbolicExpression::number(k)).simplify();
         }
@@ -1197,16 +1197,16 @@ SymbolicExpression RischAlgorithm::normalize_exponential(const SymbolicExpressio
     }
 
     // Case 4: exp(0) -> 1
-    double val = 0.0;
+    long double val = 0.0L;
     if (simplified.is_number(&val) && mymath::abs(val) < 1e-12) {
-        return SymbolicExpression::number(1.0);
+        return SymbolicExpression::number(1.0L);
     }
 
     // Case 5: exp(-u) -> 1/exp(u)
     if (simplified.node_->type == NodeType::kNegate) {
         SymbolicExpression inner(simplified.node_->left);
         SymbolicExpression norm_inner = normalize_exponential(inner, x_var);
-        return (SymbolicExpression::number(1.0) / make_function("exp", norm_inner)).simplify();
+        return (SymbolicExpression::number(1.0L) / make_function("exp", norm_inner)).simplify();
     }
 
     // Case 6: exp(x + ln(y)) -> y * exp(x)
@@ -1251,7 +1251,7 @@ bool RischAlgorithm::check_algebraic_independence(const SymbolicExpression& arg,
         if (normalized_arg.node_->type == NodeType::kPower) {
             SymbolicExpression base(normalized_arg.node_->left);
             SymbolicExpression exp(normalized_arg.node_->right);
-            double exp_val = 0.0;
+            long double exp_val = 0.0L;
             if (exp.is_number(&exp_val)) {
                 SymbolicExpression sub_base;
                 if (!check_algebraic_independence(base, kind, current_tower, x_var, &sub_base, recursion_depth + 1)) {
@@ -1279,10 +1279,10 @@ bool RischAlgorithm::check_algebraic_independence(const SymbolicExpression& arg,
         // 改进：检查常数因子
         // ln(c*u) = ln(c) + ln(u)，其中 c 是常数
         // 如果 c > 0，ln(c) 是常数；如果 c < 0，ln(c) = ln(-c) + i*pi
-        double const_factor = 1.0;
+        long double const_factor = 1.0L;
         SymbolicExpression rest;
         if (risch_algorithm_internal::decompose_constant_times_expression(normalized_arg, x_var, &const_factor, &rest)) {
-            if (mymath::abs(const_factor) > 1e-12 && mymath::abs(const_factor - 1.0) > 1e-12) {
+            if (mymath::abs(const_factor) > 1e-12 && mymath::abs(const_factor - 1.0L) > 1e-12) {
                 // 检查 rest 是否已经在塔中
                 SymbolicExpression sub_rest;
                 if (!check_algebraic_independence(rest, kind, current_tower, x_var, &sub_rest, recursion_depth + 1)) {
@@ -1305,7 +1305,7 @@ bool RischAlgorithm::check_algebraic_independence(const SymbolicExpression& arg,
                 SymbolicExpression ratio = (normalized_arg / ext.argument).simplify();
 
                 // 检查 ratio 是否为常数
-                double ratio_val = 0.0;
+                long double ratio_val = 0.0L;
                 if (ratio.is_number(&ratio_val)) {
                     // arg = ratio * ext.argument
                     // ln(arg) = ln(ratio) + ln(ext.argument) = ln(ratio) + t
@@ -1325,9 +1325,9 @@ bool RischAlgorithm::check_algebraic_independence(const SymbolicExpression& arg,
                 if (ratio.node_->type == NodeType::kPower) {
                     SymbolicExpression base(ratio.node_->left);
                     SymbolicExpression exp(ratio.node_->right);
-                    double exp_val = 0.0;
+                    long double exp_val = 0.0L;
                     if (base.is_number() && base.is_number(&ratio_val) &&
-                        mymath::abs(ratio_val - 1.0) < 1e-9 && exp.is_number(&exp_val)) {
+                        mymath::abs(ratio_val - 1.0L) < 1e-9 && exp.is_number(&exp_val)) {
                         // arg = ext.argument^k
                         // ln(arg) = k * ln(ext.argument) = k * t
                         *substitution = (SymbolicExpression::number(exp_val) *
@@ -1434,7 +1434,7 @@ bool RischAlgorithm::check_algebraic_independence(const SymbolicExpression& arg,
         for (const auto& ext : current_tower) {
             if (ext.kind == DifferentialExtension::Kind::kExponential) {
                 SymbolicExpression diff = (normalized_arg - ext.argument).simplify();
-                double diff_val = 0.0;
+                long double diff_val = 0.0L;
                 if (diff.is_number(&diff_val)) {
                     // exp(arg) = exp(diff) * exp(ext.argument) = exp(diff) * t
                     *substitution = (SymbolicExpression::number(mymath::exp(diff_val)) *
@@ -1453,12 +1453,12 @@ bool RischAlgorithm::check_algebraic_independence(const SymbolicExpression& arg,
         if (result.success && result.type == IntegralType::kElementary) {
             // 分解积分为对数项和剩余项
             std::vector<std::pair<SymbolicExpression, SymbolicExpression>> logs;
-            SymbolicExpression rest = SymbolicExpression::number(0.0);
+            SymbolicExpression rest = SymbolicExpression::number(0.0L);
             collect_log_terms_local(result.value, logs, &rest);
             
             // 如果剩余部分是常数且所有对数项都在当前域中，则 exp(arg) 是代数相关的
             if (is_expression_in_field_local(rest)) {
-                double const_val = 0.0;
+                long double const_val = 0.0L;
                 if (rest.is_number(&const_val)) {
                     // exp(arg) = exp(const) * prod(v_i^c_i)
                     SymbolicExpression prod = SymbolicExpression::number(mymath::exp(const_val));
@@ -1581,7 +1581,7 @@ void RischAlgorithm::collect_transcendental_extensions(
             collect(exp);
 
             // x^(1/2) = sqrt(x)
-            double exp_val = 0.0;
+            long double exp_val = 0.0L;
             if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < 1e-9) {
                 extensions.push_back({base.simplify(), DifferentialExtension::Kind::kAlgebraic});
             }
@@ -1642,7 +1642,7 @@ void RischAlgorithm::collect_transcendental_extensions_with_names(
             collect(base);
             collect(exp);
 
-            double exp_val = 0.0;
+            long double exp_val = 0.0L;
             if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < 1e-9) {
                 extensions.push_back({base.simplify(), DifferentialExtension::Kind::kAlgebraic, "sqrt"});
             }
@@ -1788,23 +1788,23 @@ std::vector<RischAlgorithm::DifferentialExtension> RischAlgorithm::build_differe
 
             if (func_name == "tan") {
                 // t = tan(u), t' = (1 + t²) * u'
-                SymbolicExpression one_plus_t_sq = (SymbolicExpression::number(1.0) + t * t).simplify();
+                SymbolicExpression one_plus_t_sq = (SymbolicExpression::number(1.0L) + t * t).simplify();
                 ext.derivation = (one_plus_t_sq * u_prime).simplify();
             } else if (func_name == "tanh") {
                 // t = tanh(u), t' = (1 - t²) * u'
-                SymbolicExpression one_minus_t_sq = (SymbolicExpression::number(1.0) - t * t).simplify();
+                SymbolicExpression one_minus_t_sq = (SymbolicExpression::number(1.0L) - t * t).simplify();
                 ext.derivation = (one_minus_t_sq * u_prime).simplify();
             } else if (func_name == "sin") {
                 // t = sin(u), t' = cos(u) * u'
                 // cos(u) = sqrt(1 - sin²(u)) = sqrt(1 - t²)
                 SymbolicExpression cos_u = make_function("sqrt",
-                    (SymbolicExpression::number(1.0) - t * t).simplify());
+                    (SymbolicExpression::number(1.0L) - t * t).simplify());
                 ext.derivation = (cos_u * u_prime).simplify();
             } else if (func_name == "cos") {
                 // t = cos(u), t' = -sin(u) * u'
                 // sin(u) = sqrt(1 - cos²(u)) = sqrt(1 - t²)
                 SymbolicExpression sin_u = make_function("sqrt",
-                    (SymbolicExpression::number(1.0) - t * t).simplify());
+                    (SymbolicExpression::number(1.0L) - t * t).simplify());
                 ext.derivation = (make_negate(sin_u) * u_prime).simplify();
             } else {
                 ext.derivation = u_prime.simplify();
@@ -1896,7 +1896,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_trigonometric_direct
             integrate_sin_poly = [&](const SymbolicExpression& poly) -> SymbolicExpression {
                 SymbolicExpression simplified_poly = poly.simplify();
                 if (expr_is_zero(simplified_poly)) {
-                    return SymbolicExpression::number(0.0);
+                    return SymbolicExpression::number(0.0L);
                 }
                 SymbolicExpression derivative = simplified_poly.derivative(x_var).simplify();
                 return ((make_negate(simplified_poly * make_function("cos", arg)) +
@@ -1906,7 +1906,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_trigonometric_direct
             integrate_cos_poly = [&](const SymbolicExpression& poly) -> SymbolicExpression {
                 SymbolicExpression simplified_poly = poly.simplify();
                 if (expr_is_zero(simplified_poly)) {
-                    return SymbolicExpression::number(0.0);
+                    return SymbolicExpression::number(0.0L);
                 }
                 SymbolicExpression derivative = simplified_poly.derivative(x_var).simplify();
                 return ((simplified_poly * make_function("sin", arg) -
@@ -1994,14 +1994,14 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_trigonometric_direct
     if (expr.node_->type == NodeType::kPower) {
         SymbolicExpression base(expr.node_->left);
         SymbolicExpression exp(expr.node_->right);
-        double exp_val = 0.0;
+        long double exp_val = 0.0L;
         if (exp.is_number(&exp_val)) {
             if (base.node_->type == NodeType::kFunction && base.node_->text == "sin") {
                 SymbolicExpression arg(base.node_->left);
                 SymbolicExpression a, b;
                 if (mymath::abs(exp_val - 2.0) < 1e-9 &&
                     symbolic_decompose_linear(arg, x_var, &a, &b)) {
-                    double a_val = 1.0;
+                    long double a_val = 1.0L;
                     a.is_number(&a_val);
                     SymbolicExpression two_arg = (SymbolicExpression::number(2.0) * arg).simplify();
                     SymbolicExpression result = (x / SymbolicExpression::number(2.0) -
@@ -2033,7 +2033,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_trigonometric_direct
                 SymbolicExpression a, b;
                 if (mymath::abs(exp_val - 2.0) < 1e-9 &&
                     symbolic_decompose_linear(arg, x_var, &a, &b)) {
-                    double a_val = 1.0;
+                    long double a_val = 1.0L;
                     a.is_number(&a_val);
                     SymbolicExpression two_arg = (SymbolicExpression::number(2.0) * arg).simplify();
                     SymbolicExpression result = (x / SymbolicExpression::number(2.0) +
@@ -2080,7 +2080,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_trigonometric_direct
     if (expr.node_->type == NodeType::kPower) {
         SymbolicExpression base(expr.node_->left);
         SymbolicExpression exp(expr.node_->right);
-        double exp_val = 0.0;
+        long double exp_val = 0.0L;
         if (exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < 1e-9) {
             if (base.node_->type == NodeType::kFunction && base.node_->text == "sec") {
                 SymbolicExpression arg(base.node_->left);
@@ -2122,7 +2122,7 @@ SymbolicExpression apply_pythagorean_identity(const SymbolicExpression& expr) {
             if (e.node_->type == NodeType::kPower) {
                 SymbolicExpression base(e.node_->left);
                 SymbolicExpression exp(e.node_->right);
-                double exp_val = 0.0;
+                long double exp_val = 0.0L;
                 if (exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < 1e-9) {
                     if (base.node_->type == NodeType::kFunction && base.node_->text == "sin") {
                         *arg = SymbolicExpression(base.node_->left);
@@ -2137,7 +2137,7 @@ SymbolicExpression apply_pythagorean_identity(const SymbolicExpression& expr) {
             if (e.node_->type == NodeType::kPower) {
                 SymbolicExpression base(e.node_->left);
                 SymbolicExpression exp(e.node_->right);
-                double exp_val = 0.0;
+                long double exp_val = 0.0L;
                 if (exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < 1e-9) {
                     if (base.node_->type == NodeType::kFunction && base.node_->text == "cos") {
                         *arg = SymbolicExpression(base.node_->left);
@@ -2151,12 +2151,12 @@ SymbolicExpression apply_pythagorean_identity(const SymbolicExpression& expr) {
         SymbolicExpression left_arg, right_arg;
         if (is_sin_squared(left, &left_arg) && is_cos_squared(right, &right_arg)) {
             if (structural_equals(left_arg.simplify(), right_arg.simplify())) {
-                return SymbolicExpression::number(1.0);
+                return SymbolicExpression::number(1.0L);
             }
         }
         if (is_cos_squared(left, &left_arg) && is_sin_squared(right, &right_arg)) {
             if (structural_equals(left_arg.simplify(), right_arg.simplify())) {
-                return SymbolicExpression::number(1.0);
+                return SymbolicExpression::number(1.0L);
             }
         }
     }
@@ -2226,15 +2226,15 @@ SymbolicExpression weierstrass_substitution(
 
     // sin(x) = 2t/(1+t²)
     SymbolicExpression sin_sub = (SymbolicExpression::number(2.0) * t /
-                                  (SymbolicExpression::number(1.0) + t * t)).simplify();
+                                  (SymbolicExpression::number(1.0L) + t * t)).simplify();
 
     // cos(x) = (1-t²)/(1+t²)
-    SymbolicExpression cos_sub = ((SymbolicExpression::number(1.0) - t * t) /
-                                  (SymbolicExpression::number(1.0) + t * t)).simplify();
+    SymbolicExpression cos_sub = ((SymbolicExpression::number(1.0L) - t * t) /
+                                  (SymbolicExpression::number(1.0L) + t * t)).simplify();
 
     // dx = 2dt/(1+t²)
     *jacobian = (SymbolicExpression::number(2.0) /
-                 (SymbolicExpression::number(1.0) + t * t)).simplify();
+                 (SymbolicExpression::number(1.0L) + t * t)).simplify();
 
     std::function<SymbolicExpression(const SymbolicExpression&)> substitute;
     substitute = [&](const SymbolicExpression& e) -> SymbolicExpression {
@@ -2249,7 +2249,7 @@ SymbolicExpression weierstrass_substitution(
                 if (func == "tan") {
                     // tan(x) = sin(x)/cos(x) = 2t/(1-t²)
                     return (SymbolicExpression::number(2.0) * t /
-                           (SymbolicExpression::number(1.0) - t * t)).simplify();
+                           (SymbolicExpression::number(1.0L) - t * t)).simplify();
                 }
             }
             return make_function(func, substitute(arg));
@@ -2408,7 +2408,7 @@ RischAlgorithm::IntegralType RischAlgorithm::detect_non_elementary_pattern(
     auto is_exp_over_x = [&]() -> bool {
         // 检查 exp(u)/u 形式
         SymbolicExpression base_expr = expr;
-        double coeff = 1.0;
+        long double coeff = 1.0L;
         if (expr.node_->type == NodeType::kMultiply) {
             SymbolicExpression left(expr.node_->left);
             if (left.is_number(&coeff)) {
@@ -2438,7 +2438,7 @@ RischAlgorithm::IntegralType RischAlgorithm::detect_non_elementary_pattern(
             if (arg.node_->type == NodeType::kPower) {
                 SymbolicExpression base(arg.node_->left);
                 SymbolicExpression exp(arg.node_->right);
-                double exp_val = 0.0;
+                long double exp_val = 0.0L;
                 if (structural_equals(base, SymbolicExpression::variable(x_var)) &&
                     exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < 1e-9) {
                     return true;
@@ -2451,7 +2451,7 @@ RischAlgorithm::IntegralType RischAlgorithm::detect_non_elementary_pattern(
                 if (right.node_->type == NodeType::kPower) {
                     SymbolicExpression base(right.node_->left);
                     SymbolicExpression exp(right.node_->right);
-                    double exp_val = 0.0;
+                    long double exp_val = 0.0L;
                     if (structural_equals(base, SymbolicExpression::variable(x_var)) &&
                         exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < 1e-9) {
                         return true;
@@ -2468,7 +2468,7 @@ RischAlgorithm::IntegralType RischAlgorithm::detect_non_elementary_pattern(
                     if (right.node_->type == NodeType::kPower) {
                         SymbolicExpression base(right.node_->left);
                         SymbolicExpression exp(right.node_->right);
-                        double exp_val = 0.0;
+                        long double exp_val = 0.0L;
                         if (structural_equals(base, SymbolicExpression::variable(x_var)) &&
                             exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < 1e-9) {
                             return true;
@@ -2485,8 +2485,8 @@ RischAlgorithm::IntegralType RischAlgorithm::detect_non_elementary_pattern(
         if (expr.node_->type == NodeType::kDivide) {
             SymbolicExpression num(expr.node_->left);
             SymbolicExpression den(expr.node_->right);
-            double num_val = 0.0;
-            if (num.is_number(&num_val) && mymath::abs(num_val - 1.0) < 1e-9) {
+            long double num_val = 0.0L;
+            if (num.is_number(&num_val) && mymath::abs(num_val - 1.0L) < 1e-9) {
                 if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
                     SymbolicExpression arg(den.node_->left);
                     // Check if arg is x or a*x
@@ -2527,7 +2527,7 @@ RischAlgorithm::IntegralType RischAlgorithm::detect_non_elementary_pattern(
         if (!symbolic_decompose_linear(expression, x_var, &a, &b)) {
             return false;
         }
-        double a_value = 0.0;
+        long double a_value = 0.0L;
         return a.is_number(&a_value) && mymath::abs(a_value) > 1e-12;
     };
 
@@ -2601,7 +2601,7 @@ SymbolicExpression RischAlgorithm::complex_log_to_real(const SymbolicExpression&
         }
 
         // 尝试分解为系数 * ln(...)
-        SymbolicExpression coeff = SymbolicExpression::number(1.0);
+        SymbolicExpression coeff = SymbolicExpression::number(1.0L);
         SymbolicExpression log_part;
 
         SymbolicExpression left(e.node_->left);
@@ -2656,19 +2656,19 @@ SymbolicExpression RischAlgorithm::complex_log_to_real(const SymbolicExpression&
         // 这对应于 arctan(x)
 
         // 检查系数是否为 1/(2i)
-        double coeff_val = 1.0;
+        long double coeff_val = 1.0L;
         bool has_i_in_coeff = false;
 
         if (coeff.node_->type == NodeType::kDivide) {
             SymbolicExpression c_num(coeff.node_->left);
             SymbolicExpression c_den(coeff.node_->right);
-            double c_num_val = 1.0, c_den_val = 1.0;
+            long double c_num_val = 1.0L, c_den_val = 1.0L;
 
             if (c_num.is_number(&c_num_val)) {
                 if (c_den.node_->type == NodeType::kMultiply) {
                     SymbolicExpression d_left(c_den.node_->left);
                     SymbolicExpression d_right(c_den.node_->right);
-                    double d_val = 1.0;
+                    long double d_val = 1.0L;
                     if (d_left.is_number(&d_val) && d_right.is_variable_named("i")) {
                         // 系数 = c_num_val / (d_val * i)
                         coeff_val = c_num_val / d_val;
@@ -2743,7 +2743,7 @@ SymbolicExpression RischAlgorithm::complex_log_to_real(const SymbolicExpression&
         SymbolicExpression left(e.node_->left);
         SymbolicExpression right(e.node_->right);
 
-        double coeff_val = 1.0;
+        long double coeff_val = 1.0L;
         SymbolicExpression log_part;
 
         if (left.is_number(&coeff_val) && right.node_->type == NodeType::kFunction && right.node_->text == "ln") {
@@ -2753,7 +2753,7 @@ SymbolicExpression RischAlgorithm::complex_log_to_real(const SymbolicExpression&
         } else if (left.node_->type == NodeType::kDivide) {
             SymbolicExpression num(left.node_->left);
             SymbolicExpression den(left.node_->right);
-            double num_val = 1.0, den_val = 1.0;
+            long double num_val = 1.0L, den_val = 1.0L;
             if (num.is_number(&num_val) && den.is_number(&den_val)) {
                 coeff_val = num_val / den_val;
                 if (right.node_->type == NodeType::kFunction && right.node_->text == "ln") {
@@ -2779,7 +2779,7 @@ SymbolicExpression RischAlgorithm::complex_log_to_real(const SymbolicExpression&
             if (e.node_->type == NodeType::kSubtract || e.node_->type == NodeType::kAdd) {
                 SymbolicExpression l(e.node_->left);
                 SymbolicExpression r(e.node_->right);
-                double r_val = 0.0;
+                long double r_val = 0.0L;
                 if (r.is_number(&r_val)) {
                     linear = l;
                     constant = r;
@@ -2909,7 +2909,7 @@ SymbolicExpression RischAlgorithm::simplify_complex_conjugate_pairs(
 
     // 尝试匹配共轭对
     std::vector<bool> processed(terms.size(), false);
-    SymbolicExpression result = SymbolicExpression::number(0.0);
+    SymbolicExpression result = SymbolicExpression::number(0.0L);
 
     for (size_t i = 0; i < terms.size(); ++i) {
         if (processed[i]) continue;
@@ -2975,7 +2975,7 @@ bool RischAlgorithm::extract_ln_term(
     SymbolicExpression& coeff,
     SymbolicExpression& arg) {
 
-    coeff = SymbolicExpression::number(1.0);
+    coeff = SymbolicExpression::number(1.0L);
     arg = SymbolicExpression();
 
     if (term.node_->type == NodeType::kFunction && term.node_->text == "ln") {
@@ -3038,8 +3038,8 @@ bool RischAlgorithm::extract_real_imag_parts(
     SymbolicExpression& real_part,
     SymbolicExpression& imag_part) {
 
-    real_part = SymbolicExpression::number(0.0);
-    imag_part = SymbolicExpression::number(0.0);
+    real_part = SymbolicExpression::number(0.0L);
+    imag_part = SymbolicExpression::number(0.0L);
 
     if (!contains_var(expr, "i")) {
         real_part = expr;
@@ -3090,7 +3090,7 @@ bool RischAlgorithm::extract_imag_coefficient(
     const SymbolicExpression& expr,
     SymbolicExpression& imag_coeff) {
 
-    imag_coeff = SymbolicExpression::number(1.0);
+    imag_coeff = SymbolicExpression::number(1.0L);
 
     if (expr.is_variable_named("i")) {
         return true;
@@ -3145,10 +3145,10 @@ SymbolicExpression RischAlgorithm::convert_conjugate_ln_pair(
 
     if (alpha_real.node_ && alpha_imag.node_) {
         // 使用 algebraic_number_utils 的转换
-        AlgebraicNumber c_r = AlgebraicNumber::from_double(c_real.is_number(nullptr) ? 0.0 : 1.0);
-        AlgebraicNumber c_i = AlgebraicNumber::from_double(c_imag.is_number(nullptr) ? 0.0 : 1.0);
-        AlgebraicNumber a_r = AlgebraicNumber::from_double(alpha_real.is_number(nullptr) ? 0.0 : 1.0);
-        AlgebraicNumber a_i = AlgebraicNumber::from_double(alpha_imag.is_number(nullptr) ? 0.0 : 1.0);
+        AlgebraicNumber c_r = AlgebraicNumber::from_double(c_real.is_number(nullptr) ? 0.0L : 1.0L);
+        AlgebraicNumber c_i = AlgebraicNumber::from_double(c_imag.is_number(nullptr) ? 0.0L : 1.0L);
+        AlgebraicNumber a_r = AlgebraicNumber::from_double(alpha_real.is_number(nullptr) ? 0.0L : 1.0L);
+        AlgebraicNumber a_i = AlgebraicNumber::from_double(alpha_imag.is_number(nullptr) ? 0.0L : 1.0L);
 
         return algebraic_number_utils::convert_complex_log_pair_to_real(
             c_r, c_i, a_r, a_i, x_var);
@@ -3240,7 +3240,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::prove_non_elementary_via_rde(
 
         // 将表达式转换为 t 的 Laurent 多项式
         SymbolicExpression num_expr = expression;
-        SymbolicExpression den_expr = SymbolicExpression::number(1.0);
+        SymbolicExpression den_expr = SymbolicExpression::number(1.0L);
         if (expression.node_->type == NodeType::kDivide) {
             num_expr = SymbolicExpression(expression.node_->left);
             den_expr = SymbolicExpression(expression.node_->right);
@@ -3262,7 +3262,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::prove_non_elementary_via_rde(
                 if (SymbolicPolynomial::coeff_is_zero(coeff_n)) continue;
 
                 // RDE: y' + n*u'*y = coeff_n
-                SymbolicExpression f = (SymbolicExpression::number(static_cast<double>(n)) * u_prime).simplify();
+                SymbolicExpression f = (SymbolicExpression::number(static_cast<long double>(n)) * u_prime).simplify();
 
                 std::string proof_reason;
                 if (rde_has_no_solution(f, coeff_n, field, &proof_reason)) {
@@ -3281,7 +3281,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::prove_non_elementary_via_rde(
 
         // 将表达式转换为 t 的有理函数
         SymbolicExpression num_expr = expression;
-        SymbolicExpression den_expr = SymbolicExpression::number(1.0);
+        SymbolicExpression den_expr = SymbolicExpression::number(1.0L);
         if (expression.node_->type == NodeType::kDivide) {
             num_expr = SymbolicExpression(expression.node_->left);
             den_expr = SymbolicExpression(expression.node_->right);
@@ -3362,8 +3362,8 @@ RischAlgorithm::IntegrationResult RischAlgorithm::prove_non_elementary_via_rde(
             SymbolicExpression num(expression.node_->left);
             SymbolicExpression den(expression.node_->right);
 
-            double num_val = 0.0;
-            if (num.is_number(&num_val) && mymath::abs(num_val - 1.0) < 1e-9) {
+            long double num_val = 0.0L;
+            if (num.is_number(&num_val) && mymath::abs(num_val - 1.0L) < 1e-9) {
                 // 分子是 1
                 if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
                     SymbolicExpression ln_arg(den.node_->left);

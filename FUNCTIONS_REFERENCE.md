@@ -95,7 +95,7 @@ dedicated syntax guides are:
 
 - `Tab`
   Autocomplete commands, functions, variables, and custom functions
-- double `Tab`
+- long double `Tab`
   Show the current candidate list when multiple completions match
 
 Examples:
@@ -103,7 +103,7 @@ Examples:
 - type `:he` then press `Tab` -> `:help`
 - type `sq` then press `Tab` -> `sqrt(`
 - type `:help ma` then press `Tab` -> `:help matrix`
-- type `:help ` then double `Tab` -> show help topics
+- type `:help ` then long double `Tab` -> show help topics
 - type `g` inside `diff(g` then press `Tab` -> complete a matching custom function
 
 ### Prefixed Integer Literals

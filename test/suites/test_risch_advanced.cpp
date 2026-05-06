@@ -69,7 +69,7 @@ void test_risch_special_part() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression exp_x = make_function("exp", x);
-        SymbolicExpression expr = (SymbolicExpression::number(1.0) / (exp_x * exp_x)).simplify();
+        SymbolicExpression expr = (SymbolicExpression::number(1.0L) / (exp_x * exp_x)).simplify();
         IntegrationResult result = engine.integrate(expr, "x");
         //std::cout << "∫ 1/exp(x)^2 dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
@@ -108,7 +108,7 @@ void test_risch_decision_procedure() {
     // Test 2: Logarithmic integral with proof trace
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = SymbolicExpression::number(1.0) / x;  // ∫1/x dx
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / x;  // ∫1/x dx
 
         RischProofTrace trace;
         auto result = RischDecisionProcedure::integrate_with_proof(expr, "x", trace);
@@ -144,7 +144,7 @@ void test_risch_decision_procedure() {
     // Test 5: Rational function
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression expr = SymbolicExpression::number(1.0) / (x * x + SymbolicExpression::number(1.0));
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / (x * x + SymbolicExpression::number(1.0L));
 
         RischProofTrace trace;
         auto result = RischDecisionProcedure::integrate_with_proof(expr, "x", trace);
@@ -174,9 +174,9 @@ void test_parametric_rde() {
     // Test 1: Simple parametric RDE: y' + y = c1 * 1 + c2 * x
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression f = SymbolicExpression::number(1.0);  // y' + y = ...
+        SymbolicExpression f = SymbolicExpression::number(1.0L);  // y' + y = ...
         std::vector<SymbolicExpression> g_list;
-        g_list.push_back(SymbolicExpression::number(1.0));  // c1 * 1
+        g_list.push_back(SymbolicExpression::number(1.0L));  // c1 * 1
         g_list.push_back(x);  // c2 * x
 
         std::vector<DifferentialExtension> tower;
@@ -195,7 +195,7 @@ void test_parametric_rde() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression t = SymbolicExpression::variable("_t1");
-        SymbolicExpression f = SymbolicExpression::number(1.0);  // In base field
+        SymbolicExpression f = SymbolicExpression::number(1.0L);  // In base field
 
         std::vector<SymbolicExpression> g_list;
         g_list.push_back(t);  // c1 * exp(x)
@@ -219,7 +219,7 @@ void test_parametric_rde() {
         SymbolicExpression x = SymbolicExpression::variable("x");
 
         // Test rational
-        SymbolicExpression rational = x * x + SymbolicExpression::number(1.0);
+        SymbolicExpression rational = x * x + SymbolicExpression::number(1.0L);
         auto rational_type = RischAlgorithm::determine_liouvillian_type(rational, "x", {});
         //std::cout << "\nLiouvillian type of x²+1: " << static_cast<int>(rational_type.type) << std::endl;
 
@@ -242,14 +242,14 @@ void test_parametric_rde() {
     // Test 4: Verify parametric RDE solution
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
-        SymbolicExpression f = SymbolicExpression::number(1.0);
+        SymbolicExpression f = SymbolicExpression::number(1.0L);
         std::vector<SymbolicExpression> g_list;
-        g_list.push_back(SymbolicExpression::number(1.0));
+        g_list.push_back(SymbolicExpression::number(1.0L));
 
         ParametricRDESymbolicSolution solution;
         solution.has_solution = true;
-        solution.y_particular = SymbolicExpression::number(1.0);  // y = 1 is a solution to y' + y = 1
-        solution.parameters.push_back(SymbolicExpression::number(1.0));
+        solution.y_particular = SymbolicExpression::number(1.0L);  // y = 1 is a solution to y' + y = 1
+        solution.parameters.push_back(SymbolicExpression::number(1.0L));
 
         bool valid = RischAlgorithm::verify_parametric_rde_solution(f, g_list, solution, "x");
         //std::cout << "\nSolution verification: " << (valid ? "valid" : "invalid") << std::endl;

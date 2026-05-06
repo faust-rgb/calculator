@@ -191,9 +191,9 @@ int run_symbolic_tests(int& passed, int& failed) {
 
     // 测试消元敏感的行列式计算
     try {
-        const double actual =
+        const long double actual =
             calculator.evaluate("det(mat(2, 2, 100001, 100000, 100000, 99999))");
-        if (nearly_equal(actual, -1.0, 1e-5)) {
+        if (nearly_equal(actual, -1.0L, 1e-5)) {
             ++passed;
         } else {
             ++failed;
@@ -225,9 +225,9 @@ int run_symbolic_tests(int& passed, int& failed) {
 
     // 测试奇异矩阵的条件数（应为无穷大）
     try {
-        const double actual =
+        const long double actual =
             calculator.evaluate("cond(mat(2, 2, 1, 1, 1, 1))");
-        if (!mymath::isfinite(actual) && actual > 0.0) {
+        if (!mymath::isfinite(actual) && actual > 0.0L) {
             ++passed;
         } else {
             ++failed;
@@ -508,8 +508,8 @@ int run_symbolic_tests(int& passed, int& failed) {
     // ========== 随机数测试 ==========
     // 测试随机数生成函数
     try {
-        const double value = calculator.evaluate("rand()");
-        if (value >= 0.0 && value < 1.0) {
+        const long double value = calculator.evaluate("rand()");
+        if (value >= 0.0L && value < 1.0L) {
             ++passed;
         } else {
             ++failed;
@@ -521,7 +521,7 @@ int run_symbolic_tests(int& passed, int& failed) {
     }
 
     try {
-        const double value = calculator.evaluate("randint(2, 4)");
+        const long double value = calculator.evaluate("randint(2, 4)");
         if (value == 2.0 || value == 3.0 || value == 4.0) {
             ++passed;
         } else {
@@ -535,8 +535,8 @@ int run_symbolic_tests(int& passed, int& failed) {
     }
 
     try {
-        const double value = calculator.evaluate("get(randmat(2, 3, -2, -1), 1, 2)");
-        if (value >= -2.0 && value < -1.0) {
+        const long double value = calculator.evaluate("get(randmat(2, 3, -2, -1), 1, 2)");
+        if (value >= -2.0 && value < -1.0L) {
             ++passed;
         } else {
             ++failed;
@@ -1282,7 +1282,7 @@ int run_symbolic_tests(int& passed, int& failed) {
     // ========== ODE求解测试 ==========
     // 测试自适应刚性ODE求解
     try {
-        const double actual = calculator.evaluate(
+        const long double actual = calculator.evaluate(
             "ode(-1000*(y-sin(x))+cos(x), 0, 0, 0.1, 20)");
         if (mymath::isfinite(actual) && nearly_equal(actual, mymath::sin(0.1), 1e-6)) {
             ++passed;
@@ -1318,7 +1318,7 @@ int run_symbolic_tests(int& passed, int& failed) {
 
     // 测试近奇异矩阵的秩
     try {
-        const double actual =
+        const long double actual =
             calculator.evaluate("rank(mat(2,2,1,1,1,1.000000000001))");
         if (nearly_equal(actual, 2.0)) {
             ++passed;
@@ -1335,7 +1335,7 @@ int run_symbolic_tests(int& passed, int& failed) {
 
     // 测试复数特征值情况（应抛出异常）
     try {
-        (void)calculator.evaluate("eigvals(mat(3,3,0,-1,0,1,0,0,0,0,2))");
+        (void)calculator.evaluate("eigvals(mat(3,3,0,-1.0,1.0,0,0,0,2))");
         ++failed;
         std::cout << "FAIL: complex eigenvalue case expected an error but succeeded\n";
     } catch (const std::exception&) {
@@ -1354,13 +1354,13 @@ int run_symbolic_tests(int& passed, int& failed) {
     // 统计扩展测试
     try {
         Calculator calc;
-        const double c = calc.evaluate("cov(vec(1, 2, 3), vec(4, 5, 6))");
-        const double r = calc.evaluate("corr(vec(1, 2, 3), vec(4, 5, 6))");
-        if (nearly_equal(c, 2.0/3.0) && nearly_equal(r, 1.0)) {
+        const long double c = calc.evaluate("cov(vec(1, 2, 3), vec(4, 5, 6))");
+        const long double r = calc.evaluate("corr(vec(1, 2, 3), vec(4, 5, 6))");
+        if (nearly_equal(c, 2.0/3.0) && nearly_equal(r, 1.0L)) {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: cov/corr expected 0.666..., 1.0 got " << c << ", " << r << '\n';
+            std::cout << "FAIL: cov/corr expected 0.666..., 1.0L got " << c << ", " << r << '\n';
         }
     } catch (const std::exception& ex) {
         ++failed;
@@ -1488,7 +1488,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         std::cout << "FAIL: directional threw unexpected error: " << ex.what() << '\n';
     }
 
-    // 测试 line_integral: f = 1 along line segment from (0,0) to (1,0)
+    // 测试 line_integral: f = 1 along line segment from (0,0) to (1.0)
     // r(t) = [t, 0], t in [0, 1], |r'| = 1, integral = 1
     try {
         std::string output;
@@ -1506,7 +1506,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         std::cout << "FAIL: line_integral scalar threw unexpected error: " << ex.what() << '\n';
     }
 
-    // 测试 line_integral: f = x along line segment from (0,0) to (1,0)
+    // 测试 line_integral: f = x along line segment from (0,0) to (1.0)
     // r(t) = [t, 0], f(r(t)) = t, |r'| = 1, integral = ∫_0^1 t dt = 0.5
     try {
         std::string output;
@@ -1542,7 +1542,7 @@ int run_symbolic_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
-    // 测试 line_integral: F = [y, -x] along line from (0,0) to (1,0)
+    // 测试 line_integral: F = [y, -x] along line from (0,0) to (1.0)
     // r(t) = [t, 0], r' = [1, 0], F(r) = [0, -t], F·r' = 0
     try {
         std::string output;

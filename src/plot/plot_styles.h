@@ -55,10 +55,10 @@ struct Color {
 struct SeriesStyle {
     std::string label;
     std::string color = "#377EB8";
-    double line_width = 1.5;
+    long double line_width = 1.5;
     LineStyle line_style = LineStyle::Solid;
     MarkerStyle marker_style = MarkerStyle::None;
-    double marker_size = 4.0;
+    long double marker_size = 4.0;
     bool show_line = true;
     bool show_marker = false;
 };
@@ -82,10 +82,10 @@ struct PlotOptions {
     int height = 400;
 
     // 轴范围（0 表示自动）
-    double x_min = 0;
-    double x_max = 0;
-    double y_min = 0;
-    double y_max = 0;
+    long double x_min = 0;
+    long double x_max = 0;
+    long double y_min = 0;
+    long double y_max = 0;
     bool auto_range = true;
 };
 
@@ -102,8 +102,8 @@ struct HeatmapOptions {
     int height = 400;
 
     // 数据范围
-    double z_min = 0;
-    double z_max = 0;
+    long double z_min = 0;
+    long double z_max = 0;
     bool auto_range = true;
 };
 

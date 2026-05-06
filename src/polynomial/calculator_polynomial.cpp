@@ -44,7 +44,7 @@ void build_polynomial_recursive(
     const PolynomialContext& ctx,
     const std::string& argument,
     std::string* variable_name,
-    std::vector<double>* coefficients) {
+    std::vector<long double>* coefficients) {
 
     const std::string trimmed_argument = trim_copy(argument);
     CommandASTNode ast = parse_command(trimmed_argument);
@@ -62,8 +62,8 @@ void build_polynomial_recursive(
 
             std::string lhs_variable;
             std::string rhs_variable;
-            std::vector<double> lhs_coefficients;
-            std::vector<double> rhs_coefficients;
+            std::vector<long double> lhs_coefficients;
+            std::vector<long double> rhs_coefficients;
             build_polynomial_recursive(ctx, std::string(call->arguments[0].text),
                                        &lhs_variable, &lhs_coefficients);
             build_polynomial_recursive(ctx, std::string(call->arguments[1].text),
@@ -82,7 +82,7 @@ void build_polynomial_recursive(
                 const PolynomialDivisionResult division =
                     polynomial_divide(lhs_coefficients, rhs_coefficients);
                 bool zero_remainder = true;
-                for (double coefficient : division.remainder) {
+                for (long double coefficient : division.remainder) {
                     if (!mymath::is_near_zero(coefficient, 1e-10)) {
                         zero_remainder = false;
                         break;
@@ -194,7 +194,7 @@ std::string poly_div(const PolynomialData& lhs, const PolynomialData& rhs) {
  * 对接近整数的实部和虚部进行取整处理。
  */
 std::string roots(const PolynomialData& poly) {
-    const std::vector<mymath::complex<double>> roots =
+    const std::vector<mymath::complex<long double>> roots =
         polynomial_complex_roots(poly.coefficients);
     if (roots.empty()) {
         return "No roots.";
@@ -202,7 +202,7 @@ std::string roots(const PolynomialData& poly) {
 
     std::ostringstream out;
     bool wrote_root = false;
-    mymath::complex<double> previous_root(0.0, 0.0);
+    mymath::complex<long double> previous_root(0.0L, 0.0L);
     for (std::size_t i = 0; i < roots.size(); ++i) {
         if (wrote_root &&
             mymath::abs(roots[i].real() - previous_root.real()) <= 1e-7 &&
@@ -212,18 +212,18 @@ std::string roots(const PolynomialData& poly) {
         if (wrote_root) {
             out << ", ";
         }
-        double real = roots[i].real();
-        double imag = roots[i].imag();
+        long double real = roots[i].real();
+        long double imag = roots[i].imag();
         if (is_integer_double(real, 1e-6)) {
-            real = static_cast<double>(round_to_long_long(real));
+            real = static_cast<long double>(round_to_long_long(real));
         }
         if (is_integer_double(imag, 1e-6)) {
-            imag = static_cast<double>(round_to_long_long(imag));
+            imag = static_cast<long double>(round_to_long_long(imag));
         }
         if (mymath::is_near_zero(imag, 1e-8)) {
             out << format_symbolic_scalar(real);
         } else {
-            out << matrix::internal::format_complex<double>({real, imag});
+            out << matrix::internal::format_complex<long double>({real, imag});
         }
         previous_root = {real, imag};
         wrote_root = true;

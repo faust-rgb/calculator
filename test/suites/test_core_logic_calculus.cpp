@@ -31,8 +31,8 @@ int run_logic_calculus_tests(int& passed, int& failed) {
     // ========== 符号微积分测试 ==========
     // 测试自定义函数求值
     try {
-        const double actual = calculator.evaluate("f(2)");
-        const double expected = mymath::sin(2.0) + 4.0;
+        const long double actual = calculator.evaluate("f(2)");
+        const long double expected = mymath::sin(2.0) + 4.0;
         if (nearly_equal(actual, expected, 1e-7)) {
             ++passed;
         } else {

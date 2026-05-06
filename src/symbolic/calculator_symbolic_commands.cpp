@@ -334,7 +334,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         // 2. Check if linear: y' = -P(x)y + Q(x) => y' + P(x)y = Q(x)
         SymbolicExpression neg_P = rhs.derivative(y_var).simplify();
         if (!contains(neg_P, y_var)) {
-            SymbolicExpression Q = rhs.substitute(y_var, SymbolicExpression::number(0.0)).simplify();
+            SymbolicExpression Q = rhs.substitute(y_var, SymbolicExpression::number(0.0L)).simplify();
             if (!contains(Q, y_var)) {
                 // Linear ODE: y' + P(x)y = Q(x) where P = -neg_P
                 SymbolicExpression P = (-neg_P).simplify();
@@ -420,13 +420,13 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         // Determine how many variables we have
         // Variables are identifiers, point values are numbers
         std::vector<std::string> variables;
-        std::vector<double> point_values;
+        std::vector<long double> point_values;
 
         for (std::size_t i = 1; i < arguments.size(); ++i) {
             const std::string arg = trim_copy(arguments[i]);
             // Try to parse as number first
             try {
-                double val = ctx.parse_decimal(arg);
+                long double val = ctx.parse_decimal(arg);
                 point_values.push_back(val);
             } catch (...) {
                 // Not a number, must be a variable name
@@ -453,7 +453,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         }
 
         // Compute gradient using forward-mode AutoDiff
-        std::vector<double> gradient_values;
+        std::vector<long double> gradient_values;
         for (std::size_t i = 0; i < variables.size(); ++i) {
             symbolic_expression_internal::DualEvaluationContext dual_ctx;
             dual_ctx.differentiation_variable = variables[i];
@@ -464,7 +464,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
                 }
             }
 
-            mymath::dual<double> result;
+            mymath::dual<long double> result;
             if (!symbolic_expression_internal::try_evaluate_dual_node(expression.node_, dual_ctx, &result)) {
                 throw std::runtime_error(
                     "numerical_gradient: failed to evaluate expression with dual numbers");
@@ -584,9 +584,9 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         }
         int order = 1;
         if (arguments.size() == 4) {
-            const double order_value = ctx.parse_decimal(arguments[3]);
+            const long double order_value = ctx.parse_decimal(arguments[3]);
             if (!mymath::isfinite(order_value) || mymath::floor(order_value) != order_value ||
-                order_value < 1.0) {
+                order_value < 1.0L) {
                 throw std::runtime_error("param_deriv order must be a positive integer");
             }
             order = static_cast<int>(order_value);
@@ -625,7 +625,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
 
         std::vector<SymbolicExpression> direction;
         direction.reserve(dimension);
-        SymbolicExpression norm_squared = SymbolicExpression::number(0.0);
+        SymbolicExpression norm_squared = SymbolicExpression::number(0.0L);
         for (std::size_t i = 0; i < dimension; ++i) {
             SymbolicExpression component =
                 SymbolicExpression::parse(arguments[1 + dimension + i]).simplify();
@@ -636,7 +636,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             SymbolicExpression::parse("sqrt(" + norm_squared.to_string() + ")").simplify();
         const std::vector<SymbolicExpression> gradient =
             expression.gradient(variables);
-        SymbolicExpression result = SymbolicExpression::number(0.0);
+        SymbolicExpression result = SymbolicExpression::number(0.0L);
         for (std::size_t i = 0; i < dimension; ++i) {
             result = (result + gradient[i] * direction[i] / norm).simplify();
         }
@@ -658,8 +658,8 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         const std::vector<SymbolicExpression> curve_components = ctx.parse_symbolic_expression_list(arguments[1]);
         const std::string param = trim_copy(arguments[2]);
         if (!is_identifier_text(param)) throw std::runtime_error("line_integral parameter must be an identifier");
-        const double a = ctx.parse_decimal(arguments[3]);
-        const double b = ctx.parse_decimal(arguments[4]);
+        const long double a = ctx.parse_decimal(arguments[3]);
+        const long double b = ctx.parse_decimal(arguments[4]);
         const std::size_t dim = curve_components.size();
 
         // Parse optional coordinate variable names
@@ -685,7 +685,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
 
         if (field_components.size() > 1) {
             if (field_components.size() != dim) throw std::runtime_error("line_integral: field and curve dimensions must match");
-            SymbolicExpression integrand = SymbolicExpression::number(0.0);
+            SymbolicExpression integrand = SymbolicExpression::number(0.0L);
             for (std::size_t i = 0; i < dim; ++i) {
                 SymbolicExpression Fi = field_components[i];
                 for (std::size_t j = 0; j < dim; ++j) Fi = Fi.substitute(coord_vars[j], curve_components[j]).simplify();
@@ -700,15 +700,15 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
 
             if (symbolic_success) {
                 SymbolicExpression res = (antideriv.substitute(param, SymbolicExpression::number(b)) - antideriv.substitute(param, SymbolicExpression::number(a))).simplify();
-                double n; if (res.is_number(&n)) *output = format_decimal(ctx.normalize_result(n)); else *output = res.to_string();
+                long double n; if (res.is_number(&n)) *output = format_decimal(ctx.normalize_result(n)); else *output = res.to_string();
             } else {
                 const auto eval = ctx.build_scoped_evaluator(integrand.to_string());
-                MultivariableIntegrator integrator([eval, param](const std::vector<double>& p) { return eval({{param, p[0]}}); });
-                *output = format_decimal(ctx.normalize_result(integrator.integrate({[a, b](const std::vector<double>&) { return std::make_pair(a, b); }}, {256})));
+                MultivariableIntegrator integrator([eval, param](const std::vector<long double>& p) { return eval({{param, p[0]}}); });
+                *output = format_decimal(ctx.normalize_result(integrator.integrate({[a, b](const std::vector<long double>&) { return std::make_pair(a, b); }}, {256})));
             }
         } else {
             std::string var; SymbolicExpression f; ctx.resolve_symbolic(arguments[0], false, &var, &f);
-            SymbolicExpression speed_sq = SymbolicExpression::number(0.0);
+            SymbolicExpression speed_sq = SymbolicExpression::number(0.0L);
             for (std::size_t i = 0; i < dim; ++i) speed_sq = (speed_sq + dr_dt[i] * dr_dt[i]).simplify();
             SymbolicExpression speed = SymbolicExpression::parse("sqrt(" + speed_sq.to_string() + ")").simplify();
             SymbolicExpression f_r = f;
@@ -721,20 +721,20 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             } catch (...) { symbolic_success = false; }
             if (symbolic_success) {
                 SymbolicExpression res = (antideriv.substitute(param, SymbolicExpression::number(b)) - antideriv.substitute(param, SymbolicExpression::number(a))).simplify();
-                double n; if (res.is_number(&n)) *output = format_decimal(ctx.normalize_result(n)); else *output = res.to_string();
+                long double n; if (res.is_number(&n)) *output = format_decimal(ctx.normalize_result(n)); else *output = res.to_string();
             } else {
                 const auto f_eval = ctx.build_scoped_evaluator(f.to_string());
-                std::vector<std::function<double(const std::vector<std::pair<std::string, double>>&)>> c_evals, d_evals;
+                std::vector<std::function<long double(const std::vector<std::pair<std::string, long double>>&)>> c_evals, d_evals;
                 for (const auto& c : curve_components) c_evals.push_back(ctx.build_scoped_evaluator(c.to_string()));
                 for (const auto& d : dr_dt) d_evals.push_back(ctx.build_scoped_evaluator(d.to_string()));
-                MultivariableIntegrator integrator([f_eval, c_evals, d_evals, coord_vars, param](const std::vector<double>& p) {
-                    const std::vector<std::pair<std::string, double>> p_s = {{param, p[0]}};
-                    std::vector<std::pair<std::string, double>> f_s = p_s;
+                MultivariableIntegrator integrator([f_eval, c_evals, d_evals, coord_vars, param](const std::vector<long double>& p) {
+                    const std::vector<std::pair<std::string, long double>> p_s = {{param, p[0]}};
+                    std::vector<std::pair<std::string, long double>> f_s = p_s;
                     for (std::size_t i = 0; i < c_evals.size(); ++i) f_s.push_back({coord_vars[i], c_evals[i](p_s)});
-                    double s_v = 0.0; for (const auto& d : d_evals) { double v = d(p_s); s_v += v * v; }
+                    long double s_v = 0.0L; for (const auto& d : d_evals) { long double v = d(p_s); s_v += v * v; }
                     return f_eval(f_s) * mymath::sqrt(s_v);
                 });
-                *output = format_decimal(ctx.normalize_result(integrator.integrate({[a, b](const std::vector<double>&) { return std::make_pair(a, b); }}, {256})));
+                *output = format_decimal(ctx.normalize_result(integrator.integrate({[a, b](const std::vector<long double>&) { return std::make_pair(a, b); }}, {256})));
             }
         }
         return true;
@@ -768,8 +768,8 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         }
 
         // Parse bounds
-        const double a = ctx.parse_decimal(arguments[3]);
-        const double b = ctx.parse_decimal(arguments[4]);
+        const long double a = ctx.parse_decimal(arguments[3]);
+        const long double b = ctx.parse_decimal(arguments[4]);
 
         const std::size_t dim = field_components.size();
 
@@ -787,7 +787,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         }
 
         // Substitute r(t) into F and compute dot product F(r(t)) · r'(t)
-        SymbolicExpression integrand = SymbolicExpression::number(0.0);
+        SymbolicExpression integrand = SymbolicExpression::number(0.0L);
         for (std::size_t i = 0; i < dim; ++i) {
             SymbolicExpression F_i = field_components[i];
             for (std::size_t j = 0; j < dim; ++j) {
@@ -812,7 +812,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             SymbolicExpression result_at_a = antideriv.substitute(param, SymbolicExpression::number(a)).simplify();
             SymbolicExpression result = (result_at_b - result_at_a).simplify();
 
-            double numeric_result;
+            long double numeric_result;
             if (result.is_number(&numeric_result)) {
                 *output = format_decimal(ctx.normalize_result(numeric_result));
             } else {
@@ -820,11 +820,11 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             }
         } else {
             // Fall back to numerical integration
-            std::vector<std::function<double(const std::vector<std::pair<std::string, double>>&)>> field_evaluators;
+            std::vector<std::function<long double(const std::vector<std::pair<std::string, long double>>&)>> field_evaluators;
             field_evaluators.reserve(dim);
-            std::vector<std::function<double(const std::vector<std::pair<std::string, double>>&)>> curve_evaluators;
+            std::vector<std::function<long double(const std::vector<std::pair<std::string, long double>>&)>> curve_evaluators;
             curve_evaluators.reserve(dim);
-            std::vector<std::function<double(const std::vector<std::pair<std::string, double>>&)>> derivative_evaluators;
+            std::vector<std::function<long double(const std::vector<std::pair<std::string, long double>>&)>> derivative_evaluators;
             derivative_evaluators.reserve(dim);
             for (std::size_t i = 0; i < dim; ++i) {
                 field_evaluators.push_back(ctx.build_scoped_evaluator(field_components[i].to_string()));
@@ -832,21 +832,21 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
                 derivative_evaluators.push_back(ctx.build_scoped_evaluator(dr_dt[i].to_string()));
             }
             MultivariableIntegrator integrator([field_evaluators, curve_evaluators, derivative_evaluators, coord_vars, param](
-                const std::vector<double>& point) {
-                const std::vector<std::pair<std::string, double>> param_scope = {{param, point[0]}};
-                std::vector<std::pair<std::string, double>> field_scope = param_scope;
+                const std::vector<long double>& point) {
+                const std::vector<std::pair<std::string, long double>> param_scope = {{param, point[0]}};
+                std::vector<std::pair<std::string, long double>> field_scope = param_scope;
                 for (std::size_t i = 0; i < curve_evaluators.size(); ++i) {
                     field_scope.push_back({coord_vars[i], curve_evaluators[i](param_scope)});
                 }
-                double value = 0.0;
+                long double value = 0.0L;
                 for (std::size_t i = 0; i < field_evaluators.size(); ++i) {
                     value += field_evaluators[i](field_scope) *
                              derivative_evaluators[i](param_scope);
                 }
                 return value;
             });
-            double numeric_result = integrator.integrate({
-                [a, b](const std::vector<double>&) {
+            long double numeric_result = integrator.integrate({
+                [a, b](const std::vector<long double>&) {
                     return std::make_pair(a, b);
                 }
             }, {256});
@@ -890,10 +890,10 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         }
 
         // Parse bounds
-        const double u_a = ctx.parse_decimal(arguments[3]);
-        const double u_b = ctx.parse_decimal(arguments[4]);
-        const double v_c = ctx.parse_decimal(arguments[6]);
-        const double v_d = ctx.parse_decimal(arguments[7]);
+        const long double u_a = ctx.parse_decimal(arguments[3]);
+        const long double u_b = ctx.parse_decimal(arguments[4]);
+        const long double v_c = ctx.parse_decimal(arguments[6]);
+        const long double v_d = ctx.parse_decimal(arguments[7]);
 
         // Compute r_u and r_v (partial derivatives)
         std::vector<SymbolicExpression> r_u(3), r_v(3);
@@ -930,9 +930,9 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         integration_ops::IntegrationContext int_ctx;
         int_ctx.parse_decimal = [&](const std::string& s) { return ctx.parse_decimal(s); };
         int_ctx.build_scoped_evaluator = [&](const std::string& s) { return ctx.build_scoped_evaluator(s); };
-        int_ctx.normalize_result = [&](double d) { return ctx.normalize_result(d); };
+        int_ctx.normalize_result = [&](long double d) { return ctx.normalize_result(d); };
 
-        double result = integration_ops::double_integral(
+        long double result = integration_ops::double_integral(
             int_ctx, integrand.to_string(),
             u_param, u_a, u_b,
             v_param, std::to_string(v_c), std::to_string(v_d),
@@ -967,8 +967,8 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         }
 
         // Parse bounds - v bounds can depend on u
-        const double u_a = ctx.parse_decimal(arguments[3]);
-        const double u_b = ctx.parse_decimal(arguments[4]);
+        const long double u_a = ctx.parse_decimal(arguments[3]);
+        const long double u_b = ctx.parse_decimal(arguments[4]);
         const std::string v_c_expr = arguments[6];  // Can be constant or expression in u
         const std::string v_d_expr = arguments[7];  // Can be constant or expression in u
 
@@ -1003,7 +1003,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             SymbolicExpression cross_z = (r_u[0] * r_v[1] - r_u[1] * r_v[0]).simplify();
 
             // Apply orientation
-            double sign = (orientation == "inward") ? -1.0 : 1.0;
+            long double sign = (orientation == "inward") ? -1.0L : 1.0L;
 
             // Substitute r(u,v) into F
             const std::vector<std::string> coord_vars = {"x", "y", "z"};
@@ -1018,7 +1018,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             // Integrand: F(r(u,v)) · (r_u × r_v)
             integrand = (F_of_r[0] * cross_x + F_of_r[1] * cross_y + F_of_r[2] * cross_z).simplify();
             if (sign < 0) {
-                integrand = (SymbolicExpression::number(-1.0) * integrand).simplify();
+                integrand = (SymbolicExpression::number(-1.0L) * integrand).simplify();
             }
         } else {
             // Scalar field: surface integral f dS = f * |r_u × r_v| du dv
@@ -1042,20 +1042,20 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
                 integrand = (f_of_r * cross_norm).simplify();
             } else {
                 // General dimension: compute sqrt(det(g)) where g is the metric tensor
-                SymbolicExpression metric_det = SymbolicExpression::number(0.0);
+                SymbolicExpression metric_det = SymbolicExpression::number(0.0L);
                 for (std::size_t i = 0; i < dim; ++i) {
                     for (std::size_t j = 0; j < dim; ++j) {
                         // g_ij = r_i · r_j
-                        SymbolicExpression g_ij = SymbolicExpression::number(0.0);
+                        SymbolicExpression g_ij = SymbolicExpression::number(0.0L);
                         for (std::size_t k = 0; k < dim; ++k) {
                             // For 2D surface, we compute the 2x2 metric tensor determinant
                         }
                     }
                 }
                 // For 2D surface in nD: area element = sqrt(|r_u|^2 * |r_v|^2 - (r_u·r_v)^2)
-                SymbolicExpression r_u_sq = SymbolicExpression::number(0.0);
-                SymbolicExpression r_v_sq = SymbolicExpression::number(0.0);
-                SymbolicExpression r_u_dot_r_v = SymbolicExpression::number(0.0);
+                SymbolicExpression r_u_sq = SymbolicExpression::number(0.0L);
+                SymbolicExpression r_v_sq = SymbolicExpression::number(0.0L);
+                SymbolicExpression r_u_dot_r_v = SymbolicExpression::number(0.0L);
                 for (std::size_t i = 0; i < dim; ++i) {
                     r_u_sq = (r_u_sq + r_u[i] * r_u[i]).simplify();
                     r_v_sq = (r_v_sq + r_v[i] * r_v[i]).simplify();
@@ -1083,9 +1083,9 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         integration_ops::IntegrationContext int_ctx;
         int_ctx.parse_decimal = [&](const std::string& s) { return ctx.parse_decimal(s); };
         int_ctx.build_scoped_evaluator = [&](const std::string& s) { return ctx.build_scoped_evaluator(s); };
-        int_ctx.normalize_result = [&](double d) { return ctx.normalize_result(d); };
+        int_ctx.normalize_result = [&](long double d) { return ctx.normalize_result(d); };
 
-        double result = integration_ops::double_integral(
+        long double result = integration_ops::double_integral(
             int_ctx, integrand.to_string(),
             u_param, u_a, u_b,
             v_param, v_c_expr, v_d_expr,
@@ -1225,7 +1225,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
     if (command == "greens_theorem") {
         // greens_theorem([Fx, Fy], [x(t), y(t)], t, a, b)
         // Green's theorem: ∮_C F·dr = ∬_D (∂Fy/∂x - ∂Fx/∂y) dA
-        // Computes the line integral using the double integral of curl_2d
+        // Computes the line integral using the long double integral of curl_2d
         if (arguments.size() < 5) {
             throw std::runtime_error(
                 "greens_theorem expects ([Fx, Fy], [x(t), y(t)], t, a, b)");
@@ -1252,8 +1252,8 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         }
 
         // Parse bounds
-        const double a = ctx.parse_decimal(arguments[3]);
-        const double b = ctx.parse_decimal(arguments[4]);
+        const long double a = ctx.parse_decimal(arguments[3]);
+        const long double b = ctx.parse_decimal(arguments[4]);
 
         // Compute curl_2d = ∂Fy/∂x - ∂Fx/∂y
         const std::vector<std::string> vars = {"x", "y"};
@@ -1287,7 +1287,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             SymbolicExpression result_at_a = antideriv.substitute(param, SymbolicExpression::number(a)).simplify();
             SymbolicExpression result = (result_at_b - result_at_a).simplify();
 
-            double numeric_result;
+            long double numeric_result;
             if (result.is_number(&numeric_result)) {
                 *output = format_decimal(ctx.normalize_result(numeric_result));
             } else {
@@ -1296,16 +1296,16 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         } else {
             // Fall back to numerical integration
             const auto evaluate_integrand = ctx.build_scoped_evaluator(integrand.to_string());
-            MultivariableIntegrator integrator([&evaluate_integrand, param](const std::vector<double>& point) {
+            MultivariableIntegrator integrator([&evaluate_integrand, param](const std::vector<long double>& point) {
                 return evaluate_integrand({{param, point[0]}});
             });
 
             std::vector<MultivariableIntegrator::BoundFunc> bounds;
-            bounds.push_back([&a, &b](const std::vector<double>&) {
+            bounds.push_back([&a, &b](const std::vector<long double>&) {
                 return std::make_pair(a, b);
             });
 
-            double result = integrator.integrate(bounds, {100});
+            long double result = integrator.integrate(bounds, {100});
             *output = format_decimal(ctx.normalize_result(result));
         }
         return true;
@@ -1342,10 +1342,10 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         }
 
         // Parse bounds
-        const double u_a = ctx.parse_decimal(arguments[3]);
-        const double u_b = ctx.parse_decimal(arguments[4]);
-        const double v_c = ctx.parse_decimal(arguments[6]);
-        const double v_d = ctx.parse_decimal(arguments[7]);
+        const long double u_a = ctx.parse_decimal(arguments[3]);
+        const long double u_b = ctx.parse_decimal(arguments[4]);
+        const long double v_c = ctx.parse_decimal(arguments[6]);
+        const long double v_d = ctx.parse_decimal(arguments[7]);
 
         // Compute curl(F)
         const std::vector<std::string> vars = {"x", "y", "z"};
@@ -1382,9 +1382,9 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         integration_ops::IntegrationContext int_ctx;
         int_ctx.parse_decimal = [&](const std::string& s) { return ctx.parse_decimal(s); };
         int_ctx.build_scoped_evaluator = [&](const std::string& s) { return ctx.build_scoped_evaluator(s); };
-        int_ctx.normalize_result = [&](double d) { return ctx.normalize_result(d); };
+        int_ctx.normalize_result = [&](long double d) { return ctx.normalize_result(d); };
 
-        double result = integration_ops::double_integral(
+        long double result = integration_ops::double_integral(
             int_ctx, integrand.to_string(),
             u_param, u_a, u_b,
             v_param, std::to_string(v_c), std::to_string(v_d),
@@ -1406,8 +1406,8 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             if (field.size() != 3) throw std::runtime_error("divergence_theorem requires a 3D vector field");
 
             const std::string x_var = arguments[1];
-            const double x0 = ctx.parse_decimal(arguments[2]);
-            const double x1 = ctx.parse_decimal(arguments[3]);
+            const long double x0 = ctx.parse_decimal(arguments[2]);
+            const long double x1 = ctx.parse_decimal(arguments[3]);
             const std::string y_var = arguments[4];
             const std::string y0 = arguments[5];
             const std::string y1 = arguments[6];
@@ -1420,9 +1420,9 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             integration_ops::IntegrationContext int_ctx;
             int_ctx.parse_decimal = [&](const std::string& s) { return ctx.parse_decimal(s); };
             int_ctx.build_scoped_evaluator = [&](const std::string& s) { return ctx.build_scoped_evaluator(s); };
-            int_ctx.normalize_result = [&](double d) { return ctx.normalize_result(d); };
+            int_ctx.normalize_result = [&](long double d) { return ctx.normalize_result(d); };
 
-            double result = integration_ops::triple_integral(
+            long double result = integration_ops::triple_integral(
                 int_ctx, div_F.to_string(),
                 x_var, x0, x1, y_var, y0, y1, z_var, z0, z1,
                 20, 20, 20);
@@ -1439,10 +1439,10 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             const std::vector<SymbolicExpression> surface = ctx.parse_symbolic_expression_list(arguments[1]);
             const std::string u_param = trim_copy(arguments[2]);
             const std::string v_param = trim_copy(arguments[5]);
-            const double u_a = ctx.parse_decimal(arguments[3]);
-            const double u_b = ctx.parse_decimal(arguments[4]);
-            const double v_c = ctx.parse_decimal(arguments[6]);
-            const double v_d = ctx.parse_decimal(arguments[7]);
+            const long double u_a = ctx.parse_decimal(arguments[3]);
+            const long double u_b = ctx.parse_decimal(arguments[4]);
+            const long double v_c = ctx.parse_decimal(arguments[6]);
+            const long double v_d = ctx.parse_decimal(arguments[7]);
 
             std::vector<SymbolicExpression> r_u(3), r_v(3);
             for (int i = 0; i < 3; ++i) {
@@ -1468,9 +1468,9 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             integration_ops::IntegrationContext int_ctx;
             int_ctx.parse_decimal = [&](const std::string& s) { return ctx.parse_decimal(s); };
             int_ctx.build_scoped_evaluator = [&](const std::string& s) { return ctx.build_scoped_evaluator(s); };
-            int_ctx.normalize_result = [&](double d) { return ctx.normalize_result(d); };
+            int_ctx.normalize_result = [&](long double d) { return ctx.normalize_result(d); };
 
-            double result = integration_ops::double_integral(
+            long double result = integration_ops::double_integral(
                 int_ctx, integrand.to_string(),
                 u_param, u_a, u_b,
                 v_param, std::to_string(v_c), std::to_string(v_d),
@@ -1502,7 +1502,7 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
 
         // Parse bounds
         std::vector<std::string> var_names;
-        std::vector<double> lower_bounds, upper_bounds;
+        std::vector<long double> lower_bounds, upper_bounds;
         std::size_t i = 2;
         while (i + 2 < arguments.size()) {
             std::string var = trim_copy(arguments[i]);
@@ -1539,16 +1539,16 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
 
         // Create the multidim function and constraint
         std::size_t dim = var_names.size();
-        multidim::MultidimFunction f = [&](const std::vector<double>& point) {
-            std::vector<std::pair<std::string, double>> scope;
+        multidim::MultidimFunction f = [&](const std::vector<long double>& point) {
+            std::vector<std::pair<std::string, long double>> scope;
             for (std::size_t d = 0; d < dim; ++d) {
                 scope.push_back({var_names[d], point[d]});
             }
             return integrand_eval(scope);
         };
 
-        multidim::RegionConstraint constraint = [&](const std::vector<double>& point) {
-            std::vector<std::pair<std::string, double>> scope;
+        multidim::RegionConstraint constraint = [&](const std::vector<long double>& point) {
+            std::vector<std::pair<std::string, long double>> scope;
             for (std::size_t d = 0; d < dim; ++d) {
                 scope.push_back({var_names[d], point[d]});
             }
@@ -1606,21 +1606,21 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
         bool upper_infinite = (upper_str == "inf" || upper_str == "infinity" ||
                                upper_str == "oo" || upper_str == "+inf");
 
-        double lower_val = ctx.parse_decimal(lower_str);
-        double upper_val = upper_infinite ? 0.0 : ctx.parse_decimal(upper_str);
+        long double lower_val = ctx.parse_decimal(lower_str);
+        long double upper_val = upper_infinite ? 0.0L : ctx.parse_decimal(upper_str);
 
         // 检查是否为多项式
-        std::vector<double> coeffs;
+        std::vector<long double> coeffs;
         if (expression.polynomial_coefficients(var, &coeffs) && !upper_infinite) {
             int lo = static_cast<int>(mymath::round(lower_val));
             int hi = static_cast<int>(mymath::round(upper_val));
 
             // 数值求和
-            double sum = 0.0;
+            long double sum = 0.0L;
             for (int k = lo; k <= hi; ++k) {
                 SymbolicExpression sub = expression.substitute(var, SymbolicExpression::number(k));
                 sub = sub.simplify();
-                double val = 0.0;
+                long double val = 0.0L;
                 if (sub.is_number(&val)) {
                     sum += val;
                 }
@@ -1635,11 +1635,11 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
             int lo = static_cast<int>(mymath::round(lower_val));
             int hi = static_cast<int>(mymath::round(upper_val));
 
-            double sum = 0.0;
+            long double sum = 0.0L;
             for (int k = lo; k <= hi; ++k) {
                 SymbolicExpression sub = expression.substitute(var, SymbolicExpression::number(k));
                 sub = sub.simplify();
-                double val = 0.0;
+                long double val = 0.0L;
                 if (sub.is_number(&val)) {
                     sum += val;
                 }

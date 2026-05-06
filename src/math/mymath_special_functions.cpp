@@ -13,47 +13,47 @@ namespace mymath {
 using internal::finite_or_infinity_from_log;
 using internal::log_gamma_positive;
 
-double gamma(double x) {
-    if (is_integer(x) && x <= 0.0) {
+long double gamma(long double x) {
+    if (is_integer(x) && x <= 0.0L) {
         throw std::domain_error("gamma is undefined for non-positive integers");
     }
 
     if (x < 0.5) {
-        const double reflected_sine = sin(kPi * x);
+        const long double reflected_sine = sin(kPi * x);
         if (abs(reflected_sine) < kEps) {
             throw std::domain_error("gamma is undefined at this input");
         }
-        return kPi / (reflected_sine * gamma(1.0 - x));
+        return kPi / (reflected_sine * gamma(1.0L - x));
     }
     return finite_or_infinity_from_log(log_gamma_positive(x));
 }
 
-double lgamma(double x) {
-    if (x <= 0.0 && is_integer(x)) {
+long double lgamma(long double x) {
+    if (x <= 0.0L && is_integer(x)) {
         throw std::domain_error("lgamma is undefined for non-positive integers");
     }
 
-    if (x > 0.0) {
+    if (x > 0.0L) {
         return log_gamma_positive(x);
     }
 
-    const double reflected_sine = sin(kPi * x);
+    const long double reflected_sine = sin(kPi * x);
     if (abs(reflected_sine) < kEps) {
         throw std::domain_error("lgamma is undefined at this input");
     }
-    return ln(kPi) - ln(abs(reflected_sine)) - log_gamma_positive(1.0 - x);
+    return ln(kPi) - ln(abs(reflected_sine)) - log_gamma_positive(1.0L - x);
 }
 
-double sin(double x) {
+long double sin(long double x) {
     x = normalize_angle(x);
     if (is_near_zero(x, 1e-12) || is_near_zero(abs(x) - kPi, 1e-12)) {
-        return 0.0;
+        return 0.0L;
     }
     if (is_near_zero(x - kPi / 2.0, 1e-12)) {
-        return 1.0;
+        return 1.0L;
     }
     if (is_near_zero(x + kPi / 2.0, 1e-12)) {
-        return -1.0;
+        return -1.0L;
     }
 
     // sin(x) 的泰勒展开：
@@ -75,19 +75,19 @@ double sin(double x) {
         }
     }
 
-    return static_cast<double>(sum);
+    return static_cast<long double>(sum);
 }
 
-double cos(double x) {
+long double cos(long double x) {
     x = normalize_angle(x);
     if (is_near_zero(x, 1e-12)) {
-        return 1.0;
+        return 1.0L;
     }
     if (is_near_zero(abs(x) - kPi, 1e-12)) {
-        return -1.0;
+        return -1.0L;
     }
     if (is_near_zero(abs(x) - kPi / 2.0, 1e-12)) {
-        return 0.0;
+        return 0.0L;
     }
 
     // cos(x) 的泰勒展开：
@@ -108,33 +108,33 @@ double cos(double x) {
         }
     }
 
-    return static_cast<double>(sum);
+    return static_cast<long double>(sum);
 }
 
-double tan(double x) {
+long double tan(long double x) {
     // tan(x) = sin(x) / cos(x)
-    const double cosine = cos(x);
+    const long double cosine = cos(x);
     if (abs(cosine) < 1e-10) {
         throw std::domain_error("tan is undefined when cos(x) is zero");
     }
     return sin(x) / cosine;
 }
 
-double atan(double x) {
+long double atan(long double x) {
     if (is_near_zero(x)) {
-        return 0.0;
+        return 0.0L;
     }
 
-    if (x < 0.0) {
+    if (x < 0.0L) {
         // 反正切是奇函数：atan(-x) = -atan(x)
         return -atan(-x);
     }
 
-    if (x > 1.0) {
+    if (x > 1.0L) {
         // 对大输入使用恒等式，把问题变到 (0, 1] 区间。
         //
         // atan(x) = pi/2 - atan(1/x), x > 0
-        return kPi / 2.0 - atan(1.0 / x);
+        return kPi / 2.0 - atan(1.0L / x);
     }
 
     if (x > 0.5) {
@@ -142,7 +142,7 @@ double atan(double x) {
         // 这样后面的级数在 x 接近 1 时也能较快收敛。
         //
         // atan(x) = 2 * atan( x / (1 + sqrt(1 + x^2)) )
-        const double reduced = x / (1.0 + sqrt(1.0 + x * x));
+        const long double reduced = x / (1.0L + sqrt(1.0L + x * x));
         return 2.0 * atan(reduced);
     }
 
@@ -162,22 +162,22 @@ double atan(double x) {
         }
     }
 
-    return static_cast<double>(sum);
+    return static_cast<long double>(sum);
 }
 
-double asin(double x) {
+long double asin(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
         return x;  // NaN 传播
     }
-    if (x < -1.0 || x > 1.0) {
+    if (x < -1.0L || x > 1.0L) {
         throw std::domain_error("asin is only defined for values in [-1, 1]");
     }
 
-    if (is_near_zero(1.0 - x)) {
+    if (is_near_zero(1.0L - x)) {
         return kPi / 2.0;
     }
-    if (is_near_zero(-1.0 - x)) {
+    if (is_near_zero(-1.0L - x)) {
         return -kPi / 2.0;
     }
 
@@ -189,8 +189,8 @@ double asin(double x) {
     // sin(theta) 和 theta 接近，足够作为一个简单起点。
     long double guess = static_cast<long double>(x);
     for (int i = 0; i < 60; ++i) {
-        const long double s = static_cast<long double>(sin(static_cast<double>(guess)));
-        const long double c = static_cast<long double>(cos(static_cast<double>(guess)));
+        const long double s = static_cast<long double>(sin(static_cast<long double>(guess)));
+        const long double c = static_cast<long double>(cos(static_cast<long double>(guess)));
         if (abs_long_double(c) < 1e-10L) {
             break;
         }
@@ -198,20 +198,20 @@ double asin(double x) {
         const long double next =
             guess - (s - static_cast<long double>(x)) / c;
         if (abs_long_double(next - guess) < static_cast<long double>(kEps)) {
-            return static_cast<double>(next);
+            return static_cast<long double>(next);
         }
         guess = next;
     }
 
-    return static_cast<double>(guess);
+    return static_cast<long double>(guess);
 }
 
-double acos(double x) {
+long double acos(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
         return x;  // NaN 传播
     }
-    if (x < -1.0 || x > 1.0) {
+    if (x < -1.0L || x > 1.0L) {
         throw std::domain_error("acos is only defined for values in [-1, 1]");
     }
 
@@ -219,96 +219,96 @@ double acos(double x) {
     return kPi / 2.0 - asin(x);
 }
 
-double sec(double x) {
-    const double cosine = cos(x);
+long double sec(long double x) {
+    const long double cosine = cos(x);
     if (abs(cosine) < 1e-10) {
         throw std::domain_error("sec is undefined when cos(x) is zero");
     }
-    return 1.0 / cosine;
+    return 1.0L / cosine;
 }
 
-double csc(double x) {
-    const double sine = sin(x);
+long double csc(long double x) {
+    const long double sine = sin(x);
     if (abs(sine) < 1e-10) {
         throw std::domain_error("csc is undefined when sin(x) is zero");
     }
-    return 1.0 / sine;
+    return 1.0L / sine;
 }
 
-double cot(double x) {
-    const double sine = sin(x);
+long double cot(long double x) {
+    const long double sine = sin(x);
     if (abs(sine) < 1e-10) {
         throw std::domain_error("cot is undefined when sin(x) is zero");
     }
     return cos(x) / sine;
 }
 
-double asec(double x) {
-    if (abs(x) < 1.0) {
+long double asec(long double x) {
+    if (abs(x) < 1.0L) {
         throw std::domain_error("asec is only defined for |x| >= 1");
     }
-    return acos(1.0 / x);
+    return acos(1.0L / x);
 }
 
-double acsc(double x) {
-    if (abs(x) < 1.0) {
+long double acsc(long double x) {
+    if (abs(x) < 1.0L) {
         throw std::domain_error("acsc is only defined for |x| >= 1");
     }
-    return asin(1.0 / x);
+    return asin(1.0L / x);
 }
 
-double acot(double x) {
+long double acot(long double x) {
     if (is_near_zero(x)) {
         return kPi / 2.0;
     }
-    if (x > 0.0) {
-        return atan(1.0 / x);
+    if (x > 0.0L) {
+        return atan(1.0L / x);
     }
-    return atan(1.0 / x) + kPi;
+    return atan(1.0L / x) + kPi;
 }
 
-double sqrt(double x) {
+long double sqrt(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
         return x;  // NaN 传播
     }
-    if (x < 0.0) {
+    if (x < 0.0L) {
         throw std::domain_error("sqrt is only defined for non-negative numbers");
     }
     if (is_near_zero(x)) {
-        return 0.0;
+        return 0.0L;
     }
 
     // 牛顿迭代求平方根：
     // next = (guess + x / guess) / 2
     //
     // 这相当于对 f(g) = g^2 - x 做 Newton-Raphson。
-    long double guess = x >= 1.0 ? static_cast<long double>(x) : 1.0L;
+    long double guess = x >= 1.0L ? static_cast<long double>(x) : 1.0L;
     const long double target = static_cast<long double>(x);
     for (int i = 0; i < 100; ++i) {
         const long double next = 0.5L * (guess + target / guess);
         // 使用相对误差判断收敛，对极大/极小数更稳健
         const long double rel_err = abs_long_double(next - guess) / (abs_long_double(next) + abs_long_double(guess) + 1e-300L);
         if (rel_err < static_cast<long double>(kEps)) {
-            return static_cast<double>(next);
+            return static_cast<long double>(next);
         }
         guess = next;
     }
-    return static_cast<double>(guess);
+    return static_cast<long double>(guess);
 }
 
-double cbrt(double x) {
+long double cbrt(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
         return x;  // NaN 传播
     }
     if (is_near_zero(x)) {
-        return 0.0;
+        return 0.0L;
     }
 
     // 使用牛顿迭代法提升立方根精度：
     // g_{n+1} = (2*g_n + x / g_n^2) / 3
-    double guess = x > 0.0 ? exp(ln(x) / 3.0) : -exp(ln(-x) / 3.0);
+    long double guess = x > 0.0L ? exp(ln(x) / 3.0) : -exp(ln(-x) / 3.0);
     const long double target = static_cast<long double>(x);
 
     for (int i = 0; i < 10; ++i) {
@@ -317,14 +317,14 @@ double cbrt(double x) {
         // 使用相对误差判断收敛
         const long double rel_err = abs_long_double(next - g) / (abs_long_double(next) + 1e-300L);
         if (rel_err < 1e-15L) {
-            return static_cast<double>(next);
+            return static_cast<long double>(next);
         }
-        guess = static_cast<double>(next);
+        guess = static_cast<long double>(next);
     }
     return guess;
 }
 
-double root(double value, double degree) {
+long double root(long double value, long double degree) {
     // root(value, degree) 约定只接受“整数次数”的根。
     if (!is_integer(degree)) {
         throw std::domain_error("root degree must be an integer");
@@ -335,39 +335,39 @@ double root(double value, double degree) {
         throw std::domain_error("root degree cannot be zero");
     }
 
-    if (value == 0.0) {
+    if (value == 0.0L) {
         if (n < 0) {
             throw std::domain_error("zero cannot be raised to a negative power");
         }
-        return 0.0;
+        return 0.0L;
     }
 
     const long long abs_n = n < 0 ? -n : n;
     
     // 特殊情况优化
-    if (abs_n == 2 && value > 0.0) return n < 0 ? 1.0 / sqrt(value) : sqrt(value);
-    if (abs_n == 3) return n < 0 ? 1.0 / cbrt(value) : cbrt(value);
+    if (abs_n == 2 && value > 0.0L) return n < 0 ? 1.0L / sqrt(value) : sqrt(value);
+    if (abs_n == 3) return n < 0 ? 1.0L / cbrt(value) : cbrt(value);
 
-    double result = 0.0;
-    if (value < 0.0) {
+    long double result = 0.0L;
+    if (value < 0.0L) {
         if (abs_n % 2 == 0) {
             throw std::domain_error("even root is undefined for negative values");
         }
-        result = -exp(ln(-value) / static_cast<double>(abs_n));
+        result = -exp(ln(-value) / static_cast<long double>(abs_n));
     } else {
-        result = exp(ln(value) / static_cast<double>(abs_n));
+        result = exp(ln(value) / static_cast<long double>(abs_n));
     }
 
-    return n < 0 ? 1.0 / result : result;
+    return n < 0 ? 1.0L / result : result;
 }
 
-static double int_pow(double base, long long exponent) {
+static long double int_pow(long double base, long long exponent) {
     // 0^0 = 1 是数学惯例
     if (exponent == 0) {
-        return 1.0;
+        return 1.0L;
     }
 
-    if (base == 0.0 && exponent < 0) {
+    if (base == 0.0L && exponent < 0) {
         throw std::runtime_error("zero cannot be raised to a negative power");
     }
 
@@ -386,17 +386,17 @@ static double int_pow(double base, long long exponent) {
         power >>= 1ULL;
     }
 
-    return static_cast<double>(negative ? 1.0L / result : result);
+    return static_cast<long double>(negative ? 1.0L / result : result);
 }
 
-double pow(double base, double exponent) {
+long double pow(long double base, long double exponent) {
     if (is_integer(exponent)) {
         // 整数次幂优先走快速幂，既更快也避免不必要的 ln/exp 误差。
         return int_pow(base, static_cast<long long>(exponent));
     }
 
-    if (base <= 0.0) {
-        if (base == 0.0) {
+    if (base <= 0.0L) {
+        if (base == 0.0L) {
             throw std::domain_error("zero cannot be raised to a non-integer power");
         }
 
@@ -407,7 +407,7 @@ double pow(double base, double exponent) {
         // 否则一律视为不在当前实数计算器的定义域内。
         long long numerator = 0;
         long long denominator = 0;
-        const double positive_exponent = exponent < 0.0 ? -exponent : exponent;
+        const long double positive_exponent = exponent < 0.0L ? -exponent : exponent;
         if (!approximate_fraction(positive_exponent, &numerator, &denominator) ||
             denominator % 2 == 0) {
             throw std::domain_error(
@@ -415,24 +415,24 @@ double pow(double base, double exponent) {
         }
 
         // 先计算正数底的幅值，再根据分子奇偶决定结果符号。
-        const double magnitude = exp(
-            (static_cast<double>(numerator) / static_cast<double>(denominator)) *
+        const long double magnitude = exp(
+            (static_cast<long double>(numerator) / static_cast<long double>(denominator)) *
             ln(-base));
-        const double signed_value = (numerator % 2 == 0) ? magnitude : -magnitude;
-        return exponent < 0.0 ? 1.0 / signed_value : signed_value;
+        const long double signed_value = (numerator % 2 == 0) ? magnitude : -magnitude;
+        return exponent < 0.0L ? 1.0L / signed_value : signed_value;
     }
 
     // 非整数次幂使用：a^b = e^(b * ln(a))
     return exp(exponent * ln(base));
 }
 
-double erf(double x) {
-    if (x < 0.0) {
+long double erf(long double x) {
+    if (x < 0.0L) {
         return -erf(-x);
     }
 
     if (x > 2.5) {
-        return 1.0 - erfc(x);
+        return 1.0L - erfc(x);
     }
 
     const long double x_ld = static_cast<long double>(x);
@@ -450,22 +450,22 @@ double erf(double x) {
         term *= x_ld * x_ld;
         factorial *= static_cast<long double>(n + 1);
     }
-    return static_cast<double>(2.0L * sum /
+    return static_cast<long double>(2.0L * sum /
                                static_cast<long double>(sqrt(kPi)));
 }
 
-double erfc(double x) {
-    if (x < 0.0) {
+long double erfc(long double x) {
+    if (x < 0.0L) {
         return 2.0 - erfc(-x);
     }
 
     if (x < 2.5) {
-        return 1.0 - erf(x);
+        return 1.0L - erf(x);
     }
 
     // Abramowitz-Stegun 风格的快速近似，对大 x 更稳定。
-    const double t = 1.0 / (1.0 + 0.3275911 * x);
-    const double poly =
+    const long double t = 1.0L / (1.0L + 0.3275911 * x);
+    const long double poly =
         (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t -
           0.284496736) *
              t +
@@ -474,17 +474,17 @@ double erfc(double x) {
     return poly * exp(-x * x);
 }
 
-double inc_gamma(double a, double x) {
-    if (x <= 0.0) return 0.0;
-    if (a <= 0.0) return 1.0;
+long double inc_gamma(long double a, long double x) {
+    if (x <= 0.0L) return 0.0L;
+    if (a <= 0.0L) return 1.0L;
 
-    const double log_ax = a * ln(x) - x - internal::log_gamma_positive(a);
-    const double prefix = internal::finite_or_infinity_from_log(log_ax);
+    const long double log_ax = a * ln(x) - x - internal::log_gamma_positive(a);
+    const long double prefix = internal::finite_or_infinity_from_log(log_ax);
 
-    if (x < a + 1.0) {
+    if (x < a + 1.0L) {
         // Series representation for P(a, x)
-        double sum = 1.0 / a;
-        double term = sum;
+        long double sum = 1.0L / a;
+        long double term = sum;
         for (int n = 1; n < 200; ++n) {
             term *= x / (a + n);
             sum += term;
@@ -494,75 +494,75 @@ double inc_gamma(double a, double x) {
     } else {
         // Continued fraction for Q(a, x) = 1 - P(a, x)
         // Q(a, x) = (x^a e^-x / Gamma(a)) * [ 1 / (x+1-a - 1(1-a)/(x+3-a - 2(2-a)/(x+5-a - ...))) ]
-        const double tiny = 1e-30;
-        double b = x + 1.0 - a;
-        double c = 1.0 / tiny;
-        double d = 1.0 / b;
-        double h = d;
+        const long double tiny = 1e-30;
+        long double b = x + 1.0L - a;
+        long double c = 1.0L / tiny;
+        long double d = 1.0L / b;
+        long double h = d;
         for (int i = 1; i < 200; ++i) {
-            double an = -static_cast<double>(i) * (static_cast<double>(i) - a);
+            long double an = -static_cast<long double>(i) * (static_cast<long double>(i) - a);
             b += 2.0;
             d = an * d + b;
             if (abs(d) < tiny) d = tiny;
             c = b + an / c;
             if (abs(c) < tiny) c = tiny;
-            d = 1.0 / d;
-            double delta = c * d;
+            d = 1.0L / d;
+            long double delta = c * d;
             h *= delta;
-            if (abs(delta - 1.0) < 1e-14) break;
+            if (abs(delta - 1.0L) < 1e-14) break;
         }
-        return 1.0 - h * prefix;
+        return 1.0L - h * prefix;
     }
 }
 
-double inc_beta(double a, double b, double x) {
-    if (x <= 0.0) return 0.0;
-    if (x >= 1.0) return 1.0;
+long double inc_beta(long double a, long double b, long double x) {
+    if (x <= 0.0L) return 0.0L;
+    if (x >= 1.0L) return 1.0L;
 
-    if (x > (a + 1.0) / (a + b + 2.0)) {
-        return 1.0 - inc_beta(b, a, 1.0 - x);
+    if (x > (a + 1.0L) / (a + b + 2.0)) {
+        return 1.0L - inc_beta(b, a, 1.0L - x);
     }
 
-    const double log_beta = internal::log_gamma_positive(a) + internal::log_gamma_positive(b) - internal::log_gamma_positive(a + b);
-    const double prefix = exp(a * ln(x) + b * ln(1.0 - x) - log_beta) / a;
+    const long double log_beta = internal::log_gamma_positive(a) + internal::log_gamma_positive(b) - internal::log_gamma_positive(a + b);
+    const long double prefix = exp(a * ln(x) + b * ln(1.0L - x) - log_beta) / a;
 
     // Lentz's method for continued fraction
-    const double tiny = 1e-30;
-    double h = 1.0; // b0 is 1 for the CF part
-    double c = h;
-    double d = 0.0;
+    const long double tiny = 1e-30;
+    long double h = 1.0L; // b0 is 1 for the CF part
+    long double c = h;
+    long double d = 0.0L;
 
     for (int m = 1; m <= 200; ++m) {
         // Even step 2m
-        double m_d = static_cast<double>(m);
-        double num = m_d * (b - m_d) * x / ((a + 2.0 * m_d - 1.0) * (a + 2.0 * m_d));
+        long double m_d = static_cast<long double>(m);
+        long double num = m_d * (b - m_d) * x / ((a + 2.0 * m_d - 1.0L) * (a + 2.0 * m_d));
         
-        d = 1.0 + num * d;
+        d = 1.0L + num * d;
         if (abs(d) < tiny) d = tiny;
-        c = 1.0 + num / c;
+        c = 1.0L + num / c;
         if (abs(c) < tiny) c = tiny;
-        d = 1.0 / d;
+        d = 1.0L / d;
         h *= c * d;
 
         // Odd step 2m + 1
-        num = -(a + m_d) * (a + b + m_d) * x / ((a + 2.0 * m_d) * (a + 2.0 * m_d + 1.0));
+        num = -(a + m_d) * (a + b + m_d) * x / ((a + 2.0 * m_d) * (a + 2.0 * m_d + 1.0L));
         
-        d = 1.0 + num * d;
+        d = 1.0L + num * d;
         if (abs(d) < tiny) d = tiny;
-        c = 1.0 + num / c;
+        c = 1.0L + num / c;
         if (abs(c) < tiny) c = tiny;
-        d = 1.0 / d;
-        double delta = c * d;
+        d = 1.0L / d;
+        long double delta = c * d;
         h *= delta;
 
-        if (abs(delta - 1.0) < 1e-14) break;
+        if (abs(delta - 1.0L) < 1e-14) break;
     }
 
     return prefix * h;
 }
 
-double beta(double a, double b) {
-    if (a <= 0.0 || b <= 0.0) {
+long double beta(long double a, long double b) {
+    if (a <= 0.0L || b <= 0.0L) {
         throw std::domain_error("beta is only defined for positive inputs");
     }
     return finite_or_infinity_from_log(
@@ -571,18 +571,18 @@ double beta(double a, double b) {
         log_gamma_positive(a + b));
 }
 
-double zeta(double s) {
-    if (is_near_zero(s - 1.0, 1e-13)) {
+long double zeta(long double s) {
+    if (is_near_zero(s - 1.0L, 1e-13)) {
         throw std::domain_error("zeta is undefined at s = 1");
     }
 
-    if (s < 0.0) {
+    if (s < 0.0L) {
         // 反射公式：ζ(s) = 2^s π^(s-1) sin(πs/2) Γ(1-s) ζ(1-s)
         return pow(2.0, s) *
-               pow(kPi, s - 1.0) *
+               pow(kPi, s - 1.0L) *
                sin(kPi * s * 0.5) *
-               gamma(1.0 - s) *
-               zeta(1.0 - s);
+               gamma(1.0L - s) *
+               zeta(1.0L - s);
     }
 
     if (is_near_zero(s)) {
@@ -605,11 +605,11 @@ double zeta(double s) {
     const long double s_ld = static_cast<long double>(s);
     long double total = 0.0L;
     for (int n = 1; n < kEulerMaclaurinN; ++n) {
-        total += 1.0L / static_cast<long double>(pow(static_cast<double>(n), s));
+        total += 1.0L / static_cast<long double>(pow(static_cast<long double>(n), s));
     }
 
     const long double n_ld = static_cast<long double>(kEulerMaclaurinN);
-    total += static_cast<long double>(pow(kEulerMaclaurinN, 1.0 - s)) /
+    total += static_cast<long double>(pow(kEulerMaclaurinN, 1.0L - s)) /
              (s_ld - 1.0L);
     total += 0.5L / static_cast<long double>(pow(kEulerMaclaurinN, s));
 
@@ -624,38 +624,38 @@ double zeta(double s) {
         }
         total += kBernoulli[k - 1] * rising / factorial /
                  static_cast<long double>(
-                     pow(static_cast<double>(n_ld),
-                         s + static_cast<double>(2 * k - 1)));
+                     pow(static_cast<long double>(n_ld),
+                         s + static_cast<long double>(2 * k - 1)));
     }
-    return static_cast<double>(total);
+    return static_cast<long double>(total);
 }
 
-double bessel_j(int order, double x) {
+long double bessel_j(int order, long double x) {
     if (order < 0) {
-        const double value = bessel_j(-order, x);
+        const long double value = bessel_j(-order, x);
         return ((-order) % 2 == 0) ? value : -value;
     }
 
     if (is_near_zero(x)) {
-        return order == 0 ? 1.0 : 0.0;
+        return order == 0 ? 1.0L : 0.0L;
     }
 
-    const double abs_x = abs(x);
-    if (abs_x > 50.0) {
-        const double phase =
-            abs_x - static_cast<double>(order) * kPi * 0.5 - kPi * 0.25;
-        const double asymptotic =
+    const long double abs_x = abs(x);
+    if (abs_x > 50.0L) {
+        const long double phase =
+            abs_x - static_cast<long double>(order) * kPi * 0.5 - kPi * 0.25;
+        const long double asymptotic =
             sqrt(2.0 / (kPi * abs_x)) * cos(phase);
-        return (x < 0.0 && order % 2 != 0) ? -asymptotic : asymptotic;
+        return (x < 0.0L && order % 2 != 0) ? -asymptotic : asymptotic;
     }
 
     long double sum = 0.0L;
     const long double half_x = static_cast<long double>(x) * 0.5L;
     long double term = static_cast<long double>(
-                           pow(static_cast<double>(half_x),
-                               static_cast<double>(order))) /
+                           pow(static_cast<long double>(half_x),
+                               static_cast<long double>(order))) /
                   finite_or_infinity_from_log(
-                      log_gamma_positive(static_cast<double>(order + 1)));
+                      log_gamma_positive(static_cast<long double>(order + 1)));
     for (int k = 0; k < 200; ++k) {
         const long double add = term;
         sum += add;
@@ -666,7 +666,7 @@ double bessel_j(int order, double x) {
                 (static_cast<long double>(k + 1) *
                  static_cast<long double>(k + order + 1));
     }
-    return static_cast<double>(sum);
+    return static_cast<long double>(sum);
 }
 
 }  // namespace mymath

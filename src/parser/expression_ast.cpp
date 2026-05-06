@@ -286,10 +286,10 @@ private:
         throw ExceptionType(oss.str());
     }
 
-double evaluate_ast(const ExpressionAST* ast,
+long double evaluate_ast(const ExpressionAST* ast,
                     const VariableResolver& variables,
                     const std::map<std::string, CustomFunction>* functions,
-                    const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions,
+                    const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions,
                     const HasScriptFunctionCallback& has_script_function,
                     const InvokeScriptFunctionDecimalCallback& invoke_script_function) {
     if (!ast) {
@@ -303,7 +303,7 @@ double evaluate_ast(const ExpressionAST* ast,
         case ExprKind::kString:
             // 字符串不能作为标量求值，但在比较中可以使用
             // 返回非零值表示字符串存在
-            return ast->string_value.empty() ? 0.0 : 1.0;
+            return ast->string_value.empty() ? 0.0L : 1.0L;
 
         case ExprKind::kVariable: {
             // 超快路径：已绑定到槽位索引
@@ -338,10 +338,10 @@ double evaluate_ast(const ExpressionAST* ast,
             if (ast->children.size() != 2) {
                 throw_ast_error<MathError>("invalid binary operation", ast->position);
             }
-            double left = evaluate_ast(ast->children[0].get(), variables,
+            long double left = evaluate_ast(ast->children[0].get(), variables,
                                        functions, scalar_functions,
                                        has_script_function, invoke_script_function);
-            double right = evaluate_ast(ast->children[1].get(), variables,
+            long double right = evaluate_ast(ast->children[1].get(), variables,
                                         functions, scalar_functions,
                                         has_script_function, invoke_script_function);
 
@@ -350,10 +350,10 @@ double evaluate_ast(const ExpressionAST* ast,
                 case '-': return left - right;
                 case '*': return left * right;
                 case '/':
-                    if (right == 0.0) throw_ast_error<MathError>("division by zero", ast->position);
+                    if (right == 0.0L) throw_ast_error<MathError>("division by zero", ast->position);
                     return left / right;
                 case '%':
-                    if (right == 0.0) throw_ast_error<MathError>("modulo by zero", ast->position);
+                    if (right == 0.0L) throw_ast_error<MathError>("modulo by zero", ast->position);
                     return mymath::fmod(left, right);
                 case '^': return mymath::pow(left, right);
                 default:
@@ -365,7 +365,7 @@ double evaluate_ast(const ExpressionAST* ast,
             if (ast->children.size() != 1) {
                 throw_ast_error<MathError>("invalid unary operation", ast->position);
             }
-            double operand = evaluate_ast(ast->children[0].get(), variables,
+            long double operand = evaluate_ast(ast->children[0].get(), variables,
                                           functions, scalar_functions,
                                           has_script_function, invoke_script_function);
             switch (ast->op_char) {
@@ -415,30 +415,30 @@ double evaluate_ast(const ExpressionAST* ast,
                     throw_ast_error<MathError>("cannot compare string with non-string", ast->position);
                 }
 
-                if (ast->comparison_op == "==") return left_str == right_str ? 1.0 : 0.0;
-                if (ast->comparison_op == "!=") return left_str != right_str ? 1.0 : 0.0;
-                if (ast->comparison_op == "<") return left_str < right_str ? 1.0 : 0.0;
-                if (ast->comparison_op == ">") return left_str > right_str ? 1.0 : 0.0;
-                if (ast->comparison_op == "<=") return left_str <= right_str ? 1.0 : 0.0;
-                if (ast->comparison_op == ">=") return left_str >= right_str ? 1.0 : 0.0;
+                if (ast->comparison_op == "==") return left_str == right_str ? 1.0L : 0.0L;
+                if (ast->comparison_op == "!=") return left_str != right_str ? 1.0L : 0.0L;
+                if (ast->comparison_op == "<") return left_str < right_str ? 1.0L : 0.0L;
+                if (ast->comparison_op == ">") return left_str > right_str ? 1.0L : 0.0L;
+                if (ast->comparison_op == "<=") return left_str <= right_str ? 1.0L : 0.0L;
+                if (ast->comparison_op == ">=") return left_str >= right_str ? 1.0L : 0.0L;
 
                 throw_ast_error<MathError>("unknown comparison operator: " + ast->comparison_op, ast->position);
             }
 
             // 标量比较
-            double left = evaluate_ast(left_child, variables,
+            long double left = evaluate_ast(left_child, variables,
                                        functions, scalar_functions,
                                        has_script_function, invoke_script_function);
-            double right = evaluate_ast(right_child, variables,
+            long double right = evaluate_ast(right_child, variables,
                                         functions, scalar_functions,
                                         has_script_function, invoke_script_function);
 
-            if (ast->comparison_op == "==") return mymath::is_near_zero(left - right, 1e-10) ? 1.0 : 0.0;
-            if (ast->comparison_op == "!=") return mymath::is_near_zero(left - right, 1e-10) ? 0.0 : 1.0;
-            if (ast->comparison_op == "<") return left < right ? 1.0 : 0.0;
-            if (ast->comparison_op == ">") return left > right ? 1.0 : 0.0;
-            if (ast->comparison_op == "<=") return left <= right ? 1.0 : 0.0;
-            if (ast->comparison_op == ">=") return left >= right ? 1.0 : 0.0;
+            if (ast->comparison_op == "==") return mymath::is_near_zero(left - right, 1e-10) ? 1.0L : 0.0L;
+            if (ast->comparison_op == "!=") return mymath::is_near_zero(left - right, 1e-10) ? 0.0L : 1.0L;
+            if (ast->comparison_op == "<") return left < right ? 1.0L : 0.0L;
+            if (ast->comparison_op == ">") return left > right ? 1.0L : 0.0L;
+            if (ast->comparison_op == "<=") return left <= right ? 1.0L : 0.0L;
+            if (ast->comparison_op == ">=") return left >= right ? 1.0L : 0.0L;
 
             throw_ast_error<MathError>("unknown comparison operator: " + ast->comparison_op, ast->position);
         }
@@ -449,33 +449,33 @@ double evaluate_ast(const ExpressionAST* ast,
             }
 
             // 逻辑运算符支持短路求值
-            double left = evaluate_ast(ast->children[0].get(), variables,
+            long double left = evaluate_ast(ast->children[0].get(), variables,
                                        functions, scalar_functions,
                                        has_script_function, invoke_script_function);
 
             if (ast->comparison_op == "&&") {
                 // &&: 如果左边为假，直接返回 0，不计算右边
-                if (left == 0.0) return 0.0;
-                double right = evaluate_ast(ast->children[1].get(), variables,
+                if (left == 0.0L) return 0.0L;
+                long double right = evaluate_ast(ast->children[1].get(), variables,
                                             functions, scalar_functions,
                                             has_script_function, invoke_script_function);
-                return (right != 0.0) ? 1.0 : 0.0;
+                return (right != 0.0L) ? 1.0L : 0.0L;
             }
 
             if (ast->comparison_op == "||") {
                 // ||: 如果左边为真，直接返回 1，不计算右边
-                if (left != 0.0) return 1.0;
-                double right = evaluate_ast(ast->children[1].get(), variables,
+                if (left != 0.0L) return 1.0L;
+                long double right = evaluate_ast(ast->children[1].get(), variables,
                                             functions, scalar_functions,
                                             has_script_function, invoke_script_function);
-                return (right != 0.0) ? 1.0 : 0.0;
+                return (right != 0.0L) ? 1.0L : 0.0L;
             }
 
             throw_ast_error<MathError>("unknown logical operator: " + ast->comparison_op, ast->position);
         }
 
         case ExprKind::kFunctionCall: {
-            std::vector<double> args;
+            std::vector<long double> args;
             args.reserve(ast->children.size());
             for (const auto& child : ast->children) {
                 args.push_back(evaluate_ast(child.get(), variables,
@@ -527,10 +527,10 @@ double evaluate_ast(const ExpressionAST* ast,
             if (ast->children.size() != 3) {
                 throw_ast_error<MathError>("invalid conditional", ast->position);
             }
-            double cond = evaluate_ast(ast->children[0].get(), variables,
+            long double cond = evaluate_ast(ast->children[0].get(), variables,
                                        functions, scalar_functions,
                                        has_script_function, invoke_script_function);
-            if (cond != 0.0) {
+            if (cond != 0.0L) {
                 return evaluate_ast(ast->children[1].get(), variables,
                                    functions, scalar_functions,
                                    has_script_function, invoke_script_function);
@@ -568,7 +568,7 @@ bool bind_variable_slots(ExpressionAST* ast, const VariableResolver& variables) 
             // nested script frames, so variables must remain dynamically
             // resolved. Built-in constants are safe to fold.
             // 检查是否为内置常量
-            double value = 0.0;
+            long double value = 0.0L;
             if (lookup_builtin_constant(ast->identifier, &value)) {
                 ast->is_builtin_constant = true;
                 ast->number_value = value;
@@ -627,10 +627,10 @@ std::unique_ptr<ExpressionAST> compile_expression_ast(const std::string& express
     }
 }
 
-double evaluate_compiled_ast(const ExpressionAST* ast,
+long double evaluate_compiled_ast(const ExpressionAST* ast,
                              const VariableResolver& variables,
                              const std::map<std::string, CustomFunction>* functions,
-                             const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions,
+                             const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions,
                              const HasScriptFunctionCallback& has_script_function,
                              const InvokeScriptFunctionDecimalCallback& invoke_script_function) {
     return evaluate_ast(ast, variables, functions, scalar_functions,

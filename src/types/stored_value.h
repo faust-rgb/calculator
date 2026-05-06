@@ -3,7 +3,7 @@
 // ============================================================================
 //
 // 计算器中存储的值，支持多种类型：
-// - 标量（double 或有理数）
+// - 标量（long double 或有理数）
 // - 矩阵
 // - 字符串
 // - 符号表达式文本
@@ -42,7 +42,7 @@ struct StoredValue {
     mutable std::string source_expression;   ///< 源表达式（用于延迟符号计算）
 
     Rational rational;                   ///< 有理数值
-    double decimal = 0.0;                ///< 浮点数值
+    long double decimal = 0.0L;                ///< 浮点数值
     matrix::ComplexNumber complex;       ///< 复数值
     std::string string_value;            ///< 字符串值
     mutable std::string symbolic_text;   ///< 符号表达式文本（mutable 支持延迟计算）

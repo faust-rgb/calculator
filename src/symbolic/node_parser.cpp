@@ -233,11 +233,11 @@ private:
  * @param value 数值
  * @return 格式化字符串
  */
-std::string format_number(double value) {
+std::string format_number(long double value) {
     if (mymath::is_near_zero(value, kFormatEps)) {
         return "0";
     }
-    if (value < 0.0) {
+    if (value < 0.0L) {
         return "-" + format_number(-value);
     }
 
@@ -262,7 +262,7 @@ std::string format_number(double value) {
 // ============================================================================
 
 /** @brief 创建数值节点（带驻留） */
-std::shared_ptr<SymbolicExpression::Node> make_number(double value) {
+std::shared_ptr<SymbolicExpression::Node> make_number(long double value) {
     return intern_node(std::make_shared<SymbolicExpression::Node>(value));
 }
 
@@ -286,7 +286,7 @@ std::shared_ptr<SymbolicExpression::Node> make_infinity(bool positive) {
     std::shared_ptr<SymbolicExpression::Node> node =
         std::make_shared<SymbolicExpression::Node>();
     node->type = NodeType::kInfinity;
-    node->number_value = positive ? 1.0 : -1.0;  // 1.0 表示 +inf, -1.0 表示 -inf
+    node->number_value = positive ? 1.0L : -1.0L;  // 1.0L 表示 +inf, -1.0L 表示 -inf
     return intern_node(node);
 }
 
@@ -758,7 +758,7 @@ private:
                 return SymbolicExpression(make_infinity(true));
             }
             if (identifier == "nan") {
-                return SymbolicExpression::number(0.0 / 0.0);
+                return SymbolicExpression::number(0.0L / 0.0L);
             }
 
             skip_spaces();
@@ -815,17 +815,17 @@ private:
         }
 
         // 手动解析数值（避免 strtod 的依赖和区域设置问题）
-        double value = 0.0;
+        long double value = 0.0L;
         std::size_t index = start;
         while (index < pos_ && source_[index] != '.') {
-            value = value * 10.0 + static_cast<double>(source_[index] - '0');
+            value = value * 10.0L + static_cast<long double>(source_[index] - '0');
             ++index;
         }
         if (index < pos_ && source_[index] == '.') {
             ++index;
-            double place = 0.1;
+            long double place = 0.1;
             while (index < pos_) {
-                value += static_cast<double>(source_[index] - '0') * place;
+                value += static_cast<long double>(source_[index] - '0') * place;
                 place *= 0.1;
                 ++index;
             }
@@ -843,16 +843,16 @@ private:
             }
             
             if (exp_pos < source_.size() && std::isdigit(static_cast<unsigned char>(source_[exp_pos]))) {
-                double exponent = 0.0;
+                long double exponent = 0.0L;
                 while (exp_pos < source_.size() && std::isdigit(static_cast<unsigned char>(source_[exp_pos]))) {
-                    exponent = exponent * 10.0 + static_cast<double>(source_[exp_pos] - '0');
+                    exponent = exponent * 10.0L + static_cast<long double>(source_[exp_pos] - '0');
                     ++exp_pos;
                 }
                 pos_ = exp_pos;
                 if (exp_negative) {
-                    value /= mymath::pow(10.0, exponent);
+                    value /= mymath::pow(10.0L, exponent);
                 } else {
-                    value *= mymath::pow(10.0, exponent);
+                    value *= mymath::pow(10.0L, exponent);
                 }
             }
         }
@@ -861,7 +861,7 @@ private:
     }
 };
 
-bool expr_is_number(const SymbolicExpression& expression, double* value);
+bool expr_is_number(const SymbolicExpression& expression, long double* value);
 
 SymbolicExpression simplify_impl(const SymbolicExpression& expression);
 SymbolicExpression simplify_once(const SymbolicExpression& expression);
@@ -1048,7 +1048,7 @@ SymbolicExpression substitute_expression_impl(const SymbolicExpression& expressi
 }
 
 bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& node,
-                               double* value) {
+                               long double* value) {
     switch (node->type) {
         case NodeType::kNumber:
             *value = node->number_value;
@@ -1068,7 +1068,7 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
             }
             return false;
         case NodeType::kNegate: {
-            double operand = 0.0;
+            long double operand = 0.0L;
             if (!try_evaluate_numeric_node(node->left, &operand)) {
                 return false;
             }
@@ -1080,8 +1080,8 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
         case NodeType::kMultiply:
         case NodeType::kDivide:
         case NodeType::kPower: {
-            double left = 0.0;
-            double right = 0.0;
+            long double left = 0.0L;
+            long double right = 0.0L;
             if (!try_evaluate_numeric_node(node->left, &left) ||
                 !try_evaluate_numeric_node(node->right, &right)) {
                 return false;
@@ -1119,7 +1119,7 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
             return false;
         }
         case NodeType::kFunction: {
-            double argument = 0.0;
+            long double argument = 0.0L;
             if (!try_evaluate_numeric_node(node->left, &argument)) {
                 return false;
             }
@@ -1164,17 +1164,17 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                 return true;
             }
             if (node->text == "ln") {
-                if (argument <= 0.0) {
+                if (argument <= 0.0L) {
                     return false;
                 }
                 *value = mymath::ln(argument);
                 return true;
             }
             if (node->text == "sqrt") {
-                if (argument < 0.0) {
+                if (argument < 0.0L) {
                     return false;
                 }
-                double root = mymath::sqrt(argument);
+                long double root = mymath::sqrt(argument);
                 // Only evaluate to number if it's a perfect square
                 if (mymath::is_near_zero(root * root - argument, 1e-12) && mymath::is_integer(root, 1e-10)) {
                     *value = root;
@@ -1199,19 +1199,19 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                 return true;
             }
             if (node->text == "floor") {
-                *value = static_cast<double>(
-                    static_cast<long long>(argument < 0.0 &&
-                                                   static_cast<double>(static_cast<long long>(argument)) != argument
-                                               ? argument - 1.0
+                *value = static_cast<long double>(
+                    static_cast<long long>(argument < 0.0L &&
+                                                   static_cast<long double>(static_cast<long long>(argument)) != argument
+                                               ? argument - 1.0L
                                                : argument));
                 return true;
             }
             if (node->text == "ceil") {
                 long long truncated = static_cast<long long>(argument);
-                if (argument > 0.0 && static_cast<double>(truncated) != argument) {
+                if (argument > 0.0L && static_cast<long double>(truncated) != argument) {
                     ++truncated;
                 }
-                *value = static_cast<double>(truncated);
+                *value = static_cast<long double>(truncated);
                 return true;
             }
             if (node->text == "cbrt") {
@@ -1220,18 +1220,18 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
             }
             if (node->text == "sign") {
                 if (mymath::is_near_zero(argument, kFormatEps)) {
-                    *value = 0.0;
+                    *value = 0.0L;
                 } else {
-                    *value = argument > 0.0 ? 1.0 : -1.0;
+                    *value = argument > 0.0L ? 1.0L : -1.0L;
                 }
                 return true;
             }
             if (node->text == "step") {
-                *value = argument >= 0.0 ? 1.0 : 0.0;
+                *value = argument >= 0.0L ? 1.0L : 0.0L;
                 return true;
             }
             if (node->text == "delta") {
-                *value = mymath::is_near_zero(argument, kFormatEps) ? 1.0 : 0.0;
+                *value = mymath::is_near_zero(argument, kFormatEps) ? 1.0L : 0.0L;
                 return true;
             }
             return false;
@@ -1248,45 +1248,45 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
 /**
  * @brief Evaluate expression node with dual numbers for automatic differentiation.
  *
- * For the differentiation variable, returns dual(point_value, 1.0).
- * For other variables, returns dual(their_value, 0.0).
+ * For the differentiation variable, returns dual(point_value, 1.0L).
+ * For other variables, returns dual(their_value, 0.0L).
  * All operations propagate derivatives using dual arithmetic.
  */
 bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& node,
                             const DualEvaluationContext& ctx,
-                            mymath::dual<double>* result) {
+                            mymath::dual<long double>* result) {
     switch (node->type) {
         case NodeType::kNumber:
-            *result = mymath::dual<double>(node->number_value, 0.0);
+            *result = mymath::dual<long double>(node->number_value, 0.0L);
             return true;
         case NodeType::kPi:
-            *result = mymath::dual<double>(mymath::kPi, 0.0);
+            *result = mymath::dual<long double>(mymath::kPi, 0.0L);
             return true;
         case NodeType::kE:
-            *result = mymath::dual<double>(mymath::kE, 0.0);
+            *result = mymath::dual<long double>(mymath::kE, 0.0L);
             return true;
         case NodeType::kInfinity:
-            *result = mymath::dual<double>(
-                (node->number_value > 0) ? mymath::infinity() : -mymath::infinity(), 0.0);
+            *result = mymath::dual<long double>(
+                (node->number_value > 0) ? mymath::infinity() : -mymath::infinity(), 0.0L);
             return true;
         case NodeType::kVariable: {
             if (node->text == ctx.differentiation_variable) {
-                *result = mymath::dual<double>(ctx.point_value, 1.0);
+                *result = mymath::dual<long double>(ctx.point_value, 1.0L);
                 return true;
             }
             auto it = ctx.other_values.find(node->text);
             if (it != ctx.other_values.end()) {
-                *result = mymath::dual<double>(it->second, 0.0);
+                *result = mymath::dual<long double>(it->second, 0.0L);
                 return true;
             }
             if (node->text == "1 / 2") {
-                *result = mymath::dual<double>(0.5, 0.0);
+                *result = mymath::dual<long double>(0.5, 0.0L);
                 return true;
             }
             return false;
         }
         case NodeType::kNegate: {
-            mymath::dual<double> operand;
+            mymath::dual<long double> operand;
             if (!try_evaluate_dual_node(node->left, ctx, &operand)) {
                 return false;
             }
@@ -1298,7 +1298,7 @@ bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& nod
         case NodeType::kMultiply:
         case NodeType::kDivide:
         case NodeType::kPower: {
-            mymath::dual<double> left, right;
+            mymath::dual<long double> left, right;
             if (!try_evaluate_dual_node(node->left, ctx, &left) ||
                 !try_evaluate_dual_node(node->right, ctx, &right)) {
                 return false;
@@ -1336,7 +1336,7 @@ bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& nod
             return false;
         }
         case NodeType::kFunction: {
-            mymath::dual<double> argument;
+            mymath::dual<long double> argument;
             if (!try_evaluate_dual_node(node->left, ctx, &argument)) {
                 return false;
             }
@@ -1474,7 +1474,7 @@ bool expr_is_variable(const SymbolicExpression& expression, const std::string& n
 
 using namespace symbolic_expression_internal;
 
-SymbolicExpression::SymbolicExpression() : node_(make_number(0.0)) {}
+SymbolicExpression::SymbolicExpression() : node_(make_number(0.0L)) {}
 
 SymbolicExpression::SymbolicExpression(std::shared_ptr<Node> node)
     : node_(std::move(node)) {}
@@ -1484,7 +1484,7 @@ SymbolicExpression SymbolicExpression::parse(const std::string& text) {
     return parser.parse().simplify();
 }
 
-SymbolicExpression SymbolicExpression::number(double value) {
+SymbolicExpression SymbolicExpression::number(long double value) {
     return SymbolicExpression(make_number(value));
 }
 
@@ -1559,8 +1559,8 @@ bool SymbolicExpression::is_constant(const std::string& variable_name) const {
     return false;
 }
 
-bool SymbolicExpression::is_number(double* value) const {
-    double numeric = 0.0;
+bool SymbolicExpression::is_number(long double* value) const {
+    long double numeric = 0.0L;
     if (!try_evaluate_numeric_node(node_, &numeric)) {
         return false;
     }
@@ -1576,7 +1576,7 @@ bool SymbolicExpression::is_variable_named(const std::string& variable_name) con
 
 bool SymbolicExpression::polynomial_coefficients(
     const std::string& variable_name,
-    std::vector<double>* coefficients) const {
+    std::vector<long double>* coefficients) const {
     const SymbolicExpression simplified = simplify();
     return polynomial_coefficients_from_simplified(simplified, variable_name, coefficients);
 }
@@ -1766,7 +1766,7 @@ SymbolicExpression SymbolicExpression::substitute_expression(
 // 边界参数解析实现
 // ============================================================================
 
-double BoundArgument::to_double() const {
+long double BoundArgument::to_double() const {
     switch (kind) {
         case BoundKind::kFinite:
             return value;
@@ -1778,7 +1778,7 @@ double BoundArgument::to_double() const {
     return value;
 }
 
-BoundArgument BoundArgument::finite(double v) {
+BoundArgument BoundArgument::finite(long double v) {
     BoundArgument result;
     result.kind = BoundKind::kFinite;
     result.value = v;
@@ -1851,13 +1851,13 @@ BoundArgument parse_bound_argument(const std::string& text) {
     // 尝试解析为数值
     try {
         // 使用简单的数值解析
-        double num = 0.0;
+        long double num = 0.0L;
         bool has_digit = false;
         std::size_t i = 0;
 
         // 解析整数部分
         while (i < value.size() && std::isdigit(static_cast<unsigned char>(value[i]))) {
-            num = num * 10.0 + (value[i] - '0');
+            num = num * 10.0L + (value[i] - '0');
             has_digit = true;
             ++i;
         }
@@ -1865,7 +1865,7 @@ BoundArgument parse_bound_argument(const std::string& text) {
         // 解析小数部分
         if (i < value.size() && value[i] == '.') {
             ++i;
-            double place = 0.1;
+            long double place = 0.1;
             while (i < value.size() && std::isdigit(static_cast<unsigned char>(value[i]))) {
                 num += (value[i] - '0') * place;
                 place *= 0.1;
@@ -1890,9 +1890,9 @@ BoundArgument parse_bound_argument(const std::string& text) {
                 ++i;
             }
             if (exp_neg) {
-                num /= mymath::pow(10.0, exponent);
+                num /= mymath::pow(10.0L, exponent);
             } else {
-                num *= mymath::pow(10.0, exponent);
+                num *= mymath::pow(10.0L, exponent);
             }
         }
 

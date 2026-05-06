@@ -255,11 +255,11 @@ std::vector<std::string> Calculator::custom_function_names() const {
     return names;
 }
 
-double Calculator::normalize_result(double value) {
+long double Calculator::normalize_result(long double value) {
     if (!mymath::isfinite(value)) return value;
-    if (mymath::abs(value) < kDisplayZeroEps) return 0.0;
+    if (mymath::abs(value) < kDisplayZeroEps) return 0.0L;
     if (mymath::abs(value) > kDisplayIntegerEps && is_integer_double(value, kDisplayIntegerEps)) {
-        return static_cast<double>(round_to_long_long(value));
+        return static_cast<long double>(round_to_long_long(value));
     }
     return value;
 }
@@ -305,11 +305,11 @@ bool Calculator::try_evaluate_implicit(std::string_view expression,
 // 基础求值与显示
 // ============================================================================
 
-double Calculator::evaluate(const std::string& expression) {
+long double Calculator::evaluate(const std::string& expression) {
     return normalize_result(evaluate_raw(expression));
 }
 
-double Calculator::evaluate_raw(const std::string& expression) {
+long double Calculator::evaluate_raw(const std::string& expression) {
     const StoredValue value = evaluate_expression_value(this, impl_.get(), expression, false);
     if (value.is_matrix || value.is_complex) {
         throw std::runtime_error("matrix or complex expression cannot be used as a scalar");
@@ -498,7 +498,7 @@ std::string Calculator::factor_expression(const std::string& expression) const {
     }
 
     // 先允许 inside 是一个普通表达式或变量，再检查最终值是否为整数。
-    const double value = parse_decimal_expression(std::string(call->arguments[0].text), VariableResolver(&impl_->variables, nullptr), &impl_->functions, &impl_->scalar_functions);
+    const long double value = parse_decimal_expression(std::string(call->arguments[0].text), VariableResolver(&impl_->variables, nullptr), &impl_->functions, &impl_->scalar_functions);
     if (!is_integer_double(value)) {
         throw std::runtime_error("factor only accepts integers");
     }
@@ -525,7 +525,7 @@ std::string Calculator::plot_expression(const std::string& expression) const {
     ctx.has_script_function = [this](const std::string& name) {
         return has_visible_script_function(impl_.get(), name);
     };
-    ctx.invoke_script_function = [this](const std::string& name, const std::vector<double>& args) {
+    ctx.invoke_script_function = [this](const std::string& name, const std::vector<long double>& args) {
         return invoke_script_function_decimal(const_cast<Calculator*>(this), impl_.get(), name, args);
     };
 
@@ -540,7 +540,7 @@ std::string Calculator::export_variable(const std::string& line) const {
     ctx.has_script_function = [this](const std::string& name) {
         return has_visible_script_function(impl_.get(), name);
     };
-    ctx.invoke_script_function = [this](const std::string& name, const std::vector<double>& args) {
+    ctx.invoke_script_function = [this](const std::string& name, const std::vector<long double>& args) {
         return invoke_script_function_decimal(const_cast<Calculator*>(this), impl_.get(), name, args);
     };
     return plot::handle_export_command(ctx, line);
@@ -588,7 +588,7 @@ std::string Calculator::save_state(const std::string& path) const {
             out << "VAR\t" << encode_state_field(name)
                 << "\tMATRIX\t" << value.matrix.rows
                 << '\t' << value.matrix.cols;
-            for (double element : value.matrix.data) {
+            for (long double element : value.matrix.data) {
                 out << '\t' << std::setprecision(17) << element;
             }
             out << '\n';
@@ -743,7 +743,7 @@ std::string Calculator::load_state(const std::string& path) {
                         throw std::runtime_error("invalid save file format");
                     }
                     value.is_matrix = true;
-                    value.matrix = matrix::Matrix(rows, cols, 0.0);
+                    value.matrix = matrix::Matrix(rows, cols, 0.0L);
                     for (std::size_t i = 0; i < value.matrix.data.size(); ++i) {
                         value.matrix.data[i] = std::stod(parts[i + 5]);
                     }

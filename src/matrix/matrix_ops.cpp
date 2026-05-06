@@ -105,13 +105,13 @@ TMatrix<T> multiply(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     return result;
 }
 
-// 针对 double 的优化版本 (使用 long double 中间累加)
+// 针对 long double 的优化版本 (使用 long double 中间累加)
 template <>
-TMatrix<double> multiply<double>(const TMatrix<double>& lhs, const TMatrix<double>& rhs) {
+TMatrix<long double> multiply<long double>(const TMatrix<long double>& lhs, const TMatrix<long double>& rhs) {
     if (lhs.cols != rhs.rows) {
         throw std::runtime_error("matrix multiplication requires lhs.cols == rhs.rows");
     }
-    TMatrix<double> result(lhs.rows, rhs.cols, 0.0);
+    TMatrix<long double> result(lhs.rows, rhs.cols, 0.0L);
     std::vector<long double> sums(lhs.rows * rhs.cols, 0.0L);
     for (std::size_t i = 0; i < lhs.rows; ++i) {
         for (std::size_t k = 0; k < lhs.cols; ++k) {
@@ -124,7 +124,7 @@ TMatrix<double> multiply<double>(const TMatrix<double>& lhs, const TMatrix<doubl
             }
         }
     }
-    for (std::size_t i = 0; i < sums.size(); ++i) result.data[i] = static_cast<double>(sums[i]);
+    for (std::size_t i = 0; i < sums.size(); ++i) result.data[i] = static_cast<long double>(sums[i]);
     return result;
 }
 
@@ -194,9 +194,9 @@ T dot(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     return sum;
 }
 
-// 针对 double 的优化版 dot (Kahan 求和)
+// 针对 long double 的优化版 dot (Kahan 求和)
 template <>
-double dot<double>(const TMatrix<double>& lhs, const TMatrix<double>& rhs) {
+long double dot<long double>(const TMatrix<long double>& lhs, const TMatrix<long double>& rhs) {
     const std::size_t n = vector_length(lhs, "dot");
     const std::size_t m = vector_length(rhs, "dot");
     if (n != m) throw std::runtime_error("dot size mismatch");
@@ -208,7 +208,7 @@ double dot<double>(const TMatrix<double>& lhs, const TMatrix<double>& rhs) {
         c = (t - sum) - y;
         sum = t;
     }
-    return static_cast<double>(sum);
+    return static_cast<long double>(sum);
 }
 
 template <typename T>
@@ -325,7 +325,7 @@ TMatrix<T> hadamard(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     template TMatrix<TYPE> kronecker(const TMatrix<TYPE>&, const TMatrix<TYPE>&); \
     template TMatrix<TYPE> hadamard(const TMatrix<TYPE>&, const TMatrix<TYPE>&);
 
-INSTANTIATE_OPS(double)
+INSTANTIATE_OPS(long double)
 INSTANTIATE_OPS(PreciseDecimal)
 
 } // namespace matrix

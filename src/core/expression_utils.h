@@ -20,22 +20,22 @@
 /**
  * @brief 生成移位级数基
  */
-std::string shifted_series_base(const std::string& variable_name, double center);
+std::string shifted_series_base(const std::string& variable_name, long double center);
 
 /**
  * @brief 将广义级数转换为字符串
  */
-std::string generalized_series_to_string(const std::vector<double>& coefficients,
+std::string generalized_series_to_string(const std::vector<long double>& coefficients,
                                          const std::string& variable_name,
-                                         double center,
+                                         long double center,
                                          int denominator = 1);
 
 /**
  * @brief 将泰勒级数转换为字符串
  */
-std::string taylor_series_to_string(const std::vector<double>& coefficients,
+std::string taylor_series_to_string(const std::vector<long double>& coefficients,
                                     const std::string& variable_name,
-                                    double center);
+                                    long double center);
 
 // ============================================================================
 // 数值容差
@@ -44,16 +44,16 @@ std::string taylor_series_to_string(const std::vector<double>& coefficients,
 /**
  * @brief 根据值计算根位置容差
  */
-double root_position_tolerance(double value);
+long double root_position_tolerance(long double value);
 
 /**
  * @brief 根据值计算根函数容差
  */
-double root_function_tolerance(double value);
+long double root_function_tolerance(long double value);
 
 /**
  * @brief 根据值计算根导数步长
  */
-double root_derivative_step(double value);
+long double root_derivative_step(long double value);
 
 #endif // CORE_EXPRESSION_UTILS_H

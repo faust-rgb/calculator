@@ -79,7 +79,7 @@ bool truthy_value(const StoredValue& value) {
                                  1e-10);
 }
 
-double evaluate_scalar(Calculator* calculator, Calculator::Impl* impl, const CommandASTNode& ast, const char* context) {
+long double evaluate_scalar(Calculator* calculator, Calculator::Impl* impl, const CommandASTNode& ast, const char* context) {
     StoredValue val = evaluate_command_ast_to_value(calculator, impl, ast, false);
     if (val.is_matrix || val.is_complex || val.is_string) {
         throw std::runtime_error(std::string(context) + " must be a scalar");
@@ -159,7 +159,7 @@ long long stored_to_index(const StoredValue& value, const char* context) {
     if (value.is_matrix || value.is_complex || value.is_string || value.is_list || value.is_dict) {
         throw std::runtime_error(std::string(context) + " must be an integer");
     }
-    const double scalar = value.exact ? rational_to_double(value.rational) : value.decimal;
+    const long double scalar = value.exact ? rational_to_double(value.rational) : value.decimal;
     if (!is_integer_double(scalar)) {
         throw std::runtime_error(std::string(context) + " must be an integer");
     }
@@ -243,9 +243,9 @@ StoredValue evaluate_range_list(Calculator* calculator,
     if (args.empty() || args.size() > 3) throw std::runtime_error("range expects 1-3 arguments");
     auto eval_scalar = [&](const std::string& arg) {
         StoredValue value = evaluate_script_value_expression(calculator, impl, arg, exact_mode);
-        return static_cast<double>(stored_to_index(value, "range argument"));
+        return static_cast<long double>(stored_to_index(value, "range argument"));
     };
-    double start = 0.0, stop = 0.0, step = 1.0;
+    long double start = 0.0L, stop = 0.0L, step = 1.0L;
     if (args.size() == 1) {
         stop = eval_scalar(args[0]);
     } else if (args.size() == 2) {
@@ -256,9 +256,9 @@ StoredValue evaluate_range_list(Calculator* calculator,
         stop = eval_scalar(args[1]);
         step = eval_scalar(args[2]);
     }
-    if (step == 0.0) throw std::runtime_error("range step cannot be zero");
+    if (step == 0.0L) throw std::runtime_error("range step cannot be zero");
     std::vector<StoredValue> values;
-    for (double current = start; step > 0 ? current < stop : current > stop; current += step) {
+    for (long double current = start; step > 0 ? current < stop : current > stop; current += step) {
         StoredValue item;
         item.decimal = current;
         values.push_back(item);
@@ -435,13 +435,13 @@ StoredValue evaluate_script_value_expression(Calculator* calculator,
         }
         StoredValue value = evaluate_script_value_expression(calculator, impl, arg, exact_mode);
         StoredValue result;
-        result.decimal = 0.0;
+        result.decimal = 0.0L;
         if (value.is_list && value.list_value) {
-            result.decimal = static_cast<double>(value.list_value->size());
+            result.decimal = static_cast<long double>(value.list_value->size());
         } else if (value.is_dict && value.dict_value) {
-            result.decimal = static_cast<double>(value.dict_value->size());
+            result.decimal = static_cast<long double>(value.dict_value->size());
         } else if (value.is_string) {
-            result.decimal = static_cast<double>(value.string_value.size());
+            result.decimal = static_cast<long double>(value.string_value.size());
         } else {
             throw std::runtime_error("len() requires a list, dict, or string");
         }
@@ -531,7 +531,7 @@ bool try_execute_index_assignment(Calculator* calculator,
         if (new_value.is_matrix || new_value.is_list || new_value.is_dict || new_value.is_string) {
             throw std::runtime_error("matrix element assignment requires a scalar value");
         }
-        double val = new_value.exact ? rational_to_double(new_value.rational) : new_value.decimal;
+        long double val = new_value.exact ? rational_to_double(new_value.rational) : new_value.decimal;
         const std::vector<std::string> parts = split_script_top_level(index_expr, ',');
         if (parts.size() == 1) {
             long long index = stored_to_index(evaluate_script_value_expression(calculator, impl, parts[0], exact_mode), "matrix index");
@@ -636,7 +636,7 @@ StoredValue evaluate_expression_value(Calculator* calculator,
     const HasScriptFunctionCallback has_script_function = [impl](const std::string& name) {
         return has_visible_script_function(impl, name);
     };
-    const InvokeScriptFunctionCallback invoke_script_function = [calculator, impl](const std::string& name, const std::vector<double>& arguments) {
+    const InvokeScriptFunctionCallback invoke_script_function = [calculator, impl](const std::string& name, const std::vector<long double>& arguments) {
         return invoke_script_function_decimal(calculator, impl, name, arguments);
     };
 
@@ -868,12 +868,12 @@ ScriptSignal execute_script_statement(Calculator* calculator,
             const auto& for_range = static_cast<const script::ForRangeStatement&>(statement);
             impl->flat_scopes.push_scope();
             try {
-                const double start = evaluate_scalar(calculator, impl, for_range.start_ast, "range start");
-                const double stop = evaluate_scalar(calculator, impl, for_range.stop_ast, "range stop");
-                const double step = evaluate_scalar(calculator, impl, for_range.step_ast, "range step");
-                if (step == 0.0) throw std::runtime_error("range step cannot be zero");
-                bool ascending = step > 0.0;
-                for (double current = start; (ascending ? current < stop : current > stop); current += step) {
+                const long double start = evaluate_scalar(calculator, impl, for_range.start_ast, "range start");
+                const long double stop = evaluate_scalar(calculator, impl, for_range.stop_ast, "range stop");
+                const long double step = evaluate_scalar(calculator, impl, for_range.step_ast, "range step");
+                if (step == 0.0L) throw std::runtime_error("range step cannot be zero");
+                bool ascending = step > 0.0L;
+                for (long double current = start; (ascending ? current < stop : current > stop); current += step) {
                     StoredValue loop_val; loop_val.decimal = current; loop_val.exact = false;
                     impl->flat_scopes.set(for_range.variable, loop_val);
                     const ScriptSignal signal = execute_script_statement(calculator, impl, *for_range.body, exact_mode, last_output, true);
@@ -1027,8 +1027,8 @@ ScriptSignal execute_script_statement(Calculator* calculator,
                             }
                         } else {
                             // 标量比较
-                            double subj_val = subject.exact ? rational_to_double(subject.rational) : subject.decimal;
-                            double pat_val = pattern.exact ? rational_to_double(pattern.rational) : pattern.decimal;
+                            long double subj_val = subject.exact ? rational_to_double(subject.rational) : subject.decimal;
+                            long double pat_val = pattern.exact ? rational_to_double(pattern.rational) : pattern.decimal;
                             matches = mymath::is_near_zero(subj_val - pat_val, 1e-10);
                         }
 
@@ -1091,12 +1091,12 @@ std::string execute_simple_script_line(Calculator* calculator,
     return execute_command_ast(calculator, impl, ast, exact_mode);
 }
 
-double invoke_script_function_decimal(Calculator* calculator,
+long double invoke_script_function_decimal(Calculator* calculator,
                                       Calculator::Impl* impl,
                                       const std::string& name,
-                                      const std::vector<double>& arguments) {
+                                      const std::vector<long double>& arguments) {
     std::vector<StoredValue> stored_args;
-    for (double arg : arguments) { StoredValue sv; sv.decimal = arg; sv.exact = false; stored_args.push_back(sv); }
+    for (long double arg : arguments) { StoredValue sv; sv.decimal = arg; sv.exact = false; stored_args.push_back(sv); }
     StoredValue result = invoke_script_function(calculator, impl, name, stored_args);
     return result.exact ? rational_to_double(result.rational) : result.decimal;
 }

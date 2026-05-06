@@ -127,7 +127,7 @@ public:
                                       const std::map<std::string, StoredValue>&) const { return false; }
 
     // 函数注册接口
-    virtual std::map<std::string, std::function<double(const std::vector<double>&)>> get_scalar_functions() const { return {}; }
+    virtual std::map<std::string, std::function<long double(const std::vector<long double>&)>> get_scalar_functions() const { return {}; }
     virtual std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>> get_matrix_functions() const { return {}; }
 
     using ValueFunction = matrix::ValueFunction;

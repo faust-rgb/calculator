@@ -23,7 +23,7 @@
 namespace {
 
 struct NamedConstant {
-    double value;
+    long double value;
     const char* name;
 };
 
@@ -50,8 +50,8 @@ std::string format_rational_with_constant(const Rational& r, const std::string& 
     }
 }
 
-std::string try_format_with_named_constants(double value, [[maybe_unused]] double eps) {
-    const double abs_value = mymath::abs(value);
+std::string try_format_with_named_constants(long double value, [[maybe_unused]] long double eps) {
+    const long double abs_value = mymath::abs(value);
     Rational r;
 
     for (const auto& const_entry : kNamedConstants) {
@@ -67,9 +67,9 @@ std::string try_format_with_named_constants(double value, [[maybe_unused]] doubl
     return "";
 }
 
-std::string try_format_as_sqrt(double value, [[maybe_unused]] double eps) {
-    const double abs_value = mymath::abs(value);
-    const double squared = abs_value * abs_value;
+std::string try_format_as_sqrt(long double value, [[maybe_unused]] long double eps) {
+    const long double abs_value = mymath::abs(value);
+    const long double squared = abs_value * abs_value;
     
     Rational r;
     // 尝试识别平方后是有理数的情况
@@ -80,7 +80,7 @@ std::string try_format_as_sqrt(double value, [[maybe_unused]] double eps) {
         // 完美平方检测
         auto is_perfect_square = [](long long x) {
             if (x < 0) return false;
-            long long s = static_cast<long long>(mymath::sqrt(static_cast<double>(x)) + 0.5);
+            long long s = static_cast<long long>(mymath::sqrt(static_cast<long double>(x)) + 0.5);
             return s * s == x;
         };
 
@@ -123,13 +123,13 @@ std::string try_format_as_sqrt(double value, [[maybe_unused]] double eps) {
 // 符号识别入口
 // ============================================================================
 
-std::string try_format_symbolic_extended(double value, double eps) {
+std::string try_format_symbolic_extended(long double value, long double eps) {
     if (!mymath::isfinite(value) || mymath::is_near_zero(value, eps)) {
         return "";
     }
 
-    const bool negative = value < 0.0;
-    const double abs_value = mymath::abs(value);
+    const bool negative = value < 0.0L;
+    const long double abs_value = mymath::abs(value);
 
     // 1. 尝试命名常数比例 (pi, e, 等)
     std::string named_form = try_format_with_named_constants(abs_value, eps);
@@ -146,7 +146,7 @@ std::string try_format_symbolic_extended(double value, double eps) {
     return "";
 }
 
-std::string try_format_as_pi_fraction(double value, double eps) {
+std::string try_format_as_pi_fraction(long double value, long double eps) {
     // 保持向前兼容，调用新的扩展识别
     return try_format_symbolic_extended(value, eps);
 }
@@ -182,13 +182,13 @@ void set_process_display_precision(int precision) {
 // 数值规范化
 // ============================================================================
 
-double normalize_display_decimal(double value) {
+long double normalize_display_decimal(long double value) {
     if (mymath::is_near_zero(value, kDisplayZeroEps)) {
-        return 0.0;
+        return 0.0L;
     }
     if (mymath::abs(value) > kDisplayIntegerEps &&
         is_integer_double(value, kDisplayIntegerEps)) {
-        return static_cast<double>(round_to_long_long(value));
+        return static_cast<long double>(round_to_long_long(value));
     }
     return value;
 }
@@ -197,11 +197,11 @@ double normalize_display_decimal(double value) {
 // 数值格式化
 // ============================================================================
 
-std::string format_decimal(double value) {
+std::string format_decimal(long double value) {
     return format_decimal(value, process_display_precision());
 }
 
-std::string format_decimal(double value, int precision) {
+std::string format_decimal(long double value, int precision) {
     value = normalize_display_decimal(value);
     precision = std::clamp(precision, kMinDisplayPrecision, kMaxDisplayPrecision);
     std::ostringstream out;
@@ -209,7 +209,7 @@ std::string format_decimal(double value, int precision) {
     return out.str();
 }
 
-bool try_make_simple_rational(double value,
+bool try_make_simple_rational(long double value,
                               int max_denominator,
                               Rational* rational) {
     if (rational == nullptr || !mymath::isfinite(value)) {
@@ -230,8 +230,8 @@ bool try_make_simple_rational(double value,
     return true;
 }
 
-std::string format_symbolic_number(double value) {
-    value = mymath::is_near_zero(value, kDisplayZeroEps) ? 0.0 : value;
+std::string format_symbolic_number(long double value) {
+    value = mymath::is_near_zero(value, kDisplayZeroEps) ? 0.0L : value;
     if (mymath::abs(value) > kDisplayIntegerEps &&
         is_integer_double(value, kDisplayIntegerEps)) {
         return std::to_string(round_to_long_long(value));
@@ -252,7 +252,7 @@ std::string format_symbolic_number(double value) {
     return format_decimal(value);
 }
 
-std::string format_symbolic_scalar(double value) {
+std::string format_symbolic_scalar(long double value) {
     return format_symbolic_number(value);
 }
 
@@ -260,11 +260,11 @@ std::string format_symbolic_scalar(double value) {
 // 级数格式化辅助
 // ============================================================================
 
-std::string signed_center_text(double center) {
+std::string signed_center_text(long double center) {
     if (mymath::is_near_zero(center, 1e-12)) {
         return "";
     }
-    return center > 0.0
+    return center > 0.0L
                ? " - " + format_symbolic_number(center)
                : " + " + format_symbolic_number(-center);
 }
@@ -290,23 +290,23 @@ std::string power_term(const std::string& base, int numerator, int denominator) 
            std::to_string(denominator) + ")";
 }
 
-std::string format_term(double coefficient, const std::string& factor) {
+std::string format_term(long double coefficient, const std::string& factor) {
     const bool has_factor = !factor.empty();
-    const double abs_coefficient = mymath::abs(coefficient);
+    const long double abs_coefficient = mymath::abs(coefficient);
     const bool omit_unit =
-        has_factor && mymath::is_near_zero(abs_coefficient - 1.0, 1e-9);
+        has_factor && mymath::is_near_zero(abs_coefficient - 1.0L, 1e-9);
 
     if (!has_factor) {
         return format_symbolic_number(coefficient);
     }
     const std::string coeff_text = format_symbolic_number(abs_coefficient);
     if (coeff_text == "1") {
-        return coefficient < 0.0 ? "-" + factor : factor;
+        return coefficient < 0.0L ? "-" + factor : factor;
     }
     if (omit_unit) {
-        return coefficient < 0.0 ? "-" + factor : factor;
+        return coefficient < 0.0L ? "-" + factor : factor;
     }
-    return coefficient < 0.0 ? "-" + coeff_text + " * " + factor
+    return coefficient < 0.0L ? "-" + coeff_text + " * " + factor
                              : coeff_text + " * " + factor;
 }
 

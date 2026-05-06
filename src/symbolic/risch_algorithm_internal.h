@@ -44,7 +44,7 @@ SymbolicExpression substitute_tower_variables_back(
 
 bool try_decompose_constant_product(
     const SymbolicExpression& expr,
-    double* constant,
+    long double* constant,
     SymbolicExpression* rest);
 
 SymbolicExpression multiply_by_derivative_factor(
@@ -70,7 +70,7 @@ void collect_log_terms(
 bool decompose_constant_times_expression(
     const SymbolicExpression& expr,
     const std::string& x_var,
-    double* constant,
+    long double* constant,
     SymbolicExpression* rest);
 
 // ============================================================================

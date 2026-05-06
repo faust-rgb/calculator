@@ -152,8 +152,8 @@ int run_logic_multivar_tests(int& passed, int& failed) {
         const bool handled =
             calculator.try_process_function_command("critical(x ^ 3 - 3 * x, x)", &output);
         if (handled &&
-            contains_critical_point_near(output, -1.0, "(local max)") &&
-            contains_critical_point_near(output, 1.0, "(local min)")) {
+            contains_critical_point_near(output, -1.0L, "(local max)") &&
+            contains_critical_point_near(output, 1.0L, "(local min)")) {
             ++passed;
         } else {
             ++failed;
@@ -309,7 +309,7 @@ int run_logic_multivar_tests(int& passed, int& failed) {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("diff(f, 0)", &output);
-        if (handled && nearly_equal(calculator.evaluate(output), 1.0, 1e-5)) {
+        if (handled && nearly_equal(calculator.evaluate(output), 1.0L, 1e-5)) {
             ++passed;
         } else {
             ++failed;
@@ -326,8 +326,8 @@ int run_logic_multivar_tests(int& passed, int& failed) {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("integral(f, 0, 1)", &output);
-        const double expected =
-            1.0 - mymath::cos(1.0) + 1.0 / 3.0;
+        const long double expected =
+            1.0L - mymath::cos(1.0L) + 1.0L / 3.0;
         if (handled && nearly_equal(calculator.evaluate(output), expected, 1e-5)) {
             ++passed;
         } else {
@@ -345,8 +345,8 @@ int run_logic_multivar_tests(int& passed, int& failed) {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("integral(f, 1)", &output);
-        const double expected =
-            1.0 - mymath::cos(1.0) + 1.0 / 3.0;
+        const long double expected =
+            1.0L - mymath::cos(1.0L) + 1.0L / 3.0;
         if (handled && nearly_equal(calculator.evaluate(output), expected, 1e-5)) {
             ++passed;
         } else {
@@ -380,7 +380,7 @@ int run_logic_multivar_tests(int& passed, int& failed) {
         const std::string output = calculator.evaluate_for_display(
             "integral(f17, 0, 2) - integral(f17, 0, 1)", false);
         // 允许小的数值误差 (约 1e-11)
-        double val = std::stod(output);
+        long double val = std::stod(output);
         if (std::abs(val - 2.333333333337) < 1e-10) {
             ++passed;
         } else {

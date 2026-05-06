@@ -19,7 +19,7 @@
 namespace signal {
 
 // 数学常量
-constexpr double kPi = 3.14159265358979323846;
+constexpr long double kPi = 3.14159265358979323846;
 
 // ============================================================================
 // 辅助函数
@@ -82,10 +82,10 @@ std::vector<Complex> fft_radix2(const std::vector<Complex>& input) {
 
     // Cooley-Tukey 迭代
     for (std::size_t length = 2; length <= n; length <<= 1) {
-        const double angle = -2.0 * kPi / static_cast<double>(length);
-        const Complex step = mymath::polar(1.0, angle);
+        const long double angle = -2.0 * kPi / static_cast<long double>(length);
+        const Complex step = mymath::polar(1.0L, angle);
         for (std::size_t start = 0; start < n; start += length) {
-            Complex twiddle = 1.0;
+            Complex twiddle = 1.0L;
             const std::size_t half = length >> 1;
             for (std::size_t offset = 0; offset < half; ++offset) {
                 const Complex even = output[start + offset];
@@ -138,9 +138,9 @@ static void small_factor_fft(std::vector<Complex>& data,
                               std::size_t total_length) {
     if (factor == 2) {
         // 基-2
-        const double angle = -2.0 * kPi / static_cast<double>(total_length);
-        Complex twiddle = mymath::polar(1.0, angle * static_cast<double>(start));
-        const Complex step = mymath::polar(1.0, angle * static_cast<double>(stride));
+        const long double angle = -2.0 * kPi / static_cast<long double>(total_length);
+        Complex twiddle = mymath::polar(1.0L, angle * static_cast<long double>(start));
+        const Complex step = mymath::polar(1.0L, angle * static_cast<long double>(stride));
 
         for (std::size_t i = 0; i < stride; ++i) {
             const Complex even = data[start + i];
@@ -151,13 +151,13 @@ static void small_factor_fft(std::vector<Complex>& data,
         }
     } else if (factor == 3) {
         // 基-3
-        const double angle = -2.0 * kPi / static_cast<double>(total_length * factor);
-        const Complex w1 = mymath::polar(1.0, angle);
-        const Complex w2 = mymath::polar(1.0, 2.0 * angle);
+        const long double angle = -2.0 * kPi / static_cast<long double>(total_length * factor);
+        const Complex w1 = mymath::polar(1.0L, angle);
+        const Complex w2 = mymath::polar(1.0L, 2.0 * angle);
 
-        const double base_angle = -2.0 * kPi / static_cast<double>(total_length);
-        Complex twiddle = mymath::polar(1.0, base_angle * static_cast<double>(start));
-        const Complex step = mymath::polar(1.0, base_angle * static_cast<double>(stride));
+        const long double base_angle = -2.0 * kPi / static_cast<long double>(total_length);
+        Complex twiddle = mymath::polar(1.0L, base_angle * static_cast<long double>(start));
+        const Complex step = mymath::polar(1.0L, base_angle * static_cast<long double>(stride));
 
         for (std::size_t i = 0; i < stride; ++i) {
             Complex sum = data[start + i];
@@ -171,10 +171,10 @@ static void small_factor_fft(std::vector<Complex>& data,
         }
     } else if (factor == 4) {
         // 基-4
-        const double angle = -2.0 * kPi / static_cast<double>(total_length);
-        Complex twiddle = mymath::polar(1.0, angle * static_cast<double>(start));
-        const Complex step = mymath::polar(1.0, angle * static_cast<double>(stride));
-        const Complex j = mymath::polar(1.0, kPi / 2.0);  // j = sqrt(-1)
+        const long double angle = -2.0 * kPi / static_cast<long double>(total_length);
+        Complex twiddle = mymath::polar(1.0L, angle * static_cast<long double>(start));
+        const Complex step = mymath::polar(1.0L, angle * static_cast<long double>(stride));
+        const Complex j = mymath::polar(1.0L, kPi / 2.0);  // j = sqrt(-1)
 
         for (std::size_t i = 0; i < stride; ++i) {
             const Complex a = data[start + i];
@@ -195,15 +195,15 @@ static void small_factor_fft(std::vector<Complex>& data,
         }
     } else if (factor == 5) {
         // 基-5
-        const double angle = -2.0 * kPi / 5.0;
-        const Complex w1 = mymath::polar(1.0, angle);
-        const Complex w2 = mymath::polar(1.0, 2.0 * angle);
-        const Complex w3 = mymath::polar(1.0, 3.0 * angle);
-        const Complex w4 = mymath::polar(1.0, 4.0 * angle);
+        const long double angle = -2.0 * kPi / 5.0;
+        const Complex w1 = mymath::polar(1.0L, angle);
+        const Complex w2 = mymath::polar(1.0L, 2.0 * angle);
+        const Complex w3 = mymath::polar(1.0L, 3.0 * angle);
+        const Complex w4 = mymath::polar(1.0L, 4.0 * angle);
 
-        const double base_angle = -2.0 * kPi / static_cast<double>(total_length);
-        Complex twiddle = mymath::polar(1.0, base_angle * static_cast<double>(start));
-        const Complex step = mymath::polar(1.0, base_angle * static_cast<double>(stride));
+        const long double base_angle = -2.0 * kPi / static_cast<long double>(total_length);
+        Complex twiddle = mymath::polar(1.0L, base_angle * static_cast<long double>(start));
+        const Complex step = mymath::polar(1.0L, base_angle * static_cast<long double>(stride));
 
         for (std::size_t i = 0; i < stride; ++i) {
             Complex a = data[start + i];
@@ -309,25 +309,25 @@ std::vector<Complex> fft_bluestein(const std::vector<Complex>& input) {
         chirp_fft = cache_it->second;
     } else {
         // 生成 chirp 信号
-        std::vector<Complex> chirp(m, 0.0);
+        std::vector<Complex> chirp(m, 0.0L);
         for (std::size_t k = 0; k < n; ++k) {
-            const double angle = -kPi * static_cast<double>(k * k) / static_cast<double>(n);
-            chirp[k] = mymath::polar(1.0, angle);
+            const long double angle = -kPi * static_cast<long double>(k * k) / static_cast<long double>(n);
+            chirp[k] = mymath::polar(1.0L, angle);
         }
         for (std::size_t k = m - n + 1; k < m; ++k) {
             const std::size_t kk = k - m;  // 负索引
-            const double angle = -kPi * static_cast<double>(kk * kk) / static_cast<double>(n);
-            chirp[k] = mymath::polar(1.0, angle);
+            const long double angle = -kPi * static_cast<long double>(kk * kk) / static_cast<long double>(n);
+            chirp[k] = mymath::polar(1.0L, angle);
         }
         chirp_fft = fft_radix2(chirp);
         chirp_fft_cache[n] = chirp_fft;
     }
 
     // 输入信号乘以 chirp
-    std::vector<Complex> y(m, 0.0);
+    std::vector<Complex> y(m, 0.0L);
     for (std::size_t k = 0; k < n; ++k) {
-        const double angle = kPi * static_cast<double>(k * k) / static_cast<double>(n);
-        y[k] = input[k] * mymath::polar(1.0, angle);
+        const long double angle = kPi * static_cast<long double>(k * k) / static_cast<long double>(n);
+        y[k] = input[k] * mymath::polar(1.0L, angle);
     }
 
     // FFT(y)
@@ -344,8 +344,8 @@ std::vector<Complex> fft_bluestein(const std::vector<Complex>& input) {
     // 取前 n 个点并乘以 chirp
     std::vector<Complex> output(n);
     for (std::size_t k = 0; k < n; ++k) {
-        const double angle = kPi * static_cast<double>(k * k) / static_cast<double>(n);
-        output[k] = result[k] * mymath::polar(1.0, angle);
+        const long double angle = kPi * static_cast<long double>(k * k) / static_cast<long double>(n);
+        output[k] = result[k] * mymath::polar(1.0L, angle);
     }
 
     return output;
@@ -405,7 +405,7 @@ std::vector<Complex> ifft(const std::vector<Complex>& spectrum) {
     std::vector<Complex> result = fft(conjugated);
 
     // 共轭并缩放
-    const double scale = 1.0 / static_cast<double>(n);
+    const long double scale = 1.0L / static_cast<long double>(n);
     for (std::size_t i = 0; i < n; ++i) {
         result[i] = mymath::conj(result[i]) * scale;
     }
@@ -417,10 +417,10 @@ std::vector<Complex> ifft(const std::vector<Complex>& spectrum) {
 // 实数 FFT
 // ============================================================================
 
-std::vector<Complex> rfft(const std::vector<double>& input) {
+std::vector<Complex> rfft(const std::vector<long double>& input) {
     const std::size_t n = input.size();
     if (n == 0) return {};
-    if (n == 1) return {Complex(input[0], 0.0)};
+    if (n == 1) return {Complex(input[0], 0.0L)};
 
     if (n % 2 == 0) {
         // 针对偶数长度的高效打包算法：将实数打包为复数
@@ -436,18 +436,18 @@ std::vector<Complex> rfft(const std::vector<double>& input) {
         
         // 处理 DC 和 Nyquist (如果是偶数)
         const Complex f0 = packed_fft[0];
-        result[0] = Complex(f0.real() + f0.imag(), 0.0);
-        result[n / 2] = Complex(f0.real() - f0.imag(), 0.0);
+        result[0] = Complex(f0.real() + f0.imag(), 0.0L);
+        result[n / 2] = Complex(f0.real() - f0.imag(), 0.0L);
 
         for (std::size_t k = 1; k < n / 2; ++k) {
             const Complex fk = packed_fft[k];
             const Complex fnk = mymath::conj(packed_fft[n / 2 - k]);
             
             const Complex fe = 0.5 * (fk + fnk);
-            const Complex fo = Complex(0.0, -0.5) * (fk - fnk);
+            const Complex fo = Complex(0.0L, -0.5) * (fk - fnk);
             
-            const double angle = -2.0 * kPi * static_cast<double>(k) / static_cast<double>(n);
-            const Complex twiddle = mymath::polar(1.0, angle);
+            const long double angle = -2.0 * kPi * static_cast<long double>(k) / static_cast<long double>(n);
+            const Complex twiddle = mymath::polar(1.0L, angle);
             
             result[k] = fe + twiddle * fo;
         }
@@ -457,7 +457,7 @@ std::vector<Complex> rfft(const std::vector<double>& input) {
     // 奇数长度：回退到标准 FFT
     std::vector<Complex> complex_input(n);
     for (std::size_t i = 0; i < n; ++i) {
-        complex_input[i] = Complex(input[i], 0.0);
+        complex_input[i] = Complex(input[i], 0.0L);
     }
     std::vector<Complex> full_fft = fft(complex_input);
     std::vector<Complex> result(n / 2 + 1);
@@ -465,7 +465,7 @@ std::vector<Complex> rfft(const std::vector<double>& input) {
     return result;
 }
 
-std::vector<double> irfft(const std::vector<Complex>& spectrum, std::size_t n) {
+std::vector<long double> irfft(const std::vector<Complex>& spectrum, std::size_t n) {
     if (spectrum.empty()) return {};
     if (n == 0) return {};
     
@@ -480,14 +480,14 @@ std::vector<double> irfft(const std::vector<Complex>& spectrum, std::size_t n) {
             const Complex fe = 0.5 * (rk + rnk);
             const Complex fo = 0.5 * (rk - rnk);
             
-            const double angle = 2.0 * kPi * static_cast<double>(k) / static_cast<double>(n);
-            const Complex twiddle_inv = mymath::polar(1.0, angle);
+            const long double angle = 2.0 * kPi * static_cast<long double>(k) / static_cast<long double>(n);
+            const Complex twiddle_inv = mymath::polar(1.0L, angle);
             
-            packed[k] = fe + Complex(0.0, 1.0) * twiddle_inv * fo;
+            packed[k] = fe + Complex(0.0L, 1.0L) * twiddle_inv * fo;
         }
         
         std::vector<Complex> time_complex = ifft(packed);
-        std::vector<double> result(n);
+        std::vector<long double> result(n);
         for (std::size_t i = 0; i < n / 2; ++i) {
             result[2 * i] = time_complex[i].real();
             result[2 * i + 1] = time_complex[i].imag();
@@ -501,7 +501,7 @@ std::vector<double> irfft(const std::vector<Complex>& spectrum, std::size_t n) {
     for (std::size_t i = spectrum.size(); i < n; ++i) full_spectrum[i] = mymath::conj(spectrum[n - i]);
     
     std::vector<Complex> time_signal = ifft(full_spectrum);
-    std::vector<double> result(n);
+    std::vector<long double> result(n);
     for (std::size_t i = 0; i < n; ++i) result[i] = time_signal[i].real();
     return result;
 }
@@ -510,13 +510,13 @@ std::vector<double> irfft(const std::vector<Complex>& spectrum, std::size_t n) {
 // FFT 频率轴和频移
 // ============================================================================
 
-std::vector<double> fft_frequencies(std::size_t n, double sample_rate) {
-    std::vector<double> freqs(n);
+std::vector<long double> fft_frequencies(std::size_t n, long double sample_rate) {
+    std::vector<long double> freqs(n);
     for (std::size_t i = 0; i < n; ++i) {
         if (i <= n / 2) {
-            freqs[i] = static_cast<double>(i) * sample_rate / static_cast<double>(n);
+            freqs[i] = static_cast<long double>(i) * sample_rate / static_cast<long double>(n);
         } else {
-            freqs[i] = static_cast<double>(i - n) * sample_rate / static_cast<double>(n);
+            freqs[i] = static_cast<long double>(i - n) * sample_rate / static_cast<long double>(n);
         }
     }
     return freqs;

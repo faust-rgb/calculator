@@ -30,7 +30,7 @@ static std::vector<DataSeries> sample_multiple_series(const PlotContext& ctx, co
     }
 
     std::string var_name = "x";
-    double start = -10, end = 10;
+    long double start = -10, end = 10;
     int num_points = 100;
     size_t consumed = 1;
 
@@ -70,7 +70,7 @@ static std::vector<DataSeries> sample_multiple_series(const PlotContext& ctx, co
         
         std::map<std::string, StoredValue> scoped_variables = ctx.variables.snapshot();
         for (int i = 0; i < num_points; ++i) {
-            double x = start + (end - start) * i / (num_points - 1);
+            long double x = start + (end - start) * i / (num_points - 1);
             StoredValue x_val;
             x_val.decimal = x;
             scoped_variables[var_name] = x_val;
@@ -81,7 +81,7 @@ static std::vector<DataSeries> sample_multiple_series(const PlotContext& ctx, co
                 // So we use a local resolver.
                 VariableResolver resolver(&scoped_variables, nullptr);
                 UnifiedExpressionParser local_parser(resolver, ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
-                double y = local_parser.evaluate(expressions[s]);
+                long double y = local_parser.evaluate(expressions[s]);
                 series.points.push_back({x, y});
             } catch (...) {
                 series.points.push_back({x, std::nan("")});
@@ -114,10 +114,10 @@ std::string handle_imshow_command(const PlotContext& ctx, const std::vector<std:
     HeatmapOptions options = parse_heatmap_options(arguments, 1);
 
     // 生成坐标轴（默认使用索引）
-    std::vector<double> x_coords(z.cols);
-    std::vector<double> y_coords(z.rows);
-    for (size_t i = 0; i < z.cols; ++i) x_coords[i] = static_cast<double>(i);
-    for (size_t i = 0; i < z.rows; ++i) y_coords[i] = static_cast<double>(i);
+    std::vector<long double> x_coords(z.cols);
+    std::vector<long double> y_coords(z.rows);
+    for (size_t i = 0; i < z.cols; ++i) x_coords[i] = static_cast<long double>(i);
+    for (size_t i = 0; i < z.rows; ++i) y_coords[i] = static_cast<long double>(i);
 
     std::string svg = SvgRenderer::render_heatmap(z, x_coords, y_coords, options);
 
@@ -139,7 +139,7 @@ std::string handle_bar_command(const PlotContext& ctx, const std::vector<std::st
     }
 
     std::vector<std::string> labels;
-    std::vector<double> values;
+    std::vector<long double> values;
     size_t next_idx = 0;
 
     auto eval = [&](const std::string& e) {
@@ -287,7 +287,7 @@ std::string handle_hist_command(const PlotContext& ctx, const std::vector<std::s
         throw std::runtime_error("hist expects (data, ...)");
     }
 
-    std::vector<double> data;
+    std::vector<long double> data;
 
     auto eval = [&](const std::string& e) {
         return parse_decimal_expression(e, ctx.variables, ctx.functions, ctx.scalar_functions, ctx.has_script_function, ctx.invoke_script_function);

@@ -39,7 +39,7 @@ struct PreciseDecimal {
     /** @brief 从各种基础类型构造 */
     explicit PreciseDecimal(long long value);
     explicit PreciseDecimal(int value) : PreciseDecimal(static_cast<long long>(value)) {}
-    explicit PreciseDecimal(double value);
+    explicit PreciseDecimal(long double value);
     explicit PreciseDecimal(const std::string& token);
 
     /** @brief 规范化表示（去除前导零、末尾零） */
@@ -52,7 +52,7 @@ struct PreciseDecimal {
     std::string to_string() const;
 
     /** @brief 转换为 double（可能有精度损失） */
-    double to_double() const;
+    long double to_double() const;
 
     // 运算符重载 (成员)
     PreciseDecimal operator-() const;
@@ -62,10 +62,10 @@ struct PreciseDecimal {
     PreciseDecimal& operator/=(const PreciseDecimal& rhs);
 
     // 混合类型辅助
-    PreciseDecimal& operator+=(double rhs) { return *this += PreciseDecimal(rhs); }
-    PreciseDecimal& operator-=(double rhs) { return *this -= PreciseDecimal(rhs); }
-    PreciseDecimal& operator*=(double rhs) { return *this *= PreciseDecimal(rhs); }
-    PreciseDecimal& operator/=(double rhs) { return *this /= PreciseDecimal(rhs); }
+    PreciseDecimal& operator+=(long double rhs) { return *this += PreciseDecimal(rhs); }
+    PreciseDecimal& operator-=(long double rhs) { return *this -= PreciseDecimal(rhs); }
+    PreciseDecimal& operator*=(long double rhs) { return *this *= PreciseDecimal(rhs); }
+    PreciseDecimal& operator/=(long double rhs) { return *this /= PreciseDecimal(rhs); }
 
     bool operator==(const PreciseDecimal& rhs) const;
     bool operator!=(const PreciseDecimal& rhs) const { return !(*this == rhs); }
@@ -89,33 +89,33 @@ struct PreciseDecimal {
 
 // 非成员二元运算符 (全量重载以支持混合运算)
 PreciseDecimal operator+(PreciseDecimal lhs, const PreciseDecimal& rhs);
-PreciseDecimal operator+(PreciseDecimal lhs, double rhs);
-PreciseDecimal operator+(double lhs, const PreciseDecimal& rhs);
+PreciseDecimal operator+(PreciseDecimal lhs, long double rhs);
+PreciseDecimal operator+(long double lhs, const PreciseDecimal& rhs);
 
 PreciseDecimal operator-(PreciseDecimal lhs, const PreciseDecimal& rhs);
-PreciseDecimal operator-(PreciseDecimal lhs, double rhs);
-PreciseDecimal operator-(double lhs, const PreciseDecimal& rhs);
+PreciseDecimal operator-(PreciseDecimal lhs, long double rhs);
+PreciseDecimal operator-(long double lhs, const PreciseDecimal& rhs);
 
 PreciseDecimal operator*(PreciseDecimal lhs, const PreciseDecimal& rhs);
-PreciseDecimal operator*(PreciseDecimal lhs, double rhs);
-PreciseDecimal operator*(double lhs, const PreciseDecimal& rhs);
+PreciseDecimal operator*(PreciseDecimal lhs, long double rhs);
+PreciseDecimal operator*(long double lhs, const PreciseDecimal& rhs);
 
 PreciseDecimal operator/(PreciseDecimal lhs, const PreciseDecimal& rhs);
-PreciseDecimal operator/(PreciseDecimal lhs, double rhs);
-PreciseDecimal operator/(double lhs, const PreciseDecimal& rhs);
+PreciseDecimal operator/(PreciseDecimal lhs, long double rhs);
+PreciseDecimal operator/(long double lhs, const PreciseDecimal& rhs);
 
-bool operator==(const PreciseDecimal& lhs, double rhs);
-bool operator==(double lhs, const PreciseDecimal& rhs);
-bool operator!=(const PreciseDecimal& lhs, double rhs);
-bool operator!=(double lhs, const PreciseDecimal& rhs);
-bool operator<(const PreciseDecimal& lhs, double rhs);
-bool operator<(double lhs, const PreciseDecimal& rhs);
-bool operator>(const PreciseDecimal& lhs, double rhs);
-bool operator>(double lhs, const PreciseDecimal& rhs);
-bool operator<=(const PreciseDecimal& lhs, double rhs);
-bool operator<=(double lhs, const PreciseDecimal& rhs);
-bool operator>=(const PreciseDecimal& lhs, double rhs);
-bool operator>=(double lhs, const PreciseDecimal& rhs);
+bool operator==(const PreciseDecimal& lhs, long double rhs);
+bool operator==(long double lhs, const PreciseDecimal& rhs);
+bool operator!=(const PreciseDecimal& lhs, long double rhs);
+bool operator!=(long double lhs, const PreciseDecimal& rhs);
+bool operator<(const PreciseDecimal& lhs, long double rhs);
+bool operator<(long double lhs, const PreciseDecimal& rhs);
+bool operator>(const PreciseDecimal& lhs, long double rhs);
+bool operator>(long double lhs, const PreciseDecimal& rhs);
+bool operator<=(const PreciseDecimal& lhs, long double rhs);
+bool operator<=(long double lhs, const PreciseDecimal& rhs);
+bool operator>=(const PreciseDecimal& lhs, long double rhs);
+bool operator>=(long double lhs, const PreciseDecimal& rhs);
 
 // 基础数学函数 (高精度版)
 namespace precise {

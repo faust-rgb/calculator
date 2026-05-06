@@ -52,51 +52,51 @@ int run_core_basic_tests(int& passed, int& failed) {
         {"0.3 - 0.2", 0.1},
         {"0.1 * 0.2", 0.02},
         {"0.3 / 0.1", 3.0},
-        {"1e20 / 1e20", 1.0},
-        {"1e-300 / 1e-300", 1.0},
+        {"1e20 / 1e20", 1.0L},
+        {"1e-300 / 1e-300", 1.0L},
         {"2 ^ 10", 1024.0},
         {"2 ^ 3 ^ 2", 512.0},
         {"2 ^ -2", 0.25},
         {"pow(2, -2)", 0.25},
         {"-2 ^ 2", -4.0},
         {"-3 + 5", 2.0},
-        {"0 ^ 0", 1.0},
+        {"0 ^ 0", 1.0L},
         {"0b1010 + 0xF", 25.0},
         {"0o77", 63.0},
         {"sqrt(9)", 3.0},
-        {"sqrt(0)", 0.0},
+        {"sqrt(0)", 0.0L},
         {"cbrt(27)", 3.0},
         {"cbrt(-8)", -2.0},
-        {"cbrt(0)", 0.0},
+        {"cbrt(0)", 0.0L},
         {"root(16, 2)", 4.0},
         {"root(27, 3)", 3.0},
         {"root(-8, 3)", -2.0},
         {"root(16, -2)", 0.25},
-        {"root(0, 3)", 0.0},
-        {"sinh(0)", 0.0},
-        {"cosh(0)", 1.0},
-        {"tanh(0)", 0.0},
+        {"root(0, 3)", 0.0L},
+        {"sinh(0)", 0.0L},
+        {"cosh(0)", 1.0L},
+        {"tanh(0)", 0.0L},
         {"asinh(1)", 0.88137358702},
         {"acosh(2)", 1.31695789692},
         {"atanh(0.5)", 0.549306144334},
         {"exp(1)", mymath::kE},
         {"gamma(5)", 24.0},
         {"gamma(0.5)", mymath::sqrt(mymath::kPi)},
-        {"beta(2, 3)", 1.0 / 12.0},
+        {"beta(2, 3)", 1.0L / 12.0},
         {"zeta(2)", (mymath::kPi * mymath::kPi) / 6.0},
-        {"bessel(0, 0)", 1.0},
-        {"ln(e)", 1.0},
+        {"bessel(0, 0)", 1.0L},
+        {"ln(e)", 1.0L},
         {"log(8, 2)", 3.0},
         {"log2(8)", 3.0},
         {"log10(1000)", 3.0},
         {"exp2(5)", 32.0},
-        {"sin(pi / 2)", 1.0},
-        {"sin(pi)", 0.0},
-        {"cos(pi)", -1.0},
-        {"tan(pi / 4)", 1.0},
+        {"sin(pi / 2)", 1.0L},
+        {"sin(pi)", 0.0L},
+        {"cos(pi)", -1.0L},
+        {"tan(pi / 4)", 1.0L},
         {"sec(pi / 3)", 2.0},
-        {"csc(pi / 2)", 1.0},
-        {"cot(pi / 4)", 1.0},
+        {"csc(pi / 2)", 1.0L},
+        {"cot(pi / 4)", 1.0L},
         {"atan(1)", mymath::kPi / 4.0},
         {"asin(0.5)", mymath::kPi / 6.0},
         {"acos(0.5)", mymath::kPi / 3.0},
@@ -106,27 +106,27 @@ int run_core_basic_tests(int& passed, int& failed) {
         {"(-8) ^ (1 / 3)", -2.0},
         {"(-8) ^ (2 / 3)", 4.0},
         {"(-8) ^ (-1 / 3)", -0.5},
-        {"sin(0)", 0.0},
-        {"cos(0)", 1.0},
+        {"sin(0)", 0.0L},
+        {"cos(0)", 1.0L},
         {"sqrt(2) * sqrt(2)", 2.0},
         {"gcd(48, 18)", 6.0},
         {"gcd(0, 18)", 18.0},
         {"gcd(-48, 18)", 6.0},
         {"lcm(12, 18)", 36.0},
-        {"lcm(0, 18)", 0.0},
+        {"lcm(0, 18)", 0.0L},
         {"lcm(-12, 18)", 36.0},
         {"mod(17, 5)", 2.0},
         {"mod(-17, 5)", -2.0},
         {"abs(-3.5)", 3.5},
-        {"sign(-3.5)", -1.0},
-        {"sign(0)", 0.0},
-        {"sign(0.0000000000001)", 0.0},
-        {"sign(3.5)", 1.0},
-        {"step(-2)", 0.0},
-        {"step(0)", 1.0},
-        {"heaviside(3)", 1.0},
-        {"delta(0)", 1.0},
-        {"impulse(2)", 0.0},
+        {"sign(-3.5)", -1.0L},
+        {"sign(0)", 0.0L},
+        {"sign(0.0000000000001)", 0.0L},
+        {"sign(3.5)", 1.0L},
+        {"step(-2)", 0.0L},
+        {"step(0)", 1.0L},
+        {"heaviside(3)", 1.0L},
+        {"delta(0)", 1.0L},
+        {"impulse(2)", 0.0L},
         {"floor(7/3)", 2.0},
         {"floor(-7/3)", -3.0},
         {"ceil(7/3)", 3.0},
@@ -137,15 +137,15 @@ int run_core_basic_tests(int& passed, int& failed) {
         {"trunc(-7/3)", -2.0},
         {"min(4, 9)", 4.0},
         {"max(4, 9)", 9.0},
-        {"clamp(12, 0, 10)", 10.0},
-        {"clamp(-3, 0, 10)", 0.0},
+        {"clamp(12, 0, 10)", 10.0L},
+        {"clamp(-3, 0, 10)", 0.0L},
         {"clamp(4, 10, 0)", 4.0},
         {"percentile(75, 1, 2, 3, 4, 5)", 4.0},
         {"quartile(1, 1, 2, 3, 4, 5)", 2.0},
         {"percentile(vec(1, 2, 3, 4, 5), 25)", 2.0},
         {"quartile(vec(1, 2, 3, 4, 5), 3)", 4.0},
-        {"sum(1, 2, 3, 4)", 10.0},
-        {"sum(1e16, 1, -1e16)", 1.0},
+        {"sum(1, 2, 3, 4)", 10.0L},
+        {"sum(1e16, 1, -1e16)", 1.0L},
         {"mean(1, 2, 3, 4)", 2.5},
         {"avg(1, 2, 3, 4)", 2.5},
         {"median(9, 1, 5, 2)", 3.5},
@@ -153,64 +153,64 @@ int run_core_basic_tests(int& passed, int& failed) {
         {"mode(1, 2, 2, 3)", 2.0},
         {"var(1, 2, 3)", 2.0 / 3.0},
         {"std(1, 2, 3)", mymath::sqrt(2.0 / 3.0)},
-        {"factorial(5)", 120.0},
-        {"nCr(5, 2)", 10.0},
-        {"binom(5, 2)", 10.0},
-        {"nPr(5, 2)", 20.0},
-        {"poisson_pmf(0, 0)", 1.0},
-        {"poisson_cdf(0, 0)", 1.0},
-        {"poisson_pmf(1, 0)", 0.0},
-        {"binom_pmf(5, 0, 0)", 1.0},
-        {"binom_pmf(5, 5, 1)", 1.0},
-        {"binom_cdf(5, 4, 1)", 0.0},
+        {"factorial(5)", 120.0L},
+        {"nCr(5, 2)", 10.0L},
+        {"binom(5, 2)", 10.0L},
+        {"nPr(5, 2)", 20.0L},
+        {"poisson_pmf(0, 0)", 1.0L},
+        {"poisson_cdf(0, 0)", 1.0L},
+        {"poisson_pmf(1, 0)", 0.0L},
+        {"binom_pmf(5, 0, 0)", 1.0L},
+        {"binom_pmf(5, 5, 1)", 1.0L},
+        {"binom_cdf(5, 4, 1)", 0.0L},
         {"fib(10)", 55.0},
-        {"is_prime(17)", 1.0},
+        {"is_prime(17)", 1.0L},
         {"next_prime(20)", 23.0},
         {"prev_prime(20)", 19.0},
         {"prime_pi(20)", 8.0},
         {"euler_phi(36)", 12.0},
         {"phi(9)", 6.0},
-        {"mobius(30)", -1.0},
-        {"mobius(12)", 0.0},
+        {"mobius(30)", -1.0L},
+        {"mobius(12)", 0.0L},
         {"egcd(240, 46)", 2.0},
-        {"skewness(1, 2, 3)", 0.0},
+        {"skewness(1, 2, 3)", 0.0L},
         {"kurtosis(1, 2, 3)", -1.5},
         {"erf(1)", 0.84270079295},
         {"erfc(1)", 0.15729920705},
         {"deg2rad(180)", mymath::kPi},
-        {"rad2deg(pi / 2)", 90.0},
-        {"deg(pi)", 180.0},
+        {"rad2deg(pi / 2)", 90.0L},
+        {"deg(pi)", 180.0L},
         {"rad(180)", mymath::kPi},
         {"sin_deg(30)", 0.5},
         {"cos_deg(60)", 0.5},
-        {"celsius(212)", 100.0},
+        {"celsius(212)", 100.0L},
         {"fahrenheit(100)", 212.0},
         {"kelvin(0)", 273.15},
         {"c2f(100)", 212.0},
-        {"f2c(212)", 100.0},
+        {"f2c(212)", 100.0L},
         {"pdf_normal(0, 0, 1)", 0.398942280401},
         {"cdf_normal(0, 0, 1)", 0.5},
-        {"pow(3, 4)", 81.0},
+        {"pow(3, 4)", 81.0L},
         {"and(6, 3)", 2.0},
         {"or(6, 3)", 7.0},
         {"xor(6, 3)", 5.0},
-        {"not(0)", -1.0},
+        {"not(0)", -1.0L},
         {"shl(3, 2)", 12.0},
         {"shr(16, 2)", 4.0},
         {"rol(1, 3)", 8.0},
-        {"ror(8, 3)", 1.0},
+        {"ror(8, 3)", 1.0L},
         {"popcount(0xF0)", 4.0},
         {"bitlen(255)", 8.0},
         {"ctz(40)", 3.0},
         {"clz(1)", 63.0},
-        {"parity(0xF0)", 0.0},
+        {"parity(0xF0)", 0.0L},
         {"reverse_bits(1)", -9223372036854775808.0},
     };
 
     // 遍历所有成功测试用例，验证计算结果
     for (const auto& test : success_cases) {
         try {
-            const double actual = calculator.evaluate(test.expression);
+            const long double actual = calculator.evaluate(test.expression);
             if (nearly_equal(actual, test.expected)) {
                 ++passed;
             } else {
@@ -227,7 +227,7 @@ int run_core_basic_tests(int& passed, int& failed) {
 
     // 测试大参数Gamma函数的数值稳定性
     try {
-        const double actual = calculator.evaluate("gamma(170)");
+        const long double actual = calculator.evaluate("gamma(170)");
         if (mymath::isfinite(actual) && actual > 1e304 && actual < 1e305) {
             ++passed;
         } else {
@@ -243,8 +243,8 @@ int run_core_basic_tests(int& passed, int& failed) {
 
     // 测试小参数Beta函数的数值稳定性
     try {
-        const double actual = calculator.evaluate("beta(100, 100)");
-        if (mymath::isfinite(actual) && actual > 0.0 && actual < 1e-40) {
+        const long double actual = calculator.evaluate("beta(100, 100)");
+        if (mymath::isfinite(actual) && actual > 0.0L && actual < 1e-40) {
             ++passed;
         } else {
             ++failed;
@@ -259,8 +259,8 @@ int run_core_basic_tests(int& passed, int& failed) {
 
     // 测试大参数Bessel函数的数值稳定性
     try {
-        const double actual = calculator.evaluate("bessel(0, 100)");
-        if (mymath::isfinite(actual) && mymath::abs(actual) <= 1.0) {
+        const long double actual = calculator.evaluate("bessel(0, 100)");
+        if (mymath::isfinite(actual) && mymath::abs(actual) <= 1.0L) {
             ++passed;
         } else {
             ++failed;
@@ -275,8 +275,8 @@ int run_core_basic_tests(int& passed, int& failed) {
 
     // 测试大参数三角函数的精度（参数约简）
     try {
-        const double actual = calculator.evaluate("sin(100000000000000000000)");
-        if (mymath::isfinite(actual) && mymath::abs(actual) <= 1.0) {
+        const long double actual = calculator.evaluate("sin(100000000000000000000)");
+        if (mymath::isfinite(actual) && mymath::abs(actual) <= 1.0L) {
             ++passed;
         } else {
             ++failed;
@@ -291,7 +291,7 @@ int run_core_basic_tests(int& passed, int& failed) {
 
     // 测试大样本二项分布概率质量函数的数值稳定性
     try {
-        const double pmf = calculator.evaluate("binom_pmf(2000, 1000, 0.5)");
+        const long double pmf = calculator.evaluate("binom_pmf(2000, 1000, 0.5)");
         if (mymath::isfinite(pmf) && pmf > 0.017 && pmf < 0.019) {
             ++passed;
         } else {
@@ -307,7 +307,7 @@ int run_core_basic_tests(int& passed, int& failed) {
 
     // 测试大样本二项分布累积分布函数的数值稳定性
     try {
-        const double cdf = calculator.evaluate("binom_cdf(2000, 1000, 0.5)");
+        const long double cdf = calculator.evaluate("binom_cdf(2000, 1000, 0.5)");
         if (mymath::isfinite(cdf) && cdf > 0.50 && cdf < 0.52) {
             ++passed;
         } else {

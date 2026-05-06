@@ -25,7 +25,7 @@ namespace signal {
 // 复数类型定义
 // ============================================================================
 
-using Complex = mymath::complex<double>;
+using Complex = mymath::complex<long double>;
 
 // ============================================================================
 // 窗函数类型定义
@@ -58,8 +58,8 @@ enum class WindowType {
  */
 struct FFTResult {
     std::vector<Complex> spectrum;  ///< 频谱数据
-    std::vector<double> frequencies; ///< 频率轴（可选）
-    double sample_rate = 1.0;       ///< 采样率
+    std::vector<long double> frequencies; ///< 频率轴（可选）
+    long double sample_rate = 1.0L;       ///< 采样率
 };
 
 /**
@@ -68,8 +68,8 @@ struct FFTResult {
  */
 struct STFTResult {
     std::vector<std::vector<Complex>> stft_matrix; ///< STFT 矩阵（时间 × 频率）
-    std::vector<double> time_vector;               ///< 时间轴
-    std::vector<double> freq_vector;               ///< 频率轴
+    std::vector<long double> time_vector;               ///< 时间轴
+    std::vector<long double> freq_vector;               ///< 频率轴
     WindowType window_type = WindowType::Hanning;  ///< 使用的窗函数
 };
 
@@ -121,7 +121,7 @@ std::vector<Complex> fft(const std::vector<Complex>& input);
  * @param input 实数输入信号
  * @return 频谱（仅包含正频率部分，利用 Hermitian 对称性）
  */
-std::vector<Complex> rfft(const std::vector<double>& input);
+std::vector<Complex> rfft(const std::vector<long double>& input);
 
 /**
  * @brief 实数 IFFT
@@ -129,7 +129,7 @@ std::vector<Complex> rfft(const std::vector<double>& input);
  * @param n 原始信号长度
  * @return 实数信号
  */
-std::vector<double> irfft(const std::vector<Complex>& spectrum, std::size_t n);
+std::vector<long double> irfft(const std::vector<Complex>& spectrum, std::size_t n);
 
 /**
  * @brief 逆 FFT
@@ -144,7 +144,7 @@ std::vector<Complex> ifft(const std::vector<Complex>& spectrum);
  * @param sample_rate 采样率
  * @return 频率向量
  */
-std::vector<double> fft_frequencies(std::size_t n, double sample_rate);
+std::vector<long double> fft_frequencies(std::size_t n, long double sample_rate);
 
 /**
  * @brief FFT 频移（将零频率移到中心）
@@ -170,8 +170,8 @@ std::vector<Complex> ifftshift(const std::vector<Complex>& spectrum);
  * @param signal2 第二个信号
  * @return 卷积结果（长度 = n + m - 1）
  */
-std::vector<double> convolve(const std::vector<double>& signal1,
-                              const std::vector<double>& signal2);
+std::vector<long double> convolve(const std::vector<long double>& signal1,
+                              const std::vector<long double>& signal2);
 
 /**
  * @brief FFT 快速卷积
@@ -179,8 +179,8 @@ std::vector<double> convolve(const std::vector<double>& signal1,
  * @param signal2 第二个信号
  * @return 卷积结果
  */
-std::vector<double> fft_convolve(const std::vector<double>& signal1,
-                                  const std::vector<double>& signal2);
+std::vector<long double> fft_convolve(const std::vector<long double>& signal1,
+                                  const std::vector<long double>& signal2);
 
 /**
  * @brief 循环卷积（圆周卷积）
@@ -189,8 +189,8 @@ std::vector<double> fft_convolve(const std::vector<double>& signal1,
  * @param n 卷积长度（默认为两信号长度的最小公倍数）
  * @return 循环卷积结果
  */
-std::vector<double> circular_convolve(const std::vector<double>& signal1,
-                                       const std::vector<double>& signal2,
+std::vector<long double> circular_convolve(const std::vector<long double>& signal1,
+                                       const std::vector<long double>& signal2,
                                        std::size_t n = 0);
 
 /**
@@ -199,15 +199,15 @@ std::vector<double> circular_convolve(const std::vector<double>& signal1,
  * @param signal2 第二个信号
  * @return 互相关结果
  */
-std::vector<double> xcorr(const std::vector<double>& signal1,
-                          const std::vector<double>& signal2);
+std::vector<long double> xcorr(const std::vector<long double>& signal1,
+                          const std::vector<long double>& signal2);
 
 /**
  * @brief 自相关函数
  * @param signal 输入信号
  * @return 自相关结果
  */
-std::vector<double> autocorr(const std::vector<double>& signal);
+std::vector<long double> autocorr(const std::vector<long double>& signal);
 
 /**
  * @brief 归一化互相关
@@ -215,8 +215,8 @@ std::vector<double> autocorr(const std::vector<double>& signal);
  * @param signal2 第二个信号
  * @return 归一化互相关（范围 [-1, 1]）
  */
-std::vector<double> normalized_xcorr(const std::vector<double>& signal1,
-                                      const std::vector<double>& signal2);
+std::vector<long double> normalized_xcorr(const std::vector<long double>& signal1,
+                                      const std::vector<long double>& signal2);
 
 // ============================================================================
 // 窗函数
@@ -229,63 +229,63 @@ std::vector<double> normalized_xcorr(const std::vector<double>& signal1,
  * @param param 可选参数（如 Kaiser 窗的 beta 值）
  * @return 窗函数系数
  */
-std::vector<double> window(WindowType type, std::size_t length, double param = 0.0);
+std::vector<long double> window(WindowType type, std::size_t length, long double param = 0.0L);
 
 /**
  * @brief 矩形窗
  */
-std::vector<double> rectangular_window(std::size_t length);
+std::vector<long double> rectangular_window(std::size_t length);
 
 /**
  * @brief 汉宁窗
  */
-std::vector<double> hanning_window(std::size_t length);
+std::vector<long double> hanning_window(std::size_t length);
 
 /**
  * @brief 汉明窗
  */
-std::vector<double> hamming_window(std::size_t length);
+std::vector<long double> hamming_window(std::size_t length);
 
 /**
  * @brief 布莱克曼窗
  */
-std::vector<double> blackman_window(std::size_t length);
+std::vector<long double> blackman_window(std::size_t length);
 
 /**
  * @brief 布莱克曼-哈里斯窗
  */
-std::vector<double> blackman_harris_window(std::size_t length);
+std::vector<long double> blackman_harris_window(std::size_t length);
 
 /**
  * @brief 巴特利特窗（三角窗）
  */
-std::vector<double> bartlett_window(std::size_t length);
+std::vector<long double> bartlett_window(std::size_t length);
 
 /**
  * @brief 凯撒窗
  * @param length 窗长度
  * @param beta 形状参数（默认 5.0，控制旁瓣衰减）
  */
-std::vector<double> kaiser_window(std::size_t length, double beta = 5.0);
+std::vector<long double> kaiser_window(std::size_t length, long double beta = 5.0);
 
 /**
  * @brief 高斯窗
  * @param length 窗长度
  * @param sigma 标准差（相对于窗长度的比例，默认 0.4）
  */
-std::vector<double> gaussian_window(std::size_t length, double sigma = 0.4);
+std::vector<long double> gaussian_window(std::size_t length, long double sigma = 0.4);
 
 /**
  * @brief 平顶窗
  */
-std::vector<double> flattop_window(std::size_t length);
+std::vector<long double> flattop_window(std::size_t length);
 
 /**
  * @brief Tukey 窗
  * @param length 窗长度
  * @param alpha 锥度比例（0 = 矩形窗，1 = 汉宁窗）
  */
-std::vector<double> tukey_window(std::size_t length, double alpha = 0.5);
+std::vector<long double> tukey_window(std::size_t length, long double alpha = 0.5);
 
 /**
  * @brief 应用窗函数到信号
@@ -294,9 +294,9 @@ std::vector<double> tukey_window(std::size_t length, double alpha = 0.5);
  * @param param 可选参数
  * @return 加窗后的信号
  */
-std::vector<double> apply_window(const std::vector<double>& signal,
+std::vector<long double> apply_window(const std::vector<long double>& signal,
                                   WindowType window_type,
-                                  double param = 0.0);
+                                  long double param = 0.0L);
 
 // ============================================================================
 // 滤波器设计
@@ -317,8 +317,8 @@ enum class FilterType {
  * @brief 滤波器系数
  */
 struct FilterCoefficients {
-    std::vector<double> b;  ///< 分子系数
-    std::vector<double> a;  ///< 分母系数
+    std::vector<long double> b;  ///< 分子系数
+    std::vector<long double> a;  ///< 分母系数
 };
 
 /**
@@ -326,25 +326,25 @@ struct FilterCoefficients {
  * @brief 二阶节 (Second-Order Section) 系数
  */
 struct SOS {
-    double b0, b1, b2;  ///< 分子系数
-    double a1, a2;      ///< 分母系数 (a0 默认为 1)
+    long double b0, b1, b2;  ///< 分子系数
+    long double a1, a2;      ///< 分母系数 (a0 默认为 1)
 };
 
 /**
  * @brief 将 [b, a] 系数转换为 SOS 形式
  */
-std::vector<SOS> tf2sos(const std::vector<double>& b, const std::vector<double>& a);
+std::vector<SOS> tf2sos(const std::vector<long double>& b, const std::vector<long double>& a);
 
 /**
  * @brief 使用 SOS 形式应用滤波器
  */
-std::vector<double> sosfilter(const std::vector<SOS>& sos, const std::vector<double>& signal);
+std::vector<long double> sosfilter(const std::vector<SOS>& sos, const std::vector<long double>& signal);
 
 /**
  * @brief 线性卷积（针对实数信号优化的 FFT 卷积）
  */
-std::vector<double> fast_convolve(const std::vector<double>& signal1,
-                                   const std::vector<double>& signal2);
+std::vector<long double> fast_convolve(const std::vector<long double>& signal1,
+                                   const std::vector<long double>& signal2);
 
 /**
  * @brief 设计 FIR 滤波器（窗函数法）
@@ -355,7 +355,7 @@ std::vector<double> fast_convolve(const std::vector<double>& signal1,
  * @return 滤波器系数
  */
 FilterCoefficients design_fir(int order,
-                               double cutoff,
+                               long double cutoff,
                                FilterType type,
                                WindowType window_type = WindowType::Hamming);
 
@@ -369,8 +369,8 @@ FilterCoefficients design_fir(int order,
  * @return 滤波器系数
  */
 FilterCoefficients design_fir_band(int order,
-                                    double cutoff_low,
-                                    double cutoff_high,
+                                    long double cutoff_low,
+                                    long double cutoff_high,
                                     FilterType type,
                                     WindowType window_type = WindowType::Hamming);
 
@@ -382,7 +382,7 @@ FilterCoefficients design_fir_band(int order,
  * @return 滤波器系数
  */
 FilterCoefficients design_butterworth(int order,
-                                       double cutoff,
+                                       long double cutoff,
                                        FilterType type);
 
 /**
@@ -394,8 +394,8 @@ FilterCoefficients design_butterworth(int order,
  * @return 滤波器系数
  */
 FilterCoefficients design_chebyshev1(int order,
-                                      double cutoff,
-                                      double ripple,
+                                      long double cutoff,
+                                      long double ripple,
                                       FilterType type);
 
 /**
@@ -408,9 +408,9 @@ FilterCoefficients design_chebyshev1(int order,
  * @return 滤波器系数
  */
 FilterCoefficients design_elliptic(int order,
-                                    double cutoff,
-                                    double ripple,
-                                    double stopband_atten,
+                                    long double cutoff,
+                                    long double ripple,
+                                    long double stopband_atten,
                                     FilterType type);
 
 /**
@@ -420,9 +420,9 @@ FilterCoefficients design_elliptic(int order,
  * @param signal 输入信号
  * @return 滤波后的信号
  */
-std::vector<double> filter(const std::vector<double>& b,
-                            const std::vector<double>& a,
-                            const std::vector<double>& signal);
+std::vector<long double> filter(const std::vector<long double>& b,
+                            const std::vector<long double>& a,
+                            const std::vector<long double>& signal);
 
 /**
  * @brief 零相位滤波（前向-后向滤波）
@@ -431,9 +431,9 @@ std::vector<double> filter(const std::vector<double>& b,
  * @param signal 输入信号
  * @return 滤波后的信号（零相位失真）
  */
-std::vector<double> filtfilt(const std::vector<double>& b,
-                              const std::vector<double>& a,
-                              const std::vector<double>& signal);
+std::vector<long double> filtfilt(const std::vector<long double>& b,
+                              const std::vector<long double>& a,
+                              const std::vector<long double>& signal);
 
 /**
  * @brief 计算滤波器频率响应
@@ -442,8 +442,8 @@ std::vector<double> filtfilt(const std::vector<double>& b,
  * @param n 频率点数
  * @return 频率响应（复数）
  */
-std::vector<Complex> freqz(const std::vector<double>& b,
-                            const std::vector<double>& a,
+std::vector<Complex> freqz(const std::vector<long double>& b,
+                            const std::vector<long double>& a,
                             std::size_t n = 512);
 
 /**
@@ -453,8 +453,8 @@ std::vector<Complex> freqz(const std::vector<double>& b,
  * @param n 频率点数
  * @return 群延迟（采样点数）
  */
-std::vector<double> grpdelay(const std::vector<double>& b,
-                              const std::vector<double>& a,
+std::vector<long double> grpdelay(const std::vector<long double>& b,
+                              const std::vector<long double>& a,
                               std::size_t n = 512);
 
 // ============================================================================
@@ -470,11 +470,11 @@ std::vector<double> grpdelay(const std::vector<double>& b,
  * @param sample_rate 采样率
  * @return 功率谱密度
  */
-std::vector<double> pwelch(const std::vector<double>& signal,
+std::vector<long double> pwelch(const std::vector<long double>& signal,
                             std::size_t nfft,
                             WindowType window_type = WindowType::Hanning,
                             std::size_t noverlap = 0,
-                            double sample_rate = 1.0);
+                            long double sample_rate = 1.0L);
 
 /**
  * @brief 计算功率谱密度（周期图法）
@@ -482,7 +482,7 @@ std::vector<double> pwelch(const std::vector<double>& signal,
  * @param sample_rate 采样率
  * @return 功率谱密度
  */
-std::vector<double> periodogram(const std::vector<double>& signal, double sample_rate = 1.0);
+std::vector<long double> periodogram(const std::vector<long double>& signal, long double sample_rate = 1.0L);
 
 /**
  * @brief 短时傅里叶变换
@@ -492,7 +492,7 @@ std::vector<double> periodogram(const std::vector<double>& signal, double sample
  * @param noverlap 重叠点数
  * @return STFT 结果
  */
-STFTResult stft(const std::vector<double>& signal,
+STFTResult stft(const std::vector<long double>& signal,
                 std::size_t nfft,
                 WindowType window_type = WindowType::Hanning,
                 std::size_t noverlap = 0);
@@ -502,7 +502,7 @@ STFTResult stft(const std::vector<double>& signal,
  * @param stft_result STFT 结果
  * @return 重构的时域信号
  */
-std::vector<double> istft(const STFTResult& stft_result);
+std::vector<long double> istft(const STFTResult& stft_result);
 
 /**
  * @brief 计算语谱图
@@ -512,7 +512,7 @@ std::vector<double> istft(const STFTResult& stft_result);
  * @param noverlap 重叠点数
  * @return 语谱图（功率谱矩阵）
  */
-std::vector<std::vector<double>> spectrogram(const std::vector<double>& signal,
+std::vector<std::vector<long double>> spectrogram(const std::vector<long double>& signal,
                                               std::size_t nfft,
                                               WindowType window_type = WindowType::Hanning,
                                               std::size_t noverlap = 0);

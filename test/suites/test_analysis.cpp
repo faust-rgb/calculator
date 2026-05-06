@@ -55,8 +55,8 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("sin(x) + x ^ 2");
-        const double actual = function.evaluate(2.0);
-        const double expected = mymath::sin(2.0) + 4.0;
+        const long double actual = function.evaluate(2.0);
+        const long double expected = mymath::sin(2.0) + 4.0;
         if (nearly_equal(actual, expected, 1e-7)) {
             ++passed;
         } else {
@@ -74,8 +74,8 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("sin(x)");
-        const double actual = function.derivative(0.0);
-        if (nearly_equal(actual, 1.0, 1e-5)) {
+        const long double actual = function.derivative(0.0L);
+        if (nearly_equal(actual, 1.0L, 1e-5)) {
             ++passed;
         } else {
             ++failed;
@@ -91,8 +91,8 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("sin(x)");
-        const double actual = function.derivative(1e-8);
-        if (nearly_equal(actual, 1.0, 1e-6)) {
+        const long double actual = function.derivative(1e-8);
+        if (nearly_equal(actual, 1.0L, 1e-6)) {
             ++passed;
         } else {
             ++failed;
@@ -108,7 +108,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("exp(x)");
-        const double actual = function.derivative(2.0);
+        const long double actual = function.derivative(2.0);
         if (nearly_equal(actual, mymath::exp(2.0), 1e-7)) {
             ++passed;
         } else {
@@ -126,7 +126,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("abs(x)");
-        (void)function.derivative(0.0);
+        (void)function.derivative(0.0L);
         ++failed;
         std::cout << "FAIL: abs derivative at cusp expected error\n";
     } catch (const std::exception&) {
@@ -137,7 +137,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("x ^ 2");
-        const double actual = function.definite_integral(0.0, 3.0);
+        const long double actual = function.definite_integral(0.0L, 3.0);
         if (nearly_equal(actual, 9.0, 1e-6)) {
             ++passed;
         } else {
@@ -155,7 +155,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("1 / sqrt(x)");
-        const double actual = function.definite_integral(0.0, 1.0);
+        const long double actual = function.definite_integral(0.0L, 1.0L);
         if (nearly_equal(actual, 2.0, 1e-6)) {
             ++passed;
         } else {
@@ -173,7 +173,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("1 / x");
-        (void)function.definite_integral(0.0, 1.0);
+        (void)function.definite_integral(0.0L, 1.0L);
         ++failed;
         std::cout << "FAIL: divergent endpoint integral expected error\n";
     } catch (const std::exception&) {
@@ -184,7 +184,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("1 / (x - 0.1)");
-        (void)function.definite_integral(-1.0, 1.0);
+        (void)function.definite_integral(-1.0L, 1.0L);
         ++failed;
         std::cout << "FAIL: internal singular integral expected error\n";
     } catch (const std::exception&) {
@@ -195,7 +195,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("sin(x)");
-        (void)function.definite_integral(0.0, mymath::infinity());
+        (void)function.definite_integral(0.0L, mymath::infinity());
         ++failed;
         std::cout << "FAIL: oscillatory infinite integral expected error\n";
     } catch (const std::exception&) {
@@ -206,8 +206,8 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("sin(50 * x)");
-        const double actual = function.definite_integral(0.0, mymath::kPi);
-        if (nearly_equal(actual, 0.0, 1e-8)) {
+        const long double actual = function.definite_integral(0.0L, mymath::kPi);
+        if (nearly_equal(actual, 0.0L, 1e-8)) {
             ++passed;
         } else {
             ++failed;
@@ -224,7 +224,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("1 / (1 + x ^ 2)");
-        const double actual = function.definite_integral(-1.0, 1.0);
+        const long double actual = function.definite_integral(-1.0L, 1.0L);
         if (nearly_equal(actual, mymath::kPi / 2.0, 1e-7)) {
             ++passed;
         } else {
@@ -242,7 +242,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("x ^ 2");
-        const double actual = function.indefinite_integral_at(3.0, 0.0, 5.0);
+        const long double actual = function.indefinite_integral_at(3.0, 0.0L, 5.0);
         if (nearly_equal(actual, 14.0, 1e-6)) {
             ++passed;
         } else {
@@ -260,8 +260,8 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("sin(x) / x");
-        const double actual = function.limit(0.0);
-        if (nearly_equal(actual, 1.0, 1e-8)) {
+        const long double actual = function.limit(0.0L);
+        if (nearly_equal(actual, 1.0L, 1e-8)) {
             ++passed;
         } else {
             ++failed;
@@ -278,7 +278,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("(1 - cos(x)) / (x ^ 2)");
-        const double actual = function.limit(0.0);
+        const long double actual = function.limit(0.0L);
         if (nearly_equal(actual, 0.5, 1e-8)) {
             ++passed;
         } else {
@@ -296,8 +296,8 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("(exp(x) - 1) / x");
-        const double actual = function.limit(0.0);
-        if (nearly_equal(actual, 1.0, 1e-8)) {
+        const long double actual = function.limit(0.0L);
+        if (nearly_equal(actual, 1.0L, 1e-8)) {
             ++passed;
         } else {
             ++failed;
@@ -314,8 +314,8 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("ln(x) / x");
-        const double actual = function.limit(mymath::infinity());
-        if (nearly_equal(actual, 0.0, 1e-12)) {
+        const long double actual = function.limit(mymath::infinity());
+        if (nearly_equal(actual, 0.0L, 1e-12)) {
             ++passed;
         } else {
             ++failed;
@@ -332,8 +332,8 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("sqrt(x)");
-        const double actual = function.limit(0.0, 0); // 双侧极限请求
-        if (nearly_equal(actual, 0.0, 1e-8)) {
+        const long double actual = function.limit(0.0L, 0); // 双侧极限请求
+        if (nearly_equal(actual, 0.0L, 1e-8)) {
             ++passed;
         } else {
             ++failed;
@@ -354,12 +354,12 @@ int run_analysis_tests(int& passed, int& failed) {
         const bool count_ok = extrema.size() == 2;
         const bool left_ok =
             count_ok &&
-            nearly_equal(extrema[0].x, -1.0, 1e-3) &&
+            nearly_equal(extrema[0].x, -1.0L, 1e-3) &&
             nearly_equal(extrema[0].value, 2.0, 1e-3) &&
             extrema[0].is_maximum;
         const bool right_ok =
             count_ok &&
-            nearly_equal(extrema[1].x, 1.0, 1e-3) &&
+            nearly_equal(extrema[1].x, 1.0L, 1e-3) &&
             nearly_equal(extrema[1].value, -2.0, 1e-3) &&
             !extrema[1].is_maximum;
         if (left_ok && right_ok) {
@@ -377,11 +377,11 @@ int run_analysis_tests(int& passed, int& failed) {
     // ========== 微分方程求解测试 ==========
     // 测试ODE求解器
     try {
-        ODESolver solver([](double x, double y) {
-            return y - x * x + 1.0;
+        ODESolver solver([](long double x, long double y) {
+            return y - x * x + 1.0L;
         });
-        const double actual = solver.solve(0.0, 0.5, 2.0, 20);
-        const double expected = 9.0 - 0.5 * mymath::exp(2.0);
+        const long double actual = solver.solve(0.0L, 0.5, 2.0, 20);
+        const long double expected = 9.0 - 0.5 * mymath::exp(2.0);
         if (nearly_equal(actual, expected, 1e-4)) {
             ++passed;
         } else {
@@ -397,11 +397,11 @@ int run_analysis_tests(int& passed, int& failed) {
 
     // 测试指数增长ODE
     try {
-        ODESolver solver([](double, double y) {
+        ODESolver solver([](double, long double y) {
             return y;
         });
-        const double actual = solver.solve(0.0, 1.0, 1.0, 100);
-        if (nearly_equal(actual, mymath::exp(1.0), 1e-6)) {
+        const long double actual = solver.solve(0.0L, 1.0L, 1.0L, 100);
+        if (nearly_equal(actual, mymath::exp(1.0L), 1e-6)) {
             ++passed;
         } else {
             ++failed;
@@ -438,11 +438,11 @@ int run_analysis_tests(int& passed, int& failed) {
         const std::string actual = calculator.process_line(
             "near_singular_solution = solve(mat(2, 2, 1, 1, 1, 1.0000001), vec(2, 2.0000001))",
             false);
-        const double x0 = calculator.evaluate("get(near_singular_solution, 0, 0)");
-        const double x1 = calculator.evaluate("get(near_singular_solution, 1, 0)");
+        const long double x0 = calculator.evaluate("get(near_singular_solution, 0, 0)");
+        const long double x1 = calculator.evaluate("get(near_singular_solution, 1, 0)");
         if (actual.find("near_singular_solution = [[") == 0 &&
-            nearly_equal(x0, 1.0, 1e-7) &&
-            nearly_equal(x1, 1.0, 1e-7)) {
+            nearly_equal(x0, 1.0L, 1e-7) &&
+            nearly_equal(x1, 1.0L, 1e-7)) {
             ++passed;
         } else {
             ++failed;
@@ -674,30 +674,30 @@ int run_analysis_tests(int& passed, int& failed) {
     // ========== 多变量积分测试 ==========
     // 测试二重积分
     try {
-        MultivariableIntegrator integrator([](const std::vector<double>& point) {
+        MultivariableIntegrator integrator([](const std::vector<long double>& point) {
             return point[0] + point[1];
         });
-        const double actual = integrator.integrate({[](const std::vector<double>&){ return std::make_pair(0.0, 1.0); }, [](const std::vector<double>&){ return std::make_pair(0.0, 2.0); }}, {24, 24});
+        const long double actual = integrator.integrate({[](const std::vector<long double>&){ return std::make_pair(0.0L, 1.0L); }, [](const std::vector<long double>&){ return std::make_pair(0.0L, 2.0); }}, {24, 24});
         if (nearly_equal(actual, 3.0, 1e-6)) {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: multivariable double integral expected 3 got "
+            std::cout << "FAIL: multivariable long double integral expected 3 got "
                       << actual << '\n';
         }
     } catch (const std::exception& ex) {
         ++failed;
-        std::cout << "FAIL: multivariable double integral threw unexpected error: "
+        std::cout << "FAIL: multivariable long double integral threw unexpected error: "
                   << ex.what() << '\n';
     }
 
     // 测试三重积分
     try {
-        MultivariableIntegrator integrator([](const std::vector<double>& point) {
+        MultivariableIntegrator integrator([](const std::vector<long double>& point) {
             return point[0] * point[1] * point[2];
         });
-        const double actual =
-            integrator.integrate({[](const std::vector<double>&){ return std::make_pair(0.0, 1.0); }, [](const std::vector<double>&){ return std::make_pair(0.0, 1.0); }, [](const std::vector<double>&){ return std::make_pair(0.0, 1.0); }}, {12, 12, 12});
+        const long double actual =
+            integrator.integrate({[](const std::vector<long double>&){ return std::make_pair(0.0L, 1.0L); }, [](const std::vector<long double>&){ return std::make_pair(0.0L, 1.0L); }, [](const std::vector<long double>&){ return std::make_pair(0.0L, 1.0L); }}, {12, 12, 12});
         if (nearly_equal(actual, 0.125, 1e-6)) {
             ++passed;
         } else {
@@ -713,11 +713,11 @@ int run_analysis_tests(int& passed, int& failed) {
 
     // 测试二次函数积分
     try {
-        MultivariableIntegrator integrator([](const std::vector<double>& point) {
+        MultivariableIntegrator integrator([](const std::vector<long double>& point) {
             return point[0] * point[0] + point[1] * point[1];
         });
-        const double actual =
-            integrator.integrate({[](const std::vector<double>&){ return std::make_pair(-1.0, 1.0); }, [](const std::vector<double>&){ return std::make_pair(-1.0, 1.0); }}, {24, 24});
+        const long double actual =
+            integrator.integrate({[](const std::vector<long double>&){ return std::make_pair(-1.0L, 1.0L); }, [](const std::vector<long double>&){ return std::make_pair(-1.0L, 1.0L); }}, {24, 24});
         if (nearly_equal(actual, 8.0 / 3.0, 1e-6)) {
             ++passed;
         } else {
@@ -735,8 +735,8 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("ln(x)");
-        const double actual = function.evaluate(mymath::kE);
-        if (nearly_equal(actual, 1.0, 1e-6)) {
+        const long double actual = function.evaluate(mymath::kE);
+        if (nearly_equal(actual, 1.0L, 1e-6)) {
             ++passed;
         } else {
             ++failed;

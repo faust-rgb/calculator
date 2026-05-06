@@ -136,7 +136,7 @@ private:
             return name;
         }
 
-        double builtin_constant = 0.0;
+        long double builtin_constant = 0.0L;
         if (lookup_builtin_constant(name, &builtin_constant)) {
             return format_symbolic_scalar(builtin_constant);
         }
@@ -231,7 +231,7 @@ private:
                     }
                     ++pos_;
                 }
-                return format_decimal(static_cast<double>(
+                return format_decimal(static_cast<long double>(
                     parse_prefixed_integer_token(std::string(source_.substr(start, pos_ - start)))));
             }
         }

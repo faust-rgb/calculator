@@ -16,7 +16,7 @@
 namespace stats_ops {
 
 /**
- * @brief 从 StoredValue 中提取 double 向量
+ * @brief 从 StoredValue 中提取 long double 向量
  *
  * 将存储值转换为双精度浮点数向量，支持以下类型：
  * - 矩阵：展开为一维向量
@@ -25,9 +25,9 @@ namespace stats_ops {
  * - 普通数值：直接返回
  *
  * @param value 存储值对象
- * @return 提取的 double 向量
+ * @return 提取的 long double 向量
  */
-std::vector<double> extract_vector(const StoredValue& value);
+std::vector<long double> extract_vector(const StoredValue& value);
 
 /**
  * @brief 处理统计命令 (如 mean, var, std 等)
@@ -49,7 +49,7 @@ std::vector<double> extract_vector(const StoredValue& value);
  * @param arguments 参数列表
  * @return 统计计算结果
  */
-double apply_statistic(const std::string& name, const std::vector<double>& arguments);
+long double apply_statistic(const std::string& name, const std::vector<long double>& arguments);
 
 /**
  * @brief 处理概率命令 (如 factorial, nCr, normal_pdf 等)
@@ -69,7 +69,7 @@ double apply_statistic(const std::string& name, const std::vector<double>& argum
  * @param arguments 参数列表
  * @return 概率计算结果
  */
-double apply_probability(const std::string& name, const std::vector<double>& arguments);
+long double apply_probability(const std::string& name, const std::vector<long double>& arguments);
 
 /**
  * @brief 执行 T 检验
@@ -79,14 +79,14 @@ double apply_probability(const std::string& name, const std::vector<double>& arg
  *        或者简单点：前一半和后一半。
  * @return p-value
  */
-double t_test(const std::vector<double>& arguments);
+long double t_test(const std::vector<long double>& arguments);
 
 /**
  * @brief 执行卡方检验（拟合优度）
  * @param arguments [obs..., exp...] 前一半是观测值，后一半是期望值
  * @return p-value
  */
-double chi2_test(const std::vector<double>& arguments);
+long double chi2_test(const std::vector<long double>& arguments);
 
 } // namespace stats_ops
 

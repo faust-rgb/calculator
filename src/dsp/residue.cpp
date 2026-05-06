@@ -32,14 +32,14 @@ std::string handle_residue_command(const std::string& command,
             trim_copy(svc.symbolic.expand_inline(arguments[0])))
             .simplify();
     SymbolicExpression numerator = expression;
-    SymbolicExpression denominator = SymbolicExpression::number(1.0);
+    SymbolicExpression denominator = SymbolicExpression::number(1.0L);
     if (expression.node_->type == NodeType::kDivide) {
         numerator = SymbolicExpression(expression.node_->left).simplify();
         denominator = SymbolicExpression(expression.node_->right).simplify();
     }
 
-    std::vector<double> numerator_coefficients;
-    std::vector<double> denominator_coefficients;
+    std::vector<long double> numerator_coefficients;
+    std::vector<long double> denominator_coefficients;
     if (!numerator.polynomial_coefficients(variable_name,
                                            &numerator_coefficients) ||
         !denominator.polynomial_coefficients(variable_name,
@@ -49,19 +49,19 @@ std::string handle_residue_command(const std::string& command,
 
     StoredValue point_value = svc.evaluation.evaluate_value(arguments[2], false);
 
-    mymath::complex<double> point(point_value.exact
+    mymath::complex<long double> point(point_value.exact
                                    ? rational_to_double(point_value.rational)
                                    : point_value.decimal,
-                               0.0);
+                               0.0L);
     if (point_value.is_matrix) {
         const matrix::Matrix& point_matrix = point_value.matrix;
         if (!point_matrix.is_vector() ||
             point_matrix.rows * point_matrix.cols != 2) {
             throw DimensionError("residue point must be scalar or complex(real, imag)");
         }
-        const double real = point_matrix.rows == 1 ? point_matrix.at(0, 0)
+        const long double real = point_matrix.rows == 1 ? point_matrix.at(0, 0)
                                                    : point_matrix.at(0, 0);
-        const double imag = point_matrix.rows == 1 ? point_matrix.at(0, 1)
+        const long double imag = point_matrix.rows == 1 ? point_matrix.at(0, 1)
                                                    : point_matrix.at(1, 0);
         point = {real, imag};
     } else if (point_value.is_complex) {
@@ -69,36 +69,36 @@ std::string handle_residue_command(const std::string& command,
     }
 
     auto evaluate_polynomial_complex =
-        [](const std::vector<double>& coefficients,
-           mymath::complex<double> value) {
-            mymath::complex<double> result(0.0, 0.0);
+        [](const std::vector<long double>& coefficients,
+           mymath::complex<long double> value) {
+            mymath::complex<long double> result(0.0L, 0.0L);
             for (std::size_t i = coefficients.size(); i > 0; --i) {
                 result = result * value + coefficients[i - 1];
             }
             return result;
         };
 
-    const std::vector<double> denominator_derivative =
+    const std::vector<long double> denominator_derivative =
         polynomial_derivative(denominator_coefficients);
-    const mymath::complex<double> denominator_value =
+    const mymath::complex<long double> denominator_value =
         evaluate_polynomial_complex(denominator_coefficients, point);
     if (mymath::abs(denominator_value) > 1e-8) {
-        return matrix::Matrix::vector({0.0, 0.0}).to_string();
+        return matrix::Matrix::vector({0.0L, 0.0L}).to_string();
     }
-    const mymath::complex<double> denominator_prime =
+    const mymath::complex<long double> denominator_prime =
         evaluate_polynomial_complex(denominator_derivative, point);
     if (mymath::abs(denominator_prime) <= 1e-10) {
         throw MathError("residue currently supports only simple poles");
     }
 
-    const mymath::complex<double> residue =
+    const mymath::complex<long double> residue =
         evaluate_polynomial_complex(numerator_coefficients, point) /
         denominator_prime;
 
     // 规范化结果
-    auto normalize = [](double x) -> double {
+    auto normalize = [](long double x) -> long double {
         if (!mymath::isfinite(x)) return x;
-        if (mymath::is_near_zero(x, 1e-10)) return 0.0;
+        if (mymath::is_near_zero(x, 1e-10)) return 0.0L;
         return x;
     };
 

@@ -31,7 +31,7 @@ struct StoredValue;
 
 // 回调类型定义（来自 types/function.h）
 using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
-using InvokeScriptFunctionDecimalCallback = std::function<double(const std::string&, const std::vector<double>&)>;
+using InvokeScriptFunctionDecimalCallback = std::function<long double(const std::string&, const std::vector<long double>&)>;
 
 /**
  * @enum ExprKind
@@ -57,7 +57,7 @@ struct ExpressionAST {
     ExprKind kind;
 
     // 数值（kNumber）
-    double number_value = 0.0;
+    long double number_value = 0.0L;
     std::string string_value; // 用于精确解析数字的原始文本
 
     // 标识符/函数名（kVariable, kFunctionCall）
@@ -115,11 +115,11 @@ bool bind_variable_slots(ExpressionAST* ast, const VariableResolver& variables);
 /**
  * @brief 求值编译后的 AST
  */
-double evaluate_compiled_ast(
+long double evaluate_compiled_ast(
     const ExpressionAST* ast,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
-    const std::map<std::string, std::function<double(const std::vector<double>&)>>* scalar_functions,
+    const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions,
     const HasScriptFunctionCallback& has_script_function,
     const InvokeScriptFunctionDecimalCallback& invoke_script_function);
 

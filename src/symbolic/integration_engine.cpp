@@ -37,10 +37,10 @@ std::size_t expression_node_count(const SymbolicExpression& expression) {
 
 void collect_rational_factors(const SymbolicExpression& expression,
                               int side,
-                              double* coefficient,
+                              long double* coefficient,
                               std::vector<std::string>* numerator_factors,
                               std::vector<std::string>* denominator_factors) {
-    double value = 0.0;
+    long double value = 0.0L;
     if (expression.is_number(&value)) {
         if (side > 0) {
             *coefficient *= value;
@@ -52,7 +52,7 @@ void collect_rational_factors(const SymbolicExpression& expression,
 
     const auto& node = expression.node_;
     if (node->type == NodeType::kNegate) {
-        *coefficient *= -1.0;
+        *coefficient *= -1.0L;
         collect_rational_factors(SymbolicExpression(node->left),
                                  side,
                                  coefficient,
@@ -88,11 +88,11 @@ void collect_rational_factors(const SymbolicExpression& expression,
     }
     if (node->type == NodeType::kPower) {
         SymbolicExpression exponent(node->right);
-        double exponent_value = 0.0;
+        long double exponent_value = 0.0L;
         if (exponent.is_number(&exponent_value) &&
             mymath::is_integer(exponent_value, 1e-10)) {
             const int count = static_cast<int>(mymath::abs(exponent_value) + 0.5);
-            const int adjusted_side = exponent_value >= 0.0 ? side : -side;
+            const int adjusted_side = exponent_value >= 0.0L ? side : -side;
             SymbolicExpression base(node->left);
             const std::string key = node_structural_key(base.simplify().node_);
             for (int i = 0; i < count; ++i) {
@@ -116,8 +116,8 @@ void collect_rational_factors(const SymbolicExpression& expression,
 
 bool multiplicatively_equivalent(const SymbolicExpression& lhs,
                                  const SymbolicExpression& rhs) {
-    double lhs_coeff = 1.0;
-    double rhs_coeff = 1.0;
+    long double lhs_coeff = 1.0L;
+    long double rhs_coeff = 1.0L;
     std::vector<std::string> lhs_num;
     std::vector<std::string> lhs_den;
     std::vector<std::string> rhs_num;
@@ -387,17 +387,17 @@ IntegrationResult IntegrationEngine::try_integrate_rational(
                                                           &coeffs)) {
         // 多项式积分
         SymbolicExpression x = SymbolicExpression::variable(variable_name);
-        SymbolicExpression result = SymbolicExpression::number(0.0);
+        SymbolicExpression result = SymbolicExpression::number(0.0L);
 
         for (std::size_t i = 0; i < coeffs.size(); ++i) {
             if (!SymbolicPolynomial::coeff_is_zero(coeffs[i])) {
-                double power = static_cast<double>(i);
+                long double power = static_cast<long double>(i);
                 if (i == 0) {
                     // 常数项
                     result = (result + coeffs[i] * x).simplify();
                 } else {
                     // x^n -> x^(n+1) / (n+1)
-                    SymbolicExpression new_power = SymbolicExpression::number(power + 1.0);
+                    SymbolicExpression new_power = SymbolicExpression::number(power + 1.0L);
                     result = (result + coeffs[i] / new_power *
                               make_power(x, new_power)).simplify();
                 }
@@ -648,13 +648,13 @@ IntegrationResult IntegrationEngine::try_integrate_special(
                     (SymbolicExpression::number(0.5) *
                      (make_function("atan", x) *
                           (make_power(x, SymbolicExpression::number(2.0)) +
-                           SymbolicExpression::number(1.0)) -
+                           SymbolicExpression::number(1.0L)) -
                       x)).simplify();
                 return IntegrationResult::ok(result, "atan_by_parts");
             }
         }
 
-        double numeric_factor = 1.0;
+        long double numeric_factor = 1.0L;
         bool unsupported_factor = false;
         bool has_exp = false;
         bool has_trig = false;
@@ -663,7 +663,7 @@ IntegrationResult IntegrationEngine::try_integrate_special(
         SymbolicExpression trig_arg;
 
         for (const SymbolicExpression& factor : factors) {
-            double value = 0.0;
+            long double value = 0.0L;
             if (factor.is_number(&value)) {
                 numeric_factor *= value;
                 continue;
@@ -804,7 +804,7 @@ IntegrationResult IntegrationEngine::try_integrate_special(
         SymbolicExpression exponent(node->right);
 
         if (base.node_->type == NodeType::kFunction) {
-            double n = 0.0;
+            long double n = 0.0L;
             SymbolicExpression a, b;
             SymbolicExpression arg(base.node_->left);
             if (exponent.is_number(&n) &&
@@ -838,9 +838,9 @@ IntegrationResult IntegrationEngine::try_integrate_special(
         }
 
         if (base.is_variable_named(variable_name)) {
-            double n = 0.0;
+            long double n = 0.0L;
             if (exponent.is_number(&n)) {
-                if (mymath::is_near_zero(n + 1.0, 1e-10)) {
+                if (mymath::is_near_zero(n + 1.0L, 1e-10)) {
                     // ∫ x^(-1) dx = ln|x|
                     SymbolicExpression x = SymbolicExpression::variable(variable_name);
                     SymbolicExpression result = make_function("ln", make_function("abs", x));
@@ -848,7 +848,7 @@ IntegrationResult IntegrationEngine::try_integrate_special(
                 } else {
                     // ∫ x^n dx = x^(n+1) / (n+1)
                     SymbolicExpression x = SymbolicExpression::variable(variable_name);
-                    SymbolicExpression new_exp = SymbolicExpression::number(n + 1.0);
+                    SymbolicExpression new_exp = SymbolicExpression::number(n + 1.0L);
                     SymbolicExpression result = make_divide(
                         make_power(x, new_exp),
                         new_exp).simplify();
@@ -917,9 +917,9 @@ bool IntegrationEngine::try_non_elementary_pattern(
                 // 检查 arg 是否为线性
                 SymbolicExpression a, b;
                 if (symbolic_decompose_linear(arg, variable_name, &a, &b)) {
-                    double a_val = 0.0;
+                    long double a_val = 0.0L;
                     if (a.is_number(&a_val) && mymath::abs(a_val) > 1e-12) {
-                        *result = (SymbolicExpression::number(1.0 / a_val) *
+                        *result = (SymbolicExpression::number(1.0L / a_val) *
                                   make_function("Ei", arg)).simplify();
                         *pattern_name = "Ei";
                         return true;
@@ -934,7 +934,7 @@ bool IntegrationEngine::try_non_elementary_pattern(
         SymbolicExpression arg(expression.node_->left);
         SymbolicExpression neg_x_sq = (make_negate(x * x)).simplify();
         if (structural_equals(arg.simplify(), neg_x_sq)) {
-            *result = (SymbolicExpression::number(mymath::sqrt(mymath::acos(-1.0)) / 2.0) *
+            *result = (SymbolicExpression::number(mymath::sqrt(mymath::acos(-1.0L)) / 2.0) *
                       make_function("erf", x)).simplify();
             *pattern_name = "erf";
             return true;
@@ -951,9 +951,9 @@ bool IntegrationEngine::try_non_elementary_pattern(
             if (structural_equals(den.simplify(), arg.simplify())) {
                 SymbolicExpression a, b;
                 if (symbolic_decompose_linear(arg, variable_name, &a, &b)) {
-                    double a_val = 0.0;
+                    long double a_val = 0.0L;
                     if (a.is_number(&a_val) && mymath::abs(a_val) > 1e-12) {
-                        *result = (SymbolicExpression::number(1.0 / a_val) *
+                        *result = (SymbolicExpression::number(1.0L / a_val) *
                                   make_function("Si", arg)).simplify();
                         *pattern_name = "Si";
                         return true;
@@ -973,9 +973,9 @@ bool IntegrationEngine::try_non_elementary_pattern(
             if (structural_equals(den.simplify(), arg.simplify())) {
                 SymbolicExpression a, b;
                 if (symbolic_decompose_linear(arg, variable_name, &a, &b)) {
-                    double a_val = 0.0;
+                    long double a_val = 0.0L;
                     if (a.is_number(&a_val) && mymath::abs(a_val) > 1e-12) {
-                        *result = (SymbolicExpression::number(1.0 / a_val) *
+                        *result = (SymbolicExpression::number(1.0L / a_val) *
                                   make_function("Ci", arg)).simplify();
                         *pattern_name = "Ci";
                         return true;
@@ -990,8 +990,8 @@ bool IntegrationEngine::try_non_elementary_pattern(
         SymbolicExpression num(expression.node_->left);
         SymbolicExpression den(expression.node_->right);
 
-        double num_val = 0.0;
-        if (num.is_number(&num_val) && mymath::abs(num_val - 1.0) < 1e-9) {
+        long double num_val = 0.0L;
+        if (num.is_number(&num_val) && mymath::abs(num_val - 1.0L) < 1e-9) {
             if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
                 SymbolicExpression arg(den.node_->left);
                 if (structural_equals(arg.simplify(), x.simplify())) {
@@ -1020,17 +1020,17 @@ bool IntegrationEngine::try_series_integration(
     SymbolicExpression x = SymbolicExpression::variable(variable_name);
 
     // 尝试计算前几项泰勒级数
-    SymbolicExpression series = SymbolicExpression::number(0.0);
+    SymbolicExpression series = SymbolicExpression::number(0.0L);
     SymbolicExpression current = expression;
-    SymbolicExpression x_power = SymbolicExpression::number(1.0);
-    double factorial = 1.0;
+    SymbolicExpression x_power = SymbolicExpression::number(1.0L);
+    long double factorial = 1.0L;
 
     for (int n = 0; n < 5; ++n) {
         // 计算 f^(n)(0)
         SymbolicExpression deriv = (n == 0) ? expression : current.derivative(variable_name);
-        SymbolicExpression val_at_zero = deriv.substitute(variable_name, SymbolicExpression::number(0.0)).simplify();
+        SymbolicExpression val_at_zero = deriv.substitute(variable_name, SymbolicExpression::number(0.0L)).simplify();
 
-        double coeff = 0.0;
+        long double coeff = 0.0L;
         if (val_at_zero.is_number(&coeff)) {
             if (n > 0) factorial *= n;
             SymbolicExpression term = (SymbolicExpression::number(coeff / factorial) * x_power).simplify();
@@ -1042,21 +1042,21 @@ bool IntegrationEngine::try_series_integration(
     }
 
     // 积分级数
-    SymbolicExpression integrated = SymbolicExpression::number(0.0);
+    SymbolicExpression integrated = SymbolicExpression::number(0.0L);
     x_power = x;
-    factorial = 1.0;
+    factorial = 1.0L;
 
     for (int n = 0; n < 5; ++n) {
         SymbolicExpression deriv = (n == 0) ? expression : expression;
         for (int d = 0; d < n; ++d) {
             deriv = deriv.derivative(variable_name);
         }
-        SymbolicExpression val_at_zero = deriv.substitute(variable_name, SymbolicExpression::number(0.0)).simplify();
+        SymbolicExpression val_at_zero = deriv.substitute(variable_name, SymbolicExpression::number(0.0L)).simplify();
 
-        double coeff = 0.0;
+        long double coeff = 0.0L;
         if (val_at_zero.is_number(&coeff)) {
             if (n > 0) factorial *= n;
-            double new_coeff = coeff / factorial / (n + 1);
+            long double new_coeff = coeff / factorial / (n + 1);
             SymbolicExpression term = (SymbolicExpression::number(new_coeff) * x_power).simplify();
             integrated = (integrated + term).simplify();
         }
@@ -1117,9 +1117,9 @@ bool IntegrationEngine::verify_integration(
     }
 
     SymbolicExpression ratio = (derivative / original_simplified).simplify();
-    double ratio_value = 0.0;
+    long double ratio_value = 0.0L;
     if (ratio.is_number(&ratio_value) &&
-        mymath::is_near_zero(ratio_value - 1.0, 1e-8)) {
+        mymath::is_near_zero(ratio_value - 1.0L, 1e-8)) {
         return true;
     }
 
@@ -1129,9 +1129,9 @@ bool IntegrationEngine::verify_integration(
 
     // 尝试数值验证
     // 在几个点验证
-    std::vector<double> test_points = {2.0, 3.0, 5.0, 7.0};
-    for (double x : test_points) {
-        double orig_val = 0.0, deriv_val = 0.0;
+    std::vector<long double> test_points = {2.0, 3.0, 5.0, 7.0};
+    for (long double x : test_points) {
+        long double orig_val = 0.0L, deriv_val = 0.0L;
 
         try {
             SymbolicExpression subst_x = SymbolicExpression::number(x);
@@ -1232,7 +1232,7 @@ bool IntegrationEngine::try_substitution_with_candidate(
     }
 
     // 尝试检测模式
-    double constant = 0.0;
+    long double constant = 0.0L;
     SymbolicExpression h_expr;
 
     if (detect_derivative_pattern(expression, candidate, variable_name,
@@ -1280,7 +1280,7 @@ SymbolicExpression IntegrationEngine::rebuild_product(
     const std::vector<SymbolicExpression>& factors) {
 
     if (factors.empty()) {
-        return SymbolicExpression::number(1.0);
+        return SymbolicExpression::number(1.0L);
     }
 
     SymbolicExpression result = factors[0];
@@ -1393,14 +1393,14 @@ bool IntegrationEngine::solve_cyclic_integration(
     }
 
     // 在各项中寻找 original 的倍数
-    SymbolicExpression non_original_terms = SymbolicExpression::number(0.0);
-    double original_coefficient = 0.0;  // original 前的系数
+    SymbolicExpression non_original_terms = SymbolicExpression::number(0.0L);
+    long double original_coefficient = 0.0L;  // original 前的系数
     bool found_original = false;
 
     for (const SymbolicExpression& term : terms) {
         // 检查 term 是否是 original 的倍数
         // 尝试提取常数因子
-        double constant = 1.0;
+        long double constant = 1.0L;
         SymbolicExpression rest;
         bool has_constant = extract_constant_factor(term, &constant, &rest);
 
@@ -1419,7 +1419,7 @@ bool IntegrationEngine::solve_cyclic_integration(
 
         // 检查是否为 +original
         if (expressions_match(term_to_check, simplified_original)) {
-            original_coefficient += has_constant ? constant : 1.0;
+            original_coefficient += has_constant ? constant : 1.0L;
             found_original = true;
             continue;
         }
@@ -1438,7 +1438,7 @@ bool IntegrationEngine::solve_cyclic_integration(
     }
 
     // 检查分母是否为零
-    double denominator = 1.0 - original_coefficient;
+    long double denominator = 1.0L - original_coefficient;
     if (mymath::is_near_zero(denominator, kFormatEps)) {
         return false;  // 无法求解
     }
@@ -1503,13 +1503,13 @@ bool IntegrationEngine::solve_cyclic_integration_system(
 
     // 构建系数矩阵 M 和右侧向量 A
     std::vector<std::vector<SymbolicExpression>> matrix(n,
-        std::vector<SymbolicExpression>(n, SymbolicExpression::number(0.0)));
-    std::vector<SymbolicExpression> rhs(n, SymbolicExpression::number(0.0));
+        std::vector<SymbolicExpression>(n, SymbolicExpression::number(0.0L)));
+    std::vector<SymbolicExpression> rhs(n, SymbolicExpression::number(0.0L));
 
     // 对每个方程，提取系数
     for (std::size_t i = 0; i < n; ++i) {
         // 初始化：M[i][i] = 1
-        matrix[i][i] = SymbolicExpression::number(1.0);
+        matrix[i][i] = SymbolicExpression::number(1.0L);
 
         // 从 after_parts 中提取各积分的系数
         const SymbolicExpression& after_parts = entries[i].after_parts;
@@ -1536,7 +1536,7 @@ bool IntegrationEngine::solve_cyclic_integration_system(
 
         // 分析每个项
         for (const SymbolicExpression& term : terms) {
-            double constant = 1.0;
+            long double constant = 1.0L;
             SymbolicExpression rest;
             bool has_constant = extract_constant_factor(term, &constant, &rest);
             SymbolicExpression term_to_check = has_constant ? rest : term;
@@ -1546,15 +1546,15 @@ bool IntegrationEngine::solve_cyclic_integration_system(
             for (std::size_t j = 0; j < n; ++j) {
                 // 处理取负情况
                 SymbolicExpression check_expr = term_to_check;
-                double sign = 1.0;
+                long double sign = 1.0L;
                 if (check_expr.node_->type == NodeType::kNegate) {
                     check_expr = SymbolicExpression(check_expr.node_->left);
-                    sign = -1.0;
+                    sign = -1.0L;
                 }
 
                 if (expressions_match(check_expr, entries[j].integral)) {
                     // 找到积分 j 的系数
-                    double coeff = sign * (has_constant ? constant : 1.0);
+                    long double coeff = sign * (has_constant ? constant : 1.0L);
                     matrix[i][j] = make_subtract(matrix[i][j],
                         SymbolicExpression::number(coeff)).simplify();
                     found_match = true;
@@ -1578,9 +1578,9 @@ bool IntegrationEngine::solve_cyclic_integration_system(
     for (std::size_t col = 0; col < n; ++col) {
         // 寻找主元（优先选择数值非零的）
         std::size_t pivot = col;
-        double pivot_val = 0.0;
+        long double pivot_val = 0.0L;
         for (std::size_t row = col; row < n; ++row) {
-            double val = 0.0;
+            long double val = 0.0L;
             if (matrix[row][col].is_number(&val) && !mymath::is_near_zero(val, kFormatEps)) {
                 if (pivot == col || mymath::abs(val) > mymath::abs(pivot_val)) {
                     pivot = row;
@@ -1596,7 +1596,7 @@ bool IntegrationEngine::solve_cyclic_integration_system(
         }
 
         // 检查主元是否为零
-        double pv = 0.0;
+        long double pv = 0.0L;
         if (!matrix[col][col].is_number(&pv) || mymath::is_near_zero(pv, kFormatEps)) {
             // 尝试符号消元（简化处理：返回失败）
             return false;
@@ -1604,21 +1604,21 @@ bool IntegrationEngine::solve_cyclic_integration_system(
 
         // 消元
         for (std::size_t row = col + 1; row < n; ++row) {
-            double row_val = 0.0;
+            long double row_val = 0.0L;
             if (!matrix[row][col].is_number(&row_val)) {
                 continue;  // 简化处理：跳过非数值系数
             }
 
-            double factor = row_val / pv;
+            long double factor = row_val / pv;
             for (std::size_t j = col; j < n; ++j) {
-                double m_val = 0.0;
+                long double m_val = 0.0L;
                 if (matrix[col][j].is_number(&m_val)) {
                     matrix[row][j] = SymbolicExpression::number(
                         matrix[row][j].is_number(nullptr) ?
-                        (matrix[row][j].is_number(&m_val) ? m_val : 0.0) - factor * m_val : -factor * m_val);
+                        (matrix[row][j].is_number(&m_val) ? m_val : 0.0L) - factor * m_val : -factor * m_val);
                 }
             }
-            double rhs_val = 0.0;
+            long double rhs_val = 0.0L;
             if (rhs[col].is_number(&rhs_val)) {
                 rhs[row] = SymbolicExpression::number(
                     rhs[row].is_number(&rhs_val) ? rhs_val - factor * rhs_val : -factor * rhs_val);
@@ -1629,15 +1629,15 @@ bool IntegrationEngine::solve_cyclic_integration_system(
     // 回代
     results->resize(n);
     for (std::size_t i = n; i-- > 0; ) {
-        double sum = 0.0;
+        long double sum = 0.0L;
         if (rhs[i].is_number(&sum)) {
             for (std::size_t j = i + 1; j < n; ++j) {
-                double m_val = 0.0, r_val = 0.0;
+                long double m_val = 0.0L, r_val = 0.0L;
                 if (matrix[i][j].is_number(&m_val) && (*results)[j].is_number(&r_val)) {
                     sum -= m_val * r_val;
                 }
             }
-            double diag = 0.0;
+            long double diag = 0.0L;
             if (matrix[i][i].is_number(&diag) && !mymath::is_near_zero(diag, kFormatEps)) {
                 (*results)[i] = SymbolicExpression::number(sum / diag);
             } else {
@@ -1667,7 +1667,7 @@ bool IntegrationEngine::contains_variable(
 
 bool IntegrationEngine::extract_constant_factor(
     const SymbolicExpression& expression,
-    double* constant,
+    long double* constant,
     SymbolicExpression* rest) {
 
     // 检查是否为常数乘法
@@ -1675,14 +1675,14 @@ bool IntegrationEngine::extract_constant_factor(
         SymbolicExpression left(expression.node_->left);
         SymbolicExpression right(expression.node_->right);
 
-        double left_val = 0.0;
+        long double left_val = 0.0L;
         if (left.is_number(&left_val)) {
             *constant = left_val;
             *rest = right;
             return true;
         }
 
-        double right_val = 0.0;
+        long double right_val = 0.0L;
         if (right.is_number(&right_val)) {
             *constant = right_val;
             *rest = left;
@@ -1691,10 +1691,10 @@ bool IntegrationEngine::extract_constant_factor(
     }
 
     // 单独的常数
-    double val = 0.0;
+    long double val = 0.0L;
     if (expression.is_number(&val)) {
         *constant = val;
-        *rest = SymbolicExpression::number(1.0);
+        *rest = SymbolicExpression::number(1.0L);
         return true;
     }
 
@@ -1709,7 +1709,7 @@ bool detect_derivative_pattern(
     const SymbolicExpression& expression,
     const SymbolicExpression& candidate,
     const std::string& variable_name,
-    double* constant,
+    long double* constant,
     SymbolicExpression* h_expr) {
 
     // 计算 du = candidate'
@@ -1731,7 +1731,7 @@ bool detect_derivative_pattern(
     auto vars = ratio_subst.identifier_variables();
     if (std::find(vars.begin(), vars.end(), variable_name) == vars.end()) {
         // 成功！ratio 只含 candidate
-        *constant = 1.0;
+        *constant = 1.0L;
         *h_expr = ratio_subst;
         return true;
     }
@@ -1766,7 +1766,7 @@ bool detect_common_substitution_pattern(
 
         // 检查是否相差常数因子
         SymbolicExpression ratio = (num_simplified / denom_deriv).simplify();
-        double ratio_val = 0.0;
+        long double ratio_val = 0.0L;
         if (ratio.is_number(&ratio_val) && !mymath::is_near_zero(ratio_val, 1e-10)) {
             *result = (SymbolicExpression::number(ratio_val) *
                        make_function("ln", make_function("abs", denominator))).simplify();
@@ -1791,10 +1791,10 @@ bool detect_common_substitution_pattern(
                 SymbolicExpression deriv_simplified = maybe_deriv.simplify();
 
                 if (expressions_match(deriv_simplified, base_deriv)) {
-                    double n = 0.0;
+                    long double n = 0.0L;
                     if (exponent.is_number(&n)) {
                         // ∫ f' * f^n dx = f^(n+1) / (n+1)
-                        SymbolicExpression new_exp = SymbolicExpression::number(n + 1.0);
+                        SymbolicExpression new_exp = SymbolicExpression::number(n + 1.0L);
                         *result = make_divide(
                             make_power(base, new_exp),
                             new_exp).simplify();
@@ -1832,7 +1832,7 @@ bool detect_common_substitution_pattern(
 
                 // 常数因子
                 SymbolicExpression ratio = (deriv_simplified / arg_deriv).simplify();
-                double ratio_val = 0.0;
+                long double ratio_val = 0.0L;
                 if (ratio.is_number(&ratio_val) && !mymath::is_near_zero(ratio_val, 1e-10)) {
                     *result = (SymbolicExpression::number(ratio_val) * maybe_exp).simplify();
                     *pattern_name = "c_f_prime_times_exp_f";

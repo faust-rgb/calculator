@@ -24,9 +24,9 @@ public:
 
 struct OptimizationContext {
     std::function<matrix::Matrix(const std::string&, const std::string&)> parse_matrix_argument;
-    std::function<double(double)> normalize_result;
-    std::function<bool(double, double)> is_integer_double;
-    std::function<long long(double)> round_to_long_long;
+    std::function<long double(long double)> normalize_result;
+    std::function<bool(long double, long double)> is_integer_double;
+    std::function<long long(long double)> round_to_long_long;
 };
 
 bool is_optimization_command(const std::string& command);

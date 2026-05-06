@@ -29,8 +29,8 @@ std::string PlotRenderer::render(const std::vector<Point>& points, int width, in
 std::string PlotRenderer::render_braille(const std::vector<Point>& points, int width, int height) {
     if (points.empty()) return "";
 
-    double x_min = points[0].x, x_max = points[0].x;
-    double y_min = points[0].y, y_max = points[0].y;
+    long double x_min = points[0].x, x_max = points[0].x;
+    long double y_min = points[0].y, y_max = points[0].y;
 
     for (const auto& p : points) {
         if (mymath::isnan(p.y) || mymath::isinf(p.y)) continue;
@@ -41,8 +41,8 @@ std::string PlotRenderer::render_braille(const std::vector<Point>& points, int w
     }
 
     if (y_min == y_max) {
-        y_min -= 1.0;
-        y_max += 1.0;
+        y_min -= 1.0L;
+        y_max += 1.0L;
     }
 
     int canvas_w = width * 2;
