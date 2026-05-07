@@ -78,11 +78,111 @@ bool operator==(float128_t a, float128_t b) {
     return a.hi == b.hi && a.lo == b.lo;
 }
 
+bool operator!=(float128_t a, float128_t b) {
+    return !(a == b);
+}
+
 bool operator<(float128_t a, float128_t b) {
     return a.hi < b.hi || (a.hi == b.hi && a.lo < b.lo);
 }
 
 namespace precise128 {
+
+// ============================================================================
+// 基础工具函数
+// ============================================================================
+
+bool isnan(float128_t a) {
+    return mymath::isnan(a.hi) || mymath::isnan(a.lo);
+}
+
+bool isinf(float128_t a) {
+    return mymath::isinf(a.hi);
+}
+
+bool isfinite(float128_t a) {
+    return mymath::isfinite(a.hi) && mymath::isfinite(a.lo);
+}
+
+float128_t floor(float128_t a) {
+    long double f = mymath::floor(a.hi);
+    if (a.hi == f && a.lo != 0) {
+        // hi 已经是整数，需要考虑 lo
+        if (a.lo < 0) {
+            return {f - 1.0L, 0.0L};
+        }
+    }
+    return {f, 0.0L};
+}
+
+float128_t ceil(float128_t a) {
+    long double c = mymath::ceil(a.hi);
+    if (a.hi == c && a.lo != 0) {
+        // hi 已经是整数，需要考虑 lo
+        if (a.lo > 0) {
+            return {c + 1.0L, 0.0L};
+        }
+    }
+    return {c, 0.0L};
+}
+
+float128_t round(float128_t a) {
+    long double r = mymath::round(a.hi);
+    if (a.hi == r && a.lo != 0) {
+        // hi 已经是整数
+        if (a.lo >= 0.5L) {
+            return {r + 1.0L, 0.0L};
+        } else if (a.lo <= -0.5L) {
+            return {r - 1.0L, 0.0L};
+        }
+    }
+    return {r, 0.0L};
+}
+
+float128_t trunc(float128_t a) {
+    return {mymath::trunc(a.hi), 0.0L};
+}
+
+float128_t fmod(float128_t a, float128_t b) {
+    float128_t q = a / b;
+    float128_t q_trunc = trunc(q);
+    return a - b * q_trunc;
+}
+
+float128_t remainder(float128_t a, float128_t b) {
+    float128_t q = a / b;
+    float128_t q_round = round(q);
+    return a - b * q_round;
+}
+
+float128_t hypot(float128_t a, float128_t b) {
+    float128_t abs_a = abs(a);
+    float128_t abs_b = abs(b);
+    if (abs_a.hi == 0) return abs_b;
+    if (abs_b.hi == 0) return abs_a;
+    if (abs_a > abs_b) {
+        float128_t ratio = abs_b / abs_a;
+        return abs_a * sqrt(float128_t(1.0L) + ratio * ratio);
+    }
+    float128_t ratio = abs_a / abs_b;
+    return abs_b * sqrt(float128_t(1.0L) + ratio * ratio);
+}
+
+float128_t normalize_angle(float128_t x) {
+    float128_t two_pi = float128_t(2.0L) * pi();
+    float128_t result = fmod(x, two_pi);
+    float128_t p = pi();
+    if (result > p) {
+        result = result - two_pi;
+    } else if (result < -p) {
+        result = result + two_pi;
+    }
+    return result;
+}
+
+// ============================================================================
+// 基础数学函数
+// ============================================================================
 
 float128_t abs(float128_t a) {
     return a.hi < 0 ? -a : a;
@@ -91,12 +191,24 @@ float128_t abs(float128_t a) {
 float128_t sqrt(float128_t a) {
     if (a.hi == 0) return {0, 0};
     if (a.hi < 0) return {mymath::quiet_nan(), mymath::quiet_nan()};
-    
+
     // 牛顿迭代法提高精度
     long double x = mymath::sqrt(a.hi);
     float128_t res(x);
     // 一次迭代通常足以达到 128 位精度（如果初始值是 long double 结果）
     res = (res + a / res) * 0.5L;
+    return res;
+}
+
+float128_t cbrt(float128_t a) {
+    if (a.hi == 0) return {0, 0};
+
+    long double x = mymath::cbrt(a.hi);
+    float128_t res(x);
+    // 牛顿迭代: x = x - (x^3 - a) / (3*x^2)
+    float128_t x2 = res * res;
+    float128_t x3 = x2 * res;
+    res = res - (x3 - a) / (float128_t(3.0L) * x2);
     return res;
 }
 
@@ -148,9 +260,130 @@ float128_t tan(float128_t a) {
     return sin(a) / cos(a);
 }
 
+float128_t asin(float128_t a) {
+    // asin(x) = atan(x / sqrt(1 - x^2))
+    if (abs(a).hi > 1.0L) {
+        return {mymath::quiet_nan(), mymath::quiet_nan()};
+    }
+    if (a.hi == 0) return {0, 0};
+    float128_t one_minus_x2 = float128_t(1.0L) - a * a;
+    return atan(a / sqrt(one_minus_x2));
+}
+
+float128_t acos(float128_t a) {
+    // acos(x) = pi/2 - asin(x)
+    if (abs(a).hi > 1.0L) {
+        return {mymath::quiet_nan(), mymath::quiet_nan()};
+    }
+    return pi() * 0.5L - asin(a);
+}
+
+float128_t sec(float128_t a) {
+    return float128_t(1.0L) / cos(a);
+}
+
+float128_t csc(float128_t a) {
+    return float128_t(1.0L) / sin(a);
+}
+
+float128_t cot(float128_t a) {
+    return cos(a) / sin(a);
+}
+
+float128_t asec(float128_t a) {
+    // asec(x) = acos(1/x)
+    if (abs(a).hi < 1.0L) {
+        return {mymath::quiet_nan(), mymath::quiet_nan()};
+    }
+    return acos(float128_t(1.0L) / a);
+}
+
+float128_t acsc(float128_t a) {
+    // acsc(x) = asin(1/x)
+    if (abs(a).hi < 1.0L) {
+        return {mymath::quiet_nan(), mymath::quiet_nan()};
+    }
+    return asin(float128_t(1.0L) / a);
+}
+
+float128_t acot(float128_t a) {
+    // acot(x) = pi/2 - atan(x)
+    return pi() * 0.5L - atan(a);
+}
+
+// ============================================================================
+// 双曲函数
+// ============================================================================
+
+float128_t sinh(float128_t a) {
+    // sinh(x) = (exp(x) - exp(-x)) / 2
+    float128_t e_x = exp(a);
+    float128_t e_neg_x = float128_t(1.0L) / e_x;
+    return (e_x - e_neg_x) * 0.5L;
+}
+
+float128_t cosh(float128_t a) {
+    // cosh(x) = (exp(x) + exp(-x)) / 2
+    float128_t e_x = exp(a);
+    float128_t e_neg_x = float128_t(1.0L) / e_x;
+    return (e_x + e_neg_x) * 0.5L;
+}
+
+float128_t tanh(float128_t a) {
+    // tanh(x) = sinh(x) / cosh(x)
+    // 更稳定的实现: tanh(x) = (exp(2x) - 1) / (exp(2x) + 1)
+    float128_t e2x = exp(a * 2.0L);
+    return (e2x - float128_t(1.0L)) / (e2x + float128_t(1.0L));
+}
+
+float128_t asinh(float128_t a) {
+    // asinh(x) = ln(x + sqrt(x^2 + 1))
+    return ln(a + sqrt(a * a + float128_t(1.0L)));
+}
+
+float128_t acosh(float128_t a) {
+    // acosh(x) = ln(x + sqrt(x - 1) * sqrt(x + 1)), x >= 1
+    if (a.hi < 1.0L) {
+        return {mymath::quiet_nan(), mymath::quiet_nan()};
+    }
+    return ln(a + sqrt(a - float128_t(1.0L)) * sqrt(a + float128_t(1.0L)));
+}
+
+float128_t atanh(float128_t a) {
+    // atanh(x) = 0.5 * ln((1 + x) / (1 - x)), |x| < 1
+    if (abs(a).hi >= 1.0L) {
+        return {mymath::quiet_nan(), mymath::quiet_nan()};
+    }
+    return ln((float128_t(1.0L) + a) / (float128_t(1.0L) - a)) * 0.5L;
+}
+
 float128_t log10(float128_t a) {
     static const float128_t inv_ln10 = float128_t(1.0L) / ln(float128_t(10.0L));
     return ln(a) * inv_ln10;
+}
+
+float128_t log2(float128_t a) {
+    static const float128_t inv_ln2 = float128_t(1.0L) / ln(float128_t(2.0L));
+    return ln(a) * inv_ln2;
+}
+
+float128_t log1p(float128_t a) {
+    // log1p(x) = ln(1 + x), 更精确的实现用于 x 接近 0
+    if (abs(a).hi < 0.125L) {
+        // 使用泰勒展开提高精度: ln(1+x) = x - x^2/2 + x^3/3 - ...
+        float128_t x = a;
+        float128_t x2 = x * x;
+        float128_t result = x;
+        float128_t term = x;
+        for (int i = 2; i <= 20; ++i) {
+            term = -term * x2 / float128_t(static_cast<long double>(i * (i - 1)));
+            float128_t new_result = result + term / float128_t(static_cast<long double>(i));
+            if (abs(new_result - result).hi < 1e-40L) break;
+            result = new_result;
+        }
+        return result;
+    }
+    return ln(float128_t(1.0L) + a);
 }
 
 float128_t pow(float128_t base, float128_t exponent) {

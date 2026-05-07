@@ -38,6 +38,8 @@ template <typename T>
 T t_abs(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::abs(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::precise128::abs(val);
     } else {
         return val < T(static_cast<long long>(0)) ? -val : val;
     }
@@ -48,6 +50,8 @@ template <typename T>
 T t_sqrt(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::sqrt(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::precise128::sqrt(val);
     } else {
         throw std::runtime_error("t_sqrt not implemented for this type");
     }
@@ -58,6 +62,8 @@ template <typename T>
 T t_pow(const T& base, const T& exponent) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::pow(base, exponent);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::precise128::pow(base, exponent);
     } else {
         throw std::runtime_error("t_pow not implemented for this type");
     }
@@ -68,6 +74,8 @@ template <typename T>
 bool t_isfinite(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::isfinite(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::isfinite(val.hi);
     } else {
         return true;
     }
@@ -78,6 +86,8 @@ template <typename T>
 T t_sin(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::sin(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::precise128::sin(val);
     } else {
         return T(mymath::sin(val.to_double()));
     }
@@ -88,6 +98,8 @@ template <typename T>
 T t_cos(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::cos(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::precise128::cos(val);
     } else {
         return T(mymath::cos(val.to_double()));
     }
@@ -98,6 +110,8 @@ template <typename T>
 T t_tan(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::tan(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::precise128::tan(val);
     } else {
         return T(mymath::tan(val.to_double()));
     }
@@ -108,6 +122,8 @@ template <typename T>
 T t_log(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::log(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::precise128::ln(val);
     } else {
         return T(mymath::log(val.to_double()));
     }
@@ -118,6 +134,8 @@ template <typename T>
 T t_exp(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::exp(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::precise128::exp(val);
     } else {
         return T(mymath::exp(val.to_double()));
     }
@@ -128,6 +146,8 @@ template <typename T>
 T t_sinh(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::sinh(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return T(mymath::sinh(val.to_long_double()));
     } else {
         return T(mymath::sinh(val.to_double()));
     }
@@ -138,6 +158,8 @@ template <typename T>
 T t_cosh(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::cosh(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return T(mymath::cosh(val.to_long_double()));
     } else {
         return T(mymath::cosh(val.to_double()));
     }
@@ -148,6 +170,8 @@ template <typename T>
 T t_tanh(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::tanh(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return T(mymath::tanh(val.to_long_double()));
     } else {
         return T(mymath::tanh(val.to_double()));
     }
@@ -158,8 +182,8 @@ template <typename T>
 T t_pi() {
     if constexpr (std::is_same_v<T, long double>) {
         return 3.1415926535897932384626433832795029L;
-    } else if constexpr (std::is_same_v<T, long double>) {
-        return mymath::kPi;
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::precise128::pi();
     } else {
         return T(3.14159265358979323846);
     }
@@ -170,6 +194,8 @@ template <typename T>
 T t_infinity() {
     if constexpr (std::is_floating_point_v<T>) {
         return std::numeric_limits<T>::infinity();
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::float128_t(mymath::infinity());
     } else {
         return T(1e300);
     }
@@ -179,6 +205,8 @@ template <typename T>
 bool t_is_effective_infinity_point(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return !std::isfinite(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return !mymath::isfinite(val.hi);
     } else {
         return false;
     }
@@ -195,8 +223,10 @@ template <typename T>
 bool t_is_integer(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::floor(val) == val;
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::is_integer(val.to_long_double());
     } else {
-        return mymath::is_integer(val.to_double());
+        return mymath::is_integer(val.to_long_double());
     }
 }
 
@@ -211,8 +241,10 @@ template <typename T>
 long long t_llround(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return static_cast<long long>(std::llround(val));
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return static_cast<long long>(std::llround(val.to_long_double()));
     } else {
-        return static_cast<long long>(std::llround(val.to_double()));
+        return static_cast<long long>(std::llround(val.to_long_double()));
     }
 }
 
@@ -283,6 +315,10 @@ std::string format_t(const T& value) {
             return "0";
         }
         return text;
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        std::ostringstream out;
+        out << std::setprecision(20) << value.to_long_double();
+        return out.str();
     } else {
         return value.to_string();
     }
@@ -980,8 +1016,10 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
         long double p_val;
         if constexpr (std::is_floating_point_v<T>) {
             p_val = static_cast<long double>(point);
+        } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+            p_val = point.to_long_double();
         } else {
-            p_val = point.to_double();
+            p_val = point.to_long_double();
         }
 
         SymbolicExpression sub_expr = expression.substitute(
@@ -1089,7 +1127,8 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
             try {
                 long double p_val;
                 if constexpr (std::is_floating_point_v<T>) p_val = static_cast<long double>(point);
-                else p_val = point.to_double();
+                else if constexpr (std::is_same_v<T, mymath::float128_t>) p_val = point.to_long_double();
+                else p_val = point.to_long_double();
 
                 if (series_ops::internal::evaluate_psa(e, variable_name, p_val, 4, coeffs, ctx)) {
                     for (int i = 0; i < static_cast<int>(coeffs.size()); ++i) {
@@ -1544,7 +1583,8 @@ T TFunctionAnalysis<T>::limit(T x, int direction) const {
         try {
             long double p_val;
             if constexpr (std::is_floating_point_v<T>) p_val = static_cast<long double>(x);
-            else p_val = x.to_double();
+            else if constexpr (std::is_same_v<T, mymath::float128_t>) p_val = x.to_long_double();
+            else p_val = x.to_long_double();
 
             if (series_ops::internal::evaluate_psa(expr, variable_name_, p_val, 2, coeffs, ctx)) {
                 if (!coeffs.empty()) return T(coeffs[0]);
@@ -1569,6 +1609,43 @@ T TFunctionAnalysis<T>::limit(T x, int direction) const {
 
 template <>
 long double TFunctionAnalysis<long double>::compute_numerical_limit(long double x, int direction) const {
+    // For limits at infinity, use float128 precision for better accuracy
+    // when computing expressions like (1 + 1/x)^x for large x
+    if (t_is_effective_infinity_point(x)) {
+        const bool positive = x > 0.0L;
+
+        // Parse the expression and substitute x = 1/t
+        SymbolicExpression expr;
+        try {
+            expr = SymbolicExpression::parse(expression_);
+        } catch (...) {
+            // Fall back to direct computation if parsing fails
+            goto direct_computation;
+        }
+
+        // Create substitution: x -> 1/t or x -> -1/t
+        SymbolicExpression t_var = SymbolicExpression::variable("t_limit_inf_subst");
+        SymbolicExpression inv_t = positive
+            ? SymbolicExpression::number(1.0L) / t_var
+            : SymbolicExpression::number(-1.0L) / t_var;
+        SymbolicExpression substituted = expr.substitute(variable_name_, inv_t).simplify();
+
+        // Use float128 precision for the substituted expression
+        TFunctionAnalysis<mymath::float128_t> analysis_128("t_limit_inf_subst");
+        analysis_128.define(substituted.to_string());
+
+        // Compute limit as t -> 0 using float128 precision
+        try {
+            mymath::float128_t result_128 = analysis_128.limit(mymath::float128_t(0.0L), direction);
+            if (mymath::isfinite(result_128.hi)) {
+                return result_128.to_long_double();
+            }
+        } catch (...) {
+            // Fall through to direct computation
+        }
+    }
+
+direct_computation:
     auto compute_limit_at = [this](long double x_target, int side) {
         mymath::float128_t richardson[14][14] = {};
         bool row_valid[14] = {};
@@ -2184,8 +2261,10 @@ void TFunctionAnalysis<T>::ensure_evaluator_initialized() const {
         for (const auto& [name, value] : assignments) {
             if constexpr (std::is_floating_point_v<T>) {
                 decimal_assignments.push_back({name, static_cast<long double>(value)});
+            } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+                decimal_assignments.push_back({name, value.to_long_double()});
             } else {
-                decimal_assignments.push_back({name, value.to_double()});
+                decimal_assignments.push_back({name, value.to_long_double()});
             }
         }
         return T(decimal_evaluator(decimal_assignments));
@@ -2522,3 +2601,4 @@ T TFunctionAnalysis<T>::gauss_kronrod_15(T left,
 
 // 显式模板实例化
 template class TFunctionAnalysis<long double>;
+template class TFunctionAnalysis<mymath::float128_t>;

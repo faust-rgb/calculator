@@ -35,6 +35,8 @@ T t_abs(const T& val) {
         return std::abs(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::abs(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::precise128::abs(val);
     } else {
         return val < T(static_cast<long long>(0)) ? -val : val;
     }
@@ -49,9 +51,43 @@ T t_sqrt(const T& val) {
         return std::sqrt(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::sqrt(val);
+    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return mymath::precise128::sqrt(val);
     } else {
         throw std::runtime_error("t_sqrt not implemented for this type");
     }
+}
+
+template <typename T>
+struct InternalType {
+    using type = T;
+};
+
+template <>
+struct InternalType<long double> {
+    using type = mymath::float128_t;
+};
+
+template <typename T>
+using internal_t = typename InternalType<T>::type;
+
+template <typename T>
+internal_t<T> to_internal(T val) {
+    return static_cast<internal_t<T>>(val);
+}
+
+template <typename T>
+T from_internal(internal_t<T> val) {
+    if constexpr (std::is_same_v<T, long double>) {
+        return val.to_long_double();
+    } else {
+        return static_cast<T>(val);
+    }
+}
+
+template <typename T>
+T t_max(const T& a, const T& b) {
+    return a < b ? b : a;
 }
 
 /**
@@ -94,7 +130,10 @@ using namespace symbolic_expression_internal;
  */
 template <typename T>
 T root_function_tolerance(T fx) {
-    return T(1e-10L) * std::max(T(static_cast<long long>(1)), t_abs(fx));
+    if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return T(1e-11L) * t_max(T(static_cast<long long>(1)), t_abs(fx));
+    }
+    return T(1e-10L) * t_max(T(static_cast<long long>(1)), t_abs(fx));
 }
 
 /**
@@ -104,7 +143,10 @@ T root_function_tolerance(T fx) {
  */
 template <typename T>
 T root_position_tolerance(T x) {
-    return T(1e-10L) * std::max(T(static_cast<long long>(1)), t_abs(x));
+    if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        return T(1e-12L) * t_max(T(static_cast<long long>(1)), t_abs(x));
+    }
+    return T(1e-10L) * t_max(T(static_cast<long long>(1)), t_abs(x));
 }
 
 /**
@@ -112,8 +154,12 @@ T root_position_tolerance(T x) {
  */
 template <typename T>
 T root_derivative_step(T x) {
+    if constexpr (std::is_same_v<T, mymath::float128_t>) {
+        // 对于 float128, 取长浮点数的最佳步长
+        return T(1e-7L) * t_max(T(static_cast<long long>(1)), t_abs(x));
+    }
     // 使用 sqrt(epsilon) 约为 1e-8 作为基础比例
-    return T(1e-7L) * std::max(T(static_cast<long long>(1)), t_abs(x));
+    return T(1e-7L) * t_max(T(static_cast<long long>(1)), t_abs(x));
 }
 
 }  // namespace
@@ -138,50 +184,54 @@ T newton_solve(
     const std::function<T(T)>& normalize,
     const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate_derivative) {
 
-    T x = initial;
+    using CalcT = internal_t<T>;
+    auto eval = [&](CalcT val) -> CalcT {
+        return to_internal<T>(evaluate({{"x", from_internal<T>(val)}}));
+    };
+
+    CalcT x = to_internal<T>(initial);
     for (int iteration = 0; iteration < 100; ++iteration) {
-        const T fx = evaluate({{"x", x}});
+        const CalcT fx = eval(x);
 
         // 检查是否已收敛（函数值足够小）
         if (t_abs(fx) <= root_function_tolerance(fx)) {
-            return normalize(x);
+            return normalize(from_internal<T>(x));
         }
 
         // 计算导数（解析或数值）
-        T derivative = T(static_cast<long long>(0));
+        CalcT derivative = CalcT(static_cast<long long>(0));
         if (evaluate_derivative) {
             // 使用解析导数
-            derivative = evaluate_derivative({{"x", x}});
+            derivative = to_internal<T>(evaluate_derivative({{"x", from_internal<T>(x)}}));
         } else {
             // 使用中心差分近似导数
-            const T h = root_derivative_step(x);
+            const CalcT h = root_derivative_step(x);
             derivative =
-                (evaluate({{"x", x + h}}) -
-                 evaluate({{"x", x - h}})) /
-                (T(static_cast<long long>(2)) * h);
+                (eval(x + h) - eval(x - h)) /
+                (CalcT(static_cast<long long>(2)) * h);
         }
 
         // 检查导数是否为零
         if (t_abs(derivative) <=
-            T(1e-13L) * std::max(T(static_cast<long long>(1)), t_abs(fx))) {
+            CalcT(1e-13L) * t_max(CalcT(static_cast<long long>(1)), t_abs(fx))) {
             throw std::runtime_error("solve failed because the derivative vanished");
         }
 
-        const T raw_step = fx / derivative;
+        const CalcT raw_step = fx / derivative;
 
         // 回溯搜索：确保 |f(x)| 减小
-        T factor = T(1.0L);
-        T next = x - raw_step;
+        CalcT factor = CalcT(1.0L);
+        CalcT next = x - raw_step;
         bool step_accepted = false;
 
         for (int retry = 0; retry < 10; ++retry) {
-            const T f_next = evaluate({{"x", next}});
+            const CalcT f_next = eval(next);
             // Armijo 类条件：检查是否确实改进
             if (t_abs(f_next) < t_abs(fx) || t_abs(f_next) <= root_function_tolerance(f_next)) {
                 step_accepted = true;
                 break;
             }
-            factor *= T(0.5L);
+            factor = factor * CalcT(0.5L);
             next = x - factor * raw_step;
         }
 
@@ -191,12 +241,12 @@ T newton_solve(
 
         // 检查位置收敛
         if (t_abs(next - x) <=
-            root_position_tolerance(std::max(t_abs(next), t_abs(x)))) {
-            return normalize(next);
+            root_position_tolerance(t_max(t_abs(next), t_abs(x)))) {
+            return normalize(from_internal<T>(next));
         }
         x = next;
     }
-    return normalize(x);
+    return normalize(from_internal<T>(x));
 }
 
 /**
@@ -218,41 +268,49 @@ T bisection_solve(
     T right,
     const std::function<T(T)>& normalize) {
 
+    using CalcT = internal_t<T>;
+    auto eval = [&](CalcT val) -> CalcT {
+        return to_internal<T>(evaluate({{"x", from_internal<T>(val)}}));
+    };
+
+    CalcT c_left = to_internal<T>(left);
+    CalcT c_right = to_internal<T>(right);
+
     // 确保 left <= right
-    if (left > right) {
-        std::swap(left, right);
+    if (c_left > c_right) {
+        std::swap(c_left, c_right);
     }
 
-    T left_value = evaluate({{"x", left}});
-    T right_value = evaluate({{"x", right}});
+    CalcT left_value = eval(c_left);
+    CalcT right_value = eval(c_right);
 
     // 检查端点是否异号
-    if (left_value * right_value > T(static_cast<long long>(0))) {
+    if (left_value * right_value > CalcT(static_cast<long long>(0))) {
         throw std::runtime_error("bisect requires f(a) and f(b) to have opposite signs");
     }
 
     for (int iteration = 0; iteration < 100; ++iteration) {
-        const T mid = T(0.5L) * (left + right);
-        const T mid_value = evaluate({{"x", mid}});
+        const CalcT mid = CalcT(0.5L) * (c_left + c_right);
+        const CalcT mid_value = eval(mid);
 
         // 检查收敛
         if (t_abs(mid_value) <= root_function_tolerance(mid_value) ||
-            t_abs(right - left) <=
-                root_position_tolerance(std::max(t_abs(left), t_abs(right)))) {
-            return normalize(mid);
+            t_abs(c_right - c_left) <=
+                root_position_tolerance(t_max(t_abs(c_left), t_abs(c_right)))) {
+            return normalize(from_internal<T>(mid));
         }
 
         // 更新区间
-        if ((left_value < T(static_cast<long long>(0)) && mid_value > T(static_cast<long long>(0))) ||
-            (left_value > T(static_cast<long long>(0)) && mid_value < T(static_cast<long long>(0)))) {
-            right = mid;
+        if ((left_value < CalcT(static_cast<long long>(0)) && mid_value > CalcT(static_cast<long long>(0))) ||
+            (left_value > CalcT(static_cast<long long>(0)) && mid_value < CalcT(static_cast<long long>(0)))) {
+            c_right = mid;
             right_value = mid_value;
         } else {
-            left = mid;
+            c_left = mid;
             left_value = mid_value;
         }
     }
-    return normalize(T(0.5L) * (left + right));
+    return normalize(from_internal<T>(CalcT(0.5L) * (c_left + c_right)));
 }
 
 /**
@@ -274,29 +332,37 @@ T secant_solve(
     T x1,
     const std::function<T(T)>& normalize) {
 
+    using CalcT = internal_t<T>;
+    auto eval = [&](CalcT val) -> CalcT {
+        return to_internal<T>(evaluate({{"x", from_internal<T>(val)}}));
+    };
+
+    CalcT c_x0 = to_internal<T>(x0);
+    CalcT c_x1 = to_internal<T>(x1);
+
     for (int iteration = 0; iteration < 64; ++iteration) {
-        const T f0 = evaluate({{"x", x0}});
-        const T f1 = evaluate({{"x", x1}});
+        const CalcT f0 = eval(c_x0);
+        const CalcT f1 = eval(c_x1);
 
         // 计算 f1 - f0（避免分母为零）
-        const T denominator = f1 - f0;
+        const CalcT denominator = f1 - f0;
         if (t_abs(denominator) <=
-            T(1e-12L) * std::max({T(1.0L), t_abs(f0), t_abs(f1)})) {
+            CalcT(1e-15L) * t_max(CalcT(1.0L), t_max(t_abs(f0), t_abs(f1)))) {
             throw std::runtime_error("secant failed because consecutive function values matched");
         }
 
         // 割线法公式：next = x1 - f1 * (x1 - x0) / (f1 - f0)
-        const T next = x1 - f1 * (x1 - x0) / denominator;
+        const CalcT next = c_x1 - f1 * (c_x1 - c_x0) / denominator;
 
         // 检查收敛
-        if (t_abs(next - x1) <=
-            root_position_tolerance(std::max(t_abs(next), t_abs(x1)))) {
-            return normalize(next);
+        if (t_abs(next - c_x1) <=
+            root_position_tolerance(t_max(t_abs(next), t_abs(c_x1)))) {
+            return normalize(from_internal<T>(next));
         }
-        x0 = x1;
-        x1 = next;
+        c_x0 = c_x1;
+        c_x1 = next;
     }
-    return normalize(x1);
+    return normalize(from_internal<T>(c_x1));
 }
 
 /**
@@ -316,17 +382,22 @@ T fixed_point_solve(
     T initial,
     const std::function<T(T)>& normalize) {
 
-    T x = initial;
+    using CalcT = internal_t<T>;
+    auto eval = [&](CalcT val) -> CalcT {
+        return to_internal<T>(evaluate({{"x", from_internal<T>(val)}}));
+    };
+
+    CalcT x = to_internal<T>(initial);
     for (int iteration = 0; iteration < 128; ++iteration) {
-        const T next = evaluate({{"x", x}});
+        const CalcT next = eval(x);
         // 检查收敛
         if (t_abs(next - x) <=
-            root_position_tolerance(std::max(t_abs(next), t_abs(x)))) {
-            return normalize(next);
+            root_position_tolerance(t_max(t_abs(next), t_abs(x)))) {
+            return normalize(from_internal<T>(next));
         }
         x = next;
     }
-    return normalize(x);
+    return normalize(from_internal<T>(x));
 }
 
 /**

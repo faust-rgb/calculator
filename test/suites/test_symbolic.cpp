@@ -553,9 +553,9 @@ int run_symbolic_tests(int& passed, int& failed) {
     // 测试各种高级数学命令
     const std::vector<DisplayCase> command_display_cases = {
         {"solve(x^2 - 2, 1)", false, "1.41421356237"},
-        {"bisect(x^2 - 2, 1, 2)", false, "1.41421356238"},
+        {"bisect(x^2 - 2, 1, 2)", false, "1.41421356237"},
         {"secant(x^2 - 2, 1, 2)", false, "1.41421356237"},
-        {"fixed_point(cos(x), 0.5)", false, "0.73908513325"},
+        {"fixed_point(cos(x), 0.5)", false, "0.739085133215"},
         {"pade(exp(x), 0, 2, 2)", false, "(1/12 * x ^ 2 + 1/2 * x + 1) / (1/12 * x ^ 2 - 1/2 * x + 1)"},
         {"puiseux((1 + x) ^ (1 / 2), 0, 4, 2)", false, "1 + 1/2 * x - 1/8 * x ^ 2"},
         {"puiseux(sqrt(x), 0, 4, 2)", false, "x ^ (1 / 2)"},

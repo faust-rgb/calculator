@@ -1,6 +1,7 @@
 #include "symbolic/risch/risch_algorithm.h"
 #include "symbolic/risch/risch_algorithm_internal.h"
 #include "symbolic/symbolic_expression_internal.h"
+#include "math/mymath_float128.h"
 #include <map>
 #include <functional>
 #include <iostream>
@@ -13,6 +14,38 @@ using namespace symbolic_expression_internal;
 using namespace risch_algorithm_internal;
 
 namespace {
+
+// Helper function for high-precision numerical comparison using float128
+// Returns true if the expression is a number within tolerance
+bool is_number_precise(const SymbolicExpression& expr, long double* value, mymath::float128_t* value_128 = nullptr) {
+    long double val = 0.0L;
+    if (expr.is_number(&val)) {
+        if (value) *value = val;
+        if (value_128) *value_128 = mymath::float128_t(val);
+        return true;
+    }
+    return false;
+}
+
+// Check if a long double value is close to an integer using float128 precision
+bool is_near_integer_precise(long double val, int* int_value = nullptr) {
+    mymath::float128_t val_128(val);
+    mymath::float128_t rounded = mymath::float128_t(mymath::round(val));
+    mymath::float128_t diff = mymath::precise128::abs(val_128 - rounded);
+    if (diff < mymath::float128_t(1e-10L)) {
+        if (int_value) *int_value = static_cast<int>(mymath::round(val));
+        return true;
+    }
+    return false;
+}
+
+// Check if two long double values are close using float128 precision
+bool are_values_close_precise(long double a, long double b, long double tolerance = 1e-10L) {
+    mymath::float128_t a_128(a);
+    mymath::float128_t b_128(b);
+    mymath::float128_t diff = mymath::precise128::abs(a_128 - b_128);
+    return diff < mymath::float128_t(tolerance);
+}
 
 // Helper to check if an expression is "in the field" defined by the tower
 // (i.e., it doesn't contain any explicit ln, exp, or sqrt functions)
@@ -162,34 +195,31 @@ RationalValue extract_rational_value(const SymbolicExpression& expr) {
 
 /**
  * @brief Check if expression is an integer value
+ * Uses float128 for high-precision comparison
  */
 bool is_integer_value(const SymbolicExpression& expr, int* value = nullptr) {
     long double val = 0.0L;
     if (expr.is_number(&val)) {
-        int n = static_cast<int>(mymath::round(val));
-        if (mymath::abs(val - n) < 1e-9) {
-            if (value) *value = n;
-            return true;
-        }
+        return is_near_integer_precise(val, value);
     }
     return false;
 }
 
 /**
  * @brief Check if expression is a rational number (ratio of integers)
+ * Uses float128 for high-precision comparison
  */
 bool is_rational_value(const SymbolicExpression& expr, int* num = nullptr, int* den = nullptr) {
     RationalValue r = extract_rational_value(expr);
     if (!r.is_valid) return false;
 
-    // Check if it's a ratio of integers
+    // Check if it's a ratio of integers using float128 precision
     long double n_val = r.numerator;
     long double d_val = r.denominator;
 
-    int n_int = static_cast<int>(mymath::round(n_val));
-    int d_int = static_cast<int>(mymath::round(d_val));
-
-    if (mymath::abs(n_val - n_int) < 1e-9 && mymath::abs(d_val - d_int) < 1e-9 && d_int != 0) {
+    int n_int = 0, d_int = 0;
+    if (is_near_integer_precise(n_val, &n_int) &&
+        is_near_integer_precise(d_val, &d_int) && d_int != 0) {
         if (num) *num = n_int;
         if (den) *den = d_int;
         return true;

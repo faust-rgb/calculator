@@ -31,31 +31,94 @@ float128_t operator/(float128_t a, float128_t b);
 
 float128_t operator-(float128_t a);
 
+// 复合赋值运算符
+inline float128_t& operator+=(float128_t& a, float128_t b) {
+    a = a + b;
+    return a;
+}
+
+inline float128_t& operator-=(float128_t& a, float128_t b) {
+    a = a - b;
+    return a;
+}
+
+inline float128_t& operator*=(float128_t& a, float128_t b) {
+    a = a * b;
+    return a;
+}
+
+inline float128_t& operator/=(float128_t& a, float128_t b) {
+    a = a / b;
+    return a;
+}
+
 // 混合运算
 inline float128_t operator+(float128_t a, long double b) { return a + float128_t(b); }
 inline float128_t operator+(long double a, float128_t b) { return float128_t(a) + b; }
+inline float128_t operator-(float128_t a, long double b) { return a - float128_t(b); }
+inline float128_t operator-(long double a, float128_t b) { return float128_t(a) - b; }
 inline float128_t operator*(float128_t a, long double b) { return a * float128_t(b); }
 inline float128_t operator*(long double a, float128_t b) { return float128_t(a) * b; }
+inline float128_t operator/(float128_t a, long double b) { return a / float128_t(b); }
+inline float128_t operator/(long double a, float128_t b) { return float128_t(a) / b; }
 
 // 比较运算符
 bool operator==(float128_t a, float128_t b);
+bool operator!=(float128_t a, float128_t b);
 bool operator<(float128_t a, float128_t b);
 inline bool operator>(float128_t a, float128_t b) { return b < a; }
 inline bool operator<=(float128_t a, float128_t b) { return !(a > b); }
 inline bool operator>=(float128_t a, float128_t b) { return !(a < b); }
 
 namespace precise128 {
+    // 基础工具函数
+    bool isnan(float128_t a);
+    bool isinf(float128_t a);
+    bool isfinite(float128_t a);
+    float128_t floor(float128_t a);
+    float128_t ceil(float128_t a);
+    float128_t round(float128_t a);
+    float128_t trunc(float128_t a);
+    float128_t fmod(float128_t a, float128_t b);
+    float128_t remainder(float128_t a, float128_t b);
+    float128_t hypot(float128_t a, float128_t b);
+    float128_t normalize_angle(float128_t x);
+
+    // 数学函数
     float128_t sqrt(float128_t a);
     float128_t abs(float128_t a);
+    float128_t cbrt(float128_t a);
+
+    // 三角函数
     float128_t sin(float128_t a);
     float128_t cos(float128_t a);
     float128_t tan(float128_t a);
+    float128_t asin(float128_t a);
+    float128_t acos(float128_t a);
+    float128_t atan(float128_t a);
+    float128_t atan2(float128_t y, float128_t x);
+    float128_t sec(float128_t a);
+    float128_t csc(float128_t a);
+    float128_t cot(float128_t a);
+    float128_t asec(float128_t a);
+    float128_t acsc(float128_t a);
+    float128_t acot(float128_t a);
+
+    // 双曲函数
+    float128_t sinh(float128_t a);
+    float128_t cosh(float128_t a);
+    float128_t tanh(float128_t a);
+    float128_t asinh(float128_t a);
+    float128_t acosh(float128_t a);
+    float128_t atanh(float128_t a);
+
+    // 指数和对数函数
     float128_t exp(float128_t a);
     float128_t ln(float128_t a);
     float128_t log10(float128_t a);
+    float128_t log2(float128_t a);
+    float128_t log1p(float128_t a);
     float128_t pow(float128_t base, float128_t exp);
-    float128_t atan(float128_t a);
-    float128_t atan2(float128_t y, float128_t x);
 
     // 常量
     float128_t pi();

@@ -107,14 +107,16 @@ std::vector<long double> ps_sub(const std::vector<long double>& a, const std::ve
  * 使用卷积计算乘积的前 degree+1 项。
  */
 std::vector<long double> ps_mul(const std::vector<long double>& a, const std::vector<long double>& b, int degree) {
-    std::vector<long double> res(degree + 1, 0.0L);
+    std::vector<mymath::float128_t> res_128(degree + 1, 0.0L);
     for (int i = 0; i <= degree; ++i) {
-        if (i >= static_cast<int>(a.size()) || mymath::is_near_zero(a[i], 1e-12)) continue;
+        if (i >= static_cast<int>(a.size()) || mymath::is_near_zero(a[i], 1e-15)) continue;
         for (int j = 0; i + j <= degree; ++j) {
-            if (j >= static_cast<int>(b.size()) || mymath::is_near_zero(b[j], 1e-12)) continue;
-            res[i + j] += a[i] * b[j];
+            if (j >= static_cast<int>(b.size()) || mymath::is_near_zero(b[j], 1e-15)) continue;
+            res_128[i + j] = res_128[i + j] + mymath::float128_t(a[i]) * mymath::float128_t(b[j]);
         }
     }
+    std::vector<long double> res(degree + 1);
+    for (int i = 0; i <= degree; ++i) res[i] = res_128[i].to_long_double();
     return res;
 }
 
@@ -136,7 +138,7 @@ std::vector<long double> ps_div_with_laurent(const std::vector<long double>& a, 
     // 查找 a 和 b 的第一个非零项索引
     int start_a = -1;
     for (int i = 0; i < static_cast<int>(a.size()); ++i) {
-        if (!mymath::is_near_zero(a[i], 1e-15)) {
+        if (!mymath::is_near_zero(a[i], 1e-18)) {
             start_a = i;
             break;
         }
@@ -144,7 +146,7 @@ std::vector<long double> ps_div_with_laurent(const std::vector<long double>& a, 
 
     int start_b = -1;
     for (int i = 0; i < static_cast<int>(b.size()); ++i) {
-        if (!mymath::is_near_zero(b[i], 1e-15)) {
+        if (!mymath::is_near_zero(b[i], 1e-18)) {
             start_b = i;
             break;
         }
@@ -180,12 +182,13 @@ std::vector<long double> ps_div_with_laurent(const std::vector<long double>& a, 
         return std::vector<long double>(degree + 1, 0.0L);
     }
 
-    std::vector<long double> res_effective(result_size, 0.0L);
-    long double inv_b0 = 1.0L / b_effective[0];
+    std::vector<mymath::float128_t> res_effective(result_size, 0.0L);
+    mymath::float128_t inv_b0 = mymath::float128_t(1.0L) / mymath::float128_t(b_effective[0]);
     for (int i = 0; i < result_size; ++i) {
-        long double val = (i < static_cast<int>(a_effective.size()) ? a_effective[i] : 0.0L);
+        mymath::float128_t val = mymath::float128_t(i < static_cast<int>(a_effective.size()) ? a_effective[i] : 0.0L);
         for (int j = 1; j <= i; ++j) {
-            if (j < static_cast<int>(b_effective.size())) val -= b_effective[j] * res_effective[i - j];
+            if (j < static_cast<int>(b_effective.size())) 
+                val = val - mymath::float128_t(b_effective[j]) * res_effective[i - j];
         }
         res_effective[i] = val * inv_b0;
     }
@@ -195,7 +198,7 @@ std::vector<long double> ps_div_with_laurent(const std::vector<long double>& a, 
     for (int i = 0; i <= degree; ++i) {
         int effective_idx = i - result_start;
         if (effective_idx >= 0 && effective_idx < static_cast<int>(res_effective.size())) {
-            final_res[i] = res_effective[effective_idx];
+            final_res[i] = res_effective[effective_idx].to_long_double();
         }
     }
     return final_res;
@@ -254,17 +257,19 @@ std::vector<long double> ps_div(const std::vector<long double>& a, const std::ve
  * 计算 exp(a) 的幂级数。
  */
 std::vector<long double> ps_exp(const std::vector<long double>& a, int degree) {
-    std::vector<long double> res(degree + 1, 0.0L);
+    std::vector<mymath::float128_t> res_128(degree + 1, 0.0L);
     long double a0 = a.empty() ? 0.0L : a[0];
-    res[0] = mymath::exp(a0);
+    res_128[0] = mymath::precise128::exp(mymath::float128_t(a0));
     for (int i = 1; i <= degree; ++i) {
-        long double sum = 0.0L;
+        mymath::float128_t sum = 0.0L;
         for (int k = 1; k <= i; ++k) {
             long double ak = k < static_cast<int>(a.size()) ? a[k] : 0.0L;
-            sum += k * ak * res[i - k];
+            sum = sum + mymath::float128_t(k) * mymath::float128_t(ak) * res_128[i - k];
         }
-        res[i] = sum / i;
+        res_128[i] = sum / mymath::float128_t(i);
     }
+    std::vector<long double> res(degree + 1);
+    for (int i = 0; i <= degree; ++i) res[i] = res_128[i].to_long_double();
     return res;
 }
 
@@ -276,18 +281,20 @@ std::vector<long double> ps_exp(const std::vector<long double>& a, int degree) {
  */
 std::vector<long double> ps_ln(const std::vector<long double>& a, int degree) {
     if (a.empty() || a[0] <= 0) throw std::runtime_error("ln of non-positive power series base");
-    std::vector<long double> res(degree + 1, 0.0L);
-    res[0] = mymath::ln(a[0]);
-    long double inv_a0 = 1.0L / a[0];
+    std::vector<mymath::float128_t> res_128(degree + 1, 0.0L);
+    res_128[0] = mymath::precise128::ln(mymath::float128_t(a[0]));
+    mymath::float128_t inv_a0 = mymath::float128_t(1.0L) / mymath::float128_t(a[0]);
     for (int i = 1; i <= degree; ++i) {
-        long double sum = 0.0L;
+        mymath::float128_t sum = 0.0L;
         for (int k = 1; k < i; ++k) {
             long double ak = i - k < static_cast<int>(a.size()) ? a[i - k] : 0.0L;
-            sum += k * res[k] * ak;
+            sum = sum + mymath::float128_t(k) * res_128[k] * mymath::float128_t(ak);
         }
         long double ai = i < static_cast<int>(a.size()) ? a[i] : 0.0L;
-        res[i] = (ai - sum / i) * inv_a0;
+        res_128[i] = (mymath::float128_t(ai) - sum / mymath::float128_t(i)) * inv_a0;
     }
+    std::vector<long double> res(degree + 1);
+    for (int i = 0; i <= degree; ++i) res[i] = res_128[i].to_long_double();
     return res;
 }
 
@@ -297,21 +304,27 @@ std::vector<long double> ps_ln(const std::vector<long double>& a, int degree) {
  * 同时计算 sin(a) 和 cos(a) 的幂级数。
  */
 void ps_sincos(const std::vector<long double>& a, int degree, std::vector<long double>& sin_res, std::vector<long double>& cos_res) {
-    sin_res.assign(degree + 1, 0.0L);
-    cos_res.assign(degree + 1, 0.0L);
+    std::vector<mymath::float128_t> sin_res_128(degree + 1, 0.0L);
+    std::vector<mymath::float128_t> cos_res_128(degree + 1, 0.0L);
     long double a0 = a.empty() ? 0.0L : a[0];
-    sin_res[0] = mymath::sin(a0);
-    cos_res[0] = mymath::cos(a0);
+    sin_res_128[0] = mymath::precise128::sin(mymath::float128_t(a0));
+    cos_res_128[0] = mymath::precise128::cos(mymath::float128_t(a0));
     for (int i = 1; i <= degree; ++i) {
-        long double sum_sin = 0.0L;
-        long double sum_cos = 0.0L;
+        mymath::float128_t sum_sin = 0.0L;
+        mymath::float128_t sum_cos = 0.0L;
         for (int k = 1; k <= i; ++k) {
             long double ak = k < static_cast<int>(a.size()) ? a[k] : 0.0L;
-            sum_sin += k * ak * cos_res[i - k];
-            sum_cos -= k * ak * sin_res[i - k];
+            sum_sin = sum_sin + mymath::float128_t(k) * mymath::float128_t(ak) * cos_res_128[i - k];
+            sum_cos = sum_cos - mymath::float128_t(k) * mymath::float128_t(ak) * sin_res_128[i - k];
         }
-        sin_res[i] = sum_sin / i;
-        cos_res[i] = sum_cos / i;
+        sin_res_128[i] = sum_sin / mymath::float128_t(i);
+        cos_res_128[i] = sum_cos / mymath::float128_t(i);
+    }
+    sin_res.assign(degree + 1, 0.0L);
+    cos_res.assign(degree + 1, 0.0L);
+    for (int i = 0; i <= degree; ++i) {
+        sin_res[i] = sin_res_128[i].to_long_double();
+        cos_res[i] = cos_res_128[i].to_long_double();
     }
 }
 
@@ -343,9 +356,10 @@ static std::vector<long double> ps_pow_const_puiseux(const std::vector<long doub
  * 特殊处理 a[0] = 0 的情况。
  */
 std::vector<long double> ps_pow_const(const std::vector<long double>& a, long double n, int degree) {
-    if (a.empty() || mymath::is_near_zero(a[0], 1e-12)) {
+    if (a.empty() || mymath::is_near_zero(a[0], 1e-15)) {
+        // ... (remaining logic for leading zero, will update internally)
         // 底数首项为零的情况
-        if (mymath::is_near_zero(n, 1e-12)) {
+        if (mymath::is_near_zero(n, 1e-15)) {
             // a^0 = 1
             std::vector<long double> res(degree + 1, 0.0L);
             res[0] = 1.0L;
@@ -355,7 +369,7 @@ std::vector<long double> ps_pow_const(const std::vector<long double>& a, long do
         // 找到第一个非零项
         int leading = -1;
         for (int i = 0; i < static_cast<int>(a.size()); ++i) {
-            if (!mymath::is_near_zero(a[i], 1e-12)) {
+            if (!mymath::is_near_zero(a[i], 1e-18)) {
                 leading = i;
                 break;
             }
@@ -441,17 +455,20 @@ std::vector<long double> ps_pow_const(const std::vector<long double>& a, long do
     }
 
     // 正常情况：a[0] != 0
-    std::vector<long double> res(degree + 1, 0.0L);
-    res[0] = mymath::pow(a[0], n);
-    long double inv_a0 = 1.0L / a[0];
+    std::vector<mymath::float128_t> res_128(degree + 1, 0.0L);
+    mymath::float128_t n_128(n);
+    res_128[0] = mymath::precise128::pow(mymath::float128_t(a[0]), n_128);
+    mymath::float128_t inv_a0 = mymath::float128_t(1.0L) / mymath::float128_t(a[0]);
     for (int i = 1; i <= degree; ++i) {
-        long double sum = 0.0L;
+        mymath::float128_t sum = 0.0L;
         for (int k = 1; k <= i; ++k) {
             long double ak = k < static_cast<int>(a.size()) ? a[k] : 0.0L;
-            sum += (n * k - (i - k)) * ak * res[i - k];
+            sum = sum + (n_128 * mymath::float128_t(k) - mymath::float128_t(i - k)) * mymath::float128_t(ak) * res_128[i - k];
         }
-        res[i] = sum * inv_a0 / i;
+        res_128[i] = sum * inv_a0 / mymath::float128_t(i);
     }
+    std::vector<long double> res(degree + 1);
+    for (int i = 0; i <= degree; ++i) res[i] = res_128[i].to_long_double();
     return res;
 }
 
@@ -476,32 +493,32 @@ std::vector<long double> ps_pow_const_puiseux(const std::vector<long double>& a,
     // 使用二项式展开 (1 + u)^n = sum_{k=0}^{inf} C(n,k) * u^k
     // 其中 u = b_1 * x + b_2 * x^2 + ...
 
-    std::vector<long double> res(degree + 1, 0.0L);
-    res[0] = mymath::pow(a_leading, n);  // a[leading]^n 作为首项系数
+    std::vector<mymath::float128_t> res_128(degree + 1, 0.0L);
+    mymath::float128_t n_128(n);
+    res_128[0] = mymath::precise128::pow(mymath::float128_t(a_leading), n_128);  // a[leading]^n 作为首项系数
 
     // 计算 (1 + u)^n 的幂级数展开
     // 使用递推公式：c_0 = 1, c_k = sum_{j=1}^{k} (n*j/k - j/k + 1/k) * u_j * c_{k-j}
     // 简化：c_k = (1/k) * sum_{j=1}^{k} ((n-1)*j + k) * u_j * c_{k-j} / k
 
-    std::vector<long double> binom_coeffs(degree + 1, 0.0L);
-    binom_coeffs[0] = 1.0L;
+    std::vector<mymath::float128_t> binom_coeffs_128(degree + 1, 0.0L);
+    binom_coeffs_128[0] = 1.0L;
 
     for (int k = 1; k <= degree; ++k) {
-        long double sum = 0.0L;
+        mymath::float128_t sum = 0.0L;
         for (int j = 1; j <= k && j < static_cast<int>(normalized.size()); ++j) {
             long double u_j = normalized[j];
-            sum += (n * j - (k - j)) * u_j * binom_coeffs[k - j];
+            sum = sum + (n_128 * mymath::float128_t(j) - mymath::float128_t(k - j)) * mymath::float128_t(u_j) * binom_coeffs_128[k - j];
         }
-        binom_coeffs[k] = sum / k;
+        binom_coeffs_128[k] = sum / mymath::float128_t(k);
     }
 
     // 组合结果
+    std::vector<long double> res(degree + 1);
     for (int i = 0; i <= degree; ++i) {
-        res[i] = res[0] * binom_coeffs[i];
+        res[i] = (res_128[0] * binom_coeffs_128[i]).to_long_double();
     }
 
-    // 注意：这里没有处理 x^(leading*n) 的分数幂部分
-    // 调用者需要处理这个分数位移
     return res;
 }
 
@@ -1398,56 +1415,56 @@ bool solve_pade_denominator(std::function<long double(int)> c,
                             std::vector<long double>& q) {
     if (denominator_degree == 0) return true;
 
-    std::vector<std::vector<long double>> matrix(
+    std::vector<std::vector<mymath::float128_t>> matrix(
         static_cast<std::size_t>(denominator_degree),
-        std::vector<long double>(static_cast<std::size_t>(denominator_degree), 0.0L));
-    std::vector<long double> rhs(static_cast<std::size_t>(denominator_degree), 0.0L);
+        std::vector<mymath::float128_t>(static_cast<std::size_t>(denominator_degree), 0.0L));
+    std::vector<mymath::float128_t> rhs(static_cast<std::size_t>(denominator_degree), 0.0L);
 
     for (int row = 0; row < denominator_degree; ++row) {
         const int k = numerator_degree + 1 + row;
         for (int col = 0; col < denominator_degree; ++col) {
-            matrix[row][col] = c(k - (col + 1));
+            matrix[row][col] = mymath::float128_t(c(k - (col + 1)));
         }
-        rhs[row] = -c(k);
+        rhs[row] = -mymath::float128_t(c(k));
     }
 
     for (int col = 0; col < denominator_degree; ++col) {
         int pivot = col;
-        long double pivot_abs = mymath::abs_long_double(matrix[col][col]);
+        mymath::float128_t pivot_abs = mymath::precise128::abs(matrix[col][col]);
         for (int row = col + 1; row < denominator_degree; ++row) {
-            const long double candidate = mymath::abs_long_double(matrix[row][col]);
+            const mymath::float128_t candidate = mymath::precise128::abs(matrix[row][col]);
             if (candidate > pivot_abs) {
                 pivot_abs = candidate;
                 pivot = row;
             }
         }
-        if (pivot_abs < 1e-24L) return false;
+        if (pivot_abs < mymath::float128_t(1e-35L)) return false;
         if (pivot != col) {
             std::swap(matrix[pivot], matrix[col]);
             std::swap(rhs[pivot], rhs[col]);
         }
 
-        const long double divisor = matrix[col][col];
+        const mymath::float128_t divisor = matrix[col][col];
         for (int c_col = col; c_col < denominator_degree; ++c_col) {
-            matrix[col][c_col] /= divisor;
+            matrix[col][c_col] = matrix[col][c_col] / divisor;
         }
-        rhs[col] /= divisor;
+        rhs[col] = rhs[col] / divisor;
 
         for (int row = 0; row < denominator_degree; ++row) {
             if (row == col) continue;
-            const long double factor = matrix[row][col];
-            if (mymath::abs_long_double(factor) < 1e-30L) continue;
+            const mymath::float128_t factor = matrix[row][col];
+            if (mymath::precise128::abs(factor) < mymath::float128_t(1e-40L)) continue;
             for (int c_col = col; c_col < denominator_degree; ++c_col) {
-                matrix[row][c_col] -= factor * matrix[col][c_col];
+                matrix[row][c_col] = matrix[row][c_col] - factor * matrix[col][c_col];
             }
-            rhs[row] -= factor * rhs[col];
+            rhs[row] = rhs[row] - factor * rhs[col];
         }
     }
 
     q.assign(static_cast<std::size_t>(denominator_degree + 1), 0.0L);
     q[0] = 1.0L;
     for (int i = 0; i < denominator_degree; ++i) {
-        q[i + 1] = rhs[i];
+        q[i + 1] = rhs[i].to_long_double();
     }
     return true;
 }
@@ -1464,38 +1481,39 @@ bool solve_tohplitz_stable(std::function<long double(int)> c, int n, std::vector
     // Levinson-Durbin 递推
     // 求解系统：sum_{j=0}^{n-1} c_{i-j+1} * q_{j+1} = -c_{i+1}, i = 0, ..., n-1
 
-    std::vector<long double> f(n + 1, 0.0L);  // 前向预测误差滤波器
-    std::vector<long double> b(n + 1, 0.0L);  // 后向预测误差滤波器
-    std::vector<long double> q_new(n + 1, 0.0L);
+    std::vector<mymath::float128_t> f(n + 1, 0.0L);  // 前向预测误差滤波器
+    std::vector<mymath::float128_t> b(n + 1, 0.0L);  // 后向预测误差滤波器
+    std::vector<mymath::float128_t> q_new(n + 1, 0.0L);
+    std::vector<mymath::float128_t> q_128(n + 1, 0.0L);
 
     f[0] = 1.0L;
     b[0] = 1.0L;
-    q[0] = 1.0L;
+    q_128[0] = 1.0L;
 
-    long double ef = c(1);  // 前向误差
+    mymath::float128_t ef = mymath::float128_t(c(1));  // 前向误差
     for (int k = 0; k < n; ++k) {
         // 计算反射系数
-        long double denom = ef;
-        if (mymath::abs_long_double(denom) < 1e-30L) {
+        mymath::float128_t denom = ef;
+        if (mymath::precise128::abs(denom) < mymath::float128_t(1e-40L)) {
             return false;  // 系统奇异
         }
-        long double kappa = 0.0L;
+        mymath::float128_t kappa = 0.0L;
 
         // 计算新的反射系数
-        long double sum_f = 0.0L, sum_b = 0.0L;
+        mymath::float128_t sum_f = 0.0L, sum_b = 0.0L;
         for (int i = 0; i <= k; ++i) {
-            sum_f += f[i] * c(k + 2 - i);
-            sum_b += b[i] * c(i + 1);
+            sum_f = sum_f + f[i] * mymath::float128_t(c(k + 2 - i));
+            sum_b = sum_b + b[i] * mymath::float128_t(c(i + 1));
         }
 
-        if (mymath::abs_long_double(sum_b) > 1e-30L) {
+        if (mymath::precise128::abs(sum_b) > mymath::float128_t(1e-40L)) {
             kappa = -sum_f / sum_b;
         }
 
         // 更新滤波器
-        std::vector<long double> f_new = f;
+        std::vector<mymath::float128_t> f_new = f;
         for (int i = 0; i <= k; ++i) {
-            f_new[i + 1] += kappa * b[k - i];
+            f_new[i + 1] = f_new[i + 1] + kappa * b[k - i];
         }
         for (int i = 0; i <= k; ++i) {
             b[i + 1] = b[i] + kappa * f[k - i];
@@ -1503,22 +1521,27 @@ bool solve_tohplitz_stable(std::function<long double(int)> c, int n, std::vector
         f = f_new;
 
         // 更新误差
-        ef = ef * (1.0L - kappa * kappa);
-        if (mymath::abs_long_double(ef) < 1e-30L) {
+        ef = ef * (mymath::float128_t(1.0L) - kappa * kappa);
+        if (mymath::precise128::abs(ef) < mymath::float128_t(1e-40L)) {
             return false;
         }
 
         // 更新解
-        long double q_sum = 0.0L;
+        mymath::float128_t q_sum = 0.0L;
         for (int i = 0; i <= k; ++i) {
-            q_sum += q[i] * c(k + 1 - i);
+            q_sum = q_sum + q_128[i] * mymath::float128_t(c(k + 1 - i));
         }
-        long double delta = -q_sum / ef;
+        mymath::float128_t delta = -q_sum / ef;
 
         for (int i = 0; i <= k + 1; ++i) {
-            q_new[i] = q[i] + delta * f[i];
+            q_new[i] = q_128[i] + delta * f[i];
         }
-        q = q_new;
+        q_128 = q_new;
+    }
+
+    q.assign(n + 1, 0.0L);
+    for (int i = 0; i <= n; ++i) {
+        q[i] = q_128[i].to_long_double();
     }
 
     return true;

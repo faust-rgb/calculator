@@ -239,14 +239,19 @@ std::vector<long double> polynomial_subtract(const std::vector<long double>& lhs
  *
  * 使用直接卷积算法，时间复杂度 O(n*m)。
  * 结果的次数为两多项式次数之和。
+ * 使用 float128 进行中间计算以减少累积舍入误差。
  */
 std::vector<long double> polynomial_multiply(const std::vector<long double>& lhs,
                                         const std::vector<long double>& rhs) {
-    std::vector<long double> result(lhs.size() + rhs.size() - 1, 0.0L);
+    std::vector<mymath::float128_t> result_128(lhs.size() + rhs.size() - 1, mymath::float128_t(0.0L));
     for (std::size_t i = 0; i < lhs.size(); ++i) {
         for (std::size_t j = 0; j < rhs.size(); ++j) {
-            result[i + j] += lhs[i] * rhs[j];
+            result_128[i + j] = result_128[i + j] + mymath::float128_t(lhs[i]) * mymath::float128_t(rhs[j]);
         }
+    }
+    std::vector<long double> result(result_128.size());
+    for (std::size_t i = 0; i < result_128.size(); ++i) {
+        result[i] = result_128[i].to_long_double();
     }
     trim_trailing_zeros(&result);
     return result;
@@ -260,6 +265,7 @@ std::vector<long double> polynomial_multiply(const std::vector<long double>& lhs
  * @throw std::runtime_error 当除数为零多项式时抛出
  *
  * 使用标准的多项式长除法算法，迭代地消去最高次项。
+ * 使用 float128 进行中间计算以减少累积舍入误差。
  */
 PolynomialDivisionResult polynomial_divide(const std::vector<long double>& dividend,
                                            const std::vector<long double>& divisor) {
@@ -277,19 +283,51 @@ PolynomialDivisionResult polynomial_divide(const std::vector<long double>& divid
         return {{0.0L}, normalized_dividend};
     }
 
-    std::vector<long double> quotient(
-        normalized_dividend.size() - normalized_divisor.size() + 1, 0.0L);
-    std::vector<long double> remainder = normalized_dividend;
+    std::vector<mymath::float128_t> quotient_128(
+        normalized_dividend.size() - normalized_divisor.size() + 1, mymath::float128_t(0.0L));
+    std::vector<mymath::float128_t> remainder_128(normalized_dividend.size());
+    for (std::size_t i = 0; i < normalized_dividend.size(); ++i) {
+        remainder_128[i] = mymath::float128_t(normalized_dividend[i]);
+    }
+    std::vector<mymath::float128_t> divisor_128(normalized_divisor.size());
+    for (std::size_t i = 0; i < normalized_divisor.size(); ++i) {
+        divisor_128[i] = mymath::float128_t(normalized_divisor[i]);
+    }
 
-    while (remainder.size() >= normalized_divisor.size() &&
-           !(remainder.size() == 1 && mymath::is_near_zero(remainder[0], kPolynomialEps))) {
-        const std::size_t degree_diff = remainder.size() - normalized_divisor.size();
-        const long double factor = remainder.back() / normalized_divisor.back();
-        quotient[degree_diff] = factor;
-        for (std::size_t i = 0; i < normalized_divisor.size(); ++i) {
-            remainder[degree_diff + i] -= factor * normalized_divisor[i];
+    auto trim_128 = [](std::vector<mymath::float128_t>* coeffs) {
+        while (coeffs->size() > 1 &&
+               mymath::precise128::abs(coeffs->back()) < mymath::float128_t(kPolynomialEps)) {
+            coeffs->pop_back();
         }
-        trim_trailing_zeros(&remainder);
+        if (coeffs->empty()) {
+            coeffs->push_back(mymath::float128_t(0.0L));
+        }
+    };
+
+    while (remainder_128.size() >= normalized_divisor.size()) {
+        trim_128(&remainder_128);
+        if (remainder_128.size() < normalized_divisor.size()) break;
+        if (remainder_128.size() == 1 && mymath::precise128::abs(remainder_128[0]) < mymath::float128_t(kPolynomialEps)) break;
+
+        const std::size_t degree_diff = remainder_128.size() - normalized_divisor.size();
+        const mymath::float128_t factor = remainder_128.back() / divisor_128.back();
+        quotient_128[degree_diff] = factor;
+        for (std::size_t i = 0; i < divisor_128.size(); ++i) {
+            remainder_128[degree_diff + i] = remainder_128[degree_diff + i] - factor * divisor_128[i];
+        }
+        trim_128(&remainder_128);
+    }
+
+    trim_128(&quotient_128);
+    trim_128(&remainder_128);
+
+    std::vector<long double> quotient(quotient_128.size());
+    for (std::size_t i = 0; i < quotient_128.size(); ++i) {
+        quotient[i] = quotient_128[i].to_long_double();
+    }
+    std::vector<long double> remainder(remainder_128.size());
+    for (std::size_t i = 0; i < remainder_128.size(); ++i) {
+        remainder[i] = remainder_128[i].to_long_double();
     }
 
     trim_trailing_zeros(&quotient);
@@ -382,6 +420,7 @@ std::vector<long double> polynomial_real_roots(const std::vector<long double>& c
  * 1. 在半径为根界圆上均匀分布初始猜测
  * 2. 迭代更新每个根的估计值
  * 3. 收敛后清理接近整数的实部和虚部
+ * 使用 float128 进行中间计算以减少累积舍入误差。
  */
 std::vector<mymath::complex<long double>> polynomial_complex_roots(
     const std::vector<long double>& coefficients) {
@@ -397,49 +436,56 @@ std::vector<mymath::complex<long double>> polynomial_complex_roots(
         return {mymath::complex<long double>(-normalized[0] / normalized[1], 0.0L)};
     }
 
-    const long double leading = normalized.back();
-    const long double radius = std::max(1.0L, polynomial_root_bound(normalized));
-    std::vector<mymath::complex<long double>> roots;
-    roots.reserve(degree);
+    const mymath::float128_t leading_128(normalized.back());
+    const mymath::float128_t bound_128(polynomial_root_bound(normalized));
+    const mymath::float128_t radius_128 = (bound_128 > mymath::float128_t(1.0L)) ? bound_128 : mymath::float128_t(1.0L);
+
+    std::vector<mymath::complex<mymath::float128_t>> roots_128;
+    roots_128.reserve(degree);
     for (std::size_t k = 0; k < degree; ++k) {
-        const long double angle =
-            2.0 * mymath::kPi * (static_cast<long double>(k) + 0.25) /
-            static_cast<long double>(degree);
-        roots.emplace_back(radius * mymath::cos(angle),
-                           radius * mymath::sin(angle));
+        const mymath::float128_t angle_128 =
+            mymath::float128_t(2.0L) * mymath::precise128::pi() *
+            (mymath::float128_t(static_cast<long double>(k)) + mymath::float128_t(0.25L)) /
+            mymath::float128_t(static_cast<long double>(degree));
+        roots_128.emplace_back(radius_128 * mymath::precise128::cos(angle_128),
+                               radius_128 * mymath::precise128::sin(angle_128));
     }
 
-    auto evaluate_complex = [&](mymath::complex<long double> x) {
-        mymath::complex<long double> result(0.0L, 0.0L);
+    auto evaluate_complex_128 = [&](const mymath::complex<mymath::float128_t>& x) {
+        mymath::complex<mymath::float128_t> result(mymath::float128_t(0.0L), mymath::float128_t(0.0L));
         for (std::size_t i = normalized.size(); i > 0; --i) {
-            result = result * x + normalized[i - 1] / leading;
+            result = result * x;
+            result = result + mymath::complex<mymath::float128_t>(mymath::float128_t(normalized[i - 1]) / leading_128, mymath::float128_t(0.0L));
         }
         return result;
     };
 
     for (int iteration = 0; iteration < 2000; ++iteration) {
-        long double max_delta = 0.0L;
-        for (std::size_t i = 0; i < roots.size(); ++i) {
-            mymath::complex<long double> denominator(1.0L, 0.0L);
-            for (std::size_t j = 0; j < roots.size(); ++j) {
+        mymath::float128_t max_delta_128(0.0L);
+        for (std::size_t i = 0; i < roots_128.size(); ++i) {
+            mymath::complex<mymath::float128_t> denominator(mymath::float128_t(1.0L), mymath::float128_t(0.0L));
+            for (std::size_t j = 0; j < roots_128.size(); ++j) {
                 if (i == j) continue;
-                denominator *= roots[i] - roots[j];
+                denominator = denominator * (roots_128[i] - roots_128[j]);
             }
-            if (mymath::abs(denominator) <= 1e-24) {
-                denominator = mymath::complex<long double>(1e-12, 1e-12);
+            if (mymath::abs(denominator) <= mymath::float128_t(1e-24L)) {
+                denominator = mymath::complex<mymath::float128_t>(mymath::float128_t(1e-12L), mymath::float128_t(1e-12L));
             }
-            const mymath::complex<long double> delta = evaluate_complex(roots[i]) / denominator;
-            roots[i] -= delta;
-            max_delta = std::max(max_delta, mymath::abs(delta));
+            const mymath::complex<mymath::float128_t> delta = evaluate_complex_128(roots_128[i]) / denominator;
+            roots_128[i] = roots_128[i] - delta;
+            const mymath::float128_t abs_delta = mymath::abs(delta);
+            max_delta_128 = (abs_delta > max_delta_128) ? abs_delta : max_delta_128;
         }
-        if (max_delta <= 1e-12) {
+        if (max_delta_128 <= mymath::float128_t(1e-12L)) {
             break;
         }
     }
 
-    for (mymath::complex<long double>& root : roots) {
-        long double real = root.real();
-        long double imag = root.imag();
+    std::vector<mymath::complex<long double>> roots;
+    roots.reserve(roots_128.size());
+    for (const auto& root_128 : roots_128) {
+        long double real = root_128.real().to_long_double();
+        long double imag = root_128.imag().to_long_double();
         if (mymath::is_near_zero(real, 1e-9)) real = 0.0L;
         if (mymath::is_near_zero(imag, 1e-9)) imag = 0.0L;
         if (mymath::is_integer(real)) {
@@ -448,7 +494,7 @@ std::vector<mymath::complex<long double>> polynomial_complex_roots(
         if (mymath::is_integer(imag)) {
             imag = mymath::round(imag);
         }
-        root = {real, imag};
+        roots.emplace_back(real, imag);
     }
 
     std::sort(roots.begin(), roots.end(), [](const auto& lhs, const auto& rhs) {

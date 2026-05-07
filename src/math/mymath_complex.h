@@ -255,19 +255,41 @@ T norm(const complex<T>& value) {
     return value.real() * value.real() + value.imag() * value.imag();
 }
 
+// Helper to get absolute value for different types
+template <typename T>
+inline T type_abs(const T& val) {
+    return mymath::abs(val);
+}
+
+// Specialization for float128_t
+inline mymath::float128_t type_abs(const mymath::float128_t& val) {
+    return mymath::precise128::abs(val);
+}
+
+// Helper to get sqrt for different types
+template <typename T>
+inline T type_sqrt(const T& val) {
+    return mymath::sqrt(val);
+}
+
+// Specialization for float128_t
+inline mymath::float128_t type_sqrt(const mymath::float128_t& val) {
+    return mymath::precise128::sqrt(val);
+}
+
 template <typename T>
 T abs(const complex<T>& value) {
     // 使用 hypot 算法避免溢出
-    const T real_abs = mymath::abs(value.real());
-    const T imag_abs = mymath::abs(value.imag());
+    const T real_abs = type_abs(value.real());
+    const T imag_abs = type_abs(value.imag());
     if (real_abs == T()) return imag_abs;
     if (imag_abs == T()) return real_abs;
     if (real_abs > imag_abs) {
         const T ratio = imag_abs / real_abs;
-        return real_abs * mymath::sqrt(T(1) + ratio * ratio);
+        return real_abs * type_sqrt(T(1) + ratio * ratio);
     }
     const T ratio = real_abs / imag_abs;
-    return imag_abs * mymath::sqrt(T(1) + ratio * ratio);
+    return imag_abs * type_sqrt(T(1) + ratio * ratio);
 }
 
 template <typename T>
