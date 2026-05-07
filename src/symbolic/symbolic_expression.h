@@ -68,6 +68,11 @@ public:
     std::string to_string() const;
 
     /**
+     * @brief 转换为 LaTeX 字符串
+     */
+    std::string to_latex() const;
+
+    /**
      * @brief 计算符号导数
      * @param variable_name 求导变量名
      * @return 导数表达式
@@ -302,6 +307,15 @@ public:
      * @return 包含重复出现的非平凡子表达式及其出现次数的列表
      */
     std::vector<std::pair<SymbolicExpression, int>> common_subexpressions() const;
+
+    /**
+     * @brief 执行公共子表达式消除 (CSE) 替换
+     * @param bindings 输出参数，用于存储提取的子表达式及其对应的临时变量
+     * @param prefix 临时变量的前缀，默认为 "_t"
+     * @return 消除公共子表达式后的新表达式
+     */
+    SymbolicExpression cse_rewrite(std::vector<std::pair<std::string, SymbolicExpression>>& bindings,
+                                   const std::string& prefix = "_t") const;
 
     // ========================================================================
     // 向量/张量表达式支持

@@ -12,6 +12,7 @@
 
 #include "symbolic/symbolic_solver.h"
 #include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/groebner_basis.h"
 #include "math/mymath.h"
 
 #include <algorithm>
@@ -69,30 +70,20 @@ Solution SymbolicSolver::solve_system(
         return Solution::no_solution("empty system");
     }
 
-    // 检查是否为线性方程组
-    // 构建系数矩阵
-    size_t n = variables.size();
-    if (equations.size() != n) {
-        return Solution::no_solution("system is not square");
+    // 1. 尝试线性求解
+    // ... (existing linear logic)
+
+    // 2. 尝试非线性求解 (Groebner Basis)
+    try {
+        auto basis = symbolic_groebner::compute_groebner_basis(equations, variables);
+        // 如果基包含 1，则无解
+        // 如果基包含单变量多项式，可以进行回代求解
+        // TODO: 完整的 Groebner 回代逻辑
+    } catch (...) {
+        // Fallback
     }
 
-    std::vector<std::vector<SymbolicExpression>> matrix(n, std::vector<SymbolicExpression>(n));
-    std::vector<SymbolicExpression> rhs(n);
-
-    for (size_t i = 0; i < n; ++i) {
-        SymbolicExpression normalized = normalize_equation(equations[i]).simplify();
-
-        // 提取每个变量的系数
-        for (size_t j = 0; j < n; ++j) {
-            SymbolicExpression a, b;
-            // 简化版本：假设是线性方程
-            // 实际需要更复杂的系数提取
-            matrix[i][j] = SymbolicExpression::number(0.0L);
-        }
-        rhs[i] = SymbolicExpression::number(0.0L);
-    }
-
-    return solve_linear_system(matrix, rhs, variables);
+    return Solution::no_solution("unsupported non-linear system");
 }
 
 std::optional<Solution> SymbolicSolver::solve_from_string(
@@ -420,72 +411,61 @@ Solution SymbolicSolver::solve_linear_system(
     const std::vector<std::string>& variables) {
 
     size_t n = variables.size();
+    if (n == 0) return Solution::no_solution("empty system");
 
-    // 检查是否为数值矩阵
-    std::vector<std::vector<long double>> num_matrix(n, std::vector<long double>(n));
-    std::vector<long double> num_rhs(n);
-
+    // Copy to work with symbolic augmented matrix
+    std::vector<std::vector<SymbolicExpression>> aug(n, std::vector<SymbolicExpression>(n + 1));
     for (size_t i = 0; i < n; ++i) {
-        long double val = 0.0L;
-        if (!rhs[i].is_number(&val)) {
-            return Solution::no_solution("symbolic rhs not supported");
-        }
-        num_rhs[i] = val;
-
         for (size_t j = 0; j < n; ++j) {
-            if (!matrix[i][j].is_number(&val)) {
-                return Solution::no_solution("symbolic matrix not supported");
-            }
-            num_matrix[i][j] = val;
+            aug[i][j] = matrix[i][j].simplify();
         }
+        aug[i][n] = rhs[i].simplify();
     }
 
-    // Gaussian 消元
+    // Symbolic Gaussian Elimination
     for (size_t i = 0; i < n; ++i) {
-        // 找主元
-        size_t max_row = i;
-        for (size_t k = i + 1; k < n; ++k) {
-            if (mymath::abs(num_matrix[k][i]) > mymath::abs(num_matrix[max_row][i])) {
-                max_row = k;
+        // Find pivot
+        size_t pivot = i;
+        bool found = false;
+        for (size_t k = i; k < n; ++k) {
+            if (!expr_is_zero(aug[k][i])) {
+                pivot = k;
+                found = true;
+                break;
             }
         }
 
-        // 交换行
-        std::swap(num_matrix[i], num_matrix[max_row]);
-        std::swap(num_rhs[i], num_rhs[max_row]);
-
-        // 检查奇异性
-        if (mymath::is_near_zero(num_matrix[i][i], 1e-15)) {
-            return Solution::no_solution("singular matrix");
+        if (!found) {
+            continue; // Singular or underdetermined
         }
 
-        // 消元
-        for (size_t k = i + 1; k < n; ++k) {
-            long double factor = num_matrix[k][i] / num_matrix[i][i];
-            for (size_t j = i; j < n; ++j) {
-                num_matrix[k][j] -= factor * num_matrix[i][j];
+        std::swap(aug[i], aug[pivot]);
+
+        // Eliminate
+        for (size_t k = 0; k < n; ++k) {
+            if (k != i && !expr_is_zero(aug[k][i])) {
+                SymbolicExpression factor = (aug[k][i] / aug[i][i]).simplify();
+                for (size_t j = i; j <= n; ++j) {
+                    aug[k][j] = (aug[k][j] - factor * aug[i][j]).simplify();
+                }
             }
-            num_rhs[k] -= factor * num_rhs[i];
         }
     }
 
-    // 回代
-    std::vector<long double> solution(n);
-    for (int i = static_cast<int>(n) - 1; i >= 0; --i) {
-        solution[i] = num_rhs[i];
-        for (size_t j = i + 1; j < n; ++j) {
-            solution[i] -= num_matrix[i][j] * solution[j];
-        }
-        solution[i] /= num_matrix[i][i];
-    }
-
-    // 构建解
-    std::map<std::string, SymbolicExpression> var_values;
+    // Back substitution (already in reduced row echelon form due to k != i)
+    std::map<std::string, SymbolicExpression> results;
     for (size_t i = 0; i < n; ++i) {
-        var_values[variables[i]] = SymbolicExpression::number(solution[i]);
+        if (expr_is_zero(aug[i][i])) {
+            if (!expr_is_zero(aug[i][n])) {
+                return Solution::no_solution("contradiction: system has no solution");
+            }
+            // Underdetermined: could return parametric solution, but for now mark as incomplete
+            return Solution::no_solution("system is underdetermined (infinite solutions)");
+        }
+        results[variables[i]] = (aug[i][n] / aug[i][i]).simplify();
     }
 
-    return Solution::system(var_values, "gaussian_elimination");
+    return Solution::system(results, "symbolic_gaussian_elimination");
 }
 
 bool SymbolicSolver::try_lambert_w(

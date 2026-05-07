@@ -1791,6 +1791,55 @@ bool newton_puiseux_expand(const std::vector<long double>& poly_coeffs,
  *
  * 对于 sqrt(P(x)) 形式的表达式，使用更智能的展开方法。
  */
+/**
+ * @brief 通用级数展开函数
+ * 
+ * 自动检测函数在中心点的性质并选择合适的展开方式。
+ */
+std::string puiseux(const SeriesContext& ctx,
+                    const std::string& expr,
+                    long double center,
+                    int degree,
+                    int denominator);
+
+std::string general_series_auto(const SeriesContext& ctx,
+                              const std::string& expression_str,
+                              long double center,
+                              int degree) {
+    std::string variable_name;
+    SymbolicExpression expr;
+    ctx.resolve_symbolic(expression_str, true, &variable_name, &expr);
+
+    // 1. 尝试 Taylor 展开 (检测是否解析)
+    try {
+        SymbolicExpression val = expr.substitute(variable_name, SymbolicExpression::number(center)).simplify();
+        long double n;
+        if (val.is_number(&n) && !mymath::isinf(n)) {
+            return taylor(ctx, expression_str, center, degree);
+        }
+    } catch (...) {}
+
+    // 2. 尝试 Laurent 展开 (检测极点)
+    for (int k = 1; k <= 3; ++k) {
+        SymbolicExpression factor =
+            (SymbolicExpression::variable(variable_name) - SymbolicExpression::number(center)) ^
+            SymbolicExpression::number(static_cast<long double>(k));
+        SymbolicExpression shifted = (expr * factor).simplify();
+        
+        try {
+            SymbolicExpression val = shifted.substitute(variable_name, SymbolicExpression::number(center)).simplify();
+            long double n;
+            if (val.is_number(&n) && !mymath::isinf(n)) {
+                std::string t_str = taylor(ctx, shifted.to_string(), center, degree + k);
+                return "(" + t_str + ") / (" + variable_name + (center == 0 ? "" : " - " + std::to_string(center)) + ")^" + std::to_string(k);
+            }
+        } catch (...) {}
+    }
+
+    // 3. 回退到 Puiseux
+    return puiseux(ctx, expression_str, center, degree, 2);
+}
+
 std::string puiseux(const SeriesContext& ctx,
                     const std::string& expr,
                     long double center,
@@ -3373,6 +3422,7 @@ bool is_series_command(const std::string& command) {
     return command == "taylor" ||
            command == "pade" ||
            command == "puiseux" ||
+           command == "series" ||
            command == "series_sum" ||
            command == "summation";
 }
@@ -3430,6 +3480,23 @@ bool handle_series_command(const SeriesContext& ctx,
             static_cast<int>(round_to_long_long(denominator_degree_value));
 
         *output = pade(ctx, arguments[0], center, numerator_degree, denominator_degree);
+        return true;
+    }
+
+    if (command == "series") {
+        if (arguments.size() != 2 && arguments.size() != 3) {
+            throw std::runtime_error("series expects expr, degree or expr, center, degree");
+        }
+        long double center = 0.0L;
+        int degree = 0;
+        if (arguments.size() == 2) {
+            degree = static_cast<int>(ctx.parse_decimal(arguments[1]));
+        } else {
+            center = ctx.parse_decimal(arguments[1]);
+            degree = static_cast<int>(ctx.parse_decimal(arguments[2]));
+        }
+        if (degree < 0) throw std::runtime_error("series degree must be non-negative");
+        *output = general_series_auto(ctx, arguments[0], center, degree);
         return true;
     }
 
@@ -3510,7 +3577,7 @@ std::string SeriesModule::execute_args(const std::string& command,
 }
 
 std::vector<std::string> SeriesModule::get_commands() const {
-    return {"taylor", "pade", "puiseux", "series_sum", "summation"};
+    return {"taylor", "pade", "puiseux", "series", "series_sum", "summation"};
 }
 
 std::string SeriesModule::get_help_snippet(const std::string& topic) const {
@@ -3518,6 +3585,7 @@ std::string SeriesModule::get_help_snippet(const std::string& topic) const {
         return "Series:\n"
                "  taylor(f, a, n)     Taylor series at x=a up to degree n\n"
                "  pade(f, [a], m, n)  Pade approximation [m/n]\n"
+               "  series(f, [a], n)   Auto-detecting series (Laurent/Puiseux)\n"
                "  puiseux(f, n, d)    Puiseux series (fractional powers)\n"
                "  series_sum(f, i, a, b) Finite or infinite summation";
     }

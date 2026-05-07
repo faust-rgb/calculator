@@ -31,6 +31,7 @@
 
 #include "symbolic/symbolic_expression_internal.h"
 #include "symbolic/symbolic_polynomial.h"
+#include "symbolic/assumptions.h"
 
 #include "math/mymath.h"
 #include "polynomial/polynomial.h"
@@ -54,6 +55,7 @@ namespace symbolic_expression_internal {
  * - 正数值常量
  * - pi, e 等数学常数
  * - exp, sqrt, abs 等恒正函数
+ * - 根据 AssumptionEngine 设为正数的变量
  */
 bool is_known_positive_expression(const SymbolicExpression& expression) {
     long double numeric = 0.0L;
@@ -66,10 +68,29 @@ bool is_known_positive_expression(const SymbolicExpression& expression) {
         return true;
     }
     if (node->type == NodeType::kVariable) {
-        return false;
+        return symbolic_assumptions::AssumptionEngine::instance().has_assumption(
+            node->text, symbolic_assumptions::Assumption::kPositive);
     }
     if (node->type == NodeType::kFunction) {
-        return node->text == "exp" || node->text == "sqrt" || node->text == "abs";
+        if (node->text == "exp" || node->text == "sqrt" || node->text == "abs") return true;
+        // cosh(x) is always >= 1
+        if (node->text == "cosh") return true;
+    }
+    if (node->type == NodeType::kPower) {
+        // x^2 is positive if x is real and non-zero
+        long double exponent = 0.0L;
+        if (SymbolicExpression(node->right).is_number(&exponent)) {
+            if (static_cast<long long>(exponent) % 2 == 0) {
+                // Check if base is real
+                SymbolicExpression base(node->left);
+                // simplified check for real vars
+                if (base.node_->type == NodeType::kVariable && 
+                    symbolic_assumptions::AssumptionEngine::instance().has_assumption(
+                        base.node_->text, symbolic_assumptions::Assumption::kReal)) {
+                    return true;
+                }
+            }
+        }
     }
     return false;
 }

@@ -2733,6 +2733,22 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                 // 简化：目前只处理对积分变量求导的情况
                 return argument; // 这是一个占位符逻辑
             }
+            if (node_->text == "gamma") {
+                // d/dx gamma(x) = gamma(x) * digamma(x)
+                return make_multiply(make_multiply(expression, make_function("digamma", argument)), inner).simplify();
+            }
+            if (node_->text == "erf") {
+                // d/dx erf(x) = 2/sqrt(pi) * exp(-x^2)
+                const SymbolicExpression pi_val = SymbolicExpression::variable("pi");
+                const SymbolicExpression factor = make_divide(SymbolicExpression::number(2.0), make_function("sqrt", pi_val));
+                const SymbolicExpression exp_part = make_function("exp", make_negate(make_power(argument, SymbolicExpression::number(2.0))));
+                return make_multiply(make_multiply(factor, exp_part), inner).simplify();
+            }
+            if (node_->text == "besselj") {
+                // d/dx J_n(x) = 0.5 * (J_{n-1}(x) - J_{n+1}(x))
+                // Simplified for J_0: d/dx J_0(x) = -J_1(x)
+                return make_multiply(make_negate(make_function("besselj1", argument)), inner).simplify();
+            }
             throw std::runtime_error("symbolic derivative does not support function: " + node_->text);
         }
         case NodeType::kVector: {
@@ -3104,8 +3120,20 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                                     make_function("asin", make_multiply(number(internal), variable(variable_name)))))
                                 .simplify();
                         }
+                        // 1 / sqrt(a*x^2 + c) -> asinh for a > 0, c > 0
+                        if (c_val > 0 && a_val > 0) {
+                            const long double factor = 1.0L / mymath::sqrt(a_val);
+                            const long double internal = mymath::sqrt(a_val / c_val);
+                            return make_multiply(left,
+                                make_multiply(number(factor),
+                                    make_function("asinh", make_multiply(number(internal), variable(variable_name)))))
+                                .simplify();
+                        }
                     } else if (expr_is_one(c_term) && expr_is_minus_one(x2_coeff)) {
                         return make_multiply(left, make_function("asin", variable(variable_name))).simplify();
+                    } else if (expr_is_one(c_term) && expr_is_one(x2_coeff)) {
+                        // 1 / sqrt(x^2 + 1) -> asinh(x)
+                        return make_multiply(left, make_function("asinh", variable(variable_name))).simplify();
                     }
                 }
             }

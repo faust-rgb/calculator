@@ -766,6 +766,70 @@ IntegrationResult IntegrationEngine::try_integrate_special(
                 return IntegrationResult::ok(result, "tan_linear");
             }
 
+            // cot(ax + b)
+            if (func_name == "cot") {
+                // ∫ cot(ax + b) dx = ln|sin(ax + b)| / a
+                SymbolicExpression result = make_divide(
+                    make_function("ln",
+                                  make_function("abs", make_function("sin", arg))),
+                    a).simplify();
+                return IntegrationResult::ok(result, "cot_linear");
+            }
+
+            // sec(ax + b)
+            if (func_name == "sec") {
+                // ∫ sec(ax + b) dx = ln|sec(ax + b) + tan(ax + b)| / a
+                SymbolicExpression result = make_divide(
+                    make_function("ln",
+                                  make_function("abs",
+                                                make_add(make_function("sec", arg),
+                                                         make_function("tan", arg)))),
+                    a).simplify();
+                return IntegrationResult::ok(result, "sec_linear");
+            }
+
+            // csc(ax + b)
+            if (func_name == "csc") {
+                // ∫ csc(ax + b) dx = -ln|csc(ax + b) + cot(ax + b)| / a
+                SymbolicExpression result = make_divide(
+                    make_negate(make_function("ln",
+                                              make_function("abs",
+                                                            make_add(make_function("csc", arg),
+                                                                     make_function("cot", arg))))),
+                    a).simplify();
+                return IntegrationResult::ok(result, "csc_linear");
+            }
+
+            // asin(ax + b)
+            if (func_name == "asin") {
+                // ∫ asin(ax + b) dx = x*asin(ax + b) + sqrt(1 - (ax + b)^2) / a
+                SymbolicExpression x = SymbolicExpression::variable(variable_name);
+                SymbolicExpression sqrt_term = make_function("sqrt",
+                    (SymbolicExpression::number(1.0L) - make_power(arg, SymbolicExpression::number(2.0L))).simplify());
+                SymbolicExpression result = (x * expression + sqrt_term / a).simplify();
+                return IntegrationResult::ok(result, "asin_linear");
+            }
+
+            // acos(ax + b)
+            if (func_name == "acos") {
+                // ∫ acos(ax + b) dx = x*acos(ax + b) - sqrt(1 - (ax + b)^2) / a
+                SymbolicExpression x = SymbolicExpression::variable(variable_name);
+                SymbolicExpression sqrt_term = make_function("sqrt",
+                    (SymbolicExpression::number(1.0L) - make_power(arg, SymbolicExpression::number(2.0L))).simplify());
+                SymbolicExpression result = (x * expression - sqrt_term / a).simplify();
+                return IntegrationResult::ok(result, "acos_linear");
+            }
+
+            // atan(ax + b)
+            if (func_name == "atan") {
+                // ∫ atan(ax + b) dx = x*atan(ax + b) - ln(1 + (ax + b)^2) / (2a)
+                SymbolicExpression x = SymbolicExpression::variable(variable_name);
+                SymbolicExpression log_term = make_function("ln",
+                    (SymbolicExpression::number(1.0L) + make_power(arg, SymbolicExpression::number(2.0L))).simplify());
+                SymbolicExpression result = (x * expression - log_term / (SymbolicExpression::number(2.0L) * a)).simplify();
+                return IntegrationResult::ok(result, "atan_linear");
+            }
+
             // 1/(ax + b) -> ln|ax + b| / a
             // 这在 rational 中已处理
         }

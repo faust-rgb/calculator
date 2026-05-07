@@ -41,6 +41,7 @@
 #include "symbolic/symbolic_limit.h"
 #include "symbolic/symbolic_solver.h"
 #include "symbolic/symbolic_sum.h"
+#include "symbolic/assumptions.h"
 #include "parser/command_parser.h"
 #include "math/mymath.h"
 
@@ -83,6 +84,58 @@ std::string symbolic_matrix_to_string(
     }
     out << "]";
     return out.str();
+}
+
+std::vector<std::string> split_top_level_semicolon_list(const std::string& text) {
+    std::vector<std::string> parts;
+    std::size_t start = 0;
+    int paren_depth = 0;
+    int bracket_depth = 0;
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        const char ch = text[i];
+        if (ch == '(') {
+            ++paren_depth;
+        } else if (ch == ')') {
+            if (paren_depth > 0) --paren_depth;
+        } else if (ch == '[') {
+            ++bracket_depth;
+        } else if (ch == ']') {
+            if (bracket_depth > 0) --bracket_depth;
+        } else if (ch == ';' && paren_depth == 0 && bracket_depth == 0) {
+            parts.push_back(trim_copy(text.substr(start, i - start)));
+            start = i + 1;
+        }
+    }
+    parts.push_back(trim_copy(text.substr(start)));
+    return parts;
+}
+
+bool parse_symbolic_vector_literal(const SymbolicCommandContext& ctx,
+                                   const std::string& text,
+                                   std::vector<SymbolicExpression>* components) {
+    const std::string trimmed = trim_copy(text);
+    if (trimmed.size() < 2 || trimmed.front() != '[' || trimmed.back() != ']') {
+        return false;
+    }
+
+    const std::string inner = trimmed.substr(1, trimmed.size() - 2);
+    const std::vector<std::string> parts =
+        inner.find(';') == std::string::npos
+            ? split_top_level_arguments(inner)
+            : split_top_level_semicolon_list(inner);
+
+    components->clear();
+    components->reserve(parts.size());
+    for (const std::string& part : parts) {
+        if (trim_copy(part).empty()) {
+            continue;
+        }
+        std::string variable_name;
+        SymbolicExpression expression;
+        ctx.resolve_symbolic(part, false, &variable_name, &expression);
+        components->push_back(expression);
+    }
+    return true;
 }
 
 bool is_infinity_literal(const std::string& text) {
@@ -301,12 +354,223 @@ std::vector<SymbolicExpression> parse_symbolic_expression_list(
     }
     return expressions;
 }
+#include "symbolic/groebner_basis.h"
 
 bool handle_symbolic_command(const SymbolicCommandContext& ctx,
                              const std::string& command,
                              const std::string& inside,
                              std::string* output) {
+    if (command == "groebner") {
+        // expect groebner([p1, p2, ...], [x, y, ...])
+        auto parts = ctx.parse_symbolic_expression_list(inside);
+        if (parts.size() < 2) throw std::runtime_error("groebner expects list of polynomials and list of variables");
+
+        // This is a bit complex to parse nested lists in current framework
+        // Simplified: first arg is list of polys, second is list of vars
+        // TODO: Fix list parsing
+        return false;
+    }
+
+    if (command == "simplify" || command == "latex") {
+        std::string var;
+        SymbolicExpression expr;
+        ctx.resolve_symbolic(inside, false, &var, &expr);
+        if (command == "latex") {
+            *output = expr.to_latex();
+        } else {
+            *output = expr.simplify().to_string();
+        }
+        return true;
+    }
+
     const std::vector<std::string> arguments = split_top_level_arguments(inside);
+
+    if (command == "det" || command == "inverse" || command == "transpose") {
+        if (arguments.size() != 1) {
+            throw std::runtime_error(command + " expects exactly one argument");
+        }
+
+        std::string var;
+        SymbolicExpression expr;
+        ctx.resolve_symbolic(arguments[0], false, &var, &expr);
+
+        if (!expr.is_tensor() && !expr.is_vector()) {
+            throw std::runtime_error(command + " expects a matrix or vector");
+        }
+
+        if (command == "transpose") {
+            if (expr.is_vector()) {
+                // Vector transpose is just itself or we can turn it into a 1xn tensor
+                std::vector<SymbolicExpression> components = expr.vector_components();
+                std::vector<std::vector<SymbolicExpression>> rows;
+                for (const auto& comp : components) {
+                    rows.push_back({comp});
+                }
+                *output = SymbolicExpression::tensor(rows).simplify().to_string();
+                return true;
+            } else {
+                auto rows = expr.tensor_rows();
+                if (rows.empty()) {
+                    *output = expr.to_string();
+                    return true;
+                }
+                std::size_t old_rows = rows.size();
+                std::size_t old_cols = rows[0].size();
+                std::vector<std::vector<SymbolicExpression>> new_rows(old_cols, std::vector<SymbolicExpression>(old_rows));
+                for (std::size_t i = 0; i < old_rows; ++i) {
+                    for (std::size_t j = 0; j < old_cols; ++j) {
+                        new_rows[j][i] = rows[i][j];
+                    }
+                }
+                *output = SymbolicExpression::tensor(new_rows).simplify().to_string();
+                return true;
+            }
+        }
+
+        if (!expr.is_tensor()) {
+            throw std::runtime_error(command + " expects a matrix");
+        }
+
+        auto rows = expr.tensor_rows();
+        std::size_t n = rows.size();
+        if (n == 0 || rows[0].size() != n) {
+            throw std::runtime_error(command + " expects a square matrix");
+        }
+
+        auto compute_det = [](auto& self, const std::vector<std::vector<SymbolicExpression>>& m) -> SymbolicExpression {
+            std::size_t size = m.size();
+            if (size == 1) return m[0][0];
+            if (size == 2) return (m[0][0] * m[1][1] - m[0][1] * m[1][0]).simplify();
+            
+            SymbolicExpression d = SymbolicExpression::number(0.0L);
+            for (std::size_t j = 0; j < size; ++j) {
+                std::vector<std::vector<SymbolicExpression>> minor;
+                for (std::size_t i = 1; i < size; ++i) {
+                    std::vector<SymbolicExpression> row;
+                    for (std::size_t k = 0; k < size; ++k) {
+                        if (k != j) row.push_back(m[i][k]);
+                    }
+                    minor.push_back(row);
+                }
+                SymbolicExpression term = (m[0][j] * self(self, minor)).simplify();
+                if (j % 2 == 1) {
+                    d = (d - term).simplify();
+                } else {
+                    d = (d + term).simplify();
+                }
+            }
+            return d;
+        };
+
+        if (command == "det") {
+            *output = compute_det(compute_det, rows).to_string();
+            return true;
+        }
+
+        if (command == "inverse") {
+            SymbolicExpression determinant = compute_det(compute_det, rows);
+            if (symbolic_expression_internal::expr_is_zero(determinant)) {
+                throw std::runtime_error("matrix is singular");
+            }
+
+            std::vector<std::vector<SymbolicExpression>> adjugate(n, std::vector<SymbolicExpression>(n));
+            for (std::size_t i = 0; i < n; ++i) {
+                for (std::size_t j = 0; j < n; ++j) {
+                    std::vector<std::vector<SymbolicExpression>> minor;
+                    for (std::size_t row = 0; row < n; ++row) {
+                        if (row == i) continue;
+                        std::vector<SymbolicExpression> minor_row;
+                        for (std::size_t col = 0; col < n; ++col) {
+                            if (col == j) continue;
+                            minor_row.push_back(rows[row][col]);
+                        }
+                        minor.push_back(minor_row);
+                    }
+                    SymbolicExpression cofactor = compute_det(compute_det, minor);
+                    if ((i + j) % 2 == 1) {
+                        cofactor = symbolic_expression_internal::make_negate(cofactor).simplify();
+                    }
+                    adjugate[j][i] = cofactor; // Transpose here
+                }
+            }
+
+            std::vector<std::vector<SymbolicExpression>> inv_rows(n, std::vector<SymbolicExpression>(n));
+            for (std::size_t i = 0; i < n; ++i) {
+                for (std::size_t j = 0; j < n; ++j) {
+                    inv_rows[i][j] = (adjugate[i][j] / determinant).simplify();
+                }
+            }
+            *output = SymbolicExpression::tensor(inv_rows).simplify().to_string();
+            return true;
+        }
+    }
+
+    if (command == "jacobian" || command == "hessian") {
+        if (arguments.size() < 2) {
+            throw std::runtime_error(command + " expects (expression, variables...)");
+        }
+
+        std::vector<std::string> vars;
+        for (std::size_t i = 1; i < arguments.size(); ++i) {
+            vars.push_back(trim_copy(arguments[i]));
+        }
+
+        if (command == "jacobian") {
+            std::vector<SymbolicExpression> components;
+            if (parse_symbolic_vector_literal(ctx, arguments[0], &components)) {
+                std::vector<std::vector<SymbolicExpression>> rows(components.size(), std::vector<SymbolicExpression>(vars.size()));
+                for (std::size_t i = 0; i < components.size(); ++i) {
+                    for (std::size_t j = 0; j < vars.size(); ++j) {
+                        rows[i][j] = components[i].derivative(vars[j]).simplify();
+                    }
+                }
+                *output = symbolic_matrix_to_string(rows);
+                return true;
+            }
+
+            std::string dummy_var;
+            SymbolicExpression expr;
+            ctx.resolve_symbolic(arguments[0], false, &dummy_var, &expr);
+            if (expr.is_vector()) {
+                if (components.empty()) {
+                    components = expr.vector_components();
+                }
+                std::vector<std::vector<SymbolicExpression>> rows(components.size(), std::vector<SymbolicExpression>(vars.size()));
+                for (std::size_t i = 0; i < components.size(); ++i) {
+                    for (std::size_t j = 0; j < vars.size(); ++j) {
+                        rows[i][j] = components[i].derivative(vars[j]).simplify();
+                    }
+                }
+                *output = symbolic_matrix_to_string(rows);
+                return true;
+            } else {
+                // Scalar Jacobian is just the gradient (as a 1xn tensor or vector)
+                std::vector<SymbolicExpression> row(vars.size());
+                for (std::size_t j = 0; j < vars.size(); ++j) {
+                    row[j] = expr.derivative(vars[j]).simplify();
+                }
+                *output = SymbolicExpression::vector(row).simplify().to_string();
+                return true;
+            }
+        }
+
+        if (command == "hessian") {
+            std::string dummy_var;
+            SymbolicExpression expr;
+            ctx.resolve_symbolic(arguments[0], false, &dummy_var, &expr);
+            if (expr.is_vector() || expr.is_tensor()) {
+                throw std::runtime_error("hessian expects a scalar expression");
+            }
+            std::vector<std::vector<SymbolicExpression>> rows(vars.size(), std::vector<SymbolicExpression>(vars.size()));
+            for (std::size_t i = 0; i < vars.size(); ++i) {
+                for (std::size_t j = 0; j < vars.size(); ++j) {
+                    rows[i][j] = expr.derivative(vars[i]).derivative(vars[j]).simplify();
+                }
+            }
+            *output = SymbolicExpression::tensor(rows).simplify().to_string();
+            return true;
+        }
+    }
 
     if (command == "dsolve") {
         if (arguments.size() < 1 || arguments.size() > 3) {
@@ -1655,9 +1919,71 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
 }
 
 
+#include "symbolic/assumptions.h"
+
 std::string SymbolicModule::execute_args(const std::string& command,
                                         const std::vector<std::string>& args,
                                         const CoreServices& services) {
+    if (command == ":assume") {
+        if (args.empty()) {
+            auto assumptions = symbolic_assumptions::AssumptionEngine::instance().get_all_assumptions_text();
+            if (assumptions.empty()) return "No active assumptions.";
+            std::string res;
+            for (size_t i = 0; i < assumptions.size(); ++i) {
+                if (i != 0) res += "\n";
+                res += assumptions[i];
+            }
+            return res;
+        }
+        if (args[0] == "clear") {
+            if (args.size() == 1 || args[1] == "all") {
+                symbolic_assumptions::AssumptionEngine::instance().clear_all_assumptions();
+                return "Cleared all assumptions.";
+            } else {
+                symbolic_assumptions::AssumptionEngine::instance().clear_variable(args[1]);
+                return "Cleared assumptions for " + args[1] + ".";
+            }
+        }
+        
+        std::string joined;
+        for (const auto& a : args) joined += a;
+        
+        // simple heuristic parser for: x>0, x is positive, x real, etc
+        std::string var;
+        symbolic_assumptions::Assumption assumption = symbolic_assumptions::Assumption::kReal;
+        bool found = false;
+        
+        if (joined.find(">0") != std::string::npos) {
+            var = joined.substr(0, joined.find(">0"));
+            assumption = symbolic_assumptions::Assumption::kPositive;
+            found = true;
+        } else if (joined.find("positive") != std::string::npos) {
+            var = joined.substr(0, joined.find("positive"));
+            assumption = symbolic_assumptions::Assumption::kPositive;
+            found = true;
+        } else if (joined.find("real") != std::string::npos) {
+            var = joined.substr(0, joined.find("real"));
+            assumption = symbolic_assumptions::Assumption::kReal;
+            found = true;
+        } else if (joined.find("integer") != std::string::npos) {
+            var = joined.substr(0, joined.find("integer"));
+            assumption = symbolic_assumptions::Assumption::kInteger;
+            found = true;
+        }
+        
+        if (found) {
+            var = trim_copy(var);
+            // strip trailing " is" or ","
+            if (var.length() > 3 && var.substr(var.length() - 3) == " is") var = var.substr(0, var.length() - 3);
+            var = trim_copy(var);
+            if (!var.empty()) {
+                symbolic_assumptions::AssumptionEngine::instance().assume(var, assumption);
+                return "Assumed " + var + " is " + symbolic_assumptions::AssumptionEngine::assumption_to_string(assumption) + ".";
+            }
+        }
+        return "Usage: :assume x > 0 | :assume x real | :assume x integer | :assume clear [x|all]";
+    }
+
     SymbolicCommandContext ctx;
     ctx.resolve_symbolic = services.symbolic.resolve_symbolic;
     ctx.parse_symbolic_variable_arguments = services.parse_symbolic_vars;
@@ -1683,6 +2009,8 @@ std::string SymbolicModule::execute_args(const std::string& command,
 std::string SymbolicModule::get_help_snippet(const std::string& topic) const {
     if (topic == "symbolic") {
         return "Symbolic Operations:\n"
+               "  :assume expr           Set variable assumptions (e.g. x>0, x real)\n"
+               "  :assume clear [var]    Clear assumptions\n"
                "  simplify(expr)         Simplify an algebraic expression\n"
                "  expand(expr)           Expand polynomial/algebraic expression\n"
                "  diff(expr, [var])      Symbolic derivative\n"

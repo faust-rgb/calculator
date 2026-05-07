@@ -30,6 +30,7 @@
 
 #include "symbolic/symbolic_expression_internal.h"
 
+#include "core/format_utils.h"
 #include "math/mymath.h"
 #include "math/mymath_dual.h"
 
@@ -1520,6 +1521,72 @@ SymbolicExpression SymbolicExpression::variable(const std::string& name) {
     return SymbolicExpression(make_variable(name));
 }
 
+std::string to_latex_impl(const std::shared_ptr<SymbolicExpression::Node>& node) {
+    if (!node) return "";
+    switch (node->type) {
+        case NodeType::kNumber: {
+            long double val = 0.0L;
+            try_evaluate_numeric_node(node, &val);
+            return format_decimal(val);
+        }
+        case NodeType::kPi: return "\\pi";
+        case NodeType::kE: return "e";
+        case NodeType::kInfinity: return "\\infty";
+        case NodeType::kVariable: return node->text;
+        case NodeType::kNegate: return "-" + to_latex_impl(node->left);
+        case NodeType::kAdd: return to_latex_impl(node->left) + " + " + to_latex_impl(node->right);
+        case NodeType::kSubtract: return to_latex_impl(node->left) + " - " + to_latex_impl(node->right);
+        case NodeType::kMultiply: {
+            std::string left_str = to_latex_impl(node->left);
+            std::string right_str = to_latex_impl(node->right);
+            // 简单逻辑：如果右侧是变量，可以省略乘号
+            if (node->right->type == NodeType::kVariable) return left_str + right_str;
+            return left_str + " \\cdot " + right_str;
+        }
+        case NodeType::kDivide: return "\\frac{" + to_latex_impl(node->left) + "}{" + to_latex_impl(node->right) + "}";
+        case NodeType::kPower: {
+            // e^x -> e^x
+            if (node->left->type == NodeType::kE) return "e^{" + to_latex_impl(node->right) + "}";
+            return "{" + to_latex_impl(node->left) + "}^{" + to_latex_impl(node->right) + "}";
+        }
+        case NodeType::kVector: {
+            std::string res = "\\begin{pmatrix} ";
+            for (size_t i = 0; i < node->children.size(); ++i) {
+                if (i > 0) res += " \\\\ ";
+                res += to_latex_impl(node->children[i]);
+            }
+            res += " \\end{pmatrix}";
+            return res;
+        }
+        case NodeType::kTensor: {
+            std::string res = "\\begin{pmatrix} ";
+            for (size_t i = 0; i < node->children.size(); ++i) {
+                if (i > 0) res += " \\\\ ";
+                // 每行是一个 kVector
+                if (node->children[i]->type == NodeType::kVector) {
+                    for (size_t j = 0; j < node->children[i]->children.size(); ++j) {
+                        if (j > 0) res += " & ";
+                        res += to_latex_impl(node->children[i]->children[j]);
+                    }
+                }
+            }
+            res += " \\end{pmatrix}";
+            return res;
+        }
+        case NodeType::kFunction: {
+            if (node->text == "sqrt") return "\\sqrt{" + to_latex_impl(node->left) + "}";
+            if (node->text == "sin") return "\\sin(" + to_latex_impl(node->left) + ")";
+            if (node->text == "cos") return "\\cos(" + to_latex_impl(node->left) + ")";
+            return "\\" + node->text + "(" + to_latex_impl(node->left) + ")";
+        }
+        default: return "???";
+    }
+}
+
+std::string SymbolicExpression::to_latex() const {
+    return to_latex_impl(simplify().node_);
+}
+
 std::string SymbolicExpression::to_string() const {
     return to_string_impl(simplify().node_, 0);
 }
@@ -1631,6 +1698,36 @@ std::vector<std::pair<SymbolicExpression, int>> SymbolicExpression::common_subex
     return result;
 }
 
+SymbolicExpression SymbolicExpression::cse_rewrite(std::vector<std::pair<std::string, SymbolicExpression>>& bindings, const std::string& prefix) const {
+    auto subs = common_subexpressions();
+    if (subs.empty()) {
+        return *this;
+    }
+    
+    // 按节点数（树大小）降序排序，优先替换大表达式
+    // 使得提取出的临时变量更少但覆盖更大
+    std::sort(subs.begin(), subs.end(), [](const auto& a, const auto& b) {
+        std::size_t a_size = a.first.node_count();
+        std::size_t b_size = b.first.node_count();
+        if (a_size != b_size) return a_size > b_size;
+        return a.second > b.second;
+    });
+
+    SymbolicExpression current = *this;
+    int t_index = 0;
+    for (const auto& sub : subs) {
+        std::string t_name = prefix + std::to_string(t_index++);
+        bindings.push_back({t_name, sub.first});
+        current = current.substitute_expression(sub.first, SymbolicExpression::variable(t_name)).simplify();
+        
+        // 更新已经提取的表达式（它们可能包含刚刚提取的小表达式）
+        for (std::size_t i = 0; i < bindings.size() - 1; ++i) {
+            bindings[i].second = bindings[i].second.substitute_expression(sub.first, SymbolicExpression::variable(t_name)).simplify();
+        }
+    }
+    return current;
+}
+
 SymbolicExpression SymbolicExpression::power(const SymbolicExpression& exponent) const {
     return make_power(*this, exponent);
 }
@@ -1643,6 +1740,19 @@ SymbolicExpression SymbolicExpression::simplify() const {
     SymbolicExpression cached;
     if (cache.get(key, &cached)) {
         return cached;
+    }
+
+    // 1. 检查表达式膨胀
+    std::size_t count = node_count();
+    if (count > 500) {
+        // 自动触发 CSE 以控制膨胀
+        std::vector<std::pair<std::string, SymbolicExpression>> bindings;
+        SymbolicExpression cse_expr = cse_rewrite(bindings, "_auto_t");
+        if (bindings.size() > 5) {
+             SymbolicExpression simplified = simplify_with_budget(200); 
+             cache.put(key, simplified);
+             return simplified;
+        }
     }
 
     SymbolicExpression simplified = simplify_impl(*this);

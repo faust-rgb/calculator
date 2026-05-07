@@ -302,10 +302,39 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                     return SymbolicExpression::number(0.0L);
                 }
             }
+            if (node->text == "gamma") {
+                long double val;
+                if (argument.is_number(&val)) {
+                    if (mymath::abs(val - 1.0L) < 1e-9) return SymbolicExpression::number(1.0L);
+                    if (mymath::abs(val - 0.5L) < 1e-9) return (make_function("sqrt", SymbolicExpression::variable("pi"))).simplify();
+                    if (mymath::abs(val - 2.0L) < 1e-9) return SymbolicExpression::number(1.0L);
+                }
+            }
+            if (node->text == "erf") {
+                if (expr_is_zero(argument)) return SymbolicExpression::number(0.0L);
+                if (argument.node_->type == NodeType::kNegate) {
+                    return make_negate(make_function("erf", SymbolicExpression(argument.node_->left))).simplify();
+                }
+            }
+            if (node->text == "besselj") {
+                if (expr_is_zero(argument)) return SymbolicExpression::number(1.0L); // Default J_0(0) = 1
+            }
+            // exp(ln(x)) → x
+            if (node->text == "exp" && argument.node_->type == NodeType::kFunction && argument.node_->text == "ln") {
+                return SymbolicExpression(argument.node_->left).simplify();
+            }
+            // ln(exp(x)) → x (for real x)
+            if (node->text == "ln" && argument.node_->type == NodeType::kFunction && argument.node_->text == "exp") {
+                return SymbolicExpression(argument.node_->left).simplify();
+            }
             if (node->text == "sqrt" && argument.node_->type == NodeType::kPower) {
                 long double exponent = 0.0L;
                 if (SymbolicExpression(argument.node_->right).is_number(&exponent) && mymath::is_near_zero(exponent - 2.0, kFormatEps)) {
-                    return make_function("abs", SymbolicExpression(argument.node_->left)).simplify();
+                    SymbolicExpression base(argument.node_->left);
+                    if (is_known_positive_expression(base)) {
+                        return base.simplify();
+                    }
+                    return make_function("abs", base).simplify();
                 }
             }
             if (node->text == "abs" && argument.node_->type == NodeType::kFunction && (argument.node_->text == "abs" || argument.node_->text == "sqrt")) {
@@ -358,6 +387,35 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (operand.node_->type == NodeType::kNegate) return SymbolicExpression(operand.node_->left).simplify();
             return make_negate(operand);
         }
+
+        case NodeType::kVector: {
+            std::vector<SymbolicExpression> components;
+            for (const auto& child : node->children) components.push_back(simplify_once(SymbolicExpression(child)).simplify());
+            return SymbolicExpression::vector(components);
+        }
+
+        case NodeType::kTensor: {
+            std::vector<std::vector<SymbolicExpression>> rows;
+            for (const auto& row_node : node->children) {
+                std::vector<SymbolicExpression> row;
+                if (row_node->type == NodeType::kVector) {
+                    for (const auto& comp : row_node->children) row.push_back(simplify_once(SymbolicExpression(comp)).simplify());
+                }
+                rows.push_back(row);
+            }
+            return SymbolicExpression::tensor(rows);
+        }
+
+        case NodeType::kDifferentialOp: {
+            SymbolicExpression op = simplify_once(SymbolicExpression(node->left));
+            if (node->text == "div" && op.node_->type == NodeType::kDifferentialOp && op.node_->text == "grad") return make_function("laplacian", simplify_once(SymbolicExpression(op.node_->left)));
+            if (node->text == "div" && op.node_->type == NodeType::kDifferentialOp && op.node_->text == "curl") return SymbolicExpression::number(0.0L);
+            if (node->text == "curl" && op.node_->type == NodeType::kDifferentialOp && op.node_->text == "grad") return SymbolicExpression::number(0.0L);
+            return SymbolicExpression(make_function(node->text, op).node_);
+        }
+
+        case NodeType::kRootOf:
+            return expression;
 
         default: break;
     }
@@ -537,6 +595,16 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (right.is_number(&right_value)) {
                 if (mymath::is_near_zero(right_value, kFormatEps)) return SymbolicExpression::number(1.0L);
                 if (mymath::is_near_zero(right_value - 1.0L, kFormatEps)) return left;
+                // sqrt(x)^2 → x (for x >= 0)
+                if (mymath::is_near_zero(right_value - 2.0L, kFormatEps) &&
+                    left.node_->type == NodeType::kFunction && left.node_->text == "sqrt") {
+                    return SymbolicExpression(left.node_->left).simplify();
+                }
+                // abs(x)^2 → x^2
+                if (mymath::is_near_zero(right_value - 2.0L, kFormatEps) &&
+                    left.node_->type == NodeType::kFunction && left.node_->text == "abs") {
+                    return make_power(SymbolicExpression(left.node_->left), SymbolicExpression::number(2.0L)).simplify();
+                }
             }
             if (left.node_->type == NodeType::kPower) {
                 long double inner_exp;
@@ -546,32 +614,6 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             if (left.is_number(&left_value) && right.is_number(&right_value)) return SymbolicExpression::number(mymath::pow(left_value, right_value));
             return make_power(left, right);
-
-        case NodeType::kVector: {
-            std::vector<SymbolicExpression> components;
-            for (const auto& child : node->children) components.push_back(simplify_once(SymbolicExpression(child)).simplify());
-            return SymbolicExpression::vector(components);
-        }
-
-        case NodeType::kTensor: {
-            std::vector<std::vector<SymbolicExpression>> rows;
-            for (const auto& row_node : node->children) {
-                std::vector<SymbolicExpression> row;
-                if (row_node->type == NodeType::kVector) {
-                    for (const auto& comp : row_node->children) row.push_back(simplify_once(SymbolicExpression(comp)).simplify());
-                }
-                rows.push_back(row);
-            }
-            return SymbolicExpression::tensor(rows);
-        }
-
-        case NodeType::kDifferentialOp: {
-            SymbolicExpression op = simplify_once(SymbolicExpression(node->left));
-            if (node->text == "div" && op.node_->type == NodeType::kDifferentialOp && op.node_->text == "grad") return make_function("laplacian", simplify_once(SymbolicExpression(op.node_->left)));
-            if (node->text == "div" && op.node_->type == NodeType::kDifferentialOp && op.node_->text == "curl") return SymbolicExpression::number(0.0L);
-            if (node->text == "curl" && op.node_->type == NodeType::kDifferentialOp && op.node_->text == "grad") return SymbolicExpression::number(0.0L);
-            return SymbolicExpression(make_function(node->text, op).node_);
-        }
 
         default: break;
     }

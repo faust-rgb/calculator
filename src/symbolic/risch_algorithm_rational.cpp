@@ -415,7 +415,13 @@ bool try_integrate_numeric_quadratic_partial_fractions(const SymbolicPolynomial&
         int multiplicity = 1;
     };
 
+    struct LinearFactor {
+        long double root;
+        int multiplicity = 1;
+    };
+
     std::vector<QuadraticFactor> quadratics;
+    std::vector<LinearFactor> linears;
     bool used_power_factorization = false;
 
     const int denominator_degree = static_cast<int>(den_coeffs.size()) - 1;
@@ -446,7 +452,19 @@ bool try_integrate_numeric_quadratic_partial_fractions(const SymbolicPolynomial&
         const long double re = root.first;
         const long double im = root.second;
         if (mymath::abs(im) < 1e-8) {
-            return false;
+            // Real root: add as linear factor (x - re)
+            bool merged = false;
+            for (auto& existing : linears) {
+                if (mymath::abs(existing.root - re) < 1e-6) {
+                    ++existing.multiplicity;
+                    merged = true;
+                    break;
+                }
+            }
+            if (!merged) {
+                linears.push_back({re, 1});
+            }
+            continue;
         }
         std::vector<long double> factor = {re * re + im * im, -2.0 * re, 1.0L};
         bool merged = false;
@@ -467,12 +485,15 @@ bool try_integrate_numeric_quadratic_partial_fractions(const SymbolicPolynomial&
     for (const auto& factor : quadratics) {
         factored_degree += 2 * factor.multiplicity;
     }
-    if (quadratics.empty() || factored_degree != denominator.degree()) {
+    for (const auto& factor : linears) {
+        factored_degree += factor.multiplicity;
+    }
+    if (factored_degree == 0) {
         return false;
     }
 
     std::vector<std::vector<long double>> columns;
-    columns.reserve(denominator.degree());
+    columns.reserve(factored_degree);
     for (const auto& factor : quadratics) {
         std::vector<long double> divisor = {1.0L};
         for (int power = 1; power <= factor.multiplicity; ++power) {
@@ -485,8 +506,22 @@ bool try_integrate_numeric_quadratic_partial_fractions(const SymbolicPolynomial&
             columns.push_back(multiply_numeric_polynomial(quotient, {0.0L, 1.0L}));
         }
     }
+    for (const auto& factor : linears) {
+        std::vector<long double> divisor = {1.0L};
+        for (int power = 1; power <= factor.multiplicity; ++power) {
+            divisor = multiply_numeric_polynomial(divisor, {-factor.root, 1.0L});
+            std::vector<long double> quotient;
+            if (!divide_numeric_polynomial(den_coeffs, divisor, &quotient)) {
+                return false;
+            }
+            columns.push_back(quotient);
+        }
+    }
 
     const int unknown_count = static_cast<int>(columns.size());
+    if (unknown_count == 0) {
+        return false;
+    }
     std::vector<std::vector<long double>> matrix(unknown_count,
                                             std::vector<long double>(unknown_count, 0.0L));
     std::vector<long double> rhs(unknown_count, 0.0L);
@@ -507,6 +542,7 @@ bool try_integrate_numeric_quadratic_partial_fractions(const SymbolicPolynomial&
     }
 
     SymbolicExpression total = SymbolicExpression::number(0.0L);
+    SymbolicExpression x = SymbolicExpression::variable(variable_name);
     std::size_t unknown_index = 0;
     for (const auto& factor : quadratics) {
         for (int power = 1; power <= factor.multiplicity; ++power) {
@@ -517,6 +553,19 @@ bool try_integrate_numeric_quadratic_partial_fractions(const SymbolicPolynomial&
                                                                   factor.coefficients,
                                                                   power,
                                                                   variable_name)).simplify();
+        }
+    }
+    for (const auto& factor : linears) {
+        for (int power = 1; power <= factor.multiplicity; ++power) {
+            const long double coefficient = unknowns[unknown_index++];
+            if (mymath::abs(coefficient) < 1e-12) continue;
+            SymbolicExpression linear = (x - SymbolicExpression::number(factor.root)).simplify();
+            if (power == 1) {
+                total = (total + SymbolicExpression::number(coefficient) * make_function("ln", make_function("abs", linear))).simplify();
+            } else {
+                total = (total + SymbolicExpression::number(coefficient) / SymbolicExpression::number(1.0L - static_cast<long double>(power)) *
+                         make_power(linear, SymbolicExpression::number(1.0L - static_cast<long double>(power)))).simplify();
+            }
         }
     }
 

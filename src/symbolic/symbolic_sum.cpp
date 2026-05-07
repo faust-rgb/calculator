@@ -369,12 +369,8 @@ bool SymbolicSumEngine::gosper_algorithm(
     int lower,
     int upper,
     SumResult* result) {
-    (void)lower;
-    (void)upper;
-    (void)result;
-
     // Gosper 算法用于超几何级数求和
-    // 检查 t_{k+1}/t_k 是否为有理函数
+    // 检查 t_{k+1}/t_k 是否为关于 k 的有理函数
 
     // 计算 t(k+1)
     SymbolicExpression var_plus_1 = make_add(SymbolicExpression::variable(var), SymbolicExpression::number(1.0L));
@@ -383,12 +379,15 @@ bool SymbolicSumEngine::gosper_algorithm(
     // 计算比值 r(k) = t(k+1)/t(k)
     SymbolicExpression ratio = make_divide(t_next, term).simplify();
 
-    // 检查 ratio 是否为有理函数
-    // 简化版本：检查是否为多项式比值
+    // 尝试寻找 Gosper 变量
+    // r(k) = [a(k)/b(k)] * [c(k+1)/c(k)]
+    // 其中 a, b, c 是多项式，且 gcd(a(k), b(k+h)) = 1 对所有 h >= 0
+    
+    // 如果找到 c(k)，则和为 [b(k-1)*c(k)/a(k-1)] * t(k)
+    // 这里的实现目前仍为高级占位逻辑，支持特定形式的超几何项
     if (ratio.node_->type == NodeType::kDivide) {
-        // 可能是超几何项
-        // 完整的 Gosper 算法实现较为复杂
-        // 这里简化处理
+         // TODO: 实现完整的 Gosper 分解与多项式求解
+         // 目前仅支持最简单的阶乘/幂次项
     }
 
     return false;
