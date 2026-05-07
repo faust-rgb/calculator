@@ -1,5 +1,16 @@
 // ============================================================================
-// 系统模块实现
+// system_module.cpp - 系统命令模块实现
+// ============================================================================
+//
+// 本文件实现了 SystemModule 类，提供计算器的核心系统命令。
+// 这些命令用于：
+// - 状态管理：列出/清除变量和函数
+// - 持久化：保存/加载状态，执行脚本
+// - 配置：设置精度、模式、格式等
+//
+// 命令分类：
+// - Meta 命令（冒号前缀）：:vars, :clear, :save 等
+// - Call 命令：print
 // ============================================================================
 
 #include "system_module.h"
@@ -13,12 +24,28 @@
 #include <sstream>
 #include <stdexcept>
 
-/// 返回模块名称
+/**
+ * @brief 返回模块名称
+ * @return 固定返回 "System"
+ */
 std::string SystemModule::name() const {
     return "System";
 }
 
-/// 返回支持的命令列表
+/**
+ * @brief 返回支持的命令列表
+ * @return 命令名字符串向量
+ *
+ * 命令列表包括：
+ * - :vars, :funcs - 列出变量/函数
+ * - :clear, :clearfuncs, :clearfunc - 清除变量/函数
+ * - :history - 命令历史（未实现）
+ * - :save, :load, :export, :run - 持久化操作
+ * - :exact, :symbolic - 模式切换
+ * - :precision, :scale - 精度设置
+ * - :hexprefix, :hexcase - 十六进制格式
+ * - print - 打印命令
+ */
 std::vector<std::string> SystemModule::get_commands() const {
     return { ":vars", ":funcs", ":clear", ":clearfuncs", ":clearfunc",
              ":history", ":save", ":load", ":export", ":run",
@@ -26,22 +53,50 @@ std::vector<std::string> SystemModule::get_commands() const {
              "print" };
 }
 
-/// 执行系统命令
+/**
+ * @brief 执行系统命令
+ * @param command 命令名
+ * @param args 命令参数列表
+ * @param svc 核心服务接口
+ * @return 命令执行结果字符串
+ *
+ * 根据命令名分发到相应的处理逻辑：
+ * - :vars - 列出所有变量
+ * - :funcs - 列出所有自定义函数
+ * - :clear [name] - 清除指定变量或全部变量
+ * - :clearfuncs - 清除所有自定义函数
+ * - :clearfunc name - 清除指定自定义函数
+ * - print expr... - 打印表达式的值
+ * - :history - 命令历史（待实现）
+ * - :save path - 保存状态到文件
+ * - :load path - 从文件加载状态
+ * - :export name - 导出变量值
+ * - :run path - 执行脚本文件
+ * - :exact on|off - 切换精确模式
+ * - :symbolic on|off - 切换符号常量模式
+ * - :precision n - 设置显示精度
+ * - :scale n - 设置内部计算精度
+ * - :hexprefix on|off - 切换十六进制前缀
+ * - :hexcase upper|lower - 设置十六进制字母大小写
+ */
 std::string SystemModule::execute_args(const std::string& command,
                                        const std::vector<std::string>& args,
                                        const CoreServices& svc) {
-    if (command == ":vars") return svc.env.list_variables();
-    if (command == ":funcs") return svc.env.list_functions();
+    if (command == ":vars") return svc.env.list_variables();  // 列出所有变量
+    if (command == ":funcs") return svc.env.list_functions();  // 列出所有自定义函数
     if (command == ":clear") {
+        // 清除变量：无参数时清除全部，有参数时清除指定变量
         if (args.empty()) return svc.env.clear_all_variables();
         return svc.env.clear_variable(trim_copy(args[0]));
     }
-    if (command == ":clearfuncs") return svc.env.clear_all_functions();
+    if (command == ":clearfuncs") return svc.env.clear_all_functions();  // 清除所有自定义函数
     if (command == ":clearfunc") {
+        // 清除指定自定义函数
         if (args.empty()) throw std::runtime_error(":clearfunc expects a function name");
         return svc.env.clear_function(trim_copy(args[0]));
     }
     if (command == "print") {
+        // print 命令：打印表达式的值
         std::ostringstream out;
         for (std::size_t i = 0; i < args.size(); ++i) {
             if (i != 0) out << ' ';
@@ -51,8 +106,9 @@ std::string SystemModule::execute_args(const std::string& command,
         }
         return out.str();
     }
-    if (command == ":history") return "History access via Module not implemented yet";
+    if (command == ":history") return "History access via Module not implemented yet";  // 待实现
 
+    // Lambda：将参数列表拼接为逗号分隔的字符串
     auto join_args = [&]() {
         std::string res;
         for (size_t i = 0; i < args.size(); ++i) {
@@ -62,14 +118,19 @@ std::string SystemModule::execute_args(const std::string& command,
         return trim_copy(res);
     };
 
-    if (command == ":save") return svc.env.save_state(join_args());
-    if (command == ":load") return svc.env.load_state(join_args());
-    if (command == ":export") return svc.env.export_variable(join_args());
+    // 状态持久化命令
+    if (command == ":save") return svc.env.save_state(join_args());   // 保存状态到文件
+    if (command == ":load") return svc.env.load_state(join_args());   // 从文件加载状态
+    if (command == ":export") return svc.env.export_variable(join_args()); // 导出变量
     if (command == ":run") {
+        // 执行脚本文件
         const std::string script_path = join_args();
         return svc.env.execute_script_file(script_path, false);
     }
 
+    // ==================== 模式设置命令 ====================
+
+    // :exact - 精确分数模式
     if (command == ":exact") {
         if (args.empty()) return "Usage: :exact on|off";
         const std::string arg = trim_copy(args[0]);
@@ -77,6 +138,8 @@ std::string SystemModule::execute_args(const std::string& command,
         if (arg == "off") return svc.env.set_exact_mode(false);
         return "Usage: :exact on|off";
     }
+
+    // :symbolic - 符号常量模式
     if (command == ":symbolic") {
         if (args.empty()) return "Usage: :symbolic on|off";
         const std::string arg = trim_copy(args[0]);
@@ -84,6 +147,8 @@ std::string SystemModule::execute_args(const std::string& command,
         if (arg == "off") return svc.env.set_symbolic_mode(false);
         return "Usage: :symbolic on|off";
     }
+
+    // :precision - 显示精度设置
     if (command == ":precision") {
         if (args.empty()) return "Current precision is visible in REPL status or via internal query";
         try {
@@ -92,6 +157,8 @@ std::string SystemModule::execute_args(const std::string& command,
             return "Invalid precision value";
         }
     }
+
+    // :scale - 内部计算精度设置
     if (command == ":scale") {
         if (args.empty()) return "Internal scale: " + std::to_string(PrecisionContext::get_default_scale());
         try {
@@ -103,6 +170,8 @@ std::string SystemModule::execute_args(const std::string& command,
             return "Invalid scale value";
         }
     }
+
+    // :hexprefix - 十六进制 0x 前缀设置
     if (command == ":hexprefix") {
         if (args.empty()) return "Usage: :hexprefix on|off";
         const std::string arg = trim_copy(args[0]);
@@ -110,6 +179,8 @@ std::string SystemModule::execute_args(const std::string& command,
         if (arg == "off") return svc.env.set_hex_prefix(false);
         return "Usage: :hexprefix on|off";
     }
+
+    // :hexcase - 十六进制字母大小写设置
     if (command == ":hexcase") {
         if (args.empty()) return "Usage: :hexcase upper|lower";
         const std::string arg = trim_copy(args[0]);
@@ -121,7 +192,18 @@ std::string SystemModule::execute_args(const std::string& command,
     return "Unknown system command";
 }
 
-/// 返回帮助文本
+/**
+ * @brief 返回指定主题的帮助文本
+ * @param topic 帮助主题名
+ * @return 帮助文本字符串，若主题不存在则返回空字符串
+ *
+ * 支持的帮助主题：
+ * - "commands" - 系统命令概览
+ * - "variables" - 变量和函数管理
+ * - "persistence" - 状态持久化
+ * - "exact" - 精确模式说明
+ * - "examples" - 使用示例
+ */
 std::string SystemModule::get_help_snippet(const std::string& topic) const {
     if (topic == "commands") {
         return "System Commands:\n"

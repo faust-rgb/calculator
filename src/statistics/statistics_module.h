@@ -1,3 +1,11 @@
+/**
+ * @file statistics_module.h
+ * @brief 统计模块头文件
+ *
+ * 本文件定义了 StatisticsModule 类，作为计算器统计功能的模块化接口。
+ * 该模块提供了统计摘要、描述性统计量计算等功能，可被计算器主程序动态加载。
+ */
+
 #ifndef STATISTICS_MODULE_H
 #define STATISTICS_MODULE_H
 
@@ -10,13 +18,43 @@
 #include <numeric>
 #include <sstream>
 
+/**
+ * @brief 统计模块类
+ *
+ * 继承自 CalculatorModule 基类，提供统计相关的命令和函数。
+ * 支持的命令包括：
+ * - describe / stat_summary: 生成完整的统计摘要
+ *
+ * 支持的原生函数包括：
+ * - mean / avg: 平均值
+ * - median: 中位数
+ * - std: 标准差
+ * - var: 方差
+ * - t_test2: 双样本 T 检验
+ * - chi2_test: 卡方检验
+ */
 class StatisticsModule : public CalculatorModule {
 public:
+    /**
+     * @brief 获取模块名称
+     * @return 模块名称 "Statistics"
+     */
     std::string name() const override { return "Statistics"; }
 
-    std::string execute(const std::string& command, 
-                       const std::string& inside, 
+    /**
+     * @brief 执行统计命令
+     *
+     * 处理统计相关的命令请求，如统计摘要生成等。
+     *
+     * @param command 命令名称
+     * @param inside 命令参数字符串
+     * @param svc 核心服务接口
+     * @return 命令执行结果的字符串表示
+     */
+    std::string execute(const std::string& command,
+                       const std::string& inside,
                        const CoreServices& svc) override {
+        // 解析参数并提取数据向量
         auto args_str = split_top_level_arguments(inside);
         std::vector<long double> data;
         for (const auto& arg_str : args_str) {
@@ -25,11 +63,14 @@ public:
             data.insert(data.end(), vec.begin(), vec.end());
         }
 
+        // 检查是否有数据
         if (data.empty()) {
             return "No data provided.";
         }
 
+        // 处理统计摘要命令
         if (command == "stat_summary" || command == "describe") {
+            // 计算各种统计量
             long double mean = stats::mean(data);
             long double stddev = stats::sample_stddev(data);
             long double variance = stats::sample_variance(data);
@@ -43,6 +84,7 @@ public:
             long double kurt = stats::kurtosis(data);
             long double mad = stats::mad(data);
 
+            // 格式化输出统计摘要
             std::ostringstream out;
             out << "--- Statistical Summary ---\n"
                 << "Count:    " << data.size() << "\n"
@@ -64,13 +106,26 @@ public:
         return "Unknown statistics command";
     }
 
+    /**
+     * @brief 获取模块支持的命令列表
+     * @return 命令名称列表
+     */
     std::vector<std::string> get_commands() const override {
         return { "describe", "stat_summary" };
     }
 
+    /**
+     * @brief 获取模块提供的原生函数映射
+     *
+     * 返回统计相关的原生函数，包括均值、中位数、标准差、方差、
+     * 双样本 T 检验和卡方检验等。
+     *
+     * @return 函数名到函数实现的映射表
+     */
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_native_functions() const override {
         std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
+        // 辅助函数：将 long double 包装为 StoredValue
         auto wrap_scalar = [](long double val) -> StoredValue {
             StoredValue res;
             res.decimal = val;
@@ -78,6 +133,7 @@ public:
             return res;
         };
 
+        // 均值函数
         funcs["mean"] = [wrap_scalar](const std::vector<StoredValue>& args) {
             std::vector<long double> data;
             for (const auto& arg : args) {
@@ -88,6 +144,7 @@ public:
         };
         funcs["avg"] = funcs["mean"];
 
+        // 中位数函数
         funcs["median"] = [wrap_scalar](const std::vector<StoredValue>& args) {
             std::vector<long double> data;
             for (const auto& arg : args) {
@@ -97,6 +154,7 @@ public:
             return wrap_scalar(stats::median(data));
         };
 
+        // 标准差函数
         funcs["std"] = [wrap_scalar](const std::vector<StoredValue>& args) {
             std::vector<long double> data;
             for (const auto& arg : args) {
@@ -106,6 +164,7 @@ public:
             return wrap_scalar(stats::stddev(data));
         };
 
+        // 方差函数
         funcs["var"] = [wrap_scalar](const std::vector<StoredValue>& args) {
             std::vector<long double> data;
             for (const auto& arg : args) {
@@ -115,6 +174,7 @@ public:
             return wrap_scalar(stats::variance(data));
         };
 
+        // 双样本 T 检验函数
         funcs["t_test2"] = [wrap_scalar](const std::vector<StoredValue>& args) {
             std::vector<long double> x, y;
             if (args.size() == 2) {
@@ -146,6 +206,7 @@ public:
             return wrap_scalar(2.0 * prob::student_t_cdf(-mymath::abs(t), df));
         };
 
+        // 卡方检验函数
         funcs["chi2_test"] = [wrap_scalar](const std::vector<StoredValue>& args) {
             std::vector<long double> obs, exp;
             if (args.size() == 2) {
@@ -180,6 +241,14 @@ public:
         return funcs;
     }
 
+    /**
+     * @brief 获取帮助信息片段
+     *
+     * 根据主题返回相关的帮助文本。
+     *
+     * @param topic 帮助主题
+     * @return 帮助文本
+     */
     std::string get_help_snippet(const std::string& topic) const override {
         if (topic == "analysis") {
             return "Statistics:\n"

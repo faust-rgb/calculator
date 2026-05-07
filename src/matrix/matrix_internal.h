@@ -1,6 +1,19 @@
 /**
  * @file matrix_internal.h
  * @brief 矩阵内部辅助函数和数据结构定义 (泛型版)
+ *
+ * 本文件定义了矩阵运算库内部使用的辅助函数和数据结构，包括：
+ * - 数值精度常量：kMatrixEps, kMatrixPivotRelativeEps, kMatrixPivotAbsoluteEps
+ * - 分解结果结构体：TReducedSvd, TLuResult, TEigenResult
+ * - 复数采样点结构体：TComplexSample
+ * - 辅助函数：矩阵行交换、向量运算、复数处理、正交化等
+ * - 统计函数：mean, median, mode, variance, percentile 等
+ * - 插值函数：Lagrange 插值、样条插值、线性回归
+ *
+ * 这些函数和结构体仅供矩阵库内部使用，不对外暴露。
+ *
+ * @author Calculator Team
+ * @date 2024
  */
 
 #ifndef MATRIX_INTERNAL_H

@@ -1,6 +1,8 @@
 // ============================================================================
-// 命令注册表 - 模块自注册机制
+// 命令注册表头文件 - 模块自注册机制
 // ============================================================================
+//
+// 本文件定义了 CommandRegistry 类，提供命令的注册、注销和分发功能。
 //
 // 设计目标：
 // 1. 模块启动时自注册命令处理器
@@ -26,8 +28,12 @@
 // 前向声明
 struct CoreServices;
 
+// ============================================================================
+// 命令处理器类型定义
+// ============================================================================
+
 /**
- * @brief 命令处理器类型
+ * @brief 命令处理器函数类型
  * @param input 输入字符串
  * @param args 已解析的参数列表
  * @param output 输出字符串指针
@@ -42,17 +48,27 @@ using CommandHandler = std::function<bool(
     bool exact_mode,
     const CoreServices& services)>;
 
+// ============================================================================
+// 命令信息结构体
+// ============================================================================
+
 /**
  * @struct CommandInfo
- * @brief 命令信息
+ * @brief 存储单个命令的完整信息
+ *
+ * 包含命令名、帮助文本、处理器函数等元数据。
  */
 struct CommandInfo {
     std::string name;           ///< 命令名
-    std::string help_text;      ///< 帮助文本
+    std::string help_text;      ///< 完整帮助文本
     std::string short_help;     ///< 简短帮助（用于列表显示）
-    CommandHandler handler;     ///< 处理器
+    CommandHandler handler;     ///< 命令处理函数
     bool is_prefix = false;     ///< 是否是前缀命令（如 plot3d 匹配 plot）
 };
+
+// ============================================================================
+// CommandRegistry 类定义
+// ============================================================================
 
 /**
  * @class CommandRegistry
@@ -69,15 +85,15 @@ public:
     CommandRegistry() = default;
 
     // ========================================================================
-    // 命令注册
+    // 命令注册接口
     // ========================================================================
 
     /**
-     * @brief 注册命令处理器
+     * @brief 注册精确匹配的命令处理器
      * @param name 命令名
-     * @param handler 处理器
-     * @param help_text 帮助文本
-     * @param short_help 简短帮助
+     * @param handler 处理函数
+     * @param help_text 完整帮助文本
+     * @param short_help 简短帮助文本
      */
     void register_command(const std::string& name,
                           CommandHandler handler,
@@ -87,7 +103,7 @@ public:
     /**
      * @brief 注册前缀命令处理器
      * @param prefix 命令前缀
-     * @param handler 处理器
+     * @param handler 处理函数
      * @param help_text 帮助文本
      *
      * 前缀命令可以匹配以该前缀开头的所有命令。
@@ -104,7 +120,7 @@ public:
     void unregister_command(const std::string& name);
 
     // ========================================================================
-    // 命令处理
+    // 命令处理接口
     // ========================================================================
 
     /**
@@ -130,12 +146,12 @@ public:
     bool has_command(const std::string& name) const;
 
     // ========================================================================
-    // 命令信息
+    // 命令信息查询接口
     // ========================================================================
 
     /**
      * @brief 获取所有命令名
-     * @return 命令名列表
+     * @return 命令名列表（已排序）
      */
     std::vector<std::string> get_commands() const;
 
@@ -154,7 +170,7 @@ public:
 
     /**
      * @brief 获取命令数量
-     * @return 命令数量
+     * @return 已注册命令的总数
      */
     std::size_t size() const { return commands_.size() + prefix_commands_.size(); }
 
@@ -164,7 +180,7 @@ public:
     void clear();
 
     // ========================================================================
-    // 命令名提取
+    // 命令名提取接口
     // ========================================================================
 
     /**
@@ -185,7 +201,7 @@ private:
      */
     const CommandInfo* find_command(const std::string& name) const;
 
-    std::map<std::string, CommandInfo> commands_;        ///< 命令映射
+    std::map<std::string, CommandInfo> commands_;        ///< 精确匹配命令映射
     std::vector<CommandInfo> prefix_commands_;           ///< 前缀命令列表
 };
 

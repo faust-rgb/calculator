@@ -22,11 +22,18 @@
 
 namespace {
 
+/**
+ * @struct NamedConstant
+ * @brief 命名常量定义
+ *
+ * 存储常见数学常量的值和名称，用于符号格式化时识别。
+ */
 struct NamedConstant {
-    long double value;
-    const char* name;
+    long double value;    ///< 常量值
+    const char* name;     ///< 常量名称
 };
 
+/// 预定义的命名常量表
 static const NamedConstant kNamedConstants[] = {
     {mymath::kPi, "pi"},
     {mymath::kE, "e"},
@@ -35,6 +42,13 @@ static const NamedConstant kNamedConstants[] = {
     {1.618033988749895, "phi"}, // 黄金分割比
 };
 
+/**
+ * @brief 将有理数与命名常量组合格式化
+ * @param r 有理数部分
+ * @param name 常量名称
+ * @param reciprocal 是否为倒数形式（r / name）
+ * @return 格式化后的字符串
+ */
 std::string format_rational_with_constant(const Rational& r, const std::string& name, bool reciprocal) {
     if (reciprocal) {
         // value = r / name => (r.num / r.den) / name
@@ -50,6 +64,12 @@ std::string format_rational_with_constant(const Rational& r, const std::string& 
     }
 }
 
+/**
+ * @brief 尝试用命名常量格式化数值
+ * @param value 输入数值
+ * @param eps 匹配误差阈值
+ * @return 格式化后的字符串，如 "pi / 4"、"2 * e"；无法匹配时返回空字符串
+ */
 std::string try_format_with_named_constants(long double value, [[maybe_unused]] long double eps) {
     const long double abs_value = mymath::abs(value);
     Rational r;
@@ -67,6 +87,15 @@ std::string try_format_with_named_constants(long double value, [[maybe_unused]] 
     return "";
 }
 
+/**
+ * @brief 尝试将数值格式化为平方根形式
+ * @param value 输入数值
+ * @param eps 匹配误差阈值
+ * @return 格式化后的字符串，如 "sqrt(2)"、"sqrt(3) / 2"；无法匹配时返回空字符串
+ *
+ * 检测形如 sqrt(n/d) 的值，其中 n/d 为简单有理数。
+ * 提取平方因子以简化表达式，如 sqrt(8) = 2*sqrt(2)。
+ */
 std::string try_format_as_sqrt(long double value, [[maybe_unused]] long double eps) {
     const long double abs_value = mymath::abs(value);
     const long double squared = abs_value * abs_value;
@@ -123,6 +152,16 @@ std::string try_format_as_sqrt(long double value, [[maybe_unused]] long double e
 // 符号识别入口
 // ============================================================================
 
+/**
+ * @brief 扩展符号格式化尝试
+ * @param value 输入数值
+ * @param eps 匹配误差阈值
+ * @return 格式化后的字符串；无法匹配时返回空字符串
+ *
+ * 依次尝试：
+ * 1. 命名常数比例形式（如 pi/4, 2*e）
+ * 2. 平方根形式（如 sqrt(2), sqrt(3)/2）
+ */
 std::string try_format_symbolic_extended(long double value, long double eps) {
     if (!mymath::isfinite(value) || mymath::is_near_zero(value, eps)) {
         return "";
@@ -146,6 +185,12 @@ std::string try_format_symbolic_extended(long double value, long double eps) {
     return "";
 }
 
+/**
+ * @brief 尝试将数值格式化为含 pi 的分数形式（向后兼容接口）
+ * @param value 输入数值
+ * @param eps 匹配误差阈值
+ * @return 格式化后的字符串；无法匹配时返回空字符串
+ */
 std::string try_format_as_pi_fraction(long double value, long double eps) {
     // 保持向前兼容，调用新的扩展识别
     return try_format_symbolic_extended(value, eps);
@@ -158,21 +203,38 @@ std::string try_format_as_pi_fraction(long double value, long double eps) {
 
 namespace {
 
+/**
+ * @brief 获取可变的显示精度引用（内部使用）
+ * @return 静态精度值的引用
+ */
 int& mutable_process_display_precision() {
     static int precision = kDefaultDisplayPrecision;
     return precision;
 }
 
+/**
+ * @brief 格式化字典键
+ * @param key 键名
+ * @return 带引号的键字符串
+ */
 std::string format_dict_key(const std::string& key) {
     return "\"" + key + "\"";
 }
 
 } // namespace
 
+/**
+ * @brief 获取当前显示精度
+ * @return 当前显示精度值
+ */
 int process_display_precision() {
     return mutable_process_display_precision();
 }
 
+/**
+ * @brief 设置显示精度
+ * @param precision 新的显示精度值，将被限制在 [kMinDisplayPrecision, kMaxDisplayPrecision] 范围内
+ */
 void set_process_display_precision(int precision) {
     mutable_process_display_precision() =
         std::clamp(precision, kMinDisplayPrecision, kMaxDisplayPrecision);
@@ -182,6 +244,15 @@ void set_process_display_precision(int precision) {
 // 数值规范化
 // ============================================================================
 
+/**
+ * @brief 规范化显示的小数值
+ * @param value 原始数值
+ * @return 规范化后的数值
+ *
+ * 处理以下边界情况：
+ * - 接近零的值返回精确的 0
+ * - 接近整数的值返回精确的整数
+ */
 long double normalize_display_decimal(long double value) {
     if (mymath::is_near_zero(value, kDisplayZeroEps)) {
         return 0.0L;
@@ -197,10 +268,21 @@ long double normalize_display_decimal(long double value) {
 // 数值格式化
 // ============================================================================
 
+/**
+ * @brief 格式化小数值（使用全局显示精度）
+ * @param value 要格式化的数值
+ * @return 格式化后的字符串
+ */
 std::string format_decimal(long double value) {
     return format_decimal(value, process_display_precision());
 }
 
+/**
+ * @brief 格式化小数值
+ * @param value 要格式化的数值
+ * @param precision 显示精度
+ * @return 格式化后的字符串
+ */
 std::string format_decimal(long double value, int precision) {
     value = normalize_display_decimal(value);
     precision = std::clamp(precision, kMinDisplayPrecision, kMaxDisplayPrecision);
@@ -209,6 +291,13 @@ std::string format_decimal(long double value, int precision) {
     return out.str();
 }
 
+/**
+ * @brief 尝试将 long double 转换为简单的有理数
+ * @param value 输入数值
+ * @param max_denominator 最大分母限制
+ * @param rational 输出的有理数
+ * @return 转换是否成功
+ */
 bool try_make_simple_rational(long double value,
                               int max_denominator,
                               Rational* rational) {
@@ -230,6 +319,17 @@ bool try_make_simple_rational(long double value,
     return true;
 }
 
+/**
+ * @brief 格式化符号数值
+ * @param value 要格式化的数值
+ * @return 格式化后的字符串，优先使用符号形式（如 pi/4, sqrt(2)）
+ *
+ * 依次尝试：
+ * 1. 整数检测
+ * 2. 扩展符号识别（常数比例、平方根）
+ * 3. 有理数近似
+ * 4. 普通小数格式
+ */
 std::string format_symbolic_number(long double value) {
     value = mymath::is_near_zero(value, kDisplayZeroEps) ? 0.0L : value;
     if (mymath::abs(value) > kDisplayIntegerEps &&
@@ -252,6 +352,11 @@ std::string format_symbolic_number(long double value) {
     return format_decimal(value);
 }
 
+/**
+ * @brief 格式化符号标量（format_symbolic_number 的别名）
+ * @param value 要格式化的数值
+ * @return 格式化后的字符串
+ */
 std::string format_symbolic_scalar(long double value) {
     return format_symbolic_number(value);
 }
@@ -260,6 +365,11 @@ std::string format_symbolic_scalar(long double value) {
 // 级数格式化辅助
 // ============================================================================
 
+/**
+ * @brief 生成带符号的中心文本
+ * @param center 展开中心点
+ * @return 格式化后的中心文本，如 " - 1" 或 " + 2"
+ */
 std::string signed_center_text(long double center) {
     if (mymath::is_near_zero(center, 1e-12)) {
         return "";
@@ -269,6 +379,16 @@ std::string signed_center_text(long double center) {
                : " + " + format_symbolic_number(-center);
 }
 
+/**
+ * @brief 格式化幂次项
+ * @param base 基表达式
+ * @param numerator 幂次分子
+ * @param denominator 幂次分母
+ * @return 格式化后的幂次表达式
+ *
+ * 例如：power_term("x", 2, 1) 返回 "x ^ 2"
+ *       power_term("x", 1, 2) 返回 "x ^ (1 / 2)"
+ */
 std::string power_term(const std::string& base, int numerator, int denominator) {
     if (numerator == 0) {
         return "";
@@ -290,6 +410,14 @@ std::string power_term(const std::string& base, int numerator, int denominator) 
            std::to_string(denominator) + ")";
 }
 
+/**
+ * @brief 格式化级数项
+ * @param coefficient 系数
+ * @param factor 因子表达式
+ * @return 格式化后的项字符串
+ *
+ * 自动处理系数为 1 时的省略，以及负系数的符号处理。
+ */
 std::string format_term(long double coefficient, const std::string& factor) {
     const bool has_factor = !factor.empty();
     const long double abs_coefficient = mymath::abs(coefficient);
@@ -314,6 +442,21 @@ std::string format_term(long double coefficient, const std::string& factor) {
 // 存储值格式化
 // ============================================================================
 
+/**
+ * @brief 格式化 StoredValue 用于显示
+ * @param value 要格式化的存储值
+ * @param symbolic_constants_mode 是否启用符号常量模式
+ * @return 格式化后的字符串
+ *
+ * 根据值的类型选择合适的格式化方式：
+ * - 字符串：加引号输出
+ * - 列表：[elem1, elem2, ...]
+ * - 字典：{key: value, ...}
+ * - 矩阵：使用 Matrix::to_string()
+ * - 复数：complex(real, imag)
+ * - 精确值：使用有理数或符号形式
+ * - 其他：使用小数格式
+ */
 std::string format_stored_value(const StoredValue& value, bool symbolic_constants_mode) {
     if (value.is_string) {
         return "\"" + value.string_value + "\"";
@@ -369,6 +512,16 @@ std::string format_stored_value(const StoredValue& value, bool symbolic_constant
                                    : format_decimal(normalize_display_decimal(value.decimal));
 }
 
+/**
+ * @brief 格式化 StoredValue 用于 print 命令
+ * @param value 要格式化的存储值
+ * @param symbolic_constants_mode 是否启用符号常量模式
+ * @return 格式化后的字符串
+ *
+ * 与 format_stored_value 的区别：
+ * - 字符串值不加引号，直接输出内容
+ * - 其他类型使用 format_stored_value
+ */
 std::string format_print_value(const StoredValue& value, bool symbolic_constants_mode) {
     if (value.is_string) {
         return value.string_value;

@@ -8,6 +8,10 @@
 #include <unordered_map>
 #include <vector>
 
+#include "math/mymath_float128.h"
+
+class Calculator;
+
 /**
  * @file function_analysis.h
  * @brief 函数分析库，提供微积分运算功能 (泛型版)
@@ -76,6 +80,7 @@ public:
 
 private:
     T evaluate_with_variable(T x) const;
+    void ensure_evaluator_initialized() const;
     T second_derivative(T x) const;
     T bisect_stationary_point(T left, T right) const;
 
@@ -94,7 +99,8 @@ private:
 
     std::string expression_;
     std::string variable_name_;
-    std::function<T(const std::vector<std::pair<std::string, T>>&)> evaluator_;
+    mutable std::function<T(const std::vector<std::pair<std::string, T>>&)> evaluator_;
+    mutable std::shared_ptr<Calculator> fallback_calculator_;
     mutable std::list<std::pair<std::string, T>> evaluation_cache_entries_;
     mutable std::unordered_map<std::string, typename std::list<std::pair<std::string, T>>::iterator> evaluation_cache_index_;
 };

@@ -1,11 +1,12 @@
 // ============================================================================
-// 变量解析器
+// 变量解析器头文件
 // ============================================================================
 //
 // 本模块提供变量查找机制，支持分层作用域：
-// 1. 局部作用域（函数参数、循环变量等）
+// 1. 局部作用域（函数参数、循环变量等）- 通过 FlatScopeStack 管理
 // 2. 全局变量表
-// 3. 内置常量（pi, e 等）
+// 3. 覆盖变量表（临时变量）
+// 4. 内置常量（pi, e 等）
 //
 // 通过引用/指针持有变量表，避免 visible_variables() 的 Map 复制开销。
 // 支持 FlatScopeStack 高性能查找。
@@ -21,7 +22,7 @@
 #include <functional>
 #include "types/stored_value.h"
 
-// Forward declarations
+// 前向声明
 namespace script {
     class BlockStatement;
 }
@@ -29,6 +30,10 @@ namespace script {
 #include "types/function.h"
 
 struct FlatScopeStack;
+
+// ============================================================================
+// VariableResolver 类定义
+// ============================================================================
 
 /**
  * @class VariableResolver
@@ -38,6 +43,13 @@ struct FlatScopeStack;
  * 按优先级查找变量。通过持有引用或指针，避免了 visible_variables() 的 Map 复制开销。
  *
  * 统一使用 FlatScopeStack 进行高性能查找。
+ *
+ * 查找优先级：
+ * 1. 覆盖变量表（override_vars_）
+ * 2. 局部作用域栈（flat_scopes_）
+ * 3. 全局变量表（global_vars_）
+ * 4. 内置常量（pi, e 等）
+ * 5. 父解析器（parent_）
  */
 class VariableResolver {
 public:
@@ -61,7 +73,7 @@ public:
           parent_(parent), is_owned_(false) {}
 
     /**
-     * @brief 构造变量解析器
+     * @brief 构造变量解析器（完整版）
      * @param global_vars 全局变量表指针
      * @param flat_scopes 平坦作用域栈指针
      * @param override_vars 覆盖变量表指针（可选）
@@ -75,20 +87,41 @@ public:
           flat_scopes_(flat_scopes), override_vars_(override_vars),
           parent_(parent), is_owned_(false) {}
 
-    /** @brief 构造一个拥有所有权副本的解析器，用于 Lambda 捕获 */
+    // ========================================================================
+    // 主要查询接口
+    // ========================================================================
+
+    /**
+     * @brief 构造一个拥有所有权副本的解析器，用于 Lambda 捕获
+     * @param other 源解析器
+     * @return 拥有数据所有权的解析器副本
+     */
     static VariableResolver make_owned(const VariableResolver& other);
 
-    /** @brief 查找变量值，返回指针，未找到返回 nullptr */
+    /**
+     * @brief 查找变量值
+     * @param name 变量名
+     * @return 变量值指针，未找到返回 nullptr
+     */
     const StoredValue* lookup(const std::string& name) const;
 
-    /** @brief 检查变量是否存在（包括内置常量） */
+    /**
+     * @brief 检查变量是否存在（包括内置常量）
+     * @param name 变量名
+     * @return 如果存在返回 true
+     */
     bool contains(const std::string& name) const;
 
-    /** @brief 获取所有可见变量的快照（用于兼容旧代码或显示） */
+    /**
+     * @brief 获取所有可见变量的快照
+     * @return 变量名到值的映射表
+     *
+     * 用于兼容旧代码或显示变量列表。
+     */
     std::map<std::string, StoredValue> snapshot() const;
 
     // ========================================================================
-    // 快速访问方法（用于编译期变量绑定优化）
+    // 高性能访问方法（用于编译期变量绑定优化）
     // ========================================================================
 
     /**
@@ -108,6 +141,7 @@ public:
 
     /**
      * @brief 获取局部作用域数量
+     * @return 当前作用域栈深度
      */
     int local_scope_count() const;
 
@@ -126,6 +160,10 @@ public:
     int find_slot_index(const std::string& name) const;
 
 private:
+    // ========================================================================
+    // 成员变量
+    // ========================================================================
+
     const std::map<std::string, StoredValue>* global_vars_;      ///< 全局变量表
     const FlatScopeStack* flat_scopes_;                          ///< 平坦作用域栈
     const std::map<std::string, StoredValue>* override_vars_;    ///< 覆盖变量表

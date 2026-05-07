@@ -1,3 +1,20 @@
+/**
+ * @file matrix_solvers.cpp
+ * @brief 矩阵求解器与分解算法实现
+ *
+ * 本文件实现了矩阵的核心求解和分解算法，包括：
+ * - rref_in_place: 原地行简化阶梯形变换（Gauss-Jordan 消元）
+ * - nullspace_vector: 计算零空间中的单个向量（用于特征向量计算）
+ * - nullspace_basis: 计算零空间的一组基
+ * - compute_reduced_svd: 紧缩型奇异值分解
+ *
+ * 这些算法是矩阵求逆、线性方程组求解、特征值计算等高级操作的基础。
+ * 所有函数都支持泛型模板，可处理 long double 和 PreciseDecimal 类型。
+ *
+ * @author Calculator Team
+ * @date 2024
+ */
+
 #include "matrix.h"
 #include "matrix_internal.h"
 #include "mymath.h"
@@ -9,6 +26,21 @@
 namespace matrix {
 namespace internal {
 
+/**
+ * @brief 原地行简化阶梯形变换
+ *
+ * 将矩阵通过 Gauss-Jordan 消元法变换为行简化阶梯形（RREF）。
+ * 返回主元列的索引列表，可用于计算矩阵的秩和零空间。
+ *
+ * 算法步骤：
+ * 1. 从左到右逐列处理，寻找当前列中绝对值最大的元素作为主元
+ * 2. 将主元所在行交换到当前位置
+ * 3. 用主元除以整行，使主元变为 1
+ * 4. 用当前行消去其他行在当前列的元素
+ *
+ * @param matrix 待变换的矩阵（原地修改）
+ * @return 主元列索引列表，其长度即为矩阵的秩
+ */
 template <typename T>
 std::vector<std::size_t> rref_in_place(TMatrix<T>* matrix) {
     std::vector<std::size_t> pivot_columns;
@@ -74,6 +106,16 @@ std::vector<std::size_t> rref_in_place(TMatrix<T>* matrix) {
     return pivot_columns;
 }
 
+/**
+ * @brief 计算零空间中的单个向量
+ *
+ * 计算矩阵零空间中的一个单位向量。主要用于特征向量计算，
+ * 当求 (A - λI) 的零空间时，得到对应于特征值 λ 的特征向量。
+ *
+ * @param matrix 输入矩阵
+ * @return 零空间中的单位向量
+ * @throws 如果矩阵的零空间为零（即矩阵满秩）则抛出异常
+ */
 template <typename T>
 std::vector<T> nullspace_vector(const TMatrix<T>& matrix) {
     TMatrix<T> reduced = matrix;
@@ -113,6 +155,15 @@ std::vector<T> nullspace_vector(const TMatrix<T>& matrix) {
     return vector;
 }
 
+/**
+ * @brief 计算零空间的一组基
+ *
+ * 计算矩阵零空间的一组标准正交基。
+ * 通过 RREF 变换识别自由变量，构造对应的基向量。
+ *
+ * @param matrix 输入矩阵
+ * @return 零空间基矩阵，每列是一个基向量；若零空间为零则返回空矩阵
+ */
 template <typename T>
 TMatrix<T> nullspace_basis(const TMatrix<T>& matrix) {
     TMatrix<T> reduced = matrix;
@@ -146,6 +197,21 @@ TMatrix<T> nullspace_basis(const TMatrix<T>& matrix) {
     return basis;
 }
 
+/**
+ * @brief 计算紧缩型奇异值分解 (SVD)
+ *
+ * 对矩阵 A 进行奇异值分解：A = U * S * V^T
+ * 其中：
+ * - U: 左奇异向量矩阵 (m×n，正交列)
+ * - S: 奇异值对角矩阵 (n×n，非负，降序排列)
+ * - V^T: 右奇异向量矩阵的转置 (n×n，正交)
+ *
+ * 算法使用 Jacobi 旋转迭代方法，对于小规模矩阵效率较高。
+ * 对于扁平矩阵 (m < n)，自动转置处理后再转置回来。
+ *
+ * @param matrix 输入矩阵 (m×n)
+ * @return SVD 分解结果结构体，包含 U, S, Vt 三个矩阵
+ */
 template <typename T>
 TReducedSvd<T> compute_reduced_svd(const TMatrix<T>& matrix) {
     bool transposed = false;
@@ -261,16 +327,23 @@ TReducedSvd<T> compute_reduced_svd(const TMatrix<T>& matrix) {
     return {result_U, result_S, result_VT};
 }
 
-// Explicit template instantiations
+// ============================================================================
+// 显式模板实例化
+// ============================================================================
+
+/// RREF 变换的模板实例化
 template std::vector<std::size_t> rref_in_place<long double>(TMatrix<long double>*);
 template std::vector<std::size_t> rref_in_place<PreciseDecimal>(TMatrix<PreciseDecimal>*);
 
+/// 零空间向量计算的模板实例化
 template std::vector<long double> nullspace_vector<long double>(const TMatrix<long double>&);
 template std::vector<PreciseDecimal> nullspace_vector<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
 
+/// 零空间基计算的模板实例化
 template TMatrix<long double> nullspace_basis<long double>(const TMatrix<long double>&);
 template TMatrix<PreciseDecimal> nullspace_basis<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
 
+/// SVD 分解的模板实例化
 template TReducedSvd<long double> compute_reduced_svd<long double>(const TMatrix<long double>&);
 template TReducedSvd<PreciseDecimal> compute_reduced_svd<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
 

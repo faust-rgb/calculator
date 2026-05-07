@@ -1,3 +1,16 @@
+/**
+ * @file mymath.cpp
+ * @brief 自定义数学库核心实现
+ *
+ * 本文件实现了 mymath 命名空间中的基础数学函数，不依赖标准数学库 <cmath>。
+ * 所有函数均从零实现，使用泰勒级数展开、牛顿迭代等数值方法。
+ *
+ * 实现内容包括：
+ * - 基础工具函数（abs、floor、ceil、round 等）
+ * - 指数和对数函数（exp、ln、log、sinh、cosh 等）
+ * - 辅助函数（近似分数、有理逼近、角度归一等）
+ */
+
 #include "mymath.h"
 #include "mymath_internal.h"
 
@@ -7,6 +20,12 @@ namespace mymath {
 
 namespace internal {
 
+/**
+ * @brief 使用 Lanczos 近似计算正数的对数伽马函数
+ * @param x 正数输入
+ * @return ln(Γ(x))
+ * @throws std::domain_error 如果 x <= 0
+ */
 long double log_gamma_positive(long double x) {
     if (x <= 0.0L) {
         throw std::domain_error("log-gamma is only defined for positive inputs");
@@ -34,6 +53,11 @@ long double log_gamma_positive(long double x) {
     return 0.5 * ln(2.0 * kPi) + (z + 0.5) * ln(t) - t + ln(series);
 }
 
+/**
+ * @brief 从对数值转换为有限值或无穷
+ * @param log_value 对数值
+ * @return exp(log_value) 或边界值（无穷或零）
+ */
 long double finite_or_infinity_from_log(long double log_value) {
     if (log_value >= kLnDoubleMax) {
         return infinity();
@@ -49,38 +73,83 @@ long double finite_or_infinity_from_log(long double log_value) {
 using internal::finite_or_infinity_from_log;
 using internal::log_gamma_positive;
 
+/**
+ * @brief 计算 long double 的绝对值
+ * @param x 输入值
+ * @return |x|
+ */
 long double abs(long double x) {
     return x < 0.0L ? -x : x;
 }
 
+/**
+ * @brief 计算 int 的绝对值
+ * @param x 输入值
+ * @return |x|
+ */
 int abs(int x) {
     return x < 0 ? -x : x;
 }
 
+/**
+ * @brief 计算 long 的绝对值
+ * @param x 输入值
+ * @return |x|
+ */
 long abs(long x) {
     return x < 0 ? -x : x;
 }
 
+/**
+ * @brief 计算 long long 的绝对值
+ * @param x 输入值
+ * @return |x|
+ */
 long long abs(long long x) {
     return x < 0 ? -x : x;
 }
 
+/**
+ * @brief 计算 long double 的绝对值（显式函数）
+ * @param x 输入值
+ * @return |x|
+ */
 long double abs_long_double(long double x) {
     return x < 0.0L ? -x : x;
 }
 
+/**
+ * @brief 检查值是否为 NaN
+ * @param x 待检查的值
+ * @return true 如果是 NaN
+ */
 bool isnan(long double x) {
     return x != x;
 }
 
+/**
+ * @brief 检查值是否为无穷大
+ * @param x 待检查的值
+ * @return true 如果是正无穷或负无穷
+ */
 bool isinf(long double x) {
     return !isnan(x) && (x > kDoubleMax || x < -kDoubleMax);
 }
 
+/**
+ * @brief 检查值是否为有限值
+ * @param x 待检查的值
+ * @return true 如果既不是 NaN 也不是无穷大
+ */
 bool isfinite(long double x) {
     return !isnan(x) && !isinf(x);
 }
 
+/**
+ * @brief 向零截断
+ * @param x 输入值
+ * @return 向零截断后的整数值
+ */
 long double trunc(long double x) {
     if (!isfinite(x)) {
         return x;
@@ -91,6 +160,11 @@ long double trunc(long double x) {
     return static_cast<long double>(static_cast<long long>(x));
 }
 
+/**
+ * @brief 向下取整
+ * @param x 输入值
+ * @return 不大于 x 的最大整数
+ */
 long double floor(long double x) {
     if (!isfinite(x)) {
         return x;
@@ -99,6 +173,11 @@ long double floor(long double x) {
     return (integer > x) ? integer - 1.0L : integer;
 }
 
+/**
+ * @brief 向上取整
+ * @param x 输入值
+ * @return 不小于 x 的最小整数
+ */
 long double ceil(long double x) {
     if (!isfinite(x)) {
         return x;
@@ -107,6 +186,11 @@ long double ceil(long double x) {
     return (integer < x) ? integer + 1.0L : integer;
 }
 
+/**
+ * @brief 四舍五入
+ * @param x 输入值
+ * @return 最接近 x 的整数
+ */
 long double round(long double x) {
     if (!isfinite(x)) {
         return x;
@@ -114,6 +198,12 @@ long double round(long double x) {
     return x >= 0.0L ? floor(x + 0.5) : ceil(x - 0.5);
 }
 
+/**
+ * @brief 分解浮点数为整数和小数部分
+ * @param x 输入值
+ * @param integer_part 输出参数，存储整数部分
+ * @return 小数部分
+ */
 long double modf(long double x, long double* integer_part) {
     const long double integer = trunc(x);
     if (integer_part) {
@@ -122,6 +212,13 @@ long double modf(long double x, long double* integer_part) {
     return x - integer;
 }
 
+/**
+ * @brief 将值限制在指定范围内
+ * @param value 待限制的值
+ * @param low 下界
+ * @param high 上界
+ * @return 限制后的值
+ */
 long double clamp(long double value, long double low, long double high) {
     if (high < low) {
         const long double temp = low;
@@ -137,6 +234,13 @@ long double clamp(long double value, long double low, long double high) {
     return value;
 }
 
+/**
+ * @brief 计算浮点余数
+ * @param x 被除数
+ * @param y 除数
+ * @return x - trunc(x/y) * y
+ * @throws std::domain_error 如果 y 为零
+ */
 long double fmod(long double x, long double y) {
     if (is_near_zero(y)) {
         throw std::domain_error("fmod divisor cannot be zero");
@@ -148,6 +252,13 @@ long double fmod(long double x, long double y) {
     return x - quotient * y;
 }
 
+/**
+ * @brief 计算 IEEE 余数
+ * @param x 被除数
+ * @param y 除数
+ * @return x - n * y，其中 n 是最接近 x/y 的整数
+ * @throws std::domain_error 如果 y 为零
+ */
 long double remainder(long double x, long double y) {
     if (is_near_zero(y)) {
         throw std::domain_error("remainder divisor cannot be zero");
@@ -177,15 +288,29 @@ long double remainder(long double x, long double y) {
         static_cast<long double>(x) - nearest * static_cast<long double>(y));
 }
 
+/**
+ * @brief 返回正无穷大
+ * @return 正无穷大值
+ */
 long double infinity() {
     return kDoubleMax * kDoubleMax;
 }
 
+/**
+ * @brief 返回静默 NaN
+ * @return NaN 值
+ */
 long double quiet_nan() {
     const volatile long double zero = 0.0L;
     return zero / zero;
 }
 
+/**
+ * @brief 计算最大公约数
+ * @param a 第一个整数
+ * @param b 第二个整数
+ * @return a 和 b 的最大公约数
+ */
 long long gcd(long long a, long long b) {
     while (b != 0) {
         const long long t = a % b;
@@ -195,6 +320,15 @@ long long gcd(long long a, long long b) {
     return a < 0 ? -a : a;
 }
 
+/**
+ * @brief 尝试将浮点数识别为简单分数
+ * @param value 输入值
+ * @param numerator 输出分子
+ * @param denominator 输出分母
+ * @param max_denominator 最大分母
+ * @param eps 允许误差
+ * @return true 如果成功识别为简单分数
+ */
 bool approximate_fraction(long double value,
                           long long* numerator,
                           long long* denominator,
@@ -219,6 +353,16 @@ bool approximate_fraction(long double value,
     return false;
 }
 
+/**
+ * @brief 计算给定最大分母约束下的最佳有理逼近
+ * @param value 输入值
+ * @param numerator 输出分子
+ * @param denominator 输出分母
+ * @param max_denominator 最大分母
+ * @return true 如果成功求得有理逼近
+ *
+ * 使用连分数方法进行逼近。
+ */
 bool best_rational_approximation(long double value,
                                  long long* numerator,
                                  long long* denominator,
@@ -297,16 +441,35 @@ bool best_rational_approximation(long double value,
     return true;
 }
 
+/**
+ * @brief 判断数值是否接近零
+ * @param x 输入值
+ * @param eps 误差阈值
+ * @return true 如果 |x| <= eps
+ */
 bool is_near_zero(long double x, long double eps) {
     return abs(x) <= eps;
 }
 
+/**
+ * @brief 判断数值是否接近整数
+ * @param x 输入值
+ * @param eps 误差阈值
+ * @return true 如果 x 与最近整数的距离 <= eps
+ */
 bool is_integer(long double x, long double eps) {
     long long truncated = static_cast<long long>(x);
     return abs(x - static_cast<long double>(truncated)) <= eps ||
            abs(x - static_cast<long double>(truncated + (x >= 0 ? 1 : -1))) <= eps;
 }
 
+/**
+ * @brief 将角度归约到 [-π, π] 区间
+ * @param x 输入角度（弧度）
+ * @return 归约后的角度
+ *
+ * 用于三角函数计算前的范围缩减，提高泰勒展开的收敛速度和精度。
+ */
 long double normalize_angle(long double x) {
     if (!isfinite(x)) {
         return x;
@@ -334,6 +497,13 @@ long double normalize_angle(long double x) {
     return static_cast<long double>(reduced);
 }
 
+/**
+ * @brief 计算 e^x
+ * @param x 指数
+ * @return e 的 x 次幂
+ *
+ * 使用泰勒级数展开结合范围缩减技术。
+ */
 long double exp(long double x) {
     if (x >= kLnDoubleMax) {
         return infinity();
@@ -371,6 +541,14 @@ long double exp(long double x) {
     return result;
 }
 
+/**
+ * @brief 计算自然对数 ln(x)
+ * @param x 输入值，必须 > 0
+ * @return ln(x)
+ * @throws std::domain_error 当 x <= 0 时抛出
+ *
+ * 使用范围缩减和泰勒级数展开。
+ */
 long double ln(long double x) {
     if (x <= 0.0L) {
         throw std::domain_error("ln is only defined for positive numbers");
@@ -402,22 +580,47 @@ long double ln(long double x) {
     return 2.0 * sum + static_cast<long double>(shifts);
 }
 
+/**
+ * @brief log 函数别名，等同于 ln
+ * @param x 输入值
+ * @return ln(x)
+ */
 long double log(long double x) {
     return ln(x);
 }
 
+/**
+ * @brief 计算 ln(1 + x)，针对小 x 优化
+ * @param x 输入值
+ * @return ln(1 + x)
+ */
 long double log1p(long double x) {
     return ln(1.0L + x);
 }
 
+/**
+ * @brief 计算常用对数 log10(x)
+ * @param x 输入值
+ * @return log10(x)
+ */
 long double log10(long double x) {
     return ln(x) / ln(10.0L);
 }
 
+/**
+ * @brief 计算以 2 为底的对数
+ * @param x 输入值
+ * @return log2(x)
+ */
 long double log2(long double x) {
     return ln(x) / ln(2.0);
 }
 
+/**
+ * @brief 计算双曲正弦
+ * @param x 输入值
+ * @return sinh(x)
+ */
 long double sinh(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
@@ -444,6 +647,11 @@ long double sinh(long double x) {
     return 0.5 * (positive - negative);
 }
 
+/**
+ * @brief 计算双曲余弦
+ * @param x 输入值
+ * @return cosh(x)
+ */
 long double cosh(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
@@ -466,6 +674,11 @@ long double cosh(long double x) {
     return 0.5 * (positive + negative);
 }
 
+/**
+ * @brief 计算双曲正切
+ * @param x 输入值
+ * @return tanh(x)
+ */
 long double tanh(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
@@ -489,6 +702,11 @@ long double tanh(long double x) {
     return sinh(x) / denominator;
 }
 
+/**
+ * @brief 计算反双曲正弦
+ * @param x 输入值
+ * @return asinh(x)
+ */
 long double asinh(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
@@ -508,6 +726,12 @@ long double asinh(long double x) {
     return ln(x + sqrt(x * x + 1.0L));
 }
 
+/**
+ * @brief 计算反双曲余弦
+ * @param x 输入值，必须 >= 1
+ * @return acosh(x)
+ * @throws std::domain_error 当 x < 1 时抛出
+ */
 long double acosh(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
@@ -529,6 +753,12 @@ long double acosh(long double x) {
     return ln(x + sqrt(x - 1.0L) * sqrt(x + 1.0L));
 }
 
+/**
+ * @brief 计算反双曲正切
+ * @param x 输入值，必须在 (-1, 1) 范围内
+ * @return atanh(x)
+ * @throws std::domain_error 当 |x| >= 1 时抛出
+ */
 long double atanh(long double x) {
     // 处理 NaN 输入
     if (isnan(x)) {
@@ -551,6 +781,14 @@ long double atanh(long double x) {
     return 0.5 * ln((1.0L + x) / (1.0L - x));
 }
 
+/**
+ * @brief 计算双参数反正切
+ * @param y y 坐标
+ * @param x x 坐标
+ * @return atan2(y, x)，范围 [-π, π]
+ *
+ * 正确处理所有象限和特殊值。
+ */
 long double atan2(long double y, long double x) {
     // 处理 NaN 输入
     if (isnan(x) || isnan(y)) {
@@ -591,6 +829,14 @@ long double atan2(long double y, long double x) {
     return res;
 }
 
+/**
+ * @brief 计算欧几里得范数 sqrt(x^2 + y^2)
+ * @param x 第一个值
+ * @param y 第二个值
+ * @return sqrt(x^2 + y^2)
+ *
+ * 使用数值稳定的算法避免中间计算溢出。
+ */
 long double hypot(long double x, long double y) {
     // 处理 NaN 输入
     if (isnan(x)) return x;

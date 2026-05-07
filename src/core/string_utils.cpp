@@ -12,6 +12,11 @@
 
 namespace {
 
+/**
+ * @brief 检查是否为保留函数名的内部实现
+ * @param name 函数名
+ * @return 是否为保留名
+ */
 bool is_reserved_function_name_impl(std::string_view name) {
     static const std::unordered_set<std::string_view> reserved = {
         "abs", "acos", "acosh", "asin", "asinh", "atan", "atanh", "avg",
@@ -111,6 +116,13 @@ std::string trim_copy(std::string_view text) {
 // 标识符验证
 // ============================================================================
 
+/**
+ * @brief 检查是否是有效的变量名
+ * @param name 要检查的名称
+ * @return 是否为有效的变量名
+ *
+ * 有效变量名必须以字母开头，只能包含字母、数字和下划线。
+ */
 bool is_valid_variable_name(std::string_view name) {
     if (name.empty() || !is_ascii_alpha(name.front())) {
         return false;
@@ -125,6 +137,13 @@ bool is_valid_variable_name(std::string_view name) {
     return true;
 }
 
+/**
+ * @brief 检查文本是否是单个标识符
+ * @param text 要检查的文本
+ * @return 是否为单个标识符
+ *
+ * 与 is_valid_variable_name 类似，但允许包含单引号（用于变量名如 x'）。
+ */
 bool is_identifier_text(std::string_view text) {
     if (text.empty() || !is_ascii_alpha(text.front())) {
         return false;
@@ -141,10 +160,22 @@ bool is_identifier_text(std::string_view text) {
 // 字符串字面量
 // ============================================================================
 
+/**
+ * @brief 检查文本是否是字符串字面量
+ * @param text 要检查的文本
+ * @return 是否被双引号包围
+ */
 bool is_string_literal(std::string_view text) {
     return text.size() >= 2 && text.front() == '"' && text.back() == '"';
 }
 
+/**
+ * @brief 解码转义字符串
+ * @param text 包含转义序列的文本
+ * @return 解码后的字符串
+ *
+ * 支持的转义序列：\\ -> \, \n -> 换行, \t -> 制表符
+ */
 std::string decode_escaped_string(std::string_view text) {
     std::string result;
     result.reserve(text.size());
@@ -174,6 +205,12 @@ std::string decode_escaped_string(std::string_view text) {
     return result;
 }
 
+/**
+ * @brief 解析字符串字面量的值
+ * @param text 字符串字面量（带引号）
+ * @return 解析后的字符串值（去除引号，处理转义）
+ * @throw std::runtime_error 如果不是有效的字符串字面量
+ */
 std::string parse_string_literal_value(std::string_view text) {
     if (!is_string_literal(text)) {
         throw std::runtime_error("expected string literal");

@@ -1,6 +1,18 @@
 // ============================================================================
 // 精确小数实现 (优化版：基数 10^9)
 // ============================================================================
+//
+// 本文件实现了 PreciseDecimal 类型的所有功能，包括：
+// - 基于大整数的精确算术运算
+// - NTT（数论变换）和 Karatsuba 高效乘法算法
+// - Knuth 算法 D 用于高效大整数除法
+// - 高精度数学函数（三角函数、指数对数等）
+//
+// 性能优化：
+// - 小规模乘法使用朴素算法
+// - 中等规模使用 Karatsuba 算法 (O(n^1.585))
+// - 大规模使用 NTT 算法 (O(n log n))
+// ============================================================================
 
 #include "precise_decimal.h"
 #include "rational.h"
@@ -17,12 +29,17 @@
 
 namespace {
 
-constexpr uint32_t kBase = 1000000000;
-constexpr int kBaseDigits = 9;
-int g_default_scale = 40;
-constexpr long double kDisplayZeroEps = 1e-16;
-constexpr long double kDisplayIntegerEps = 1e-9;
+// ============================================================================
+// 常量定义
+// ============================================================================
 
+constexpr uint32_t kBase = 1000000000;  ///< 大整数基数（10^9）
+constexpr int kBaseDigits = 9;          ///< 每个 chunk 的十进制位数
+int g_default_scale = 40;               ///< 默认精度（小数点后位数）
+constexpr long double kDisplayZeroEps = 1e-16;      ///< 显示零的阈值
+constexpr long double kDisplayIntegerEps = 1e-9;    ///< 显示整数的阈值
+
+// 前向声明辅助函数
 PreciseDecimal one();
 PreciseDecimal two();
 PreciseDecimal half();
@@ -30,6 +47,14 @@ PreciseDecimal decimal_from_uint(uint32_t value);
 PreciseDecimal scale_epsilon(int extra_digits = 4);
 int series_iteration_limit(int minimum);
 
+/**
+ * @brief 规范化显示用的浮点数
+ *
+ * 对非常小的值返回零，对接近整数的值返回整数。
+ *
+ * @param value 输入值
+ * @return 规范化后的值
+ */
 long double normalize_display_decimal(long double value) {
     if (mymath::abs(value) < kDisplayZeroEps) return 0.0L;
     if (mymath::abs(value) > kDisplayIntegerEps &&
@@ -39,6 +64,13 @@ long double normalize_display_decimal(long double value) {
     return value;
 }
 
+/**
+ * @brief 格式化浮点数为字符串
+ *
+ * @param value 浮点数值
+ * @param precision 显示精度（默认 12 位）
+ * @return 格式化后的字符串
+ */
 std::string format_decimal(long double value, int precision = 12) {
     value = normalize_display_decimal(value);
     std::ostringstream out;
@@ -48,14 +80,27 @@ std::string format_decimal(long double value, int precision = 12) {
 
 /**
  * @brief 计算 a / b，返回商和余数 (均为 BigInt)
+ *
+ * 这是 Knuth 算法 D 的声明，在后面实现。
  */
 void div_bigint(const std::vector<uint32_t>& num,
                 const std::vector<uint32_t>& den,
                 std::vector<uint32_t>* quotient,
                 std::vector<uint32_t>* remainder);
 
+// ============================================================================
+// 大整数基础操作函数
+// ============================================================================
+
 /**
- * @brief 将整数字符串转换为基数为 10^9 的向量
+ * @brief 将整数字符串转换为基数为 10^9 的大整数数组
+ *
+ * 字符串表示从高位到低位，而结果数组是小端序（低位在前）。
+ *
+ * @param s 整数字符串，如 "123456789012345"
+ * @return 大整数数组，小端序
+ *
+ * @example "1234567890123" -> [890123, 234567, 1]
  */
 std::vector<uint32_t> string_to_bigint(const std::string& s) {
     if (s.empty() || s == "0") return {0};
@@ -72,7 +117,14 @@ std::vector<uint32_t> string_to_bigint(const std::string& s) {
 }
 
 /**
- * @brief 将基数为 10^9 的向量转换为字符串
+ * @brief 将基数为 10^9 的大整数数组转换为字符串
+ *
+ * 数组是小端序（低位在前），输出字符串是高位在前。
+ *
+ * @param v 大整数数组，小端序
+ * @return 整数字符串
+ *
+ * @example [890123, 234567, 1] -> "1234567890123"
  */
 std::string bigint_to_string(const std::vector<uint32_t>& v) {
     if (v.empty() || (v.size() == 1 && v[0] == 0)) return "0";
@@ -86,6 +138,10 @@ std::string bigint_to_string(const std::vector<uint32_t>& v) {
 
 /**
  * @brief 比较两个大整数的大小
+ *
+ * @param lhs 左操作数
+ * @param rhs 右操作数
+ * @return -1 表示 lhs < rhs，0 表示相等，1 表示 lhs > rhs
  */
 int compare_bigint(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
     if (lhs.size() != rhs.size()) return lhs.size() < rhs.size() ? -1 : 1;
@@ -99,6 +155,12 @@ int compare_bigint(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>
 
 /**
  * @brief 大整数加法
+ *
+ * 实现两个大整数的精确加法，自动处理进位。
+ *
+ * @param lhs 左操作数（小端序）
+ * @param rhs 右操作数（小端序）
+ * @return 和（小端序）
  */
 std::vector<uint32_t> add_bigint(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
     std::vector<uint32_t> res;
@@ -113,7 +175,14 @@ std::vector<uint32_t> add_bigint(const std::vector<uint32_t>& lhs, const std::ve
 }
 
 /**
- * @brief 大整数减法 (要求 lhs >= rhs)
+ * @brief 大整数减法（要求 lhs >= rhs）
+ *
+ * 实现两个大整数的减法，自动处理借位。
+ * 注意：此函数假设 lhs >= rhs，否则结果不正确。
+ *
+ * @param lhs 被减数（小端序）
+ * @param rhs 减数（小端序）
+ * @return 差（小端序）
  */
 std::vector<uint32_t> subtract_bigint(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
     std::vector<uint32_t> res = lhs;
@@ -132,27 +201,54 @@ std::vector<uint32_t> subtract_bigint(const std::vector<uint32_t>& lhs, const st
     return res;
 }
 
+// ============================================================================
+// 乘法算法阈值配置
+// ============================================================================
+
 /**
- * @brief Karatsuba 乘法阈值 - 小于此规模使用朴素乘法
+ * @brief Karatsuba 乘法阈值
+ *
+ * 当数字长度小于此值时使用朴素乘法，否则使用 Karatsuba 算法。
+ * 32 是经验值，在此规模下 Karatsuba 的额外开销不划算。
  */
 constexpr std::size_t KARATSUBA_THRESHOLD = 32;
 
 /**
- * @brief NTT 乘法阈值 - 大于此规模使用 NTT
+ * @brief NTT 乘法阈值
+ *
+ * 当数字长度大于此值时使用 NTT（数论变换）算法。
+ * 256 是经验值，在此规模以上 NTT 的 O(n log n) 优势显现。
  */
 constexpr std::size_t NTT_THRESHOLD = 256;
 
 // ============================================================================
 // NTT (数论变换) 乘法实现
 // ============================================================================
+//
+// NTT 是 FFT 在模数域的变体，用于高效计算多项式乘法。
+// 这里使用三个不同的质数进行 NTT，然后用中国剩余定理（CRT）合并结果。
+// ============================================================================
 
 namespace ntt {
 
+/**
+ * @struct NTTConfig
+ * @brief NTT 配置模板类
+ *
+ * 封装 NTT 变换所需的配置参数和辅助函数。
+ * @tparam P 模数（必须是形如 k*2^n+1 的质数）
+ */
 template <uint32_t P>
 struct NTTConfig {
-    static constexpr uint32_t mod = P;
-    static constexpr uint32_t g = 3;
+    static constexpr uint32_t mod = P;  ///< 模数
+    static constexpr uint32_t g = 3;    ///< 原根（对所选模数有效）
 
+    /**
+     * @brief 快速幂运算（模意义下）
+     * @param a 底数
+     * @param b 指数
+     * @return a^b mod P
+     */
     static uint32_t power(uint32_t a, uint32_t b) {
         uint32_t res = 1;
         a %= mod;
@@ -164,10 +260,23 @@ struct NTTConfig {
         return res;
     }
 
+    /**
+     * @brief 求模逆元
+     * @param n 要求逆元的数
+     * @return n^(-1) mod P
+     */
     static uint32_t inv(uint32_t n) {
         return power(n, mod - 2);
     }
 
+    /**
+     * @brief 执行 NTT 变换或逆变换
+     *
+     * 这是最核心的 NTT 实现，使用蝶形运算。
+     *
+     * @param a 待变换的数组（原地修改）
+     * @param invert true 表示逆变换，false 表示正变换
+     */
     static void transform(std::vector<uint32_t>& a, bool invert) {
         std::size_t n = a.size();
         for (std::size_t i = 1, j = 0; i < n; i++) {
@@ -199,13 +308,29 @@ struct NTTConfig {
     }
 };
 
-// 三个适用于 NTT 的质数
-constexpr uint32_t P1 = 998244353;
-constexpr uint32_t P2 = 1004535809;
-constexpr uint32_t P3 = 469762049;
+// ============================================================================
+// NTT 使用的质数常量
+// ============================================================================
+//
+// 三个适用于 NTT 的质数，都形如 k*2^23+1，支持最大 2^23 长度的变换。
+// 这些质数足够大，使得 CRT 合并后的结果能正确表示乘积。
 
-// CRT 合并结果
-// 使用 __int128_t 处理中间大数
+constexpr uint32_t P1 = 998244353;     ///< 第一个质数
+constexpr uint32_t P2 = 1004535809;    ///< 第二个质数
+constexpr uint32_t P3 = 469762049;     ///< 第三个质数
+
+/**
+ * @brief 中国剩余定理（CRT）合并三个 NTT 结果
+ *
+ * 将三个不同模数下的 NTT 结果合并为最终结果。
+ * 使用 __int128_t 处理中间大数运算。
+ *
+ * @param r1 第一个质数模下的结果
+ * @param r2 第二个质数模下的结果
+ * @param r3 第三个质数模下的结果
+ * @param base 输出基数（这里是 10^9）
+ * @return 合并后的大整数数组
+ */
 std::vector<uint32_t> crt(const std::vector<uint32_t>& r1,
                           const std::vector<uint32_t>& r2,
                           const std::vector<uint32_t>& r3,
@@ -247,7 +372,18 @@ std::vector<uint32_t> crt(const std::vector<uint32_t>& r1,
 /**
  * @brief 大整数乘法 - NTT 算法
  *
- * 时间复杂度 O(N log N)，适合超大规模计算
+ * 使用数论变换（NTT）实现高效的大整数乘法。
+ * 时间复杂度 O(N log N)，适合超大规模计算。
+ *
+ * 算法流程：
+ * 1. 将两个大整数视为多项式
+ * 2. 对三个不同质数执行 NTT 变换
+ * 3. 在变换域进行点乘
+ * 4. 逆变换并用 CRT 合并结果
+ *
+ * @param lhs 左操作数（小端序）
+ * @param rhs 右操作数（小端序）
+ * @return 乘积（小端序）
  */
 std::vector<uint32_t> multiply_bigint_ntt(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
     std::size_t n = 1;
@@ -289,12 +425,30 @@ std::vector<uint32_t> multiply_bigint_ntt(const std::vector<uint32_t>& lhs, cons
 /**
  * @brief 大整数乘法 - Karatsuba 算法
  *
- * 时间复杂度 O(n^1.585)，比朴素 O(n²) 更快
+ * 使用分治策略的 Karatsuba 乘法算法。
+ * 时间复杂度 O(n^1.585)，比朴素 O(n^2) 更快。
+ *
+ * 算法原理：
+ * 将 x * y 分解为：
+ *   (a1 * B^m + a0) * (b1 * B^m + b0)
+ * = a1*b1 * B^(2m) + [(a0+a1)(b0+b1) - a0*b0 - a1*b1] * B^m + a0*b0
+ * 只需要 3 次递归乘法而非 4 次。
+ *
+ * @param lhs 左操作数（小端序）
+ * @param rhs 右操作数（小端序）
+ * @return 乘积（小端序）
  */
 std::vector<uint32_t> multiply_bigint_karatsuba(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs);
 
 /**
- * @brief 朴素大整数乘法 (用于小规模数据)
+ * @brief 朴素大整数乘法（用于小规模数据）
+ *
+ * 直接按照手工乘法的方式计算，时间复杂度 O(n^2)。
+ * 虽然效率低，但在小规模数据下开销最小。
+ *
+ * @param lhs 左操作数（小端序）
+ * @param rhs 右操作数（小端序）
+ * @return 乘积（小端序）
  */
 std::vector<uint32_t> multiply_bigint_naive(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
     if ((lhs.size() == 1 && lhs[0] == 0) || (rhs.size() == 1 && rhs[0] == 0)) return {0};
@@ -313,7 +467,13 @@ std::vector<uint32_t> multiply_bigint_naive(const std::vector<uint32_t>& lhs, co
 }
 
 /**
- * @brief 大整数移位 (相当于乘以 base^n)
+ * @brief 大整数左移位（相当于乘以 base^n）
+ *
+ * 在大整数数组前面添加 n 个零，相当于数值乘以 base^n。
+ *
+ * @param v 大整数数组
+ * @param n 移位量
+ * @return 移位后的数组
  */
 std::vector<uint32_t> shift_bigint(const std::vector<uint32_t>& v, std::size_t n) {
     if (v.empty() || (v.size() == 1 && v[0] == 0)) return {0};
@@ -325,6 +485,10 @@ std::vector<uint32_t> shift_bigint(const std::vector<uint32_t>& v, std::size_t n
 
 /**
  * @brief 大整数截取低位 n 个 chunk
+ *
+ * @param v 大整数数组
+ * @param n 要截取的 chunk 数量
+ * @return 截取后的数组
  */
 std::vector<uint32_t> bigint_low(const std::vector<uint32_t>& v, std::size_t n) {
     if (n >= v.size()) return v;
@@ -332,7 +496,11 @@ std::vector<uint32_t> bigint_low(const std::vector<uint32_t>& v, std::size_t n) 
 }
 
 /**
- * @brief 大整数截取高位 (从第 n 个 chunk 开始)
+ * @brief 大整数截取高位（从第 n 个 chunk 开始）
+ *
+ * @param v 大整数数组
+ * @param n 起始 chunk 索引
+ * @return 截取后的数组
  */
 std::vector<uint32_t> bigint_high(const std::vector<uint32_t>& v, std::size_t n) {
     if (n >= v.size()) return {0};
@@ -341,11 +509,20 @@ std::vector<uint32_t> bigint_high(const std::vector<uint32_t>& v, std::size_t n)
 
 /**
  * @brief 移除大整数前导零
+ *
+ * 原地修改，移除数组末尾的所有零（保留至少一个元素）。
+ *
+ * @param v 大整数数组（原地修改）
  */
 void trim_bigint(std::vector<uint32_t>& v) {
     while (v.size() > 1 && v.back() == 0) v.pop_back();
 }
 
+/**
+ * @brief 大整数乘法 - Karatsuba 算法实现
+ *
+ * 递归实现 Karatsuba 乘法，小规模时退化为朴素乘法。
+ */
 std::vector<uint32_t> multiply_bigint_karatsuba(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
     std::size_t n = std::max(lhs.size(), rhs.size());
 
@@ -388,7 +565,16 @@ std::vector<uint32_t> multiply_bigint_karatsuba(const std::vector<uint32_t>& lhs
 }
 
 /**
- * @brief 大整数乘法 (自动选择最优算法)
+ * @brief 大整数乘法（自动选择最优算法）
+ *
+ * 根据输入规模自动选择最适合的乘法算法：
+ * - 小规模（<= 32 chunks）：朴素乘法
+ * - 中等规模（<= 256 chunks）：Karatsuba 算法
+ * - 大规模（> 256 chunks）：NTT 算法
+ *
+ * @param lhs 左操作数
+ * @param rhs 右操作数
+ * @return 乘积
  */
 std::vector<uint32_t> multiply_bigint(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) {
     // 零值快速返回
@@ -412,6 +598,12 @@ std::vector<uint32_t> multiply_bigint(const std::vector<uint32_t>& lhs, const st
 
 /**
  * @brief 大整数乘以一个小整数
+ *
+ * 当乘数是单个 uint32_t 时使用此函数，效率更高。
+ *
+ * @param v 大整数数组
+ * @param n 小整数乘数
+ * @return 乘积
  */
 std::vector<uint32_t> multiply_bigint_by_uint32(const std::vector<uint32_t>& v, uint32_t n) {
     if (n == 0 || (v.size() == 1 && v[0] == 0)) return {0};
@@ -431,8 +623,19 @@ std::vector<uint32_t> multiply_bigint_by_uint32(const std::vector<uint32_t>& v, 
 /**
  * @brief Knuth 算法 D：高效大整数除法
  *
- * 时间复杂度 O(n*m)，其中 n 是被除数位数，m 是除数位数
- * 相比逐位试商的 O(n*m*10) 有显著提升
+ * 实现经典的 Knuth 除法算法，时间复杂度 O(n*m)。
+ * 相比逐位试商的 O(n*m*10) 有显著提升。
+ *
+ * 算法步骤：
+ * 1. D1: 归一化 - 使除数最高位 >= base/2
+ * 2. D2-D7: 主循环，计算每一位商
+ * 3. D8: 反归一化得到最终余数
+ *
+ * @param num 被除数
+ * @param den 除数
+ * @param quotient 输出：商
+ * @param remainder 输出：余数
+ * @throws std::runtime_error 如果除数为零
  */
 void div_bigint(const std::vector<uint32_t>& num,
                 const std::vector<uint32_t>& den,
@@ -574,6 +777,14 @@ void div_bigint(const std::vector<uint32_t>& num,
 
 /**
  * @brief 大整数乘以 10^n
+ *
+ * 通过移动小数点位置来实现，分两步：
+ * 1. 移动完整的 chunk（乘以 base^k）
+ * 2. 移动剩余的位数（乘以 10^r）
+ *
+ * @param v 大整数数组
+ * @param n 10 的幂次
+ * @return 乘积
  */
 std::vector<uint32_t> multiply_bigint_by_power_of_10(std::vector<uint32_t> v, int n) {
     if (n <= 0) return v;
@@ -596,6 +807,12 @@ std::vector<uint32_t> multiply_bigint_by_power_of_10(std::vector<uint32_t> v, in
 
 /**
  * @brief 对齐两个 PreciseDecimal 的 scale
+ *
+ * 通过扩展较小 scale 的数字来对齐两个数的小数点位置。
+ * 例如：1.23 (scale=2) 和 0.1 (scale=1) 变为 1.23 和 0.10
+ *
+ * @param lhs 第一个数（可能被修改）
+ * @param rhs 第二个数（可能被修改）
  */
 void align_precise_scales(PreciseDecimal* lhs, PreciseDecimal* rhs) {
     if (lhs->scale == rhs->scale) return;
@@ -608,22 +825,55 @@ void align_precise_scales(PreciseDecimal* lhs, PreciseDecimal* rhs) {
     }
 }
 
+// ============================================================================
+// 高精度数学常量和辅助函数
+// ============================================================================
+
+/// 返回高精度整数 1
 PreciseDecimal one() { return PreciseDecimal(1LL); }
+
+/// 返回高精度整数 2
 PreciseDecimal two() { return PreciseDecimal(2LL); }
+
+/// 返回高精度小数 0.5
 PreciseDecimal half() { return PreciseDecimal("0.5"); }
 
+/// 从 uint32_t 构造高精度小数
 PreciseDecimal decimal_from_uint(uint32_t value) {
     return PreciseDecimal(static_cast<long long>(value));
 }
 
+/**
+ * @brief 生成精度相关的 epsilon 值
+ *
+ * 用于级数展开的收敛判断。
+ *
+ * @param extra_digits 额外精度位数
+ * @return 10^(-(default_scale + extra_digits))
+ */
 PreciseDecimal scale_epsilon(int extra_digits) {
     return PreciseDecimal("1e-" + std::to_string(PrecisionContext::get_default_scale() + extra_digits));
 }
 
+/**
+ * @brief 计算级数迭代上限
+ *
+ * @param minimum 最小迭代次数
+ * @return 迭代次数上限
+ */
 int series_iteration_limit(int minimum) {
     return std::max(minimum, PrecisionContext::get_default_scale() * 2 + 20);
 }
 
+/**
+ * @brief 将值规约到正模数范围内
+ *
+ * 计算 value mod modulus，保证结果在 [0, modulus) 范围内。
+ *
+ * @param value 输入值
+ * @param modulus 模数（必须为正）
+ * @return 规约后的值
+ */
 PreciseDecimal reduce_mod_positive(const PreciseDecimal& value, const PreciseDecimal& modulus) {
     PreciseDecimal q = precise::floor(value / modulus);
     PreciseDecimal r = value - q * modulus;
@@ -631,6 +881,14 @@ PreciseDecimal reduce_mod_positive(const PreciseDecimal& value, const PreciseDec
     return r;
 }
 
+/**
+ * @brief 规约三角函数参数到 [-π, π] 范围
+ *
+ * 通过模 2π 运算将参数规约到主值区间，提高三角函数计算的效率和精度。
+ *
+ * @param x 输入弧度值
+ * @return 规约后的弧度值，在 [-π, π] 范围内
+ */
 PreciseDecimal reduce_trig_argument(const PreciseDecimal& x) {
     const PreciseDecimal p = precise::pi();
     const PreciseDecimal two_pi = p * two();

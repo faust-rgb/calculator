@@ -1,3 +1,26 @@
+// ============================================================================
+// 脚本 AST 定义 - Python 风格脚本语言的抽象语法树
+// ============================================================================
+//
+// 本文件定义了脚本语言的所有 AST 节点类型：
+// - Statement: 所有语句的基类
+// - BlockStatement: 语句块
+// - SimpleStatement: 简单语句（表达式/赋值）
+// - IfStatement: 条件语句
+// - WhileStatement: while 循环
+// - ForStatement: C 风格 for 循环
+// - ForRangeStatement: range 风格 for 循环
+// - ForInStatement: iterable 风格 for 循环
+// - FunctionStatement: 函数定义
+// - ReturnStatement: 返回语句
+// - BreakStatement/ContinueStatement: 控制流语句
+// - ImportStatement: 导入语句
+// - MatchStatement: 模式匹配语句
+//
+// 所有语句继承自 execution::ExecutableNode，支持直接执行。
+//
+// ============================================================================
+
 #ifndef SCRIPT_AST_H
 #define SCRIPT_AST_H
 

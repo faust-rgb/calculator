@@ -2,11 +2,16 @@
  * @file convolution.cpp
  * @brief 卷积与相关函数实现
  *
- * 实现：
- * - 线性卷积
- * - FFT 快速卷积
- * - 循环卷积
- * - 互相关与自相关
+ * 本文件实现了信号处理中的卷积和相关函数，包括：
+ * - 线性卷积：直接法和 FFT 快速法
+ * - 循环卷积：使用 FFT 实现的圆周卷积
+ * - 互相关函数：测量两个信号的相似性
+ * - 自相关函数：分析信号自身的周期性
+ *
+ * 对于小信号使用直接卷积，大信号自动切换到 FFT 快速卷积以提高效率。
+ *
+ * @author Calculator Development Team
+ * @date 2024
  */
 
 #include "signal_processing.h"
@@ -25,6 +30,16 @@ constexpr long double kPi = 3.14159265358979323846;
 // 线性卷积（直接法）
 // ============================================================================
 
+/**
+ * @brief 计算两个信号的线性卷积
+ *
+ * 实现线性卷积运算，输出长度为 M + N - 1。
+ * 对于小信号（N * M <= 1024）使用直接卷积，大信号自动使用 FFT 快速卷积。
+ *
+ * @param signal1 第一个输入信号
+ * @param signal2 第二个输入信号
+ * @return 卷积结果向量
+ */
 std::vector<long double> convolve(const std::vector<long double>& signal1,
                                const std::vector<long double>& signal2) {
     const std::size_t n = signal1.size();

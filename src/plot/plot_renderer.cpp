@@ -1,3 +1,11 @@
+/**
+ * @file plot_renderer.cpp
+ * @brief 终端绘图渲染器实现文件
+ *
+ * 本文件实现了基于终端字符的二维图形渲染功能，
+ * 主要使用 Braille Unicode 字符实现高分辨率终端图形。
+ */
+
 #include "plot_renderer.h"
 #include "math/mymath.h"
 #include <algorithm>
@@ -7,6 +15,15 @@
 
 namespace plot {
 
+/**
+ * @brief 编码 Braille 字符
+ *
+ * 将 8 位点阵掩码编码为 UTF-8 格式的 Braille Unicode 字符。
+ * Braille 字符范围为 U+2800 - U+28FF，每个字符表示 2x4 的点阵。
+ *
+ * @param mask 8 位点阵掩码，每位对应一个点
+ * @return UTF-8 编码的 Braille 字符字符串
+ */
 static std::string encode_braille(int mask) {
     if (mask == 0) return " ";
     // Braille Unicode range: U+2800 - U+28FF
@@ -21,11 +38,32 @@ static std::string encode_braille(int mask) {
     return s;
 }
 
+/**
+ * @brief 渲染点集为终端字符串
+ *
+ * 对外接口函数，内部调用 Braille 渲染方法。
+ *
+ * @param points 要绑制的点集
+ * @param width 绑图宽度
+ * @param height 绑图高度
+ * @return 绑图字符串
+ */
 std::string PlotRenderer::render(const std::vector<Point>& points, int width, int height) {
     if (points.empty()) return "No data to plot.";
     return render_braille(points, width, height);
 }
 
+/**
+ * @brief 使用 Braille 字符渲染点集
+ *
+ * 核心渲染函数，实现高分辨率终端图形显示。
+ * 每个终端字符表示 2x4 像素网格，使用不同颜色区分数据点和坐标轴。
+ *
+ * @param points 要绑制的点集
+ * @param width 绑图宽度（字符数）
+ * @param height 绑图高度（字符数）
+ * @return 格式化的绑图字符串
+ */
 std::string PlotRenderer::render_braille(const std::vector<Point>& points, int width, int height) {
     if (points.empty()) return "";
 
@@ -122,6 +160,16 @@ std::string PlotRenderer::render_braille(const std::vector<Point>& points, int w
     return out.str();
 }
 
+/**
+ * @brief 使用 ASCII 字符渲染点集
+ *
+ * 简单的 ASCII 渲染备选方案（尚未完整实现）。
+ *
+ * @param points 要绑制的点集
+ * @param width 绑图宽度
+ * @param height 绑图高度
+ * @return 绑图字符串
+ */
 std::string PlotRenderer::render_ascii(const std::vector<Point>&, int, int) {
     // Simple ASCII fallback if needed, but for now Braille is the target.
     return "ASCII renderer not implemented yet. Use Braille-supported terminal.";

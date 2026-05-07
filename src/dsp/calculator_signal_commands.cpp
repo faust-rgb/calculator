@@ -1,6 +1,18 @@
 /**
  * @file calculator_signal_commands.cpp
  * @brief 信号处理命令实现
+ *
+ * 本文件实现了计算器中的信号处理命令，包括：
+ * - FFT 相关命令：fft, ifft, rfft（快速傅里叶变换及其逆变换）
+ * - 卷积与相关命令：conv, cconv, xcorr, autocorr
+ * - 窗函数命令：window
+ * - 滤波器命令：filter, fir_design, iir_design, freqz
+ * - 时频分析命令：psd, stft, spectrogram
+ *
+ * 这些命令为用户提供了完整的数字信号处理功能。
+ *
+ * @author Calculator Development Team
+ * @date 2024
  */
 
 #include "calculator_signal_commands.h"
@@ -23,7 +35,15 @@ constexpr long double kPi = 3.14159265358979323846;
 // 辅助函数
 // ============================================================================
 
-// 使用统一解析器解析向量
+/**
+ * @brief 使用统一解析器解析向量
+ *
+ * 将字符串解析为长双精度浮点数向量。支持矩阵、列表和单个数值的解析。
+ *
+ * @param ctx 信号处理上下文，包含变量和函数信息
+ * @param str 要解析的字符串
+ * @return 解析后的向量
+ */
 static std::vector<long double> parse_vector(const SignalContext& ctx, const std::string& str) {
     if (utils::trim_view(str).empty()) return {};
 
@@ -43,7 +63,15 @@ static std::vector<long double> parse_vector(const SignalContext& ctx, const std
     return result;
 }
 
-// 格式化向量输出
+/**
+ * @brief 格式化向量输出
+ *
+ * 将向量转换为可读的字符串格式，支持指定精度。
+ *
+ * @param vec 要格式化的向量
+ * @param precision 输出精度（默认为6）
+ * @return 格式化后的字符串
+ */
 static std::string format_vector(const std::vector<long double>& vec, int precision = 6) {
     std::ostringstream oss;
     oss << std::setprecision(precision) << std::fixed;
@@ -56,7 +84,15 @@ static std::string format_vector(const std::vector<long double>& vec, int precis
     return oss.str();
 }
 
-// 格式化复数向量输出
+/**
+ * @brief 格式化复数向量输出
+ *
+ * 将复数向量转换为可读的字符串格式，每个复数以 a+bj 形式表示。
+ *
+ * @param vec 要格式化的复数向量
+ * @param precision 输出精度（默认为6）
+ * @return 格式化后的字符串
+ */
 static std::string format_complex_vector(const std::vector<signal::Complex>& vec, int precision = 6) {
     std::ostringstream oss;
     oss << std::setprecision(precision) << std::fixed;
@@ -73,7 +109,14 @@ static std::string format_complex_vector(const std::vector<signal::Complex>& vec
     return oss.str();
 }
 
-// 解析参数列表（使用 parser_utils）
+/**
+ * @brief 解析参数列表
+ *
+ * 使用 parser_utils 工具将参数字符串按逗号分隔为参数列表。
+ *
+ * @param args 参数字符串
+ * @return 参数列表
+ */
 static std::vector<std::string> parse_args(const std::string& args) {
     auto result = parser_utils::split_top_level(args, ',');
     for (auto& arg : result) {
@@ -86,6 +129,16 @@ static std::vector<std::string> parse_args(const std::string& args) {
 // FFT 命令
 // ============================================================================
 
+/**
+ * @brief 处理 FFT 命令
+ *
+ * 计算输入信号的快速傅里叶变换。将时域信号转换为频域频谱。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含信号向量）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_fft_command(const SignalContext& ctx,
                         const std::string& args,
                         std::string* output) {
@@ -114,6 +167,17 @@ bool handle_fft_command(const SignalContext& ctx,
     return true;
 }
 
+/**
+ * @brief 处理 IFFT 命令
+ *
+ * 计算频域频谱的逆快速傅里叶变换，恢复时域信号。
+ * 目前支持实数输入向量。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含频谱向量）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_ifft_command(const SignalContext& ctx,
                          const std::string& args,
                          std::string* output) {
@@ -147,6 +211,17 @@ bool handle_ifft_command(const SignalContext& ctx,
     return true;
 }
 
+/**
+ * @brief 处理 RFFT 命令
+ *
+ * 计算实数信号的快速傅里叶变换。
+ * 由于输入是实数，利用 Hermitian 对称性优化计算，仅返回正频率部分。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含实数信号向量）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_rfft_command(const SignalContext& ctx,
                          const std::string& args,
                          std::string* output) {
@@ -172,6 +247,16 @@ bool handle_rfft_command(const SignalContext& ctx,
 // 卷积与相关命令
 // ============================================================================
 
+/**
+ * @brief 处理卷积命令
+ *
+ * 计算两个信号的线性卷积。结果长度为 M + N - 1。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含两个信号向量）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_conv_command(const SignalContext& ctx,
                          const std::string& args,
                          std::string* output) {
@@ -195,6 +280,17 @@ bool handle_conv_command(const SignalContext& ctx,
     return true;
 }
 
+/**
+ * @brief 处理循环卷积命令
+ *
+ * 计算两个信号的循环卷积（圆周卷积）。
+ * 可选参数 n 指定卷积长度，默认为两个信号长度的最大值。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含两个信号向量和可选长度）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_cconv_command(const SignalContext& ctx,
                           const std::string& args,
                           std::string* output) {
@@ -228,6 +324,17 @@ bool handle_cconv_command(const SignalContext& ctx,
     return true;
 }
 
+/**
+ * @brief 处理互相关命令
+ *
+ * 计算两个信号的互相关函数。
+ * 用于测量两个信号在不同时间延迟下的相似程度。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含两个信号向量）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_xcorr_command(const SignalContext& ctx,
                           const std::string& args,
                           std::string* output) {
@@ -251,6 +358,17 @@ bool handle_xcorr_command(const SignalContext& ctx,
     return true;
 }
 
+/**
+ * @brief 处理自相关命令
+ *
+ * 计算信号的自相关函数。
+ * 用于分析信号自身的周期性和结构特征。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含信号向量）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_autocorr_command(const SignalContext& ctx,
                              const std::string& args,
                              std::string* output) {
@@ -276,6 +394,17 @@ bool handle_autocorr_command(const SignalContext& ctx,
 // 窗函数命令
 // ============================================================================
 
+/**
+ * @brief 处理窗函数命令
+ *
+ * 生成指定类型和长度的窗函数。
+ * 支持多种窗函数类型：rectangular, hanning, hamming, blackman, kaiser 等。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含窗类型、长度和可选参数）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_window_command(const SignalContext& ctx,
                            const std::string& args,
                            std::string* output) {
@@ -322,6 +451,17 @@ bool handle_window_command(const SignalContext& ctx,
 // 滤波器命令
 // ============================================================================
 
+/**
+ * @brief 处理滤波命令
+ *
+ * 应用数字滤波器对信号进行滤波处理。
+ * 使用 Direct Form II 实现差分方程计算。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含分子系数b、分母系数a和输入信号）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_filter_command(const SignalContext& ctx,
                            const std::string& args,
                            std::string* output) {
@@ -350,6 +490,17 @@ bool handle_filter_command(const SignalContext& ctx,
     }
 }
 
+/**
+ * @brief 处理 FIR 滤波器设计命令
+ *
+ * 使用窗函数法设计 FIR（有限脉冲响应）滤波器。
+ * 支持低通、高通、带通和带阻滤波器类型。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含阶数、截止频率、类型和可选窗函数）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_fir_design_command(const SignalContext& ctx,
                                const std::string& args,
                                std::string* output) {
@@ -418,6 +569,17 @@ bool handle_fir_design_command(const SignalContext& ctx,
     }
 }
 
+/**
+ * @brief 处理 IIR 滤波器设计命令
+ *
+ * 设计 IIR（无限脉冲响应）巴特沃斯滤波器。
+ * 使用双线性变换法将模拟原型转换为数字滤波器。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含阶数、截止频率和类型）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_iir_design_command(const SignalContext& ctx,
                                const std::string& args,
                                std::string* output) {
@@ -465,6 +627,17 @@ bool handle_iir_design_command(const SignalContext& ctx,
     }
 }
 
+/**
+ * @brief 处理频率响应命令
+ *
+ * 计算数字滤波器的频率响应。
+ * 返回在单位圆上均匀采样点的复数频率响应值。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含分子系数b、分母系数a和可选采样点数）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_freqz_command(const SignalContext& ctx,
                           const std::string& args,
                           std::string* output) {
@@ -506,6 +679,17 @@ bool handle_freqz_command(const SignalContext& ctx,
 // 时频分析命令
 // ============================================================================
 
+/**
+ * @brief 处理功率谱密度命令
+ *
+ * 使用 Welch 方法计算信号的功率谱密度估计。
+ * 将信号分段、加窗后计算平均周期图。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含信号向量和可选 FFT 点数）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_psd_command(const SignalContext& ctx,
                         const std::string& args,
                         std::string* output) {
@@ -536,6 +720,17 @@ bool handle_psd_command(const SignalContext& ctx,
     return true;
 }
 
+/**
+ * @brief 处理短时傅里叶变换命令
+ *
+ * 计算信号的短时傅里叶变换（STFT）。
+ * 用于分析信号频率随时间变化的情况，适用于非平稳信号分析。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含信号向量和可选 FFT 点数）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_stft_command(const SignalContext& ctx,
                          const std::string& args,
                          std::string* output) {
@@ -574,6 +769,17 @@ bool handle_stft_command(const SignalContext& ctx,
     return true;
 }
 
+/**
+ * @brief 处理语谱图命令
+ *
+ * 计算信号的语谱图（时频谱）。
+ * 语谱图显示信号在不同时间和频率上的能量分布。
+ *
+ * @param ctx 信号处理上下文
+ * @param args 参数字符串（包含信号向量和可选 FFT 点数）
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_spectrogram_command(const SignalContext& ctx,
                                 const std::string& args,
                                 std::string* output) {
@@ -615,6 +821,14 @@ bool handle_spectrogram_command(const SignalContext& ctx,
 // 命令注册
 // ============================================================================
 
+/**
+ * @brief 检查是否为信号处理命令
+ *
+ * 判断给定的命令名称是否属于信号处理命令集。
+ *
+ * @param command 命令名称
+ * @return 是信号处理命令返回 true，否则返回 false
+ */
 bool is_signal_command(const std::string& command) {
     static const std::vector<std::string> commands = {
         "fft", "ifft", "rfft", "irfft",
@@ -627,6 +841,17 @@ bool is_signal_command(const std::string& command) {
     return std::find(commands.begin(), commands.end(), command) != commands.end();
 }
 
+/**
+ * @brief 处理信号处理命令
+ *
+ * 根据命令名称分发给相应的处理函数。
+ *
+ * @param ctx 信号处理上下文
+ * @param command 命令名称
+ * @param args 参数字符串
+ * @param output 输出字符串指针
+ * @return 成功返回 true，失败返回 false
+ */
 bool handle_signal_command(const SignalContext& ctx,
                            const std::string& command,
                            const std::string& args,
@@ -655,6 +880,13 @@ bool handle_signal_command(const SignalContext& ctx,
     return false;
 }
 
+/**
+ * @brief 获取信号处理帮助文本
+ *
+ * 返回所有信号处理命令的使用说明和示例。
+ *
+ * @return 帮助文本字符串
+ */
 std::string signal_help_text() {
     return R"(
 Signal Processing Commands:

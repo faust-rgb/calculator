@@ -1,3 +1,21 @@
+/**
+ * @file matrix_ops.cpp
+ * @brief 矩阵基本运算实现
+ *
+ * 本文件实现了矩阵的基本算术运算，包括：
+ * - 加法运算：矩阵+矩阵、矩阵+标量（支持移动语义优化）
+ * - 减法运算：矩阵-矩阵、矩阵-标量
+ * - 乘法运算：矩阵乘法、标量乘法（包含 long double 和 PreciseDecimal 的优化版本）
+ * - 除法运算：矩阵/标量
+ * - 向量运算：点积（使用 Kahan 求和优化）、外积、叉积、投影、归一化
+ * - 特殊积：Kronecker 积、Hadamard 积
+ *
+ * 所有函数都支持泛型模板，可以处理 long double 和 PreciseDecimal 类型。
+ *
+ * @author Calculator Team
+ * @date 2024
+ */
+
 #include "matrix.h"
 #include "matrix_internal.h"
 #include "mymath.h"
@@ -83,6 +101,20 @@ TMatrix<T> subtract(TMatrix<T>&& lhs, T scalar) {
     return std::move(lhs);
 }
 
+// ============================================================================
+// 矩阵乘法实现
+// ============================================================================
+
+/**
+ * @brief 矩阵乘法（泛型版本）
+ *
+ * 计算两个矩阵的乘积。使用稀疏优化：跳过零值元素以减少计算量。
+ *
+ * @param lhs 左操作数矩阵 (m×k)
+ * @param rhs 右操作数矩阵 (k×n)
+ * @return 乘积矩阵 (m×n)
+ * @throws 如果 lhs.cols != rhs.rows 则抛出异常
+ */
 template <typename T>
 TMatrix<T> multiply(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     if (lhs.cols != rhs.rows) {
@@ -105,6 +137,12 @@ TMatrix<T> multiply(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     return result;
 }
 
+/**
+ * @brief 矩阵乘法 - long double 特化版本
+ *
+ * 使用 long double 中间累加器提高数值精度。
+ * 对于大规模矩阵乘法，减少精度损失。
+ */
 // 针对 long double 的优化版本 (使用 long double 中间累加)
 template <>
 TMatrix<long double> multiply<long double>(const TMatrix<long double>& lhs, const TMatrix<long double>& rhs) {
@@ -128,6 +166,12 @@ TMatrix<long double> multiply<long double>(const TMatrix<long double>& lhs, cons
     return result;
 }
 
+/**
+ * @brief 矩阵乘法 - PreciseDecimal 特化版本
+ *
+ * 使用延迟规范化优化：在累加过程中不规范化，
+ * 最后统一规范化，减少规范化开销。
+ */
 // 针对 PreciseDecimal 的优化版本 (延迟规范化)
 template <>
 TMatrix<PreciseDecimal> multiply<PreciseDecimal>(const TMatrix<PreciseDecimal>& lhs, const TMatrix<PreciseDecimal>& rhs) {
@@ -180,6 +224,20 @@ TMatrix<T> divide(TMatrix<T>&& lhs, T scalar) {
     return std::move(lhs);
 }
 
+// ============================================================================
+// 向量运算实现
+// ============================================================================
+
+/**
+ * @brief 向量点积（泛型版本）
+ *
+ * 计算两个向量的点积（内积）。支持行向量和列向量。
+ *
+ * @param lhs 第一个向量
+ * @param rhs 第二个向量
+ * @return 点积值
+ * @throws 如果向量长度不匹配则抛出异常
+ */
 template <typename T>
 T dot(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     const std::size_t lhs_size = vector_length(lhs, "dot");
@@ -194,6 +252,12 @@ T dot(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     return sum;
 }
 
+/**
+ * @brief 向量点积 - long double 特化版本
+ *
+ * 使用 Kahan 补偿求和算法，减少浮点累加误差。
+ * 对于大量元素的点积运算，精度损失显著降低。
+ */
 // 针对 long double 的优化版 dot (Kahan 求和)
 template <>
 long double dot<long double>(const TMatrix<long double>& lhs, const TMatrix<long double>& rhs) {
@@ -211,6 +275,16 @@ long double dot<long double>(const TMatrix<long double>& lhs, const TMatrix<long
     return static_cast<long double>(sum);
 }
 
+/**
+ * @brief 向量外积
+ *
+ * 计算两个向量的外积（张量积）。结果是一个矩阵。
+ * 例如，[a, b] 与 [c, d] 的外积为 [[ac, ad], [bc, bd]]。
+ *
+ * @param lhs 第一个向量（结果矩阵的行数由其长度决定）
+ * @param rhs 第二个向量（结果矩阵的列数由其长度决定）
+ * @return 外积矩阵
+ */
 template <typename T>
 TMatrix<T> outer(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     const std::size_t lhs_size = vector_length(lhs, "outer");
@@ -224,6 +298,16 @@ TMatrix<T> outer(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     return result;
 }
 
+/**
+ * @brief 向量叉积
+ *
+ * 计算两个三维向量的叉积。仅支持三维向量。
+ *
+ * @param lhs 第一个三维向量
+ * @param rhs 第二个三维向量
+ * @return 叉积向量（方向遵循右手定则）
+ * @throws 如果输入不是三维向量则抛出异常
+ */
 template <typename T>
 TMatrix<T> cross(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     const std::size_t lhs_size = vector_length(lhs, "cross");
@@ -251,6 +335,17 @@ TMatrix<T> cross(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     }
 }
 
+/**
+ * @brief 向量投影
+ *
+ * 计算向量 lhs 在向量 rhs 方向上的投影向量。
+ * 投影向量为 (lhs·rhs / rhs·rhs) * rhs。
+ *
+ * @param lhs 被投影的向量
+ * @param rhs 投影方向向量
+ * @return 投影向量
+ * @throws 如果 rhs 是零向量则抛出异常
+ */
 template <typename T>
 TMatrix<T> project(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     const T rhs_norm_sq = dot(rhs, rhs);
@@ -260,6 +355,15 @@ TMatrix<T> project(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     return multiply(rhs, dot(lhs, rhs) / rhs_norm_sq);
 }
 
+/**
+ * @brief 向量归一化
+ *
+ * 将向量归一化为单位向量（长度为1）。
+ *
+ * @param matrix 输入向量
+ * @return 单位向量
+ * @throws 如果输入不是向量或为零向量则抛出异常
+ */
 template <typename T>
 TMatrix<T> normalize(const TMatrix<T>& matrix) {
     if (!matrix.is_vector()) {
@@ -272,6 +376,21 @@ TMatrix<T> normalize(const TMatrix<T>& matrix) {
     return divide(matrix, v_norm);
 }
 
+// ============================================================================
+// 特殊矩阵积实现
+// ============================================================================
+
+/**
+ * @brief Kronecker 积
+ *
+ * 计算两个矩阵的 Kronecker 积（张量积）。
+ * 若 A 为 m×n，B 为 p×q，则结果为 mp×nq 矩阵。
+ * 结果矩阵的每个元素 a[i][j] 被替换为 a[i][j] * B。
+ *
+ * @param lhs 左操作数矩阵
+ * @param rhs 右操作数矩阵
+ * @return Kronecker 积矩阵
+ */
 template <typename T>
 TMatrix<T> kronecker(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     TMatrix<T> result(lhs.rows * rhs.rows, lhs.cols * rhs.cols, T(0));
@@ -290,6 +409,17 @@ TMatrix<T> kronecker(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     return result;
 }
 
+/**
+ * @brief Hadamard 积（逐元素乘积）
+ *
+ * 计算两个相同形状矩阵的逐元素乘积。
+ * 要求两个矩阵的行列数完全相同。
+ *
+ * @param lhs 左操作数矩阵
+ * @param rhs 右操作数矩阵
+ * @return 逐元素乘积矩阵
+ * @throws 如果矩阵形状不匹配则抛出异常
+ */
 template <typename T>
 TMatrix<T> hadamard(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     require_same_shape(lhs, rhs, "hadamard");
@@ -300,7 +430,16 @@ TMatrix<T> hadamard(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     return result;
 }
 
-// 显式实例化
+// ============================================================================
+// 显式模板实例化
+// ============================================================================
+
+/**
+ * @brief 模板实例化宏
+ *
+ * 为指定类型实例化所有矩阵运算函数模板。
+ * 支持 long double 和 PreciseDecimal 两种类型。
+ */
 #define INSTANTIATE_OPS(TYPE) \
     template TMatrix<TYPE> add(const TMatrix<TYPE>&, const TMatrix<TYPE>&); \
     template TMatrix<TYPE> add(TMatrix<TYPE>&&, const TMatrix<TYPE>&); \

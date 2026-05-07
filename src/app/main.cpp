@@ -66,11 +66,21 @@ private:
     termios original_ {};
 };
 
+/**
+ * @brief 重绘输入行
+ *
+ * 清除当前行并重新绘制提示符、输入内容和光标位置。
+ * 用于在用户编辑输入时保持显示同步。
+ *
+ * @param prompt 命令行提示符字符串
+ * @param line 当前输入行内容
+ * @param cursor_pos 光标在输入行中的位置
+ */
 void redraw_input(const std::string& prompt, const std::string& line, std::size_t cursor_pos) {
     // \33[2K 清空当前行，\r 回到行首
     // 重画提示符和输入内容
     std::cout << "\33[2K\r" << prompt << line;
-    
+
     // 将光标移回到正确的位置。使用 \r 后接 \33[C (向前移动)
     std::size_t offset = prompt.size() + cursor_pos;
     if (offset > 0) {
@@ -81,6 +91,14 @@ void redraw_input(const std::string& prompt, const std::string& line, std::size_
     std::cout << std::flush;
 }
 
+/**
+ * @brief 格式化历史记录输出
+ *
+ * 将命令历史记录格式化为带编号的列表字符串。
+ *
+ * @param history 历史命令列表
+ * @return 格式化后的历史记录字符串，每条命令带有编号
+ */
 std::string format_history(const std::vector<std::string>& history) {
     if (history.empty()) {
         return "No history.";
@@ -96,6 +114,13 @@ std::string format_history(const std::vector<std::string>& history) {
     return out.str();
 }
 
+/**
+ * @brief 获取帮助主题列表
+ *
+ * 返回计算器支持的所有帮助主题的静态列表。
+ *
+ * @return 帮助主题名称列表的常量引用
+ */
 const std::vector<std::string>& help_topics() {
     static const std::vector<std::string> topics = {
         "commands", "functions", "matrix", "symbolic", "analysis", "planning", "examples",
@@ -104,6 +129,13 @@ const std::vector<std::string>& help_topics() {
     return topics;
 }
 
+/**
+ * @brief 获取命令补全关键词列表
+ *
+ * 返回可用于Tab补全的核心命令名称列表。
+ *
+ * @return 命令名称列表的常量引用
+ */
 const std::vector<std::string>& command_completion_words() {
     static const std::vector<std::string> words = {
         ":help", ":exact", ":precision", ":symbolic",
@@ -112,6 +144,15 @@ const std::vector<std::string>& command_completion_words() {
     return words;
 }
 
+/**
+ * @brief 提取当前正在输入的标记（token）
+ *
+ * 从输入行中提取光标所在位置的标记，用于Tab补全。
+ * 标记由字母、数字、冒号和下划线组成。
+ *
+ * @param line 当前的输入行
+ * @return 包含标记起始位置和标记内容的 pair
+ */
 std::pair<std::size_t, std::string> current_token(const std::string& line) {
     // 从行尾向前扫描，找出当前正在输入的 token。
     // 这样 Tab 补全只会替换最后一段命令/函数前缀。
@@ -128,6 +169,14 @@ std::pair<std::size_t, std::string> current_token(const std::string& line) {
     return {start, line.substr(start)};
 }
 
+/**
+ * @brief 计算字符串列表的公共前缀
+ *
+ * 找出所有匹配字符串的最长公共前缀，用于Tab补全时的部分补全。
+ *
+ * @param matches 候选字符串列表
+ * @return 最长公共前缀字符串，如果没有匹配则返回空字符串
+ */
 std::string common_prefix(const std::vector<std::string>& matches) {
     if (matches.empty()) {
         return "";
@@ -149,6 +198,17 @@ std::string common_prefix(const std::vector<std::string>& matches) {
     return prefix;
 }
 
+/**
+ * @brief 收集补全候选词
+ *
+ * 根据当前输入上下文收集所有可能用于Tab补全的候选词。
+ * 根据输入内容不同，返回帮助主题、命令或函数名。
+ *
+ * @param calculator 计算器实例，用于获取模块函数和变量列表
+ * @param line 当前的输入行，用于判断上下文
+ * @param token 当前正在输入的标记
+ * @return 候选补全词列表
+ */
 std::vector<std::string> gather_completion_words(const Calculator& calculator,
                                                  const std::string& line,
                                                  const std::string& token) {
@@ -170,7 +230,7 @@ std::vector<std::string> gather_completion_words(const Calculator& calculator,
 
     // 合并核心函数、模块函数、变量和自定义函数
     std::vector<std::string> words = { "help", "exit", "quit" };
-    
+
     const std::vector<std::string> module_funcs = calculator.module_function_names();
     for (const auto& name : module_funcs) {
         words.push_back(name + "(");
@@ -189,6 +249,14 @@ std::vector<std::string> gather_completion_words(const Calculator& calculator,
     return words;
 }
 
+/**
+ * @brief 格式化补全候选列表
+ *
+ * 将多个补全候选词格式化为用户友好的显示字符串。
+ *
+ * @param matches 补全候选词列表
+ * @return 格式化后的候选列表字符串
+ */
 std::string format_completion_candidates(const std::vector<std::string>& matches) {
     std::ostringstream out;
     out << "Candidates:\n";
@@ -198,13 +266,30 @@ std::string format_completion_candidates(const std::vector<std::string>& matches
     return out.str();
 }
 
+/**
+ * @struct CompletionResult
+ * @brief Tab补全结果结构体
+ *
+ * 存储Tab补全操作的结果信息，包括是否有匹配、
+ * 是否已应用补全、是否存在歧义以及所有匹配项。
+ */
 struct CompletionResult {
-    bool has_matches = false;
-    bool applied = false;
-    bool ambiguous = false;
-    std::vector<std::string> matches;
+    bool has_matches = false;    ///< 是否找到匹配项
+    bool applied = false;        ///< 是否已应用补全到输入行
+    bool ambiguous = false;      ///< 是否存在多个匹配项（歧义）
+    std::vector<std::string> matches;  ///< 所有匹配的候选词列表
 };
 
+/**
+ * @brief 应用Tab补全
+ *
+ * 根据当前输入内容执行Tab补全操作，查找并应用匹配的补全词。
+ * 如果存在唯一匹配，则直接补全；如果存在多个匹配，则补全公共前缀。
+ *
+ * @param calculator 计算器实例
+ * @param line 输入行的指针，补全结果会直接修改此字符串
+ * @return 补全结果结构体，包含匹配状态和信息
+ */
 CompletionResult apply_completion(const Calculator& calculator, std::string* line) {
     CompletionResult result;
 
@@ -237,6 +322,20 @@ CompletionResult apply_completion(const Calculator& calculator, std::string* lin
     return result;
 }
 
+/**
+ * @brief 读取一行输入（支持历史记录和Tab补全）
+ *
+ * 交互式输入读取函数，支持：
+ * - 方向键浏览历史记录
+ * - Tab自动补全
+ * - 光标移动和编辑
+ * - Ctrl+A/E/K/D等快捷键
+ *
+ * @param calculator 计算器实例，用于Tab补全
+ * @param prompt 命令行提示符
+ * @param history 历史命令列表
+ * @return 用户输入的命令行字符串
+ */
 std::string read_line_with_history(Calculator& calculator,
                                    const std::string& prompt,
                                    const std::vector<std::string>& history) {
@@ -381,18 +480,44 @@ std::string read_line_with_history(Calculator& calculator,
     }
 }
 
+/**
+ * @brief 从输入流读取所有内容
+ *
+ * 将输入流中的所有内容读取到一个字符串中。
+ *
+ * @param in 输入流引用
+ * @return 包含输入流所有内容的字符串
+ */
 std::string read_all(std::istream& in) {
     std::ostringstream out;
     out << in.rdbuf();
     return out.str();
 }
 
+/**
+ * @brief 检查文件是否具有 .calc 扩展名
+ *
+ * 判断给定路径是否以 ".calc" 扩展名结尾。
+ *
+ * @param path 文件路径
+ * @return 如果是 .calc 文件返回 true，否则返回 false
+ */
 bool has_calc_extension(const std::string& path) {
     constexpr std::string_view extension = ".calc";
     return path.size() >= extension.size() &&
            path.compare(path.size() - extension.size(), extension.size(), extension) == 0;
 }
 
+/**
+ * @brief 运行脚本文件
+ *
+ * 执行指定路径的 .calc 脚本文件并输出结果。
+ *
+ * @param calculator 计算器实例
+ * @param script_path 脚本文件路径
+ * @param exact_mode 是否启用精确模式
+ * @return 成功返回 0，失败返回 1
+ */
 int run_script_file(Calculator& calculator, const std::string& script_path, bool exact_mode) {
     if (!has_calc_extension(script_path)) {
         std::cerr << "Error: script file must use .calc extension\n";
@@ -412,6 +537,19 @@ int run_script_file(Calculator& calculator, const std::string& script_path, bool
     return 0;
 }
 
+/**
+ * @brief 执行REPL单行命令
+ *
+ * 处理REPL中输入的单行命令，包括内置命令（help、exit等）
+ * 和计算器表达式求值。
+ *
+ * @param calculator 计算器实例
+ * @param raw_line 原始输入行
+ * @param exact_mode 精确模式标志的指针，可能被修改
+ * @param history 历史命令列表
+ * @param should_exit 退出标志的指针，当用户输入exit时设为true
+ * @return 命令执行结果字符串
+ */
 std::string execute_repl_line(Calculator& calculator,
                               const std::string& raw_line,
                               bool* exact_mode,
@@ -438,7 +576,7 @@ std::string execute_repl_line(Calculator& calculator,
     if (line == ":history") {
         return format_history(history);
     }
-    
+
     // 拦截 :exact 以便同步 REPL 的本地 exact_mode 状态
     if (line == ":exact on") { *exact_mode = true; }
     else if (line == ":exact off") { *exact_mode = false; }
@@ -451,6 +589,15 @@ std::string execute_repl_line(Calculator& calculator,
     return calculator.process_line(line, *exact_mode);
 }
 
+/**
+ * @brief 运行非交互式输入
+ *
+ * 处理来自管道或重定向的非交互式输入，逐行执行命令。
+ *
+ * @param calculator 计算器实例
+ * @param input 输入字符串
+ * @return 成功返回 0，失败返回 1
+ */
 int run_non_interactive_input(Calculator& calculator, const std::string& input) {
     std::istringstream stream(input);
     std::string line;
@@ -487,6 +634,18 @@ int run_non_interactive_input(Calculator& calculator, const std::string& input) 
 
 }  // namespace
 
+/**
+ * @brief 程序入口函数
+ *
+ * 解析命令行参数，根据参数决定运行模式：
+ * - 脚本文件执行模式
+ * - 非交互式输入模式（管道/重定向）
+ * - 交互式REPL模式
+ *
+ * @param argc 参数个数
+ * @param argv 参数数组
+ * @return 成功返回 0，失败返回非零值
+ */
 int main(int argc, char* argv[]) {
     Calculator calculator;
     std::vector<std::string> history;

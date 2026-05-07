@@ -1,3 +1,18 @@
+// ============================================================================
+// 脚本运行时实现文件
+// ============================================================================
+//
+// 本文件实现了脚本执行的核心功能，包括：
+// - 表达式求值（标量、矩阵、字符串、列表、字典等）
+// - 命令 AST 执行
+// - 脚本语句执行（if、while、for、for-in、match 等）
+// - 脚本函数调用
+// - 列表推导式和字典构造
+// - 索引和切片操作
+//
+// 是计算器脚本功能的核心实现文件。
+// ============================================================================
+
 #include "script_runtime.h"
 #include "calculator_module.h"
 #include "parser/expression_ast.h"
@@ -24,39 +39,87 @@
 #include <stdexcept>
 #include <utility>
 
+// ============================================================================
+// 变量访问辅助函数实现
+// ============================================================================
+
+/**
+ * @brief 获取当前可见变量的解析器
+ * @param impl 计算器实现指针
+ * @return 包含所有可见变量的 VariableResolver
+ */
 VariableResolver visible_variables(const Calculator::Impl* impl) {
     return VariableResolver(&impl->variables, &impl->flat_scopes);
 }
 
+/**
+ * @brief 检查是否存在可见的脚本函数或原生函数
+ * @param impl 计算器实现指针
+ * @param name 函数名
+ * @return 如果存在返回 true
+ */
 bool has_visible_script_function(const Calculator::Impl* impl, const std::string& name) {
     if (impl->native_functions.find(name) != impl->native_functions.end()) return true;
     return impl->script_functions.find(name) != impl->script_functions.end();
 }
 
+/**
+ * @brief 分配可见变量
+ * @param impl 计算器实现指针
+ * @param name 变量名
+ * @param value 变量值
+ *
+ * 按作用域优先级分配：先尝试更新现有变量，再创建新变量。
+ * 优先级：局部作用域 > 全局变量表
+ */
 void assign_visible_variable(Calculator::Impl* impl,
                              const std::string& name,
                              const StoredValue& value) {
+    // 先在局部作用域查找
     if (VariableSlot* existing = impl->flat_scopes.find(name)) {
         existing->value = value;
         return;
     }
+    // 再在全局变量表查找
     if (impl->variables.find(name) != impl->variables.end()) {
         impl->variables[name] = value;
         return;
     }
+    // 如果有局部作用域，在局部创建新变量
     if (impl->flat_scopes.scope_depth() > 0) {
         impl->flat_scopes.set(name, value);
         return;
     }
+    // 否则在全局创建
     impl->variables[name] = value;
 }
 
+// ============================================================================
+// 匿名命名空间 - 内部辅助函数
+// ============================================================================
+
 namespace {
 
+/**
+ * @brief 生成缩进文本
+ * @param indent 缩进层级
+ * @return 缩进字符串
+ */
 std::string indent_text(int indent) {
     return std::string(static_cast<std::size_t>(indent) * 2, ' ');
 }
 
+/**
+ * @brief 判断值是否为真值
+ * @param value 要判断的值
+ * @return 如果为真返回 true
+ *
+ * 规则：
+ * - 矩阵和复数不能用作条件
+ * - 字符串：非空为真
+ * - 列表/字典：非空为真
+ * - 标量：非零为真
+ */
 bool truthy_value(const StoredValue& value) {
     if (value.is_matrix) {
         throw std::runtime_error("matrix values cannot be used as script conditions");
@@ -79,6 +142,15 @@ bool truthy_value(const StoredValue& value) {
                                  1e-10);
 }
 
+/**
+ * @brief 求值 AST 并转换为标量值
+ * @param calculator 计算器实例
+ * @param impl 计算器实现指针
+ * @param ast 命令 AST 节点
+ * @param context 上下文描述（用于错误信息）
+ * @return 标量值
+ * @throws 如果值不是标量则抛出异常
+ */
 long double evaluate_scalar(Calculator* calculator, Calculator::Impl* impl, const CommandASTNode& ast, const char* context) {
     StoredValue val = evaluate_command_ast_to_value(calculator, impl, ast, false);
     if (val.is_matrix || val.is_complex || val.is_string) {
@@ -87,16 +159,32 @@ long double evaluate_scalar(Calculator* calculator, Calculator::Impl* impl, cons
     return val.exact ? rational_to_double(val.rational) : val.decimal;
 }
 
+/**
+ * @brief 检查文本是否被指定字符包裹
+ */
 bool is_wrapped_by(std::string_view text, char open, char close) {
     return parser_utils::is_wrapped_by(text, open, close);
 }
 
+/**
+ * @brief 在顶层分割文本（忽略嵌套结构）
+ * @param text 输入文本
+ * @param delimiter 分隔符
+ * @return 分割后的字符串列表
+ */
 std::vector<std::string> split_script_top_level(std::string_view text, char delimiter) {
     auto parts = parser_utils::split_top_level(text, delimiter);
     for (auto& p : parts) p = trim_copy(p);
     return parts;
 }
 
+/**
+ * @brief 在顶层查找单词（忽略嵌套结构和字符串）
+ * @param text 输入文本
+ * @param word 要查找的单词
+ * @param start_at 起始位置
+ * @return 单词位置，未找到返回 npos
+ */
 std::size_t find_top_level_word(std::string_view text, std::string_view word, std::size_t start_at = 0) {
     int paren = 0, bracket = 0, brace = 0;
     bool in_string = false, escaping = false;
@@ -128,6 +216,13 @@ std::size_t find_top_level_word(std::string_view text, std::string_view word, st
     return std::string::npos;
 }
 
+/**
+ * @brief 在顶层查找赋值符号（忽略嵌套结构）
+ * @param text 输入文本
+ * @return 赋值符号位置，未找到返回 npos
+ *
+ * 排除比较运算符（==, !=, <=, >=）。
+ */
 std::size_t find_top_level_assignment(std::string_view text) {
     int paren = 0, bracket = 0, brace = 0;
     bool in_string = false, escaping = false;
@@ -155,6 +250,13 @@ std::size_t find_top_level_assignment(std::string_view text) {
     return std::string::npos;
 }
 
+/**
+ * @brief 将 StoredValue 转换为整数索引
+ * @param value 存储值
+ * @param context 上下文描述（用于错误信息）
+ * @return 整数索引
+ * @throws 如果值不是整数则抛出异常
+ */
 long long stored_to_index(const StoredValue& value, const char* context) {
     if (value.is_matrix || value.is_complex || value.is_string || value.is_list || value.is_dict) {
         throw std::runtime_error(std::string(context) + " must be an integer");
@@ -166,6 +268,12 @@ long long stored_to_index(const StoredValue& value, const char* context) {
     return round_to_long_long(scalar);
 }
 
+/**
+ * @brief 将 StoredValue 转换为字典键
+ * @param value 存储值
+ * @return 字符串形式的键
+ * @throws 如果值不能用作键则抛出异常
+ */
 std::string stored_to_key(const StoredValue& value) {
     if (value.is_string) return value.string_value;
     if (value.is_matrix || value.is_complex || value.is_list || value.is_dict) {
@@ -174,6 +282,15 @@ std::string stored_to_key(const StoredValue& value) {
     return value.exact ? value.rational.to_string() : format_stored_value(value, false);
 }
 
+/**
+ * @brief 解析索引表达式
+ * @param expression 表达式字符串
+ * @param base 输出：基础表达式
+ * @param index 输出：索引表达式
+ * @return 如果成功解析返回 true
+ *
+ * 例如："arr[0]" -> base="arr", index="0"
+ */
 bool parse_index_expression(std::string_view expression, std::string* base, std::string* index) {
     const std::string text = trim_copy(expression);
     if (text.empty() || text.back() != ']') return false;
@@ -211,15 +328,28 @@ bool parse_index_expression(std::string_view expression, std::string* base, std:
     return !base->empty();
 }
 
+/**
+ * @brief 检查文本是否有顶层分号
+ */
 bool has_top_level_semicolon(std::string_view text) {
     return split_script_top_level(text, ';').size() > 1;
 }
 
+// 前向声明
 StoredValue evaluate_script_value_expression(Calculator* calculator,
                                              Calculator::Impl* impl,
                                              const std::string& expression,
                                              bool exact_mode);
 
+// ============================================================================
+// 列表和字典构造辅助函数
+// ============================================================================
+
+/**
+ * @brief 创建列表值
+ * @param values 元素列表
+ * @return 列表类型的 StoredValue
+ */
 StoredValue make_list_value(std::vector<StoredValue> values) {
     StoredValue stored;
     stored.is_list = true;
@@ -227,6 +357,11 @@ StoredValue make_list_value(std::vector<StoredValue> values) {
     return stored;
 }
 
+/**
+ * @brief 创建字典值
+ * @param values 键值对映射
+ * @return 字典类型的 StoredValue
+ */
 StoredValue make_dict_value(std::map<std::string, StoredValue> values) {
     StoredValue stored;
     stored.is_dict = true;
@@ -234,6 +369,16 @@ StoredValue make_dict_value(std::map<std::string, StoredValue> values) {
     return stored;
 }
 
+/**
+ * @brief 求值 range() 函数调用
+ * @param calculator 计算器实例
+ * @param impl 计算器实现指针
+ * @param args_text 参数文本
+ * @param exact_mode 是否精确模式
+ * @return 包含范围内数值的列表
+ *
+ * 支持 1-3 个参数：range(stop)、range(start, stop)、range(start, stop, step)
+ */
 StoredValue evaluate_range_list(Calculator* calculator,
                                 Calculator::Impl* impl,
                                 const std::string& args_text,
@@ -266,6 +411,17 @@ StoredValue evaluate_range_list(Calculator* calculator,
     return make_list_value(std::move(values));
 }
 
+/**
+ * @brief 求值列表推导式
+ * @param calculator 计算器实例
+ * @param impl 计算器实现指针
+ * @param body 推导式体（如 "x*2 for x in list if x > 0"）
+ * @param exact_mode 是否精确模式
+ * @return 结果列表
+ *
+ * 语法：[expr for var in iterable if condition]
+ * 其中 if condition 是可选的。
+ */
 StoredValue evaluate_list_comprehension(Calculator* calculator,
                                         Calculator::Impl* impl,
                                         const std::string& body,
@@ -310,6 +466,16 @@ StoredValue evaluate_list_comprehension(Calculator* calculator,
     return make_list_value(std::move(result));
 }
 
+/**
+ * @brief 求值列表字面量
+ * @param calculator 计算器实例
+ * @param impl 计算器实现指针
+ * @param expression 列表表达式（如 "[1, 2, 3]"）
+ * @param exact_mode 是否精确模式
+ * @return 列表值
+ *
+ * 支持列表推导式语法。
+ */
 StoredValue evaluate_list_literal(Calculator* calculator,
                                   Calculator::Impl* impl,
                                   const std::string& expression,
@@ -329,6 +495,14 @@ StoredValue evaluate_list_literal(Calculator* calculator,
     return make_list_value(std::move(values));
 }
 
+/**
+ * @brief 求值字典字面量
+ * @param calculator 计算器实例
+ * @param impl 计算器实现指针
+ * @param expression 字典表达式（如 "{a: 1, b: 2}"）
+ * @param exact_mode 是否精确模式
+ * @return 字典值
+ */
 StoredValue evaluate_dict_literal(Calculator* calculator,
                                   Calculator::Impl* impl,
                                   const std::string& expression,
@@ -345,6 +519,16 @@ StoredValue evaluate_dict_literal(Calculator* calculator,
     return make_dict_value(std::move(values));
 }
 
+/**
+ * @brief 求值索引或切片操作
+ * @param calculator 计算器实例
+ * @param impl 计算器实现指针
+ * @param expression 索引表达式（如 "arr[0]" 或 "list[1:3]"）
+ * @param exact_mode 是否精确模式
+ * @return 索引或切片结果
+ *
+ * 支持列表、字典、矩阵的索引访问，以及列表的切片操作。
+ */
 StoredValue evaluate_index_or_slice(Calculator* calculator,
                                     Calculator::Impl* impl,
                                     const std::string& expression,
@@ -421,13 +605,28 @@ StoredValue evaluate_index_or_slice(Calculator* calculator,
     throw std::runtime_error("indexing requires a list, dictionary, or matrix");
 }
 
+/**
+ * @brief 求值脚本值表达式
+ * @param calculator 计算器实例
+ * @param impl 计算器实现指针
+ * @param expression 表达式字符串
+ * @param exact_mode 是否精确模式
+ * @return 求值结果
+ *
+ * 支持多种表达式类型：
+ * - 内置函数：len(), range(), append()
+ * - 列表字面量：[1, 2, 3]
+ * - 字典字面量：{a: 1, b: 2}
+ * - 索引/切片：arr[0], list[1:3]
+ * - 普通数学表达式
+ */
 StoredValue evaluate_script_value_expression(Calculator* calculator,
                                              Calculator::Impl* impl,
                                              const std::string& expression,
                                              bool exact_mode) {
     const std::string trimmed = trim_copy(expression);
 
-    // len() function - returns length of list, dict, or string
+    // len() 函数 - 返回列表、字典或字符串的长度
     if (trimmed.rfind("len(", 0) == 0 && trimmed.back() == ')') {
         std::string arg = trim_copy(trimmed.substr(4, trimmed.size() - 5));
         if (arg.empty()) {
@@ -448,12 +647,12 @@ StoredValue evaluate_script_value_expression(Calculator* calculator,
         return result;
     }
 
-    // range() function
+    // range() 函数 - 生成数值范围列表
     if (trimmed.rfind("range(", 0) == 0 && is_wrapped_by(trimmed.substr(5), '(', ')')) {
         return evaluate_range_list(calculator, impl, trimmed.substr(6, trimmed.size() - 7), exact_mode);
     }
 
-    // append() function - returns new list with element appended
+    // append() 函数 - 返回追加元素后的新列表
     if (trimmed.rfind("append(", 0) == 0 && trimmed.back() == ')') {
         std::string args_text = trim_copy(trimmed.substr(7, trimmed.size() - 8));
         std::vector<std::string> args = split_script_top_level(args_text, ',');

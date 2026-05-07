@@ -1,3 +1,14 @@
+/**
+ * @file io_module.h
+ * @brief 输入输出模块头文件
+ *
+ * 本文件定义了 IoModule 类，提供文件读写功能的模块接口。
+ * 支持文件的打开、关闭、读取、写入等基本操作，以及 CSV 和 JSON 格式的数据读写。
+ *
+ * @author Calculator Team
+ * @date 2024
+ */
+
 #ifndef IO_MODULE_H
 #define IO_MODULE_H
 
@@ -11,6 +22,9 @@
 /**
  * @class IoModule
  * @brief 提供文件读写功能的模块
+ *
+ * 该模块继承自 CalculatorModule，为计算器提供完整的文件输入输出能力。
+ * 所有打开的文件通过文件描述符（fd）进行管理，支持多种文件打开模式。
  *
  * 支持的函数：
  * - open(path, mode) - 打开文件，返回文件描述符
@@ -30,24 +44,50 @@
  */
 class IoModule : public CalculatorModule {
 public:
+    /**
+     * @brief 获取模块名称
+     * @return 返回模块名称 "IO"
+     */
     std::string name() const override { return "IO"; }
 
+    /**
+     * @brief 获取模块支持的所有命令列表
+     * @return 返回命令名称字符串向量
+     */
     std::vector<std::string> get_commands() const override {
         return {"open", "close", "read", "write", "read_lines", "readline",
                 "seek", "tell", "exists", "delete", "read_csv", "write_csv",
                 "read_json", "write_json"};
     }
 
+    /**
+     * @brief 获取模块提供的原生函数映射
+     * @return 返回函数名到函数实现的映射表
+     */
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_native_functions() const override;
 
+    /**
+     * @brief 执行命令行参数形式的命令
+     * @param command 命令名称
+     * @param args 参数列表
+     * @param services 核心服务引用
+     * @return 返回命令执行结果的字符串表示
+     */
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
                              const CoreServices& services) override;
 
+    /**
+     * @brief 获取指定主题的帮助信息
+     * @param topic 帮助主题名称
+     * @return 返回该主题的帮助文本
+     */
     std::string get_help_snippet(const std::string& topic) const override;
 
 private:
+    /// 文件描述符到文件流的映射表，存储所有打开的文件
     mutable std::map<int, std::shared_ptr<std::fstream>> files_;
+    /// 下一个可用的文件描述符，从1开始递增
     mutable int next_fd_ = 1;
 };
 

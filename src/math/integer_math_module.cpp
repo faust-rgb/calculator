@@ -1,3 +1,11 @@
+/**
+ * @file integer_math_module.cpp
+ * @brief 整数数学模块实现
+ *
+ * 本文件实现了 IntegerMathModule 类，提供整数数学、数论和进制转换功能。
+ * 包括因式分解、进制转换、位运算和数论函数等。
+ */
+
 #include "integer_math_module.h"
 #include "helpers/integer_helpers.h"
 #include "helpers/combinatorics.h"
@@ -11,6 +19,14 @@
 
 namespace {
 
+/**
+ * @brief 确保参数为整数并转换为 long long
+ * @param x 待检查的值
+ * @param name 参数名称（用于错误消息）
+ * @param func 函数名称（用于错误消息）
+ * @return 转换后的整数值
+ * @throws MathError 如果值不是整数
+ */
 long long require_integer(long double x, const std::string& name, const std::string& func) {
     if (!is_integer_double(x)) {
         throw MathError(func + " requires an integer " + name);
@@ -21,6 +37,14 @@ long long require_integer(long double x, const std::string& name, const std::str
 } // namespace
 
 
+/**
+ * @brief 执行命令式操作（如 factor、bin、oct、hex、base）
+ * @param command 命令名称
+ * @param args 参数列表
+ * @param services 核心服务接口
+ * @return 执行结果的字符串表示
+ * @throws std::runtime_error 如果参数无效
+ */
 std::string IntegerMathModule::execute_args(const std::string& command,
                                           const std::vector<std::string>& args,
                                           const CoreServices& services) {
@@ -76,6 +100,14 @@ std::string IntegerMathModule::execute_args(const std::string& command,
     return "";
 }
 
+/**
+ * @brief 获取模块提供的标量函数映射
+ * @return 函数名称到函数实现的映射
+ *
+ * 包括数论函数（gcd、lcm、factorial、nCr、nPr等）、
+ * 位运算函数（and、or、xor、shl、shr、rol、ror等）
+ * 以及位统计函数（popcount、bitlen、ctz、clz等）。
+ */
 std::map<std::string, std::function<long double(const std::vector<long double>&)>>
 IntegerMathModule::get_scalar_functions() const {
     std::map<std::string, std::function<long double(const std::vector<long double>&)>> funcs;
@@ -148,6 +180,10 @@ IntegerMathModule::get_scalar_functions() const {
     return funcs;
 }
 
+/**
+ * @brief 获取模块提供的所有函数名称列表
+ * @return 函数名称列表
+ */
 std::vector<std::string> IntegerMathModule::get_functions() const {
     std::vector<std::string> names;
     auto sfuncs = get_scalar_functions();
@@ -155,6 +191,11 @@ std::vector<std::string> IntegerMathModule::get_functions() const {
     return names;
 }
 
+/**
+ * @brief 获取帮助信息片段
+ * @param topic 主题名称
+ * @return 对应主题的帮助文本
+ */
 std::string IntegerMathModule::get_help_snippet(const std::string& topic) const {
     if (topic == "programmer") {
         return "Integer & Programmer tools:\n"

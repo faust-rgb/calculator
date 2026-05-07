@@ -1,5 +1,12 @@
 // ============================================================================
-// 命令注册表实现
+// 命令注册表实现文件
+// ============================================================================
+//
+// 本文件实现了 CommandRegistry 类，提供命令的注册、注销和分发功能。
+// 主要特性：
+//   - 支持精确匹配和前缀匹配两种命令注册方式
+//   - 支持命令帮助文本管理
+//   - 提供命令名提取功能
 // ============================================================================
 
 #include "command_registry.h"
@@ -8,9 +15,16 @@
 #include <algorithm>
 
 // ============================================================================
-// 命令注册
+// 命令注册方法实现
 // ============================================================================
 
+/**
+ * @brief 注册一个精确匹配的命令处理器
+ * @param name 命令名称
+ * @param handler 命令处理函数
+ * @param help_text 完整的帮助文本
+ * @param short_help 简短的帮助文本（用于命令列表显示）
+ */
 void CommandRegistry::register_command(const std::string& name,
                                         CommandHandler handler,
                                         const std::string& help_text,
@@ -25,6 +39,15 @@ void CommandRegistry::register_command(const std::string& name,
     commands_[name] = std::move(info);
 }
 
+/**
+ * @brief 注册一个前缀匹配的命令处理器
+ * @param prefix 命令前缀
+ * @param handler 命令处理函数
+ * @param help_text 帮助文本
+ *
+ * 前缀命令可以匹配以该前缀开头的所有命令。
+ * 例如，注册 "plot" 前缀可以匹配 "plot", "plot3d", "plotparam" 等。
+ */
 void CommandRegistry::register_prefix_command(const std::string& prefix,
                                                CommandHandler handler,
                                                const std::string& help_text) {
@@ -38,6 +61,12 @@ void CommandRegistry::register_prefix_command(const std::string& prefix,
     prefix_commands_.push_back(std::move(info));
 }
 
+/**
+ * @brief 注销指定名称的命令
+ * @param name 要注销的命令名称
+ *
+ * 同时从精确匹配表和前缀匹配列表中移除。
+ */
 void CommandRegistry::unregister_command(const std::string& name) {
     commands_.erase(name);
 
@@ -49,9 +78,20 @@ void CommandRegistry::unregister_command(const std::string& name) {
 }
 
 // ============================================================================
-// 命令处理
+// 命令处理方法实现
 // ============================================================================
 
+/**
+ * @brief 尝试处理指定命令
+ * @param cmd_name 命令名称
+ * @param args 已解析的参数列表
+ * @param output 输出字符串指针
+ * @param exact_mode 是否为精确模式
+ * @param services 核心服务接口
+ * @return 如果命令被成功处理返回 true，否则返回 false
+ *
+ * 查找顺序：先查找精确匹配，再查找前缀匹配。
+ */
 bool CommandRegistry::try_process(const std::string& cmd_name,
                                    const std::vector<std::string_view>& args,
                                    std::string* output,
@@ -80,14 +120,23 @@ bool CommandRegistry::try_process(const std::string& cmd_name,
     return false;
 }
 
+/**
+ * @brief 检查指定命令是否存在
+ * @param name 命令名称
+ * @return 如果命令存在返回 true，否则返回 false
+ */
 bool CommandRegistry::has_command(const std::string& name) const {
     return find_command(name) != nullptr;
 }
 
 // ============================================================================
-// 命令信息
+// 命令信息查询方法实现
 // ============================================================================
 
+/**
+ * @brief 获取所有已注册命令的名称列表
+ * @return 排序后的命令名称列表
+ */
 std::vector<std::string> CommandRegistry::get_commands() const {
     std::vector<std::string> result;
 
@@ -103,11 +152,20 @@ std::vector<std::string> CommandRegistry::get_commands() const {
     return result;
 }
 
+/**
+ * @brief 获取指定命令的帮助文本
+ * @param name 命令名称
+ * @return 帮助文本，如果命令不存在则返回空字符串
+ */
 std::string CommandRegistry::get_help(const std::string& name) const {
     const CommandInfo* info = find_command(name);
     return info ? info->help_text : "";
 }
 
+/**
+ * @brief 获取所有命令的简短帮助文本映射
+ * @return 命令名到简短帮助文本的映射表
+ */
 std::map<std::string, std::string> CommandRegistry::get_command_helps() const {
     std::map<std::string, std::string> result;
 
@@ -122,15 +180,27 @@ std::map<std::string, std::string> CommandRegistry::get_command_helps() const {
     return result;
 }
 
+/**
+ * @brief 清空所有已注册的命令
+ */
 void CommandRegistry::clear() {
     commands_.clear();
     prefix_commands_.clear();
 }
 
 // ============================================================================
-// 命令名提取
+// 命令名提取方法实现
 // ============================================================================
 
+/**
+ * @brief 从输入字符串中提取命令名
+ * @param input 输入字符串
+ * @return 提取的命令名，如果无法提取则返回空字符串
+ *
+ * 提取规则：跳过前导空白，提取第一个标识符作为命令名。
+ * 支持元命令（以冒号开头的命令，如 ":help"）。
+ * 例如："plot(sin(x), 0, 2*pi)" 返回 "plot"。
+ */
 std::string CommandRegistry::extract_command_name(const std::string& input) {
     std::size_t start = 0;
 
@@ -160,9 +230,16 @@ std::string CommandRegistry::extract_command_name(const std::string& input) {
 }
 
 // ============================================================================
-// 辅助方法
+// 私有辅助方法实现
 // ============================================================================
 
+/**
+ * @brief 查找命令信息
+ * @param name 命令名称
+ * @return 命令信息指针，如果未找到则返回 nullptr
+ *
+ * 查找顺序：先进行精确匹配，再进行前缀匹配。
+ */
 const CommandInfo* CommandRegistry::find_command(const std::string& name) const {
     // 精确匹配
     auto it = commands_.find(name);

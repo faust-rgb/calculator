@@ -1,3 +1,16 @@
+/**
+ * @file calculator_plot.cpp
+ * @brief 绘图命令处理实现文件
+ *
+ * 本文件实现了各种绘图命令的处理函数，包括：
+ * - plot 命令：生成函数曲线图（终端或 SVG 格式）
+ * - imshow 命令：生成矩阵热力图
+ * - bar 命令：生成柱状图
+ * - hist 命令：生成直方图
+ * - :plot 命令：调用外部 Gnuplot 进行绘图
+ * - :export 命令：将变量导出到文件
+ */
+
 #include "calculator_plot.h"
 #include "plot_renderer.h"
 #include "svg_renderer.h"
@@ -14,6 +27,18 @@
 
 namespace plot {
 
+/**
+ * @brief 对多个表达式进行采样，生成数据系列
+ *
+ * 解析绘图参数，对指定的表达式在给定范围内进行均匀采样，
+ * 生成可用于绑图的数据点序列。
+ *
+ * @param ctx 绘图上下文
+ * @param args 命令参数列表
+ * @param options 绑图选项（输出参数）
+ * @param next_idx 输出参数，返回消耗的参数数量
+ * @return 生成的数据系列向量
+ */
 static std::vector<DataSeries> sample_multiple_series(const PlotContext& ctx, const std::vector<std::string>& args, PlotOptions& /*options*/, size_t* next_idx = nullptr) {
     if (args.empty()) {
         throw std::runtime_error("plot expects at least an expression");
@@ -93,6 +118,16 @@ static std::vector<DataSeries> sample_multiple_series(const PlotContext& ctx, co
     return all_series;
 }
 
+/**
+ * @brief 处理 imshow 命令，生成热力图
+ *
+ * 从矩阵变量中读取数据，使用 SVG 渲染器生成热力图。
+ * 支持自定义颜色映射、标题、轴标签等选项。
+ *
+ * @param ctx 绘图上下文
+ * @param arguments 命令参数列表
+ * @return 热力图 SVG 或导出状态信息
+ */
 std::string handle_imshow_command(const PlotContext& ctx, const std::vector<std::string>& arguments) {
     if (arguments.empty()) {
         throw std::runtime_error("imshow expects (matrix, ...)");
@@ -133,6 +168,19 @@ std::string handle_imshow_command(const PlotContext& ctx, const std::vector<std:
     return svg;
 }
 
+/**
+ * @brief 处理 bar 命令，生成柱状图
+ *
+ * 解析标签和数值参数，使用 SVG 渲染器生成柱状图。
+ * 支持多种输入格式：
+ * - bar(["A", "B", "C"], values)
+ * - bar(values, ["A", "B", "C"])
+ * - bar(matrix_variable)
+ *
+ * @param ctx 绘图上下文
+ * @param arguments 命令参数列表
+ * @return 柱状图 SVG 或导出状态信息
+ */
 std::string handle_bar_command(const PlotContext& ctx, const std::vector<std::string>& arguments) {
     if (arguments.size() < 2) {
         throw std::runtime_error("bar expects (labels, values, ...) or (values, ...)");
@@ -282,6 +330,16 @@ std::string handle_bar_command(const PlotContext& ctx, const std::vector<std::st
     return svg;
 }
 
+/**
+ * @brief 处理 hist 命令，生成直方图
+ *
+ * 从输入数据计算频率分布，使用 SVG 渲染器生成直方图。
+ * 支持自定义分箱数量、颜色、归一化等选项。
+ *
+ * @param ctx 绘图上下文
+ * @param arguments 命令参数列表
+ * @return 直方图 SVG 或导出状态信息
+ */
 std::string handle_hist_command(const PlotContext& ctx, const std::vector<std::string>& arguments) {
     if (arguments.empty()) {
         throw std::runtime_error("hist expects (data, ...)");
@@ -346,6 +404,19 @@ std::string handle_hist_command(const PlotContext& ctx, const std::vector<std::s
     return svg;
 }
 
+/**
+ * @brief 处理 plot 命令，生成函数曲线图
+ *
+ * 解析表达式和绘图参数，对函数进行采样并生成可视化输出。
+ * 支持输出格式：
+ * - 终端格式：使用 Braille 字符渲染
+ * - SVG 格式：生成矢量图形
+ * - 文件导出：保存到指定路径
+ *
+ * @param ctx 绘图上下文
+ * @param arguments 命令参数列表
+ * @return 绘图结果字符串
+ */
 std::string handle_plot_command(const PlotContext& ctx, const std::vector<std::string>& arguments) {
     PlotOptions options;
     size_t next_idx = 0;
@@ -393,6 +464,17 @@ std::string handle_plot_command(const PlotContext& ctx, const std::vector<std::s
     return PlotRenderer::render(all_series[0].points, term_w, term_h);
 }
 
+/**
+ * @brief 处理 :export 命令，将变量导出到文件
+ *
+ * 将指定变量的值导出到文件中，支持：
+ * - 矩阵变量：导出为 CSV 格式
+ * - 标量变量：导出为单行数值
+ *
+ * @param ctx 绘图上下文
+ * @param line 完整的导出命令行
+ * @return 操作状态信息
+ */
 std::string handle_export_command(const PlotContext& ctx, const std::string& line) {
     // :export "file.csv" var 或直接是 "file.csv" var
     std::string trimmed = utils::trim_copy(line);
@@ -436,6 +518,16 @@ std::string handle_export_command(const PlotContext& ctx, const std::string& lin
     return "Exported " + var_name + " to " + filename;
 }
 
+/**
+ * @brief 处理 :plot 命令，调用外部 Gnuplot 进行绘图
+ *
+ * 将数据写入临时文件，调用系统 Gnuplot 打开绘图窗口。
+ * 支持多系列数据同时绘制。
+ *
+ * @param ctx 绘图上下文
+ * @param arguments 命令参数列表
+ * @return 操作状态信息
+ */
 std::string handle_gnuplot_command(const PlotContext& ctx, const std::vector<std::string>& arguments) {
     PlotOptions opts;
     std::vector<DataSeries> all_series = sample_multiple_series(ctx, arguments, opts);

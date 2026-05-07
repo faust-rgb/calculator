@@ -2,12 +2,17 @@
  * @file calculator_signal_commands.h
  * @brief 信号处理命令接口
  *
- * 提供信号处理命令的计算逻辑，包括：
- * - FFT 相关命令 (fft, ifft, rfft, irfft)
- * - 卷积相关命令 (conv, xcorr, autocorr)
- * - 窗函数命令 (window)
- * - 滤波器命令 (filter, fir_design, iir_design)
- * - 时频分析命令 (psd, stft, spectrogram)
+ * 本头文件定义了信号处理命令的接口，包括：
+ * - FFT 相关命令 (fft, ifft, rfft, irfft)：快速傅里叶变换及其逆变换
+ * - 卷积相关命令 (conv, xcorr, autocorr)：线性卷积、循环卷积和相关函数
+ * - 窗函数命令 (window)：生成各类窗函数
+ * - 滤波器命令 (filter, fir_design, iir_design)：数字滤波器设计和应用
+ * - 时频分析命令 (psd, stft, spectrogram)：功率谱和时频分析
+ *
+ * 这些命令为计算器提供完整的数字信号处理功能支持。
+ *
+ * @author Calculator Development Team
+ * @date 2024
  */
 
 #ifndef CALCULATOR_SIGNAL_COMMANDS_H
@@ -28,7 +33,10 @@ namespace signal_cmds {
 // ============================================================================
 
 /**
- * @brief 信号数据（用于命令间传递）
+ * @struct SignalData
+ * @brief 信号数据结构
+ *
+ * 用于在命令间传递实数信号数据，包含采样值和采样率信息。
  */
 struct SignalData {
     std::vector<long double> samples;
@@ -36,7 +44,10 @@ struct SignalData {
 };
 
 /**
- * @brief 复数信号数据
+ * @struct ComplexSignalData
+ * @brief 复数信号数据结构
+ *
+ * 用于在命令间传递复数信号数据，包含复数采样值和采样率信息。
  */
 struct ComplexSignalData {
     std::vector<signal::Complex> samples;
@@ -44,7 +55,11 @@ struct ComplexSignalData {
 };
 
 /**
- * @brief 信号处理上下文
+ * @struct SignalContext
+ * @brief 信号处理上下文结构
+ *
+ * 包含信号处理命令执行所需的上下文信息，
+ * 如变量表、函数表、标量函数表以及脚本函数回调等。
  */
 struct SignalContext {
     const std::map<std::string, StoredValue>* variables;

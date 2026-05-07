@@ -1,3 +1,17 @@
+/**
+ * @file matrix_module.cpp
+ * @brief 矩阵模块实现
+ *
+ * 本文件实现了 MatrixModule 类的所有方法，包括：
+ * - 命令处理：eig, svd, lu_p 命令的执行逻辑
+ * - 矩阵函数注册：transpose, inverse, pinv, qr分解, lu分解, svd分解等
+ * - 值函数注册：complex, polar, real, imag, abs, exp, sin, cos等多态函数
+ * - 辅助函数：参数解析、矩阵/复数要求检查、特征值格式化等
+ *
+ * @author Calculator Team
+ * @date 2024
+ */
+
 #include "matrix_module.h"
 #include "matrix.h"
 #include "matrix_internal.h"
@@ -13,7 +27,17 @@ namespace {
 
 using namespace matrix;
 
-// 辅助函数：解析索引参数
+/**
+ * @brief 解析索引参数
+ *
+ * 将表达式字符串解析为非负整数索引。
+ *
+ * @param expression 包含索引的表达式字符串
+ * @param scalar_evaluator 标量求值器
+ * @param func_name 函数名称（用于错误信息）
+ * @return 解析得到的索引值
+ * @throws 如果结果不是非负整数则抛出异常
+ */
 std::size_t parse_index_argument(const std::string& expression,
                                  const ScalarEvaluator& scalar_evaluator,
                                  const std::string& func_name) {
@@ -24,7 +48,19 @@ std::size_t parse_index_argument(const std::string& expression,
     return static_cast<std::size_t>(value >= 0.0L ? value + 0.5 : value - 0.5);
 }
 
-// 辅助函数：要求参数为矩阵
+/**
+ * @brief 要求参数为矩阵并返回
+ *
+ * 尝试将表达式求值为矩阵，如果失败则抛出异常。
+ *
+ * @param expression 表达式字符串
+ * @param func_name 函数名称（用于错误信息）
+ * @param scalar_evaluator 标量求值器
+ * @param matrix_lookup 矩阵查找回调
+ * @param complex_lookup 复数查找回调
+ * @param matrix_functions 矩阵函数映射
+ * @return 求值得到的矩阵
+ */
 Matrix require_matrix(const std::string& expression,
                       const std::string& func_name,
                       const ScalarEvaluator& scalar_evaluator,
@@ -39,7 +75,15 @@ Matrix require_matrix(const std::string& expression,
     return value.matrix;
 }
 
-// 辅助函数：尝试从 Value 获取复数
+/**
+ * @brief 尝试从 Value 获取复数
+ *
+ * 检查值是否可以转换为复数（复数标量或实数标量）。
+ *
+ * @param v 输入值
+ * @param z 输出复数指针
+ * @return 如果成功转换返回 true
+ */
 bool try_complex_from_value(const Value& v, ComplexNumber* z) {
     if (v.is_complex) {
         *z = v.complex;
@@ -53,7 +97,19 @@ bool try_complex_from_value(const Value& v, ComplexNumber* z) {
     return false;
 }
 
-// 辅助函数：要求参数为复数
+/**
+ * @brief 要求参数为复数并返回
+ *
+ * 尝试将表达式求值为复数或标量，如果失败则抛出异常。
+ *
+ * @param expression 表达式字符串
+ * @param func_name 函数名称（用于错误信息）
+ * @param scalar_evaluator 标量求值器
+ * @param matrix_lookup 矩阵查找回调
+ * @param complex_lookup 复数查找回调
+ * @param matrix_functions 矩阵函数映射
+ * @return 求值得到的复数
+ */
 ComplexNumber require_complex_argument(const std::string& expression,
                                        const std::string& func_name,
                                        const ScalarEvaluator& scalar_evaluator,
@@ -70,7 +126,14 @@ ComplexNumber require_complex_argument(const std::string& expression,
     throw std::runtime_error(func_name + " expects a scalar or complex argument");
 }
 
-// 格式化特征值矩阵（复数形式）
+/**
+ * @brief 格式化特征值矩阵（复数形式）
+ *
+ * 将特征值矩阵格式化为复数形式的字符串表示。
+ *
+ * @param values 特征值矩阵（每行为一个特征值，包含实部和虚部）
+ * @return 格式化后的字符串
+ */
 std::string format_eigenvalue_matrix(const Matrix& values) {
     if (values.rows <= 1 || values.cols != 2) {
         return values.to_string();

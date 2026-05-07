@@ -1,3 +1,24 @@
+/**
+ * @file matrix_stats.cpp
+ * @brief 矩阵统计函数实现
+ *
+ * 本文件实现了用于矩阵数据的统计函数，包括：
+ * - 均值计算：mean_values
+ * - 中位数计算：median_values
+ * - 众数计算：mode_values
+ * - 方差计算：variance_values
+ * - 百分位数计算：percentile_values
+ * - 四分位数计算：quartile_values
+ * - 协方差计算：covariance_values
+ * - 相关系数计算：correlation_values
+ *
+ * 对于 long double 类型，委托给 statistics 库的实现；
+ * 对于 PreciseDecimal 类型，使用独立的实现以保证精度。
+ *
+ * @author Calculator Team
+ * @date 2024
+ */
+
 #include "matrix.h"
 #include "math/mymath.h"
 #include "matrix_internal.h"
@@ -11,6 +32,14 @@
 namespace matrix {
 namespace internal {
 
+/**
+ * @brief 计算均值
+ *
+ * 计算一组数值的算术平均值。
+ *
+ * @param values 输入数值向量
+ * @return 算术平均值
+ */
 template <typename T>
 T mean_values(const std::vector<T>& values) {
     if constexpr (std::is_same_v<T, long double>) {
@@ -23,6 +52,15 @@ T mean_values(const std::vector<T>& values) {
     }
 }
 
+/**
+ * @brief 计算中位数
+ *
+ * 计算一组数值的中位数。对于偶数个元素，取中间两个数的平均值。
+ *
+ * @param values 输入数值向量
+ * @return 中位数
+ * @throws 如果输入为空则抛出异常
+ */
 template <typename T>
 T median_values(const std::vector<T>& values) {
     if constexpr (std::is_same_v<T, long double>) {
@@ -40,6 +78,16 @@ T median_values(const std::vector<T>& values) {
     }
 }
 
+/**
+ * @brief 计算众数
+ *
+ * 计算一组数值的众数（出现次数最多的值）。
+ * 如果有多个值出现次数相同，返回数值最小的那个。
+ *
+ * @param values 输入数值向量
+ * @return 众数
+ * @throws 如果输入为空则抛出异常
+ */
 template <typename T>
 T mode_values(const std::vector<T>& values) {
     if constexpr (std::is_same_v<T, long double>) {
@@ -60,6 +108,14 @@ T mode_values(const std::vector<T>& values) {
     }
 }
 
+/**
+ * @brief 计算方差
+ *
+ * 计算一组数值的总体方差（除以 n，不是 n-1）。
+ *
+ * @param values 输入数值向量
+ * @return 方差
+ */
 template <typename T>
 T variance_values(const std::vector<T>& values) {
     if constexpr (std::is_same_v<T, long double>) {

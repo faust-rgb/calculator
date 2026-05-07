@@ -1,9 +1,24 @@
 // ============================================================================
-// CalculatorModule 基类实现
+// calculator_module.cpp - CalculatorModule 基类实现
+// ============================================================================
+//
+// 本文件实现了 CalculatorModule 基类的成员函数，提供：
+// - 命令规范生成（将命令名转换为 CommandSpec）
+// - 命令执行的默认实现（支持字符串和字符串视图参数）
+// - 隐式触发字符表的缓存机制
+//
+// 这些实现为所有派生模块提供通用的基础设施。
 // ============================================================================
 
 #include "calculator_module.h"
 
+/**
+ * @brief 获取命令规范列表
+ * @return 命令规范向量，包含命令键和派发名称
+ *
+ * 遍历 get_commands() 返回的命令名，自动判断是 Meta 命令（以冒号开头）
+ * 还是 Call 命令，并生成对应的 CommandSpec。
+ */
 std::vector<CommandSpec> CalculatorModule::get_command_specs() const {
     std::vector<CommandSpec> specs;
     for (const std::string& cmd : get_commands()) {
@@ -16,6 +31,16 @@ std::vector<CommandSpec> CalculatorModule::get_command_specs() const {
     return specs;
 }
 
+/**
+ * @brief 使用字符串参数执行命令（默认实现）
+ * @param command 命令名
+ * @param args 参数列表
+ * @param services 核心服务接口
+ * @return 命令执行结果字符串
+ *
+ * 默认实现将参数列表拼接为逗号分隔的字符串，调用旧版 execute() 函数。
+ * 派生类可重写此方法以获得更好的性能。
+ */
 std::string CalculatorModule::execute_args(const std::string& command,
                                            const std::vector<std::string>& args,
                                            const CoreServices& services) {
@@ -28,6 +53,16 @@ std::string CalculatorModule::execute_args(const std::string& command,
     return execute(command, inside, services);
 }
 
+/**
+ * @brief 使用字符串视图参数执行命令
+ * @param command 命令名（字符串视图）
+ * @param args 参数列表（字符串视图向量）
+ * @param services 核心服务接口
+ * @return 命令执行结果字符串
+ *
+ * 将字符串视图参数转换为字符串，然后调用 execute_args()。
+ * 这种设计允许调用者使用零拷贝的字符串视图参数。
+ */
 std::string CalculatorModule::execute_args_view(std::string_view command,
                                                 const std::vector<std::string_view>& args,
                                                 const CoreServices& services) {
@@ -40,6 +75,13 @@ std::string CalculatorModule::execute_args_view(std::string_view command,
     return execute_args(cmd, string_args, services);
 }
 
+/**
+ * @brief 获取缓存的隐式触发字符表
+ * @return 指向触发字符布尔表的指针，若无触发字符则返回 nullptr
+ *
+ * 为了提高性能，将隐式触发字符缓存为查找表（256元素的布尔数组）。
+ * 首次调用时构建缓存，后续调用直接返回缓存的表。
+ */
 const std::array<bool, 256>* CalculatorModule::get_cached_trigger_table() const {
     if (!trigger_table_cached_) {
         std::string triggers = get_implicit_trigger_chars();

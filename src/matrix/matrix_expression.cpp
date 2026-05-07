@@ -2,12 +2,22 @@
  * @file matrix_expression.cpp
  * @brief 矩阵表达式解析与求值实现
  *
- * 本文件实现了矩阵表达式的解析和求值功能，包括：
- * - 矩阵字面量的解析（如 [1, 2; 3, 4]）
- * - 矩阵函数调用（如 transpose(A), inverse(M)）
- * - 矩阵运算（加减乘除、幂运算）
- * - 统计函数、插值函数、信号处理函数等
- * - 复数运算支持
+ * 本文件实现了矩阵表达式的解析和求值功能，是矩阵模块的核心组件。
+ *
+ * 主要功能包括：
+ * - 矩阵字面量的解析：支持 [a,b;c,d] 语法的矩阵字面量
+ * - 矩阵函数调用：支持 transpose(A), inverse(M), eigvals(M) 等函数
+ * - 矩阵运算：加减乘除、幂运算，支持运算符优先级
+ * - 统计函数：mean, median, mode, var, std, skewness, kurtosis 等
+ * - 插值函数：Lagrange 插值、样条插值、线性回归
+ * - 信号处理：DFT/FFT、卷积、滤波器、频率响应
+ * - 复数运算：complex, polar, real, imag, arg, conj 等
+ * - 多项式运算：poly_eval, poly_deriv, poly_integ, poly_fit 等
+ *
+ * 解析器采用递归下降方法实现，继承自 BaseParser 复用词法分析工具。
+ *
+ * @author Calculator Team
+ * @date 2024
  */
 
 #include "matrix.h"

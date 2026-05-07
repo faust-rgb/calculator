@@ -1,3 +1,17 @@
+/**
+ * @file matrix.h
+ * @brief 矩阵运算库核心头文件
+ *
+ * 本文件定义了矩阵运算库的核心数据结构和函数接口，包括：
+ * - TMatrix: 泛型矩阵数据结构，支持 long double 和 PreciseDecimal 类型
+ * - TComplex: 泛型复数表示
+ * - TValue: 统一的值类型，可以表示标量、矩阵或复数
+ * - 各种矩阵运算函数的声明（基本运算、线性代数、信号处理等）
+ *
+ * @author Calculator Team
+ * @date 2024
+ */
+
 #ifndef MATRIX_H
 #define MATRIX_H
 

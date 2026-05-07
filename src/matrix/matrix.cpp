@@ -1,3 +1,18 @@
+/**
+ * @file matrix.cpp
+ * @brief 矩阵核心方法实现
+ *
+ * 本文件实现了 TMatrix 和 TValue 结构的核心方法，包括：
+ * - 矩阵的构造函数和静态工厂方法（zero, identity, vector）
+ * - 矩阵的基本操作（at, resize, append_row, append_col）
+ * - 算术运算符重载（+=, -=, *=, /=）
+ * - TValue 的静态工厂方法
+ * - 模板显式实例化
+ *
+ * @author Calculator Team
+ * @date 2024
+ */
+
 #include "matrix.h"
 #include "matrix_internal.h"
 #include "mymath.h"

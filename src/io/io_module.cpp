@@ -1,3 +1,14 @@
+/**
+ * @file io_module.cpp
+ * @brief 输入输出模块实现文件
+ *
+ * 本文件实现了 IoModule 类的所有成员函数，提供文件读写功能的具体实现。
+ * 包括基本文件操作（打开、关闭、读写）以及 CSV 和 JSON 格式的数据读写功能。
+ *
+ * @author Calculator Team
+ * @date 2024
+ */
+
 #include "io_module.h"
 #include "core/calculator_exceptions.h"
 #include "core/string_utils.h"
@@ -7,7 +18,18 @@
 #include <sstream>
 #include <stdexcept>
 
+/**
+ * @brief 匿名命名空间，包含模块内部使用的辅助函数
+ */
 namespace {
+
+    /**
+     * @brief 从 StoredValue 中提取标量数值
+     * @param val 存储值对象
+     * @param ctx 上下文描述，用于错误信息
+     * @return 返回提取的长双精度浮点数值
+     * @throw std::runtime_error 如果值不是标量类型
+     */
     long double get_scalar(const StoredValue& val, const std::string& ctx) {
         if (val.is_matrix || val.is_complex || val.is_string || val.is_list || val.is_dict) {
             throw std::runtime_error(ctx + " must be a scalar");
@@ -15,17 +37,39 @@ namespace {
         return val.exact ? rational_to_double(val.rational) : val.decimal;
     }
 
+    /**
+     * @brief 从 StoredValue 中提取字符串值
+     * @param val 存储值对象
+     * @param ctx 上下文描述，用于错误信息
+     * @return 返回提取的字符串
+     * @throw std::runtime_error 如果值不是字符串类型
+     */
     std::string get_string(const StoredValue& val, const std::string& ctx) {
         if (val.is_string) return val.string_value;
         throw std::runtime_error(ctx + " must be a string");
     }
 
+    /**
+     * @brief 从 StoredValue 中提取矩阵对象
+     * @param val 存储值对象
+     * @param ctx 上下文描述，用于错误信息
+     * @return 返回提取的矩阵对象
+     * @throw std::runtime_error 如果值不是矩阵类型
+     */
     matrix::Matrix get_matrix(const StoredValue& val, const std::string& ctx) {
         if (val.is_matrix) return val.matrix;
         throw std::runtime_error(ctx + " must be a matrix");
     }
 
-    // JSON 序列化辅助函数
+    /**
+     * @brief 将 StoredValue 序列化为 JSON 字符串
+     *
+     * 支持字符串、矩阵、列表、字典、复数和标量类型的序列化。
+     * 对于字符串，会自动转义特殊字符（引号、反斜杠、换行符等）。
+     *
+     * @param val 要序列化的存储值
+     * @return 返回 JSON 格式的字符串表示
+     */
     std::string value_to_json_impl(const StoredValue& val) {
         if (val.is_string) {
             std::string escaped;
@@ -78,13 +122,27 @@ namespace {
         if (val.is_complex) {
             return "[" + std::to_string(val.complex.real) + ", " + std::to_string(val.complex.imag) + "]";
         }
-        // 标量
+        // 标量数值
         return std::to_string(val.exact ? rational_to_double(val.rational) : val.decimal);
     }
 
-    // JSON 解析辅助函数
+    /**
+     * @brief 从 JSON 字符串解析 StoredValue
+     *
+     * 递归解析 JSON 格式的字符串视图，支持解析以下 JSON 类型：
+     * - null: 转换为标量 0
+     * - true/false: 转换为标量 1/0
+     * - 数字: 转换为标量值
+     * - 字符串: 保持为字符串类型
+     * - 数组: 尝试转换为矩阵或列表
+     * - 对象: 转换为字典类型
+     *
+     * @param s JSON 字符串视图，解析过程中会被修改（前缀移除）
+     * @return 返回解析后的存储值对象
+     * @throw std::runtime_error 如果 JSON 格式无效
+     */
     StoredValue parse_json_value_impl(std::string_view& s) {
-        // 跳过空白
+        // 跳过空白字符
         while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front()))) {
             s.remove_prefix(1);
         }
@@ -92,28 +150,28 @@ namespace {
 
         StoredValue result;
 
-        // null
+        // 处理 null 值，转换为标量 0
         if (s.substr(0, 4) == "null") {
             s.remove_prefix(4);
             result.decimal = 0;
             return result;
         }
 
-        // true
+        // 处理 true 值，转换为标量 1
         if (s.substr(0, 4) == "true") {
             s.remove_prefix(4);
             result.decimal = 1;
             return result;
         }
 
-        // false
+        // 处理 false 值，转换为标量 0
         if (s.substr(0, 5) == "false") {
             s.remove_prefix(5);
             result.decimal = 0;
             return result;
         }
 
-        // 数字
+        // 处理数字类型
         if (std::isdigit(static_cast<unsigned char>(s.front())) || s.front() == '-' || s.front() == '+') {
             std::size_t i = 0;
             if (s.front() == '-' || s.front() == '+') i = 1;
@@ -126,7 +184,7 @@ namespace {
             return result;
         }
 
-        // 字符串
+        // 处理字符串类型
         if (s.front() == '"') {
             s.remove_prefix(1);
             std::string str;
@@ -152,7 +210,7 @@ namespace {
             return result;
         }
 
-        // 数组
+        // 处理数组类型
         if (s.front() == '[') {
             s.remove_prefix(1);
             std::vector<StoredValue> items;
@@ -224,7 +282,7 @@ namespace {
             return result;
         }
 
-        // 对象
+        // 处理对象类型（字典）
         if (s.front() == '{') {
             s.remove_prefix(1);
             std::map<std::string, StoredValue> obj;
@@ -267,11 +325,23 @@ namespace {
 
         throw std::runtime_error("Unexpected character in JSON");
     }
-}
+} // 匿名命名空间结束
 
+/**
+ * @brief 获取模块提供的所有原生函数实现
+ *
+ * 返回一个映射表，包含所有 I/O 相关函数的实现。
+ * 每个函数都是一个 lambda 表达式，接受 StoredValue 向量作为参数，
+ * 并返回一个 StoredValue 作为结果。
+ *
+ * @return 函数名到函数实现的映射表
+ */
 std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> IoModule::get_native_functions() const {
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
+    // ========== open 函数 ==========
+    // 打开指定路径的文件，支持多种打开模式（r, w, a, rw 等）
+    // 返回文件描述符用于后续操作
     funcs["open"] = [this](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("open expects at least 1 argument");
         std::string path;
@@ -312,6 +382,8 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         return res;
     };
 
+    // ========== close 函数 ==========
+    // 关闭指定的文件描述符，释放相关资源
     funcs["close"] = [this](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("close expects 1 argument");
         int fd = static_cast<int>(get_scalar(args[0], "close fd"));
@@ -324,6 +396,8 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         throw std::runtime_error("Invalid file descriptor");
     };
 
+    // ========== read 函数 ==========
+    // 读取整个文件内容，返回字符串
     funcs["read"] = [this](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("read expects at least 1 argument");
         int fd = static_cast<int>(get_scalar(args[0], "read fd"));
@@ -339,6 +413,8 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         return res;
     };
 
+    // ========== write 函数 ==========
+    // 将文本内容写入到指定文件
     funcs["write"] = [this](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() < 2) throw std::runtime_error("write expects 2 arguments");
         int fd = static_cast<int>(get_scalar(args[0], "write fd"));
@@ -355,6 +431,8 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         StoredValue res; res.decimal = 1; return res;
     };
 
+    // ========== read_lines 函数 ==========
+    // 读取文件所有行，返回字符串列表
     funcs["read_lines"] = [this](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("read_lines expects 1 argument");
         int fd = static_cast<int>(get_scalar(args[0], "read_lines fd"));
@@ -376,7 +454,8 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         return res;
     };
 
-    // readline(fd) - 读取单行
+    // ========== readline 函数 ==========
+    // 读取单行文本，每次调用返回下一行
     funcs["readline"] = [this](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("readline expects 1 argument");
         int fd = static_cast<int>(get_scalar(args[0], "readline fd"));
@@ -391,14 +470,15 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
             return res;
         }
 
-        // EOF reached
+        // 到达文件末尾（EOF），返回空字符串
         StoredValue res;
         res.is_string = true;
         res.string_value = "";
         return res;
     };
 
-    // seek(fd, pos) - 定位文件指针
+    // ========== seek 函数 ==========
+    // 定位文件指针到指定位置
     funcs["seek"] = [this](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() < 2) throw std::runtime_error("seek expects 2 arguments");
         int fd = static_cast<int>(get_scalar(args[0], "seek fd"));
@@ -416,7 +496,8 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         return res;
     };
 
-    // tell(fd) - 获取当前位置
+    // ========== tell 函数 ==========
+    // 获取当前文件指针位置
     funcs["tell"] = [this](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("tell expects 1 argument");
         int fd = static_cast<int>(get_scalar(args[0], "tell fd"));
@@ -432,7 +513,8 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         return res;
     };
 
-    // exists(path) - 检查文件是否存在
+    // ========== exists 函数 ==========
+    // 检查指定路径的文件是否存在
     funcs["exists"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("exists expects 1 argument");
         std::string path = get_string(args[0], "exists path");
@@ -443,7 +525,8 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         return res;
     };
 
-    // delete(path) - 删除文件
+    // ========== delete 函数 ==========
+    // 删除指定路径的文件
     funcs["delete"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("delete expects 1 argument");
         std::string path = get_string(args[0], "delete path");
@@ -456,7 +539,9 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         return res;
     };
 
-    // read_csv(path) - 从 CSV 文件读取矩阵
+    // ========== read_csv 函数 ==========
+    // 从 CSV 文件读取数据并转换为矩阵
+    // 支持逗号分隔的数值数据
     funcs["read_csv"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("read_csv expects 1 argument");
         std::string path = get_string(args[0], "read_csv path");
@@ -521,7 +606,9 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         return res;
     };
 
-    // write_csv(path, matrix) - 将矩阵写入 CSV 文件
+    // ========== write_csv 函数 ==========
+    // 将矩阵数据写入 CSV 文件
+    // 每行对应矩阵的一行，逗号分隔各列
     funcs["write_csv"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() < 2) throw std::runtime_error("write_csv expects 2 arguments");
         std::string path = get_string(args[0], "write_csv path");
@@ -546,7 +633,9 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         return res;
     };
 
-    // read_json(path) - 从 JSON 文件读取数据
+    // ========== read_json 函数 ==========
+    // 从 JSON 文件读取数据并转换为 StoredValue
+    // 支持 JSON 的各种数据类型（对象、数组、字符串、数字等）
     funcs["read_json"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("read_json expects 1 argument");
         std::string path = get_string(args[0], "read_json path");
@@ -564,7 +653,8 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         return parse_json_value_impl(s);
     };
 
-    // write_json(path, data) - 将数据写入 JSON 文件
+    // ========== write_json 函数 ==========
+    // 将 StoredValue 数据序列化为 JSON 并写入文件
     funcs["write_json"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() < 2) throw std::runtime_error("write_json expects 2 arguments");
         std::string path = get_string(args[0], "write_json path");
@@ -585,14 +675,24 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
     return funcs;
 }
 
+/**
+ * @brief 执行命令行参数形式的 I/O 命令
+ *
+ * 用于在命令行中直接使用 I/O 命令（不使用括号形式），
+ * 例如: open "file.txt" w
+ *
+ * @param command 命令名称
+ * @param args 参数字符串列表
+ * @param services 核心服务引用，用于求值表达式
+ * @return 返回命令执行结果的字符串表示
+ */
 std::string IoModule::execute_args(const std::string& command,
                                    const std::vector<std::string>& args,
                                    const CoreServices& services) {
-    // For command-line usage without parentheses
-    // e.g. open "file.txt" w
+    // 命令行用法（无括号），例如: open "file.txt" w
     std::vector<StoredValue> s_args;
     for (const auto& arg : args) {
-        // Strip quotes if any
+        // 移除引号（如果存在）
         std::string parsed = trim_copy(arg);
         if (parsed.size() >= 2 && parsed.front() == '"' && parsed.back() == '"') {
             StoredValue sv;
@@ -600,7 +700,7 @@ std::string IoModule::execute_args(const std::string& command,
             sv.string_value = parsed.substr(1, parsed.size() - 2);
             s_args.push_back(sv);
         } else {
-            // 使用 evaluate_value 而不是 parse_decimal，以支持矩阵和复数变量
+            // 使用 evaluate_value 而非 parse_decimal，以支持矩阵和复数变量
             StoredValue sv = services.evaluation.evaluate_value(parsed, false);
             s_args.push_back(sv);
         }
@@ -626,6 +726,15 @@ std::string IoModule::execute_args(const std::string& command,
     return "";
 }
 
+/**
+ * @brief 获取指定主题的帮助信息片段
+ *
+ * 根据 topic 参数返回相应的帮助文本，
+ * 支持 I/O 相关的各种命令主题。
+ *
+ * @param topic 帮助主题名称（如 "io", "file", "open" 等）
+ * @return 返回该主题的帮助文本，如果主题不存在则返回空字符串
+ */
 std::string IoModule::get_help_snippet(const std::string& topic) const {
     if (topic == "io" || topic == "file") {
         return "File I/O Functions:\n"

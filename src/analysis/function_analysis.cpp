@@ -503,6 +503,19 @@ T adaptive_gauss_kronrod_callable_recursive(
     T whole,
     T error,
     int depth) {
+    // 检查结果是否有效
+    if (!t_isfinite(whole) || !t_isfinite(error)) {
+        throw std::runtime_error("integral did not converge (non-finite value encountered)");
+    }
+
+    // 检查区间是否过小，避免数值问题
+    const T interval_width = t_abs(right - left);
+    const T interval_scale = std::max(t_abs(left), t_abs(right));
+    const T min_width = std::max(T(1e-15L), interval_scale * T(1e-14L));
+    if (interval_width < min_width) {
+        return whole;
+    }
+
     const T scale = std::max(T(static_cast<long long>(1)), t_abs(whole));
     if (depth <= 0 || error <= relative_tolerance(eps, scale)) {
         return whole;
@@ -515,6 +528,12 @@ T adaptive_gauss_kronrod_callable_recursive(
         gauss_kronrod_15_callable(function, left, mid, &left_error);
     const T right_area =
         gauss_kronrod_15_callable(function, mid, right, &right_error);
+
+    // 检查子区间结果是否有效
+    if (!t_isfinite(left_area) || !t_isfinite(right_area)) {
+        throw std::runtime_error("integral did not converge (non-finite value in subinterval)");
+    }
+
     const T left_result =
         adaptive_gauss_kronrod_callable_recursive(function,
                                                   left,
@@ -1240,7 +1259,8 @@ template <typename T>
 TFunctionAnalysis<T>::TFunctionAnalysis(const TFunctionAnalysis& other)
     : expression_(other.expression_),
       variable_name_(other.variable_name_),
-      evaluator_(other.evaluator_) {}
+      evaluator_(other.evaluator_),
+      fallback_calculator_(other.fallback_calculator_) {}
 
 template <typename T>
 TFunctionAnalysis<T>& TFunctionAnalysis<T>::operator=(const TFunctionAnalysis& other) {
@@ -1248,6 +1268,7 @@ TFunctionAnalysis<T>& TFunctionAnalysis<T>::operator=(const TFunctionAnalysis& o
         expression_ = other.expression_;
         variable_name_ = other.variable_name_;
         evaluator_ = other.evaluator_;
+        fallback_calculator_ = other.fallback_calculator_;
         evaluation_cache_entries_.clear();
         evaluation_cache_index_.clear();
     }
@@ -1270,6 +1291,8 @@ void TFunctionAnalysis<T>::define(const std::string& expression) {
     }
 
     expression_ = expression;
+    evaluator_ = nullptr;
+    fallback_calculator_.reset();
     evaluation_cache_entries_.clear();
     evaluation_cache_index_.clear();
 }
@@ -1277,11 +1300,112 @@ void TFunctionAnalysis<T>::define(const std::string& expression) {
 template <typename T>
 void TFunctionAnalysis<T>::set_evaluator(std::function<T(const std::vector<std::pair<std::string, T>>&)> evaluator) {
     evaluator_ = std::move(evaluator);
+    fallback_calculator_.reset();
+    evaluation_cache_entries_.clear();
+    evaluation_cache_index_.clear();
 }
 
 template <typename T>
 T TFunctionAnalysis<T>::evaluate(T x) const {
     return evaluate_with_variable(x);
+}
+
+template <>
+long double TFunctionAnalysis<long double>::derivative(long double x) const {
+    const long double scale = std::max(1.0L, mymath::abs(x));
+    const long double center = evaluate_with_variable(x);
+    if (!mymath::isfinite(center)) {
+        throw std::runtime_error("derivative is undefined at this point");
+    }
+
+    constexpr int kLayers = 4; // 恢复为 4 层，主要利用 float128 减少舍入误差
+
+    // 计算曲率以确定步长
+    const long double curvature_sample_step = scale * 1e-3L;
+    const long double curvature_probe = evaluate_with_variable(x + curvature_sample_step) -
+                                   2.0L * center +
+                                   evaluate_with_variable(x - curvature_sample_step);
+    const long double curvature_scale =
+        std::max(1.0L,
+                 mymath::abs(curvature_probe) /
+                     std::max(1e-12L, mymath::abs(center)));
+
+    long double base_step = central_difference_step_value(
+        scale,
+        1.0L / derivative_quarter_power_scale(curvature_scale));
+
+    mymath::float128_t richardson[kLayers][kLayers] = {};
+    bool row_valid[kLayers] = {};
+    mymath::float128_t best_value = 0.0L;
+    mymath::float128_t best_error = mymath::infinity();
+
+    for (int row = 0; row < kLayers; ++row) {
+        const long double step = base_step / mymath::pow(2.0L, static_cast<long double>(row));
+        const long double forward_x = x + step;
+        const long double backward_x = x - step;
+        const long double actual_step = (forward_x - backward_x) * 0.5L;
+        if (actual_step <= 0.0L) {
+            continue;
+        }
+        const long double forward = evaluate_with_variable(forward_x);
+        const long double backward = evaluate_with_variable(backward_x);
+        if (!mymath::isfinite(forward) || !mymath::isfinite(backward)) {
+            continue;
+        }
+        richardson[row][0] = mymath::float128_t(forward - backward) / (2.0L * actual_step);
+        row_valid[row] = mymath::isfinite(richardson[row][0].hi);
+        if (!row_valid[row]) {
+            continue;
+        }
+        for (int col = 1; col <= row; ++col) {
+            if (!row_valid[row - 1]) {
+                row_valid[row] = false;
+                break;
+            }
+            mymath::float128_t factor = mymath::precise128::pow(mymath::float128_t(4.0L), mymath::float128_t(static_cast<long double>(col)));
+            richardson[row][col] =
+                richardson[row][col - 1] +
+                (richardson[row][col - 1] - richardson[row - 1][col - 1]) /
+                    (factor - 1.0L);
+            if (!mymath::isfinite(richardson[row][col].hi)) {
+                row_valid[row] = false;
+                break;
+            }
+        }
+        if (row > 0 && row_valid[row] && row_valid[row - 1]) {
+            const mymath::float128_t candidate = richardson[row][row];
+            const mymath::float128_t error_estimate = mymath::precise128::abs(candidate - richardson[row - 1][row - 1]);
+            if (error_estimate < best_error && mymath::isfinite(candidate.hi)) {
+                best_error = error_estimate;
+                best_value = candidate;
+
+                mymath::float128_t tol = mymath::precise128::abs(best_value) * 1e-16L;
+                if (tol < 1e-18L) tol = 1e-18L;
+
+                if (error_estimate < tol) break;
+            }
+        }
+    }
+
+    if (best_error < mymath::infinity()) {
+        const long double side_step = std::max(1e-7L * scale, base_step / 64.0L);
+        const long double left_value = evaluate_with_variable(x - side_step);
+        const long double right_value = evaluate_with_variable(x + side_step);
+        if (!mymath::isfinite(left_value) || !mymath::isfinite(right_value)) {
+            throw std::runtime_error("derivative is undefined at this point");
+        }
+        const long double left_slope = (center - left_value) / side_step;
+        const long double right_slope = (right_value - center) / side_step;
+        const long double slope_scale =
+            std::max({1.0L, mymath::abs(left_slope), mymath::abs(right_slope), mymath::abs(best_value.hi)});
+        if (mymath::abs(left_slope - right_slope) >
+            std::max(1e-4L, 1e-5L * slope_scale)) {
+            throw std::runtime_error("derivative does not exist at this point");
+        }
+        return best_value.hi;
+    }
+
+    throw std::runtime_error("derivative did not converge");
 }
 
 template <typename T>
@@ -1441,6 +1565,131 @@ T TFunctionAnalysis<T>::limit(T x, int direction) const {
     }
 
     return compute_numerical_limit(x, direction);
+}
+
+template <>
+long double TFunctionAnalysis<long double>::compute_numerical_limit(long double x, int direction) const {
+    auto compute_limit_at = [this](long double x_target, int side) {
+        mymath::float128_t richardson[14][14] = {};
+        bool row_valid[14] = {};
+        mymath::float128_t best_value = 0.0L;
+        mymath::float128_t best_error = mymath::infinity();
+        bool have_best = false;
+
+        const long double base_h = t_is_effective_infinity_point(x_target)
+                             ? 1e-2L
+                             : limit_step_scale(x_target);
+        long double adaptive_h = base_h;
+        int consecutive_bad = 0;
+        constexpr int kMaxBadSamples = 3;
+
+        long double prev_val = 0.0L;
+        bool have_prev = false;
+        int oscillation_count = 0;
+        long double total_amplitude = 0.0L;
+
+        for (int row = 0; row < 14; ++row) {
+            const long double h = adaptive_h / mymath::pow(2.0L, static_cast<long double>(row + 4));
+            long double sample_x;
+            if (!t_is_effective_infinity_point(x_target)) {
+                sample_x = x_target + static_cast<long double>(side) * h;
+            } else {
+                sample_x = (x_target > 0.0L ? 1.0L : -1.0L) / h;
+            }
+
+            long double val = 0.0L;
+            try {
+                val = evaluate_with_variable(sample_x);
+            } catch (...) {
+                adaptive_h *= 0.5L;
+                consecutive_bad++;
+                if (consecutive_bad >= kMaxBadSamples) {
+                    throw std::runtime_error("limit did not converge (sampling failures)");
+                }
+                continue;
+            }
+
+            if (!mymath::isfinite(val)) {
+                if (have_prev && mymath::isfinite(prev_val)) {
+                    if (prev_val > 1e10L) return mymath::infinity();
+                    else if (prev_val < -1e10L) return -mymath::infinity();
+                }
+                adaptive_h *= 0.5L;
+                consecutive_bad++;
+                if (consecutive_bad >= kMaxBadSamples) {
+                    throw std::runtime_error("limit appears to be infinite (numerical evidence)");
+                }
+                continue;
+            }
+
+            if (have_prev) {
+                const long double diff = mymath::abs(val - prev_val);
+                total_amplitude += diff;
+                if ((val > 0.0L && prev_val < 0.0L) || (val < 0.0L && prev_val > 0.0L)) {
+                    oscillation_count++;
+                    if (oscillation_count >= 5) {
+                        const long double avg_amp = total_amplitude / static_cast<long double>(row + 1);
+                        if (avg_amp > 1e-2L) {
+                            throw std::runtime_error("limit does not exist (oscillation)");
+                        }
+                        adaptive_h *= 0.25L;
+                        oscillation_count = 0;
+                    }
+                } else {
+                    oscillation_count = std::max(0, oscillation_count - 1);
+                }
+            }
+            prev_val = val;
+            have_prev = true;
+
+            mymath::float128_t f_val(val);
+            if (have_best && row > 0) {
+                const mymath::float128_t expected_change =
+                    best_error * 10.0L + 1e-10L;
+                const mymath::float128_t actual_change = mymath::precise128::abs(f_val - best_value);
+                if (actual_change > expected_change * 1e6L) {
+                    adaptive_h *= 0.5L;
+                    row = -1;
+                    consecutive_bad++;
+                    if (consecutive_bad >= kMaxBadSamples) break;
+                    continue;
+                }
+            }
+
+            richardson[row][0] = f_val;
+            for (int col = 1; col <= row; ++col) {
+                mymath::float128_t p4 = mymath::precise128::pow(mymath::float128_t(2.0L), mymath::float128_t(static_cast<long double>(col)));
+                richardson[row][col] = (p4 * richardson[row][col - 1] - richardson[row - 1][col - 1]) / (p4 - 1.0L);
+            }
+            row_valid[row] = true;
+
+            if (row >= 1) {
+                const mymath::float128_t current_error = mymath::precise128::abs(richardson[row][row] - richardson[row - 1][row - 1]);
+                if (!have_best || current_error < best_error) {
+                    best_value = richardson[row][row];
+                    best_error = current_error;
+                    have_best = true;
+                }
+                if (best_error < 1e-18L) break;
+            } else {
+                best_value = richardson[0][0];
+                have_best = true;
+            }
+        }
+
+        if (!have_best) throw std::runtime_error("limit did not converge");
+        return best_value.hi;
+    };
+
+    if (direction == 0) {
+        long double left = compute_limit_at(x, -1);
+        long double right = compute_limit_at(x, 1);
+        if (mymath::abs(left - right) > 1e-7L && mymath::isfinite(left) && mymath::isfinite(right)) {
+            throw std::runtime_error("limit does not exist (left and right limits differ)");
+        }
+        return (left + right) * 0.5L;
+    }
+    return compute_limit_at(x, direction);
 }
 
 template <typename T>
@@ -1739,14 +1988,15 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
             lower_bound + (upper_bound - lower_bound) *
                               (T(static_cast<long double>(i)) / T(40.0L));
         T value = evaluate_with_variable(x);
+        // std::cout << "DEBUG: x=" << format_t(x) << " val=" << format_t(value) << std::endl;
         if (!t_isfinite(value)) {
             throw std::runtime_error("integral did not converge");
         }
         if (t_isfinite(prev_scan_val)) {
             T prev_abs = t_abs(prev_scan_val);
             T curr_abs = t_abs(value);
-            if ((prev_scan_val > T(static_cast<long long>(0))) != (value > T(static_cast<long long>(0))) &&
-                (prev_abs > T(100.0L) || curr_abs > T(100.0L))) {
+            bool sign_change = (value > T(0)) != (prev_scan_val > T(0));
+            if (sign_change && (prev_abs > T(1e6L) || curr_abs > T(1e6L))) {
                 throw std::runtime_error("potential internal discontinuity detected");
             }
         }
@@ -1771,12 +2021,17 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
 
         if (!t_isfinite(val)) {
             suspicious_points.push_back({prev_x, x});
-        } else if (t_abs(val) > T(1e6)) {
+        } else if (t_abs(val) > T(1e9L)) {
             suspicious_points.push_back({prev_x, x});
         } else if (t_isfinite(prev_scan_val)) {
             T jump = t_abs(val - prev_scan_val);
             T avg = (t_abs(val) + t_abs(prev_scan_val)) / T(2.0);
-            if (avg > T(1e-10L) && jump > T(10.0L) * avg) {
+            
+            // 检测可能的奇异点：值非常大且发生符号改变，或者跳跃巨大
+            bool sign_change = (val > T(0)) != (prev_scan_val > T(0));
+            if (sign_change && (t_abs(val) > T(1e6L) || t_abs(prev_scan_val) > T(1e6L))) {
+                suspicious_points.push_back({prev_x, x});
+            } else if (avg > T(1e-10L) && jump > T(50.0L) * avg) {
                 suspicious_points.push_back({prev_x, x});
             }
         }
@@ -1911,10 +2166,39 @@ const std::string& TFunctionAnalysis<T>::variable_name() const {
 }
 
 template <typename T>
+void TFunctionAnalysis<T>::ensure_evaluator_initialized() const {
+    if (evaluator_) {
+        return;
+    }
+    if (expression_.empty()) {
+        throw std::runtime_error("function is not defined");
+    }
+
+    fallback_calculator_ = std::make_shared<Calculator>();
+    const auto decimal_evaluator =
+        fallback_calculator_->get_core_services().evaluation.build_decimal_evaluator(expression_);
+    evaluator_ = [decimal_evaluator](
+                     const std::vector<std::pair<std::string, T>>& assignments) -> T {
+        std::vector<std::pair<std::string, long double>> decimal_assignments;
+        decimal_assignments.reserve(assignments.size());
+        for (const auto& [name, value] : assignments) {
+            if constexpr (std::is_floating_point_v<T>) {
+                decimal_assignments.push_back({name, static_cast<long double>(value)});
+            } else {
+                decimal_assignments.push_back({name, value.to_double()});
+            }
+        }
+        return T(decimal_evaluator(decimal_assignments));
+    };
+}
+
+template <typename T>
 T TFunctionAnalysis<T>::evaluate_with_variable(T x) const {
     if (expression_.empty()) {
         throw std::runtime_error("function is not defined");
     }
+
+    ensure_evaluator_initialized();
 
     static constexpr std::size_t kMaxEvaluationCacheSize = 4096;
     const std::string cache_key =
@@ -1928,13 +2212,7 @@ T TFunctionAnalysis<T>::evaluate_with_variable(T x) const {
     }
 
     T value = T(static_cast<long long>(0));
-    if (evaluator_) {
-        value = evaluator_({{variable_name_, x}});
-    } else {
-        Calculator calculator;
-        calculator.process_line(variable_name_ + " = " + format_t(x), false);
-        value = T(calculator.evaluate_raw(expression_));
-    }
+    value = evaluator_({{variable_name_, x}});
     
     evaluation_cache_entries_.push_front({cache_key, value});
     evaluation_cache_index_[cache_key] = evaluation_cache_entries_.begin();
@@ -2055,6 +2333,19 @@ T TFunctionAnalysis<T>::adaptive_gauss_kronrod_recursive(T left,
                                                           T whole,
                                                           T error,
                                                           int depth) const {
+    // 检查结果是否有效
+    if (!t_isfinite(whole) || !t_isfinite(error)) {
+        throw std::runtime_error("integral did not converge (non-finite value encountered)");
+    }
+
+    // 检查区间是否过小，避免数值问题
+    const T interval_width = t_abs(right - left);
+    const T interval_scale = std::max(t_abs(left), t_abs(right));
+    const T min_width = std::max(T(1e-15L), interval_scale * T(1e-14L));
+    if (interval_width < min_width) {
+        return whole;
+    }
+
     const T scale = std::max(T(static_cast<long long>(1)), t_abs(whole));
     if (depth <= 0 || error <= relative_tolerance(eps, scale)) {
         return whole;
@@ -2065,6 +2356,12 @@ T TFunctionAnalysis<T>::adaptive_gauss_kronrod_recursive(T left,
     T right_error = T(static_cast<long long>(0));
     const T left_area = gauss_kronrod_15(left, mid, &left_error);
     const T right_area = gauss_kronrod_15(mid, right, &right_error);
+
+    // 检查子区间结果是否有效
+    if (!t_isfinite(left_area) || !t_isfinite(right_area)) {
+        throw std::runtime_error("integral did not converge (non-finite value in subinterval)");
+    }
+
     const T left_result =
         adaptive_gauss_kronrod_recursive(left,
                                          mid,
@@ -2080,6 +2377,75 @@ T TFunctionAnalysis<T>::adaptive_gauss_kronrod_recursive(T left,
                                          right_error,
                                          depth - 1);
     return compensated_pair_sum(left_result, right_result);
+}
+
+template <>
+long double TFunctionAnalysis<long double>::gauss_kronrod_15(long double left,
+                                                       long double right,
+                                                       long double* error_estimate) const {
+    static const long double kNodes[] = {
+        0.0L,
+        0.20778495500789846760L,
+        0.40584515137739716691L,
+        0.58608723546769113029L,
+        0.74153118559939443986L,
+        0.86486442335976907279L,
+        0.94910791234275852453L,
+        0.99145537112081263921L
+    };
+
+    static const long double kKronrodWeights[] = {
+        0.20948214108472782801L,
+        0.20443294007529889241L,
+        0.19035057806478540991L,
+        0.16900472663926790283L,
+        0.14065325971552591875L,
+        0.10479001032225018384L,
+        0.06309209262997855329L,
+        0.02293532201052922496L
+    };
+
+    static const long double kGaussWeights[] = {
+        0.41795918367346938776L,
+        0.0L,
+        0.38183005050511894495L,
+        0.0L,
+        0.27970539148927666790L,
+        0.0L,
+        0.12948496616886969327L,
+        0.0L
+    };
+
+    const long double center = (left + right) * 0.5L;
+    const long double half_width = (right - left) * 0.5L;
+    
+    mymath::float128_t kronrod_sum = 0.0L;
+    mymath::float128_t gauss_sum = 0.0L;
+
+    for (int i = 0; i < 8; ++i) {
+        if (mymath::is_near_zero(kNodes[i], 0.0L)) {
+            mymath::float128_t value(evaluate_with_variable(center));
+            kronrod_sum = kronrod_sum + mymath::float128_t(kKronrodWeights[i]) * value;
+            gauss_sum = gauss_sum + mymath::float128_t(kGaussWeights[i]) * value;
+            continue;
+        }
+
+        const long double offset = half_width * kNodes[i];
+        mymath::float128_t left_val(evaluate_with_variable(center - offset));
+        mymath::float128_t right_val(evaluate_with_variable(center + offset));
+        mymath::float128_t pair_sum = left_val + right_val;
+        
+        kronrod_sum = kronrod_sum + mymath::float128_t(kKronrodWeights[i]) * pair_sum;
+        if (kGaussWeights[i] != 0.0L) {
+            gauss_sum = gauss_sum + mymath::float128_t(kGaussWeights[i]) * pair_sum;
+        }
+    }
+
+    mymath::float128_t kronrod = mymath::float128_t(half_width) * kronrod_sum;
+    mymath::float128_t gauss = mymath::float128_t(half_width) * gauss_sum;
+    
+    *error_estimate = mymath::precise128::abs(kronrod - gauss).hi;
+    return kronrod.hi;
 }
 
 template <typename T>

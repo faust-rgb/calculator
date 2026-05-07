@@ -1,6 +1,20 @@
+/**
+ * @file base_conversions.cpp
+ * @brief 进制转换功能实现
+ *
+ * 本文件提供不同进制之间的整数转换功能，包括：
+ * - 解析带前缀的整数字面量（如 0b101, 0o77, 0xFF）
+ * - 将整数转换为指定进制的字符串表示
+ */
+
 #include "base_conversions.h"
 #include <stdexcept>
 
+/**
+ * @brief 将字符转换为对应的数值
+ * @param ch 输入字符（0-9, a-f, A-F）
+ * @return 对应的数值，无效字符返回 -1
+ */
 int digit_value(char ch) {
     if (ch >= '0' && ch <= '9') return ch - '0';
     if (ch >= 'a' && ch <= 'f') return 10 + (ch - 'a');
@@ -8,6 +22,17 @@ int digit_value(char ch) {
     return -1;
 }
 
+/**
+ * @brief 根据前缀字符判断对应的进制
+ * @param prefix 前缀字符（b/B, o/O, x/X）
+ * @param base 输出参数，存储对应的进制值
+ * @return true 表示是有效的前缀，false 表示不是
+ *
+ * 支持的前缀：
+ * - 'b' 或 'B': 二进制（base = 2）
+ * - 'o' 或 'O': 八进制（base = 8）
+ * - 'x' 或 'X': 十六进制（base = 16）
+ */
 bool prefixed_base(char prefix, int* base) {
     if (prefix == 'b' || prefix == 'B') {
         *base = 2; return true;
@@ -21,6 +46,17 @@ bool prefixed_base(char prefix, int* base) {
     return false;
 }
 
+/**
+ * @brief 解析带前缀的整数字面量
+ * @param token 输入字符串（如 "0b101", "0o77", "0xFF"）
+ * @return 解析后的整数值
+ * @throws std::runtime_error 如果格式无效
+ *
+ * 支持的格式：
+ * - 0b... : 二进制
+ * - 0o... : 八进制
+ * - 0x... : 十六进制
+ */
 long long parse_prefixed_integer_token(const std::string& token) {
     if (token.size() < 3 || token[0] != '0') {
         throw std::runtime_error("invalid prefixed integer literal");
@@ -49,6 +85,15 @@ long long parse_prefixed_integer_token(const std::string& token) {
     return value;
 }
 
+/**
+ * @brief 将整数转换为指定进制的字符串表示
+ * @param value 待转换的整数值
+ * @param base 目标进制（2-16）
+ * @param uppercase 是否使用大写字母（针对十六进制）
+ * @param prefix 是否添加进制前缀（如 0b, 0o, 0x）
+ * @return 转换后的字符串
+ * @throws std::runtime_error 如果进制不在有效范围内
+ */
 std::string convert_to_base(long long value, int base, bool uppercase, bool prefix) {
     if (base < 2 || base > 16) {
         throw std::runtime_error("base must be in the range [2, 16]");
