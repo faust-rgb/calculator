@@ -1,4 +1,4 @@
-#include "symbolic/risch_algorithm.h"
+#include "symbolic/risch/risch_algorithm.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "math/mymath.h"
 #include <algorithm>

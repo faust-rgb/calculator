@@ -1,7 +1,7 @@
 #ifndef RISCH_ALGORITHM_H
 #define RISCH_ALGORITHM_H
 
-#include "symbolic/risch_types.h"
+#include "symbolic/risch/risch_types.h"
 #include "symbolic/differential_field.h"
 #include "symbolic/symbolic_algebraic_number.h"
 #include <vector>

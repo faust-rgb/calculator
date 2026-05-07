@@ -5,8 +5,8 @@
  * 实现统一的决策树，每一步都有严格的证明，并生成可回溯的证明记录。
  */
 
-#include "symbolic/risch_algorithm.h"
-#include "symbolic/risch_algorithm_internal.h"
+#include "symbolic/risch/risch_algorithm.h"
+#include "symbolic/risch/risch_algorithm_internal.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "symbolic/differential_field.h"
 #include <chrono>

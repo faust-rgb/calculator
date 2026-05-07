@@ -33,7 +33,7 @@
 
 #include "symbolic/symbolic_expression.h"
 #include "symbolic/symbolic_polynomial.h"
-#include "symbolic/risch_algorithm.h"
+#include "symbolic/risch/risch_algorithm.h"
 
 #include <functional>
 #include <memory>

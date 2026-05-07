@@ -1,6 +1,6 @@
 #include "symbolic/differential_field.h"
 #include "symbolic/symbolic_expression_internal.h"
-#include "symbolic/risch_algorithm_internal.h"
+#include "symbolic/risch/risch_algorithm_internal.h"
 #include <algorithm>
 #include <sstream>
 

@@ -4,6 +4,8 @@
 #include <limits>
 #include <string>
 
+#include "mymath_float128.h"
+
 namespace mymath {
 
 /**

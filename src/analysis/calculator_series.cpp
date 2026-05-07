@@ -28,6 +28,7 @@
 #include <iomanip>
 #include <tuple>
 #include <functional>
+#include <algorithm>
 
 namespace series_ops {
 

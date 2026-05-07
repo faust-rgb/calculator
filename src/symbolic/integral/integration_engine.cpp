@@ -2,8 +2,8 @@
 // 积分引擎实现
 // ============================================================================
 
-#include "symbolic/integration_engine.h"
-#include "symbolic/risch_algorithm_internal.h"
+#include "symbolic/integral/integration_engine.h"
+#include "symbolic/risch/risch_algorithm_internal.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "math/mymath.h"
 

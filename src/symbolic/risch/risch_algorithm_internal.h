@@ -1,7 +1,7 @@
 #ifndef RISCH_ALGORITHM_INTERNAL_H
 #define RISCH_ALGORITHM_INTERNAL_H
 
-#include "symbolic/risch_algorithm.h"
+#include "symbolic/risch/risch_algorithm.h"
 
 #include <set>
 #include <string>

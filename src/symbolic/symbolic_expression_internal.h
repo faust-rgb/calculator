@@ -5,6 +5,7 @@
 #include "math/mymath_dual.h"
 
 #include <initializer_list>
+#include <list>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -291,6 +292,12 @@ SymbolicExpression make_rootof_from_polynomial(
 // 字符串转换与结构键
 // ============================================================================
 
+/** @brief 获取可变的符号表达式显示精度设置 */
+int& mutable_display_precision();
+
+/** @brief 将显示精度限制在有效范围内 */
+int clamp_display_precision(int precision);
+
 /**
  * @brief 将表达式节点转换为字符串
  * @param node 表达式节点
@@ -382,6 +389,27 @@ bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& nod
  * @return Total number of nodes (including leaves)
  */
 std::size_t count_nodes(const std::shared_ptr<SymbolicExpression::Node>& node);
+
+/**
+ * @brief 表达式 LRU 缓存
+ *
+ * 用于缓存 simplify() 等高频表达式变换结果。
+ */
+class SymbolicExpressionLruCache {
+public:
+    explicit SymbolicExpressionLruCache(std::size_t capacity);
+
+    bool get(const std::string& key, SymbolicExpression* value);
+
+    void put(const std::string& key, const SymbolicExpression& value);
+
+private:
+    std::size_t capacity_ = 0;
+    std::list<std::pair<std::string, SymbolicExpression>> entries_;
+    std::unordered_map<std::string,
+                       std::list<std::pair<std::string, SymbolicExpression>>::iterator>
+        index_;
+};
 
 // ============================================================================
 // 多项式操作
@@ -519,6 +547,17 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression);
 SymbolicExpression substitute_impl(const SymbolicExpression& expression,
                                    const std::string& variable_name,
                                    const SymbolicExpression& replacement);
+
+/**
+ * @brief 表达式替换的内部实现
+ * @param expression 表达式
+ * @param target 被替换的目标表达式
+ * @param replacement 替换表达式
+ * @return 替换后的表达式
+ */
+SymbolicExpression substitute_expression_impl(const SymbolicExpression& expression,
+                                              const SymbolicExpression& target,
+                                              const SymbolicExpression& replacement);
 
 // ============================================================================
 // 表达式匹配与分解
@@ -869,6 +908,19 @@ SymbolicExpression make_step_expression(const std::string& variable_name,
  */
 SymbolicExpression make_delta_expression(const std::string& variable_name,
                                          long double shift);
+
+// ============================================================================
+// 微积分内部实现
+// ============================================================================
+
+/**
+ * @brief 符号微分的内部实现（无缓存）
+ * @param expression 要求导的表达式
+ * @param variable_name 求导变量
+ * @return 导数表达式
+ */
+SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
+                                       const std::string& variable_name);
 
 // ============================================================================
 // 积分变换实现

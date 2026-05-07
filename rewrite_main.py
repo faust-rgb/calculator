@@ -1,8 +1,16 @@
-#include "symbolic/calculator_symbolic_commands.h"
+import os
+import re
+
+with open('extracted_body.cpp', 'r') as f:
+    handle_body = f.read()
+
+# We need to split handle_body into the different domains
+# Since C++ parsing in regex is hard, I will just use the file as is for the missing implementations, but let's check what was inside.
+
+commands_cpp_new = """#include "symbolic/calculator_symbolic_commands.h"
 #include "symbolic/commands/symbolic_commands_internal.h"
 #include "symbolic/assumptions.h"
 #include "core/string_utils.h"
-#include "parser/unified_expression_parser.h"
 
 namespace symbolic_commands {
 
@@ -30,7 +38,7 @@ std::string SymbolicModule::execute_args(const std::string& command,
             if (assumptions.empty()) return "No active assumptions.";
             std::string res;
             for (size_t i = 0; i < assumptions.size(); ++i) {
-                if (i != 0) res += "\n";
+                if (i != 0) res += "\\n";
                 res += assumptions[i];
             }
             return res;
@@ -106,19 +114,28 @@ std::string SymbolicModule::execute_args(const std::string& command,
 
 std::string SymbolicModule::get_help_snippet(const std::string& topic) const {
     if (topic == "symbolic") {
-        return "Symbolic Operations:\n"
-               "  :assume expr           Set variable assumptions (e.g. x>0, x real)\n"
-               "  :assume clear [var]    Clear assumptions\n"
-               "  simplify(expr)         Simplify an algebraic expression\n"
-               "  expand(expr)           Expand polynomial/algebraic expression\n"
-               "  diff(expr, [var])      Symbolic derivative\n"
-               "  integral(expr, [var])  Symbolic indefinite integral\n"
-               "  dsolve(rhs, [x, y])    Solve simple linear ODEs\n"
-               "  limit(expr, var, point [, dir])  Symbolic limit\n"
-               "  solve(equation, var)   Solve equation for variable\n"
+        return "Symbolic Operations:\\n"
+               "  :assume expr           Set variable assumptions (e.g. x>0, x real)\\n"
+               "  :assume clear [var]    Clear assumptions\\n"
+               "  simplify(expr)         Simplify an algebraic expression\\n"
+               "  expand(expr)           Expand polynomial/algebraic expression\\n"
+               "  diff(expr, [var])      Symbolic derivative\\n"
+               "  integral(expr, [var])  Symbolic indefinite integral\\n"
+               "  dsolve(rhs, [x, y])    Solve simple linear ODEs\\n"
+               "  limit(expr, var, point [, dir])  Symbolic limit\\n"
+               "  solve(equation, var)   Solve equation for variable\\n"
                "  sum(expr, var, lo, hi) Symbolic summation";
     }
     return "";
 }
 
 }  // namespace symbolic_commands
+"""
+
+with open('src/symbolic/calculator_symbolic_commands.cpp', 'w') as f:
+    f.write(commands_cpp_new)
+
+# Now, we need to restore the complex logic for calculus, integral, and misc from extracted_body.cpp
+# To do this cleanly, I'll just write extracted_body.cpp into a "symbolic_commands_legacy.cpp" and let the handlers call it, 
+# OR I can manually paste the contents into the handlers.
+# Actually, since I have extracted_body.cpp, I can just include the contents directly by replacing the "TODO"s in the submodule files.

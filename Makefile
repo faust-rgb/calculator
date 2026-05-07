@@ -1,5 +1,5 @@
 CXX ?= g++
-BASE_CXXFLAGS := -std=c++17 -Wall -Wextra -pedantic
+BASE_CXXFLAGS := -std=c++23 -Wall -Wextra -pedantic -mfma
 OPT_CXXFLAGS ?= -O0 -g -static
 CXXFLAGS ?= $(BASE_CXXFLAGS) $(OPT_CXXFLAGS)
 LDFLAGS ?=

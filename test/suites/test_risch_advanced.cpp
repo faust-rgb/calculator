@@ -1,5 +1,5 @@
-#include "symbolic/risch_algorithm.h"
-#include "symbolic/integration_engine.h"
+#include "symbolic/risch/risch_algorithm.h"
+#include "symbolic/integral/integration_engine.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include <iostream>
 #include <cassert>
