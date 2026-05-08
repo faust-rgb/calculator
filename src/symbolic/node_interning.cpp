@@ -402,8 +402,14 @@ std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node
             }
             break;
         case NodeType::kSubtract:
-            text = to_string_impl(node->left, precedence(node)) + " - " +
-                   to_string_impl(node->right, precedence(node) + 1);
+            if (node->right->type == NodeType::kNumber &&
+                node->right->number_value < Scalar(0)) {
+                text = to_string_impl(node->left, precedence(node)) + " + " +
+                       format_number(-node->right->number_value);
+            } else {
+                text = to_string_impl(node->left, precedence(node)) + " - " +
+                       to_string_impl(node->right, precedence(node) + 1);
+            }
             break;
         case NodeType::kMultiply:
             text = to_string_impl(node->left, precedence(node)) + " * " +

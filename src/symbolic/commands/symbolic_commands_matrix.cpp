@@ -30,21 +30,6 @@ SymbolicExpression compute_det_recursive(const std::vector<std::vector<SymbolicE
     return d;
 }
 
-std::string symbolic_matrix_to_semicolon_string(
-    const std::vector<std::vector<SymbolicExpression>>& values) {
-    std::string out = "[";
-    for (std::size_t row = 0; row < values.size(); ++row) {
-        if (row != 0) out += "; ";
-        out += "[";
-        for (std::size_t col = 0; col < values[row].size(); ++col) {
-            if (col != 0) out += ", ";
-            out += values[row][col].simplify().to_string();
-        }
-        out += "]";
-    }
-    out += "]";
-    return out;
-}
 }
 
 bool handle_matrix_commands(const SymbolicCommandContext& ctx,
@@ -125,7 +110,7 @@ bool handle_matrix_commands(const SymbolicCommandContext& ctx,
             std::string v; SymbolicExpression e; ctx.resolve_symbolic(arguments[0], false, &v, &e);
             auto vars = ctx.parse_symbolic_variable_arguments(arguments, 1, {v});
             auto hess = e.hessian(vars);
-            *output = symbolic_matrix_to_semicolon_string(hess);
+            *output = symbolic_matrix_to_string(hess);
         }
         return true;
     }

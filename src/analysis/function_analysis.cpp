@@ -454,8 +454,6 @@ void reject_persistent_tail_oscillation(
         previous = value;
         have_previous = true;
     }
-    std::cout << "DEBUG: sign_changes=" << sign_changes << " significant=" << significant_samples << " max_abs=" << static_cast<double>(max_abs) << std::endl;
-
     if (sign_changes >= 12 &&
         significant_samples >= 32 &&
         max_abs > T(1e-2L)) {
@@ -2013,12 +2011,8 @@ T TFunctionAnalysis<T>::compute_numerical_limit(T x, int direction) const {
 template <typename T>
 T TFunctionAnalysis<T>::definite_integral(T lower_bound,
                                            T upper_bound) const {
-    std::cout << "ENTERING definite_integral lower=" << static_cast<double>(lower_bound) << " upper=" << static_cast<double>(upper_bound) << std::endl;
-    T diff = lower_bound - upper_bound;
-    T adiff = t_abs(diff);
-    std::cout << "diff=" << static_cast<double>(diff) << " abs_diff=" << static_cast<double>(adiff) << std::endl;
-    if (t_is_near_zero(diff, T(1e-15L))) {
-        std::cout << "t_is_near_zero is TRUE" << std::endl;
+    const T diff = lower_bound - upper_bound;
+    if (t_isfinite(diff) && t_is_near_zero(diff, T(1e-15L))) {
         return T(static_cast<long long>(0));
     }
     if (lower_bound > upper_bound) {
@@ -2026,7 +2020,6 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
     }
     const bool lower_is_infinite = !t_isfinite(lower_bound);
     const bool upper_is_infinite = !t_isfinite(upper_bound);
-    std::cout << "DEBUG: lower_inf=" << lower_is_infinite << " upper_inf=" << upper_is_infinite << " lower=" << static_cast<double>(lower_bound) << " upper=" << static_cast<double>(upper_bound) << std::endl;
     if (lower_is_infinite || upper_is_infinite) {
         if (lower_is_infinite && upper_is_infinite) {
             if (lower_bound > T(static_cast<long long>(0)) || upper_bound < T(static_cast<long long>(0))) {
