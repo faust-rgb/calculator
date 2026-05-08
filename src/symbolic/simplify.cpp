@@ -16,7 +16,12 @@
 // 6. 公因子提取：2x+2y → 2(x+y)
 // 7. 多项式规范化：单变量多项式按降幂排列
 //
-// 简化通过多轮迭代进行，直到表达式结构不再变化（最多 16 轮）。
+// 规则分级：
+// - 轻量级 (lightweight)：常数折叠、恒等式消去、简单函数求值
+// - 中量级 (medium)：幂运算规则、三角恒等式、对数指数规则
+// - 重量级 (heavyweight)：多项式 GCD、因式分解、公因子提取
+//
+// 简化通过多轮迭代进行，直到表达式结构不再变化（最多 24 轮）。
 // 结果通过 LRU 缓存记忆，避免重复计算。
 // ============================================================================
 
@@ -148,6 +153,285 @@ bool try_extract_common_symbolic_factor(const SymbolicExpression& expression,
     }
     *remaining = make_sorted_sum(new_terms).simplify();
     return true;
+}
+
+// ============================================================================
+// 分级简化函数
+// ============================================================================
+
+/**
+ * @brief 轻量级简化：常数折叠和恒等式消去
+ *
+ * 只应用最简单、低开销的规则：
+ * - 数值常数的直接求值
+ * - 恒等式消去：x+0→x, x*1→x, x*0→0, x^0→1, x^1→x
+ * - 双重取负：-(-x)→x
+ * - 简单函数：abs(negative)→错误处理等
+ *
+ * @param expression 输入表达式
+ * @return 简化后的表达式
+ */
+SymbolicExpression simplify_lightweight(const SymbolicExpression& expression) {
+    const auto& node = expression.node_;
+    Scalar left_value = Scalar(0), right_value = Scalar(0);
+    SymbolicExpression left, right;
+
+    switch (node->type) {
+        case NodeType::kNumber:
+        case NodeType::kVariable:
+        case NodeType::kPi:
+        case NodeType::kE:
+        case NodeType::kInfinity:
+            return expression;
+
+        case NodeType::kNegate: {
+            const SymbolicExpression operand = simplify_lightweight(SymbolicExpression(node->left));
+            Scalar value = Scalar(0);
+            if (operand.is_number(&value)) return SymbolicExpression::number(-value);
+            if (operand.node_->type == NodeType::kNegate) return SymbolicExpression(operand.node_->left);
+            return make_negate(operand);
+        }
+
+        case NodeType::kAdd:
+            left = simplify_lightweight(SymbolicExpression(node->left));
+            right = simplify_lightweight(SymbolicExpression(node->right));
+            if (left.is_number(&left_value) && right.is_number(&right_value))
+                return SymbolicExpression::number(left_value + right_value);
+            if (expr_is_zero(left)) return right;
+            if (expr_is_zero(right)) return left;
+            return make_add(left, right);
+
+        case NodeType::kSubtract:
+            left = simplify_lightweight(SymbolicExpression(node->left));
+            right = simplify_lightweight(SymbolicExpression(node->right));
+            if (left.is_number(&left_value) && right.is_number(&right_value))
+                return SymbolicExpression::number(left_value - right_value);
+            if (expr_is_zero(right)) return left;
+            if (expr_is_zero(left)) return make_negate(right);
+            if (right.node_->type == NodeType::kNegate)
+                return make_add(left, SymbolicExpression(right.node_->left));
+            return make_subtract(left, right);
+
+        case NodeType::kMultiply:
+            left = simplify_lightweight(SymbolicExpression(node->left));
+            right = simplify_lightweight(SymbolicExpression(node->right));
+            if (left.is_number(&left_value) && right.is_number(&right_value))
+                return SymbolicExpression::number(left_value * right_value);
+            if (expr_is_zero(left) || expr_is_zero(right))
+                return SymbolicExpression::number(Scalar(0));
+            if (expr_is_one(left)) return right;
+            if (expr_is_one(right)) return left;
+            if (expr_is_minus_one(left)) return make_negate(right);
+            if (expr_is_minus_one(right)) return make_negate(left);
+            return make_multiply(left, right);
+
+        case NodeType::kDivide:
+            left = simplify_lightweight(SymbolicExpression(node->left));
+            right = simplify_lightweight(SymbolicExpression(node->right));
+            if (left.is_number(&left_value) && right.is_number(&right_value))
+                return SymbolicExpression::number(left_value / right_value);
+            if (expr_is_zero(left)) return SymbolicExpression::number(Scalar(0));
+            if (expr_is_one(right)) return left;
+            return make_divide(left, right);
+
+        case NodeType::kPower:
+            left = simplify_lightweight(SymbolicExpression(node->left));
+            right = simplify_lightweight(SymbolicExpression(node->right));
+            if (left.is_number(&left_value) && right.is_number(&right_value))
+                return SymbolicExpression::number(mymath::precise128::pow(left_value, right_value));
+            if (right.is_number(&right_value)) {
+                if (mymath::precise128::is_near_zero(right_value, kFormatEps))
+                    return SymbolicExpression::number(Scalar(1));
+                if (mymath::precise128::is_near_zero(right_value - Scalar(1), kFormatEps))
+                    return left;
+            }
+            if (left.is_number(&left_value) && mymath::precise128::is_near_zero(left_value, kFormatEps)) {
+                return SymbolicExpression::number(Scalar(0));
+            }
+            if (left.is_number(&left_value) && mymath::precise128::is_near_zero(left_value - Scalar(1), kFormatEps)) {
+                return SymbolicExpression::number(Scalar(1));
+            }
+            return make_power(left, right);
+
+        default:
+            return expression;
+    }
+}
+
+/**
+ * @brief 中量级简化：幂运算规则、三角恒等式、对数指数规则
+ *
+ * 应用中等开销的规则：
+ * - 幂运算规则：x^a * x^b → x^(a+b), (x^a)^b → x^(a*b)
+ * - 三角恒等式：sin²(x)+cos²(x)→1
+ * - 对数指数规则：ln(e^x)→x, e^(ln(x))→x
+ * - 简单函数求值（数值参数）
+ *
+ * @param expression 输入表达式
+ * @return 简化后的表达式
+ */
+SymbolicExpression simplify_medium(const SymbolicExpression& expression) {
+    // 先应用轻量级规则
+    SymbolicExpression current = simplify_lightweight(expression);
+    const auto& node = current.node_;
+
+    switch (node->type) {
+        case NodeType::kFunction: {
+            const SymbolicExpression argument = simplify_medium(SymbolicExpression(node->left));
+            Scalar numeric = Scalar(0);
+
+            // 数值参数的函数求值
+            if (argument.is_number(&numeric)) {
+                if (node->text == "sin") return SymbolicExpression::number(mymath::precise128::sin(numeric));
+                if (node->text == "cos") return SymbolicExpression::number(mymath::precise128::cos(numeric));
+                if (node->text == "tan") return SymbolicExpression::number(mymath::precise128::tan(numeric));
+                if (node->text == "exp") return SymbolicExpression::number(mymath::precise128::exp(numeric));
+                if (node->text == "ln" && numeric > Scalar(0))
+                    return SymbolicExpression::number(mymath::precise128::ln(numeric));
+                if (node->text == "sqrt" && numeric >= Scalar(0))
+                    return SymbolicExpression::number(mymath::precise128::sqrt(numeric));
+                if (node->text == "abs") return SymbolicExpression::number(mymath::precise128::abs(numeric));
+            }
+
+            // exp(ln(x)) → x
+            if (node->text == "exp" && argument.node_->type == NodeType::kFunction && argument.node_->text == "ln") {
+                return SymbolicExpression(argument.node_->left);
+            }
+            // ln(exp(x)) → x
+            if (node->text == "ln" && argument.node_->type == NodeType::kFunction && argument.node_->text == "exp") {
+                return SymbolicExpression(argument.node_->left);
+            }
+            // ln(1) → 0
+            if (node->text == "ln" && argument.is_number(&numeric) && mymath::precise128::is_near_zero(numeric - Scalar(1), kFormatEps)) {
+                return SymbolicExpression::number(Scalar(0));
+            }
+
+            return make_function(node->text, argument);
+        }
+
+        case NodeType::kMultiply: {
+            SymbolicExpression left = simplify_medium(SymbolicExpression(node->left));
+            SymbolicExpression right = simplify_medium(SymbolicExpression(node->right));
+
+            // e^a * e^b → e^(a+b)
+            if (left.node_->type == NodeType::kFunction && right.node_->type == NodeType::kFunction &&
+                left.node_->text == "exp" && right.node_->text == "exp") {
+                return make_function("exp", make_add(SymbolicExpression(left.node_->left),
+                                                      SymbolicExpression(right.node_->left)));
+            }
+
+            // x^a * x^b → x^(a+b)
+            SymbolicExpression left_base, right_base;
+            Scalar left_exp, right_exp;
+            decompose_power_factor(left, &left_base, &left_exp);
+            decompose_power_factor(right, &right_base, &right_exp);
+            if (expressions_match(left_base, right_base)) {
+                return rebuild_power_difference(left_base, left_exp + right_exp);
+            }
+
+            return make_multiply(left, right);
+        }
+
+        case NodeType::kPower: {
+            SymbolicExpression left = simplify_medium(SymbolicExpression(node->left));
+            SymbolicExpression right = simplify_medium(SymbolicExpression(node->right));
+
+            // (x^a)^b → x^(a*b)
+            if (left.node_->type == NodeType::kPower) {
+                Scalar inner_exp, outer_exp;
+                if (SymbolicExpression(left.node_->right).is_number(&inner_exp) && right.is_number(&outer_exp)) {
+                    return make_power(SymbolicExpression(left.node_->left),
+                                      SymbolicExpression::number(inner_exp * outer_exp));
+                }
+            }
+
+            return make_power(left, right);
+        }
+
+        default:
+            return current;
+    }
+}
+
+/**
+ * @brief 重量级简化：多项式 GCD、因式分解、公因子提取
+ *
+ * 应用高开销的规则：
+ * - 多项式 GCD 约分
+ * - 公因子提取
+ * - 多项式规范化
+ * - 同类项合并
+ *
+ * @param expression 输入表达式
+ * @return 简化后的表达式
+ */
+SymbolicExpression simplify_heavyweight(const SymbolicExpression& expression) {
+    // 先应用中量级规则
+    SymbolicExpression current = simplify_medium(expression);
+    const auto& node = current.node_;
+    Scalar left_value = Scalar(0), right_value = Scalar(0);
+    SymbolicExpression left, right;
+
+    switch (node->type) {
+        case NodeType::kAdd: {
+            left = simplify_heavyweight(SymbolicExpression(node->left));
+            right = simplify_heavyweight(SymbolicExpression(node->right));
+
+            // 三角恒等式
+            std::string left_arg, right_arg;
+            if ((is_squared_function(left, "sin", &left_arg) && is_squared_function(right, "cos", &right_arg) && left_arg == right_arg) ||
+                (is_squared_function(left, "cos", &left_arg) && is_squared_function(right, "sin", &right_arg) && left_arg == right_arg)) {
+                return SymbolicExpression::number(Scalar(1));
+            }
+
+            // 同类项合并
+            SymbolicExpression combined;
+            if (try_combine_like_terms(left, right, Scalar(1), &combined)) return combined;
+
+            // 公因子提取
+            SymbolicExpression factored;
+            if (try_factor_common_terms(left, right, Scalar(1), &factored)) return factored;
+
+            // 多项式规范化
+            const SymbolicExpression sum = make_add(left, right);
+            if (is_single_variable_polynomial(sum)) return maybe_canonicalize_polynomial(sum);
+
+            return make_add(left, right);
+        }
+
+        case NodeType::kSubtract: {
+            left = simplify_heavyweight(SymbolicExpression(node->left));
+            right = simplify_heavyweight(SymbolicExpression(node->right));
+
+            // 三角恒等式
+            std::string left_arg, right_arg;
+            if (is_squared_function(left, "cosh", &left_arg) && is_squared_function(right, "sinh", &right_arg) && left_arg == right_arg) {
+                return SymbolicExpression::number(Scalar(1));
+            }
+
+            SymbolicExpression combined;
+            if (try_combine_like_terms(left, right, Scalar(-1), &combined)) return combined;
+
+            SymbolicExpression factored;
+            if (try_factor_common_terms(left, right, Scalar(-1), &factored)) return factored;
+
+            return make_subtract(left, right);
+        }
+
+        case NodeType::kDivide: {
+            left = simplify_heavyweight(SymbolicExpression(node->left));
+            right = simplify_heavyweight(SymbolicExpression(node->right));
+
+            // GCD 约分
+            SymbolicExpression reduced;
+            if (try_reduce_polynomial_gcd_quotient(left, right, &reduced)) return reduced;
+
+            return make_divide(left, right);
+        }
+
+        default:
+            return current;
+    }
 }
 
 // ============================================================================
@@ -304,6 +588,13 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 if (argument.is_number(&arg_val) && mymath::precise128::is_near_zero(arg_val - Scalar(1), kFormatEps)) {
                     return SymbolicExpression::number(Scalar(0));
                 }
+                // ln(x) where x is negative → ln(-x) + i*pi
+                if (is_known_negative_expression(argument)) {
+                    return make_add(
+                        make_function("ln", make_negate(argument).simplify()),
+                        make_multiply(SymbolicExpression::variable("i"), SymbolicExpression::variable("pi"))
+                    ).simplify();
+                }
             }
             if (node->text == "gamma") {
                 Scalar val;
@@ -340,8 +631,22 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                     return make_function("abs", base).simplify();
                 }
             }
+            // sqrt(x) where x is negative → i*sqrt(-x)
+            if (node->text == "sqrt") {
+                if (is_known_negative_expression(argument)) {
+                    return make_multiply(
+                        SymbolicExpression::variable("i"),
+                        make_function("sqrt", make_negate(argument).simplify())
+                    ).simplify();
+                }
+            }
             if (node->text == "abs" && argument.node_->type == NodeType::kFunction && (argument.node_->text == "abs" || argument.node_->text == "sqrt")) {
                 return argument;
+            }
+            if (node->text == "abs") {
+                if (is_known_positive_expression(argument)) {
+                    return argument.simplify();
+                }
             }
             if ((node->text == "sin" || node->text == "tan" || node->text == "sinh" || node->text == "tanh") && argument.node_->type == NodeType::kNegate) {
                 return make_negate(make_function(node->text, SymbolicExpression(argument.node_->left))).simplify();
@@ -616,6 +921,15 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 }
             }
             if (left.is_number(&left_value) && right.is_number(&right_value)) return SymbolicExpression::number(mymath::precise128::pow(left_value, right_value));
+            // Power simplifications based on assumptions
+            // x^(1/2) → sqrt(x) for positive x
+            if (right.is_number(&right_value) && mymath::precise128::is_near_zero(right_value - Scalar(0.5L), kFormatEps)) {
+                if (is_known_positive_expression(left)) {
+                    return make_function("sqrt", left).simplify();
+                }
+            }
+            // x^(p/q) where x is negative and q is odd → -|x|^(p/q)
+            // For even q, result would be complex
             return make_power(left, right);
 
         default: break;
@@ -629,14 +943,42 @@ SymbolicExpression simplify_impl(const SymbolicExpression& expression) {
     if (simplify_depth > 0) return simplify_once(expression);
     Guard guard(&simplify_depth);
     SymbolicExpression current = expression;
-    constexpr int kMaxPasses = 24;
-    for (int p = 0; p < kMaxPasses; ++p) {
+
+    // Phase 1: Lightweight rules (constant folding, identity elimination)
+    // Run until convergence with lightweight rules only
+    constexpr int kMaxLightweightPasses = 8;
+    for (int p = 0; p < kMaxLightweightPasses; ++p) {
         const std::string ck = node_structural_key(current.node_);
-        SymbolicExpression next = simplify_once(current);
-        if (node_structural_key(next.node_) == ck) return next;
-        if (count_nodes(next.node_) > 10000) return current;
+        SymbolicExpression next = simplify_lightweight(current);
+        if (node_structural_key(next.node_) == ck) break;
         current = next;
     }
+
+    // Phase 2: Medium rules (power rules, trig identities, log/exp rules)
+    // Run until convergence with medium rules
+    constexpr int kMaxMediumPasses = 8;
+    for (int p = 0; p < kMaxMediumPasses; ++p) {
+        const std::string ck = node_structural_key(current.node_);
+        SymbolicExpression next = simplify_medium(current);
+        if (node_structural_key(next.node_) == ck) break;
+        current = next;
+    }
+
+    // Phase 3: Heavyweight rules (polynomial GCD, factorization)
+    // Only run if expression is still changing
+    constexpr int kMaxHeavyweightPasses = 8;
+    for (int p = 0; p < kMaxHeavyweightPasses; ++p) {
+        const std::string ck = node_structural_key(current.node_);
+        SymbolicExpression next = simplify_heavyweight(current);
+        if (node_structural_key(next.node_) == ck) break;
+        if (count_nodes(next.node_) > 10000) return current; // Size guard
+        current = next;
+    }
+
+    // Phase 4: Final pass with original simplify_once for symbolic function handling
+    // This handles sin(pi/2), ln(e), etc.
+    current = simplify_once(current);
+
     return current;
 }
 
@@ -646,14 +988,38 @@ SymbolicExpression simplify_with_budget_impl(const SymbolicExpression& expressio
     if (simplify_depth > 0) return simplify_once(expression);
     Guard guard(&simplify_depth);
     SymbolicExpression current = expression;
-    constexpr int kMaxPasses = 24;
-    for (int p = 0; p < kMaxPasses; ++p) {
+
+    // Phase 1: Lightweight rules
+    constexpr int kMaxLightweightPasses = 8;
+    for (int p = 0; p < kMaxLightweightPasses; ++p) {
         const std::string ck = node_structural_key(current.node_);
-        SymbolicExpression next = simplify_once(current);
-        if (node_structural_key(next.node_) == ck) return next;
+        SymbolicExpression next = simplify_lightweight(current);
+        if (node_structural_key(next.node_) == ck) break;
+        current = next;
+    }
+
+    // Phase 2: Medium rules
+    constexpr int kMaxMediumPasses = 8;
+    for (int p = 0; p < kMaxMediumPasses; ++p) {
+        const std::string ck = node_structural_key(current.node_);
+        SymbolicExpression next = simplify_medium(current);
+        if (node_structural_key(next.node_) == ck) break;
+        current = next;
+    }
+
+    // Phase 3: Heavyweight rules with budget
+    constexpr int kMaxHeavyweightPasses = 8;
+    for (int p = 0; p < kMaxHeavyweightPasses; ++p) {
+        const std::string ck = node_structural_key(current.node_);
+        SymbolicExpression next = simplify_heavyweight(current);
+        if (node_structural_key(next.node_) == ck) break;
         if (count_nodes(next.node_) > max_nodes) return current;
         current = next;
     }
+
+    // Phase 4: Final pass with original simplify_once for symbolic function handling
+    current = simplify_once(current);
+
     return current;
 }
 

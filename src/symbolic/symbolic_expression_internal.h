@@ -577,6 +577,12 @@ bool expressions_match(const SymbolicExpression& lhs, const SymbolicExpression& 
 bool is_known_positive_expression(const SymbolicExpression& expression);
 
 /**
+ * @brief 检查表达式是否已知为负
+ * @return true 对于负数、已知负变量、正数的相反数等
+ */
+bool is_known_negative_expression(const SymbolicExpression& expression);
+
+/**
  * @brief 分解常数乘积表达式
  * @param expression 表达式
  * @param variable_name 变量名

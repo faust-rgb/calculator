@@ -244,6 +244,19 @@ bool SymbolicLimitEngine::apply_lhopital(
     int direction,
     LimitResult* result) {
 
+    // 添加深度限制防止无限递归
+    static thread_local int lhopital_depth = 0;
+    constexpr int kMaxLhopitalDepth = 10;
+
+    if (lhopital_depth >= kMaxLhopitalDepth) {
+        return false;  // 达到最大深度，停止递归
+    }
+
+    ++lhopital_depth;
+    struct DepthGuard {
+        ~DepthGuard() { --lhopital_depth; }
+    } guard;
+
     // 计算导数
     SymbolicExpression num_deriv = numerator.derivative(var).simplify();
     SymbolicExpression den_deriv = denominator.derivative(var).simplify();

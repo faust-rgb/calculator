@@ -78,13 +78,23 @@ Scalar mode(const std::vector<Scalar>& data) {
     }
     std::sort(sorted.begin(), sorted.end());
 
+    // 动态计算阈值：基于数据范围和机器精度
+    Scalar data_range = sorted.back() - sorted.front();
+    // 使用数据范围的相对阈值，结合机器 epsilon
+    Scalar epsilon = std::numeric_limits<Scalar>::epsilon();
+    Scalar threshold = std::max(epsilon * mymath::precise128::abs(data_range), Scalar(1e-10L));
+    // 对于极小数据范围，使用绝对阈值
+    if (data_range < Scalar(1e-6L)) {
+        threshold = Scalar(1e-10L);
+    }
+
     Scalar best_value = sorted.front();
     int best_count = 0;
     Scalar current_value = sorted.front();
     int current_count = 0;
 
     for (const auto& val : sorted) {
-        if (mymath::precise128::abs(val - current_value) < Scalar(1e-10L)) {
+        if (mymath::precise128::abs(val - current_value) < threshold) {
             ++current_count;
         } else {
             if (current_count > best_count) {
@@ -102,28 +112,20 @@ Scalar mode(const std::vector<Scalar>& data) {
  * @brief 内部辅助：单次遍历计算均值、方差、三阶矩和四阶矩
  * 使用扩展的 Welford 算法。
  */
-struct Moments {
-    long long n = 0;
-    Scalar mean = Scalar(0);
-    Scalar m2 = Scalar(0);
-    Scalar m3 = Scalar(0);
-    Scalar m4 = Scalar(0);
+void Moments::add(Scalar x) {
+    long long n1 = n;
+    n++;
+    Scalar delta = x - mean;
+    Scalar delta_n = delta / Scalar((n));
+    Scalar delta_n2 = delta_n * delta_n;
+    Scalar term1 = delta * delta_n * Scalar((n1));
+    mean += delta_n;
+    m4 += term1 * delta_n2 * Scalar((n * n - 3 * n + 3)) + Scalar(6) * delta_n2 * m2 - Scalar(4) * delta_n * m3;
+    m3 += term1 * delta_n * Scalar((n - 2)) - Scalar(3) * delta_n * m2;
+    m2 += term1;
+}
 
-    void add(Scalar x) {
-        long long n1 = n;
-        n++;
-        Scalar delta = x - mean;
-        Scalar delta_n = delta / Scalar((n));
-        Scalar delta_n2 = delta_n * delta_n;
-        Scalar term1 = delta * delta_n * Scalar((n1));
-        mean += delta_n;
-        m4 += term1 * delta_n2 * Scalar((n * n - 3 * n + 3)) + Scalar(6) * delta_n2 * m2 - Scalar(4) * delta_n * m3;
-        m3 += term1 * delta_n * Scalar((n - 2)) - Scalar(3) * delta_n * m2;
-        m2 += term1;
-    }
-};
-
-static Moments compute_moments(const std::vector<Scalar>& data) {
+Moments compute_moments(const std::vector<Scalar>& data) {
     Moments m;
     for (const auto& x : data) m.add(Scalar(x));
     return m;

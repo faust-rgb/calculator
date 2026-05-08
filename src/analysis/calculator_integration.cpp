@@ -3,6 +3,7 @@
 // ============================================================================
 
 #include "analysis/calculator_integration.h"
+#include "analysis/precision_constants.h"
 #include "core/calculator_internal_types.h"
 #include "parser/unified_expression_parser.h"
 #include "math/mymath.h"
@@ -58,12 +59,14 @@ std::function<Scalar(const std::vector<Scalar>&)> make_scalar_bound_func(
 }
 
 /**
- * @brief 计算数值导数的自适应步长
+ * @brief 计算数值导数的自适应步长（精度感知版本）
+ *
+ * 使用 precision::optimal_derivative_step 根据 Scalar 类型自动选择最优步长
+ * 对于 double: h ≈ 1e-8 * max(1, |x|)
+ * 对于 float128_t: h ≈ 1e-17 * max(1, |x|)
  */
 Scalar adaptive_derivative_step(Scalar x) {
-    // 基础步长为 sqrt(epsilon) * max(1.0L, |x|)
-    // 对于 double，sqrt(epsilon) 约为 1e-8
-    return Scalar(1e-7L) * mymath::precise128::fmax(Scalar(1.0L), mymath::precise128::abs(x));
+    return precision::optimal_derivative_step<Scalar>(x);
 }
 
 }  // namespace
@@ -411,7 +414,7 @@ bool handle_integration_command(const IntegrationContext& ctx,
         std::string x_expr = arguments[7];
         std::string y_expr = arguments[8];
         std::string z_expr = arguments[9];
-        auto s = parse_subdivisions(ctx, arguments, 10, {32, 32});
+        auto s = parse_subdivisions(ctx, arguments, 10, {256, 256});
         *output = format_decimal(ctx.normalize_result(surface_integral(ctx, arguments[0], u_var, u0, u1, v_var, v0, v1, x_expr, y_expr, z_expr, s[0], s[1])));
         return true;
     }

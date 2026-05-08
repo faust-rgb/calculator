@@ -1,6 +1,8 @@
 #include "standard_math_module.h"
 #include "mymath.h"
 #include "math/helpers/integer_helpers.h"
+#include "math/helpers/unit_conversions.h"
+#include "math/helpers/combinatorics.h"
 #include "core/calculator_exceptions.h"
 #include "core/calculator_internal_types.h"
 #include "core/string_utils.h"
@@ -10,11 +12,7 @@
 #include <algorithm>
 #include <map>
 
-// 辅助函数声明
-long double degrees_to_radians(long double value);
-long double radians_to_degrees(long double value);
-long double celsius_to_fahrenheit(long double value);
-long double fahrenheit_to_celsius(long double value);
+// 辅助函数声明 (已在 unit_conversions.h 中定义，但为了保持一致可以移除或更新)
 
 std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>> 
 StandardMathModule::get_scalar_functions() const {
@@ -111,15 +109,15 @@ StandardMathModule::get_scalar_functions() const {
     funcs["bessel_j"] = funcs["bessel"];
 
     // Conversions
-    funcs["deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("deg expects 1 argument"); return Scalar(radians_to_degrees(static_cast<long double>(a[0]))); };
-    funcs["rad"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("rad expects 1 argument"); return Scalar(degrees_to_radians(static_cast<long double>(a[0]))); };
+    funcs["deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("deg expects 1 argument"); return radians_to_degrees(a[0]); };
+    funcs["rad"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("rad expects 1 argument"); return degrees_to_radians(a[0]); };
     funcs["deg2rad"] = funcs["rad"];
     funcs["rad2deg"] = funcs["deg"];
-    funcs["sin_deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("sin_deg expects 1 argument"); return mymath::sin(Scalar(degrees_to_radians(static_cast<long double>(a[0])))); };
-    funcs["cos_deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("cos_deg expects 1 argument"); return mymath::cos(Scalar(degrees_to_radians(static_cast<long double>(a[0])))); };
-    funcs["celsius"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("celsius expects 1 argument"); return Scalar(fahrenheit_to_celsius(static_cast<long double>(a[0]))); };
-    funcs["fahrenheit"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("fahrenheit expects 1 argument"); return Scalar(celsius_to_fahrenheit(static_cast<long double>(a[0]))); };
-    funcs["kelvin"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("kelvin expects 1 argument"); return a[0] + 273.15; };
+    funcs["sin_deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("sin_deg expects 1 argument"); return mymath::sin(degrees_to_radians(a[0])); };
+    funcs["cos_deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("cos_deg expects 1 argument"); return mymath::cos(degrees_to_radians(a[0])); };
+    funcs["celsius"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("celsius expects 1 argument"); return fahrenheit_to_celsius(a[0]); };
+    funcs["fahrenheit"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("fahrenheit expects 1 argument"); return celsius_to_fahrenheit(a[0]); };
+    funcs["kelvin"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("kelvin expects 1 argument"); return a[0] + Scalar(273.15L); };
     funcs["c2f"] = funcs["fahrenheit"];
     funcs["f2c"] = funcs["celsius"];
 

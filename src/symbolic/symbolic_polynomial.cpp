@@ -279,6 +279,27 @@ SymbolicPolynomial SymbolicPolynomial::multiply(const SymbolicPolynomial& other)
         return SymbolicPolynomial();
     }
 
+    // Optimization: use numeric path if both polynomials have numeric coefficients
+    if (is_numeric() && other.is_numeric()) {
+        const auto& coeffs1 = to_numeric_coefficients();
+        const auto& coeffs2 = other.to_numeric_coefficients();
+
+        if (!coeffs1.empty() && !coeffs2.empty()) {
+            const int deg1 = static_cast<int>(coeffs1.size()) - 1;
+            const int deg2 = static_cast<int>(coeffs2.size()) - 1;
+            std::vector<Scalar> numeric_result(deg1 + deg2 + 1, Scalar(0));
+
+            for (int i = 0; i <= deg1; ++i) {
+                for (int j = 0; j <= deg2; ++j) {
+                    numeric_result[i + j] += coeffs1[i] * coeffs2[j];
+                }
+            }
+
+            return from_numeric_coefficients(numeric_result, variable_name_);
+        }
+    }
+
+    // Symbolic path
     const int deg1 = degree();
     const int deg2 = other.degree();
     std::vector<SymbolicExpression> result(deg1 + deg2 + 1, SymbolicExpression::number(Scalar(0)));
@@ -536,7 +557,62 @@ SymbolicExpression SymbolicPolynomial::resultant(const SymbolicPolynomial& other
 }
 
 SymbolicPolynomial SymbolicPolynomial::gcd(const SymbolicPolynomial& other) const {
-    // 欧几里得算法
+    // Optimization: use numeric GCD if both polynomials have numeric coefficients
+    if (is_numeric() && other.is_numeric()) {
+        const auto& coeffs1 = to_numeric_coefficients();
+        const auto& coeffs2 = other.to_numeric_coefficients();
+
+        if (!coeffs1.empty() && !coeffs2.empty()) {
+            // Use numeric polynomial GCD algorithm
+            std::vector<Scalar> a = coeffs1;
+            std::vector<Scalar> b = coeffs2;
+
+            // Trim leading zeros
+            while (a.size() > 1 && mymath::is_near_zero(a.back(), Scalar(1e-12L))) a.pop_back();
+            while (b.size() > 1 && mymath::is_near_zero(b.back(), Scalar(1e-12L))) b.pop_back();
+
+            // Euclidean algorithm for numeric polynomials
+            while (b.size() > 1 || !mymath::is_near_zero(b[0], Scalar(1e-12L))) {
+                // Polynomial division: a = q*b + r
+                std::vector<Scalar> r = a;
+                const int deg_a = static_cast<int>(a.size()) - 1;
+                const int deg_b = static_cast<int>(b.size()) - 1;
+
+                if (deg_a < deg_b) {
+                    std::swap(a, b);
+                    continue;
+                }
+
+                if (deg_b >= 0 && !mymath::is_near_zero(b[deg_b], Scalar(1e-12L))) {
+                    r.resize(deg_a >= 0 ? deg_a + 1 : 1, Scalar(0));
+                    for (int i = deg_a; i >= deg_b; --i) {
+                        const Scalar quot = a[i] / b[deg_b];
+                        for (int j = 0; j <= deg_b; ++j) {
+                            r[i - deg_b + j] -= quot * b[j];
+                        }
+                    }
+                    // Trim leading zeros
+                    while (r.size() > 1 && mymath::is_near_zero(r.back(), Scalar(1e-12L))) r.pop_back();
+                }
+
+                a = b;
+                b = r;
+
+                // Safety: prevent infinite loop
+                if (b.size() > a.size()) break;
+            }
+
+            // Normalize: make leading coefficient 1
+            if (!a.empty() && !mymath::is_near_zero(a.back(), Scalar(1e-12L))) {
+                const Scalar lc = a.back();
+                for (auto& c : a) c /= lc;
+            }
+
+            return from_numeric_coefficients(a, variable_name_);
+        }
+    }
+
+    // Symbolic path: original Euclidean algorithm
     SymbolicPolynomial a = *this;
     SymbolicPolynomial b = other;
 
@@ -821,6 +897,61 @@ bool SymbolicPolynomial::coeff_is_one(const SymbolicExpression& coeff) {
 
 bool SymbolicPolynomial::coeff_equals(const SymbolicExpression& lhs, const SymbolicExpression& rhs) {
     return expressions_match(lhs.simplify(), rhs.simplify());
+}
+
+// ============================================================================
+// 系数类型检测与数值优化
+// ============================================================================
+
+CoefficientType SymbolicPolynomial::detect_coefficient_type() const {
+    if (coefficients_.empty()) {
+        return CoefficientType::kNumericInteger; // Zero polynomial
+    }
+
+    bool all_integer = true;
+    for (const auto& coeff : coefficients_) {
+        Scalar val;
+        if (!coeff.is_number(&val)) {
+            return CoefficientType::kSymbolic;
+        }
+        // Check if it's an integer
+        if (all_integer && !mymath::is_integer(val, Scalar(1e-10L))) {
+            all_integer = false;
+        }
+    }
+
+    return all_integer ? CoefficientType::kNumericInteger : CoefficientType::kNumericRational;
+}
+
+std::vector<Scalar> SymbolicPolynomial::to_numeric_coefficients() const {
+    std::vector<Scalar> result;
+    result.reserve(coefficients_.size());
+
+    for (const auto& coeff : coefficients_) {
+        Scalar val;
+        if (coeff.is_number(&val)) {
+            result.push_back(val);
+        } else {
+            // Return empty if any coefficient is not numeric
+            return {};
+        }
+    }
+
+    return result;
+}
+
+SymbolicPolynomial SymbolicPolynomial::from_numeric_coefficients(
+    const std::vector<Scalar>& coeffs,
+    const std::string& variable_name) {
+
+    std::vector<SymbolicExpression> sym_coeffs;
+    sym_coeffs.reserve(coeffs.size());
+
+    for (const auto& c : coeffs) {
+        sym_coeffs.push_back(SymbolicExpression::number(c));
+    }
+
+    return SymbolicPolynomial(sym_coeffs, variable_name);
 }
 
 // ============================================================================

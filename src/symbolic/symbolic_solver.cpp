@@ -13,6 +13,7 @@
 #include "symbolic/symbolic_solver.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "symbolic/groebner_basis.h"
+#include "symbolic/symbolic_polynomial.h"
 #include "math/mymath.h"
 #include "core/scalar_type.h"
 
@@ -73,20 +74,154 @@ Solution SymbolicSolver::solve_system(
         return Solution::no_solution("empty system");
     }
 
-    // 1. 尝试线性求解
-    // ... (existing linear logic)
-
-    // 2. 尝试非线性求解 (Groebner Basis)
-    try {
-        auto basis = symbolic_groebner::compute_groebner_basis(equations, variables);
-        // 如果基包含 1，则无解
-        // 如果基包含单变量多项式，可以进行回代求解
-        // TODO: 完整的 Groebner 回代逻辑
-    } catch (...) {
-        // Fallback
+    // 1. 尝试多项式系统求解 (Groebner Basis)
+    if (is_polynomial_system(equations, variables)) {
+        Solution groebner_result = solve_system_groebner(equations, variables);
+        if (groebner_result.is_complete) {
+            return groebner_result;
+        }
     }
 
     return Solution::no_solution("unsupported non-linear system");
+}
+
+bool SymbolicSolver::is_polynomial_system(
+    const std::vector<SymbolicExpression>& equations,
+    const std::vector<std::string>& variables) {
+
+    for (const auto& eq : equations) {
+        SymbolicExpression normalized = eq.simplify();
+
+        // Check if each term is polynomial in all variables
+        for (const auto& var : variables) {
+            std::vector<Scalar> coeffs;
+            if (!normalized.polynomial_coefficients(var, &coeffs)) {
+                // Check if it's a polynomial with symbolic coefficients
+                SymbolicPolynomial poly = SymbolicPolynomial::from_expression(normalized, var);
+                if (poly.is_zero() && !normalized.is_number(nullptr)) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+Solution SymbolicSolver::solve_system_groebner(
+    const std::vector<SymbolicExpression>& equations,
+    const std::vector<std::string>& variables) {
+
+    // Normalize equations to polynomial form (assume already normalized to lhs = 0)
+    std::vector<SymbolicExpression> polys;
+    for (const auto& eq : equations) {
+        polys.push_back(eq.simplify());
+    }
+
+    // Compute Groebner basis with lex order (variables in reverse order for back-substitution)
+    std::vector<std::string> lex_vars = variables;
+    // Lex order: last variable is eliminated first
+    std::reverse(lex_vars.begin(), lex_vars.end());
+
+    auto basis = symbolic_groebner::compute_groebner_basis(polys, lex_vars);
+
+    if (basis.empty()) {
+        return Solution::no_solution("empty Groebner basis");
+    }
+
+    // Check if basis contains 1 (no solution)
+    for (const auto& b : basis) {
+        SymbolicExpression simplified = b.simplify();
+        Scalar val;
+        if (simplified.is_number(&val) && !mymath::is_near_zero(val, Scalar(1e-10L))) {
+            return Solution::no_solution("inconsistent system (basis contains nonzero constant)");
+        }
+    }
+
+    // Find univariate polynomial in the basis (should be in the last variable after lex ordering)
+    std::map<std::string, SymbolicExpression> solutions;
+
+    // Try to extract univariate polynomials and solve them
+    for (const auto& b : basis) {
+        // Check if this polynomial involves only one variable
+        std::set<std::string> vars_in_poly;
+        collect_variables(b, &vars_in_poly);
+
+        if (vars_in_poly.size() == 1) {
+            std::string single_var = *vars_in_poly.begin();
+            // Solve this univariate polynomial
+            Solution univariate_sol = solve(b, single_var);
+            if (univariate_sol.is_complete && !univariate_sol.values.empty()) {
+                // Take the first solution (or handle multiple solutions)
+                solutions[single_var] = univariate_sol.values[0];
+            }
+        }
+    }
+
+    // Back-substitute to find other variables
+    for (int i = static_cast<int>(variables.size()) - 2; i >= 0; --i) {
+        const std::string& var = variables[i];
+
+        if (solutions.count(var)) continue; // Already solved
+
+        // Substitute known values into remaining basis elements
+        for (const auto& b : basis) {
+            SymbolicExpression substituted = b;
+            for (const auto& [solved_var, val] : solutions) {
+                substituted = substituted.substitute(solved_var, val);
+            }
+            substituted = substituted.simplify();
+
+            // Check if this is now univariate in var
+            std::set<std::string> remaining_vars;
+            collect_variables(substituted, &remaining_vars);
+
+            if (remaining_vars.size() == 1 && remaining_vars.count(var)) {
+                Solution var_sol = solve(substituted, var);
+                if (var_sol.is_complete && !var_sol.values.empty()) {
+                    solutions[var] = var_sol.values[0];
+                    break;
+                }
+            }
+        }
+    }
+
+    // Check if we found all variables
+    if (solutions.size() == variables.size()) {
+        return Solution::system(solutions, "groebner_basis");
+    }
+
+    return Solution::no_solution("partial Groebner solution");
+}
+
+void SymbolicSolver::collect_variables(const SymbolicExpression& expr,
+                                        std::set<std::string>* vars) {
+    if (!expr.node_) return;
+
+    switch (expr.node_->type) {
+        case NodeType::kVariable:
+            vars->insert(expr.node_->text);
+            break;
+        case NodeType::kAdd:
+        case NodeType::kSubtract:
+        case NodeType::kMultiply:
+        case NodeType::kDivide:
+        case NodeType::kPower:
+            collect_variables(SymbolicExpression(expr.node_->left), vars);
+            collect_variables(SymbolicExpression(expr.node_->right), vars);
+            break;
+        case NodeType::kNegate:
+        case NodeType::kFunction:
+            collect_variables(SymbolicExpression(expr.node_->left), vars);
+            break;
+        case NodeType::kVector:
+        case NodeType::kTensor:
+            for (const auto& child : expr.node_->children) {
+                collect_variables(SymbolicExpression(child), vars);
+            }
+            break;
+        default:
+            break;
+    }
 }
 
 std::optional<Solution> SymbolicSolver::solve_from_string(

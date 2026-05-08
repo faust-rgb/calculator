@@ -837,7 +837,8 @@ int run_logic_calculus_tests(int& passed, int& failed) {
             is_one_of(output, {
                 "1/6 * (-ln(abs(x ^ 2 + 4)) + ln(abs(x ^ 2 + 1))) + C",
                 "(ln(abs(x ^ 2 + 1)) - ln(abs(x ^ 2 + 4))) / 6 + C",
-                "1/6 * (ln(abs(x ^ 2 + 1)) - ln(abs(x ^ 2 + 4))) + C"})) {
+                "1/6 * (ln(abs(x ^ 2 + 1)) - ln(abs(x ^ 2 + 4))) + C",
+                "-1/6 * (ln(abs(x ^ 2 + 4)) - ln(abs(x ^ 2 + 1))) + C"})) {
             ++passed;
         } else {
             ++failed;

@@ -3,8 +3,11 @@
 // ============================================================================
 
 #include "analysis/calculator_analysis_cmds.h"
+#include "analysis/precision_constants.h"
 #include "symbolic/calculator_symbolic_commands.h"
 #include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/groebner_basis.h"
+#include "symbolic/symbolic_solver.h"
 #include "analysis/function_analysis.h"
 #include "parser/unified_expression_parser.h"
 #include "core/string_utils.h"
@@ -38,14 +41,14 @@ std::string classify_critical_point(
 
     if (variables.size() == 1) {
         Scalar d2f = numeric_hessian[0][0];
-        if (mymath::precise128::isfinite(d2f) && mymath::precise128::abs(d2f) < Scalar(1e-10L)) return "degenerate";
+        if (mymath::precise128::isfinite(d2f) && mymath::precise128::abs(d2f) < precision::sqrt_epsilon<Scalar>() * Scalar(10)) return "degenerate";
         return d2f > Scalar(0) ? "local min" : "local max";
     }
 
     if (variables.size() == 2) {
         Scalar A = numeric_hessian[0][0], B = numeric_hessian[0][1], C = numeric_hessian[1][1];
         Scalar D = A * C - B * B;
-        if (mymath::precise128::isfinite(D) && mymath::precise128::abs(D) < Scalar(1e-10L)) return "degenerate";
+        if (mymath::precise128::isfinite(D) && mymath::precise128::abs(D) < precision::sqrt_epsilon<Scalar>() * Scalar(10)) return "degenerate";
         if (D < Scalar(0)) return "saddle point";
         return A > Scalar(0) ? "local min" : "local max";
     }
@@ -71,7 +74,7 @@ std::vector<Scalar> solve_linear_system_local(std::vector<std::vector<Scalar>> m
                 pivot = row;
             }
         }
-        if (mymath::precise128::isfinite(matrix[pivot][col]) && mymath::precise128::abs(matrix[pivot][col]) < Scalar(1e-12L)) {
+        if (mymath::precise128::isfinite(matrix[pivot][col]) && mymath::precise128::abs(matrix[pivot][col]) < precision::singular_value_threshold<Scalar>()) {
             throw std::runtime_error("singular critical point system");
         }
         if (pivot != col) {
@@ -84,7 +87,7 @@ std::vector<Scalar> solve_linear_system_local(std::vector<std::vector<Scalar>> m
         for (std::size_t row = 0; row < n; ++row) {
             if (row == col) continue;
             const Scalar factor = matrix[row][col];
-            if (mymath::precise128::isfinite(factor) && mymath::precise128::abs(factor) < Scalar(1e-14L)) continue;
+            if (mymath::precise128::isfinite(factor) && mymath::precise128::abs(factor) < precision::epsilon<Scalar>() * Scalar(100)) continue;
             for (std::size_t c = col; c < n; ++c) matrix[row][c] = matrix[row][c] - factor * matrix[col][c];
             rhs[row] = rhs[row] - factor * rhs[col];
         }
@@ -211,7 +214,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                     for (int iter = 0; iter < 80; ++iter) {
                         const Scalar mid = (left + right) * Scalar(0.5L);
                         const Scalar mid_value = eval_derivative(mid);
-                        if (mymath::precise128::isfinite(mid_value) && mymath::precise128::abs(mid_value) < Scalar(1e-12L)) {
+                        if (mymath::precise128::isfinite(mid_value) && mymath::precise128::abs(mid_value) < precision::newton_tolerance<Scalar>()) {
                             left = right = mid;
                             break;
                         }
@@ -235,17 +238,17 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                 const Scalar deriv_val = eval_derivative(x);
                 const Scalar second_val = eval_second(x);
 
-                if (mymath::precise128::abs(deriv_val) < Scalar(1e-8L) && mymath::precise128::abs(second_val) > Scalar(1e-6L)) {
+                if (mymath::precise128::abs(deriv_val) < precision::gradient_convergence_threshold<Scalar>() && mymath::precise128::abs(second_val) > precision::sqrt_epsilon<Scalar>()) {
                     Scalar refined_x = x;
                     for (int iter = 0; iter < 20; ++iter) {
                         const Scalar f_prime = eval_derivative(refined_x);
                         const Scalar f_double_prime = eval_second(refined_x);
-                        if (mymath::precise128::isfinite(f_prime) && mymath::precise128::abs(f_prime) < Scalar(1e-12L)) break;
-                        if (mymath::precise128::abs(f_double_prime) < Scalar(1e-8L)) break;
+                        if (mymath::precise128::isfinite(f_prime) && mymath::precise128::abs(f_prime) < precision::newton_tolerance<Scalar>()) break;
+                        if (mymath::precise128::abs(f_double_prime) < precision::gradient_convergence_threshold<Scalar>()) break;
                         refined_x = refined_x - f_prime / f_double_prime;
                     }
-                    if (mymath::precise128::isfinite(eval_derivative(refined_x)) && mymath::precise128::abs(eval_derivative(refined_x)) < Scalar(1e-10L) &&
-                        mymath::precise128::abs(eval_second(refined_x)) > Scalar(1e-6L)) {
+                    if (mymath::precise128::isfinite(eval_derivative(refined_x)) && mymath::precise128::abs(eval_derivative(refined_x)) < precision::newton_tolerance<Scalar>() &&
+                        mymath::precise128::abs(eval_second(refined_x)) > precision::sqrt_epsilon<Scalar>()) {
                         add_point(refined_x);
                     }
                 }
@@ -300,6 +303,74 @@ bool handle_analysis_command(const AnalysisContext& ctx,
             // Try Newton-Raphson from multiple starting points
             std::vector<std::map<std::string, Scalar>> starting_points;
 
+            // Attempt to use Groebner Basis for polynomial systems
+            auto is_polynomial_node = [&](const std::shared_ptr<SymbolicExpression::Node>& node) {
+                std::function<bool(const std::shared_ptr<SymbolicExpression::Node>&)> check = [&](const std::shared_ptr<SymbolicExpression::Node>& n) {
+                    if (!n) return true;
+                    switch (n->type) {
+                        case NodeType::kNumber:
+                        case NodeType::kPi:
+                        case NodeType::kE:
+                        case NodeType::kVariable:
+                            return true;
+                        case NodeType::kAdd:
+                        case NodeType::kSubtract:
+                        case NodeType::kMultiply:
+                            return check(n->left) && check(n->right);
+                        case NodeType::kNegate:
+                            return check(n->left);
+                        case NodeType::kPower: {
+                            Scalar val;
+                            if (SymbolicExpression(n->right).is_number(&val)) {
+                                if (val >= Scalar(0) && mymath::precise128::abs(val - mymath::precise128::floor(val)) < precision::epsilon<Scalar>() * Scalar(100)) {
+                                    return check(n->left);
+                                }
+                            }
+                            return false;
+                        }
+                        default: return false;
+                    }
+                };
+                return check(node);
+            };
+
+            bool is_poly_system = true;
+            for (const auto& g : gradient) {
+                if (!is_polynomial_node(g.node_)) {
+                    is_poly_system = false; break;
+                }
+            }
+
+            if (is_poly_system && variables.size() > 1) {
+                try {
+                    auto basis = symbolic_groebner::compute_groebner_basis(gradient, variables);
+                    if (!basis.empty()) {
+                        // The last polynomial in a lex basis usually depends on the fewest variables
+                        const SymbolicExpression& last_poly = basis.back();
+                        symbolic_solver::SymbolicSolver solver;
+                        // Solve for the last variable
+                        auto sol = solver.solve(last_poly, variables.back());
+                        for (const auto& val_expr : sol.values) {
+                            Scalar val;
+                            if (val_expr.is_number(&val)) {
+                                std::map<std::string, Scalar> pt;
+                                pt[variables.back()] = val;
+                                // Fill other variables with 0 to seed Newton
+                                for (size_t i = 0; i < variables.size() - 1; ++i) pt[variables[i]] = Scalar(0);
+                                starting_points.push_back(pt);
+                                // Also add one with other variables set to 1
+                                std::map<std::string, Scalar> pt1;
+                                pt1[variables.back()] = val;
+                                for (size_t i = 0; i < variables.size() - 1; ++i) pt1[variables[i]] = Scalar(1);
+                                starting_points.push_back(pt1);
+                            }
+                        }
+                    }
+                } catch (...) {
+                    // Ignore Groebner basis failures
+                }
+            }
+
             // Origin as starting point
             std::map<std::string, Scalar> origin;
             for (const auto& v : variables) origin[v] = Scalar(0);
@@ -347,7 +418,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
             for (const auto& start : starting_points) {
                 try {
                     std::map<std::string, Scalar> current = start;
-                    if (gradient_norm_at(current) < Scalar(1e-8L)) {
+                    if (gradient_norm_at(current) < precision::gradient_convergence_threshold<Scalar>()) {
                         add_critical_point(current);
                         continue;
                     }
@@ -359,7 +430,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                             std::vector<Scalar>(variables.size(), Scalar(0)));
 
                         Scalar current_norm = gradient_norm_at(current);
-                        if (current_norm < Scalar(1e-10L)) break;
+                        if (current_norm < precision::newton_tolerance<Scalar>()) break;
 
                         // Build Jacobian using symbolic derivatives
                         bool eval_ok = true;
@@ -407,17 +478,17 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                             for (std::size_t i = 0; i < variables.size(); ++i) {
                                 current[variables[i]] = current[variables[i]] + alpha * delta[i];
                             }
-                            if (alpha < 1e-12L) break;
+                            if (alpha < precision::line_search_min_step<Scalar>()) break;
                         }
 
                         Scalar max_delta = 0.0L;
                         for (auto d : delta) max_delta = mymath::precise128::fmax(max_delta, mymath::precise128::abs(d * alpha));
-                        if (max_delta < Scalar(1e-12L)) break;
+                        if (max_delta < precision::line_search_min_step<Scalar>()) break;
                     }
 
                     // Check if this is a valid critical point
                     const Scalar grad_norm = gradient_norm_at(current);
-                    if (grad_norm < Scalar(1e-8L)) {
+                    if (grad_norm < precision::gradient_convergence_threshold<Scalar>()) {
                         add_critical_point(current);
                     }
                 } catch (const std::exception&) {
@@ -460,8 +531,9 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                 }
                 Scalar second_val = 0.0L;
                 second_at_pt.is_number(&second_val);
-                if (second_val > 1e-10) out << " (local min)";
-                else if (second_val < -1e-10) out << " (local max)";
+                const Scalar hessian_threshold = precision::positive_definite_threshold<Scalar>();
+                if (second_val > hessian_threshold) out << " (local min)";
+                else if (second_val < -hessian_threshold) out << " (local max)";
                 else out << " (inflection)";
             } else {
                 // Multi-variable: use Hessian to classify
@@ -492,16 +564,17 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                     bool negative_definite = true;
 
                     // Check diagonal elements
+                    const Scalar hessian_threshold = precision::positive_definite_threshold<Scalar>();
                     for (size_t i = 0; i < hessian_values.size(); ++i) {
-                        if (hessian_values[i][i] <= Scalar(1e-10L)) positive_definite = false;
-                        if (hessian_values[i][i] >= Scalar(-1e-10L)) negative_definite = false;
+                        if (hessian_values[i][i] <= hessian_threshold) positive_definite = false;
+                        if (hessian_values[i][i] >= -hessian_threshold) negative_definite = false;
                     }
 
                     // For 2x2, also check determinant
                     if (hessian_values.size() == 2) {
                         Scalar det = hessian_values[0][0] * hessian_values[1][1] - hessian_values[0][1] * hessian_values[1][0];
-                        if (det <= Scalar(1e-10L)) positive_definite = false;
-                        if (det <= Scalar(1e-10L)) negative_definite = false;
+                        if (det <= hessian_threshold) positive_definite = false;
+                        if (det <= hessian_threshold) negative_definite = false;
                     }
 
                     if (positive_definite) {
@@ -511,9 +584,10 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                     } else {
                         // Check if Hessian is zero (degenerate case)
                         bool all_zero = true;
+                        const Scalar zero_threshold = precision::positive_definite_threshold<Scalar>();
                         for (const auto& row : hessian_values) {
                             for (const Scalar& val : row) {
-                                if (mymath::precise128::abs(val) > Scalar(1e-10L)) {
+                                if (mymath::precise128::abs(val) > zero_threshold) {
                                     all_zero = false;
                                     break;
                                 }

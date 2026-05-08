@@ -99,6 +99,46 @@ bool is_known_positive_expression(const SymbolicExpression& expression) {
 }
 
 /**
+ * @brief 判断表达式是否为已知负数
+ *
+ * 已知负数包括：
+ * - 负数值常量
+ * - 根据 AssumptionEngine 设为负数的变量
+ * - 已知正数的相反数
+ * - 已知正数乘以 -1
+ */
+bool is_known_negative_expression(const SymbolicExpression& expression) {
+    Scalar numeric = 0.0L;
+    if (expression.is_number(&numeric)) {
+        return numeric < 0.0L;
+    }
+
+    const auto& node = expression.node_;
+    if (node->type == NodeType::kVariable) {
+        return symbolic_assumptions::AssumptionEngine::instance().has_assumption(
+            node->text, symbolic_assumptions::Assumption::kNegative);
+    }
+    // Negation of a positive expression
+    if (node->type == NodeType::kNegate) {
+        return is_known_positive_expression(SymbolicExpression(node->left));
+    }
+    // -1 * positive = negative
+    if (node->type == NodeType::kMultiply) {
+        SymbolicExpression left(node->left);
+        SymbolicExpression right(node->right);
+        Scalar left_val = 0.0L;
+        if (left.is_number(&left_val) && left_val < 0.0L && is_known_positive_expression(right)) {
+            return true;
+        }
+        Scalar right_val = 0.0L;
+        if (right.is_number(&right_val) && right_val < 0.0L && is_known_positive_expression(left)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * @brief 判断表达式是否为关于指定变量的多项式
  *
  * 尝试提取多项式系数，如果成功则为多项式。

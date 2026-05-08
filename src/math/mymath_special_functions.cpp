@@ -316,13 +316,14 @@ long double erf(long double x) {
             factorial * Scalar(static_cast<long double>(2 * n + 1));
         const Scalar add = term / denominator;
         sum += (n % 2 == 0 ? add : -add);
-        if (precise128::abs(add).hi < 1e-14L) {
+        if (precise128::abs(add).hi < 1e-35L) {
             break;
         }
         term *= x_s * x_s;
         factorial *= Scalar(static_cast<long double>(n + 1));
     }
-    Scalar sqrt_pi = precise128::sqrt(precise128::pi());
+    // 使用预计算的高精度 √π 常量
+    Scalar sqrt_pi = precise128::sqrt_pi();
     return static_cast<long double>(Scalar(2.0L) * sum / sqrt_pi);
 }
 
@@ -365,7 +366,7 @@ long double inc_gamma(long double a, long double x) {
         for (int n = 1; n < 200; ++n) {
             term *= x_s / (a_s + Scalar(static_cast<long double>(n)));
             sum += term;
-            if (precise128::abs(term).hi < precise128::abs(sum).hi * 1e-14L) break;
+            if (precise128::abs(term).hi < precise128::abs(sum).hi * 1e-35L) break;
         }
         return static_cast<long double>(sum * prefix);
     } else {
@@ -386,7 +387,7 @@ long double inc_gamma(long double a, long double x) {
             d = Scalar(1.0L) / d;
             Scalar delta = c * d;
             h *= delta;
-            if (precise128::abs(delta - Scalar(1.0L)).hi < 1e-14L) break;
+            if (precise128::abs(delta - Scalar(1.0L)).hi < 1e-35L) break;
         }
         return static_cast<long double>(Scalar(1.0L) - h * prefix);
     }
@@ -436,7 +437,7 @@ long double inc_beta(long double a, long double b, long double x) {
         Scalar delta = c * d;
         h *= delta;
 
-        if (precise128::abs(delta - Scalar(1.0L)).hi < 1e-14L) break;
+        if (precise128::abs(delta - Scalar(1.0L)).hi < 1e-35L) break;
     }
 
     return static_cast<long double>(prefix * h);
@@ -540,7 +541,7 @@ long double bessel_j(int order, long double x) {
     for (int k = 0; k < 200; ++k) {
         const Scalar add = term;
         sum += add;
-        if (precise128::abs(add).hi <= 1e-14L * (1.0L + precise128::abs(sum).hi)) {
+        if (precise128::abs(add).hi <= 1e-35L * (1.0L + precise128::abs(sum).hi)) {
             break;
         }
         term *= -(half_x * half_x) /

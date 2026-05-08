@@ -890,10 +890,11 @@ PreciseDecimal reduce_mod_positive(const PreciseDecimal& value, const PreciseDec
  * @return 规约后的弧度值，在 [-π, π] 范围内
  */
 PreciseDecimal reduce_trig_argument(const PreciseDecimal& x) {
+    // 使用预计算的高精度常量，避免动态计算引入误差
     const PreciseDecimal p = precise::pi();
-    const PreciseDecimal two_pi = p * two();
-    PreciseDecimal r = reduce_mod_positive(x, two_pi);
-    if (r > p) r -= two_pi;
+    const PreciseDecimal two_pi_val = precise::two_pi();
+    PreciseDecimal r = reduce_mod_positive(x, two_pi_val);
+    if (r > p) r -= two_pi_val;
     return r;
 }
 
@@ -910,6 +911,16 @@ PreciseDecimal::PreciseDecimal(long long value) {
     negative = value < 0;
     data = string_to_bigint(std::to_string(negative ? -value : value));
     scale = 0;
+}
+
+PreciseDecimal::PreciseDecimal(mymath::Scalar value) {
+    if (mymath::precise128::isnan(value)) {
+        throw MathError("NaN cannot be converted to PreciseDecimal");
+    }
+    if (mymath::precise128::isinf(value)) {
+        throw MathError("Infinity cannot be converted to PreciseDecimal");
+    }
+    *this = from_decimal_literal(mymath::to_string(value, 32));
 }
 
 PreciseDecimal::PreciseDecimal(long double value) {
@@ -1061,16 +1072,14 @@ long double PreciseDecimal::to_double() const {
 
     if (start_chunk < 0) return 0.0L;
 
-    // 只取最高位的 3 个 chunk (约 27 位十进制)，足以填满 long double 的 53 位精度
+    // 取最高位的 4 个 chunk (约 36 位十进制)，足以填满 long double 的 64 位尾数
     long double res = 0;
-    int end_chunk = std::max(0, start_chunk - 2);
+    int end_chunk = std::max(0, start_chunk - 3);
     for (int i = start_chunk; i >= end_chunk; --i) {
         res = res * static_cast<long double>(kBase) + static_cast<long double>(data[i]);
     }
 
-    // 计算指数偏移: (start_chunk - (start_chunk - end_chunk)) * 9 - scale
-    // 实际应该是: start_chunk * 9 + (data[start_chunk]的位数) - scale
-    // 这里简单处理：res 对应的是 10^(end_chunk * 9) 的量级
+    // 计算指数偏移: (end_chunk * 9) - scale
     long double exponent = static_cast<long double>(end_chunk) * 9.0L - static_cast<long double>(scale);
 
     if (exponent != 0.0L) {
@@ -1243,6 +1252,22 @@ PreciseDecimal pi() {
         "117450284102701938521105559644622948954930381964428810975665933446128475648233");
 }
 
+PreciseDecimal two_pi() {
+    // 预计算的高精度 2π 常量，避免动态计算引入误差
+    return PreciseDecimal(
+        "6.283185307179586476925286766559005768394338798750211641949889184615632812572"
+        "417997256069650684234135964296173026564613294187689219101164434507187816256962"
+        "234900568205403877042211119289245897909860763928857621951331866892256951296466");
+}
+
+PreciseDecimal half_pi() {
+    // 预计算的高精度 π/2 常量
+    return PreciseDecimal(
+        "1.5707963267948966192313216916397514420985846996875529104874722961539082031431"
+        "0449931401741267105853399107404325664115332354692223077529111586285977040642405"
+        "587251420513509692605527798223114744974651909822144054878329667323064237824116");
+}
+
 PreciseDecimal e() {
     return PreciseDecimal(
         "2.718281828459045235360287471352662497757247093699959574966967627724076630353"
@@ -1300,8 +1325,9 @@ PreciseDecimal ln(const PreciseDecimal& x) {
     }
 
     // 对于其他值，使用 Newton 迭代
-    PreciseDecimal y(mymath::ln(x.to_double()));
-    const int iterations = std::max(12, scale / 8 + 8);
+    // 使用更高精度的初始猜测：通过 to_long_double() 获取更多精度
+    PreciseDecimal y(mymath::Scalar(mymath::ln(x.to_long_double())));
+    const int iterations = std::max(16, scale / 6 + 10);
     for (int i = 0; i < iterations; ++i) y = y + x / exp(y) - one();
     return y;
 }

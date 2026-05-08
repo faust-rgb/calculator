@@ -3,6 +3,7 @@
 // ============================================================================
 
 #include "analysis/ode_solver.h"
+#include "analysis/precision_constants.h"
 #include "core/scalar_type.h"
 #include "math/mymath.h"
 #include "matrix/matrix.h"
@@ -69,11 +70,15 @@ T t_clamp(const T& val, const T& low, const T& high) {
 }
 
 /**
- * @brief 检查事件是否触发
+ * @brief 检查事件是否触发（精度感知版本）
+ *
+ * 使用 precision::event_tolerance 根据 Scalar 类型自动选择最优容差
+ * 对于 double: ~1.5e-6
+ * 对于 float128_t: ~3e-16
  */
 template <typename T>
 bool event_triggered(T left, T right) {
-    const T kEventValueTolerance = T(2e-11);
+    const T kEventValueTolerance = precision::event_tolerance<T>();
     if (t_abs(left) <= kEventValueTolerance ||
         t_abs(right) <= kEventValueTolerance) {
         return true;
@@ -209,7 +214,7 @@ std::vector<TODEPoint<T>> TODESolver<T>::solve_trajectory(T x0,
     points.reserve(static_cast<std::size_t>(steps + 1));
     points.push_back({x0, y0});
 
-    const T kEventValueTolerance = T(2e-11);
+    const T kEventValueTolerance = precision::event_tolerance<T>();
     if (event_ && t_abs(event_(x0, y0)) <= kEventValueTolerance) {
         return points;
     }
@@ -248,7 +253,7 @@ T TODESolver<T>::integrate_segment(T x0, T y0, T x1) const {
 
     const T direction = segment > T(0) ? T(1.0L) : T(-1.0L);
     const T segment_abs = t_abs(segment);
-    const T min_step = std::max(T(1e-12L), segment_abs * T(1e-9));
+    const T min_step = std::max(precision::min_step_size<T>(segment_abs), segment_abs * T(1e-9));
     const T max_step = segment_abs;
     const T tolerance = absolute_tolerance_ + relative_tolerance_ *
         std::max({T(1.0L), t_abs(segment), t_abs(x0), t_abs(x1)});
@@ -309,7 +314,7 @@ TODEPoint<T> TODESolver<T>::integrate_segment_with_event(T x0,
         return {x1, integrate_segment(x0, y0, x1)};
     }
 
-    const T kEventValueTolerance = T(2e-11);
+    const T kEventValueTolerance = precision::event_tolerance<T>();
     const T initial_event = event_(x0, y0);
     if (t_abs(initial_event) <= kEventValueTolerance) {
         *stopped = true;
@@ -323,7 +328,7 @@ TODEPoint<T> TODESolver<T>::integrate_segment_with_event(T x0,
 
     const T direction = segment > T(0) ? T(1.0L) : T(-1.0L);
     const T segment_abs = t_abs(segment);
-    const T min_step = std::max(T(1e-12L), segment_abs * T(1e-9));
+    const T min_step = std::max(precision::min_step_size<T>(segment_abs), segment_abs * T(1e-9));
     const T max_step = segment_abs;
     const T tolerance = absolute_tolerance_ + relative_tolerance_ *
         std::max({T(1.0L), t_abs(segment), t_abs(x0), t_abs(x1)});
@@ -481,7 +486,7 @@ std::vector<TODESystemPoint<T>> TODESystemSolver<T>::solve_trajectory(T x0,
     points.reserve(static_cast<std::size_t>(steps + 1));
     points.push_back({x0, y0});
 
-    const T kEventValueTolerance = T(2e-11);
+    const T kEventValueTolerance = precision::event_tolerance<T>();
     if (event_ && t_abs(event_(x0, y0)) <= kEventValueTolerance) {
         return points;
     }
@@ -522,7 +527,7 @@ std::vector<T> TODESystemSolver<T>::integrate_segment(T x0,
 
     const T direction = segment > T(0) ? T(1.0L) : T(-1.0L);
     const T segment_abs = t_abs(segment);
-    const T min_step = std::max(T(1e-12L), segment_abs * T(1e-9));
+    const T min_step = std::max(precision::min_step_size<T>(segment_abs), segment_abs * T(1e-9));
     const T max_step = segment_abs;
     const T tolerance = absolute_tolerance_ + relative_tolerance_ *
         std::max({T(1.0L), t_abs(segment), t_abs(x0), t_abs(x1)});
@@ -584,7 +589,7 @@ TODESystemPoint<T> TODESystemSolver<T>::integrate_segment_with_event(T x0,
         return {x1, integrate_segment(x0, y0, x1)};
     }
 
-    const T kEventValueTolerance = T(2e-11);
+    const T kEventValueTolerance = precision::event_tolerance<T>();
     const T initial_event = event_(x0, y0);
     if (t_abs(initial_event) <= kEventValueTolerance) {
         *stopped = true;
@@ -598,7 +603,7 @@ TODESystemPoint<T> TODESystemSolver<T>::integrate_segment_with_event(T x0,
 
     const T direction = segment > T(0) ? T(1.0L) : T(-1.0L);
     const T segment_abs = t_abs(segment);
-    const T min_step = std::max(T(1e-12L), segment_abs * T(1e-9));
+    const T min_step = std::max(precision::min_step_size<T>(segment_abs), segment_abs * T(1e-9));
     const T max_step = segment_abs;
     const T tolerance = absolute_tolerance_ + relative_tolerance_ *
         std::max({T(1.0L), t_abs(segment), t_abs(x0), t_abs(x1)});
@@ -842,7 +847,7 @@ std::vector<TODEPoint<T>> TStiffODESolver<T>::solve_trajectory(T x0, T y0, T x1,
 
     const T direction = x1 > x0 ? T(1.0L) : T(-1.0L);
     const T segment_abs = t_abs(x1 - x0);
-    const T min_step = std::max(T(1e-14), segment_abs * T(1e-12L));
+    const T min_step = std::max(precision::min_step_size<T>(segment_abs), segment_abs * T(1e-12L));
 
     T h = direction * std::min(segment_abs / T(static_cast<long long>(steps)), segment_abs * T(0.1));
 
@@ -953,7 +958,7 @@ T TStiffODESolver<T>::bdf_step(T x, T y, T h, int order,
 template <typename T>
 T TStiffODESolver<T>::newton_implicit(T x, T y_pred, T h,
                                       T gamma, T) const {
-    const T kNewtonTolerance = T(1e-12L);
+    const T kNewtonTolerance = precision::newton_tolerance<T>();
     const int kMaxNewtonIterations = 20;
     T y = y_pred;
 
@@ -979,7 +984,7 @@ T TStiffODESolver<T>::newton_implicit(T x, T y_pred, T h,
 
 template <typename T>
 T TStiffODESolver<T>::numerical_jacobian(T x, T y) const {
-    const T eps = T(1e-8L) * std::max(T(1.0L), t_abs(y));
+    const T eps = precision::jacobian_step<T>(y);
     return (rhs_(x, y + eps) - rhs_(x, y - eps)) / (T(2.0) * eps);
 }
 
@@ -1033,7 +1038,7 @@ std::vector<TODESystemPoint<T>> TStiffODESystemSolver<T>::solve_trajectory(
 
     const T direction = x1 > x0 ? T(1.0L) : T(-1.0L);
     const T segment_abs = t_abs(x1 - x0);
-    const T min_step = std::max(T(1e-14), segment_abs * T(1e-12L));
+    const T min_step = std::max(precision::min_step_size<T>(segment_abs), segment_abs * T(1e-12L));
 
     T h = direction * std::min(segment_abs / T(static_cast<long long>(steps)), segment_abs * T(0.1));
 
@@ -1140,7 +1145,7 @@ std::vector<T> TStiffODESystemSolver<T>::newton_implicit_system(
     T gamma,
     const std::vector<T>&) const {
 
-    const T kNewtonTolerance = T(1e-12L);
+    const T kNewtonTolerance = precision::newton_tolerance<T>();
     const int kMaxNewtonIterations = 20;
     const std::size_t n = y_pred.size();
     std::vector<T> y = y_pred;
@@ -1193,7 +1198,7 @@ std::vector<std::vector<T>> TStiffODESystemSolver<T>::numerical_jacobian_matrix(
     const std::vector<T> f0 = rhs_(x, y);
 
     for (std::size_t j = 0; j < n; ++j) {
-        const T eps = T(1e-8L) * std::max(T(1.0L), t_abs(y[j]));
+        const T eps = precision::jacobian_step<T>(y[j]);
         std::vector<T> y_pert = y;
         y_pert[j] += eps;
         std::vector<T> f_pert = rhs_(x, y_pert);

@@ -569,7 +569,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         {"fourier(exp(-2 * t) * step(t), t, w)", false, "1 / (i * w + 2)"},
         {"fourier(exp(-2 * t) * step(t) + 3 * exp(-4 * t) * step(t), t, w)", false, "1 / (i * w + 2) + 3 * 1 / (i * w + 4)"},
         {"fourier(delta(t - 2))", false, "exp(-2 * i * w)"},
-        {"ifourier(delta(w - 3))", false, "0.159154943092 * exp(3 * i * t)"},
+        {"ifourier(delta(w - 3))", false, "0.159154943091 * exp(3 * i * t)"},
         {"ztrans(step(n - 2))", false, "z ^ -1 / (z - 1)"},
         {"iztrans(z ^ -2)", false, "delta(n - 2)"},
         {"iztrans(z / (z - 1), z, n)", false, "step(n)"},

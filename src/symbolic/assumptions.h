@@ -11,6 +11,7 @@ namespace symbolic_assumptions {
 
 enum class Assumption {
     kPositive,
+    kNegative,
     kReal,
     kInteger
 };
@@ -36,6 +37,7 @@ private:
     AssumptionEngine() = default;
 
     std::unordered_set<std::string> positive_vars_;
+    std::unordered_set<std::string> negative_vars_;
     std::unordered_set<std::string> real_vars_;
     std::unordered_set<std::string> integer_vars_;
     mutable std::mutex mutex_;

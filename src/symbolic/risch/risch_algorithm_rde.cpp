@@ -2791,6 +2791,47 @@ RDEResult RischAlgorithm::solve_rde_strict(
         }
     }
 
+    // Enhanced edge case: f and g are both constants
+    Scalar f_val, g_val;
+    if (f_simplified.is_number(&f_val) && g_simplified.is_number(&g_val)) {
+        // y' + f*y = g where f, g are constants
+        // Solution: y = g/f (constant) if f ≠ 0
+        if (!mymath::is_near_zero(f_val, Scalar(1e-12L))) {
+            return RDEResult::has_solution(SymbolicExpression::number(g_val / f_val));
+        }
+        // f = 0: y' = g → y = g*x
+        return RDEResult::has_solution(
+            make_multiply(g_simplified, SymbolicExpression::variable(x_var)).simplify());
+    }
+
+    // Enhanced edge case: g/f is a constant
+    SymbolicExpression ratio = (g_simplified / f_simplified).simplify();
+    Scalar ratio_val;
+    if (ratio.is_number(&ratio_val) && field.is_constant(ratio)) {
+        // y' + f*y = g where g/f = c (constant)
+        // Try y = c as a solution: y' + f*c = g → 0 + f*c = g → c = g/f ✓
+        return RDEResult::has_solution(ratio);
+    }
+
+    // Enhanced edge case: f = -n*g'/g for integer n (cancellation case)
+    // This handles the logarithmic derivative case
+    if (g_simplified.node_->type == NodeType::kFunction) {
+        std::string func_name = g_simplified.node_->text;
+        if (func_name == "ln" || func_name == "exp") {
+            SymbolicExpression g_arg = SymbolicExpression(g_simplified.node_->left);
+            SymbolicExpression g_deriv = g_simplified.derivative(x_var).simplify();
+            SymbolicExpression neg_g_deriv = make_negate(g_deriv).simplify();
+
+            // Check if f = -g' (n=1 case)
+            if (expressions_match(f_simplified, neg_g_deriv)) {
+                // y' + (-g')*y = g → y = -g works? Check: -g' + (-g')*(-g) = -g' + g'*g ≠ g
+                // Actually: y' - g'*y = g → y = -g is NOT solution
+                // Try y = -∫g*exp(-∫(-g')dx) dx = -∫g*exp(ln(g)) dx = -∫g*g dx
+                // This is handled by the general algorithm below
+            }
+        }
+    }
+
     // 检查 f 和 g 是否在基域中
     bool f_in_base = field.is_in_base_field(f_simplified);
     bool g_in_base = field.is_in_base_field(g_simplified);

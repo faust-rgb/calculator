@@ -17,6 +17,18 @@
 #include <string>
 
 /**
+ * @enum CoefficientType
+ * @brief 多项式系数类型
+ *
+ * 用于优化：当系数为纯数值时，可使用更高效的算法。
+ */
+enum class CoefficientType {
+    kSymbolic,       ///< 符号系数（如 a, b, x+y）
+    kNumericInteger, ///< 整数系数
+    kNumericRational ///< 有理数系数（浮点数）
+};
+
+/**
  * @class SymbolicPolynomial
  * @brief 符号系数多项式
  *
@@ -237,6 +249,43 @@ public:
      * @brief 检查系数是否为一（静态公有方法）
      */
     static bool coeff_is_one(const SymbolicExpression& coeff);
+
+    /**
+     * @brief 检测系数类型
+     *
+     * 检测所有系数是否为纯数值（整数或有理数）。
+     * 用于选择优化的算法路径。
+     *
+     * @return 系数类型
+     */
+    CoefficientType detect_coefficient_type() const;
+
+    /**
+     * @brief 检查是否为数值系数多项式
+     */
+    bool is_numeric() const {
+        return detect_coefficient_type() != CoefficientType::kSymbolic;
+    }
+
+    /**
+     * @brief 提取数值系数向量
+     *
+     * 仅当 is_numeric() 返回 true 时有效。
+     *
+     * @return 数值系数向量（低次到高次）
+     */
+    std::vector<mymath::Scalar> to_numeric_coefficients() const;
+
+    /**
+     * @brief 从数值系数创建多项式
+     *
+     * @param coeffs 数值系数向量（低次到高次）
+     * @param variable_name 变量名
+     * @return 多项式
+     */
+    static SymbolicPolynomial from_numeric_coefficients(
+        const std::vector<mymath::Scalar>& coeffs,
+        const std::string& variable_name);
 
 private:
     std::vector<SymbolicExpression> coefficients_;

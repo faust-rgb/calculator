@@ -18,6 +18,7 @@
 #include "mymath.h"
 #include <numeric>
 #include <sstream>
+#include <span>
 
 /**
  * @brief 统计模块类
@@ -72,36 +73,49 @@ public:
 
         // 处理统计摘要命令
         if (command == "stat_summary" || command == "describe") {
-            // 计算各种统计量
-            Scalar mean = stats::mean(data);
-            Scalar stddev = stats::sample_stddev(data);
-            Scalar variance = stats::sample_variance(data);
-            Scalar median = stats::median(data);
-            Scalar min = stats::percentile(data, 0);
-            Scalar max = stats::percentile(data, 100);
-            Scalar q1 = stats::percentile(data, 25);
-            Scalar q3 = stats::percentile(data, 75);
-            Scalar iqr = q3 - q1;
-            Scalar skew = stats::skewness(data);
-            Scalar kurt = stats::kurtosis(data);
-            Scalar mad = stats::mad(data);
+            // 使用单次遍历计算所有矩（均值、方差、偏度、峰度）
+            stats::Moments m = stats::compute_moments(data);
+
+            Scalar mean_val = m.mean;
+            Scalar variance_val = m.m2 / Scalar(static_cast<long long>(m.n));
+            Scalar sample_variance_val = m.m2 / Scalar(static_cast<long long>(m.n - 1));
+            Scalar stddev_val = mymath::precise128::sqrt(sample_variance_val);
+
+            // 计算偏度和峰度
+            Scalar skew_val = Scalar(0);
+            Scalar kurt_val = Scalar(0);
+            if (variance_val > Scalar(1e-30L)) {
+                skew_val = (m.m3 / Scalar(static_cast<long long>(m.n))) /
+                          mymath::precise128::pow(variance_val, Scalar(1.5));
+                kurt_val = (m.m4 / Scalar(static_cast<long long>(m.n))) /
+                          (variance_val * variance_val) - Scalar(3);
+            }
+
+            // 计算分位数（需要排序，无法与矩合并）
+            Scalar median_val = stats::median(data);
+            Scalar min_val = stats::percentile(data, 0);
+            Scalar max_val = stats::percentile(data, 100);
+            Scalar q1_val = stats::percentile(data, 25);
+            Scalar q3_val = stats::percentile(data, 75);
+            Scalar iqr_val = q3_val - q1_val;
+            Scalar mad_val = stats::mad(data);
 
             // 格式化输出统计摘要
             std::ostringstream out;
             out << "--- Statistical Summary ---\n"
                 << "Count:    " << data.size() << "\n"
-                << "Mean:     " << svc.evaluation.normalize_result(mean) << "\n"
-                << "StdDev(S):" << svc.evaluation.normalize_result(stddev) << "\n"
-                << "Variance: " << svc.evaluation.normalize_result(variance) << "\n"
-                << "Min:      " << svc.evaluation.normalize_result(min) << "\n"
-                << "25% (Q1): " << svc.evaluation.normalize_result(q1) << "\n"
-                << "50% (Med):" << svc.evaluation.normalize_result(median) << "\n"
-                << "75% (Q3): " << svc.evaluation.normalize_result(q3) << "\n"
-                << "Max:      " << svc.evaluation.normalize_result(max) << "\n"
-                << "IQR:      " << svc.evaluation.normalize_result(iqr) << "\n"
-                << "Skewness: " << svc.evaluation.normalize_result(skew) << "\n"
-                << "Kurtosis: " << svc.evaluation.normalize_result(kurt) << "\n"
-                << "MAD:      " << svc.evaluation.normalize_result(mad);
+                << "Mean:     " << svc.evaluation.normalize_result(mean_val) << "\n"
+                << "StdDev(S):" << svc.evaluation.normalize_result(stddev_val) << "\n"
+                << "Variance: " << svc.evaluation.normalize_result(sample_variance_val) << "\n"
+                << "Min:      " << svc.evaluation.normalize_result(min_val) << "\n"
+                << "25% (Q1): " << svc.evaluation.normalize_result(q1_val) << "\n"
+                << "50% (Med):" << svc.evaluation.normalize_result(median_val) << "\n"
+                << "75% (Q3): " << svc.evaluation.normalize_result(q3_val) << "\n"
+                << "Max:      " << svc.evaluation.normalize_result(max_val) << "\n"
+                << "IQR:      " << svc.evaluation.normalize_result(iqr_val) << "\n"
+                << "Skewness: " << svc.evaluation.normalize_result(skew_val) << "\n"
+                << "Kurtosis: " << svc.evaluation.normalize_result(kurt_val) << "\n"
+                << "MAD:      " << svc.evaluation.normalize_result(mad_val);
             return out.str();
         }
 

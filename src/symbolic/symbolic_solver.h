@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 #include <optional>
 
 namespace symbolic_solver {
@@ -180,6 +181,20 @@ private:
         const std::string& var,
         SymbolicExpression* a,
         SymbolicExpression* b);
+
+    // 检查方程组是否为多项式系统
+    bool is_polynomial_system(
+        const std::vector<SymbolicExpression>& equations,
+        const std::vector<std::string>& variables);
+
+    // 使用 Groebner 基求解多项式方程组
+    Solution solve_system_groebner(
+        const std::vector<SymbolicExpression>& equations,
+        const std::vector<std::string>& variables);
+
+    // 收集表达式中的变量
+    static void collect_variables(const SymbolicExpression& expr,
+                                  std::set<std::string>* vars);
 };
 
 // ============================================================================

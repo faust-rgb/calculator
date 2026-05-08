@@ -118,7 +118,6 @@ bool decompose_numeric_multiple_of_symbol(const SymbolicExpression& expression,
 
     // 取负：-symbol
     if (node->type == NodeType::kNegate) {
-        Scalar nested = Scalar(0);
         if (decompose_numeric_multiple_of_symbol(SymbolicExpression(node->left),
                                                  symbol_name,
                                                  coefficient)) {

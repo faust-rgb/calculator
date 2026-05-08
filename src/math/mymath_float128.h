@@ -217,6 +217,9 @@ namespace precise128 {
 
     // 常量
     float128_t pi();
+    float128_t two_pi();   // 预计算的 2π
+    float128_t half_pi();  // 预计算的 π/2
+    float128_t sqrt_pi();  // 预计算的 √π
     float128_t e();
     float128_t infinity();
     bool is_near_zero(float128_t x, float128_t eps);

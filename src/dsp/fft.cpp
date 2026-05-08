@@ -4,8 +4,8 @@
  *
  * 实现：
  * - 基-2 FFT（Cooley-Tukey）
- * - 混合基 FFT
- * - Bluestein FFT
+ * - 混合基 FFT（迭代实现）
+ * - Bluestein FFT（带 LRU 缓存）
  * - 实数 FFT
  */
 
@@ -14,8 +14,9 @@
 #include "core/scalar_type.h"
 
 #include <algorithm>
-#include <map>
+#include <list>
 #include <stdexcept>
+#include <unordered_map>
 #include <vector>
 
 namespace signal {
@@ -26,8 +27,54 @@ using Scalar = mymath::Scalar;
 // 数学常量 - use Scalar precision
 static const Scalar kPiScalar = mymath::precise128::pi();
 
-// Legacy constant for API compatibility
-constexpr Scalar kPi = 3.14159265358979323846;
+// ============================================================================
+// LRU 缓存（用于 Bluestein FFT）
+// ============================================================================
+
+/**
+ * @brief Chirp FFT 缓存的 LRU 缓存管理器
+ *
+ * 解决原 thread_local std::map 无上限导致的内存膨胀问题。
+ * 最大缓存 16 个不同长度的 Chirp FFT 结果。
+ */
+class ChirpFftLruCache {
+public:
+    static constexpr std::size_t kMaxCapacity = 16;
+
+    std::vector<Complex> get(std::size_t n) {
+        auto it = index_.find(n);
+        if (it != index_.end()) {
+            // 移动到前端（最近使用）
+            entries_.splice(entries_.begin(), entries_, it->second);
+            return it->second->second;
+        }
+        return {};  // 未命中
+    }
+
+    void put(std::size_t n, const std::vector<Complex>& chirp_fft) {
+        auto it = index_.find(n);
+        if (it != index_.end()) {
+            // 已存在，更新并移到前端
+            it->second->second = chirp_fft;
+            entries_.splice(entries_.begin(), entries_, it->second);
+            return;
+        }
+
+        // 淘汰最久未使用
+        if (entries_.size() >= kMaxCapacity) {
+            index_.erase(entries_.back().first);
+            entries_.pop_back();
+        }
+
+        entries_.emplace_front(n, chirp_fft);
+        index_[n] = entries_.begin();
+    }
+
+private:
+    std::list<std::pair<std::size_t, std::vector<Complex>>> entries_;
+    std::unordered_map<std::size_t,
+                       std::list<std::pair<std::size_t, std::vector<Complex>>>::iterator> index_;
+};
 
 // ============================================================================
 // 辅助函数
@@ -93,20 +140,23 @@ std::vector<Complex> fft_radix2(const std::vector<Complex>& input) {
         }
     }
 
-    // Cooley-Tukey 迭代 - use Scalar for angle precision
+    // Cooley-Tukey 迭代 - 使用预计算旋转因子表提高数值稳定性
     for (std::size_t length = 2; length <= n; length <<= 1) {
-        const Scalar angle_scalar = -Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(length));
-        const Scalar angle = (angle_scalar);
-        const Complex step = twiddle_factor(angle);
+        const Scalar base_angle = -Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(length));
+        const std::size_t half = length >> 1;
+
+        // 预计算旋转因子表，避免累乘误差
+        std::vector<Complex> twiddles(half);
+        for (std::size_t k = 0; k < half; ++k) {
+            twiddles[k] = twiddle_factor(base_angle * Scalar(static_cast<long long>(k)));
+        }
+
         for (std::size_t start = 0; start < n; start += length) {
-            Complex twiddle = Complex(1.0L, 0.0L);
-            const std::size_t half = length >> 1;
             for (std::size_t offset = 0; offset < half; ++offset) {
                 const Complex even = output[start + offset];
-                const Complex odd = output[start + offset + half] * twiddle;
+                const Complex odd = output[start + offset + half] * twiddles[offset];
                 output[start + offset] = even + odd;
                 output[start + offset + half] = even - odd;
-                twiddle *= step;
             }
         }
     }
@@ -144,19 +194,18 @@ static std::vector<std::size_t> find_factors(std::size_t n) {
     return factors;
 }
 
-// 小因子 FFT（用于混合基）
+// 小因子 FFT（用于混合基）- 使用预计算旋转因子表
 static void small_factor_fft(std::vector<Complex>& data,
                               std::size_t start,
                               std::size_t factor,
                               std::size_t stride,
-                              std::size_t total_length) {
+                              std::size_t total_length,
+                              const std::vector<Complex>& twiddles_base) {
     if (factor == 2) {
         // 基-2
-        const Scalar angle_scalar = -Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(total_length));
-        const Scalar angle = (angle_scalar);
-        const Scalar angle_scaled = angle * (start);
-        Complex twiddle = twiddle_factor(angle_scaled);
-        const Complex step = twiddle_factor((angle * (stride)));
+        const Scalar base_angle = -Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(total_length));
+        Complex twiddle = twiddle_factor(base_angle * Scalar(static_cast<long long>(start)));
+        const Complex step = twiddle_factor(base_angle * Scalar(static_cast<long long>(stride)));
 
         for (std::size_t i = 0; i < stride; ++i) {
             const Complex even = data[start + i];
@@ -167,15 +216,13 @@ static void small_factor_fft(std::vector<Complex>& data,
         }
     } else if (factor == 3) {
         // 基-3
-        const Scalar angle_scalar = -Scalar(2.0L) * kPiScalar / Scalar((total_length * factor));
-        const Scalar angle = (angle_scalar);
+        const Scalar angle = -Scalar(2.0L) * kPiScalar / Scalar(3.0L);
         const Complex w1 = twiddle_factor(angle);
         const Complex w2 = twiddle_factor(2.0L * angle);
 
-        const Scalar base_angle_scalar = -Scalar(2.0L) * kPiScalar / Scalar((total_length));
-        const Scalar base_angle = (base_angle_scalar);
-        Complex twiddle = twiddle_factor(base_angle * (start));
-        const Complex step = twiddle_factor(base_angle * (stride));
+        const Scalar base_angle = -Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(total_length));
+        Complex twiddle = twiddle_factor(base_angle * Scalar(static_cast<long long>(start)));
+        const Complex step = twiddle_factor(base_angle * Scalar(static_cast<long long>(stride)));
 
         for (std::size_t i = 0; i < stride; ++i) {
             Complex sum = data[start + i];
@@ -189,11 +236,10 @@ static void small_factor_fft(std::vector<Complex>& data,
         }
     } else if (factor == 4) {
         // 基-4
-        const Scalar angle_scalar = -Scalar(2.0L) * kPiScalar / Scalar((total_length));
-        const Scalar angle = (angle_scalar);
-        Complex twiddle = twiddle_factor(angle * (start));
-        const Complex step = twiddle_factor(angle * (stride));
-        const Complex j = twiddle_factor((kPiScalar / Scalar(2.0L)));  // j = sqrt(-1)
+        const Scalar base_angle = -Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(total_length));
+        Complex twiddle = twiddle_factor(base_angle * Scalar(static_cast<long long>(start)));
+        const Complex step = twiddle_factor(base_angle * Scalar(static_cast<long long>(stride)));
+        const Complex j = twiddle_factor(kPiScalar / Scalar(2.0L));  // j = sqrt(-1)
 
         for (std::size_t i = 0; i < stride; ++i) {
             const Complex a = data[start + i];
@@ -214,17 +260,15 @@ static void small_factor_fft(std::vector<Complex>& data,
         }
     } else if (factor == 5) {
         // 基-5
-        const Scalar angle_scalar = -Scalar(2.0L) * kPiScalar / Scalar(5.0L);
-        const Scalar angle = (angle_scalar);
+        const Scalar angle = -Scalar(2.0L) * kPiScalar / Scalar(5.0L);
         const Complex w1 = twiddle_factor(angle);
         const Complex w2 = twiddle_factor(2.0L * angle);
         const Complex w3 = twiddle_factor(3.0L * angle);
         const Complex w4 = twiddle_factor(4.0L * angle);
 
-        const Scalar base_angle_scalar = -Scalar(2.0L) * kPiScalar / Scalar((total_length));
-        const Scalar base_angle = (base_angle_scalar);
-        Complex twiddle = twiddle_factor(base_angle * (start));
-        const Complex step = twiddle_factor(base_angle * (stride));
+        const Scalar base_angle = -Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(total_length));
+        Complex twiddle = twiddle_factor(base_angle * Scalar(static_cast<long long>(start)));
+        const Complex step = twiddle_factor(base_angle * Scalar(static_cast<long long>(stride)));
 
         for (std::size_t i = 0; i < stride; ++i) {
             Complex a = data[start + i];
@@ -249,28 +293,46 @@ static void small_factor_fft(std::vector<Complex>& data,
     }
 }
 
-// 混合基 FFT 递归实现
-static void mixed_radix_fft_recursive(std::vector<Complex>& data,
-                                       std::size_t start,
-                                       std::size_t stride,
-                                       std::size_t total_length,
-                                       const std::vector<std::size_t>& factors,
-                                       std::size_t factor_index) {
-    if (factor_index >= factors.size()) {
-        return;
+// 混合基 FFT 迭代实现（避免递归栈溢出）
+static void mixed_radix_fft_iterative(std::vector<Complex>& data,
+                                       std::size_t n,
+                                       const std::vector<std::size_t>& factors) {
+    if (factors.empty() || n <= 1) return;
+
+    // 计算各层的 stride 和 total_length
+    // 使用迭代方式从最内层向外处理
+    const std::size_t num_stages = factors.size();
+
+    // 预计算每层的参数
+    std::vector<std::size_t> stage_lengths(num_stages + 1);
+    stage_lengths[0] = n;
+    for (std::size_t i = 0; i < num_stages; ++i) {
+        stage_lengths[i + 1] = stage_lengths[i] / factors[i];
     }
 
-    const std::size_t factor = factors[factor_index];
-    const std::size_t sub_length = total_length / factor;
+    // 预计算旋转因子表（空表，small_factor_fft 会自行计算）
+    std::vector<Complex> twiddles_base;
 
-    // 先对每个子序列递归处理
-    for (std::size_t k = 0; k < factor; ++k) {
-        mixed_radix_fft_recursive(data, start + k * stride, stride * factor,
-                                   sub_length, factors, factor_index + 1);
+    // 从最内层向外迭代处理
+    // 使用栈模拟递归，但按层处理避免深度递归
+    for (std::size_t stage = 0; stage < num_stages; ++stage) {
+        const std::size_t factor = factors[stage];
+        const std::size_t total_length = stage_lengths[stage];
+        const std::size_t sub_length = stage_lengths[stage + 1];
+
+        // 计算当前层的 stride
+        std::size_t stride = 1;
+        for (std::size_t j = stage + 1; j < num_stages; ++j) {
+            stride *= factors[j];
+        }
+
+        // 对当前层的所有块应用蝶形运算
+        const std::size_t num_blocks = n / total_length;
+        for (std::size_t block = 0; block < num_blocks; ++block) {
+            const std::size_t start = block * total_length;
+            small_factor_fft(data, start, factor, stride, total_length, twiddles_base);
+        }
     }
-
-    // 然后应用当前层的蝶形运算
-    small_factor_fft(data, start, factor, stride, total_length);
 }
 
 std::vector<Complex> fft_mixed_radix(const std::vector<Complex>& input) {
@@ -299,7 +361,7 @@ std::vector<Complex> fft_mixed_radix(const std::vector<Complex>& input) {
     }
 
     std::vector<Complex> output = input;
-    mixed_radix_fft_recursive(output, 0, 1, n, factors, 0);
+    mixed_radix_fft_iterative(output, n, factors);
 
     return output;
 }
@@ -320,35 +382,33 @@ std::vector<Complex> fft_bluestein(const std::vector<Complex>& input) {
     // 找到合适的 FFT 长度（至少 2n-1，且为 2 的幂）
     const std::size_t m = next_power_of_two(2 * static_cast<long long>(n) - 1);
 
-    // 线程本地缓存以优化重复调用
-    thread_local std::map<std::size_t, std::vector<Complex>> chirp_fft_cache;
+    // 使用 LRU 缓存替代无上限的 thread_local std::map
+    static thread_local ChirpFftLruCache chirp_fft_cache;
 
     std::vector<Complex> chirp_fft;
-    auto cache_it = chirp_fft_cache.find(n);
+    chirp_fft = chirp_fft_cache.get(n);
 
-    if (cache_it != chirp_fft_cache.end()) {
-        chirp_fft = cache_it->second;
-    } else {
+    if (chirp_fft.empty()) {
         // 生成 chirp 信号
         std::vector<Complex> chirp(m, Complex(0.0L, 0.0L));
         for (std::size_t k = 0; k < n; ++k) {
-            const Scalar angle_scalar = -kPiScalar * Scalar((k * static_cast<long long>(k))) / Scalar(static_cast<long long>(n));
-            chirp[k] = twiddle_factor((angle_scalar));
+            const Scalar angle = -kPiScalar * Scalar((k * static_cast<long long>(k))) / Scalar(static_cast<long long>(n));
+            chirp[k] = twiddle_factor(angle);
         }
         for (std::size_t k = m - n + 1; k < m; ++k) {
             const std::size_t kk = k - m;  // 负索引
-            const Scalar angle_scalar = -kPiScalar * Scalar((kk * kk)) / Scalar(static_cast<long long>(n));
-            chirp[k] = twiddle_factor((angle_scalar));
+            const Scalar angle = -kPiScalar * Scalar((kk * kk)) / Scalar(static_cast<long long>(n));
+            chirp[k] = twiddle_factor(angle);
         }
         chirp_fft = fft_radix2(chirp);
-        chirp_fft_cache[n] = chirp_fft;
+        chirp_fft_cache.put(n, chirp_fft);
     }
 
     // 输入信号乘以 chirp
     std::vector<Complex> y(m, Complex(0.0L, 0.0L));
     for (std::size_t k = 0; k < n; ++k) {
-        const Scalar angle_scalar = kPiScalar * Scalar((k * static_cast<long long>(k))) / Scalar(static_cast<long long>(n));
-        y[k] = input[k] * twiddle_factor((angle_scalar));
+        const Scalar angle = kPiScalar * Scalar((k * static_cast<long long>(k))) / Scalar(static_cast<long long>(n));
+        y[k] = input[k] * twiddle_factor(angle);
     }
 
     // FFT(y)
@@ -365,8 +425,8 @@ std::vector<Complex> fft_bluestein(const std::vector<Complex>& input) {
     // 取前 n 个点并乘以 chirp
     std::vector<Complex> output(n);
     for (std::size_t k = 0; k < n; ++k) {
-        const Scalar angle_scalar = kPiScalar * Scalar((k * static_cast<long long>(k))) / Scalar(static_cast<long long>(n));
-        output[k] = result[k] * twiddle_factor((angle_scalar));
+        const Scalar angle = kPiScalar * Scalar((k * static_cast<long long>(k))) / Scalar(static_cast<long long>(n));
+        output[k] = result[k] * twiddle_factor(angle);
     }
 
     return output;
@@ -425,9 +485,8 @@ std::vector<Complex> ifft(const std::vector<Complex>& spectrum) {
     // 正向 FFT
     std::vector<Complex> result = fft(conjugated);
 
-    // 共轭并缩放 - use Scalar for precision
-    const Scalar scale_scalar = Scalar(1.0L) / Scalar(static_cast<long long>(n));
-    const Scalar scale = (scale_scalar);
+    // 共轭并缩放
+    const Scalar scale = Scalar(1.0L) / Scalar(static_cast<long long>(n));
     for (std::size_t i = 0; i < n; ++i) {
         result[i] = mymath::conj(result[i]) * scale;
     }

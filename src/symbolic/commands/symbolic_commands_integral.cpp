@@ -4,6 +4,7 @@
 #include "analysis/multivariable_integrator.h"
 #include "analysis/multidim_integration.h"
 #include "analysis/calculator_integration.h"
+#include "analysis/precision_constants.h"
 #include "core/string_utils.h"
 #include "core/format_utils.h"
 #include "core/scalar_type.h"
@@ -33,7 +34,7 @@ Scalar derivative_at(
     const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>& f,
     const std::string& var,
     Scalar t) {
-    const Scalar h = Scalar(1e-7L) * mymath::precise128::fmax(Scalar(1.0L), mymath::abs(t));
+    const Scalar h = precision::optimal_derivative_step<Scalar>(t);
     return (f({{var, t + h}}) - f({{var, t - h}})) / (Scalar(2.0L) * h);
 }
 
@@ -113,7 +114,7 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
         const std::string var = trim_copy(arguments[2]);
         const Scalar t0 = ctx.parse_decimal(arguments[3]);
         const Scalar t1 = ctx.parse_decimal(arguments[4]);
-        const int subdivisions = arguments.size() >= 6 ? static_cast<int>(ctx.parse_decimal(arguments[5])) : 256;
+        const int subdivisions = arguments.size() >= 6 ? static_cast<int>(ctx.parse_decimal(arguments[5])) : 1024;
 
         if (trim_copy(arguments[0]).size() >= 2 && trim_copy(arguments[0]).front() == '[') {
             const std::vector<std::string> field = vector_literal_components(arguments[0]);
@@ -171,8 +172,8 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
         const std::string v_var = trim_copy(arguments[5]);
         const Scalar v0 = ctx.parse_decimal(arguments[6]);
         const Scalar v1 = ctx.parse_decimal(arguments[7]);
-        const int nu = arguments.size() >= 9 ? static_cast<int>(ctx.parse_decimal(arguments[8])) : 128;
-        const int nv = arguments.size() >= 10 ? static_cast<int>(ctx.parse_decimal(arguments[9])) : 128;
+        const int nu = arguments.size() >= 9 ? static_cast<int>(ctx.parse_decimal(arguments[8])) : 256;
+        const int nv = arguments.size() >= 10 ? static_cast<int>(ctx.parse_decimal(arguments[9])) : 256;
 
         if (trim_copy(arguments[0]).size() >= 2 && trim_copy(arguments[0]).front() == '[') {
             const std::vector<std::string> field = vector_literal_components(arguments[0]);
@@ -191,8 +192,8 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
             auto integrand = [&](const std::vector<Scalar>& pt) {
                 const Scalar u = pt[0];
                 const Scalar v = pt[1];
-                const Scalar hu = Scalar(1e-7L) * mymath::precise128::fmax(Scalar(1.0L), mymath::abs(u));
-                const Scalar hv = Scalar(1e-7L) * mymath::precise128::fmax(Scalar(1.0L), mymath::abs(v));
+                const Scalar hu = precision::jacobian_step<Scalar>(u);
+                const Scalar hv = precision::jacobian_step<Scalar>(v);
                 const Scalar x = eval(rx, u, v);
                 const Scalar y = eval(ry, u, v);
                 const Scalar z = eval(rz, u, v);

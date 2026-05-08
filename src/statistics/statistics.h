@@ -12,7 +12,34 @@
 #include <vector>
 #include <string>
 #include "core/scalar_type.h"
+
 namespace stats {
+
+/**
+ * @brief 矩计算结果结构体
+ *
+ * 使用扩展的 Welford 算法在单次遍历中计算均值、方差、三阶矩和四阶矩。
+ */
+struct Moments {
+    long long n = 0;      ///< 样本数量
+    Scalar mean = Scalar(0);  ///< 均值
+    Scalar m2 = Scalar(0);    ///< 二阶中心矩
+    Scalar m3 = Scalar(0);    ///< 三阶中心矩
+    Scalar m4 = Scalar(0);    ///< 四阶中心矩
+
+    /**
+     * @brief 添加一个数据点
+     * @param x 数据值
+     */
+    void add(Scalar x);
+};
+
+/**
+ * @brief 计算数据集的所有矩
+ * @param data 数据向量
+ * @return 矩结构体
+ */
+Moments compute_moments(const std::vector<Scalar>& data);
 
 /**
  * @brief 计算平均值（算术平均）

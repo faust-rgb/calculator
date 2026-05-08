@@ -385,13 +385,73 @@ bool SymbolicSumEngine::gosper_algorithm(
     // 尝试寻找 Gosper 变量
     // r(k) = [a(k)/b(k)] * [c(k+1)/c(k)]
     // 其中 a, b, c 是多项式，且 gcd(a(k), b(k+h)) = 1 对所有 h >= 0
-    
+
     // 如果找到 c(k)，则和为 [b(k-1)*c(k)/a(k-1)] * t(k)
     // 这里的实现目前仍为高级占位逻辑，支持特定形式的超几何项
     if (ratio.node_->type == NodeType::kDivide) {
-         // TODO: 实现完整的 Gosper 分解与多项式求解
-         // 目前仅支持最简单的阶乘/幂次项
+        SymbolicExpression num(ratio.node_->left);
+        SymbolicExpression den(ratio.node_->right);
+
+        // 简化版本：检测简单的超几何形式
+        // 例如：r(k) = (k+1)/(k+2) 对应 t_k = 1/(k+1)
+        // 和为 telescoping 形式
+
+        // 尝试提取多项式系数
+        // p(k) * r(k) = q(k) * r(k+1) - q(k) * r(k) 形式
+
+        Scalar num_val = 0.0L, den_val = 0.0L;
+        if (num.is_number(&num_val) && den.is_number(&den_val)) {
+            // 常数比值：几何级数
+            Scalar r = num_val / den_val;
+            if (mymath::precise128::abs(mymath::Scalar(r)) < mymath::Scalar(1.0L)) {
+                // 几何级数求和
+                SymbolicExpression geom_sum;
+                if (lower == 1) {
+                    geom_sum = make_divide(
+                        make_multiply(term.substitute(var, SymbolicExpression::number(1.0L)), SymbolicExpression::number(1.0L - r)),
+                        SymbolicExpression::number(1.0L - r)
+                    ).simplify();
+                } else {
+                    SymbolicExpression r_n = make_power(SymbolicExpression::number(r), SymbolicExpression::number(lower));
+                    SymbolicExpression r_m_plus_1 = make_power(SymbolicExpression::number(r), SymbolicExpression::number(upper + 1));
+                    geom_sum = make_multiply(
+                        term.substitute(var, SymbolicExpression::number(lower)),
+                        make_divide(
+                            make_subtract(r_n, r_m_plus_1),
+                            SymbolicExpression::number(1.0L - r)
+                        )
+                    ).simplify();
+                }
+                *result = SumResult::elementary(geom_sum, TermType::kGeometric, "gosper_geometric");
+                return true;
+            }
+        }
+
+        // 检测 Pochhammer 符号形式：(a)_k / (b)_k
+        // r(k) = (a+k)/(b+k) 对应 t_k = Gamma(a+k)/Gamma(b+k)
+        // 这类超几何级数通常没有闭式，但特殊情况可以处理
+
+        // 简单的线性有理函数：r(k) = (ak+b)/(ck+d)
+        // 尝试识别并构造 telescoping
+        std::string num_str = num.to_string();
+        std::string den_str = den.to_string();
+
+        // 检测 (k+a)/(k+b) 形式
+        if (num_str.find(var) != std::string::npos && den_str.find(var) != std::string::npos) {
+            // 尝试分解为 telescoping 形式
+            // 对于 r(k) = (k+a)/(k+b)，如果 a-b = 1，则可能 telescoping
+            // 例如：sum(1/((k+a)(k+b)), k, ...) 当 b = a+1 时 telescoping
+
+            // 简化处理：尝试数值求和
+            SymbolicExpression sum_val = numerical_sum(term, var, lower, upper);
+            *result = SumResult::elementary(sum_val, TermType::kHypergeometric, "gosper_numerical");
+            return true;
+        }
     }
+
+    // 尝试更一般的 Gosper 算法
+    // 寻找多项式 p(k) 使得 p(k)*t(k) = q(k)*t(k) - q(k-1)*t(k-1)
+    // 这需要求解多项式方程
 
     return false;
 }

@@ -158,8 +158,9 @@ T root_position_tolerance(T x) {
 template <typename T>
 T root_derivative_step(T x) {
     if constexpr (std::is_same_v<T, Scalar>) {
-        // 对于 float128, 取长浮点数的最佳步长
-        return T(1e-7L) * t_max(T(static_cast<long long>(1)), t_abs(x));
+        // 对于 float128, 使用更小的步长以匹配更高的精度
+        // sqrt(epsilon) ≈ 1e-16 对于 128 位精度
+        return T(1e-18L) * t_max(T(static_cast<long long>(1)), t_abs(x));
     }
     // 使用 sqrt(epsilon) 约为 1e-8 作为基础比例
     return T(1e-7L) * t_max(T(static_cast<long long>(1)), t_abs(x));

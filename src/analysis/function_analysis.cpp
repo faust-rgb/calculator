@@ -184,9 +184,9 @@ T t_tanh(const T& val) {
 template <typename T>
 T t_pi() {
     if constexpr (std::is_same_v<T, Scalar>) {
-        return 3.1415926535897932384626433832795029L;
-    } else if constexpr (std::is_same_v<T, Scalar>) {
         return mymath::precise128::pi();
+    } else if constexpr (std::is_floating_point_v<T>) {
+        return T(3.1415926535897932384626433832795029L);
     } else {
         return T(3.14159265358979323846);
     }
@@ -255,7 +255,7 @@ long long t_llround(const T& val) {
 template <typename T>
 T kDerivativeBaseStep_v() {
     if constexpr (std::is_same_v<T, Scalar>) {
-        return 1e-5L;
+        return 1e-12L;
     } else {
         return T(1e-4);
     }

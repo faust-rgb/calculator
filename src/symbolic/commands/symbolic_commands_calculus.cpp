@@ -65,10 +65,61 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
         std::string v; SymbolicExpression e; ctx.resolve_symbolic(arguments[0], false, &v, &e);
         auto vars = ctx.parse_symbolic_variable_arguments(arguments, 1, {v});
         const auto eval = ctx.build_scoped_evaluator(e.simplify().to_string());
+
+        // 数值梯度计算：使用中心差分
         std::vector<Scalar> grad;
-        // Simplified numerical gradient logic
-        // TODO: Full implementation
-        return false;
+        grad.reserve(vars.size());
+
+        // 获取当前点的值（需要从上下文获取变量值）
+        std::vector<Scalar> point;
+        for (const auto& var : vars) {
+            Scalar val = 0.0L;
+            // 尝试从上下文获取变量值，如果失败则使用默认值
+            try {
+                auto var_eval = ctx.build_scoped_evaluator(var);
+                val = var_eval({});
+            } catch (...) {
+                val = 0.0L;  // 默认值
+            }
+            point.push_back(val);
+        }
+
+        // 对每个变量计算偏导数
+        const Scalar h = Scalar(1e-8L);  // 差分步长
+
+        for (size_t i = 0; i < vars.size(); ++i) {
+            // 中心差分：df/dx ≈ (f(x+h) - f(x-h)) / (2h)
+            std::vector<std::pair<std::string, Scalar>> point_plus;
+            std::vector<std::pair<std::string, Scalar>> point_minus;
+
+            for (size_t j = 0; j < vars.size(); ++j) {
+                Scalar val = point[j];
+                if (j == i) {
+                    point_plus.emplace_back(vars[j], val + h);
+                    point_minus.emplace_back(vars[j], val - h);
+                } else {
+                    point_plus.emplace_back(vars[j], val);
+                    point_minus.emplace_back(vars[j], val);
+                }
+            }
+
+            Scalar f_plus = eval(point_plus);
+            Scalar f_minus = eval(point_minus);
+
+            Scalar derivative = (f_plus - f_minus) / (Scalar(2.0L) * h);
+            grad.push_back(derivative);
+        }
+
+        // 格式化输出
+        std::ostringstream out;
+        out << "[";
+        for (size_t i = 0; i < grad.size(); ++i) {
+            if (i > 0) out << ", ";
+            out << mymath::to_string(grad[i], 15);
+        }
+        out << "]";
+        *output = out.str();
+        return true;
     }
 
     if (command == "implicit_diff" || command == "param_deriv" || command == "directional") {

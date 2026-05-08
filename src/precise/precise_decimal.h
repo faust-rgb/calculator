@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include "core/scalar_type.h"
 
 /**
  * @struct PrecisionContext
@@ -84,6 +85,12 @@ struct PreciseDecimal {
     explicit PreciseDecimal(int value) : PreciseDecimal(static_cast<long long>(value)) {}
 
     /**
+     * @brief 从 Scalar 浮点数构造
+     * @param value 浮点数值
+     */
+    explicit PreciseDecimal(mymath::Scalar value);
+
+    /**
      * @brief 从 long double 浮点数构造（可能有精度损失）
      * @param value 浮点数值
      */
@@ -122,6 +129,12 @@ struct PreciseDecimal {
      * @return 近似的浮点数值
      */
     long double to_double() const;
+
+    /**
+     * @brief 转换为 long double（to_double 的别名）
+     * @return 近似的浮点数值
+     */
+    long double to_long_double() const { return to_double(); }
 
     // ==================== 算术运算符（成员函数） ====================
 
@@ -305,6 +318,18 @@ PreciseDecimal round(const PreciseDecimal& val);
  * @return 高精度的 π 值
  */
 PreciseDecimal pi();
+
+/**
+ * @brief 2π 常量
+ * @return 高精度的 2π 值
+ */
+PreciseDecimal two_pi();
+
+/**
+ * @brief π/2 常量
+ * @return 高精度的 π/2 值
+ */
+PreciseDecimal half_pi();
 
 /**
  * @brief 自然对数的底 e

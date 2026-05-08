@@ -17,11 +17,27 @@
 #include <filesystem>
 #include <sstream>
 #include <stdexcept>
+#include <iomanip>
 
 /**
  * @brief 匿名命名空间，包含模块内部使用的辅助函数
  */
 namespace {
+
+    /**
+     * @brief 将 long double 转换为高精度字符串
+     * @param val 要转换的值
+     * @return 字符串表示
+     */
+    std::string format_long_double(long double val) {
+        if (val == static_cast<long long>(val) && std::abs(val) < 1e15L) {
+            // 整数值，直接输出
+            return std::to_string(static_cast<long long>(val));
+        }
+        std::ostringstream oss;
+        oss << std::setprecision(15) << val;
+        return oss.str();
+    }
 
     /**
      * @brief 从 StoredValue 中提取标量数值
@@ -92,7 +108,7 @@ namespace {
                 if (val.matrix.cols > 1) result += "[";
                 for (std::size_t c = 0; c < val.matrix.cols; ++c) {
                     if (c > 0) result += ", ";
-                    result += std::to_string(val.matrix.at(r, c).to_long_double());
+                    result += format_long_double(val.matrix.at(r, c).to_long_double());
                 }
                 if (val.matrix.cols > 1) result += "]";
             }
@@ -120,10 +136,10 @@ namespace {
             return result;
         }
         if (val.is_complex) {
-            return "[" + std::to_string(val.complex.real.to_long_double()) + ", " + std::to_string(val.complex.imag.to_long_double()) + "]";
+            return "[" + format_long_double(val.complex.real.to_long_double()) + ", " + format_long_double(val.complex.imag.to_long_double()) + "]";
         }
         // 标量数值
-        return std::to_string(val.exact ? rational_to_double(val.rational) : val.decimal.to_long_double());
+        return format_long_double(val.exact ? rational_to_double(val.rational) : val.decimal.to_long_double());
     }
 
     /**
@@ -178,7 +194,8 @@ namespace {
             while (i < s.size() && (std::isdigit(static_cast<unsigned char>(s[i])) || s[i] == '.' || s[i] == 'e' || s[i] == 'E' || s[i] == '+' || s[i] == '-')) {
                 ++i;
             }
-            result.decimal = std::stod(std::string(s.substr(0, i)));
+            // 使用 std::stold 以获得更高精度
+            result.decimal = std::stold(std::string(s.substr(0, i)));
             result.exact = false;
             s.remove_prefix(i);
             return result;
@@ -564,12 +581,13 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
             while (std::getline(ss, cell, ',')) {
                 std::string trimmed = trim_copy(cell);
                 if (trimmed.empty()) {
-                    row.push_back(0.0L);
+                    row.push_back(Scalar(0.0L));
                     continue;
                 }
                 try {
                     std::size_t processed = 0;
-                    Scalar val = std::stod(trimmed, &processed);
+                    // 使用 std::stold 以获得更高精度
+                    Scalar val = Scalar(std::stold(trimmed, &processed));
                     if (processed != trimmed.size()) {
                         throw std::runtime_error("Invalid numeric data in CSV: " + trimmed);
                     }
@@ -720,7 +738,7 @@ std::string IoModule::execute_args(const std::string& command,
             out += "]";
             return out;
         }
-        return std::to_string(res.exact ? rational_to_double(res.rational) : res.decimal.to_long_double());
+        return format_long_double(res.exact ? rational_to_double(res.rational) : res.decimal.to_long_double());
     }
     
     return "";

@@ -23,14 +23,14 @@ namespace mymath {
 // 数学常量
 // ============================================================================
 
-/** @brief 圆周率 π，精确到小数点后 30 位 */
-constexpr long double kPi = 3.141592653589793238462643383279;
+/** @brief 圆周率 π，精确到小数点后 36 位（适用于 float128 精度） */
+constexpr long double kPi = 3.141592653589793238462643383279502884L;
 
 /** @brief 圆周率 π (long double)，用于高精度范围归约 */
 constexpr long double kPiL = 3.1415926535897932384626433832795028841971L;
 
-/** @brief 自然对数的底 e，精确到小数点后 30 位 */
-constexpr long double kE = 2.718281828459045235360287471352;
+/** @brief 自然对数的底 e，精确到小数点后 36 位（适用于 float128 精度） */
+constexpr long double kE = 2.718281828459045235360287471352662498L;
 
 /** @brief 光速 c (m/s) */
 constexpr long double kSpeedOfLight = 299792458.0;
@@ -324,9 +324,41 @@ inline Scalar atanh(Scalar x) {
 long double gamma(long double x);
 long double lgamma(long double x);
 
-// Scalar overloads for gamma, lgamma - convert to long double for now
-inline Scalar gamma(Scalar x) { return Scalar(gamma(static_cast<long double>(x))); }
-inline Scalar lgamma(Scalar x) { return Scalar(lgamma(static_cast<long double>(x))); }
+namespace internal {
+    Scalar log_gamma_positive(Scalar x);
+    Scalar finite_or_infinity_from_log(Scalar log_value);
+}
+
+// Scalar overloads for gamma, lgamma - now with full precision
+inline Scalar gamma(Scalar x) { 
+    if (is_integer(x) && x <= Scalar(0.0L)) {
+        throw std::domain_error("gamma is undefined for non-positive integers");
+    }
+
+    if (x < Scalar(0.5L)) {
+        const Scalar reflected_sine = precise128::sin(precise128::pi() * x);
+        if (precise128::abs(reflected_sine) < Scalar(1e-35L)) {
+            throw std::domain_error("gamma is undefined at this input");
+        }
+        return precise128::pi() / (reflected_sine * gamma(Scalar(1.0L) - x));
+    }
+    return internal::finite_or_infinity_from_log(internal::log_gamma_positive(x));
+}
+inline Scalar lgamma(Scalar x) { 
+    if (x <= Scalar(0.0L) && is_integer(x)) {
+        throw std::domain_error("lgamma is undefined for non-positive integers");
+    }
+
+    if (x > Scalar(0.0L)) {
+        return internal::log_gamma_positive(x);
+    }
+
+    const Scalar reflected_sine = precise128::sin(precise128::pi() * x);
+    if (precise128::abs(reflected_sine) < Scalar(1e-35L)) {
+        throw std::domain_error("lgamma is undefined at this input");
+    }
+    return precise128::ln(precise128::pi()) - precise128::ln(precise128::abs(reflected_sine)) - internal::log_gamma_positive(Scalar(1.0L) - x);
+}
 
 // ============================================================================
 // 三角函数
@@ -371,10 +403,13 @@ long double atan2(long double y, long double x);
 // Scalar overloads for trig functions
 inline Scalar sin(Scalar x) {
     Scalar result = precise128::sin(x);
+    // 清理接近零的小值，避免浮点误差
+    // 使用 1e-15 作为阈值，因为 sin(pi) 的误差约为 1e-16
     return precise128::abs(result) < Scalar(1e-15L) ? Scalar(0.0L) : result;
 }
 inline Scalar cos(Scalar x) {
     Scalar result = precise128::cos(x);
+    // 清理接近零的小值，避免浮点误差
     return precise128::abs(result) < Scalar(1e-15L) ? Scalar(0.0L) : result;
 }
 inline Scalar tan(Scalar x) {
@@ -473,9 +508,19 @@ long double acsc(long double x);
 long double acot(long double x);
 
 // Scalar overloads for asec, acsc, acot
-inline Scalar asec(Scalar x) { return Scalar(asec(static_cast<long double>(x))); }
-inline Scalar acsc(Scalar x) { return Scalar(acsc(static_cast<long double>(x))); }
-inline Scalar acot(Scalar x) { return Scalar(acot(static_cast<long double>(x))); }
+inline Scalar asec(Scalar x) {
+    if (precise128::abs(x) < Scalar(1.0L)) {
+        throw std::domain_error("asec is only defined for |x| >= 1");
+    }
+    return precise128::asec(x);
+}
+inline Scalar acsc(Scalar x) {
+    if (precise128::abs(x) < Scalar(1.0L)) {
+        throw std::domain_error("acsc is only defined for |x| >= 1");
+    }
+    return precise128::acsc(x);
+}
+inline Scalar acot(Scalar x) { return precise128::acot(x); }
 
 /**
  * @brief 计算欧几里得范数 sqrt(x^2 + y^2)
@@ -592,9 +637,15 @@ long double erf(long double x);
  */
 long double erfc(long double x);
 
-// Scalar overloads for erf, erfc - convert to long double for now
-inline Scalar erf(Scalar x) { return Scalar(erf(static_cast<long double>(x))); }
-inline Scalar erfc(Scalar x) { return Scalar(erfc(static_cast<long double>(x))); }
+// Scalar overloads for erf, erfc - limited to long double precision
+inline Scalar erf(Scalar x) { 
+    // Fallback to long double precision
+    return Scalar(erf(static_cast<long double>(x))); 
+}
+inline Scalar erfc(Scalar x) { 
+    // Fallback to long double precision
+    return Scalar(erfc(static_cast<long double>(x))); 
+}
 
 /**
  * @brief 计算正则化下不完全伽马函数 P(a, x)
@@ -604,7 +655,7 @@ inline Scalar erfc(Scalar x) { return Scalar(erfc(static_cast<long double>(x)));
  */
 long double inc_gamma(long double a, long double x);
 
-// Scalar overload for inc_gamma
+// Scalar overload for inc_gamma - limited to long double precision
 inline Scalar inc_gamma(Scalar a, Scalar x) {
     return Scalar(inc_gamma(static_cast<long double>(a), static_cast<long double>(x)));
 }
@@ -618,7 +669,7 @@ inline Scalar inc_gamma(Scalar a, Scalar x) {
  */
 long double inc_beta(long double a, long double b, long double x);
 
-// Scalar overload for inc_beta
+// Scalar overload for inc_beta - limited to long double precision
 inline Scalar inc_beta(Scalar a, Scalar b, Scalar x) {
     return Scalar(inc_beta(static_cast<long double>(a), static_cast<long double>(b), static_cast<long double>(x)));
 }
@@ -631,7 +682,7 @@ inline Scalar inc_beta(Scalar a, Scalar b, Scalar x) {
  */
 long double beta(long double a, long double b);
 
-// Scalar overload for beta
+// Scalar overload for beta - limited to long double precision
 inline Scalar beta(Scalar a, Scalar b) {
     return Scalar(beta(static_cast<long double>(a), static_cast<long double>(b)));
 }
@@ -643,7 +694,7 @@ inline Scalar beta(Scalar a, Scalar b) {
  */
 long double zeta(long double s);
 
-// Scalar overload for zeta
+// Scalar overload for zeta - limited to long double precision
 inline Scalar zeta(Scalar s) {
     return Scalar(zeta(static_cast<long double>(s)));
 }
@@ -656,7 +707,7 @@ inline Scalar zeta(Scalar s) {
  */
 long double bessel_j(int order, long double x);
 
-// Scalar overload for bessel_j
+// Scalar overload for bessel_j - limited to long double precision
 inline Scalar bessel_j(int order, Scalar x) {
     return Scalar(bessel_j(order, static_cast<long double>(x)));
 }
