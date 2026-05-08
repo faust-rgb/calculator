@@ -281,7 +281,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                         const auto it_existing = existing.find(v);
                         const auto it_current = point.find(v);
                         if (it_existing == existing.end() || it_current == point.end() ||
-                            mymath::precise128::abs(it_existing->second - it_current->second) > Scalar(1e-4L)) {
+                            mymath::precise128::abs(it_existing->second - it_current->second) > Scalar(1e-2L)) {
                             same = false;
                             break;
                         }
@@ -305,16 +305,42 @@ bool handle_analysis_command(const AnalysisContext& ctx,
             for (const auto& v : variables) origin[v] = Scalar(0);
             starting_points.push_back(origin);
 
-            // Grid of starting points for better coverage
-            const std::vector<Scalar> grid_values = {Scalar(-10), Scalar(-5), Scalar(0), Scalar(5), Scalar(10)};
-            if (variables.size() == 2) {
+            // Grid and random starting points for better coverage
+            const std::vector<Scalar> grid_values = {Scalar(-10), Scalar(-1), Scalar(1), Scalar(10)};
+            if (variables.size() <= 3) {
+                // For small dimensions, use a sparse grid
                 for (Scalar v0 : grid_values) {
                     for (Scalar v1 : grid_values) {
                         std::map<std::string, Scalar> pt;
                         pt[variables[0]] = v0;
                         pt[variables[1]] = v1;
-                        starting_points.push_back(pt);
+                        if (variables.size() == 3) {
+                            for (Scalar v2 : grid_values) {
+                                pt[variables[2]] = v2;
+                                starting_points.push_back(pt);
+                            }
+                        } else {
+                            starting_points.push_back(pt);
+                        }
                     }
+                }
+            }
+            
+            // Add some random points for higher dimensions or extra coverage
+            for (int i = 0; i < 5; ++i) {
+                std::map<std::string, Scalar> pt;
+                for (const auto& v : variables) {
+                    pt[v] = Scalar(static_cast<long double>(rand()) / RAND_MAX * 20.0L - 10.0L);
+                }
+                starting_points.push_back(pt);
+            }
+
+            // Pre-calculate symbolic Hessian (Jacobian of the gradient)
+            std::vector<std::vector<SymbolicExpression>> symbolic_hessian(variables.size(),
+                std::vector<SymbolicExpression>(variables.size()));
+            for (std::size_t i = 0; i < variables.size(); ++i) {
+                for (std::size_t j = 0; j < variables.size(); ++j) {
+                    symbolic_hessian[i][j] = gradient[i].derivative(variables[j]).simplify();
                 }
             }
 
@@ -326,32 +352,67 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                         continue;
                     }
 
-                    // Newton-Raphson iteration
-                    for (int iter = 0; iter < 50; ++iter) {
-                        // Build Jacobian of gradient (Hessian of original function)
+                    // Newton-Raphson iteration with backtracking line search
+                    for (int iter = 0; iter < 100; ++iter) {
                         std::vector<Scalar> rhs(variables.size(), Scalar(0));
                         std::vector<std::vector<Scalar>> jac(variables.size(),
                             std::vector<Scalar>(variables.size(), Scalar(0)));
 
+                        Scalar current_norm = gradient_norm_at(current);
+                        if (current_norm < Scalar(1e-10L)) break;
+
+                        // Build Jacobian using symbolic derivatives
+                        bool eval_ok = true;
                         for (std::size_t row = 0; row < variables.size(); ++row) {
                             rhs[row] = Scalar(0) - eval_gradient_at(gradient[row], current);
                             for (std::size_t col = 0; col < variables.size(); ++col) {
-                                std::map<std::string, Scalar> perturbed = current;
-                                perturbed[variables[col]] = perturbed[variables[col]] + Scalar(1e-6L);
-                                jac[row][col] = (eval_gradient_at(gradient[row], perturbed) -
-                                                eval_gradient_at(gradient[row], current)) / Scalar(1e-6L);
+                                auto val_expr = symbolic_hessian[row][col];
+                                for (const auto& [v, val] : current) {
+                                    val_expr = val_expr.substitute(v, SymbolicExpression::number(val)).simplify();
+                                }
+                                Scalar val;
+                                if (val_expr.is_number(&val)) {
+                                    jac[row][col] = val;
+                                } else {
+                                    eval_ok = false;
+                                    break;
+                                }
                             }
+                            if (!eval_ok) break;
                         }
+
+                        if (!eval_ok) break;
 
                         const std::vector<Scalar> delta = solve_linear_system_local(jac, rhs);
 
-                        Scalar max_change = Scalar(0);
-                        for (std::size_t i = 0; i < variables.size(); ++i) {
-                            current[variables[i]] = current[variables[i]] + delta[i];
-                            max_change = mymath::precise128::fmax(max_change, mymath::precise128::abs(delta[i]));
+                        // Backtracking Line Search (Armijo-like condition for gradient descent on norm)
+                        Scalar alpha = 1.0L;
+                        bool line_search_success = false;
+                        for (int ls_iter = 0; ls_iter < 10; ++ls_iter) {
+                            std::map<std::string, Scalar> next = current;
+                            for (std::size_t i = 0; i < variables.size(); ++i) {
+                                next[variables[i]] = next[variables[i]] + alpha * delta[i];
+                            }
+                            
+                            if (gradient_norm_at(next) < current_norm) {
+                                current = next;
+                                line_search_success = true;
+                                break;
+                            }
+                            alpha *= 0.5L;
                         }
 
-                        if (max_change < Scalar(1e-10L)) break;
+                        if (!line_search_success) {
+                            // If line search fails, try a small step anyway or break
+                            for (std::size_t i = 0; i < variables.size(); ++i) {
+                                current[variables[i]] = current[variables[i]] + alpha * delta[i];
+                            }
+                            if (alpha < 1e-12L) break;
+                        }
+
+                        Scalar max_delta = 0.0L;
+                        for (auto d : delta) max_delta = mymath::precise128::fmax(max_delta, mymath::precise128::abs(d * alpha));
+                        if (max_delta < Scalar(1e-12L)) break;
                     }
 
                     // Check if this is a valid critical point

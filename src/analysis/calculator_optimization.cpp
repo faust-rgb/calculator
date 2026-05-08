@@ -160,7 +160,7 @@ bool handle_optimization_command(const OptimizationContext& ctx,
     matrix::Matrix equality_matrix(0, variable_count, 0.0L);
     std::vector<Scalar> equality_rhs;
     std::vector<Scalar> lower_bounds(variable_count, 0.0L);
-    std::vector<Scalar> upper_bounds(variable_count, 1e20); // 默认无上限
+    std::vector<Scalar> upper_bounds(variable_count, mymath::infinity()); // 默认无上限
     std::vector<Scalar> integrality(variable_count, 0.0L);
 
     // 根据问题类型解析不同参数

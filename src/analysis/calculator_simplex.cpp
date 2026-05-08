@@ -16,6 +16,7 @@
 #include "math/mymath.h"
 
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 
 namespace simplex {
@@ -101,6 +102,235 @@ bool reinvert_basis(
     }
 }
 
+bool solve_square_system(std::vector<std::vector<Scalar>> matrix,
+                         std::vector<Scalar> rhs,
+                         Scalar eps,
+                         std::vector<Scalar>* solution) {
+    const std::size_t n = rhs.size();
+    for (std::size_t col = 0; col < n; ++col) {
+        std::size_t pivot = col;
+        Scalar best_abs = mymath::precise128::abs(matrix[col][col]);
+        for (std::size_t row = col + 1; row < n; ++row) {
+            const Scalar candidate_abs = mymath::precise128::abs(matrix[row][col]);
+            if (candidate_abs > best_abs) {
+                best_abs = candidate_abs;
+                pivot = row;
+            }
+        }
+
+        if (best_abs <= eps) return false;
+
+        if (pivot != col) {
+            std::swap(matrix[pivot], matrix[col]);
+            std::swap(rhs[pivot], rhs[col]);
+        }
+
+        const Scalar pivot_value = matrix[col][col];
+        for (std::size_t j = col; j < n; ++j) matrix[col][j] /= pivot_value;
+        rhs[col] /= pivot_value;
+
+        for (std::size_t row = 0; row < n; ++row) {
+            if (row == col) continue;
+            const Scalar factor = matrix[row][col];
+            if (mymath::precise128::abs(factor) <= eps) continue;
+            for (std::size_t j = col; j < n; ++j) {
+                matrix[row][j] -= factor * matrix[col][j];
+            }
+            rhs[row] -= factor * rhs[col];
+        }
+    }
+
+    *solution = rhs;
+    return true;
+}
+
+struct LinearConstraint {
+    std::vector<Scalar> coeffs;
+    Scalar rhs;
+};
+
+bool satisfies_equalities(const std::vector<Scalar>& point,
+                          const std::vector<LinearConstraint>& equalities,
+                          Scalar eps) {
+    for (const LinearConstraint& constraint : equalities) {
+        Scalar lhs = Scalar(0);
+        for (std::size_t j = 0; j < point.size(); ++j) {
+            lhs += constraint.coeffs[j] * point[j];
+        }
+        if (mymath::precise128::abs(lhs - constraint.rhs) > eps) return false;
+    }
+    return true;
+}
+
+bool satisfies_inequalities(const std::vector<Scalar>& point,
+                            const std::vector<LinearConstraint>& inequalities,
+                            Scalar eps) {
+    for (const LinearConstraint& constraint : inequalities) {
+        Scalar lhs = Scalar(0);
+        for (std::size_t j = 0; j < point.size(); ++j) {
+            lhs += constraint.coeffs[j] * point[j];
+        }
+        if (lhs > constraint.rhs + eps) return false;
+    }
+    return true;
+}
+
+bool solve_by_vertex_enumeration(
+    const std::vector<Scalar>& objective,
+    const matrix::Matrix& inequality_matrix,
+    const std::vector<Scalar>& inequality_rhs,
+    const matrix::Matrix& equality_matrix,
+    const std::vector<Scalar>& equality_rhs,
+    const std::vector<Scalar>& lower_bounds,
+    const std::vector<Scalar>& upper_bounds,
+    Scalar tolerance,
+    std::vector<Scalar>* solution,
+    Scalar* objective_value,
+    std::string* diagnostic) {
+
+    const std::size_t n = objective.size();
+    const Scalar inf_val = Scalar(mymath::infinity());
+    const Scalar eps = std::max(tolerance * Scalar(100), Scalar(1e-10L));
+
+    std::vector<LinearConstraint> equalities;
+    equalities.reserve(equality_matrix.rows);
+    for (std::size_t i = 0; i < equality_matrix.rows; ++i) {
+        LinearConstraint constraint{{}, Scalar(equality_rhs[i])};
+        constraint.coeffs.resize(n, Scalar(0));
+        for (std::size_t j = 0; j < n; ++j) constraint.coeffs[j] = Scalar(equality_matrix.at(i, j));
+        equalities.push_back(constraint);
+    }
+
+    std::vector<LinearConstraint> inequalities;
+    inequalities.reserve(inequality_matrix.rows + n * 2);
+    for (std::size_t i = 0; i < inequality_matrix.rows; ++i) {
+        LinearConstraint constraint{{}, Scalar(inequality_rhs[i])};
+        constraint.coeffs.resize(n, Scalar(0));
+        for (std::size_t j = 0; j < n; ++j) constraint.coeffs[j] = Scalar(inequality_matrix.at(i, j));
+        inequalities.push_back(constraint);
+    }
+
+    for (std::size_t j = 0; j < n; ++j) {
+        if (tolerance < 0) return false;
+        if (lower_bounds[j] > upper_bounds[j] + eps) {
+            if (diagnostic) *diagnostic = "inconsistent variable bounds";
+            return false;
+        }
+
+        LinearConstraint lower{{}, -Scalar(lower_bounds[j])};
+        lower.coeffs.resize(n, Scalar(0));
+        lower.coeffs[j] = Scalar(-1);
+        inequalities.push_back(lower);
+
+        if (upper_bounds[j] < inf_val) {
+            LinearConstraint upper{{}, Scalar(upper_bounds[j])};
+            upper.coeffs.resize(n, Scalar(0));
+            upper.coeffs[j] = Scalar(1);
+            inequalities.push_back(upper);
+        } else if (objective[j] > eps) {
+            bool bounded_by_constraint = false;
+            for (const LinearConstraint& constraint : inequalities) {
+                if (constraint.coeffs[j] > eps) {
+                    bounded_by_constraint = true;
+                    break;
+                }
+            }
+            if (!bounded_by_constraint && equality_matrix.rows == 0) {
+                if (diagnostic) *diagnostic = "linear objective is unbounded";
+                return false;
+            }
+        }
+    }
+
+    bool have_best = false;
+    std::vector<Scalar> best_solution(n, Scalar(0));
+    Scalar best_value = -inf_val;
+
+    auto consider = [&](const std::vector<Scalar>& candidate) {
+        if (!satisfies_equalities(candidate, equalities, eps) ||
+            !satisfies_inequalities(candidate, inequalities, eps)) {
+            return;
+        }
+        Scalar value = Scalar(0);
+        for (std::size_t j = 0; j < n; ++j) value += objective[j] * candidate[j];
+        if (!have_best || value > best_value + eps) {
+            have_best = true;
+            best_value = value;
+            best_solution = candidate;
+        }
+    };
+
+    auto solve_active_set = [&](const std::vector<std::size_t>& active) {
+        std::vector<std::vector<Scalar>> system;
+        std::vector<Scalar> rhs;
+        system.reserve(equalities.size() + active.size());
+        rhs.reserve(equalities.size() + active.size());
+
+        for (const LinearConstraint& equality : equalities) {
+            system.push_back(equality.coeffs);
+            rhs.push_back(equality.rhs);
+        }
+        for (std::size_t index : active) {
+            system.push_back(inequalities[index].coeffs);
+            rhs.push_back(inequalities[index].rhs);
+        }
+        if (system.size() != n) return;
+
+        std::vector<Scalar> candidate;
+        if (solve_square_system(system, rhs, eps, &candidate)) {
+            consider(candidate);
+        }
+    };
+
+    if (n == 0) {
+        *solution = {};
+        *objective_value = Scalar(0);
+        return true;
+    }
+
+    if (equalities.size() > n) {
+        if (diagnostic) *diagnostic = "too many equality constraints for vertex enumeration";
+        return false;
+    }
+
+    const std::size_t active_needed = n - equalities.size();
+    std::vector<std::size_t> active;
+    auto choose_active = [&](auto&& self, std::size_t start) -> void {
+        if (active.size() == active_needed) {
+            solve_active_set(active);
+            return;
+        }
+        const std::size_t remaining = active_needed - active.size();
+        for (std::size_t i = start; i + remaining <= inequalities.size(); ++i) {
+            active.push_back(i);
+            self(self, i + 1);
+            active.pop_back();
+        }
+    };
+
+    choose_active(choose_active, 0);
+
+    if (!have_best) {
+        if (diagnostic) *diagnostic = "no feasible solution found";
+        return false;
+    }
+
+    for (std::size_t j = 0; j < n; ++j) {
+        if (mymath::precise128::abs(best_solution[j]) <= eps) best_solution[j] = Scalar(0);
+        if (mymath::precise128::abs(best_solution[j] - lower_bounds[j]) <= eps) {
+            best_solution[j] = lower_bounds[j];
+        }
+        if (upper_bounds[j] < inf_val &&
+            mymath::precise128::abs(best_solution[j] - upper_bounds[j]) <= eps) {
+            best_solution[j] = upper_bounds[j];
+        }
+    }
+
+    *solution = best_solution;
+    *objective_value = best_value;
+    return true;
+}
+
 /**
  * @brief 单纯形迭代核心算法
  *
@@ -151,25 +381,27 @@ bool simplex_iterate(
             if (!reinvert_basis(B_inv, basis_curr, A_full, m_total)) return false;
         }
 
+        // 快速检查变量是否在基中，将定价复杂度降为 O(n)
+        std::vector<bool> is_basic_mask(n_full, false);
+        for (std::size_t k = 0; k < m_total; ++k) is_basic_mask[basis_curr[k]] = true;
+
         // 计算对偶变量 y: y' = c_B' * B_inv
         std::vector<Scalar> y(m_total, Scalar(0));
         for (std::size_t j = 0; j < m_total; ++j) {
             const Scalar cB_val = c_obj[basis_curr[j]];
+            if (mymath::precise128::abs(cB_val) < eps * Scalar(1e-25L)) continue;
             for (std::size_t i = 0; i < m_total; ++i) {
                 y[i] += cB_val * Scalar(B_inv.at(j, i));
             }
         }
 
         // 寻找入基变量（定价阶段）
+        // 使用 Bland 规则：选择满足条件的最小索引，防止循环
         std::size_t entering = n_full;
         Scalar best_rc = Scalar(0);
+        
         for (std::size_t j = 0; j < n_full; ++j) {
-            // 检查是否已在基中
-            bool is_basic = false;
-            for (std::size_t k = 0; k < m_total; ++k) {
-                if (basis_curr[k] == j) { is_basic = true; break; }
-            }
-            if (is_basic) continue;
+            if (is_basic_mask[j]) continue;
 
             // 计算检验数（reduced cost）
             Scalar rc = c_obj[j];
@@ -185,17 +417,19 @@ bool simplex_iterate(
 
             if (minimize) {
                 // 最小化：检验数为负时可入基
-                if (at_lower && rc < -eps) {
-                    if (rc < best_rc) { best_rc = rc; entering = j; }
-                } else if (at_upper && rc > eps) {
-                    if (-rc < best_rc) { best_rc = -rc; entering = j; }
+                if ((at_lower && rc < -eps) || (at_upper && rc > eps)) {
+                    if (entering == n_full || j < entering) { 
+                        best_rc = (at_lower ? rc : -rc);
+                        entering = j; 
+                    }
                 }
             } else {
                 // 最大化：检验数为正时可入基
-                if (at_lower && rc > eps) {
-                    if (-rc < best_rc) { best_rc = -rc; entering = j; }
-                } else if (at_upper && rc < -eps) {
-                    if (rc < best_rc) { best_rc = rc; entering = j; }
+                if ((at_lower && rc > eps) || (at_upper && rc < -eps)) {
+                    if (entering == n_full || j < entering) { 
+                        best_rc = (at_lower ? -rc : rc);
+                        entering = j; 
+                    }
                 }
             }
         }
@@ -227,34 +461,43 @@ bool simplex_iterate(
             decreasing_entering = true;
         }
 
-        // 计算最大步长
-        Scalar max_theta = (ub_full[entering] < inf_val)
-                            ? (ub_full[entering] - lb_full[entering])
-                            : inf_val;
-
-        theta = max_theta;
+        // 计算最大允许步长（入基变量本身到达另一边界）
+        theta = (ub_full[entering] < inf_val)
+                ? (ub_full[entering] - lb_full[entering])
+                : inf_val;
 
         // 对每个基变量进行比值检验
         for (std::size_t i = 0; i < m_total; ++i) {
             std::size_t j = basis_curr[i];
             Scalar di = decreasing_entering ? -d[i] : d[i];
-            if (mymath::precise128::abs(di) <= eps) continue;
-
-            if (di > Scalar(0)) {
+            
+            if (di > eps * Scalar(1e-10L)) {
                 // 基变量可能到达下界
                 Scalar ratio = (x_curr[j] - lb_full[j]) / di;
-                if (ratio < theta) { theta = ratio; leaving = i; }
-            } else {
+                if (ratio < 0) ratio = 0;
+                if (ratio < theta - eps) { 
+                    theta = ratio; leaving = i; 
+                } else if (mymath::precise128::abs(ratio - theta) <= eps && leaving < m_total) {
+                    // Bland 规则：比值相同时选择索引最小的出基变量
+                    if (basis_curr[i] < basis_curr[leaving]) leaving = i;
+                }
+            } else if (di < -eps * Scalar(1e-10L)) {
                 // 基变量可能到达上界
                 if (ub_full[j] < inf_val) {
                     Scalar ratio = (ub_full[j] - x_curr[j]) / (-di);
-                    if (ratio < theta) { theta = ratio; leaving = i; }
+                    if (ratio < 0) ratio = 0;
+                    if (ratio < theta - eps) { 
+                        theta = ratio; leaving = i; 
+                    } else if (mymath::precise128::abs(ratio - theta) <= eps && leaving < m_total) {
+                        if (basis_curr[i] < basis_curr[leaving]) leaving = i;
+                    }
                 }
             }
         }
 
         if (theta >= inf_val - Scalar(1e9L)) {
-            return true; // 无界或已达到极值
+            // 如果目标函数系数在该方向上有利且无边界限制，则问题无界
+            return false;
         }
 
         // 更新当前解
@@ -306,6 +549,7 @@ bool solve_linear_box_problem(
 
     const Scalar inf_val = Scalar(mymath::infinity());
     const Scalar eps = Scalar(tolerance);
+    const Scalar internal_eps = Scalar(1e-18L);
 
     const std::size_t n = objective.size();
     if (inequality_matrix.cols != n ||
@@ -332,9 +576,9 @@ bool solve_linear_box_problem(
         Scalar best_val = 0.0L;
         for (std::size_t j = 0; j < n; ++j) {
             if (objective[j] >= 0) {
-                best[j] = lower_bounds[j];
-            } else {
                 best[j] = upper_bounds[j];
+            } else {
+                best[j] = lower_bounds[j];
             }
             best_val += objective[j] * best[j];
         }
@@ -376,12 +620,21 @@ bool solve_linear_box_problem(
         b[m_ineq + i] = Scalar(equality_rhs[i]);
     }
 
+    // 调整 b 以反映 x = lb 时的剩余量，并确保 b >= 0
     for (std::size_t i = 0; i < m_total; ++i) {
-        if (b[i] < Scalar(0)) {
+        Scalar current_lhs = 0;
+        for (std::size_t j = 0; j < n_total; ++j) {
+            current_lhs += A[i][j] * lb[j];
+        }
+        b[i] -= current_lhs;
+        
+        if (b[i] < -eps) {
             b[i] = -b[i];
             for (std::size_t j = 0; j < n_total; ++j) {
                 A[i][j] = -A[i][j];
             }
+        } else if (b[i] < 0) {
+            b[i] = 0;
         }
     }
 
@@ -423,11 +676,20 @@ bool solve_linear_box_problem(
 
     constexpr std::size_t kMaxSimplexIters = 10000;
     bool phase1_ok = simplex_iterate(x, basis, c_phase1, A_full, lb_full, ub_full,
-                                      m_total, n_full, true, kMaxSimplexIters, eps);
+                                      m_total, n_full, true, kMaxSimplexIters, internal_eps);
 
     if (!phase1_ok) {
-        if (diagnostic) *diagnostic = "phase 1 simplex failed";
-        return false;
+        return solve_by_vertex_enumeration(objective,
+                                           inequality_matrix,
+                                           inequality_rhs,
+                                           equality_matrix,
+                                           equality_rhs,
+                                           lower_bounds,
+                                           upper_bounds,
+                                           tolerance,
+                                           solution,
+                                           objective_value,
+                                           diagnostic);
     }
 
     Scalar art_sum = Scalar(0);
@@ -435,29 +697,42 @@ bool solve_linear_box_problem(
         art_sum += mymath::precise128::abs(x[j]);
     }
     if (art_sum > eps * Scalar((m_total))) {
-        if (diagnostic) *diagnostic = "no feasible solution found";
-        return false;
+        return solve_by_vertex_enumeration(objective,
+                                           inequality_matrix,
+                                           inequality_rhs,
+                                           equality_matrix,
+                                           equality_rhs,
+                                           lower_bounds,
+                                           upper_bounds,
+                                           tolerance,
+                                           solution,
+                                           objective_value,
+                                           diagnostic);
     }
 
     for (std::size_t i = 0; i < m_total; ++i) {
         if (basis[i] >= n_total) {
+            // 需要将人工变量从基中移出
+            matrix::Matrix B_inv_temp(m_total, m_total, 0.0L);
+            if (!reinvert_basis(B_inv_temp, basis, A_full, m_total)) break;
+
             for (std::size_t j = 0; j < n_total; ++j) {
+                // 检查变量 j 是否可以入基替代人工变量 i
                 bool in_basis = false;
                 for (std::size_t k = 0; k < m_total; ++k) {
                     if (basis[k] == j) { in_basis = true; break; }
                 }
-                if (!in_basis) {
-                    bool can_enter = false;
-                    for (std::size_t row = 0; row < m_total; ++row) {
-                        if (mymath::precise128::abs(A_full[row][j]) > eps) {
-                            can_enter = true;
-                            break;
-                        }
-                    }
-                    if (can_enter) {
-                        basis[i] = j;
-                        break;
-                    }
+                if (in_basis) continue;
+
+                // 计算该列在单纯形表中的第 i 行的值: (B_inv * A_j)[i]
+                Scalar tableau_val = 0;
+                for (std::size_t k = 0; k < m_total; ++k) {
+                    tableau_val += Scalar(B_inv_temp.at(i, k)) * A_full[k][j];
+                }
+
+                if (mymath::precise128::abs(tableau_val) > eps * Scalar(1e-2L)) {
+                    basis[i] = j;
+                    break;
                 }
             }
         }
@@ -469,10 +744,10 @@ bool solve_linear_box_problem(
     }
 
     bool phase2_ok = simplex_iterate(x, basis, c_phase2, A_full, lb_full, ub_full,
-                                      m_total, n_full, true, kMaxSimplexIters, eps);
+                                      m_total, n_full, true, kMaxSimplexIters, internal_eps);
 
     if (!phase2_ok) {
-        if (diagnostic) *diagnostic = "phase 2 simplex failed";
+        if (diagnostic) *diagnostic = "problem is unbounded or numerical failure in phase 2";
         return false;
     }
 

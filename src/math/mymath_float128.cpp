@@ -399,7 +399,23 @@ float128_t pow(float128_t base, float128_t exponent) {
         }
         return {0, 0};
     }
-    if (base.hi < 0) return {::mymath::quiet_nan(), ::mymath::quiet_nan()};
+    if (base.hi < 0) {
+        // Check if exponent is an integer
+        float128_t exp_rounded = precise128::round(exponent);
+        if (precise128::abs(exponent - exp_rounded).hi < 1e-30L) {
+            // Integer exponent: compute as |base|^exp * sign
+            long double exp_int = exp_rounded.hi;
+            float128_t abs_base = precise128::abs(base);
+            float128_t result = precise128::exp(exp_rounded * precise128::ln(abs_base));
+            // Apply sign: negative if exponent is odd
+            long long exp_ll = static_cast<long long>(exp_int);
+            if (exp_ll % 2 != 0) {
+                result = -result;
+            }
+            return result;
+        }
+        return {::mymath::quiet_nan(), ::mymath::quiet_nan()};
+    }
     return precise128::exp(exponent * precise128::ln(base));
 }
 
@@ -557,14 +573,14 @@ bool is_near_zero(float128_t x, float128_t eps) {
 // ============================================================================
 
 std::ostream& operator<<(std::ostream& os, float128_t a) {
-    // 使用高精度输出
-    std::ios_base::fmtflags old_flags = os.flags();
-    std::streamsize old_precision = os.precision();
+    // 使用流设置的精度输出
+    std::streamsize precision = os.precision();
+    if (precision <= 0) precision = 12;
 
-    // 输出完整精度
-    os << std::fixed << std::setprecision(36);
+    // 输出指定精度
+    os << std::fixed << std::setprecision(precision);
     os << a.hi;
-    if (a.lo != 0) {
+    if (a.lo != 0 && precision > 15) {
         if (a.lo > 0) {
             os << " + " << a.lo;
         } else {
@@ -572,8 +588,6 @@ std::ostream& operator<<(std::ostream& os, float128_t a) {
         }
     }
 
-    os.flags(old_flags);
-    os.precision(old_precision);
     return os;
 }
 

@@ -398,13 +398,17 @@ void reject_divergent_transformed_endpoint(
     bool check_right) {
     const T offsets[] = {
         numeric_control_value<T>("1e-3", 1e-3),
+        numeric_control_value<T>("2e-3", 2e-3),
+        numeric_control_value<T>("5e-3", 5e-3),
         numeric_control_value<T>("1e-4", 1e-4),
+        numeric_control_value<T>("5e-4", 5e-4),
         numeric_control_value<T>("1e-5", 1e-5),
+        numeric_control_value<T>("1e-6", 1e-6),
     };
     auto check_at = [&](T t) {
         T value = transformed(t);
-        if (!t_isfinite(value) || t_abs(value) > T(static_cast<long long>(10000))) {
-            throw std::runtime_error("integral did not converge");
+        if (!t_isfinite(value) || t_abs(value) > T(static_cast<long long>(5000))) {
+            throw std::runtime_error("integral did not converge (divergence detected at endpoint)");
         }
     };
 
@@ -415,6 +419,47 @@ void reject_divergent_transformed_endpoint(
         if (check_right) {
             check_at(T(static_cast<long long>(1)) - offset);
         }
+    }
+}
+
+template <typename T>
+void reject_persistent_tail_oscillation(
+    const std::function<T(T)>& function,
+    T start) {
+    bool have_previous = false;
+    T previous = T(0);
+    int sign_changes = 0;
+    int significant_samples = 0;
+    T max_abs = T(0);
+
+    for (int i = 0; i < 64; ++i) {
+        const T offset = T(10) + T(i) * (t_pi<T>() / T(2));
+        const T value = function(start + offset);
+        // std::cout << "DEBUG: i=" << i << " offset=" << static_cast<double>(offset) << " val=" << static_cast<double>(value) << std::endl;
+        if (!t_isfinite(value)) {
+            throw std::runtime_error("integral did not converge (non-finite tail sample)");
+        }
+
+        const T abs_value = t_abs(value);
+        max_abs = std::max(max_abs, abs_value);
+        if (abs_value > T(1e-3L)) ++significant_samples;
+
+        if (have_previous &&
+            abs_value > T(1e-3L) &&
+            t_abs(previous) > T(1e-3L) &&
+            ((value > T(0)) != (previous > T(0)))) {
+            ++sign_changes;
+        }
+
+        previous = value;
+        have_previous = true;
+    }
+    std::cout << "DEBUG: sign_changes=" << sign_changes << " significant=" << significant_samples << " max_abs=" << static_cast<double>(max_abs) << std::endl;
+
+    if (sign_changes >= 12 &&
+        significant_samples >= 32 &&
+        max_abs > T(1e-2L)) {
+        throw std::runtime_error("integral did not converge (persistent tail oscillation detected)");
     }
 }
 
@@ -556,7 +601,14 @@ T adaptive_gauss_kronrod_callable_recursive(
     }
 
     const T scale = std::max(T(static_cast<long long>(1)), t_abs(whole));
-    if (depth <= 0 || error <= relative_tolerance(eps, scale)) {
+    const T tol = relative_tolerance(eps, scale);
+    if (error <= tol) {
+        return whole;
+    }
+    if (depth <= 0) {
+        if (error > tol * T(1e4L)) { // 严重不收敛
+            throw std::runtime_error("integral did not converge (max depth reached with large error)");
+        }
         return whole;
     }
 
@@ -1444,7 +1496,7 @@ Scalar TFunctionAnalysis<Scalar>::derivative(Scalar x) const {
             std::max(1e-4L, (1e-5L * slope_scale).to_long_double())) {
             throw std::runtime_error("derivative does not exist at this point");
         }
-        return best_value.hi;
+        return best_value;
     }
 
     throw std::runtime_error("derivative did not converge");
@@ -1691,8 +1743,8 @@ direct_computation:
 
             if (!mymath::isfinite(val)) {
                 if (have_prev && mymath::isfinite(prev_val)) {
-                    if (prev_val > 1e10L) return mymath::infinity();
-                    else if (prev_val < -1e10L) return -mymath::infinity();
+                    if (prev_val > 1e10L) return Scalar(mymath::infinity());
+                    else if (prev_val < -1e10L) return Scalar(-mymath::infinity());
                 }
                 adaptive_h *= 0.5L;
                 consecutive_bad++;
@@ -1758,7 +1810,7 @@ direct_computation:
         }
 
         if (!have_best) throw std::runtime_error("limit did not converge");
-        return best_value.hi;
+        return best_value;
     };
 
     if (direction == 0) {
@@ -1961,7 +2013,12 @@ T TFunctionAnalysis<T>::compute_numerical_limit(T x, int direction) const {
 template <typename T>
 T TFunctionAnalysis<T>::definite_integral(T lower_bound,
                                            T upper_bound) const {
-    if (t_is_near_zero(lower_bound - upper_bound, T(1e-15L))) {
+    std::cout << "ENTERING definite_integral lower=" << static_cast<double>(lower_bound) << " upper=" << static_cast<double>(upper_bound) << std::endl;
+    T diff = lower_bound - upper_bound;
+    T adiff = t_abs(diff);
+    std::cout << "diff=" << static_cast<double>(diff) << " abs_diff=" << static_cast<double>(adiff) << std::endl;
+    if (t_is_near_zero(diff, T(1e-15L))) {
+        std::cout << "t_is_near_zero is TRUE" << std::endl;
         return T(static_cast<long long>(0));
     }
     if (lower_bound > upper_bound) {
@@ -1969,6 +2026,7 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
     }
     const bool lower_is_infinite = !t_isfinite(lower_bound);
     const bool upper_is_infinite = !t_isfinite(upper_bound);
+    std::cout << "DEBUG: lower_inf=" << lower_is_infinite << " upper_inf=" << upper_is_infinite << " lower=" << static_cast<double>(lower_bound) << " upper=" << static_cast<double>(upper_bound) << std::endl;
     if (lower_is_infinite || upper_is_infinite) {
         if (lower_is_infinite && upper_is_infinite) {
             if (lower_bound > T(static_cast<long long>(0)) || upper_bound < T(static_cast<long long>(0))) {
@@ -1992,6 +2050,9 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
             if (lower_bound > T(static_cast<long long>(0))) {
                 throw std::runtime_error("invalid infinite integration bounds");
             }
+            reject_persistent_tail_oscillation<T>(
+                [this](T x) { return evaluate_with_variable(x); },
+                -std::max(T(static_cast<long long>(1)), t_abs(upper_bound)));
             auto transformed = [this, upper_bound](T t) {
                 const T x = upper_bound - (T(static_cast<long long>(1)) - t) / t;
                 return evaluate_with_variable(x) / (t * t);
@@ -2007,11 +2068,28 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
         if (upper_bound < T(static_cast<long long>(0))) {
             throw std::runtime_error("invalid infinite integration bounds");
         }
+        reject_persistent_tail_oscillation<T>(
+            [this](T x) { return evaluate_with_variable(x); },
+            lower_bound);
         auto transformed = [this, lower_bound](T t) {
             const T one_minus_t = T(static_cast<long long>(1)) - t;
+            if (one_minus_t < T(1e-18L)) return T(0);
             const T x = lower_bound + t / one_minus_t;
             return evaluate_with_variable(x) / (one_minus_t * one_minus_t);
         };
+        // 增加对变换后函数的振荡检测
+        T prev_val_scan = transformed(T(0.01L));
+        int sign_changes = 0;
+        for (int i = 2; i < 500; ++i) {
+            T val = transformed(T(i) / T(500.0L));
+            if (t_isfinite(val) && t_isfinite(prev_val_scan)) {
+                if ((val > T(0)) != (prev_val_scan > T(0))) sign_changes++;
+            }
+            prev_val_scan = val;
+        }
+        if (sign_changes > 20) {
+            throw std::runtime_error("integral did not converge (excessive oscillations detected)");
+        }
         reject_divergent_transformed_endpoint<T>(std::function<T(T)>(transformed), false, true);
         return adaptive_gauss_kronrod_callable<T>(std::function<T(T)>(transformed),
                                                T(static_cast<long long>(0)),
@@ -2429,7 +2507,14 @@ T TFunctionAnalysis<T>::adaptive_gauss_kronrod_recursive(T left,
     }
 
     const T scale = std::max(T(static_cast<long long>(1)), t_abs(whole));
-    if (depth <= 0 || error <= relative_tolerance(eps, scale)) {
+    const T tol = relative_tolerance(eps, scale);
+    if (error <= tol) {
+        return whole;
+    }
+    if (depth <= 0) {
+        if (error > tol * T(1e4L)) { // 严重不收敛
+            throw std::runtime_error("integral did not converge (max depth reached with large error)");
+        }
         return whole;
     }
 
