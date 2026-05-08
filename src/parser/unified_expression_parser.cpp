@@ -21,11 +21,16 @@
 #include "types/function.h"
 #include "precise/rational.h"
 #include "core/string_utils.h"
+#include "core/scalar_type.h"
 #include "math/helpers/integer_helpers.h"
 #include "math/helpers/base_conversions.h"
 #include "mymath.h"
 
 #include <cctype>
+
+namespace {
+using Scalar = mymath::Scalar;
+}  // namespace
 
 namespace {
 
@@ -156,7 +161,7 @@ ExpressionHint UnifiedExpressionParser::get_hint(const std::string& expression) 
 // 求值
 // ============================================================================
 
-long double UnifiedExpressionParser::evaluate(const std::string& expression) const {
+Scalar UnifiedExpressionParser::evaluate(const std::string& expression) const {
     auto ast = compile(expression);
     if (!ast) {
         throw SyntaxError("Failed to parse expression: " + expression);
@@ -191,7 +196,7 @@ bool UnifiedExpressionParser::try_evaluate_value(const std::string& expression, 
 
     // 否则使用标量求值
     try {
-        long double scalar_value = evaluate(expression);
+        Scalar scalar_value = evaluate(expression);
         *value = matrix::Value::from_scalar(scalar_value);
         return true;
     } catch (...) {
@@ -268,7 +273,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
                     max_denominator_value.is_string) {
                     throw std::runtime_error("rat max_denominator must be a positive integer");
                 }
-                const long double scalar =
+                const Scalar scalar =
                     max_denominator_value.exact
                         ? rational_to_double(max_denominator_value.rational)
                         : max_denominator_value.decimal;
@@ -282,12 +287,12 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
                 return value;
             }
 
-            const long double decimal_value = value.exact
-                                             ? rational_to_double(value.rational)
-                                             : value.decimal;
+            const Scalar decimal_value = value.exact
+                                             ? Scalar(rational_to_double(value.rational))
+                                             : Scalar(value.decimal);
             long long numerator = 0;
             long long denominator = 1;
-            if (!mymath::best_rational_approximation(decimal_value,
+            if (!mymath::best_rational_approximation(static_cast<Scalar>(decimal_value).to_long_double(),
                                                      &numerator,
                                                      &denominator,
                                                      max_denominator)) {
@@ -317,7 +322,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
 
     // 标量求值
     try {
-        long double value = evaluate(expression);
+         Scalar value = evaluate(expression);
         StoredValue stored;
         stored.decimal = value;
         stored.exact = false;
@@ -329,7 +334,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
     }
 }
 
-long double UnifiedExpressionParser::evaluate_ast(const ExpressionAST* ast) const {
+Scalar UnifiedExpressionParser::evaluate_ast(const ExpressionAST* ast) const {
     return evaluate_compiled_ast(ast, variables_, functions_, scalar_functions_,
                                   has_script_function_, invoke_script_function_);
 }
@@ -350,11 +355,11 @@ std::unique_ptr<ExpressionAST> UnifiedExpressionParser::compile(const std::strin
 // 便捷函数（替代 DecimalParser 和 ExactParser）
 // ============================================================================
 
-long double parse_decimal_expression(
+Scalar parse_decimal_expression(
     const std::string& expression,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
-    const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions,
+    const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions,
     HasScriptFunctionCallback has_script_function,
     InvokeScriptFunctionCallback invoke_script_function) {
 
@@ -383,7 +388,7 @@ bool try_evaluate_matrix_expression(
     const std::string& expression,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
-    const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions,
+    const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions,
     const std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>* matrix_functions,
     const std::map<std::string, matrix::ValueFunction>* value_functions,
     HasScriptFunctionCallback has_script_function,
@@ -392,10 +397,10 @@ bool try_evaluate_matrix_expression(
 
     const matrix::ScalarEvaluator scalar_evaluator =
         [&](std::string_view text) {
-            const long double scalar_value = parse_decimal_expression(
+            const Scalar scalar_value = parse_decimal_expression(
                 std::string(text), variables, functions, scalar_functions,
                 has_script_function, invoke_script_function);
-            return mymath::is_near_zero(scalar_value, 1e-10) ? 0.0L : scalar_value;
+            return mymath::is_near_zero(scalar_value, 1e-10L) ? 0.0L : scalar_value;
         };
 
     const matrix::MatrixLookup matrix_lookup =
@@ -453,14 +458,14 @@ bool try_base_conversion_expression(
         if (call->arguments.size() != 2) {
             throw std::runtime_error("base expects exactly two arguments");
         }
-        const long double base_value = parse_decimal_expression(std::string(call->arguments[1].text), variables, functions);
+        const Scalar base_value = parse_decimal_expression(std::string(call->arguments[1].text), variables, functions);
         if (!is_integer_double(base_value)) {
             throw std::runtime_error("base conversion requires an integer base");
         }
         base = static_cast<int>(round_to_long_long(base_value));
     }
 
-    const long double value = parse_decimal_expression(std::string(call->arguments[0].text), variables, functions);
+    const Scalar value = parse_decimal_expression(std::string(call->arguments[0].text), variables, functions);
     if (!is_integer_double(value)) {
         throw std::runtime_error("base conversion only accepts integers");
     }
@@ -524,11 +529,11 @@ std::vector<std::string> split_top_level_arguments(std::string_view text) {
     return results;
 }
 
-long double evaluate_expression(
+Scalar evaluate_expression(
     const std::string& expression,
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
-    const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions) {
+    const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions) {
 
     UnifiedExpressionParser parser(variables, functions, scalar_functions);
     return parser.evaluate(expression);

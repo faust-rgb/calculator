@@ -246,7 +246,7 @@ SymbolicExpression integrate_symbolic_inverse_quadratic(
     SymbolicExpression u = (x + h).simplify();
 
     if (power == 1) {
-        long double k_val = 0.0L;
+        Scalar k_val = 0.0L;
         if (k.is_number(&k_val)) {
             if (k_val > 0) {
                 SymbolicExpression sqrt_k = make_function("sqrt", k);
@@ -276,8 +276,8 @@ SymbolicExpression integrate_symbolic_inverse_quadratic(
     for (int n = 2; n <= power; ++n) {
         SymbolicExpression recurrence = (u / (SymbolicExpression::number(2.0 * (n - 1)) * k *
                                    make_power(u2_plus_k, SymbolicExpression::number(n - 1)))).simplify();
-        integral = (recurrence + SymbolicExpression::number(static_cast<long double>(2 * n - 3) /
-                                   static_cast<long double>(2 * (n - 1))) / k * integral).simplify();
+        integral = (recurrence + SymbolicExpression::number((2 * n - 3) /
+                                   (2 * (n - 1))) / k * integral).simplify();
     }
 
     return (coeff / a * integral).simplify();

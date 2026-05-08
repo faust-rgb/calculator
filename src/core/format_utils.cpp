@@ -6,6 +6,7 @@
 // ============================================================================
 
 #include "format_utils.h"
+#include "core/scalar_type.h"
 #include "calculator_internal_types.h"
 #include "math/helpers/integer_helpers.h"
 #include "math/mymath.h"
@@ -21,6 +22,8 @@
 // ============================================================================
 
 namespace {
+
+using Scalar = mymath::Scalar;
 
 /**
  * @struct NamedConstant
@@ -71,16 +74,16 @@ std::string format_rational_with_constant(const Rational& r, const std::string& 
  * @return 格式化后的字符串，如 "pi / 4"、"2 * e"；无法匹配时返回空字符串
  */
 std::string try_format_with_named_constants(long double value, [[maybe_unused]] long double eps) {
-    const long double abs_value = mymath::abs(value);
+    const Scalar abs_value = mymath::precise128::abs(Scalar(value));
     Rational r;
 
     for (const auto& const_entry : kNamedConstants) {
         // 尝试 value = r * C
-        if (try_make_simple_rational(abs_value / const_entry.value, 20, &r)) {
+        if (try_make_simple_rational(static_cast<long double>(abs_value / Scalar(const_entry.value)), 20, &r)) {
             return format_rational_with_constant(r, const_entry.name, false);
         }
         // 尝试 value = r / C
-        if (try_make_simple_rational(abs_value * const_entry.value, 20, &r)) {
+        if (try_make_simple_rational(static_cast<long double>(abs_value * Scalar(const_entry.value)), 20, &r)) {
             return format_rational_with_constant(r, const_entry.name, true);
         }
     }
@@ -97,12 +100,12 @@ std::string try_format_with_named_constants(long double value, [[maybe_unused]] 
  * 提取平方因子以简化表达式，如 sqrt(8) = 2*sqrt(2)。
  */
 std::string try_format_as_sqrt(long double value, [[maybe_unused]] long double eps) {
-    const long double abs_value = mymath::abs(value);
-    const long double squared = abs_value * abs_value;
-    
+    const Scalar abs_value = mymath::precise128::abs(Scalar(value));
+    const Scalar squared = abs_value * abs_value;
+
     Rational r;
     // 尝试识别平方后是有理数的情况
-    if (try_make_simple_rational(squared, 100, &r)) {
+    if (try_make_simple_rational(static_cast<long double>(squared), 100, &r)) {
         long long n = r.numerator;
         long long d = r.denominator;
 
@@ -115,7 +118,7 @@ std::string try_format_as_sqrt(long double value, [[maybe_unused]] long double e
 
         if (is_perfect_square(n) && is_perfect_square(d)) {
             // 这其实应该在普通有理数识别中被捕获，但以防万一
-            return ""; 
+            return "";
         }
 
         // 格式化为 sqrt(n) / sqrt(d) -> sqrt(n*d) / d
@@ -137,7 +140,7 @@ std::string try_format_as_sqrt(long double value, [[maybe_unused]] long double e
         }
 
         if (d == 1) return res;
-        
+
         // 如果 n=1, d=2, value = sqrt(1/2) = sqrt(2)/2
         // res 此时已经是 "sqrt(2)"，需要除以 d (d=2? 不，应该是 sqrt(d^2) = d)
         // 这里的逻辑：value = sqrt(n/d) = sqrt(n*d)/d
@@ -163,21 +166,22 @@ std::string try_format_as_sqrt(long double value, [[maybe_unused]] long double e
  * 2. 平方根形式（如 sqrt(2), sqrt(3)/2）
  */
 std::string try_format_symbolic_extended(long double value, long double eps) {
-    if (!mymath::isfinite(value) || mymath::is_near_zero(value, eps)) {
+    const Scalar v(value);
+    if (!mymath::isfinite(value) || mymath::precise128::abs(v) < Scalar(eps)) {
         return "";
     }
 
-    const bool negative = value < 0.0L;
-    const long double abs_value = mymath::abs(value);
+    const bool negative = value < Scalar(0);
+    const Scalar abs_value = mymath::precise128::abs(v);
 
     // 1. 尝试命名常数比例 (pi, e, 等)
-    std::string named_form = try_format_with_named_constants(abs_value, eps);
+    std::string named_form = try_format_with_named_constants(static_cast<long double>(abs_value), eps);
     if (!named_form.empty()) {
         return negative ? "-" + named_form : named_form;
     }
 
     // 2. 尝试平方根形式
-    std::string sqrt_form = try_format_as_sqrt(abs_value, eps);
+    std::string sqrt_form = try_format_as_sqrt(static_cast<long double>(abs_value), eps);
     if (!sqrt_form.empty()) {
         return negative ? "-" + sqrt_form : sqrt_form;
     }
@@ -253,15 +257,16 @@ void set_process_display_precision(int precision) {
  * - 接近零的值返回精确的 0
  * - 接近整数的值返回精确的整数
  */
-long double normalize_display_decimal(long double value) {
-    if (mymath::is_near_zero(value, kDisplayZeroEps)) {
+long double normalize_display_decimal(Scalar value) {
+    const Scalar v(value);
+    if (mymath::precise128::abs(v) < Scalar(kDisplayZeroEps)) {
         return 0.0L;
     }
-    if (mymath::abs(value) > kDisplayIntegerEps &&
+    if (mymath::precise128::abs(v) > Scalar(kDisplayIntegerEps) &&
         is_integer_double(value, kDisplayIntegerEps)) {
         return static_cast<long double>(round_to_long_long(value));
     }
-    return value;
+    return value.to_long_double();
 }
 
 // ============================================================================
@@ -305,6 +310,7 @@ bool try_make_simple_rational(long double value,
         return false;
     }
 
+    const Scalar v(value);
     long long numerator = 0;
     long long denominator = 1;
     if (!mymath::approximate_fraction(value,
@@ -331,8 +337,14 @@ bool try_make_simple_rational(long double value,
  * 4. 普通小数格式
  */
 std::string format_symbolic_number(long double value) {
-    value = mymath::is_near_zero(value, kDisplayZeroEps) ? 0.0L : value;
-    if (mymath::abs(value) > kDisplayIntegerEps &&
+    const Scalar v(value);
+    const Scalar zero_eps(kDisplayZeroEps);
+    const Scalar int_eps(kDisplayIntegerEps);
+
+    if (mymath::precise128::abs(v) < zero_eps) {
+        value = 0.0L;
+    }
+    if (mymath::precise128::abs(v) > int_eps &&
         is_integer_double(value, kDisplayIntegerEps)) {
         return std::to_string(round_to_long_long(value));
     }
@@ -371,10 +383,11 @@ std::string format_symbolic_scalar(long double value) {
  * @return 格式化后的中心文本，如 " - 1" 或 " + 2"
  */
 std::string signed_center_text(long double center) {
-    if (mymath::is_near_zero(center, 1e-12)) {
+    const Scalar c(center);
+    if (mymath::precise128::abs(c) < Scalar(1e-12)) {
         return "";
     }
-    return center > 0.0L
+    return c > Scalar(0)
                ? " - " + format_symbolic_number(center)
                : " + " + format_symbolic_number(-center);
 }
@@ -420,21 +433,22 @@ std::string power_term(const std::string& base, int numerator, int denominator) 
  */
 std::string format_term(long double coefficient, const std::string& factor) {
     const bool has_factor = !factor.empty();
-    const long double abs_coefficient = mymath::abs(coefficient);
+    const Scalar coeff(coefficient);
+    const Scalar abs_coefficient = mymath::precise128::abs(coeff);
     const bool omit_unit =
-        has_factor && mymath::is_near_zero(abs_coefficient - 1.0L, 1e-9);
+        has_factor && mymath::precise128::abs(abs_coefficient - Scalar(1)) < Scalar(1e-9);
 
     if (!has_factor) {
         return format_symbolic_number(coefficient);
     }
-    const std::string coeff_text = format_symbolic_number(abs_coefficient);
+    const std::string coeff_text = format_symbolic_number(static_cast<long double>(abs_coefficient));
     if (coeff_text == "1") {
-        return coefficient < 0.0L ? "-" + factor : factor;
+        return coefficient < Scalar(0) ? "-" + factor : factor;
     }
     if (omit_unit) {
-        return coefficient < 0.0L ? "-" + factor : factor;
+        return coefficient < Scalar(0) ? "-" + factor : factor;
     }
-    return coefficient < 0.0L ? "-" + coeff_text + " * " + factor
+    return coefficient < Scalar(0) ? "-" + coeff_text + " * " + factor
                              : coeff_text + " * " + factor;
 }
 

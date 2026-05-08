@@ -15,6 +15,7 @@
 #define COMMAND_BUILTIN_CONSTANTS_H
 
 #include <string>
+#include "core/scalar_type.h"
 
 // ============================================================================
 // 常量查找函数声明
@@ -28,7 +29,7 @@
  *
  * 支持的常量：pi, e, c, G, h, k, NA, inf, infinity, oo
  */
-bool lookup_builtin_constant(const std::string& name, long double* value);
+bool lookup_builtin_constant(const std::string& name, Scalar* value);
 
 /**
  * @brief 检查给定名称是否为内置常量

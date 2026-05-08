@@ -301,11 +301,11 @@ private:
         const std::string& var_name);
 
     static std::vector<SymbolicExpression> find_numeric_roots_newton(
-        const std::vector<long double>& coeffs);
+        const std::vector<Scalar>& coeffs);
 
 public:
-    static std::vector<std::pair<long double, long double>> find_complex_roots_aberth(
-        const std::vector<long double>& coeffs);
+    static std::vector<std::pair<Scalar, Scalar>> find_complex_roots_aberth(
+        const std::vector<Scalar>& coeffs);
 
 private:
     // 代数独立性检查
@@ -938,7 +938,7 @@ struct RischProofTrace {
     IntegralType final_result_type;     // 最终结果类型
     std::string final_result_desc;      // 最终结果描述
     SymbolicExpression result_value;    // 积分结果 (如果初等)
-    long double elapsed_time_ms;             // 耗时 (毫秒)
+    Scalar elapsed_time_ms;             // 耗时 (毫秒)
 
     void add_step(const RischProofStep& step) {
         steps.push_back(step);

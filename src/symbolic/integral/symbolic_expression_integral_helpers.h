@@ -78,7 +78,7 @@ bool try_integrate_weierstrass_substitution(const SymbolicExpression& expr,
                                             SymbolicExpression* result);
 
 bool try_integrate_trig_power_identity(const SymbolicExpression& expr,
-                                       long double exponent_value,
+                                       Scalar exponent_value,
                                        const std::string& var,
                                        SymbolicExpression* result);
 

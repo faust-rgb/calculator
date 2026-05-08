@@ -38,7 +38,7 @@ namespace {
 } // namespace
 
 SymbolicExpression SymbolicExpression::integral(const std::string& variable_name) const {
-    long double numeric_value = 0.0L;
+    Scalar numeric_value = 0.0L;
     if (is_constant(variable_name)) {
         if (is_number(&numeric_value)) {
             return make_multiply(number(numeric_value), variable(variable_name)).simplify();
@@ -68,7 +68,7 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             return make_subtract(SymbolicExpression(node_->left).integral(variable_name),
                                  SymbolicExpression(node_->right).integral(variable_name)).simplify();
         case NodeType::kMultiply: {
-            long double constant = 0.0L;
+            Scalar constant = 0.0L;
             SymbolicExpression rest;
             const SymbolicExpression left(node_->left);
             const SymbolicExpression right(node_->right);
@@ -167,11 +167,11 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             SymbolicExpression c_term, x2_coeff;
             // Case 1: 1 / (c + a*x^2) -> atan
             if (is_pure_quadratic(right, variable_name, &c_term, &x2_coeff)) {
-                long double a_val, c_val;
+                Scalar a_val, c_val;
                 if (x2_coeff.is_number(&a_val) && c_term.is_number(&c_val)) {
                     if (a_val * c_val > 0) {
-                        const long double factor = 1.0L / mymath::sqrt(a_val * c_val);
-                        const long double internal = mymath::sqrt(a_val / c_val);
+                        const Scalar factor = 1.0L / mymath::sqrt(a_val * c_val);
+                        const Scalar internal = mymath::sqrt(a_val / c_val);
                         return make_multiply(left,
                             make_multiply(number(factor),
                                 make_function("atan", make_multiply(number(internal), variable(variable_name)))))
@@ -189,12 +189,12 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             if (right.node_->type == NodeType::kFunction && right.node_->text == "sqrt") {
                 const SymbolicExpression inner(right.node_->left);
                 if (is_pure_quadratic(inner, variable_name, &c_term, &x2_coeff)) {
-                    long double a_val, c_val;
+                    Scalar a_val, c_val;
                     if (x2_coeff.is_number(&a_val) && c_term.is_number(&c_val)) {
                         if (c_val > 0 && a_val < 0) {
-                            const long double abs_a = -a_val;
-                            const long double factor = 1.0L / mymath::sqrt(abs_a);
-                            const long double internal = mymath::sqrt(abs_a / c_val);
+                            const Scalar abs_a = -a_val;
+                            const Scalar factor = 1.0L / mymath::sqrt(abs_a);
+                            const Scalar internal = mymath::sqrt(abs_a / c_val);
                             return make_multiply(left,
                                 make_multiply(number(factor),
                                     make_function("asin", make_multiply(number(internal), variable(variable_name)))))
@@ -202,8 +202,8 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                         }
                         // 1 / sqrt(a*x^2 + c) -> asinh for a > 0, c > 0
                         if (c_val > 0 && a_val > 0) {
-                            const long double factor = 1.0L / mymath::sqrt(a_val);
-                            const long double internal = mymath::sqrt(a_val / c_val);
+                            const Scalar factor = 1.0L / mymath::sqrt(a_val);
+                            const Scalar internal = mymath::sqrt(a_val / c_val);
                             return make_multiply(left,
                                 make_multiply(number(factor),
                                     make_function("asinh", make_multiply(number(internal), variable(variable_name)))))
@@ -231,10 +231,10 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             const SymbolicExpression inner(right.node_->left);
             const SymbolicExpression expected_derivative =
                 inner.derivative(variable_name).simplify();
-            long double scale = 1.0L;
+            Scalar scale = 1.0L;
             bool matched = same_simplified_expression(left, expected_derivative);
             if (!matched) {
-                long double constant = 0.0L;
+                Scalar constant = 0.0L;
                 SymbolicExpression rest;
                 if (decompose_constant_times_expression(expected_derivative,
                                                         variable_name,
@@ -262,7 +262,7 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             SymbolicExpression c_term;
             SymbolicExpression x2_coeff;
             if (is_pure_quadratic(inner, variable_name, &c_term, &x2_coeff)) {
-                long double a_value = 0.0L;
+                Scalar a_value = 0.0L;
                 if (x2_coeff.is_number(&a_value) &&
                     !mymath::is_near_zero(a_value, kFormatEps) &&
                     left.is_variable_named(variable_name)) {
@@ -381,7 +381,7 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
     if (node_->type == NodeType::kPower) {
         const SymbolicExpression base(node_->left);
         const SymbolicExpression exponent(node_->right);
-        long double exponent_value = 0.0L;
+        Scalar exponent_value = 0.0L;
         SymbolicExpression trig_identity_integral;
         if (exponent.is_number(&exponent_value) &&
             try_integrate_trig_power_identity(base,
@@ -410,8 +410,8 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
 
     if (node_->type == NodeType::kFunction) {
         const SymbolicExpression argument(node_->left);
-        long double a = 0.0L;
-        long double b = 0.0L;
+        Scalar a = 0.0L;
+        Scalar b = 0.0L;
         const bool linear = decompose_linear(argument, variable_name, &a, &b) &&
                             !mymath::is_near_zero(a, kFormatEps);
         
@@ -443,11 +443,11 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             }
             SymbolicExpression c_term, x2_coeff;
             if (is_pure_quadratic(argument, variable_name, &c_term, &x2_coeff)) {
-                long double a_val;
+                Scalar a_val;
                 if (x2_coeff.is_number(&a_val)) {
                     const SymbolicExpression pi_val = variable("pi");
                     if (a_val < 0) {
-                        const long double pos_a = -a_val;
+                        const Scalar pos_a = -a_val;
                         const SymbolicExpression factor = make_divide(
                             make_multiply(make_function("exp", c_term), make_function("sqrt", pi_val)),
                             make_multiply(number(2.0), make_function("sqrt", number(pos_a)))

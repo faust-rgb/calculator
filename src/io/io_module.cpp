@@ -34,7 +34,7 @@ namespace {
         if (val.is_matrix || val.is_complex || val.is_string || val.is_list || val.is_dict) {
             throw std::runtime_error(ctx + " must be a scalar");
         }
-        return val.exact ? rational_to_double(val.rational) : val.decimal;
+        return val.exact ? rational_to_double(val.rational) : val.decimal.to_long_double();
     }
 
     /**
@@ -92,7 +92,7 @@ namespace {
                 if (val.matrix.cols > 1) result += "[";
                 for (std::size_t c = 0; c < val.matrix.cols; ++c) {
                     if (c > 0) result += ", ";
-                    result += std::to_string(val.matrix.at(r, c));
+                    result += std::to_string(val.matrix.at(r, c).to_long_double());
                 }
                 if (val.matrix.cols > 1) result += "]";
             }
@@ -120,10 +120,10 @@ namespace {
             return result;
         }
         if (val.is_complex) {
-            return "[" + std::to_string(val.complex.real) + ", " + std::to_string(val.complex.imag) + "]";
+            return "[" + std::to_string(val.complex.real.to_long_double()) + ", " + std::to_string(val.complex.imag.to_long_double()) + "]";
         }
         // 标量数值
-        return std::to_string(val.exact ? rational_to_double(val.rational) : val.decimal);
+        return std::to_string(val.exact ? rational_to_double(val.rational) : val.decimal.to_long_double());
     }
 
     /**
@@ -551,13 +551,13 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
             throw std::runtime_error("Failed to open file: " + path);
         }
 
-        std::vector<std::vector<long double>> rows;
+        std::vector<std::vector<Scalar>> rows;
         std::string line;
 
         while (std::getline(file, line)) {
             if (line.empty()) continue;
 
-            std::vector<long double> row;
+            std::vector<Scalar> row;
             std::stringstream ss(line);
             std::string cell;
 
@@ -569,7 +569,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
                 }
                 try {
                     std::size_t processed = 0;
-                    long double val = std::stod(trimmed, &processed);
+                    Scalar val = std::stod(trimmed, &processed);
                     if (processed != trimmed.size()) {
                         throw std::runtime_error("Invalid numeric data in CSV: " + trimmed);
                     }
@@ -720,7 +720,7 @@ std::string IoModule::execute_args(const std::string& command,
             out += "]";
             return out;
         }
-        return std::to_string(res.exact ? rational_to_double(res.rational) : res.decimal);
+        return std::to_string(res.exact ? rational_to_double(res.rational) : res.decimal.to_long_double());
     }
     
     return "";

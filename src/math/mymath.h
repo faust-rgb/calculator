@@ -11,6 +11,7 @@
 #ifndef MYMATH_H
 #define MYMATH_H
 
+#include "core/scalar_type.h"
 #include <limits>
 #include <string>
 
@@ -85,12 +86,33 @@ long double ceil(long double x);
 long double round(long double x);
 long double trunc(long double x);
 long double modf(long double x, long double* integer_part);
+
+// Scalar overload for modf - convert to long double
+inline Scalar modf(Scalar x, Scalar* integer_part) {
+    long double ld_int;
+    long double frac = modf(static_cast<long double>(x), &ld_int);
+    *integer_part = Scalar(ld_int);
+    return Scalar(frac);
+}
+
 long double clamp(long double value, long double low, long double high);
 long double fmod(long double x, long double y);
 long double remainder(long double x, long double y);
 long double infinity();
 long double quiet_nan();
 long long gcd(long long a, long long b);
+
+// Scalar overloads using precise128 functions
+inline Scalar abs(Scalar x) { return precise128::abs(x); }
+inline bool isnan(Scalar x) { return precise128::isnan(x); }
+inline bool isinf(Scalar x) { return precise128::isinf(x); }
+inline bool isfinite(Scalar x) { return precise128::isfinite(x); }
+inline Scalar floor(Scalar x) { return precise128::floor(x); }
+inline Scalar ceil(Scalar x) { return precise128::ceil(x); }
+inline Scalar round(Scalar x) { return precise128::round(x); }
+inline Scalar trunc(Scalar x) { return precise128::trunc(x); }
+inline Scalar fmod(Scalar x, Scalar y) { return precise128::fmod(x, y); }
+inline Scalar remainder(Scalar x, Scalar y) { return precise128::remainder(x, y); }
 
 /**
  * @brief 判断数值是否接近零
@@ -108,6 +130,16 @@ bool is_near_zero(long double x, long double eps = kEps);
  */
 bool is_integer(long double x, long double eps = 1e-10);
 
+// Scalar overloads using precise128 functions
+inline bool is_near_zero(Scalar x, Scalar eps = Scalar(1e-12L)) {
+    return precise128::is_near_zero(x, eps);
+}
+
+inline bool is_integer(Scalar x, Scalar eps = Scalar(1e-10L)) {
+    Scalar frac = precise128::abs(x - precise128::round(x));
+    return frac <= eps;
+}
+
 /**
  * @brief 将浮点数识别为“足够接近”的简单分数
  * @param value 输入值
@@ -124,6 +156,18 @@ bool approximate_fraction(long double value,
                           long long* denominator,
                           int max_denominator = 999,
                           long double eps = 1e-10);
+
+// Scalar overload for approximate_fraction
+inline bool approximate_fraction(Scalar value,
+                                 long long* numerator,
+                                 long long* denominator,
+                                 int max_denominator = 999,
+                                 Scalar eps = Scalar(1e-10L)) {
+    return approximate_fraction(static_cast<long double>(value),
+                                 numerator, denominator,
+                                 max_denominator,
+                                 static_cast<long double>(eps));
+}
 
 /**
  * @brief 计算给定最大分母约束下的最佳有理逼近
@@ -163,6 +207,29 @@ long double normalize_angle(long double x);
  * - 对于负 x，使用 e^(-x) = 1/e^x
  */
 long double exp(long double x);
+
+// Scalar overloads for exp, ln, sqrt, etc.
+inline Scalar exp(Scalar x) { return precise128::exp(x); }
+inline Scalar ln(Scalar x) {
+    if (x <= Scalar(0.0L)) {
+        throw std::domain_error("ln is only defined for positive numbers");
+    }
+    return precise128::ln(x);
+}
+inline Scalar log(Scalar x) { return ln(x); }
+inline Scalar log1p(Scalar x) { return precise128::log1p(x); }
+inline Scalar log10(Scalar x) {
+    if (x <= Scalar(0.0L)) {
+        throw std::domain_error("log10 is only defined for positive numbers");
+    }
+    return precise128::log10(x);
+}
+inline Scalar log2(Scalar x) {
+    if (x <= Scalar(0.0L)) {
+        throw std::domain_error("log2 is only defined for positive numbers");
+    }
+    return precise128::log2(x);
+}
 
 /**
  * @brief 计算自然对数 ln(x)
@@ -230,6 +297,24 @@ long double acosh(long double x);
  */
 long double atanh(long double x);
 
+// Scalar overloads for hyperbolic functions
+inline Scalar sinh(Scalar x) { return precise128::sinh(x); }
+inline Scalar cosh(Scalar x) { return precise128::cosh(x); }
+inline Scalar tanh(Scalar x) { return precise128::tanh(x); }
+inline Scalar asinh(Scalar x) { return precise128::asinh(x); }
+inline Scalar acosh(Scalar x) {
+    if (x < Scalar(1.0L)) {
+        throw std::domain_error("acosh is only defined for x >= 1");
+    }
+    return precise128::acosh(x);
+}
+inline Scalar atanh(Scalar x) {
+    if (x <= Scalar(-1.0L) || x >= Scalar(1.0L)) {
+        throw std::domain_error("atanh is only defined for values in (-1, 1)");
+    }
+    return precise128::atanh(x);
+}
+
 /**
  * @brief 计算伽马函数 Γ(x)
  * @param x 输入值
@@ -238,6 +323,10 @@ long double atanh(long double x);
  */
 long double gamma(long double x);
 long double lgamma(long double x);
+
+// Scalar overloads for gamma, lgamma - convert to long double for now
+inline Scalar gamma(Scalar x) { return Scalar(gamma(static_cast<long double>(x))); }
+inline Scalar lgamma(Scalar x) { return Scalar(lgamma(static_cast<long double>(x))); }
 
 // ============================================================================
 // 三角函数
@@ -279,6 +368,37 @@ long double tan(long double x);
 long double atan(long double x);
 long double atan2(long double y, long double x);
 
+// Scalar overloads for trig functions
+inline Scalar sin(Scalar x) {
+    Scalar result = precise128::sin(x);
+    return precise128::abs(result) < Scalar(1e-15L) ? Scalar(0.0L) : result;
+}
+inline Scalar cos(Scalar x) {
+    Scalar result = precise128::cos(x);
+    return precise128::abs(result) < Scalar(1e-15L) ? Scalar(0.0L) : result;
+}
+inline Scalar tan(Scalar x) {
+    const Scalar cosine = precise128::cos(x);
+    if (precise128::abs(cosine) < Scalar(1e-10L)) {
+        throw std::domain_error("tan is undefined when cos(x) is zero");
+    }
+    return precise128::sin(x) / cosine;
+}
+inline Scalar atan(Scalar x) { return precise128::atan(x); }
+inline Scalar atan2(Scalar y, Scalar x) { return precise128::atan2(y, x); }
+inline Scalar asin(Scalar x) {
+    if (x < Scalar(-1.0L) || x > Scalar(1.0L)) {
+        throw std::domain_error("asin is only defined for values in [-1, 1]");
+    }
+    return precise128::asin(x);
+}
+inline Scalar acos(Scalar x) {
+    if (x < Scalar(-1.0L) || x > Scalar(1.0L)) {
+        throw std::domain_error("acos is only defined for values in [-1, 1]");
+    }
+    return precise128::acos(x);
+}
+
 /**
  * @brief 计算反正弦值
  * @param x 输入值，必须在 [-1, 1] 范围内
@@ -298,6 +418,17 @@ long double asin(long double x);
  * 使用恒等式：acos(x) = π/2 - asin(x)
  */
 long double acos(long double x);
+
+// Scalar overloads for sec, csc, cot
+inline Scalar sec(Scalar x) { return precise128::sec(x); }
+inline Scalar csc(Scalar x) { return precise128::csc(x); }
+inline Scalar cot(Scalar x) {
+    const Scalar sine = precise128::sin(x);
+    if (precise128::abs(sine) < Scalar(1e-10L)) {
+        throw std::domain_error("cot is undefined when sin(x) is zero");
+    }
+    return precise128::cos(x) / sine;
+}
 
 /**
  * @brief 计算正割
@@ -341,6 +472,11 @@ long double acsc(long double x);
  */
 long double acot(long double x);
 
+// Scalar overloads for asec, acsc, acot
+inline Scalar asec(Scalar x) { return Scalar(asec(static_cast<long double>(x))); }
+inline Scalar acsc(Scalar x) { return Scalar(acsc(static_cast<long double>(x))); }
+inline Scalar acot(Scalar x) { return Scalar(acot(static_cast<long double>(x))); }
+
 /**
  * @brief 计算欧几里得范数 sqrt(x^2 + y^2)
  * @param x 第一个值
@@ -365,6 +501,15 @@ long double hypot(long double x, long double y);
  */
 long double sqrt(long double x);
 
+// Scalar overloads for sqrt, cbrt, root
+inline Scalar sqrt(Scalar x) {
+    if (x < Scalar(0.0L)) {
+        throw std::domain_error("sqrt is only defined for non-negative numbers");
+    }
+    return precise128::sqrt(x);
+}
+inline Scalar cbrt(Scalar x) { return precise128::cbrt(x); }
+
 /**
  * @brief 计算立方根
  * @param x 输入值（可以为负）
@@ -385,6 +530,11 @@ long double cbrt(long double x);
  */
 long double root(long double value, long double degree);
 
+// Scalar overload for root
+inline Scalar root(Scalar value, Scalar degree) {
+    return Scalar(root(static_cast<long double>(value), static_cast<long double>(degree)));
+}
+
 /**
  * @brief 计算幂函数
  * @param base 底数
@@ -398,6 +548,35 @@ long double root(long double value, long double degree);
  * - 一般情况使用 a^b = e^(b*ln(a))
  */
 long double pow(long double base, long double exponent);
+
+// Scalar overloads for pow, hypot, normalize_angle
+inline Scalar pow(Scalar base, Scalar exponent) {
+    if (base <= Scalar(0.0L)) {
+        if (base == Scalar(0.0L)) {
+            if (exponent < Scalar(0.0L)) {
+                throw std::domain_error("zero cannot be raised to a negative power");
+            }
+            return precise128::pow(base, exponent);
+        }
+
+        if (is_integer(exponent)) {
+            return precise128::pow(base, exponent);
+        }
+
+        long long numerator = 0;
+        long long denominator = 0;
+        const Scalar positive_exponent = exponent < Scalar(0.0L) ? -exponent : exponent;
+        if (!approximate_fraction(positive_exponent, &numerator, &denominator) ||
+            denominator % 2 == 0) {
+            throw std::domain_error(
+                "non-integer exponent requires a positive base unless the exponent is an odd-denominator fraction");
+        }
+    }
+
+    return precise128::pow(base, exponent);
+}
+inline Scalar hypot(Scalar x, Scalar y) { return precise128::hypot(x, y); }
+inline Scalar normalize_angle(Scalar x) { return precise128::normalize_angle(x); }
 
 /**
  * @brief 计算误差函数
@@ -413,6 +592,10 @@ long double erf(long double x);
  */
 long double erfc(long double x);
 
+// Scalar overloads for erf, erfc - convert to long double for now
+inline Scalar erf(Scalar x) { return Scalar(erf(static_cast<long double>(x))); }
+inline Scalar erfc(Scalar x) { return Scalar(erfc(static_cast<long double>(x))); }
+
 /**
  * @brief 计算正则化下不完全伽马函数 P(a, x)
  * @param a 参数 a
@@ -420,6 +603,11 @@ long double erfc(long double x);
  * @return P(a, x)
  */
 long double inc_gamma(long double a, long double x);
+
+// Scalar overload for inc_gamma
+inline Scalar inc_gamma(Scalar a, Scalar x) {
+    return Scalar(inc_gamma(static_cast<long double>(a), static_cast<long double>(x)));
+}
 
 /**
  * @brief 计算正则化不完全贝塔函数 I_x(a, b)
@@ -430,6 +618,11 @@ long double inc_gamma(long double a, long double x);
  */
 long double inc_beta(long double a, long double b, long double x);
 
+// Scalar overload for inc_beta
+inline Scalar inc_beta(Scalar a, Scalar b, Scalar x) {
+    return Scalar(inc_beta(static_cast<long double>(a), static_cast<long double>(b), static_cast<long double>(x)));
+}
+
 /**
  * @brief 计算贝塔函数
  * @param a 参数 a
@@ -438,12 +631,22 @@ long double inc_beta(long double a, long double b, long double x);
  */
 long double beta(long double a, long double b);
 
+// Scalar overload for beta
+inline Scalar beta(Scalar a, Scalar b) {
+    return Scalar(beta(static_cast<long double>(a), static_cast<long double>(b)));
+}
+
 /**
  * @brief 计算黎曼 ζ 函数（实数输入）
  * @param s 输入值，s = 1 处无定义
  * @return zeta(s)
  */
 long double zeta(long double s);
+
+// Scalar overload for zeta
+inline Scalar zeta(Scalar s) {
+    return Scalar(zeta(static_cast<long double>(s)));
+}
 
 /**
  * @brief 计算第一类整数阶贝塞尔函数 J_n(x)
@@ -452,6 +655,11 @@ long double zeta(long double s);
  * @return J_order(x)
  */
 long double bessel_j(int order, long double x);
+
+// Scalar overload for bessel_j
+inline Scalar bessel_j(int order, Scalar x) {
+    return Scalar(bessel_j(order, static_cast<long double>(x)));
+}
 
 }  // namespace mymath
 

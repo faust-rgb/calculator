@@ -11,6 +11,7 @@
 
 #include "signal_processing.h"
 #include "math/mymath.h"
+#include "core/scalar_type.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -18,8 +19,12 @@
 
 namespace signal {
 
+// Use Scalar for internal high-precision real computations
+using Scalar = mymath::Scalar;
+
 // 数学常量
-constexpr long double kPi = 3.14159265358979323846;
+static const Scalar kPiScalar = mymath::precise128::pi();
+constexpr Scalar kPi = 3.14159265358979323846;
 
 // ============================================================================
 // 滤波器类型转换
@@ -52,11 +57,12 @@ FilterType string_to_filter_type(const std::string& str) {
 // 理想低通滤波器脉冲响应（sinc 函数）
 // ============================================================================
 
-static long double sinc(long double x) {
-    if (mymath::abs(x) < 1e-10) {
+static Scalar sinc_scalar(Scalar x) {
+    const Scalar x_s(x);
+    if (mymath::precise128::abs(x_s) < Scalar(1e-10L)) {
         return 1.0L;
     }
-    return mymath::sin(kPi * x) / (kPi * x);
+    return (mymath::precise128::sin(kPiScalar * x_s) / (kPiScalar * x_s));
 }
 
 // ============================================================================
@@ -64,7 +70,7 @@ static long double sinc(long double x) {
 // ============================================================================
 
 FilterCoefficients design_fir(int order,
-                               long double cutoff,
+                               Scalar cutoff,
                                FilterType type,
                                WindowType window_type) {
     if (order < 1) {
@@ -79,25 +85,25 @@ FilterCoefficients design_fir(int order,
     const int half = order / 2;
 
     // 归一化截止频率（0 到 0.5 对应 0 到 Nyquist）
-    const long double fc = cutoff / 2.0;
+    const Scalar fc = cutoff / 2.0;
 
     // 生成窗函数
-    std::vector<long double> win = window(window_type, length);
+    std::vector<Scalar> win = window(window_type, length);
 
     // 计算理想脉冲响应
-    std::vector<long double> h(length);
+    std::vector<Scalar> h(length);
 
     if (type == FilterType::LowPass) {
         // 低通：h[n] = 2*fc*sinc(2*fc*(n-M/2))
         for (int n = 0; n <= order; ++n) {
-            const long double x = static_cast<long double>(n - half);
-            h[n] = 2.0 * fc * sinc(2.0 * fc * x);
+            const Scalar x = (n - half);
+            h[n] = 2.0 * fc * sinc_scalar(2.0 * fc * x);
         }
     } else if (type == FilterType::HighPass) {
         // 高通：h[n] = delta(n-M/2) - 2*fc*sinc(2*fc*(n-M/2))
         for (int n = 0; n <= order; ++n) {
-            const long double x = static_cast<long double>(n - half);
-            h[n] = (n == half ? 1.0L : 0.0L) - 2.0 * fc * sinc(2.0 * fc * x);
+            const Scalar x = (n - half);
+            h[n] = (n == half ? 1.0L : 0.0L) - 2.0 * fc * sinc_scalar(2.0 * fc * x);
         }
     } else {
         throw std::runtime_error("Use design_fir_band for bandpass/bandstop filters");
@@ -112,8 +118,8 @@ FilterCoefficients design_fir(int order,
 }
 
 FilterCoefficients design_fir_band(int order,
-                                    long double cutoff_low,
-                                    long double cutoff_high,
+                                    Scalar cutoff_low,
+                                    Scalar cutoff_high,
                                     FilterType type,
                                     WindowType window_type) {
     if (order < 1) {
@@ -126,26 +132,26 @@ FilterCoefficients design_fir_band(int order,
     const std::size_t length = static_cast<std::size_t>(order + 1);
     const int half = order / 2;
 
-    const long double fc1 = cutoff_low / 2.0;
-    const long double fc2 = cutoff_high / 2.0;
+    const Scalar fc1 = cutoff_low / 2.0;
+    const Scalar fc2 = cutoff_high / 2.0;
 
-    std::vector<long double> win = window(window_type, length);
-    std::vector<long double> h(length);
+    std::vector<Scalar> win = window(window_type, length);
+    std::vector<Scalar> h(length);
 
     if (type == FilterType::BandPass) {
         // 带通 = 高通(fc1) - 高通(fc2) = 低通(fc2) - 低通(fc1)
         for (int n = 0; n <= order; ++n) {
-            const long double x = static_cast<long double>(n - half);
-            h[n] = 2.0 * (fc2 - fc1) * sinc((fc2 - fc1) * x) *
-                   mymath::cos(kPi * (fc2 + fc1) * x);
+            const Scalar x = (n - half);
+            h[n] = 2.0 * (fc2 - fc1) * sinc_scalar((fc2 - fc1) * x) *
+                   (mymath::precise128::cos((kPiScalar) * (fc2 + fc1) * x));
         }
     } else if (type == FilterType::BandStop) {
         // 带阻 = 低通(fc1) + 高通(fc2)
         for (int n = 0; n <= order; ++n) {
-            const long double x = static_cast<long double>(n - half);
+            const Scalar x = (n - half);
             h[n] = (n == half ? 1.0L : 0.0L) -
-                   2.0 * (fc2 - fc1) * sinc((fc2 - fc1) * x) *
-                   mymath::cos(kPi * (fc2 + fc1) * x);
+                   2.0 * (fc2 - fc1) * sinc_scalar((fc2 - fc1) * x) *
+                   (mymath::precise128::cos((kPiScalar) * (fc2 + fc1) * x));
         }
     } else {
         throw std::runtime_error("Use design_fir for lowpass/highpass filters");
@@ -163,16 +169,16 @@ FilterCoefficients design_fir_band(int order,
 // ============================================================================
 
 // 双线性变换：将模拟极点转换为数字极点
-static Complex bilinear_transform(const Complex& s_pole, long double fs) {
+static Complex bilinear_transform(const Complex& s_pole, Scalar fs) {
     return (1.0L + s_pole / (2.0 * fs)) / (1.0L - s_pole / (2.0 * fs));
 }
 
 // 将模拟传递函数转换为数字传递函数（双线性变换）
 static void bilinear(const std::vector<Complex>& s_zeros,
                      const std::vector<Complex>& s_poles,
-                     long double fs,
-                     std::vector<long double>& b,
-                     std::vector<long double>& a) {
+                     Scalar fs,
+                     std::vector<Scalar>& b,
+                     std::vector<Scalar>& a) {
     const std::size_t n_zeros = s_zeros.size();
     const std::size_t n_poles = s_poles.size();
 
@@ -188,9 +194,9 @@ static void bilinear(const std::vector<Complex>& s_zeros,
 
     // 从极点/零点展开多项式系数
     auto poly_from_roots = [](const std::vector<Complex>& roots) -> std::vector<Complex> {
-        std::vector<Complex> coeffs = {1.0L};
+        std::vector<Complex> coeffs = {Scalar(1.0L)};
         for (const Complex& r : roots) {
-            std::vector<Complex> new_coeffs(coeffs.size() + 1, 0.0L);
+            std::vector<Complex> new_coeffs(coeffs.size() + 1, Scalar(0.0L));
             for (std::size_t i = 0; i < coeffs.size(); ++i) {
                 new_coeffs[i] += coeffs[i];
                 new_coeffs[i + 1] -= r * coeffs[i];
@@ -228,7 +234,7 @@ static void bilinear(const std::vector<Complex>& s_zeros,
 // ============================================================================
 
 FilterCoefficients design_butterworth(int order,
-                                       long double cutoff,
+                                       Scalar cutoff,
                                        FilterType type) {
     if (order < 1) {
         throw std::runtime_error("Filter order must be at least 1");
@@ -238,19 +244,25 @@ FilterCoefficients design_butterworth(int order,
     }
 
     // 预扭曲频率（双线性变换）
-    const long double fs = 1.0L;  // 归一化采样率
-    const long double wc = 2.0 * fs * mymath::tan(kPi * cutoff / 2.0);
+    const Scalar fs = 1.0L;  // 归一化采样率
+    // Use Scalar for tan computation
+    const Scalar cutoff_s(cutoff);
+    const Scalar tan_arg = (kPiScalar) * cutoff_s / Scalar(2.0L);
+    const Scalar wc_scalar = Scalar(2.0L) * fs * mymath::precise128::tan(tan_arg);
+    const Scalar wc = (wc_scalar);
 
     // 计算模拟巴特沃斯极点
     std::vector<Complex> s_poles;
     for (int k = 0; k < order; ++k) {
-        const long double angle = kPi * (2.0 * static_cast<long double>(k) + 1.0L) / (2.0 * static_cast<long double>(order));
-        s_poles.push_back(wc * mymath::polar(1.0L, angle + kPi / 2.0));
+        const Scalar angle_scalar = kPiScalar * (Scalar(2.0L) * Scalar((k)) + Scalar(1.0L)) /
+                                    (Scalar(2.0L) * Scalar((order)));
+        const Scalar angle = (angle_scalar);
+        s_poles.push_back(wc * mymath::polar(Scalar(1.0L), angle + (kPiScalar) / 2.0L));
     }
 
     std::vector<Complex> s_zeros;  // 巴特沃斯没有有限零点
 
-    std::vector<long double> b, a;
+    std::vector<Scalar> b, a;
     bilinear(s_zeros, s_poles, fs, b, a);
 
     // 根据滤波器类型调整
@@ -276,8 +288,8 @@ FilterCoefficients design_butterworth(int order,
 // ============================================================================
 
 FilterCoefficients design_chebyshev1(int order,
-                                      long double cutoff,
-                                      long double ripple,
+                                      Scalar cutoff,
+                                      Scalar ripple,
                                       FilterType type) {
     if (order < 1) {
         throw std::runtime_error("Filter order must be at least 1");
@@ -289,41 +301,47 @@ FilterCoefficients design_chebyshev1(int order,
         throw std::runtime_error("Ripple must be positive");
     }
 
-    const long double fs = 1.0L;
-    const long double wc = 2.0 * fs * mymath::tan(kPi * cutoff / 2.0);
+    const Scalar fs = 1.0L;
+    // Use Scalar for tan computation
+    const Scalar cutoff_s(cutoff);
+    const Scalar tan_arg = (kPiScalar) * cutoff_s / Scalar(2.0L);
+    const Scalar wc_scalar = Scalar(2.0L) * fs * mymath::precise128::tan(tan_arg);
+    const Scalar wc = (wc_scalar);
 
-    // 从波纹计算 epsilon
-    const long double epsilon = mymath::sqrt(mymath::pow(10.0L, ripple / 10.0L) - 1.0L);
+    // 从波纹计算 epsilon - use Scalar for precision
+    const Scalar ripple_s(ripple);
+    const Scalar epsilon = mymath::precise128::sqrt(mymath::precise128::pow(Scalar(10.0L), ripple_s / Scalar(10.0L)) - Scalar(1.0L));
 
     // 计算切比雪夫极点
-    const long double mu = mymath::asinh(1.0L / epsilon) / static_cast<long double>(order);
+    const Scalar mu = mymath::precise128::asinh(Scalar(1.0L) / epsilon) / Scalar((order));
 
     std::vector<Complex> s_poles;
     for (int k = 0; k < order; ++k) {
-        const long double theta = kPi * (2.0 * static_cast<long double>(k) + 1.0L) / (2.0 * static_cast<long double>(order));
-        const long double sigma = -mymath::sinh(mu) * mymath::sin(theta);
-        const long double omega = mymath::cosh(mu) * mymath::cos(theta);
-        s_poles.push_back(wc * Complex(sigma, omega));
+        const Scalar theta = kPiScalar * (Scalar(2.0L) * Scalar((k)) + Scalar(1.0L)) /
+                              (Scalar(2.0L) * Scalar((order)));
+        const Scalar sigma_val = -mymath::precise128::sinh(mu) * mymath::precise128::sin(theta);
+        const Scalar omega_val = mymath::precise128::cosh(mu) * mymath::precise128::cos(theta);
+        s_poles.push_back(wc * Complex((sigma_val), (omega_val)));
     }
 
     std::vector<Complex> s_zeros;
-    std::vector<long double> b, a;
+    std::vector<Scalar> b, a;
     bilinear(s_zeros, s_poles, fs, b, a);
 
     // 直流增益调整
-    long double dc_gain = 0.0L;
-    for (long double coeff : b) {
+    Scalar dc_gain = 0.0L;
+    for (Scalar coeff : b) {
         dc_gain += coeff;
     }
-    long double dc_denom = 0.0L;
-    for (long double coeff : a) {
+    Scalar dc_denom = 0.0L;
+    for (Scalar coeff : a) {
         dc_denom += coeff;
     }
     dc_gain /= dc_denom;
 
     if (type == FilterType::LowPass) {
         // 归一化直流增益为 1
-        for (long double& coeff : b) {
+        for (Scalar& coeff : b) {
             coeff /= dc_gain;
         }
     } else if (type == FilterType::HighPass) {
@@ -348,9 +366,9 @@ FilterCoefficients design_chebyshev1(int order,
 // ============================================================================
 
 FilterCoefficients design_elliptic(int order,
-                                    long double cutoff,
-                                    long double ripple,
-                                    long double stopband_atten,
+                                    Scalar cutoff,
+                                    Scalar ripple,
+                                    Scalar stopband_atten,
                                     FilterType type) {
     (void)order;
     (void)cutoff;
@@ -364,45 +382,45 @@ FilterCoefficients design_elliptic(int order,
 // 二阶节 (SOS) 滤波器实现
 // ============================================================================
 
-std::vector<long double> sosfilter(const std::vector<SOS>& sos, const std::vector<long double>& signal) {
+std::vector<Scalar> sosfilter(const std::vector<SOS>& sos, const std::vector<Scalar>& signal) {
     if (signal.empty()) return {};
     if (sos.empty()) return signal;
 
-    std::vector<long double> output = signal;
-    
-    // 用于存储每个节的状态 (Direct Form II)
-    struct State { long double w1 = 0.0L, w2 = 0.0L; };
+    std::vector<Scalar> output = signal;
+
+    // 用于存储每个节的状态 (Direct Form II) - use Scalar for precision
+    struct State { Scalar w1 = Scalar(0.0L), w2 = Scalar(0.0L); };
     std::vector<State> states(sos.size());
 
-    for (long double& x : output) {
-        long double val = x;
+    for (Scalar& x : output) {
+        Scalar val = Scalar(x);
         for (std::size_t i = 0; i < sos.size(); ++i) {
             const SOS& s = sos[i];
             State& st = states[i];
-            
+
             // w[n] = x[n] - a1*w[n-1] - a2*w[n-2]
-            long double w = val - s.a1 * st.w1 - s.a2 * st.w2;
+            Scalar w = val - Scalar(s.a1) * st.w1 - Scalar(s.a2) * st.w2;
             // y[n] = b0*w[n] + b1*w[n-1] + b2*w[n-2]
-            val = s.b0 * w + s.b1 * st.w1 + s.b2 * st.w2;
-            
+            val = Scalar(s.b0) * w + Scalar(s.b1) * st.w1 + Scalar(s.b2) * st.w2;
+
             st.w2 = st.w1;
             st.w1 = w;
         }
-        x = val;
+        x = (val);
     }
 
     return output;
 }
 
-std::vector<SOS> tf2sos(const std::vector<long double>& b, const std::vector<long double>& a) {
+std::vector<SOS> tf2sos(const std::vector<Scalar>& b, const std::vector<Scalar>& a) {
     // 这是一个简化的实现。
     // 对于真正的 tf2sos，我们需要通过多项式求根找到极点和零点，然后配对。
     // 在本仓库中，由于 IIR 设计函数已知极点，建议在设计函数中直接生成 SOS。
     // 这里暂时返回一个单节（如果是低阶）或抛出异常。
-    
+
     if (a.size() <= 3 && b.size() <= 3) {
         SOS s;
-        const long double a0 = a[0];
+        const Scalar a0 = a[0];
         s.b0 = b[0] / a0;
         s.b1 = (b.size() > 1 ? b[1] / a0 : 0.0L);
         s.b2 = (b.size() > 2 ? b[2] / a0 : 0.0L);
@@ -410,7 +428,7 @@ std::vector<SOS> tf2sos(const std::vector<long double>& b, const std::vector<lon
         s.a2 = (a.size() > 2 ? a[2] / a0 : 0.0L);
         return {s};
     }
-    
+
     throw std::runtime_error("tf2sos for high-order filters requires polynomial root pairing into sections. "
                              "This is not yet fully implemented. It is recommended to use "
                              "IIR design functions that generate SOS directly, or stick to lower-order IIR filters "
@@ -421,11 +439,11 @@ std::vector<SOS> tf2sos(const std::vector<long double>& b, const std::vector<lon
 // 滤波器应用
 // ============================================================================
 
-std::vector<long double> filter(const std::vector<long double>& b,
-                            const std::vector<long double>& a,
-                            const std::vector<long double>& signal) {
+std::vector<Scalar> filter(const std::vector<Scalar>& b,
+                            const std::vector<Scalar>& a,
+                            const std::vector<Scalar>& signal) {
     if (signal.empty()) return {};
-    
+
     // 优化：对于高阶 IIR 滤波器（a.size > 3），尝试使用 SOS
     // 但由于目前 tf2sos 还没实现全自动配对，先保持直接型，
     // 但增加了数值保护和归一化。
@@ -433,34 +451,40 @@ std::vector<long double> filter(const std::vector<long double>& b,
     const std::size_t n = signal.size();
     const std::size_t nb = b.size();
     const std::size_t na = a.size();
-    
-    std::vector<long double> output(n, 0.0L);
-    const long double a0 = a[0];
-    
+
+    std::vector<Scalar> output(n, 0.0L);
+    const Scalar a0 = Scalar(a[0]);
+
+    // 使用 Scalar 进行高精度计算
+    std::vector<Scalar> b_scalar(nb);
+    std::vector<Scalar> a_scalar(na);
+    for (std::size_t i = 0; i < nb; ++i) b_scalar[i] = Scalar(b[i]);
+    for (std::size_t i = 0; i < na; ++i) a_scalar[i] = Scalar(a[i]);
+
     // 使用状态空间或缓冲区以提高性能并减少内存访问
-    std::vector<long double> w(std::max(nb, na), 0.0L);
+    std::vector<Scalar> w(std::max(nb, na), Scalar(0.0L));
 
     for (std::size_t i = 0; i < n; ++i) {
-        long double val = signal[i];
-        
+        Scalar val = Scalar(signal[i]);
+
         // 采用 Direct Form II
-        long double wn = val;
+        Scalar wn = val;
         for (std::size_t j = 1; j < na; ++j) {
-            wn -= (a[j] / a0) * w[j - 1];
+            wn -= (a_scalar[j] / a0) * w[j - 1];
         }
-        
-        long double yn = (b[0] / a0) * wn;
+
+        Scalar yn = (b_scalar[0] / a0) * wn;
         for (std::size_t j = 1; j < nb; ++j) {
-            yn += (b[j] / a0) * w[j - 1];
+            yn += (b_scalar[j] / a0) * w[j - 1];
         }
-        
+
         // 更新状态
         for (std::size_t j = std::max(nb, na) - 1; j > 0; --j) {
             w[j] = w[j - 1];
         }
         w[0] = wn;
-        
-        output[i] = yn;
+
+        output[i] = (yn);
     }
 
     return output;
@@ -470,9 +494,9 @@ std::vector<long double> filter(const std::vector<long double>& b,
 // 零相位滤波
 // ============================================================================
 
-std::vector<long double> filtfilt(const std::vector<long double>& b,
-                              const std::vector<long double>& a,
-                              const std::vector<long double>& signal) {
+std::vector<Scalar> filtfilt(const std::vector<Scalar>& b,
+                              const std::vector<Scalar>& a,
+                              const std::vector<Scalar>& signal) {
     if (signal.empty()) {
         return {};
     }
@@ -483,7 +507,7 @@ std::vector<long double> filtfilt(const std::vector<long double>& b,
         padlen = signal.size() - 1;
     }
 
-    std::vector<long double> padded_signal;
+    std::vector<Scalar> padded_signal;
     padded_signal.reserve(signal.size() + 2 * padlen);
 
     // 奇对称延拓 (Odd Extension) 左侧
@@ -500,16 +524,16 @@ std::vector<long double> filtfilt(const std::vector<long double>& b,
     }
 
     // 前向滤波
-    std::vector<long double> forward = filter(b, a, padded_signal);
+    std::vector<Scalar> forward = filter(b, a, padded_signal);
 
     // 反向
-    std::vector<long double> reversed(forward.rbegin(), forward.rend());
+    std::vector<Scalar> reversed(forward.rbegin(), forward.rend());
 
     // 反向滤波
-    std::vector<long double> backward = filter(b, a, reversed);
+    std::vector<Scalar> backward = filter(b, a, reversed);
 
     // 再反向恢复原顺序，并截取有效部分
-    std::vector<long double> result(signal.size());
+    std::vector<Scalar> result(signal.size());
     for (std::size_t i = 0; i < signal.size(); ++i) {
         result[i] = backward[backward.size() - 1 - (padlen + i)];
     }
@@ -521,8 +545,8 @@ std::vector<long double> filtfilt(const std::vector<long double>& b,
 // 频率响应
 // ============================================================================
 
-std::vector<Complex> freqz(const std::vector<long double>& b,
-                            const std::vector<long double>& a,
+std::vector<Complex> freqz(const std::vector<Scalar>& b,
+                            const std::vector<Scalar>& a,
                             std::size_t n) {
     if (b.empty()) {
         throw std::runtime_error("Numerator coefficients cannot be empty");
@@ -533,22 +557,28 @@ std::vector<Complex> freqz(const std::vector<long double>& b,
 
     std::vector<Complex> response(n);
 
+    // Convert coefficients to Scalar for high precision computation
+    std::vector<Scalar> b_scalar(b.size()), a_scalar(a.size());
+    for (std::size_t i = 0; i < b.size(); ++i) b_scalar[i] = Scalar(b[i]);
+    for (std::size_t i = 0; i < a.size(); ++i) a_scalar[i] = Scalar(a[i]);
+
     for (std::size_t k = 0; k < n; ++k) {
-        const long double omega = kPi * static_cast<long double>(k) / static_cast<long double>(n);
-        const Complex z = mymath::polar(1.0L, omega);
+        const Scalar angle = kPiScalar * Scalar(static_cast<long long>(k)) / Scalar(static_cast<long long>(n));
+        const Scalar omega = (angle);
+        const Complex z = Complex(mymath::cos(omega), mymath::sin(omega));
 
         // 计算分子
-        Complex num = 0.0L;
-        Complex z_pow = 1.0L;
-        for (long double coeff : b) {
+        Complex num = Scalar(0.0L);
+        Complex z_pow = Scalar(1.0L);
+        for (Scalar coeff : b) {
             num += coeff * z_pow;
             z_pow *= z;
         }
 
         // 计算分母
-        Complex den = 0.0L;
-        z_pow = 1.0L;
-        for (long double coeff : a) {
+        Complex den = Scalar(0.0L);
+        z_pow = Scalar(1.0L);
+        for (Scalar coeff : a) {
             den += coeff * z_pow;
             z_pow *= z;
         }
@@ -563,41 +593,41 @@ std::vector<Complex> freqz(const std::vector<long double>& b,
 // 群延迟
 // ============================================================================
 
-std::vector<long double> grpdelay(const std::vector<long double>& b,
-                              const std::vector<long double>& a,
+std::vector<Scalar> grpdelay(const std::vector<Scalar>& b,
+                              const std::vector<Scalar>& a,
                               std::size_t n) {
     std::vector<Complex> h = freqz(b, a, n);
-    std::vector<long double> gd(n);
+    std::vector<Scalar> gd(n);
 
-    if (n < 2) return std::vector<long double>(n, 0.0L);
+    if (n < 2) return std::vector<Scalar>(n, 0.0L);
 
     // 提取相位并展开 (unwrap)
-    std::vector<long double> phase(n);
+    std::vector<Scalar> phase(n);
     for (std::size_t k = 0; k < n; ++k) {
         phase[k] = mymath::arg(h[k]);
     }
 
     for (std::size_t k = 1; k < n; ++k) {
-        long double dp = phase[k] - phase[k - 1];
+        Scalar dp = phase[k] - phase[k - 1];
         while (dp > kPi) { phase[k] -= 2.0 * kPi; dp -= 2.0 * kPi; }
         while (dp < -kPi) { phase[k] += 2.0 * kPi; dp += 2.0 * kPi; }
     }
 
     // 数值微分计算群延迟
-    const long double dw = kPi / static_cast<long double>(n);
+    const Scalar dw = kPi / Scalar(static_cast<long long>(n));
 
     for (std::size_t k = 0; k < n; ++k) {
         if (k == 0) {
             // 前向差分
-            const long double dphi = phase[1] - phase[0];
+            const Scalar dphi = phase[1] - phase[0];
             gd[k] = -dphi / dw;
         } else if (k == n - 1) {
             // 后向差分
-            const long double dphi = phase[k] - phase[k - 1];
+            const Scalar dphi = phase[k] - phase[k - 1];
             gd[k] = -dphi / dw;
         } else {
             // 中心差分
-            const long double dphi = phase[k + 1] - phase[k - 1];
+            const Scalar dphi = phase[k + 1] - phase[k - 1];
             gd[k] = -dphi / (2.0 * dw);
         }
     }

@@ -7,6 +7,7 @@
  */
 
 #include "plot_renderer.h"
+#include "core/scalar_type.h"
 #include "math/mymath.h"
 #include <algorithm>
 #include <iomanip>
@@ -14,6 +15,8 @@
 #include <sstream>
 
 namespace plot {
+
+using Scalar = mymath::Scalar;
 
 /**
  * @brief 编码 Braille 字符
@@ -67,20 +70,20 @@ std::string PlotRenderer::render(const std::vector<Point>& points, int width, in
 std::string PlotRenderer::render_braille(const std::vector<Point>& points, int width, int height) {
     if (points.empty()) return "";
 
-    long double x_min = points[0].x, x_max = points[0].x;
-    long double y_min = points[0].y, y_max = points[0].y;
+    Scalar x_min = Scalar(points[0].x), x_max = Scalar(points[0].x);
+    Scalar y_min = Scalar(points[0].y), y_max = Scalar(points[0].y);
 
     for (const auto& p : points) {
-        if (mymath::isnan(p.y) || mymath::isinf(p.y)) continue;
-        x_min = std::min(x_min, p.x);
-        x_max = std::max(x_max, p.x);
-        y_min = std::min(y_min, p.y);
-        y_max = std::max(y_max, p.y);
+        if (mymath::precise128::isnan(Scalar(p.y)) || mymath::precise128::isinf(Scalar(p.y))) continue;
+        x_min = std::min(x_min, Scalar(p.x));
+        x_max = std::max(x_max, Scalar(p.x));
+        y_min = std::min(y_min, Scalar(p.y));
+        y_max = std::max(y_max, Scalar(p.y));
     }
 
     if (y_min == y_max) {
-        y_min -= 1.0L;
-        y_max += 1.0L;
+        y_min -= Scalar(1);
+        y_max += Scalar(1);
     }
 
     int canvas_w = width * 2;
@@ -89,23 +92,23 @@ std::string PlotRenderer::render_braille(const std::vector<Point>& points, int w
     std::vector<std::vector<int>> canvas(canvas_h, std::vector<int>(canvas_w, 0));
 
     // Draw axes if they are within range
-    if (x_min <= 0 && x_max >= 0 && x_max > x_min) {
-        int ax = static_cast<int>((0 - x_min) / (x_max - x_min) * (canvas_w - 1));
+    if (x_min <= Scalar(0) && x_max >= Scalar(0) && x_max > x_min) {
+        int ax = static_cast<int>((Scalar(0) - x_min) / (x_max - x_min) * (canvas_w - 1));
         if (ax >= 0 && ax < canvas_w) {
             for (int y = 0; y < canvas_h; ++y) canvas[y][ax] = 1;
         }
     }
-    if (y_min <= 0 && y_max >= 0 && y_max > y_min) {
-        int ay = static_cast<int>((0 - y_min) / (y_max - y_min) * (canvas_h - 1));
+    if (y_min <= Scalar(0) && y_max >= Scalar(0) && y_max > y_min) {
+        int ay = static_cast<int>((Scalar(0) - y_min) / (y_max - y_min) * (canvas_h - 1));
         if (ay >= 0 && ay < canvas_h) {
             for (int x = 0; x < canvas_w; ++x) canvas[canvas_h - 1 - ay][x] = 1;
         }
     }
 
     for (const auto& p : points) {
-        if (mymath::isnan(p.y) || mymath::isinf(p.y)) continue;
-        int px = static_cast<int>((p.x - x_min) / (x_max - x_min) * (canvas_w - 1));
-        int py = static_cast<int>((p.y - y_min) / (y_max - y_min) * (canvas_h - 1));
+        if (mymath::precise128::isnan(Scalar(p.y)) || mymath::precise128::isinf(Scalar(p.y))) continue;
+        int px = static_cast<int>((Scalar(p.x) - x_min) / (x_max - x_min) * (canvas_w - 1));
+        int py = static_cast<int>((Scalar(p.y) - y_min) / (y_max - y_min) * (canvas_h - 1));
         if (px >= 0 && px < canvas_w && py >= 0 && py < canvas_h) {
             canvas[canvas_h - 1 - py][px] = 2;
         }

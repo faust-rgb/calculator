@@ -10,6 +10,7 @@
 #define CORE_FORMAT_UTILS_H
 
 #include <string>
+#include "core/scalar_type.h"
 
 struct StoredValue;
 struct Rational;
@@ -58,7 +59,7 @@ void set_process_display_precision(int precision);
 /**
  * @brief 规范化显示的小数值（处理接近零和接近整数的情况）
  */
-long double normalize_display_decimal(long double value);
+long double normalize_display_decimal(Scalar value);
 
 // ============================================================================
 // 数值格式化
@@ -70,11 +71,24 @@ long double normalize_display_decimal(long double value);
 std::string format_decimal(long double value);
 std::string format_decimal(long double value, int precision);
 
+// Scalar overload
+inline std::string format_decimal(Scalar value) {
+    return format_decimal(static_cast<long double>(value));
+}
+
 /**
  * @brief 格式化符号数值（如 pi, e）
  */
 std::string format_symbolic_number(long double value);
 std::string format_symbolic_scalar(long double value);
+
+// Scalar overloads
+inline std::string format_symbolic_number(Scalar value) {
+    return format_symbolic_number(static_cast<long double>(value));
+}
+inline std::string format_symbolic_scalar(Scalar value) {
+    return format_symbolic_scalar(static_cast<long double>(value));
+}
 
 /**
  * @brief 格式化幂次项

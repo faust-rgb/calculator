@@ -13,7 +13,7 @@
 #define PROBABILITY_H
 
 #include <vector>
-
+#include "core/scalar_type.h"
 namespace prob {
 
 /**
@@ -21,7 +21,7 @@ namespace prob {
  * @param n 非负整数（最大支持 170）
  * @return n 的阶乘
  */
-long double factorial(long double n);
+Scalar factorial(Scalar n);
 
 /**
  * @brief 计算组合数 C(n, r) = n! / (r! * (n-r)!)
@@ -29,7 +29,7 @@ long double factorial(long double n);
  * @param r 选取数
  * @return 组合数
  */
-long double nCr(long double n, long double r);
+Scalar nCr(Scalar n, Scalar r);
 
 /**
  * @brief 计算排列数 P(n, r) = n! / (n-r)!
@@ -37,21 +37,21 @@ long double nCr(long double n, long double r);
  * @param r 选取数
  * @return 排列数
  */
-long double nPr(long double n, long double r);
+Scalar nPr(Scalar n, Scalar r);
 
 /**
  * @brief 计算第 n 个伯努利数 B_n
  * @param n 伯努利数索引
  * @return 伯努利数 B_n
  */
-long double bernoulli(int n);
+Scalar bernoulli(int n);
 
 /**
  * @brief 计算 Gamma 函数值
  * @param x 输入值
  * @return Gamma(x)
  */
-long double gamma(long double x);
+Scalar gamma(Scalar x);
 
 /**
  * @brief 计算 Log-Gamma 函数值
@@ -61,7 +61,7 @@ long double gamma(long double x);
  * @param x 输入值
  * @return ln(|Gamma(x)|)
  */
-long double lgamma(long double x);
+Scalar lgamma(Scalar x);
 
 /**
  * @brief 计算正态分布概率密度函数（PDF）
@@ -70,7 +70,7 @@ long double lgamma(long double x);
  * @param sigma 标准差
  * @return PDF 值
  */
-long double normal_pdf(long double x, long double mean, long double sigma);
+Scalar normal_pdf(Scalar x, Scalar mean, Scalar sigma);
 
 /**
  * @brief 计算正态分布累积分布函数（CDF）
@@ -79,7 +79,7 @@ long double normal_pdf(long double x, long double mean, long double sigma);
  * @param sigma 标准差
  * @return CDF 值
  */
-long double normal_cdf(long double x, long double mean, long double sigma);
+Scalar normal_cdf(Scalar x, Scalar mean, Scalar sigma);
 
 /**
  * @brief 计算泊松分布概率质量函数（PMF）
@@ -87,7 +87,7 @@ long double normal_cdf(long double x, long double mean, long double sigma);
  * @param lambda 期望值（泊松参数）
  * @return P(X = k)
  */
-long double poisson_pmf(int k, long double lambda);
+Scalar poisson_pmf(int k, Scalar lambda);
 
 /**
  * @brief 计算泊松分布累积分布函数（CDF）
@@ -95,7 +95,7 @@ long double poisson_pmf(int k, long double lambda);
  * @param lambda 期望值（泊松参数）
  * @return P(X <= k)
  */
-long double poisson_cdf(int k, long double lambda);
+Scalar poisson_cdf(int k, Scalar lambda);
 
 /**
  * @brief 计算二项分布概率质量函数（PMF）
@@ -104,7 +104,7 @@ long double poisson_cdf(int k, long double lambda);
  * @param p 单次成功概率
  * @return P(X = k)
  */
-long double binom_pmf(int n, int k, long double p);
+Scalar binom_pmf(int n, int k, Scalar p);
 
 /**
  * @brief 计算二项分布累积分布函数（CDF）
@@ -113,7 +113,7 @@ long double binom_pmf(int n, int k, long double p);
  * @param p 单次成功概率
  * @return P(X <= k)
  */
-long double binom_cdf(int n, int k, long double p);
+Scalar binom_cdf(int n, int k, Scalar p);
 
 /**
  * @brief 计算 Student's t 分布概率密度函数（PDF）
@@ -121,7 +121,7 @@ long double binom_cdf(int n, int k, long double p);
  * @param df 自由度
  * @return PDF 值
  */
-long double student_t_pdf(long double x, long double df);
+Scalar student_t_pdf(Scalar x, Scalar df);
 
 /**
  * @brief 计算 Student's t 分布累积分布函数（CDF）
@@ -129,7 +129,7 @@ long double student_t_pdf(long double x, long double df);
  * @param df 自由度
  * @return CDF 值
  */
-long double student_t_cdf(long double x, long double df);
+Scalar student_t_cdf(Scalar x, Scalar df);
 
 /**
  * @brief 计算卡方分布概率密度函数（PDF）
@@ -137,7 +137,7 @@ long double student_t_cdf(long double x, long double df);
  * @param df 自由度
  * @return PDF 值
  */
-long double chi2_pdf(long double x, long double df);
+Scalar chi2_pdf(Scalar x, Scalar df);
 
 /**
  * @brief 计算卡方分布累积分布函数（CDF）
@@ -145,7 +145,7 @@ long double chi2_pdf(long double x, long double df);
  * @param df 自由度
  * @return CDF 值
  */
-long double chi2_cdf(long double x, long double df);
+Scalar chi2_cdf(Scalar x, Scalar df);
 
 /**
  * @brief 计算 F 分布概率密度函数（PDF）
@@ -154,7 +154,7 @@ long double chi2_cdf(long double x, long double df);
  * @param df2 自由度2
  * @return PDF 值
  */
-long double f_pdf(long double x, long double df1, long double df2);
+Scalar f_pdf(Scalar x, Scalar df1, Scalar df2);
 
 /**
  * @brief 计算 F 分布累积分布函数（CDF）
@@ -163,7 +163,7 @@ long double f_pdf(long double x, long double df1, long double df2);
  * @param df2 自由度2
  * @return CDF 值
  */
-long double f_cdf(long double x, long double df1, long double df2);
+Scalar f_cdf(Scalar x, Scalar df1, Scalar df2);
 
 /**
  * @brief 计算指数分布概率密度函数（PDF）
@@ -171,7 +171,7 @@ long double f_cdf(long double x, long double df1, long double df2);
  * @param lambda 率参数
  * @return PDF 值
  */
-long double exp_pdf(long double x, long double lambda);
+Scalar exp_pdf(Scalar x, Scalar lambda);
 
 /**
  * @brief 计算指数分布累积分布函数（CDF）
@@ -179,19 +179,19 @@ long double exp_pdf(long double x, long double lambda);
  * @param lambda 率参数
  * @return CDF 值
  */
-long double exp_cdf(long double x, long double lambda);
+Scalar exp_cdf(Scalar x, Scalar lambda);
 
 /**
  * @brief 生成 [0, 1) 区间均匀分布随机数
  * @return 随机数
  */
-long double rand();
+Scalar rand();
 
 /**
  * @brief 生成标准正态分布随机数
  * @return 随机数（均值为 0，标准差为 1）
  */
-long double randn();
+Scalar randn();
 
 /**
  * @brief 生成指定范围内的整数随机数
@@ -199,7 +199,7 @@ long double randn();
  * @param max 最大值（包含）
  * @return [min, max] 区间内的随机整数
  */
-long double randint(long long min, long long max);
+Scalar randint(long long min, long long max);
 
 } // namespace prob
 

@@ -7,6 +7,7 @@
  */
 
 #include "calculator_statistics.h"
+#include "core/scalar_type.h"
 #include "math/mymath.h"
 #include "statistics.h"
 #include "probability.h"
@@ -15,45 +16,47 @@
 
 namespace stats_ops {
 
+using Scalar = mymath::Scalar;
+
 // 匿名命名空间，包含内部辅助函数
 namespace {
 
 /**
- * @brief 检查一个 long double 值是否为整数
+ * @brief 检查一个 Scalar 值是否为整数
  * @param value 待检查的值
  * @return 如果是整数返回 true，否则返回 false
  */
-bool is_integer(long double value) {
+bool is_exact_integer(Scalar value) {
     return mymath::isfinite(value) && mymath::floor(value) == value;
 }
 
 /**
- * @brief 将 long double 转换为 int，并进行边界检查
+ * @brief 将 Scalar 转换为 int，并进行边界检查
  * @param value 待转换的值
  * @param name 参数名称（用于错误信息）
  * @return 转换后的 int 值
  * @throws std::runtime_error 如果值不是整数或超出 int 范围
  */
-int require_int(long double value, const std::string& name) {
-    if (!is_integer(value) ||
-        value < static_cast<long double>(mymath::kIntMin) ||
-        value > static_cast<long double>(mymath::kIntMax)) {
+int require_int(Scalar value, const std::string& name) {
+    if (!is_exact_integer(value) ||
+        value < (mymath::kIntMin) ||
+        value > (mymath::kIntMax)) {
         throw std::runtime_error(name + " must be an integer");
     }
     return static_cast<int>(value);
 }
 
 /**
- * @brief 将 long double 转换为 long long，并进行边界检查
+ * @brief 将 Scalar 转换为 long long，并进行边界检查
  * @param value 待转换的值
  * @param name 参数名称（用于错误信息）
  * @return 转换后的 long long 值
  * @throws std::runtime_error 如果值不是整数或超出 long long 范围
  */
-long long require_long_long(long double value, const std::string& name) {
-    if (!is_integer(value) ||
-        value < static_cast<long double>(mymath::kLongLongMin) ||
-        value > static_cast<long double>(mymath::kLongLongMax)) {
+long long require_long_long(Scalar value, const std::string& name) {
+    if (!is_exact_integer(value) ||
+        value < (mymath::kLongLongMin) ||
+        value > (mymath::kLongLongMax)) {
         throw std::runtime_error(name + " must be an integer");
     }
     return static_cast<long long>(value);
@@ -70,10 +73,10 @@ long long require_long_long(long double value, const std::string& name) {
  * - 精确小数文本：转换为 double
  * - 普通数值：直接包装为单元素向量
  */
-std::vector<long double> extract_vector(const StoredValue& value) {
+std::vector<Scalar> extract_vector(const StoredValue& value) {
     if (value.is_matrix) {
         // 矩阵类型：展开为一维向量
-        std::vector<long double> result;
+        std::vector<Scalar> result;
         result.reserve(value.matrix.rows * value.matrix.cols);
         for (std::size_t i = 0; i < value.matrix.rows; ++i) {
             for (std::size_t j = 0; j < value.matrix.cols; ++j) {
@@ -96,7 +99,7 @@ std::vector<long double> extract_vector(const StoredValue& value) {
 /**
  * @brief 根据统计命令名称调用相应的统计函数
  */
-long double apply_statistic(const std::string& name, const std::vector<long double>& arguments) {
+Scalar apply_statistic(const std::string& name, const std::vector<Scalar>& arguments) {
     if (arguments.empty()) throw std::runtime_error("statistic functions expect at least one value");
 
     // 基本统计量
@@ -116,8 +119,8 @@ long double apply_statistic(const std::string& name, const std::vector<long doub
             throw std::runtime_error(name + " expects two equal-length datasets");
         }
         size_t n = arguments.size() / 2;
-        std::vector<long double> x(arguments.begin(), arguments.begin() + n);
-        std::vector<long double> y(arguments.begin() + n, arguments.end());
+        std::vector<Scalar> x(arguments.begin(), arguments.begin() + n);
+        std::vector<Scalar> y(arguments.begin() + n, arguments.end());
         auto res = stats::linear_regression(x, y);
         return (name == "intercept") ? res[0] : res[1];
     }
@@ -125,14 +128,14 @@ long double apply_statistic(const std::string& name, const std::vector<long doub
     // 百分位数：第一个参数为百分比 p，后面为数据
     if (name == "percentile") {
         if (arguments.size() < 2) throw std::runtime_error("percentile expects p followed by data");
-        std::vector<long double> data(arguments.begin() + 1, arguments.end());
+        std::vector<Scalar> data(arguments.begin() + 1, arguments.end());
         return stats::percentile(data, arguments[0]);
     }
 
     // 四分位数：第一个参数为四分位数索引 q，后面为数据
     if (name == "quartile") {
         if (arguments.size() < 2) throw std::runtime_error("quartile expects q followed by data");
-        std::vector<long double> data(arguments.begin() + 1, arguments.end());
+        std::vector<Scalar> data(arguments.begin() + 1, arguments.end());
         return stats::quartile(data, require_int(arguments[0], "quartile q"));
     }
 
@@ -144,8 +147,8 @@ long double apply_statistic(const std::string& name, const std::vector<long doub
             throw std::runtime_error(name + " expects two equal-length datasets (total size must be even)");
         }
         size_t n = arguments.size() / 2;
-        std::vector<long double> x(arguments.begin(), arguments.begin() + n);
-        std::vector<long double> y(arguments.begin() + n, arguments.end());
+        std::vector<Scalar> x(arguments.begin(), arguments.begin() + n);
+        std::vector<Scalar> y(arguments.begin() + n, arguments.end());
         if (name == "cov" || name == "covariance") return stats::covariance(x, y);
         if (name == "corr" || name == "correlation") return stats::correlation(x, y);
         return stats::spearman_correlation(x, y);
@@ -159,8 +162,8 @@ long double apply_statistic(const std::string& name, const std::vector<long doub
             throw std::runtime_error("weighted_mean expects data followed by weights of same length");
         }
         size_t n = arguments.size() / 2;
-        std::vector<long double> data(arguments.begin(), arguments.begin() + n);
-        std::vector<long double> weights(arguments.begin() + n, arguments.end());
+        std::vector<Scalar> data(arguments.begin(), arguments.begin() + n);
+        std::vector<Scalar> weights(arguments.begin() + n, arguments.end());
         return stats::weighted_mean(data, weights);
     }
 
@@ -171,21 +174,21 @@ long double apply_statistic(const std::string& name, const std::vector<long doub
             throw std::runtime_error("t_test2 expects two equal-length datasets");
         }
         size_t n = arguments.size() / 2;
-        std::vector<long double> x(arguments.begin(), arguments.begin() + n);
-        std::vector<long double> y(arguments.begin() + n, arguments.end());
-        
-        long double m1 = stats::mean(x);
-        long double m2 = stats::mean(y);
-        long double s1 = stats::sample_variance(x);
-        long double s2 = stats::sample_variance(y);
-        long double n1 = static_cast<long double>(x.size());
-        long double n2 = static_cast<long double>(y.size());
-        
-        long double t = (m1 - m2) / mymath::sqrt(s1/n1 + s2/n2);
-        long double df = mymath::pow(s1/n1 + s2/n2, 2) / 
-                    (mymath::pow(s1/n1, 2)/(n1-1.0L) + mymath::pow(s2/n2, 2)/(n2-1.0L));
-        
-        return 2.0 * prob::student_t_cdf(-mymath::abs(t), df);
+        std::vector<Scalar> x(arguments.begin(), arguments.begin() + n);
+        std::vector<Scalar> y(arguments.begin() + n, arguments.end());
+
+        Scalar m1 = Scalar(stats::mean(x));
+        Scalar m2 = Scalar(stats::mean(y));
+        Scalar s1 = Scalar(stats::sample_variance(x));
+        Scalar s2 = Scalar(stats::sample_variance(y));
+        Scalar n1 = Scalar((x.size()));
+        Scalar n2 = Scalar((y.size()));
+
+        Scalar t = (m1 - m2) / mymath::precise128::sqrt(s1/n1 + s2/n2);
+        Scalar df = mymath::precise128::pow(s1/n1 + s2/n2, Scalar(2)) /
+                    (mymath::precise128::pow(s1/n1, Scalar(2))/(n1-Scalar(1)) + mymath::precise128::pow(s2/n2, Scalar(2))/(n2-Scalar(1)));
+
+        return 2.0 * prob::student_t_cdf(-(mymath::precise128::abs(t)), (df));
     }
     if (name == "chi2_test") return chi2_test(arguments);
 
@@ -195,7 +198,7 @@ long double apply_statistic(const std::string& name, const std::vector<long doub
 /**
  * @brief 根据概率命令名称调用相应的概率函数
  */
-long double apply_probability(const std::string& name, const std::vector<long double>& arguments) {
+Scalar apply_probability(const std::string& name, const std::vector<Scalar>& arguments) {
     // 组合数学函数
     if (name == "factorial") {
         if (arguments.size() != 1) throw std::runtime_error("factorial expects 1 argument");
@@ -307,34 +310,34 @@ long double apply_probability(const std::string& name, const std::vector<long do
     throw std::runtime_error("unknown probability function: " + name);
 }
 
-long double t_test(const std::vector<long double>& arguments) {
+Scalar t_test(const std::vector<Scalar>& arguments) {
     if (arguments.size() < 2) throw std::runtime_error("t_test expects mu0 and data");
-    long double mu0 = arguments[0];
-    std::vector<long double> data(arguments.begin() + 1, arguments.end());
-    long double m = stats::mean(data);
-    long double s = stats::sample_stddev(data);
-    long double n = static_cast<long double>(data.size());
-    if (s < 1e-20) return (mymath::abs(m - mu0) < 1e-20) ? 1.0L : 0.0L;
-    long double t = (m - mu0) / (s / mymath::sqrt(n));
-    long double df = n - 1.0L;
-    return 2.0 * prob::student_t_cdf(-mymath::abs(t), df);
+    Scalar mu0 = Scalar(arguments[0]);
+    std::vector<Scalar> data(arguments.begin() + 1, arguments.end());
+    Scalar m = Scalar(stats::mean(data));
+    Scalar s = Scalar(stats::sample_stddev(data));
+    Scalar n = Scalar((data.size()));
+    if (s < Scalar(1e-20L)) return (mymath::precise128::abs(m - mu0) < Scalar(1e-20L)) ? 1.0L : 0.0L;
+    Scalar t = (m - mu0) / (s / mymath::precise128::sqrt(n));
+    Scalar df = n - Scalar(1);
+    return 2.0 * prob::student_t_cdf(-(mymath::precise128::abs(t)), (df));
 }
 
-long double chi2_test(const std::vector<long double>& arguments) {
+Scalar chi2_test(const std::vector<Scalar>& arguments) {
     if (arguments.size() < 2 || arguments.size() % 2 != 0) {
         throw std::runtime_error("chi2_test expects obs and exp datasets of same length");
     }
     size_t n = arguments.size() / 2;
-    long double chi2 = 0;
+    Scalar chi2 = Scalar(0);
     for (size_t i = 0; i < n; i++) {
-        long double obs = arguments[i];
-        long double exp = arguments[i + n];
-        if (exp <= 0) throw std::runtime_error("chi2_test expected values must be positive");
-        chi2 += mymath::pow(obs - exp, 2) / exp;
+        Scalar obs = Scalar(arguments[i]);
+        Scalar exp = Scalar(arguments[i + n]);
+        if (exp <= Scalar(0)) throw std::runtime_error("chi2_test expected values must be positive");
+        chi2 += mymath::precise128::pow(obs - exp, Scalar(2)) / exp;
     }
-    long double df = static_cast<long double>(n - 1);
-    if (df < 1) throw std::runtime_error("chi2_test requires at least 2 categories");
-    return 1.0L - prob::chi2_cdf(chi2, df);
+    Scalar df = Scalar((n - 1));
+    if (df < Scalar(1)) throw std::runtime_error("chi2_test requires at least 2 categories");
+    return 1.0L - prob::chi2_cdf((chi2), (df));
 }
 
 } // namespace stats_ops

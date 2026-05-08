@@ -12,8 +12,8 @@ void run_statistics_ext_tests(int& passed, int& failed) {
     // 1. Probability Distributions
     {
         // Student's t (x=0, df=10 should have high PDF)
-        long double p_t = prob::student_t_pdf(0, 10);
-        if (std::abs(p_t - 0.389) < 0.01) {
+        auto p_t = prob::student_t_pdf(0, 10);
+        if (mymath::abs(p_t - 0.389) < 0.01) {
             ++passed;
         } else {
             ++failed;
@@ -21,8 +21,8 @@ void run_statistics_ext_tests(int& passed, int& failed) {
         }
 
         // Student's t CDF (symmetry)
-        long double c_t = prob::student_t_cdf(0, 5);
-        if (std::abs(c_t - 0.5) < 0.001) {
+        auto c_t = prob::student_t_cdf(0, 5);
+        if (mymath::abs(c_t - 0.5) < 0.001) {
             ++passed;
         } else {
             ++failed;
@@ -30,8 +30,8 @@ void run_statistics_ext_tests(int& passed, int& failed) {
         }
 
         // Chi-squared
-        long double c_chi2 = prob::chi2_cdf(2.0, 2); // df=2, x=2 -> 1 - exp(-1) = 0.6321
-        if (std::abs(c_chi2 - 0.6321) < 0.001) {
+        auto c_chi2 = prob::chi2_cdf(2.0, 2); // df=2, x=2 -> 1 - exp(-1) = 0.6321
+        if (mymath::abs(c_chi2 - 0.6321) < 0.001) {
             ++passed;
         } else {
             ++failed;
@@ -39,8 +39,8 @@ void run_statistics_ext_tests(int& passed, int& failed) {
         }
 
         // Exponential
-        long double p_exp = prob::exp_pdf(1.0L, 2.0); // lambda=2, x=1 -> 2*exp(-2) = 0.27067
-        if (std::abs(p_exp - 0.27067) < 0.0001) {
+        auto p_exp = prob::exp_pdf(1.0L, 2.0); // lambda=2, x=1 -> 2*exp(-2) = 0.27067
+        if (mymath::abs(p_exp - 0.27067) < 0.0001) {
             ++passed;
         } else {
             ++failed;
@@ -48,9 +48,9 @@ void run_statistics_ext_tests(int& passed, int& failed) {
         }
 
         // Poisson large lambda optimization
-        long double c_poisson = prob::poisson_cdf(110, 100); // mu=100, k=110. Approx normal(100, 10)
+        auto c_poisson = prob::poisson_cdf(110, 100); // mu=100, k=110. Approx normal(100, 10)
         // P(X<=110) approx P(Z <= (110.5-100)/10) = P(Z <= 1.0L5) approx 0.8531
-        if (std::abs(c_poisson - 0.8531) < 0.01) {
+        if (mymath::abs(c_poisson - 0.8531) < 0.01) {
             ++passed;
         } else {
             ++failed;
@@ -60,12 +60,12 @@ void run_statistics_ext_tests(int& passed, int& failed) {
 
     // 2. Statistics Measures
     {
-        std::vector<long double> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+        std::vector<mymath::Scalar> data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
         // IQR: Q3 (7.75) - Q1 (3.25) = 4.5 (using our percentile formula pos = p*(n-1)/100)
         // data size 10. pos(25) = 0.25*9 = 2.25. data[2]=3, data[3]=4. -> 3 + 0.25*(4-3)=3.25
         // pos(75) = 0.75*9 = 6.75. data[6]=7, data[7]=8. -> 7 + 0.75*(8-7)=7.75
-        long double iqr_val = stats::iqr(data);
-        if (std::abs(iqr_val - 4.5) < 0.001) {
+        auto iqr_val = stats::iqr(data);
+        if (mymath::abs(iqr_val - 4.5) < 0.001) {
             ++passed;
         } else {
             ++failed;
@@ -73,9 +73,9 @@ void run_statistics_ext_tests(int& passed, int& failed) {
         }
 
         // MAD
-        std::vector<long double> data2 = {1, 1, 2, 2, 4, 6, 9}; // median = 2. abs(x-med) = {1, 1, 0, 0, 2, 4, 7}. sorted = {0, 0, 1, 1, 2, 4, 7}. median = 1
-        long double mad_val = stats::mad(data2);
-        if (std::abs(mad_val - 1.0L) < 0.001) {
+        std::vector<mymath::Scalar> data2 = {1, 1, 2, 2, 4, 6, 9}; // median = 2. abs(x-med) = {1, 1, 0, 0, 2, 4, 7}. sorted = {0, 0, 1, 1, 2, 4, 7}. median = 1
+        auto mad_val = stats::mad(data2);
+        if (mymath::abs(mad_val - 1.0L) < 0.001) {
             ++passed;
         } else {
             ++failed;
@@ -83,12 +83,12 @@ void run_statistics_ext_tests(int& passed, int& failed) {
         }
 
         // Spearman Correlation
-        std::vector<long double> x = {1, 2, 3, 4, 5};
-        std::vector<long double> y = {5, 6, 7, 8, 7}; // y ranks: {1, 2, 3.5, 5, 3.5}
+        std::vector<mymath::Scalar> x = {1, 2, 3, 4, 5};
+        std::vector<mymath::Scalar> y = {5, 6, 7, 8, 7}; // y ranks: {1, 2, 3.5, 5, 3.5}
         // x ranks: {1, 2, 3, 4, 5}
         // Spearman should be high but not 1.0L
-        long double spearman = stats::spearman_correlation(x, y);
-        if (std::abs(spearman - 0.825) < 0.01) {
+        auto spearman = stats::spearman_correlation(x, y);
+        if (mymath::abs(spearman - 0.825) < 0.01) {
             ++passed;
         } else {
             ++failed;

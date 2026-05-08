@@ -13,10 +13,13 @@
 
 #include "mymath.h"
 #include "mymath_internal.h"
+#include "core/scalar_type.h"
 
 #include <stdexcept>
 
 namespace mymath {
+
+using Scalar = float128_t;
 
 namespace internal {
 
@@ -66,6 +69,55 @@ long double finite_or_infinity_from_log(long double log_value) {
         return 0.0L;
     }
     return exp(log_value);
+}
+
+/**
+ * @brief 使用 Lanczos 近似计算正数的对数伽马函数（Scalar 版本）
+ * @param x 正数输入
+ * @return ln(Γ(x))
+ */
+Scalar log_gamma_positive(Scalar x) {
+    if (x.hi <= 0.0L) {
+        throw std::domain_error("log-gamma is only defined for positive inputs");
+    }
+
+    // Lanczos 系数
+    static const Scalar kLanczosCoefficients[] = {
+        Scalar(0.99999999999980993L),
+        Scalar(676.5203681218851L),
+        Scalar(-1259.1392167224028L),
+        Scalar(771.32342877765313L),
+        Scalar(-176.61502916214059L),
+        Scalar(12.507343278686905L),
+        Scalar(-0.13857109526572012L),
+        Scalar(9.9843695780195716e-6L),
+        Scalar(1.5056327351493116e-7L),
+    };
+
+    const Scalar z = x - Scalar(1.0L);
+    Scalar series = kLanczosCoefficients[0];
+    for (int i = 1; i < 9; ++i) {
+        series += kLanczosCoefficients[i] / (z + Scalar(static_cast<long double>(i)));
+    }
+
+    const Scalar t = z + Scalar(7.5L);
+    const Scalar two_pi = Scalar(2.0L) * precise128::pi();
+    return Scalar(0.5L) * precise128::ln(two_pi) + (z + Scalar(0.5L)) * precise128::ln(t) - t + precise128::ln(series);
+}
+
+/**
+ * @brief 从对数值转换为有限值或无穷（Scalar 版本）
+ * @param log_value 对数值
+ * @return exp(log_value) 或边界值
+ */
+Scalar finite_or_infinity_from_log(Scalar log_value) {
+    if (log_value.hi >= kLnDoubleMax) {
+        return Scalar(infinity());
+    }
+    if (log_value.hi <= kLnDoubleDenormMin) {
+        return Scalar(0.0L);
+    }
+    return precise128::exp(log_value);
 }
 
 }  // namespace internal
@@ -474,27 +526,10 @@ long double normalize_angle(long double x) {
     if (!isfinite(x)) {
         return x;
     }
-    
-    // 对于非常大的输入，long double 的精度已经不足以进行有意义的范围缩减。
-    // 但我们至少应该保证结果在 [-pi, pi] 范围内，且是有限的。
-    const long double x_ld = static_cast<long double>(x);
-    const long double period = 2.0L * kPiL;
-    
-    // 使用 fmod 逻辑将值缩减到 (-period, period)
-    long double reduced = x_ld - floor(x_ld / period) * period;
-    
-    // 调整到 [-pi, pi]
-    if (reduced > kPiL) {
-        reduced -= period;
-    } else if (reduced < -kPiL) {
-        reduced += period;
-    }
-    
-    // 二次保险：如果输入极大导致精度丢失，强制限制在合理范围
-    if (reduced > kPiL) reduced = kPiL;
-    if (reduced < -kPiL) reduced = -kPiL;
 
-    return static_cast<long double>(reduced);
+    // 使用 precise128 进行高精度角度归约
+    Scalar result = precise128::normalize_angle(Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -511,34 +546,10 @@ long double exp(long double x) {
     if (x <= kLnDoubleDenormMin) {
         return 0.0L;
     }
-    if (x < 0.0L) {
-        return 1.0L / exp(-x);
-    }
 
-    int halvings = 0;
-    while (x > 0.5) {
-        x *= 0.5;
-        ++halvings;
-    }
-
-    long double term = 1.0L;
-    long double sum = 1.0L;
-    for (int n = 1; n <= 80; ++n) {
-        term *= static_cast<long double>(x) / static_cast<long double>(n);
-        sum += term;
-        if (abs_long_double(term) < 1e-18L) {
-            break;
-        }
-    }
-
-    long double result = static_cast<long double>(sum);
-    for (int i = 0; i < halvings; ++i) {
-        result *= result;
-        if (!isfinite(result)) {
-            return infinity();
-        }
-    }
-    return result;
+    // 使用 precise128 进行高精度计算
+    Scalar result = precise128::exp(Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -554,30 +565,9 @@ long double ln(long double x) {
         throw std::domain_error("ln is only defined for positive numbers");
     }
 
-    int shifts = 0;
-    while (x > 1.5) {
-        x /= kE;
-        ++shifts;
-    }
-    while (x < 0.75) {
-        x *= kE;
-        --shifts;
-    }
-
-    const long double y = (x - 1.0L) / (x + 1.0L);
-    const long double y2 = y * y;
-    long double term = y;
-    long double sum = 0.0L;
-
-    for (int n = 1; n <= 199; n += 2) {
-        sum += term / static_cast<long double>(n);
-        term *= y2;
-        if (abs(term) < kEps) {
-            break;
-        }
-    }
-
-    return 2.0 * sum + static_cast<long double>(shifts);
+    // 使用 precise128 进行高精度计算
+    Scalar result = precise128::ln(Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -595,7 +585,8 @@ long double log(long double x) {
  * @return ln(1 + x)
  */
 long double log1p(long double x) {
-    return ln(1.0L + x);
+    Scalar result = precise128::log1p(Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -604,7 +595,8 @@ long double log1p(long double x) {
  * @return log10(x)
  */
 long double log10(long double x) {
-    return ln(x) / ln(10.0L);
+    Scalar result = precise128::log10(Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -613,7 +605,8 @@ long double log10(long double x) {
  * @return log2(x)
  */
 long double log2(long double x) {
-    return ln(x) / ln(2.0);
+    Scalar result = precise128::log2(Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -631,20 +624,9 @@ long double sinh(long double x) {
         return x;
     }
 
-    const long double abs_x = abs(x);
-    // 对于大数使用替代公式避免溢出
-    // sinh(x) = sign(x) * |sinh(|x|)|
-    // 对于 |x| > 20，exp(|x|)/2 已经足够精确
-    if (abs_x > 20.0L) {
-        const long double result = 0.5 * exp(abs_x);
-        // 此时 exp(-abs_x) 可忽略不计
-        return x > 0.0L ? result : -result;
-    }
-
-    // 对于中等大小的 x，使用标准公式
-    const long double positive = exp(x);
-    const long double negative = exp(-x);
-    return 0.5 * (positive - negative);
+    // 使用 precise128 进行高精度计算
+    Scalar result = precise128::sinh(Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -662,16 +644,9 @@ long double cosh(long double x) {
         return infinity();
     }
 
-    const long double abs_x = abs(x);
-    // 对于大数使用替代公式避免溢出
-    if (abs_x > 20.0L) {
-        return 0.5 * exp(abs_x);
-    }
-
-    // 对于中等大小的 x，使用标准公式
-    const long double positive = exp(x);
-    const long double negative = exp(-x);
-    return 0.5 * (positive + negative);
+    // 使用 precise128 进行高精度计算
+    Scalar result = precise128::cosh(Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -689,17 +664,9 @@ long double tanh(long double x) {
         return x > 0.0L ? 1.0L : -1.0L;
     }
 
-    // 对于大数直接返回极限值
-    const long double abs_x = abs(x);
-    if (abs_x > 20.0L) {
-        return x > 0.0L ? 1.0L : -1.0L;
-    }
-
-    const long double denominator = cosh(x);
-    if (abs(denominator) < kEps) {
-        throw std::domain_error("tanh is undefined when cosh(x) is zero");
-    }
-    return sinh(x) / denominator;
+    // 使用 precise128 进行高精度计算
+    Scalar result = precise128::tanh(Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -717,13 +684,9 @@ long double asinh(long double x) {
         return x;
     }
 
-    // 对于大数使用 log(2|x|) 近似
-    const long double abs_x = abs(x);
-    if (abs_x > 1e10) {
-        return x > 0.0L ? ln(2.0 * abs_x) : -ln(2.0 * abs_x);
-    }
-
-    return ln(x + sqrt(x * x + 1.0L));
+    // 使用 precise128 进行高精度计算
+    Scalar result = precise128::asinh(Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -745,12 +708,9 @@ long double acosh(long double x) {
         throw std::domain_error("acosh is only defined for x >= 1");
     }
 
-    // 对于大数使用 log(2x) 近似
-    if (x > 1e10) {
-        return ln(2.0 * x);
-    }
-
-    return ln(x + sqrt(x - 1.0L) * sqrt(x + 1.0L));
+    // 使用 precise128 进行高精度计算
+    Scalar result = precise128::acosh(Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -768,17 +728,9 @@ long double atanh(long double x) {
         throw std::domain_error("atanh is only defined for values in (-1, 1)");
     }
 
-    // 对于接近 ±1 的值使用更稳定的公式
-    // atanh(x) = 0.5 * ln((1+x)/(1-x))
-    // 对于 x 接近 1，使用 log1p 避免精度损失
-    // (1+x)/(1-x) = (1-x+2x)/(1-x) = 1 + 2x/(1-x)
-    // 所以 ln((1+x)/(1-x)) = log1p(2x/(1-x))
-    if (abs(x) > 0.5) {
-        const long double ratio = 2.0 * x / (1.0L - x);
-        return 0.5 * ln(1.0L + ratio);
-    }
-
-    return 0.5 * ln((1.0L + x) / (1.0L - x));
+    // 使用 precise128 进行高精度计算
+    Scalar result = precise128::atanh(Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -819,14 +771,9 @@ long double atan2(long double y, long double x) {
         return x_pos ? 0.0L : (y_pos ? kPi : -kPi);
     }
 
-    // 原有逻辑处理有限值
-    if (is_near_zero(x)) {
-        if (is_near_zero(y)) return 0.0L;  // 0/0 情况
-        return y > 0.0L ? kPi / 2.0 : -kPi / 2.0;
-    }
-    long double res = atan(y / x);
-    if (x < 0.0L) res += y >= 0.0L ? kPi : -kPi;
-    return res;
+    // 使用 precise128 进行高精度计算
+    Scalar result = precise128::atan2(Scalar(y), Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -847,22 +794,9 @@ long double hypot(long double x, long double y) {
         return infinity();
     }
 
-    const long double abs_x = abs(x);
-    const long double abs_y = abs(y);
-
-    // 处理零
-    if (abs_x == 0.0L) return abs_y;
-    if (abs_y == 0.0L) return abs_x;
-
-    // 使用稳定的算法：hypot(x, y) = max(|x|, |y|) * sqrt(1 + (min/max)^2)
-    // 这样可以避免 x^2 或 y^2 溢出
-    if (abs_x > abs_y) {
-        const long double ratio = abs_y / abs_x;
-        return abs_x * sqrt(1.0L + ratio * ratio);
-    } else {
-        const long double ratio = abs_x / abs_y;
-        return abs_y * sqrt(1.0L + ratio * ratio);
-    }
+    // 使用 precise128 进行高精度计算
+    Scalar result = precise128::hypot(Scalar(x), Scalar(y));
+    return static_cast<long double>(result);
 }
 
 }  // namespace mymath

@@ -40,7 +40,7 @@ long double get_scalar(const StoredValue& val, const char* context) {
     if (val.is_matrix || val.is_complex || val.is_string || val.is_list || val.is_dict) {
         throw std::runtime_error(std::string(context) + " expects a scalar value");
     }
-    return val.exact ? rational_to_double(val.rational) : val.decimal;
+    return val.exact ? rational_to_double(val.rational) : val.decimal.to_long_double();
 }
 
 /**

@@ -14,6 +14,7 @@
 
 #include "rational.h"
 #include "matrix.h"
+#include "core/scalar_type.h"
 
 #include <map>
 #include <memory>
@@ -42,8 +43,8 @@ struct StoredValue {
     mutable std::string source_expression;   ///< 源表达式（用于延迟符号计算）
 
     Rational rational;                   ///< 有理数值
-    long double decimal = 0.0L;                ///< 浮点数值
-    matrix::ComplexNumber complex;       ///< 复数值
+    Scalar decimal = Scalar(0.0L);                ///< 浮点数值
+    matrix::TComplex<Scalar> complex;       ///< 复数值
     std::string string_value;            ///< 字符串值
     mutable std::string symbolic_text;   ///< 符号表达式文本（mutable 支持延迟计算）
     std::string precise_decimal_text;    ///< 精确小数文本

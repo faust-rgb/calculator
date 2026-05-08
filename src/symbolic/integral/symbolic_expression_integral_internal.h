@@ -14,12 +14,12 @@ namespace symbolic_expression_internal {
 /**
  * @brief 裁剪多项式系数向量末尾的零
  */
-void trim_coefficients(std::vector<long double>* coefficients);
+void trim_coefficients(std::vector<Scalar>* coefficients);
 
 /**
  * @brief 检查多项式系数向量是否全为零
  */
-bool polynomial_is_zero(const std::vector<long double>& coefficients);
+bool polynomial_is_zero(const std::vector<Scalar>& coefficients);
 
 /**
  * @brief 求解稠密线性方程组
@@ -27,9 +27,9 @@ bool polynomial_is_zero(const std::vector<long double>& coefficients);
  * 使用高斯消元法求解 n×n 线性方程组。
  * 用于部分分式分解中的系数求解。
  */
-bool solve_dense_linear_system(std::vector<std::vector<long double>> matrix,
-                               std::vector<long double> rhs,
-                               std::vector<long double>* solution);
+bool solve_dense_linear_system(std::vector<std::vector<Scalar>> matrix,
+                               std::vector<Scalar> rhs,
+                               std::vector<Scalar>* solution);
 
 // ============================================================================
 // 常数规范化函数
@@ -43,14 +43,14 @@ bool solve_dense_linear_system(std::vector<std::vector<long double>> matrix,
  * - sqrt(2), sqrt(3) 及其倍数和分式
  * - 有理数：返回分数形式
  */
-SymbolicExpression clean_symbolic_constant(long double value);
+SymbolicExpression clean_symbolic_constant(Scalar value);
 
 /**
  * @brief 计算多项式幂的系数向量
  *
  * 返回 (base)^exponent 展开后的系数向量。
  */
-std::vector<long double> polynomial_power_coefficients(const std::vector<long double>& base,
+std::vector<Scalar> polynomial_power_coefficients(const std::vector<Scalar>& base,
                                                        int exponent);
 
 /**

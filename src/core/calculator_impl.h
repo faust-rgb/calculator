@@ -13,6 +13,7 @@
 
 #include "core/calculator.h"
 #include "core/scope.h"
+#include "core/scalar_type.h"
 #include "execution/command_registry.h"
 #include "types/function.h"
 
@@ -33,11 +34,23 @@ struct CommandKey;
 // 显示精度常量
 // ============================================================================
 
+namespace core {
+
+using Scalar = mymath::Scalar;
+
 /** @brief 判断数值是否为零的显示阈值 */
-constexpr long double kDisplayZeroEps = 1e-290;  // 近似 long double 最小值
+constexpr Scalar kDisplayZeroEpsScalar = Scalar(1e-290L);  // 近似 Scalar 最小值
 
 /** @brief 判断数值是否为整数的显示阈值 */
-constexpr long double kDisplayIntegerEps = 1e-9;
+constexpr Scalar kDisplayIntegerEpsScalar = Scalar(1e-9L);
+
+} // namespace core
+
+/** @brief 判断数值是否为零的显示阈值 */
+constexpr Scalar kDisplayZeroEps = 1e-290L;  // 近似 Scalar 最小值
+
+/** @brief 判断数值是否为整数的显示阈值 */
+constexpr Scalar kDisplayIntegerEps = 1e-9L;
 
 /** @brief 默认十进制显示有效位数 */
 constexpr int kDefaultDisplayPrecision = 12;
@@ -83,7 +96,7 @@ struct Calculator::Impl {
     std::vector<std::shared_ptr<CalculatorModule>> implicit_evaluation_modules;
 
     // 函数汇总（由模块注册）
-    std::map<std::string, std::function<long double(const std::vector<long double>&)>> scalar_functions;
+    std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>> scalar_functions;
     std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>> matrix_functions;
     std::map<std::string, matrix::ValueFunction> value_functions;
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> native_functions;
@@ -135,9 +148,9 @@ std::string decode_state_field(const std::string& text);
 void apply_calculator_display_precision(const Calculator::Impl* impl);
 
 // 线性方程组
-std::vector<long double> solve_dense_linear_system(
-    std::vector<std::vector<long double>> matrix,
-    std::vector<long double> rhs,
+std::vector<Scalar> solve_dense_linear_system(
+    std::vector<std::vector<Scalar>> matrix,
+    std::vector<Scalar> rhs,
     const std::string& context);
 
 // 模块注册

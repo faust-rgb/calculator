@@ -13,6 +13,8 @@
 
 #include "symbolic/symbolic_limit.h"
 #include "symbolic/symbolic_expression_internal.h"
+
+#include "core/scalar_type.h"
 #include "math/mymath.h"
 
 #include <algorithm>
@@ -24,6 +26,7 @@ namespace symbolic_limit {
 namespace {
 
 using namespace symbolic_expression_internal;
+using Scalar = mymath::Scalar;
 
 // 提取分式的分子和分母
 bool extract_numerator_denominator(const SymbolicExpression& expr,
@@ -40,12 +43,12 @@ bool extract_numerator_denominator(const SymbolicExpression& expr,
 }
 
 // 计算表达式在某点的值（用于直接代入）
-std::optional<long double> evaluate_at_point(const SymbolicExpression& expr,
+std::optional<Scalar> evaluate_at_point(const SymbolicExpression& expr,
                                         const std::string& var,
-                                        long double point) {
+                                        Scalar point) {
     SymbolicExpression substituted = expr.substitute(var, SymbolicExpression::number(point));
     substituted = substituted.simplify();
-    long double val = 0.0L;
+    Scalar val = 0.0L;
     if (substituted.is_number(&val)) {
         return val;
     }
@@ -220,7 +223,7 @@ IndeterminateForm SymbolicLimitEngine::detect_indeterminate_form(
         // 检查 base 是否趋于 1
         if (point.is_finite()) {
             auto base_val = evaluate_at_point(base, var, point.value);
-            if (base_val.has_value() && mymath::is_near_zero(*base_val - 1.0L, 1e-10)) {
+            if (base_val.has_value() && mymath::precise128::is_near_zero(Scalar(*base_val - 1.0L), Scalar(1e-10))) {
                 base_one = true;
             }
         }
@@ -274,7 +277,7 @@ bool SymbolicLimitEngine::try_known_pattern(
     std::string expr_str = expr.to_string();
 
     // 模式 1: sin(x)/x → 1 (x → 0)
-    if (point.is_finite() && mymath::is_near_zero(point.value, 1e-12)) {
+    if (point.is_finite() && mymath::precise128::is_near_zero(Scalar(point.value), Scalar(1e-12))) {
         // 检查 sin(var)/var 形式
         if (expr.node_->type == NodeType::kDivide) {
             SymbolicExpression num(expr.node_->left);
@@ -291,12 +294,12 @@ bool SymbolicLimitEngine::try_known_pattern(
                 }
                 // sin(kx)/(kx) → 1
                 if (arg.node_->type == NodeType::kMultiply) {
-                    long double k = 0.0L;
+                    Scalar k = Scalar(0);
                     SymbolicExpression other;
                     if (SymbolicExpression(arg.node_->left).is_number(&k) &&
                         SymbolicExpression(arg.node_->right).node_->type == NodeType::kVariable &&
                         SymbolicExpression(arg.node_->right).node_->text == var) {
-                        SymbolicExpression expected_den = make_multiply(SymbolicExpression::number(k), SymbolicExpression::variable(var));
+                        SymbolicExpression expected_den = make_multiply(SymbolicExpression::number((k)), SymbolicExpression::variable(var));
                         if (expressions_match(den, expected_den)) {
                             *result = LimitResult::elementary(SymbolicExpression::number(1.0L), "known_pattern: sin(kx)/(kx)");
                             return true;
@@ -334,7 +337,7 @@ bool SymbolicLimitEngine::try_known_pattern(
                 if (left.node_->type == NodeType::kFunction && left.node_->text == "exp") {
                     SymbolicExpression arg(left.node_->left);
                     if (arg.node_->type == NodeType::kVariable && arg.node_->text == var &&
-                        right.is_number(nullptr) && mymath::is_near_zero(right.node_->number_value - 1.0L, 1e-12)) {
+                        right.is_number(nullptr) && mymath::precise128::is_near_zero(Scalar(right.node_->number_value - 1.0L), Scalar(1e-12))) {
                         if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
                             *result = LimitResult::elementary(SymbolicExpression::number(1.0L), "known_pattern: (exp(x)-1)/x");
                             return true;
@@ -354,8 +357,8 @@ bool SymbolicLimitEngine::try_known_pattern(
                 if (arg.node_->type == NodeType::kAdd) {
                     SymbolicExpression left(arg.node_->left);
                     SymbolicExpression right(arg.node_->right);
-                    long double one = 0.0L;
-                    if (left.is_number(&one) && mymath::is_near_zero(one - 1.0L, 1e-12) &&
+                    Scalar one = Scalar(0);
+                    if (left.is_number(&one) && mymath::precise128::is_near_zero(one - Scalar(1), Scalar(1e-12)) &&
                         right.node_->type == NodeType::kVariable && right.node_->text == var) {
                         if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
                             *result = LimitResult::elementary(SymbolicExpression::number(1.0L), "known_pattern: ln(1+x)/x");
@@ -377,14 +380,14 @@ bool SymbolicLimitEngine::try_known_pattern(
                 SymbolicExpression left(base.node_->left);
                 SymbolicExpression right(base.node_->right);
 
-                long double one = 0.0L;
-                if (left.is_number(&one) && mymath::is_near_zero(one - 1.0L, 1e-12)) {
+                Scalar one = Scalar(0);
+                if (left.is_number(&one) && mymath::precise128::is_near_zero(one - Scalar(1), Scalar(1e-12))) {
                     // 检查 right 是否为 1/var
                     if (right.node_->type == NodeType::kDivide) {
                         SymbolicExpression rnum(right.node_->left);
                         SymbolicExpression rden(right.node_->right);
-                        long double one_check = 0.0L;
-                        if (rnum.is_number(&one_check) && mymath::is_near_zero(one_check - 1.0L, 1e-12) &&
+                        Scalar one_check = Scalar(0);
+                        if (rnum.is_number(&one_check) && mymath::precise128::is_near_zero(one_check - Scalar(1), Scalar(1e-12)) &&
                             rden.node_->type == NodeType::kVariable && rden.node_->text == var) {
                             *result = LimitResult::elementary(
                                 SymbolicExpression::parse("e"),
@@ -405,17 +408,17 @@ bool SymbolicLimitEngine::try_known_pattern(
                 SymbolicExpression left(base.node_->left);
                 SymbolicExpression right(base.node_->right);
 
-                long double one = 0.0L;
-                if (left.is_number(&one) && mymath::is_near_zero(one - 1.0L, 1e-12)) {
+                Scalar one = Scalar(0);
+                if (left.is_number(&one) && mymath::precise128::is_near_zero(one - Scalar(1), Scalar(1e-12))) {
                     // 检查 right 是否为 a/var
                     if (right.node_->type == NodeType::kDivide) {
                         SymbolicExpression rnum(right.node_->left);
                         SymbolicExpression rden(right.node_->right);
                         if (rden.node_->type == NodeType::kVariable && rden.node_->text == var) {
-                            long double a = 0.0L;
+                            Scalar a = Scalar(0);
                             if (rnum.is_number(&a)) {
                                 *result = LimitResult::elementary(
-                                    make_function("exp", SymbolicExpression::number(a)),
+                                    make_function("exp", SymbolicExpression::number((a))),
                                     "known_pattern: (1+a/n)^n");
                                 return true;
                             }
@@ -427,7 +430,7 @@ bool SymbolicLimitEngine::try_known_pattern(
     }
 
     // 模式 7: x^x → 1 (x → 0+)
-    if (point.is_finite() && mymath::is_near_zero(point.value, 1e-12) && direction >= 0) {
+    if (point.is_finite() && mymath::precise128::is_near_zero(Scalar(point.value), Scalar(1e-12)) && direction >= 0) {
         if (expr.node_->type == NodeType::kPower) {
             SymbolicExpression base(expr.node_->left);
             SymbolicExpression exp(expr.node_->right);
@@ -443,10 +446,10 @@ bool SymbolicLimitEngine::try_known_pattern(
     return false;
 }
 
-std::optional<long double> SymbolicLimitEngine::try_direct_substitution(
+std::optional<Scalar> SymbolicLimitEngine::try_direct_substitution(
     const SymbolicExpression& expr,
     const std::string& var,
-    long double point) {
+    Scalar point) {
 
     return evaluate_at_point(expr, var, point);
 }
@@ -460,7 +463,7 @@ LimitResult SymbolicLimitEngine::limit_at_infinity(
     // 简化版本：检查多项式主导项
 
     // 尝试提取多项式系数
-    std::vector<long double> coeffs;
+    std::vector<Scalar> coeffs;
     if (expr.polynomial_coefficients(var, &coeffs)) {
         if (coeffs.empty()) {
             return LimitResult::elementary(SymbolicExpression::number(0.0L), "polynomial_at_infinity");
@@ -468,7 +471,7 @@ LimitResult SymbolicLimitEngine::limit_at_infinity(
 
         // 找到最高次项
         int degree = static_cast<int>(coeffs.size()) - 1;
-        while (degree >= 0 && mymath::is_near_zero(coeffs[degree], 1e-15)) {
+        while (degree >= 0 && mymath::precise128::is_near_zero(Scalar(coeffs[degree]), Scalar(1e-15))) {
             degree--;
         }
 
@@ -482,7 +485,7 @@ LimitResult SymbolicLimitEngine::limit_at_infinity(
         }
 
         // 高次多项式趋于无穷
-        long double leading_coeff = coeffs[degree];
+        Scalar leading_coeff = coeffs[degree];
         bool positive_inf = (leading_coeff > 0) == (degree % 2 == 0 || direction >= 0);
         return LimitResult::infinite(positive_inf, "polynomial_dominant_term");
     }
@@ -492,15 +495,15 @@ LimitResult SymbolicLimitEngine::limit_at_infinity(
         SymbolicExpression num(expr.node_->left);
         SymbolicExpression den(expr.node_->right);
 
-        long double num_val = 0.0L;
-        if (num.is_number(&num_val) && !mymath::is_near_zero(num_val, 1e-15)) {
+        Scalar num_val = 0.0L;
+        if (num.is_number(&num_val) && !mymath::precise128::is_near_zero(Scalar(num_val), Scalar(1e-15))) {
             // 检查分母是否为 x 的幂
             if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
                 return LimitResult::elementary(SymbolicExpression::number(0.0L), "1/x_at_infinity");
             }
             if (den.node_->type == NodeType::kPower) {
                 SymbolicExpression base(den.node_->left);
-                long double exp = 0.0L;
+                Scalar exp = 0.0L;
                 if (base.node_->type == NodeType::kVariable && base.node_->text == var &&
                     SymbolicExpression(den.node_->right).is_number(&exp) && exp > 0) {
                     return LimitResult::elementary(SymbolicExpression::number(0.0L), "1/x^n_at_infinity");
@@ -585,14 +588,14 @@ bool SymbolicLimitEngine::is_zero_at_point(
     const BoundArgument& point) {
 
     // 常量零
-    long double val = 0.0L;
-    if (expr.is_number(&val) && mymath::is_near_zero(val, 1e-15)) {
+    Scalar val = Scalar(0);
+    if (expr.is_number(&val) && mymath::precise128::is_near_zero(val, Scalar(1e-15))) {
         return true;
     }
 
     // 变量在趋于零点时
     if (expr.node_->type == NodeType::kVariable && expr.node_->text == var) {
-        if (point.is_finite() && mymath::is_near_zero(point.value, 1e-15)) {
+        if (point.is_finite() && mymath::precise128::is_near_zero(Scalar(point.value), Scalar(1e-15))) {
             return true;
         }
     }
@@ -646,7 +649,7 @@ bool parse_limit_arguments(
         } else if (point_str == "-inf" || point_str == "-infinity" || point_str == "-oo") {
             *point = BoundArgument::neg_inf();
         } else {
-            long double p = std::stod(point_str);
+            Scalar p = std::stod(point_str);
             *point = BoundArgument::finite(p);
         }
 

@@ -19,10 +19,13 @@
 #ifndef MULTIDIM_INTEGRATION_H
 #define MULTIDIM_INTEGRATION_H
 
+#include "core/scalar_type.h"
 #include <functional>
 #include <vector>
 
 namespace multidim {
+
+using Scalar = mymath::Scalar;
 
 // ============================================================================
 // 数据结构
@@ -33,10 +36,10 @@ namespace multidim {
  * @brief 积分区域边界
  */
 struct IntegrationBounds {
-    long double lower = 0.0L;  ///< 下界
-    long double upper = 0.0L;  ///< 上界
+    Scalar lower = 0.0L;  ///< 下界
+    Scalar upper = 0.0L;  ///< 上界
 
-    IntegrationBounds(long double l, long double u) : lower(l), upper(u) {}
+    IntegrationBounds(Scalar l, Scalar u) : lower(l), upper(u) {}
 };
 
 /**
@@ -44,8 +47,8 @@ struct IntegrationBounds {
  * @brief 积分结果
  */
 struct IntegrationResult {
-    long double value = 0.0L;         ///< 积分值
-    long double error_estimate = 0.0L; ///< 误差估计
+    Scalar value = 0.0L;         ///< 积分值
+    Scalar error_estimate = 0.0L; ///< 误差估计
     int function_evaluations = 0; ///< 函数求值次数
     bool converged = false;     ///< 是否收敛
     int subdivisions_used = 0;  ///< 使用的细分数
@@ -68,8 +71,8 @@ enum class IntegrationMethod {
  * @brief 积分选项
  */
 struct IntegrationOptions {
-    long double relative_tolerance = 1e-8L;  ///< 相对容差
-    long double absolute_tolerance = 1e-10L; ///< 绝对容差
+    Scalar relative_tolerance = 1e-8L;  ///< 相对容差
+    Scalar absolute_tolerance = 1e-10L; ///< 绝对容差
     int max_evaluations = 100000;      ///< 最大函数求值次数
     int max_depth = 20;                ///< 自适应细分最大深度
     int initial_subdivisions = 16;     ///< 初始分割数
@@ -82,10 +85,10 @@ struct IntegrationOptions {
 // ============================================================================
 
 /// 多维函数类型: f(x1, x2, ..., xd)
-using MultidimFunction = std::function<long double(const std::vector<long double>&)>;
+using MultidimFunction = std::function<Scalar(const std::vector<Scalar>&)>;
 
 /// 区域约束函数类型: g(x1, x2, ..., xd) <= 0 表示在区域内
-using RegionConstraint = std::function<long double(const std::vector<long double>&)>;
+using RegionConstraint = std::function<Scalar(const std::vector<Scalar>&)>;
 
 // ============================================================================
 // 矩形区域积分
@@ -106,8 +109,8 @@ using RegionConstraint = std::function<long double(const std::vector<long double
 IntegrationResult integrate_rectangular(
     const MultidimFunction& function,
     const std::vector<IntegrationBounds>& bounds,
-    long double relative_tolerance = 1e-8L,
-    long double absolute_tolerance = 1e-10L,
+    Scalar relative_tolerance = 1e-8L,
+    Scalar absolute_tolerance = 1e-10L,
     int max_evaluations = 100000);
 
 /**
@@ -129,7 +132,7 @@ IntegrationResult integrate_rectangular(
  * @param points_per_dimension 每维度的积分点数
  * @return 积分值
  */
-long double integrate_tensor_product(
+Scalar integrate_tensor_product(
     const MultidimFunction& function,
     const std::vector<IntegrationBounds>& bounds,
     int points_per_dimension = 15);
@@ -151,10 +154,10 @@ long double integrate_tensor_product(
  * @param points_per_dimension 积分点数
  * @return 积分值
  */
-long double integrate_with_transform(
+Scalar integrate_with_transform(
     const MultidimFunction& function,
-    const std::function<std::vector<long double>(const std::vector<long double>&)>& transform,
-    const std::function<long double(const std::vector<long double>&)>& jacobian,
+    const std::function<std::vector<Scalar>(const std::vector<Scalar>&)>& transform,
+    const std::function<Scalar(const std::vector<Scalar>&)>& jacobian,
     const std::vector<IntegrationBounds>& bounds,
     int points_per_dimension = 15);
 
@@ -251,11 +254,11 @@ IntegrationResult integrate_implicit_region(
  * @param points_per_dimension 积分点数
  * @return 积分值
  */
-long double integrate_over_circle(
-    const std::function<long double(double, double)>& function,
-    long double center_x,
-    long double center_y,
-    long double radius,
+Scalar integrate_over_circle(
+    const std::function<Scalar(double, double)>& function,
+    Scalar center_x,
+    Scalar center_y,
+    Scalar radius,
     int points_per_dimension = 15);
 
 /**
@@ -269,10 +272,10 @@ long double integrate_over_circle(
  * @param points_per_dimension 积分点数
  * @return 积分值
  */
-long double integrate_over_sphere(
-    const std::function<long double(double, double, double)>& function,
-    const std::vector<long double>& center,
-    long double radius,
+Scalar integrate_over_sphere(
+    const std::function<Scalar(double, double, double)>& function,
+    const std::vector<Scalar>& center,
+    Scalar radius,
     int points_per_dimension = 15);
 
 /**
@@ -285,9 +288,9 @@ long double integrate_over_sphere(
  * @param points_per_dimension 积分点数
  * @return 积分值
  */
-long double integrate_over_triangle(
-    const std::function<long double(double, double)>& function,
-    const std::vector<std::vector<long double>>& vertices,
+Scalar integrate_over_triangle(
+    const std::function<Scalar(Scalar, Scalar)>& function,
+    const std::vector<std::vector<Scalar>>& vertices,
     int points_per_dimension = 15);
 
 /**
@@ -300,9 +303,9 @@ long double integrate_over_triangle(
  * @param points_per_dimension 积分点数
  * @return 积分值
  */
-long double integrate_over_polygon(
-    const std::function<long double(double, double)>& function,
-    const std::vector<std::vector<long double>>& vertices,
+Scalar integrate_over_polygon(
+    const std::function<Scalar(Scalar, Scalar)>& function,
+    const std::vector<std::vector<Scalar>>& vertices,
     int points_per_dimension = 15);
 
 // ============================================================================
@@ -320,7 +323,7 @@ long double integrate_over_polygon(
  * @param level 网格层级（控制精度）
  * @return 积分值
  */
-long double integrate_sparse_grid(
+Scalar integrate_sparse_grid(
     const MultidimFunction& function,
     const std::vector<IntegrationBounds>& bounds,
     int level = 5);
@@ -350,21 +353,21 @@ IntegrationResult integrate_sparse_grid_with_error(
  * @return 积分结果
  */
 IntegrationResult integrate_2d_adaptive(
-    const std::function<long double(double, double)>& function,
+    const std::function<Scalar(Scalar, Scalar)>& function,
     const IntegrationBounds& x_bounds,
     const IntegrationBounds& y_bounds,
-    long double relative_tolerance = 1e-8,
+    Scalar relative_tolerance = 1e-8,
     int max_depth = 15);
 
 /**
  * @brief 三维自适应积分
  */
 IntegrationResult integrate_3d_adaptive(
-    const std::function<long double(double, double, double)>& function,
+    const std::function<Scalar(Scalar, Scalar, Scalar)>& function,
     const IntegrationBounds& x_bounds,
     const IntegrationBounds& y_bounds,
     const IntegrationBounds& z_bounds,
-    long double relative_tolerance = 1e-6,
+    Scalar relative_tolerance = 1e-6,
     int max_depth = 10);
 
 // ============================================================================
@@ -381,7 +384,7 @@ IntegrationResult integrate_3d_adaptive(
  * @param order 方法阶数
  * @return 误差估计
  */
-long double estimate_error(long double fine, long double coarse, int order = 4);
+Scalar estimate_error(Scalar fine, Scalar coarse, int order = 4);
 
 /**
  * @brief 自动选择积分方法

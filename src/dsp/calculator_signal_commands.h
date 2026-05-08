@@ -39,8 +39,8 @@ namespace signal_cmds {
  * 用于在命令间传递实数信号数据，包含采样值和采样率信息。
  */
 struct SignalData {
-    std::vector<long double> samples;
-    long double sample_rate = 1.0L;
+    std::vector<Scalar> samples;
+    Scalar sample_rate = 1.0L;
 };
 
 /**
@@ -51,7 +51,7 @@ struct SignalData {
  */
 struct ComplexSignalData {
     std::vector<signal::Complex> samples;
-    long double sample_rate = 1.0L;
+    Scalar sample_rate = 1.0L;
 };
 
 /**
@@ -64,9 +64,9 @@ struct ComplexSignalData {
 struct SignalContext {
     const std::map<std::string, StoredValue>* variables;
     const std::map<std::string, CustomFunction>* functions;
-    const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions;
+    const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions;
     std::function<bool(const std::string&)> has_script_function;
-    std::function<long double(const std::string&, const std::vector<long double>&)> invoke_script_function;
+    std::function<Scalar(const std::string&, const std::vector<Scalar>&)> invoke_script_function;
     std::function<SignalData(const std::string&, std::string*)> resolve_signal;
 };
 

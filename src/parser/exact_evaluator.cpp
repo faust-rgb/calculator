@@ -16,11 +16,16 @@
 #include "math/helpers/combinatorics.h"
 #include "math/helpers/integer_helpers.h"
 #include "core/calculator_internal_types.h"
+#include "core/scalar_type.h"
 #include "mymath.h"
 
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+
+namespace {
+using Scalar = mymath::Scalar;
+} // namespace
 
 namespace {
 
@@ -86,7 +91,8 @@ Rational parse_rational_literal(const std::string& token) {
 Rational lookup_variable_exact(const std::string& name, const VariableResolver& variables, std::size_t pos) {
     const StoredValue* found = variables.lookup(name);
     if (!found) {
-        long double constant_value = 0.0L;
+        // Use Scalar for constant lookup
+        Scalar constant_value = 0.0L;
         if (lookup_builtin_constant(name, &constant_value)) {
             throw_ast_error<ExactModeUnsupported>("built-in constants are not rational", pos);
         }

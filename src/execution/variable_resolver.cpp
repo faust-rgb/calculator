@@ -91,12 +91,12 @@ const StoredValue* VariableResolver::lookup(const std::string& name) const {
     }
 
     // 4. 检查内置常量
-    long double constant_value = 0.0L;
+    Scalar constant_value = Scalar(0.0L);
     if (lookup_builtin_constant(name, &constant_value)) {
         // 使用线程本地缓存避免重复创建
         static thread_local std::map<std::string, StoredValue> constant_cache;
         auto& cached = constant_cache[name];
-        if (!cached.decimal && !cached.exact) {
+        if (mymath::precise128::is_near_zero(cached.decimal, Scalar(1e-12L)) && !cached.exact) {
             cached.decimal = constant_value;
             cached.exact = false;
         }
@@ -142,7 +142,7 @@ std::map<std::string, StoredValue> VariableResolver::snapshot() const {
 
     // 合并内置常量
     for (const char* name : {"pi", "e", "c", "G", "h", "k", "NA", "inf", "infinity", "oo"}) {
-        long double constant_value = 0.0L;
+        Scalar constant_value = 0.0L;
         if (lookup_builtin_constant(name, &constant_value)) {
             StoredValue stored;
             stored.decimal = constant_value;
@@ -199,7 +199,7 @@ int VariableResolver::get_scope_level(const std::string& name) const {
     }
 
     // 检查内置常量
-    long double constant_value = 0.0L;
+    Scalar constant_value = 0.0L;
     if (lookup_builtin_constant(name, &constant_value)) {
         return 0;  // 内置常量视为全局
     }
@@ -233,11 +233,11 @@ const StoredValue* VariableResolver::lookup_at_scope(const std::string& name, in
         }
 
         // 检查内置常量
-        long double constant_value = 0.0L;
+        Scalar constant_value = Scalar(0.0L);
         if (lookup_builtin_constant(name, &constant_value)) {
             static thread_local std::map<std::string, StoredValue> constant_cache;
             auto& cached = constant_cache[name];
-            if (!cached.decimal && !cached.exact) {
+            if (mymath::precise128::is_near_zero(cached.decimal, Scalar(1e-12L)) && !cached.exact) {
                 cached.decimal = constant_value;
                 cached.exact = false;
             }

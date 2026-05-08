@@ -11,7 +11,8 @@
 #include <functional>
 #include <utility>
 #include <vector>
-
+#include "core/scalar_type.h"
+using Scalar = mymath::Scalar;
 /**
  * @class MultivariableIntegrator
  * @brief 多重积分器
@@ -27,10 +28,10 @@
 class MultivariableIntegrator {
 public:
     /// 被积函数类型：接受点坐标，返回函数值
-    using Integrand = std::function<long double(const std::vector<long double>&)>;
+    using Integrand = std::function<Scalar(const std::vector<Scalar>&)>;
 
     /// 边界函数类型：接受外层变量值，返回该维度的积分上下界
-    using BoundFunc = std::function<std::pair<long double, long double>(const std::vector<long double>&)>;
+    using BoundFunc = std::function<std::pair<Scalar, Scalar>(const std::vector<Scalar>&)>;
 
     /**
      * @brief 构造函数
@@ -47,7 +48,7 @@ public:
      * @return 积分值
      * @throw std::runtime_error 当参数无效时抛出
      */
-    long double integrate(const std::vector<BoundFunc>& bounds,
+    Scalar integrate(const std::vector<BoundFunc>& bounds,
                 const std::vector<int>& subdivisions) const;
 
     /**
@@ -58,8 +59,8 @@ public:
      * @param max_depth 最大递归深度
      * @return 积分值
      */
-    long double integrate_adaptive(const std::vector<BoundFunc>& bounds,
-                         long double tolerance = 1e-6,
+    Scalar integrate_adaptive(const std::vector<BoundFunc>& bounds,
+                         Scalar tolerance = 1e-6,
                          int max_depth = 5) const;
 
 private:
@@ -69,7 +70,7 @@ private:
      * @param subdivisions 总分割数
      * @return Simpson 权重（1, 4, 2, 4, ..., 2, 4, 1）
      */
-    static long double simpson_weight(int index, int subdivisions);
+    static Scalar simpson_weight(int index, int subdivisions);
 
     /**
      * @brief 规范化分割数为偶数
@@ -89,25 +90,25 @@ private:
      * @param accumulated_weight 累积的 Simpson 权重
      * @return 该维度及内层维度的积分值
      */
-    long double integrate_recursive(const std::vector<BoundFunc>& bounds,
+    Scalar integrate_recursive(const std::vector<BoundFunc>& bounds,
                           const std::vector<int>& subdivisions,
-                          std::vector<long double>* point,
+                          std::vector<Scalar>* point,
                           std::size_t dimension,
-                          long double accumulated_weight) const;
+                          Scalar accumulated_weight) const;
 
     /**
      * @brief 自适应递归积分实现
      */
-    long double integrate_adaptive_recursive(const std::vector<BoundFunc>& bounds,
-                                   std::vector<long double>* point,
+    Scalar integrate_adaptive_recursive(const std::vector<BoundFunc>& bounds,
+                                   std::vector<Scalar>* point,
                                    std::size_t dimension,
-                                   long double lower,
-                                   long double upper,
-                                   long double fa,
-                                   long double fb,
-                                   long double fc,
-                                   long double whole,
-                                   long double tolerance,
+                                   Scalar lower,
+                                   Scalar upper,
+                                   Scalar fa,
+                                   Scalar fb,
+                                   Scalar fc,
+                                   Scalar whole,
+                                   Scalar tolerance,
                                    int depth) const;
 
     Integrand integrand_;  ///< 被积函数

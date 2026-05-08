@@ -10,6 +10,7 @@
 #include "symbolic_render_parser.h"
 #include "calculator_internal_types.h"
 #include "core/format_utils.h"
+#include "core/scalar_type.h"
 #include "execution/builtin_constants.h"
 #include "parser/base_parser.h"
 #include "math/helpers/base_conversions.h"
@@ -18,6 +19,10 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+
+namespace {
+using Scalar = mymath::Scalar;
+} // namespace
 
 class SymbolicRenderParserImpl : public BaseParser {
 public:
@@ -145,7 +150,7 @@ private:
             return name;
         }
 
-        long double builtin_constant = 0.0L;
+        Scalar builtin_constant = 0.0L;
         if (lookup_builtin_constant(name, &builtin_constant)) {
             return format_symbolic_scalar(builtin_constant);
         }
@@ -240,7 +245,7 @@ private:
                     }
                     ++pos_;
                 }
-                return format_decimal(static_cast<long double>(
+                return format_decimal(static_cast<Scalar>(
                     parse_prefixed_integer_token(std::string(source_.substr(start, pos_ - start)))));
             }
         }
@@ -278,7 +283,9 @@ private:
         if (!has_digit) {
             throw std::runtime_error("expected number");
         }
-        return format_decimal(std::stod(std::string(source_.substr(start, pos_ - start))));
+        // Use Scalar for higher precision parsing
+        Scalar parsed = mymath::from_string(std::string(source_.substr(start, pos_ - start)));
+        return format_decimal(static_cast<Scalar>(parsed));
     }
 
     VariableResolver variables_;

@@ -27,10 +27,10 @@ std::vector<RischAlgorithm::ComplexRoot> RischAlgorithm::find_all_roots(
 
     // 尝试数值求解
     bool all_numeric = true;
-    std::vector<long double> num_coeffs;
+    std::vector<Scalar> num_coeffs;
 
     for (const auto& c : coeffs) {
-        long double val = 0.0L;
+        Scalar val = 0.0L;
         if (c.is_number(&val)) {
             num_coeffs.push_back(val);
         } else {
@@ -42,17 +42,17 @@ std::vector<RischAlgorithm::ComplexRoot> RischAlgorithm::find_all_roots(
     if (all_numeric) {
         // 二次
         if (poly_degree == 2) {
-            long double a = num_coeffs[2], b = num_coeffs[1], c = num_coeffs[0];
-            long double delta = b * b - 4.0 * a * c;
+            Scalar a = num_coeffs[2], b = num_coeffs[1], c = num_coeffs[0];
+            Scalar delta = b * b - 4.0 * a * c;
 
             if (delta >= 0) {
-                long double sqrt_delta = mymath::sqrt(delta);
+                Scalar sqrt_delta = mymath::sqrt(delta);
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number((-b + sqrt_delta) / (2.0 * a))));
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number((-b - sqrt_delta) / (2.0 * a))));
             } else {
                 // 复数根：返回共轭对 (a + bi, a - bi) 作为单个条目
-                long double real_part = -b / (2.0 * a);
-                long double imag_part = mymath::sqrt(-delta) / (2.0 * a);
+                Scalar real_part = -b / (2.0 * a);
+                Scalar imag_part = mymath::sqrt(-delta) / (2.0 * a);
                 // 存储为一个共轭对，表示 a+bi 和 a-bi
                 roots.push_back(ComplexRoot::complex(
                     SymbolicExpression::number(real_part),
@@ -64,27 +64,27 @@ std::vector<RischAlgorithm::ComplexRoot> RischAlgorithm::find_all_roots(
 
         // 三次（Cardano 公式）
         if (poly_degree == 3) {
-            long double a = num_coeffs[3], b = num_coeffs[2], c = num_coeffs[1], d = num_coeffs[0];
+            Scalar a = num_coeffs[3], b = num_coeffs[2], c = num_coeffs[1], d = num_coeffs[0];
 
-            long double p = (3.0 * a * c - b * b) / (3.0 * a * a);
-            long double q = (2.0 * b * b * b - 9.0 * a * b * c + 27.0 * a * a * d) / (27.0 * a * a * a);
-            long double disc = q * q / 4.0 + p * p * p / 27.0;
+            Scalar p = (3.0 * a * c - b * b) / (3.0 * a * a);
+            Scalar q = (2.0 * b * b * b - 9.0 * a * b * c + 27.0 * a * a * d) / (27.0 * a * a * a);
+            Scalar disc = q * q / 4.0 + p * p * p / 27.0;
 
             if (disc > 0) {
-                long double u = mymath::sqrt(disc);
-                long double root1 = mymath::pow(-q / 2.0 + u, 1.0L/3.0) + mymath::pow(-q / 2.0 - u, 1.0L/3.0) - b / (3.0 * a);
+                Scalar u = mymath::sqrt(disc);
+                Scalar root1 = mymath::pow(-q / 2.0 + u, 1.0L/3.0) + mymath::pow(-q / 2.0 - u, 1.0L/3.0) - b / (3.0 * a);
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number(root1)));
             } else if (disc == 0) {
-                long double root1 = 3.0 * q / p - b / (3.0 * a);
-                long double root2 = -3.0 * q / (2.0 * p) - b / (3.0 * a);
+                Scalar root1 = 3.0 * q / p - b / (3.0 * a);
+                Scalar root2 = -3.0 * q / (2.0 * p) - b / (3.0 * a);
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number(root1)));
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number(root2)));
             } else {
-                long double r = mymath::sqrt(-p * p * p / 27.0);
-                long double theta = mymath::acos(-q / (2.0 * r)) / 3.0;
-                long double root1 = 2.0 * mymath::pow(r, 1.0L/3.0) * mymath::cos(theta) - b / (3.0 * a);
-                long double root2 = 2.0 * mymath::pow(r, 1.0L/3.0) * mymath::cos(theta + 2.0 * mymath::kPi / 3.0) - b / (3.0 * a);
-                long double root3 = 2.0 * mymath::pow(r, 1.0L/3.0) * mymath::cos(theta + 4.0 * mymath::kPi / 3.0) - b / (3.0 * a);
+                Scalar r = mymath::sqrt(-p * p * p / 27.0);
+                Scalar theta = mymath::acos(-q / (2.0 * r)) / 3.0;
+                Scalar root1 = 2.0 * mymath::pow(r, 1.0L/3.0) * mymath::cos(theta) - b / (3.0 * a);
+                Scalar root2 = 2.0 * mymath::pow(r, 1.0L/3.0) * mymath::cos(theta + 2.0 * mymath::kPi / 3.0) - b / (3.0 * a);
+                Scalar root3 = 2.0 * mymath::pow(r, 1.0L/3.0) * mymath::cos(theta + 4.0 * mymath::kPi / 3.0) - b / (3.0 * a);
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number(root1)));
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number(root2)));
                 roots.push_back(ComplexRoot::real(SymbolicExpression::number(root3)));
@@ -124,11 +124,11 @@ std::vector<SymbolicExpression> RischAlgorithm::find_integer_roots(
     std::vector<SymbolicExpression> roots;
 
     SymbolicExpression lc = coeffs.back();
-    long double lc_val = 1.0L;
+    Scalar lc_val = 1.0L;
     if (!lc.is_number(&lc_val)) lc_val = 1.0L;
 
     SymbolicExpression ct = coeffs.front();
-    long double ct_val = 0.0L;
+    Scalar ct_val = 0.0L;
     if (!ct.is_number(&ct_val)) ct_val = 0.0L;
 
     int max_search = 100;
@@ -168,12 +168,12 @@ std::vector<SymbolicExpression> RischAlgorithm::find_rational_roots(
     SymbolicExpression lc = coeffs.back();
     SymbolicExpression ct = coeffs.front();
 
-    long double lc_val = 1.0L, ct_val = 0.0L;
+    Scalar lc_val = 1.0L, ct_val = 0.0L;
     if (!lc.is_number(&lc_val) || !ct.is_number(&ct_val)) {
         return roots;
     }
 
-    auto get_divisors = [](long double n) -> std::vector<int> {
+    auto get_divisors = [](Scalar n) -> std::vector<int> {
         std::vector<int> divisors;
         int abs_n = static_cast<int>(mymath::abs(n) + 0.5);
         if (abs_n == 0) return divisors;
@@ -192,7 +192,7 @@ std::vector<SymbolicExpression> RischAlgorithm::find_rational_roots(
     for (int p : p_divisors) {
         for (int q : q_divisors) {
             if (q == 0) continue;
-            long double rational = static_cast<long double>(p) / static_cast<long double>(q);
+            Scalar rational = (p) / (q);
 
             SymbolicExpression val = SymbolicExpression::number(0.0L);
             SymbolicExpression x_val = SymbolicExpression::number(rational);
@@ -213,7 +213,7 @@ std::vector<SymbolicExpression> RischAlgorithm::find_rational_roots(
 }
 
 std::vector<SymbolicExpression> RischAlgorithm::find_numeric_roots_newton(
-    const std::vector<long double>& coeffs) {
+    const std::vector<Scalar>& coeffs) {
 
     std::vector<SymbolicExpression> roots;
     if (coeffs.empty()) return roots;
@@ -221,19 +221,19 @@ std::vector<SymbolicExpression> RischAlgorithm::find_numeric_roots_newton(
     int deg = static_cast<int>(coeffs.size()) - 1;
     if (deg <= 0) return roots;
 
-    auto eval_poly = [&coeffs](long double x) -> long double {
-        long double result = 0.0L;
-        long double power = 1.0L;
-        for (long double c : coeffs) {
+    auto eval_poly = [&coeffs](Scalar x) -> Scalar {
+        Scalar result = 0.0L;
+        Scalar power = 1.0L;
+        for (Scalar c : coeffs) {
             result += c * power;
             power *= x;
         }
         return result;
     };
 
-    auto eval_deriv = [&coeffs, deg](long double x) -> long double {
-        long double result = 0.0L;
-        long double power = 1.0L;
+    auto eval_deriv = [&coeffs, deg](Scalar x) -> Scalar {
+        Scalar result = 0.0L;
+        Scalar power = 1.0L;
         for (int i = 1; i <= deg; ++i) {
             result += i * coeffs[i] * power;
             power *= x;
@@ -241,23 +241,23 @@ std::vector<SymbolicExpression> RischAlgorithm::find_numeric_roots_newton(
         return result;
     };
 
-    std::vector<long double> start_points = {-10.0L, -5.0, -2.0, -1.0L, -0.5, 0.5, 1.0L, 2.0, 5.0, 10.0L};
+    std::vector<Scalar> start_points = {-10.0L, -5.0, -2.0, -1.0L, -0.5, 0.5, 1.0L, 2.0, 5.0, 10.0L};
 
-    for (long double start : start_points) {
-        long double x = start;
+    for (Scalar start : start_points) {
+        Scalar x = start;
         for (int iter = 0; iter < 50; ++iter) {
-            long double fx = eval_poly(x);
-            long double fpx = eval_deriv(x);
+            Scalar fx = eval_poly(x);
+            Scalar fpx = eval_deriv(x);
 
             if (mymath::abs(fpx) < 1e-12) break;
 
-            long double next_x = x - fx / fpx;
+            Scalar next_x = x - fx / fpx;
 
             if (mymath::abs(next_x - x) < 1e-10) {
                 if (mymath::abs(eval_poly(next_x)) < 1e-9) {
                     bool already_found = false;
                     for (const auto& r : roots) {
-                        long double r_val = 0.0L;
+                        Scalar r_val = 0.0L;
                         if (r.is_number(&r_val) && mymath::abs(r_val - next_x) < 1e-6) {
                             already_found = true;
                             break;
@@ -280,20 +280,20 @@ std::vector<SymbolicExpression> RischAlgorithm::find_numeric_roots_newton(
 // Aberth-Ehrlich 方法找复数根 (Durand-Kerner 变体)
 // ============================================================================
 
-std::vector<std::pair<long double, long double>> RischAlgorithm::find_complex_roots_aberth(
-    const std::vector<long double>& coeffs) {
+std::vector<std::pair<Scalar, Scalar>> RischAlgorithm::find_complex_roots_aberth(
+    const std::vector<Scalar>& coeffs) {
 
-    std::vector<std::pair<long double, long double>> roots;
+    std::vector<std::pair<Scalar, Scalar>> roots;
     if (coeffs.empty()) return roots;
 
     int n = static_cast<int>(coeffs.size()) - 1;
     if (n <= 0) return roots;
 
     // 使用 Durand-Kerner 方法
-    auto eval_poly_complex = [&coeffs](const std::complex<long double>& z) -> std::complex<long double> {
-        std::complex<long double> result = 0.0L;
-        std::complex<long double> power = 1.0L;
-        for (long double c : coeffs) {
+    auto eval_poly_complex = [&coeffs](const std::complex<Scalar>& z) -> std::complex<Scalar> {
+        std::complex<Scalar> result(Scalar(0.0L), Scalar(0.0L));
+        std::complex<Scalar> power(Scalar(1.0L), Scalar(0.0L));
+        for (Scalar c : coeffs) {
             result += c * power;
             power *= z;
         }
@@ -301,18 +301,18 @@ std::vector<std::pair<long double, long double>> RischAlgorithm::find_complex_ro
     };
 
     // 初始猜测：在单位圆上均匀分布
-    std::vector<std::complex<long double>> z(n);
+    std::vector<std::complex<Scalar>> z(n);
     for (int i = 0; i < n; ++i) {
-        long double angle = 2.0 * mymath::kPi * i / n + 0.1;
-        z[i] = std::complex<long double>(mymath::cos(angle), mymath::sin(angle));
+        Scalar angle = 2.0 * mymath::kPi * i / n + 0.1;
+        z[i] = std::complex<Scalar>(mymath::cos(angle), mymath::sin(angle));
     }
 
     // Durand-Kerner 迭代
     for (int iter = 0; iter < 100; ++iter) {
         bool converged = true;
         for (int i = 0; i < n; ++i) {
-            std::complex<long double> p_z = eval_poly_complex(z[i]);
-            std::complex<long double> denom = 1.0L;
+            std::complex<Scalar> p_z = eval_poly_complex(z[i]);
+            std::complex<Scalar> denom(Scalar(1.0L), Scalar(0.0L));
 
             for (int j = 0; j < n; ++j) {
                 if (j != i) {
@@ -324,7 +324,7 @@ std::vector<std::pair<long double, long double>> RischAlgorithm::find_complex_ro
                 denom = 1e-15;
             }
 
-            std::complex<long double> delta = p_z / denom;
+            std::complex<Scalar> delta = p_z / denom;
             z[i] -= delta;
 
             if (std::abs(delta) > 1e-10) {
@@ -340,8 +340,8 @@ std::vector<std::pair<long double, long double>> RischAlgorithm::find_complex_ro
     for (int i = 0; i < n; ++i) {
         if (used.count(i)) continue;
 
-        long double re = z[i].real();
-        long double im = z[i].imag();
+        Scalar re = z[i].real();
+        Scalar im = z[i].imag();
 
         // 检查是否为实根
         if (mymath::abs(im) < 1e-9) {

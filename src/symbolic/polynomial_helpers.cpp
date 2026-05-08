@@ -33,16 +33,19 @@
 #include "symbolic/symbolic_polynomial.h"
 #include "symbolic/assumptions.h"
 
+#include "core/scalar_type.h"
 #include "math/mymath.h"
 #include "polynomial/polynomial.h"
 
 #include <algorithm>
 #include <map>
+
+namespace symbolic_expression_internal {
+
+using Scalar = mymath::Scalar;
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-namespace symbolic_expression_internal {
 
 // ============================================================================
 // 表达式判定函数
@@ -58,7 +61,7 @@ namespace symbolic_expression_internal {
  * - 根据 AssumptionEngine 设为正数的变量
  */
 bool is_known_positive_expression(const SymbolicExpression& expression) {
-    long double numeric = 0.0L;
+    Scalar numeric = 0.0L;
     if (expression.is_number(&numeric)) {
         return numeric > 0.0L;
     }
@@ -78,7 +81,7 @@ bool is_known_positive_expression(const SymbolicExpression& expression) {
     }
     if (node->type == NodeType::kPower) {
         // x^2 is positive if x is real and non-zero
-        long double exponent = 0.0L;
+        Scalar exponent = 0.0L;
         if (SymbolicExpression(node->right).is_number(&exponent)) {
             if (static_cast<long long>(exponent) % 2 == 0) {
                 // Check if base is real
@@ -103,7 +106,7 @@ bool is_known_positive_expression(const SymbolicExpression& expression) {
 bool polynomial_expression(const SymbolicExpression& expression,
                            const std::string& variable_name,
                            SymbolicExpression* polynomial) {
-    std::vector<long double> coefficients;
+    std::vector<Scalar> coefficients;
     if (!expression.polynomial_coefficients(variable_name, &coefficients)) {
         return false;
     }
@@ -120,8 +123,8 @@ bool polynomial_expression(const SymbolicExpression& expression,
  */
 bool is_linear_function_argument(const SymbolicExpression& argument,
                                  const std::string& variable_name,
-                                 long double* a) {
-    long double b = 0.0L;
+                                 Scalar* a) {
+    Scalar b = 0.0L;
     return decompose_linear(argument, variable_name, a, &b) &&
            !mymath::is_near_zero(*a, kFormatEps);
 }
@@ -151,12 +154,12 @@ bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
                                          const SymbolicExpression& argument,
                                          const std::string& variable_name,
                                          SymbolicExpression* integrated) {
-    long double a = 0.0L;
+    Scalar a = 0.0L;
     if (!is_linear_function_argument(argument, variable_name, &a)) {
         return false;
     }
 
-    long double constant = 0.0L;
+    Scalar constant = 0.0L;
     if (polynomial.is_number(&constant)) {
         if (function_name == "exp") {
             *integrated = make_multiply(
@@ -186,17 +189,17 @@ bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
     }
 
     if (argument.is_variable_named(variable_name)) {
-        std::vector<long double> coefficients;
+        std::vector<Scalar> coefficients;
         if (polynomial.polynomial_coefficients(variable_name, &coefficients)) {
             const SymbolicExpression x = SymbolicExpression::variable(variable_name);
             if (function_name == "ln") {
                 SymbolicExpression result = SymbolicExpression::number(0.0L);
                 for (std::size_t degree = 0; degree < coefficients.size(); ++degree) {
-                    const long double coefficient = coefficients[degree];
+                    const Scalar coefficient = coefficients[degree];
                     if (mymath::is_near_zero(coefficient, kFormatEps)) {
                         continue;
                     }
-                    const long double next_degree = static_cast<long double>(degree + 1);
+                    const Scalar next_degree = Scalar(static_cast<long long>(degree + 1));
                     const SymbolicExpression power =
                         make_power(x, SymbolicExpression::number(next_degree));
                     const SymbolicExpression term =
@@ -207,7 +210,7 @@ bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
                                 make_subtract(
                                     make_divide(make_function("ln", x),
                                                 SymbolicExpression::number(next_degree)),
-                                    SymbolicExpression::number(1.0L / (next_degree * next_degree)))));
+                                    SymbolicExpression::number(Scalar(1.0L) / (next_degree * next_degree)))));
                     result = make_add(result, term).simplify();
                 }
                 *integrated = result.simplify();
@@ -303,7 +306,7 @@ bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
  */
 bool decompose_power_factor(const SymbolicExpression& expression,
                             SymbolicExpression* base,
-                            long double* exponent) {
+                            Scalar* exponent) {
     if (expression.node_->type == NodeType::kPower &&
         SymbolicExpression(expression.node_->right).is_number(exponent)) {
         *base = SymbolicExpression(expression.node_->left);
@@ -355,7 +358,7 @@ bool decompose_power_factor_expression(const SymbolicExpression& expression,
  * - exponent=-1 → 1/base
  * - exponent<0 → 1/base^(-exponent)
  */
-SymbolicExpression rebuild_power_difference(const SymbolicExpression& base, long double exponent) {
+SymbolicExpression rebuild_power_difference(const SymbolicExpression& base, Scalar exponent) {
     if (mymath::is_near_zero(exponent, kFormatEps)) {
         return SymbolicExpression::number(1.0L);
     }
@@ -384,7 +387,7 @@ SymbolicExpression rebuild_power_expression(const SymbolicExpression& base,
     if (base.node_->type == NodeType::kVariable && base.node_->text == "e") {
         return make_function("exp", exponent);
     }
-    long double numeric_exponent = 0.0L;
+    Scalar numeric_exponent = 0.0L;
     if (exponent.is_number(&numeric_exponent)) {
         return rebuild_power_difference(base, numeric_exponent);
     }
@@ -407,7 +410,7 @@ SymbolicExpression rebuild_power_expression(const SymbolicExpression& base,
  * @param factors 符号因子列表
  * @return 规范化的乘积表达式
  */
-SymbolicExpression make_sorted_product(long double numeric_factor,
+SymbolicExpression make_sorted_product(Scalar numeric_factor,
                                       std::vector<SymbolicExpression> factors) {
     if (mymath::is_near_zero(numeric_factor, kFormatEps)) {
         return SymbolicExpression::number(0.0L);
@@ -496,8 +499,8 @@ SymbolicExpression make_sorted_product(long double numeric_factor,
 bool try_canonical_factor_quotient(const SymbolicExpression& numerator,
                                    const SymbolicExpression& denominator,
                                    SymbolicExpression* quotient) {
-    long double numerator_coefficient = 1.0L;
-    long double denominator_coefficient = 1.0L;
+    Scalar numerator_coefficient = 1.0L;
+    Scalar denominator_coefficient = 1.0L;
     std::vector<SymbolicExpression> numerator_factors;
     std::vector<SymbolicExpression> denominator_factors;
     collect_multiplicative_terms(numerator, &numerator_coefficient, &numerator_factors);
@@ -511,7 +514,7 @@ bool try_canonical_factor_quotient(const SymbolicExpression& numerator,
         SymbolicExpression exponent;
     };
     std::map<std::string, PowerGroup> grouped;
-    auto add_factor = [&grouped](const SymbolicExpression& factor, long double sign) {
+    auto add_factor = [&grouped](const SymbolicExpression& factor, Scalar sign) {
         SymbolicExpression base;
         SymbolicExpression exponent;
         decompose_power_factor_expression(factor, &base, &exponent);
@@ -548,7 +551,7 @@ bool try_canonical_factor_quotient(const SymbolicExpression& numerator,
     bool changed = numerator_factors.size() + denominator_factors.size() != grouped.size();
     for (const auto& item : grouped) {
         const SymbolicExpression exponent = item.second.exponent.simplify();
-        long double numeric_exponent = 0.0L;
+        Scalar numeric_exponent = 0.0L;
         if (exponent.is_number(&numeric_exponent)) {
             if (mymath::is_near_zero(numeric_exponent, kFormatEps)) {
                 changed = true;
@@ -569,7 +572,7 @@ bool try_canonical_factor_quotient(const SymbolicExpression& numerator,
         }
     }
 
-    const long double coefficient = numerator_coefficient / denominator_coefficient;
+    const Scalar coefficient = numerator_coefficient / denominator_coefficient;
     const SymbolicExpression numerator_expression =
         make_sorted_product(coefficient, rebuilt_numerator).simplify();
     const SymbolicExpression denominator_expression =
@@ -589,9 +592,9 @@ bool try_canonical_factor_quotient(const SymbolicExpression& numerator,
  * 对于整数参数使用欧几里得算法，
  * 对于相近的数值返回较大者的绝对值。
  */
-long double common_numeric_factor(long double lhs, long double rhs) {
-    const long double lhs_abs = mymath::abs(lhs);
-    const long double rhs_abs = mymath::abs(rhs);
+Scalar common_numeric_factor(Scalar lhs, Scalar rhs) {
+    const Scalar lhs_abs = mymath::abs(lhs);
+    const Scalar rhs_abs = mymath::abs(rhs);
     if (mymath::is_near_zero(lhs_abs, kFormatEps) ||
         mymath::is_near_zero(rhs_abs, kFormatEps)) {
         return 0.0L;
@@ -604,7 +607,7 @@ long double common_numeric_factor(long double lhs, long double rhs) {
             a = b;
             b = next;
         }
-        return static_cast<long double>(a);
+        return (a);
     }
     if (mymath::is_near_zero(lhs_abs - rhs_abs, kFormatEps)) {
         return lhs_abs;
@@ -627,10 +630,10 @@ long double common_numeric_factor(long double lhs, long double rhs) {
  */
 bool try_factor_common_terms(const SymbolicExpression& left,
                              const SymbolicExpression& right,
-                             long double right_sign,
+                             Scalar right_sign,
                              SymbolicExpression* combined) {
-    long double left_coefficient = 1.0L;
-    long double right_coefficient = 1.0L;
+    Scalar left_coefficient = 1.0L;
+    Scalar right_coefficient = 1.0L;
     std::vector<SymbolicExpression> left_factors;
     std::vector<SymbolicExpression> right_factors;
     collect_multiplicative_terms(left, &left_coefficient, &left_factors);
@@ -662,7 +665,7 @@ bool try_factor_common_terms(const SymbolicExpression& left,
         }
     }
 
-    const long double numeric_factor = common_numeric_factor(left_coefficient, right_coefficient);
+    const Scalar numeric_factor = common_numeric_factor(left_coefficient, right_coefficient);
     if (common_factors.empty() &&
         mymath::is_near_zero(numeric_factor - 1.0L, kFormatEps)) {
         return false;
@@ -708,7 +711,7 @@ bool is_squared_function(const SymbolicExpression& expression,
         return false;
     }
 
-    long double exponent = 0.0L;
+    Scalar exponent = 0.0L;
     if (!SymbolicExpression(expression.node_->right).is_number(&exponent) ||
         !mymath::is_near_zero(exponent - 2.0, kFormatEps)) {
         return false;
@@ -821,10 +824,10 @@ std::string unique_identifier_variable(const SymbolicExpression& expression) {
  */
 bool polynomial_coefficients_from_simplified(const SymbolicExpression& expression,
                                              const std::string& variable_name,
-                                             std::vector<long double>* coefficients) {
+                                             std::vector<Scalar>* coefficients) {
     struct PolynomialCoefficientMemoEntry {
         bool ok = false;
-        std::vector<long double> coefficients;
+        std::vector<Scalar> coefficients;
     };
     static thread_local std::unordered_map<std::string, PolynomialCoefficientMemoEntry> memo;
     static thread_local int recursion_depth = 0;
@@ -868,7 +871,7 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
         return ok;
     };
 
-    long double numeric = 0.0L;
+    Scalar numeric = 0.0L;
     if (expression.is_number(&numeric)) {
         *coefficients = {numeric};
         return finish(true);
@@ -892,15 +895,15 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
                                                      coefficients)) {
             return finish(false);
         }
-        for (long double& value : *coefficients) {
+        for (Scalar& value : *coefficients) {
             value = -value;
         }
         trim_polynomial_coefficients(coefficients);
         return finish(true);
     }
 
-    std::vector<long double> left;
-    std::vector<long double> right;
+    std::vector<Scalar> left;
+    std::vector<Scalar> right;
     switch (node->type) {
         case NodeType::kAdd:
             if (!polynomial_coefficients_from_simplified(SymbolicExpression(node->left),
@@ -941,12 +944,12 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
                                                          &left)) {
                 return finish(false);
             }
-            long double divisor = 0.0L;
+            Scalar divisor = 0.0L;
             if (!SymbolicExpression(node->right).is_number(&divisor) ||
                 mymath::is_near_zero(divisor, kFormatEps)) {
                 return finish(false);
             }
-            for (long double& value : left) {
+            for (Scalar& value : left) {
                 value /= divisor;
             }
             trim_polynomial_coefficients(&left);
@@ -954,7 +957,7 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
             return finish(true);
         }
         case NodeType::kPower: {
-            long double exponent = 0.0L;
+            Scalar exponent = 0.0L;
             if (!SymbolicExpression(node->right).is_number(&exponent) ||
                 !mymath::is_integer(exponent, 1e-10) || exponent < 0.0L) {
                 return finish(false);
@@ -964,7 +967,7 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
                                                          &left)) {
                 return finish(false);
             }
-            std::vector<long double> result = {1.0L};
+            std::vector<Scalar> result = {1.0L};
             for (int i = 0; i < static_cast<int>(exponent + 0.5); ++i) {
                 result = polynomial_multiply_impl(result, left);
             }
@@ -994,8 +997,8 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
 /**
  * @brief 检查多项式系数向量是否全为零
  */
-bool polynomial_is_zero_remainder(const std::vector<long double>& coefficients) {
-    for (long double coefficient : coefficients) {
+bool polynomial_is_zero_remainder(const std::vector<Scalar>& coefficients) {
+    for (Scalar coefficient : coefficients) {
         if (!mymath::is_near_zero(coefficient, kFormatEps)) {
             return false;
         }
@@ -1017,8 +1020,8 @@ bool try_reduce_polynomial_quotient(const SymbolicExpression& left,
         return false;
     }
 
-    std::vector<long double> numerator;
-    std::vector<long double> denominator;
+    std::vector<Scalar> numerator;
+    std::vector<Scalar> denominator;
     if (!polynomial_coefficients_from_simplified(left, variable_name, &numerator) ||
         !polynomial_coefficients_from_simplified(right, variable_name, &denominator)) {
         return false;
@@ -1052,8 +1055,8 @@ bool try_reduce_polynomial_gcd_quotient(const SymbolicExpression& left,
         return false;
     }
 
-    std::vector<long double> numerator;
-    std::vector<long double> denominator;
+    std::vector<Scalar> numerator;
+    std::vector<Scalar> denominator;
     if (!polynomial_coefficients_from_simplified(left, variable_name, &numerator) ||
         !polynomial_coefficients_from_simplified(right, variable_name, &denominator)) {
         return false;
@@ -1064,7 +1067,7 @@ bool try_reduce_polynomial_gcd_quotient(const SymbolicExpression& left,
         return false;
     }
 
-    std::vector<long double> gcd = polynomial_gcd(numerator, denominator);
+    std::vector<Scalar> gcd = polynomial_gcd(numerator, denominator);
     trim_polynomial_coefficients(&gcd);
     if (gcd.size() <= 1) {
         return false;
@@ -1105,7 +1108,7 @@ bool is_single_variable_polynomial(const SymbolicExpression& expression) {
         return false;
     }
 
-    std::vector<long double> coefficients;
+    std::vector<Scalar> coefficients;
     return polynomial_coefficients_from_simplified(expression, variable_name, &coefficients);
 }
 
@@ -1120,7 +1123,7 @@ SymbolicExpression maybe_canonicalize_polynomial(const SymbolicExpression& expre
         return expression;
     }
 
-    std::vector<long double> coefficients;
+    std::vector<Scalar> coefficients;
     if (!polynomial_coefficients_from_simplified(expression, variable_name, &coefficients)) {
         return expression;
     }
@@ -1279,7 +1282,7 @@ bool symbolic_laurent_coefficients(
         if (den.node_->type == NodeType::kPower) {
             SymbolicExpression base(den.node_->left);
             SymbolicExpression exp(den.node_->right);
-            long double exp_val = 0.0L;
+            Scalar exp_val = 0.0L;
             if (base.is_variable_named(variable_name) && exp.is_number(&exp_val)) {
                 int n = static_cast<int>(mymath::round(exp_val));
                 if (n > 0 && mymath::abs(exp_val - n) < 1e-9) {
@@ -1333,7 +1336,7 @@ bool symbolic_laurent_coefficients(
         if (symbolic_laurent_coefficients(num, variable_name, &num_coeffs)) {
             if (num_coeffs.empty()) return false;
             // 检查分母是否为常数
-            long double den_val = 0.0L;
+            Scalar den_val = 0.0L;
             if (den.is_number(&den_val) && mymath::abs(den_val) > 1e-12) {
                 for (const auto& [power, coeff] : num_coeffs) {
                     (*coefficients)[power] = (coeff / den).simplify();
@@ -1350,7 +1353,7 @@ bool symbolic_laurent_coefficients(
         SymbolicExpression base(node->left);
         SymbolicExpression exp(node->right);
 
-        long double exp_val = 0.0L;
+        Scalar exp_val = 0.0L;
         if (exp.is_number(&exp_val)) {
             int n = static_cast<int>(mymath::round(exp_val));
 
@@ -1499,7 +1502,7 @@ bool symbolic_polynomial_coefficients_from_simplified(
     }
 
     if (node->type == NodeType::kPower) {
-        long double exponent = 0.0L;
+        Scalar exponent = 0.0L;
         if (SymbolicExpression(node->right).is_number(&exponent) &&
             exponent >= 0.0L && mymath::is_integer(exponent, 1e-10)) {
             const int exp_int = static_cast<int>(exponent + 0.5);

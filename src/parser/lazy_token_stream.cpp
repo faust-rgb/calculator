@@ -4,9 +4,14 @@
 
 #include "parser/lazy_token_stream.h"
 #include "core/calculator_exceptions.h"
+#include "core/scalar_type.h"
 #include "math/helpers/base_conversions.h"
 #include <sstream>
 #include <algorithm>
+
+namespace {
+using Scalar = mymath::Scalar;
+} // namespace
 
 // 静态成员定义
 Token LazyTokenStream::end_token_;
@@ -314,14 +319,16 @@ Token LazyTokenStream::parse_number_token() {
     tok.kind = TokenKind::kNumber;
     tok.text = parse_number_token_view();
     tok.position = start;
-    // 解析数值
+    // 解析数值 - 使用 Scalar 进行高精度解析
     try {
         std::string num_str(tok.text);
         if (num_str.size() > 2 && num_str[0] == '0' &&
             std::isalpha(static_cast<unsigned char>(num_str[1]))) {
-            tok.number_value = static_cast<long double>(parse_prefixed_integer_token(num_str));
+            tok.number_value = static_cast<Scalar>(parse_prefixed_integer_token(num_str));
         } else {
-            tok.number_value = std::stod(num_str);
+            // Use Scalar for higher precision parsing
+            Scalar parsed = mymath::from_string(num_str);
+            tok.number_value = static_cast<Scalar>(parsed);
         }
     } catch (...) {
         std::ostringstream oss;

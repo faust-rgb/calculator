@@ -12,11 +12,14 @@
 #ifndef VECTOR_FIELD_THEOREMS_H
 #define VECTOR_FIELD_THEOREMS_H
 
+#include "core/scalar_type.h"
 #include <string>
 #include <functional>
 #include <vector>
 
 namespace integration_ops {
+
+using Scalar = mymath::Scalar;
 
 struct IntegrationContext;
 
@@ -29,11 +32,11 @@ struct IntegrationContext;
  * @brief 定理计算结果
  */
 struct TheoremResult {
-    long double value = 0.0L;           ///< 积分值
-    long double error_estimate = 0.0L;  ///< 误差估计
+    Scalar value = 0.0L;           ///< 积分值
+    Scalar error_estimate = 0.0L;  ///< 误差估计
     std::string method_used;      ///< 使用的方法（线积分/面积分/体积分）
     bool verified = false;        ///< 是否通过双侧验证
-    long double verification_diff = 0.0L; ///< 验证差异
+    Scalar verification_diff = 0.0L; ///< 验证差异
 };
 
 // ============================================================================
@@ -64,7 +67,7 @@ TheoremResult greens_theorem(
     const std::string& curve_x,
     const std::string& curve_y,
     const std::string& t_var,
-    long double t0, long double t1,
+    Scalar t0, Scalar t1,
     int subdivisions = 64);
 
 /**
@@ -87,7 +90,7 @@ TheoremResult greens_theorem_area(
     const IntegrationContext& ctx,
     const std::string& P,
     const std::string& Q,
-    const std::string& x_var, long double x0, long double x1,
+    const std::string& x_var, Scalar x0, Scalar x1,
     const std::string& y_var,
     const std::string& y0_expr, const std::string& y1_expr,
     int subdivisions = 32);
@@ -123,8 +126,8 @@ TheoremResult divergence_theorem(
     const std::string& surface_x,
     const std::string& surface_y,
     const std::string& surface_z,
-    const std::string& u_var, long double u0, long double u1,
-    const std::string& v_var, long double v0, long double v1,
+    const std::string& u_var, Scalar u0, Scalar u1,
+    const std::string& v_var, Scalar v0, Scalar v1,
     const std::string& orientation,
     int subdivisions = 32);
 
@@ -148,7 +151,7 @@ TheoremResult divergence_theorem_volume(
     const std::string& F_x,
     const std::string& F_y,
     const std::string& F_z,
-    const std::string& x_var, long double x0, long double x1,
+    const std::string& x_var, Scalar x0, Scalar x1,
     const std::string& y_var,
     const std::string& y0_expr, const std::string& y1_expr,
     const std::string& z_var,
@@ -185,12 +188,12 @@ TheoremResult stokes_theorem(
     const std::string& curve_x,
     const std::string& curve_y,
     const std::string& curve_z,
-    const std::string& t_var, long double t0, long double t1,
+    const std::string& t_var, Scalar t0, Scalar t1,
     const std::string& surface_x,
     const std::string& surface_y,
     const std::string& surface_z,
-    const std::string& u_var, long double u0, long double u1,
-    const std::string& v_var, long double v0, long double v1,
+    const std::string& u_var, Scalar u0, Scalar u1,
+    const std::string& v_var, Scalar v0, Scalar v1,
     const std::string& orientation,
     int subdivisions = 32);
 
@@ -215,7 +218,7 @@ TheoremResult stokes_theorem_line(
     const std::string& curve_x,
     const std::string& curve_y,
     const std::string& curve_z,
-    const std::string& t_var, long double t0, long double t1,
+    const std::string& t_var, Scalar t0, Scalar t1,
     int subdivisions = 64);
 
 // ============================================================================
@@ -225,12 +228,12 @@ TheoremResult stokes_theorem_line(
 /**
  * @brief 计算向量场的散度
  */
-long double compute_divergence(
+Scalar compute_divergence(
     const IntegrationContext& ctx,
     const std::string& F_x,
     const std::string& F_y,
     const std::string& F_z,
-    long double x, long double y, long double z);
+    Scalar x, Scalar y, Scalar z);
 
 /**
  * @brief 计算向量场的旋度
@@ -240,8 +243,8 @@ void compute_curl(
     const std::string& F_x,
     const std::string& F_y,
     const std::string& F_z,
-    long double x, long double y, long double z,
-    long double* curl_x, long double* curl_y, long double* curl_z);
+    Scalar x, Scalar y, Scalar z,
+    Scalar* curl_x, Scalar* curl_y, Scalar* curl_z);
 
 }  // namespace integration_ops
 

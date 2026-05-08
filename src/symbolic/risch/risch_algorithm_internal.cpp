@@ -161,7 +161,7 @@ bool try_integrate_low_degree_rational_in_variable(const SymbolicExpression& exp
             if (SymbolicPolynomial::coeff_is_zero(coeff)) {
                 continue;
             }
-            SymbolicExpression new_power = SymbolicExpression::number(static_cast<long double>(i + 1));
+            SymbolicExpression new_power = SymbolicExpression::number((i + 1));
             integral = (integral +
                         (coeff / denominator_constant) *
                             make_power(t, new_power) / new_power).simplify();
@@ -183,9 +183,9 @@ bool try_integrate_low_degree_rational_in_variable(const SymbolicExpression& exp
     }
 
     if (den_degree == 2 && num_degree <= 1) {
-        long double a_val = 0.0L;
-        long double b_val = 0.0L;
-        long double c_val = 0.0L;
+        Scalar a_val = 0.0L;
+        Scalar b_val = 0.0L;
+        Scalar c_val = 0.0L;
         if (!denominator.coefficient(2).is_number(&a_val) ||
             !denominator.coefficient(1).is_number(&b_val) ||
             !denominator.coefficient(0).is_number(&c_val) ||
@@ -193,7 +193,7 @@ bool try_integrate_low_degree_rational_in_variable(const SymbolicExpression& exp
             return false;
         }
 
-        long double delta = 4.0 * a_val * c_val - b_val * b_val;
+        Scalar delta = 4.0 * a_val * c_val - b_val * b_val;
         if (delta <= 0.0L) {
             return false;
         }
@@ -207,7 +207,7 @@ bool try_integrate_low_degree_rational_in_variable(const SymbolicExpression& exp
         SymbolicExpression log_coeff = (m / (SymbolicExpression::number(2.0) * a)).simplify();
         SymbolicExpression residual = (n - m * b / (SymbolicExpression::number(2.0) * a)).simplify();
 
-        const long double sqrt_delta = mymath::sqrt(delta);
+        const Scalar sqrt_delta = mymath::sqrt(delta);
         SymbolicExpression atan_arg =
             ((SymbolicExpression::number(2.0 * a_val) * t + SymbolicExpression::number(b_val)) /
              SymbolicExpression::number(sqrt_delta)).simplify();
@@ -249,12 +249,12 @@ SymbolicExpression substitute_tower_variables_back(
 
 // 尝试将表达式分解为常数乘积
 bool try_decompose_constant_product(const SymbolicExpression& expr,
-                                   long double* constant,
+                                   Scalar* constant,
                                    SymbolicExpression* remainder) {
     if (expr.node_->type == NodeType::kMultiply) {
         SymbolicExpression left(expr.node_->left);
         SymbolicExpression right(expr.node_->right);
-        long double c = 1.0L;
+        Scalar c = 1.0L;
         if (left.is_number(&c)) {
             *constant = c;
             *remainder = right;
@@ -285,7 +285,7 @@ std::vector<int> detect_possible_integer_ratios(const SymbolicExpression& ratio)
     std::vector<int> candidates;
 
     // 尝试数值检测
-    long double val = 0.0L;
+    Scalar val = 0.0L;
     if (ratio.is_number(&val)) {
         int n = static_cast<int>(mymath::round(val));
         if (mymath::abs(val - n) < 1e-9) {
@@ -304,10 +304,10 @@ std::vector<int> detect_possible_integer_ratios(const SymbolicExpression& ratio)
     if (ratio.node_->type == NodeType::kDivide) {
         SymbolicExpression num(ratio.node_->left);
         SymbolicExpression den(ratio.node_->right);
-        long double num_val = 0.0L, den_val = 0.0L;
+        Scalar num_val = 0.0L, den_val = 0.0L;
         if (num.is_number(&num_val) && den.is_number(&den_val) &&
             mymath::abs(den_val) > 1e-12) {
-            long double quotient = num_val / den_val;
+            Scalar quotient = num_val / den_val;
             int n = static_cast<int>(mymath::round(quotient));
             if (mymath::abs(quotient - n) < 1e-9) {
                 candidates.push_back(n);
@@ -398,7 +398,7 @@ void collect_log_terms(
         if (e.node_->type == NodeType::kMultiply) {
             SymbolicExpression left(e.node_->left);
             SymbolicExpression right(e.node_->right);
-            long double c = 1.0L;
+            Scalar c = 1.0L;
             if (left.is_number(&c)) {
                 collect(right, (coeff * SymbolicExpression::number(c)).simplify());
             } else if (right.is_number(&c)) {
@@ -422,7 +422,7 @@ void collect_log_terms(
 bool decompose_constant_times_expression(
     const SymbolicExpression& expr,
     const std::string& x_var,
-    long double* constant,
+    Scalar* constant,
     SymbolicExpression* rest) {
 
     *constant = 1.0L;
@@ -443,15 +443,15 @@ bool decompose_constant_times_expression(
 
     // 分离常数因子
     SymbolicExpression remaining = SymbolicExpression::number(1.0L);
-    long double total_const = 1.0L;
+    Scalar total_const = 1.0L;
 
     for (const auto& factor : factors) {
-        long double c = 1.0L;
+        Scalar c = 1.0L;
         if (factor.is_number(&c)) {
             total_const *= c;
         } else if (factor.is_constant(x_var)) {
             // 关于 x_var 是常数
-            long double v = 0.0L;
+            Scalar v = 0.0L;
             SymbolicExpression simplified = factor.simplify();
             if (simplified.is_number(&v)) {
                 total_const *= v;

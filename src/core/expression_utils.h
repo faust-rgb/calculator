@@ -9,7 +9,7 @@
 
 #ifndef CORE_EXPRESSION_UTILS_H
 #define CORE_EXPRESSION_UTILS_H
-
+#include "core/scalar_type.h"
 #include <string>
 #include <vector>
 
@@ -20,22 +20,22 @@
 /**
  * @brief 生成移位级数基
  */
-std::string shifted_series_base(const std::string& variable_name, long double center);
+std::string shifted_series_base(const std::string& variable_name, Scalar center);
 
 /**
  * @brief 将广义级数转换为字符串
  */
-std::string generalized_series_to_string(const std::vector<long double>& coefficients,
+std::string generalized_series_to_string(const std::vector<Scalar>& coefficients,
                                          const std::string& variable_name,
-                                         long double center,
+                                         Scalar center,
                                          int denominator = 1);
 
 /**
  * @brief 将泰勒级数转换为字符串
  */
-std::string taylor_series_to_string(const std::vector<long double>& coefficients,
+std::string taylor_series_to_string(const std::vector<Scalar>& coefficients,
                                     const std::string& variable_name,
-                                    long double center);
+                                    Scalar center);
 
 // ============================================================================
 // 数值容差
@@ -44,16 +44,16 @@ std::string taylor_series_to_string(const std::vector<long double>& coefficients
 /**
  * @brief 根据值计算根位置容差
  */
-long double root_position_tolerance(long double value);
+Scalar root_position_tolerance(Scalar value);
 
 /**
  * @brief 根据值计算根函数容差
  */
-long double root_function_tolerance(long double value);
+Scalar root_function_tolerance(Scalar value);
 
 /**
  * @brief 根据值计算根导数步长
  */
-long double root_derivative_step(long double value);
+Scalar root_derivative_step(Scalar value);
 
 #endif // CORE_EXPRESSION_UTILS_H

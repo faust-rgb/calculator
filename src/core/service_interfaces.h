@@ -27,7 +27,7 @@
 
 // 前向声明
 template <typename T> class TFunctionAnalysis;
-using FunctionAnalysis = TFunctionAnalysis<long double>;
+using FunctionAnalysis = TFunctionAnalysis<Scalar>;
 
 /**
  * @struct IEvaluationService
@@ -39,13 +39,13 @@ using FunctionAnalysis = TFunctionAnalysis<long double>;
  * - 作用域求值器构造
  */
 struct IEvaluationService {
-    std::function<long double(const std::string&)> parse_decimal;           ///< 解析小数表达式
+    std::function<Scalar(const std::string&)> parse_decimal;           ///< 解析小数表达式
     std::function<StoredValue(const std::string&, bool)> evaluate_value;    ///< 求值为存储值
-    std::function<long double(double)> normalize_result;                    ///< 规范化结果
+    std::function<Scalar(Scalar)> normalize_result;                    ///< 规范化结果
 
     // 作用域求值器构造
-    std::function<std::function<long double(const std::vector<std::pair<std::string, long double>>&)>(const std::string&)> build_decimal_evaluator;   ///< 构建小数求值器
-    std::function<std::function<long double(const std::vector<std::pair<std::string, StoredValue>>&)>(const std::string&)> build_scalar_evaluator;   ///< 构建标量求值器
+    std::function<std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>(const std::string&)> build_decimal_evaluator;   ///< 构建小数求值器
+    std::function<std::function<Scalar(const std::vector<std::pair<std::string, StoredValue>>&)>(const std::string&)> build_scalar_evaluator;   ///< 构建标量求值器
     std::function<std::function<matrix::Matrix(const std::vector<std::pair<std::string, StoredValue>>&)>(const std::string&)> build_matrix_evaluator; ///< 构建矩阵求值器
 };
 
@@ -63,7 +63,7 @@ struct ISymbolicService {
     std::function<void(const std::string&, bool, std::string*, SymbolicExpression*)> resolve_symbolic;    ///< 解析符号表达式
     std::function<std::string(const std::string&)> expand_inline;                                         ///< 展开内联函数
     std::function<std::string(const std::string&)> simplify_symbolic;                                     ///< 简化符号表达式
-    std::function<long double(const SymbolicExpression&, const std::string&, double)> evaluate_symbolic_at; ///< 在指定点求值
+    std::function<Scalar(const SymbolicExpression&, const std::string&, Scalar)> evaluate_symbolic_at; ///< 在指定点求值
     std::function<std::vector<SymbolicExpression>(const std::string&)> parse_symbolic_expr_list;          ///< 解析符号表达式列表
     std::function<FunctionAnalysis(const std::string&)> build_analysis;                                   ///< 构建函数分析对象
 };
@@ -123,8 +123,8 @@ struct CoreServices {
     std::function<bool(const std::string&)> is_matrix_argument;     ///< 检查参数是否为矩阵
     std::function<matrix::Matrix(const std::string&, const std::string&)> parse_matrix_argument; ///< 解析矩阵参数
     std::function<std::string(const std::vector<std::string>&, bool)> render_plot; ///< 渲染图形
-    std::function<bool(double, double)> is_integer_double;          ///< 检查是否为整数
-    std::function<long long(double)> round_to_long_long;            ///< 四舍五入为长整型
+    std::function<bool(Scalar, Scalar)> is_integer_double;          ///< 检查是否为整数
+    std::function<long long(Scalar)> round_to_long_long;            ///< 四舍五入为长整型
 };
 
 

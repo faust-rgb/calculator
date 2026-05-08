@@ -170,10 +170,10 @@ ScriptSignal execute_script_block(Calculator* calculator,
  * @param arguments 参数列表（标量值）
  * @return 函数返回值（标量）
  */
-long double invoke_script_function_decimal(Calculator* calculator,
+Scalar invoke_script_function_decimal(Calculator* calculator,
                                       Calculator::Impl* impl,
                                       const std::string& name,
-                                      const std::vector<long double>& arguments);
+                                      const std::vector<Scalar>& arguments);
 
 /**
  * @brief 调用脚本函数（完整类型返回）

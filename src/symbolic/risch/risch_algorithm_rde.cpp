@@ -21,7 +21,7 @@ std::vector<int> detect_possible_integer_ratios_impl(const SymbolicExpression& r
     std::vector<int> candidates;
 
     // 尝试数值检测
-    long double val = 0.0L;
+    Scalar val = 0.0L;
     if (ratio.is_number(&val)) {
         int n = static_cast<int>(mymath::round(val));
         if (mymath::abs(val - n) < 1e-9) {
@@ -40,10 +40,10 @@ std::vector<int> detect_possible_integer_ratios_impl(const SymbolicExpression& r
     if (ratio.node_->type == NodeType::kDivide) {
         SymbolicExpression num(ratio.node_->left);
         SymbolicExpression den(ratio.node_->right);
-        long double num_val = 0.0L, den_val = 0.0L;
+        Scalar num_val = 0.0L, den_val = 0.0L;
         if (num.is_number(&num_val) && den.is_number(&den_val) &&
             mymath::abs(den_val) > 1e-12) {
-            long double quotient = num_val / den_val;
+            Scalar quotient = num_val / den_val;
             int n = static_cast<int>(mymath::round(quotient));
             if (mymath::abs(quotient - n) < 1e-9) {
                 candidates.push_back(n);
@@ -63,13 +63,13 @@ std::vector<int> detect_possible_integer_ratios_impl(const SymbolicExpression& r
  */
 struct RationalValueForCancellation {
     bool is_valid = false;
-    long double numerator = 0.0L;
-    long double denominator = 1.0L;
+    Scalar numerator = 0.0L;
+    Scalar denominator = 1.0L;
 
     std::vector<int> nearby_integers() const {
         std::vector<int> result;
         if (!is_valid) return result;
-        long double val = numerator / denominator;
+        Scalar val = numerator / denominator;
         int n = static_cast<int>(mymath::round(val));
         result.push_back(n);
         if (mymath::abs(val - n) < 0.5) {
@@ -83,7 +83,7 @@ struct RationalValueForCancellation {
 RationalValueForCancellation extract_rational_for_cancellation(const SymbolicExpression& expr) {
     RationalValueForCancellation result;
 
-    long double val = 0.0L;
+    Scalar val = 0.0L;
     if (expr.is_number(&val)) {
         result.is_valid = true;
         result.numerator = val;
@@ -95,7 +95,7 @@ RationalValueForCancellation extract_rational_for_cancellation(const SymbolicExp
         SymbolicExpression num(expr.node_->left);
         SymbolicExpression den(expr.node_->right);
 
-        long double num_val = 0.0L, den_val = 0.0L;
+        Scalar num_val = 0.0L, den_val = 0.0L;
         if (num.is_number(&num_val) && den.is_number(&den_val) && mymath::abs(den_val) > 1e-12) {
             result.is_valid = true;
             result.numerator = num_val;
@@ -122,7 +122,7 @@ RationalValueForCancellation extract_rational_for_cancellation(const SymbolicExp
  * @brief Check if expression represents an integer
  */
 bool is_integer_expression(const SymbolicExpression& expr, int* value = nullptr) {
-    long double val = 0.0L;
+    Scalar val = 0.0L;
     if (expr.is_number(&val)) {
         int n = static_cast<int>(mymath::round(val));
         if (mymath::abs(val - n) < 1e-9) {
@@ -258,13 +258,13 @@ CancellationResult detect_cancellation_enhanced(
     SymbolicExpression ratio = (make_negate(f_simplified) / u_prime_simplified).simplify();
 
     // Case 1: ratio is a numeric constant
-    long double n_val = 0.0L;
+    Scalar n_val = 0.0L;
     if (ratio.is_number(&n_val)) {
         int n = static_cast<int>(mymath::round(n_val));
         if (mymath::abs(n_val - n) < 1e-9) {
             result.type = CancellationType::kConstantN;
             result.n_value = n;
-            result.n_expr = SymbolicExpression::number(static_cast<long double>(n));
+            result.n_expr = SymbolicExpression::number((n));
             result.remainder = SymbolicExpression::number(0.0L);
             result.candidates.push_back(n);
             return result;
@@ -294,7 +294,7 @@ CancellationResult detect_cancellation_enhanced(
             den_is_const = field->is_constant(den);
         } else {
             // Without field, check if they are numbers
-            long double num_val = 0.0L, den_val = 0.0L;
+            Scalar num_val = 0.0L, den_val = 0.0L;
             num_is_const = num.is_number(&num_val);
             den_is_const = den.is_number(&den_val);
         }
@@ -302,7 +302,7 @@ CancellationResult detect_cancellation_enhanced(
         if (num_is_const && den_is_const) {
             auto r = extract_rational_for_cancellation(ratio);
             if (r.is_valid) {
-                long double quotient = r.numerator / r.denominator;
+                Scalar quotient = r.numerator / r.denominator;
                 int n = static_cast<int>(mymath::round(quotient));
                 if (mymath::abs(quotient - n) < 1e-9) {
                     result.type = CancellationType::kConstantN;
@@ -456,10 +456,10 @@ SymbolicExpression construct_laurent_polynomial(
         if (power == 0) {
             term = coeff;
         } else if (power > 0) {
-            term = (coeff * make_power(t, SymbolicExpression::number(static_cast<long double>(power)))).simplify();
+            term = (coeff * make_power(t, SymbolicExpression::number((power)))).simplify();
         } else {
             // Negative power: t^(-n) = 1/t^n
-            term = (coeff / make_power(t, SymbolicExpression::number(static_cast<long double>(-power)))).simplify();
+            term = (coeff / make_power(t, SymbolicExpression::number((-power)))).simplify();
         }
         result = (result + term).simplify();
     }
@@ -551,7 +551,7 @@ RDEBounds RischAlgorithm::compute_rde_bounds_complete(
             SymbolicExpression ratio = (make_negate(f0) / u_prime_over_u).simplify();
 
             // 尝试检测整数比值
-            long double n_val = 0.0L;
+            Scalar n_val = 0.0L;
             if (ratio.is_number(&n_val)) {
                 int n = static_cast<int>(mymath::round(n_val));
                 if (mymath::abs(n_val - n) < 1e-9 && n > 0) {
@@ -593,7 +593,7 @@ RDEBounds RischAlgorithm::compute_rde_bounds_complete(
             // 检查首项系数 f_lc = -n * u' 对于某个整数 n
             // 这是 Bronstein 的消去条件
             SymbolicExpression ratio = (make_negate(f_lc) / u_prime).simplify();
-            long double n_val = 0.0L;
+            Scalar n_val = 0.0L;
 
             if (ratio.is_number(&n_val)) {
                 int n = static_cast<int>(mymath::round(n_val));
@@ -635,7 +635,7 @@ RDEBounds RischAlgorithm::compute_rde_bounds_complete(
             // 检查是否存在整数 n 使得 f0 + n*u' = 0
             // 这是 Laurent 多项式情况
             SymbolicExpression ratio = (make_negate(f0) / u_prime).simplify();
-            long double n_val = 0.0L;
+            Scalar n_val = 0.0L;
 
             if (ratio.is_number(&n_val)) {
                 int n = static_cast<int>(mymath::round(n_val));
@@ -878,7 +878,7 @@ bool RischAlgorithm::solve_spde(
 
                 SymbolicExpression denom = f0;
                 if (!expr_is_zero(t_prime)) {
-                    denom = (f0 + SymbolicExpression::number(static_cast<long double>(i)) * t_prime).simplify();
+                    denom = (f0 + SymbolicExpression::number((i)) * t_prime).simplify();
                 }
 
                 if (expr_is_zero(denom)) {
@@ -945,17 +945,17 @@ bool RischAlgorithm::handle_exponential_special_case(
     // 如果存在，则 (y / t^n)' = g / t^n => y = t^n * ∫(g / t^n) dx
     
     SymbolicExpression ratio = (make_negate(f) / u_prime).simplify();
-    long double n_val = 0.0L;
+    Scalar n_val = 0.0L;
     if (ratio.is_number(&n_val)) {
         int n = static_cast<int>(mymath::round(n_val));
         if (mymath::abs(n_val - n) < 1e-9) {
-            SymbolicExpression integrand = (g / make_power(t, SymbolicExpression::number(static_cast<long double>(n)))).simplify();
+            SymbolicExpression integrand = (g / make_power(t, SymbolicExpression::number((n)))).simplify();
             
             // 尝试在当前扩展中积分
             // 注意：我们必须防止无限递归，但这里通常是更简单的积分
             IntegrationResult int_res = integrate_in_extension(integrand, tower, tower_index, x_var);
             if (int_res.success && int_res.type == IntegralType::kElementary) {
-                *result = (int_res.value * make_power(t, SymbolicExpression::number(static_cast<long double>(n)))).simplify();
+                *result = (int_res.value * make_power(t, SymbolicExpression::number((n)))).simplify();
                 return true;
             }
         }
@@ -1009,13 +1009,13 @@ int RischAlgorithm::compute_laurent_valuation(
     // 2. 一般情况: v_y = min(v_g - 1, v_f)
 
     // 检查 f 是否为常数（关于 t）
-    long double f_val = 0.0L;
-    long double u_prime_val = 0.0L;
+    Scalar f_val = 0.0L;
+    Scalar u_prime_val = 0.0L;
     if (f_coeffs.size() == 1 && f_coeffs.count(0) &&
         f_coeffs.at(0).is_number(&f_val) &&
         u_prime.is_number(&u_prime_val) && mymath::abs(u_prime_val) > 1e-12) {
         // 检查 f = -n*u' 对于某个整数 n
-        long double ratio = -f_val / u_prime_val;
+        Scalar ratio = -f_val / u_prime_val;
         int n = static_cast<int>(mymath::round(ratio));
         if (mymath::abs(ratio - n) < 1e-9) {
             if (n > 0) {
@@ -1141,7 +1141,7 @@ bool RischAlgorithm::solve_laurent_rde(const SymbolicExpression& f,
             if (SymbolicPolynomial::coeff_is_zero(gi)) continue;
 
             // 求解 c_i' + (f0 + i*u') c_i = gi
-            SymbolicExpression fi = (f0 + SymbolicExpression::number(static_cast<long double>(i)) * u_prime).simplify();
+            SymbolicExpression fi = (f0 + SymbolicExpression::number((i)) * u_prime).simplify();
 
             // 检查 fi 是否为零
             if (SymbolicPolynomial::coeff_is_zero(fi)) {
@@ -1154,11 +1154,11 @@ bool RischAlgorithm::solve_laurent_rde(const SymbolicExpression& f,
                 }
             } else {
                 // 检查 fi 是否为常数
-                long double fi_val = 0.0L;
+                Scalar fi_val = 0.0L;
                 if (fi.is_number(&fi_val)) {
                     // c_i' + fi_val * c_i = gi
                     // 如果 gi 也是常数，则 c_i = gi / fi_val
-                    long double gi_val = 0.0L;
+                    Scalar gi_val = 0.0L;
                     if (gi.is_number(&gi_val)) {
                         y_coeffs[i] = SymbolicExpression::number(gi_val / fi_val);
                     } else {
@@ -1215,7 +1215,7 @@ bool RischAlgorithm::solve_laurent_rde(const SymbolicExpression& f,
             }
 
             // 求解 c_k' + k*u'*c_k = rhs
-            SymbolicExpression fi = (SymbolicExpression::number(static_cast<long double>(k)) * u_prime).simplify();
+            SymbolicExpression fi = (SymbolicExpression::number((k)) * u_prime).simplify();
 
             if (SymbolicPolynomial::coeff_is_zero(fi)) {
                 // c_k' = rhs
@@ -1242,10 +1242,10 @@ bool RischAlgorithm::solve_laurent_rde(const SymbolicExpression& f,
             if (i == 0) {
                 result = (result + y_coeffs[i]).simplify();
             } else if (i > 0) {
-                result = (result + y_coeffs[i] * make_power(t, SymbolicExpression::number(static_cast<long double>(i)))).simplify();
+                result = (result + y_coeffs[i] * make_power(t, SymbolicExpression::number((i)))).simplify();
             } else {
                 // 负幂次: t^(-n) = 1/t^n
-                result = (result + y_coeffs[i] / make_power(t, SymbolicExpression::number(static_cast<long double>(-i)))).simplify();
+                result = (result + y_coeffs[i] / make_power(t, SymbolicExpression::number((-i)))).simplify();
             }
         }
     }
@@ -1373,7 +1373,7 @@ bool RischAlgorithm::solve_laurent_rde_complete(
                 // gk = 0，检查是否需要非零解
                 // c_k' + (f0 + k*u') c_k = 0
                 // 齐次方程，只有零解（除非 f0 + k*u' = 0）
-                SymbolicExpression fi = (f0 + SymbolicExpression::number(static_cast<long double>(k)) * u_prime).simplify();
+                SymbolicExpression fi = (f0 + SymbolicExpression::number((k)) * u_prime).simplify();
                 if (SymbolicPolynomial::coeff_is_zero(fi)) {
                     // fi = 0，任意常数都是解
                     // 取 c_k = 0（特解）
@@ -1385,7 +1385,7 @@ bool RischAlgorithm::solve_laurent_rde_complete(
             }
 
             // 求解 c_k' + (f0 + k*u') c_k = gk
-            SymbolicExpression fi = (f0 + SymbolicExpression::number(static_cast<long double>(k)) * u_prime).simplify();
+            SymbolicExpression fi = (f0 + SymbolicExpression::number((k)) * u_prime).simplify();
 
             // 检查 fi 是否为零
             if (SymbolicPolynomial::coeff_is_zero(fi)) {
@@ -1398,7 +1398,7 @@ bool RischAlgorithm::solve_laurent_rde_complete(
                 }
             } else {
                 // 检查 fi 和 gk 是否都是常数
-                long double fi_val = 0.0L, gk_val = 0.0L;
+                Scalar fi_val = 0.0L, gk_val = 0.0L;
                 if (fi.is_number(&fi_val) && gk.is_number(&gk_val) && mymath::abs(fi_val) > 1e-12) {
                     // c_k = gk / fi 是常数解
                     y_coeffs[k] = SymbolicExpression::number(gk_val / fi_val);
@@ -1446,7 +1446,7 @@ bool RischAlgorithm::solve_laurent_rde_complete(
             }
 
             // 求解 c_k' + k*u'*c_k = rhs
-            SymbolicExpression fi = (SymbolicExpression::number(static_cast<long double>(k)) * u_prime).simplify();
+            SymbolicExpression fi = (SymbolicExpression::number((k)) * u_prime).simplify();
 
             if (SymbolicPolynomial::coeff_is_zero(fi)) {
                 // c_k' = rhs
@@ -1458,7 +1458,7 @@ bool RischAlgorithm::solve_laurent_rde_complete(
                 }
             } else {
                 // 检查 fi 和 rhs 是否都是常数
-                long double fi_val = 0.0L, rhs_val = 0.0L;
+                Scalar fi_val = 0.0L, rhs_val = 0.0L;
                 if (fi.is_number(&fi_val) && rhs.is_number(&rhs_val) && mymath::abs(fi_val) > 1e-12) {
                     y_coeffs[k] = SymbolicExpression::number(rhs_val / fi_val);
                 } else {
@@ -1654,7 +1654,7 @@ RDEResult RischAlgorithm::solve_polynomial_rde_in_extension(
             // 所以 t'/t = u'/(2*t^2) = u'/(2*u)
             SymbolicExpression t_prime_over_t;
             SymbolicExpression u_prime = ext.argument.derivative(x_var).simplify();
-            t_prime_over_t = (u_prime / (SymbolicExpression::number(static_cast<long double>(n)) * ext.argument)).simplify();
+            t_prime_over_t = (u_prime / (SymbolicExpression::number((n)) * ext.argument)).simplify();
 
             SymbolicExpression f0 = f_coeffs.empty() ? SymbolicExpression::number(0.0L) : f_coeffs[0];
 
@@ -1682,7 +1682,7 @@ RDEResult RischAlgorithm::solve_polynomial_rde_in_extension(
                 if (SymbolicPolynomial::coeff_is_zero(g_i)) continue;
 
                 // 求解 c_i' + (f0 + i*t'/t) * c_i = g_i
-                SymbolicExpression fi = (f0 + SymbolicExpression::number(static_cast<long double>(i)) * t_prime_over_t).simplify();
+                SymbolicExpression fi = (f0 + SymbolicExpression::number((i)) * t_prime_over_t).simplify();
 
                 // 递归到基域求解
                 RDEResult res = solve_polynomial_rde_in_extension(fi, g_i, x_var, field, -1, recursion_depth + 1);
@@ -1704,7 +1704,7 @@ RDEResult RischAlgorithm::solve_polynomial_rde_in_extension(
                     if (i == 0) {
                         result = (result + y_coeffs[i]).simplify();
                     } else {
-                        result = (result + y_coeffs[i] * make_power(t, SymbolicExpression::number(static_cast<long double>(i)))).simplify();
+                        result = (result + y_coeffs[i] * make_power(t, SymbolicExpression::number((i)))).simplify();
                     }
                 }
             }
@@ -1906,11 +1906,11 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde(
     }
 
     // 常数 f 情况：y = exp(-fx) * ∫ g*exp(fx) dx
-    long double f_const = 0.0L;
+    Scalar f_const = 0.0L;
     if (f_num.is_constant() && f_den.is_constant() &&
         f_num.leading_coefficient().is_number(&f_const)) {
 
-        long double f_den_val = 1.0L;
+        Scalar f_den_val = 1.0L;
         f_den.leading_coefficient().is_number(&f_den_val);
         f_const /= f_den_val;
 
@@ -1918,7 +1918,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde(
             tower[tower_index].kind == DifferentialExtension::Kind::kExponential) {
             SymbolicExpression t = SymbolicExpression::variable(tower[tower_index].t_name);
             SymbolicExpression u_prime = (tower[tower_index].derivation / t).simplify();
-            long double u_prime_const = 0.0L;
+            Scalar u_prime_const = 0.0L;
             if (u_prime.is_number(&u_prime_const) &&
                 mymath::abs(u_prime_const - f_const) < 1e-10) {
                 return IntegrationResult::unknown("RDE integrating factor is current exponential extension");
@@ -1980,7 +1980,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_polynomial_rde(
                 if (expr_is_zero(gi)) continue;
                 
                 // 求解 y_i' + (f0 + i*u') y_i = g_i 在基域 K 中
-                SymbolicExpression fi = (f0 + SymbolicExpression::number(static_cast<long double>(i)) * u_prime).simplify();
+                SymbolicExpression fi = (f0 + SymbolicExpression::number((i)) * u_prime).simplify();
                 IntegrationResult res = solve_rde(fi, gi, x_var, tower, tower_index - 1, recursion_depth + 1);
                 if (!res.success) return IntegrationResult::non_elementary("Failed to solve RDE for coefficient in exponential extension");
                 y_coeffs[i] = res.value;
@@ -2139,7 +2139,7 @@ bool RischAlgorithm::solve_polynomial_parametric_rde(
                 SymbolicPolynomial tp_poly(tp_coeffs, t_var);
                 for (int k = 0; k <= tp_poly.degree(); ++k) {
                     if (j - 1 + k < num_eqs) {
-                        SymbolicExpression term = (SymbolicExpression::number(static_cast<long double>(j)) *
+                        SymbolicExpression term = (SymbolicExpression::number((j)) *
                                                    tp_poly.coefficient(k)).simplify();
                         matrix[j - 1 + k][j] = (matrix[j - 1 + k][j] + term).simplify();
                     }
@@ -2148,7 +2148,7 @@ bool RischAlgorithm::solve_polynomial_parametric_rde(
                 // t' 不是 t 的多项式，简化处理
                 // 假设 t' 是常数或简单表达式
                 if (j - 1 < num_eqs) {
-                    SymbolicExpression term = (SymbolicExpression::number(static_cast<long double>(j)) * t_prime).simplify();
+                    SymbolicExpression term = (SymbolicExpression::number((j)) * t_prime).simplify();
                     matrix[j - 1][j] = (matrix[j - 1][j] + term).simplify();
                 }
             }
@@ -2378,7 +2378,7 @@ bool RischAlgorithm::try_algebraic_substitution(
         if (e.node_->type == NodeType::kPower) {
             SymbolicExpression base(e.node_->left);
             SymbolicExpression exp(e.node_->right);
-            long double exp_val = 0.0L;
+            Scalar exp_val = 0.0L;
             if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < 1e-9) {
                 return {true, base};
             }
@@ -2409,7 +2409,7 @@ bool RischAlgorithm::try_algebraic_substitution(
     SymbolicExpression a = coeffs.size() > 1 ? coeffs[1] : SymbolicExpression::number(0.0L);
     SymbolicExpression b = coeffs[0];
 
-    long double a_val = 0.0L;
+    Scalar a_val = 0.0L;
     if (!a.is_number(&a_val) || mymath::abs(a_val) < 1e-9) {
         // a 不是常数或为零，无法简单换元
         return false;
@@ -2440,7 +2440,7 @@ bool RischAlgorithm::try_algebraic_substitution(
         if (e.node_->type == NodeType::kPower) {
             SymbolicExpression base(e.node_->left);
             SymbolicExpression exp(e.node_->right);
-            long double exp_val = 0.0L;
+            Scalar exp_val = 0.0L;
             if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < 1e-9) {
                 // x^0.5 = sqrt(x)
                 SymbolicExpression base_sub = substitute(base);
@@ -2492,7 +2492,7 @@ bool RischAlgorithm::try_algebraic_substitution(
              SymbolicExpression(den.node_->left).is_variable_named("_t"))) {
             // Cancel t in denominator with t in jacobian
             // integrand = num * (2/a) * t^(1 - power_of_t_in_den)
-            long double t_power_in_den = 1.0L;
+            Scalar t_power_in_den = 1.0L;
             if (den.is_variable_named("_t")) {
                 t_power_in_den = 1.0L;
             } else if (den.node_->type == NodeType::kPower) {
@@ -2507,7 +2507,7 @@ bool RischAlgorithm::try_algebraic_substitution(
                     integrand = (num * coeff).simplify();
                 } else {
                     // t^(1 - t_power_in_den) remaining
-                    long double remaining_power = 1.0L - t_power_in_den;
+                    Scalar remaining_power = 1.0L - t_power_in_den;
                     SymbolicExpression t_factor = make_power(t, SymbolicExpression::number(remaining_power));
                     integrand = (num * coeff * t_factor).simplify();
                 }
@@ -2916,7 +2916,7 @@ CancellationResult RischAlgorithm::detect_cancellation_strict(
 
     SymbolicExpression ratio = (make_negate(f) / u_prime).simplify();
 
-    long double val = 0.0L;
+    Scalar val = 0.0L;
     if (ratio.is_number(&val)) {
         int n = static_cast<int>(mymath::round(val));
         if (mymath::abs(val - n) < 1e-9) {
@@ -2931,9 +2931,9 @@ CancellationResult RischAlgorithm::detect_cancellation_strict(
         SymbolicExpression num(ratio.node_->left);
         SymbolicExpression den(ratio.node_->right);
 
-        long double num_val = 0.0L, den_val = 0.0L;
+        Scalar num_val = 0.0L, den_val = 0.0L;
         if (num.is_number(&num_val) && den.is_number(&den_val)) {
-            long double quotient = num_val / den_val;
+            Scalar quotient = num_val / den_val;
             int n = static_cast<int>(mymath::round(quotient));
             if (mymath::abs(quotient - n) < 1e-9) {
                 result.type = CancellationType::kConstantN;
@@ -3009,8 +3009,8 @@ RDEResult RischAlgorithm::solve_spde_strict(
 
     if (sub.has_solution()) {
         SymbolicExpression t = SymbolicExpression::variable(g.poly.variable_name());
-        SymbolicExpression term = (a * make_power(t, SymbolicExpression::number(static_cast<long double>(n))) /
-                                  SymbolicExpression::number(static_cast<long double>(n))).simplify();
+        SymbolicExpression term = (a * make_power(t, SymbolicExpression::number((n))) /
+                                  SymbolicExpression::number((n))).simplify();
         SymbolicExpression result = (sub.solution + term).simplify();
         return RDEResult::has_solution(result);
     }
@@ -3459,9 +3459,9 @@ bool RischAlgorithm::verify_parametric_rde_solution(
 bool has_fractional_power(const SymbolicExpression& expr) {
     if (expr.node_->type == NodeType::kPower) {
         SymbolicExpression exp(expr.node_->right);
-        long double val = 0.0L;
+        Scalar val = 0.0L;
         if (exp.is_number(&val)) {
-            long double int_part;
+            Scalar int_part;
             if (mymath::abs(mymath::modf(val, &int_part)) > 1e-12) {
                 return true;  // 分数幂
             }

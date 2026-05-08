@@ -16,6 +16,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
+#include <iomanip>
 #include <list>
 #include <memory>
 #include <sstream>
@@ -28,6 +30,26 @@
 #include <mutex>
 
 namespace symbolic_expression_internal {
+
+namespace {
+
+std::string long_double_bits_key(long double value) {
+    unsigned char bytes[sizeof(long double)] = {};
+    std::memcpy(bytes, &value, sizeof(value));
+
+    std::ostringstream out;
+    out << std::hex << std::setfill('0');
+    for (unsigned char byte : bytes) {
+        out << std::setw(2) << static_cast<unsigned int>(byte);
+    }
+    return out.str();
+}
+
+std::string scalar_structural_number_key(Scalar value) {
+    return long_double_bits_key(value.hi) + ":" + long_double_bits_key(value.lo);
+}
+
+} // namespace
 
 int& mutable_display_precision() {
     static int precision = 12;
@@ -178,20 +200,25 @@ void SymbolicExpressionLruCache::put(const std::string& key,
  * @param value 数值
  * @return 格式化字符串
  */
-std::string format_number(long double value) {
+std::string format_number(Scalar value) {
     if (mymath::is_near_zero(value, kFormatEps)) {
         return "0";
     }
-    if (value < 0.0L) {
+    if (value < Scalar(0.0L)) {
         return "-" + format_number(-value);
     }
 
-    if (mymath::is_integer(value, 1e-10)) {
-        return std::to_string(static_cast<long long>(value + 0.5));
+    if (mymath::is_integer(value, Scalar(1e-10L))) {
+        return std::to_string(static_cast<long long>(static_cast<long double>(value.to_long_double()) + 0.5));
+    }
+
+    if (mutable_display_precision() < 12) {
+        return format_decimal(value);
     }
 
     long long n, d;
-    if (mymath::approximate_fraction(value, &n, &d, 999, 1e-10)) {
+    long double ld_val = static_cast<long double>(value.to_long_double());
+    if (mymath::approximate_fraction(ld_val, &n, &d, 999, 1e-10)) {
         if (d == 1) return std::to_string(n);
         return std::to_string(n) + "/" + std::to_string(d);
     }
@@ -207,7 +234,7 @@ std::string format_number(long double value) {
 // ============================================================================
 
 /** @brief 创建数值节点（带驻留） */
-std::shared_ptr<SymbolicExpression::Node> make_number(long double value) {
+std::shared_ptr<SymbolicExpression::Node> make_number(Scalar value) {
     return intern_node(std::make_shared<SymbolicExpression::Node>(value));
 }
 
@@ -465,8 +492,8 @@ std::string node_structural_key(const std::shared_ptr<SymbolicExpression::Node>&
     std::string key;
     switch (node->type) {
         case NodeType::kNumber:
-            // 使用 std::to_string 保证内部键的唯一性，不受格式化策略影响
-            key = "N(" + std::to_string(node->number_value) + ")";
+            // 使用原始位模式保证内部键的唯一性，避免受显示格式和浮点文本格式化影响。
+            key = "N(" + scalar_structural_number_key(node->number_value) + ")";
             break;
         case NodeType::kVariable:
             key = "V(" + node->text + ")";

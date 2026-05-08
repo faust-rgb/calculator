@@ -52,7 +52,7 @@ bool extract_laurent_coefficients(const SymbolicExpression& expr,
         if (den.node_->type == NodeType::kPower) {
             SymbolicExpression base(den.node_->left);
             SymbolicExpression exp(den.node_->right);
-            long double exp_val = 0.0L;
+            Scalar exp_val = 0.0L;
             if (base.is_variable_named(t_var) && exp.is_number(&exp_val)) {
                 int n = static_cast<int>(mymath::round(exp_val));
                 if (n > 0 && mymath::abs(exp_val - n) < 1e-9) {
@@ -140,10 +140,10 @@ bool extract_laurent_coefficients(const SymbolicExpression& expr,
         if (power == 0) {
             term = coeff;
         } else if (power > 0) {
-            term = (coeff * make_power(t, SymbolicExpression::number(static_cast<long double>(power)))).simplify();
+            term = (coeff * make_power(t, SymbolicExpression::number((power)))).simplify();
         } else {
             // Negative power: t^(-n) = 1/t^n
-            term = (coeff / make_power(t, SymbolicExpression::number(static_cast<long double>(-power)))).simplify();
+            term = (coeff / make_power(t, SymbolicExpression::number((-power)))).simplify();
         }
         result = (result + term).simplify();
     }
@@ -182,16 +182,16 @@ int compute_laurent_valuation_bound(const SymbolicExpression& f,
 
     // Check if f has a special form that affects the bound
     // If f = -n*u' for some integer n, there may be cancellation at power n
-    long double u_prime_val = 0.0L;
+    Scalar u_prime_val = 0.0L;
     bool u_prime_is_const = u_prime.is_number(&u_prime_val);
 
     if (u_prime_is_const && f_coeffs.size() == 1 && f_coeffs.count(0)) {
         // f is a constant (power 0)
-        long double f_val = 0.0L;
+        Scalar f_val = 0.0L;
         if (f_coeffs.at(0).is_number(&f_val)) {
             // Check if f = -n*u' for some integer n
             if (mymath::abs(u_prime_val) > 1e-12) {
-                long double ratio = -f_val / u_prime_val;
+                Scalar ratio = -f_val / u_prime_val;
                 int n = static_cast<int>(mymath::round(ratio));
                 if (mymath::abs(ratio - n) < 1e-9 && n > 0) {
                     // Special case: f = -n*u', solution may have term with t^(-n)
@@ -230,12 +230,12 @@ int compute_laurent_degree_bound(const SymbolicExpression& f,
     }
 
     // Check for cancellation case
-    long double u_prime_val = 0.0L;
+    Scalar u_prime_val = 0.0L;
     if (u_prime.is_number(&u_prime_val) && mymath::abs(u_prime_val) > 1e-12) {
         if (f_coeffs.size() == 1 && f_coeffs.count(0)) {
-            long double f_val = 0.0L;
+            Scalar f_val = 0.0L;
             if (f_coeffs.at(0).is_number(&f_val)) {
-                long double ratio = -f_val / u_prime_val;
+                Scalar ratio = -f_val / u_prime_val;
                 int n = static_cast<int>(mymath::round(ratio));
                 if (mymath::abs(ratio - n) < 1e-9 && n > 0) {
                     // Cancellation possible, degree may be higher

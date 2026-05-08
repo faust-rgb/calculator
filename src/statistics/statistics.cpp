@@ -11,6 +11,7 @@
  */
 
 #include "statistics.h"
+#include "core/scalar_type.h"
 #include "math/mymath.h"
 #include <algorithm>
 #include <stdexcept>
@@ -19,58 +20,71 @@
 
 namespace stats {
 
+using Scalar = mymath::Scalar;
+
 /**
  * @brief 计算平均值（算术平均）
  */
-long double mean(const std::vector<long double>& data) {
+Scalar mean(const std::vector<Scalar>& data) {
     if (data.empty()) {
         throw std::runtime_error("mean expects at least one value");
     }
-    long double sum = std::accumulate(data.begin(), data.end(), 0.0L);
-    return static_cast<long double>(sum / static_cast<long double>(data.size()));
+    Scalar sum = Scalar(0);
+    for (const auto& val : data) {
+        sum += Scalar(val);
+    }
+    return (sum / Scalar((data.size())));
 }
 
 /**
  * @brief 计算中位数
  * 使用 std::nth_element 以 O(n) 时间复杂度获取中位数，避免全排序。
  */
-long double median(const std::vector<long double>& data) {
+Scalar median(const std::vector<Scalar>& data) {
     if (data.empty()) {
         throw std::runtime_error("median expects at least one value");
     }
     size_t n = data.size();
-    std::vector<long double> copy = data;
+    std::vector<Scalar> copy;
+    copy.reserve(n);
+    for (const auto& val : data) {
+        copy.push_back(Scalar(val));
+    }
     if (n % 2 == 1) {
         std::nth_element(copy.begin(), copy.begin() + n / 2, copy.end());
-        return copy[n / 2];
+        return (copy[n / 2]);
     } else {
         std::nth_element(copy.begin(), copy.begin() + n / 2, copy.end());
-        long double right = copy[n / 2];
+        Scalar right = copy[n / 2];
         std::nth_element(copy.begin(), copy.begin() + n / 2 - 1, copy.begin() + n / 2);
-        long double left = copy[n / 2 - 1];
-        return (left + right) / 2.0;
+        Scalar left = copy[n / 2 - 1];
+        return ((left + right) / Scalar(2));
     }
 }
 
 /**
  * @brief 计算众数
  */
-long double mode(const std::vector<long double>& data) {
+Scalar mode(const std::vector<Scalar>& data) {
     if (data.empty()) {
         throw std::runtime_error("mode expects at least one value");
     }
     if (data.size() == 1) return data[0];
 
-    std::vector<long double> sorted = data;
+    std::vector<Scalar> sorted;
+    sorted.reserve(data.size());
+    for (const auto& val : data) {
+        sorted.push_back(Scalar(val));
+    }
     std::sort(sorted.begin(), sorted.end());
 
-    long double best_value = sorted.front();
+    Scalar best_value = sorted.front();
     int best_count = 0;
-    long double current_value = sorted.front();
+    Scalar current_value = sorted.front();
     int current_count = 0;
 
-    for (long double val : sorted) {
-        if (mymath::abs(val - current_value) < 1e-10) {
+    for (const auto& val : sorted) {
+        if (mymath::precise128::abs(val - current_value) < Scalar(1e-10L)) {
             ++current_count;
         } else {
             if (current_count > best_count) {
@@ -81,7 +95,7 @@ long double mode(const std::vector<long double>& data) {
             current_count = 1;
         }
     }
-    return (current_count > best_count) ? current_value : best_value;
+    return ((current_count > best_count) ? current_value : best_value);
 }
 
 /**
@@ -90,197 +104,211 @@ long double mode(const std::vector<long double>& data) {
  */
 struct Moments {
     long long n = 0;
-    long double mean = 0;
-    long double m2 = 0;
-    long double m3 = 0;
-    long double m4 = 0;
+    Scalar mean = Scalar(0);
+    Scalar m2 = Scalar(0);
+    Scalar m3 = Scalar(0);
+    Scalar m4 = Scalar(0);
 
-    void add(long double x_in) {
-        long double x = static_cast<long double>(x_in);
+    void add(Scalar x) {
         long long n1 = n;
         n++;
-        long double delta = x - mean;
-        long double delta_n = delta / n;
-        long double delta_n2 = delta_n * delta_n;
-        long double term1 = delta * delta_n * n1;
+        Scalar delta = x - mean;
+        Scalar delta_n = delta / Scalar((n));
+        Scalar delta_n2 = delta_n * delta_n;
+        Scalar term1 = delta * delta_n * Scalar((n1));
         mean += delta_n;
-        m4 += term1 * delta_n2 * (n * n - 3 * n + 3) + 6 * delta_n2 * m2 - 4 * delta_n * m3;
-        m3 += term1 * delta_n * (n - 2) - 3 * delta_n * m2;
+        m4 += term1 * delta_n2 * Scalar((n * n - 3 * n + 3)) + Scalar(6) * delta_n2 * m2 - Scalar(4) * delta_n * m3;
+        m3 += term1 * delta_n * Scalar((n - 2)) - Scalar(3) * delta_n * m2;
         m2 += term1;
     }
 };
 
-static Moments compute_moments(const std::vector<long double>& data) {
+static Moments compute_moments(const std::vector<Scalar>& data) {
     Moments m;
-    for (long double x : data) m.add(x);
+    for (const auto& x : data) m.add(Scalar(x));
     return m;
 }
 
-long double variance(const std::vector<long double>& data) {
+Scalar variance(const std::vector<Scalar>& data) {
     if (data.empty()) throw std::runtime_error("variance expects at least one value");
     if (data.size() == 1) return 0.0L;
     Moments m = compute_moments(data);
-    return static_cast<long double>(m.m2 / m.n);
+    return (m.m2 / Scalar((m.n)));
 }
 
-long double sample_variance(const std::vector<long double>& data) {
+Scalar sample_variance(const std::vector<Scalar>& data) {
     if (data.size() < 2) throw std::runtime_error("sample_variance requires at least two values");
     Moments m = compute_moments(data);
-    return static_cast<long double>(m.m2 / (m.n - 1));
+    return (m.m2 / Scalar((m.n - 1)));
 }
 
-long double stddev(const std::vector<long double>& data) {
-    return mymath::sqrt(variance(data));
+Scalar stddev(const std::vector<Scalar>& data) {
+    return (mymath::precise128::sqrt(Scalar(variance(data))));
 }
 
-long double sample_stddev(const std::vector<long double>& data) {
-    return mymath::sqrt(sample_variance(data));
+Scalar sample_stddev(const std::vector<Scalar>& data) {
+    return (mymath::precise128::sqrt(Scalar(sample_variance(data))));
 }
 
-long double skewness(const std::vector<long double>& data) {
+Scalar skewness(const std::vector<Scalar>& data) {
     if (data.size() < 2) throw std::runtime_error("skewness requires at least two values");
     Moments m = compute_moments(data);
-    long double var = static_cast<long double>(m.m2 / m.n);
-    if (var < 1e-20) throw std::runtime_error("skewness undefined for zero variance");
-    return static_cast<long double>(m.m3 / m.n) / mymath::pow(var, 1.5);
+    Scalar var = m.m2 / Scalar((m.n));
+    if (var < Scalar(1e-20L)) throw std::runtime_error("skewness undefined for zero variance");
+    return ((m.m3 / Scalar((m.n))) / mymath::precise128::pow(var, Scalar(1.5)));
 }
 
-long double kurtosis(const std::vector<long double>& data) {
+Scalar kurtosis(const std::vector<Scalar>& data) {
     if (data.size() < 2) throw std::runtime_error("kurtosis requires at least two values");
     Moments m = compute_moments(data);
-    long double var = static_cast<long double>(m.m2 / m.n);
-    if (var < 1e-20) throw std::runtime_error("kurtosis undefined for zero variance");
-    return static_cast<long double>((m.m4 / m.n) / (var * var) - 3.0);
+    Scalar var = m.m2 / Scalar((m.n));
+    if (var < Scalar(1e-20L)) throw std::runtime_error("kurtosis undefined for zero variance");
+    return ((m.m4 / Scalar((m.n))) / (var * var) - Scalar(3));
 }
 
-long double percentile(const std::vector<long double>& data, long double p) {
+Scalar percentile(const std::vector<Scalar>& data, Scalar p) {
     if (data.empty()) throw std::runtime_error("percentile expects at least one value");
     if (p < 0.0L || p > 100.0L) throw std::runtime_error("percentile p must be in [0, 100]");
     if (data.size() == 1) return data[0];
 
-    std::vector<long double> copy = data;
-    long double pos = p * (copy.size() - 1) / 100.0L;
-    size_t i = static_cast<size_t>(pos);
-    long double fraction = pos - i;
-
-    if (fraction < 1e-12) {
-        std::nth_element(copy.begin(), copy.begin() + i, copy.end());
-        return copy[i];
+    std::vector<Scalar> copy;
+    copy.reserve(data.size());
+    for (const auto& val : data) {
+        copy.push_back(Scalar(val));
     }
-    
+    Scalar pos = Scalar(p) * Scalar((copy.size() - 1)) / Scalar(100);
+    size_t i = static_cast<size_t>((pos));
+    Scalar fraction = pos - Scalar((i));
+
+    if (fraction < Scalar(1e-12L)) {
+        std::nth_element(copy.begin(), copy.begin() + i, copy.end());
+        return (copy[i]);
+    }
+
     std::nth_element(copy.begin(), copy.begin() + i, copy.end());
-    long double v0 = copy[i];
+    Scalar v0 = copy[i];
     std::nth_element(copy.begin() + i + 1, copy.begin() + i + 1, copy.end());
-    long double v1 = copy[i + 1];
-    return v0 + fraction * (v1 - v0);
+    Scalar v1 = copy[i + 1];
+    return (v0 + fraction * (v1 - v0));
 }
 
-long double quartile(const std::vector<long double>& data, int q) {
+Scalar quartile(const std::vector<Scalar>& data, int q) {
     if (q < 0 || q > 4) throw std::runtime_error("quartile q must be between 0 and 4");
     return percentile(data, q * 25.0);
 }
 
-long double covariance(const std::vector<long double>& x, const std::vector<long double>& y) {
+Scalar covariance(const std::vector<Scalar>& x, const std::vector<Scalar>& y) {
     if (x.size() != y.size() || x.empty()) {
         throw std::runtime_error("covariance requires two non-empty vectors of same length");
     }
     // 单次遍历计算协方差
-    long double mean_x = 0, mean_y = 0, C = 0;
+    Scalar mean_x = Scalar(0), mean_y = Scalar(0), C = Scalar(0);
     for (size_t i = 0; i < x.size(); ++i) {
         size_t n = i + 1;
-        long double dx = x[i] - mean_x;
-        mean_x += dx / n;
-        mean_y += (y[i] - mean_y) / n;
-        C += dx * (y[i] - mean_y);
+        Scalar dx = Scalar(x[i]) - mean_x;
+        mean_x += dx / Scalar((n));
+        mean_y += (Scalar(y[i]) - mean_y) / Scalar((n));
+        C += dx * (Scalar(y[i]) - mean_y);
     }
-    return static_cast<long double>(C / x.size());
+    return (C / Scalar((x.size())));
 }
 
-long double correlation(const std::vector<long double>& x, const std::vector<long double>& y) {
+Scalar correlation(const std::vector<Scalar>& x, const std::vector<Scalar>& y) {
     if (x.size() != y.size() || x.empty()) {
         throw std::runtime_error("correlation requires two non-empty vectors of same length");
     }
     // 单次遍历计算均值、方差和协方差
-    long double mx = 0, my = 0, vx = 0, vy = 0, cxy = 0;
+    Scalar mx = Scalar(0), my = Scalar(0), vx = Scalar(0), vy = Scalar(0), cxy = Scalar(0);
     for (size_t i = 0; i < x.size(); ++i) {
         size_t n = i + 1;
-        long double dx = x[i] - mx;
-        mx += dx / n;
-        vx += dx * (x[i] - mx);
-        long double dy = y[i] - my;
-        my += dy / n;
-        vy += dy * (y[i] - my);
-        cxy += dx * (y[i] - my);
+        Scalar dx = Scalar(x[i]) - mx;
+        mx += dx / Scalar((n));
+        vx += dx * (Scalar(x[i]) - mx);
+        Scalar dy = Scalar(y[i]) - my;
+        my += dy / Scalar((n));
+        vy += dy * (Scalar(y[i]) - my);
+        cxy += dx * (Scalar(y[i]) - my);
     }
-    if (vx < 1e-20 || vy < 1e-20) throw std::runtime_error("correlation undefined for constant vectors");
-    return static_cast<long double>(cxy / mymath::sqrt(vx * vy));
+    if (vx < Scalar(1e-20L) || vy < Scalar(1e-20L)) throw std::runtime_error("correlation undefined for constant vectors");
+    return (cxy / mymath::precise128::sqrt(vx * vy));
 }
 
-std::vector<long double> linear_regression(const std::vector<long double>& x, const std::vector<long double>& y) {
+std::vector<Scalar> linear_regression(const std::vector<Scalar>& x, const std::vector<Scalar>& y) {
     if (x.size() != y.size() || x.empty()) {
         throw std::runtime_error("linear_regression requires two non-empty vectors of same length");
     }
-    long double mx = 0, my = 0, vx = 0, cxy = 0;
+    Scalar mx = Scalar(0), my = Scalar(0), vx = Scalar(0), cxy = Scalar(0);
     for (size_t i = 0; i < x.size(); ++i) {
         size_t n = i + 1;
-        long double dx = x[i] - mx;
-        mx += dx / n;
-        vx += dx * (x[i] - mx);
-        long double dy = y[i] - my;
-        my += dy / n;
-        cxy += dx * (y[i] - my);
+        Scalar dx = Scalar(x[i]) - mx;
+        mx += dx / Scalar((n));
+        vx += dx * (Scalar(x[i]) - mx);
+        Scalar dy = Scalar(y[i]) - my;
+        my += dy / Scalar((n));
+        cxy += dx * (Scalar(y[i]) - my);
     }
-    if (vx < 1e-20) throw std::runtime_error("linear_regression requires non-constant x");
-    long double slope = static_cast<long double>(cxy / vx);
-    long double intercept = static_cast<long double>(my - slope * mx);
-    return {intercept, slope};
+    if (vx < Scalar(1e-20L)) throw std::runtime_error("linear_regression requires non-constant x");
+    Scalar slope = cxy / vx;
+    Scalar intercept = my - slope * mx;
+    return {(intercept), (slope)};
 }
 
-long double iqr(const std::vector<long double>& data) {
+Scalar iqr(const std::vector<Scalar>& data) {
     return quartile(data, 3) - quartile(data, 1);
 }
 
-long double mad(const std::vector<long double>& data) {
+Scalar mad(const std::vector<Scalar>& data) {
     if (data.empty()) throw std::runtime_error("mad expects at least one value");
-    long double med = median(data);
-    std::vector<long double> diffs;
+    Scalar med = median(data);
+    std::vector<Scalar> diffs;
     diffs.reserve(data.size());
-    for (long double x : data) {
-        diffs.push_back(mymath::abs(x - med));
+    for (const auto& x : data) {
+        diffs.push_back(mymath::precise128::abs(Scalar(x) - Scalar(med)));
     }
-    return median(diffs);
+    // Calculate median of diffs
+    size_t n = diffs.size();
+    if (n % 2 == 1) {
+        std::nth_element(diffs.begin(), diffs.begin() + n / 2, diffs.end());
+        return (diffs[n / 2]);
+    } else {
+        std::nth_element(diffs.begin(), diffs.begin() + n / 2, diffs.end());
+        Scalar right = diffs[n / 2];
+        std::nth_element(diffs.begin(), diffs.begin() + n / 2 - 1, diffs.begin() + n / 2);
+        Scalar left = diffs[n / 2 - 1];
+        return ((left + right) / Scalar(2));
+    }
 }
 
-long double weighted_mean(const std::vector<long double>& data, const std::vector<long double>& weights) {
+Scalar weighted_mean(const std::vector<Scalar>& data, const std::vector<Scalar>& weights) {
     if (data.size() != weights.size() || data.empty()) {
         throw std::runtime_error("weighted_mean requires two non-empty vectors of same length");
     }
-    long double weighted_sum = 0;
-    long double weight_sum = 0;
+    Scalar weighted_sum = Scalar(0);
+    Scalar weight_sum = Scalar(0);
     for (size_t i = 0; i < data.size(); i++) {
-        weighted_sum += static_cast<long double>(data[i]) * weights[i];
-        weight_sum += static_cast<long double>(weights[i]);
+        weighted_sum += Scalar(data[i]) * Scalar(weights[i]);
+        weight_sum += Scalar(weights[i]);
     }
-    if (mymath::is_near_zero(static_cast<long double>(weight_sum))) {
+    if (weight_sum < Scalar(1e-30L)) {
         throw std::runtime_error("weighted_mean sum of weights is zero");
     }
-    return static_cast<long double>(weighted_sum / weight_sum);
+    return (weighted_sum / weight_sum);
 }
 
-static std::vector<long double> get_ranks(const std::vector<long double>& data) {
+static std::vector<Scalar> get_ranks(const std::vector<Scalar>& data) {
     size_t n = data.size();
     std::vector<size_t> indices(n);
     std::iota(indices.begin(), indices.end(), 0);
     std::sort(indices.begin(), indices.end(), [&](size_t i, size_t j) {
         return data[i] < data[j];
     });
-    std::vector<long double> ranks(n);
+    std::vector<Scalar> ranks(n);
     for (size_t i = 0; i < n; ) {
         size_t j = i + 1;
-        while (j < n && mymath::is_near_zero(data[indices[j]] - data[indices[i]], 1e-10)) {
+        while (j < n && mymath::precise128::abs(Scalar(data[indices[j]]) - Scalar(data[indices[i]])) < Scalar(1e-10L)) {
             j++;
         }
-        long double rank = (static_cast<long double>(i) + static_cast<long double>(j) + 1.0L) / 2.0;
+        Scalar rank = (Scalar((i)) + Scalar((j)) + Scalar(1)) / Scalar(2);
         for (size_t k = i; k < j; k++) {
             ranks[indices[k]] = rank;
         }
@@ -289,13 +317,27 @@ static std::vector<long double> get_ranks(const std::vector<long double>& data) 
     return ranks;
 }
 
-long double spearman_correlation(const std::vector<long double>& x, const std::vector<long double>& y) {
+Scalar spearman_correlation(const std::vector<Scalar>& x, const std::vector<Scalar>& y) {
     if (x.size() != y.size() || x.empty()) {
         throw std::runtime_error("spearman_correlation requires two non-empty vectors of same length");
     }
-    std::vector<long double> rx = get_ranks(x);
-    std::vector<long double> ry = get_ranks(y);
-    return correlation(rx, ry);
+    std::vector<Scalar> rx = get_ranks(x);
+    std::vector<Scalar> ry = get_ranks(y);
+
+    // Compute correlation using Scalar internally
+    Scalar mx = Scalar(0), my = Scalar(0), vx = Scalar(0), vy = Scalar(0), cxy = Scalar(0);
+    for (size_t i = 0; i < rx.size(); ++i) {
+        size_t n = i + 1;
+        Scalar dx = rx[i] - mx;
+        mx += dx / Scalar((n));
+        vx += dx * (rx[i] - mx);
+        Scalar dy = ry[i] - my;
+        my += dy / Scalar((n));
+        vy += dy * (ry[i] - my);
+        cxy += dx * (ry[i] - my);
+    }
+    if (vx < Scalar(1e-20L) || vy < Scalar(1e-20L)) throw std::runtime_error("spearman_correlation undefined for constant vectors");
+    return (cxy / mymath::precise128::sqrt(vx * vy));
 }
 
 } // namespace stats

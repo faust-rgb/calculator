@@ -1,6 +1,7 @@
 #ifndef CALCULATOR_ROOTFINDING_H
 #define CALCULATOR_ROOTFINDING_H
 
+#include "core/scalar_type.h"
 #include <string>
 #include <functional>
 #include <vector>
@@ -8,6 +9,8 @@
 #include "matrix/matrix.h"
 
 namespace rootfinding {
+
+using Scalar = mymath::Scalar;
 
 /**
  * @class RootfindingModule
@@ -37,7 +40,7 @@ struct TRootfindingContext {
     std::function<T(T)> normalize_result;
 };
 
-using RootfindingContext = TRootfindingContext<long double>;
+using RootfindingContext = TRootfindingContext<Scalar>;
 
 bool is_rootfinding_command(const std::string& command);
 

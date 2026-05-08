@@ -59,7 +59,7 @@ MultivariatePoly from_expression(const SymbolicExpression& expr, const std::vect
     // 简化处理：目前仅支持已经展开的多项式
     // 实际实现需要递归遍历表达式树
     // 这里做个非常简单的提取
-    long double val = 0.0L;
+    Scalar val = 0.0L;
     if (expr.is_number(&val)) {
         res.terms[{}] = expr;
     } else if (expr.node_->type == NodeType::kVariable) {

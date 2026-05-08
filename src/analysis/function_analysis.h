@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "math/mymath_float128.h"
+#include "core/scalar_type.h"
 
 class Calculator;
 
@@ -28,7 +28,7 @@ struct TExtremumPoint {
     bool is_maximum = false;  ///< true 表示极大值，false 表示极小值
 };
 
-using ExtremumPoint = TExtremumPoint<long double>;
+using ExtremumPoint = TExtremumPoint<Scalar>;
 
 /**
  * @class TFunctionAnalysis
@@ -105,6 +105,6 @@ private:
     mutable std::unordered_map<std::string, typename std::list<std::pair<std::string, T>>::iterator> evaluation_cache_index_;
 };
 
-using FunctionAnalysis = TFunctionAnalysis<long double>;
+using FunctionAnalysis = TFunctionAnalysis<Scalar>;
 
 #endif

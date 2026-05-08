@@ -1,6 +1,7 @@
 #ifndef SYMBOLIC_EXPRESSION_H
 #define SYMBOLIC_EXPRESSION_H
 
+#include "core/scalar_type.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -46,7 +47,7 @@ public:
      * @param value 数值
      * @return 常量表达式
      */
-    static SymbolicExpression number(long double value);
+    static SymbolicExpression number(Scalar value);
 
     /**
      * @brief 设置符号表达式字符串输出中的十进制显示有效位数
@@ -276,7 +277,7 @@ public:
      * @param value 可选的输出参数，用于获取数值
      * @return true 如果表达式是数字常量
      */
-    bool is_number(long double* value = nullptr) const;
+    bool is_number(Scalar* value = nullptr) const;
 
     /**
      * @brief 检查表达式是否为指定变量
@@ -294,7 +295,7 @@ public:
      * 例如：x^2 + 2x + 1 的系数为 [1, 2, 1]
      */
     bool polynomial_coefficients(const std::string& variable_name,
-                                 std::vector<long double>* coefficients) const;
+                                 std::vector<Scalar>* coefficients) const;
 
     /**
      * @brief 获取表达式中出现的普通标识符变量名（不含 pi/e）

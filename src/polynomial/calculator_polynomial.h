@@ -105,7 +105,7 @@ public:
  */
 struct PolynomialData {
     std::string variable_name;           ///< 多项式变量名（如 "x"）
-    std::vector<long double> coefficients; ///< 多项式系数（低次到高次）
+    std::vector<Scalar> coefficients; ///< 多项式系数（低次到高次）
 };
 
 /**

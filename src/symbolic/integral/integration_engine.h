@@ -362,7 +362,7 @@ private:
      * 如果 expression = constant * rest，提取常数
      */
     bool extract_constant_factor(const SymbolicExpression& expression,
-                                  long double* constant,
+                                  Scalar* constant,
                                   SymbolicExpression* rest);
 };
 
@@ -385,7 +385,7 @@ private:
 bool detect_derivative_pattern(const SymbolicExpression& expression,
                                const SymbolicExpression& candidate,
                                const std::string& variable_name,
-                               long double* constant,
+                               Scalar* constant,
                                SymbolicExpression* h_expr);
 
 /**

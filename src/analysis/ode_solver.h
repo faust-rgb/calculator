@@ -5,6 +5,7 @@
 #ifndef ODE_SOLVER_H
 #define ODE_SOLVER_H
 
+#include "core/scalar_type.h"
 #include <functional>
 #include <utility>
 #include <vector>
@@ -23,7 +24,10 @@ struct TODEPoint {
     T y = T(0);
 };
 
-using ODEPoint = TODEPoint<long double>;
+using ODEPoint = TODEPoint<Scalar>;
+
+// Scalar-precision alias
+using ScalarODEPoint = TODEPoint<mymath::Scalar>;
 
 /**
  * @struct TODESystemPoint
@@ -35,7 +39,10 @@ struct TODESystemPoint {
     std::vector<T> y;
 };
 
-using ODESystemPoint = TODESystemPoint<long double>;
+using ODESystemPoint = TODESystemPoint<Scalar>;
+
+// Scalar-precision alias
+using ScalarODESystemPoint = TODESystemPoint<mymath::Scalar>;
 
 // ============================================================================
 // 单方程求解器
@@ -71,7 +78,8 @@ private:
     T absolute_tolerance_;
 };
 
-using ODESolver = TODESolver<long double>;
+using ODESolver = TODESolver<Scalar>;
+using ScalarODESolver = TODESolver<mymath::Scalar>;
 
 // ============================================================================
 // 方程组求解器
@@ -108,7 +116,8 @@ private:
     T absolute_tolerance_;
 };
 
-using ODESystemSolver = TODESystemSolver<long double>;
+using ODESystemSolver = TODESystemSolver<Scalar>;
+using ScalarODESystemSolver = TODESystemSolver<mymath::Scalar>;
 
 // ============================================================================
 // 刚性 ODE 求解器 (BDF 方法)
@@ -139,7 +148,8 @@ private:
     T absolute_tolerance_;
 };
 
-using StiffODESolver = TStiffODESolver<long double>;
+using StiffODESolver = TStiffODESolver<Scalar>;
+using ScalarStiffODESolver = TStiffODESolver<mymath::Scalar>;
 
 template <typename T>
 class TStiffODESystemSolver {
@@ -167,6 +177,7 @@ private:
     T absolute_tolerance_;
 };
 
-using StiffODESystemSolver = TStiffODESystemSolver<long double>;
+using StiffODESystemSolver = TStiffODESystemSolver<Scalar>;
+using ScalarStiffODESystemSolver = TStiffODESystemSolver<mymath::Scalar>;
 
 #endif

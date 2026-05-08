@@ -9,6 +9,8 @@
 #ifndef MYMATH_INTERNAL_H
 #define MYMATH_INTERNAL_H
 
+#include "mymath_float128.h"
+
 namespace mymath {
 namespace internal {
 
@@ -33,6 +35,30 @@ long double log_gamma_positive(long double x);
  * @return exp(log_value) 或边界值
  */
 long double finite_or_infinity_from_log(long double log_value);
+
+// ============================================================================
+// Scalar (float128_t) 版本的内部函数
+// ============================================================================
+
+using Scalar = float128_t;
+
+/**
+ * @brief 计算 Gamma 函数的对数 ln(Γ(x))，x > 0（Scalar 版本）
+ *
+ * 使用 Lanczos 近似公式，精度可达 30+ 位有效数字。
+ *
+ * @param x 输入值，必须为正数
+ * @return ln(Γ(x))
+ */
+Scalar log_gamma_positive(Scalar x);
+
+/**
+ * @brief 从对数值转换为有限值或无穷（Scalar 版本）
+ *
+ * @param log_value 对数值
+ * @return exp(log_value) 或边界值
+ */
+Scalar finite_or_infinity_from_log(Scalar log_value);
 
 }  // namespace internal
 }  // namespace mymath

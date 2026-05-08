@@ -5,8 +5,13 @@
 #include <functional>
 #include <vector>
 #include "module/calculator_module.h"
+#include "core/scalar_type.h"
 
 namespace ode_ops {
+
+namespace {
+using Scalar = mymath::Scalar;
+}  // namespace
 
 /**
  * @class ODEModule
@@ -23,14 +28,14 @@ public:
 };
 
 struct ODEContext {
-    std::function<long double(const std::string&)> parse_decimal;
+    std::function<Scalar(const std::string&)> parse_decimal;
     // Fix type to use StoredValue for inner function parameter
-    std::function<std::function<long double(const std::vector<std::pair<std::string, StoredValue>>&)>(const std::string&)> build_scoped_scalar_evaluator;
+    std::function<std::function<Scalar(const std::vector<std::pair<std::string, StoredValue>>&)>(const std::string&)> build_scoped_scalar_evaluator;
     std::function<std::function<matrix::Matrix(const std::vector<std::pair<std::string, StoredValue>>&)>(const std::string&)> build_scoped_matrix_evaluator;
     std::function<bool(const std::string&)> is_matrix_argument;
     std::function<matrix::Matrix(const std::string&, const std::string&)> parse_matrix_argument;
     std::function<StoredValue(const std::string&, bool)> evaluate_expression_value;
-    std::function<long double(double)> normalize_result;
+    std::function<Scalar(Scalar)> normalize_result;
 };
 
 bool is_ode_command(const std::string& command);

@@ -466,5 +466,6 @@ TMatrix<T> hadamard(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
 
 INSTANTIATE_OPS(long double)
 INSTANTIATE_OPS(PreciseDecimal)
+INSTANTIATE_OPS(mymath::Scalar)
 
 } // namespace matrix

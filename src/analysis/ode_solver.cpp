@@ -3,6 +3,7 @@
 // ============================================================================
 
 #include "analysis/ode_solver.h"
+#include "core/scalar_type.h"
 #include "math/mymath.h"
 #include "matrix/matrix.h"
 #include "precise/precise_decimal.h"
@@ -14,39 +15,49 @@
 
 namespace {
 
+using Scalar = mymath::Scalar;
+
 template <typename T>
 T t_abs(const T& val) {
-    if constexpr (std::is_floating_point_v<T>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
+        return mymath::precise128::abs(val);
+    } else if constexpr (std::is_floating_point_v<T>) {
         return std::abs(val);
     } else {
-        return mymath::abs(static_cast<long double>(val));
+        return mymath::abs((val));
     }
 }
 
 template <typename T>
 T t_sqrt(const T& val) {
-    if constexpr (std::is_floating_point_v<T>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
+        return mymath::precise128::sqrt(val);
+    } else if constexpr (std::is_floating_point_v<T>) {
         return std::sqrt(val);
     } else {
-        return mymath::sqrt(static_cast<long double>(val));
+        return mymath::sqrt((val));
     }
 }
 
 template <typename T>
 T t_pow(const T& base, const T& exponent) {
-    if constexpr (std::is_floating_point_v<T>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
+        return mymath::precise128::pow(base, exponent);
+    } else if constexpr (std::is_floating_point_v<T>) {
         return std::pow(base, exponent);
     } else {
-        return mymath::pow(static_cast<long double>(base), static_cast<long double>(exponent));
+        return mymath::pow((base), (exponent));
     }
 }
 
 template <typename T>
 bool t_isfinite(const T& val) {
-    if constexpr (std::is_floating_point_v<T>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
+        return mymath::precise128::isfinite(val);
+    } else if constexpr (std::is_floating_point_v<T>) {
         return std::isfinite(val);
     } else {
-        return mymath::isfinite(static_cast<long double>(val));
+        return mymath::isfinite((val));
     }
 }
 
@@ -148,7 +159,7 @@ std::vector<T> combine_rkf_state(const std::vector<T>& y,
 }
 
 // BDF 系数表 (阶数 1-5)
-constexpr long double kBdfCoefficients[][7] = {
+constexpr Scalar kBdfCoefficients[][7] = {
     {},  // 占位，阶数从 1 开始
     {1.0L, -1.0L, 1.0L},                                    // BDF1: y_{n+1} - y_n = h * f_{n+1}
     {3.0/2.0, -2.0, 1.0L/2.0, 1.0L},                       // BDF2
@@ -922,7 +933,7 @@ T TStiffODESolver<T>::bdf_step(T x, T y, T h, int order,
                                const std::vector<T>& prev_y,
                                const std::vector<T>&) const {
     const int k = std::min(order, 5);
-    const long double* coeffs_d = kBdfCoefficients[k];
+    const Scalar* coeffs_d = kBdfCoefficients[k];
     const T alpha0 = T(coeffs_d[0]);
     const T beta = T(coeffs_d[k + 1]);
 
@@ -1111,7 +1122,7 @@ std::vector<T> TStiffODESystemSolver<T>::bdf_step(
     const std::vector<T>&) const {
 
     const int k = std::min(order, 5);
-    const long double* coeffs_d = kBdfCoefficients[k];
+    const Scalar* coeffs_d = kBdfCoefficients[k];
     const T alpha0 = T(coeffs_d[0]);
     const T beta = T(coeffs_d[k + 1]);
     const T gamma = beta / alpha0;
@@ -1203,3 +1214,9 @@ template class TODESolver<long double>;
 template class TODESystemSolver<long double>;
 template class TStiffODESolver<long double>;
 template class TStiffODESystemSolver<long double>;
+
+// Scalar-precision instantiations
+template class TODESolver<Scalar>;
+template class TODESystemSolver<Scalar>;
+template class TStiffODESolver<Scalar>;
+template class TStiffODESystemSolver<Scalar>;

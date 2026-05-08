@@ -85,9 +85,9 @@ public:
     }
 
     /**
-     * @brief 从 long double 创建 (近似，仅用于数值输入)
+     * @brief 从 Scalar 创建 (近似，仅用于数值输入)
      */
-    static AlgebraicNumber from_double(long double value);
+    static AlgebraicNumber from_double(Scalar value);
 
     /**
      * @brief 创建 sqrt(n) 形式的代数数
@@ -107,14 +107,14 @@ public:
     bool is_rational(ExactRational* value = nullptr) const {
         if (minimal_polynomial.degree() != 1) return false;
 
-        long double a = 0.0L, b = 0.0L;
+        Scalar a = 0.0L, b = 0.0L;
         if (!minimal_polynomial.coefficient(1).is_number(&a)) return false;
         if (!minimal_polynomial.coefficient(0).is_number(&b)) return false;
 
         if (mymath::abs(a) < 1e-12) return false;
 
         if (value) {
-            long double val = -b / a;
+            Scalar val = -b / a;
             *value = ExactRational::from_double(val);
         }
         return true;
@@ -123,7 +123,7 @@ public:
     /**
      * @brief 获取数值近似 (用于显示，不用于计算)
      */
-    long double approximate() const {
+    Scalar approximate() const {
         ExactRational r;
         if (is_rational(&r)) {
             return r.to_double();

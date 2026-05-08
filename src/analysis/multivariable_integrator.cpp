@@ -7,6 +7,14 @@
 #include <stdexcept>
 #include <utility>
 
+#include "core/scalar_type.h"
+
+namespace {
+
+using Scalar = mymath::Scalar;
+
+} // namespace
+
 /**
  * @brief 构造函数
  *
@@ -25,7 +33,7 @@ MultivariableIntegrator::MultivariableIntegrator(Integrand integrand)
  * 使用 Simpson 法则递归计算各维度的积分。
  * 首先规范化分割数，然后从最外层维度开始递归。
  */
-long double MultivariableIntegrator::integrate(
+Scalar MultivariableIntegrator::integrate(
     const std::vector<BoundFunc>& bounds,
     const std::vector<int>& subdivisions) const {
     if (bounds.empty()) {
@@ -43,10 +51,10 @@ long double MultivariableIntegrator::integrate(
     }
 
     // 初始化积分点坐标
-    std::vector<long double> point(bounds.size(), 0.0L);
+    std::vector<Scalar> point(bounds.size(), 0.0L);
 
     // 从第 0 维开始递归积分
-    return static_cast<long double>(
+    return (
         integrate_recursive(bounds,
                            normalized_subdivisions,
                            &point,
@@ -59,7 +67,7 @@ long double MultivariableIntegrator::integrate(
  *
  * Simpson 法则的权重序列为：1, 4, 2, 4, 2, ..., 4, 1
  */
-long double MultivariableIntegrator::simpson_weight(int index, int subdivisions) {
+Scalar MultivariableIntegrator::simpson_weight(int index, int subdivisions) {
     if (index == 0 || index == subdivisions) {
         return 1.0L;  // 端点权重为 1
     }
@@ -89,21 +97,21 @@ int MultivariableIntegrator::normalize_subdivision_count(int subdivisions) {
  *
  * 当达到最内层维度时，直接计算被积函数值。
  */
-long double MultivariableIntegrator::integrate_recursive(
+Scalar MultivariableIntegrator::integrate_recursive(
     const std::vector<BoundFunc>& bounds,
     const std::vector<int>& subdivisions,
-    std::vector<long double>* point,
+    std::vector<Scalar>* point,
     std::size_t dimension,
-    long double accumulated_weight) const {
+    Scalar accumulated_weight) const {
     // 到达最内层维度，计算被积函数值
     if (dimension == bounds.size()) {
         return accumulated_weight * integrand_(*point);
     }
 
     // 获取当前维度的积分边界
-    const std::pair<long double, long double> current_bounds = bounds[dimension](*point);
-    const long double lower = current_bounds.first;
-    const long double upper = current_bounds.second;
+    const std::pair<Scalar, Scalar> current_bounds = bounds[dimension](*point);
+    const Scalar lower = Scalar(current_bounds.first);
+    const Scalar upper = Scalar(current_bounds.second);
 
     // 边界相同，积分为零
     if (lower == upper) {
@@ -111,21 +119,19 @@ long double MultivariableIntegrator::integrate_recursive(
     }
 
     const int subdivision_count = subdivisions[dimension];
-    const long double step = (upper - lower) / static_cast<long double>(subdivision_count);
+    const Scalar step = (upper - lower) / Scalar(subdivision_count);
 
     // Simpson 法则的比例因子：h / 3
-    const long double scale = static_cast<long double>(upper - lower) /
-                              static_cast<long double>(subdivision_count) / 3.0L;
+    const Scalar scale = (upper - lower) / Scalar(subdivision_count) / Scalar(3.0L);
 
     // 对每个采样点进行积分
-    long double sum = 0.0L;
+    Scalar sum = Scalar(0);
     for (int i = 0; i <= subdivision_count; ++i) {
         // 设置当前维度的坐标
-        (*point)[dimension] = lower + step * static_cast<long double>(i);
+        (*point)[dimension] = (lower + step * Scalar(i));
 
         // 递归计算内层积分，并乘以 Simpson 权重
-        sum += static_cast<long double>(
-            integrate_recursive(bounds,
+        sum = sum + Scalar(integrate_recursive(bounds,
                                 subdivisions,
                                 point,
                                 dimension + 1,
@@ -133,89 +139,98 @@ long double MultivariableIntegrator::integrate_recursive(
                                     simpson_weight(i, subdivision_count)));
     }
 
-    return static_cast<long double>(sum * scale);
+    return (sum * scale);
 }
 
 /**
  * @brief 自适应计算多重积分
  */
-long double MultivariableIntegrator::integrate_adaptive(
+Scalar MultivariableIntegrator::integrate_adaptive(
     const std::vector<BoundFunc>& bounds,
-    long double tolerance,
+    Scalar tolerance,
     int max_depth) const {
     if (bounds.empty()) {
         throw std::runtime_error("multivariable integrator requires at least one bound");
     }
 
-    std::vector<long double> point(bounds.size(), 0.0L);
-    
+    std::vector<Scalar> point(bounds.size(), 0.0L);
+
     // 自适应积分目前主要支持一维和二维的高精度化
     // 这里实现一个简化的自适应逻辑：对最外层维度进行自适应细分
-    const std::pair<long double, long double> b = bounds[0](point);
-    const long double a = b.first;
-    const long double d = b.second;
+    const std::pair<Scalar, Scalar> b = bounds[0](point);
+    const Scalar a = Scalar(b.first);
+    const Scalar d = Scalar(b.second);
     if (a == d) return 0.0L;
 
-    auto f = [&](long double x) {
+    auto f = [&](Scalar x) {
         point[0] = x;
         if (bounds.size() == 1) return integrand_(point);
-        
+
         // 对于多维，内层暂时使用固定的 Simpson（可以递归调用，但开销极大）
         // 为了简单起见，这里假设内层已经足够精确或用户通过 integrate 调用
         std::vector<int> sub(bounds.size() - 1, 32);
         std::vector<BoundFunc> inner_bounds(bounds.begin() + 1, bounds.end());
-        std::vector<long double> inner_point(point.begin() + 1, point.end());
-        
+        std::vector<Scalar> inner_point(point.begin() + 1, point.end());
+
         // 构造一个新的积分器用于内层
         MultivariableIntegrator inner_integrator(integrand_);
         return inner_integrator.integrate_recursive(bounds, std::vector<int>(bounds.size(), 32), &point, 1, 1.0L);
     };
 
-    long double fa = f(a);
-    long double fb = f(d);
-    long double c = (a + d) / 2.0;
-    long double fc = f(c);
-    long double whole = (d - a) / 6.0 * (fa + 4.0 * fc + fb);
+    const Scalar fa = Scalar(f((a)));
+    const Scalar fb = Scalar(f((d)));
+    const Scalar c = (a + d) / Scalar(2.0L);
+    const Scalar fc = Scalar(f((c)));
+    const Scalar whole = (d - a) / Scalar(6.0L) * (fa + Scalar(4.0L) * fc + fb);
 
-    return integrate_adaptive_recursive(bounds, &point, 0, a, d, fa, fb, fc, whole, tolerance, max_depth);
+    return integrate_adaptive_recursive(bounds, &point, 0, (a), (d),
+        (fa), (fb), (fc),
+        (whole), tolerance, max_depth);
 }
 
-long double MultivariableIntegrator::integrate_adaptive_recursive(
+Scalar MultivariableIntegrator::integrate_adaptive_recursive(
     const std::vector<BoundFunc>& bounds,
-    std::vector<long double>* point,
+    std::vector<Scalar>* point,
     std::size_t dimension,
-    long double a,
-    long double b,
-    long double fa,
-    long double fb,
-    long double fc,
-    long double whole,
-    long double tolerance,
+    Scalar a,
+    Scalar b,
+    Scalar fa,
+    Scalar fb,
+    Scalar fc,
+    Scalar whole,
+    Scalar tolerance,
     int depth) const {
-    
-    long double c = (a + b) / 2.0;
-    long double h = b - a;
-    long double d = (a + c) / 2.0;
-    long double e = (c + b) / 2.0;
-    
-    auto get_f = [&](long double x) {
+
+    const Scalar sa = Scalar(a);
+    const Scalar sb = Scalar(b);
+    const Scalar sfa = Scalar(fa);
+    const Scalar sfb = Scalar(fb);
+    const Scalar sfc = Scalar(fc);
+    const Scalar swhole = Scalar(whole);
+
+    const Scalar c = (sa + sb) / Scalar(2.0L);
+    const Scalar h = sb - sa;
+    const Scalar sd = (sa + c) / Scalar(2.0L);
+    const Scalar se = (c + sb) / Scalar(2.0L);
+
+    auto get_f = [&](Scalar x) {
         (*point)[dimension] = x;
         if (dimension + 1 == bounds.size()) return integrand_(*point);
         // 递归处理内层
         return integrate_recursive(bounds, std::vector<int>(bounds.size(), 16), point, dimension + 1, 1.0L);
     };
 
-    long double fd = get_f(d);
-    long double fe = get_f(e);
-    
-    long double left = h / 12.0 * (fa + 4.0 * fd + fc);
-    long double right = h / 12.0 * (fc + 4.0 * fe + fb);
-    long double total = left + right;
+    const Scalar fd = Scalar(get_f((sd)));
+    const Scalar fe = Scalar(get_f((se)));
 
-    if (depth <= 0 || std::abs(total - whole) <= 15.0 * tolerance) {
-        return total + (total - whole) / 15.0;
+    const Scalar left = h / Scalar(12.0L) * (sfa + Scalar(4.0L) * fd + sfc);
+    const Scalar right = h / Scalar(12.0L) * (sfc + Scalar(4.0L) * fe + sfb);
+    const Scalar total = left + right;
+
+    if (depth <= 0 || mymath::precise128::abs(total - swhole) <= Scalar(15.0L) * Scalar(tolerance)) {
+        return (total + (total - swhole) / Scalar(15.0L));
     }
 
-    return integrate_adaptive_recursive(bounds, point, dimension, a, c, fa, fc, fd, left, tolerance / 2.0, depth - 1) +
-           integrate_adaptive_recursive(bounds, point, dimension, c, b, fc, fb, fe, right, tolerance / 2.0, depth - 1);
+    return integrate_adaptive_recursive(bounds, point, dimension, a, (c), fa, (fc), (fd), (left), tolerance / 2.0L, depth - 1) +
+           integrate_adaptive_recursive(bounds, point, dimension, (c), b, (fc), fb, (fe), (right), tolerance / 2.0L, depth - 1);
 }

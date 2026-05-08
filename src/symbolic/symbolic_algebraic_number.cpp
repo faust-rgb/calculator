@@ -1,36 +1,41 @@
 #include "symbolic/symbolic_algebraic_number.h"
 #include "symbolic/symbolic_expression_internal.h"
+
+#include "core/scalar_type.h"
+
 #include <algorithm>
 #include <sstream>
 
 using namespace symbolic_expression_internal;
 
+using Scalar = mymath::Scalar;
+
 // ============================================================================
 // AlgebraicNumber 实现
 // ============================================================================
 
-AlgebraicNumber AlgebraicNumber::from_double(long double value) {
+AlgebraicNumber AlgebraicNumber::from_double(Scalar value) {
     // 尝试识别常见的代数数
-    long double sqrt2 = mymath::sqrt(2.0);
-    long double sqrt3 = mymath::sqrt(3.0);
-    long double sqrt5 = mymath::sqrt(5.0);
+    Scalar sqrt2 = mymath::precise128::sqrt(Scalar(2));
+    Scalar sqrt3 = mymath::precise128::sqrt(Scalar(3));
+    Scalar sqrt5 = mymath::precise128::sqrt(Scalar(5));
 
-    if (mymath::abs(value - sqrt2) < 1e-10) {
+    if (mymath::precise128::abs(Scalar(value) - sqrt2) < Scalar(1e-10)) {
         return sqrt(2);
     }
-    if (mymath::abs(value + sqrt2) < 1e-10) {
+    if (mymath::precise128::abs(Scalar(value) + sqrt2) < Scalar(1e-10)) {
         return sqrt(2).negate();
     }
-    if (mymath::abs(value - sqrt3) < 1e-10) {
+    if (mymath::precise128::abs(Scalar(value) - sqrt3) < Scalar(1e-10)) {
         return sqrt(3);
     }
-    if (mymath::abs(value + sqrt3) < 1e-10) {
+    if (mymath::precise128::abs(Scalar(value) + sqrt3) < Scalar(1e-10)) {
         return sqrt(3).negate();
     }
-    if (mymath::abs(value - sqrt5) < 1e-10) {
+    if (mymath::precise128::abs(Scalar(value) - sqrt5) < Scalar(1e-10)) {
         return sqrt(5);
     }
-    if (mymath::abs(value + sqrt5) < 1e-10) {
+    if (mymath::precise128::abs(Scalar(value) + sqrt5) < Scalar(1e-10)) {
         return sqrt(5).negate();
     }
 
@@ -59,7 +64,7 @@ AlgebraicNumber AlgebraicNumber::sqrt(int n) {
     }
 
     // 检查是否是完全平方数
-    int root = static_cast<int>(mymath::sqrt(static_cast<long double>(n)));
+    int root = static_cast<int>((mymath::precise128::sqrt(Scalar(n))));
     if (root * root == n) {
         return from_integer(root);
     }
@@ -109,9 +114,9 @@ AlgebraicNumber AlgebraicNumber::add(const AlgebraicNumber& other) const {
     SymbolicPolynomial sum_poly = compute_sum_minpoly(minimal_polynomial, other.minimal_polynomial);
 
     // 计算新的隔离区间
-    long double approx1 = approximate();
-    long double approx2 = other.approximate();
-    long double sum_approx = approx1 + approx2;
+    Scalar approx1 = approximate();
+    Scalar approx2 = other.approximate();
+    Scalar sum_approx = approx1 + approx2;
 
     ExactRational new_lower = ExactRational::from_double(sum_approx - 0.1);
     ExactRational new_upper = ExactRational::from_double(sum_approx + 0.1);
@@ -135,9 +140,9 @@ AlgebraicNumber AlgebraicNumber::multiply(const AlgebraicNumber& other) const {
     SymbolicPolynomial prod_poly = compute_product_minpoly(minimal_polynomial, other.minimal_polynomial);
 
     // 计算新的隔离区间
-    long double approx1 = approximate();
-    long double approx2 = other.approximate();
-    long double prod_approx = approx1 * approx2;
+    Scalar approx1 = approximate();
+    Scalar approx2 = other.approximate();
+    Scalar prod_approx = approx1 * approx2;
 
     ExactRational new_lower = ExactRational::from_double(prod_approx - 0.1);
     ExactRational new_upper = ExactRational::from_double(prod_approx + 0.1);
@@ -238,8 +243,8 @@ int AlgebraicNumber::compare(const AlgebraicNumber& other) const {
 
     // 区间重叠，需要细化
     // 这里简化处理，使用数值近似
-    long double approx1 = approximate();
-    long double approx2 = other.approximate();
+    Scalar approx1 = approximate();
+    Scalar approx2 = other.approximate();
 
     if (mymath::abs(approx1 - approx2) < 1e-10) {
         // 可能相等，检查最小多项式
@@ -285,14 +290,14 @@ SymbolicExpression AlgebraicNumber::to_expression() const {
 
     // 检查是否是 sqrt 形式
     if (minimal_polynomial.degree() == 2) {
-        long double a = 0.0L, b = 0.0L, c = 0.0L;
+        Scalar a = 0.0L, b = 0.0L, c = 0.0L;
         if (minimal_polynomial.coefficient(2).is_number(&a) &&
             minimal_polynomial.coefficient(1).is_number(&b) &&
             minimal_polynomial.coefficient(0).is_number(&c)) {
 
             if (mymath::abs(b) < 1e-10 && mymath::abs(a - 1.0L) < 1e-10) {
                 // t^2 - c = 0, t = sqrt(-c)
-                long double val = -c;
+                Scalar val = -c;
                 if (val > 0) {
                     SymbolicExpression sqrt_val = make_function("sqrt", SymbolicExpression::number(val));
                     if (approximate() < 0) {
@@ -368,7 +373,7 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
         // (x - t)^i 的展开
         for (int j = 0; j <= i; ++j) {
             // C(i, j) * x^j * (-t)^{i-j}
-            long double binom = 1.0L;
+            Scalar binom = 1.0L;
             for (int k = 0; k < j; ++k) {
                 binom = binom * (i - k) / (k + 1);
             }
@@ -379,15 +384,15 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
             // x^j 部分
             if (j > 0) {
                 term = (term * make_power(SymbolicExpression::variable(x_var),
-                                         SymbolicExpression::number(static_cast<long double>(j)))).simplify();
+                                         SymbolicExpression::number((j)))).simplify();
             }
 
             // (-t)^{i-j} 部分
             if (i - j > 0) {
-                long double sign = ((i - j) % 2 == 0) ? 1.0L : -1.0L;
+                Scalar sign = ((i - j) % 2 == 0) ? 1.0L : -1.0L;
                 term = (term * SymbolicExpression::number(sign)).simplify();
                 term = (term * make_power(SymbolicExpression::variable(t_var),
-                                         SymbolicExpression::number(static_cast<long double>(i - j)))).simplify();
+                                         SymbolicExpression::number((i - j)))).simplify();
             }
 
             // 将项添加到对应 x^j 的系数
@@ -410,8 +415,8 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
     // alpha + beta 的最小多项式可以通过消元得到
 
     // 对于简单情况（数值系数），使用直接方法
-    long double a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
-    long double a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
+    Scalar a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
+    Scalar a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
 
     bool p1_numeric = (d1 == 2 &&
                       p1.coefficient(2).is_number(&a1) &&
@@ -432,8 +437,8 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
         // 简化：假设 p1 = t^2 - r1, p2 = t^2 - r2 (即 sqrt(r1), sqrt(r2))
         if (mymath::abs(a1 - 1.0L) < 1e-10 && mymath::abs(b1) < 1e-10 &&
             mymath::abs(a2 - 1.0L) < 1e-10 && mymath::abs(b2) < 1e-10) {
-            long double r1 = -c1;
-            long double r2 = -c2;
+            Scalar r1 = -c1;
+            Scalar r2 = -c2;
 
             // sqrt(r1) + sqrt(r2) 的最小多项式是 t^4 - 2*(r1+r2)*t^2 + (r1-r2)^2
             std::vector<SymbolicExpression> coeffs(5);
@@ -470,8 +475,8 @@ SymbolicPolynomial AlgebraicNumber::compute_product_minpoly(
     if (d2 <= 0) return p1;
 
     // 对于简单情况（数值系数），使用直接方法
-    long double a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
-    long double a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
+    Scalar a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
+    Scalar a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
 
     bool p1_numeric = (d1 == 2 &&
                       p1.coefficient(2).is_number(&a1) &&
@@ -487,9 +492,9 @@ SymbolicPolynomial AlgebraicNumber::compute_product_minpoly(
         // sqrt(r1) * sqrt(r2) = sqrt(r1 * r2)
         if (mymath::abs(a1 - 1.0L) < 1e-10 && mymath::abs(b1) < 1e-10 &&
             mymath::abs(a2 - 1.0L) < 1e-10 && mymath::abs(b2) < 1e-10) {
-            long double r1 = -c1;
-            long double r2 = -c2;
-            long double r_product = r1 * r2;
+            Scalar r1 = -c1;
+            Scalar r2 = -c2;
+            Scalar r_product = r1 * r2;
 
             // sqrt(r1 * r2) 的最小多项式是 t^2 - r1*r2
             std::vector<SymbolicExpression> coeffs(3);
@@ -579,8 +584,8 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
     if (d2 <= 0) return p1;
 
     // Special case: both are quadratic with no linear term (sqrt case)
-    long double a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
-    long double a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
+    Scalar a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
+    Scalar a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
 
     bool p1_numeric = (d1 == 2 &&
                       p1.coefficient(2).is_number(&a1) &&
@@ -594,8 +599,8 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
 
     if (p1_numeric && p2_numeric && mymath::abs(a1 - 1.0L) < 1e-10 && mymath::abs(b1) < 1e-10 &&
         mymath::abs(a2 - 1.0L) < 1e-10 && mymath::abs(b2) < 1e-10) {
-        long double r1 = -c1;
-        long double r2 = -c2;
+        Scalar r1 = -c1;
+        Scalar r2 = -c2;
 
         // sqrt(r1) + sqrt(r2) has minpoly t^4 - 2*(r1+r2)*t^2 + (r1-r2)^2
         std::vector<SymbolicExpression> coeffs(5);
@@ -618,7 +623,7 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
     // Check if all coefficients are numeric
     bool all_numeric = true;
     for (int i = 0; i <= d1; ++i) {
-        long double val;
+        Scalar val;
         if (!p1.coefficient(i).is_number(&val)) {
             all_numeric = false;
             break;
@@ -626,7 +631,7 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
     }
     if (all_numeric) {
         for (int i = 0; i <= d2; ++i) {
-            long double val;
+            Scalar val;
             if (!p2.coefficient(i).is_number(&val)) {
                 all_numeric = false;
                 break;
@@ -636,7 +641,7 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
 
     if (all_numeric) {
         // Extract numeric coefficients
-        std::vector<long double> p1_coeffs(d1 + 1), p2_coeffs(d2 + 1);
+        std::vector<Scalar> p1_coeffs(d1 + 1), p2_coeffs(d2 + 1);
         for (int i = 0; i <= d1; ++i) {
             p1.coefficient(i).is_number(&p1_coeffs[i]);
         }
@@ -681,8 +686,8 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
     if (d2 <= 0) return p1;
 
     // Special case: both are quadratic with no linear term (sqrt case)
-    long double a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
-    long double a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
+    Scalar a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
+    Scalar a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
 
     bool p1_numeric = (d1 == 2 &&
                       p1.coefficient(2).is_number(&a1) &&
@@ -696,9 +701,9 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
 
     if (p1_numeric && p2_numeric && mymath::abs(a1 - 1.0L) < 1e-10 && mymath::abs(b1) < 1e-10 &&
         mymath::abs(a2 - 1.0L) < 1e-10 && mymath::abs(b2) < 1e-10) {
-        long double r1 = -c1;
-        long double r2 = -c2;
-        long double r_product = r1 * r2;
+        Scalar r1 = -c1;
+        Scalar r2 = -c2;
+        Scalar r_product = r1 * r2;
 
         // sqrt(r1) * sqrt(r2) = sqrt(r1 * r2)
         std::vector<SymbolicExpression> coeffs(3);
@@ -715,7 +720,7 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
     // For numerical coefficients, compute directly
     bool all_numeric = true;
     for (int i = 0; i <= d1; ++i) {
-        long double val;
+        Scalar val;
         if (!p1.coefficient(i).is_number(&val)) {
             all_numeric = false;
             break;
@@ -723,7 +728,7 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
     }
     if (all_numeric) {
         for (int i = 0; i <= d2; ++i) {
-            long double val;
+            Scalar val;
             if (!p2.coefficient(i).is_number(&val)) {
                 all_numeric = false;
                 break;
@@ -857,14 +862,14 @@ AlgebraicNumber::complex_roots_of(const SymbolicPolynomial& poly) {
         // ax^2 + bx + c = 0 的根为 (-b ± sqrt(b^2-4ac)) / (2a)
         // 当判别式 < 0 时，实部为 -b/(2a)
 
-        long double a = 0.0L, b = 0.0L, c = 0.0L;
+        Scalar a = 0.0L, b = 0.0L, c = 0.0L;
         if (poly.coefficient(2).is_number(&a) &&
             poly.coefficient(1).is_number(&b) &&
             poly.coefficient(0).is_number(&c)) {
 
-            long double real_part = -b / (2.0 * a);
-            long double disc = b * b - 4.0 * a * c;  // 负数
-            long double imag_part = mymath::sqrt(-disc) / (2.0 * mymath::abs(a));
+            Scalar real_part = -b / (2.0 * a);
+            Scalar disc = b * b - 4.0 * a * c;  // 负数
+            Scalar imag_part = mymath::sqrt(-disc) / (2.0 * mymath::abs(a));
 
             // 创建实部和虚部的代数数表示
             // 实部是有理数
@@ -916,6 +921,55 @@ AlgebraicNumber::complex_roots_of(const SymbolicPolynomial& poly) {
 
 namespace sturm {
 
+namespace {
+
+constexpr int kMaxIsolationDepth = 64;
+constexpr int64_t kMaxIsolationDenominator = (int64_t{1} << 50);
+
+bool denominator_too_large(const ExactRational& value) {
+    return mymath::abs(value.denominator) >= kMaxIsolationDenominator;
+}
+
+ExactRational midpoint(const ExactRational& lower, const ExactRational& upper) {
+    return lower.add(upper).divide(ExactRational(2));
+}
+
+std::vector<std::pair<ExactRational, ExactRational>> isolate_real_roots_impl(
+    const SymbolicPolynomial& p,
+    const ExactRational& lower,
+    const ExactRational& upper,
+    int depth) {
+
+    std::vector<std::pair<ExactRational, ExactRational>> intervals;
+
+    int num_roots = count_real_roots(p, lower, upper);
+    if (num_roots == 0) return intervals;
+
+    if (num_roots == 1 ||
+        depth >= kMaxIsolationDepth ||
+        denominator_too_large(lower) ||
+        denominator_too_large(upper)) {
+        intervals.push_back({lower, upper});
+        return intervals;
+    }
+
+    ExactRational mid = midpoint(lower, upper);
+    if (mid == lower || mid == upper) {
+        intervals.push_back({lower, upper});
+        return intervals;
+    }
+
+    auto left_intervals = isolate_real_roots_impl(p, lower, mid, depth + 1);
+    auto right_intervals = isolate_real_roots_impl(p, mid, upper, depth + 1);
+
+    intervals.insert(intervals.end(), left_intervals.begin(), left_intervals.end());
+    intervals.insert(intervals.end(), right_intervals.begin(), right_intervals.end());
+
+    return intervals;
+}
+
+} // namespace
+
 std::vector<SymbolicPolynomial> sturm_sequence(const SymbolicPolynomial& p) {
     std::vector<SymbolicPolynomial> seq;
 
@@ -951,11 +1005,11 @@ std::vector<SymbolicPolynomial> sturm_sequence(const SymbolicPolynomial& p) {
 
 int sign_variations(const SymbolicPolynomial& p, const ExactRational& x) {
     // 计算多项式在 x 处的符号
-    long double x_val = x.to_double();
-    long double val = 0.0L;
+    Scalar x_val = x.to_double();
+    Scalar val = 0.0L;
 
     for (int i = 0; i <= p.degree(); ++i) {
-        long double coeff = 0.0L;
+        Scalar coeff = 0.0L;
         if (p.coefficient(i).is_number(&coeff)) {
             val += coeff * mymath::pow(x_val, i);
         }
@@ -1000,29 +1054,7 @@ std::vector<std::pair<ExactRational, ExactRational>> isolate_real_roots(
     const ExactRational& lower,
     const ExactRational& upper) {
 
-    std::vector<std::pair<ExactRational, ExactRational>> intervals;
-
-    int num_roots = count_real_roots(p, lower, upper);
-    if (num_roots == 0) return intervals;
-
-    if (num_roots == 1) {
-        intervals.push_back({lower, upper});
-        return intervals;
-    }
-
-    // 二分递归
-    ExactRational mid = ExactRational(
-        lower.numerator * upper.denominator + upper.numerator * lower.denominator,
-        2 * lower.denominator * upper.denominator
-    );
-
-    auto left_intervals = isolate_real_roots(p, lower, mid);
-    auto right_intervals = isolate_real_roots(p, mid, upper);
-
-    intervals.insert(intervals.end(), left_intervals.begin(), left_intervals.end());
-    intervals.insert(intervals.end(), right_intervals.begin(), right_intervals.end());
-
-    return intervals;
+    return isolate_real_roots_impl(p, lower, upper, 0);
 }
 
 void bisect_interval(const SymbolicPolynomial& p,
@@ -1074,7 +1106,7 @@ SymbolicExpression norm(const AlgebraicNumber& a) {
     }
 
     // 范数是最小多项式常数项的绝对值（对于首一多项式）
-    long double const_term = 0.0L;
+    Scalar const_term = 0.0L;
     if (a.minimal_polynomial.coefficient(0).is_number(&const_term)) {
         return SymbolicExpression::number(mymath::abs(const_term));
     }
@@ -1089,7 +1121,7 @@ SymbolicExpression trace(const AlgebraicNumber& a) {
     }
 
     // 迹是次高次系数的相反数（对于首一多项式）
-    long double coeff = 0.0L;
+    Scalar coeff = 0.0L;
     if (a.minimal_polynomial.coefficient(a.minimal_polynomial.degree() - 1).is_number(&coeff)) {
         return SymbolicExpression::number(-coeff);
     }

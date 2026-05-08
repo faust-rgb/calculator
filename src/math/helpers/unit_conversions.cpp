@@ -9,6 +9,13 @@
 
 #include "unit_conversions.h"
 #include "mymath.h"
+#include "core/scalar_type.h"
+
+namespace {
+
+using Scalar = mymath::float128_t;
+
+} // namespace
 
 /**
  * @brief 将角度转换为弧度
@@ -18,7 +25,9 @@
  * 转换公式：rad = deg * π / 180
  */
 long double degrees_to_radians(long double value) {
-    return value * mymath::kPi / 180.0L;
+    Scalar pi = mymath::precise128::pi();
+    Scalar result = Scalar(value) * pi / Scalar(180.0L);
+    return static_cast<long double>(result);
 }
 
 /**
@@ -29,7 +38,9 @@ long double degrees_to_radians(long double value) {
  * 转换公式：deg = rad * 180 / π
  */
 long double radians_to_degrees(long double value) {
-    return value * 180.0L / mymath::kPi;
+    Scalar pi = mymath::precise128::pi();
+    Scalar result = Scalar(value) * Scalar(180.0L) / pi;
+    return static_cast<long double>(result);
 }
 
 /**
@@ -40,7 +51,8 @@ long double radians_to_degrees(long double value) {
  * 转换公式：F = C * 9/5 + 32
  */
 long double celsius_to_fahrenheit(long double value) {
-    return value * 9.0 / 5.0 + 32.0;
+    Scalar result = Scalar(value) * Scalar(9.0L) / Scalar(5.0L) + Scalar(32.0L);
+    return static_cast<long double>(result);
 }
 
 /**
@@ -51,5 +63,6 @@ long double celsius_to_fahrenheit(long double value) {
  * 转换公式：C = (F - 32) * 5/9
  */
 long double fahrenheit_to_celsius(long double value) {
-    return (value - 32.0) * 5.0 / 9.0;
+    Scalar result = (Scalar(value) - Scalar(32.0L)) * Scalar(5.0L) / Scalar(9.0L);
+    return static_cast<long double>(result);
 }

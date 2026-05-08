@@ -13,6 +13,7 @@
 #ifndef PLOT_STYLES_H
 #define PLOT_STYLES_H
 
+#include "core/scalar_type.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -146,10 +147,10 @@ struct Color {
 struct SeriesStyle {
     std::string label;
     std::string color = "#377EB8";
-    long double line_width = 1.5;
+    Scalar line_width = 1.5;
     LineStyle line_style = LineStyle::Solid;
     MarkerStyle marker_style = MarkerStyle::None;
-    long double marker_size = 4.0;
+    Scalar marker_size = 4.0;
     bool show_line = true;
     bool show_marker = false;
 };
@@ -173,10 +174,10 @@ struct PlotOptions {
     int height = 400;
 
     // 轴范围（0 表示自动）
-    long double x_min = 0;
-    long double x_max = 0;
-    long double y_min = 0;
-    long double y_max = 0;
+    Scalar x_min = 0;
+    Scalar x_max = 0;
+    Scalar y_min = 0;
+    Scalar y_max = 0;
     bool auto_range = true;
 };
 
@@ -193,8 +194,8 @@ struct HeatmapOptions {
     int height = 400;
 
     // 数据范围
-    long double z_min = 0;
-    long double z_max = 0;
+    Scalar z_min = 0;
+    Scalar z_max = 0;
     bool auto_range = true;
 };
 

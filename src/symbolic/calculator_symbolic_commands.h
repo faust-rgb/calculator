@@ -73,10 +73,10 @@ struct SymbolicCommandContext {
     std::function<std::vector<SymbolicExpression>(const std::string&)>
         parse_symbolic_expression_list;
     std::function<FunctionAnalysis(const std::string&)> build_analysis;
-    std::function<std::function<long double(const std::vector<std::pair<std::string, long double>>&)>(const std::string&)>
+    std::function<std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>(const std::string&)>
         build_scoped_evaluator;
-    std::function<long double(const std::string&)> parse_decimal;
-    std::function<long double(double)> normalize_result;
+    std::function<Scalar(const std::string&)> parse_decimal;
+    std::function<Scalar(Scalar)> normalize_result;
 };
 
 bool is_symbolic_command(const std::string& command);

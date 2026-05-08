@@ -32,7 +32,7 @@ namespace {
  * @brief 线性因子及其重数
  */
 struct LinearFactorMultiplicity {
-    long double root = 0.0L;
+    Scalar root = 0.0L;
     int multiplicity = 0;
 };
 
@@ -41,7 +41,7 @@ struct LinearFactorMultiplicity {
  * @brief 二次因子及其重数
  */
 struct QuadraticFactorMultiplicity {
-    std::vector<long double> coefficients;
+    std::vector<Scalar> coefficients;
     int multiplicity = 0;
 };
 } // namespace
@@ -53,30 +53,30 @@ struct QuadraticFactorMultiplicity {
 /**
  * @brief 检查两个多项式系数向量是否近似相等
  */
-bool polynomial_close(const std::vector<long double>& lhs,
-                      const std::vector<long double>& rhs,
-                      long double eps = 1e-8);
+bool polynomial_close(const std::vector<Scalar>& lhs,
+                      const std::vector<Scalar>& rhs,
+                      Scalar eps = 1e-8);
 
 /**
  * @brief 多项式整除检测
  */
-bool divide_exact_polynomial(std::vector<long double>* remaining,
-                             const std::vector<long double>& divisor);
+bool divide_exact_polynomial(std::vector<Scalar>* remaining,
+                             const std::vector<Scalar>& divisor);
 
 /**
  * @brief 容差多项式整除检测
  */
-bool divide_near_polynomial(std::vector<long double>* remaining,
-                            const std::vector<long double>& divisor,
-                            long double eps = 1e-7);
+bool divide_near_polynomial(std::vector<Scalar>* remaining,
+                            const std::vector<Scalar>& divisor,
+                            Scalar eps = 1e-7);
 
 /**
  * @brief 积分二次式部分分式项
  */
 SymbolicExpression integrate_quadratic_partial_fraction_term(
-    const std::vector<long double>& quadratic,
-    long double slope,
-    long double constant,
+    const std::vector<Scalar>& quadratic,
+    Scalar slope,
+    Scalar constant,
     int power,
     const std::string& variable_name);
 
@@ -87,28 +87,28 @@ SymbolicExpression integrate_quadratic_partial_fraction_term(
  * 用于部分分式积分。
  */
 bool extract_general_rational_factorization(
-    const std::vector<long double>& denominator,
+    const std::vector<Scalar>& denominator,
     std::vector<LinearFactorMultiplicity>* linear_factors,
     std::vector<QuadraticFactorMultiplicity>* quadratic_factors) {
     linear_factors->clear();
     quadratic_factors->clear();
 
-    std::vector<long double> remaining = denominator;
+    std::vector<Scalar> remaining = denominator;
     trim_coefficients(&remaining);
     
     // 1. 提取线性因子
-    std::vector<long double> roots;
+    std::vector<Scalar> roots;
     try {
         roots = polynomial_real_roots(remaining);
     } catch (...) {
         roots.clear();
     }
 
-    for (long double root : roots) {
+    for (Scalar root : roots) {
         SymbolicExpression cleaned_root_expr = clean_symbolic_constant(root);
-        long double cleaned_root = root;
+        Scalar cleaned_root = root;
         expr_is_number(cleaned_root_expr, &cleaned_root);
-        const std::vector<long double> factor = {-cleaned_root, 1.0L};
+        const std::vector<Scalar> factor = {-cleaned_root, 1.0L};
         int multiplicity = 0;
         while (remaining.size() > 1 && divide_exact_polynomial(&remaining, factor)) {
             ++multiplicity;
@@ -126,7 +126,7 @@ bool extract_general_rational_factorization(
     // x^2 - 2a*x + (a^2+b^2)。这条路径覆盖多个不同二次因子
     // 及其重复因子，避免只识别 (x^2+k)^n 这类特殊形状。
     try {
-        std::vector<mymath::complex<long double>> complex_roots =
+        std::vector<mymath::complex<Scalar>> complex_roots =
             polynomial_complex_roots(remaining);
         std::vector<bool> used(complex_roots.size(), false);
         std::sort(complex_roots.begin(), complex_roots.end(),
@@ -137,13 +137,13 @@ bool extract_general_rational_factorization(
                       return lhs.imag() < rhs.imag();
                   });
 
-        std::vector<std::vector<long double>> extracted_quadratics;
+        std::vector<std::vector<Scalar>> extracted_quadratics;
         for (std::size_t i = 0; i < complex_roots.size(); ++i) {
             if (used[i] || mymath::abs(complex_roots[i].imag()) <= 1e-7) {
                 continue;
             }
             std::size_t pair_index = complex_roots.size();
-            const mymath::complex<long double> conjugate_root =
+            const mymath::complex<Scalar> conjugate_root =
                 mymath::conj(complex_roots[i]);
             for (std::size_t j = i + 1; j < complex_roots.size(); ++j) {
                 if (used[j]) {
@@ -159,22 +159,22 @@ bool extract_general_rational_factorization(
                 continue;
             }
 
-            const long double real = (complex_roots[i].real() +
+            const Scalar real = (complex_roots[i].real() +
                                  complex_roots[pair_index].real()) * 0.5;
-            const long double imag_abs =
+            const Scalar imag_abs =
                 (mymath::abs(complex_roots[i].imag()) +
                  mymath::abs(complex_roots[pair_index].imag())) * 0.5;
             if (imag_abs <= 1e-7) {
                 continue;
             }
-            std::vector<long double> factor = {
+            std::vector<Scalar> factor = {
                 real * real + imag_abs * imag_abs,
                 -2.0 * real,
                 1.0L,
             };
-            for (long double& coefficient : factor) {
+            for (Scalar& coefficient : factor) {
                 SymbolicExpression cleaned = clean_symbolic_constant(coefficient);
-                long double cleaned_value = coefficient;
+                Scalar cleaned_value = coefficient;
                 if (expr_is_number(cleaned, &cleaned_value)) {
                     coefficient = cleaned_value;
                 }
@@ -228,14 +228,14 @@ bool extract_general_rational_factorization(
                 const int q_deg = 2;
                 if (m * q_deg == degree) {
                     // 假设形如 (a x^2 + b x + c)^m
-                    long double a = mymath::pow(mymath::abs(remaining.back()), 1.0L / m);
+                    Scalar a = mymath::pow(mymath::abs(remaining.back()), 1.0L / m);
                     if (remaining.back() < 0 && m % 2 != 0) a = -a;
-                    long double c = mymath::pow(mymath::abs(remaining[0]), 1.0L / m);
+                    Scalar c = mymath::pow(mymath::abs(remaining[0]), 1.0L / m);
                     // 尝试不同的 c 符号 (对于不可约，c/a 必须 > (b/2a)^2)
-                    for (long double c_sign : {1.0L, -1.0L}) {
-                        long double trial_c = c * c_sign;
+                    for (Scalar c_sign : {1.0L, -1.0L}) {
+                        Scalar trial_c = c * c_sign;
                         // 估算 b：通过一次项或最高次项次一项
-                        long double b = 0.0L;
+                        Scalar b = 0.0L;
                         if (degree > 2) {
                             // (ax^2 + bx + c)^m = (ax^2)^m + m(ax^2)^{m-1}(bx) + ...
                             // coeff[deg-1] = m * a^{m-1} * b
@@ -244,12 +244,12 @@ bool extract_general_rational_factorization(
                             b = remaining[1] / m; // 实际上 m=1 时就是 remaining[1]
                         }
                         
-                        std::vector<long double> q = {trial_c, b, a};
+                        std::vector<Scalar> q = {trial_c, b, a};
                         if (b * b - 4.0 * a * trial_c < -1e-7) {
-                            std::vector<long double> powered = polynomial_power_coefficients(q, m);
+                            std::vector<Scalar> powered = polynomial_power_coefficients(q, m);
                             // 由于 LC 可能不对，我们需要标准化比较
-                            long double scale = remaining.back() / powered.back();
-                            for (long double& val : powered) val *= scale;
+                            Scalar scale = remaining.back() / powered.back();
+                            for (Scalar& val : powered) val *= scale;
                             
                             if (polynomial_close(powered, remaining, 1e-4)) {
                                 quadratic_factors->push_back({q, m});
@@ -269,11 +269,11 @@ bool extract_general_rational_factorization(
 /**
  * @brief 检查两个多项式系数向量是否近似相等
  */
-bool polynomial_close(const std::vector<long double>& lhs,
-                      const std::vector<long double>& rhs,
-                      long double eps) {
-    std::vector<long double> left = lhs;
-    std::vector<long double> right = rhs;
+bool polynomial_close(const std::vector<Scalar>& lhs,
+                      const std::vector<Scalar>& rhs,
+                      Scalar eps) {
+    std::vector<Scalar> left = lhs;
+    std::vector<Scalar> right = rhs;
     trim_coefficients(&left);
     trim_coefficients(&right);
     if (left.size() != right.size()) {
@@ -293,8 +293,8 @@ bool polynomial_close(const std::vector<long double>& lhs,
  * 检查 remaining 是否能被 divisor 整除，
  * 如果能，返回商并更新 remaining。
  */
-bool divide_exact_polynomial(std::vector<long double>* remaining,
-                             const std::vector<long double>& divisor) {
+bool divide_exact_polynomial(std::vector<Scalar>* remaining,
+                             const std::vector<Scalar>& divisor) {
     const PolynomialDivisionResult division = polynomial_divide(*remaining, divisor);
     if (!polynomial_is_zero(division.remainder)) {
         return false;
@@ -304,12 +304,12 @@ bool divide_exact_polynomial(std::vector<long double>* remaining,
     return true;
 }
 
-bool divide_near_polynomial(std::vector<long double>* remaining,
-                            const std::vector<long double>& divisor,
-                            long double eps) {
+bool divide_near_polynomial(std::vector<Scalar>* remaining,
+                            const std::vector<Scalar>& divisor,
+                            Scalar eps) {
     PolynomialDivisionResult division = polynomial_divide(*remaining, divisor);
     trim_coefficients(&division.remainder);
-    for (long double coefficient : division.remainder) {
+    for (Scalar coefficient : division.remainder) {
         if (!mymath::is_near_zero(coefficient, eps)) {
             return false;
         }
@@ -334,8 +334,8 @@ struct RationalPartialFractionTerm {
     };
 
     Kind kind = Kind::kLinear;
-    long double root = 0.0L;
-    std::vector<long double> quadratic;
+    Scalar root = 0.0L;
+    std::vector<Scalar> quadratic;
     int power = 0;
     int numerator_degree = 0;
 };
@@ -359,8 +359,8 @@ struct RationalPartialFractionTerm {
  * @return true 如果成功积分
  */
 bool integrate_general_partial_fractions(
-    const std::vector<long double>& numerator,
-    const std::vector<long double>& denominator,
+    const std::vector<Scalar>& numerator,
+    const std::vector<Scalar>& denominator,
     const std::string& variable_name,
     SymbolicExpression* integrated) {
     if (denominator.size() < 2) {
@@ -411,49 +411,49 @@ bool integrate_general_partial_fractions(
     // P(x)/Q(x) = sum(A_i / (x-r_i)^p_i) + sum((B_j x + C_j) / (q_j(x))^p_j)
     // P(x) = sum(A_i * Q(x)/(x-r_i)^p_i) + sum((B_j x + C_j) * Q(x)/(q_j(x))^p_j)
     
-    std::vector<std::vector<long double>> columns;
+    std::vector<std::vector<Scalar>> columns;
     for (const auto& term : terms) {
-        std::vector<long double> divisor;
+        std::vector<Scalar> divisor;
         if (term.kind == RationalPartialFractionTerm::Kind::kLinear) {
             divisor = polynomial_power_coefficients({-term.root, 1.0L}, term.power);
         } else {
             divisor = polynomial_power_coefficients(term.quadratic, term.power);
         }
         PolynomialDivisionResult div = polynomial_divide(denominator, divisor);
-        std::vector<long double> col = div.quotient;
+        std::vector<Scalar> col = div.quotient;
         if (term.kind == RationalPartialFractionTerm::Kind::kQuadratic && term.numerator_degree == 1) {
             col.insert(col.begin(), 0.0L);
         }
         columns.push_back(col);
     }
 
-    std::vector<std::vector<long double>> matrix;
-    std::vector<long double> rhs;
+    std::vector<std::vector<Scalar>> matrix;
+    std::vector<Scalar> rhs;
     for (int c = -unknown_count * 2; static_cast<int>(rhs.size()) < unknown_count && c < 1000; ++c) {
-        long double x = static_cast<long double>(c);
+        Scalar x = (c);
         bool is_pole = false;
         for (const auto& f : linear_factors) {
             if (mymath::is_near_zero(x - f.root, 1e-8)) { is_pole = true; break; }
         }
         if (is_pole) continue;
 
-        std::vector<long double> row;
+        std::vector<Scalar> row;
         for (const auto& col : columns) {
-            long double val = polynomial_evaluate(col, x);
+            Scalar val = polynomial_evaluate(col, x);
             SymbolicExpression cleaned = clean_symbolic_constant(val);
-            long double cleaned_val = val;
+            Scalar cleaned_val = val;
             expr_is_number(cleaned, &cleaned_val);
             row.push_back(cleaned_val);
         }
         matrix.push_back(row);
-        long double rhs_val = polynomial_evaluate(numerator, x);
+        Scalar rhs_val = polynomial_evaluate(numerator, x);
         SymbolicExpression cleaned_rhs = clean_symbolic_constant(rhs_val);
-        long double cleaned_rhs_val = rhs_val;
+        Scalar cleaned_rhs_val = rhs_val;
         expr_is_number(cleaned_rhs, &cleaned_rhs_val);
         rhs.push_back(cleaned_rhs_val);
     }
 
-    std::vector<long double> coeffs;
+    std::vector<Scalar> coeffs;
     if (!solve_dense_linear_system(matrix, rhs, &coeffs)) return false;
 
     SymbolicExpression result = SymbolicExpression::number(0.0L);
@@ -470,13 +470,13 @@ bool integrate_general_partial_fractions(
                 term_int = make_multiply(val,
                                          make_function("ln", make_function("abs", v))).simplify();
             } else {
-                long double p_val = static_cast<long double>(terms[i].power);
+                Scalar p_val = (terms[i].power);
                 term_int = make_multiply(make_divide(val, SymbolicExpression::number(1.0L - p_val)),
                                          make_power(v, SymbolicExpression::number(1.0L - p_val))).simplify();
             }
         } else {
-            long double slope_val = (terms[i].numerator_degree == 1) ? coeffs[i] : 0.0L;
-            long double const_val = (terms[i].numerator_degree == 0) ? coeffs[i] : 0.0L;
+            Scalar slope_val = (terms[i].numerator_degree == 1) ? coeffs[i] : 0.0L;
+            Scalar const_val = (terms[i].numerator_degree == 0) ? coeffs[i] : 0.0L;
             term_int = integrate_quadratic_partial_fraction_term(terms[i].quadratic, slope_val, const_val, terms[i].power, variable_name);
         }
         term_exprs.push_back(term_int);
@@ -500,13 +500,13 @@ bool integrate_general_partial_fractions(
  * I_n = 2ax / [(4ac-b^2)(n-1)(ax^2+bx+c)^(n-1)] + (4n-6)/[(2n-2)(4ac-b^2)] * I_{n-1}
  */
 SymbolicExpression integrate_inverse_quadratic_power(
-    const std::vector<long double>& quadratic,
+    const std::vector<Scalar>& quadratic,
     int power,
     const std::string& variable_name) {
-    const long double c = quadratic[0];
-    const long double b = quadratic[1];
-    const long double a = quadratic[2];
-    const long double delta = 4.0 * a * c - b * b;
+    const Scalar c = quadratic[0];
+    const Scalar b = quadratic[1];
+    const Scalar a = quadratic[2];
+    const Scalar delta = 4.0 * a * c - b * b;
     if (power <= 0 || mymath::is_near_zero(a, kFormatEps) || delta <= kFormatEps) {
         throw std::runtime_error("unsupported quadratic power integral");
     }
@@ -514,7 +514,7 @@ SymbolicExpression integrate_inverse_quadratic_power(
     const SymbolicExpression x = SymbolicExpression::variable(variable_name);
     const SymbolicExpression u =
         make_add(x, SymbolicExpression::number(b / (2.0 * a))).simplify();
-    const long double d = delta / (4.0 * a * a);
+    const Scalar d = delta / (4.0 * a * a);
     const SymbolicExpression shifted_quadratic =
         make_add(make_power(u, SymbolicExpression::number(2.0)),
                  SymbolicExpression::number(d))
@@ -539,8 +539,8 @@ SymbolicExpression integrate_inverse_quadratic_power(
             make_add(recurrence_term,
                      make_multiply(
                          SymbolicExpression::number(
-                             static_cast<long double>(2 * n - 3) /
-                             static_cast<long double>(2 * (n - 1)) / d),
+                             (2 * n - 3) /
+                             (2 * (n - 1)) / d),
                          integral))
                 .simplify();
     }
@@ -557,15 +557,15 @@ SymbolicExpression integrate_inverse_quadratic_power(
  * 分解为导数部分和逆二次式部分分别处理。
  */
 SymbolicExpression integrate_quadratic_partial_fraction_term(
-    const std::vector<long double>& quadratic,
-    long double slope,
-    long double constant,
+    const std::vector<Scalar>& quadratic,
+    Scalar slope,
+    Scalar constant,
     int power,
     const std::string& variable_name) {
-    const long double a = quadratic[2];
-    const long double b = quadratic[1];
-    const long double derivative_scale = slope / (2.0 * a);
-    const long double inverse_scale = constant - derivative_scale * b;
+    const Scalar a = quadratic[2];
+    const Scalar b = quadratic[1];
+    const Scalar derivative_scale = slope / (2.0 * a);
+    const Scalar inverse_scale = constant - derivative_scale * b;
     const SymbolicExpression quadratic_expression =
         build_polynomial_expression_from_coefficients(quadratic, variable_name)
             .simplify();
@@ -581,7 +581,7 @@ SymbolicExpression integrate_quadratic_partial_fraction_term(
                                             make_function("abs", quadratic_expression)))
                     .simplify();
         } else {
-            long double p_val = static_cast<long double>(power);
+            Scalar p_val = (power);
             derivative_part =
                 make_multiply(make_divide(clean_derivative_scale, SymbolicExpression::number(1.0L - p_val)),
                               make_power(quadratic_expression,
@@ -612,8 +612,8 @@ SymbolicExpression integrate_quadratic_partial_fraction_term(
  *
  * 特殊处理 (1+x^2)^n 分母的有理式。
  */
-bool try_integrate_repeated_unit_quadratic(const std::vector<long double>& numerator,
-                                           const std::vector<long double>& denominator,
+bool try_integrate_repeated_unit_quadratic(const std::vector<Scalar>& numerator,
+                                           const std::vector<Scalar>& denominator,
                                            const std::string& variable_name,
                                            SymbolicExpression* integrated) {
     if (numerator.size() != 1 ||
@@ -769,9 +769,9 @@ bool try_integrate_substitution_product(const SymbolicExpression& derivative_fac
     const SymbolicExpression argument(function_factor.node_->left);
     const SymbolicExpression expected_derivative =
         argument.derivative(variable_name).simplify();
-    long double scale = 1.0L;
+    Scalar scale = 1.0L;
     if (!same_simplified_expression(derivative_factor, expected_derivative)) {
-        long double constant = 0.0L;
+        Scalar constant = 0.0L;
         SymbolicExpression rest;
         if (decompose_constant_times_expression(expected_derivative,
                                                 variable_name,
@@ -811,7 +811,7 @@ bool try_integrate_substitution_product(const SymbolicExpression& derivative_fac
  * - sin^3(x), cos^3(x) 等高次幂
  */
 bool try_integrate_trig_power_identity(const SymbolicExpression& base,
-                                       long double exponent_value,
+                                       Scalar exponent_value,
                                        const std::string& variable_name,
                                        SymbolicExpression* integrated) {
     if (base.node_->type != NodeType::kFunction) {
@@ -819,8 +819,8 @@ bool try_integrate_trig_power_identity(const SymbolicExpression& base,
     }
 
     const SymbolicExpression argument(base.node_->left);
-    long double a = 0.0L;
-    long double b = 0.0L;
+    Scalar a = 0.0L;
+    Scalar b = 0.0L;
     if (!decompose_linear(argument, variable_name, &a, &b) ||
         mymath::is_near_zero(a, kFormatEps)) {
         return false;
@@ -978,7 +978,7 @@ bool try_integrate_by_parts(const SymbolicExpression& left,
     const SymbolicExpression v_du = make_multiply(v, du).simplify();
 
     // 检查 v_du 是否是原始表达式的常数倍 (I = uv - k*I => I = uv/(1+k))
-    long double k = 0.0L;
+    Scalar k = 0.0L;
     SymbolicExpression remainder;
     if (decompose_constant_times_expression(v_du, variable_name, &k, &remainder) &&
         node_structural_key(remainder.node_) == original_key) {
@@ -1027,7 +1027,7 @@ bool try_integrate_by_parts(const SymbolicExpression& left,
                 SymbolicExpression v2_du2 = make_multiply(v2, du2).simplify();
                 
                 // 检查 v2_du2 是否回到 I
-                long double k2 = 0.0L;
+                Scalar k2 = 0.0L;
                 SymbolicExpression remainder2;
                 if (decompose_constant_times_expression(v2_du2, variable_name, &k2, &remainder2) &&
                     node_structural_key(remainder2.node_) == original_key) {
@@ -1071,8 +1071,8 @@ bool try_integrate_trig_product_identity(const SymbolicExpression& left,
     }
 
     const SymbolicExpression argument(left.node_->left);
-    long double a = 0.0L;
-    long double b = 0.0L;
+    Scalar a = 0.0L;
+    Scalar b = 0.0L;
     if (!decompose_linear(argument, variable_name, &a, &b) ||
         mymath::is_near_zero(a, kFormatEps)) {
         return false;
@@ -1107,8 +1107,8 @@ bool try_integrate_sec_csc_power_product(const SymbolicExpression& left,
         same_simplified_expression(SymbolicExpression(left.node_->left),
                                    SymbolicExpression(right.node_->left))) {
         const SymbolicExpression argument(left.node_->left);
-        long double a = 0.0L;
-        long double b = 0.0L;
+        Scalar a = 0.0L;
+        Scalar b = 0.0L;
         if (decompose_linear(argument, variable_name, &a, &b) &&
             !mymath::is_near_zero(a, kFormatEps)) {
             if ((left.node_->text == "sec" && right.node_->text == "tan") ||
@@ -1146,7 +1146,7 @@ bool try_integrate_sec_csc_power_product(const SymbolicExpression& left,
 
     const SymbolicExpression base(power_factor->node_->left);
     const SymbolicExpression exponent(power_factor->node_->right);
-    long double exponent_value = 0.0L;
+    Scalar exponent_value = 0.0L;
     if (base.node_->type != NodeType::kFunction ||
         !exponent.is_number(&exponent_value) ||
         !mymath::is_near_zero(exponent_value - 2.0, kFormatEps) ||
@@ -1156,8 +1156,8 @@ bool try_integrate_sec_csc_power_product(const SymbolicExpression& left,
     }
 
     const SymbolicExpression argument(base.node_->left);
-    long double a = 0.0L;
-    long double b = 0.0L;
+    Scalar a = 0.0L;
+    Scalar b = 0.0L;
     if (!decompose_linear(argument, variable_name, &a, &b) ||
         mymath::is_near_zero(a, kFormatEps)) {
         return false;
@@ -1198,8 +1198,8 @@ bool try_integrate_polynomial_quotient(const SymbolicExpression& numerator,
                                         const SymbolicExpression& denominator,
                                         const std::string& variable_name,
                                         SymbolicExpression* integrated) {
-    std::vector<long double> num_coeffs;
-    std::vector<long double> den_coeffs;
+    std::vector<Scalar> num_coeffs;
+    std::vector<Scalar> den_coeffs;
     if (!polynomial_coefficients_from_simplified(numerator.simplify(),
                                                  variable_name,
                                                  &num_coeffs) ||
@@ -1213,8 +1213,8 @@ bool try_integrate_polynomial_quotient(const SymbolicExpression& numerator,
     if (den_coeffs.size() <= 1 || polynomial_is_zero(den_coeffs)) return false;
 
     if (den_coeffs.back() < 0.0L) {
-        for (long double& c : num_coeffs) c = -c;
-        for (long double& c : den_coeffs) c = -c;
+        for (Scalar& c : num_coeffs) c = -c;
+        for (Scalar& c : den_coeffs) c = -c;
     }
 
     SymbolicExpression poly_part = SymbolicExpression::number(0.0L);
@@ -1249,8 +1249,8 @@ bool try_integrate_polynomial_quotient(const SymbolicExpression& numerator,
 
     // 回退：处理简单的线性分母
     if (den_coeffs.size() == 2) {
-        const long double constant = num_coeffs[0];
-        const long double slope = den_coeffs[1];
+        const Scalar constant = num_coeffs[0];
+        const Scalar slope = den_coeffs[1];
         if (!mymath::is_near_zero(slope, kFormatEps)) {
             const SymbolicExpression den_expr = 
                 build_polynomial_expression_from_coefficients(den_coeffs, variable_name);
@@ -1288,7 +1288,7 @@ bool collect_two_symbolic_linear_denominator_factors(
     SymbolicExpression* first_intercept,
     SymbolicExpression* second_slope,
     SymbolicExpression* second_intercept) {
-    long double numeric_factor = 1.0L;
+    Scalar numeric_factor = 1.0L;
     std::vector<SymbolicExpression> factors;
     collect_multiplicative_terms(denominator.simplify(),
                                  &numeric_factor,
@@ -1315,7 +1315,7 @@ bool collect_symbolic_linear_and_pure_quadratic_factors(
     SymbolicExpression* slope,
     SymbolicExpression* intercept,
     SymbolicExpression* quadratic_constant) {
-    long double numeric_factor = 1.0L;
+    Scalar numeric_factor = 1.0L;
     std::vector<SymbolicExpression> factors;
     collect_multiplicative_terms(denominator.simplify(),
                                  &numeric_factor,
@@ -1349,7 +1349,7 @@ bool collect_symbolic_two_linear_and_pure_quadratic_factors(
     SymbolicExpression* second_slope,
     SymbolicExpression* second_intercept,
     SymbolicExpression* quadratic_constant) {
-    long double numeric_factor = 1.0L;
+    Scalar numeric_factor = 1.0L;
     std::vector<SymbolicExpression> factors;
     collect_multiplicative_terms(denominator.simplify(),
                                  &numeric_factor,
@@ -1397,7 +1397,7 @@ bool collect_symbolic_repeated_linear_and_linear_factors(
     SymbolicExpression* repeated_intercept,
     SymbolicExpression* simple_slope,
     SymbolicExpression* simple_intercept) {
-    long double numeric_factor = 1.0L;
+    Scalar numeric_factor = 1.0L;
     std::vector<SymbolicExpression> factors;
     collect_multiplicative_terms(denominator.simplify(),
                                  &numeric_factor,
@@ -1409,7 +1409,7 @@ bool collect_symbolic_repeated_linear_and_linear_factors(
 
     auto try_order = [&](const SymbolicExpression& repeated_factor,
                          const SymbolicExpression& simple_factor) {
-        long double exponent_value = 0.0L;
+        Scalar exponent_value = 0.0L;
         if (repeated_factor.node_->type != NodeType::kPower ||
             !SymbolicExpression(repeated_factor.node_->right).is_number(&exponent_value) ||
             !mymath::is_near_zero(exponent_value - 2.0, kFormatEps)) {
@@ -1437,7 +1437,7 @@ bool collect_symbolic_repeated_linear_and_pure_quadratic_factors(
     SymbolicExpression* repeated_slope,
     SymbolicExpression* repeated_intercept,
     SymbolicExpression* quadratic_constant) {
-    long double numeric_factor = 1.0L;
+    Scalar numeric_factor = 1.0L;
     std::vector<SymbolicExpression> factors;
     collect_multiplicative_terms(denominator.simplify(),
                                  &numeric_factor,
@@ -1449,7 +1449,7 @@ bool collect_symbolic_repeated_linear_and_pure_quadratic_factors(
 
     auto try_order = [&](const SymbolicExpression& repeated_factor,
                          const SymbolicExpression& quadratic_factor) {
-        long double exponent_value = 0.0L;
+        Scalar exponent_value = 0.0L;
         if (repeated_factor.node_->type != NodeType::kPower ||
             !SymbolicExpression(repeated_factor.node_->right).is_number(&exponent_value) ||
             !mymath::is_near_zero(exponent_value - 2.0, kFormatEps)) {
@@ -1474,7 +1474,7 @@ bool collect_symbolic_repeated_pure_quadratic_factor(
     const std::string& variable_name,
     SymbolicExpression* constant_term) {
     const SymbolicExpression simplified = denominator.simplify();
-    long double exponent_value = 0.0L;
+    Scalar exponent_value = 0.0L;
     return simplified.node_->type == NodeType::kPower &&
            SymbolicExpression(simplified.node_->right).is_number(&exponent_value) &&
            mymath::is_near_zero(exponent_value - 2.0, kFormatEps) &&
@@ -2004,7 +2004,7 @@ bool collect_two_pure_quadratic_denominator_factors(
     const std::string& variable_name,
     SymbolicExpression* first_constant,
     SymbolicExpression* second_constant) {
-    long double numeric_factor = 1.0L;
+    Scalar numeric_factor = 1.0L;
     std::vector<SymbolicExpression> factors;
     collect_multiplicative_terms(denominator.simplify(),
                                  &numeric_factor,
@@ -2140,14 +2140,14 @@ bool try_integrate_weierstrass_substitution(const SymbolicExpression& expression
     std::vector<SymbolicExpression> terms;
     collect_additive_expressions(denominator, &terms);
 
-    long double A = 0.0L;
+    Scalar A = 0.0L;
     SymbolicExpression B_expr = SymbolicExpression::number(0.0L);
     SymbolicExpression C_expr = SymbolicExpression::number(0.0L);
     SymbolicExpression argument;
     bool found_argument = false;
 
     for (const auto& term : terms) {
-        long double val = 0.0L;
+        Scalar val = 0.0L;
         if (term.is_number(&val)) {
             A += val;
         } else if (term.node_->type == NodeType::kFunction && term.node_->text == "sin") {
@@ -2168,7 +2168,7 @@ bool try_integrate_weierstrass_substitution(const SymbolicExpression& expression
             C_expr = make_add(C_expr, SymbolicExpression::number(1.0L)).simplify();
         } else if (term.node_->type == NodeType::kMultiply) {
             // 处理 B * sin(x) 或 C * cos(x)
-            long double coeff = 0.0L;
+            Scalar coeff = 0.0L;
             SymbolicExpression rest;
             if (decompose_constant_times_expression(term, variable_name, &coeff, &rest)) {
                 if (rest.node_->type == NodeType::kFunction && rest.node_->text == "sin") {
@@ -2200,7 +2200,7 @@ bool try_integrate_weierstrass_substitution(const SymbolicExpression& expression
 
     if (!found_argument) return false;
 
-    long double a = 0.0L, b = 0.0L;
+    Scalar a = 0.0L, b = 0.0L;
     if (!decompose_linear(argument, variable_name, &a, &b) || !mymath::is_near_zero(b, kFormatEps)) {
         // 目前仅支持 sin(ax), cos(ax)
         return false;
@@ -2213,11 +2213,11 @@ bool try_integrate_weierstrass_substitution(const SymbolicExpression& expression
     
     // 积分变为: integral( (2/a) / (A*(1+t^2) + B*(2t) + C*(1-t^2)), t )
     // 分母多项式: (A-C)t^2 + 2Bt + (A+C)
-    long double b_val = 0.0L, c_val = 0.0L;
+    Scalar b_val = 0.0L, c_val = 0.0L;
     if (!B_expr.is_number(&b_val) || !C_expr.is_number(&c_val)) return false;
 
-    std::vector<long double> poly_numerator = { 2.0 / a };
-    std::vector<long double> poly_denominator = { A + c_val, 2.0 * b_val, A - c_val };
+    std::vector<Scalar> poly_numerator = { 2.0 / a };
+    std::vector<Scalar> poly_denominator = { A + c_val, 2.0 * b_val, A - c_val };
 
     SymbolicExpression t_variable = SymbolicExpression::variable("_t");
     SymbolicExpression t_numerator = build_polynomial_expression_from_coefficients(poly_numerator, "_t");

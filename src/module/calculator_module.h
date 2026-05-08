@@ -176,7 +176,7 @@ public:
     // ==================== 函数注册接口 ====================
 
     /// 返回标量函数映射（函数名 -> 计算函数）
-    virtual std::map<std::string, std::function<long double(const std::vector<long double>&)>> get_scalar_functions() const { return {}; }
+    virtual std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>> get_scalar_functions() const { return {}; }
 
     /// 返回矩阵函数映射（函数名 -> 计算函数）
     virtual std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>> get_matrix_functions() const { return {}; }

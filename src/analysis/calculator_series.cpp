@@ -16,6 +16,7 @@
 // - Wynn-epsilon 加速：数值级数收敛加速
 
 #include "analysis/calculator_series.h"
+#include "core/scalar_type.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "statistics/probability.h"
 #include "math/helpers/integer_helpers.h"
@@ -32,6 +33,8 @@
 
 namespace series_ops {
 
+using Scalar = mymath::Scalar;
+
 namespace internal {
 
 // ============================================================================
@@ -44,28 +47,28 @@ namespace internal {
  * 表示形式：sum_{k=low_power}^{high_power} c_k * x^k
  */
 struct LaurentSeries {
-    std::vector<long double> coefficients;  // 系数，从 low_power 开始
+    std::vector<Scalar> coefficients;  // 系数，从 low_power 开始
     int low_power;                      // 最低幂次（可为负）
     int high_power;                     // 最高幂次
 
     LaurentSeries() : low_power(0), high_power(-1) {}
 
-    LaurentSeries(int low, int high, const std::vector<long double>& coeffs)
+    LaurentSeries(int low, int high, const std::vector<Scalar>& coeffs)
         : coefficients(coeffs), low_power(low), high_power(high) {}
 
     // 检查是否为空
     bool empty() const { return coefficients.empty() || low_power > high_power; }
 
     // 获取指定幂次的系数
-    long double get_coefficient(int power) const {
-        if (power < low_power || power > high_power) return 0.0L;
+    Scalar get_coefficient(int power) const {
+        if (power < low_power || power > high_power) return Scalar(0);
         return coefficients[power - low_power];
     }
 
     // 转换为 Taylor 级数（如果 low_power >= 0）
-    bool to_taylor(std::vector<long double>& result, int degree) const {
+    bool to_taylor(std::vector<Scalar>& result, int degree) const {
         if (low_power < 0) return false;
-        result.assign(degree + 1, 0.0L);
+        result.assign(degree + 1, Scalar(0));
         for (int k = low_power; k <= high_power && k <= degree; ++k) {
             result[k] = get_coefficient(k);
         }
@@ -80,11 +83,11 @@ struct LaurentSeries {
 /**
  * @brief 幂级数加法
  */
-std::vector<long double> ps_add(const std::vector<long double>& a, const std::vector<long double>& b, int degree) {
-    std::vector<long double> res(degree + 1, 0.0L);
+std::vector<Scalar> ps_add(const std::vector<Scalar>& a, const std::vector<Scalar>& b, int degree) {
+    std::vector<Scalar> res(degree + 1, Scalar(0));
     for (int i = 0; i <= degree; ++i) {
-        res[i] = (i < static_cast<int>(a.size()) ? a[i] : 0.0L) +
-                 (i < static_cast<int>(b.size()) ? b[i] : 0.0L);
+        res[i] = (i < static_cast<int>(a.size()) ? a[i] : Scalar(0)) +
+                 (i < static_cast<int>(b.size()) ? b[i] : Scalar(0));
     }
     return res;
 }
@@ -92,11 +95,11 @@ std::vector<long double> ps_add(const std::vector<long double>& a, const std::ve
 /**
  * @brief 幂级数减法
  */
-std::vector<long double> ps_sub(const std::vector<long double>& a, const std::vector<long double>& b, int degree) {
-    std::vector<long double> res(degree + 1, 0.0L);
+std::vector<Scalar> ps_sub(const std::vector<Scalar>& a, const std::vector<Scalar>& b, int degree) {
+    std::vector<Scalar> res(degree + 1, Scalar(0));
     for (int i = 0; i <= degree; ++i) {
-        res[i] = (i < static_cast<int>(a.size()) ? a[i] : 0.0L) -
-                 (i < static_cast<int>(b.size()) ? b[i] : 0.0L);
+        res[i] = (i < static_cast<int>(a.size()) ? a[i] : Scalar(0)) -
+                 (i < static_cast<int>(b.size()) ? b[i] : Scalar(0));
     }
     return res;
 }
@@ -106,17 +109,15 @@ std::vector<long double> ps_sub(const std::vector<long double>& a, const std::ve
  *
  * 使用卷积计算乘积的前 degree+1 项。
  */
-std::vector<long double> ps_mul(const std::vector<long double>& a, const std::vector<long double>& b, int degree) {
-    std::vector<mymath::float128_t> res_128(degree + 1, 0.0L);
+std::vector<Scalar> ps_mul(const std::vector<Scalar>& a, const std::vector<Scalar>& b, int degree) {
+    std::vector<Scalar> res(degree + 1, Scalar(0));
     for (int i = 0; i <= degree; ++i) {
-        if (i >= static_cast<int>(a.size()) || mymath::is_near_zero(a[i], 1e-15)) continue;
+        if (i >= static_cast<int>(a.size()) || mymath::precise128::abs(a[i]) < Scalar(1e-15L)) continue;
         for (int j = 0; i + j <= degree; ++j) {
-            if (j >= static_cast<int>(b.size()) || mymath::is_near_zero(b[j], 1e-15)) continue;
-            res_128[i + j] = res_128[i + j] + mymath::float128_t(a[i]) * mymath::float128_t(b[j]);
+            if (j >= static_cast<int>(b.size()) || mymath::precise128::abs(b[j]) < Scalar(1e-15L)) continue;
+            res[i + j] = res[i + j] + a[i] * b[j];
         }
     }
-    std::vector<long double> res(degree + 1);
-    for (int i = 0; i <= degree; ++i) res[i] = res_128[i].to_long_double();
     return res;
 }
 
@@ -132,13 +133,13 @@ std::vector<long double> ps_mul(const std::vector<long double>& a, const std::ve
  * @param laurent_shift 输出 Laurent 级数的负幂起始位置（负数表示有负幂项）
  * @throws std::runtime_error 当除数为零时
  */
-std::vector<long double> ps_div_with_laurent(const std::vector<long double>& a, const std::vector<long double>& b, int degree, int* laurent_shift) {
+std::vector<Scalar> ps_div_with_laurent(const std::vector<Scalar>& a, const std::vector<Scalar>& b, int degree, int* laurent_shift) {
     if (b.empty()) throw std::runtime_error("division by empty power series");
 
     // 查找 a 和 b 的第一个非零项索引
     int start_a = -1;
     for (int i = 0; i < static_cast<int>(a.size()); ++i) {
-        if (!mymath::is_near_zero(a[i], 1e-18)) {
+        if (mymath::precise128::abs(a[i]) >= Scalar(1e-18L)) {
             start_a = i;
             break;
         }
@@ -146,7 +147,7 @@ std::vector<long double> ps_div_with_laurent(const std::vector<long double>& a, 
 
     int start_b = -1;
     for (int i = 0; i < static_cast<int>(b.size()); ++i) {
-        if (!mymath::is_near_zero(b[i], 1e-18)) {
+        if (mymath::precise128::abs(b[i]) >= Scalar(1e-18L)) {
             start_b = i;
             break;
         }
@@ -157,7 +158,7 @@ std::vector<long double> ps_div_with_laurent(const std::vector<long double>& a, 
     // 如果 a 为全零，结果全零
     if (start_a == -1) {
         if (laurent_shift) *laurent_shift = 0;
-        return std::vector<long double>(degree + 1, 0.0L);
+        return std::vector<Scalar>(degree + 1, Scalar(0));
     }
 
     // 计算位移：x^start_a / x^start_b = x^(start_a - start_b)
@@ -167,10 +168,10 @@ std::vector<long double> ps_div_with_laurent(const std::vector<long double>& a, 
     if (laurent_shift) *laurent_shift = shift;
 
     // 提取有效部分并相除
-    std::vector<long double> a_effective;
+    std::vector<Scalar> a_effective;
     for (int i = start_a; i < static_cast<int>(a.size()); ++i) a_effective.push_back(a[i]);
 
-    std::vector<long double> b_effective;
+    std::vector<Scalar> b_effective;
     for (int i = start_b; i < static_cast<int>(b.size()); ++i) b_effective.push_back(b[i]);
 
     // 计算商级数的有效部分
@@ -179,26 +180,26 @@ std::vector<long double> ps_div_with_laurent(const std::vector<long double>& a, 
     int result_size = degree + 1 - result_start;
     if (result_size <= 0) {
         // 结果全是超出范围的负幂项
-        return std::vector<long double>(degree + 1, 0.0L);
+        return std::vector<Scalar>(degree + 1, Scalar(0));
     }
 
-    std::vector<mymath::float128_t> res_effective(result_size, 0.0L);
-    mymath::float128_t inv_b0 = mymath::float128_t(1.0L) / mymath::float128_t(b_effective[0]);
+    std::vector<Scalar> res_effective(result_size, Scalar(0));
+    Scalar inv_b0 = Scalar(1) / b_effective[0];
     for (int i = 0; i < result_size; ++i) {
-        mymath::float128_t val = mymath::float128_t(i < static_cast<int>(a_effective.size()) ? a_effective[i] : 0.0L);
+        Scalar val = (i < static_cast<int>(a_effective.size()) ? a_effective[i] : Scalar(0));
         for (int j = 1; j <= i; ++j) {
-            if (j < static_cast<int>(b_effective.size())) 
-                val = val - mymath::float128_t(b_effective[j]) * res_effective[i - j];
+            if (j < static_cast<int>(b_effective.size()))
+                val = val - b_effective[j] * res_effective[i - j];
         }
         res_effective[i] = val * inv_b0;
     }
 
     // 构建最终结果，考虑 Laurent 位移
-    std::vector<long double> final_res(degree + 1, 0.0L);
+    std::vector<Scalar> final_res(degree + 1, Scalar(0));
     for (int i = 0; i <= degree; ++i) {
         int effective_idx = i - result_start;
         if (effective_idx >= 0 && effective_idx < static_cast<int>(res_effective.size())) {
-            final_res[i] = res_effective[effective_idx].to_long_double();
+            final_res[i] = res_effective[effective_idx];
         }
     }
     return final_res;
@@ -210,34 +211,34 @@ std::vector<long double> ps_div_with_laurent(const std::vector<long double>& a, 
  * 计算商级数 a / b 的前 degree+1 项。
  * 当结果为 Laurent 级数时抛出异常。
  */
-std::vector<long double> ps_div(const std::vector<long double>& a, const std::vector<long double>& b, int degree) {
+std::vector<Scalar> ps_div(const std::vector<Scalar>& a, const std::vector<Scalar>& b, int degree) {
     int shift = 0;
-    std::vector<long double> result = ps_div_with_laurent(a, b, degree, &shift);
+    std::vector<Scalar> result = ps_div_with_laurent(a, b, degree, &shift);
     if (shift < 0) {
         // 对于 Laurent 级数，前导系数对应 x^shift 项
         // 由于 shift < 0，前导系数存储在 result 的开始位置（对应最低幂次）
         // 我们需要找到第一个非零系数作为前导系数
-        long double leading = 0.0L;
-        for (long double v : result) {
-            if (!mymath::is_near_zero(v, 1e-15)) {
+        Scalar leading = Scalar(0);
+        for (const Scalar& v : result) {
+            if (mymath::precise128::abs(v) >= Scalar(1e-15L)) {
                 leading = v;
                 break;
             }
         }
         // 如果 result 中没有找到非零值，说明前导系数在 res_effective[0]
         // 这种情况发生在 shift < 0 且 |shift| > degree 时
-        if (mymath::is_near_zero(leading, 1e-15)) {
+        if (mymath::precise128::abs(leading) < Scalar(1e-15L)) {
             // 重新计算前导系数
             int start_a = -1;
             for (int i = 0; i < static_cast<int>(a.size()); ++i) {
-                if (!mymath::is_near_zero(a[i], 1e-15)) {
+                if (mymath::precise128::abs(a[i]) >= Scalar(1e-15L)) {
                     start_a = i;
                     break;
                 }
             }
             int start_b = -1;
             for (int i = 0; i < static_cast<int>(b.size()); ++i) {
-                if (!mymath::is_near_zero(b[i], 1e-15)) {
+                if (mymath::precise128::abs(b[i]) >= Scalar(1e-15L)) {
                     start_b = i;
                     break;
                 }
@@ -246,7 +247,7 @@ std::vector<long double> ps_div(const std::vector<long double>& a, const std::ve
                 leading = a[start_a] / b[start_b];
             }
         }
-        throw series_ops::internal::PoleException(shift, leading);
+        throw series_ops::internal::PoleException(shift, leading.to_long_double());
     }
     return result;
 }
@@ -256,20 +257,18 @@ std::vector<long double> ps_div(const std::vector<long double>& a, const std::ve
  *
  * 计算 exp(a) 的幂级数。
  */
-std::vector<long double> ps_exp(const std::vector<long double>& a, int degree) {
-    std::vector<mymath::float128_t> res_128(degree + 1, 0.0L);
-    long double a0 = a.empty() ? 0.0L : a[0];
-    res_128[0] = mymath::precise128::exp(mymath::float128_t(a0));
+std::vector<Scalar> ps_exp(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> res(degree + 1, Scalar(0));
+    Scalar a0 = a.empty() ? Scalar(0) : a[0];
+    res[0] = mymath::precise128::exp(a0);
     for (int i = 1; i <= degree; ++i) {
-        mymath::float128_t sum = 0.0L;
+        Scalar sum = Scalar(0);
         for (int k = 1; k <= i; ++k) {
-            long double ak = k < static_cast<int>(a.size()) ? a[k] : 0.0L;
-            sum = sum + mymath::float128_t(k) * mymath::float128_t(ak) * res_128[i - k];
+            Scalar ak = k < static_cast<int>(a.size()) ? a[k] : Scalar(0);
+            sum = sum + Scalar(k) * ak * res[i - k];
         }
-        res_128[i] = sum / mymath::float128_t(i);
+        res[i] = sum / Scalar(i);
     }
-    std::vector<long double> res(degree + 1);
-    for (int i = 0; i <= degree; ++i) res[i] = res_128[i].to_long_double();
     return res;
 }
 
@@ -279,22 +278,20 @@ std::vector<long double> ps_exp(const std::vector<long double>& a, int degree) {
  * 计算 ln(a) 的幂级数。
  * 要求 a[0] > 0。
  */
-std::vector<long double> ps_ln(const std::vector<long double>& a, int degree) {
-    if (a.empty() || a[0] <= 0) throw std::runtime_error("ln of non-positive power series base");
-    std::vector<mymath::float128_t> res_128(degree + 1, 0.0L);
-    res_128[0] = mymath::precise128::ln(mymath::float128_t(a[0]));
-    mymath::float128_t inv_a0 = mymath::float128_t(1.0L) / mymath::float128_t(a[0]);
+std::vector<Scalar> ps_ln(const std::vector<Scalar>& a, int degree) {
+    if (a.empty() || a[0] <= Scalar(0)) throw std::runtime_error("ln of non-positive power series base");
+    std::vector<Scalar> res(degree + 1, Scalar(0));
+    res[0] = mymath::precise128::ln(a[0]);
+    Scalar inv_a0 = Scalar(1) / a[0];
     for (int i = 1; i <= degree; ++i) {
-        mymath::float128_t sum = 0.0L;
+        Scalar sum = Scalar(0);
         for (int k = 1; k < i; ++k) {
-            long double ak = i - k < static_cast<int>(a.size()) ? a[i - k] : 0.0L;
-            sum = sum + mymath::float128_t(k) * res_128[k] * mymath::float128_t(ak);
+            Scalar ak = i - k < static_cast<int>(a.size()) ? a[i - k] : Scalar(0);
+            sum = sum + Scalar(k) * res[k] * ak;
         }
-        long double ai = i < static_cast<int>(a.size()) ? a[i] : 0.0L;
-        res_128[i] = (mymath::float128_t(ai) - sum / mymath::float128_t(i)) * inv_a0;
+        Scalar ai = i < static_cast<int>(a.size()) ? a[i] : Scalar(0);
+        res[i] = (ai - sum / Scalar(i)) * inv_a0;
     }
-    std::vector<long double> res(degree + 1);
-    for (int i = 0; i <= degree; ++i) res[i] = res_128[i].to_long_double();
     return res;
 }
 
@@ -303,36 +300,36 @@ std::vector<long double> ps_ln(const std::vector<long double>& a, int degree) {
  *
  * 同时计算 sin(a) 和 cos(a) 的幂级数。
  */
-void ps_sincos(const std::vector<long double>& a, int degree, std::vector<long double>& sin_res, std::vector<long double>& cos_res) {
-    std::vector<mymath::float128_t> sin_res_128(degree + 1, 0.0L);
-    std::vector<mymath::float128_t> cos_res_128(degree + 1, 0.0L);
-    long double a0 = a.empty() ? 0.0L : a[0];
-    sin_res_128[0] = mymath::precise128::sin(mymath::float128_t(a0));
-    cos_res_128[0] = mymath::precise128::cos(mymath::float128_t(a0));
+void ps_sincos(const std::vector<Scalar>& a, int degree, std::vector<Scalar>& sin_res, std::vector<Scalar>& cos_res) {
+    std::vector<Scalar> sin_res_128(degree + 1, Scalar(0));
+    std::vector<Scalar> cos_res_128(degree + 1, Scalar(0));
+    Scalar a0 = a.empty() ? Scalar(0) : a[0];
+    sin_res_128[0] = mymath::precise128::sin(a0);
+    cos_res_128[0] = mymath::precise128::cos(a0);
     for (int i = 1; i <= degree; ++i) {
-        mymath::float128_t sum_sin = 0.0L;
-        mymath::float128_t sum_cos = 0.0L;
+        Scalar sum_sin = Scalar(0);
+        Scalar sum_cos = Scalar(0);
         for (int k = 1; k <= i; ++k) {
-            long double ak = k < static_cast<int>(a.size()) ? a[k] : 0.0L;
-            sum_sin = sum_sin + mymath::float128_t(k) * mymath::float128_t(ak) * cos_res_128[i - k];
-            sum_cos = sum_cos - mymath::float128_t(k) * mymath::float128_t(ak) * sin_res_128[i - k];
+            Scalar ak = k < static_cast<int>(a.size()) ? a[k] : Scalar(0);
+            sum_sin = sum_sin + Scalar(k) * ak * cos_res_128[i - k];
+            sum_cos = sum_cos - Scalar(k) * ak * sin_res_128[i - k];
         }
-        sin_res_128[i] = sum_sin / mymath::float128_t(i);
-        cos_res_128[i] = sum_cos / mymath::float128_t(i);
+        sin_res_128[i] = sum_sin / Scalar(i);
+        cos_res_128[i] = sum_cos / Scalar(i);
     }
-    sin_res.assign(degree + 1, 0.0L);
-    cos_res.assign(degree + 1, 0.0L);
+    sin_res.assign(degree + 1, Scalar(0));
+    cos_res.assign(degree + 1, Scalar(0));
     for (int i = 0; i <= degree; ++i) {
-        sin_res[i] = sin_res_128[i].to_long_double();
-        cos_res[i] = cos_res_128[i].to_long_double();
+        sin_res[i] = sin_res_128[i];
+        cos_res[i] = cos_res_128[i];
     }
 }
 
 /**
  * @brief 幂级数正弦函数
  */
-std::vector<long double> ps_sin(const std::vector<long double>& a, int degree) {
-    std::vector<long double> s, c;
+std::vector<Scalar> ps_sin(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> s, c;
     ps_sincos(a, degree, s, c);
     return s;
 }
@@ -340,14 +337,14 @@ std::vector<long double> ps_sin(const std::vector<long double>& a, int degree) {
 /**
  * @brief 幂级数余弦函数
  */
-std::vector<long double> ps_cos(const std::vector<long double>& a, int degree) {
-    std::vector<long double> s, c;
+std::vector<Scalar> ps_cos(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> s, c;
     ps_sincos(a, degree, s, c);
     return c;
 }
 
 // 前向声明
-static std::vector<long double> ps_pow_const_puiseux(const std::vector<long double>& a, long double n, int degree, int leading);
+static std::vector<Scalar> ps_pow_const_puiseux(const std::vector<Scalar>& a, Scalar n, int degree, int leading);
 
 /**
  * @brief 幂级数幂函数
@@ -355,21 +352,21 @@ static std::vector<long double> ps_pow_const_puiseux(const std::vector<long doub
  * 计算 a^n 的幂级数，其中 n 为常数。
  * 特殊处理 a[0] = 0 的情况。
  */
-std::vector<long double> ps_pow_const(const std::vector<long double>& a, long double n, int degree) {
-    if (a.empty() || mymath::is_near_zero(a[0], 1e-15)) {
+std::vector<Scalar> ps_pow_const(const std::vector<Scalar>& a, Scalar n, int degree) {
+    if (a.empty() || mymath::precise128::abs(a[0]) < Scalar(1e-15L)) {
         // ... (remaining logic for leading zero, will update internally)
         // 底数首项为零的情况
-        if (mymath::is_near_zero(n, 1e-15)) {
+        if (mymath::precise128::abs(Scalar(n)) < Scalar(1e-15L)) {
             // a^0 = 1
-            std::vector<long double> res(degree + 1, 0.0L);
-            res[0] = 1.0L;
+            std::vector<Scalar> res(degree + 1, Scalar(0));
+            res[0] = Scalar(1);
             return res;
         }
 
         // 找到第一个非零项
         int leading = -1;
         for (int i = 0; i < static_cast<int>(a.size()); ++i) {
-            if (!mymath::is_near_zero(a[i], 1e-18)) {
+            if (mymath::precise128::abs(a[i]) >= Scalar(1e-18L)) {
                 leading = i;
                 break;
             }
@@ -378,7 +375,7 @@ std::vector<long double> ps_pow_const(const std::vector<long double>& a, long do
         if (leading < 0) {
             // 全零序列
             if (n > 0) {
-                return std::vector<long double>(degree + 1, 0.0L);
+                return std::vector<Scalar>(degree + 1, Scalar(0));
             } else {
                 throw std::runtime_error("0^negative is undefined");
             }
@@ -387,13 +384,13 @@ std::vector<long double> ps_pow_const(const std::vector<long double>& a, long do
         // a(x) = a_leading * x^leading * (1 + higher terms)
         // a(x)^n = a_leading^n * x^(leading*n) * (1 + higher terms)^n
 
-        const long double shifted_power = static_cast<long double>(leading) * n;
+        const Scalar shifted_power = (leading) * n;
 
         // 情况1：正整数幂 - 直接乘法
         if (n > 0 && mymath::is_integer(n, 1e-12)) {
-            std::vector<long double> res(degree + 1, 0.0L);
-            res[0] = 1.0L;
-            std::vector<long double> base = a;
+            std::vector<Scalar> res(degree + 1, Scalar(0));
+            res[0] = Scalar(1);
+            std::vector<Scalar> base = a;
             int p = static_cast<int>(n + 0.5);
             for (int i = 0; i < p; ++i) res = ps_mul(res, base, degree);
             return res;
@@ -403,9 +400,9 @@ std::vector<long double> ps_pow_const(const std::vector<long double>& a, long do
         if (n < 0 && mymath::is_integer(n, 1e-12)) {
             int p = static_cast<int>(-n + 0.5);
             // a^(-p) = 1 / a^p
-            std::vector<long double> pos_pow = ps_pow_const(a, static_cast<long double>(p), degree);
-            std::vector<long double> one(degree + 1, 0.0L);
-            one[0] = 1.0L;
+            std::vector<Scalar> pos_pow = ps_pow_const(a, (p), degree);
+            std::vector<Scalar> one(degree + 1, Scalar(0));
+            one[0] = Scalar(1);
             return ps_div_with_laurent(one, pos_pow, degree, nullptr);
         }
 
@@ -414,25 +411,25 @@ std::vector<long double> ps_pow_const(const std::vector<long double>& a, long do
             const int shift = static_cast<int>(round_to_long_long(shifted_power));
             if (shift < 0) {
                 // Laurent 级数（极点）
-                long double leading_coeff = mymath::pow(a[leading], n);
-                throw series_ops::internal::PoleException(shift, leading_coeff);
+                Scalar leading_coeff = mymath::precise128::pow(a[leading], Scalar(n));
+                throw series_ops::internal::PoleException(shift, leading_coeff.to_long_double());
             }
             if (shift > degree) {
-                return std::vector<long double>(degree + 1, 0.0L);
+                return std::vector<Scalar>(degree + 1, Scalar(0));
             }
 
             // 归一化：提取 x^leading 因子
-            std::vector<long double> normalized;
+            std::vector<Scalar> normalized;
             normalized.reserve(a.size() - static_cast<std::size_t>(leading));
             for (int i = leading; i < static_cast<int>(a.size()); ++i) {
                 normalized.push_back(a[static_cast<std::size_t>(i)]);
             }
 
             // 现在 normalized[0] != 0，可以计算 normalized^n
-            const std::vector<long double> powered = ps_pow_const(normalized, n, degree - shift);
+            const std::vector<Scalar> powered = ps_pow_const(normalized, n, degree - shift);
 
             // 乘以 x^shift
-            std::vector<long double> res(degree + 1, 0.0L);
+            std::vector<Scalar> res(degree + 1, Scalar(0));
             for (int i = 0; i + shift <= degree &&
                             i < static_cast<int>(powered.size()); ++i) {
                 res[static_cast<std::size_t>(i + shift)] =
@@ -444,31 +441,29 @@ std::vector<long double> ps_pow_const(const std::vector<long double>& a, long do
         // 情况4：分数幂，位移非整数 - 需要 Puiseux 级数
         // 对于极限计算，如果位移为正，则极限为 0；如果位移为负，则极限为无穷大。
         if (shifted_power > 1e-10) {
-            return std::vector<long double>(degree + 1, 0.0L);
+            return std::vector<Scalar>(degree + 1, Scalar(0));
         } else if (shifted_power < -1e-10) {
-            long double leading_coeff = mymath::pow(a[leading], n);
+            Scalar leading_coeff = mymath::precise128::pow(a[leading], Scalar(n));
             // 抛出极点异常，虽然这实际上是支点，但对于极限判定是等价的
-            throw series_ops::internal::PoleException(-1, leading_coeff);
+            throw series_ops::internal::PoleException(-1, leading_coeff.to_long_double());
         }
 
         return ps_pow_const_puiseux(a, n, degree, leading);
     }
 
     // 正常情况：a[0] != 0
-    std::vector<mymath::float128_t> res_128(degree + 1, 0.0L);
-    mymath::float128_t n_128(n);
-    res_128[0] = mymath::precise128::pow(mymath::float128_t(a[0]), n_128);
-    mymath::float128_t inv_a0 = mymath::float128_t(1.0L) / mymath::float128_t(a[0]);
+    std::vector<Scalar> res(degree + 1, Scalar(0));
+    Scalar n_scalar(n);
+    res[0] = mymath::precise128::pow(a[0], n_scalar);
+    Scalar inv_a0 = Scalar(1) / a[0];
     for (int i = 1; i <= degree; ++i) {
-        mymath::float128_t sum = 0.0L;
+        Scalar sum = Scalar(0);
         for (int k = 1; k <= i; ++k) {
-            long double ak = k < static_cast<int>(a.size()) ? a[k] : 0.0L;
-            sum = sum + (n_128 * mymath::float128_t(k) - mymath::float128_t(i - k)) * mymath::float128_t(ak) * res_128[i - k];
+            Scalar ak = k < static_cast<int>(a.size()) ? a[k] : Scalar(0);
+            sum = sum + (n_scalar * Scalar(k) - Scalar(i - k)) * ak * res[i - k];
         }
-        res_128[i] = sum * inv_a0 / mymath::float128_t(i);
+        res[i] = sum * inv_a0 / Scalar(i);
     }
-    std::vector<long double> res(degree + 1);
-    for (int i = 0; i <= degree; ++i) res[i] = res_128[i].to_long_double();
     return res;
 }
 
@@ -478,14 +473,14 @@ std::vector<long double> ps_pow_const(const std::vector<long double>& a, long do
  * 当 a(x)^n 的首项位移不是整数时，需要 Puiseux 级数。
  * 使用广义二项式展开计算。
  */
-std::vector<long double> ps_pow_const_puiseux(const std::vector<long double>& a, long double n, int degree, int leading) {
+std::vector<Scalar> ps_pow_const_puiseux(const std::vector<Scalar>& a, Scalar n, int degree, int leading) {
     // a(x) = a[leading] * x^leading * (1 + b_1 * x + b_2 * x^2 + ...)
     // a(x)^n = a[leading]^n * x^(leading*n) * (1 + b_1 * x + ...)^n
 
     // 提取归一化部分
-    std::vector<long double> normalized;
-    long double a_leading = a[leading];
-    normalized.push_back(1.0L);  // 归一化使首项为 1
+    std::vector<Scalar> normalized;
+    Scalar a_leading = a[leading];
+    normalized.push_back(Scalar(1));  // 归一化使首项为 1
     for (int i = leading + 1; i < static_cast<int>(a.size()); ++i) {
         normalized.push_back(a[i] / a_leading);
     }
@@ -493,120 +488,120 @@ std::vector<long double> ps_pow_const_puiseux(const std::vector<long double>& a,
     // 使用二项式展开 (1 + u)^n = sum_{k=0}^{inf} C(n,k) * u^k
     // 其中 u = b_1 * x + b_2 * x^2 + ...
 
-    std::vector<mymath::float128_t> res_128(degree + 1, 0.0L);
-    mymath::float128_t n_128(n);
-    res_128[0] = mymath::precise128::pow(mymath::float128_t(a_leading), n_128);  // a[leading]^n 作为首项系数
+    std::vector<Scalar> res(degree + 1, Scalar(0));
+    Scalar n_scalar(n);
+    res[0] = mymath::precise128::pow(a_leading, n_scalar);  // a[leading]^n 作为首项系数
 
     // 计算 (1 + u)^n 的幂级数展开
     // 使用递推公式：c_0 = 1, c_k = sum_{j=1}^{k} (n*j/k - j/k + 1/k) * u_j * c_{k-j}
     // 简化：c_k = (1/k) * sum_{j=1}^{k} ((n-1)*j + k) * u_j * c_{k-j} / k
 
-    std::vector<mymath::float128_t> binom_coeffs_128(degree + 1, 0.0L);
-    binom_coeffs_128[0] = 1.0L;
+    std::vector<Scalar> binom_coeffs(degree + 1, Scalar(0));
+    binom_coeffs[0] = Scalar(1);
 
     for (int k = 1; k <= degree; ++k) {
-        mymath::float128_t sum = 0.0L;
+        Scalar sum = Scalar(0);
         for (int j = 1; j <= k && j < static_cast<int>(normalized.size()); ++j) {
-            long double u_j = normalized[j];
-            sum = sum + (n_128 * mymath::float128_t(j) - mymath::float128_t(k - j)) * mymath::float128_t(u_j) * binom_coeffs_128[k - j];
+            Scalar u_j = normalized[j];
+            sum = sum + (n_scalar * Scalar(j) - Scalar(k - j)) * u_j * binom_coeffs[k - j];
         }
-        binom_coeffs_128[k] = sum / mymath::float128_t(k);
+        binom_coeffs[k] = sum / Scalar(k);
     }
 
     // 组合结果
-    std::vector<long double> res(degree + 1);
     for (int i = 0; i <= degree; ++i) {
-        res[i] = (res_128[0] * binom_coeffs_128[i]).to_long_double();
+        res[i] = res[0] * binom_coeffs[i];
     }
 
     return res;
 }
 
-std::vector<long double> ps_scale(const std::vector<long double>& a, long double scale, int degree) {
-    std::vector<long double> res(degree + 1, 0.0L);
+std::vector<Scalar> ps_scale(const std::vector<Scalar>& a, Scalar scale, int degree) {
+    std::vector<Scalar> res(degree + 1, Scalar(0));
+    Scalar scale_scalar(scale);
     for (int i = 0; i <= degree; ++i) {
-        if (i < static_cast<int>(a.size())) res[i] = a[i] * scale;
+        if (i < static_cast<int>(a.size())) res[i] = a[i] * scale_scalar;
     }
     return res;
 }
 
-std::vector<long double> ps_derivative(const std::vector<long double>& a, int degree) {
-    std::vector<long double> res(degree + 1, 0.0L);
+std::vector<Scalar> ps_derivative(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> res(degree + 1, Scalar(0));
     for (int i = 1; i <= degree + 1; ++i) {
-        if (i < static_cast<int>(a.size())) res[i - 1] = a[i] * i;
+        if (i < static_cast<int>(a.size())) res[i - 1] = a[i] * Scalar(i);
     }
     return res;
 }
 
-std::vector<long double> ps_integral(const std::vector<long double>& a, long double constant_term, int degree) {
-    std::vector<long double> res(degree + 1, 0.0L);
-    res[0] = constant_term;
+std::vector<Scalar> ps_integral(const std::vector<Scalar>& a, Scalar constant_term, int degree) {
+    std::vector<Scalar> res(degree + 1, Scalar(0));
+    res[0] = Scalar(constant_term);
     for (int i = 1; i <= degree; ++i) {
-        if (i - 1 < static_cast<int>(a.size())) res[i] = a[i - 1] / i;
+        if (i - 1 < static_cast<int>(a.size())) res[i] = a[i - 1] / Scalar(i);
     }
     return res;
 }
 
-std::vector<long double> ps_tan(const std::vector<long double>& a, int degree) {
-    std::vector<long double> s, c;
+std::vector<Scalar> ps_tan(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> s, c;
     ps_sincos(a, degree, s, c);
     return ps_div(s, c, degree);
 }
 
-std::vector<long double> ps_asin(const std::vector<long double>& a, int degree) {
-    long double a0 = a.empty() ? 0.0L : a[0];
-    if (mymath::abs(a0) >= 1.0L) throw std::runtime_error("asin power series base out of bounds");
-    std::vector<long double> a_prime = ps_derivative(a, degree);
-    std::vector<long double> a_sq = ps_mul(a, a, degree);
-    std::vector<long double> one_minus_a_sq(degree + 1, 0.0L);
-    one_minus_a_sq[0] = 1.0L;
+std::vector<Scalar> ps_asin(const std::vector<Scalar>& a, int degree) {
+    Scalar a0 = a.empty() ? Scalar(0) : a[0];
+    if (mymath::precise128::abs(a0) >= Scalar(1)) throw std::runtime_error("asin power series base out of bounds");
+    std::vector<Scalar> a_prime = ps_derivative(a, degree);
+    std::vector<Scalar> a_sq = ps_mul(a, a, degree);
+    std::vector<Scalar> one_minus_a_sq(degree + 1, Scalar(0));
+    one_minus_a_sq[0] = Scalar(1);
     one_minus_a_sq = ps_sub(one_minus_a_sq, a_sq, degree);
-    std::vector<long double> inv_sqrt = ps_pow_const(one_minus_a_sq, -0.5, degree);
-    std::vector<long double> deriv = ps_mul(inv_sqrt, a_prime, degree);
-    return ps_integral(deriv, mymath::asin(a0), degree);
+    std::vector<Scalar> inv_sqrt = ps_pow_const(one_minus_a_sq, -0.5, degree);
+    std::vector<Scalar> deriv = ps_mul(inv_sqrt, a_prime, degree);
+    return ps_integral(deriv, mymath::precise128::asin(a0).to_long_double(), degree);
 }
 
-std::vector<long double> ps_acos(const std::vector<long double>& a, int degree) {
-    long double a0 = a.empty() ? 0.0L : a[0];
-    if (mymath::abs(a0) >= 1.0L) throw std::runtime_error("acos power series base out of bounds");
-    std::vector<long double> a_prime = ps_derivative(a, degree);
-    std::vector<long double> a_sq = ps_mul(a, a, degree);
-    std::vector<long double> one_minus_a_sq(degree + 1, 0.0L);
-    one_minus_a_sq[0] = 1.0L;
+std::vector<Scalar> ps_acos(const std::vector<Scalar>& a, int degree) {
+    Scalar a0 = a.empty() ? Scalar(0) : a[0];
+    if (mymath::precise128::abs(a0) >= Scalar(1)) throw std::runtime_error("acos power series base out of bounds");
+    std::vector<Scalar> a_prime = ps_derivative(a, degree);
+    std::vector<Scalar> a_sq = ps_mul(a, a, degree);
+    std::vector<Scalar> one_minus_a_sq(degree + 1, Scalar(0));
+    one_minus_a_sq[0] = Scalar(1);
     one_minus_a_sq = ps_sub(one_minus_a_sq, a_sq, degree);
-    std::vector<long double> inv_sqrt = ps_pow_const(one_minus_a_sq, -0.5, degree);
-    std::vector<long double> deriv = ps_mul(inv_sqrt, a_prime, degree);
-    std::vector<long double> neg_deriv = ps_scale(deriv, -1.0L, degree);
-    return ps_integral(neg_deriv, mymath::acos(a0), degree);
+    std::vector<Scalar> inv_sqrt = ps_pow_const(one_minus_a_sq, -0.5, degree);
+    std::vector<Scalar> deriv = ps_mul(inv_sqrt, a_prime, degree);
+    std::vector<Scalar> neg_deriv = ps_scale(deriv, -1.0L, degree);
+    return ps_integral(neg_deriv, mymath::precise128::acos(a0).to_long_double(), degree);
 }
 
-std::vector<long double> ps_atan(const std::vector<long double>& a, int degree) {
-    long double a0 = a.empty() ? 0.0L : a[0];
-    std::vector<long double> a_prime = ps_derivative(a, degree);
-    std::vector<long double> a_sq = ps_mul(a, a, degree);
-    std::vector<long double> one_plus_a_sq(degree + 1, 0.0L);
-    one_plus_a_sq[0] = 1.0L;
+std::vector<Scalar> ps_atan(const std::vector<Scalar>& a, int degree) {
+    Scalar a0 = a.empty() ? Scalar(0) : a[0];
+    std::vector<Scalar> a_prime = ps_derivative(a, degree);
+    std::vector<Scalar> a_sq = ps_mul(a, a, degree);
+    std::vector<Scalar> one_plus_a_sq(degree + 1, Scalar(0));
+    one_plus_a_sq[0] = Scalar(1);
     one_plus_a_sq = ps_add(one_plus_a_sq, a_sq, degree);
-    std::vector<long double> inv = ps_pow_const(one_plus_a_sq, -1.0L, degree);
-    std::vector<long double> deriv = ps_mul(inv, a_prime, degree);
-    return ps_integral(deriv, mymath::atan(a0), degree);
+    std::vector<Scalar> inv = ps_pow_const(one_plus_a_sq, -1.0L, degree);
+    std::vector<Scalar> deriv = ps_mul(inv, a_prime, degree);
+    return ps_integral(deriv, mymath::precise128::atan(a0).to_long_double(), degree);
 }
 
-std::vector<long double> ps_sinh(const std::vector<long double>& a, int degree) {
-    std::vector<long double> exp_a = ps_exp(a, degree);
-    std::vector<long double> neg_a = ps_scale(a, -1.0L, degree);
-    std::vector<long double> exp_neg_a = ps_exp(neg_a, degree);
-    return ps_scale(ps_sub(exp_a, exp_neg_a, degree), 0.5, degree);
+std::vector<Scalar> ps_sinh(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> exp_a = ps_exp(a, degree);
+    std::vector<Scalar> neg_a = ps_scale(a, -1.0L, degree);
+    std::vector<Scalar> exp_neg_a = ps_exp(neg_a, degree);
+    return ps_scale(ps_sub(exp_a, exp_neg_a, degree), 0.5L, degree);
 }
 
-std::vector<long double> ps_cosh(const std::vector<long double>& a, int degree) {
-    std::vector<long double> exp_a = ps_exp(a, degree);
-    std::vector<long double> neg_a = ps_scale(a, -1.0L, degree);
-    std::vector<long double> exp_neg_a = ps_exp(neg_a, degree);
-    return ps_scale(ps_add(exp_a, exp_neg_a, degree), 0.5, degree);
+std::vector<Scalar> ps_cosh(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> exp_a = ps_exp(a, degree);
+    std::vector<Scalar> neg_a = ps_scale(a, -1.0L, degree);
+    std::vector<Scalar> exp_neg_a = ps_exp(neg_a, degree);
+    return ps_scale(ps_add(exp_a, exp_neg_a, degree), 0.5L, degree);
 }
 
-std::vector<long double> ps_tanh(const std::vector<long double>& a, int degree) {
+std::vector<Scalar> ps_tanh(const std::vector<Scalar>& a, int degree) {
     return ps_div(ps_sinh(a, degree), ps_cosh(a, degree), degree);
 }
 
@@ -623,37 +618,37 @@ std::vector<long double> ps_tanh(const std::vector<long double>& a, int degree) 
  * @param ctx 级数上下文
  * @return 是否成功计算
  */
-bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, long double center, int degree, std::vector<long double>& result, const SeriesContext& ctx) {
+bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, Scalar center, int degree, std::vector<Scalar>& result, const SeriesContext& ctx) {
     if (!expr.node_) return false;
     auto node = expr.node_;
-    
+
     if (node->type == NodeType::kNumber) {
-        result.assign(degree + 1, 0.0L);
-        result[0] = node->number_value;
+        result.assign(degree + 1, Scalar(0));
+        result[0] = Scalar(node->number_value);
         return true;
     }
     if (node->type == NodeType::kPi) {
-        result.assign(degree + 1, 0.0L);
-        result[0] = mymath::kPi;
+        result.assign(degree + 1, Scalar(0));
+        result[0] = Scalar(mymath::kPi);
         return true;
     }
     if (node->type == NodeType::kE) {
-        result.assign(degree + 1, 0.0L);
-        result[0] = mymath::kE;
+        result.assign(degree + 1, Scalar(0));
+        result[0] = Scalar(mymath::kE);
         return true;
     }
     if (node->type == NodeType::kVariable) {
-        result.assign(degree + 1, 0.0L);
+        result.assign(degree + 1, Scalar(0));
         if (node->text == var_name) {
-            result[0] = center;
-            if (degree >= 1) result[1] = 1.0L;
+            result[0] = Scalar(center);
+            if (degree >= 1) result[1] = Scalar(1);
         } else {
-            result[0] = ctx.evaluate_at(expr, var_name, center);
+            result[0] = Scalar(ctx.evaluate_at(expr, var_name, center));
         }
         return true;
     }
 
-    std::vector<long double> left_res, right_res;
+    std::vector<Scalar> left_res, right_res;
     if (node->left && !series_ops::internal::evaluate_psa(SymbolicExpression(node->left), var_name, center, degree, left_res, ctx)) return false;
     if (node->right && !series_ops::internal::evaluate_psa(SymbolicExpression(node->right), var_name, center, degree, right_res, ctx)) return false;
 
@@ -663,20 +658,20 @@ bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, l
             case NodeType::kSubtract: result = ps_sub(left_res, right_res, degree); return true;
             case NodeType::kMultiply: result = ps_mul(left_res, right_res, degree); return true;
             case NodeType::kDivide: result = ps_div(left_res, right_res, degree); return true;
-            case NodeType::kNegate: 
-                result.assign(degree + 1, 0.0L);
+            case NodeType::kNegate:
+                result.assign(degree + 1, Scalar(0));
                 for (int i = 0; i <= degree; ++i) result[i] = -left_res[i];
                 return true;
             case NodeType::kPower: {
                 bool right_is_const = true;
                 for (int i = 1; i <= degree; ++i) {
                     if (i < static_cast<int>(right_res.size()) &&
-                        !mymath::is_near_zero(right_res[i], 1e-12)) {
+                        mymath::precise128::abs(right_res[i]) >= Scalar(1e-12L)) {
                         right_is_const = false; break;
                     }
                 }
                 if (right_is_const) {
-                    long double p = right_res.empty() ? 0.0L : right_res[0];
+                    Scalar p = right_res.empty() ? 0.0L : right_res[0].to_long_double();
                     result = ps_pow_const(left_res, p, degree);
                     return true;
                 } else {
@@ -748,9 +743,9 @@ namespace predefined_series {
  */
 bool try_predefined_taylor(const SymbolicExpression& expr,
                             const std::string& var_name,
-                            long double center,
+                            Scalar center,
                             int degree,
-                            std::vector<long double>& result) {
+                            std::vector<Scalar>& result) {
     if (!expr.node_) return false;
 
     // 处理函数节点
@@ -759,7 +754,7 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
         SymbolicExpression arg(expr.node_->left);
 
         // 检查参数是否是简单的 x - center 形式
-        long double arg_coeff = 0.0L, arg_const = 0.0L;
+        Scalar arg_coeff = 0.0L, arg_const = 0.0L;
         bool is_linear_arg = false;
 
         // 尝试检测 arg = a*(x-center) 或 arg = x - center
@@ -780,13 +775,13 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
 
         // 对于 center = 0 且参数是 x，直接使用预定义级数
         if (mymath::is_near_zero(center, 1e-10) && arg.node_->type == NodeType::kVariable && arg.node_->text == var_name) {
-            result.assign(degree + 1, 0.0L);
+            result.assign(degree + 1, Scalar(0));
 
             // exp(x) = sum x^n/n!
             if (func_name == "exp") {
-                result[0] = 1.0L;
+                result[0] = Scalar(1);
                 for (int n = 1; n <= degree; ++n) {
-                    result[n] = result[n - 1] / static_cast<long double>(n);
+                    result[n] = result[n - 1] / Scalar(n);
                 }
                 return true;
             }
@@ -796,7 +791,7 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
                 for (int n = 0; n <= degree; ++n) {
                     if (n % 2 == 1) {
                         int sign = (n % 4 == 1) ? 1 : -1;
-                        result[n] = static_cast<long double>(sign) / prob::factorial(n);
+                        result[n] = Scalar(sign) / Scalar(prob::factorial(n));
                     }
                 }
                 return true;
@@ -807,7 +802,7 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
                 for (int n = 0; n <= degree; ++n) {
                     if (n % 2 == 0) {
                         int sign = (n % 4 == 0) ? 1 : -1;
-                        result[n] = static_cast<long double>(sign) / prob::factorial(n);
+                        result[n] = Scalar(sign) / Scalar(prob::factorial(n));
                     }
                 }
                 return true;
@@ -817,7 +812,7 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
             if (func_name == "sinh") {
                 for (int n = 0; n <= degree; ++n) {
                     if (n % 2 == 1) {
-                        result[n] = 1.0L / prob::factorial(n);
+                        result[n] = Scalar(1) / Scalar(prob::factorial(n));
                     }
                 }
                 return true;
@@ -827,7 +822,7 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
             if (func_name == "cosh") {
                 for (int n = 0; n <= degree; ++n) {
                     if (n % 2 == 0) {
-                        result[n] = 1.0L / prob::factorial(n);
+                        result[n] = Scalar(1) / Scalar(prob::factorial(n));
                     }
                 }
                 return true;
@@ -842,10 +837,10 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
             // arcsin(x) = x + x^3/6 + 3x^5/40 + ...
             if (func_name == "arcsin" || func_name == "asin") {
                 // 使用递推公式: a_n = (2n-1)/(2n) * a_{n-1} * (n-1)/n
-                result[1] = 1.0L;
+                result[1] = Scalar(1);
                 for (int n = 3; n <= degree; n += 2) {
                     int m = (n - 1) / 2;
-                    result[n] = result[n - 2] * static_cast<long double>(2 * m - 1) / static_cast<long double>(2 * m) * static_cast<long double>(m) / static_cast<long double>(m + 1);
+                    result[n] = result[n - 2] * Scalar(2 * m - 1) / Scalar(2 * m) * Scalar(m) / Scalar(m + 1);
                 }
                 return true;
             }
@@ -855,7 +850,7 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
                 for (int n = 0; n <= degree; ++n) {
                     if (n % 2 == 1) {
                         int sign = (n % 4 == 1) ? 1 : -1;
-                        result[n] = static_cast<long double>(sign) / static_cast<long double>(n);
+                        result[n] = Scalar(sign) / Scalar(n);
                     }
                 }
                 return true;
@@ -863,12 +858,12 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
 
             // sqrt(1+x) = 1 + x/2 - x^2/8 + x^3/16 - ... (二项式展开)
             if (func_name == "sqrt") {
-                result[0] = 1.0L;
+                result[0] = Scalar(1);
                 for (int n = 1; n <= degree; ++n) {
                     // 系数 = (1/2 choose n) = (1/2)(1/2-1)...(1/2-n+1)/n!
-                    long double coeff = 1.0L;
+                    Scalar coeff = Scalar(1);
                     for (int k = 0; k < n; ++k) {
-                        coeff *= (0.5 - static_cast<long double>(k)) / static_cast<long double>(n - k);
+                        coeff = coeff * (Scalar(0.5L) - Scalar(k)) / Scalar(n - k);
                     }
                     result[n] = coeff;
                 }
@@ -880,37 +875,37 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
         // f(x) 在 x=a 处展开: f(a + h) = sum f^(n)(a) * h^n / n!
         if (is_linear_arg) {
             // 参数是 x - center 或类似形式
-            long double h_coeff = arg_coeff;  // 参数中 x 的系数
+            Scalar h_coeff = arg_coeff;  // 参数中 x 的系数
 
-            result.assign(degree + 1, 0.0L);
+            result.assign(degree + 1, Scalar(0));
 
             // exp(x) 在 x=a 处: exp(a) * exp(h) = exp(a) * sum h^n/n!
             if (func_name == "exp") {
-                long double exp_center = mymath::exp(center);
+                Scalar exp_center = mymath::precise128::exp(Scalar(center));
                 result[0] = exp_center;
                 for (int n = 1; n <= degree; ++n) {
-                    result[n] = result[n - 1] * h_coeff / static_cast<long double>(n);
+                    result[n] = result[n - 1] * Scalar(h_coeff) / Scalar(n);
                 }
                 return true;
             }
 
             // sin(x) 在 x=a 处: sin(a+h) = sin(a)cos(h) + cos(a)sin(h)
             if (func_name == "sin") {
-                long double sin_a = mymath::sin(center);
-                long double cos_a = mymath::cos(center);
+                Scalar sin_a = mymath::precise128::sin(Scalar(center));
+                Scalar cos_a = mymath::precise128::cos(Scalar(center));
                 // sin(a+h) = sin(a) * cos(h) + cos(a) * sin(h)
                 // cos(h) = 1 - h^2/2! + h^4/4! - ...
                 // sin(h) = h - h^3/3! + h^5/5! - ...
                 for (int n = 0; n <= degree; ++n) {
-                    long double h_pow = mymath::pow(h_coeff, n);
+                    Scalar h_pow = mymath::precise128::pow(Scalar(h_coeff), Scalar(n));
                     if (n % 2 == 0) {
                         // 来自 cos(h)
                         int sign = (n % 4 == 0) ? 1 : -1;
-                        result[n] = sin_a * static_cast<long double>(sign) * h_pow / prob::factorial(n);
+                        result[n] = sin_a * Scalar(sign) * h_pow / Scalar(prob::factorial(n));
                     } else {
                         // 来自 sin(h)
                         int sign = (n % 4 == 1) ? 1 : -1;
-                        result[n] = cos_a * static_cast<long double>(sign) * h_pow / prob::factorial(n);
+                        result[n] = cos_a * Scalar(sign) * h_pow / Scalar(prob::factorial(n));
                     }
                 }
                 return true;
@@ -918,16 +913,16 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
 
             // cos(x) 在 x=a 处
             if (func_name == "cos") {
-                long double sin_a = mymath::sin(center);
-                long double cos_a = mymath::cos(center);
+                Scalar sin_a = mymath::precise128::sin(Scalar(center));
+                Scalar cos_a = mymath::precise128::cos(Scalar(center));
                 for (int n = 0; n <= degree; ++n) {
-                    long double h_pow = mymath::pow(h_coeff, n);
+                    Scalar h_pow = mymath::precise128::pow(Scalar(h_coeff), Scalar(n));
                     if (n % 2 == 0) {
                         int sign = (n % 4 == 0) ? 1 : -1;
-                        result[n] = cos_a * static_cast<long double>(sign) * h_pow / prob::factorial(n);
+                        result[n] = cos_a * Scalar(sign) * h_pow / Scalar(prob::factorial(n));
                     } else {
                         int sign = (n % 4 == 1) ? -1 : 1;
-                        result[n] = sin_a * static_cast<long double>(sign) * h_pow / prob::factorial(n);
+                        result[n] = sin_a * Scalar(sign) * h_pow / Scalar(prob::factorial(n));
                     }
                 }
                 return true;
@@ -940,16 +935,16 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
         SymbolicExpression base(expr.node_->left);
         SymbolicExpression exponent(expr.node_->right);
 
-        long double exp_val = 0.0L;
+        Scalar exp_val = 0.0L;
         if (base.node_->type == NodeType::kVariable && base.node_->text == var_name &&
             exponent.is_number(&exp_val) && mymath::is_near_zero(center, 1e-10)) {
             // x^p 在 x=0 处展开
             // 如果 p 是正整数，x^p 本身就是单项式
             if (exp_val > 0 && mymath::is_integer(exp_val, 1e-10)) {
                 int p = static_cast<int>(exp_val + 0.5);
-                result.assign(degree + 1, 0.0L);
+                result.assign(degree + 1, Scalar(0));
                 if (p <= degree) {
-                    result[p] = 1.0L;
+                    result[p] = Scalar(1);
                 }
                 return true;
             }
@@ -984,9 +979,9 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
 bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
                                     const SymbolicExpression& expression,
                                     const std::string& variable_name,
-                                    long double center,
+                                    Scalar center,
                                     int degree,
-                                    std::vector<long double>& result) {
+                                    std::vector<Scalar>& result) {
     result.clear();
     result.reserve(degree + 1);
 
@@ -995,50 +990,50 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
     // f^(n)(x) ≈ (1/h^n) * sum_{k=0}^{n} (-1)^k * C(n,k) * f(x + (n/2 - k)*h)
 
     // 选择步长：对于高阶导数需要更小的步长
-    const long double base_h = 1e-4;
+    const Scalar base_h = Scalar(1e-4L);
 
     // 0阶导数（函数值）
-    long double f0 = 0.0L;
+    Scalar f0 = Scalar(0);
     try {
-        f0 = ctx.evaluate_at(expression, variable_name, center);
+        f0 = Scalar(ctx.evaluate_at(expression, variable_name, center));
     } catch (...) {
         return false;
     }
-    if (!mymath::isfinite(f0)) return false;
+    if (!mymath::precise128::isfinite(f0)) return false;
     result.push_back(f0);
 
     // 使用复合数值差分计算高阶导数
     // 对于 1-3 阶使用精确的中心差分公式
     // 对于更高阶使用递归差分
 
-    auto compute_derivative = [&](int order, long double h) -> long double {
+    auto compute_derivative = [&](int order, Scalar h) -> Scalar {
         if (order == 0) return f0;
 
         // 使用中心差分
         int n_points = 2 * order + 1;
-        std::vector<long double> points;
+        std::vector<Scalar> points;
         points.reserve(n_points);
 
         for (int k = -order; k <= order; ++k) {
-            long double x = center + k * h;
-            long double val = 0.0L;
+            Scalar x = Scalar(center) + Scalar(k) * h;
+            Scalar val = Scalar(0);
             try {
-                val = ctx.evaluate_at(expression, variable_name, x);
+                val = Scalar(ctx.evaluate_at(expression, variable_name, x.to_long_double()));
             } catch (...) {
-                return mymath::quiet_nan();
+                return Scalar(mymath::quiet_nan());
             }
-            if (!mymath::isfinite(val)) {
-                return mymath::quiet_nan();
+            if (!mymath::precise128::isfinite(val)) {
+                return Scalar(mymath::quiet_nan());
             }
             points.push_back(val);
         }
 
         // 计算差分表
-        std::vector<std::vector<long double>> diff_table;
+        std::vector<std::vector<Scalar>> diff_table;
         diff_table.push_back(points);
 
         for (int d = 1; d <= order; ++d) {
-            std::vector<long double> next_diff;
+            std::vector<Scalar> next_diff;
             next_diff.reserve(diff_table[d - 1].size() - 1);
             for (std::size_t i = 0; i + 1 < diff_table[d - 1].size(); ++i) {
                 next_diff.push_back(diff_table[d - 1][i + 1] - diff_table[d - 1][i]);
@@ -1049,33 +1044,33 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
         // n阶中心差分位于表的中心
         const auto& nth_diff = diff_table[order];
         if (nth_diff.empty()) {
-            return mymath::quiet_nan();
+            return Scalar(mymath::quiet_nan());
         }
 
         // 中心差分系数
-        long double coeff = nth_diff[nth_diff.size() / 2];
+        Scalar coeff = nth_diff[nth_diff.size() / 2];
 
         // 调整系数：中心差分公式 f^(n)(x) ≈ delta^n f / h^n
         // 其中 delta^n 是 n 阶差分
-        return coeff / mymath::pow(h, order);
+        return coeff / mymath::precise128::pow(h, Scalar(order));
     };
 
     // 使用 Richardson 外推提高精度
-    auto richardson_derivative = [&](int order) -> long double {
-        long double h1 = base_h;
-        long double h2 = base_h / 2.0;
+    auto richardson_derivative = [&](int order) -> Scalar {
+        Scalar h1 = base_h;
+        Scalar h2 = base_h / Scalar(2);
 
-        long double d1 = compute_derivative(order, h1);
-        long double d2 = compute_derivative(order, h2);
+        Scalar d1 = compute_derivative(order, h1);
+        Scalar d2 = compute_derivative(order, h2);
 
-        if (!mymath::isfinite(d1) || !mymath::isfinite(d2)) {
+        if (!mymath::precise128::isfinite(d1) || !mymath::precise128::isfinite(d2)) {
             // 回退到单步差分
             return compute_derivative(order, base_h);
         }
 
         // Richardson 外推：R = d2 + (d2 - d1) / (2^order - 1)
-        long double factor = mymath::pow(2.0, order) - 1.0L;
-        if (mymath::abs(factor) < 1e-10) {
+        Scalar factor = mymath::precise128::pow(Scalar(2), Scalar(order)) - Scalar(1);
+        if (mymath::precise128::abs(factor) < Scalar(1e-10L)) {
             return d2;
         }
         return d2 + (d2 - d1) / factor;
@@ -1083,20 +1078,20 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
 
     // 计算各阶导数
     for (int order = 1; order <= degree; ++order) {
-        long double deriv = richardson_derivative(order);
+        Scalar deriv = richardson_derivative(order);
 
-        if (!mymath::isfinite(deriv)) {
+        if (!mymath::precise128::isfinite(deriv)) {
             // 尝试使用更小的步长
-            deriv = compute_derivative(order, base_h / 10.0L);
+            deriv = compute_derivative(order, base_h / Scalar(10));
         }
 
-        if (!mymath::isfinite(deriv)) {
+        if (!mymath::precise128::isfinite(deriv)) {
             // 失败，返回已计算的系数
             return result.size() > 1;
         }
 
         // Taylor 系数 = f^(n)(x) / n!
-        result.push_back(deriv / prob::factorial(order));
+        result.push_back(deriv / Scalar(prob::factorial(order)));
     }
 
     return true;
@@ -1111,35 +1106,35 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
  * 3. 自动微分（AD）方法
  * 4. 符号微分方法（最后回退）
  */
-std::vector<long double> build_taylor_coefficients(
+std::vector<Scalar> build_taylor_coefficients(
 
     const SeriesContext& ctx,
     const SymbolicExpression& expression,
     const std::string& variable_name,
-    long double center,
+    Scalar center,
     int degree) {
     struct TaylorDerivativeCacheEntry {
         SymbolicExpression derivative;
-        long double value = 0.0L;
+        Scalar value = Scalar(0);
         bool has_value = false;
     };
     static thread_local std::map<std::string, TaylorDerivativeCacheEntry> derivative_cache;
     static constexpr std::size_t kMaxTaylorDerivativeCacheSize = 256;
 
     // 1. 首先尝试预定义级数库
-    std::vector<long double> predefined_result;
+    std::vector<Scalar> predefined_result;
     if (predefined_series::try_predefined_taylor(expression, variable_name, center, degree, predefined_result)) {
         return predefined_result;
     }
 
     // 2. 尝试幂级数代数（PSA）方法
-    std::vector<long double> psa_result;
+    std::vector<Scalar> psa_result;
     if (series_ops::internal::evaluate_psa(expression.simplify(), variable_name, center, degree, psa_result, ctx)) {
         return psa_result;
     }
 
     // 3. 尝试自动微分（AD）方法（对于高阶展开更高效）
-    std::vector<long double> ad_result;
+    std::vector<Scalar> ad_result;
     if (degree >= 5 && compute_taylor_coefficients_ad(ctx, expression, variable_name, center, degree, ad_result)) {
         return ad_result;
     }
@@ -1148,7 +1143,7 @@ std::vector<long double> build_taylor_coefficients(
     const std::string base_key =
         variable_name + "|" + format_symbolic_scalar(center) + "|" +
         expression.simplify().to_string();
-    std::vector<long double> coefficients;
+    std::vector<Scalar> coefficients;
     coefficients.reserve(static_cast<std::size_t>(degree + 1));
     SymbolicExpression current = expression;
     for (int order = 0; order <= degree; ++order) {
@@ -1167,20 +1162,20 @@ std::vector<long double> build_taylor_coefficients(
 
         if (!found->second.has_value) {
             found->second.value =
-                ctx.evaluate_at(found->second.derivative, variable_name, center);
+                Scalar(ctx.evaluate_at(found->second.derivative, variable_name, center));
             found->second.has_value = true;
         }
-        const long double derivative_value = found->second.value;
-        if (!mymath::isfinite(derivative_value)) {
+        const Scalar derivative_value = found->second.value;
+        if (!mymath::precise128::isfinite(derivative_value)) {
             // 符号微分失败，尝试 AD 回退
-            std::vector<long double> ad_fallback;
+            std::vector<Scalar> ad_fallback;
             if (compute_taylor_coefficients_ad(ctx, expression, variable_name, center, degree, ad_fallback)) {
                 return ad_fallback;
             }
             throw std::runtime_error(
                 "taylor expansion produced a non-finite coefficient");
         }
-        coefficients.push_back(derivative_value / prob::factorial(order));
+        coefficients.push_back(derivative_value / Scalar(prob::factorial(order)));
         if (order != degree) {
             const std::string next_key = base_key + "|" + std::to_string(order + 1);
             auto next_found = derivative_cache.find(next_key);
@@ -1201,15 +1196,20 @@ std::vector<long double> build_taylor_coefficients(
  */
 std::string taylor(const SeriesContext& ctx,
                    const std::string& expr,
-                   long double center,
+                   Scalar center,
                    int degree) {
     std::string variable_name;
     SymbolicExpression expression;
     ctx.resolve_symbolic(expr, true, &variable_name, &expression);
 
-    const std::vector<long double> coefficients =
+    const std::vector<Scalar> coefficients =
         build_taylor_coefficients(ctx, expression, variable_name, center, degree);
-    return taylor_series_to_string(coefficients, variable_name, center);
+    // Convert to Scalar for string output
+    std::vector<Scalar> ld_coefficients;
+    for (const auto& c : coefficients) {
+        ld_coefficients.push_back(c.to_long_double());
+    }
+    return taylor_series_to_string(ld_coefficients, variable_name, center);
 }
 
 // ============================================================================
@@ -1217,18 +1217,18 @@ std::string taylor(const SeriesContext& ctx,
 // ============================================================================
 
 // 前向声明（在 series_ops 命名空间内）
-static std::string pade_from_coeffs(const std::vector<long double>& coefficients,
+static std::string pade_from_coeffs(const std::vector<Scalar>& coefficients,
                               int numerator_degree,
                               int denominator_degree);
-static bool solve_pade_denominator(std::function<long double(int)> c,
+static bool solve_pade_denominator(std::function<Scalar(int)> c,
                                    int numerator_degree,
                                    int denominator_degree,
-                                   std::vector<long double>& q);
-static bool solve_tohplitz_stable(std::function<long double(int)> c, int n, std::vector<long double>& q);
-static std::string format_pade_result(const std::vector<long double>& numerator,
-                                const std::vector<long double>& denominator);
-static std::string format_simple_pade(const std::vector<long double>& numerator,
-                                const std::vector<long double>& denominator);
+                                   std::vector<Scalar>& q);
+static bool solve_tohplitz_stable(std::function<Scalar(int)> c, int n, std::vector<Scalar>& q);
+static std::string format_pade_result(const std::vector<Scalar>& numerator,
+                                const std::vector<Scalar>& denominator);
+static std::string format_simple_pade(const std::vector<Scalar>& numerator,
+                                const std::vector<Scalar>& denominator);
 
 /**
  * @brief Pade 有理逼近（基于连分数的稳定算法）
@@ -1243,7 +1243,7 @@ static std::string format_simple_pade(const std::vector<long double>& numerator,
  */
 std::string pade(const SeriesContext& ctx,
                  const std::string& expr,
-                 long double center,
+                 Scalar center,
                  int numerator_degree,
                  int denominator_degree) {
     if (numerator_degree == 0 && denominator_degree == 0) {
@@ -1255,21 +1255,21 @@ std::string pade(const SeriesContext& ctx,
     ctx.resolve_symbolic(expr, true, &variable_name, &expression);
 
     const int total_degree = numerator_degree + denominator_degree;
-    const std::vector<long double> coefficients = build_taylor_coefficients(
+    const std::vector<Scalar> coefficients = build_taylor_coefficients(
         ctx, expression, variable_name, center, total_degree);
 
-    if (coefficients.empty() || mymath::is_near_zero(coefficients[0], 1e-15)) {
+    if (coefficients.empty() || mymath::precise128::abs(coefficients[0]) < Scalar(1e-15L)) {
         // 首项系数为零，需要特殊处理
         int first_nonzero = 0;
         for (int i = 0; i < static_cast<int>(coefficients.size()); ++i) {
-            if (!mymath::is_near_zero(coefficients[i], 1e-15)) {
+            if (mymath::precise128::abs(coefficients[i]) >= Scalar(1e-15L)) {
                 first_nonzero = i;
                 break;
             }
         }
         if (first_nonzero > 0) {
             // 提取 x^k 因子
-            std::vector<long double> shifted_coeffs(coefficients.begin() + first_nonzero, coefficients.end());
+            std::vector<Scalar> shifted_coeffs(coefficients.begin() + first_nonzero, coefficients.end());
             std::string inner_result = pade_from_coeffs(shifted_coeffs, numerator_degree, denominator_degree);
             const std::string base = shifted_series_base(variable_name, center);
             if (first_nonzero == 1) {
@@ -1289,23 +1289,23 @@ std::string pade(const SeriesContext& ctx,
  * 使用 Baker 算法（基于连分数），避免求解线性方程组。
  * 这是计算 Pade 逼近的最稳定方法之一。
  */
-std::string pade_from_coeffs(const std::vector<long double>& coefficients,
+std::string pade_from_coeffs(const std::vector<Scalar>& coefficients,
                               int numerator_degree,
                               int denominator_degree) {
     const int total_degree = numerator_degree + denominator_degree;
 
     // 获取系数的辅助函数
-    auto c = [&](int k) -> long double {
-        if (k < 0 || k >= static_cast<int>(coefficients.size())) return 0.0L;
-        return static_cast<long double>(coefficients[static_cast<std::size_t>(k)]);
+    auto c = [&](int k) -> Scalar {
+        if (k < 0 || k >= static_cast<int>(coefficients.size())) return Scalar(0);
+        return coefficients[static_cast<std::size_t>(k)];
     };
 
     // 特殊情况处理
     if (denominator_degree == 0) {
         // [m/0] 逼近就是 Taylor 多项式
-        std::vector<long double> num(numerator_degree + 1, 0.0L);
+        std::vector<Scalar> num(numerator_degree + 1, 0.0L);
         for (int i = 0; i <= numerator_degree && i < static_cast<int>(coefficients.size()); ++i) {
-            num[i] = coefficients[i];
+            num[i] = coefficients[i].to_long_double();
         }
         return polynomial_to_string(num, "x");
     }
@@ -1313,14 +1313,14 @@ std::string pade_from_coeffs(const std::vector<long double>& coefficients,
     if (numerator_degree == 0) {
         // [0/n] 逼近
         // 使用简单的递推计算
-        std::vector<long double> q_coeffs(denominator_degree + 1, 0.0L);
-        q_coeffs[0] = 1.0L;
+        std::vector<Scalar> q_coeffs(denominator_degree + 1, Scalar(0));
+        q_coeffs[0] = Scalar(1);
 
         // 构建并求解线性系统（对于 [0/n] 情况，系统较小）
         // 使用更稳定的 Householder 变换
-        std::vector<std::vector<long double>> H(
+        std::vector<std::vector<Scalar>> H(
             static_cast<std::size_t>(denominator_degree),
-            std::vector<long double>(static_cast<std::size_t>(denominator_degree + 1), 0.0L));
+            std::vector<Scalar>(static_cast<std::size_t>(denominator_degree + 1), Scalar(0)));
 
         for (int i = 0; i < denominator_degree; ++i) {
             for (int j = 0; j < denominator_degree; ++j) {
@@ -1330,22 +1330,22 @@ std::string pade_from_coeffs(const std::vector<long double>& coefficients,
         }
 
         // 使用 QR 分解求解（更稳定）
-        std::vector<long double> q(denominator_degree + 1, 0.0L);
-        q[0] = 1.0L;
+        std::vector<Scalar> q(denominator_degree + 1, Scalar(0));
+        q[0] = Scalar(1);
         if (!solve_tohplitz_stable(c, denominator_degree, q)) {
             // 回退到简化处理
-            return format_simple_pade({c(0)}, std::vector<long double>(denominator_degree + 1, 1.0L));
+            return format_simple_pade({c(0)}, std::vector<Scalar>(denominator_degree + 1, Scalar(1)));
         }
 
-        long double p0 = c(0);
+        Scalar p0 = c(0);
         for (int j = 1; j <= denominator_degree; ++j) {
-            p0 += q[j] * c(-j);
+            p0 = p0 + q[j] * c(-j);
         }
 
-        std::vector<long double> num_vec = {static_cast<long double>(p0)};
-        std::vector<long double> den_vec(denominator_degree + 1);
+        std::vector<Scalar> num_vec = {p0};
+        std::vector<Scalar> den_vec(denominator_degree + 1);
         for (int i = 0; i <= denominator_degree; ++i) {
-            den_vec[i] = static_cast<long double>(q[i]);
+            den_vec[i] = q[i];
         }
         return format_pade_result(num_vec, den_vec);
     }
@@ -1355,19 +1355,19 @@ std::string pade_from_coeffs(const std::vector<long double>& coefficients,
 
     // 初始化：P_{-1} = 0, P_0 = c_0
     //         Q_{-1} = 1, Q_0 = 1
-    std::vector<long double> P_prev2(total_degree + 2, 0.0L);
-    std::vector<long double> P_prev1(total_degree + 2, 0.0L);
+    std::vector<Scalar> P_prev2(total_degree + 2, Scalar(0));
+    std::vector<Scalar> P_prev1(total_degree + 2, Scalar(0));
     P_prev1[0] = c(0);
 
-    std::vector<long double> Q_prev2(total_degree + 2, 1.0L);
-    std::vector<long double> Q_prev1(total_degree + 2, 1.0L);
+    std::vector<Scalar> Q_prev2(total_degree + 2, Scalar(1));
+    std::vector<Scalar> Q_prev1(total_degree + 2, Scalar(1));
 
     // 使用 Thacher-Tukey 算法递推计算
     // 这是一种基于欧几里得算法的稳定方法
-    std::vector<long double> A(total_degree + 2, 0.0L);
-    std::vector<long double> B(total_degree + 2, 0.0L);
+    std::vector<Scalar> A(total_degree + 2, Scalar(0));
+    std::vector<Scalar> B(total_degree + 2, Scalar(0));
     A[0] = c(0);
-    B[0] = 1.0L;
+    B[0] = Scalar(1);
 
     // 构建分子和分母多项式
     // 使用递推关系：P_k = P_{k-1} - a_k * x * P_{k-2}
@@ -1377,9 +1377,9 @@ std::string pade_from_coeffs(const std::vector<long double>& coefficients,
     // 这里使用更直接的 Toeplitz 求解方法，但采用稳定的实现
 
     // 构建分子和分母系数
-    std::vector<long double> p_coeffs(numerator_degree + 1, 0.0L);
-    std::vector<long double> q_coeffs(denominator_degree + 1, 0.0L);
-    q_coeffs[0] = 1.0L;
+    std::vector<Scalar> p_coeffs(numerator_degree + 1, Scalar(0));
+    std::vector<Scalar> q_coeffs(denominator_degree + 1, Scalar(0));
+    q_coeffs[0] = Scalar(1);
 
     if (denominator_degree > 0) {
         if (!solve_pade_denominator(c, numerator_degree, denominator_degree, q_coeffs)) {
@@ -1389,62 +1389,52 @@ std::string pade_from_coeffs(const std::vector<long double>& coefficients,
 
     // 计算分子系数：p_i = sum_{j=0}^{min(i,n)} q_j * c_{i-j}
     for (int i = 0; i <= numerator_degree; ++i) {
-        long double sum = 0.0L;
+        Scalar sum = Scalar(0);
         for (int j = 0; j <= denominator_degree && j <= i; ++j) {
-            sum += q_coeffs[j] * c(i - j);
+            sum = sum + q_coeffs[j] * c(i - j);
         }
         p_coeffs[i] = sum;
     }
 
-    // 转换为 long double 并格式化输出
-    std::vector<long double> numerator(numerator_degree + 1);
-    std::vector<long double> denominator(denominator_degree + 1);
-    for (int i = 0; i <= numerator_degree; ++i) {
-        numerator[i] = static_cast<long double>(p_coeffs[i]);
-    }
-    for (int i = 0; i <= denominator_degree; ++i) {
-        denominator[i] = static_cast<long double>(q_coeffs[i]);
-    }
-
-    return format_pade_result(numerator, denominator);
+    return format_pade_result(p_coeffs, q_coeffs);
 }
 
-bool solve_pade_denominator(std::function<long double(int)> c,
+bool solve_pade_denominator(std::function<Scalar(int)> c,
                             int numerator_degree,
                             int denominator_degree,
-                            std::vector<long double>& q) {
+                            std::vector<Scalar>& q) {
     if (denominator_degree == 0) return true;
 
-    std::vector<std::vector<mymath::float128_t>> matrix(
+    std::vector<std::vector<Scalar>> matrix(
         static_cast<std::size_t>(denominator_degree),
-        std::vector<mymath::float128_t>(static_cast<std::size_t>(denominator_degree), 0.0L));
-    std::vector<mymath::float128_t> rhs(static_cast<std::size_t>(denominator_degree), 0.0L);
+        std::vector<Scalar>(static_cast<std::size_t>(denominator_degree), Scalar(0)));
+    std::vector<Scalar> rhs(static_cast<std::size_t>(denominator_degree), Scalar(0));
 
     for (int row = 0; row < denominator_degree; ++row) {
         const int k = numerator_degree + 1 + row;
         for (int col = 0; col < denominator_degree; ++col) {
-            matrix[row][col] = mymath::float128_t(c(k - (col + 1)));
+            matrix[row][col] = c(k - (col + 1));
         }
-        rhs[row] = -mymath::float128_t(c(k));
+        rhs[row] = -c(k);
     }
 
     for (int col = 0; col < denominator_degree; ++col) {
         int pivot = col;
-        mymath::float128_t pivot_abs = mymath::precise128::abs(matrix[col][col]);
+        Scalar pivot_abs = mymath::precise128::abs(matrix[col][col]);
         for (int row = col + 1; row < denominator_degree; ++row) {
-            const mymath::float128_t candidate = mymath::precise128::abs(matrix[row][col]);
+            const Scalar candidate = mymath::precise128::abs(matrix[row][col]);
             if (candidate > pivot_abs) {
                 pivot_abs = candidate;
                 pivot = row;
             }
         }
-        if (pivot_abs < mymath::float128_t(1e-35L)) return false;
+        if (pivot_abs < Scalar(1e-35L)) return false;
         if (pivot != col) {
             std::swap(matrix[pivot], matrix[col]);
             std::swap(rhs[pivot], rhs[col]);
         }
 
-        const mymath::float128_t divisor = matrix[col][col];
+        const Scalar divisor = matrix[col][col];
         for (int c_col = col; c_col < denominator_degree; ++c_col) {
             matrix[col][c_col] = matrix[col][c_col] / divisor;
         }
@@ -1452,8 +1442,8 @@ bool solve_pade_denominator(std::function<long double(int)> c,
 
         for (int row = 0; row < denominator_degree; ++row) {
             if (row == col) continue;
-            const mymath::float128_t factor = matrix[row][col];
-            if (mymath::precise128::abs(factor) < mymath::float128_t(1e-40L)) continue;
+            const Scalar factor = matrix[row][col];
+            if (mymath::precise128::abs(factor) < Scalar(1e-40L)) continue;
             for (int c_col = col; c_col < denominator_degree; ++c_col) {
                 matrix[row][c_col] = matrix[row][c_col] - factor * matrix[col][c_col];
             }
@@ -1461,10 +1451,10 @@ bool solve_pade_denominator(std::function<long double(int)> c,
         }
     }
 
-    q.assign(static_cast<std::size_t>(denominator_degree + 1), 0.0L);
-    q[0] = 1.0L;
+    q.assign(static_cast<std::size_t>(denominator_degree + 1), Scalar(0));
+    q[0] = Scalar(1);
     for (int i = 0; i < denominator_degree; ++i) {
-        q[i + 1] = rhs[i].to_long_double();
+        q[i + 1] = rhs[i];
     }
     return true;
 }
@@ -1475,43 +1465,43 @@ bool solve_pade_denominator(std::function<long double(int)> c,
  * 求解 T * q = -c，其中 T 是 Toeplitz 矩阵。
  * 复杂度 O(n²)，比高斯消元更稳定。
  */
-bool solve_tohplitz_stable(std::function<long double(int)> c, int n, std::vector<long double>& q) {
+bool solve_tohplitz_stable(std::function<Scalar(int)> c, int n, std::vector<Scalar>& q) {
     if (n == 0) return true;
 
     // Levinson-Durbin 递推
     // 求解系统：sum_{j=0}^{n-1} c_{i-j+1} * q_{j+1} = -c_{i+1}, i = 0, ..., n-1
 
-    std::vector<mymath::float128_t> f(n + 1, 0.0L);  // 前向预测误差滤波器
-    std::vector<mymath::float128_t> b(n + 1, 0.0L);  // 后向预测误差滤波器
-    std::vector<mymath::float128_t> q_new(n + 1, 0.0L);
-    std::vector<mymath::float128_t> q_128(n + 1, 0.0L);
+    std::vector<Scalar> f(n + 1, Scalar(0));  // 前向预测误差滤波器
+    std::vector<Scalar> b(n + 1, Scalar(0));  // 后向预测误差滤波器
+    std::vector<Scalar> q_new(n + 1, Scalar(0));
+    std::vector<Scalar> q_128(n + 1, Scalar(0));
 
-    f[0] = 1.0L;
-    b[0] = 1.0L;
-    q_128[0] = 1.0L;
+    f[0] = Scalar(1);
+    b[0] = Scalar(1);
+    q_128[0] = Scalar(1);
 
-    mymath::float128_t ef = mymath::float128_t(c(1));  // 前向误差
+    Scalar ef = c(1);  // 前向误差
     for (int k = 0; k < n; ++k) {
         // 计算反射系数
-        mymath::float128_t denom = ef;
-        if (mymath::precise128::abs(denom) < mymath::float128_t(1e-40L)) {
+        Scalar denom = ef;
+        if (mymath::precise128::abs(denom) < Scalar(1e-40L)) {
             return false;  // 系统奇异
         }
-        mymath::float128_t kappa = 0.0L;
+        Scalar kappa = Scalar(0);
 
         // 计算新的反射系数
-        mymath::float128_t sum_f = 0.0L, sum_b = 0.0L;
+        Scalar sum_f = Scalar(0), sum_b = Scalar(0);
         for (int i = 0; i <= k; ++i) {
-            sum_f = sum_f + f[i] * mymath::float128_t(c(k + 2 - i));
-            sum_b = sum_b + b[i] * mymath::float128_t(c(i + 1));
+            sum_f = sum_f + f[i] * c(k + 2 - i);
+            sum_b = sum_b + b[i] * c(i + 1);
         }
 
-        if (mymath::precise128::abs(sum_b) > mymath::float128_t(1e-40L)) {
+        if (mymath::precise128::abs(sum_b) > Scalar(1e-40L)) {
             kappa = -sum_f / sum_b;
         }
 
         // 更新滤波器
-        std::vector<mymath::float128_t> f_new = f;
+        std::vector<Scalar> f_new = f;
         for (int i = 0; i <= k; ++i) {
             f_new[i + 1] = f_new[i + 1] + kappa * b[k - i];
         }
@@ -1521,17 +1511,17 @@ bool solve_tohplitz_stable(std::function<long double(int)> c, int n, std::vector
         f = f_new;
 
         // 更新误差
-        ef = ef * (mymath::float128_t(1.0L) - kappa * kappa);
-        if (mymath::precise128::abs(ef) < mymath::float128_t(1e-40L)) {
+        ef = ef * (Scalar(1) - kappa * kappa);
+        if (mymath::precise128::abs(ef) < Scalar(1e-40L)) {
             return false;
         }
 
         // 更新解
-        mymath::float128_t q_sum = 0.0L;
+        Scalar q_sum = Scalar(0);
         for (int i = 0; i <= k; ++i) {
-            q_sum = q_sum + q_128[i] * mymath::float128_t(c(k + 1 - i));
+            q_sum = q_sum + q_128[i] * c(k + 1 - i);
         }
-        mymath::float128_t delta = -q_sum / ef;
+        Scalar delta = -q_sum / ef;
 
         for (int i = 0; i <= k + 1; ++i) {
             q_new[i] = q_128[i] + delta * f[i];
@@ -1539,9 +1529,9 @@ bool solve_tohplitz_stable(std::function<long double(int)> c, int n, std::vector
         q_128 = q_new;
     }
 
-    q.assign(n + 1, 0.0L);
+    q.assign(n + 1, Scalar(0));
     for (int i = 0; i <= n; ++i) {
-        q[i] = q_128[i].to_long_double();
+        q[i] = q_128[i];
     }
 
     return true;
@@ -1550,24 +1540,24 @@ bool solve_tohplitz_stable(std::function<long double(int)> c, int n, std::vector
 /**
  * @brief 格式化 Pade 逼近结果
  */
-std::string format_pade_result(const std::vector<long double>& numerator,
-                                const std::vector<long double>& denominator) {
+std::string format_pade_result(const std::vector<Scalar>& numerator,
+                                const std::vector<Scalar>& denominator) {
     const std::string base = "x";
 
     // 规范化：使分母首项为 1
-    long double scale = denominator[0];
-    if (mymath::abs(scale) < 1e-15) {
-        scale = 1.0L;
+    Scalar scale = denominator[0];
+    if (mymath::precise128::abs(scale) < Scalar(1e-15L)) {
+        scale = Scalar(1);
     }
 
-    std::vector<long double> num_normalized(numerator.size());
-    std::vector<long double> den_normalized(denominator.size());
+    std::vector<Scalar> num_normalized(numerator.size());
+    std::vector<Scalar> den_normalized(denominator.size());
 
     for (std::size_t i = 0; i < numerator.size(); ++i) {
-        num_normalized[i] = numerator[i] / scale;
+        num_normalized[i] = (numerator[i] / scale).to_long_double();
     }
     for (std::size_t i = 0; i < denominator.size(); ++i) {
-        den_normalized[i] = denominator[i] / scale;
+        den_normalized[i] = (denominator[i] / scale).to_long_double();
     }
 
     std::string num_text = polynomial_to_string(num_normalized, base);
@@ -1583,17 +1573,9 @@ std::string format_pade_result(const std::vector<long double>& numerator,
 /**
  * @brief 简单 Pade 格式化（用于退化情况）
  */
-std::string format_simple_pade(const std::vector<long double>& numerator,
-                                const std::vector<long double>& denominator) {
-    std::vector<long double> num(numerator.size());
-    std::vector<long double> den(denominator.size());
-    for (std::size_t i = 0; i < numerator.size(); ++i) {
-        num[i] = static_cast<long double>(numerator[i]);
-    }
-    for (std::size_t i = 0; i < denominator.size(); ++i) {
-        den[i] = static_cast<long double>(denominator[i]);
-    }
-    return format_pade_result(num, den);
+std::string format_simple_pade(const std::vector<Scalar>& numerator,
+                                const std::vector<Scalar>& denominator) {
+    return format_pade_result(numerator, denominator);
 }
 
 // ============================================================================
@@ -1614,14 +1596,14 @@ std::string format_simple_pade(const std::vector<long double>& numerator,
  */
 bool compute_newton_polygon(const std::vector<int>& x_powers,
                             const std::vector<int>& y_powers,
-                            const std::vector<long double>& coefficients,
-                            std::vector<std::tuple<long double, int, int, int, int>>* edges) {
+                            const std::vector<Scalar>& coefficients,
+                            std::vector<std::tuple<Scalar, int, int, int, int>>* edges) {
     if (x_powers.empty() || y_powers.empty()) return false;
 
     // 收集非零项的点
     std::vector<std::pair<int, int>> points;
     for (std::size_t i = 0; i < coefficients.size(); ++i) {
-        if (!mymath::is_near_zero(coefficients[i], 1e-15)) {
+        if (mymath::precise128::abs(coefficients[i]) >= Scalar(1e-15L)) {
             points.emplace_back(x_powers[i], y_powers[i]);
         }
     }
@@ -1661,10 +1643,10 @@ bool compute_newton_polygon(const std::vector<int>& x_powers,
 
     if (min_x == mymath::kIntMax) {
         // 没有常数项，找最小的 x/y 比值
-        long double min_ratio = mymath::kDoubleMax;
+        Scalar min_ratio = mymath::kDoubleMax;
         for (const auto& p : points) {
             if (p.second > 0) {
-                long double ratio = static_cast<long double>(p.first) / p.second;
+                Scalar ratio = (p.first) / p.second;
                 min_ratio = std::min(min_ratio, ratio);
             }
         }
@@ -1676,7 +1658,7 @@ bool compute_newton_polygon(const std::vector<int>& x_powers,
     }
 
     // 边的斜率
-    long double slope = static_cast<long double>(min_x) / max_y;
+    Scalar slope = (min_x) / max_y;
     edges->emplace_back(slope, 0, min_x, 0, max_y);
     return true;
 }
@@ -1693,17 +1675,17 @@ bool compute_newton_polygon(const std::vector<int>& x_powers,
  * @param result 输出 Puiseux 级数系数
  * @return 是否成功计算
  */
-bool newton_puiseux_expand(const std::vector<long double>& poly_coeffs,
+bool newton_puiseux_expand(const std::vector<Scalar>& poly_coeffs,
                            int degree,
-                           std::vector<std::pair<long double, int>>* result) {
+                           std::vector<std::pair<Scalar, int>>* result) {
     // 对于 y^2 = a_n x^n + a_{n-1} x^{n-1} + ... + a_1 x + a_0
     // 在 x=0 处展开
 
     // 找到第一个非零系数
     int leading_power = -1;
-    long double leading_coeff = 0.0L;
+    Scalar leading_coeff = Scalar(0);
     for (std::size_t i = 0; i < poly_coeffs.size(); ++i) {
-        if (!mymath::is_near_zero(poly_coeffs[i], 1e-15)) {
+        if (mymath::precise128::abs(poly_coeffs[i]) >= Scalar(1e-15L)) {
             leading_power = static_cast<int>(i);
             leading_coeff = poly_coeffs[i];
             break;
@@ -1722,7 +1704,7 @@ bool newton_puiseux_expand(const std::vector<long double>& poly_coeffs,
     result->reserve(degree + 1);
 
     // 首项
-    long double sqrt_leading = mymath::sqrt(mymath::abs(leading_coeff));
+    Scalar sqrt_leading = mymath::precise128::sqrt(mymath::precise128::abs(leading_coeff));
 
     result->emplace_back(sqrt_leading, leading_power);
 
@@ -1736,7 +1718,7 @@ bool newton_puiseux_expand(const std::vector<long double>& poly_coeffs,
     }
 
     // 归一化：构造 (P(x) - a_{leading_power} x^{leading_power}) / a_{leading_power}
-    std::vector<long double> normalized;
+    std::vector<Scalar> normalized;
     normalized.reserve(poly_coeffs.size() - leading_power);
     for (std::size_t i = leading_power; i < poly_coeffs.size(); ++i) {
         normalized.push_back(poly_coeffs[i] / leading_coeff);
@@ -1746,17 +1728,17 @@ bool newton_puiseux_expand(const std::vector<long double>& poly_coeffs,
     // sqrt(1+t) = 1 + t/2 - t^2/8 + t^3/16 - 5*t^4/128 + ...
     // 二项式系数: C(1/2, k) = (1/2)(1/2-1)(1/2-2)...(1/2-k+1) / k!
 
-    std::vector<long double> sqrt_coeffs;
+    std::vector<Scalar> sqrt_coeffs;
     sqrt_coeffs.reserve(degree + 1);
-    sqrt_coeffs.push_back(1.0L);  // 常数项
+    sqrt_coeffs.push_back(Scalar(1));  // 常数项
 
     for (int k = 1; k <= degree; ++k) {
         // C(1/2, k) = (-1)^{k-1} * (2k-3)!! / (2^k * k!)
-        long double coeff = 1.0L;
+        Scalar coeff = Scalar(1);
         for (int j = 1; j < k; ++j) {
-            coeff *= (0.5 - j);
+            coeff = coeff * (Scalar(0.5L) - Scalar(j));
         }
-        coeff /= prob::factorial(k);
+        coeff = coeff / Scalar(prob::factorial(k));
         sqrt_coeffs.push_back(coeff);
     }
 
@@ -1764,26 +1746,26 @@ bool newton_puiseux_expand(const std::vector<long double>& poly_coeffs,
     // 然后 sqrt(1+t) = sum_k sqrt_coeffs[k] * t^k
 
     // 使用幂级数乘法
-    std::vector<long double> t_series(degree + 1, 0.0L);
+    std::vector<Scalar> t_series(degree + 1, Scalar(0));
     for (std::size_t i = 1; i < normalized.size() && i <= static_cast<std::size_t>(degree); ++i) {
         t_series[i] = normalized[i];
     }
 
     // 计算 sqrt(1+t) 的系数
-    std::vector<long double> sqrt_result(degree + 1, 0.0L);
-    sqrt_result[0] = 1.0L;
+    std::vector<Scalar> sqrt_result(degree + 1, Scalar(0));
+    sqrt_result[0] = Scalar(1);
 
-    std::vector<long double> t_power(degree + 1, 0.0L);
-    t_power[0] = 1.0L;  // t^0 = 1
+    std::vector<Scalar> t_power(degree + 1, Scalar(0));
+    t_power[0] = Scalar(1);  // t^0 = 1
 
     for (int k = 1; k <= degree; ++k) {
         // t^k = t^{k-1} * t
-        std::vector<long double> new_t_power(degree + 1, 0.0L);
+        std::vector<Scalar> new_t_power(degree + 1, Scalar(0));
         for (int i = 0; i <= degree; ++i) {
-            if (mymath::is_near_zero(t_power[i], 1e-15)) continue;
+            if (mymath::precise128::abs(t_power[i]) < Scalar(1e-15L)) continue;
             for (int j = 0; i + j <= degree; ++j) {
-                if (!mymath::is_near_zero(t_series[j], 1e-15)) {
-                    new_t_power[i + j] += t_power[i] * t_series[j];
+                if (mymath::precise128::abs(t_series[j]) >= Scalar(1e-15L)) {
+                    new_t_power[i + j] = new_t_power[i + j] + t_power[i] * t_series[j];
                 }
             }
         }
@@ -1791,13 +1773,13 @@ bool newton_puiseux_expand(const std::vector<long double>& poly_coeffs,
 
         // 加到结果中
         for (int i = 0; i <= degree; ++i) {
-            sqrt_result[i] += sqrt_coeffs[k] * t_power[i];
+            sqrt_result[i] = sqrt_result[i] + sqrt_coeffs[k] * t_power[i];
         }
     }
 
     // 最终结果：sqrt_leading * x^{leading_power/2} * sqrt_result
     for (int i = 0; i <= degree && i < static_cast<int>(sqrt_result.size()); ++i) {
-        if (!mymath::is_near_zero(sqrt_result[i], 1e-15)) {
+        if (mymath::precise128::abs(sqrt_result[i]) >= Scalar(1e-15L)) {
             result->emplace_back(sqrt_leading * sqrt_result[i], leading_power + i);
         }
     }
@@ -1822,13 +1804,13 @@ bool newton_puiseux_expand(const std::vector<long double>& poly_coeffs,
  */
 std::string puiseux(const SeriesContext& ctx,
                     const std::string& expr,
-                    long double center,
+                    Scalar center,
                     int degree,
                     int denominator);
 
 std::string general_series_auto(const SeriesContext& ctx,
                               const std::string& expression_str,
-                              long double center,
+                              Scalar center,
                               int degree) {
     std::string variable_name;
     SymbolicExpression expr;
@@ -1837,7 +1819,7 @@ std::string general_series_auto(const SeriesContext& ctx,
     // 1. 尝试 Taylor 展开 (检测是否解析)
     try {
         SymbolicExpression val = expr.substitute(variable_name, SymbolicExpression::number(center)).simplify();
-        long double n;
+        Scalar n;
         if (val.is_number(&n) && !mymath::isinf(n)) {
             return taylor(ctx, expression_str, center, degree);
         }
@@ -1847,15 +1829,15 @@ std::string general_series_auto(const SeriesContext& ctx,
     for (int k = 1; k <= 3; ++k) {
         SymbolicExpression factor =
             (SymbolicExpression::variable(variable_name) - SymbolicExpression::number(center)) ^
-            SymbolicExpression::number(static_cast<long double>(k));
+            SymbolicExpression::number((k));
         SymbolicExpression shifted = (expr * factor).simplify();
         
         try {
             SymbolicExpression val = shifted.substitute(variable_name, SymbolicExpression::number(center)).simplify();
-            long double n;
+            Scalar n;
             if (val.is_number(&n) && !mymath::isinf(n)) {
                 std::string t_str = taylor(ctx, shifted.to_string(), center, degree + k);
-                return "(" + t_str + ") / (" + variable_name + (center == 0 ? "" : " - " + std::to_string(center)) + ")^" + std::to_string(k);
+                return "(" + t_str + ") / (" + variable_name + (center == 0 ? "" : " - " + std::to_string(center.to_long_double())) + ")^" + std::to_string(k);
             }
         } catch (...) {}
     }
@@ -1866,7 +1848,7 @@ std::string general_series_auto(const SeriesContext& ctx,
 
 std::string puiseux(const SeriesContext& ctx,
                     const std::string& expr,
-                    long double center,
+                    Scalar center,
                     int degree,
                     int denominator) {
     std::string variable_name;
@@ -1886,17 +1868,21 @@ std::string puiseux(const SeriesContext& ctx,
     if (is_sqrt_form && mymath::is_near_zero(center, 1e-10)) {
         // 检查 sqrt_arg 是否在 x=0 处为零
         SymbolicExpression arg_at_zero = sqrt_arg.substitute(variable_name, SymbolicExpression::number(0.0L)).simplify();
-        long double val = 0.0L;
+        Scalar val = 0.0L;
         if (arg_at_zero.is_number(&val) && mymath::is_near_zero(val, 1e-10)) {
             // sqrt(P(x)) 在 x=0 处展开，其中 P(0)=0
             // 尝试提取 P(x) 的首项
-            std::vector<long double> poly_coeffs;
-            if (sqrt_arg.polynomial_coefficients(variable_name, &poly_coeffs)) {
+            std::vector<Scalar> poly_coeffs;
+            std::vector<Scalar> ld_poly_coeffs;
+            if (sqrt_arg.polynomial_coefficients(variable_name, &ld_poly_coeffs)) {
+                for (const auto& c : ld_poly_coeffs) {
+                    poly_coeffs.push_back(Scalar(c));
+                }
                 // 找到第一个非零系数
                 int leading_power = -1;
-                long double leading_coeff = 0.0L;
+                Scalar leading_coeff = Scalar(0);
                 for (std::size_t i = 0; i < poly_coeffs.size(); ++i) {
-                    if (!mymath::is_near_zero(poly_coeffs[i], 1e-10)) {
+                    if (mymath::precise128::abs(poly_coeffs[i]) >= Scalar(1e-10L)) {
                         leading_power = static_cast<int>(i);
                         leading_coeff = poly_coeffs[i];
                         break;
@@ -1905,27 +1891,28 @@ std::string puiseux(const SeriesContext& ctx,
 
                 if (leading_power >= 1) {
                     // 使用 Newton-Puiseux 算法
-                    std::vector<std::pair<long double, int>> puiseux_coeffs;
+                    std::vector<std::pair<Scalar, int>> puiseux_coeffs;
                     if (newton_puiseux_expand(poly_coeffs, degree, &puiseux_coeffs)) {
                         // 转换为字符串输出
                         std::ostringstream result;
                         bool first = true;
                         for (const auto& [coeff, power] : puiseux_coeffs) {
-                            if (mymath::is_near_zero(coeff, 1e-15)) continue;
+                            if (mymath::precise128::abs(coeff) < Scalar(1e-15L)) continue;
 
+                            Scalar coeff_ld = coeff.to_long_double();
                             if (!first) {
-                                if (coeff > 0) {
+                                if (coeff_ld > 0) {
                                     result << " + ";
                                 } else {
                                     result << " - ";
                                 }
                             } else {
-                                if (coeff < 0) {
+                                if (coeff_ld < 0) {
                                     result << "-";
                                 }
                             }
 
-                            long double abs_coeff = mymath::abs(coeff);
+                            Scalar abs_coeff = mymath::abs(coeff_ld);
                             int actual_power = power;
                             int actual_denom = 2;  // sqrt 的分母
 
@@ -1941,10 +1928,10 @@ std::string puiseux(const SeriesContext& ctx,
                                 mymath::is_near_zero(abs_coeff - 1.0L, 1e-9);
 
                             if (!omit_unit_coeff) {
-                                if (!first && coeff < 0) {
+                                if (!first && coeff_ld < 0) {
                                     result << format_symbolic_scalar(abs_coeff);
                                 } else {
-                                    result << format_symbolic_scalar(coeff);
+                                    result << format_symbolic_scalar(coeff_ld);
                                 }
                             }
 
@@ -2000,10 +1987,14 @@ std::string puiseux(const SeriesContext& ctx,
                         }
                         const SymbolicExpression puiseux_expression =
                             SymbolicExpression::parse(substituted_text);
-                        const std::vector<long double> coefficients = build_taylor_coefficients(
+                        const std::vector<Scalar> coefficients = build_taylor_coefficients(
                             ctx, puiseux_expression, auxiliary_variable, 0.0L, degree);
+                        std::vector<Scalar> ld_coefficients;
+                        for (const auto& c : coefficients) {
+                            ld_coefficients.push_back(c.to_long_double());
+                        }
                         return generalized_series_to_string(
-                            coefficients, variable_name, center, denominator);
+                            ld_coefficients, variable_name, center, denominator);
                     } else {
                         // n 是奇数，真正的分数幂分支点
                         // sqrt(a*x^n + ...) = sqrt(a)*x^(n/2) * (1 + ...)^(1/2)
@@ -2014,7 +2005,7 @@ std::string puiseux(const SeriesContext& ctx,
                         }
 
                         // 构造展开
-                        std::vector<long double> coefficients;
+                        std::vector<Scalar> coefficients;
                         coefficients.reserve(static_cast<std::size_t>(degree + 1));
 
                         // 首项: sqrt(leading_coeff) * t^(leading_power/2)
@@ -2022,9 +2013,9 @@ std::string puiseux(const SeriesContext& ctx,
                         // sqrt(x^n) = t^n
 
                         // 使用 PSA 方法计算 sqrt(1 + higher_terms)
-                        SymbolicExpression normalized_arg = (sqrt_arg / SymbolicExpression::number(leading_coeff)).simplify();
+                        SymbolicExpression normalized_arg = (sqrt_arg / SymbolicExpression::number(leading_coeff.to_long_double())).simplify();
                         normalized_arg = normalized_arg.substitute(variable_name,
-                            SymbolicExpression::parse(variable_name + " / " + format_symbolic_scalar(mymath::sqrt(mymath::abs(leading_coeff)))));
+                            SymbolicExpression::parse(variable_name + " / " + format_symbolic_scalar(mymath::precise128::sqrt(mymath::precise128::abs(leading_coeff)).to_long_double())));
 
                         // 简化方法：直接使用 Taylor 展开
                         const std::string auxiliary_variable = "puiseux_t";
@@ -2044,11 +2035,15 @@ std::string puiseux(const SeriesContext& ctx,
                         }
                         const SymbolicExpression puiseux_expression =
                             SymbolicExpression::parse(substituted_text);
-                        const std::vector<long double> raw_coeffs = build_taylor_coefficients(
+                        const std::vector<Scalar> raw_coeffs = build_taylor_coefficients(
                             ctx, puiseux_expression, auxiliary_variable, 0.0L, degree);
 
+                        std::vector<Scalar> ld_raw_coeffs;
+                        for (const auto& c : raw_coeffs) {
+                            ld_raw_coeffs.push_back(c.to_long_double());
+                        }
                         return generalized_series_to_string(
-                            raw_coeffs, variable_name, center, effective_denominator);
+                            ld_raw_coeffs, variable_name, center, effective_denominator);
                     }
                 }
             }
@@ -2077,10 +2072,14 @@ std::string puiseux(const SeriesContext& ctx,
     }
     const SymbolicExpression puiseux_expression =
         SymbolicExpression::parse(substituted_text);
-    const std::vector<long double> coefficients = build_taylor_coefficients(
+    const std::vector<Scalar> coefficients = build_taylor_coefficients(
         ctx, puiseux_expression, auxiliary_variable, 0.0L, degree);
+    std::vector<Scalar> ld_coefficients;
+    for (const auto& c : coefficients) {
+        ld_coefficients.push_back(c.to_long_double());
+    }
     return generalized_series_to_string(
-        coefficients, variable_name, center, denominator);
+        ld_coefficients, variable_name, center, denominator);
 }
 
 // ============================================================================
@@ -2097,8 +2096,8 @@ namespace {
  */
 bool detect_geometric_ratio_symbolic(const SymbolicExpression& summand,
                                       const std::string& index_name,
-                                      long double* coefficient,
-                                      long double* ratio) {
+                                      Scalar* coefficient,
+                                      Scalar* ratio) {
     // 构造 n+1 表达式
     SymbolicExpression n_plus_1 = SymbolicExpression::parse("(" + index_name + ") + 1");
     SymbolicExpression next_term = summand.substitute(index_name, n_plus_1);
@@ -2118,7 +2117,7 @@ bool detect_geometric_ratio_symbolic(const SymbolicExpression& summand,
         // 如果 f(0) 不是常数，尝试 f(1) / r
         SymbolicExpression n_one = SymbolicExpression::number(1.0L);
         SymbolicExpression term_at_one = summand.substitute(index_name, n_one).simplify();
-        long double val_one = 0.0L;
+        Scalar val_one = 0.0L;
         if (term_at_one.is_number(&val_one) && !mymath::is_near_zero(*ratio, 1e-12)) {
             *coefficient = val_one / *ratio;
             return true;
@@ -2135,8 +2134,8 @@ bool detect_geometric_ratio_symbolic(const SymbolicExpression& summand,
  */
 bool detect_arith_geo_series(const SymbolicExpression& summand,
                               const std::string& index_name,
-                              std::vector<long double>* poly_coeffs,
-                              long double* ratio) {
+                              std::vector<Scalar>* poly_coeffs,
+                              Scalar* ratio) {
     // 尝试提取 r^n 因子
     // 方法：检查 f(n+1)/f(n) 是否趋近于常数 r（当 n→∞）
     // 对于 P(n)*r^n，比值为 (P(n+1)/P(n)) * r → r
@@ -2146,7 +2145,7 @@ bool detect_arith_geo_series(const SymbolicExpression& summand,
     SymbolicExpression ratio_expr = (next_term / summand).simplify();
 
     // 如果比值是常数，这是纯几何级数
-    long double r = 0.0L;
+    Scalar r = 0.0L;
     if (ratio_expr.is_number(&r)) {
         return false;  // 纯几何级数，不是等差-等比
     }
@@ -2155,16 +2154,16 @@ bool detect_arith_geo_series(const SymbolicExpression& summand,
     // 对于 P(n)*r^n，计算 f(n+1)/f(n) 在大 n 处的极限
     // 使用更多的点来改进外推精度
     constexpr int kNumPoints = 6;
-    long double ratios_arr[kNumPoints];
-    long double n_arr[kNumPoints];
+    Scalar ratios_arr[kNumPoints];
+    Scalar n_arr[kNumPoints];
     for (int i = 0; i < kNumPoints; ++i) {
         int n = 10 + i;
-        SymbolicExpression n_val = SymbolicExpression::number(static_cast<long double>(n));
+        SymbolicExpression n_val = SymbolicExpression::number((n));
         SymbolicExpression term_n = summand.substitute(index_name, n_val).simplify();
-        SymbolicExpression n_plus_val = SymbolicExpression::number(static_cast<long double>(n + 1));
+        SymbolicExpression n_plus_val = SymbolicExpression::number((n + 1));
         SymbolicExpression term_n1 = summand.substitute(index_name, n_plus_val).simplify();
 
-        long double val_n = 0.0L, val_n1 = 0.0L;
+        Scalar val_n = 0.0L, val_n1 = 0.0L;
         if (!term_n.is_number(&val_n) || !term_n1.is_number(&val_n1)) {
             return false;
         }
@@ -2172,7 +2171,7 @@ bool detect_arith_geo_series(const SymbolicExpression& summand,
             return false;
         }
         ratios_arr[i] = val_n1 / val_n;
-        n_arr[i] = static_cast<long double>(n);
+        n_arr[i] = (n);
     }
 
     // 检查比值是否递减趋近于某个值
@@ -2185,8 +2184,8 @@ bool detect_arith_geo_series(const SymbolicExpression& summand,
     }
 
     // 或者检查是否收敛
-    long double ratio_diff1 = mymath::abs(ratios_arr[1] - ratios_arr[0]);
-    long double ratio_diff2 = mymath::abs(ratios_arr[2] - ratios_arr[1]);
+    Scalar ratio_diff1 = mymath::abs(ratios_arr[1] - ratios_arr[0]);
+    Scalar ratio_diff2 = mymath::abs(ratios_arr[2] - ratios_arr[1]);
     bool is_converging = (ratio_diff2 < ratio_diff1 * 1.5) ||
                          (ratio_diff1 < 1e-3 && ratio_diff2 < 1e-3);
 
@@ -2199,7 +2198,7 @@ bool detect_arith_geo_series(const SymbolicExpression& summand,
     // T[i][0] = ratios[i]
     // T[i][j+1] = T[i+1][j] + (T[i+1][j] - T[i][j]) * n_{i+j+1} / (n_{i+j+1} - n_i)
 
-    std::vector<std::vector<long double>> T(kNumPoints, std::vector<long double>(kNumPoints, 0.0L));
+    std::vector<std::vector<Scalar>> T(kNumPoints, std::vector<Scalar>(kNumPoints, 0.0L));
 
     // 初始化第一列
     for (int i = 0; i < kNumPoints; ++i) {
@@ -2209,8 +2208,8 @@ bool detect_arith_geo_series(const SymbolicExpression& summand,
     // 递推计算
     for (int j = 1; j < kNumPoints; ++j) {
         for (int i = 0; i < kNumPoints - j; ++i) {
-            long double n_ipj = n_arr[i + j];
-            long double n_i = n_arr[i];
+            Scalar n_ipj = n_arr[i + j];
+            Scalar n_i = n_arr[i];
             T[i][j] = T[i + 1][j - 1] + (T[i + 1][j - 1] - T[i][j - 1]) * n_ipj / (n_ipj - n_i);
         }
     }
@@ -2226,21 +2225,21 @@ bool detect_arith_geo_series(const SymbolicExpression& summand,
     // 采样更多点以支持更高次多项式
     constexpr int kMaxPolyDegree = 10;  // 支持最多 10 次多项式
     for (int n = 0; n <= kMaxPolyDegree + 2; ++n) {
-        SymbolicExpression n_val = SymbolicExpression::number(static_cast<long double>(n));
+        SymbolicExpression n_val = SymbolicExpression::number((n));
         SymbolicExpression term_n = summand.substitute(index_name, n_val).simplify();
-        long double val = 0.0L;
+        Scalar val = 0.0L;
         if (!term_n.is_number(&val)) {
             return false;
         }
-        long double p_n = val / mymath::pow(*ratio, n);
+        Scalar p_n = val / mymath::pow(*ratio, n);
         poly_coeffs->push_back(p_n);
     }
 
     // 验证 P(n) 是否为多项式（通过差分）
     // 对于 d 次多项式，d+1 阶差分为零
-    std::vector<long double> diff = *poly_coeffs;
+    std::vector<Scalar> diff = *poly_coeffs;
     for (int order = 1; order <= kMaxPolyDegree + 1; ++order) {
-        std::vector<long double> new_diff;
+        std::vector<Scalar> new_diff;
         for (std::size_t i = 1; i < diff.size(); ++i) {
             new_diff.push_back(diff[i] - diff[i - 1]);
         }
@@ -2248,7 +2247,7 @@ bool detect_arith_geo_series(const SymbolicExpression& summand,
 
         // 检查差分是否为零
         bool all_zero = true;
-        for (long double d : diff) {
+        for (Scalar d : diff) {
             if (!mymath::is_near_zero(d, 1e-8)) {
                 all_zero = false;
                 break;
@@ -2266,7 +2265,7 @@ bool detect_arith_geo_series(const SymbolicExpression& summand,
             // 使用有限差分法计算多项式系数
             // P(n) = a_0 + a_1*n + a_2*n^2 + ... + a_d*n^d
             // 构建范德蒙德矩阵并求解
-            std::vector<long double> coeffs(degree + 1, 0.0L);
+            std::vector<Scalar> coeffs(degree + 1, 0.0L);
 
             // 使用差分表计算系数（牛顿形式转标准形式）
             // 对于小次数，直接使用公式
@@ -2283,23 +2282,23 @@ bool detect_arith_geo_series(const SymbolicExpression& summand,
                 // P(1) = a_0 + a_1 + a_2
                 // P(2) = a_0 + 2*a_1 + 4*a_2
                 coeffs[0] = (*poly_coeffs)[0];
-                long double p1 = (*poly_coeffs)[1] - coeffs[0];  // a_1 + a_2
-                long double p2 = (*poly_coeffs)[2] - coeffs[0];  // 2*a_1 + 4*a_2
+                Scalar p1 = (*poly_coeffs)[1] - coeffs[0];  // a_1 + a_2
+                Scalar p2 = (*poly_coeffs)[2] - coeffs[0];  // 2*a_1 + 4*a_2
                 coeffs[2] = (p2 - 2 * p1) / 2.0;  // a_2
                 coeffs[1] = p1 - coeffs[2];       // a_1
             } else {
                 // 对于高次多项式，使用高斯消元
                 // 构建范德蒙德矩阵
                 int n = degree + 1;
-                std::vector<std::vector<long double>> A(n, std::vector<long double>(n, 0.0L));
-                std::vector<long double> b(n, 0.0L);
+                std::vector<std::vector<Scalar>> A(n, std::vector<Scalar>(n, 0.0L));
+                std::vector<Scalar> b(n, 0.0L);
 
                 for (int i = 0; i < n; ++i) {
                     b[i] = (*poly_coeffs)[i];
-                    long double power = 1.0L;
+                    Scalar power = 1.0L;
                     for (int j = 0; j < n; ++j) {
                         A[i][j] = power;
-                        power *= static_cast<long double>(i);
+                        power *= (i);
                     }
                 }
 
@@ -2321,7 +2320,7 @@ bool detect_arith_geo_series(const SymbolicExpression& summand,
 
                     // 消元
                     for (int k = i + 1; k < n; ++k) {
-                        long double factor = A[k][i] / A[i][i];
+                        Scalar factor = A[k][i] / A[i][i];
                         for (int j = i; j < n; ++j) {
                             A[k][j] -= factor * A[i][j];
                         }
@@ -2451,7 +2450,7 @@ std::string compute_power_times_geo_sum(int m, const std::string& r,
     // 使用修正的递推关系
     // S_m = [n^m r^{n+1} + r * sum_{j=0}^{m-1} binom(m,j) S_j] / (1-r)
     for (int j = 0; j < m; ++j) {
-        long double c = prob::nCr(m, j);
+        Scalar c = prob::nCr(m, j);
         if (mymath::is_near_zero(c, 1e-10)) continue;
 
         std::string s_j = compute_power_times_geo_sum(j, r, index_name);
@@ -2469,8 +2468,8 @@ std::string compute_power_times_geo_sum(int m, const std::string& r,
  * 计算 sum_{k=0}^{n} P(k) * r^k，其中 P(k) 是多项式
  * 使用递推公式处理任意次数多项式
  */
-std::string arith_geo_sum(const std::vector<long double>& poly_coeffs,
-                           long double ratio,
+std::string arith_geo_sum(const std::vector<Scalar>& poly_coeffs,
+                           Scalar ratio,
                            const std::string& index_name,
                            const SymbolicExpression& upper_expr,
                            const std::string& lower) {
@@ -2491,10 +2490,10 @@ std::string arith_geo_sum(const std::vector<long double>& poly_coeffs,
             faulhaber << "(1 / " << (m + 1) << ") * (";
             bool first = true;
             for (std::size_t j = 0; j <= m; ++j) {
-                long double bj = prob::bernoulli(static_cast<int>(j));
+                Scalar bj = prob::bernoulli(static_cast<int>(j));
                 if (mymath::is_near_zero(bj, 1e-10)) continue;
 
-                long double term_coeff = prob::nCr(m + 1, j) * bj;
+                Scalar term_coeff = prob::nCr(m + 1, j) * bj;
                 if (!first) faulhaber << " + ";
                 faulhaber << format_symbolic_scalar(term_coeff) << " * ("
                           << index_name << " ^ " << (m + 1 - j) << ")";
@@ -2577,7 +2576,7 @@ bool detect_telescoping(const SymbolicExpression& summand,
         SymbolicExpression numerator(summand.node_->left);
         SymbolicExpression denominator(summand.node_->right);
 
-        long double num_val = 0.0L;
+        Scalar num_val = 0.0L;
         if (numerator.is_number(&num_val) && mymath::is_near_zero(num_val - 1.0L, 1e-10)) {
             // 分子为 1，检查分母是否可以分解为 a(n)*b(n) 其中 b(n) = a(n+1)
             // 例如：1/(n*(n+1)) = 1/n - 1/(n+1)
@@ -2616,11 +2615,11 @@ bool detect_telescoping(const SymbolicExpression& summand,
             // 我们通过数值拟合来检测
 
             // 计算 P(n) 在几个点的值
-            std::vector<long double> p_values;
+            std::vector<Scalar> p_values;
             for (int n = 1; n <= 5; ++n) {
-                SymbolicExpression n_val = SymbolicExpression::number(static_cast<long double>(n));
+                SymbolicExpression n_val = SymbolicExpression::number((n));
                 SymbolicExpression denom_at_n = denominator.substitute(index_name, n_val).simplify();
-                long double val = 0.0L;
+                Scalar val = 0.0L;
                 if (!denom_at_n.is_number(&val)) {
                     break;
                 }
@@ -2632,7 +2631,7 @@ bool detect_telescoping(const SymbolicExpression& summand,
             if (p_values.size() >= 5) {
                 bool is_n_times_n_plus_1 = true;
                 for (int n = 1; n <= 5; ++n) {
-                    long double expected = static_cast<long double>(n) * (n + 1);
+                    Scalar expected = (n) * (n + 1);
                     if (mymath::abs(p_values[n - 1] - expected) > 1e-6) {
                         is_n_times_n_plus_1 = false;
                         break;
@@ -2649,18 +2648,18 @@ bool detect_telescoping(const SymbolicExpression& summand,
                 // 通过解方程确定 a
                 // P(1) = 1 + (2a+1) + a(a+1) = a^2 + 3a + 2
                 // P(0) = a(a+1)
-                long double p1 = p_values[0];  // P(1)
+                Scalar p1 = p_values[0];  // P(1)
                 // 解 a^2 + 3a + 2 = p1
                 // a^2 + 3a + (2 - p1) = 0
-                long double discriminant = 9.0 - 4.0 * (2.0 - p1);
+                Scalar discriminant = 9.0 - 4.0 * (2.0 - p1);
                 if (discriminant >= 0) {
-                    long double a1 = (-3.0 + mymath::sqrt(discriminant)) / 2.0;
-                    long double a2 = (-3.0 - mymath::sqrt(discriminant)) / 2.0;
+                    Scalar a1 = (-3.0 + mymath::sqrt(discriminant)) / 2.0;
+                    Scalar a2 = (-3.0 - mymath::sqrt(discriminant)) / 2.0;
 
-                    auto verify_a = [&](long double a) -> bool {
+                    auto verify_a = [&](Scalar a) -> bool {
                         // 验证 P(n) = (n+a)*(n+a+1)
                         for (int n = 1; n <= 5; ++n) {
-                            long double expected = (n + a) * (n + a + 1);
+                            Scalar expected = (n + a) * (n + a + 1);
                             if (mymath::abs(p_values[n - 1] - expected) > 1e-6) {
                                 return false;
                             }
@@ -2668,7 +2667,7 @@ bool detect_telescoping(const SymbolicExpression& summand,
                         return true;
                     };
 
-                    long double a = 0.0L;
+                    Scalar a = 0.0L;
                     if (verify_a(a1)) {
                         a = a1;
                     } else if (verify_a(a2)) {
@@ -2698,11 +2697,11 @@ bool detect_telescoping(const SymbolicExpression& summand,
     // 我们尝试通过 f(n) = g(n) - g(n+1) 反推 g(n)
 
     // 计算 f(n) 在几个点的值
-    std::vector<long double> f_values;
+    std::vector<Scalar> f_values;
     for (int n = 0; n <= 6; ++n) {
-        SymbolicExpression n_val = SymbolicExpression::number(static_cast<long double>(n));
+        SymbolicExpression n_val = SymbolicExpression::number((n));
         SymbolicExpression f_at_n = summand.substitute(index_name, n_val).simplify();
-        long double val = 0.0L;
+        Scalar val = 0.0L;
         if (!f_at_n.is_number(&val)) {
             break;
         }
@@ -2718,7 +2717,7 @@ bool detect_telescoping(const SymbolicExpression& summand,
         // 检查 f(n) * n * (n+1) 是否接近 1
         bool is_simple_telescoping = true;
         for (int n = 1; n <= 5; ++n) {
-            long double product = f_values[n] * static_cast<long double>(n) * (n + 1);
+            Scalar product = f_values[n] * (n) * (n + 1);
             if (mymath::abs(product - 1.0L) > 1e-6) {
                 is_simple_telescoping = false;
                 break;
@@ -2749,10 +2748,10 @@ bool detect_telescoping(const SymbolicExpression& summand,
  * @param result 输出收敛值
  * @return 是否成功收敛
  */
-bool wynn_epsilon_acceleration(const std::vector<long double>& partial_sums,
+bool wynn_epsilon_acceleration(const std::vector<Scalar>& partial_sums,
                                 int max_iterations,
-                                long double tolerance,
-                                long double* result) {
+                                Scalar tolerance,
+                                Scalar* result) {
     if (partial_sums.size() < 3) {
         if (partial_sums.empty()) {
             *result = 0.0L;
@@ -2766,30 +2765,30 @@ bool wynn_epsilon_acceleration(const std::vector<long double>& partial_sums,
 
     // 动态参数：根据数据量自动调整
     int actual_max_iter = (max_iterations < 0) ? std::min(n / 2, 50) : max_iterations;
-    long double actual_tolerance = (tolerance < 0) ? 1e-10 : tolerance;
+    Scalar actual_tolerance = (tolerance < 0) ? 1e-10 : tolerance;
 
     // epsilon 表，只需要两行
-    std::vector<long double> e_prev(n + 1, 0.0L);
-    std::vector<long double> e_curr(n + 1, 0.0L);
+    std::vector<Scalar> e_prev(n + 1, 0.0L);
+    std::vector<Scalar> e_curr(n + 1, 0.0L);
 
     // 初始化：e_0^{(n)} = S_n
     for (int i = 0; i < n; ++i) {
         e_prev[i + 1] = partial_sums[i];
     }
 
-    long double best_estimate = partial_sums.back();
-    long double best_change = mymath::kDoubleMax;
+    Scalar best_estimate = partial_sums.back();
+    Scalar best_change = mymath::kDoubleMax;
     int consecutive_no_improvement = 0;
 
     // 递归计算 epsilon 表
     for (int k = 1; k <= actual_max_iter && k < n; ++k) {
         bool all_valid = true;
         for (int j = k; j <= n - k; ++j) {
-            long double diff = e_prev[j + 1] - e_prev[j - 1];
+            Scalar diff = e_prev[j + 1] - e_prev[j - 1];
             if (mymath::abs(diff) < 1e-30) {
                 e_curr[j] = e_prev[j];
             } else {
-                long double eps_diff = e_curr[j - 1] - e_prev[j];
+                Scalar eps_diff = e_curr[j - 1] - e_prev[j];
                 if (mymath::abs(eps_diff) < 1e-30) {
                     e_curr[j] = e_prev[j + 1];
                 } else {
@@ -2805,9 +2804,9 @@ bool wynn_epsilon_acceleration(const std::vector<long double>& partial_sums,
         if (k % 2 == 0 && all_valid) {
             int mid = (k + 1) / 2 + 1;
             if (mid <= n - k) {
-                long double estimate = e_curr[mid];
+                Scalar estimate = e_curr[mid];
                 if (mymath::isfinite(estimate)) {
-                    long double change = mymath::abs(estimate - best_estimate);
+                    Scalar change = mymath::abs(estimate - best_estimate);
                     if (change < best_change) {
                         best_change = change;
                         best_estimate = estimate;
@@ -2844,21 +2843,21 @@ bool wynn_epsilon_acceleration(const std::vector<long double>& partial_sums,
  * 变换公式：S = sum_{k=0}^{inf} (-1)^k * Delta^k(a_0) / 2^{k+1}
  * 其中 Delta 是前向差分算子。
  */
-bool euler_transform(const std::vector<long double>& terms,
-                     long double tolerance,
-                     long double* result) {
+bool euler_transform(const std::vector<Scalar>& terms,
+                     Scalar tolerance,
+                     Scalar* result) {
     if (terms.empty()) {
         *result = 0.0L;
         return true;
     }
 
     const int n = static_cast<int>(terms.size());
-    std::vector<long double> delta = terms;  // 初始为 a_n
-    std::vector<long double> euler_sums;
+    std::vector<Scalar> delta = terms;  // 初始为 a_n
+    std::vector<Scalar> euler_sums;
     euler_sums.reserve(n);
 
-    long double sum = 0.0L;
-    long double pow2 = 1.0L;  // 2^k
+    Scalar sum = 0.0L;
+    Scalar pow2 = 1.0L;  // 2^k
 
     for (int k = 0; k < n && k < 30; ++k) {
         // 添加当前项
@@ -2874,7 +2873,7 @@ bool euler_transform(const std::vector<long double>& terms,
 
         // 检查收敛
         if (k > 2 && euler_sums.size() >= 2) {
-            long double change = mymath::abs(euler_sums[k] - euler_sums[k - 1]);
+            Scalar change = mymath::abs(euler_sums[k] - euler_sums[k - 1]);
             if (change < tolerance) {
                 *result = sum;
                 return true;
@@ -2893,10 +2892,10 @@ bool euler_transform(const std::vector<long double>& terms,
  * 公式：L_k^{(n)} = S_n / D_k^{(n)}
  * 其中 D_k^{(n)} 是基于差分的分母。
  */
-bool levin_transform(const std::vector<long double>& partial_sums,
-                     const std::vector<long double>& terms,
-                     long double tolerance,
-                     long double* result) {
+bool levin_transform(const std::vector<Scalar>& partial_sums,
+                     const std::vector<Scalar>& terms,
+                     Scalar tolerance,
+                     Scalar* result) {
     const int n = static_cast<int>(partial_sums.size());
     if (n < 4) {
         *result = partial_sums.empty() ? 0.0L : partial_sums.back();
@@ -2907,20 +2906,20 @@ bool levin_transform(const std::vector<long double>& partial_sums,
     // L = S_n + a_{n+1} * T_n / D_n
     // 其中 T_n 和 D_n 是基于二项式系数的和
 
-    long double best_estimate = partial_sums.back();
-    long double best_change = mymath::kDoubleMax;
+    Scalar best_estimate = partial_sums.back();
+    Scalar best_change = mymath::kDoubleMax;
 
     // 使用简化的 Levin 序列变换
     for (int k = 2; k < n - 1; ++k) {
-        long double beta = 1.0L;
+        Scalar beta = 1.0L;
 
         // 计算分子和分母
-        long double num = partial_sums[k];
-        long double den = 1.0L;
+        Scalar num = partial_sums[k];
+        Scalar den = 1.0L;
 
         for (int j = 1; j <= k && j < n; ++j) {
-            long double coeff = static_cast<long double>(j) / (k + 1);
-            long double term = mymath::pow(beta * coeff, j);
+            Scalar coeff = (j) / (k + 1);
+            Scalar term = mymath::pow(beta * coeff, j);
             if (j < static_cast<int>(terms.size())) {
                 num += term * terms[k - j];
             }
@@ -2928,9 +2927,9 @@ bool levin_transform(const std::vector<long double>& partial_sums,
         }
 
         if (mymath::abs(den) > 1e-15) {
-            long double estimate = num / den;
+            Scalar estimate = num / den;
             if (mymath::isfinite(estimate)) {
-                long double change = mymath::abs(estimate - best_estimate);
+                Scalar change = mymath::abs(estimate - best_estimate);
                 if (change < best_change) {
                     best_change = change;
                     best_estimate = estimate;
@@ -2950,7 +2949,7 @@ bool levin_transform(const std::vector<long double>& partial_sums,
 /**
  * @brief 检测级数是否为交错级数
  */
-bool is_alternating_series(const std::vector<long double>& terms) {
+bool is_alternating_series(const std::vector<Scalar>& terms) {
     if (terms.size() < 3) return false;
 
     int sign_changes = 0;
@@ -2985,9 +2984,9 @@ bool numerical_infinite_sum(const SeriesContext& ctx,
                             const std::string& index_name,
                             const std::string& lower,
                             int max_terms,
-                            long double* result) {
+                            Scalar* result) {
     // 解析下界
-    long double lower_val = 0.0L;
+    Scalar lower_val = 0.0L;
     try {
         lower_val = ctx.parse_decimal(lower);
     } catch (...) {
@@ -2996,22 +2995,22 @@ bool numerical_infinite_sum(const SeriesContext& ctx,
 
     // 动态参数：根据收敛情况调整
     int actual_max_terms = (max_terms < 0) ? 2000 : max_terms;
-    const long double tolerance = 1e-12;
+    const Scalar tolerance = 1e-12;
 
     // 计算部分和序列和项序列
-    std::vector<long double> partial_sums;
-    std::vector<long double> terms;
+    std::vector<Scalar> partial_sums;
+    std::vector<Scalar> terms;
     partial_sums.reserve(actual_max_terms);
     terms.reserve(actual_max_terms);
 
-    long double running_sum = 0.0L;
-    long double prev_term = mymath::kDoubleMax;
+    Scalar running_sum = 0.0L;
+    Scalar prev_term = mymath::kDoubleMax;
     int terms_since_improvement = 0;
-    long double best_term = mymath::kDoubleMax;
+    Scalar best_term = mymath::kDoubleMax;
 
     for (int n = 0; n < actual_max_terms; ++n) {
-        long double idx = lower_val + n;
-        long double term = 0.0L;
+        Scalar idx = lower_val + n;
+        Scalar term = 0.0L;
         try {
             term = ctx.evaluate_at(summand, index_name, idx);
         } catch (...) {
@@ -3064,10 +3063,10 @@ bool numerical_infinite_sum(const SeriesContext& ctx,
     bool is_alternating = is_alternating_series(terms);
 
     // 尝试多种方法，选择最佳结果
-    std::vector<std::pair<long double, bool>> estimates;
+    std::vector<std::pair<Scalar, bool>> estimates;
 
     // 方法1：Wynn-epsilon
-    long double wynn_result = 0.0L;
+    Scalar wynn_result = 0.0L;
     bool wynn_ok = wynn_epsilon_acceleration(partial_sums, -1, tolerance, &wynn_result);
     if (wynn_ok) {
         estimates.push_back({wynn_result, true});
@@ -3075,7 +3074,7 @@ bool numerical_infinite_sum(const SeriesContext& ctx,
 
     // 方法2：Euler 变换（仅对交错级数）
     if (is_alternating) {
-        long double euler_result = 0.0L;
+        Scalar euler_result = 0.0L;
         bool euler_ok = euler_transform(terms, tolerance, &euler_result);
         if (euler_ok) {
             estimates.push_back({euler_result, true});
@@ -3083,7 +3082,7 @@ bool numerical_infinite_sum(const SeriesContext& ctx,
     }
 
     // 方法3：Levin 变换
-    long double levin_result = 0.0L;
+    Scalar levin_result = 0.0L;
     bool levin_ok = levin_transform(partial_sums, terms, tolerance, &levin_result);
     if (levin_ok) {
         estimates.push_back({levin_result, true});
@@ -3102,11 +3101,11 @@ bool numerical_infinite_sum(const SeriesContext& ctx,
     }
 
     // 找到与其他结果差异最小的估计
-    long double best_result = estimates[0].first;
-    long double min_variance = mymath::kDoubleMax;
+    Scalar best_result = estimates[0].first;
+    Scalar min_variance = mymath::kDoubleMax;
 
     for (const auto& est1 : estimates) {
-        long double variance = 0.0L;
+        Scalar variance = 0.0L;
         for (const auto& est2 : estimates) {
             variance += mymath::abs(est1.first - est2.first);
         }
@@ -3127,7 +3126,7 @@ bool numerical_infinite_sum(const SeriesContext& ctx,
  */
 struct InfiniteSeriesValue {
     std::string pattern;  // 模式描述
-    long double value;         // 级数值
+    Scalar value;         // 级数值
     bool is_symbolic;     // 是否需要符号表示
     std::string symbolic; // 符号表示
 };
@@ -3161,11 +3160,11 @@ bool try_infinite_series_value(const SymbolicExpression& summand,
         std::string inv_pow_str = "1 / (" + index_name + " ^ " + std::to_string(two_k) + ")";
         SymbolicExpression pattern = SymbolicExpression::parse(inv_pow_str);
         SymbolicExpression diff = (summand - pattern).simplify();
-        long double val = 0.0L;
+        Scalar val = 0.0L;
         if (diff.is_number(&val) && mymath::is_near_zero(val, 1e-10)) {
             // 匹配 zeta(2k)
-            long double B = prob::bernoulli(two_k);
-            long double coeff = mymath::pow(2.0, two_k - 1) * mymath::abs(B) / prob::factorial(two_k);
+            Scalar B = prob::bernoulli(two_k);
+            Scalar coeff = mymath::pow(2.0, two_k - 1) * mymath::abs(B) / prob::factorial(two_k);
             std::ostringstream ss;
             if (!mymath::is_near_zero(coeff - 1.0L, 1e-10)) {
                 ss << format_symbolic_scalar(coeff) << " * ";
@@ -3180,7 +3179,7 @@ bool try_infinite_series_value(const SymbolicExpression& summand,
     std::string alt_harm = "(-1) ^ (" + index_name + " + 1) / " + index_name;
     SymbolicExpression alt_pattern = SymbolicExpression::parse(alt_harm);
     SymbolicExpression alt_diff = (summand - alt_pattern).simplify();
-    long double alt_val = 0.0L;
+    Scalar alt_val = 0.0L;
     if (alt_diff.is_number(&alt_val) && mymath::is_near_zero(alt_val, 1e-10)) {
         *result = "ln(2)";
         return true;
@@ -3190,7 +3189,7 @@ bool try_infinite_series_value(const SymbolicExpression& summand,
     std::string telescoping1 = "1 / (" + index_name + " * (" + index_name + " + 1))";
     SymbolicExpression teles_pattern1 = SymbolicExpression::parse(telescoping1);
     SymbolicExpression teles_diff1 = (summand - teles_pattern1).simplify();
-    long double teles_val1 = 0.0L;
+    Scalar teles_val1 = 0.0L;
     if (teles_diff1.is_number(&teles_val1) && mymath::is_near_zero(teles_val1, 1e-10)) {
         *result = "1";
         return true;
@@ -3200,7 +3199,7 @@ bool try_infinite_series_value(const SymbolicExpression& summand,
     std::string telescoping2 = "1 / (" + index_name + " * (" + index_name + " + 2))";
     SymbolicExpression teles_pattern2 = SymbolicExpression::parse(telescoping2);
     SymbolicExpression teles_diff2 = (summand - teles_pattern2).simplify();
-    long double teles_val2 = 0.0L;
+    Scalar teles_val2 = 0.0L;
     if (teles_diff2.is_number(&teles_val2) && mymath::is_near_zero(teles_val2, 1e-10)) {
         *result = "3 / 4";
         return true;
@@ -3236,7 +3235,7 @@ std::string series_sum(const SeriesContext& ctx,
     }
 
     auto make_polynomial_sum_primitive =
-        [&](const std::vector<long double>& coefficients) {
+        [&](const std::vector<Scalar>& coefficients) {
             std::vector<std::string> pieces;
             for (std::size_t p = 0; p < coefficients.size(); ++p) {
                 if (mymath::is_near_zero(coefficients[p], 1e-10)) {
@@ -3247,10 +3246,10 @@ std::string series_sum(const SeriesContext& ctx,
                 poly_part << "(1 / " << (p + 1) << ") * (";
                 bool first = true;
                 for (std::size_t j = 0; j <= p; ++j) {
-                    long double bj = prob::bernoulli(static_cast<int>(j));
+                    Scalar bj = prob::bernoulli(static_cast<int>(j));
                     if (mymath::is_near_zero(bj, 1e-10)) continue;
 
-                    long double term_coeff = prob::nCr(p + 1, j) * bj;
+                    Scalar term_coeff = prob::nCr(p + 1, j) * bj;
                     if (!first) poly_part << " + ";
                     poly_part << format_symbolic_scalar(term_coeff) << " * (" << index_name << " ^ " << (p + 1 - j) << ")";
                     first = false;
@@ -3288,11 +3287,11 @@ std::string series_sum(const SeriesContext& ctx,
         };
 
     // 1. 检查多项式求和
-    std::vector<long double> polynomial_coefficients;
+    std::vector<Scalar> polynomial_coefficients;
     if (summand.polynomial_coefficients(index_name, &polynomial_coefficients)) {
         if (upper_is_infinite) {
             bool all_zero = true;
-            for (long double coefficient : polynomial_coefficients) {
+            for (Scalar coefficient : polynomial_coefficients) {
                 if (!mymath::is_near_zero(coefficient, 1e-10)) {
                     all_zero = false;
                     break;
@@ -3319,15 +3318,15 @@ std::string series_sum(const SeriesContext& ctx,
     }
 
     // 3. 尝试符号化检测几何级数（优先于数值方法）
-    long double geometric_coefficient = 0.0L;
-    long double geometric_ratio_value = 0.0L;
+    Scalar geometric_coefficient = 0.0L;
+    Scalar geometric_ratio_value = 0.0L;
     bool is_geometric = detect_geometric_ratio_symbolic(
         summand, index_name, &geometric_coefficient, &geometric_ratio_value);
 
     // 4. 如果符号方法失败，尝试数值方法
     if (!is_geometric) {
-        auto geometric_ratio_numeric = [&](long double* coefficient, long double* ratio) {
-            long double s[4];
+        auto geometric_ratio_numeric = [&](Scalar* coefficient, Scalar* ratio) {
+            Scalar s[4];
             int offset = 0;
             while (offset < 10) {
                 for (int i = 0; i < 4; ++i) {
@@ -3342,7 +3341,7 @@ std::string series_sum(const SeriesContext& ctx,
                 return false;
             }
 
-            const long double candidate = s[1] / s[0];
+            const Scalar candidate = s[1] / s[0];
             if (!mymath::is_near_zero(s[2] - s[1] * candidate, 1e-8) ||
                 !mymath::is_near_zero(s[3] - s[2] * candidate, 1e-8)) {
                 return false;
@@ -3362,8 +3361,8 @@ std::string series_sum(const SeriesContext& ctx,
     }
 
     // 5. 检查等差-等比级数
-    std::vector<long double> arith_geo_poly;
-    long double arith_geo_ratio = 0.0L;
+    std::vector<Scalar> arith_geo_poly;
+    Scalar arith_geo_ratio = 0.0L;
     bool is_arith_geo = false;
     if (!is_geometric) {
         is_arith_geo = detect_arith_geo_series(summand, index_name, &arith_geo_poly, &arith_geo_ratio);
@@ -3424,7 +3423,7 @@ std::string series_sum(const SeriesContext& ctx,
 
     // 8. 数值求和回退（仅对无穷级数）
     if (upper_is_infinite) {
-        long double numerical_result = 0.0L;
+        Scalar numerical_result = 0.0L;
         if (numerical_infinite_sum(ctx, summand, index_name, lower, 1000, &numerical_result)) {
             // 返回数值结果，标记为近似值
             std::ostringstream ss;
@@ -3465,8 +3464,8 @@ bool handle_series_command(const SeriesContext& ctx,
             throw std::runtime_error("taylor expects exactly three arguments");
         }
 
-        const long double center = ctx.parse_decimal(arguments[1]);
-        const long double degree_value = ctx.parse_decimal(arguments[2]);
+        const Scalar center = ctx.parse_decimal(arguments[1]);
+        const Scalar degree_value = ctx.parse_decimal(arguments[2]);
         if (!is_integer_double(degree_value) || degree_value < 0.0L) {
             throw std::runtime_error("taylor degree must be a non-negative integer");
         }
@@ -3483,12 +3482,12 @@ bool handle_series_command(const SeriesContext& ctx,
         }
 
         const bool explicit_center = arguments.size() == 4;
-        const long double center = explicit_center
+        const Scalar center = explicit_center
                                   ? ctx.parse_decimal(arguments[1])
                                   : 0.0L;
-        const long double numerator_degree_value = ctx.parse_decimal(
+        const Scalar numerator_degree_value = ctx.parse_decimal(
             arguments[explicit_center ? 2 : 1]);
-        const long double denominator_degree_value = ctx.parse_decimal(
+        const Scalar denominator_degree_value = ctx.parse_decimal(
             arguments[explicit_center ? 3 : 2]);
         if (!is_integer_double(numerator_degree_value) ||
             numerator_degree_value < 0.0L ||
@@ -3511,7 +3510,7 @@ bool handle_series_command(const SeriesContext& ctx,
         if (arguments.size() != 2 && arguments.size() != 3) {
             throw std::runtime_error("series expects expr, degree or expr, center, degree");
         }
-        long double center = 0.0L;
+        Scalar center = 0.0L;
         int degree = 0;
         if (arguments.size() == 2) {
             degree = static_cast<int>(ctx.parse_decimal(arguments[1]));
@@ -3531,12 +3530,12 @@ bool handle_series_command(const SeriesContext& ctx,
         }
 
         const bool explicit_center = arguments.size() == 4;
-        const long double center = explicit_center
+        const Scalar center = explicit_center
                                   ? ctx.parse_decimal(arguments[1])
                                   : 0.0L;
-        const long double degree_value = ctx.parse_decimal(
+        const Scalar degree_value = ctx.parse_decimal(
             arguments[explicit_center ? 2 : 1]);
-        const long double denominator_value = ctx.parse_decimal(
+        const Scalar denominator_value = ctx.parse_decimal(
             arguments[explicit_center ? 3 : 2]);
         if (!is_integer_double(degree_value) || degree_value < 0.0L) {
             throw std::runtime_error(

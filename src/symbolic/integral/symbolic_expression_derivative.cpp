@@ -67,7 +67,7 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
         case NodeType::kPower: {
             const SymbolicExpression base(node_->left);
             const SymbolicExpression exponent(node_->right);
-            long double exponent_value = 0.0L;
+            Scalar exponent_value = 0.0L;
             if (exponent.is_number(&exponent_value)) {
                 return make_multiply(
                            make_multiply(SymbolicExpression::number(exponent_value),

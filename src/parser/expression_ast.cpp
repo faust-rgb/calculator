@@ -11,6 +11,7 @@
 #include "calculator_exceptions.h"
 #include "calculator_internal_types.h"
 #include "execution/builtin_constants.h"
+#include "core/scalar_type.h"
 #include "mymath.h"
 #include "variable_resolver.h"
 #include "lazy_token_stream.h"
@@ -21,6 +22,10 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+namespace {
+using Scalar = mymath::Scalar;
+} // namespace
 
 // ============================================================================
 // AST 编译器
@@ -286,10 +291,10 @@ private:
         throw ExceptionType(oss.str());
     }
 
-long double evaluate_ast(const ExpressionAST* ast,
+Scalar evaluate_ast(const ExpressionAST* ast,
                     const VariableResolver& variables,
                     const std::map<std::string, CustomFunction>* functions,
-                    const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions,
+                    const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions,
                     const HasScriptFunctionCallback& has_script_function,
                     const InvokeScriptFunctionDecimalCallback& invoke_script_function) {
     if (!ast) {
@@ -298,7 +303,7 @@ long double evaluate_ast(const ExpressionAST* ast,
 
     switch (ast->kind) {
         case ExprKind::kNumber:
-            return ast->number_value;
+            return static_cast<Scalar>(ast->number_value);
 
         case ExprKind::kString:
             // 字符串不能作为标量求值，但在比较中可以使用
@@ -320,7 +325,7 @@ long double evaluate_ast(const ExpressionAST* ast,
 
             // 快速路径：内置常量
             if (ast->is_builtin_constant) {
-                return ast->number_value;
+                return static_cast<Scalar>(ast->number_value);
             }
 
             const StoredValue* found = variables.lookup(ast->identifier);
@@ -338,24 +343,24 @@ long double evaluate_ast(const ExpressionAST* ast,
             if (ast->children.size() != 2) {
                 throw_ast_error<MathError>("invalid binary operation", ast->position);
             }
-            long double left = evaluate_ast(ast->children[0].get(), variables,
+            Scalar left = Scalar(evaluate_ast(ast->children[0].get(), variables,
                                        functions, scalar_functions,
-                                       has_script_function, invoke_script_function);
-            long double right = evaluate_ast(ast->children[1].get(), variables,
+                                       has_script_function, invoke_script_function));
+            Scalar right = Scalar(evaluate_ast(ast->children[1].get(), variables,
                                         functions, scalar_functions,
-                                        has_script_function, invoke_script_function);
+                                        has_script_function, invoke_script_function));
 
             switch (ast->op_char) {
-                case '+': return left + right;
-                case '-': return left - right;
-                case '*': return left * right;
+                case '+': return static_cast<Scalar>(left + right);
+                case '-': return static_cast<Scalar>(left - right);
+                case '*': return static_cast<Scalar>(left * right);
                 case '/':
-                    if (right == 0.0L) throw_ast_error<MathError>("division by zero", ast->position);
-                    return left / right;
+                    if (right == Scalar(0)) throw_ast_error<MathError>("division by zero", ast->position);
+                    return static_cast<Scalar>(left / right);
                 case '%':
-                    if (right == 0.0L) throw_ast_error<MathError>("modulo by zero", ast->position);
-                    return mymath::fmod(left, right);
-                case '^': return mymath::pow(left, right);
+                    if (right == Scalar(0)) throw_ast_error<MathError>("modulo by zero", ast->position);
+                    return static_cast<Scalar>(mymath::precise128::fmod(left, right));
+                case '^': return static_cast<Scalar>(mymath::pow(left, right));
                 default:
                     throw_ast_error<MathError>("unknown operator", ast->position);
             }
@@ -365,12 +370,12 @@ long double evaluate_ast(const ExpressionAST* ast,
             if (ast->children.size() != 1) {
                 throw_ast_error<MathError>("invalid unary operation", ast->position);
             }
-            long double operand = evaluate_ast(ast->children[0].get(), variables,
+            Scalar operand = Scalar(evaluate_ast(ast->children[0].get(), variables,
                                           functions, scalar_functions,
-                                          has_script_function, invoke_script_function);
+                                          has_script_function, invoke_script_function));
             switch (ast->op_char) {
-                case '-': return -operand;
-                case '+': return operand;
+                case '-': return static_cast<Scalar>(-operand);
+                case '+': return static_cast<Scalar>(operand);
                 default:
                     throw_ast_error<MathError>("unknown unary operator", ast->position);
             }
@@ -426,15 +431,15 @@ long double evaluate_ast(const ExpressionAST* ast,
             }
 
             // 标量比较
-            long double left = evaluate_ast(left_child, variables,
+            Scalar left = Scalar(evaluate_ast(left_child, variables,
                                        functions, scalar_functions,
-                                       has_script_function, invoke_script_function);
-            long double right = evaluate_ast(right_child, variables,
+                                       has_script_function, invoke_script_function));
+            Scalar right = Scalar(evaluate_ast(right_child, variables,
                                         functions, scalar_functions,
-                                        has_script_function, invoke_script_function);
+                                        has_script_function, invoke_script_function));
 
-            if (ast->comparison_op == "==") return mymath::is_near_zero(left - right, 1e-10) ? 1.0L : 0.0L;
-            if (ast->comparison_op == "!=") return mymath::is_near_zero(left - right, 1e-10) ? 0.0L : 1.0L;
+            if (ast->comparison_op == "==") return mymath::precise128::abs(left - right) < Scalar(1e-10L) ? 1.0L : 0.0L;
+            if (ast->comparison_op == "!=") return mymath::precise128::abs(left - right) < Scalar(1e-10L) ? 0.0L : 1.0L;
             if (ast->comparison_op == "<") return left < right ? 1.0L : 0.0L;
             if (ast->comparison_op == ">") return left > right ? 1.0L : 0.0L;
             if (ast->comparison_op == "<=") return left <= right ? 1.0L : 0.0L;
@@ -449,38 +454,38 @@ long double evaluate_ast(const ExpressionAST* ast,
             }
 
             // 逻辑运算符支持短路求值
-            long double left = evaluate_ast(ast->children[0].get(), variables,
+            Scalar left = Scalar(evaluate_ast(ast->children[0].get(), variables,
                                        functions, scalar_functions,
-                                       has_script_function, invoke_script_function);
+                                       has_script_function, invoke_script_function));
 
             if (ast->comparison_op == "&&") {
                 // &&: 如果左边为假，直接返回 0，不计算右边
-                if (left == 0.0L) return 0.0L;
-                long double right = evaluate_ast(ast->children[1].get(), variables,
+                if (left == Scalar(0)) return 0.0L;
+                Scalar right = Scalar(evaluate_ast(ast->children[1].get(), variables,
                                             functions, scalar_functions,
-                                            has_script_function, invoke_script_function);
-                return (right != 0.0L) ? 1.0L : 0.0L;
+                                            has_script_function, invoke_script_function));
+                return (right != Scalar(0)) ? 1.0L : 0.0L;
             }
 
             if (ast->comparison_op == "||") {
                 // ||: 如果左边为真，直接返回 1，不计算右边
-                if (left != 0.0L) return 1.0L;
-                long double right = evaluate_ast(ast->children[1].get(), variables,
+                if (left != Scalar(0)) return 1.0L;
+                Scalar right = Scalar(evaluate_ast(ast->children[1].get(), variables,
                                             functions, scalar_functions,
-                                            has_script_function, invoke_script_function);
-                return (right != 0.0L) ? 1.0L : 0.0L;
+                                            has_script_function, invoke_script_function));
+                return (right != Scalar(0)) ? 1.0L : 0.0L;
             }
 
             throw_ast_error<MathError>("unknown logical operator: " + ast->comparison_op, ast->position);
         }
 
         case ExprKind::kFunctionCall: {
-            std::vector<long double> args;
+            std::vector<Scalar> args;
             args.reserve(ast->children.size());
             for (const auto& child : ast->children) {
-                args.push_back(evaluate_ast(child.get(), variables,
+                args.push_back(Scalar(evaluate_ast(child.get(), variables,
                                             functions, scalar_functions,
-                                            has_script_function, invoke_script_function));
+                                            has_script_function, invoke_script_function)));
             }
 
             // 自定义函数
@@ -494,7 +499,7 @@ long double evaluate_ast(const ExpressionAST* ast,
                     std::map<std::string, StoredValue> snapshot = variables.snapshot();
                     for (std::size_t i = 0; i < args.size(); ++i) {
                         StoredValue arg_value;
-                        arg_value.decimal = args[i];
+                        arg_value.decimal = static_cast<Scalar>(args[i]);
                         snapshot[it->second.parameter_names[i]] = arg_value;
                     }
                     // 使用缓存的 AST，避免每次调用重新编译
@@ -509,14 +514,24 @@ long double evaluate_ast(const ExpressionAST* ast,
 
             // 脚本函数
             if (has_script_function && has_script_function(ast->identifier)) {
-                return invoke_script_function(ast->identifier, args);
+                std::vector<Scalar> args_ld;
+                args_ld.reserve(args.size());
+                for (const auto& arg : args) {
+                    args_ld.push_back(static_cast<Scalar>(arg));
+                }
+                return invoke_script_function(ast->identifier, args_ld);
             }
 
             // 标量函数
             if (scalar_functions) {
                 auto it = scalar_functions->find(ast->identifier);
                 if (it != scalar_functions->end()) {
-                    return it->second(args);
+                    std::vector<Scalar> args_ld;
+                    args_ld.reserve(args.size());
+                    for (const auto& arg : args) {
+                        args_ld.push_back(static_cast<Scalar>(arg));
+                    }
+                    return it->second(args_ld);
                 }
             }
 
@@ -527,10 +542,10 @@ long double evaluate_ast(const ExpressionAST* ast,
             if (ast->children.size() != 3) {
                 throw_ast_error<MathError>("invalid conditional", ast->position);
             }
-            long double cond = evaluate_ast(ast->children[0].get(), variables,
+            Scalar cond = Scalar(evaluate_ast(ast->children[0].get(), variables,
                                        functions, scalar_functions,
-                                       has_script_function, invoke_script_function);
-            if (cond != 0.0L) {
+                                       has_script_function, invoke_script_function));
+            if (cond != Scalar(0)) {
                 return evaluate_ast(ast->children[1].get(), variables,
                                    functions, scalar_functions,
                                    has_script_function, invoke_script_function);
@@ -568,10 +583,10 @@ bool bind_variable_slots(ExpressionAST* ast, const VariableResolver& variables) 
             // nested script frames, so variables must remain dynamically
             // resolved. Built-in constants are safe to fold.
             // 检查是否为内置常量
-            long double value = 0.0L;
-            if (lookup_builtin_constant(ast->identifier, &value)) {
+             Scalar value_ld = 0.0L;
+            if (lookup_builtin_constant(ast->identifier, &value_ld)) {
                 ast->is_builtin_constant = true;
-                ast->number_value = value;
+                ast->number_value = value_ld;
                 return true;
             }
             // 无法绑定，保持动态查找
@@ -627,10 +642,10 @@ std::unique_ptr<ExpressionAST> compile_expression_ast(const std::string& express
     }
 }
 
-long double evaluate_compiled_ast(const ExpressionAST* ast,
+ Scalar evaluate_compiled_ast(const ExpressionAST* ast,
                              const VariableResolver& variables,
                              const std::map<std::string, CustomFunction>* functions,
-                             const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions,
+                             const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions,
                              const HasScriptFunctionCallback& has_script_function,
                              const InvokeScriptFunctionDecimalCallback& invoke_script_function) {
     return evaluate_ast(ast, variables, functions, scalar_functions,

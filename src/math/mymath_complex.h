@@ -2,12 +2,23 @@
 #define MYMATH_COMPLEX_H
 
 #include "mymath.h"
+#include "mymath_float128.h"
 
 #include <istream>
 #include <ostream>
 #include <type_traits>
 
 namespace mymath {
+
+// Helper to check if a type is arithmetic or float128_t
+template <typename T>
+struct is_numeric : std::is_arithmetic<T> {};
+
+template <>
+struct is_numeric<float128_t> : std::true_type {};
+
+template <typename T>
+inline constexpr bool is_numeric_v = is_numeric<T>::value;
 
 template <typename T>
 class complex {
@@ -163,56 +174,56 @@ auto operator/(const complex<T>& lhs, const complex<U>& rhs)
     return result;
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<U>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<U>>::type>
 auto operator+(const complex<T>& lhs, const U& rhs)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;
     return complex<R>(lhs.real() + rhs, lhs.imag());
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<T>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<T>>::type>
 auto operator+(const T& lhs, const complex<U>& rhs)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;
     return complex<R>(lhs + rhs.real(), rhs.imag());
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<U>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<U>>::type>
 auto operator-(const complex<T>& lhs, const U& rhs)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;
     return complex<R>(lhs.real() - rhs, lhs.imag());
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<T>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<T>>::type>
 auto operator-(const T& lhs, const complex<U>& rhs)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;
     return complex<R>(lhs - rhs.real(), -rhs.imag());
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<U>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<U>>::type>
 auto operator*(const complex<T>& lhs, const U& rhs)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;
     return complex<R>(lhs.real() * rhs, lhs.imag() * rhs);
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<T>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<T>>::type>
 auto operator*(const T& lhs, const complex<U>& rhs)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;
     return complex<R>(lhs * rhs.real(), lhs * rhs.imag());
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<U>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<U>>::type>
 auto operator/(const complex<T>& lhs, const U& rhs)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;
     return complex<R>(lhs.real() / rhs, lhs.imag() / rhs);
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<T>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<T>>::type>
 auto operator/(const T& lhs, const complex<U>& rhs)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;
@@ -225,12 +236,12 @@ bool operator==(const complex<T>& lhs, const complex<U>& rhs) {
     return lhs.real() == rhs.real() && lhs.imag() == rhs.imag();
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<U>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<U>>::type>
 bool operator==(const complex<T>& lhs, const U& rhs) {
     return lhs.real() == rhs && lhs.imag() == U();
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<T>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<T>>::type>
 bool operator==(const T& lhs, const complex<U>& rhs) {
     return rhs == lhs;
 }
@@ -240,12 +251,12 @@ bool operator!=(const complex<T>& lhs, const complex<U>& rhs) {
     return !(lhs == rhs);
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<U>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<U>>::type>
 bool operator!=(const complex<T>& lhs, const U& rhs) {
     return !(lhs == rhs);
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<T>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<T>>::type>
 bool operator!=(const T& lhs, const complex<U>& rhs) {
     return !(lhs == rhs);
 }
@@ -398,14 +409,14 @@ auto pow(const complex<T>& base, const complex<U>& exponent)
     return exp(complex<R>(exponent) * log(complex<R>(base)));
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<U>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<U>>::type>
 auto pow(const complex<T>& base, const U& exponent)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;
     return exp(complex<R>(exponent) * log(complex<R>(base)));
 }
 
-template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<T>::value>::type>
+template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<T>>::type>
 auto pow(const T& base, const complex<U>& exponent)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;

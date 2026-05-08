@@ -191,7 +191,7 @@ int run_symbolic_tests(int& passed, int& failed) {
 
     // 测试消元敏感的行列式计算
     try {
-        const long double actual =
+        const auto actual =
             calculator.evaluate("det(mat(2, 2, 100001, 100000, 100000, 99999))");
         if (nearly_equal(actual, -1.0L, 1e-5)) {
             ++passed;
@@ -225,7 +225,7 @@ int run_symbolic_tests(int& passed, int& failed) {
 
     // 测试奇异矩阵的条件数（应为无穷大）
     try {
-        const long double actual =
+        const auto actual =
             calculator.evaluate("cond(mat(2, 2, 1, 1, 1, 1))");
         if (!mymath::isfinite(actual) && actual > 0.0L) {
             ++passed;
@@ -508,7 +508,7 @@ int run_symbolic_tests(int& passed, int& failed) {
     // ========== 随机数测试 ==========
     // 测试随机数生成函数
     try {
-        const long double value = calculator.evaluate("rand()");
+        const auto value = calculator.evaluate("rand()");
         if (value >= 0.0L && value < 1.0L) {
             ++passed;
         } else {
@@ -521,7 +521,7 @@ int run_symbolic_tests(int& passed, int& failed) {
     }
 
     try {
-        const long double value = calculator.evaluate("randint(2, 4)");
+        const auto value = calculator.evaluate("randint(2, 4)");
         if (value == 2.0 || value == 3.0 || value == 4.0) {
             ++passed;
         } else {
@@ -535,7 +535,7 @@ int run_symbolic_tests(int& passed, int& failed) {
     }
 
     try {
-        const long double value = calculator.evaluate("get(randmat(2, 3, -2, -1), 1, 2)");
+        const auto value = calculator.evaluate("get(randmat(2, 3, -2, -1), 1, 2)");
         if (value >= -2.0 && value < -1.0L) {
             ++passed;
         } else {
@@ -1282,7 +1282,7 @@ int run_symbolic_tests(int& passed, int& failed) {
     // ========== ODE求解测试 ==========
     // 测试自适应刚性ODE求解
     try {
-        const long double actual = calculator.evaluate(
+        const auto actual = calculator.evaluate(
             "ode(-1000*(y-sin(x))+cos(x), 0, 0, 0.1, 20)");
         if (mymath::isfinite(actual) && nearly_equal(actual, mymath::sin(0.1), 1e-6)) {
             ++passed;
@@ -1318,7 +1318,7 @@ int run_symbolic_tests(int& passed, int& failed) {
 
     // 测试近奇异矩阵的秩
     try {
-        const long double actual =
+        const auto actual =
             calculator.evaluate("rank(mat(2,2,1,1,1,1.000000000001))");
         if (nearly_equal(actual, 2.0)) {
             ++passed;
@@ -1354,8 +1354,8 @@ int run_symbolic_tests(int& passed, int& failed) {
     // 统计扩展测试
     try {
         Calculator calc;
-        const long double c = calc.evaluate("cov(vec(1, 2, 3), vec(4, 5, 6))");
-        const long double r = calc.evaluate("corr(vec(1, 2, 3), vec(4, 5, 6))");
+        const auto c = calc.evaluate("cov(vec(1, 2, 3), vec(4, 5, 6))");
+        const auto r = calc.evaluate("corr(vec(1, 2, 3), vec(4, 5, 6))");
         if (nearly_equal(c, 2.0/3.0) && nearly_equal(r, 1.0L)) {
             ++passed;
         } else {

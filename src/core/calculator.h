@@ -1,6 +1,7 @@
 #ifndef CALCULATOR_H
 #define CALCULATOR_H
 
+#include "core/scalar_type.h"
 #include <memory>
 #include <string>
 #include <string_view>
@@ -56,14 +57,14 @@ public:
      * @return 表达式的数值结果
      * @throw std::runtime_error 表达式语法错误或计算错误时抛出
      */
-    long double evaluate(const std::string& expression);
+    Scalar evaluate(const std::string& expression);
 
     /**
      * @brief 计算表达式的原始数值结果，不做显示层归整
      * @param expression 数学表达式字符串
      * @return 原始浮点结果
      */
-    long double evaluate_raw(const std::string& expression);
+    Scalar evaluate_raw(const std::string& expression);
 
     /**
      * @brief 计算表达式并以字符串形式返回，支持精确模式
@@ -280,7 +281,7 @@ public:
      * @param value 原始计算结果
      * @return 规范化后的结果
      */
-    static long double normalize_result(long double value);
+    static Scalar normalize_result(Scalar value);
 
 private:
     /** @brief Pimpl 模式的实现指针 */

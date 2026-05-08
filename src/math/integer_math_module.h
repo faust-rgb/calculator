@@ -48,7 +48,7 @@ public:
      * @brief 获取模块提供的标量函数映射
      * @return 函数名称到函数实现的映射
      */
-    std::map<std::string, std::function<long double(const std::vector<long double>&)>> get_scalar_functions() const override;
+    std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>> get_scalar_functions() const override;
 
     /**
      * @brief 获取模块提供的所有函数名称列表

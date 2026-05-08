@@ -5,6 +5,7 @@
 #include "mymath_complex.h"
 #include "string_utils.h"
 #include "precise/precise_decimal.h"
+#include "core/scalar_type.h"
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
@@ -100,6 +101,8 @@ T matrix_tolerance(T scale) {
         int current_scale = PrecisionContext::get_default_scale();
         std::string tol_s = "1e-" + std::to_string(std::max(10, current_scale - 5));
         return scale * PreciseDecimal(tol_s);
+    } else if constexpr (std::is_same_v<T, mymath::Scalar>) {
+        return mymath::precise128::fmax(mymath::Scalar(kMatrixPivotAbsoluteEps), scale * mymath::Scalar(kMatrixPivotRelativeEps));
     } else {
         return std::max(kMatrixPivotAbsoluteEps, scale * kMatrixPivotRelativeEps);
     }
@@ -247,7 +250,7 @@ TMatrix<T> complex_sequence_to_matrix(const std::vector<TComplexSample<T>>& valu
 
 template <typename T>
 std::vector<TComplexSample<T>> discrete_fourier_transform(const std::vector<TComplexSample<T>>& input, bool inverse) {
-    if constexpr (std::is_same_v<T, long double>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         std::vector<signal::Complex> v;
         for (const auto& s : input) v.emplace_back(s.real, s.imag);
         auto trans = inverse ? signal::ifft(v) : signal::fft(v);
@@ -319,3 +322,4 @@ void set_display_precision(int precision) {
 
 INSTANTIATE_UTIL(long double)
 INSTANTIATE_UTIL(PreciseDecimal)
+INSTANTIATE_UTIL(mymath::Scalar)

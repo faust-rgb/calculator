@@ -1564,5 +1564,5 @@ std::string rational_to_precise_decimal_text(const Rational& value) {
 std::string stored_value_precise_decimal_text(const StoredValue& value) {
     if (value.exact) return rational_to_precise_decimal_text(value.rational);
     if (value.has_precise_decimal_text) return value.precise_decimal_text;
-    return format_decimal(normalize_display_decimal(value.decimal));
+    return format_decimal(normalize_display_decimal(value.decimal.to_long_double()), 15);
 }

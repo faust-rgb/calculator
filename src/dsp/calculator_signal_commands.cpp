@@ -29,7 +29,7 @@
 namespace signal_cmds {
 
 // 数学常量
-constexpr long double kPi = 3.14159265358979323846;
+constexpr Scalar kPi = 3.14159265358979323846;
 
 // ============================================================================
 // 辅助函数
@@ -44,15 +44,15 @@ constexpr long double kPi = 3.14159265358979323846;
  * @param str 要解析的字符串
  * @return 解析后的向量
  */
-static std::vector<long double> parse_vector(const SignalContext& ctx, const std::string& str) {
+static std::vector<Scalar> parse_vector(const SignalContext& ctx, const std::string& str) {
     if (utils::trim_view(str).empty()) return {};
 
     UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
     StoredValue val = parser.evaluate_stored(str);
 
-    std::vector<long double> result;
+    std::vector<Scalar> result;
     if (val.is_matrix) {
-        for (long double d : val.matrix.data) result.push_back(d);
+        for (Scalar d : val.matrix.data) result.push_back(d);
     } else if (val.is_list && val.list_value) {
         for (const auto& item : *val.list_value) {
             result.push_back(item.exact ? rational_to_double(item.rational) : item.decimal);
@@ -72,7 +72,7 @@ static std::vector<long double> parse_vector(const SignalContext& ctx, const std
  * @param precision 输出精度（默认为6）
  * @return 格式化后的字符串
  */
-static std::string format_vector(const std::vector<long double>& vec, int precision = 6) {
+static std::string format_vector(const std::vector<Scalar>& vec, int precision = 6) {
     std::ostringstream oss;
     oss << std::setprecision(precision) << std::fixed;
     oss << "[";
@@ -99,8 +99,8 @@ static std::string format_complex_vector(const std::vector<signal::Complex>& vec
     oss << "[";
     for (std::size_t i = 0; i < vec.size(); ++i) {
         if (i > 0) oss << ", ";
-        long double re = vec[i].real();
-        long double im = vec[i].imag();
+        Scalar re = vec[i].real();
+        Scalar im = vec[i].imag();
         oss << re;
         if (im >= 0) oss << "+";
         oss << im << "j";
@@ -148,7 +148,7 @@ bool handle_fft_command(const SignalContext& ctx,
         return false;
     }
 
-    std::vector<long double> signal = parse_vector(ctx, arg_list[0]);
+    std::vector<Scalar> signal = parse_vector(ctx, arg_list[0]);
     if (signal.empty()) {
         *output = "Error: empty signal";
         return false;
@@ -188,7 +188,7 @@ bool handle_ifft_command(const SignalContext& ctx,
     }
 
     // 解析复数频谱（简化处理：目前暂只支持实数输入向量）
-    std::vector<long double> spectrum_real = parse_vector(ctx, arg_list[0]);
+    std::vector<Scalar> spectrum_real = parse_vector(ctx, arg_list[0]);
     if (spectrum_real.empty()) {
         *output = "Error: empty spectrum";
         return false;
@@ -202,7 +202,7 @@ bool handle_ifft_command(const SignalContext& ctx,
     std::vector<signal::Complex> time_signal = signal::ifft(spectrum);
 
     // 提取实部
-    std::vector<long double> result(time_signal.size());
+    std::vector<Scalar> result(time_signal.size());
     for (std::size_t i = 0; i < time_signal.size(); ++i) {
         result[i] = time_signal[i].real();
     }
@@ -231,7 +231,7 @@ bool handle_rfft_command(const SignalContext& ctx,
         return false;
     }
 
-    std::vector<long double> signal = parse_vector(ctx, arg_list[0]);
+    std::vector<Scalar> signal = parse_vector(ctx, arg_list[0]);
     if (signal.empty()) {
         *output = "Error: empty signal";
         return false;
@@ -266,15 +266,15 @@ bool handle_conv_command(const SignalContext& ctx,
         return false;
     }
 
-    std::vector<long double> signal1 = parse_vector(ctx, arg_list[0]);
-    std::vector<long double> signal2 = parse_vector(ctx, arg_list[1]);
+    std::vector<Scalar> signal1 = parse_vector(ctx, arg_list[0]);
+    std::vector<Scalar> signal2 = parse_vector(ctx, arg_list[1]);
 
     if (signal1.empty() || signal2.empty()) {
         *output = "Error: empty signal";
         return false;
     }
 
-    std::vector<long double> result = signal::convolve(signal1, signal2);
+    std::vector<Scalar> result = signal::convolve(signal1, signal2);
 
     *output = format_vector(result);
     return true;
@@ -300,8 +300,8 @@ bool handle_cconv_command(const SignalContext& ctx,
         return false;
     }
 
-    std::vector<long double> signal1 = parse_vector(ctx, arg_list[0]);
-    std::vector<long double> signal2 = parse_vector(ctx, arg_list[1]);
+    std::vector<Scalar> signal1 = parse_vector(ctx, arg_list[0]);
+    std::vector<Scalar> signal2 = parse_vector(ctx, arg_list[1]);
 
     if (signal1.empty() || signal2.empty()) {
         *output = "Error: empty signal";
@@ -318,7 +318,7 @@ bool handle_cconv_command(const SignalContext& ctx,
         }
     }
 
-    std::vector<long double> result = signal::circular_convolve(signal1, signal2, n);
+    std::vector<Scalar> result = signal::circular_convolve(signal1, signal2, n);
 
     *output = format_vector(result);
     return true;
@@ -344,15 +344,15 @@ bool handle_xcorr_command(const SignalContext& ctx,
         return false;
     }
 
-    std::vector<long double> signal1 = parse_vector(ctx, arg_list[0]);
-    std::vector<long double> signal2 = parse_vector(ctx, arg_list[1]);
+    std::vector<Scalar> signal1 = parse_vector(ctx, arg_list[0]);
+    std::vector<Scalar> signal2 = parse_vector(ctx, arg_list[1]);
 
     if (signal1.empty() || signal2.empty()) {
         *output = "Error: empty signal";
         return false;
     }
 
-    std::vector<long double> result = signal::xcorr(signal1, signal2);
+    std::vector<Scalar> result = signal::xcorr(signal1, signal2);
 
     *output = format_vector(result);
     return true;
@@ -378,13 +378,13 @@ bool handle_autocorr_command(const SignalContext& ctx,
         return false;
     }
 
-    std::vector<long double> signal = parse_vector(ctx, arg_list[0]);
+    std::vector<Scalar> signal = parse_vector(ctx, arg_list[0]);
     if (signal.empty()) {
         *output = "Error: empty signal";
         return false;
     }
 
-    std::vector<long double> result = signal::autocorr(signal);
+    std::vector<Scalar> result = signal::autocorr(signal);
 
     *output = format_vector(result);
     return true;
@@ -427,7 +427,7 @@ bool handle_window_command(const SignalContext& ctx,
         return false;
     }
 
-    long double param = 0.0L;
+    Scalar param = 0.0L;
     if (arg_list.size() >= 3) {
         try {
             param = parser.evaluate(arg_list[2]);
@@ -438,7 +438,7 @@ bool handle_window_command(const SignalContext& ctx,
 
     try {
         signal::WindowType type = signal::string_to_window_type(type_str);
-        std::vector<long double> result = signal::window(type, length, param);
+        std::vector<Scalar> result = signal::window(type, length, param);
         *output = format_vector(result);
         return true;
     } catch (const std::exception& e) {
@@ -471,9 +471,9 @@ bool handle_filter_command(const SignalContext& ctx,
         return false;
     }
 
-    std::vector<long double> b = parse_vector(ctx, arg_list[0]);
-    std::vector<long double> a = parse_vector(ctx, arg_list[1]);
-    std::vector<long double> signal = parse_vector(ctx, arg_list[2]);
+    std::vector<Scalar> b = parse_vector(ctx, arg_list[0]);
+    std::vector<Scalar> a = parse_vector(ctx, arg_list[1]);
+    std::vector<Scalar> signal = parse_vector(ctx, arg_list[2]);
 
     if (b.empty() || a.empty() || signal.empty()) {
         *output = "Error: empty coefficients or signal";
@@ -481,7 +481,7 @@ bool handle_filter_command(const SignalContext& ctx,
     }
 
     try {
-        std::vector<long double> result = signal::filter(b, a, signal);
+        std::vector<Scalar> result = signal::filter(b, a, signal);
         *output = format_vector(result);
         return true;
     } catch (const std::exception& e) {
@@ -513,7 +513,7 @@ bool handle_fir_design_command(const SignalContext& ctx,
     UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
 
     int order = 0;
-    long double cutoff = 0.0L;
+    Scalar cutoff = 0.0L;
 
     try {
         order = static_cast<int>(parser.evaluate(arg_list[0]));
@@ -552,7 +552,7 @@ bool handle_fir_design_command(const SignalContext& ctx,
                 *output = "Error: band filters require two cutoff frequencies";
                 return false;
             }
-            long double cutoff2 = parser.evaluate(arg_list[3]);
+            Scalar cutoff2 = parser.evaluate(arg_list[3]);
             coeffs = signal::design_fir_band(order, cutoff, cutoff2, type, win_type);
         } else {
             coeffs = signal::design_fir(order, cutoff, type, win_type);
@@ -592,7 +592,7 @@ bool handle_iir_design_command(const SignalContext& ctx,
     UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
 
     int order = 0;
-    long double cutoff = 0.0L;
+    Scalar cutoff = 0.0L;
 
     try {
         order = static_cast<int>(parser.evaluate(arg_list[0]));
@@ -647,8 +647,8 @@ bool handle_freqz_command(const SignalContext& ctx,
         return false;
     }
 
-    std::vector<long double> b = parse_vector(ctx, arg_list[0]);
-    std::vector<long double> a = parse_vector(ctx, arg_list[1]);
+    std::vector<Scalar> b = parse_vector(ctx, arg_list[0]);
+    std::vector<Scalar> a = parse_vector(ctx, arg_list[1]);
 
     if (b.empty() || a.empty()) {
         *output = "Error: empty coefficients";
@@ -699,7 +699,7 @@ bool handle_psd_command(const SignalContext& ctx,
         return false;
     }
 
-    std::vector<long double> signal = parse_vector(ctx, arg_list[0]);
+    std::vector<Scalar> signal = parse_vector(ctx, arg_list[0]);
     if (signal.empty()) {
         *output = "Error: empty signal";
         return false;
@@ -715,7 +715,7 @@ bool handle_psd_command(const SignalContext& ctx,
         }
     }
 
-    std::vector<long double> result = signal::pwelch(signal, nfft);
+    std::vector<Scalar> result = signal::pwelch(signal, nfft);
     *output = format_vector(result);
     return true;
 }
@@ -740,7 +740,7 @@ bool handle_stft_command(const SignalContext& ctx,
         return false;
     }
 
-    std::vector<long double> signal = parse_vector(ctx, arg_list[0]);
+    std::vector<Scalar> signal = parse_vector(ctx, arg_list[0]);
     if (signal.empty()) {
         *output = "Error: empty signal";
         return false;
@@ -789,7 +789,7 @@ bool handle_spectrogram_command(const SignalContext& ctx,
         return false;
     }
 
-    std::vector<long double> signal = parse_vector(ctx, arg_list[0]);
+    std::vector<Scalar> signal = parse_vector(ctx, arg_list[0]);
     if (signal.empty()) {
         *output = "Error: empty signal";
         return false;
@@ -805,7 +805,7 @@ bool handle_spectrogram_command(const SignalContext& ctx,
         }
     }
 
-    std::vector<std::vector<long double>> spec = signal::spectrogram(signal, nfft);
+    std::vector<std::vector<Scalar>> spec = signal::spectrogram(signal, nfft);
 
     std::ostringstream oss;
     oss << "Spectrogram: " << spec.size() << " frequency bins x ";

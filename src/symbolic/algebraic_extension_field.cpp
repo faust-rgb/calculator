@@ -13,9 +13,14 @@
 #include "symbolic/risch/risch_algorithm.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "symbolic/symbolic_polynomial.h"
+
+#include "core/scalar_type.h"
+
 #include <algorithm>
 
 using namespace symbolic_expression_internal;
+
+using Scalar = mymath::Scalar;
 
 // ============================================================================
 // 构造函数和基本运算
@@ -73,8 +78,8 @@ bool AlgebraicExtensionField::is_zero(const Element& elem) const {
 bool AlgebraicExtensionField::is_one(const Element& elem) const {
     if (!SymbolicPolynomial::coeff_is_zero(elem.coefficients[0])) {
         // 检查系数是否为 1
-        long double val = 0.0L;
-        if (elem.coefficients[0].is_number(&val) && mymath::abs(val - 1.0L) < 1e-12) {
+        Scalar val = Scalar(0);
+        if (elem.coefficients[0].is_number(&val) && mymath::precise128::abs(val - Scalar(1)) < Scalar(1e-12)) {
             // 检查其他系数是否为零
             for (int i = 1; i < degree_; ++i) {
                 if (!SymbolicPolynomial::coeff_is_zero(elem.coefficients[i])) {
@@ -171,10 +176,10 @@ bool AlgebraicExtensionField::inverse(const Element& a, Element* result) const {
 
     // 检查 GCD 是否为常数
     if (g.degree() == 0) {
-        long double g_val = 0.0L;
-        if (g.coefficient(0).is_number(&g_val) && mymath::abs(g_val) > 1e-12) {
+        Scalar g_val = Scalar(0);
+        if (g.coefficient(0).is_number(&g_val) && mymath::precise128::abs(g_val) > Scalar(1e-12)) {
             // 归一化
-            SymbolicExpression g_inv = SymbolicExpression::number(1.0L / g_val);
+            SymbolicExpression g_inv = SymbolicExpression::number((Scalar(1) / g_val));
             *result = zero();
             for (int i = 0; i < degree_ && i <= s.degree(); ++i) {
                 result->coefficients[i] = (s.coefficient(i) * g_inv).simplify();
@@ -346,10 +351,10 @@ SymbolicExpression AlgebraicExtensionField::discriminant(const Element& a) const
     SymbolicExpression res = compute_resultant(a_poly, a_deriv);
 
     int n = a_poly.degree();
-    long double sign = ((n * (n - 1) / 2) % 2 == 0) ? 1.0L : -1.0L;
+    Scalar sign = ((n * (n - 1) / 2) % 2 == 0) ? Scalar(1) : Scalar(-1);
 
     SymbolicExpression lc = a_poly.leading_coefficient();
-    return (SymbolicExpression::number(sign) * res / lc).simplify();
+    return (SymbolicExpression::number((sign)) * res / lc).simplify();
 }
 
 // ============================================================================
@@ -379,13 +384,13 @@ SymbolicPolynomial AlgebraicExtensionField::resultant_sum(
         SymbolicExpression term = SymbolicExpression::number(0.0L);
         for (int k = 0; k <= i; ++k) {
             // C(i,k) * z^k * (-t)^(i-k)
-            long double binom = 1.0L;
-            for (int j = 0; j < k; ++j) binom *= (i - j);
-            for (int j = 1; j <= k; ++j) binom /= j;
+            Scalar binom = Scalar(1);
+            for (int j = 0; j < k; ++j) binom = binom * Scalar(i - j);
+            for (int j = 1; j <= k; ++j) binom = binom / Scalar(j);
 
             SymbolicExpression z_pow = make_power(z, SymbolicExpression::number(k));
             SymbolicExpression t_pow = make_power(make_negate(t), SymbolicExpression::number(i - k));
-            term = (term + SymbolicExpression::number(binom) * z_pow * t_pow).simplify();
+            term = (term + SymbolicExpression::number((binom)) * z_pow * t_pow).simplify();
         }
         beta_shifted_coeffs[i] = (P_beta.coefficient(i) * term).simplify();
     }
@@ -612,13 +617,13 @@ bool AlgebraicExtensionField::detect_nested_algebraic_transcendental(
             SymbolicExpression exp(e.node_->right);
 
             // 检查分数幂
-            long double exp_val = 0.0L;
+            Scalar exp_val = Scalar(0);
             if (exp.is_number(&exp_val)) {
-                long double int_part;
-                if (mymath::abs(mymath::modf(exp_val, &int_part)) > 1e-12) {
+                Scalar int_part;
+                if (mymath::precise128::abs(mymath::modf(exp_val, &int_part)) > Scalar(1e-12)) {
                     // 分数幂 -> 代数扩展
                     AlgebraicExtensionInfo ext = AlgebraicExtensionInfo::nth_root(
-                        base, static_cast<int>(mymath::round(1.0L / (exp_val - int_part))), x_var);
+                        base, static_cast<int>(mymath::precise128::round(Scalar(1) / (exp_val - int_part))), x_var);
                     algebraic_exts->push_back(ext);
                 }
             }
@@ -689,7 +694,7 @@ SymbolicExpression AlgebraicExtensionField::trace(const Element& a) const {
     // 对于 t^n = u 形式的模多项式，Trace(a) = n * a_0
 
     // 简化实现
-    return (SymbolicExpression::number(static_cast<long double>(degree_)) * a.coefficients[0]).simplify();
+    return (SymbolicExpression::number((degree_)) * a.coefficients[0]).simplify();
 }
 
 AlgebraicExtensionField::Element AlgebraicExtensionField::reduce(const Element& a) const {

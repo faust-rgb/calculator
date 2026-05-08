@@ -1,37 +1,42 @@
 #include "symbolic/differential_field.h"
 #include "symbolic/symbolic_expression_internal.h"
 #include "symbolic/risch/risch_algorithm_internal.h"
+
+#include "core/scalar_type.h"
+
 #include <algorithm>
 #include <sstream>
 
 using namespace symbolic_expression_internal;
 using namespace risch_algorithm_internal;
 
+using Scalar = mymath::Scalar;
+
 // ============================================================================
 // ExactRational 类实现
 // ============================================================================
 
-ExactRational ExactRational::from_double(long double value, int64_t max_den) {
+ExactRational ExactRational::from_double(Scalar value, int64_t max_den) {
     // 使用连分数展开将有理数近似转换为精确分数
-    if (mymath::abs(value) < 1e-15) {
+    if (mymath::precise128::abs(Scalar(value)) < Scalar(1e-15)) {
         return ExactRational(0, 1);
     }
 
     int sign = value < 0 ? -1 : 1;
-    value = mymath::abs(value);
+    Scalar abs_value = mymath::precise128::abs(Scalar(value));
 
     // 简化的连分数算法
-    int64_t a = static_cast<int64_t>(mymath::floor(value));
-    long double frac = value - a;
+    int64_t a = static_cast<int64_t>(static_cast<long double>(mymath::precise128::floor(abs_value)));
+    Scalar frac = abs_value - Scalar(static_cast<long long>(a));
 
-    if (frac < 1e-15) {
+    if (mymath::precise128::abs(frac) < Scalar(1e-15L)) {
         return ExactRational(sign * a, 1);
     }
 
     // 继续展开
-    long double inv = 1.0L / frac;
-    int64_t b = static_cast<int64_t>(mymath::floor(inv));
-    frac = inv - b;
+    Scalar inv = Scalar(1) / frac;
+    int64_t b = static_cast<int64_t>(static_cast<long double>(mymath::precise128::floor(inv)));
+    frac = inv - Scalar(static_cast<long long>(b));
 
     // 二阶近似: a + 1/b ≈ (a*b + 1) / b
     int64_t num = a * b + 1;
@@ -41,10 +46,10 @@ ExactRational ExactRational::from_double(long double value, int64_t max_den) {
     if (den > max_den) {
         // 回退到一阶近似
         den = 1;
-        while (mymath::abs(value * den - mymath::round(value * den)) > 1e-9 && den <= max_den) {
+        while (mymath::precise128::abs(abs_value * Scalar(static_cast<long long>(den)) - mymath::precise128::round(abs_value * Scalar(static_cast<long long>(den)))) > Scalar(1e-9L) && den <= max_den) {
             den++;
         }
-        num = static_cast<int64_t>(mymath::round(value * den));
+        num = static_cast<int64_t>(static_cast<long double>(mymath::precise128::round(abs_value * Scalar(static_cast<long long>(den)))));
     }
 
     return ExactRational(sign * num, den);
@@ -241,7 +246,7 @@ bool DifferentialField::is_known_constant(const SymbolicExpression& expr) const 
     // 检查是否是已知常数
 
     // 数值是常数
-    long double val;
+    Scalar val;
     if (expr.is_number(&val)) {
         return true;
     }
@@ -400,7 +405,7 @@ PolynomialOverField PolynomialOverField::differential() const {
             // P 是关于 t_var 的多项式
             // dP/dt_var = sum j * a_j * t_var^{j-1}
             for (int j = 1; j <= poly.degree(); ++j) {
-                SymbolicExpression term = (SymbolicExpression::number(static_cast<long double>(j)) *
+                SymbolicExpression term = (SymbolicExpression::number((j)) *
                                           poly.coefficient(j) * t_prime).simplify();
                 // 添加到第 j-1 个系数
                 if (j - 1 < static_cast<int>(new_coeffs.size())) {
@@ -556,8 +561,8 @@ void DifferentialTowerBuilder::collect_extensions(
             collect(exp);
 
             // 检查 x^(1/2) = sqrt(x) 形式
-            long double exp_val;
-            if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < 1e-9) {
+            Scalar exp_val;
+            if (exp.is_number(&exp_val) && mymath::precise128::abs(exp_val - Scalar(0.5)) < Scalar(1e-9)) {
                 if (contains_var(base, x_var)) {
                     extensions.push_back({base.simplify(), DifferentialExtension::Kind::kAlgebraic});
                 }
@@ -601,14 +606,14 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
         if (normalized_arg.node_->type == NodeType::kPower) {
             SymbolicExpression base(normalized_arg.node_->left);
             SymbolicExpression exp(normalized_arg.node_->right);
-            long double exp_val = 0.0L;
+            Scalar exp_val = Scalar(0);
             if (exp.is_number(&exp_val)) {
                 // 检查 base 是否在塔中
                 for (const auto& ext : current_field.tower) {
                     if (ext.kind == DifferentialExtension::Kind::kLogarithmic) {
                         if (structural_equals(base.simplify(), ext.argument.simplify())) {
                             result.result = IndependenceResult::kDependent;
-                            result.substitution = (SymbolicExpression::number(exp_val) *
+                            result.substitution = (SymbolicExpression::number((exp_val)) *
                                                    SymbolicExpression::variable(ext.t_name)).simplify();
                             result.reason = "ln(u^n) = n*ln(u) with ln(u) in tower";
                             return result;
@@ -655,11 +660,11 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
 
                         // 检查 factor / ext.argument 是否为常数
                         SymbolicExpression ratio = (factor / ext.argument).simplify();
-                        long double ratio_val = 0.0L;
-                        if (ratio.is_number(&ratio_val) && mymath::abs(ratio_val) > 1e-12) {
+                        Scalar ratio_val = Scalar(0);
+                        if (ratio.is_number(&ratio_val) && mymath::precise128::abs(ratio_val) > Scalar(1e-12)) {
                             // ln(factor) = ln(ratio) + ln(ext.argument)
                             substitution_sum = (substitution_sum +
-                                               SymbolicExpression::number(mymath::log(mymath::abs(ratio_val))) +
+                                               SymbolicExpression::number(mymath::precise128::ln(mymath::precise128::abs(ratio_val))) +
                                                SymbolicExpression::variable(ext.t_name)).simplify();
                             factor_dependent = true;
                             any_dependent = true;
@@ -673,11 +678,11 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
                     if (!contains_var(factor, current_field.base_variable) &&
                         !current_field.contains_tower_variable(factor)) {
                         // 常数因子: ln(factor) 是常数
-                        long double factor_val = 0.0L;
+                        Scalar factor_val = Scalar(0);
                         SymbolicExpression simplified = factor.simplify();
-                        if (simplified.is_number(&factor_val) && factor_val > 0) {
+                        if (simplified.is_number(&factor_val) && factor_val > Scalar(0)) {
                             substitution_sum = (substitution_sum +
-                                               SymbolicExpression::number(mymath::log(factor_val))).simplify();
+                                               SymbolicExpression::number(mymath::precise128::ln(factor_val))).simplify();
                             any_dependent = true;
                         }
                     }
@@ -696,16 +701,16 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
         for (const auto& ext : current_field.tower) {
             if (ext.kind == DifferentialExtension::Kind::kLogarithmic) {
                 SymbolicExpression ratio = (normalized_arg / ext.argument).simplify();
-                long double ratio_val = 0.0L;
-                if (ratio.is_number(&ratio_val) && mymath::abs(ratio_val) > 1e-12) {
+                Scalar ratio_val = Scalar(0);
+                if (ratio.is_number(&ratio_val) && mymath::precise128::abs(ratio_val) > Scalar(1e-12)) {
                     // ln(arg) = ln(ratio) + ln(ext.argument) = ln(ratio) + t
                     result.result = IndependenceResult::kDependent;
-                    if (ratio_val > 0) {
-                        result.substitution = (SymbolicExpression::number(mymath::log(ratio_val)) +
+                    if (ratio_val > Scalar(0)) {
+                        result.substitution = (SymbolicExpression::number(mymath::precise128::ln(ratio_val)) +
                                               SymbolicExpression::variable(ext.t_name)).simplify();
                     } else {
                         // ln(-ratio) = ln(|ratio|) + i*pi，这里简化处理
-                        result.substitution = (SymbolicExpression::number(mymath::log(-ratio_val)) +
+                        result.substitution = (SymbolicExpression::number(mymath::precise128::ln(-ratio_val)) +
                                               SymbolicExpression::variable(ext.t_name)).simplify();
                     }
                     result.reason = "ln(arg) = ln(ratio) + t where t = ln(ext.arg) in tower";
@@ -760,11 +765,11 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
                 // 检查 integrand 是否等于 t' 或其倍数
                 SymbolicExpression ext_deriv = ext.derivation.simplify();
                 SymbolicExpression ratio = (integrand / ext_deriv).simplify();
-                long double ratio_val = 0.0L;
-                if (ratio.is_number(&ratio_val) && mymath::abs(ratio_val) > 1e-12) {
+                Scalar ratio_val = Scalar(0);
+                if (ratio.is_number(&ratio_val) && mymath::precise128::abs(ratio_val) > Scalar(1e-12)) {
                     // integrand = ratio * t' => ∫integrand = ratio * t
                     result.result = IndependenceResult::kDependent;
-                    result.substitution = (SymbolicExpression::number(ratio_val) *
+                    result.substitution = (SymbolicExpression::number((ratio_val)) *
                                           SymbolicExpression::variable(ext.t_name)).simplify();
                     result.reason = "u'/u = c * (v'/v) for some v in tower";
                     return result;
@@ -817,11 +822,11 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
                     for (const auto& ext : current_field.tower) {
                         if (ext.kind == DifferentialExtension::Kind::kExponential) {
                             SymbolicExpression diff = (term - ext.argument).simplify();
-                            long double diff_val = 0.0L;
+                            Scalar diff_val = Scalar(0);
                             if (diff.is_number(&diff_val)) {
                                 // exp(term) = exp(diff) * exp(ext.argument) = exp(diff) * t
                                 substitution_prod = (substitution_prod *
-                                                    SymbolicExpression::number(mymath::exp(diff_val)) *
+                                                    SymbolicExpression::number(mymath::precise128::exp(diff_val)) *
                                                     SymbolicExpression::variable(ext.t_name)).simplify();
                                 term_dependent = true;
                                 any_dependent = true;
@@ -835,11 +840,11 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
                 if (!term_dependent) {
                     if (!contains_var(term, current_field.base_variable) &&
                         !current_field.contains_tower_variable(term)) {
-                        long double term_val = 0.0L;
+                        Scalar term_val = Scalar(0);
                         SymbolicExpression simplified = term.simplify();
                         if (simplified.is_number(&term_val)) {
                             substitution_prod = (substitution_prod *
-                                                SymbolicExpression::number(mymath::exp(term_val))).simplify();
+                                                SymbolicExpression::number(mymath::precise128::exp(term_val))).simplify();
                             term_dependent = true;
                             any_dependent = true;
                         }
@@ -868,10 +873,10 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
         for (const auto& ext : current_field.tower) {
             if (ext.kind == DifferentialExtension::Kind::kExponential) {
                 SymbolicExpression diff = (normalized_arg - ext.argument).simplify();
-                long double diff_val = 0.0L;
+                Scalar diff_val = Scalar(0);
                 if (diff.is_number(&diff_val)) {
                     result.result = IndependenceResult::kDependent;
-                    result.substitution = (SymbolicExpression::number(mymath::exp(diff_val)) *
+                    result.substitution = (SymbolicExpression::number(mymath::precise128::exp(diff_val)) *
                                           SymbolicExpression::variable(ext.t_name)).simplify();
                     result.reason = "exp(arg) = exp(diff) * t where t = exp(ext.arg) in tower";
                     return result;
@@ -883,15 +888,15 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
         for (const auto& ext : current_field.tower) {
             if (ext.kind == DifferentialExtension::Kind::kExponential) {
                 SymbolicExpression ratio = (normalized_arg / ext.argument).simplify();
-                long double ratio_val = 0.0L;
-                if (ratio.is_number(&ratio_val) && mymath::abs(ratio_val) > 1e-12) {
+                Scalar ratio_val = Scalar(0);
+                if (ratio.is_number(&ratio_val) && mymath::precise128::abs(ratio_val) > Scalar(1e-12)) {
                     // exp(arg) = exp(ratio * ext.argument) = t^ratio
                     // 但只有 ratio 是整数时才是代数关系
-                    int int_ratio = static_cast<int>(mymath::round(ratio_val));
-                    if (mymath::abs(ratio_val - int_ratio) < 1e-9) {
+                    int int_ratio = static_cast<int>(mymath::precise128::round(ratio_val));
+                    if (mymath::precise128::abs(ratio_val - Scalar(int_ratio)) < Scalar(1e-9)) {
                         result.result = IndependenceResult::kDependent;
                         result.substitution = make_power(SymbolicExpression::variable(ext.t_name),
-                                                         SymbolicExpression::number(ratio_val)).simplify();
+                                                         SymbolicExpression::number((ratio_val))).simplify();
                         result.reason = "exp(arg) = t^n where t = exp(ext.arg) in tower";
                         return result;
                     }
@@ -946,14 +951,14 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
 
                 // 检查 u = ext.argument^k
                 SymbolicExpression ratio = (normalized_arg / ext.argument).simplify();
-                long double ratio_val = 0.0L;
-                if (ratio.is_number(&ratio_val) && mymath::abs(ratio_val) > 1e-12) {
+                Scalar ratio_val = Scalar(0);
+                if (ratio.is_number(&ratio_val) && mymath::precise128::abs(ratio_val) > Scalar(1e-12)) {
                     // sqrt(u) = sqrt(ratio * ext.argument)
                     // 如果 ratio 是完全平方，可以简化
-                    long double sqrt_ratio = mymath::sqrt(ratio_val);
-                    if (mymath::abs(sqrt_ratio * sqrt_ratio - ratio_val) < 1e-9) {
+                    Scalar sqrt_ratio = mymath::precise128::sqrt(ratio_val);
+                    if (mymath::precise128::abs(sqrt_ratio * sqrt_ratio - ratio_val) < Scalar(1e-9)) {
                         result.result = IndependenceResult::kDependent;
-                        result.substitution = (SymbolicExpression::number(sqrt_ratio) *
+                        result.substitution = (SymbolicExpression::number((sqrt_ratio)) *
                                               SymbolicExpression::variable(ext.t_name)).simplify();
                         result.reason = "sqrt(u) = sqrt(ratio) * t where t = sqrt(ext.arg) in tower";
                         return result;

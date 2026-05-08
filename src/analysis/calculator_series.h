@@ -2,6 +2,7 @@
 #define CALCULATOR_SERIES_H
 
 #include "core/calculator_internal_types.h"
+#include "core/scalar_type.h"
 #include "symbolic/symbolic_expression.h"
 #include <string>
 #include <vector>
@@ -10,6 +11,8 @@
 #include "module/calculator_module.h"
 
 namespace series_ops {
+
+using Scalar = mymath::Scalar;
 
 /**
  * @class SeriesModule
@@ -27,8 +30,8 @@ public:
 
 struct SeriesContext {
     std::function<void(const std::string&, bool, std::string*, SymbolicExpression*)> resolve_symbolic;
-    std::function<long double(const std::string&)> parse_decimal;
-    std::function<long double(const SymbolicExpression&, const std::string&, double)> evaluate_at;
+    std::function<Scalar(const std::string&)> parse_decimal;
+    std::function<Scalar(const SymbolicExpression&, const std::string&, Scalar)> evaluate_at;
     std::function<std::string(const std::string&)> simplify_symbolic;
     std::function<std::string(const std::string&)> expand_inline;
 };
@@ -43,11 +46,11 @@ bool handle_series_command(const SeriesContext& ctx,
 namespace internal {
 struct PoleException : public std::runtime_error {
     int shift;
-    long double leading_coefficient;
-    PoleException(int s, long double coeff) : std::runtime_error("Pole encountered"), shift(s), leading_coefficient(coeff) {}
+    Scalar leading_coefficient;
+    PoleException(int s, Scalar coeff) : std::runtime_error("Pole encountered"), shift(s), leading_coefficient(coeff) {}
 };
 
-bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, long double center, int degree, std::vector<long double>& result, const SeriesContext& ctx);
+bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, Scalar center, int degree, std::vector<Scalar>& result, const SeriesContext& ctx);
 }
 
 }  // namespace series_ops

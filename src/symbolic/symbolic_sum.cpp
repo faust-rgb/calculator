@@ -13,6 +13,8 @@
 
 #include "symbolic/symbolic_sum.h"
 #include "symbolic/symbolic_expression_internal.h"
+
+#include "core/scalar_type.h"
 #include "math/mymath.h"
 
 #include <algorithm>
@@ -24,6 +26,7 @@ namespace symbolic_sum {
 namespace {
 
 using namespace symbolic_expression_internal;
+using Scalar = mymath::Scalar;
 
 // Bernoulli 数 B_n (有理数形式)
 // B_0 = 1, B_1 = -1/2, B_2 = 1/6, B_4 = -1/30, B_6 = 1/42, ...
@@ -215,10 +218,10 @@ SumResult SymbolicSumEngine::sum_polynomial(
 
     // 特殊情况：常数项
     if (degree == 0) {
-        long double val = 0.0L;
+        Scalar val = 0.0L;
         if (term.is_number(&val)) {
             // sum(c, k, lo, hi) = c * (hi - lo + 1)
-            long double result = val * (upper - lower + 1);
+            Scalar result = val * (upper - lower + 1);
             return SumResult::elementary(
                 SymbolicExpression::number(result),
                 TermType::kPolynomial,
@@ -243,7 +246,7 @@ SumResult SymbolicSumEngine::sum_polynomial(
     // 对于 k^m 形式
     if (term.node_->type == NodeType::kPower) {
         SymbolicExpression base(term.node_->left);
-        long double exp = 0.0L;
+        Scalar exp = 0.0L;
         if (base.node_->type == NodeType::kVariable && base.node_->text == var &&
             SymbolicExpression(term.node_->right).is_number(&exp)) {
             int m = static_cast<int>(mymath::round(exp));
@@ -287,23 +290,23 @@ SumResult SymbolicSumEngine::sum_geometric(
         long long n = hi - lo + 1;
 
         // 检查 r 是否为数值
-        long double r_val = 0.0L;
+        Scalar r_val = 0.0L;
         if (r.is_number(&r_val)) {
-            if (mymath::is_near_zero(r_val - 1.0L, 1e-15)) {
+            if (mymath::is_near_zero(r_val - 1.0L, 1e-15L)) {
                 // r = 1: sum = a * n
-                long double a_val = 0.0L;
+                Scalar a_val = 0.0L;
                 if (a.is_number(&a_val)) {
                     return SumResult::elementary(
-                        SymbolicExpression::number(a_val * n),
+                        SymbolicExpression::number(a_val * Scalar(static_cast<long long>(n))),
                         TermType::kGeometric,
                         "geometric_r_equals_1");
                 }
             }
 
             // 一般情况
-            long double a_val = 0.0L;
+            Scalar a_val = 0.0L;
             if (a.is_number(&a_val)) {
-                long double result = a_val * mymath::pow(r_val, lo) * (mymath::pow(r_val, n) - 1.0L) / (r_val - 1.0L);
+                Scalar result = a_val * mymath::pow(r_val, lo) * (mymath::pow(r_val, n) - 1.0L) / (r_val - 1.0L);
                 return SumResult::elementary(
                     SymbolicExpression::number(result),
                     TermType::kGeometric,
@@ -326,13 +329,13 @@ SumResult SymbolicSumEngine::sum_geometric(
         long long lo = static_cast<long long>(mymath::round(lower.value));
 
         // 检查收敛性 |r| < 1
-        long double r_val = 0.0L;
+        Scalar r_val = 0.0L;
         if (r.is_number(&r_val)) {
             if (mymath::abs(r_val) < 1.0L) {
                 // sum(a * r^k, k, lo, inf) = a * r^lo / (1 - r)
-                long double a_val = 0.0L;
+                Scalar a_val = 0.0L;
                 if (a.is_number(&a_val)) {
-                    long double result = a_val * mymath::pow(r_val, lo) / (1.0L - r_val);
+                    Scalar result = a_val * mymath::pow(r_val, lo) / (1.0L - r_val);
                     return SumResult::elementary(
                         SymbolicExpression::number(result),
                         TermType::kGeometric,
@@ -428,12 +431,12 @@ SumResult SymbolicSumEngine::known_infinite_series(
         SymbolicExpression num(term.node_->left);
         SymbolicExpression den(term.node_->right);
 
-        long double num_val = 0.0L;
+        Scalar num_val = 0.0L;
         if (num.is_number(&num_val) && mymath::is_near_zero(num_val - 1.0L, 1e-15)) {
             // 检查分母是否为 k^2
             if (den.node_->type == NodeType::kPower) {
                 SymbolicExpression base(den.node_->left);
-                long double exp = 0.0L;
+                Scalar exp = 0.0L;
                 if (base.node_->type == NodeType::kVariable && base.node_->text == var &&
                     SymbolicExpression(den.node_->right).is_number(&exp)) {
                     if (mymath::is_near_zero(exp - 2.0, 1e-10)) {
@@ -482,7 +485,7 @@ SymbolicExpression SymbolicSumEngine::faulhaber_sum(int m, const SymbolicExpress
         long long comb = binomial(m + 1, j);
 
         // term = C(m+1,j) * B_j * n^(m+1-j)
-        SymbolicExpression coeff = SymbolicExpression::number(static_cast<long double>(comb * b_num) / b_den);
+        SymbolicExpression coeff = SymbolicExpression::number((comb * b_num) / b_den);
         SymbolicExpression power = make_power(n, SymbolicExpression::number(m + 1 - j));
 
         result = make_add(result, make_multiply(coeff, power)).simplify();
@@ -563,7 +566,7 @@ int SymbolicSumEngine::get_polynomial_degree(
     const std::string& var) {
 
     // 常数
-    long double val = 0.0L;
+    Scalar val = 0.0L;
     if (term.is_number(&val)) {
         return 0;
     }
@@ -579,7 +582,7 @@ int SymbolicSumEngine::get_polynomial_degree(
     // 幂次
     if (term.node_->type == NodeType::kPower) {
         SymbolicExpression base(term.node_->left);
-        long double exp = 0.0L;
+        Scalar exp = 0.0L;
         if (base.node_->type == NodeType::kVariable && base.node_->text == var &&
             SymbolicExpression(term.node_->right).is_number(&exp)) {
             if (mymath::is_integer(exp, 1e-10) && exp >= 0) {
@@ -619,12 +622,12 @@ SymbolicExpression SymbolicSumEngine::numerical_sum(
     int lower,
     int upper) {
 
-    long double sum = 0.0L;
+    Scalar sum = 0.0L;
 
     for (int k = lower; k <= upper; ++k) {
         SymbolicExpression sub = term.substitute(var, SymbolicExpression::number(k));
         sub = sub.simplify();
-        long double val = 0.0L;
+        Scalar val = 0.0L;
         if (sub.is_number(&val)) {
             sum += val;
         } else {
@@ -662,7 +665,7 @@ bool parse_sum_arguments(
         } else if (lower_str == "-inf" || lower_str == "-infinity" || lower_str == "-oo") {
             *lower = BoundArgument::neg_inf();
         } else {
-            long double lo = std::stod(lower_str);
+            Scalar lo = std::stod(lower_str);
             *lower = BoundArgument::finite(lo);
         }
 
@@ -673,7 +676,7 @@ bool parse_sum_arguments(
         } else if (upper_str == "-inf" || upper_str == "-infinity" || upper_str == "-oo") {
             *upper = BoundArgument::neg_inf();
         } else {
-            long double hi = std::stod(upper_str);
+            Scalar hi = std::stod(upper_str);
             *upper = BoundArgument::finite(hi);
         }
 

@@ -37,6 +37,7 @@
 #include "symbolic/symbolic_expression_internal.h"
 #include "symbolic/symbolic_polynomial.h"
 
+#include "core/scalar_type.h"
 #include "math/mymath.h"
 
 #include <algorithm>
@@ -47,6 +48,8 @@
 #include <vector>
 
 namespace symbolic_expression_internal {
+
+using Scalar = mymath::Scalar;
 
 // ============================================================================
 // 表达式谓词函数
@@ -59,24 +62,24 @@ namespace symbolic_expression_internal {
  * 使用 kFormatEps (1e-12) 作为容差。
  */
 bool expr_is_zero(const SymbolicExpression& expression) {
-    long double value = 0.0L;
+    Scalar value = 0.0L;
     return expr_is_number(expression, &value) && mymath::is_near_zero(value, kFormatEps);
 }
 
 /** @brief 检查表达式是否为一 */
 bool expr_is_one(const SymbolicExpression& expression) {
-    long double value = 0.0L;
+    Scalar value = 0.0L;
     return expr_is_number(expression, &value) && mymath::is_near_zero(value - 1.0L, kFormatEps);
 }
 
 /** @brief 检查表达式是否为负一 */
 bool expr_is_minus_one(const SymbolicExpression& expression) {
-    long double value = 0.0L;
+    Scalar value = 0.0L;
     return expr_is_number(expression, &value) && mymath::is_near_zero(value + 1.0L, kFormatEps);
 }
 
 /** @brief 检查表达式是否为数值，可选输出该数值 */
-bool expr_is_number(const SymbolicExpression& expression, long double* value) {
+bool expr_is_number(const SymbolicExpression& expression, Scalar* value) {
     return expression.is_number(value);
 }
 
@@ -102,7 +105,7 @@ bool expr_is_number(const SymbolicExpression& expression, long double* value) {
  */
 bool decompose_numeric_multiple_of_symbol(const SymbolicExpression& expression,
                                           const std::string& symbol_name,
-                                          long double* coefficient) {
+                                          Scalar* coefficient) {
     const SymbolicExpression simplified = expression.simplify();
 
     // 直接是符号本身
@@ -115,11 +118,11 @@ bool decompose_numeric_multiple_of_symbol(const SymbolicExpression& expression,
 
     // 取负：-symbol
     if (node->type == NodeType::kNegate) {
-        long double nested = 0.0L;
+        Scalar nested = Scalar(0);
         if (decompose_numeric_multiple_of_symbol(SymbolicExpression(node->left),
                                                  symbol_name,
-                                                 &nested)) {
-            *coefficient = -nested;
+                                                 coefficient)) {
+            *coefficient = -*coefficient;
             return true;
         }
         return false;
@@ -127,19 +130,19 @@ bool decompose_numeric_multiple_of_symbol(const SymbolicExpression& expression,
 
     // 乘法：numeric * symbol 或 symbol * numeric
     if (node->type == NodeType::kMultiply) {
-        long double numeric = 0.0L;
+        Scalar numeric = Scalar(0);
         if (SymbolicExpression(node->left).is_number(&numeric) &&
             decompose_numeric_multiple_of_symbol(SymbolicExpression(node->right),
                                                  symbol_name,
                                                  coefficient)) {
-            *coefficient *= numeric;
+            *coefficient = (numeric) * (*coefficient);
             return true;
         }
         if (SymbolicExpression(node->right).is_number(&numeric) &&
             decompose_numeric_multiple_of_symbol(SymbolicExpression(node->left),
                                                  symbol_name,
                                                  coefficient)) {
-            *coefficient *= numeric;
+            *coefficient = (numeric) * (*coefficient);
             return true;
         }
         return false;
@@ -147,15 +150,15 @@ bool decompose_numeric_multiple_of_symbol(const SymbolicExpression& expression,
 
     // 除法：symbol / numeric
     if (node->type == NodeType::kDivide) {
-        long double divisor = 0.0L;
+        Scalar divisor = Scalar(0);
         if (!SymbolicExpression(node->right).is_number(&divisor) ||
-            mymath::is_near_zero(divisor, kFormatEps)) {
+            mymath::precise128::abs(divisor) < Scalar(kFormatEps)) {
             return false;
         }
         if (decompose_numeric_multiple_of_symbol(SymbolicExpression(node->left),
                                                  symbol_name,
                                                  coefficient)) {
-            *coefficient /= divisor;
+            *coefficient = *coefficient / (divisor);
             return true;
         }
         return false;
@@ -169,8 +172,8 @@ bool decompose_numeric_multiple_of_symbol(const SymbolicExpression& expression,
  *
  * 使用 kFormatEps 容差进行近似比较。
  */
-bool numeric_matches_any(long double value, const std::initializer_list<long double>& candidates) {
-    for (long double candidate : candidates) {
+bool numeric_matches_any(Scalar value, const std::initializer_list<Scalar>& candidates) {
+    for (Scalar candidate : candidates) {
         if (mymath::is_near_zero(value - candidate, kFormatEps)) {
             return true;
         }
@@ -222,9 +225,9 @@ SymbolicExpression half_symbol() {
  */
 bool decompose_constant_times_expression(const SymbolicExpression& expression,
                                          const std::string& variable_name,
-                                         long double* constant,
+                                         Scalar* constant,
                                          SymbolicExpression* rest) {
-    long double numeric = 0.0L;
+    Scalar numeric = 0.0L;
 
     // 纯常数
     if (expression.is_constant(variable_name) && expression.is_number(&numeric)) {
@@ -275,13 +278,13 @@ bool decompose_constant_times_expression(const SymbolicExpression& expression,
  * @param symbolic_factors 符号因子列表（追加）
  */
 void collect_multiplicative_terms(const SymbolicExpression& expression,
-                                  long double* numeric_factor,
+                                  Scalar* numeric_factor,
                                   std::vector<SymbolicExpression>* symbolic_factors) {
-    long double numeric = 0.0L;
+    Scalar numeric = Scalar(0);
 
     // 纯数值
     if (expression.is_number(&numeric)) {
-        *numeric_factor *= numeric;
+        *numeric_factor = (Scalar(*numeric_factor) * numeric);
         return;
     }
 
@@ -289,7 +292,7 @@ void collect_multiplicative_terms(const SymbolicExpression& expression,
 
     // 取负
     if (node->type == NodeType::kNegate) {
-        *numeric_factor *= -1.0L;
+        *numeric_factor = -*numeric_factor;
         collect_multiplicative_terms(SymbolicExpression(node->left),
                                      numeric_factor,
                                      symbolic_factors);
@@ -323,17 +326,17 @@ void collect_multiplicative_terms(const SymbolicExpression& expression,
  * @param symbolic_factors 符号因子列表
  */
 void collect_division_factors(const SymbolicExpression& expression,
-                              long double* numeric_factor,
+                              Scalar* numeric_factor,
                               std::vector<SymbolicExpression>* symbolic_factors) {
-    long double numeric = 0.0L;
+    Scalar numeric = Scalar(0);
     if (expression.is_number(&numeric)) {
-        *numeric_factor *= numeric;
+        *numeric_factor = (Scalar(*numeric_factor) * numeric);
         return;
     }
 
     const auto& node = expression.node_;
     if (node->type == NodeType::kNegate) {
-        *numeric_factor *= -1.0L;
+        *numeric_factor = -*numeric_factor;
         collect_division_factors(SymbolicExpression(node->left),
                                  numeric_factor,
                                  symbolic_factors);
@@ -351,11 +354,11 @@ void collect_division_factors(const SymbolicExpression& expression,
 
     // 幂运算展开：x^n → [x, x, ..., x]（n 个）
     if (node->type == NodeType::kPower) {
-        long double exponent = 0.0L;
+        Scalar exponent = Scalar(0);
         if (SymbolicExpression(node->right).is_number(&exponent) &&
-            mymath::is_integer(exponent, 1e-10) &&
-            exponent > 0.0L) {
-            const int count = static_cast<int>(exponent + 0.5);
+            mymath::is_integer((exponent), 1e-10) &&
+            exponent > Scalar(0)) {
+            const int count = static_cast<int>((exponent) + 0.5);
             const SymbolicExpression base = SymbolicExpression(node->left);
             for (int i = 0; i < count; ++i) {
                 symbolic_factors->push_back(base);
@@ -379,9 +382,9 @@ void collect_division_factors(const SymbolicExpression& expression,
  * @param factors 符号因子列表
  * @return 乘积表达式
  */
-SymbolicExpression rebuild_product_expression(long double numeric_factor,
+SymbolicExpression rebuild_product_expression(Scalar numeric_factor,
                                               const std::vector<SymbolicExpression>& factors) {
-    if (mymath::is_near_zero(numeric_factor, kFormatEps)) {
+    if (mymath::precise128::abs(Scalar(numeric_factor)) < Scalar(kFormatEps)) {
         return SymbolicExpression::number(0.0L);
     }
 
@@ -402,10 +405,10 @@ SymbolicExpression rebuild_product_expression(long double numeric_factor,
     if (!has_combined) {
         return SymbolicExpression::number(numeric_factor);
     }
-    if (mymath::is_near_zero(numeric_factor - 1.0L, kFormatEps)) {
+    if (mymath::precise128::abs(Scalar(numeric_factor - 1.0L)) < Scalar(kFormatEps)) {
         return combined;
     }
-    if (mymath::is_near_zero(numeric_factor + 1.0L, kFormatEps)) {
+    if (mymath::precise128::abs(Scalar(numeric_factor + 1.0L)) < Scalar(kFormatEps)) {
         return SymbolicExpression(make_unary(NodeType::kNegate, combined.node_)).simplify();
     }
 
@@ -428,9 +431,9 @@ SymbolicExpression rebuild_product_expression(long double numeric_factor,
  * @return true（总是成功）
  */
 bool decompose_numeric_factor(const SymbolicExpression& expression,
-                              long double* coefficient,
+                              Scalar* coefficient,
                               SymbolicExpression* rest) {
-    long double numeric_factor = 1.0L;
+    Scalar numeric_factor = 1.0L;
     std::vector<SymbolicExpression> symbolic_factors;
     collect_multiplicative_terms(expression, &numeric_factor, &symbolic_factors);
 
@@ -460,7 +463,7 @@ bool decompose_numeric_factor(const SymbolicExpression& expression,
  * 例如 2*x*y 和 y*2*x 产生相同的键。
  */
 std::string canonical_multiplicative_key(const SymbolicExpression& expression) {
-    long double ignored = 1.0L;
+    Scalar ignored = 1.0L;
     std::vector<SymbolicExpression> symbolic_factors;
     collect_multiplicative_terms(expression, &ignored, &symbolic_factors);
 
@@ -534,25 +537,25 @@ SymbolicExpression make_sorted_sum(std::vector<SymbolicExpression> terms) {
                   if (lhs_negative != rhs_negative) {
                       return lhs_negative;  // 负项排前面
                   }
-                  
-                  auto get_var_deg = [](const SymbolicExpression& e) -> std::pair<std::string, long double> {
-                      long double coeff = 1.0L;
+
+                  auto get_var_deg = [](const SymbolicExpression& e) -> std::pair<std::string, Scalar> {
+                      Scalar coeff = 1.0L;
                       std::vector<SymbolicExpression> factors;
                       collect_multiplicative_terms(e, &coeff, &factors);
-                      if (factors.empty()) return {"", 0.0L};
+                      if (factors.empty()) return {"", Scalar(0)};
                       const SymbolicExpression& f = factors.back();
-                      if (f.node_->type == NodeType::kVariable) return {f.node_->text, 1.0L};
+                      if (f.node_->type == NodeType::kVariable) return {f.node_->text, Scalar(1)};
                       if (f.node_->type == NodeType::kPower && f.node_->left->type == NodeType::kVariable && f.node_->right->type == NodeType::kNumber) {
-                          return {f.node_->left->text, f.node_->right->number_value};
+                          return {f.node_->left->text, Scalar(f.node_->right->number_value)};
                       }
-                      if (f.node_->type == NodeType::kFunction) return {f.node_->text, 0.5};
-                      return {node_structural_key(f.node_), 0.0L};
+                      if (f.node_->type == NodeType::kFunction) return {f.node_->text, Scalar(0.5)};
+                      return {node_structural_key(f.node_), Scalar(0)};
                   };
 
                   auto lhs_vd = get_var_deg(lhs);
                   auto rhs_vd = get_var_deg(rhs);
                   if (lhs_vd.first != rhs_vd.first) return lhs_vd.first < rhs_vd.first;
-                  if (!mymath::is_near_zero(lhs_vd.second - rhs_vd.second, 1e-10)) return lhs_vd.second > rhs_vd.second;
+                  if (mymath::precise128::abs(lhs_vd.second - rhs_vd.second) >= Scalar(1e-10)) return lhs_vd.second > rhs_vd.second;
 
                   return node_structural_key(lhs.node_) < node_structural_key(rhs.node_);
               });
@@ -616,17 +619,21 @@ std::string canonical_expression_key(const SymbolicExpression& expression) {
  */
 bool try_combine_like_terms(const SymbolicExpression& left,
                             const SymbolicExpression& right,
-                            long double right_sign,
+                            Scalar right_sign,
                             SymbolicExpression* combined) {
-    long double left_coefficient = 0.0L;
-    long double right_coefficient = 0.0L;
+    Scalar left_coefficient = Scalar(0);
+    Scalar right_coefficient = Scalar(0);
     SymbolicExpression left_rest;
     SymbolicExpression right_rest;
 
-    if (!decompose_numeric_factor(left, &left_coefficient, &left_rest) ||
-        !decompose_numeric_factor(right, &right_coefficient, &right_rest)) {
+    Scalar left_coeff_ld = 0.0L;
+    Scalar right_coeff_ld = 0.0L;
+    if (!decompose_numeric_factor(left, &left_coeff_ld, &left_rest) ||
+        !decompose_numeric_factor(right, &right_coeff_ld, &right_rest)) {
         return false;
     }
+    left_coefficient = left_coeff_ld;
+    right_coefficient = right_coeff_ld;
 
     // 检查符号部分是否相同
     if (canonical_expression_key(left_rest) !=
@@ -635,22 +642,22 @@ bool try_combine_like_terms(const SymbolicExpression& left,
     }
 
     // 合并系数
-    const long double result_coefficient =
-        left_coefficient + right_sign * right_coefficient;
+    const Scalar result_coefficient =
+        left_coefficient + Scalar(right_sign) * right_coefficient;
 
-    if (mymath::is_near_zero(result_coefficient, kFormatEps)) {
+    if (mymath::precise128::abs(result_coefficient) < Scalar(kFormatEps)) {
         *combined = SymbolicExpression::number(0.0L);
         return true;
     }
     if (left_rest.is_number()) {
-        *combined = SymbolicExpression::number(result_coefficient);
+        *combined = SymbolicExpression::number((result_coefficient));
         return true;
     }
-    if (mymath::is_near_zero(result_coefficient - 1.0L, kFormatEps)) {
+    if (mymath::precise128::abs(result_coefficient - Scalar(1)) < Scalar(kFormatEps)) {
         *combined = left_rest;
         return true;
     }
-    if (mymath::is_near_zero(result_coefficient + 1.0L, kFormatEps)) {
+    if (mymath::precise128::abs(result_coefficient + Scalar(1)) < Scalar(kFormatEps)) {
         *combined = SymbolicExpression(
                         make_unary(NodeType::kNegate, left_rest.node_))
                         .simplify();
@@ -659,7 +666,7 @@ bool try_combine_like_terms(const SymbolicExpression& left,
 
     *combined = SymbolicExpression(
                     make_binary(NodeType::kMultiply,
-                                SymbolicExpression::number(result_coefficient).node_,
+                                SymbolicExpression::number((result_coefficient)).node_,
                                 left_rest.node_))
                     .simplify();
     return true;
@@ -688,10 +695,10 @@ bool try_combine_like_terms(const SymbolicExpression& left,
  */
 bool decompose_linear(const SymbolicExpression& expression,
                       const std::string& variable_name,
-                      long double* coefficient,
-                      long double* intercept) {
+                      Scalar* coefficient,
+                      Scalar* intercept) {
     const SymbolicExpression simplified = expression.simplify();
-    long double number = 0.0L;
+    Scalar number = 0.0L;
 
     // 单变量
     if (simplified.is_variable_named(variable_name)) {
@@ -720,10 +727,10 @@ bool decompose_linear(const SymbolicExpression& expression,
 
     // 加法或减法
     if (node->type == NodeType::kAdd || node->type == NodeType::kSubtract) {
-        long double left_a = 0.0L;
-        long double left_b = 0.0L;
-        long double right_a = 0.0L;
-        long double right_b = 0.0L;
+        Scalar left_a = 0.0L;
+        Scalar left_b = 0.0L;
+        Scalar right_a = 0.0L;
+        Scalar right_b = 0.0L;
         if (!decompose_linear(SymbolicExpression(node->left), variable_name, &left_a, &left_b) ||
             !decompose_linear(SymbolicExpression(node->right), variable_name, &right_a, &right_b)) {
             return false;
@@ -735,7 +742,7 @@ bool decompose_linear(const SymbolicExpression& expression,
 
     // 乘法：常数 * 变量
     if (node->type == NodeType::kMultiply) {
-        long double factor = 0.0L;
+        Scalar factor = 0.0L;
         SymbolicExpression rest;
         if (decompose_constant_times_expression(simplified, variable_name, &factor, &rest) &&
             rest.is_variable_named(variable_name)) {
@@ -753,9 +760,9 @@ bool decompose_linear(const SymbolicExpression& expression,
 // ============================================================================
 
 /** @brief 裁剪多项式系数向量末尾的零 */
-void trim_polynomial_coefficients(std::vector<long double>* coefficients) {
+void trim_polynomial_coefficients(std::vector<Scalar>* coefficients) {
     while (coefficients->size() > 1 &&
-           mymath::is_near_zero(coefficients->back(), kFormatEps)) {
+           mymath::precise128::abs(Scalar(coefficients->back())) < Scalar(kFormatEps)) {
         coefficients->pop_back();
     }
     if (coefficients->empty()) {
@@ -764,10 +771,10 @@ void trim_polynomial_coefficients(std::vector<long double>* coefficients) {
 }
 
 /** @brief 多项式加法（系数向量形式） */
-std::vector<long double> polynomial_add_impl(const std::vector<long double>& lhs,
-                                        const std::vector<long double>& rhs) {
+std::vector<Scalar> polynomial_add_impl(const std::vector<Scalar>& lhs,
+                                        const std::vector<Scalar>& rhs) {
     const std::size_t size = lhs.size() > rhs.size() ? lhs.size() : rhs.size();
-    std::vector<long double> result(size, 0.0L);
+    std::vector<Scalar> result(size, 0.0L);
     for (std::size_t i = 0; i < lhs.size(); ++i) {
         result[i] += lhs[i];
     }
@@ -779,10 +786,10 @@ std::vector<long double> polynomial_add_impl(const std::vector<long double>& lhs
 }
 
 /** @brief 多项式减法（系数向量形式） */
-std::vector<long double> polynomial_subtract_impl(const std::vector<long double>& lhs,
-                                             const std::vector<long double>& rhs) {
+std::vector<Scalar> polynomial_subtract_impl(const std::vector<Scalar>& lhs,
+                                             const std::vector<Scalar>& rhs) {
     const std::size_t size = lhs.size() > rhs.size() ? lhs.size() : rhs.size();
-    std::vector<long double> result(size, 0.0L);
+    std::vector<Scalar> result(size, 0.0L);
     for (std::size_t i = 0; i < lhs.size(); ++i) {
         result[i] += lhs[i];
     }
@@ -798,9 +805,9 @@ std::vector<long double> polynomial_subtract_impl(const std::vector<long double>
  *
  * 使用朴素 O(n*m) 算法。对于高次多项式可考虑 Karatsuba 或 FFT。
  */
-std::vector<long double> polynomial_multiply_impl(const std::vector<long double>& lhs,
-                                             const std::vector<long double>& rhs) {
-    std::vector<long double> result(lhs.size() + rhs.size() - 1, 0.0L);
+std::vector<Scalar> polynomial_multiply_impl(const std::vector<Scalar>& lhs,
+                                             const std::vector<Scalar>& rhs) {
+    std::vector<Scalar> result(lhs.size() + rhs.size() - 1, 0.0L);
     for (std::size_t i = 0; i < lhs.size(); ++i) {
         for (std::size_t j = 0; j < rhs.size(); ++j) {
             result[i + j] += lhs[i] * rhs[j];
@@ -858,7 +865,7 @@ SymbolicExpression make_rootof(
     auto node = std::make_shared<SymbolicExpression::Node>();
     node->type = NodeType::kRootOf;
     node->text = var_name;
-    node->number_value = static_cast<long double>(root_index);
+    node->number_value = (root_index);
     node->children.push_back(polynomial.node_);
 
     return SymbolicExpression(node);
@@ -885,9 +892,9 @@ SymbolicExpression make_rootof_from_polynomial(
  * @return 多项式表达式
  */
 SymbolicExpression build_polynomial_expression_from_coefficients(
-    const std::vector<long double>& coefficients,
+    const std::vector<Scalar>& coefficients,
     const std::string& variable_name) {
-    std::vector<long double> normalized = coefficients;
+    std::vector<Scalar> normalized = coefficients;
     trim_polynomial_coefficients(&normalized);
 
     SymbolicExpression result = SymbolicExpression::number(0.0L);
@@ -896,13 +903,13 @@ SymbolicExpression build_polynomial_expression_from_coefficients(
     // 按降幂顺序构建
     for (std::size_t index = normalized.size(); index > 0; --index) {
         const std::size_t degree = index - 1;
-        const long double coefficient = normalized[degree];
-        if (mymath::is_near_zero(coefficient, kFormatEps)) {
+        const Scalar coefficient = normalized[degree];
+        if (mymath::precise128::abs(Scalar(coefficient)) < Scalar(kFormatEps)) {
             continue;
         }
 
         const bool negative = coefficient < 0.0L;
-        const long double magnitude = negative ? -coefficient : coefficient;
+        const Scalar magnitude = negative ? -coefficient : coefficient;
 
         SymbolicExpression term;
         if (degree == 0) {
@@ -912,8 +919,8 @@ SymbolicExpression build_polynomial_expression_from_coefficients(
                        ? SymbolicExpression::variable(variable_name)
                        : make_power(SymbolicExpression::variable(variable_name),
                                     SymbolicExpression::number(
-                                        static_cast<long double>(degree)));
-            if (!mymath::is_near_zero(magnitude - 1.0L, kFormatEps)) {
+                                        Scalar(static_cast<long long>(degree))));
+            if (mymath::precise128::abs(Scalar(magnitude - 1.0L)) >= Scalar(kFormatEps)) {
                 term = make_multiply(SymbolicExpression::number(magnitude), term);
             }
         }

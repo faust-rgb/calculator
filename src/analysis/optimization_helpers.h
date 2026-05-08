@@ -7,6 +7,7 @@
 #ifndef OPTIMIZATION_HELPERS_H
 #define OPTIMIZATION_HELPERS_H
 
+#include "core/scalar_type.h"
 #include "matrix/matrix.h"
 
 #include <functional>
@@ -15,15 +16,18 @@
 
 namespace optimization_helpers {
 
+// 内部计算使用 Scalar 类型
+using Scalar = mymath::Scalar;
+
 // ============================================================================
 // 向量运算
 // ============================================================================
 
 /** @brief 计算两个向量的点积 */
-long double dot_product(const std::vector<long double>& lhs, const std::vector<long double>& rhs);
+Scalar dot_product(const std::vector<Scalar>& lhs, const std::vector<Scalar>& rhs);
 
 /** @brief 格式化规划问题结果 */
-std::string format_planning_result(const std::vector<long double>& solution, long double objective);
+std::string format_planning_result(const std::vector<Scalar>& solution, Scalar objective);
 
 // ============================================================================
 // 整数规划分支定界
@@ -37,18 +41,18 @@ std::string format_planning_result(const std::vector<long double>& solution, lon
 struct IntegerSearchContext {
     // 问题数据
     std::size_t variable_count;
-    const std::vector<long double>* objective;
+    const std::vector<Scalar>* objective;
     const matrix::Matrix* inequality_matrix;
-    const std::vector<long double>* inequality_rhs;
+    const std::vector<Scalar>* inequality_rhs;
     const matrix::Matrix* equality_matrix;
-    const std::vector<long double>* equality_rhs;
+    const std::vector<Scalar>* equality_rhs;
     const std::vector<std::size_t>* integer_indices;
-    long double tolerance;
+    Scalar tolerance;
 
     // 搜索状态
     bool* found;
-    long double* best_value;
-    std::vector<long double>* best_solution;
+    Scalar* best_value;
+    std::vector<Scalar>* best_solution;
     std::size_t* visited_nodes;
 
     // 搜索限制
@@ -64,8 +68,8 @@ struct IntegerSearchContext {
  * @param initial_upper 初始变量上界
  */
 void search_integer_branch_and_bound(IntegerSearchContext& ctx,
-                                      const std::vector<long double>& initial_lower,
-                                      const std::vector<long double>& initial_upper);
+                                      const std::vector<Scalar>& initial_lower,
+                                      const std::vector<Scalar>& initial_upper);
 
 }  // namespace optimization_helpers
 

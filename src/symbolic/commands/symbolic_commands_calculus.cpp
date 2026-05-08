@@ -2,6 +2,7 @@
 #include "symbolic/symbolic_expression_internal.h"
 #include "core/string_utils.h"
 #include "core/format_utils.h"
+#include "core/scalar_type.h"
 #include "math/mymath.h"
 #include <vector>
 
@@ -9,6 +10,7 @@ namespace symbolic_commands {
 
 namespace {
 using namespace symbolic_expression_internal;
+using Scalar = mymath::Scalar;
 }
 
 bool handle_calculus_commands(const SymbolicCommandContext& ctx,
@@ -20,7 +22,7 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
         if (arguments.empty()) throw std::runtime_error("diff expects at least one argument");
         if (arguments.size() == 2 && !is_identifier_text(trim_copy(arguments[1]))) {
             FunctionAnalysis analysis = ctx.build_analysis(arguments[0]);
-            const long double x = ctx.parse_decimal(arguments[1]);
+            const Scalar x = ctx.parse_decimal(arguments[1]);
             *output = format_decimal(ctx.normalize_result(static_cast<double>(analysis.derivative(x))));
             return true;
         }
@@ -63,7 +65,7 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
         std::string v; SymbolicExpression e; ctx.resolve_symbolic(arguments[0], false, &v, &e);
         auto vars = ctx.parse_symbolic_variable_arguments(arguments, 1, {v});
         const auto eval = ctx.build_scoped_evaluator(e.simplify().to_string());
-        std::vector<long double> grad;
+        std::vector<Scalar> grad;
         // Simplified numerical gradient logic
         // TODO: Full implementation
         return false;
@@ -108,17 +110,17 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
             for (std::size_t i = 0; i < dimensions; ++i) {
                 vars.push_back(trim_copy(arguments[1 + i]));
             }
-            long double norm_sq = 0.0L;
+            Scalar norm_sq = 0.0L;
             for (std::size_t i = 0; i < dimensions; ++i) {
                 const SymbolicExpression component =
                     SymbolicExpression::parse(trim_copy(arguments[1 + dimensions + i]));
-                long double value = 0.0L;
+                Scalar value = 0.0L;
                 if (component.is_number(&value)) {
                     norm_sq += value * value;
                 }
                 direction.push_back(component);
             }
-            const long double norm = mymath::sqrt(norm_sq);
+            const Scalar norm = mymath::sqrt(norm_sq);
             std::string v;
             SymbolicExpression expr;
             ctx.resolve_symbolic(arguments[0], false, &v, &expr);

@@ -138,7 +138,7 @@ RischDecisionProcedure::IntegrationResult RischDecisionProcedure::decide(
 finish:
     auto end_time = std::chrono::high_resolution_clock::now();
     active_trace->elapsed_time_ms =
-        std::chrono::duration<long double, std::milli>(end_time - start_time).count();
+        static_cast<Scalar>(std::chrono::duration<double, std::milli>(end_time - start_time).count());
 
     active_trace->final_result_type = result.type;
     active_trace->result_value = result.value;
@@ -663,7 +663,7 @@ bool RischDecisionProcedure::detect_trivial_integral(
         SymbolicExpression exp(expr.node_->right);
 
         if (base.is_variable_named(x_var)) {
-            long double n = 0.0L;
+            Scalar n = 0.0L;
             if (exp.is_number(&n) && n != -1.0L) {
                 // ∫x^n dx = x^(n+1)/(n+1)
                 *result = (base ^ SymbolicExpression::number(n + 1.0L)) /
@@ -679,7 +679,7 @@ bool RischDecisionProcedure::detect_trivial_integral(
         SymbolicExpression num(expr.node_->left);
         SymbolicExpression den(expr.node_->right);
 
-        long double num_val = 0.0L;
+        Scalar num_val = 0.0L;
         if (num.is_number(&num_val) && num_val == 1.0L &&
             den.is_variable_named(x_var)) {
             *result = make_function("ln", den);
@@ -730,7 +730,7 @@ bool RischDecisionProcedure::detect_non_elementary_pattern(
         SymbolicExpression num(expr.node_->left);
         SymbolicExpression den(expr.node_->right);
 
-        long double num_val = 0.0L;
+        Scalar num_val = 0.0L;
         if (num.is_number(&num_val) && num_val == 1.0L) {
             if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
                 SymbolicExpression arg(den.node_->left);
@@ -750,7 +750,7 @@ bool RischDecisionProcedure::detect_non_elementary_pattern(
             SymbolicExpression exp(arg.node_->right);
             if (base.is_variable_named(x_var) && exp.is_number() &&
                 exp.is_number(nullptr)) {
-                long double exp_val = 0.0L;
+                Scalar exp_val = 0.0L;
                 if (exp.is_number(&exp_val) && exp_val == 2.0) {
                     *pattern_name = "Error function: ∫exp(x²) dx = (√π/2)erfi(x)";
                     return true;  // 但这个可以用特殊函数表示

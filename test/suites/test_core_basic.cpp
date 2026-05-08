@@ -210,7 +210,7 @@ int run_core_basic_tests(int& passed, int& failed) {
     // 遍历所有成功测试用例，验证计算结果
     for (const auto& test : success_cases) {
         try {
-            const long double actual = calculator.evaluate(test.expression);
+            const auto actual = calculator.evaluate(test.expression);
             if (nearly_equal(actual, test.expected)) {
                 ++passed;
             } else {
@@ -227,7 +227,7 @@ int run_core_basic_tests(int& passed, int& failed) {
 
     // 测试大参数Gamma函数的数值稳定性
     try {
-        const long double actual = calculator.evaluate("gamma(170)");
+        const auto actual = calculator.evaluate("gamma(170)");
         if (mymath::isfinite(actual) && actual > 1e304 && actual < 1e305) {
             ++passed;
         } else {
@@ -243,7 +243,7 @@ int run_core_basic_tests(int& passed, int& failed) {
 
     // 测试小参数Beta函数的数值稳定性
     try {
-        const long double actual = calculator.evaluate("beta(100, 100)");
+        const auto actual = calculator.evaluate("beta(100, 100)");
         if (mymath::isfinite(actual) && actual > 0.0L && actual < 1e-40) {
             ++passed;
         } else {
@@ -259,7 +259,7 @@ int run_core_basic_tests(int& passed, int& failed) {
 
     // 测试大参数Bessel函数的数值稳定性
     try {
-        const long double actual = calculator.evaluate("bessel(0, 100)");
+        const auto actual = calculator.evaluate("bessel(0, 100)");
         if (mymath::isfinite(actual) && mymath::abs(actual) <= 1.0L) {
             ++passed;
         } else {
@@ -275,7 +275,7 @@ int run_core_basic_tests(int& passed, int& failed) {
 
     // 测试大参数三角函数的精度（参数约简）
     try {
-        const long double actual = calculator.evaluate("sin(100000000000000000000)");
+        const auto actual = calculator.evaluate("sin(100000000000000000000)");
         if (mymath::isfinite(actual) && mymath::abs(actual) <= 1.0L) {
             ++passed;
         } else {
@@ -291,7 +291,7 @@ int run_core_basic_tests(int& passed, int& failed) {
 
     // 测试大样本二项分布概率质量函数的数值稳定性
     try {
-        const long double pmf = calculator.evaluate("binom_pmf(2000, 1000, 0.5)");
+        const auto pmf = calculator.evaluate("binom_pmf(2000, 1000, 0.5)");
         if (mymath::isfinite(pmf) && pmf > 0.017 && pmf < 0.019) {
             ++passed;
         } else {
@@ -307,7 +307,7 @@ int run_core_basic_tests(int& passed, int& failed) {
 
     // 测试大样本二项分布累积分布函数的数值稳定性
     try {
-        const long double cdf = calculator.evaluate("binom_cdf(2000, 1000, 0.5)");
+        const auto cdf = calculator.evaluate("binom_cdf(2000, 1000, 0.5)");
         if (mymath::isfinite(cdf) && cdf > 0.50 && cdf < 0.52) {
             ++passed;
         } else {

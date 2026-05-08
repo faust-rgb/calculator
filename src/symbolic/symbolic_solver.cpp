@@ -14,6 +14,7 @@
 #include "symbolic/symbolic_expression_internal.h"
 #include "symbolic/groebner_basis.h"
 #include "math/mymath.h"
+#include "core/scalar_type.h"
 
 #include <algorithm>
 #include <cmath>
@@ -21,6 +22,8 @@
 #include <regex>
 
 namespace symbolic_solver {
+
+using Scalar = mymath::Scalar;
 
 namespace {
 
@@ -214,11 +217,14 @@ Solution SymbolicSolver::solve_quadratic(
     c = c.simplify();
 
     // 检查 a 是否为零
-    long double a_val = 0.0L;
-    if (a.is_number(&a_val) && mymath::is_near_zero(a_val, 1e-15)) {
-        // 退化为线性方程
-        if (b.is_number(nullptr)) {
-            return solve_linear(make_add(make_multiply(b, SymbolicExpression::variable(variable)), c), variable);
+    Scalar a_ld = 0.0L;
+    if (a.is_number(&a_ld)) {
+        Scalar a_val(a_ld);
+        if (mymath::precise128::abs(a_val) < Scalar(1e-15L)) {
+            // 退化为线性方程
+            if (b.is_number(nullptr)) {
+                return solve_linear(make_add(make_multiply(b, SymbolicExpression::variable(variable)), c), variable);
+            }
         }
     }
 
@@ -229,15 +235,16 @@ Solution SymbolicSolver::solve_quadratic(
     ).simplify();
 
     // 检查判别式是否为数值
-    long double disc_val = 0.0L;
-    if (discriminant.is_number(&disc_val)) {
-        if (mymath::is_near_zero(disc_val, 1e-15)) {
+    Scalar disc_ld = 0.0L;
+    if (discriminant.is_number(&disc_ld)) {
+        Scalar disc_val(disc_ld);
+        if (mymath::precise128::abs(disc_val) < Scalar(1e-15L)) {
             // 重根: x = -b/(2a)
             SymbolicExpression x = make_negate(make_divide(b, make_multiply(SymbolicExpression::number(2.0), a))).simplify();
             return Solution::single(x, "quadratic_repeated_root");
         }
 
-        if (disc_val > 0) {
+        if (disc_val > Scalar(0)) {
             // 两个实根
             SymbolicExpression sqrt_disc = make_function("sqrt", discriminant);
             SymbolicExpression two_a = make_multiply(SymbolicExpression::number(2.0), a);
@@ -310,66 +317,69 @@ Solution SymbolicSolver::solve_cubic(
     d = d.simplify();
 
     // 检查是否为数值系数
-    long double a_val = 0.0L, b_val = 0.0L, c_val = 0.0L, d_val = 0.0L;
-    bool all_numeric = a.is_number(&a_val) && b.is_number(&b_val) &&
-                       c.is_number(&c_val) && d.is_number(&d_val);
+    Scalar a_ld = 0.0L, b_ld = 0.0L, c_ld = 0.0L, d_ld = 0.0L;
+    bool all_numeric = a.is_number(&a_ld) && b.is_number(&b_ld) &&
+                       c.is_number(&c_ld) && d.is_number(&d_ld);
 
-    if (all_numeric && !mymath::is_near_zero(a_val, 1e-15)) {
-        // 规范化为 x^3 + px + q = 0
-        long double p = (3.0 * a_val * c_val - b_val * b_val) / (3.0 * a_val * a_val);
-        long double q = (2.0 * b_val * b_val * b_val - 9.0 * a_val * b_val * c_val + 27.0 * a_val * a_val * d_val) /
-                   (27.0 * a_val * a_val * a_val);
+    if (all_numeric) {
+        Scalar a_val(a_ld), b_val(b_ld), c_val(c_ld), d_val(d_ld);
+        if (!mymath::precise128::is_near_zero(a_val, Scalar(1e-15L))) {
+            // 规范化为 x^3 + px + q = 0
+            Scalar p = (Scalar(3) * a_val * c_val - b_val * b_val) / (Scalar(3) * a_val * a_val);
+            Scalar q = (Scalar(2) * b_val * b_val * b_val - Scalar(9) * a_val * b_val * c_val + Scalar(27) * a_val * a_val * d_val) /
+                       (Scalar(27) * a_val * a_val * a_val);
 
-        // 判别式
-        long double delta = (q * q / 4.0) + (p * p * p / 27.0);
+            // 判别式
+            Scalar delta = (q * q / Scalar(4)) + (p * p * p / Scalar(27));
 
-        std::vector<SymbolicExpression> roots;
+            std::vector<SymbolicExpression> roots;
 
-        if (mymath::is_near_zero(delta, 1e-15)) {
-            // 重根情况
-            if (mymath::is_near_zero(p, 1e-15) && mymath::is_near_zero(q, 1e-15)) {
-                // 三重根 x = -b/(3a)
-                long double x = -b_val / (3.0 * a_val);
-                roots.push_back(SymbolicExpression::number(x));
+            if (mymath::precise128::is_near_zero(delta, Scalar(1e-15L))) {
+                // 重根情况
+                if (mymath::precise128::is_near_zero(p, Scalar(1e-15L)) && mymath::precise128::is_near_zero(q, Scalar(1e-15L))) {
+                    // 三重根 x = -b/(3a)
+                    Scalar x = -b_val / (Scalar(3) * a_val);
+                    roots.push_back(SymbolicExpression::number((x)));
+                } else {
+                    // 一个单根，一个二重根
+                    Scalar x1 = Scalar(3) * q / p - b_val / (Scalar(3) * a_val);
+                    Scalar x2 = -Scalar(3) * q / (Scalar(2) * p) - b_val / (Scalar(3) * a_val);
+                    roots.push_back(SymbolicExpression::number((x1)));
+                    roots.push_back(SymbolicExpression::number((x2)));
+                }
+            } else if (delta > Scalar(0)) {
+                // 一个实根，两个复根
+                Scalar sqrt_delta = mymath::precise128::sqrt(delta);
+                Scalar u = mymath::precise128::cbrt(-q / Scalar(2) + sqrt_delta);
+                Scalar v = mymath::precise128::cbrt(-q / Scalar(2) - sqrt_delta);
+
+                Scalar x1 = u + v - b_val / (Scalar(3) * a_val);
+                roots.push_back(SymbolicExpression::number((x1)));
+
+                // 复根
+                Scalar real_part = -(u + v) / Scalar(2) - b_val / (Scalar(3) * a_val);
+                Scalar imag_part = mymath::precise128::sqrt(Scalar(3)) * (u - v) / Scalar(2);
+
+                roots.push_back(make_function("complex",
+                    SymbolicExpression::vector({SymbolicExpression::number((real_part)),
+                                               SymbolicExpression::number((imag_part))})));
+                roots.push_back(make_function("complex",
+                    SymbolicExpression::vector({SymbolicExpression::number((real_part)),
+                                               SymbolicExpression::number((-imag_part))})));
             } else {
-                // 一个单根，一个二重根
-                long double x1 = 3.0 * q / p - b_val / (3.0 * a_val);
-                long double x2 = -3.0 * q / (2.0 * p) - b_val / (3.0 * a_val);
-                roots.push_back(SymbolicExpression::number(x1));
-                roots.push_back(SymbolicExpression::number(x2));
+                // 三个实根 (使用三角形式)
+                Scalar r = mymath::precise128::sqrt(-p * p * p / Scalar(27));
+                Scalar theta = mymath::precise128::acos(-q / (Scalar(2) * r));
+
+                for (int k = 0; k < 3; ++k) {
+                    Scalar xk = Scalar(2) * mymath::precise128::cbrt(r) * mymath::precise128::cos((theta + Scalar(2) * mymath::precise128::pi() * Scalar(k)) / Scalar(3)) -
+                               b_val / (Scalar(3) * a_val);
+                    roots.push_back(SymbolicExpression::number((xk)));
+                }
             }
-        } else if (delta > 0) {
-            // 一个实根，两个复根
-            long double sqrt_delta = mymath::sqrt(delta);
-            long double u = mymath::cbrt(-q / 2.0 + sqrt_delta);
-            long double v = mymath::cbrt(-q / 2.0 - sqrt_delta);
 
-            long double x1 = u + v - b_val / (3.0 * a_val);
-            roots.push_back(SymbolicExpression::number(x1));
-
-            // 复根
-            long double real_part = -(u + v) / 2.0 - b_val / (3.0 * a_val);
-            long double imag_part = mymath::sqrt(3.0) * (u - v) / 2.0;
-
-            roots.push_back(make_function("complex",
-                SymbolicExpression::vector({SymbolicExpression::number(real_part),
-                                           SymbolicExpression::number(imag_part)})));
-            roots.push_back(make_function("complex",
-                SymbolicExpression::vector({SymbolicExpression::number(real_part),
-                                           SymbolicExpression::number(-imag_part)})));
-        } else {
-            // 三个实根 (使用三角形式)
-            long double r = mymath::sqrt(-p * p * p / 27.0);
-            long double theta = mymath::acos(-q / (2.0 * r));
-
-            for (int k = 0; k < 3; ++k) {
-                long double xk = 2.0 * mymath::cbrt(r) * mymath::cos((theta + 2.0 * mymath::kPi * k) / 3.0) -
-                           b_val / (3.0 * a_val);
-                roots.push_back(SymbolicExpression::number(xk));
-            }
+            return Solution::multiple(roots, "cardano_formula");
         }
-
-        return Solution::multiple(roots, "cardano_formula");
     }
 
     // 符号系数：返回 RootOf 表示
@@ -386,9 +396,9 @@ Solution SymbolicSolver::solve_quartic(
     // Ferrari 方法的实现较为复杂，这里使用数值回退
 
     // 检查是否为数值系数
-    std::vector<long double> num_coeffs;
+    std::vector<Scalar> num_coeffs;
     for (const auto& c : coeffs) {
-        long double val = 0.0L;
+        Scalar val = 0.0L;
         if (c.is_number(&val)) {
             num_coeffs.push_back(val);
         } else {
@@ -501,12 +511,12 @@ bool SymbolicSolver::extract_polynomial_coefficients(
     // 假设表达式已经是多项式形式
 
     // 回退：使用数值方法估计系数
-    long double test_values[] = {0.0L, 1.0L, 2.0, 3.0, 4.0};
-    std::vector<long double> values;
-    for (long double t : test_values) {
+    Scalar test_values[] = {0.0L, 1.0L, 2.0, 3.0, 4.0};
+    std::vector<Scalar> values;
+    for (Scalar t : test_values) {
         SymbolicExpression sub = expr.substitute(variable, SymbolicExpression::number(t));
         sub = sub.simplify();
-        long double val = 0.0L;
+        Scalar val = 0.0L;
         if (sub.is_number(&val)) {
             values.push_back(val);
         } else {
@@ -517,17 +527,17 @@ bool SymbolicSolver::extract_polynomial_coefficients(
     // 从值反推系数（简化版本，仅适用于低次）
     if (values.size() >= 3) {
         // 假设是二次多项式
-        long double f0 = values[0];
-        long double f1 = values[1];
-        long double f2 = values[2];
+        Scalar f0 = values[0];
+        Scalar f1 = values[1];
+        Scalar f2 = values[2];
 
         // f(0) = c
         // f(1) = a + b + c
         // f(2) = 4a + 2b + c
 
-        long double c = f0;
-        long double a = (f2 - 2.0 * f1 + f0) / 2.0;
-        long double b = f1 - f0 - a;
+        Scalar c = f0;
+        Scalar a = (f2 - 2.0 * f1 + f0) / 2.0;
+        Scalar b = f1 - f0 - a;
 
         coeffs->push_back(SymbolicExpression::number(c));
         coeffs->push_back(SymbolicExpression::number(b));

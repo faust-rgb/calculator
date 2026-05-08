@@ -24,7 +24,7 @@
  * @param value 输出参数，用于存储找到的常量值
  * @return 如果找到常量返回 true，否则返回 false
  */
-bool lookup_builtin_constant(const std::string& name, long double* value) {
+bool lookup_builtin_constant(const std::string& name, Scalar* value) {
     // 数学常量 pi
     if (name == "pi") {
         *value = mymath::kPi;

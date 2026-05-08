@@ -15,6 +15,7 @@
 #include "plot_renderer.h"
 #include "svg_renderer.h"
 #include "plot_styles.h"
+#include "core/scalar_type.h"
 #include "math/mymath.h"
 #include "string_utils.h"
 #include "parser/unified_expression_parser.h"
@@ -26,6 +27,8 @@
 #include <stdexcept>
 
 namespace plot {
+
+using Scalar = mymath::Scalar;
 
 /**
  * @brief 对多个表达式进行采样，生成数据系列
@@ -55,15 +58,15 @@ static std::vector<DataSeries> sample_multiple_series(const PlotContext& ctx, co
     }
 
     std::string var_name = "x";
-    long double start = -10, end = 10;
+    Scalar start = Scalar(-10), end = Scalar(10);
     int num_points = 100;
     size_t consumed = 1;
 
     UnifiedExpressionParser parser(ctx.variables, ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
 
     if (args.size() >= 3 && !trim_copy(args[1]).empty() && args[1][0] != ':' && !is_identifier_text(trim_copy(args[1]))) {
-        start = parser.evaluate(args[1]);
-        end = parser.evaluate(args[2]);
+        start = Scalar(parser.evaluate(args[1]));
+        end = Scalar(parser.evaluate(args[2]));
         consumed = 3;
         if (args.size() >= 4 && !args[3].empty() && args[3][0] != ':') {
              num_points = static_cast<int>(parser.evaluate(args[3]));
@@ -71,8 +74,8 @@ static std::vector<DataSeries> sample_multiple_series(const PlotContext& ctx, co
         }
     } else if (args.size() >= 4 && is_identifier_text(trim_copy(args[1]))) {
         var_name = trim_copy(args[1]);
-        start = parser.evaluate(args[2]);
-        end = parser.evaluate(args[3]);
+        start = Scalar(parser.evaluate(args[2]));
+        end = Scalar(parser.evaluate(args[3]));
         consumed = 4;
         if (args.size() >= 5 && !args[4].empty() && args[4][0] != ':') {
              num_points = static_cast<int>(parser.evaluate(args[4]));
@@ -92,24 +95,24 @@ static std::vector<DataSeries> sample_multiple_series(const PlotContext& ctx, co
         series.style.label = expressions[s];
         series.style.color = Color::from_index(s).hex;
         series.points.reserve(num_points);
-        
+
         std::map<std::string, StoredValue> scoped_variables = ctx.variables.snapshot();
         for (int i = 0; i < num_points; ++i) {
-            long double x = start + (end - start) * i / (num_points - 1);
+            Scalar x = start + (end - start) * Scalar(i) / Scalar(num_points - 1);
             StoredValue x_val;
-            x_val.decimal = x;
+            x_val.decimal = x.to_long_double();
             scoped_variables[var_name] = x_val;
-            
+
             try {
                 // We need to re-create parser or update its variable resolver for each x
-                // But parser holds a reference to variables. 
+                // But parser holds a reference to variables.
                 // So we use a local resolver.
                 VariableResolver resolver(&scoped_variables, nullptr);
                 UnifiedExpressionParser local_parser(resolver, ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
-                long double y = local_parser.evaluate(expressions[s]);
-                series.points.push_back({x, y});
+                Scalar y = local_parser.evaluate(expressions[s]);
+                series.points.push_back({x.to_long_double(), y});
             } catch (...) {
-                series.points.push_back({x, std::nan("")});
+                series.points.push_back({x.to_long_double(), std::nan("")});
             }
         }
         all_series.push_back(std::move(series));
@@ -149,10 +152,10 @@ std::string handle_imshow_command(const PlotContext& ctx, const std::vector<std:
     HeatmapOptions options = parse_heatmap_options(arguments, 1);
 
     // 生成坐标轴（默认使用索引）
-    std::vector<long double> x_coords(z.cols);
-    std::vector<long double> y_coords(z.rows);
-    for (size_t i = 0; i < z.cols; ++i) x_coords[i] = static_cast<long double>(i);
-    for (size_t i = 0; i < z.rows; ++i) y_coords[i] = static_cast<long double>(i);
+    std::vector<Scalar> x_coords(z.cols);
+    std::vector<Scalar> y_coords(z.rows);
+    for (size_t i = 0; i < z.cols; ++i) x_coords[i] = static_cast<Scalar>(i);
+    for (size_t i = 0; i < z.rows; ++i) y_coords[i] = static_cast<Scalar>(i);
 
     std::string svg = SvgRenderer::render_heatmap(z, x_coords, y_coords, options);
 
@@ -187,7 +190,7 @@ std::string handle_bar_command(const PlotContext& ctx, const std::vector<std::st
     }
 
     std::vector<std::string> labels;
-    std::vector<long double> values;
+    std::vector<Scalar> values;
     size_t next_idx = 0;
 
     auto eval = [&](const std::string& e) {
@@ -345,7 +348,7 @@ std::string handle_hist_command(const PlotContext& ctx, const std::vector<std::s
         throw std::runtime_error("hist expects (data, ...)");
     }
 
-    std::vector<long double> data;
+    std::vector<Scalar> data;
 
     auto eval = [&](const std::string& e) {
         return parse_decimal_expression(e, ctx.variables, ctx.functions, ctx.scalar_functions, ctx.has_script_function, ctx.invoke_script_function);

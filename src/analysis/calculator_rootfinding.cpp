@@ -10,6 +10,7 @@
 
 #include "analysis/calculator_rootfinding.h"
 
+#include "core/scalar_type.h"
 #include "math/mymath.h"
 #include "parser/unified_expression_parser.h"
 #include "symbolic/symbolic_expression_internal.h"
@@ -26,6 +27,8 @@ namespace rootfinding {
 
 namespace {
 
+using Scalar = mymath::Scalar;
+
 /**
  * @brief 泛型绝对值函数
  */
@@ -35,7 +38,7 @@ T t_abs(const T& val) {
         return std::abs(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::abs(val);
-    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+    } else if constexpr (std::is_same_v<T, Scalar>) {
         return mymath::precise128::abs(val);
     } else {
         return val < T(static_cast<long long>(0)) ? -val : val;
@@ -51,7 +54,7 @@ T t_sqrt(const T& val) {
         return std::sqrt(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::sqrt(val);
-    } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
+    } else if constexpr (std::is_same_v<T, Scalar>) {
         return mymath::precise128::sqrt(val);
     } else {
         throw std::runtime_error("t_sqrt not implemented for this type");
@@ -64,8 +67,8 @@ struct InternalType {
 };
 
 template <>
-struct InternalType<long double> {
-    using type = mymath::float128_t;
+struct InternalType<Scalar> {
+    using type = Scalar;
 };
 
 template <typename T>
@@ -78,7 +81,7 @@ internal_t<T> to_internal(T val) {
 
 template <typename T>
 T from_internal(internal_t<T> val) {
-    if constexpr (std::is_same_v<T, long double>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         return val.to_long_double();
     } else {
         return static_cast<T>(val);
@@ -130,7 +133,7 @@ using namespace symbolic_expression_internal;
  */
 template <typename T>
 T root_function_tolerance(T fx) {
-    if constexpr (std::is_same_v<T, mymath::float128_t>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         return T(1e-11L) * t_max(T(static_cast<long long>(1)), t_abs(fx));
     }
     return T(1e-10L) * t_max(T(static_cast<long long>(1)), t_abs(fx));
@@ -143,7 +146,7 @@ T root_function_tolerance(T fx) {
  */
 template <typename T>
 T root_position_tolerance(T x) {
-    if constexpr (std::is_same_v<T, mymath::float128_t>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         return T(1e-12L) * t_max(T(static_cast<long long>(1)), t_abs(x));
     }
     return T(1e-10L) * t_max(T(static_cast<long long>(1)), t_abs(x));
@@ -154,7 +157,7 @@ T root_position_tolerance(T x) {
  */
 template <typename T>
 T root_derivative_step(T x) {
-    if constexpr (std::is_same_v<T, mymath::float128_t>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         // 对于 float128, 取长浮点数的最佳步长
         return T(1e-7L) * t_max(T(static_cast<long long>(1)), t_abs(x));
     }
@@ -443,7 +446,7 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
             }
 
             matrix::Matrix solution = matrix::solve(a, b);
-            for (long double& val : solution.data) {
+            for (Scalar& val : solution.data) {
                 val = ctx.normalize_result(val);
             }
             *output = solution.to_string();
@@ -477,35 +480,35 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
                     SymbolicExpression equation = symbolic_expression_internal::make_subtract(lhs, rhs).simplify();
 
                     // 尝试提取多项式系数
-                    std::vector<long double> coeffs;
+                    std::vector<Scalar> coeffs;
                     if (equation.polynomial_coefficients(var, &coeffs)) {
                         if (coeffs.size() == 2) {
                             // 线性方程 a*x + b = 0
-                            long double a = coeffs[1], b = coeffs[0];
+                            Scalar a = coeffs[1], b = coeffs[0];
                             if (mymath::is_near_zero(a, 1e-15)) {
                                 *output = "no solution (coefficient is zero)";
                             } else {
-                                long double x = -b / a;
+                                Scalar x = -b / a;
                                 *output = format_decimal(ctx.normalize_result(x));
                             }
                             return true;
                         }
                         if (coeffs.size() == 3) {
                             // 二次方程 a*x^2 + b*x + c = 0
-                            long double a = coeffs[2], b = coeffs[1], c = coeffs[0];
-                            long double disc = b * b - 4 * a * c;
+                            Scalar a = coeffs[2], b = coeffs[1], c = coeffs[0];
+                            Scalar disc = b * b - 4 * a * c;
                             if (mymath::is_near_zero(disc, 1e-12)) {
-                                long double x = -b / (2 * a);
+                                Scalar x = -b / (2 * a);
                                 *output = format_decimal(ctx.normalize_result(x));
                             } else if (disc > 0) {
-                                long double x1 = (-b - mymath::sqrt(disc)) / (2 * a);
-                                long double x2 = (-b + mymath::sqrt(disc)) / (2 * a);
+                                Scalar x1 = (-b - mymath::sqrt(disc)) / (2 * a);
+                                Scalar x2 = (-b + mymath::sqrt(disc)) / (2 * a);
                                 *output = "{" + format_decimal(ctx.normalize_result(x1)) + ", " +
                                           format_decimal(ctx.normalize_result(x2)) + "}";
                             } else {
                                 // 复根
-                                long double real = -b / (2 * a);
-                                long double imag = mymath::sqrt(-disc) / (2 * a);
+                                Scalar real = -b / (2 * a);
+                                Scalar imag = mymath::sqrt(-disc) / (2 * a);
                                 *output = "{complex(" + format_decimal(ctx.normalize_result(real)) + ", " +
                                           format_decimal(ctx.normalize_result(imag)) + "), complex(" +
                                           format_decimal(ctx.normalize_result(real)) + ", " +
@@ -526,15 +529,15 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
             // 情况 3: 数值求根 solve(f, x0)
             const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
 
-            std::function<long double(const std::vector<std::pair<std::string, long double>>&)> evaluate_derivative = nullptr;
+            std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)> evaluate_derivative = nullptr;
             if (ctx.get_derivative_expression) {
                 const std::string deriv_expr = ctx.get_derivative_expression(arguments[0], "x");
                 if (!deriv_expr.empty()) {
                     evaluate_derivative = ctx.build_scoped_evaluator(deriv_expr);
                 }
             }
-            long double x = ctx.parse_decimal(arguments[1]);
-            long double result = newton_solve<long double>(evaluate_expression, x, ctx.normalize_result, evaluate_derivative);
+            Scalar x = ctx.parse_decimal(arguments[1]);
+            Scalar result = newton_solve<Scalar>(evaluate_expression, x, ctx.normalize_result, evaluate_derivative);
             *output = format_decimal(result);
             return true;
         }
@@ -546,9 +549,9 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
             throw std::runtime_error("bisect expects expression, a, b");
         }
         const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
-        long double left = ctx.parse_decimal(arguments[1]);
-        long double right = ctx.parse_decimal(arguments[2]);
-        long double result = bisection_solve<long double>(evaluate_expression, left, right, ctx.normalize_result);
+        Scalar left = ctx.parse_decimal(arguments[1]);
+        Scalar right = ctx.parse_decimal(arguments[2]);
+        Scalar result = bisection_solve<Scalar>(evaluate_expression, left, right, ctx.normalize_result);
         *output = format_decimal(result);
         return true;
     }
@@ -558,9 +561,9 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
             throw std::runtime_error("secant expects expression, x0, x1");
         }
         const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
-        long double x0 = ctx.parse_decimal(arguments[1]);
-        long double x1 = ctx.parse_decimal(arguments[2]);
-        long double result = secant_solve<long double>(evaluate_expression, x0, x1, ctx.normalize_result);
+        Scalar x0 = ctx.parse_decimal(arguments[1]);
+        Scalar x1 = ctx.parse_decimal(arguments[2]);
+        Scalar result = secant_solve<Scalar>(evaluate_expression, x0, x1, ctx.normalize_result);
         *output = format_decimal(result);
         return true;
     }
@@ -570,8 +573,8 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
             throw std::runtime_error("fixed_point expects expression, x0");
         }
         const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
-        long double x = ctx.parse_decimal(arguments[1]);
-        long double result = fixed_point_solve<long double>(evaluate_expression, x, ctx.normalize_result);
+        Scalar x = ctx.parse_decimal(arguments[1]);
+        Scalar result = fixed_point_solve<Scalar>(evaluate_expression, x, ctx.normalize_result);
         *output = format_decimal(result);
         return true;
     }
@@ -636,11 +639,11 @@ template PreciseDecimal newton_solve<PreciseDecimal>(
     const std::function<PreciseDecimal(PreciseDecimal)>&,
     const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&);
 
-template long double newton_solve<long double>(
-    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
-    long double,
-    const std::function<long double(long double)>&,
-    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&);
+template Scalar newton_solve<Scalar>(
+    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
+    Scalar,
+    const std::function<Scalar(Scalar)>&,
+    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&);
 
 template PreciseDecimal bisection_solve<PreciseDecimal>(
     const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
@@ -648,11 +651,11 @@ template PreciseDecimal bisection_solve<PreciseDecimal>(
     PreciseDecimal,
     const std::function<PreciseDecimal(PreciseDecimal)>&);
 
-template long double bisection_solve<long double>(
-    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
-    long double,
-    long double,
-    const std::function<long double(long double)>&);
+template Scalar bisection_solve<Scalar>(
+    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
+    Scalar,
+    Scalar,
+    const std::function<Scalar(Scalar)>&);
 
 template PreciseDecimal secant_solve<PreciseDecimal>(
     const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
@@ -660,20 +663,20 @@ template PreciseDecimal secant_solve<PreciseDecimal>(
     PreciseDecimal,
     const std::function<PreciseDecimal(PreciseDecimal)>&);
 
-template long double secant_solve<long double>(
-    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
-    long double,
-    long double,
-    const std::function<long double(long double)>&);
+template Scalar secant_solve<Scalar>(
+    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
+    Scalar,
+    Scalar,
+    const std::function<Scalar(Scalar)>&);
 
 template PreciseDecimal fixed_point_solve<PreciseDecimal>(
     const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
     PreciseDecimal,
     const std::function<PreciseDecimal(PreciseDecimal)>&);
 
-template long double fixed_point_solve<long double>(
-    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
-    long double,
-    const std::function<long double(long double)>&);
+template Scalar fixed_point_solve<Scalar>(
+    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
+    Scalar,
+    const std::function<Scalar(Scalar)>&);
 
 }  // namespace rootfinding

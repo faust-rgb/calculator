@@ -42,8 +42,8 @@ public:
         normalize();
     }
 
-    // 从 long double 构造 (近似)
-    static ExactRational from_double(long double value, int64_t max_den = 1000000);
+    // 从 Scalar 构造 (近似)
+    static ExactRational from_double(Scalar value, int64_t max_den = 1000000);
 
     void normalize() {
         if (denominator < 0) {
@@ -99,8 +99,8 @@ public:
     bool operator==(const ExactRational& other) const { return compare(other) == 0; }
     bool operator!=(const ExactRational& other) const { return compare(other) != 0; }
 
-    long double to_double() const {
-        return static_cast<long double>(numerator) / static_cast<long double>(denominator);
+    Scalar to_double() const {
+        return Scalar(static_cast<long long>(numerator)) / Scalar(static_cast<long long>(denominator));
     }
 
     bool is_zero() const { return numerator == 0; }

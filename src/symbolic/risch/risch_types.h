@@ -365,7 +365,7 @@ struct AlgebraicNumberRepresentation {
     // 创建整数
     static AlgebraicNumberRepresentation integer(int n) {
         std::vector<SymbolicExpression> coeffs = {
-            SymbolicExpression::number(-static_cast<long double>(n)),
+            SymbolicExpression::number(-(n)),
             SymbolicExpression::number(1.0L)
         };
         AlgebraicNumberRepresentation num;
@@ -379,7 +379,7 @@ struct AlgebraicNumberRepresentation {
     // 创建有理数
     static AlgebraicNumberRepresentation rational(int p, int q) {
         std::vector<SymbolicExpression> coeffs = {
-            SymbolicExpression::number(-static_cast<long double>(p) / static_cast<long double>(q)),
+            SymbolicExpression::number(-(p) / (q)),
             SymbolicExpression::number(1.0L)
         };
         AlgebraicNumberRepresentation num;
@@ -423,8 +423,8 @@ struct AlgebraicExtensionInfo {
         // 导数: t' = u'/(n*t^(n-1)) = u'/(n*t^(n-1))
         SymbolicExpression t = SymbolicExpression::variable(t_name);
         SymbolicExpression u_deriv = u.derivative(x_var).simplify();
-        SymbolicExpression t_n_minus_1 = symbolic_expression_internal::make_power(t, SymbolicExpression::number(static_cast<long double>(n - 1)));
-        ext.derivation = (u_deriv / (SymbolicExpression::number(static_cast<long double>(n)) * t_n_minus_1)).simplify();
+        SymbolicExpression t_n_minus_1 = symbolic_expression_internal::make_power(t, SymbolicExpression::number((n - 1)));
+        ext.derivation = (u_deriv / (SymbolicExpression::number((n)) * t_n_minus_1)).simplify();
 
         // 创建 RootOf 表示
         ext.root_of_rep = RootOfRepresentation::create(ext.minimal_polynomial, 0, t_name, x_var);
@@ -593,7 +593,7 @@ struct QuotientRingElement {
                 if (i == 0) {
                     result = (result + coefficients[i]).simplify();
                 } else {
-                    result = (result + coefficients[i] * symbolic_expression_internal::make_power(t, SymbolicExpression::number(static_cast<long double>(i)))).simplify();
+                    result = (result + coefficients[i] * symbolic_expression_internal::make_power(t, SymbolicExpression::number((i)))).simplify();
                 }
             }
         }
@@ -714,7 +714,7 @@ struct QuotientRingElement {
         // gcd 是常数 c，需要将 s 除以 c 得到真正的逆元
         // a*s + modulus*t = c => a*(s/c) + modulus*(t/c) = 1
         SymbolicExpression gcd_const = g.coefficient(0);
-        long double gcd_val;
+        Scalar gcd_val;
         if (!gcd_const.is_number(&gcd_val) || mymath::abs(gcd_val) < 1e-10) {
             // gcd 不是数值常数或为零，无法处理
             return false;
@@ -773,7 +773,7 @@ struct QuotientRingElement {
         SymbolicExpression result = SymbolicExpression::number(0.0L);
         for (int i = 0; i < modulus_degree; ++i) {
             if (i == 0) {
-                result = (result + SymbolicExpression::number(static_cast<long double>(modulus_degree)) * coefficients[i]).simplify();
+                result = (result + SymbolicExpression::number((modulus_degree)) * coefficients[i]).simplify();
             }
             // 对于 t^i (i > 0)，迹为 0
         }
@@ -823,7 +823,7 @@ public:
             result.coefficients[i] = (result.coefficients[i] + a_i_deriv).simplify();
 
             if (i > 0) {
-                SymbolicExpression term = (SymbolicExpression::number(static_cast<long double>(i)) *
+                SymbolicExpression term = (SymbolicExpression::number((i)) *
                                           coefficients[i] * t_prime).simplify();
                 result.coefficients[i - 1] = (result.coefficients[i - 1] + term).simplify();
             }

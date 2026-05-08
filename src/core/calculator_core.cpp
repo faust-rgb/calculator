@@ -10,6 +10,7 @@
 // ============================================================================
 
 #include "core/calculator_internal_types.h"
+#include "core/scalar_type.h"
 #include "parser/unified_expression_parser.h"
 #include "parser/command_parser.h"
 #include "analysis/function_analysis.h"
@@ -255,11 +256,14 @@ std::vector<std::string> Calculator::custom_function_names() const {
     return names;
 }
 
-long double Calculator::normalize_result(long double value) {
+Scalar Calculator::normalize_result(Scalar value) {
+    using Scalar = mymath::Scalar;
     if (!mymath::isfinite(value)) return value;
-    if (mymath::abs(value) < kDisplayZeroEps) return 0.0L;
-    if (mymath::abs(value) > kDisplayIntegerEps && is_integer_double(value, kDisplayIntegerEps)) {
-        return static_cast<long double>(round_to_long_long(value));
+    Scalar v(value);
+    if (mymath::precise128::abs(v) < Scalar(kDisplayZeroEps)) return 0.0L;
+    if (mymath::precise128::abs(v) > Scalar(kDisplayIntegerEps) &&
+        is_integer_double(value, kDisplayIntegerEps)) {
+        return (round_to_long_long(value));
     }
     return value;
 }
@@ -305,11 +309,11 @@ bool Calculator::try_evaluate_implicit(std::string_view expression,
 // 基础求值与显示
 // ============================================================================
 
-long double Calculator::evaluate(const std::string& expression) {
+Scalar Calculator::evaluate(const std::string& expression) {
     return normalize_result(evaluate_raw(expression));
 }
 
-long double Calculator::evaluate_raw(const std::string& expression) {
+Scalar Calculator::evaluate_raw(const std::string& expression) {
     const StoredValue value = evaluate_expression_value(this, impl_.get(), expression, false);
     if (value.is_matrix || value.is_complex) {
         throw std::runtime_error("matrix or complex expression cannot be used as a scalar");
@@ -498,7 +502,7 @@ std::string Calculator::factor_expression(const std::string& expression) const {
     }
 
     // 先允许 inside 是一个普通表达式或变量，再检查最终值是否为整数。
-    const long double value = parse_decimal_expression(std::string(call->arguments[0].text), VariableResolver(&impl_->variables, nullptr), &impl_->functions, &impl_->scalar_functions);
+    const Scalar value = parse_decimal_expression(std::string(call->arguments[0].text), VariableResolver(&impl_->variables, nullptr), &impl_->functions, &impl_->scalar_functions);
     if (!is_integer_double(value)) {
         throw std::runtime_error("factor only accepts integers");
     }
@@ -525,7 +529,7 @@ std::string Calculator::plot_expression(const std::string& expression) const {
     ctx.has_script_function = [this](const std::string& name) {
         return has_visible_script_function(impl_.get(), name);
     };
-    ctx.invoke_script_function = [this](const std::string& name, const std::vector<long double>& args) {
+    ctx.invoke_script_function = [this](const std::string& name, const std::vector<Scalar>& args) {
         return invoke_script_function_decimal(const_cast<Calculator*>(this), impl_.get(), name, args);
     };
 
@@ -540,7 +544,7 @@ std::string Calculator::export_variable(const std::string& line) const {
     ctx.has_script_function = [this](const std::string& name) {
         return has_visible_script_function(impl_.get(), name);
     };
-    ctx.invoke_script_function = [this](const std::string& name, const std::vector<long double>& args) {
+    ctx.invoke_script_function = [this](const std::string& name, const std::vector<Scalar>& args) {
         return invoke_script_function_decimal(const_cast<Calculator*>(this), impl_.get(), name, args);
     };
     return plot::handle_export_command(ctx, line);
@@ -588,7 +592,7 @@ std::string Calculator::save_state(const std::string& path) const {
             out << "VAR\t" << encode_state_field(name)
                 << "\tMATRIX\t" << value.matrix.rows
                 << '\t' << value.matrix.cols;
-            for (long double element : value.matrix.data) {
+            for (Scalar element : value.matrix.data) {
                 out << '\t' << std::setprecision(17) << element;
             }
             out << '\n';

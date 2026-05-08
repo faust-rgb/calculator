@@ -99,24 +99,23 @@ SymbolicExpression SymbolicExpression::substitute_expression(
     const SymbolicExpression& replacement) const {
     return substitute_expression_impl(*this, target, replacement).simplify();
 }
-
 // ============================================================================
 // 边界参数解析实现
 // ============================================================================
 
-long double BoundArgument::to_double() const {
+Scalar BoundArgument::to_scalar() const {
     switch (kind) {
         case BoundKind::kFinite:
             return value;
         case BoundKind::kPosInf:
-            return mymath::infinity();
+            return mymath::precise128::infinity();
         case BoundKind::kNegInf:
-            return -mymath::infinity();
+            return -mymath::precise128::infinity();
     }
     return value;
 }
 
-BoundArgument BoundArgument::finite(long double v) {
+BoundArgument BoundArgument::finite(Scalar v) {
     BoundArgument result;
     result.kind = BoundKind::kFinite;
     result.value = v;
@@ -189,7 +188,7 @@ BoundArgument parse_bound_argument(const std::string& text) {
     // 尝试解析为数值
     try {
         // 使用简单的数值解析
-        long double num = 0.0L;
+        Scalar num = 0.0L;
         bool has_digit = false;
         std::size_t i = 0;
 
@@ -203,7 +202,7 @@ BoundArgument parse_bound_argument(const std::string& text) {
         // 解析小数部分
         if (i < value.size() && value[i] == '.') {
             ++i;
-            long double place = 0.1;
+            Scalar place = 0.1;
             while (i < value.size() && std::isdigit(static_cast<unsigned char>(value[i]))) {
                 num += (value[i] - '0') * place;
                 place *= 0.1;

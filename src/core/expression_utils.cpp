@@ -6,6 +6,7 @@
 // ============================================================================
 
 #include "expression_utils.h"
+#include "core/scalar_type.h"
 #include "format_utils.h"
 #include "math/mymath.h"
 
@@ -17,6 +18,10 @@
 // 数值容差
 // ============================================================================
 
+namespace {
+using Scalar = mymath::Scalar;
+} // namespace
+
 /**
  * @brief 计算根位置容差
  * @param value 参考值
@@ -24,8 +29,9 @@
  *
  * 使用自适应容差，对于大值放宽绝对误差要求。
  */
-long double root_position_tolerance(long double value) {
-    return 1e-10 * std::max(1.0L, mymath::abs(value));
+Scalar root_position_tolerance(Scalar value) {
+    Scalar v(value);
+    return (Scalar(1e-10) * mymath::precise128::fmax(Scalar(1), mymath::precise128::abs(v)));
 }
 
 /**
@@ -33,8 +39,9 @@ long double root_position_tolerance(long double value) {
  * @param value 参考值
  * @return 基于参考值计算的函数值容差
  */
-long double root_function_tolerance(long double value) {
-    return 1e-10 * std::max(1.0L, mymath::abs(value));
+Scalar root_function_tolerance(Scalar value) {
+    Scalar v(value);
+    return (Scalar(1e-10) * mymath::precise128::fmax(Scalar(1), mymath::precise128::abs(v)));
 }
 
 /**
@@ -42,8 +49,9 @@ long double root_function_tolerance(long double value) {
  * @param value 参考值
  * @return 数值微分使用的步长
  */
-long double root_derivative_step(long double value) {
-    return 1e-6 * std::max(1.0L, mymath::abs(value));
+Scalar root_derivative_step(Scalar value) {
+    Scalar v(value);
+    return (Scalar(1e-6) * mymath::precise128::fmax(Scalar(1), mymath::precise128::abs(v)));
 }
 
 // ============================================================================
@@ -58,11 +66,11 @@ long double root_derivative_step(long double value) {
  *
  * 当中心点为零时，直接返回变量名；否则返回 "(变量名 - 中心点)" 形式。
  */
-std::string shifted_series_base(const std::string& variable_name, long double center) {
-    if (mymath::is_near_zero(center, 1e-12)) {
+std::string shifted_series_base(const std::string& variable_name, Scalar center) {
+    if (mymath::precise128::is_near_zero(center, 1e-12)) {
         return variable_name;
     }
-    return "(" + variable_name + signed_center_text(center) + ")";
+    return "(" + variable_name + signed_center_text(center.to_long_double()) + ")";
 }
 
 /**
@@ -76,9 +84,9 @@ std::string shifted_series_base(const std::string& variable_name, long double ce
  * 支持任意分母的幂次，例如 denominator=2 时生成形如 "c0 + c1*(x-a)^(1/2) + ..." 的级数。
  * 自动跳过零系数项，并优化输出格式。
  */
-std::string generalized_series_to_string(const std::vector<long double>& coefficients,
+std::string generalized_series_to_string(const std::vector<Scalar>& coefficients,
                                          const std::string& variable_name,
-                                         long double center,
+                                         Scalar center,
                                          int denominator) {
     if (denominator <= 0) {
         throw std::runtime_error("series denominator must be positive");
@@ -87,13 +95,13 @@ std::string generalized_series_to_string(const std::vector<long double>& coeffic
     const std::string base = shifted_series_base(variable_name, center);
     std::vector<std::string> terms;
     for (std::size_t i = 0; i < coefficients.size(); ++i) {
-        const long double coefficient = coefficients[i];
+        const Scalar coefficient = coefficients[i];
         if (mymath::is_near_zero(coefficient, 1e-12)) {
             continue;
         }
         const std::string factor =
             power_term(base, static_cast<int>(i), denominator);
-        terms.push_back(format_term(coefficient, factor));
+        terms.push_back(format_term(coefficient.to_long_double(), factor));
     }
 
     if (terms.empty()) {
@@ -126,8 +134,8 @@ std::string generalized_series_to_string(const std::vector<long double>& coeffic
  *
  * 泰勒级数的特化版本，幂次分母固定为 1。
  */
-std::string taylor_series_to_string(const std::vector<long double>& coefficients,
+std::string taylor_series_to_string(const std::vector<Scalar>& coefficients,
                                     const std::string& variable_name,
-                                    long double center) {
+                                    Scalar center) {
     return generalized_series_to_string(coefficients, variable_name, center, 1);
 }

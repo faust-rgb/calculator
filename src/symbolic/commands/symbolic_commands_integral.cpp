@@ -6,6 +6,7 @@
 #include "analysis/calculator_integration.h"
 #include "core/string_utils.h"
 #include "core/format_utils.h"
+#include "core/scalar_type.h"
 #include "math/mymath.h"
 #include "parser/unified_expression_parser.h"
 #include <vector>
@@ -14,6 +15,7 @@ namespace symbolic_commands {
 
 namespace {
 using namespace symbolic_expression_internal;
+using Scalar = mymath::Scalar;
 
 std::string with_constant(const SymbolicExpression& expression) {
     return expression.simplify().to_string() + " + C";
@@ -27,15 +29,15 @@ std::vector<std::string> vector_literal_components(const std::string& text) {
     return split_top_level_arguments(trimmed.substr(1, trimmed.size() - 2));
 }
 
-long double derivative_at(
-    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>& f,
+Scalar derivative_at(
+    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>& f,
     const std::string& var,
-    long double t) {
-    const long double h = 1e-7L * std::max(1.0L, mymath::abs(t));
-    return (f({{var, t + h}}) - f({{var, t - h}})) / (2.0L * h);
+    Scalar t) {
+    const Scalar h = Scalar(1e-7L) * mymath::precise128::fmax(Scalar(1.0L), mymath::abs(t));
+    return (f({{var, t + h}}) - f({{var, t - h}})) / (Scalar(2.0L) * h);
 }
 
-std::string format_symbolic_numeric(const SymbolicCommandContext& ctx, long double value) {
+std::string format_symbolic_numeric(const SymbolicCommandContext& ctx, Scalar value) {
     return format_decimal(ctx.normalize_result(static_cast<double>(value)));
 }
 }
@@ -50,15 +52,15 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
 
         if (arguments.size() == 2 && !is_identifier_text(trim_copy(arguments[1]))) {
             FunctionAnalysis analysis = ctx.build_analysis(arguments[0]);
-            const long double x = ctx.parse_decimal(arguments[1]);
+            const Scalar x = ctx.parse_decimal(arguments[1]);
             *output = format_symbolic_numeric(ctx, analysis.indefinite_integral_at(x));
             return true;
         }
 
         if (arguments.size() == 3 && !is_identifier_text(trim_copy(arguments[1]))) {
             FunctionAnalysis analysis = ctx.build_analysis(arguments[0]);
-            const long double x0 = ctx.parse_decimal(arguments[1]);
-            const long double x1 = ctx.parse_decimal(arguments[2]);
+            const Scalar x0 = ctx.parse_decimal(arguments[1]);
+            const Scalar x1 = ctx.parse_decimal(arguments[2]);
             *output = format_symbolic_numeric(ctx, analysis.definite_integral(x0, x1));
             return true;
         }
@@ -66,15 +68,15 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
         if (arguments.size() == 4 && is_identifier_text(trim_copy(arguments[1]))) {
             auto f = ctx.build_scoped_evaluator(arguments[0]);
             const std::string var = trim_copy(arguments[1]);
-            const long double x0 = ctx.parse_decimal(arguments[2]);
-            const long double x1 = ctx.parse_decimal(arguments[3]);
+            const Scalar x0 = ctx.parse_decimal(arguments[2]);
+            const Scalar x1 = ctx.parse_decimal(arguments[3]);
             MultivariableIntegrator integrator(
-                [&f, var](const std::vector<long double>& pt) {
+                [&f, var](const std::vector<Scalar>& pt) {
                     return f({{var, pt[0]}});
                 });
             std::vector<MultivariableIntegrator::BoundFunc> bounds = {
-                [x0, x1](const std::vector<long double>&) {
-                    return std::pair<long double, long double>{x0, x1};
+                [x0, x1](const std::vector<Scalar>&) {
+                    return std::pair<Scalar, Scalar>{x0, x1};
                 }
             };
             *output = format_symbolic_numeric(ctx, integrator.integrate(bounds, {1024}));
@@ -109,8 +111,8 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
             throw std::runtime_error("line_integral path must have 2 or 3 components");
         }
         const std::string var = trim_copy(arguments[2]);
-        const long double t0 = ctx.parse_decimal(arguments[3]);
-        const long double t1 = ctx.parse_decimal(arguments[4]);
+        const Scalar t0 = ctx.parse_decimal(arguments[3]);
+        const Scalar t1 = ctx.parse_decimal(arguments[4]);
         const int subdivisions = arguments.size() >= 6 ? static_cast<int>(ctx.parse_decimal(arguments[5])) : 256;
 
         if (trim_copy(arguments[0]).size() >= 2 && trim_copy(arguments[0]).front() == '[') {
@@ -123,14 +125,14 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
             for (const auto& component : field) field_eval.push_back(ctx.build_scoped_evaluator(component));
             for (const auto& component : path) path_eval.push_back(ctx.build_scoped_evaluator(component));
 
-            auto integrand = [&](const std::vector<long double>& pt) {
-                const long double t = pt[0];
-                std::vector<std::pair<std::string, long double>> scope = {{var, t}};
+            auto integrand = [&](const std::vector<Scalar>& pt) {
+                const Scalar t = pt[0];
+                std::vector<std::pair<std::string, Scalar>> scope = {{var, t}};
                 const char* names[] = {"x", "y", "z"};
                 for (std::size_t i = 0; i < path_eval.size(); ++i) {
                     scope.push_back({names[i], path_eval[i]({{var, t}})});
                 }
-                long double sum = 0.0L;
+                Scalar sum = 0.0L;
                 for (std::size_t i = 0; i < path_eval.size(); ++i) {
                     sum += field_eval[i](scope) * derivative_at(path_eval[i], var, t);
                 }
@@ -138,8 +140,8 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
             };
             MultivariableIntegrator integrator(integrand);
             std::vector<MultivariableIntegrator::BoundFunc> bounds = {
-                [t0, t1](const std::vector<long double>&) {
-                    return std::pair<long double, long double>{t0, t1};
+                [t0, t1](const std::vector<Scalar>&) {
+                    return std::pair<Scalar, Scalar>{t0, t1};
                 }
             };
             *output = format_symbolic_numeric(ctx, integrator.integrate(bounds, {subdivisions}));
@@ -164,11 +166,11 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
             throw std::runtime_error("surface_integral surface must have 3 components");
         }
         const std::string u_var = trim_copy(arguments[2]);
-        const long double u0 = ctx.parse_decimal(arguments[3]);
-        const long double u1 = ctx.parse_decimal(arguments[4]);
+        const Scalar u0 = ctx.parse_decimal(arguments[3]);
+        const Scalar u1 = ctx.parse_decimal(arguments[4]);
         const std::string v_var = trim_copy(arguments[5]);
-        const long double v0 = ctx.parse_decimal(arguments[6]);
-        const long double v1 = ctx.parse_decimal(arguments[7]);
+        const Scalar v0 = ctx.parse_decimal(arguments[6]);
+        const Scalar v1 = ctx.parse_decimal(arguments[7]);
         const int nu = arguments.size() >= 9 ? static_cast<int>(ctx.parse_decimal(arguments[8])) : 128;
         const int nv = arguments.size() >= 10 ? static_cast<int>(ctx.parse_decimal(arguments[9])) : 128;
 
@@ -183,38 +185,38 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
             auto rx = ctx.build_scoped_evaluator(surface[0]);
             auto ry = ctx.build_scoped_evaluator(surface[1]);
             auto rz = ctx.build_scoped_evaluator(surface[2]);
-            auto eval = [&](const auto& f, long double u, long double v) {
+            auto eval = [&](const auto& f, Scalar u, Scalar v) {
                 return f({{u_var, u}, {v_var, v}});
             };
-            auto integrand = [&](const std::vector<long double>& pt) {
-                const long double u = pt[0];
-                const long double v = pt[1];
-                const long double hu = 1e-7L * std::max(1.0L, mymath::abs(u));
-                const long double hv = 1e-7L * std::max(1.0L, mymath::abs(v));
-                const long double x = eval(rx, u, v);
-                const long double y = eval(ry, u, v);
-                const long double z = eval(rz, u, v);
-                const long double xu = (eval(rx, u + hu, v) - eval(rx, u - hu, v)) / (2.0L * hu);
-                const long double yu = (eval(ry, u + hu, v) - eval(ry, u - hu, v)) / (2.0L * hu);
-                const long double zu = (eval(rz, u + hu, v) - eval(rz, u - hu, v)) / (2.0L * hu);
-                const long double xv = (eval(rx, u, v + hv) - eval(rx, u, v - hv)) / (2.0L * hv);
-                const long double yv = (eval(ry, u, v + hv) - eval(ry, u, v - hv)) / (2.0L * hv);
-                const long double zv = (eval(rz, u, v + hv) - eval(rz, u, v - hv)) / (2.0L * hv);
-                const long double nx = yu * zv - zu * yv;
-                const long double ny = zu * xv - xu * zv;
-                const long double nz = xu * yv - yu * xv;
-                const std::vector<std::pair<std::string, long double>> scope = {
+            auto integrand = [&](const std::vector<Scalar>& pt) {
+                const Scalar u = pt[0];
+                const Scalar v = pt[1];
+                const Scalar hu = Scalar(1e-7L) * mymath::precise128::fmax(Scalar(1.0L), mymath::abs(u));
+                const Scalar hv = Scalar(1e-7L) * mymath::precise128::fmax(Scalar(1.0L), mymath::abs(v));
+                const Scalar x = eval(rx, u, v);
+                const Scalar y = eval(ry, u, v);
+                const Scalar z = eval(rz, u, v);
+                const Scalar xu = (eval(rx, u + hu, v) - eval(rx, u - hu, v)) / (Scalar(2.0L) * hu);
+                const Scalar yu = (eval(ry, u + hu, v) - eval(ry, u - hu, v)) / (Scalar(2.0L) * hu);
+                const Scalar zu = (eval(rz, u + hu, v) - eval(rz, u - hu, v)) / (Scalar(2.0L) * hu);
+                const Scalar xv = (eval(rx, u, v + hv) - eval(rx, u, v - hv)) / (Scalar(2.0L) * hv);
+                const Scalar yv = (eval(ry, u, v + hv) - eval(ry, u, v - hv)) / (Scalar(2.0L) * hv);
+                const Scalar zv = (eval(rz, u, v + hv) - eval(rz, u, v - hv)) / (Scalar(2.0L) * hv);
+                const Scalar nx = yu * zv - zu * yv;
+                const Scalar ny = zu * xv - xu * zv;
+                const Scalar nz = xu * yv - yu * xv;
+                const std::vector<std::pair<std::string, Scalar>> scope = {
                     {u_var, u}, {v_var, v}, {"x", x}, {"y", y}, {"z", z}
                 };
                 return fx(scope) * nx + fy(scope) * ny + fz(scope) * nz;
             };
             MultivariableIntegrator integrator(integrand);
             std::vector<MultivariableIntegrator::BoundFunc> bounds = {
-                [u0, u1](const std::vector<long double>&) {
-                    return std::pair<long double, long double>{u0, u1};
+                [u0, u1](const std::vector<Scalar>&) {
+                    return std::pair<Scalar, Scalar>{u0, u1};
                 },
-                [v0, v1](const std::vector<long double>&) {
-                    return std::pair<long double, long double>{v0, v1};
+                [v0, v1](const std::vector<Scalar>&) {
+                    return std::pair<Scalar, Scalar>{v0, v1};
                 }
             };
             *output = format_symbolic_numeric(ctx, integrator.integrate(bounds, {nu, nv}));

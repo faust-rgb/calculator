@@ -223,7 +223,7 @@ private:
     /**
      * @brief 解析数值
      *
-     * 支持整数和小数，不支持科学计数法。
+     * 支持整数和小数，支持科学计数法。
      */
     SymbolicExpression parse_number() {
         skip_spaces();
@@ -250,18 +250,18 @@ private:
         }
 
         // 手动解析数值（避免 strtod 的依赖和区域设置问题）
-        long double value = 0.0L;
+        Scalar value(0);
         std::size_t index = start;
         while (index < pos_ && source_[index] != '.') {
-            value = value * 10.0L + static_cast<long double>(source_[index] - '0');
+            value = value * Scalar(10) + Scalar(static_cast<int>(source_[index] - '0'));
             ++index;
         }
         if (index < pos_ && source_[index] == '.') {
             ++index;
-            long double place = 0.1;
+            Scalar place(0.1L);
             while (index < pos_) {
-                value += static_cast<long double>(source_[index] - '0') * place;
-                place *= 0.1;
+                value += Scalar(static_cast<int>(source_[index] - '0')) * place;
+                place *= Scalar(0.1L);
                 ++index;
             }
         }
@@ -278,16 +278,16 @@ private:
             }
             
             if (exp_pos < source_.size() && std::isdigit(static_cast<unsigned char>(source_[exp_pos]))) {
-                long double exponent = 0.0L;
+                Scalar exponent(0);
                 while (exp_pos < source_.size() && std::isdigit(static_cast<unsigned char>(source_[exp_pos]))) {
-                    exponent = exponent * 10.0L + static_cast<long double>(source_[exp_pos] - '0');
+                    exponent = exponent * Scalar(10) + Scalar(static_cast<int>(source_[exp_pos] - '0'));
                     ++exp_pos;
                 }
                 pos_ = exp_pos;
                 if (exp_negative) {
-                    value /= mymath::pow(10.0L, exponent);
+                    value /= mymath::precise128::pow(Scalar(10), exponent);
                 } else {
-                    value *= mymath::pow(10.0L, exponent);
+                    value *= mymath::precise128::pow(Scalar(10), exponent);
                 }
             }
         }
@@ -296,7 +296,7 @@ private:
     }
 };
 
-bool expr_is_number(const SymbolicExpression& expression, long double* value);
+bool expr_is_number(const SymbolicExpression& expression, Scalar* value);
 
 SymbolicExpression simplify_impl(const SymbolicExpression& expression);
 SymbolicExpression simplify_once(const SymbolicExpression& expression);
@@ -483,7 +483,7 @@ SymbolicExpression substitute_expression_impl(const SymbolicExpression& expressi
 }
 
 bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& node,
-                               long double* value) {
+                               Scalar* value) {
     switch (node->type) {
         case NodeType::kNumber:
             *value = node->number_value;
@@ -492,18 +492,18 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
         case NodeType::kE:
             return false;
         case NodeType::kInfinity:
-            *value = (node->number_value > 0) ?
-                mymath::infinity() :
-                -mymath::infinity();
+            *value = (node->number_value > Scalar(0)) ?
+                Scalar(mymath::infinity()) :
+                -Scalar(mymath::infinity());
             return true;
         case NodeType::kVariable:
             if (node->text == "1 / 2") {
-                *value = 0.5;
+                *value = Scalar(0.5L);
                 return true;
             }
             return false;
         case NodeType::kNegate: {
-            long double operand = 0.0L;
+            Scalar operand(0);
             if (!try_evaluate_numeric_node(node->left, &operand)) {
                 return false;
             }
@@ -515,8 +515,8 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
         case NodeType::kMultiply:
         case NodeType::kDivide:
         case NodeType::kPower: {
-            long double left = 0.0L;
-            long double right = 0.0L;
+            Scalar left(0);
+            Scalar right(0);
             if (!try_evaluate_numeric_node(node->left, &left) ||
                 !try_evaluate_numeric_node(node->right, &right)) {
                 return false;
@@ -536,137 +536,120 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                     *value = left / right;
                     return true;
                 case NodeType::kPower:
-                    *value = mymath::pow(left, right);
+                    *value = mymath::precise128::pow(left, right);
                     return true;
-                case NodeType::kNumber:
-                case NodeType::kPi:
-                case NodeType::kE:
-                case NodeType::kInfinity:
-                case NodeType::kVariable:
-                case NodeType::kNegate:
-                case NodeType::kFunction:
-                case NodeType::kVector:
-                case NodeType::kTensor:
-                case NodeType::kDifferentialOp:
-                case NodeType::kRootOf:
+                default:
                     break;
             }
             return false;
         }
         case NodeType::kFunction: {
-            long double argument = 0.0L;
+            Scalar argument(0);
             if (!try_evaluate_numeric_node(node->left, &argument)) {
                 return false;
             }
             if (node->text == "asin") {
-                *value = mymath::asin(argument);
+                *value = mymath::precise128::asin(argument);
                 return true;
             }
             if (node->text == "acos") {
-                *value = mymath::acos(argument);
+                *value = mymath::precise128::acos(argument);
                 return true;
             }
             if (node->text == "atan") {
-                *value = mymath::atan(argument);
+                *value = mymath::precise128::atan(argument);
                 return true;
             }
             if (node->text == "sin") {
-                *value = mymath::sin(argument);
+                *value = mymath::precise128::sin(argument);
                 return true;
             }
             if (node->text == "cos") {
-                *value = mymath::cos(argument);
+                *value = mymath::precise128::cos(argument);
                 return true;
             }
             if (node->text == "tan") {
-                *value = mymath::tan(argument);
+                *value = mymath::precise128::tan(argument);
                 return true;
             }
             if (node->text == "exp") {
-                *value = mymath::exp(argument);
+                *value = mymath::precise128::exp(argument);
                 return true;
             }
             if (node->text == "sinh") {
-                *value = mymath::sinh(argument);
+                *value = mymath::precise128::sinh(argument);
                 return true;
             }
             if (node->text == "cosh") {
-                *value = mymath::cosh(argument);
+                *value = mymath::precise128::cosh(argument);
                 return true;
             }
             if (node->text == "tanh") {
-                *value = mymath::tanh(argument);
+                *value = mymath::precise128::tanh(argument);
                 return true;
             }
             if (node->text == "ln") {
-                if (argument <= 0.0L) {
+                if (argument <= Scalar(0)) {
                     return false;
                 }
-                *value = mymath::ln(argument);
+                *value = mymath::precise128::ln(argument);
                 return true;
             }
             if (node->text == "sqrt") {
-                if (argument < 0.0L) {
+                if (argument < Scalar(0)) {
                     return false;
                 }
-                long double root = mymath::sqrt(argument);
+                Scalar root = mymath::precise128::sqrt(argument);
                 // Only evaluate to number if it's a perfect square
-                if (mymath::is_near_zero(root * root - argument, 1e-12) && mymath::is_integer(root, 1e-10)) {
+                Scalar diff = root * root - argument;
+                if (mymath::abs(diff.hi) < 1e-12L && mymath::is_integer(root.hi, 1e-10L)) {
                     *value = root;
                     return true;
                 }
                 return false;
             }
             if (node->text == "erf") {
-                *value = mymath::erf(argument);
+                *value = Scalar(mymath::erf((argument)));
                 return true;
             }
             if (node->text == "erfc") {
-                *value = mymath::erfc(argument);
+                *value = Scalar(mymath::erfc((argument)));
                 return true;
             }
             if (node->text == "gamma") {
-                *value = mymath::gamma(argument);
+                *value = Scalar(mymath::gamma((argument)));
                 return true;
             }
             if (node->text == "abs") {
-                *value = mymath::abs(argument);
+                *value = mymath::precise128::abs(argument);
                 return true;
             }
             if (node->text == "floor") {
-                *value = static_cast<long double>(
-                    static_cast<long long>(argument < 0.0L &&
-                                                   static_cast<long double>(static_cast<long long>(argument)) != argument
-                                               ? argument - 1.0L
-                                               : argument));
+                *value = mymath::precise128::floor(argument);
                 return true;
             }
             if (node->text == "ceil") {
-                long long truncated = static_cast<long long>(argument);
-                if (argument > 0.0L && static_cast<long double>(truncated) != argument) {
-                    ++truncated;
-                }
-                *value = static_cast<long double>(truncated);
+                *value = mymath::precise128::ceil(argument);
                 return true;
             }
             if (node->text == "cbrt") {
-                *value = mymath::cbrt(argument);
+                *value = mymath::precise128::cbrt(argument);
                 return true;
             }
             if (node->text == "sign") {
-                if (mymath::is_near_zero(argument, kFormatEps)) {
-                    *value = 0.0L;
+                if (mymath::abs(argument.hi) < kFormatEps) {
+                    *value = Scalar(0);
                 } else {
-                    *value = argument > 0.0L ? 1.0L : -1.0L;
+                    *value = argument.hi > 0 ? Scalar(1) : Scalar(-1);
                 }
                 return true;
             }
             if (node->text == "step") {
-                *value = argument >= 0.0L ? 1.0L : 0.0L;
+                *value = argument.hi >= 0 ? Scalar(1) : Scalar(0);
                 return true;
             }
             if (node->text == "delta") {
-                *value = mymath::is_near_zero(argument, kFormatEps) ? 1.0L : 0.0L;
+                *value = mymath::abs(argument.hi) < kFormatEps ? Scalar(1) : Scalar(0);
                 return true;
             }
             return false;
@@ -689,39 +672,39 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
  */
 bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& node,
                             const DualEvaluationContext& ctx,
-                            mymath::dual<long double>* result) {
+                            mymath::dual<Scalar>* result) {
     switch (node->type) {
         case NodeType::kNumber:
-            *result = mymath::dual<long double>(node->number_value, 0.0L);
+            *result = mymath::dual<Scalar>(node->number_value, Scalar(0));
             return true;
         case NodeType::kPi:
-            *result = mymath::dual<long double>(mymath::kPi, 0.0L);
+            *result = mymath::dual<Scalar>(mymath::precise128::pi(), Scalar(0));
             return true;
         case NodeType::kE:
-            *result = mymath::dual<long double>(mymath::kE, 0.0L);
+            *result = mymath::dual<Scalar>(mymath::precise128::e(), Scalar(0));
             return true;
         case NodeType::kInfinity:
-            *result = mymath::dual<long double>(
-                (node->number_value > 0) ? mymath::infinity() : -mymath::infinity(), 0.0L);
+            *result = mymath::dual<Scalar>(
+                (node->number_value > Scalar(0)) ? Scalar(mymath::infinity()) : -Scalar(mymath::infinity()), Scalar(0));
             return true;
         case NodeType::kVariable: {
             if (node->text == ctx.differentiation_variable) {
-                *result = mymath::dual<long double>(ctx.point_value, 1.0L);
+                *result = mymath::dual<Scalar>(ctx.point_value, Scalar(1));
                 return true;
             }
             auto it = ctx.other_values.find(node->text);
             if (it != ctx.other_values.end()) {
-                *result = mymath::dual<long double>(it->second, 0.0L);
+                *result = mymath::dual<Scalar>(it->second, Scalar(0));
                 return true;
             }
             if (node->text == "1 / 2") {
-                *result = mymath::dual<long double>(0.5, 0.0L);
+                *result = mymath::dual<Scalar>(Scalar(0.5L), Scalar(0));
                 return true;
             }
             return false;
         }
         case NodeType::kNegate: {
-            mymath::dual<long double> operand;
+            mymath::dual<Scalar> operand;
             if (!try_evaluate_dual_node(node->left, ctx, &operand)) {
                 return false;
             }
@@ -733,7 +716,7 @@ bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& nod
         case NodeType::kMultiply:
         case NodeType::kDivide:
         case NodeType::kPower: {
-            mymath::dual<long double> left, right;
+            mymath::dual<Scalar> left, right;
             if (!try_evaluate_dual_node(node->left, ctx, &left) ||
                 !try_evaluate_dual_node(node->right, ctx, &right)) {
                 return false;
@@ -752,140 +735,154 @@ bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& nod
                 case NodeType::kDivide:
                     *result = left / right;
                     return true;
-                case NodeType::kPower:
-                    *result = mymath::pow(left, right);
+                case NodeType::kPower: {
+                    // d/dx f^g = f^g * (g' * ln(f) + g * f'/f)
+                    Scalar f = left.value();
+                    Scalar g = right.value();
+                    Scalar f_prime = left.derivative();
+                    Scalar g_prime = right.derivative();
+                    Scalar fg = mymath::precise128::pow(f, g);
+                    Scalar deriv = fg * (g_prime * mymath::precise128::ln(f) + g * f_prime / f);
+                    *result = mymath::dual<Scalar>(fg, deriv);
                     return true;
-                case NodeType::kNumber:
-                case NodeType::kPi:
-                case NodeType::kE:
-                case NodeType::kInfinity:
-                case NodeType::kVariable:
-                case NodeType::kNegate:
-                case NodeType::kFunction:
-                case NodeType::kVector:
-                case NodeType::kTensor:
-                case NodeType::kDifferentialOp:
-                case NodeType::kRootOf:
+                }
+                default:
                     break;
             }
             return false;
         }
         case NodeType::kFunction: {
-            mymath::dual<long double> argument;
+            mymath::dual<Scalar> argument;
             if (!try_evaluate_dual_node(node->left, ctx, &argument)) {
                 return false;
             }
 
+            Scalar v = argument.value();
+            Scalar d = argument.derivative();
+
             if (node->text == "sin") {
-                *result = mymath::sin(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::sin(v), mymath::precise128::cos(v) * d);
                 return true;
             }
             if (node->text == "cos") {
-                *result = mymath::cos(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::cos(v), -mymath::precise128::sin(v) * d);
                 return true;
             }
             if (node->text == "tan") {
-                *result = mymath::tan(argument);
+                Scalar cv = mymath::precise128::cos(v);
+                *result = mymath::dual<Scalar>(mymath::precise128::tan(v), d / (cv * cv));
                 return true;
             }
             if (node->text == "sec") {
-                *result = mymath::sec(argument);
+                Scalar sv = mymath::precise128::sec(v);
+                *result = mymath::dual<Scalar>(sv, sv * mymath::precise128::tan(v) * d);
                 return true;
             }
             if (node->text == "csc") {
-                *result = mymath::csc(argument);
+                Scalar cv = mymath::precise128::csc(v);
+                *result = mymath::dual<Scalar>(cv, -cv * mymath::precise128::cot(v) * d);
                 return true;
             }
             if (node->text == "cot") {
-                *result = mymath::cot(argument);
+                Scalar cv = mymath::precise128::csc(v);
+                *result = mymath::dual<Scalar>(mymath::precise128::cot(v), -cv * cv * d);
                 return true;
             }
             if (node->text == "asin") {
-                *result = mymath::asin(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::asin(v), d / mymath::precise128::sqrt(Scalar(1) - v * v));
                 return true;
             }
             if (node->text == "acos") {
-                *result = mymath::acos(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::acos(v), -d / mymath::precise128::sqrt(Scalar(1) - v * v));
                 return true;
             }
             if (node->text == "atan") {
-                *result = mymath::atan(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::atan(v), d / (Scalar(1) + v * v));
                 return true;
             }
             if (node->text == "sinh") {
-                *result = mymath::sinh(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::sinh(v), mymath::precise128::cosh(v) * d);
                 return true;
             }
             if (node->text == "cosh") {
-                *result = mymath::cosh(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::cosh(v), mymath::precise128::sinh(v) * d);
                 return true;
             }
             if (node->text == "tanh") {
-                *result = mymath::tanh(argument);
+                Scalar cv = mymath::precise128::cosh(v);
+                *result = mymath::dual<Scalar>(mymath::precise128::tanh(v), d / (cv * cv));
                 return true;
             }
             if (node->text == "asinh") {
-                *result = mymath::asinh(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::asinh(v), d / mymath::precise128::sqrt(Scalar(1) + v * v));
                 return true;
             }
             if (node->text == "acosh") {
-                *result = mymath::acosh(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::acosh(v), d / mymath::precise128::sqrt(v * v - Scalar(1)));
                 return true;
             }
             if (node->text == "atanh") {
-                *result = mymath::atanh(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::atanh(v), d / (Scalar(1) - v * v));
                 return true;
             }
             if (node->text == "exp") {
-                *result = mymath::exp(argument);
+                Scalar ev = mymath::precise128::exp(v);
+                *result = mymath::dual<Scalar>(ev, ev * d);
                 return true;
             }
             if (node->text == "ln" || node->text == "log") {
-                *result = mymath::ln(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::ln(v), d / v);
                 return true;
             }
             if (node->text == "log10") {
-                *result = mymath::log10(argument);
+                Scalar inv_ln10 = Scalar(1) / mymath::precise128::ln(Scalar(10));
+                *result = mymath::dual<Scalar>(mymath::precise128::log10(v), d * inv_ln10 / v);
                 return true;
             }
             if (node->text == "sqrt") {
-                *result = mymath::sqrt(argument);
+                Scalar rv = mymath::precise128::sqrt(v);
+                *result = mymath::dual<Scalar>(rv, d / (Scalar(2) * rv));
                 return true;
             }
             if (node->text == "cbrt") {
-                *result = mymath::cbrt(argument);
+                Scalar rv = mymath::precise128::cbrt(v);
+                *result = mymath::dual<Scalar>(rv, d / (Scalar(3) * rv * rv));
                 return true;
             }
             if (node->text == "abs") {
-                *result = mymath::abs(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::abs(v), v >= Scalar(0) ? d : -d);
                 return true;
             }
             if (node->text == "erf") {
-                *result = mymath::erf(argument);
+                Scalar factor = Scalar(2) / mymath::precise128::sqrt(mymath::precise128::pi());
+                *result = mymath::dual<Scalar>(Scalar(mymath::erf((v))), 
+                                              factor * mymath::precise128::exp(-v * v) * d);
                 return true;
             }
             if (node->text == "erfc") {
-                *result = mymath::erfc(argument);
+                Scalar factor = -Scalar(2) / mymath::precise128::sqrt(mymath::precise128::pi());
+                *result = mymath::dual<Scalar>(Scalar(mymath::erfc((v))), 
+                                              factor * mymath::precise128::exp(-v * v) * d);
                 return true;
             }
             if (node->text == "sign") {
-                *result = mymath::sign(argument);
+                *result = mymath::dual<Scalar>(v.hi > 0 ? Scalar(1) : (v.hi < 0 ? Scalar(-1) : Scalar(0)), Scalar(0));
                 return true;
             }
             if (node->text == "floor") {
-                *result = mymath::floor(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::floor(v), Scalar(0));
                 return true;
             }
             if (node->text == "ceil") {
-                *result = mymath::ceil(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::ceil(v), Scalar(0));
                 return true;
             }
             if (node->text == "round") {
-                *result = mymath::round(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::round(v), Scalar(0));
                 return true;
             }
             if (node->text == "trunc") {
-                *result = mymath::trunc(argument);
+                *result = mymath::dual<Scalar>(mymath::precise128::trunc(v), Scalar(0));
                 return true;
             }
             return false;
@@ -909,7 +906,7 @@ bool expr_is_variable(const SymbolicExpression& expression, const std::string& n
 
 using namespace symbolic_expression_internal;
 
-SymbolicExpression::SymbolicExpression() : node_(make_number(0.0L)) {}
+SymbolicExpression::SymbolicExpression() : node_(make_number(Scalar(0))) {}
 
 SymbolicExpression::SymbolicExpression(std::shared_ptr<Node> node)
     : node_(std::move(node)) {}
@@ -919,7 +916,7 @@ SymbolicExpression SymbolicExpression::parse(const std::string& text) {
     return parser.parse().simplify();
 }
 
-SymbolicExpression SymbolicExpression::number(long double value) {
+SymbolicExpression SymbolicExpression::number(Scalar value) {
     return SymbolicExpression(make_number(value));
 }
 
@@ -959,7 +956,7 @@ std::string to_latex_impl(const std::shared_ptr<SymbolicExpression::Node>& node)
     if (!node) return "";
     switch (node->type) {
         case NodeType::kNumber: {
-            long double val = 0.0L;
+            Scalar val = 0.0L;
             try_evaluate_numeric_node(node, &val);
             return format_decimal(val);
         }
@@ -1060,8 +1057,8 @@ bool SymbolicExpression::is_constant(const std::string& variable_name) const {
     return false;
 }
 
-bool SymbolicExpression::is_number(long double* value) const {
-    long double numeric = 0.0L;
+bool SymbolicExpression::is_number(Scalar* value) const {
+    Scalar numeric = Scalar(0);
     if (!try_evaluate_numeric_node(node_, &numeric)) {
         return false;
     }
@@ -1077,7 +1074,7 @@ bool SymbolicExpression::is_variable_named(const std::string& variable_name) con
 
 bool SymbolicExpression::polynomial_coefficients(
     const std::string& variable_name,
-    std::vector<long double>* coefficients) const {
+    std::vector<Scalar>* coefficients) const {
     const SymbolicExpression simplified = simplify();
     return polynomial_coefficients_from_simplified(simplified, variable_name, coefficients);
 }

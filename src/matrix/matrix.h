@@ -15,6 +15,7 @@
 #ifndef MATRIX_H
 #define MATRIX_H
 
+#include "core/scalar_type.h"
 #include <cstddef>
 #include <functional>
 #include <map>
@@ -33,7 +34,7 @@ struct TComplex {
     T imag = T(0);
 };
 
-using ComplexNumber = TComplex<long double>;
+using ComplexNumber = TComplex<Scalar>;
 
 /**
  * @namespace matrix
@@ -126,7 +127,7 @@ struct TMatrix {
 };
 
 /** @brief 默认双精度矩阵 */
-using Matrix = TMatrix<long double>;
+using Matrix = TMatrix<Scalar>;
 
 /** @brief 设置矩阵字符串输出的十进制显示有效位数 */
 void set_display_precision(int precision);
@@ -150,10 +151,10 @@ struct TValue {
     static TValue from_matrix(TMatrix<T>&& matrix_value);
 };
 
-using Value = TValue<long double>;
+using Value = TValue<Scalar>;
 
 /** @brief 标量求值函数类型，用于表达式解析 */
-using ScalarEvaluator = std::function<long double(const std::string&)>;
+using ScalarEvaluator = std::function<Scalar(const std::string&)>;
 
 /** @brief 矩阵查找函数类型，用于变量解析 */
 using MatrixLookup = std::function<bool(const std::string&, Matrix*)>;

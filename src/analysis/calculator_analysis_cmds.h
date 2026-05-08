@@ -5,6 +5,7 @@
 #include <functional>
 #include <vector>
 #include "module/calculator_module.h"
+#include "core/scalar_type.h"
 
 namespace analysis_cmds {
 
@@ -25,8 +26,8 @@ public:
 struct AnalysisContext {
     std::function<void(const std::string&, bool, std::string*, SymbolicExpression*)> resolve_symbolic;
     std::function<std::vector<std::string>(const std::vector<std::string>&, std::size_t, const std::vector<std::string>&)> parse_symbolic_variable_arguments;
-    std::function<long double(const std::string&)> parse_decimal;
-    std::function<long double(double)> normalize_result;
+    std::function<Scalar(const std::string&)> parse_decimal;
+    std::function<Scalar(Scalar)> normalize_result;
     std::function<FunctionAnalysis(const std::string&)> build_analysis;
 };
 
