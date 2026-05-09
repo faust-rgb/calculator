@@ -4,7 +4,7 @@
 
 #include "symbolic/core/symbolic_expression_internal.h"
 
-#include "core/format_utils.h"
+#include "core/services/format_utils.h"
 #include "math/mymath.h"
 #include "math/mymath_dual.h"
 
@@ -21,7 +21,7 @@
 
 #include <mutex>
 
-#include "parser/base_parser.h"
+#include "parser/infra/base_parser.h"
 
 namespace symbolic_expression_internal {
 

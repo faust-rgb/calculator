@@ -14,7 +14,7 @@
 
 #include "rational.h"
 #include "matrix.h"
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 
 #include <map>
 #include <memory>

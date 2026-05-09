@@ -4,10 +4,10 @@
  */
 
 #include "script_parser.h"
-#include "parser/base_parser.h"
-#include "parser/expression_compiler.h"
-#include "parser/lazy_token_stream.h"
-#include "parser/parser_utils.h"
+#include "parser/infra/base_parser.h"
+#include "parser/ast/expression_compiler.h"
+#include "parser/lexer/lazy_token_stream.h"
+#include "parser/infra/parser_utils.h"
 #include "string_utils.h"
 
 #include <cctype>

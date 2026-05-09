@@ -11,7 +11,7 @@
 // - parser/expression_ast.h: AST 编译函数声明
 
 #include "function.h"
-#include "parser/expression_ast.h"
+#include "parser/ast/expression_ast.h"
 
 /**
  * @brief 获取或编译函数表达式的 AST

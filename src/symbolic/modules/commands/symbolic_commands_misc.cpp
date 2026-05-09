@@ -1,7 +1,7 @@
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/solver/symbolic_solver.h"
 #include "symbolic/calculus/sum/symbolic_sum.h"
-#include "core/string_utils.h"
+#include "core/services/string_utils.h"
 #include <vector>
 
 namespace symbolic_commands {

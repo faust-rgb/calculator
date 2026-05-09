@@ -6,7 +6,7 @@
 // ============================================================================
 
 #include "expression_utils.h"
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include "format_utils.h"
 #include "math/mymath.h"
 

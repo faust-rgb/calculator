@@ -10,7 +10,7 @@
 
 #include <limits>
 #include <cmath>
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include "precise/precise_decimal.h"
 
 namespace precision {

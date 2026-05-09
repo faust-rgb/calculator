@@ -5,18 +5,18 @@
 // 提供表达式 AST 的精确有理数求值功能。
 // ============================================================================
 
-#include "parser/exact_evaluator.h"
-#include "parser/expression_ast.h"
+#include "parser/grammars/exact_evaluator.h"
+#include "parser/ast/expression_ast.h"
 #include "calculator_exceptions.h"
-#include "execution/builtin_constants.h"
-#include "execution/variable_resolver.h"
+#include "execution/resolver/builtin_constants.h"
+#include "execution/resolver/variable_resolver.h"
 #include "types/function.h"
 #include "math/helpers/base_conversions.h"
 #include "math/helpers/bitwise_helpers.h"
 #include "math/helpers/combinatorics.h"
 #include "math/helpers/integer_helpers.h"
-#include "core/calculator_internal_types.h"
-#include "core/scalar_type.h"
+#include "core/api/calculator_internal_types.h"
+#include "core/common/scalar_type.h"
 #include "mymath.h"
 
 #include <algorithm>

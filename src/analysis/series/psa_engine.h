@@ -1,7 +1,7 @@
 #ifndef ANALYSIS_SERIES_PSA_ENGINE_H
 #define ANALYSIS_SERIES_PSA_ENGINE_H
 
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include "symbolic/core/symbolic_expression.h"
 #include <vector>
 #include <string>

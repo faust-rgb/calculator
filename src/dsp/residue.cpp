@@ -1,6 +1,6 @@
 #include "residue.h"
-#include "parser/unified_expression_parser.h"
-#include "core/string_utils.h"
+#include "parser/grammars/unified_expression_parser.h"
+#include "core/services/string_utils.h"
 #include "calculator_internal_types.h"
 #include "math/mymath.h"
 #include "mymath_complex.h"

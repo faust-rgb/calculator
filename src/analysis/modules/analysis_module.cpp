@@ -20,9 +20,9 @@
 #include "symbolic/algebra/groebner/groebner_basis.h"
 #include "symbolic/solver/symbolic_solver.h"
 #include "analysis/calculus/function_analysis.h"
-#include "parser/unified_expression_parser.h"
-#include "core/string_utils.h"
-#include "core/format_utils.h"
+#include "parser/grammars/unified_expression_parser.h"
+#include "core/services/string_utils.h"
+#include "core/services/format_utils.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include <algorithm>

@@ -10,8 +10,8 @@
 
 #include "symbolic/core/symbolic_expression_internal.h"
 
-#include "core/format_utils.h"
-#include "core/display_precision.h"
+#include "core/services/format_utils.h"
+#include "core/common/display_precision.h"
 #include "math/mymath.h"
 #include "math/mymath_dual.h"
 

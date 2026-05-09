@@ -10,7 +10,7 @@
 #ifndef ANALYSIS_COMMAND_HELPERS_H
 #define ANALYSIS_COMMAND_HELPERS_H
 
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include "symbolic/core/symbolic_expression.h"
 #include <string>
 #include <vector>

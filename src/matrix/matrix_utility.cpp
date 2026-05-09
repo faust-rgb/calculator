@@ -5,8 +5,8 @@
 #include "mymath_complex.h"
 #include "string_utils.h"
 #include "precise/precise_decimal.h"
-#include "core/scalar_type.h"
-#include "core/display_precision.h"
+#include "core/common/scalar_type.h"
+#include "core/common/display_precision.h"
 #include <algorithm>
 #include <iomanip>
 #include <sstream>

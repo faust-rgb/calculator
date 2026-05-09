@@ -17,8 +17,8 @@
 
 #include "script_signal.h"
 #include "script_ast.h"
-#include "parser/command_parser.h"
-#include "core/calculator.h"
+#include "parser/grammars/command_parser.h"
+#include "core/api/calculator.h"
 #include <string>
 #include <vector>
 #include <memory>

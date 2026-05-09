@@ -13,7 +13,7 @@
 //
 // ============================================================================
 
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include <string>
 #include <vector>
 #include <functional>

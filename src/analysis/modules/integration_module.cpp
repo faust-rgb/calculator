@@ -20,12 +20,12 @@
 #include "analysis/integration/multidim_integration.h"
 #include "analysis/integration/multivariable_integrator.h"
 #include "analysis/integration/vector_field_theorems.h"
-#include "core/calculator_internal_types.h"
-#include "parser/unified_expression_parser.h"
+#include "core/api/calculator_internal_types.h"
+#include "parser/grammars/unified_expression_parser.h"
 #include "math/helpers/integer_helpers.h"
-#include "core/string_utils.h"
-#include "core/format_utils.h"
-#include "core/scalar_type.h"
+#include "core/services/string_utils.h"
+#include "core/services/format_utils.h"
+#include "core/common/scalar_type.h"
 
 #include <stdexcept>
 #include <vector>

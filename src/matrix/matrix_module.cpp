@@ -16,9 +16,9 @@
 #include "matrix.h"
 #include "matrix_internal.h"
 #include "mymath.h"
-#include "core/string_utils.h"
-#include "core/format_utils.h"
-#include "core/calculator_exceptions.h"
+#include "core/services/string_utils.h"
+#include "core/services/format_utils.h"
+#include "core/common/calculator_exceptions.h"
 #include <stdexcept>
 #include <algorithm>
 #include <sstream>

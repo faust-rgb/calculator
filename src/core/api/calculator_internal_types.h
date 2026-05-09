@@ -15,6 +15,6 @@
 #define CALCULATOR_INTERNAL_TYPES_H
 
 // 包含所有内部类型（兼容现有代码）
-#include "core/calculator_impl.h"
+#include "core/api/calculator_impl.h"
 
 #endif // CALCULATOR_INTERNAL_TYPES_H

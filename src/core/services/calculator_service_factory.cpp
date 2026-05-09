@@ -8,25 +8,25 @@
 // - 环境服务（变量/函数管理、状态持久化）
 // ============================================================================
 
-#include "core/calculator_service_factory.h"
-#include "core/calculator_internal_types.h"
+#include "core/services/calculator_service_factory.h"
+#include "core/api/calculator_internal_types.h"
 #include "math/helpers/integer_helpers.h"
 #include "math/helpers/combinatorics.h"
 #include "math/helpers/bitwise_helpers.h"
 #include "math/helpers/unit_conversions.h"
 #include "math/helpers/base_conversions.h"
-#include "execution/variable_resolver.h"
-#include "parser/unified_expression_parser.h"
-#include "execution/script_runtime.h"
+#include "execution/resolver/variable_resolver.h"
+#include "parser/grammars/unified_expression_parser.h"
+#include "execution/engine/script_runtime.h"
 #include "symbolic/modules/symbolic_module.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "analysis/calculus/function_analysis.h"
 #include "plot/calculator_plot.h"
-#include "core/string_utils.h"
-#include "core/format_utils.h"
+#include "core/services/string_utils.h"
+#include "core/services/format_utils.h"
 #include "statistics/statistics.h"
 #include "statistics/probability.h"
-#include "execution/inline_expander.h"
+#include "execution/engine/inline_expander.h"
 #include "mymath.h"
 #include <sstream>
 

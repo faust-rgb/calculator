@@ -16,10 +16,10 @@
  */
 
 #include "calculator_signal_commands.h"
-#include "parser/unified_expression_parser.h"
-#include "execution/variable_resolver.h"
-#include "parser/parser_utils.h"
-#include "core/string_utils.h"
+#include "parser/grammars/unified_expression_parser.h"
+#include "execution/resolver/variable_resolver.h"
+#include "parser/infra/parser_utils.h"
+#include "core/services/string_utils.h"
 #include "math/mymath.h"
 
 #include <algorithm>

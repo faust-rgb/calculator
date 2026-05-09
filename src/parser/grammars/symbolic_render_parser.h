@@ -18,7 +18,7 @@
 
 #include <string>
 #include <map>
-#include "execution/variable_resolver.h"
+#include "execution/resolver/variable_resolver.h"
 
 /**
  * @brief 尝试以符号常量形式计算表达式

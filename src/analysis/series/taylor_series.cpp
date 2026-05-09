@@ -17,8 +17,8 @@
 
 #include "analysis/series/taylor_series.h"
 #include "analysis/modules/series_module.h"
-#include "core/scalar_type.h"
-#include "core/format_utils.h"
+#include "core/common/scalar_type.h"
+#include "core/services/format_utils.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "statistics/probability.h"
 #include "math/mymath.h"

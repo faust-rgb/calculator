@@ -5,7 +5,7 @@
 #include "precise_module.h"
 #include "precise_decimal.h"
 #include "precise_parser.h"
-#include "core/calculator_exceptions.h"
+#include "core/common/calculator_exceptions.h"
 #include <algorithm>
 #include <vector>
 

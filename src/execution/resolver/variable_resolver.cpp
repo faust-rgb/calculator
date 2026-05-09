@@ -13,8 +13,8 @@
 // ============================================================================
 
 #include "variable_resolver.h"
-#include "core/scope.h"
-#include "execution/builtin_constants.h"
+#include "core/environment/scope.h"
+#include "execution/resolver/builtin_constants.h"
 
 #include <map>
 #include <memory>

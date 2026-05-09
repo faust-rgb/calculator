@@ -13,7 +13,7 @@
 #define PROBABILITY_H
 
 #include <vector>
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 namespace prob {
 
 /**

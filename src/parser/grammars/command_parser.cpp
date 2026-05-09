@@ -2,10 +2,10 @@
 // 命令解析器实现
 // ============================================================================
 
-#include "parser/command_parser.h"
-#include "parser/syntax_validator.h"
-#include "core/string_utils.h"
-#include "parser/parser_utils.h"
+#include "parser/grammars/command_parser.h"
+#include "parser/infra/syntax_validator.h"
+#include "core/services/string_utils.h"
+#include "parser/infra/parser_utils.h"
 #include <algorithm>
 #include <cctype>
 #include <sstream>

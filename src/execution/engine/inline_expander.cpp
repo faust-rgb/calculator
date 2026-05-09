@@ -18,7 +18,7 @@
 // ============================================================================
 
 #include "inline_expander.h"
-#include "core/calculator.h"
+#include "core/api/calculator.h"
 
 #include <cctype>
 #include <stdexcept>

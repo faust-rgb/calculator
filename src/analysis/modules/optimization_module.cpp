@@ -10,11 +10,11 @@
 
 #include "analysis/modules/optimization_module.h"
 
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include "math/mymath.h"
 #include "analysis/optimization/optimization_helpers.h"
 #include "analysis/optimization/simplex_engine.h"
-#include "parser/unified_expression_parser.h"
+#include "parser/grammars/unified_expression_parser.h"
 
 #include <algorithm>
 #include <stdexcept>

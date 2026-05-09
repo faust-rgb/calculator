@@ -4,7 +4,7 @@
 
 #include "analysis/differential_equations/ode_solver.h"
 #include "analysis/base/precision_constants.h"
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include "math/mymath.h"
 #include "matrix/matrix.h"
 #include "precise/precise_decimal.h"

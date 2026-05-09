@@ -23,7 +23,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 
 /**
  * @struct PrecisionContext

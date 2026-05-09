@@ -11,7 +11,7 @@
 #ifndef MYMATH_H
 #define MYMATH_H
 
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include <limits>
 #include <string>
 

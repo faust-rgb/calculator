@@ -15,11 +15,11 @@
 #include "plot_renderer.h"
 #include "svg_renderer.h"
 #include "plot_styles.h"
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include "math/mymath.h"
 #include "string_utils.h"
-#include "parser/unified_expression_parser.h"
-#include "parser/unified_parser_factory.h"
+#include "parser/grammars/unified_expression_parser.h"
+#include "parser/grammars/unified_parser_factory.h"
 #include <cmath>
 #include <fstream>
 #include <iostream>

@@ -2,10 +2,10 @@
 // 统一解析器工厂实现
 // ============================================================================
 
-#include "parser/unified_parser_factory.h"
-#include "parser/lazy_token_stream.h"
-#include "parser/function_categories.h"
-#include "execution/variable_resolver.h"
+#include "parser/grammars/unified_parser_factory.h"
+#include "parser/lexer/lazy_token_stream.h"
+#include "parser/grammars/function_categories.h"
+#include "execution/resolver/variable_resolver.h"
 #include <cctype>
 #include <algorithm>
 

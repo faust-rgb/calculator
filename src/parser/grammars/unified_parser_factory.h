@@ -15,8 +15,8 @@
 #ifndef CORE_UNIFIED_PARSER_FACTORY_H
 #define CORE_UNIFIED_PARSER_FACTORY_H
 
-#include "parser/token_types.h"
-#include "parser/expression_ast.h"
+#include "parser/lexer/token_types.h"
+#include "parser/ast/expression_ast.h"
 #include <string>
 #include <string_view>
 #include <vector>

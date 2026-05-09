@@ -10,7 +10,7 @@
 
 #include "signal_processing.h"
 #include "math/mymath.h"
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 
 #include <algorithm>
 #include <numeric>

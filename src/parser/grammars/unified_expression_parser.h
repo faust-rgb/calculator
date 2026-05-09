@@ -26,11 +26,11 @@
 #ifndef PARSER_UNIFIED_EXPRESSION_PARSER_H
 #define PARSER_UNIFIED_EXPRESSION_PARSER_H
 
-#include "parser/token_types.h"
+#include "parser/lexer/token_types.h"
 #include "precise/rational.h"
 #include "types/stored_value.h"
 #include "matrix.h"
-#include "core/format_utils.h"
+#include "core/services/format_utils.h"
 #include <string>
 #include <map>
 #include <functional>
@@ -43,7 +43,7 @@ struct ExpressionAST;
 class UnifiedParserFactory;
 
 // 包含 exact_evaluator.h 以获取 evaluate_ast_exact 声明
-#include "parser/exact_evaluator.h"
+#include "parser/grammars/exact_evaluator.h"
 
 // 回调类型定义
 using HasScriptFunctionCallback = std::function<bool(const std::string&)>;

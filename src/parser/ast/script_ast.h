@@ -24,8 +24,8 @@
 #ifndef SCRIPT_AST_H
 #define SCRIPT_AST_H
 
-#include "parser/command_parser.h"
-#include "core/executable_node.h"
+#include "parser/grammars/command_parser.h"
+#include "core/api/executable_node.h"
 
 #include <memory>
 #include <string>

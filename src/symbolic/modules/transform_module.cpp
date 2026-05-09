@@ -3,8 +3,8 @@
 // ============================================================================
 
 #include "symbolic/modules/transform_module.h"
-#include "parser/unified_expression_parser.h"
-#include "core/string_utils.h"
+#include "parser/grammars/unified_expression_parser.h"
+#include "core/services/string_utils.h"
 
 #include <algorithm>
 #include <stdexcept>

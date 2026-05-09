@@ -9,7 +9,7 @@
 #ifndef PLOT_RENDERER_H
 #define PLOT_RENDERER_H
 
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include <string>
 #include <vector>
 

@@ -10,8 +10,8 @@
  */
 
 #include "io_module.h"
-#include "core/calculator_exceptions.h"
-#include "core/string_utils.h"
+#include "core/common/calculator_exceptions.h"
+#include "core/services/string_utils.h"
 #include "matrix/matrix.h"
 
 #include <filesystem>

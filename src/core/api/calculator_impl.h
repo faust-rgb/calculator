@@ -11,10 +11,10 @@
 #ifndef CORE_CALCULATOR_IMPL_H
 #define CORE_CALCULATOR_IMPL_H
 
-#include "core/calculator.h"
-#include "core/scope.h"
-#include "core/scalar_type.h"
-#include "execution/command_registry.h"
+#include "core/api/calculator.h"
+#include "core/environment/scope.h"
+#include "core/common/scalar_type.h"
+#include "execution/registry/command_registry.h"
 #include "types/function.h"
 
 #include <filesystem>

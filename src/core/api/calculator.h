@@ -1,7 +1,7 @@
 #ifndef CALCULATOR_H
 #define CALCULATOR_H
 
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include <memory>
 #include <string>
 #include <string_view>

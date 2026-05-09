@@ -10,8 +10,8 @@
 #define STATISTICS_MODULE_H
 
 #include "module/calculator_module.h"
-#include "parser/unified_expression_parser.h"
-#include "core/scalar_type.h"
+#include "parser/grammars/unified_expression_parser.h"
+#include "core/common/scalar_type.h"
 #include "calculator_statistics.h"
 #include "statistics.h"
 #include "probability.h"

@@ -1,6 +1,6 @@
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"
-#include "core/string_utils.h"
+#include "core/services/string_utils.h"
 #include <vector>
 
 namespace symbolic_commands {

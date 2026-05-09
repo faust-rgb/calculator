@@ -17,8 +17,8 @@
 #ifndef CORE_LAZY_TOKEN_STREAM_H
 #define CORE_LAZY_TOKEN_STREAM_H
 
-#include "parser/base_parser.h"
-#include "parser/token_types.h"
+#include "parser/infra/base_parser.h"
+#include "parser/lexer/token_types.h"
 #include <string_view>
 #include <vector>
 #include <cctype>

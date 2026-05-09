@@ -14,7 +14,7 @@
 #ifndef EXPRESSION_AST_H
 #define EXPRESSION_AST_H
 
-#include "parser/token_types.h"
+#include "parser/lexer/token_types.h"
 
 #include <memory>
 #include <string>

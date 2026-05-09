@@ -2,7 +2,7 @@
 // 语法验证器实现
 // ============================================================================
 
-#include "parser/syntax_validator.h"
+#include "parser/infra/syntax_validator.h"
 #include <cctype>
 #include <sstream>
 #include <algorithm>

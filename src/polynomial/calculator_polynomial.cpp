@@ -16,14 +16,14 @@
 
 #include "calculator_polynomial.h"
 
-#include "core/scalar_type.h"
-#include "parser/unified_expression_parser.h"
+#include "core/common/scalar_type.h"
+#include "parser/grammars/unified_expression_parser.h"
 #include "matrix_internal.h"
 #include "polynomial.h"
 #include "mymath.h"
 #include "math/helpers/integer_helpers.h"
-#include "parser/command_parser.h"
-#include "core/string_utils.h"
+#include "parser/grammars/command_parser.h"
+#include "core/services/string_utils.h"
 
 #include <sstream>
 

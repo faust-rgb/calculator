@@ -1,8 +1,8 @@
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"
-#include "core/string_utils.h"
-#include "core/format_utils.h"
-#include "core/scalar_type.h"
+#include "core/services/string_utils.h"
+#include "core/services/format_utils.h"
+#include "core/common/scalar_type.h"
 #include "math/mymath.h"
 #include <vector>
 

@@ -10,8 +10,8 @@
 #define CALCULATOR_SERVICE_FACTORY_H
 
 #include "module/calculator_module.h"
-#include "core/calculator.h"
-#include "core/calculator_internal_types.h"
+#include "core/api/calculator.h"
+#include "core/api/calculator_internal_types.h"
 
 namespace core {
 

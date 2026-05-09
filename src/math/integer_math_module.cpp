@@ -11,7 +11,7 @@
 #include "helpers/combinatorics.h"
 #include "helpers/bitwise_helpers.h"
 #include "helpers/base_conversions.h"
-#include "core/calculator_exceptions.h"
+#include "core/common/calculator_exceptions.h"
 #include "mymath.h"
 #include <algorithm>
 #include <sstream>

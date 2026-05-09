@@ -1,5 +1,5 @@
 #include "svg_renderer.h"
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include "math/mymath.h"
 #include <sstream>
 #include <algorithm>

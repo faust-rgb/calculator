@@ -2,8 +2,8 @@
 // 解析器工具函数实现
 // ============================================================================
 
-#include "parser/parser_utils.h"
-#include "core/string_utils.h"
+#include "parser/infra/parser_utils.h"
+#include "core/services/string_utils.h"
 
 namespace parser_utils {
 

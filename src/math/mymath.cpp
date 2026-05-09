@@ -13,7 +13,7 @@
 
 #include "mymath.h"
 #include "mymath_internal.h"
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 
 #include <stdexcept>
 

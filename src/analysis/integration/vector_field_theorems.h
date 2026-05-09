@@ -12,7 +12,7 @@
 #ifndef VECTOR_FIELD_THEOREMS_H
 #define VECTOR_FIELD_THEOREMS_H
 
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include <string>
 #include <functional>
 #include <vector>

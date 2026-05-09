@@ -23,7 +23,7 @@
 #include "symbolic/calculus/risch/risch_algorithm_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include "math/mymath_float128.h"
 
 #include <map>

@@ -15,17 +15,17 @@
 
 #include "script_runtime.h"
 #include "calculator_module.h"
-#include "parser/expression_ast.h"
-#include "parser/expression_compiler.h"
-#include "parser/unified_parser_factory.h"
-#include "parser/unified_expression_parser.h"
-#include "parser/symbolic_render_parser.h"
-#include "parser/command_parser.h"
-#include "core/string_utils.h"
-#include "core/format_utils.h"
-#include "parser/parser_utils.h"
-#include "core/calculator_service_factory.h"
-#include "execution/inline_expander.h"
+#include "parser/ast/expression_ast.h"
+#include "parser/ast/expression_compiler.h"
+#include "parser/grammars/unified_parser_factory.h"
+#include "parser/grammars/unified_expression_parser.h"
+#include "parser/grammars/symbolic_render_parser.h"
+#include "parser/grammars/command_parser.h"
+#include "core/services/string_utils.h"
+#include "core/services/format_utils.h"
+#include "parser/infra/parser_utils.h"
+#include "core/services/calculator_service_factory.h"
+#include "execution/engine/inline_expander.h"
 #include "math/helpers/integer_helpers.h"
 #include "mymath.h"
 #include "script_parser.h"
@@ -1518,7 +1518,7 @@ std::string render_script_block(const script::BlockStatement& block, int indent)
 // 统一执行接口实现
 // ============================================================================
 
-#include "core/executable_node.h"
+#include "core/api/executable_node.h"
 
 namespace script {
 

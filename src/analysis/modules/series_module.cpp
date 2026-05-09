@@ -20,11 +20,11 @@
 #include "analysis/series/pade_approximation.h"
 #include "analysis/series/puiseux_series.h"
 #include "analysis/series/series_summation.h"
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
-#include "parser/unified_expression_parser.h"
+#include "parser/grammars/unified_expression_parser.h"
 #include "expression_utils.h"
 #include "string_utils.h"
 #include <sstream>

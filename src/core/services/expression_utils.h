@@ -9,7 +9,7 @@
 
 #ifndef CORE_EXPRESSION_UTILS_H
 #define CORE_EXPRESSION_UTILS_H
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 #include <string>
 #include <vector>
 

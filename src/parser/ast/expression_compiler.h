@@ -12,7 +12,7 @@
 #define EXPRESSION_COMPILER_H
 
 // 所有功能现在都在 expression_ast.h 中
-#include "parser/expression_ast.h"
+#include "parser/ast/expression_ast.h"
 
 // 注意：ExpressionCache, analyze_expression_hint, analyze_expression_features
 // 和 compile_expression_ast 现在都在 expression_ast.h 中定义

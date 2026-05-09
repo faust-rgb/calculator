@@ -5,7 +5,7 @@
 #ifndef TEST_SCRIPT_FEATURES_H
 #define TEST_SCRIPT_FEATURES_H
 
-#include "core/calculator.h"
+#include "core/api/calculator.h"
 #include <iostream>
 
 inline void test_script_match_case(int& passed, int& failed) {

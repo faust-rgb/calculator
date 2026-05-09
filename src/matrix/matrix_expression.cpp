@@ -22,7 +22,7 @@
 
 #include "matrix.h"
 #include "matrix_internal.h"
-#include "parser/base_parser.h"
+#include "parser/infra/base_parser.h"
 #include "statistics/calculator_statistics.h"
 #include "statistics/probability.h"
 #include "string_utils.h"

@@ -4,8 +4,8 @@
 
 #include "precise_decimal.h"
 #include "types/stored_value.h"
-#include "parser/base_parser.h"
-#include "core/calculator_exceptions.h"
+#include "parser/infra/base_parser.h"
+#include "core/common/calculator_exceptions.h"
 #include "math/helpers/base_conversions.h"
 #include "math/mymath.h"
 

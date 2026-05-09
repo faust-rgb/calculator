@@ -5,11 +5,11 @@
 #include "analysis/integration/multidim_integration.h"
 #include "analysis/modules/integration_module.h"
 #include "analysis/base/precision_constants.h"
-#include "core/string_utils.h"
-#include "core/format_utils.h"
-#include "core/scalar_type.h"
+#include "core/services/string_utils.h"
+#include "core/services/format_utils.h"
+#include "core/common/scalar_type.h"
 #include "math/mymath.h"
-#include "parser/unified_expression_parser.h"
+#include "parser/grammars/unified_expression_parser.h"
 #include <vector>
 
 namespace symbolic_commands {

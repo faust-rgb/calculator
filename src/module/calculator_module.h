@@ -15,7 +15,7 @@
 #ifndef MODULE_CALCULATOR_MODULE_H
 #define MODULE_CALCULATOR_MODULE_H
 
-#include "core/service_interfaces.h"
+#include "core/services/service_interfaces.h"
 
 #include <string>
 #include <string_view>

@@ -21,7 +21,7 @@
 #include "precise_decimal.h"
 #include "rational.h"
 #include "types/stored_value.h"
-#include "core/calculator_exceptions.h"
+#include "core/common/calculator_exceptions.h"
 #include "math/mymath.h"
 
 #include <algorithm>

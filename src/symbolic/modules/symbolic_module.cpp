@@ -1,8 +1,8 @@
 #include "symbolic/modules/symbolic_module.h"
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/base/assumptions.h"
-#include "core/string_utils.h"
-#include "parser/unified_expression_parser.h"
+#include "core/services/string_utils.h"
+#include "parser/grammars/unified_expression_parser.h"
 
 namespace symbolic_commands {
 

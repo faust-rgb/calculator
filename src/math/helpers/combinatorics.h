@@ -9,7 +9,7 @@
 #define COMBINATORICS_HELPERS_H
 
 #include "precise/rational.h"
-#include "core/scalar_type.h"
+#include "core/common/scalar_type.h"
 
 // 函数声明直接使用 mymath::float128_t，避免全局 using 污染
 

@@ -2,9 +2,9 @@
 // 惰性 Token 流实现
 // ============================================================================
 
-#include "parser/lazy_token_stream.h"
-#include "core/calculator_exceptions.h"
-#include "core/scalar_type.h"
+#include "parser/lexer/lazy_token_stream.h"
+#include "core/common/calculator_exceptions.h"
+#include "core/common/scalar_type.h"
 #include "math/helpers/base_conversions.h"
 #include <sstream>
 #include <algorithm>
