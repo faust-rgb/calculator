@@ -19,7 +19,7 @@
 #ifndef CALCULATOR_SYMBOLIC_COMMANDS_H
 #define CALCULATOR_SYMBOLIC_COMMANDS_H
 
-#include "analysis/function_analysis.h"
+#include "analysis/calculus/function_analysis.h"
 #include "symbolic/symbolic_expression.h"
 #include "polynomial/calculator_polynomial.h"
 

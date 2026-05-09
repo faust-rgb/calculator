@@ -28,12 +28,12 @@
 #include "time/time_module.h"             // 时间相关功能
 
 // ==================== 分析模块 ====================
-#include "analysis/calculator_series.h"       // 级数展开（泰勒、傅里叶）
-#include "analysis/calculator_integration.h"   // 数值积分
-#include "analysis/calculator_rootfinding.h"   // 方程求根
-#include "analysis/calculator_optimization.h"  // 数值优化
-#include "analysis/calculator_analysis_cmds.h" // 分析相关命令
-#include "analysis/calculator_ode.h"           // 常微分方程求解
+#include "analysis/modules/series_module.h"       // 级数展开（泰勒、傅里叶）
+#include "analysis/modules/integration_module.h"   // 数值积分
+#include "analysis/modules/rootfinding_module.h"   // 方程求根
+#include "analysis/modules/optimization_module.h"  // 数值优化
+#include "analysis/modules/analysis_module.h" // 分析相关命令
+#include "analysis/modules/ode_module.h"           // 常微分方程求解
 
 // ==================== 符号计算与多项式 ====================
 #include "symbolic/calculator_symbolic_commands.h" // 符号运算命令

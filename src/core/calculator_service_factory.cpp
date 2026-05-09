@@ -20,7 +20,7 @@
 #include "execution/script_runtime.h"
 #include "symbolic/calculator_symbolic_commands.h"
 #include "symbolic/symbolic_expression.h"
-#include "analysis/function_analysis.h"
+#include "analysis/calculus/function_analysis.h"
 #include "plot/calculator_plot.h"
 #include "core/string_utils.h"
 #include "core/format_utils.h"

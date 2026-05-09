@@ -13,7 +13,7 @@
 #include "core/scalar_type.h"
 #include "parser/unified_expression_parser.h"
 #include "parser/command_parser.h"
-#include "analysis/function_analysis.h"
+#include "analysis/calculus/function_analysis.h"
 #include "matrix/matrix.h"
 #include "math/mymath.h"
 #include "symbolic/symbolic_expression.h"
