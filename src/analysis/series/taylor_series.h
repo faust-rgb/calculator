@@ -2,7 +2,7 @@
 #define ANALYSIS_SERIES_TAYLOR_SERIES_H
 
 #include "core/scalar_type.h"
-#include "symbolic/symbolic_expression.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "analysis/series/psa_engine.h"
 #include <string>
 #include <vector>

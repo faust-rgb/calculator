@@ -1,8 +1,8 @@
-#include "symbolic/risch/risch_algorithm.h"
-#include "symbolic/risch/risch_algorithm_internal.h"
-#include "symbolic/symbolic_algebraic_number.h"
-#include "symbolic/symbolic_expression_internal.h"
-#include "symbolic/differential_field.h"
+#include "symbolic/calculus/risch/risch_algorithm.h"
+#include "symbolic/calculus/risch/risch_algorithm_internal.h"
+#include "symbolic/algebra/algebraic_numbers/symbolic_algebraic_number.h"
+#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/calculus/differential_field.h"
 #include <vector>
 
 using namespace symbolic_expression_internal;

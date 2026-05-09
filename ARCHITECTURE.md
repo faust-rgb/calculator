@@ -146,17 +146,17 @@ the main functions.
   Script execution engine with FlatScopeStack optimization
 - `src/script/script_ast.h`
   Script AST node definitions
-- `src/symbolic/node_parser.cpp`
+- `src/symbolic/core/node_parser_new.cpp`
   Symbolic expression parsing and node construction
-- `src/symbolic/simplify.cpp`
+- `src/symbolic/transformation/simplify/simplify.cpp`
   Symbolic simplification rules
-- `src/symbolic/algebra_helpers.cpp`
+- `src/symbolic/algebra/algebra_helpers.cpp`
   Symbolic substitution and algebra support helpers
-- `src/symbolic/polynomial_helpers.cpp`
+- `src/symbolic/algebra/polynomial/polynomial_helpers.cpp`
   Polynomial-oriented symbolic helpers
-- `src/symbolic/symbolic_expression_calculus.cpp`
+- `src/symbolic/calculus/integral/symbolic_expression_calculus.cpp`
   Symbolic differentiation and integration rules
-- `src/symbolic/symbolic_expression_transforms.cpp`
+- `src/symbolic/transformation/rules/symbolic_expression_transforms.cpp`
   Fourier/Laplace/z transform entry points
 - `src/math/mymath.cpp`
   Core numerical algorithms and domain handling
@@ -217,7 +217,7 @@ include:
 - `src/core/expression_ast.h`
 - `src/math/mymath_internal.h`
 - `src/matrix/matrix_internal.h`
-- `src/symbolic/symbolic_expression_internal.h`
+- `src/symbolic/core/symbolic_expression_internal.h`
 
 ## Execution Flow
 
@@ -304,8 +304,8 @@ The current implementation lives mainly in:
 
 - `src/core/calculator_lifecycle.cpp` and `src/core/exact_and_symbolic_render.cpp`
   mode flag, storage, and display dispatch
-- `src/symbolic/node_parser.cpp`, `src/symbolic/simplify.cpp`, and
-  `src/symbolic/algebra_helpers.cpp`
+- `src/symbolic/core/node_parser_new.cpp`, `src/symbolic/transformation/simplify/simplify.cpp`, and
+  `src/symbolic/algebra/algebra_helpers.cpp`
   symbolic parsing, simplification, and substitution rules
 
 ## Display-only Features
@@ -424,5 +424,5 @@ For future work, the fastest way to rebuild context is:
 3. `test/main.cpp` and `test/suites/*.cpp`
 4. `src/core/calculator_commands.cpp`
 5. `src/script/script_runtime.cpp`
-6. `src/symbolic/node_parser.cpp`
+6. `src/symbolic/core/node_parser_new.cpp`
 7. `src/math/mymath.cpp`

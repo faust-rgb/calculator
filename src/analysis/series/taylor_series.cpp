@@ -2,7 +2,7 @@
 #include "analysis/modules/series_module.h"
 #include "core/scalar_type.h"
 #include "core/format_utils.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 #include "statistics/probability.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"

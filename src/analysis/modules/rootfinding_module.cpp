@@ -16,7 +16,7 @@
 #include "core/scalar_type.h"
 #include "math/mymath.h"
 #include "parser/unified_expression_parser.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 #include "core/string_utils.h"
 #include "precise/precise_decimal.h"
 

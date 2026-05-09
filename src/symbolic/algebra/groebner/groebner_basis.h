@@ -1,8 +1,8 @@
 #ifndef SYMBOLIC_GROEBNER_BASIS_H
 #define SYMBOLIC_GROEBNER_BASIS_H
 
-#include "symbolic/symbolic_expression.h"
-#include "symbolic/symbolic_polynomial.h"
+#include "symbolic/core/symbolic_expression.h"
+#include "symbolic/algebra/polynomial/symbolic_polynomial.h"
 #include <vector>
 #include <string>
 

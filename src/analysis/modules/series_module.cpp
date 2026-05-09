@@ -21,7 +21,7 @@
 #include "analysis/series/puiseux_series.h"
 #include "analysis/series/series_summation.h"
 #include "core/scalar_type.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include "parser/unified_expression_parser.h"

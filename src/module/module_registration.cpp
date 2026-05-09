@@ -36,8 +36,8 @@
 #include "analysis/modules/ode_module.h"           // 常微分方程求解
 
 // ==================== 符号计算与多项式 ====================
-#include "symbolic/calculator_symbolic_commands.h" // 符号运算命令
-#include "symbolic/calculator_transforms.h"        // 变换（傅里叶、拉普拉斯）
+#include "symbolic/modules/symbolic_module.h"  // 符号运算命令
+#include "symbolic/modules/transform_module.h" // 变换（傅里叶、拉普拉斯）
 #include "polynomial/calculator_polynomial.h"      // 多项式操作
 
 // ==================== 信号处理与绘图 ====================

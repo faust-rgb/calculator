@@ -26,10 +26,10 @@
 // 积分结果使用 LRU 缓存加速重复计算。
 // ============================================================================
 
-#include "symbolic/symbolic_expression_internal.h"
-#include "symbolic/symbolic_polynomial.h"
-#include "symbolic/integral/symbolic_expression_integral_helpers.h"
-#include "symbolic/integral/symbolic_expression_integral_internal.h"
+#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/algebra/polynomial/symbolic_polynomial.h"
+#include "symbolic/calculus/integral/symbolic_expression_integral_helpers.h"
+#include "symbolic/calculus/integral/symbolic_expression_integral_internal.h"
 
 #include "math/mymath.h"
 #include "polynomial/polynomial.h"

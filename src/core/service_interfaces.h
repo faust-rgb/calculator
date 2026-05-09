@@ -18,7 +18,7 @@
 #define CORE_SERVICE_INTERFACES_H
 
 #include "matrix/matrix.h"
-#include "symbolic/symbolic_expression.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "types/stored_value.h"
 #include <string>
 #include <vector>

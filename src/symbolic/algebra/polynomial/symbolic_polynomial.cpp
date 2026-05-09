@@ -3,8 +3,8 @@
 // 符号系数多项式实现
 // ============================================================================
 
-#include "symbolic/symbolic_polynomial.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/algebra/polynomial/symbolic_polynomial.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 
 #include "core/scalar_type.h"
 

@@ -1,9 +1,9 @@
 #ifndef RISCH_TYPES_H
 #define RISCH_TYPES_H
 
-#include "symbolic/symbolic_expression.h"
-#include "symbolic/symbolic_expression_internal.h"
-#include "symbolic/symbolic_polynomial.h"
+#include "symbolic/core/symbolic_expression.h"
+#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/algebra/polynomial/symbolic_polynomial.h"
 #include <string>
 #include <set>
 #include <vector>

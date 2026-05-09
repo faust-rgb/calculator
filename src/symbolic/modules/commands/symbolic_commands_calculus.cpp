@@ -1,5 +1,5 @@
-#include "symbolic/commands/symbolic_commands_internal.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/modules/commands/symbolic_commands_internal.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 #include "core/string_utils.h"
 #include "core/format_utils.h"
 #include "core/scalar_type.h"

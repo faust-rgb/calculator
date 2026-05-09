@@ -2,7 +2,7 @@
 // 表达式解析器
 // ============================================================================
 
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 
 #include "core/format_utils.h"
 #include "math/mymath.h"

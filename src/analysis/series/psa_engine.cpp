@@ -1,6 +1,6 @@
 #include "analysis/series/psa_engine.h"
 #include "analysis/modules/series_module.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include <algorithm>

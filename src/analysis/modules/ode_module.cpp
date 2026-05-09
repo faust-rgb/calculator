@@ -11,8 +11,8 @@
 // - ode_solver.cpp: ODE 求解器
 // - ode_command_helpers.cpp: 高阶 ODE 转换等辅助函数
 
-#include "symbolic/symbolic_expression.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 #include "analysis/modules/ode_module.h"
 #include "analysis/differential_equations/ode_solver.h"
 #include "analysis/differential_equations/ode_command_helpers.h"

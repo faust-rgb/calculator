@@ -13,7 +13,7 @@
 #ifndef TRANSFORM_RULES_H
 #define TRANSFORM_RULES_H
 
-#include "symbolic/symbolic_expression.h"
+#include "symbolic/core/symbolic_expression.h"
 
 #include <string>
 #include <vector>

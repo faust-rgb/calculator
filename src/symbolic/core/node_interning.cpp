@@ -8,7 +8,7 @@
 // - 减少内存分配，加速结构比较
 // ============================================================================
 
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 
 #include "core/format_utils.h"
 #include "core/display_precision.h"

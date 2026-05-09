@@ -11,8 +11,8 @@
 //
 // ============================================================================
 
-#include "symbolic/symbolic_sum.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/calculus/sum/symbolic_sum.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 
 #include "core/scalar_type.h"
 #include "math/mymath.h"

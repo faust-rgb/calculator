@@ -28,7 +28,7 @@
 // 并应用相应的变换公式。
 // ============================================================================
 
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 
 #include "core/scalar_type.h"
 #include "math/mymath.h"

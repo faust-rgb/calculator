@@ -2,8 +2,8 @@
 // 积分内部辅助函数实现
 // ============================================================================
 
-#include "symbolic/integral/symbolic_expression_integral_internal.h"
-#include "symbolic/integral/symbolic_expression_integral_helpers.h"
+#include "symbolic/calculus/integral/symbolic_expression_integral_internal.h"
+#include "symbolic/calculus/integral/symbolic_expression_integral_helpers.h"
 #include "math/mymath.h"
 
 namespace symbolic_expression_internal {

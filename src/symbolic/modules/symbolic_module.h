@@ -16,11 +16,11 @@
 //    - handle_symbolic_command: 分发处理具体命令
 // ============================================================================
 
-#ifndef CALCULATOR_SYMBOLIC_COMMANDS_H
-#define CALCULATOR_SYMBOLIC_COMMANDS_H
+#ifndef SYMBOLIC_MODULE_H
+#define SYMBOLIC_MODULE_H
 
 #include "analysis/calculus/function_analysis.h"
-#include "symbolic/symbolic_expression.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "polynomial/calculator_polynomial.h"
 
 #include <functional>
@@ -103,4 +103,4 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
 
 }  // namespace symbolic_commands
 
-#endif  // CALCULATOR_SYMBOLIC_COMMANDS_H
+#endif  // SYMBOLIC_MODULE_H

@@ -11,7 +11,7 @@
 #ifndef SYMBOLIC_POLYNOMIAL_H
 #define SYMBOLIC_POLYNOMIAL_H
 
-#include "symbolic/symbolic_expression.h"
+#include "symbolic/core/symbolic_expression.h"
 
 #include <vector>
 #include <string>

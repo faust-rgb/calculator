@@ -1,5 +1,5 @@
-#include "symbolic/risch/risch_algorithm.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/calculus/risch/risch_algorithm.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 #include "math/mymath.h"
 #include <algorithm>
 #include <complex>

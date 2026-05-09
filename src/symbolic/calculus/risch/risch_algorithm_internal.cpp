@@ -1,5 +1,5 @@
-#include "symbolic/risch/risch_algorithm_internal.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/calculus/risch/risch_algorithm_internal.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 #include <functional>
 
 using namespace symbolic_expression_internal;

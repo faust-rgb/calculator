@@ -1,7 +1,7 @@
-#ifndef CALCULATOR_TRANSFORMS_H
-#define CALCULATOR_TRANSFORMS_H
+#ifndef TRANSFORM_MODULE_H
+#define TRANSFORM_MODULE_H
 
-#include "symbolic/symbolic_expression.h"
+#include "symbolic/core/symbolic_expression.h"
 #include <string>
 #include <functional>
 #include "module/calculator_module.h"
@@ -35,4 +35,4 @@ bool handle_transform_command(const TransformContext& ctx,
 
 }  // namespace transforms
 
-#endif  // CALCULATOR_TRANSFORMS_H
+#endif  // TRANSFORM_MODULE_H

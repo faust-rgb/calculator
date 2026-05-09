@@ -2,7 +2,7 @@
 // 积分变换命令实现
 // ============================================================================
 
-#include "symbolic/calculator_transforms.h"
+#include "symbolic/modules/transform_module.h"
 #include "parser/unified_expression_parser.h"
 #include "core/string_utils.h"
 

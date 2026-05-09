@@ -10,10 +10,10 @@
 //
 // ============================================================================
 
-#include "symbolic/symbolic_solver.h"
-#include "symbolic/symbolic_expression_internal.h"
-#include "symbolic/groebner_basis.h"
-#include "symbolic/symbolic_polynomial.h"
+#include "symbolic/solver/symbolic_solver.h"
+#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/algebra/groebner/groebner_basis.h"
+#include "symbolic/algebra/polynomial/symbolic_polynomial.h"
 #include "math/mymath.h"
 #include "core/scalar_type.h"
 

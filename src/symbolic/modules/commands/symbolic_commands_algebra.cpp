@@ -1,6 +1,6 @@
-#include "symbolic/commands/symbolic_commands_internal.h"
-#include "symbolic/assumptions.h"
-#include "symbolic/groebner_basis.h"
+#include "symbolic/modules/commands/symbolic_commands_internal.h"
+#include "symbolic/base/assumptions.h"
+#include "symbolic/algebra/groebner/groebner_basis.h"
 #include "core/string_utils.h"
 #include <vector>
 

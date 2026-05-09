@@ -1,4 +1,4 @@
-#include "symbolic/assumptions.h"
+#include "symbolic/base/assumptions.h"
 #include <sstream>
 
 namespace symbolic_assumptions {

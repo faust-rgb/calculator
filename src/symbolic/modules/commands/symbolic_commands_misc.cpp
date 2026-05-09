@@ -1,6 +1,6 @@
-#include "symbolic/commands/symbolic_commands_internal.h"
-#include "symbolic/symbolic_solver.h"
-#include "symbolic/symbolic_sum.h"
+#include "symbolic/modules/commands/symbolic_commands_internal.h"
+#include "symbolic/solver/symbolic_solver.h"
+#include "symbolic/calculus/sum/symbolic_sum.h"
 #include "core/string_utils.h"
 #include <vector>
 

@@ -2,8 +2,8 @@
 // 符号微分实现
 // ============================================================================
 
-#include "symbolic/symbolic_expression_internal.h"
-#include "symbolic/symbolic_polynomial.h"
+#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/algebra/polynomial/symbolic_polynomial.h"
 
 #include "math/mymath.h"
 #include "polynomial/polynomial.h"

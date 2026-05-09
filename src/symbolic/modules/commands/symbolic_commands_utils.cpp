@@ -1,8 +1,8 @@
-#include "symbolic/commands/symbolic_commands_internal.h"
+#include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "parser/unified_expression_parser.h"
 #include "core/string_utils.h"
-#include "symbolic/symbolic_expression_internal.h"
-#include "symbolic/risch/risch_algorithm.h"
+#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/calculus/risch/risch_algorithm.h"
 #include "polynomial/polynomial.h"
 #include "parser/command_parser.h"
 #include <sstream>

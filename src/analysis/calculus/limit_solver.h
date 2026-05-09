@@ -2,7 +2,7 @@
 #define ANALYSIS_NUMERIC_LIMIT_SOLVER_H
 
 #include "core/scalar_type.h"
-#include "symbolic/symbolic_expression.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "analysis/calculus/numerical_calculus.h"
 #include <functional>
 #include <string>

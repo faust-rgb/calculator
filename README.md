@@ -52,15 +52,15 @@ fragments:
   `src/core/decimal_parser.cpp`, `src/core/precise_decimal_parser.cpp`,
   `src/core/exact_and_symbolic_render.cpp`, `src/core/calculator_commands.cpp`,
   and `src/core/state_persistence.cpp`
-- `src/symbolic/node_parser.cpp`, `src/symbolic/simplify.cpp`,
-  `src/symbolic/algebra_helpers.cpp`, `src/symbolic/polynomial_helpers.cpp`,
-  `src/symbolic/transforms.cpp`, `src/symbolic/symbolic_expression_calculus.cpp`,
-  and `src/symbolic/symbolic_expression_transforms.cpp`
+- `src/symbolic/core/node_parser_new.cpp`, `src/symbolic/transformation/simplify/simplify.cpp`,
+  `src/symbolic/algebra/algebra_helpers.cpp`, `src/symbolic/algebra/polynomial/polynomial_helpers.cpp`,
+  `src/symbolic/transformation/transforms.cpp`, `src/symbolic/calculus/integral/symbolic_expression_calculus.cpp`,
+  and `src/symbolic/transformation/rules/symbolic_expression_transforms.cpp`
 
 Shared internal declarations for these splits live in private headers such as
 `src/math/mymath_internal.h`, `src/matrix/matrix_internal.h`,
 `src/core/calculator_internal_types.h`, and
-`src/symbolic/symbolic_expression_internal.h`.
+`src/symbolic/core/symbolic_expression_internal.h`.
 
 ## Features
 

@@ -11,8 +11,8 @@
 //
 // ============================================================================
 
-#include "symbolic/symbolic_limit.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/calculus/limit/symbolic_limit.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 
 #include "core/scalar_type.h"
 #include "math/mymath.h"

@@ -1,6 +1,6 @@
-#include "symbolic/risch/risch_algorithm.h"
-#include "symbolic/risch/risch_algorithm_internal.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/calculus/risch/risch_algorithm.h"
+#include "symbolic/calculus/risch/risch_algorithm_internal.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 #include "mymath.h"
 #include <algorithm>
 #include <vector>

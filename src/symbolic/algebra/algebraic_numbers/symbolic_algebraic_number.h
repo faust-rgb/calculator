@@ -1,10 +1,10 @@
 #ifndef SYMBOLIC_ALGEBRAIC_NUMBER_H
 #define SYMBOLIC_ALGEBRAIC_NUMBER_H
 
-#include "symbolic/symbolic_polynomial.h"
-#include "symbolic/symbolic_expression.h"
-#include "symbolic/symbolic_expression_internal.h"
-#include "symbolic/differential_field.h"
+#include "symbolic/algebra/polynomial/symbolic_polynomial.h"
+#include "symbolic/core/symbolic_expression.h"
+#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/calculus/differential_field.h"
 #include <vector>
 #include <utility>
 #include <memory>

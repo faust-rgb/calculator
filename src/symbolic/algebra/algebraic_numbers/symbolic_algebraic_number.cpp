@@ -1,5 +1,5 @@
-#include "symbolic/symbolic_algebraic_number.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/algebra/algebraic_numbers/symbolic_algebraic_number.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 
 #include "core/scalar_type.h"
 

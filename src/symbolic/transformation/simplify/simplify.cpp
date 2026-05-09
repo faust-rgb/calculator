@@ -25,7 +25,7 @@
 // 结果通过 LRU 缓存记忆，避免重复计算。
 // ============================================================================
 
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 
 #include "core/scalar_type.h"
 #include "math/mymath.h"

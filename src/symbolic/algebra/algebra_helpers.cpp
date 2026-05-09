@@ -34,8 +34,8 @@
 // 这些函数是 simplify.cpp 中简化规则的基础设施。
 // ============================================================================
 
-#include "symbolic/symbolic_expression_internal.h"
-#include "symbolic/symbolic_polynomial.h"
+#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/algebra/polynomial/symbolic_polynomial.h"
 
 #include "core/scalar_type.h"
 #include "math/mymath.h"

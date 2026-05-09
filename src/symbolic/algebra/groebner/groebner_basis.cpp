@@ -1,5 +1,5 @@
-#include "symbolic/groebner_basis.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/algebra/groebner/groebner_basis.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 #include "math/mymath.h"
 #include <algorithm>
 #include <cmath>

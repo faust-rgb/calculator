@@ -2,7 +2,7 @@
 // 向量/张量表达式实现
 // ============================================================================
 
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 
 #include <algorithm>
 #include <cctype>

@@ -16,7 +16,7 @@
 #include "analysis/calculus/function_analysis.h"
 #include "matrix/matrix.h"
 #include "math/mymath.h"
-#include "symbolic/symbolic_expression.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "core/string_utils.h"
 #include "core/format_utils.h"
 #include "parser/command_parser.h"

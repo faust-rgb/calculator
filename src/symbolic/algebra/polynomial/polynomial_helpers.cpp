@@ -29,9 +29,9 @@
 // 提供多项式处理的基础设施。
 // ============================================================================
 
-#include "symbolic/symbolic_expression_internal.h"
-#include "symbolic/symbolic_polynomial.h"
-#include "symbolic/assumptions.h"
+#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/algebra/polynomial/symbolic_polynomial.h"
+#include "symbolic/base/assumptions.h"
 
 #include "core/scalar_type.h"
 #include "math/mymath.h"

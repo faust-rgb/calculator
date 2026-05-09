@@ -1,9 +1,9 @@
 #ifndef RISCH_ALGORITHM_H
 #define RISCH_ALGORITHM_H
 
-#include "symbolic/risch/risch_types.h"
-#include "symbolic/differential_field.h"
-#include "symbolic/symbolic_algebraic_number.h"
+#include "symbolic/calculus/risch/risch_types.h"
+#include "symbolic/calculus/differential_field.h"
+#include "symbolic/algebra/algebraic_numbers/symbolic_algebraic_number.h"
 #include <vector>
 #include <string>
 #include <map>

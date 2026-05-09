@@ -2,9 +2,9 @@
 // 符号积分实现
 // ============================================================================
 
-#include "symbolic/symbolic_expression_internal.h"
-#include "symbolic/symbolic_polynomial.h"
-#include "symbolic/integral/symbolic_expression_integral_helpers.h"
+#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/algebra/polynomial/symbolic_polynomial.h"
+#include "symbolic/calculus/integral/symbolic_expression_integral_helpers.h"
 
 #include "math/mymath.h"
 #include "polynomial/polynomial.h"

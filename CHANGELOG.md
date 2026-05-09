@@ -229,7 +229,7 @@ helpers, interactive terminal UX, and project documentation.
 ## Version 1.5 (2026-04-27)
 
 - **Performance Optimization:**
-  - Improved symbolic node interning with an incremental LRU eviction strategy in `src/symbolic/node_parser.cpp`, eliminating $O(N)$ scan overhead during high-frequency node creation.
+  - Improved symbolic node interning with an incremental LRU eviction strategy in `src/symbolic/core/node_parser_new.cpp`, eliminating $O(N)$ scan overhead during high-frequency node creation.
 - **Terminal UX Enhancements:**
   - Upgraded REPL in `src/app/main.cpp` with a full-featured line editor:
     - Inline cursor movement (Left/Right arrow keys).

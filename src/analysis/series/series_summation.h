@@ -2,7 +2,7 @@
 #define ANALYSIS_SERIES_SERIES_SUMMATION_H
 
 #include "core/scalar_type.h"
-#include "symbolic/symbolic_expression.h"
+#include "symbolic/core/symbolic_expression.h"
 #include <string>
 #include <vector>
 #include <functional>

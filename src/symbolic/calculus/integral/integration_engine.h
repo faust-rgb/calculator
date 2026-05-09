@@ -31,9 +31,9 @@
 #ifndef INTEGRATION_ENGINE_H
 #define INTEGRATION_ENGINE_H
 
-#include "symbolic/symbolic_expression.h"
-#include "symbolic/symbolic_polynomial.h"
-#include "symbolic/risch/risch_algorithm.h"
+#include "symbolic/core/symbolic_expression.h"
+#include "symbolic/algebra/polynomial/symbolic_polynomial.h"
+#include "symbolic/calculus/risch/risch_algorithm.h"
 
 #include <functional>
 #include <memory>

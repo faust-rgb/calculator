@@ -2,8 +2,8 @@
 // 变换规则框架实现
 // ============================================================================
 
-#include "symbolic/transform_rules.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/transformation/rules/transform_rules.h"
+#include "symbolic/core/symbolic_expression_internal.h"
 #include "math/mymath.h"
 
 #include <algorithm>

@@ -1,7 +1,7 @@
 #ifndef SYMBOLIC_COMMANDS_INTERNAL_H
 #define SYMBOLIC_COMMANDS_INTERNAL_H
 
-#include "symbolic/calculator_symbolic_commands.h"
+#include "symbolic/modules/symbolic_module.h"
 #include <string>
 #include <vector>
 

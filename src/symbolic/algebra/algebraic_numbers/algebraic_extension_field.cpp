@@ -10,9 +10,9 @@
  * - 嵌套扩展处理
  */
 
-#include "symbolic/risch/risch_algorithm.h"
-#include "symbolic/symbolic_expression_internal.h"
-#include "symbolic/symbolic_polynomial.h"
+#include "symbolic/calculus/risch/risch_algorithm.h"
+#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/algebra/polynomial/symbolic_polynomial.h"
 
 #include "core/scalar_type.h"
 

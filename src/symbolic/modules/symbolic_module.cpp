@@ -1,6 +1,6 @@
-#include "symbolic/calculator_symbolic_commands.h"
-#include "symbolic/commands/symbolic_commands_internal.h"
-#include "symbolic/assumptions.h"
+#include "symbolic/modules/symbolic_module.h"
+#include "symbolic/modules/commands/symbolic_commands_internal.h"
+#include "symbolic/base/assumptions.h"
 #include "core/string_utils.h"
 #include "parser/unified_expression_parser.h"
 
