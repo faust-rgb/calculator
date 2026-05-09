@@ -1727,7 +1727,7 @@ Scalar TFunctionAnalysis<Scalar>::compute_numerical_limit(Scalar x, int directio
 direct_computation:
     auto compute_limit_at = [this](Scalar x_target, int side) {
         Scalar richardson[14][14] = {};
-        bool row_valid[14] = {};
+        //bool row_valid[14] = {};
         Scalar best_value = 0.0L;
         Scalar best_error = mymath::infinity();
         bool have_best = false;
@@ -1817,7 +1817,7 @@ direct_computation:
                 Scalar p4 = mymath::precise128::pow(Scalar(2.0L), Scalar((col)));
                 richardson[row][col] = (p4 * richardson[row][col - 1] - richardson[row - 1][col - 1]) / (p4 - 1.0L);
             }
-            row_valid[row] = true;
+            //row_valid[row] = true;
 
             if (row >= 1) {
                 const Scalar current_error = mymath::precise128::abs(richardson[row][row] - richardson[row - 1][row - 1]);

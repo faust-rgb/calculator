@@ -225,7 +225,7 @@ void TransformRuleRegistry::initialize_builtin_rules() {
         .matcher = [](const SymbolicExpression& expr, const std::string& var) {
             return is_constant_expression(expr, var);
         },
-        .transformer = [](const SymbolicExpression& expr, const std::string&,
+        .transformer = [](const SymbolicExpression& /*expr*/, const std::string&,
                           const std::string& output_var) {
             return make_multiply(
                 make_multiply(SymbolicExpression::number(Scalar(2)),

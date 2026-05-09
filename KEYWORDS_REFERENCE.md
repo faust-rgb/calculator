@@ -303,9 +303,9 @@ user-defined functions:
 
 | Name | Description |
 |------|-------------|
-| `double_integral` | long double integral |
-| `double_integral_cyl` | long double integral (cylindrical) |
-| `double_integral_polar` | long double integral (polar) |
+| `double_integral` | Double integral |
+| `double_integral_cyl` | Double integral (cylindrical) |
+| `double_integral_polar` | Double integral (polar) |
 | `triple_integral` | Triple integral |
 | `triple_integral_cyl` | Triple integral (cylindrical) |
 | `triple_integral_sph` | Triple integral (spherical) |

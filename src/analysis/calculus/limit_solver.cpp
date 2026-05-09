@@ -1,3 +1,20 @@
+// ============================================================================
+// 极限求解器实现
+// ============================================================================
+//
+// 本文件实现了符号极限的数值求解算法，包括：
+// - 极限点探测（有限值、无穷大、振荡）
+// - Puiseux 级数展开辅助
+// - 极限值计算与验证
+//
+// 主要用于处理符号计算中无法直接代入的极限问题，
+// 如 0/0 型、∞/∞ 型等不定式。
+//
+// 相关文件：
+// - limit_solver.h: 极限求解器接口定义
+// - psa_engine.h: Puiseux 级数展开引擎
+// ============================================================================
+
 #include "analysis/calculus/limit_solver.h"
 #include "analysis/series/psa_engine.h"
 #include "analysis/modules/series_module.h"
@@ -536,7 +553,7 @@ T compute_numerical_limit(
     int direction) {
     auto compute_limit_at = [&](T x_target, int side) -> T {
         T richardson[14][14] = {};
-        bool row_valid[14] = {};
+        //bool row_valid[14] = {};
         T best_value = T(static_cast<long long>(0));
         T best_error = t_infinity<T>();
         bool have_best = false;
@@ -625,7 +642,7 @@ T compute_numerical_limit(
                 T p4 = t_pow(T(static_cast<long long>(2)), T(static_cast<long long>(col)));
                 richardson[row][col] = (p4 * richardson[row][col - 1] - richardson[row - 1][col - 1]) / (p4 - T(static_cast<long long>(1)));
             }
-            row_valid[row] = true;
+            //row_valid[row] = true;
 
             if (row >= 1) {
                 const T current_error = t_abs(richardson[row][row] - richardson[row - 1][row - 1]);

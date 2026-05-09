@@ -14,6 +14,10 @@
 // - 大规模使用 NTT 算法 (O(n log n))
 // ============================================================================
 
+// __int128 是 GCC 扩展，用于高精度整数运算
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+
 #include "precise_decimal.h"
 #include "rational.h"
 #include "types/stored_value.h"
@@ -1592,3 +1596,5 @@ std::string stored_value_precise_decimal_text(const StoredValue& value) {
     if (value.has_precise_decimal_text) return value.precise_decimal_text;
     return format_decimal(normalize_display_decimal(value.decimal.to_long_double()), 15);
 }
+
+#pragma GCC diagnostic pop

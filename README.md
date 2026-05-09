@@ -8,23 +8,25 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - `src/app`
   REPL entry point and command dispatch
 - `src/core`
-  Calculator API and main expression/script execution logic
+  Calculator API and shared infrastructure
+- `src/parser`
+  Expression, command, and script parsers
+- `src/execution`
+  Command registry, variable resolution, and script runtime
 - `src/math`
-  Custom numeric helpers and math primitives, split into standard `.cpp` translation units
+  Custom numeric helpers and math primitives
 - `src/matrix`
   Matrix types and operations, including a dedicated linear-algebra implementation unit
 - `src/analysis`
-  One-variable function analysis
+  Advanced calculus (integration, ODE, optimization) and function analysis
 - `src/polynomial`
   Polynomial helpers
 - `src/symbolic`
-  Symbolic expression support
-- `src/script`
-  Script AST and parser
+  Symbolic expression support and CAS engine
 - `src/time`
   Time functions (timestamp, formatting, timers, sleep)
 - `src/io`
-  File I/O operations
+  File I/O operations and state persistence
 - `test`
   Regression tests and runnable example scripts
 
@@ -33,33 +35,29 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - `ARCHITECTURE.md`
 - `FUNCTIONS_REFERENCE.md`
 - `KEYWORDS_REFERENCE.md` — Keywords and reserved names
-- `test/TESTING.md`
-- `test/script/SYNTAX_GUIDE.md`
-- `test/script/SYNTAX_GUIDE_CN.md` — Chinese script syntax guide
+- `STYLE_GUIDE.md`
+- `SYNTAX_GUIDE.md` — Script syntax guide
+- `SYNTAX_GUIDE_CN.md` — Chinese script syntax guide
 - `CHANGELOG.md`
 - `使用手册.md` — Chinese user manual
-- `docs/archive/` for historical handoff notes and one-off reports
+- `docs/` for architecture refactor plans and module development guides
 
 ## Source Organization
 
-Large subsystems are now split across normal `.cpp` files instead of implementation
-fragments:
+Large subsystems are split across focused directories and translation units:
 
+- `src/core/calculator_core.cpp` and `src/core/calculator_impl.h`
+- `src/parser/unified_expression_parser.cpp` and `src/parser/script_parser.cpp`
+- `src/execution/script_runtime.cpp` and `src/execution/variable_resolver.cpp`
 - `src/math/mymath.cpp` and `src/math/mymath_special_functions.cpp`
-- `src/matrix/matrix.cpp`, `src/matrix/matrix_expression.cpp`, and
-  `src/matrix/matrix_linear_algebra.cpp`
-- `src/core/calculator_lifecycle.cpp`, `src/core/calculator_help.cpp`,
-  `src/core/decimal_parser.cpp`, `src/core/precise_decimal_parser.cpp`,
-  `src/core/exact_and_symbolic_render.cpp`, `src/core/calculator_commands.cpp`,
-  and `src/core/state_persistence.cpp`
-- `src/symbolic/core/node_parser_new.cpp`, `src/symbolic/transformation/simplify/simplify.cpp`,
-  `src/symbolic/algebra/algebra_helpers.cpp`, `src/symbolic/algebra/polynomial/polynomial_helpers.cpp`,
-  `src/symbolic/transformation/transforms.cpp`, `src/symbolic/calculus/integral/symbolic_expression_calculus.cpp`,
-  and `src/symbolic/transformation/rules/symbolic_expression_transforms.cpp`
+- `src/matrix/matrix.cpp` and `src/matrix/matrix_linear_algebra.cpp`
+- `src/analysis/modules/` for calculator module interfaces
+- `src/analysis/calculus/`, `src/analysis/integration/`, `src/analysis/optimization/` for algorithm implementations
+- `src/symbolic/core/`, `src/symbolic/calculus/`, `src/symbolic/transformation/` for symbolic engine components
 
-Shared internal declarations for these splits live in private headers such as
-`src/math/mymath_internal.h`, `src/matrix/matrix_internal.h`,
-`src/core/calculator_internal_types.h`, and
+Shared internal declarations live in private headers such as
+`src/core/calculator_internal_types.h`, `src/math/mymath_internal.h`,
+`src/matrix/matrix_internal.h`, and
 `src/symbolic/core/symbolic_expression_internal.h`.
 
 ## Features

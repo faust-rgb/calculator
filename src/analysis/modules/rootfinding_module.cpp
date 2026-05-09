@@ -246,7 +246,7 @@ std::string solve_polynomial_equation(std::vector<Scalar> coeffs,
                 }
             }
         } else {
-            Scalar za = 1, zb = 2 * A, zc = A * A - 4 * C, zd = -B * B;
+            Scalar zb = 2 * A, zc = A * A - 4 * C, zd = -B * B;
             Scalar zshift = zb / 3;
             Scalar zA = zc - zb * zb / 3;
             Scalar zB = (2 * zb * zb * zb - 9 * zb * zc + 27 * zd) / 27;

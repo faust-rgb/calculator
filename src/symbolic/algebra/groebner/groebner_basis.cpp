@@ -1,3 +1,23 @@
+// ============================================================================
+// Gröbner 基计算模块
+// ============================================================================
+//
+// 本文件实现了 Gröbner 基算法，用于多元多项式方程组的求解和简化。
+// 主要功能包括：
+// - Buchberger 算法计算 Gröbner 基
+// - S-多项式计算和约简
+// - 多项式理想的基变换
+//
+// Gröbner 基是多项式理想的特殊生成集，具有以下性质：
+// - 可以判断多项式是否属于理想
+// - 可以求解多项式方程组
+// - 可以消除变量（消元定理）
+//
+// 相关文件：
+// - groebner_basis.h: Gröbner 基接口定义
+// - symbolic_solver.cpp: 方程求解器（使用 Gröbner 基）
+// ============================================================================
+
 #include "symbolic/algebra/groebner/groebner_basis.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "math/mymath.h"
@@ -28,8 +48,8 @@ struct MonomialComparator {
 
 // 表示一个多元多项式: sum(coeff * monomial)
 struct MultivariatePoly {
-    std::map<Monomial, SymbolicExpression, MonomialComparator> terms;
     std::vector<std::string> vars;
+    std::map<Monomial, SymbolicExpression, MonomialComparator> terms;
 
     MultivariatePoly(const std::vector<std::string>& v) : vars(v), terms(MonomialComparator{v}) {}
 

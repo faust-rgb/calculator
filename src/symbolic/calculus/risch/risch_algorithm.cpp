@@ -1,3 +1,24 @@
+// ============================================================================
+// Risch 积分算法实现
+// ============================================================================
+//
+// 本文件实现了 Risch 积分算法，这是一种用于计算初等函数不定积分的
+// 完备算法。主要功能包括：
+// - 有理函数积分
+// - 对数扩展域积分
+// - 指数扩展域积分
+// - 代数函数积分（部分支持）
+//
+// Risch 算法基于微分代数理论，能够判断一个初等函数是否有初等原函数，
+// 并在有解时给出显式结果。
+//
+// 相关文件：
+// - risch_algorithm.h: 算法接口定义
+// - risch_algorithm_internal.h: 内部辅助函数
+// - risch_algorithm_rational.cpp: 有理函数积分
+// - risch_algorithm_integration.cpp: 主积分流程
+// ============================================================================
+
 #include "symbolic/calculus/risch/risch_algorithm.h"
 #include "symbolic/calculus/risch/risch_algorithm_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"
@@ -22,7 +43,7 @@ namespace {
 
 // Helper function for high-precision numerical comparison using float128
 // Returns true if the expression is a number within tolerance
-bool is_number_precise(const SymbolicExpression& expr, Scalar* value, mymath::float128_t* value_128 = nullptr) {
+[[maybe_unused]] bool is_number_precise(const SymbolicExpression& expr, Scalar* value, mymath::float128_t* value_128 = nullptr) {
     Scalar val = Scalar(0);
     if (expr.is_number(&val)) {
         if (value) *value = val;
@@ -45,7 +66,7 @@ bool is_near_integer_precise(Scalar val, int* int_value = nullptr) {
 }
 
 // Check if two Scalar values are close using float128 precision
-bool are_values_close_precise(Scalar a, Scalar b, Scalar tolerance = 1e-10L) {
+[[maybe_unused]] bool are_values_close_precise(Scalar a, Scalar b, Scalar tolerance = 1e-10L) {
     mymath::float128_t a_128(a);
     mymath::float128_t b_128(b);
     mymath::float128_t diff = mymath::precise128::abs(a_128 - b_128);

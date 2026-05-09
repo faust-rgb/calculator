@@ -6,11 +6,11 @@
 
 namespace symbolic_commands {
 
-bool handle_misc_commands(const SymbolicCommandContext& ctx,
+bool handle_misc_commands(const SymbolicCommandContext& /*ctx*/,
                          const std::string& command,
                          const std::string& /*inside*/,
                          const std::vector<std::string>& arguments,
-                         std::string* output) {
+                         std::string* /*output*/) {
     if (command == "dsolve") {
         if (arguments.size() < 1) throw std::runtime_error("dsolve expects equation");
         // Simplified handling for now

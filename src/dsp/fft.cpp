@@ -201,7 +201,7 @@ static void small_factor_fft(std::vector<Complex>& data,
                               std::size_t factor,
                               std::size_t stride,
                               std::size_t total_length,
-                              const std::vector<Complex>& twiddles_base) {
+                              [[maybe_unused]] const std::vector<Complex>& twiddles_base) {
     if (factor == 2) {
         // 基-2
         const Scalar base_angle = -Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(total_length));
@@ -319,7 +319,7 @@ static void mixed_radix_fft_iterative(std::vector<Complex>& data,
     for (std::size_t stage = 0; stage < num_stages; ++stage) {
         const std::size_t factor = factors[stage];
         const std::size_t total_length = stage_lengths[stage];
-        const std::size_t sub_length = stage_lengths[stage + 1];
+        // const std::size_t sub_length = stage_lengths[stage + 1];
 
         // 计算当前层的 stride
         std::size_t stride = 1;

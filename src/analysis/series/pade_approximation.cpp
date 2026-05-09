@@ -210,7 +210,7 @@ bool solve_pade_denominator(std::function<Scalar(int)> c,
 std::string pade_from_coeffs(const std::vector<Scalar>& coefficients,
                               int numerator_degree,
                               int denominator_degree) {
-    const int total_degree = numerator_degree + denominator_degree;
+    //const int total_degree = numerator_degree + denominator_degree;
 
     auto c = [&](int k) -> Scalar {
         if (k < 0 || k >= static_cast<int>(coefficients.size())) return Scalar(0);

@@ -212,6 +212,20 @@ helpers, interactive terminal UX, and project documentation.
 - Expanded regression tests
 - Handoff and architecture documentation
 
+## Version 1.7 (2026-05-09)
+
+- **Comprehensive Architecture Reorganization**:
+  - Successfully executed the core refactoring plan to modularize the codebase:
+    - **parser/**: Centralized all parsing logic including `unified_expression_parser.cpp`, `command_parser.cpp`, and `script_parser.cpp`.
+    - **execution/**: Consolidated runtime components such as `script_runtime.cpp`, `command_registry.cpp`, and `variable_resolver.cpp`.
+    - **analysis/**: Reorganized advanced calculus into domain-specific subdirectories (`calculus/`, `integration/`, `optimization/`, `differential_equations/`, `rootfinding/`, `series/`) and implemented a consistent `modules/` interface.
+    - **symbolic/**: Deeply refactored the CAS engine into specialized sub-modules for core representation, algebra, calculus, transformation, and solving.
+    - **types/**: Extracted fundamental data types like `StoredValue`, `Scalar`, and `Rational` into a dedicated layer.
+  - **Cleanup and Standardization**:
+    - Standardized internal header naming and inclusion patterns across all refactored modules.
+    - Removed redundant implementation fragments and consolidated logic into focused translation units.
+    - Updated project documentation (README, ARCHITECTURE, STYLE_GUIDE) to match the new physical layout.
+
 ## Version 1.6 (2026-04-28)
 
 - **ODE and Symbolic Calculus Enhancements:**

@@ -41,7 +41,7 @@
 ## 头文件保护
 
 - 格式：`MODULE_FILENAME_H`
-- 例如：`PARSER_EXPRESSION_AST_H`
+- 例如：`PARSER_UNIFIED_EXPRESSION_PARSER_H`
 
 ## 注释风格
 
@@ -62,7 +62,7 @@ std::unique_ptr<ExpressionAST> compile_expression_ast(const std::string& express
 
 ```cpp
 // 1. 对应的头文件（如果是 .cpp 文件）
-#include "expression_ast.h"
+#include "parser/unified_expression_parser.h"
 
 // 2. 空行
 
@@ -80,7 +80,7 @@ std::unique_ptr<ExpressionAST> compile_expression_ast(const std::string& express
 
 // 7. 项目内部依赖（按层级从低到高）
 #include "types/stored_value.h"
-#include "parser/token_types.h"
+#include "core/scalar_type.h"
 ```
 
 ## 前向声明

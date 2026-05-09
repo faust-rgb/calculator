@@ -369,7 +369,6 @@ SymbolicExpression simplify_heavyweight(const SymbolicExpression& expression) {
     // 先应用中量级规则
     SymbolicExpression current = simplify_medium(expression);
     const auto& node = current.node_;
-    Scalar left_value = Scalar(0), right_value = Scalar(0);
     SymbolicExpression left, right;
 
     switch (node->type) {

@@ -367,18 +367,18 @@ Notes:
   Fast Fourier Transform
 - `ifft(spectrum)`
   Inverse FFT
-- `rfft(signal)` (planned)
+- `rfft(signal)`
   Real FFT (optimized for real signals)
 
 ### Convolution & Correlation
 
 - `conv(s1, s2)`
   Linear convolution
-- `cconv(s1, s2 [, n])` (planned)
+- `cconv(s1, s2 [, n])`
   Circular convolution
-- `xcorr(s1, s2)` (planned)
+- `xcorr(s1, s2)`
   Cross-correlation
-- `autocorr(signal)` (planned)
+- `autocorr(signal)`
   Auto-correlation
 
 ### Window Functions
@@ -390,7 +390,7 @@ Notes:
 - `blackman(n)`
   Blackman window
 
-### Filter Design (planned)
+### Filter Design
 
 - `fir_design(order, cutoff, type [, window])`
   Design FIR filter (types: `lowpass`, `highpass`, `bandpass`, `bandstop`)
@@ -401,7 +401,7 @@ Notes:
 - `freqz(b, a [, n])`
   Frequency response
 
-### Time-Frequency Analysis (planned)
+### Time-Frequency Analysis
 
 - `psd(signal [, nfft])`
   Power spectral density (Welch method)
@@ -413,10 +413,10 @@ Notes:
 Notes:
 
 - `fft` supports arbitrary-length signals using mixed-radix and Bluestein algorithms
-- `rfft` (planned) will return only positive frequencies for real signals
+- `rfft` returns only positive frequencies for real signals
 - `hann`, `hamming`, `blackman` return normalized window vectors
-- `fir_design` (planned) returns numerator `b` and denominator `a` coefficients
-- `psd` (planned) uses Welch's method with 50% overlap and Hanning window by default
+- `fir_design` returns numerator `b` and denominator `a` coefficients
+- `psd` uses Welch's method with 50% overlap and Hanning window by default
 
 Examples:
 
@@ -424,8 +424,8 @@ Examples:
 - `conv([1, 2, 3], [1, 1])` -> `[1, 3, 5, 3]`
 - `hann(5)` -> `[0, 0.5, 1, 0.5, 0]`
 - `hamming(8)` -> `[0.08, 0.253, 0.642, 0.954, 0.954, 0.642, 0.253, 0.08]`
-- `fir_design(16, 0.2, lowpass)` (planned) -> returns `b` and `a` coefficients
-- `psd([1, 2, 3, 4, 5, 6, 7, 8], 8)` (planned) -> power spectral density
+- `fir_design(16, 0.2, lowpass)` -> returns `b` and `a` coefficients
+- `psd([1, 2, 3, 4, 5, 6, 7, 8], 8)` -> power spectral density
 
 Notes:
 
