@@ -20,6 +20,7 @@
 #include "execution/variable_resolver.h"
 #include "parser/parser_utils.h"
 #include "core/string_utils.h"
+#include "math/mymath.h"
 
 #include <algorithm>
 #include <iomanip>
@@ -28,8 +29,8 @@
 
 namespace signal_cmds {
 
-// 数学常量
-constexpr Scalar kPi = 3.14159265358979323846;
+// 使用 mymath 命名空间中的常量
+using mymath::kPi;
 
 // ============================================================================
 // 辅助函数

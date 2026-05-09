@@ -48,6 +48,13 @@ public:
 
     void set_evaluator(std::function<T(const std::vector<std::pair<std::string, T>>&)> evaluator);
 
+    /**
+     * @brief 设置外部变量查找函数
+     * 用于极限计算时查询非极限变量的值
+     * @param lookup 变量查找函数，返回变量值或默认值
+     */
+    void set_variable_lookup(std::function<T(const std::string&)> lookup);
+
     T evaluate(T x) const;
 
     /**
@@ -101,6 +108,7 @@ private:
     std::string variable_name_;
     mutable std::function<T(const std::vector<std::pair<std::string, T>>&)> evaluator_;
     mutable std::shared_ptr<Calculator> fallback_calculator_;
+    mutable std::function<T(const std::string&)> variable_lookup_;  ///< 外部变量查找函数
     mutable std::list<std::pair<std::string, T>> evaluation_cache_entries_;
     mutable std::unordered_map<std::string, typename std::list<std::pair<std::string, T>>::iterator> evaluation_cache_index_;
 };

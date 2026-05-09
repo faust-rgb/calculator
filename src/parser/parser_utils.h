@@ -37,6 +37,79 @@ struct BalancedScanResult {
 };
 
 /**
+ * @class BracketCounter
+ * @brief 括号计数器，用于追踪嵌套深度
+ *
+ * 使用方法：
+ * - 每次遇到 Token 时调用 update(kind)
+ * - 检查 is_top_level() 判断是否在顶层
+ * - 检查各种 depth() 获取当前深度
+ */
+class BracketCounter {
+public:
+    BracketCounter() = default;
+
+    /// 更新计数（根据 Token 类型）
+    template<typename TokenKindType>
+    void update(TokenKindType kind) {
+        if (is_open_paren(kind)) ++paren_depth_;
+        else if (is_close_paren(kind)) { if (paren_depth_ > 0) --paren_depth_; }
+        else if (is_open_bracket(kind)) ++bracket_depth_;
+        else if (is_close_bracket(kind)) { if (bracket_depth_ > 0) --bracket_depth_; }
+        else if (is_open_brace(kind)) ++brace_depth_;
+        else if (is_close_brace(kind)) { if (brace_depth_ > 0) --brace_depth_; }
+    }
+
+    /// 是否在顶层（所有深度为 0）
+    bool is_top_level() const {
+        return paren_depth_ == 0 && bracket_depth_ == 0 && brace_depth_ == 0;
+    }
+
+    /// 获取圆括号深度
+    int paren_depth() const { return paren_depth_; }
+
+    /// 获取方括号深度
+    int bracket_depth() const { return bracket_depth_; }
+
+    /// 获取花括号深度
+    int brace_depth() const { return brace_depth_; }
+
+    /// 重置计数器
+    void reset() { paren_depth_ = bracket_depth_ = brace_depth_ = 0; }
+
+private:
+    // 模板特化辅助函数（需要在具体使用时提供）
+    template<typename TokenKindType>
+    static bool is_open_paren(TokenKindType kind) {
+        return static_cast<int>(kind) == 4;  // TokenKind::kLParen
+    }
+    template<typename TokenKindType>
+    static bool is_close_paren(TokenKindType kind) {
+        return static_cast<int>(kind) == 5;  // TokenKind::kRParen
+    }
+    template<typename TokenKindType>
+    static bool is_open_bracket(TokenKindType kind) {
+        return static_cast<int>(kind) == 6;  // TokenKind::kLBracket
+    }
+    template<typename TokenKindType>
+    static bool is_close_bracket(TokenKindType kind) {
+        return static_cast<int>(kind) == 7;  // TokenKind::kRBracket
+    }
+    template<typename TokenKindType>
+    static bool is_open_brace(TokenKindType kind) {
+        return static_cast<int>(kind) == 8;  // TokenKind::kLBrace
+    }
+    template<typename TokenKindType>
+    static bool is_close_brace(TokenKindType kind) {
+        return static_cast<int>(kind) == 9;  // TokenKind::kRBrace
+    }
+
+    int paren_depth_ = 0;
+    int bracket_depth_ = 0;
+    int brace_depth_ = 0;
+};
+
+/**
  * @brief 扫描字符串，检测括号平衡状态
  * @param text 要扫描的文本
  * @return 平衡扫描结果

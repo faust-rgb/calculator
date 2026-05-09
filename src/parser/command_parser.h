@@ -50,6 +50,7 @@ enum class CommandKind {
     kFunctionDefinition, ///< 函数定义，如 f(x,y) = x^2+y^2
     kFunctionCall,       ///< 函数调用，如 sin(pi/4)
     kAssignment,         ///< 变量赋值，如 x = 5
+    kIndexAssignment,    ///< 索引赋值，如 x[i] = value 或 m[r, c] = value
     kExpression,         ///< 纯表达式，如 2 + 3
     kStringLiteral,      ///< 字符串字面量，如 "hello"
     kSequence            ///< 语句序列，如 x=1; y=2; x+y
@@ -103,6 +104,16 @@ struct AssignmentInfo {
 };
 
 /**
+ * @struct IndexAssignmentInfo
+ * @brief 索引赋值信息（如 x[i] = value 或 m[r, c] = value）
+ */
+struct IndexAssignmentInfo {
+    std::string_view variable;       ///< 变量名（如 x 或 m）
+    std::vector<ExpressionInfo> indices;  ///< 索引表达式列表（如 [i] 或 [r, c]）
+    ExpressionInfo value;            ///< 赋值值表达式
+};
+
+/**
  * @struct MetaCommandInfo
  * @brief 元命令信息
  */
@@ -112,12 +123,22 @@ struct MetaCommandInfo {
 };
 
 /**
+ * @struct NamedArgument
+ * @brief 命名参数信息（如 color="red"）
+ */
+struct NamedArgument {
+    std::string_view name;            ///< 参数名
+    ExpressionInfo value;             ///< 参数值
+};
+
+/**
  * @struct FunctionCallInfo
- * @brief 函数调用信息
+ * @brief 函数调用信息（支持位置参数和命名参数）
  */
 struct FunctionCallInfo {
     std::string_view name;                    ///< 函数名
-    std::vector<ExpressionInfo> arguments;    ///< 参数列表（支持预编译）
+    std::vector<ExpressionInfo> arguments;    ///< 位置参数列表（支持预编译）
+    std::vector<NamedArgument> named_args;    ///< 命名参数列表（如 color="red"）
 };
 
 /**
@@ -135,6 +156,7 @@ public:
         FunctionDefinitionInfo,      // kFunctionDefinition
         FunctionCallInfo,            // kFunctionCall
         AssignmentInfo,              // kAssignment
+        IndexAssignmentInfo,         // kIndexAssignment
         ExpressionInfo,              // kExpression (改为 ExpressionInfo 支持预编译)
         std::string,                 // kStringLiteral
         std::vector<CommandASTNode>  // kSequence
@@ -154,8 +176,16 @@ public:
                                                    std::string_view body);
     static CommandASTNode make_function_call(std::string_view name,
                                              const std::vector<std::string_view>& args);
+    static CommandASTNode make_function_call_with_named(
+        std::string_view name,
+        const std::vector<std::string_view>& positional_args,
+        const std::vector<std::pair<std::string_view, std::string_view>>& named_args);
     static CommandASTNode make_assignment(std::string_view var,
                                           std::string_view expr);
+    static CommandASTNode make_index_assignment(
+        std::string_view var,
+        const std::vector<std::string_view>& indices,
+        std::string_view value);
     static CommandASTNode make_expression(std::string_view expr);
     static CommandASTNode make_string_literal(const std::string& value);
     static CommandASTNode make_sequence(std::vector<CommandASTNode> nodes);
@@ -175,6 +205,10 @@ public:
 
     const AssignmentInfo* as_assignment() const {
         return kind == CommandKind::kAssignment ? &std::get<AssignmentInfo>(data) : nullptr;
+    }
+
+    const IndexAssignmentInfo* as_index_assignment() const {
+        return kind == CommandKind::kIndexAssignment ? &std::get<IndexAssignmentInfo>(data) : nullptr;
     }
 
     const ExpressionInfo* as_expression() const {
@@ -281,6 +315,11 @@ private:
     CommandASTNode parse_function_call(Token id_token,
                                        bool single_statement,
                                        const LazyTokenStream::Checkpoint& expression_checkpoint);
+
+    /// 解析索引赋值（如 x[i] = value）
+    CommandASTNode parse_index_assignment(Token id_token,
+                                          bool single_statement,
+                                          const LazyTokenStream::Checkpoint& expression_checkpoint);
 
     /// 基于 Token 流解析参数列表（不使用字符串切分）
     std::vector<std::string_view> parse_argument_list_by_tokens(bool stop_at_rparen);

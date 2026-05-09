@@ -22,9 +22,9 @@ namespace signal {
 // Use Scalar for internal high-precision real computations
 using Scalar = mymath::Scalar;
 
-// 数学常量
+// 使用 mymath 命名空间中的常量
+using mymath::kPi;
 static const Scalar kPiScalar = mymath::precise128::pi();
-constexpr Scalar kPi = 3.14159265358979323846;
 
 // ============================================================================
 // 滤波器类型转换

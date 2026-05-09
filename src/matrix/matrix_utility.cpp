@@ -6,6 +6,7 @@
 #include "string_utils.h"
 #include "precise/precise_decimal.h"
 #include "core/scalar_type.h"
+#include "core/display_precision.h"
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
@@ -14,12 +15,11 @@ namespace matrix {
 namespace internal {
 
 int& mutable_display_precision() {
-    static int precision = 12;
-    return precision;
+    return display_precision::mutable_value();
 }
 
 int clamp_display_precision(int precision) {
-    return std::clamp(precision, 1, 17);
+    return display_precision::clamp(precision);
 }
 
 template <typename T>

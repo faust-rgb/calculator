@@ -847,8 +847,18 @@ StoredValue evaluate_expression_value(Calculator* calculator,
     if (impl->symbolic_constants_mode && !result.has_symbolic_text && !result.is_string && !result.is_matrix) {
         std::string symbolic_text;
         if (try_symbolic_constant_expression(target_expr, variables, &impl->functions, &symbolic_text)) {
-            result.has_symbolic_text = true;
-            result.symbolic_text = symbolic_text;
+            bool symbolic_text_is_plain_decimal = false;
+            try {
+                const Scalar parsed = mymath::from_string(symbolic_text);
+                symbolic_text_is_plain_decimal =
+                    mymath::precise128::abs(parsed - result.decimal) < Scalar(1e-12L);
+            } catch (...) {
+                symbolic_text_is_plain_decimal = false;
+            }
+            if (!symbolic_text_is_plain_decimal) {
+                result.has_symbolic_text = true;
+                result.symbolic_text = symbolic_text;
+            }
         }
     }
     
@@ -1367,6 +1377,16 @@ std::string command_ast_to_source(const CommandASTNode& ast) {
             const auto& assignment = std::get<AssignmentInfo>(ast.data);
             return std::string(assignment.variable) + " = " +
                    std::string(assignment.expression.text);
+        }
+        case CommandKind::kIndexAssignment: {
+            const auto& idx_assign = std::get<IndexAssignmentInfo>(ast.data);
+            std::string text = std::string(idx_assign.variable) + "[";
+            for (std::size_t i = 0; i < idx_assign.indices.size(); ++i) {
+                if (i != 0) text += ", ";
+                text += std::string(idx_assign.indices[i].text);
+            }
+            text += "] = " + std::string(idx_assign.value.text);
+            return text;
         }
         case CommandKind::kExpression:
             return std::string(std::get<ExpressionInfo>(ast.data).text);

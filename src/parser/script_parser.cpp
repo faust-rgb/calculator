@@ -22,28 +22,6 @@ namespace {
 
 using utils::trim_copy;
 
-/**
- * @brief 检查表达式是否为索引赋值（如 x[i] = value 或 m[r, c] = value）
- */
-bool looks_like_index_assignment(std::string_view text) {
-    std::size_t equal_pos = parser_utils::find_top_level(text, '=');
-    if (equal_pos == std::string_view::npos) return false;
-    
-    // Check for compound assignments or comparison operators
-    if (equal_pos + 1 < text.size() && text[equal_pos + 1] == '=') return false; // ==
-    if (equal_pos > 0 && (text[equal_pos - 1] == '!' || text[equal_pos - 1] == '<' || text[equal_pos - 1] == '>')) return false; // !=, <=, >=
-
-    const std::string lhs = trim_copy(std::string(text.substr(0, equal_pos)));
-    if (lhs.empty() || lhs.back() != ']' || lhs.find('[') == std::string::npos) return false;
-
-    const std::size_t first_bracket = lhs.find('[');
-    if (first_bracket == 0) return false;
-    const char first_char = lhs[0];
-    if (!std::isalpha(static_cast<unsigned char>(first_char)) && first_char != '_') return false;
-
-    return true;
-}
-
 struct Token {
     enum class Kind {
         kIdentifier, kKeyword, kSymbol, kNumber, kString, kNewline, kIndent, kDedent, kEof,
@@ -210,7 +188,8 @@ private:
     StatementPtr parse_simple_statement() {
         auto s = std::make_unique<SimpleStatement>(); s->line = peek().line;
         s->text = parse_expr_str();
-        if (!s->text.empty() && !looks_like_index_assignment(s->text)) {
+        // 现在所有语句都通过 CommandParser 解析，包括索引赋值
+        if (!s->text.empty()) {
             s->command_ast = parse_script_command(s->text);
         }
         return s;

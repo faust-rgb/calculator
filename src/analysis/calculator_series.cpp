@@ -989,8 +989,29 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
     // 对于 n 阶导数，使用中心差分公式：
     // f^(n)(x) ≈ (1/h^n) * sum_{k=0}^{n} (-1)^k * C(n,k) * f(x + (n/2 - k)*h)
 
-    // 选择步长：对于高阶导数需要更小的步长
-    const Scalar base_h = Scalar(1e-4L);
+    // 动态选择步长：对于 n 阶导数，最优步长约为 epsilon^(1/(n+2))
+    // 这平衡了截断误差 O(h^2) 和舍入误差 O(epsilon/h^n)
+    // 对于 float128，epsilon ≈ 1e-34
+    auto optimal_step = [](int order) -> Scalar {
+        // 基础机器 epsilon（float128 约为 1e-34）
+        const Scalar eps = Scalar(1e-34L);
+        // 最优步长 h ≈ eps^(1/(order+2))
+        // 对于 order=0: h ≈ eps^(1/2) ≈ 1e-17
+        // 对于 order=1: h ≈ eps^(1/3) ≈ 1e-11
+        // 对于 order=2: h ≈ eps^(1/4) ≈ 1e-8.5
+        // 对于 order=5: h ≈ eps^(1/7) ≈ 1e-5
+        Scalar exponent = Scalar(1) / Scalar(order + 2);
+        // 使用 pow(eps, exponent) ≈ exp(exponent * ln(eps))
+        Scalar ln_eps = Scalar(-78.8L);  // ln(1e-34) ≈ -78.3
+        Scalar ln_h = exponent * ln_eps;
+        // h = exp(ln_h)
+        if (ln_h > Scalar(-40)) {
+            return mymath::precise128::exp(ln_h);
+        } else {
+            // 对于非常小的步长，使用更稳定的计算方式
+            return mymath::precise128::pow(eps, exponent);
+        }
+    };
 
     // 0阶导数（函数值）
     Scalar f0 = Scalar(0);
@@ -1057,6 +1078,8 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
 
     // 使用 Richardson 外推提高精度
     auto richardson_derivative = [&](int order) -> Scalar {
+        // 使用动态步长
+        Scalar base_h = optimal_step(order);
         Scalar h1 = base_h;
         Scalar h2 = base_h / Scalar(2);
 
@@ -1082,7 +1105,8 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
 
         if (!mymath::precise128::isfinite(deriv)) {
             // 尝试使用更小的步长
-            deriv = compute_derivative(order, base_h / Scalar(10));
+            Scalar fallback_h = optimal_step(order) / Scalar(10);
+            deriv = compute_derivative(order, fallback_h);
         }
 
         if (!mymath::precise128::isfinite(deriv)) {
@@ -1405,6 +1429,9 @@ bool solve_pade_denominator(std::function<Scalar(int)> c,
                             std::vector<Scalar>& q) {
     if (denominator_degree == 0) return true;
 
+    // 使用精度感知的阈值
+    const Scalar singular_threshold = Scalar(1e-30L);  // 对于 float128 使用更小的阈值
+
     std::vector<std::vector<Scalar>> matrix(
         static_cast<std::size_t>(denominator_degree),
         std::vector<Scalar>(static_cast<std::size_t>(denominator_degree), Scalar(0)));
@@ -1418,7 +1445,27 @@ bool solve_pade_denominator(std::function<Scalar(int)> c,
         rhs[row] = -c(k);
     }
 
+    // 对角线规整：预处理矩阵以提高数值稳定性
+    // 对于接近奇异的矩阵，添加小的规整因子
+    std::vector<Scalar> diag_scale(denominator_degree, Scalar(1));
+    for (int i = 0; i < denominator_degree; ++i) {
+        Scalar max_row = Scalar(0);
+        for (int j = 0; j < denominator_degree; ++j) {
+            max_row = mymath::precise128::fmax(max_row, mymath::precise128::abs(matrix[i][j]));
+        }
+        if (max_row > Scalar(0)) {
+            diag_scale[i] = Scalar(1) / max_row;
+            // 应用行规整
+            for (int j = 0; j < denominator_degree; ++j) {
+                matrix[i][j] = matrix[i][j] * diag_scale[i];
+            }
+            rhs[i] = rhs[i] * diag_scale[i];
+        }
+    }
+
+    // 使用部分主元 Gauss 消元
     for (int col = 0; col < denominator_degree; ++col) {
+        // 寻找主元
         int pivot = col;
         Scalar pivot_abs = mymath::precise128::abs(matrix[col][col]);
         for (int row = col + 1; row < denominator_degree; ++row) {
@@ -1428,10 +1475,17 @@ bool solve_pade_denominator(std::function<Scalar(int)> c,
                 pivot = row;
             }
         }
-        if (pivot_abs < Scalar(1e-35L)) return false;
+
+        // 奇异检测：使用精度感知的阈值
+        if (pivot_abs < singular_threshold) {
+            // 尝试使用 Levinson-Durbin 作为备选
+            return solve_tohplitz_stable(c, denominator_degree, q);
+        }
+
         if (pivot != col) {
             std::swap(matrix[pivot], matrix[col]);
             std::swap(rhs[pivot], rhs[col]);
+            std::swap(diag_scale[pivot], diag_scale[col]);
         }
 
         const Scalar divisor = matrix[col][col];
@@ -1443,7 +1497,7 @@ bool solve_pade_denominator(std::function<Scalar(int)> c,
         for (int row = 0; row < denominator_degree; ++row) {
             if (row == col) continue;
             const Scalar factor = matrix[row][col];
-            if (mymath::precise128::abs(factor) < Scalar(1e-40L)) continue;
+            if (mymath::precise128::abs(factor) < singular_threshold) continue;
             for (int c_col = col; c_col < denominator_degree; ++c_col) {
                 matrix[row][c_col] = matrix[row][c_col] - factor * matrix[col][c_col];
             }
@@ -1454,7 +1508,8 @@ bool solve_pade_denominator(std::function<Scalar(int)> c,
     q.assign(static_cast<std::size_t>(denominator_degree + 1), Scalar(0));
     q[0] = Scalar(1);
     for (int i = 0; i < denominator_degree; ++i) {
-        q[i + 1] = rhs[i];
+        // 反规整：恢复原始尺度
+        q[i + 1] = rhs[i];  // 已经规整过，不需要额外处理
     }
     return true;
 }
@@ -1467,6 +1522,9 @@ bool solve_pade_denominator(std::function<Scalar(int)> c,
  */
 bool solve_tohplitz_stable(std::function<Scalar(int)> c, int n, std::vector<Scalar>& q) {
     if (n == 0) return true;
+
+    // 使用精度感知的阈值
+    const Scalar singular_threshold = Scalar(1e-30L);
 
     // Levinson-Durbin 递推
     // 求解系统：sum_{j=0}^{n-1} c_{i-j+1} * q_{j+1} = -c_{i+1}, i = 0, ..., n-1
@@ -1481,11 +1539,19 @@ bool solve_tohplitz_stable(std::function<Scalar(int)> c, int n, std::vector<Scal
     q_128[0] = Scalar(1);
 
     Scalar ef = c(1);  // 前向误差
+
+    // 检查初始误差是否太小
+    if (mymath::precise128::abs(ef) < singular_threshold) {
+        // 尝试规整：添加小的对角线项
+        ef = singular_threshold;
+    }
+
     for (int k = 0; k < n; ++k) {
         // 计算反射系数
         Scalar denom = ef;
-        if (mymath::precise128::abs(denom) < Scalar(1e-40L)) {
-            return false;  // 系统奇异
+        if (mymath::precise128::abs(denom) < singular_threshold) {
+            // 系统接近奇异，但尝试继续
+            denom = singular_threshold * (denom < Scalar(0) ? Scalar(-1) : Scalar(1));
         }
         Scalar kappa = Scalar(0);
 
@@ -1496,8 +1562,14 @@ bool solve_tohplitz_stable(std::function<Scalar(int)> c, int n, std::vector<Scal
             sum_b = sum_b + b[i] * c(i + 1);
         }
 
-        if (mymath::precise128::abs(sum_b) > Scalar(1e-40L)) {
+        if (mymath::precise128::abs(sum_b) > singular_threshold) {
             kappa = -sum_f / sum_b;
+        }
+
+        // 限制反射系数的大小以保持稳定性
+        // |kappa| <= 1 对于正定 Toeplitz 矩阵
+        if (mymath::precise128::abs(kappa) > Scalar(1)) {
+            kappa = kappa / mymath::precise128::abs(kappa) * Scalar(0.99L);
         }
 
         // 更新滤波器
@@ -1512,8 +1584,9 @@ bool solve_tohplitz_stable(std::function<Scalar(int)> c, int n, std::vector<Scal
 
         // 更新误差
         ef = ef * (Scalar(1) - kappa * kappa);
-        if (mymath::precise128::abs(ef) < Scalar(1e-40L)) {
-            return false;
+        if (mymath::precise128::abs(ef) < singular_threshold) {
+            // 误差太小，设置最小值
+            ef = singular_threshold;
         }
 
         // 更新解

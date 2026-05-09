@@ -300,8 +300,8 @@ bool try_symbolic_constant_expression(const std::string& expression,
                                       std::string* output) {
     SymbolicRenderParserImpl parser(expression, variables, functions);
     bool used_symbolic_constant = false;
-    if (!parser.parse(output, &used_symbolic_constant)) {
+        if (!parser.parse(output, &used_symbolic_constant)) {
         return false;
     }
-    return used_symbolic_constant;
+    return used_symbolic_constant || *output != expression;
 }

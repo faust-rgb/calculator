@@ -11,6 +11,7 @@
 #include <limits>
 #include <cmath>
 #include "core/scalar_type.h"
+#include "precise/precise_decimal.h"
 
 namespace precision {
 
@@ -23,12 +24,17 @@ namespace precision {
  * 对于 double: ~2.2e-16
  * 对于 long double: ~1.1e-19 (80-bit) 或 ~1.9e-34 (128-bit)
  * 对于 float128_t: ~1.9e-34
+ * 对于 PreciseDecimal: 10^(-scale)
  */
 template <typename T>
 constexpr T epsilon() {
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
         // float128_t 约有 113 位有效数字，epsilon ≈ 2^(-113)
         return T(1.0L) / T(10384593717069655257060992658440192.0L); // 2^113
+    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        // PreciseDecimal 的精度取决于 scale 设置
+        // 使用默认精度（通常是 34 位）
+        return precise::pow(PreciseDecimal(10), PreciseDecimal(-PrecisionContext::get_default_scale()));
     } else {
         return std::numeric_limits<T>::epsilon();
     }
@@ -44,6 +50,8 @@ inline T sqrt_epsilon() {
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
         // 使用 float128 的 sqrt
         return mymath::precise128::sqrt(epsilon<T>());
+    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        return precise::sqrt(epsilon<T>());
     } else {
         return std::sqrt(epsilon<T>());
     }
@@ -58,6 +66,11 @@ template <typename T>
 inline T cbrt_epsilon() {
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
         return mymath::precise128::cbrt(epsilon<T>());
+    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        // PreciseDecimal: 使用 pow(epsilon, 1/3)
+        // epsilon 对于 PreciseDecimal 是 10^(-scale)
+        // cbrt(epsilon) ≈ 10^(-scale/3)
+        return precise::pow(epsilon<T>(), PreciseDecimal(1) / PreciseDecimal(3));
     } else {
         return std::cbrt(epsilon<T>());
     }
@@ -155,6 +168,9 @@ inline T min_step_size(T segment) {
     // 最小步长为 epsilon^(1/4) * segment
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
         const T factor = mymath::precise128::sqrt(sqrt_epsilon<T>());
+        return factor * abs_segment;
+    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        const T factor = precise::sqrt(sqrt_epsilon<T>());
         return factor * abs_segment;
     } else {
         return std::sqrt(sqrt_epsilon<T>()) * abs_segment;

@@ -22,8 +22,8 @@ namespace signal {
 // Use Scalar for internal high-precision real computations
 using Scalar = mymath::Scalar;
 
-// 数学常量
-constexpr Scalar kPi = 3.14159265358979323846;
+// 使用 mymath 命名空间中的常量
+using mymath::kPi;
 
 // ============================================================================
 // 功率谱密度（周期图法）

@@ -12,6 +12,7 @@
 
 #include "analysis/calculator_simplex.h"
 
+#include "analysis/precision_constants.h"
 #include "core/scalar_type.h"
 #include "math/mymath.h"
 
@@ -55,7 +56,9 @@ bool update_basis_inverse(
     }
 
     const Scalar pivot = w[leaving_idx];
-    if (mymath::precise128::abs(pivot) < eps * Scalar(1e-3L)) {
+    // 使用精度感知的阈值检测数值不稳定
+    const Scalar pivot_threshold = eps * precision::sqrt_epsilon<Scalar>();
+    if (mymath::precise128::abs(pivot) < pivot_threshold) {
         return false; // 数值不稳定
     }
 
@@ -190,7 +193,8 @@ bool solve_by_vertex_enumeration(
 
     const std::size_t n = objective.size();
     const Scalar inf_val = Scalar(mymath::infinity());
-    const Scalar eps = std::max(tolerance * Scalar(100), Scalar(1e-10L));
+    // 使用精度感知的内部容差
+    const Scalar eps = std::max(tolerance * Scalar(100), precision::default_absolute_tolerance<Scalar>());
 
     std::vector<LinearConstraint> equalities;
     equalities.reserve(equality_matrix.rows);
@@ -387,9 +391,10 @@ bool simplex_iterate(
 
         // 计算对偶变量 y: y' = c_B' * B_inv
         std::vector<Scalar> y(m_total, Scalar(0));
+        const Scalar cB_threshold = eps * precision::epsilon<Scalar>();
         for (std::size_t j = 0; j < m_total; ++j) {
             const Scalar cB_val = c_obj[basis_curr[j]];
-            if (mymath::precise128::abs(cB_val) < eps * Scalar(1e-25L)) continue;
+            if (mymath::precise128::abs(cB_val) < cB_threshold) continue;
             for (std::size_t i = 0; i < m_total; ++i) {
                 y[i] += cB_val * Scalar(B_inv.at(j, i));
             }
@@ -467,27 +472,28 @@ bool simplex_iterate(
                 : inf_val;
 
         // 对每个基变量进行比值检验
+        const Scalar di_threshold = eps * precision::sqrt_epsilon<Scalar>();
         for (std::size_t i = 0; i < m_total; ++i) {
             std::size_t j = basis_curr[i];
             Scalar di = decreasing_entering ? -d[i] : d[i];
-            
-            if (di > eps * Scalar(1e-10L)) {
+
+            if (di > di_threshold) {
                 // 基变量可能到达下界
                 Scalar ratio = (x_curr[j] - lb_full[j]) / di;
                 if (ratio < 0) ratio = 0;
-                if (ratio < theta - eps) { 
-                    theta = ratio; leaving = i; 
+                if (ratio < theta - eps) {
+                    theta = ratio; leaving = i;
                 } else if (mymath::precise128::abs(ratio - theta) <= eps && leaving < m_total) {
                     // Bland 规则：比值相同时选择索引最小的出基变量
                     if (basis_curr[i] < basis_curr[leaving]) leaving = i;
                 }
-            } else if (di < -eps * Scalar(1e-10L)) {
+            } else if (di < -di_threshold) {
                 // 基变量可能到达上界
                 if (ub_full[j] < inf_val) {
                     Scalar ratio = (ub_full[j] - x_curr[j]) / (-di);
                     if (ratio < 0) ratio = 0;
-                    if (ratio < theta - eps) { 
-                        theta = ratio; leaving = i; 
+                    if (ratio < theta - eps) {
+                        theta = ratio; leaving = i;
                     } else if (mymath::precise128::abs(ratio - theta) <= eps && leaving < m_total) {
                         if (basis_curr[i] < basis_curr[leaving]) leaving = i;
                     }
@@ -549,7 +555,8 @@ bool solve_linear_box_problem(
 
     const Scalar inf_val = Scalar(mymath::infinity());
     const Scalar eps = Scalar(tolerance);
-    const Scalar internal_eps = Scalar(1e-18L);
+    // 使用精度感知的内部容差
+    const Scalar internal_eps = precision::default_absolute_tolerance<Scalar>();
 
     const std::size_t n = objective.size();
     if (inequality_matrix.cols != n ||
@@ -730,7 +737,7 @@ bool solve_linear_box_problem(
                     tableau_val += Scalar(B_inv_temp.at(i, k)) * A_full[k][j];
                 }
 
-                if (mymath::precise128::abs(tableau_val) > eps * Scalar(1e-2L)) {
+                if (mymath::precise128::abs(tableau_val) > eps * precision::sqrt_epsilon<Scalar>()) {
                     basis[i] = j;
                     break;
                 }

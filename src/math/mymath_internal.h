@@ -40,7 +40,7 @@ long double finite_or_infinity_from_log(long double log_value);
 // Scalar (float128_t) 版本的内部函数
 // ============================================================================
 
-using Scalar = float128_t;
+using Scalar = mymath::Scalar;
 
 /**
  * @brief 计算 Gamma 函数的对数 ln(Γ(x))，x > 0（Scalar 版本）

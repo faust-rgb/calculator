@@ -11,8 +11,6 @@
 
 namespace mymath {
 
-using Scalar = float128_t;
-
 using internal::finite_or_infinity_from_log;
 using internal::log_gamma_positive;
 
@@ -232,6 +230,50 @@ long double root(long double value, long double degree) {
     return n < 0 ? static_cast<long double>(Scalar(1.0L) / result) : static_cast<long double>(result);
 }
 
+Scalar root(Scalar value, Scalar degree) {
+    // root(value, degree) 约定只接受"整数次数"的根。
+    if (!is_integer(degree)) {
+        throw std::domain_error("root degree must be an integer");
+    }
+
+    const long long n = static_cast<long long>(degree);
+    if (n == 0) {
+        throw std::domain_error("root degree cannot be zero");
+    }
+
+    if (value == Scalar(0.0L)) {
+        if (n < 0) {
+            throw std::domain_error("zero cannot be raised to a negative power");
+        }
+        return Scalar(0.0L);
+    }
+
+    const long long abs_n = n < 0 ? -n : n;
+
+    // 特殊情况优化
+    if (abs_n == 2 && value > Scalar(0.0L)) {
+        Scalar result = precise128::sqrt(value);
+        return n < 0 ? Scalar(1.0L) / result : result;
+    }
+    if (abs_n == 3) {
+        Scalar result = precise128::cbrt(value);
+        return n < 0 ? Scalar(1.0L) / result : result;
+    }
+
+    Scalar result = Scalar(0.0L);
+    if (value < Scalar(0.0L)) {
+        if (abs_n % 2 == 0) {
+            throw std::domain_error("even root is undefined for negative values");
+        }
+        result = precise128::exp(precise128::ln(-value) / Scalar(static_cast<long double>(abs_n)));
+        result = -result;
+    } else {
+        result = precise128::exp(precise128::ln(value) / Scalar(static_cast<long double>(abs_n)));
+    }
+
+    return n < 0 ? Scalar(1.0L) / result : result;
+}
+
 static Scalar int_pow_scalar(Scalar base, long long exponent) {
     // 0^0 = 1 是数学惯例
     if (exponent == 0) {
@@ -327,6 +369,35 @@ long double erf(long double x) {
     return static_cast<long double>(Scalar(2.0L) * sum / sqrt_pi);
 }
 
+Scalar erf(Scalar x) {
+    if (x < Scalar(0.0L)) {
+        return -erf(-x);
+    }
+
+    if (x > Scalar(2.5L)) {
+        return Scalar(1.0L) - erfc(x);
+    }
+
+    // 使用泰勒展开进行高精度 erf 计算
+    Scalar sum = Scalar(0.0L);
+    Scalar term = x;
+    Scalar factorial = Scalar(1.0L);
+    for (int n = 0; n < 120; ++n) {
+        const Scalar denominator =
+            factorial * Scalar(static_cast<long double>(2 * n + 1));
+        const Scalar add = term / denominator;
+        sum += (n % 2 == 0 ? add : -add);
+        if (precise128::abs(add) < Scalar(1e-35L)) {
+            break;
+        }
+        term *= x * x;
+        factorial *= Scalar(static_cast<long double>(n + 1));
+    }
+    // 使用预计算的高精度 √π 常量
+    Scalar sqrt_pi = precise128::sqrt_pi();
+    return Scalar(2.0L) * sum / sqrt_pi;
+}
+
 long double erfc(long double x) {
     if (x < 0.0L) {
         return 2.0 - erfc(-x);
@@ -347,6 +418,26 @@ long double erfc(long double x) {
         t;
     Scalar result = poly * precise128::exp(-Scalar(x) * Scalar(x));
     return static_cast<long double>(result);
+}
+
+Scalar erfc(Scalar x) {
+    if (x < Scalar(0.0L)) {
+        return Scalar(2.0L) - erfc(-x);
+    }
+
+    if (x < Scalar(2.5L)) {
+        return Scalar(1.0L) - erf(x);
+    }
+
+    // Abramowitz-Stegun 风格的快速近似，对大 x 更稳定。
+    const Scalar t = Scalar(1.0L) / (Scalar(1.0L) + Scalar(0.3275911L) * x);
+    const Scalar poly =
+        (((((Scalar(1.061405429L) * t - Scalar(1.453152027L)) * t) + Scalar(1.421413741L)) * t -
+          Scalar(0.284496736L)) *
+             t +
+         Scalar(0.254829592L)) *
+        t;
+    return poly * precise128::exp(-x * x);
 }
 
 long double inc_gamma(long double a, long double x) {
@@ -390,6 +481,46 @@ long double inc_gamma(long double a, long double x) {
             if (precise128::abs(delta - Scalar(1.0L)).hi < 1e-35L) break;
         }
         return static_cast<long double>(Scalar(1.0L) - h * prefix);
+    }
+}
+
+Scalar inc_gamma(Scalar a, Scalar x) {
+    if (x <= Scalar(0.0L)) return Scalar(0.0L);
+    if (a <= Scalar(0.0L)) return Scalar(1.0L);
+
+    const Scalar log_ax = a * precise128::ln(x) - x - internal::log_gamma_positive(a);
+    const Scalar prefix = internal::finite_or_infinity_from_log(log_ax);
+
+    if (x < a + Scalar(1.0L)) {
+        // Series representation for P(a, x)
+        Scalar sum = Scalar(1.0L) / a;
+        Scalar term = sum;
+        for (int n = 1; n < 300; ++n) {
+            term *= x / (a + Scalar(static_cast<long double>(n)));
+            sum += term;
+            if (precise128::abs(term) < precise128::abs(sum) * Scalar(1e-35L)) break;
+        }
+        return sum * prefix;
+    } else {
+        // Continued fraction for Q(a, x) = 1 - P(a, x)
+        const Scalar tiny = Scalar(1e-35L);
+        Scalar b = x + Scalar(1.0L) - a;
+        Scalar c = Scalar(1.0L) / tiny;
+        Scalar d = Scalar(1.0L) / b;
+        Scalar h = d;
+        for (int i = 1; i < 300; ++i) {
+            Scalar an = -Scalar(static_cast<long double>(i)) * (Scalar(static_cast<long double>(i)) - a);
+            b += Scalar(2.0L);
+            d = an * d + b;
+            if (precise128::abs(d) < tiny) d = tiny;
+            c = b + an / c;
+            if (precise128::abs(c) < tiny) c = tiny;
+            d = Scalar(1.0L) / d;
+            Scalar delta = c * d;
+            h *= delta;
+            if (precise128::abs(delta - Scalar(1.0L)) < Scalar(1e-35L)) break;
+        }
+        return Scalar(1.0L) - h * prefix;
     }
 }
 
@@ -441,6 +572,52 @@ long double inc_beta(long double a, long double b, long double x) {
     }
 
     return static_cast<long double>(prefix * h);
+}
+
+Scalar inc_beta(Scalar a, Scalar b, Scalar x) {
+    if (x <= Scalar(0.0L)) return Scalar(0.0L);
+    if (x >= Scalar(1.0L)) return Scalar(1.0L);
+
+    if (x > (a + Scalar(1.0L)) / (a + b + Scalar(2.0L))) {
+        return Scalar(1.0L) - inc_beta(b, a, Scalar(1.0L) - x);
+    }
+
+    const Scalar log_beta = internal::log_gamma_positive(a) + internal::log_gamma_positive(b) - internal::log_gamma_positive(a + b);
+    const Scalar prefix = precise128::exp(a * precise128::ln(x) + b * precise128::ln(Scalar(1.0L) - x) - log_beta) / a;
+
+    // Lentz's method for continued fraction
+    const Scalar tiny = Scalar(1e-35L);
+    Scalar h = Scalar(1.0L);
+    Scalar c = h;
+    Scalar d = Scalar(0.0L);
+
+    for (int m = 1; m <= 300; ++m) {
+        // Even step 2m
+        Scalar m_d = Scalar(static_cast<long double>(m));
+        Scalar num = m_d * (b - m_d) * x / ((a + Scalar(2.0L) * m_d - Scalar(1.0L)) * (a + Scalar(2.0L) * m_d));
+
+        d = Scalar(1.0L) + num * d;
+        if (precise128::abs(d) < tiny) d = tiny;
+        c = Scalar(1.0L) + num / c;
+        if (precise128::abs(c) < tiny) c = tiny;
+        d = Scalar(1.0L) / d;
+        h *= c * d;
+
+        // Odd step 2m + 1
+        num = -(a + m_d) * (a + b + m_d) * x / ((a + Scalar(2.0L) * m_d) * (a + Scalar(2.0L) * m_d + Scalar(1.0L)));
+
+        d = Scalar(1.0L) + num * d;
+        if (precise128::abs(d) < tiny) d = tiny;
+        c = Scalar(1.0L) + num / c;
+        if (precise128::abs(c) < tiny) c = tiny;
+        d = Scalar(1.0L) / d;
+        Scalar delta = c * d;
+        h *= delta;
+
+        if (precise128::abs(delta - Scalar(1.0L)) < Scalar(1e-35L)) break;
+    }
+
+    return prefix * h;
 }
 
 long double beta(long double a, long double b) {
@@ -514,6 +691,63 @@ long double zeta(long double s) {
     return static_cast<long double>(total);
 }
 
+Scalar zeta(Scalar s) {
+    if (precise128::abs(s - Scalar(1.0L)) < Scalar(1e-30L)) {
+        throw std::domain_error("zeta is undefined at s = 1");
+    }
+
+    if (s < Scalar(0.0L)) {
+        // 反射公式：ζ(s) = 2^s π^(s-1) sin(πs/2) Γ(1-s) ζ(1-s)
+        Scalar two_pow_s = precise128::exp(s * precise128::ln(Scalar(2.0L)));
+        Scalar pi_pow_s_minus_1 = precise128::exp((s - Scalar(1.0L)) * precise128::ln(precise128::pi()));
+        Scalar sin_term = precise128::sin(precise128::pi() * s * Scalar(0.5L));
+        Scalar gamma_term = gamma(Scalar(1.0L) - s);
+        Scalar zeta_term = zeta(Scalar(1.0L) - s);
+        return two_pow_s * pi_pow_s_minus_1 * sin_term * gamma_term * zeta_term;
+    }
+
+    if (precise128::abs(s) < Scalar(1e-30L)) {
+        return Scalar(-0.5L);
+    }
+
+    // 使用更多项以达到 128 位精度
+    static const Scalar kBernoulli[] = {
+        Scalar(1.0L / 6.0L),
+        Scalar(-1.0L / 30.0L),
+        Scalar(1.0L / 42.0L),
+        Scalar(-1.0L / 30.0L),
+        Scalar(5.0L / 66.0L),
+        Scalar(-691.0L / 2730.0L),
+        Scalar(7.0L / 6.0L),
+        Scalar(-3617.0L / 510.0L),
+    };
+    constexpr int kEulerMaclaurinTerms = 8;
+    constexpr int kEulerMaclaurinN = 64;  // 增加到 64 以获得更高精度
+
+    Scalar total = Scalar(0.0L);
+    for (int n = 1; n < kEulerMaclaurinN; ++n) {
+        total += Scalar(1.0L) / precise128::exp(s * precise128::ln(Scalar(static_cast<long double>(n))));
+    }
+
+    const Scalar n_ld = Scalar(static_cast<long double>(kEulerMaclaurinN));
+    total += precise128::exp((Scalar(1.0L) - s) * precise128::ln(n_ld)) / (s - Scalar(1.0L));
+    total += Scalar(0.5L) / precise128::exp(s * precise128::ln(n_ld));
+
+    Scalar rising = s;
+    Scalar factorial = Scalar(2.0L);
+    for (int k = 1; k <= kEulerMaclaurinTerms; ++k) {
+        if (k > 1) {
+            rising *= (s + Scalar(static_cast<long double>(2 * k - 3))) *
+                      (s + Scalar(static_cast<long double>(2 * k - 2)));
+            factorial *= Scalar(static_cast<long double>(2 * k - 1)) *
+                         Scalar(static_cast<long double>(2 * k));
+        }
+        total += kBernoulli[k - 1] * rising / factorial /
+                 precise128::exp((s + Scalar(static_cast<long double>(2 * k - 1))) * precise128::ln(n_ld));
+    }
+    return total;
+}
+
 long double bessel_j(int order, long double x) {
     if (order < 0) {
         const long double value = bessel_j(-order, x);
@@ -549,6 +783,43 @@ long double bessel_j(int order, long double x) {
                  Scalar(static_cast<long double>(k + order + 1)));
     }
     return static_cast<long double>(sum);
+}
+
+Scalar bessel_j(int order, Scalar x) {
+    if (order < 0) {
+        const Scalar value = bessel_j(-order, x);
+        return ((-order) % 2 == 0) ? value : -value;
+    }
+
+    if (precise128::abs(x) < Scalar(1e-35L)) {
+        return order == 0 ? Scalar(1.0L) : Scalar(0.0L);
+    }
+
+    const Scalar abs_x = precise128::abs(x);
+    if (abs_x > Scalar(50.0L)) {
+        const Scalar phase =
+            abs_x - Scalar(static_cast<long double>(order)) * precise128::pi() * Scalar(0.5L) - precise128::pi() * Scalar(0.25L);
+        const Scalar asymptotic =
+            precise128::sqrt(Scalar(2.0L) / (precise128::pi() * abs_x)) * precise128::cos(phase);
+        return (x < Scalar(0.0L) && order % 2 != 0) ? -asymptotic : asymptotic;
+    }
+
+    Scalar sum = Scalar(0.0L);
+    const Scalar half_x = x * Scalar(0.5L);
+    Scalar term = precise128::exp(Scalar(static_cast<long double>(order)) * precise128::ln(half_x)) /
+                  internal::finite_or_infinity_from_log(
+                      internal::log_gamma_positive(Scalar(static_cast<long double>(order + 1))));
+    for (int k = 0; k < 300; ++k) {
+        const Scalar add = term;
+        sum += add;
+        if (precise128::abs(add) <= Scalar(1e-35L) * (Scalar(1.0L) + precise128::abs(sum))) {
+            break;
+        }
+        term *= -(half_x * half_x) /
+                (Scalar(static_cast<long double>(k + 1)) *
+                 Scalar(static_cast<long double>(k + order + 1)));
+    }
+    return sum;
 }
 
 }  // namespace mymath

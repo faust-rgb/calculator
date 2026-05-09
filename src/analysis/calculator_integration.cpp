@@ -66,7 +66,11 @@ std::function<Scalar(const std::vector<Scalar>&)> make_scalar_bound_func(
  * 对于 float128_t: h ≈ 1e-17 * max(1, |x|)
  */
 Scalar adaptive_derivative_step(Scalar x) {
-    return precision::optimal_derivative_step<Scalar>(x);
+    const Scalar scale = mymath::precise128::abs(x) > Scalar(1.0L)
+        ? mymath::precise128::abs(x)
+        : Scalar(1.0L);
+    return std::max(precision::optimal_derivative_step<Scalar>(x),
+                    Scalar(1e-6L) * scale);
 }
 
 }  // namespace
@@ -192,7 +196,7 @@ Scalar double_integral(
         std::vector<multidim::IntegrationBounds> rect_bounds = {{x0, x1}, {y0_c, y1_c}};
         multidim::IntegrationOptions opts;
         opts.relative_tolerance = tol;
-        opts.absolute_tolerance = 1e-12;
+        opts.absolute_tolerance = precision::default_absolute_tolerance<Scalar>();
         opts.max_evaluations = 500000;
         if (method == "adaptive") opts.method = multidim::IntegrationMethod::Adaptive;
         else if (method == "monte_carlo") opts.method = multidim::IntegrationMethod::MonteCarlo;
@@ -258,7 +262,7 @@ Scalar triple_integral(const IntegrationContext& ctx, const std::string& expr, c
         std::vector<multidim::IntegrationBounds> rect_bounds = {{x0, x1}, {y0_c, y1_c}, {z0_c, z1_c}};
         multidim::IntegrationOptions opts;
         opts.relative_tolerance = tol;
-        opts.absolute_tolerance = 1e-12;
+        opts.absolute_tolerance = precision::default_absolute_tolerance<Scalar>();
         opts.max_evaluations = 1000000;
         if (method == "adaptive") opts.method = multidim::IntegrationMethod::Adaptive;
         else if (method == "monte_carlo") opts.method = multidim::IntegrationMethod::MonteCarlo;

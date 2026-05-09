@@ -475,6 +475,41 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
         case NodeType::kFunction: {
             const SymbolicExpression argument = SymbolicExpression(node->left).simplify();
             Scalar numeric = Scalar(0);
+
+            Scalar pi_multiple = Scalar(0);
+            if (decompose_numeric_multiple_of_symbol(argument, "pi", &pi_multiple)) {
+                if (node->text == "sin") {
+                    if (numeric_matches_any(pi_multiple, {Scalar(0), Scalar(1), Scalar(-1)})) return SymbolicExpression::number(Scalar(0));
+                    if (numeric_matches_any(pi_multiple, {Scalar(0.5L)})) return SymbolicExpression::number(Scalar(1));
+                    if (numeric_matches_any(pi_multiple, {Scalar(-0.5L)})) return SymbolicExpression::number(Scalar(-1));
+                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(6), Scalar(5) / Scalar(6)})) return half_symbol();
+                    if (numeric_matches_any(pi_multiple, {Scalar(-1) / Scalar(6), Scalar(-5) / Scalar(6)})) return make_negate(half_symbol()).simplify();
+                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(3), Scalar(2) / Scalar(3)})) return make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2))).simplify();
+                    if (numeric_matches_any(pi_multiple, {Scalar(-1) / Scalar(3), Scalar(-2) / Scalar(3)})) return make_negate(make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2)))).simplify();
+                }
+                if (node->text == "cos") {
+                    if (numeric_matches_any(pi_multiple, {Scalar(0)})) return SymbolicExpression::number(Scalar(1));
+                    if (numeric_matches_any(pi_multiple, {Scalar(1), Scalar(-1)})) return SymbolicExpression::number(Scalar(-1));
+                    if (numeric_matches_any(pi_multiple, {Scalar(0.5L), Scalar(-0.5L)})) return SymbolicExpression::number(Scalar(0));
+                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(3), Scalar(-1) / Scalar(3)})) return half_symbol();
+                    if (numeric_matches_any(pi_multiple, {Scalar(2) / Scalar(3), Scalar(-2) / Scalar(3)})) return make_negate(half_symbol()).simplify();
+                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(6), Scalar(-1) / Scalar(6)})) return make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2))).simplify();
+                    if (numeric_matches_any(pi_multiple, {Scalar(5) / Scalar(6), Scalar(-5) / Scalar(6)})) return make_negate(make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2)))).simplify();
+                }
+                if (node->text == "tan") {
+                    if (numeric_matches_any(pi_multiple, {Scalar(0), Scalar(1), Scalar(-1)})) return SymbolicExpression::number(Scalar(0));
+                    if (numeric_matches_any(pi_multiple, {Scalar(0.25L)})) return SymbolicExpression::number(Scalar(1));
+                    if (numeric_matches_any(pi_multiple, {Scalar(-0.25L)})) return SymbolicExpression::number(Scalar(-1));
+                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(6), Scalar(-5) / Scalar(6)})) return make_divide(SymbolicExpression::number(Scalar(1)), sqrt3_symbol()).simplify();
+                    if (numeric_matches_any(pi_multiple, {Scalar(-1) / Scalar(6), Scalar(5) / Scalar(6)})) return make_negate(make_divide(SymbolicExpression::number(Scalar(1)), sqrt3_symbol())).simplify();
+                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(3), Scalar(-2) / Scalar(3)})) return sqrt3_symbol();
+                    if (numeric_matches_any(pi_multiple, {Scalar(-1) / Scalar(3), Scalar(2) / Scalar(3)})) return make_negate(sqrt3_symbol()).simplify();
+                }
+            }
+            if (node->text == "exp" && expr_is_one(argument)) {
+                return SymbolicExpression::variable("e");
+            }
+
             if (argument.is_number(&numeric)) {
                 if (node->text == "asin") return SymbolicExpression::number(mymath::precise128::asin(numeric));
                 if (node->text == "acos") return SymbolicExpression::number(mymath::precise128::acos(numeric));
@@ -655,7 +690,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 return make_function(node->text, SymbolicExpression(argument.node_->left)).simplify();
             }
 
-            Scalar pi_multiple = Scalar(0);
+            pi_multiple = Scalar(0);
             if (decompose_numeric_multiple_of_symbol(argument, "pi", &pi_multiple)) {
                 if (node->text == "sin") {
                     if (numeric_matches_any(pi_multiple, {Scalar(0), Scalar(1), Scalar(-1)})) return SymbolicExpression::number(Scalar(0));

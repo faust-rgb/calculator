@@ -10,6 +10,7 @@
  */
 
 #include "analysis/function_analysis.h"
+#include "analysis/precision_constants.h"
 
 #include "core/calculator.h"
 #include "core/scalar_type.h"
@@ -251,14 +252,10 @@ long long t_llround(const T& val) {
     }
 }
 
-/** @brief 导数计算的基准步长 */
+/** @brief 导数计算的基准步长 - 使用精度感知常量 */
 template <typename T>
 T kDerivativeBaseStep_v() {
-    if constexpr (std::is_same_v<T, Scalar>) {
-        return 1e-12L;
-    } else {
-        return T(1e-4);
-    }
+    return precision::sqrt_epsilon<T>();
 }
 
 /** @brief 极限计算的初始步长 */
@@ -267,34 +264,22 @@ T kLimitInitialStep_v() {
     return T(1e-1);
 }
 
-/** @brief 极限计算的收敛容差 */
+/** @brief 极限计算的收敛容差 - 使用精度感知常量 */
 template <typename T>
 T kLimitTolerance_v() {
-    if constexpr (std::is_same_v<T, Scalar>) {
-        return 1e-15L;
-    } else {
-        return T(1e-10L);
-    }
+    return precision::default_relative_tolerance<T>();
 }
 
-/** @brief 根查找的收敛容差 */
+/** @brief 根查找的收敛容差 - 使用精度感知常量 */
 template <typename T>
 T kRootTolerance_v() {
-    if constexpr (std::is_same_v<T, Scalar>) {
-        return 1e-12L;
-    } else {
-        return T(1e-7L);
-    }
+    return precision::newton_tolerance<T>();
 }
 
-/** @brief 数值积分的精度要求 */
+/** @brief 数值积分的精度要求 - 使用精度感知常量 */
 template <typename T>
 T kIntegralTolerance_v() {
-    if constexpr (std::is_same_v<T, Scalar>) {
-        return 1e-12L;
-    } else {
-        return T(1e-8L);
-    }
+    return precision::default_relative_tolerance<T>();
 }
 
 /** @brief 自适应积分的最大递归深度 */
@@ -354,7 +339,7 @@ T scale_aware_step(T x) {
 
 template <typename T>
 T central_difference_step_value(T scale, T factor) {
-    T base_step = T(1e-7L);
+    T base_step = std::max(precision::sqrt_epsilon<T>(), T(1e-6L));
     return std::max(base_step * scale, kDerivativeBaseStep_v<T>() * scale * factor);
 }
 
@@ -380,7 +365,8 @@ T limit_step_scale(T x) {
 
 template <typename T>
 bool same_extremum_x(T lhs, T rhs) {
-    return t_abs(lhs - rhs) <= T(1e-5);
+    const T scale = std::max({T(static_cast<long long>(1)), t_abs(lhs), t_abs(rhs)});
+    return t_abs(lhs - rhs) <= numeric_control_value<T>("1e-4", 1e-4) * scale;
 }
 
 template <typename T>
@@ -435,7 +421,6 @@ void reject_persistent_tail_oscillation(
     for (int i = 0; i < 64; ++i) {
         const T offset = T(10) + T(i) * (t_pi<T>() / T(2));
         const T value = function(start + offset);
-        // std::cout << "DEBUG: i=" << i << " offset=" << static_cast<double>(offset) << " val=" << static_cast<double>(value) << std::endl;
         if (!t_isfinite(value)) {
             throw std::runtime_error("integral did not converge (non-finite tail sample)");
         }
@@ -593,7 +578,7 @@ T adaptive_gauss_kronrod_callable_recursive(
     // 检查区间是否过小，避免数值问题
     const T interval_width = t_abs(right - left);
     const T interval_scale = std::max(t_abs(left), t_abs(right));
-    const T min_width = std::max(T(1e-15L), interval_scale * T(1e-14L));
+    const T min_width = precision::min_step_size<T>(interval_scale);
     if (interval_width < min_width) {
         return whole;
     }
@@ -1127,7 +1112,8 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
                                  const std::string& variable_name,
                                  T point,
                                  int direction,
-                                 T* result) {
+                                 T* result,
+                                 std::function<Scalar(const SymbolicExpression&, const std::string&, Scalar)> evaluate_at_override = nullptr) {
     SymbolicExpression current = expression.simplify();
     if (current.node_->type != NodeType::kDivide) {
         return false;
@@ -1162,11 +1148,13 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
     // 对于有限点，使用 PSA 提取 Laurent 信息
     if (t_isfinite(point)) {
         series_ops::SeriesContext ctx;
-        ctx.evaluate_at = [](const SymbolicExpression& e, const std::string& /*v*/, Scalar /*p*/) {
-            Scalar val = 0.0L;
-            if (e.is_number(&val)) return val;
-            return Scalar(0.0L);
-        };
+        // 使用传入的 evaluate_at 回调，或默认实现
+        ctx.evaluate_at = evaluate_at_override ? evaluate_at_override :
+            [](const SymbolicExpression& e, const std::string& /*v*/, Scalar /*p*/) {
+                Scalar val = 0.0L;
+                if (e.is_number(&val)) return val;
+                return Scalar(0.0L);
+            };
 
         struct LaurentInfo {
             int degree = 0;
@@ -1231,7 +1219,9 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
         }
     }
 
-    static constexpr int kMaxLhopitalDepth = 3;
+    // 洛必达法则深度限制：增加到 5 层，对于复杂函数可以更多次求导
+    // 对于 float128 精度，可以承受更多次数值求导的误差累积
+    static constexpr int kMaxLhopitalDepth = 5;
     SymbolicExpression iter_expr = current;
     for (int depth = 0; depth < kMaxLhopitalDepth; ++depth) {
         SymbolicExpression n(iter_expr.node_->left);
@@ -1352,7 +1342,8 @@ TFunctionAnalysis<T>::TFunctionAnalysis(const TFunctionAnalysis& other)
     : expression_(other.expression_),
       variable_name_(other.variable_name_),
       evaluator_(other.evaluator_),
-      fallback_calculator_(other.fallback_calculator_) {}
+      fallback_calculator_(other.fallback_calculator_),
+      variable_lookup_(other.variable_lookup_) {}
 
 template <typename T>
 TFunctionAnalysis<T>& TFunctionAnalysis<T>::operator=(const TFunctionAnalysis& other) {
@@ -1361,6 +1352,7 @@ TFunctionAnalysis<T>& TFunctionAnalysis<T>::operator=(const TFunctionAnalysis& o
         variable_name_ = other.variable_name_;
         evaluator_ = other.evaluator_;
         fallback_calculator_ = other.fallback_calculator_;
+        variable_lookup_ = other.variable_lookup_;
         evaluation_cache_entries_.clear();
         evaluation_cache_index_.clear();
     }
@@ -1395,6 +1387,11 @@ void TFunctionAnalysis<T>::set_evaluator(std::function<T(const std::vector<std::
     fallback_calculator_.reset();
     evaluation_cache_entries_.clear();
     evaluation_cache_index_.clear();
+}
+
+template <typename T>
+void TFunctionAnalysis<T>::set_variable_lookup(std::function<T(const std::string&)> lookup) {
+    variable_lookup_ = std::move(lookup);
 }
 
 template <typename T>
@@ -1619,9 +1616,37 @@ T TFunctionAnalysis<T>::limit(T x, int direction) const {
 
     series_ops::SeriesContext ctx;
     ctx.evaluate_at = [this](const SymbolicExpression& e, const std::string& v, Scalar p) {
+        // 如果是极限变量，返回极限点的值
         if (v == variable_name_) return p;
+
+        // 尝试从表达式中提取数值
         Scalar val = 0.0L;
         if (e.is_number(&val)) return val;
+
+        // 如果有外部变量查找函数，尝试使用它
+        if (variable_lookup_) {
+            // 尝试从表达式中提取变量名
+            std::string var_name = e.to_string();
+            // 简单变量名检查
+            bool is_simple_var = true;
+            for (char c : var_name) {
+                if (!std::isalpha(c) && c != '_') {
+                    is_simple_var = false;
+                    break;
+                }
+            }
+            if (is_simple_var && !var_name.empty()) {
+                try {
+                    Scalar lookup_val = variable_lookup_(var_name);
+                    // 如果查找成功（返回非零或有效值），使用它
+                    return lookup_val;
+                } catch (...) {
+                    // 查找失败，继续
+                }
+            }
+        }
+
+        // 无法确定值，返回 0（保守处理）
         return Scalar(0.0L);
     };
 
@@ -1653,7 +1678,8 @@ T TFunctionAnalysis<T>::limit(T x, int direction) const {
                                     variable_name_,
                                     x,
                                     direction,
-                                    &lhopital_value)) {
+                                    &lhopital_value,
+                                    ctx.evaluate_at)) {
         return lhopital_value;
     }
 
@@ -2139,7 +2165,6 @@ T TFunctionAnalysis<T>::definite_integral(T lower_bound,
             lower_bound + (upper_bound - lower_bound) *
                               (T((i)) / T(40.0L));
         T value = evaluate_with_variable(x);
-        // std::cout << "DEBUG: x=" << format_t(x) << " val=" << format_t(value) << std::endl;
         if (!t_isfinite(value)) {
             throw std::runtime_error("integral did not converge");
         }
@@ -2494,7 +2519,7 @@ T TFunctionAnalysis<T>::adaptive_gauss_kronrod_recursive(T left,
     // 检查区间是否过小，避免数值问题
     const T interval_width = t_abs(right - left);
     const T interval_scale = std::max(t_abs(left), t_abs(right));
-    const T min_width = std::max(T(1e-15L), interval_scale * T(1e-14L));
+    const T min_width = precision::min_step_size<T>(interval_scale);
     if (interval_width < min_width) {
         return whole;
     }

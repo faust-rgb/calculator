@@ -51,7 +51,7 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
             std::map<std::string, StoredValue> override_vars;
             for (const auto& [name, value] : assignments) {
                 StoredValue stored;
-                stored.decimal = normalize_display_decimal(value);
+                stored.decimal = value;
                 stored.exact = false;
                 override_vars[name] = stored;
             }

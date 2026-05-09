@@ -2342,9 +2342,6 @@ SymbolicExpression simplify_trigonometric(const SymbolicExpression& expr) {
     // 1. 应用勾股恒等式
     result = apply_pythagorean_identity(result);
 
-    // 2. 转换 tan 为 sin/cos (可选)
-    // result = tan_to_sin_cos(result);
-
     return result.simplify();
 }
 

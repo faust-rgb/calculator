@@ -22,6 +22,8 @@
 #include <string_view>
 #include <functional>
 #include <map>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <memory>
 
@@ -59,11 +61,12 @@ using CommandHandler = std::function<bool(
  * 包含命令名、帮助文本、处理器函数等元数据。
  */
 struct CommandInfo {
-    std::string name;           ///< 命令名
-    std::string help_text;      ///< 完整帮助文本
-    std::string short_help;     ///< 简短帮助（用于列表显示）
-    CommandHandler handler;     ///< 命令处理函数
-    bool is_prefix = false;     ///< 是否是前缀命令（如 plot3d 匹配 plot）
+    std::string name;                          ///< 命令名
+    std::string help_text;                     ///< 完整帮助文本
+    std::string short_help;                    ///< 简短帮助（用于列表显示）
+    CommandHandler handler;                    ///< 命令处理函数
+    bool is_prefix = false;                    ///< 是否是前缀命令（如 plot3d 匹配 plot）
+    std::vector<std::string> aliases;          ///< 命令别名列表（如 "h" 作为 "help" 的别名）
 };
 
 // ============================================================================
@@ -114,6 +117,24 @@ public:
                                   const std::string& help_text = "");
 
     /**
+     * @brief 注册命令别名
+     * @param alias 别名
+     * @param command_name 原命令名
+     * @return 如果成功返回 true，如果原命令不存在返回 false
+     *
+     * 例如，register_alias("h", "help") 使得 ":h" 等同于 ":help"
+     */
+    bool register_alias(const std::string& alias, const std::string& command_name);
+
+    /**
+     * @brief 批量注册命令别名
+     * @param command_name 原命令名
+     * @param aliases 别名列表
+     */
+    void register_aliases(const std::string& command_name,
+                          const std::vector<std::string>& aliases);
+
+    /**
      * @brief 注销命令
      * @param name 命令名
      */
@@ -144,6 +165,16 @@ public:
      * @return 如果存在返回 true
      */
     bool has_command(const std::string& name) const;
+
+    /**
+     * @brief 快速检查标识符是否可能是命令（用于解析器预检测）
+     * @param name 标识符名
+     * @return 如果可能是命令返回 true
+     *
+     * 此方法用于解析器的 Fast Path，在尝试解析 id(...) 之前快速判断。
+     * 如果返回 false，解析器可以直接走表达式路径，避免不必要的回溯。
+     */
+    bool could_be_command(std::string_view name) const;
 
     // ========================================================================
     // 命令信息查询接口
@@ -203,6 +234,7 @@ private:
 
     std::map<std::string, CommandInfo> commands_;        ///< 精确匹配命令映射
     std::vector<CommandInfo> prefix_commands_;           ///< 前缀命令列表
+    std::unordered_map<std::string, std::string> aliases_; ///< 别名到命令名的映射（快速查找）
 };
 
 #endif // CORE_COMMAND_REGISTRY_H

@@ -132,6 +132,41 @@ CommandASTNode CommandASTNode::make_assignment(std::string_view var,
     return node;
 }
 
+CommandASTNode CommandASTNode::make_index_assignment(
+    std::string_view var,
+    const std::vector<std::string_view>& indices,
+    std::string_view value) {
+    CommandASTNode node;
+    node.kind = CommandKind::kIndexAssignment;
+    IndexAssignmentInfo info;
+    info.variable = var;
+    for (const auto& idx : indices) {
+        info.indices.push_back(ExpressionInfo(idx));
+    }
+    info.value = ExpressionInfo(value);
+    compile_expression_info(info.value);
+    node.data = std::move(info);
+    return node;
+}
+
+CommandASTNode CommandASTNode::make_function_call_with_named(
+    std::string_view name,
+    const std::vector<std::string_view>& positional_args,
+    const std::vector<std::pair<std::string_view, std::string_view>>& named_args) {
+    CommandASTNode node;
+    node.kind = CommandKind::kFunctionCall;
+    FunctionCallInfo info;
+    info.name = name;
+    for (const auto& arg : positional_args) {
+        info.arguments.push_back(ExpressionInfo(arg));
+    }
+    for (const auto& [name, value] : named_args) {
+        info.named_args.push_back(NamedArgument{name, ExpressionInfo(value)});
+    }
+    node.data = std::move(info);
+    return node;
+}
+
 CommandASTNode CommandASTNode::make_expression(std::string_view expr) {
     CommandASTNode node;
     node.kind = CommandKind::kExpression;
@@ -351,19 +386,24 @@ CommandASTNode CommandParser::parse_definition_or_assignment(Token id_tok, bool 
 
         // 不是函数定义，回退到 '(' 之前
         restore_checkpoint(paren_checkpoint);
-        
+
         // 有命令注册表时只把注册命令识别为命令调用；没有回调时保留通用解析能力，
         // 供 base/rat/poly_* 等 helper 直接解析完整 name(args)。
         if (!is_command_ || is_command_(id_tok.text)) {
             return parse_function_call(id_tok, single_statement, checkpoint);
         }
-        
+
         // 否则回退，作为普通表达式解析
         restore_checkpoint(checkpoint);
         return parse_expression(single_statement);
     }
 
-    // 情况 2: x = ... 赋值
+    // 情况 2: x[...] = value 索引赋值
+    if (next.kind == TokenKind::kLBracket) {
+        return parse_index_assignment(id_tok, single_statement, checkpoint);
+    }
+
+    // 情况 3: x = ... 赋值
     if (next.kind == TokenKind::kEqual) {
         advance_token(); // 消费 =
 
@@ -372,9 +412,41 @@ CommandASTNode CommandParser::parse_definition_or_assignment(Token id_tok, bool 
         return CommandASTNode::make_assignment(id_tok.text, expr);
     }
 
-    // 情况 3: 其他情况作为表达式
+    // 情况 4: 其他情况作为表达式
     restore_checkpoint(checkpoint);
     return parse_expression(single_statement);
+}
+
+CommandASTNode CommandParser::parse_index_assignment(
+    Token id_tok,
+    bool single_statement,
+    const LazyTokenStream::Checkpoint& expression_checkpoint) {
+
+    expect_token(TokenKind::kLBracket, "expected '[' in index assignment");
+
+    // 解析索引列表
+    std::vector<std::string_view> indices;
+    if (!check_token(TokenKind::kRBracket)) {
+        indices = parse_argument_list_by_tokens(true);
+        if (!match_token(TokenKind::kRBracket)) {
+            throw_syntax_error("unmatched '[' in index assignment");
+        }
+    } else {
+        advance_token(); // 消费空的 ]
+    }
+
+    // 期望等号
+    if (!match_token(TokenKind::kEqual)) {
+        // 不是索引赋值，回退作为表达式解析
+        restore_checkpoint(expression_checkpoint);
+        return parse_expression(single_statement);
+    }
+
+    // 解析赋值值
+    std::string_view value = collect_statement_expression();
+    validate_expression_text(value, tokens_, value.data() - tokens_.source().data());
+
+    return CommandASTNode::make_index_assignment(id_tok.text, indices, value);
 }
 
 CommandASTNode CommandParser::parse_function_call(
@@ -431,6 +503,10 @@ std::vector<std::string_view> CommandParser::parse_argument_list_by_tokens(bool 
         }
         else if (tok.kind == TokenKind::kLBracket) bracket_depth++;
         else if (tok.kind == TokenKind::kRBracket) {
+            if (bracket_depth == 0) {
+                // Reached the end of the index list for index assignment
+                break;
+            }
             if (bracket_depth > 0) bracket_depth--;
         }
         else if (tok.kind == TokenKind::kComma && paren_depth == 0 && bracket_depth == 0) {

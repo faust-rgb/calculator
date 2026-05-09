@@ -19,8 +19,6 @@
 
 namespace mymath {
 
-using Scalar = float128_t;
-
 namespace internal {
 
 /**
@@ -28,32 +26,17 @@ namespace internal {
  * @param x 正数输入
  * @return ln(Γ(x))
  * @throws std::domain_error 如果 x <= 0
+ *
+ * 注意：此 long double 版本委托给 Scalar 版本以获得更高精度，
+ * 然后截断结果。这确保了两个版本之间的一致性。
  */
 long double log_gamma_positive(long double x) {
     if (x <= 0.0L) {
         throw std::domain_error("log-gamma is only defined for positive inputs");
     }
-
-    static const long double kLanczosCoefficients[] = {
-        0.99999999999980993,
-        676.5203681218851,
-        -1259.1392167224028,
-        771.32342877765313,
-        -176.61502916214059,
-        12.507343278686905,
-        -0.13857109526572012,
-        9.9843695780195716e-6,
-        1.5056327351493116e-7,
-    };
-
-    const long double z = x - 1.0L;
-    long double series = kLanczosCoefficients[0];
-    for (int i = 1; i < 9; ++i) {
-        series += kLanczosCoefficients[i] / (z + static_cast<long double>(i));
-    }
-
-    const long double t = z + 7.5;
-    return 0.5 * ln(2.0 * kPi) + (z + 0.5) * ln(t) - t + ln(series);
+    // 使用 Scalar 版本进行计算，然后截断
+    Scalar result = log_gamma_positive(Scalar(x));
+    return static_cast<long double>(result);
 }
 
 /**
@@ -410,6 +393,39 @@ bool approximate_fraction(long double value,
         if (abs(candidate - positive) <= eps) {
             const long long divisor = gcd(num, den);
             *numerator = (value < 0.0L ? -num : num) / divisor;
+            *denominator = den / divisor;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @brief 尝试将 Scalar 浮点数识别为简单分数（原生精度版本）
+ * @param value 输入值
+ * @param numerator 输出分子
+ * @param denominator 输出分母
+ * @param max_denominator 最大分母
+ * @param eps 允许误差
+ * @return true 如果成功识别为简单分数
+ */
+bool approximate_fraction(Scalar value,
+                          long long* numerator,
+                          long long* denominator,
+                          int max_denominator,
+                          Scalar eps) {
+    const Scalar positive = value < Scalar(0.0L) ? -value : value;
+
+    for (int den = 1; den <= max_denominator; ++den) {
+        const Scalar scaled = positive * Scalar(static_cast<long double>(den));
+        const long long num = static_cast<long long>(static_cast<long double>(scaled + Scalar(0.5L)));
+        const Scalar candidate =
+            Scalar(static_cast<long double>(num)) / Scalar(static_cast<long double>(den));
+
+        if (precise128::abs(candidate - positive) <= eps) {
+            const long long divisor = gcd(num, den);
+            *numerator = (value < Scalar(0.0L) ? -num : num) / divisor;
             *denominator = den / divisor;
             return true;
         }

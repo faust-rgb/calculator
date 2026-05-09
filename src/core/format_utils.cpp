@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <iomanip>
+#include <numeric>
 #include <sstream>
 
 // ============================================================================
@@ -144,6 +145,17 @@ std::string try_format_as_sqrt(long double value, [[maybe_unused]] long double e
         // 如果 n=1, d=2, value = sqrt(1/2) = sqrt(2)/2
         // res 此时已经是 "sqrt(2)"，需要除以 d (d=2? 不，应该是 sqrt(d^2) = d)
         // 这里的逻辑：value = sqrt(n/d) = sqrt(n*d)/d
+        const long long common = std::gcd(factor, d);
+        if (common > 1) {
+            factor /= common;
+            d /= common;
+            if (inner == 1) {
+                res = std::to_string(factor);
+            } else {
+                res = (factor == 1 ? "" : std::to_string(factor) + " * ") + "sqrt(" + std::to_string(inner) + ")";
+            }
+            if (d == 1) return res;
+        }
         return res + " / " + std::to_string(d);
     }
     return "";
@@ -289,7 +301,11 @@ std::string format_decimal(long double value) {
  * @return 格式化后的字符串
  */
 std::string format_decimal(long double value, int precision) {
-    value = normalize_display_decimal(value);
+    if (mymath::abs(value) < 1e-12L) {
+        value = 0.0L;
+    } else {
+        value = normalize_display_decimal(value);
+    }
     precision = std::clamp(precision, kMinDisplayPrecision, kMaxDisplayPrecision);
     std::ostringstream out;
     out << std::setprecision(precision) << value;

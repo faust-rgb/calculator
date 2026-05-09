@@ -13,8 +13,6 @@
 
 namespace {
 
-using Scalar = mymath::float128_t;
-
 } // namespace
 
 /**

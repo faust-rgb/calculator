@@ -11,6 +11,7 @@
 #include "symbolic/symbolic_expression_internal.h"
 
 #include "core/format_utils.h"
+#include "core/display_precision.h"
 #include "math/mymath.h"
 #include "math/mymath_dual.h"
 
@@ -52,12 +53,11 @@ std::string scalar_structural_number_key(Scalar value) {
 } // namespace
 
 int& mutable_display_precision() {
-    static int precision = 12;
-    return precision;
+    return display_precision::mutable_value();
 }
 
 int clamp_display_precision(int precision) {
-    return std::clamp(precision, 1, 17);
+    return display_precision::clamp(precision);
 }
 
 

@@ -62,10 +62,49 @@ void CommandRegistry::register_prefix_command(const std::string& prefix,
 }
 
 /**
+ * @brief 注册命令别名
+ * @param alias 别名
+ * @param command_name 原命令名
+ * @return 如果成功返回 true，如果原命令不存在返回 false
+ */
+bool CommandRegistry::register_alias(const std::string& alias, const std::string& command_name) {
+    // 检查原命令是否存在
+    if (!has_command(command_name)) {
+        return false;
+    }
+
+    // 添加别名映射
+    aliases_[alias] = command_name;
+
+    // 同时更新原命令的别名列表
+    auto it = commands_.find(command_name);
+    if (it != commands_.end()) {
+        // 检查别名是否已存在
+        if (std::find(it->second.aliases.begin(), it->second.aliases.end(), alias) == it->second.aliases.end()) {
+            it->second.aliases.push_back(alias);
+        }
+    }
+
+    return true;
+}
+
+/**
+ * @brief 批量注册命令别名
+ * @param command_name 原命令名
+ * @param aliases 别名列表
+ */
+void CommandRegistry::register_aliases(const std::string& command_name,
+                                        const std::vector<std::string>& aliases) {
+    for (const auto& alias : aliases) {
+        register_alias(alias, command_name);
+    }
+}
+
+/**
  * @brief 注销指定名称的命令
  * @param name 要注销的命令名称
  *
- * 同时从精确匹配表和前缀匹配列表中移除。
+ * 同时从精确匹配表、前缀匹配列表和别名映射中移除。
  */
 void CommandRegistry::unregister_command(const std::string& name) {
     commands_.erase(name);
@@ -75,6 +114,15 @@ void CommandRegistry::unregister_command(const std::string& name) {
         std::remove_if(prefix_commands_.begin(), prefix_commands_.end(),
                        [&name](const CommandInfo& info) { return info.name == name; }),
         prefix_commands_.end());
+
+    // 移除相关别名
+    for (auto it = aliases_.begin(); it != aliases_.end(); ) {
+        if (it->second == name) {
+            it = aliases_.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 // ============================================================================
@@ -90,7 +138,7 @@ void CommandRegistry::unregister_command(const std::string& name) {
  * @param services 核心服务接口
  * @return 如果命令被成功处理返回 true，否则返回 false
  *
- * 查找顺序：先查找精确匹配，再查找前缀匹配。
+ * 查找顺序：先检查别名，再查找精确匹配，最后查找前缀匹配。
  */
 bool CommandRegistry::try_process(const std::string& cmd_name,
                                    const std::vector<std::string_view>& args,
@@ -101,16 +149,23 @@ bool CommandRegistry::try_process(const std::string& cmd_name,
         return false;
     }
 
-    // 先查找精确匹配
-    auto it = commands_.find(cmd_name);
+    // 先检查别名映射
+    std::string resolved_name = cmd_name;
+    auto alias_it = aliases_.find(cmd_name);
+    if (alias_it != aliases_.end()) {
+        resolved_name = alias_it->second;
+    }
+
+    // 查找精确匹配（使用解析后的名称）
+    auto it = commands_.find(resolved_name);
     if (it != commands_.end() && it->second.handler) {
         return it->second.handler(cmd_name, args, output, exact_mode, services);
     }
 
     // 再查找前缀匹配
     for (const auto& info : prefix_commands_) {
-        if (cmd_name.size() >= info.name.size() &&
-            cmd_name.substr(0, info.name.size()) == info.name) {
+        if (resolved_name.size() >= info.name.size() &&
+            resolved_name.substr(0, info.name.size()) == info.name) {
             if (info.handler) {
                 return info.handler(cmd_name, args, output, exact_mode, services);
             }
@@ -127,6 +182,33 @@ bool CommandRegistry::try_process(const std::string& cmd_name,
  */
 bool CommandRegistry::has_command(const std::string& name) const {
     return find_command(name) != nullptr;
+}
+
+/**
+ * @brief 快速检查标识符是否可能是命令
+ * @param name 标识符名
+ * @return 如果可能是命令返回 true
+ */
+bool CommandRegistry::could_be_command(std::string_view name) const {
+    // 先检查别名
+    if (aliases_.find(std::string(name)) != aliases_.end()) {
+        return true;
+    }
+
+    // 检查精确匹配
+    if (commands_.find(std::string(name)) != commands_.end()) {
+        return true;
+    }
+
+    // 检查前缀匹配
+    for (const auto& info : prefix_commands_) {
+        if (name.size() >= info.name.size() &&
+            name.substr(0, info.name.size()) == info.name) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 // ============================================================================
@@ -186,6 +268,7 @@ std::map<std::string, std::string> CommandRegistry::get_command_helps() const {
 void CommandRegistry::clear() {
     commands_.clear();
     prefix_commands_.clear();
+    aliases_.clear();
 }
 
 // ============================================================================
@@ -238,19 +321,26 @@ std::string CommandRegistry::extract_command_name(const std::string& input) {
  * @param name 命令名称
  * @return 命令信息指针，如果未找到则返回 nullptr
  *
- * 查找顺序：先进行精确匹配，再进行前缀匹配。
+ * 查找顺序：先检查别名，再进行精确匹配，最后进行前缀匹配。
  */
 const CommandInfo* CommandRegistry::find_command(const std::string& name) const {
+    // 先检查别名映射
+    std::string resolved_name = name;
+    auto alias_it = aliases_.find(name);
+    if (alias_it != aliases_.end()) {
+        resolved_name = alias_it->second;
+    }
+
     // 精确匹配
-    auto it = commands_.find(name);
+    auto it = commands_.find(resolved_name);
     if (it != commands_.end()) {
         return &it->second;
     }
 
     // 前缀匹配
     for (const auto& info : prefix_commands_) {
-        if (name.size() >= info.name.size() &&
-            name.substr(0, info.name.size()) == info.name) {
+        if (resolved_name.size() >= info.name.size() &&
+            resolved_name.substr(0, info.name.size()) == info.name) {
             return &info;
         }
     }

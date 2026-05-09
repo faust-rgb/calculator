@@ -23,14 +23,64 @@ namespace mymath {
 // 数学常量
 // ============================================================================
 
-/** @brief 圆周率 π，精确到小数点后 36 位（适用于 float128 精度） */
+/**
+ * @brief 圆周率 π，精确到小数点后 36 位（适用于 float128 精度）
+ */
 constexpr long double kPi = 3.141592653589793238462643383279502884L;
 
-/** @brief 圆周率 π (long double)，用于高精度范围归约 */
+/**
+ * @brief 圆周率 π (long double)，用于高精度范围归约
+ */
 constexpr long double kPiL = 3.1415926535897932384626433832795028841971L;
 
-/** @brief 自然对数的底 e，精确到小数点后 36 位（适用于 float128 精度） */
+/**
+ * @brief 自然对数的底 e，精确到小数点后 36 位（适用于 float128 精度）
+ */
 constexpr long double kE = 2.718281828459045235360287471352662498L;
+
+// ============================================================================
+// 统一的常量访问器
+// ============================================================================
+
+namespace constants {
+
+/**
+ * @brief 获取 π 值（根据类型自动选择精度）
+ */
+template <typename T>
+inline T pi();
+
+template <>
+inline long double pi<long double>() { return kPi; }
+
+template <>
+inline Scalar pi<Scalar>() { return precise128::pi(); }
+
+/**
+ * @brief 获取 e 值（根据类型自动选择精度）
+ */
+template <typename T>
+inline T e();
+
+template <>
+inline long double e<long double>() { return kE; }
+
+template <>
+inline Scalar e<Scalar>() { return precise128::e(); }
+
+/**
+ * @brief 获取 √π 值
+ */
+template <typename T>
+inline T sqrt_pi();
+
+template <>
+inline long double sqrt_pi<long double>() { return static_cast<long double>(precise128::sqrt_pi()); }
+
+template <>
+inline Scalar sqrt_pi<Scalar>() { return precise128::sqrt_pi(); }
+
+}  // namespace constants
 
 /** @brief 光速 c (m/s) */
 constexpr long double kSpeedOfLight = 299792458.0;
@@ -63,6 +113,75 @@ constexpr long long kLongLongMax = 9223372036854775807LL;
  * 例如：判断迭代是否收敛、检测除零等。
  */
 constexpr long double kEps = 1e-12;
+
+// ============================================================================
+// 精度相关的阈值工具
+// ============================================================================
+
+namespace detail {
+
+/**
+ * @brief 获取给定类型的机器 epsilon
+ *
+ * long double: 约 1e-19 (80-bit extended)
+ * float128_t: 约 1e-34 (128-bit)
+ */
+template <typename T>
+struct MachineEpsilon;
+
+template <>
+struct MachineEpsilon<long double> {
+    static constexpr long double value = 1e-19L;
+};
+
+template <>
+struct MachineEpsilon<Scalar> {
+    static constexpr long double value = 1e-34L;
+};
+
+/**
+ * @brief 获取”接近零”的阈值
+ *
+ * 对于三角函数结果清理，使用 epsilon^(3/4) 作为阈值。
+ * 这确保了在保留足够精度的同时，清理掉计算误差。
+ *
+ * long double: 约 1e-14
+ * float128_t: 约 1e-25
+ */
+template <typename T>
+struct NearZeroThreshold;
+
+template <>
+struct NearZeroThreshold<long double> {
+    static constexpr long double value = 1e-14L;
+};
+
+template <>
+struct NearZeroThreshold<Scalar> {
+    static constexpr long double value = 1e-25L;
+};
+
+/**
+ * @brief 获取”接近整数”的阈值
+ */
+template <typename T>
+struct NearIntegerThreshold;
+
+template <>
+struct NearIntegerThreshold<long double> {
+    static constexpr long double value = 1e-10L;
+};
+
+template <>
+struct NearIntegerThreshold<Scalar> {
+    static constexpr long double value = 1e-30L;
+};
+
+}  // namespace detail
+
+// 便捷常量
+constexpr long double kNearZeroThreshold = detail::NearZeroThreshold<long double>::value;
+constexpr Scalar kNearZeroThresholdScalar(detail::NearZeroThreshold<Scalar>::value);
 
 // ============================================================================
 // 基础工具函数
@@ -141,7 +260,7 @@ inline bool is_integer(Scalar x, Scalar eps = Scalar(1e-10L)) {
 }
 
 /**
- * @brief 将浮点数识别为“足够接近”的简单分数
+ * @brief 将浮点数识别为”足够接近”的简单分数
  * @param value 输入值
  * @param numerator 输出分子
  * @param denominator 输出分母
@@ -157,17 +276,12 @@ bool approximate_fraction(long double value,
                           int max_denominator = 999,
                           long double eps = 1e-10);
 
-// Scalar overload for approximate_fraction
-inline bool approximate_fraction(Scalar value,
-                                 long long* numerator,
-                                 long long* denominator,
-                                 int max_denominator = 999,
-                                 Scalar eps = Scalar(1e-10L)) {
-    return approximate_fraction(static_cast<long double>(value),
-                                 numerator, denominator,
-                                 max_denominator,
-                                 static_cast<long double>(eps));
-}
+// Scalar overload for approximate_fraction - native precision
+bool approximate_fraction(Scalar value,
+                          long long* numerator,
+                          long long* denominator,
+                          int max_denominator = 999,
+                          Scalar eps = Scalar(1e-30L));
 
 /**
  * @brief 计算给定最大分母约束下的最佳有理逼近
@@ -404,13 +518,13 @@ long double atan2(long double y, long double x);
 inline Scalar sin(Scalar x) {
     Scalar result = precise128::sin(x);
     // 清理接近零的小值，避免浮点误差
-    // 使用 1e-15 作为阈值，因为 sin(pi) 的误差约为 1e-16
-    return precise128::abs(result) < Scalar(1e-15L) ? Scalar(0.0L) : result;
+    // 使用精度相关的阈值 epsilon^(3/4) ≈ 1e-25
+    return precise128::abs(result) < kNearZeroThresholdScalar ? Scalar(0.0L) : result;
 }
 inline Scalar cos(Scalar x) {
     Scalar result = precise128::cos(x);
     // 清理接近零的小值，避免浮点误差
-    return precise128::abs(result) < Scalar(1e-15L) ? Scalar(0.0L) : result;
+    return precise128::abs(result) < kNearZeroThresholdScalar ? Scalar(0.0L) : result;
 }
 inline Scalar tan(Scalar x) {
     const Scalar cosine = precise128::cos(x);
@@ -575,10 +689,8 @@ long double cbrt(long double x);
  */
 long double root(long double value, long double degree);
 
-// Scalar overload for root
-inline Scalar root(Scalar value, Scalar degree) {
-    return Scalar(root(static_cast<long double>(value), static_cast<long double>(degree)));
-}
+// Scalar overload for root - full precision
+Scalar root(Scalar value, Scalar degree);
 
 /**
  * @brief 计算幂函数
@@ -637,15 +749,9 @@ long double erf(long double x);
  */
 long double erfc(long double x);
 
-// Scalar overloads for erf, erfc - limited to long double precision
-inline Scalar erf(Scalar x) { 
-    // Fallback to long double precision
-    return Scalar(erf(static_cast<long double>(x))); 
-}
-inline Scalar erfc(Scalar x) { 
-    // Fallback to long double precision
-    return Scalar(erfc(static_cast<long double>(x))); 
-}
+// Scalar overloads for erf, erfc - full precision implementation
+Scalar erf(Scalar x);
+Scalar erfc(Scalar x);
 
 /**
  * @brief 计算正则化下不完全伽马函数 P(a, x)
@@ -655,10 +761,8 @@ inline Scalar erfc(Scalar x) {
  */
 long double inc_gamma(long double a, long double x);
 
-// Scalar overload for inc_gamma - limited to long double precision
-inline Scalar inc_gamma(Scalar a, Scalar x) {
-    return Scalar(inc_gamma(static_cast<long double>(a), static_cast<long double>(x)));
-}
+// Scalar overload for inc_gamma - full precision
+Scalar inc_gamma(Scalar a, Scalar x);
 
 /**
  * @brief 计算正则化不完全贝塔函数 I_x(a, b)
@@ -669,10 +773,8 @@ inline Scalar inc_gamma(Scalar a, Scalar x) {
  */
 long double inc_beta(long double a, long double b, long double x);
 
-// Scalar overload for inc_beta - limited to long double precision
-inline Scalar inc_beta(Scalar a, Scalar b, Scalar x) {
-    return Scalar(inc_beta(static_cast<long double>(a), static_cast<long double>(b), static_cast<long double>(x)));
-}
+// Scalar overload for inc_beta - full precision
+Scalar inc_beta(Scalar a, Scalar b, Scalar x);
 
 /**
  * @brief 计算贝塔函数
@@ -682,9 +784,15 @@ inline Scalar inc_beta(Scalar a, Scalar b, Scalar x) {
  */
 long double beta(long double a, long double b);
 
-// Scalar overload for beta - limited to long double precision
+// Scalar overload for beta - full precision
 inline Scalar beta(Scalar a, Scalar b) {
-    return Scalar(beta(static_cast<long double>(a), static_cast<long double>(b)));
+    if (a <= Scalar(0.0L) || b <= Scalar(0.0L)) {
+        throw std::domain_error("beta is only defined for positive inputs");
+    }
+    return internal::finite_or_infinity_from_log(
+        internal::log_gamma_positive(a) +
+        internal::log_gamma_positive(b) -
+        internal::log_gamma_positive(a + b));
 }
 
 /**
@@ -694,10 +802,8 @@ inline Scalar beta(Scalar a, Scalar b) {
  */
 long double zeta(long double s);
 
-// Scalar overload for zeta - limited to long double precision
-inline Scalar zeta(Scalar s) {
-    return Scalar(zeta(static_cast<long double>(s)));
-}
+// Scalar overload for zeta - full precision
+Scalar zeta(Scalar s);
 
 /**
  * @brief 计算第一类整数阶贝塞尔函数 J_n(x)
@@ -707,10 +813,8 @@ inline Scalar zeta(Scalar s) {
  */
 long double bessel_j(int order, long double x);
 
-// Scalar overload for bessel_j - limited to long double precision
-inline Scalar bessel_j(int order, Scalar x) {
-    return Scalar(bessel_j(order, static_cast<long double>(x)));
-}
+// Scalar overload for bessel_j - full precision
+Scalar bessel_j(int order, Scalar x);
 
 }  // namespace mymath
 
