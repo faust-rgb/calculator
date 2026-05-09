@@ -11,6 +11,7 @@
 
 #include "core/common/scalar_type.h"
 #include "floating_point.h"
+#include "scalar_traits.h"
 
 namespace mymath {
 
@@ -29,8 +30,10 @@ long abs(long x);
 long long abs(long long x);
 long double abs_long_double(long double x);
 
-// Scalar overload
-inline Scalar abs(Scalar x) { return precise128::abs(x); }
+// Scalar overload - uses dispatch from scalar_traits.h
+inline Scalar abs(Scalar x) {
+    return scalar_abs(x);
+}
 
 // ============================================================================
 // Rounding Functions
@@ -42,18 +45,37 @@ long double round(long double x);
 long double trunc(long double x);
 long double modf(long double x, long double* integer_part);
 
-// Scalar overloads
-inline Scalar floor(Scalar x) { return precise128::floor(x); }
-inline Scalar ceil(Scalar x) { return precise128::ceil(x); }
-inline Scalar round(Scalar x) { return precise128::round(x); }
-inline Scalar trunc(Scalar x) { return precise128::trunc(x); }
+// Scalar overloads - use dispatch from scalar_traits.h
+inline Scalar floor(Scalar x) {
+    return scalar_floor(x);
+}
+
+inline Scalar ceil(Scalar x) {
+    return scalar_ceil(x);
+}
+
+inline Scalar round(Scalar x) {
+    return scalar_round(x);
+}
+
+inline Scalar trunc(Scalar x) {
+    return scalar_trunc(x);
+}
 
 // Scalar overload for modf
-inline Scalar modf(Scalar x, Scalar* integer_part) {
-    long double ld_int;
-    long double frac = modf(static_cast<long double>(x), &ld_int);
-    *integer_part = Scalar(ld_int);
-    return Scalar(frac);
+template <typename T = Scalar>
+inline T modf(T x, T* integer_part) {
+    if constexpr (std::is_same_v<T, float128_t>) {
+        long double ld_int;
+        long double frac = modf(static_cast<long double>(x), &ld_int);
+        *integer_part = T(ld_int);
+        return T(frac);
+    } else {
+        T int_part = precise::floor(precise::abs(x));
+        if (x < T(0.0L)) int_part = -int_part;
+        *integer_part = int_part;
+        return x - int_part;
+    }
 }
 
 // ============================================================================
@@ -64,14 +86,20 @@ long double clamp(long double value, long double low, long double high);
 long double fmod(long double x, long double y);
 long double remainder(long double x, long double y);
 
-// Scalar overloads
+// Scalar overloads - use dispatch from scalar_traits.h
 inline Scalar clamp(Scalar value, Scalar low, Scalar high) {
     if (value < low) return low;
     if (value > high) return high;
     return value;
 }
-inline Scalar fmod(Scalar x, Scalar y) { return precise128::fmod(x, y); }
-inline Scalar remainder(Scalar x, Scalar y) { return precise128::remainder(x, y); }
+
+inline Scalar fmod(Scalar x, Scalar y) {
+    return scalar_fmod(x, y);
+}
+
+inline Scalar remainder(Scalar x, Scalar y) {
+    return scalar_remainder(x, y);
+}
 
 // ============================================================================
 // GCD and Fraction Approximation
@@ -136,8 +164,10 @@ bool best_rational_approximation(long double value,
  */
 long double normalize_angle(long double x);
 
-// Scalar overload
-inline Scalar normalize_angle(Scalar x) { return precise128::normalize_angle(x); }
+// Scalar overload - uses dispatch from scalar_traits.h
+inline Scalar normalize_angle(Scalar x) {
+    return scalar_normalize_angle(x);
+}
 
 }  // namespace mymath
 

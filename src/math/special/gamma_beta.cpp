@@ -26,7 +26,7 @@ long double log_gamma_positive(long double x) {
 }
 
 Scalar log_gamma_positive(Scalar x) {
-    if (x.hi <= 0.0L) {
+    if (x <= 0.0L) {
         throw std::domain_error("log-gamma is only defined for positive inputs");
     }
 
@@ -71,10 +71,10 @@ long double finite_or_infinity_from_log(long double log_value) {
 }
 
 Scalar finite_or_infinity_from_log(Scalar log_value) {
-    if (log_value.hi >= kLnDoubleMax) {
+    if (log_value >= kLnDoubleMax) {
         return Scalar(infinity());
     }
-    if (log_value.hi <= kLnDoubleDenormMin) {
+    if (log_value <= kLnDoubleDenormMin) {
         return Scalar(0.0L);
     }
     return precise128::exp(log_value);
@@ -96,7 +96,7 @@ long double gamma(long double x) {
 
     if (x < 0.5L) {
         const Scalar reflected_sine = precise128::sin(Scalar(kPi) * Scalar(x));
-        if (precise128::abs(reflected_sine).hi < 1e-12L) {
+        if (mymath::abs(reflected_sine) < 1e-12L) {
             throw std::domain_error("gamma is undefined at this input");
         }
         return static_cast<long double>(Scalar(kPi) / (reflected_sine * gamma(Scalar(1.0L) - Scalar(x))));
@@ -113,11 +113,11 @@ long double lgamma(long double x) {
         return static_cast<long double>(log_gamma_positive(Scalar(x)));
     }
 
-    const Scalar reflected_sine = precise128::sin(Scalar(kPi) * Scalar(x));
-    if (precise128::abs(reflected_sine).hi < 1e-12L) {
+    const Scalar reflected_sine = mymath::sin(Scalar(kPi) * Scalar(x));
+    if (mymath::abs(reflected_sine) < 1e-12L) {
         throw std::domain_error("lgamma is undefined at this input");
     }
-    return static_cast<long double>(precise128::ln(Scalar(kPi)) - precise128::ln(precise128::abs(reflected_sine)) - log_gamma_positive(Scalar(1.0L) - Scalar(x)));
+    return static_cast<long double>(mymath::ln(Scalar(kPi)) - mymath::ln(mymath::abs(reflected_sine)) - log_gamma_positive(Scalar(1.0L) - Scalar(x)));
 }
 
 long double inc_gamma(long double a, long double x) {
@@ -127,7 +127,7 @@ long double inc_gamma(long double a, long double x) {
     const Scalar a_s = Scalar(a);
     const Scalar x_s = Scalar(x);
 
-    const Scalar log_ax = a_s * precise128::ln(x_s) - x_s - log_gamma_positive(a_s);
+    const Scalar log_ax = a_s * mymath::ln(x_s) - x_s - log_gamma_positive(a_s);
     const Scalar prefix = finite_or_infinity_from_log(log_ax);
 
     if (x < a + 1.0L) {
@@ -136,7 +136,7 @@ long double inc_gamma(long double a, long double x) {
         for (int n = 1; n < 200; ++n) {
             term *= x_s / (a_s + Scalar(static_cast<long double>(n)));
             sum += term;
-            if (precise128::abs(term).hi < precise128::abs(sum).hi * 1e-35L) break;
+            if (mymath::abs(term) < mymath::abs(sum) * 1e-35L) break;
         }
         return static_cast<long double>(sum * prefix);
     } else {
@@ -149,13 +149,13 @@ long double inc_gamma(long double a, long double x) {
             Scalar an = -Scalar(static_cast<long double>(i)) * (Scalar(static_cast<long double>(i)) - a_s);
             b += Scalar(2.0L);
             d = an * d + b;
-            if (precise128::abs(d).hi < tiny.hi) d = tiny;
+            if (mymath::abs(d) < tiny) d = tiny;
             c = b + an / c;
-            if (precise128::abs(c).hi < tiny.hi) c = tiny;
+            if (mymath::abs(c) < tiny) c = tiny;
             d = Scalar(1.0L) / d;
             Scalar delta = c * d;
             h *= delta;
-            if (precise128::abs(delta - Scalar(1.0L)).hi < 1e-35L) break;
+            if (mymath::abs(delta - Scalar(1.0L)) < 1e-35L) break;
         }
         return static_cast<long double>(Scalar(1.0L) - h * prefix);
     }
@@ -166,13 +166,14 @@ Scalar gamma(Scalar x) {
         throw std::domain_error("gamma is undefined for non-positive integers");
     }
 
-    if (x < Scalar(0.5L)) {
-        const Scalar reflected_sine = precise128::sin(precise128::pi() * x);
-        if (precise128::abs(reflected_sine) < Scalar(1e-35L)) {
+    if (x < 0.5L) {
+        const Scalar reflected_sine = mymath::sin(mymath::constants::pi<Scalar>() * x);
+        if (mymath::abs(reflected_sine) < Scalar(1e-35L)) {
             throw std::domain_error("gamma is undefined at this input");
         }
-        return precise128::pi() / (reflected_sine * gamma(Scalar(1.0L) - x));
+        return Scalar(mymath::constants::pi<Scalar>()) / (reflected_sine * gamma(Scalar(1.0L) - x));
     }
+
     return finite_or_infinity_from_log(log_gamma_positive(x));
 }
 
@@ -259,7 +260,7 @@ long double inc_beta(long double a, long double b, long double x) {
     }
 
     const Scalar log_beta = log_gamma_positive(a_s) + log_gamma_positive(b_s) - log_gamma_positive(a_s + b_s);
-    const Scalar prefix = precise128::exp(a_s * precise128::ln(x_s) + b_s * precise128::ln(Scalar(1.0L) - x_s) - log_beta) / a_s;
+    const Scalar prefix = mymath::exp(a_s * mymath::ln(x_s) + b_s * mymath::ln(Scalar(1.0L) - x_s) - log_beta) / a_s;
 
     const Scalar tiny = Scalar(1e-30L);
     Scalar h = Scalar(1.0L);
@@ -271,23 +272,23 @@ long double inc_beta(long double a, long double b, long double x) {
         Scalar num = m_d * (b_s - m_d) * x_s / ((a_s + Scalar(2.0L) * m_d - Scalar(1.0L)) * (a_s + Scalar(2.0L) * m_d));
 
         d = Scalar(1.0L) + num * d;
-        if (precise128::abs(d).hi < tiny.hi) d = tiny;
+        if (mymath::abs(d) < tiny) d = tiny;
         c = Scalar(1.0L) + num / c;
-        if (precise128::abs(c).hi < tiny.hi) c = tiny;
+        if (mymath::abs(c) < tiny) c = tiny;
         d = Scalar(1.0L) / d;
         h *= c * d;
 
         num = -(a_s + m_d) * (a_s + b_s + m_d) * x_s / ((a_s + Scalar(2.0L) * m_d) * (a_s + Scalar(2.0L) * m_d + Scalar(1.0L)));
 
         d = Scalar(1.0L) + num * d;
-        if (precise128::abs(d).hi < tiny.hi) d = tiny;
+        if (mymath::abs(d) < tiny) d = tiny;
         c = Scalar(1.0L) + num / c;
-        if (precise128::abs(c).hi < tiny.hi) c = tiny;
+        if (mymath::abs(c) < tiny) c = tiny;
         d = Scalar(1.0L) / d;
         Scalar delta = c * d;
         h *= delta;
 
-        if (precise128::abs(delta - Scalar(1.0L)).hi < 1e-35L) break;
+        if (mymath::abs(delta - Scalar(1.0L)) < 1e-35L) break;
     }
 
     return static_cast<long double>(prefix * h);

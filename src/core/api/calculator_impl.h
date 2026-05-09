@@ -39,18 +39,18 @@ namespace core {
 using Scalar = mymath::Scalar;
 
 /** @brief 判断数值是否为零的显示阈值 */
-constexpr Scalar kDisplayZeroEpsScalar = Scalar(1e-290L);  // 近似 Scalar 最小值
+inline Scalar kDisplayZeroEpsScalar() { return Scalar(1e-290L); }  // 近似 Scalar 最小值
 
 /** @brief 判断数值是否为整数的显示阈值 */
-constexpr Scalar kDisplayIntegerEpsScalar = Scalar(1e-9L);
+inline Scalar kDisplayIntegerEpsScalar() { return Scalar(1e-9L); }
 
 } // namespace core
 
 /** @brief 判断数值是否为零的显示阈值 */
-constexpr Scalar kDisplayZeroEps = 1e-290L;  // 近似 Scalar 最小值
+inline Scalar kDisplayZeroEps() { return Scalar(1e-290L); }  // 近似 Scalar 最小值
 
 /** @brief 判断数值是否为整数的显示阈值 */
-constexpr Scalar kDisplayIntegerEps = 1e-9L;
+inline Scalar kDisplayIntegerEps() { return Scalar(1e-9L); }
 
 /** @brief 默认十进制显示有效位数 */
 constexpr int kDefaultDisplayPrecision = 12;

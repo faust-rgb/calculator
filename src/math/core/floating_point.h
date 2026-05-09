@@ -10,6 +10,7 @@
 #define MATH_CORE_FLOATING_POINT_H
 
 #include "core/common/scalar_type.h"
+#include "scalar_traits.h"
 
 namespace mymath {
 
@@ -80,7 +81,6 @@ struct NearIntegerThreshold<Scalar> {
 
 // Convenience constants
 constexpr long double kNearZeroThreshold = detail::NearZeroThreshold<long double>::value;
-constexpr Scalar kNearZeroThresholdScalar(detail::NearZeroThreshold<Scalar>::value);
 
 // ============================================================================
 // Floating-point Utilities
@@ -135,18 +135,25 @@ bool is_near_zero(long double x, long double eps = 1e-12L);
  */
 bool is_integer(long double x, long double eps = 1e-10L);
 
-// Scalar overloads using precise128 functions
-inline bool isnan(Scalar x) { return precise128::isnan(x); }
-inline bool isinf(Scalar x) { return precise128::isinf(x); }
-inline bool isfinite(Scalar x) { return precise128::isfinite(x); }
+// Scalar overloads - use dispatch from scalar_traits.h
+inline bool isnan(Scalar x) {
+    return scalar_isnan(x);
+}
+
+inline bool isinf(Scalar x) {
+    return scalar_isinf(x);
+}
+
+inline bool isfinite(Scalar x) {
+    return scalar_isfinite(x);
+}
 
 inline bool is_near_zero(Scalar x, Scalar eps = Scalar(1e-12L)) {
-    return precise128::is_near_zero(x, eps);
+    return scalar_is_near_zero(x, eps);
 }
 
 inline bool is_integer(Scalar x, Scalar eps = Scalar(1e-10L)) {
-    Scalar frac = precise128::abs(x - precise128::round(x));
-    return frac <= eps;
+    return scalar_is_integer(x, eps);
 }
 
 }  // namespace mymath

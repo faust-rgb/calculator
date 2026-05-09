@@ -73,7 +73,7 @@ AlgebraicNumber AlgebraicNumber::sqrt(int n) {
     std::vector<SymbolicExpression> coeffs;
     coeffs.push_back(SymbolicExpression::number(-n));
     coeffs.push_back(SymbolicExpression::number(0.0L));
-    coeffs.push_back(SymbolicExpression::number(1.0L));
+    coeffs.push_back(SymbolicExpression::number(Scalar(1.0L)));
     SymbolicPolynomial poly(coeffs, "_t");
 
     // 隔离区间: sqrt(n) 在 (floor(sqrt(n)), ceil(sqrt(n))) 中
@@ -92,7 +92,7 @@ AlgebraicNumber AlgebraicNumber::root_of_unity(int n, int k) {
     for (int i = 1; i < n; ++i) {
         coeffs.push_back(SymbolicExpression::number(0.0L));
     }
-    coeffs.push_back(SymbolicExpression::number(1.0L));
+    coeffs.push_back(SymbolicExpression::number(Scalar(1.0L)));
     SymbolicPolynomial poly(coeffs, "_z");
 
     // 单位根在单位圆上
@@ -290,7 +290,7 @@ SymbolicExpression AlgebraicNumber::to_expression() const {
 
     // 检查是否是 sqrt 形式
     if (minimal_polynomial.degree() == 2) {
-        Scalar a = 0.0L, b = 0.0L, c = 0.0L;
+        Scalar a = Scalar(0.0L), b = 0.0L, c = 0.0L;
         if (minimal_polynomial.coefficient(2).is_number(&a) &&
             minimal_polynomial.coefficient(1).is_number(&b) &&
             minimal_polynomial.coefficient(0).is_number(&c)) {
@@ -415,8 +415,8 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
     // alpha + beta 的最小多项式可以通过消元得到
 
     // 对于简单情况（数值系数），使用直接方法
-    Scalar a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
-    Scalar a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
+    Scalar a1 = Scalar(0.0L), b1 = 0.0L, c1 = 0.0L;
+    Scalar a2 = Scalar(0.0L), b2 = 0.0L, c2 = 0.0L;
 
     bool p1_numeric = (d1 == 2 &&
                       p1.coefficient(2).is_number(&a1) &&
@@ -446,7 +446,7 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
             coeffs[1] = SymbolicExpression::number(0.0L);
             coeffs[2] = SymbolicExpression::number(-2.0 * (r1 + r2));  // -2*(r1+r2)
             coeffs[3] = SymbolicExpression::number(0.0L);
-            coeffs[4] = SymbolicExpression::number(1.0L);  // t^4
+            coeffs[4] = SymbolicExpression::number(Scalar(1.0L));  // t^4
 
             return SymbolicPolynomial(coeffs, "_t");
         }
@@ -456,7 +456,7 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
     // 完整实现需要符号结式计算
     std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0L));
     coeffs[0] = SymbolicExpression::number(-1.0L);
-    coeffs[new_deg] = SymbolicExpression::number(1.0L);
+    coeffs[new_deg] = SymbolicExpression::number(Scalar(1.0L));
 
     return SymbolicPolynomial(coeffs, "_t");
 }
@@ -475,8 +475,8 @@ SymbolicPolynomial AlgebraicNumber::compute_product_minpoly(
     if (d2 <= 0) return p1;
 
     // 对于简单情况（数值系数），使用直接方法
-    Scalar a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
-    Scalar a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
+    Scalar a1 = Scalar(0.0L), b1 = 0.0L, c1 = 0.0L;
+    Scalar a2 = Scalar(0.0L), b2 = 0.0L, c2 = 0.0L;
 
     bool p1_numeric = (d1 == 2 &&
                       p1.coefficient(2).is_number(&a1) &&
@@ -500,7 +500,7 @@ SymbolicPolynomial AlgebraicNumber::compute_product_minpoly(
             std::vector<SymbolicExpression> coeffs(3);
             coeffs[0] = SymbolicExpression::number(-r_product);
             coeffs[1] = SymbolicExpression::number(0.0L);
-            coeffs[2] = SymbolicExpression::number(1.0L);
+            coeffs[2] = SymbolicExpression::number(Scalar(1.0L));
 
             return SymbolicPolynomial(coeffs, "_t");
         }
@@ -511,7 +511,7 @@ SymbolicPolynomial AlgebraicNumber::compute_product_minpoly(
     // 一般情况：返回占位多项式
     std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0L));
     coeffs[0] = SymbolicExpression::number(-1.0L);
-    coeffs[new_deg] = SymbolicExpression::number(1.0L);
+    coeffs[new_deg] = SymbolicExpression::number(Scalar(1.0L));
 
     return SymbolicPolynomial(coeffs, "_t");
 }
@@ -536,12 +536,12 @@ SymbolicExpression compute_resultant_symbolic(const SymbolicPolynomial& p, const
     }
 
     if (m == 0 && n == 0) {
-        return SymbolicExpression::number(1.0L);
+        return SymbolicExpression::number(Scalar(1.0L));
     }
 
     if (m == 0) {
         // Resultant is p^m
-        SymbolicExpression result = SymbolicExpression::number(1.0L);
+        SymbolicExpression result = SymbolicExpression::number(Scalar(1.0L));
         SymbolicExpression p_lc = p.leading_coefficient();
         for (int i = 0; i < n; ++i) {
             result = (result * p_lc).simplify();
@@ -551,7 +551,7 @@ SymbolicExpression compute_resultant_symbolic(const SymbolicPolynomial& p, const
 
     if (n == 0) {
         // Resultant is q^n
-        SymbolicExpression result = SymbolicExpression::number(1.0L);
+        SymbolicExpression result = SymbolicExpression::number(Scalar(1.0L));
         SymbolicExpression q_lc = q.leading_coefficient();
         for (int i = 0; i < m; ++i) {
             result = (result * q_lc).simplify();
@@ -584,8 +584,8 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
     if (d2 <= 0) return p1;
 
     // Special case: both are quadratic with no linear term (sqrt case)
-    Scalar a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
-    Scalar a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
+    Scalar a1 = Scalar(0.0L), b1 = 0.0L, c1 = 0.0L;
+    Scalar a2 = Scalar(0.0L), b2 = 0.0L, c2 = 0.0L;
 
     bool p1_numeric = (d1 == 2 &&
                       p1.coefficient(2).is_number(&a1) &&
@@ -608,7 +608,7 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
         coeffs[1] = SymbolicExpression::number(0.0L);
         coeffs[2] = SymbolicExpression::number(-2.0 * (r1 + r2));
         coeffs[3] = SymbolicExpression::number(0.0L);
-        coeffs[4] = SymbolicExpression::number(1.0L);
+        coeffs[4] = SymbolicExpression::number(Scalar(1.0L));
 
         return SymbolicPolynomial(coeffs, "_t");
     }
@@ -657,14 +657,14 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
         // For simplicity, use the existing resultant method
         return SymbolicPolynomial({SymbolicExpression::number(-1.0L),
                                    SymbolicExpression::number(0.0L),
-                                   SymbolicExpression::number(1.0L)}, "_t");
+                                   SymbolicExpression::number(Scalar(1.0L))}, "_t");
     }
 
     // Fallback: return placeholder polynomial
     int new_deg = d1 * d2;
     std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0L));
     coeffs[0] = SymbolicExpression::number(-1.0L);
-    coeffs[new_deg] = SymbolicExpression::number(1.0L);
+    coeffs[new_deg] = SymbolicExpression::number(Scalar(1.0L));
 
     return SymbolicPolynomial(coeffs, "_t");
 }
@@ -686,8 +686,8 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
     if (d2 <= 0) return p1;
 
     // Special case: both are quadratic with no linear term (sqrt case)
-    Scalar a1 = 0.0L, b1 = 0.0L, c1 = 0.0L;
-    Scalar a2 = 0.0L, b2 = 0.0L, c2 = 0.0L;
+    Scalar a1 = Scalar(0.0L), b1 = 0.0L, c1 = 0.0L;
+    Scalar a2 = Scalar(0.0L), b2 = 0.0L, c2 = 0.0L;
 
     bool p1_numeric = (d1 == 2 &&
                       p1.coefficient(2).is_number(&a1) &&
@@ -709,7 +709,7 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
         std::vector<SymbolicExpression> coeffs(3);
         coeffs[0] = SymbolicExpression::number(-r_product);
         coeffs[1] = SymbolicExpression::number(0.0L);
-        coeffs[2] = SymbolicExpression::number(1.0L);
+        coeffs[2] = SymbolicExpression::number(Scalar(1.0L));
 
         return SymbolicPolynomial(coeffs, "_t");
     }
@@ -751,7 +751,7 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
         int new_deg = d1 * d2;
         std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0L));
         coeffs[0] = SymbolicExpression::number(-1.0L);
-        coeffs[new_deg] = SymbolicExpression::number(1.0L);
+        coeffs[new_deg] = SymbolicExpression::number(Scalar(1.0L));
         return SymbolicPolynomial(coeffs, "_t");
     }
 
@@ -759,7 +759,7 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
     int new_deg = d1 * d2;
     std::vector<SymbolicExpression> coeffs(new_deg + 1, SymbolicExpression::number(0.0L));
     coeffs[0] = SymbolicExpression::number(-1.0L);
-    coeffs[new_deg] = SymbolicExpression::number(1.0L);
+    coeffs[new_deg] = SymbolicExpression::number(Scalar(1.0L));
 
     return SymbolicPolynomial(coeffs, "_t");
 }
@@ -862,7 +862,7 @@ AlgebraicNumber::complex_roots_of(const SymbolicPolynomial& poly) {
         // ax^2 + bx + c = 0 的根为 (-b ± sqrt(b^2-4ac)) / (2a)
         // 当判别式 < 0 时，实部为 -b/(2a)
 
-        Scalar a = 0.0L, b = 0.0L, c = 0.0L;
+        Scalar a = Scalar(0.0L), b = 0.0L, c = 0.0L;
         if (poly.coefficient(2).is_number(&a) &&
             poly.coefficient(1).is_number(&b) &&
             poly.coefficient(0).is_number(&c)) {
@@ -880,7 +880,7 @@ AlgebraicNumber::complex_roots_of(const SymbolicPolynomial& poly) {
             std::vector<SymbolicExpression> coeffs(3);
             coeffs[0] = SymbolicExpression::number(-imag_part * imag_part);
             coeffs[1] = SymbolicExpression::number(0.0L);
-            coeffs[2] = SymbolicExpression::number(1.0L);
+            coeffs[2] = SymbolicExpression::number(Scalar(1.0L));
             SymbolicPolynomial imag_poly(coeffs, "_t");
 
             AlgebraicNumber imag_alg(imag_poly, ExactRational(0), ExactRational(static_cast<int>(imag_part) + 1),
@@ -1006,10 +1006,10 @@ std::vector<SymbolicPolynomial> sturm_sequence(const SymbolicPolynomial& p) {
 int sign_variations(const SymbolicPolynomial& p, const ExactRational& x) {
     // 计算多项式在 x 处的符号
     Scalar x_val = x.to_double();
-    Scalar val = 0.0L;
+    Scalar val = Scalar(0.0L);
 
     for (int i = 0; i <= p.degree(); ++i) {
-        Scalar coeff = 0.0L;
+        Scalar coeff = Scalar(0.0L);
         if (p.coefficient(i).is_number(&coeff)) {
             val += coeff * mymath::pow(x_val, i);
         }
@@ -1106,7 +1106,7 @@ SymbolicExpression norm(const AlgebraicNumber& a) {
     }
 
     // 范数是最小多项式常数项的绝对值（对于首一多项式）
-    Scalar const_term = 0.0L;
+    Scalar const_term = Scalar(0.0L);
     if (a.minimal_polynomial.coefficient(0).is_number(&const_term)) {
         return SymbolicExpression::number(mymath::abs(const_term));
     }
@@ -1121,7 +1121,7 @@ SymbolicExpression trace(const AlgebraicNumber& a) {
     }
 
     // 迹是次高次系数的相反数（对于首一多项式）
-    Scalar coeff = 0.0L;
+    Scalar coeff = Scalar(0.0L);
     if (a.minimal_polynomial.coefficient(a.minimal_polynomial.degree() - 1).is_number(&coeff)) {
         return SymbolicExpression::number(-coeff);
     }

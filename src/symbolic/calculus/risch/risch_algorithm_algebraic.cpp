@@ -99,11 +99,11 @@ bool RischAlgorithm::detect_algebraic_extension(
             SymbolicExpression exp(e.node_->right);
 
             // 检查 exp = 1/n
-            Scalar exp_val = 0.0L;
+            Scalar exp_val = Scalar(0.0L);
             if (exp.is_number(&exp_val)) {
                 // exp = 1/n 意味着 n = 1/exp
                 if (exp_val > 0 && exp_val < 1) {
-                    int n = static_cast<int>(mymath::round(1.0L / exp_val));
+                    int n = static_cast<int>(mymath::round(Scalar(1) / exp_val).to_long_double());
                     if (mymath::abs(1.0L / n - exp_val) < 1e-9) {
                         radicals.push_back({base.simplify(), n});
                         collect_radicals(base);
@@ -240,13 +240,13 @@ SymbolicPolynomial compute_residue_polynomial(
     num_coeffs.resize(n);
 
     // 将 denominator' 转换为商环元素
-    std::vector<SymbolicExpression> denom_deriv_coeffs(n, SymbolicExpression::number(0.0L));
+    std::vector<SymbolicExpression> denom_deriv_coeffs(n, SymbolicExpression::number(Scalar(0)));
     for (int i = 0; i <= denom_deriv.degree() && i < n; ++i) {
         denom_deriv_coeffs[i] = denom_deriv.coefficient(i);
     }
 
     // 构造 N - c * D' 的系数
-    std::vector<SymbolicExpression> P_coeffs(n, SymbolicExpression::number(0.0L));
+    std::vector<SymbolicExpression> P_coeffs(n, SymbolicExpression::number(Scalar(0)));
     for (int i = 0; i < n; ++i) {
         SymbolicExpression c_term = (SymbolicExpression::variable(c_var) * denom_deriv_coeffs[i]).simplify();
         P_coeffs[i] = (num_coeffs[i] - c_term).simplify();
@@ -307,16 +307,16 @@ SymbolicPolynomial compute_residue_polynomial(
         SymbolicExpression root = (make_negate(b) / a).simplify();
 
         // 计算 N(root) 和 D'(root)
-        SymbolicExpression N_at_root = SymbolicExpression::number(0.0L);
-        SymbolicExpression D_prime_at_root = SymbolicExpression::number(0.0L);
+        SymbolicExpression N_at_root = SymbolicExpression::number(Scalar(0));
+        SymbolicExpression D_prime_at_root = SymbolicExpression::number(Scalar(0));
 
         for (int i = 0; i < n; ++i) {
-            SymbolicExpression term = (num_coeffs[i] * make_power(root, SymbolicExpression::number(i))).simplify();
+            SymbolicExpression term = (num_coeffs[i] * make_power(root, SymbolicExpression::number(Scalar(static_cast<long long>(i))))).simplify();
             N_at_root = (N_at_root + term).simplify();
         }
 
         for (int i = 0; i <= denom_deriv.degree(); ++i) {
-            SymbolicExpression term = (denom_deriv.coefficient(i) * make_power(root, SymbolicExpression::number(i))).simplify();
+            SymbolicExpression term = (denom_deriv.coefficient(i) * make_power(root, SymbolicExpression::number(Scalar(static_cast<long long>(i))))).simplify();
             D_prime_at_root = (D_prime_at_root + term).simplify();
         }
 
@@ -335,13 +335,13 @@ SymbolicPolynomial compute_residue_polynomial(
         SymbolicExpression b = denominator.coefficient(1);
         SymbolicExpression c = denominator.coefficient(0);
 
-        SymbolicExpression disc = (b * b - SymbolicExpression::number(4.0) * a * c).simplify();
+        SymbolicExpression disc = (b * b - SymbolicExpression::number(Scalar(4)) * a * c).simplify();
         if (!expr_is_zero(disc)) {
             // 有两个不同的根，残差多项式次数为 2
             // 简化：返回一个占位符
-            std::vector<SymbolicExpression> placeholder(3, SymbolicExpression::number(0.0L));
-            placeholder[0] = SymbolicExpression::number(1.0L);  // 常数项
-            placeholder[2] = SymbolicExpression::number(1.0L);  // 二次项
+            std::vector<SymbolicExpression> placeholder(3, SymbolicExpression::number(Scalar(0)));
+            placeholder[0] = SymbolicExpression::number(Scalar(1.0L));  // 常数项
+            placeholder[2] = SymbolicExpression::number(Scalar(1.0L));  // 二次项
             return SymbolicPolynomial(placeholder, c_var);
         }
     }
@@ -349,9 +349,9 @@ SymbolicPolynomial compute_residue_polynomial(
     // 最终回退：返回一个非平凡的占位多项式
     // 使用残差多项式的次数估计
     int estimated_deg = n * den_deg;
-    std::vector<SymbolicExpression> placeholder(estimated_deg + 1, SymbolicExpression::number(0.0L));
-    placeholder[0] = SymbolicExpression::number(1.0L);
-    placeholder[estimated_deg] = SymbolicExpression::number(1.0L);
+    std::vector<SymbolicExpression> placeholder(estimated_deg + 1, SymbolicExpression::number(Scalar(0)));
+    placeholder[0] = SymbolicExpression::number(Scalar(1.0L));
+    placeholder[estimated_deg] = SymbolicExpression::number(Scalar(1.0L));
 
     return SymbolicPolynomial(placeholder, c_var);
 }
@@ -370,7 +370,7 @@ SymbolicExpression extract_logarithmic_terms(
 
     (void)denominator;
     (void)ext;
-    SymbolicExpression result = SymbolicExpression::number(0.0L);
+    SymbolicExpression result = SymbolicExpression::number(Scalar(0));
 
     // 对残差多项式进行 square-free 分解
     std::vector<SymbolicPolynomial> sq_factors;
@@ -450,8 +450,8 @@ bool trager_integrate(
 
     if (!rational_part || !log_part) return false;
 
-    *rational_part = SymbolicExpression::number(0.0L);
-    *log_part = SymbolicExpression::number(0.0L);
+    *rational_part = SymbolicExpression::number(Scalar(0));
+    *log_part = SymbolicExpression::number(Scalar(0));
 
     int n = ext.degree;
     SymbolicPolynomial modulus = ext.minimal_polynomial;
@@ -483,7 +483,7 @@ bool trager_integrate(
     SymbolicPolynomial denom_deriv = denominator.derivative();
 
     // 构造 N - c * D' 用于子结果式链
-    std::vector<SymbolicExpression> P_coeffs(n, SymbolicExpression::number(0.0L));
+    std::vector<SymbolicExpression> P_coeffs(n, SymbolicExpression::number(Scalar(0)));
     for (int i = 0; i < n; ++i) {
         SymbolicExpression c_term = (SymbolicExpression::variable(c_var) *
                                     denom_deriv.coefficient(i)).simplify();
@@ -533,7 +533,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_algebraic_extensi
 
     // 提取分子和分母
     SymbolicExpression num_expr = elem_expr;
-    SymbolicExpression den_expr = SymbolicExpression::number(1.0L);
+    SymbolicExpression den_expr = SymbolicExpression::number(Scalar(1.0L));
 
     if (elem_expr.node_->type == NodeType::kDivide) {
         num_expr = SymbolicExpression(elem_expr.node_->left);
@@ -758,7 +758,7 @@ bool analyze_log_integral_form(
 
     *log_power = 0;
     *has_x_factor = false;
-    *inner_arg = SymbolicExpression::number(0.0L);
+    *inner_arg = SymbolicExpression::number(Scalar(0));
 
     // 检查是否是 1/f 形式
     if (expr.node_->type != NodeType::kDivide) return false;
@@ -767,7 +767,7 @@ bool analyze_log_integral_form(
     SymbolicExpression den(expr.node_->right);
 
     // 分子应该是 1
-    Scalar num_val = 0.0L;
+    Scalar num_val = Scalar(0.0L);
     if (!num.is_number(&num_val) || mymath::abs(num_val - 1.0L) > 1e-9) {
         return false;
     }
@@ -807,7 +807,7 @@ bool analyze_log_integral_form(
         SymbolicExpression exp(remaining.node_->right);
 
         if (base.node_->type == NodeType::kFunction && base.node_->text == "ln") {
-            Scalar exp_val = 0.0L;
+            Scalar exp_val = Scalar(0.0L);
             if (exp.is_number(&exp_val)) {
                 *log_power = static_cast<int>(mymath::round(exp_val));
                 *inner_arg = SymbolicExpression(base.node_->left);
@@ -1063,7 +1063,7 @@ struct LiouvilleForm {
     std::vector<SymbolicExpression> log_args;                  // v_i
     bool valid;
 
-    LiouvilleForm() : v_0(SymbolicExpression::number(0.0L)), valid(false) {}
+    LiouvilleForm() : v_0(SymbolicExpression::number(Scalar(0))), valid(false) {}
 };
 
 /**
@@ -1080,7 +1080,7 @@ bool can_express_in_liouville_form(
     if (!form) return false;
 
     form->valid = false;
-    form->v_0 = SymbolicExpression::number(0.0L);
+    form->v_0 = SymbolicExpression::number(Scalar(0));
     form->log_coeffs.clear();
     form->log_args.clear();
 
@@ -1154,7 +1154,7 @@ bool can_express_in_liouville_form(
         SymbolicExpression den_deriv = den.derivative(x_var).simplify();
         if (structural_equals(num.simplify(), den_deriv.simplify())) {
             // f = den'/den = D(ln(den))
-            form->log_coeffs.push_back(SymbolicExpression::number(1.0L));
+            form->log_coeffs.push_back(SymbolicExpression::number(Scalar(1.0L)));
             form->log_args.push_back(den);
             form->valid = true;
             return true;
@@ -1195,7 +1195,7 @@ bool prove_non_elementary_liouville(
         SymbolicExpression num(f.node_->left);
         SymbolicExpression den(f.node_->right);
 
-        Scalar num_val = 0.0L;
+        Scalar num_val = Scalar(0.0L);
         if (num.is_number(&num_val) && mymath::abs(num_val - 1.0L) < 1e-9) {
             if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
                 SymbolicExpression ln_arg(den.node_->left);
@@ -1229,7 +1229,7 @@ bool prove_non_elementary_liouville(
             if (inner.node_->type == NodeType::kPower) {
                 SymbolicExpression base(inner.node_->left);
                 SymbolicExpression exp(inner.node_->right);
-                Scalar exp_val = 0.0L;
+                Scalar exp_val = Scalar(0.0L);
                 if (exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < 1e-9) {
                     if (base.is_variable_named(x_var)) {
                         *reason = "Liouville theorem: exp(-x^2) cannot be expressed in Liouville form (requires erf)";
@@ -1284,7 +1284,7 @@ bool extract_logarithmic_term(
 
     // 情况 1: ln(v)
     if (expr.node_->type == NodeType::kFunction && expr.node_->text == "ln") {
-        *coeff = SymbolicExpression::number(1.0L);
+        *coeff = SymbolicExpression::number(Scalar(1.0L));
         *arg = SymbolicExpression(expr.node_->left);
         return true;
     }
@@ -1377,7 +1377,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_algebraic_extensi
 
     // 提取分子和分母
     SymbolicExpression num_expr = elem_expr;
-    SymbolicExpression den_expr = SymbolicExpression::number(1.0L);
+    SymbolicExpression den_expr = SymbolicExpression::number(Scalar(1.0L));
 
     if (elem_expr.node_->type == NodeType::kDivide) {
         num_expr = SymbolicExpression(elem_expr.node_->left);
@@ -1430,7 +1430,7 @@ bool RischAlgorithm::trager_logarithmic_part(
         factors = {denominator};
     }
 
-    SymbolicExpression total_log = SymbolicExpression::number(0.0L);
+    SymbolicExpression total_log = SymbolicExpression::number(Scalar(0));
 
     for (const auto& D_i : factors) {
         if (D_i.degree() <= 0) continue;
@@ -1464,7 +1464,7 @@ bool RischAlgorithm::hermite_reduction_algebraic(
 
     if (!rational_part || !reduced_num || !reduced_den) return false;
 
-    *rational_part = SymbolicExpression::number(0.0L);
+    *rational_part = SymbolicExpression::number(Scalar(0));
     *reduced_num = numerator;
     *reduced_den = denominator;
 
@@ -1569,8 +1569,8 @@ bool extended_gcd_in_quotient_ring(
     // 使用扩展欧几里得算法
     SymbolicPolynomial a = U;
     SymbolicPolynomial b = V;
-    SymbolicPolynomial s = SymbolicPolynomial({SymbolicExpression::number(1.0L)}, U.variable_name());
-    SymbolicPolynomial t = SymbolicPolynomial({SymbolicExpression::number(0.0L)}, U.variable_name());
+    SymbolicPolynomial s = SymbolicPolynomial({SymbolicExpression::number(Scalar(1.0L))}, U.variable_name());
+    SymbolicPolynomial t = SymbolicPolynomial({SymbolicExpression::number(Scalar(0))}, U.variable_name());
     SymbolicPolynomial s_old = s;
     SymbolicPolynomial t_old = t;
 
@@ -1628,14 +1628,14 @@ bool hermite_step(
     }
 
     // 如果 GCD 是常数，可以求解
-    Scalar g_val = 0.0L;
+    Scalar g_val = Scalar(0.0L);
     if (G.degree() == 0 && G.coefficient(0).is_number(&g_val) && mymath::abs(g_val) > 1e-12) {
         // 归一化
         SymbolicExpression g_inv = SymbolicExpression::number(1.0L / g_val);
 
         // 计算 B_k
         // B_k = -N * A / k (mod D_k)
-        std::vector<SymbolicExpression> B_coeffs(n, SymbolicExpression::number(0.0L));
+        std::vector<SymbolicExpression> B_coeffs(n, SymbolicExpression::number(Scalar(0)));
         for (int i = 0; i < n && i <= numerator.degree(); ++i) {
             B_coeffs[i] = (numerator.coefficients[i] * A.coefficient(i) * g_inv *
                           SymbolicExpression::number(-1.0L / (k))).simplify();
@@ -1662,7 +1662,7 @@ bool hermite_reduction_full(
 
     if (!rational_part || !reduced_num || !reduced_den) return false;
 
-    *rational_part = SymbolicExpression::number(0.0L);
+    *rational_part = SymbolicExpression::number(Scalar(0));
 
     // 对分母进行 square-free 分解
     std::vector<SymbolicPolynomial> sq_factors;
@@ -1740,7 +1740,7 @@ RischAlgorithm::compute_algebraic_residues(
         SymbolicExpression root = (make_negate(b) / a).simplify();
 
         // 残差 = numerator(root) / a
-        SymbolicExpression num_at_root = SymbolicExpression::number(0.0L);
+        SymbolicExpression num_at_root = SymbolicExpression::number(Scalar(0));
         for (int i = 0; i <= numerator.degree(); ++i) {
             SymbolicExpression term = (numerator.coefficient(i) *
                                       make_power(root, SymbolicExpression::number((i)))).simplify();
@@ -1762,10 +1762,10 @@ RischAlgorithm::compute_algebraic_residues(
         SymbolicExpression c = denominator.coefficient(0);
 
         // 判别式 delta = b^2 - 4ac
-        SymbolicExpression delta = (b * b - SymbolicExpression::number(4.0) * a * c).simplify();
+        SymbolicExpression delta = (b * b - SymbolicExpression::number(Scalar(4)) * a * c).simplify();
 
         // 检查判别式是否为完全平方
-        Scalar delta_val = 0.0L;
+        Scalar delta_val = Scalar(0.0L);
         if (delta.is_number(&delta_val)) {
             Scalar sqrt_delta = mymath::sqrt(delta_val);
             if (mymath::abs(sqrt_delta * sqrt_delta - delta_val) < 1e-12) {
@@ -1777,7 +1777,7 @@ RischAlgorithm::compute_algebraic_residues(
 
                 // 计算每个根的残差
                 for (const auto& root : {root1, root2}) {
-                    SymbolicExpression num_at_root = SymbolicExpression::number(0.0L);
+                    SymbolicExpression num_at_root = SymbolicExpression::number(Scalar(0));
                     for (int i = 0; i <= numerator.degree(); ++i) {
                         SymbolicExpression term = (numerator.coefficient(i) *
                                                   make_power(root, SymbolicExpression::number((i)))).simplify();
@@ -1810,7 +1810,7 @@ RischAlgorithm::compute_algebraic_residues(
         // 这里简化处理，返回符号形式
 
         for (const auto& root : {root1, root2}) {
-            SymbolicExpression num_at_root = SymbolicExpression::number(0.0L);
+            SymbolicExpression num_at_root = SymbolicExpression::number(Scalar(0));
             for (int i = 0; i <= numerator.degree(); ++i) {
                 SymbolicExpression term = (numerator.coefficient(i) *
                                           make_power(root, SymbolicExpression::number((i)))).simplify();
@@ -1834,7 +1834,7 @@ RischAlgorithm::compute_algebraic_residues(
     std::vector<Scalar> den_coeffs_numeric;
     bool all_numeric = true;
     for (int i = 0; i <= den_deg; ++i) {
-        Scalar val = 0.0L;
+        Scalar val = Scalar(0.0L);
         if (denominator.coefficient(i).is_number(&val)) {
             den_coeffs_numeric.push_back(val);
         } else {
@@ -1861,9 +1861,9 @@ RischAlgorithm::compute_algebraic_residues(
 
             // 计算分子在根处的值
             // 使用代数数运算
-            SymbolicExpression num_at_alpha = SymbolicExpression::number(0.0L);
+            SymbolicExpression num_at_alpha = SymbolicExpression::number(Scalar(0));
             for (int i = 0; i <= numerator.degree(); ++i) {
-                Scalar coeff = 0.0L;
+                Scalar coeff = Scalar(0.0L);
                 if (numerator.coefficient(i).is_number(&coeff)) {
                     // 使用代数数的幂运算
                     AlgebraicNumber term = alpha.power(i);
@@ -1874,9 +1874,9 @@ RischAlgorithm::compute_algebraic_residues(
 
             // 计算分母导数在根处的值
             SymbolicPolynomial den_deriv = denominator.derivative();
-            SymbolicExpression deriv_at_alpha = SymbolicExpression::number(0.0L);
+            SymbolicExpression deriv_at_alpha = SymbolicExpression::number(Scalar(0));
             for (int i = 0; i <= den_deriv.degree(); ++i) {
-                Scalar coeff = 0.0L;
+                Scalar coeff = Scalar(0.0L);
                 if (den_deriv.coefficient(i).is_number(&coeff)) {
                     AlgebraicNumber term = alpha.power(i);
                     SymbolicExpression term_val = (SymbolicExpression::number(coeff) * term.to_expression()).simplify();
@@ -1912,12 +1912,12 @@ RischAlgorithm::compute_algebraic_residues(
             // 计算结式 resultant(N - c*D', D)
             // 构造 N - c*D'
             int max_deg = std::max(numerator.degree(), D_prime.degree());
-            std::vector<SymbolicExpression> P_coeffs(max_deg + 1, SymbolicExpression::number(0.0L));
+            std::vector<SymbolicExpression> P_coeffs(max_deg + 1, SymbolicExpression::number(Scalar(0)));
             for (int i = 0; i <= numerator.degree(); ++i) {
                 P_coeffs[i] = numerator.coefficient(i);
             }
             for (int i = 0; i <= D_prime.degree(); ++i) {
-                Scalar coeff_val = 0.0L;
+                Scalar coeff_val = Scalar(0.0L);
                 if (D_prime.coefficient(i).is_number(&coeff_val)) {
                     SymbolicExpression c_term = (SymbolicExpression::variable(c_var) *
                                                SymbolicExpression::number(coeff_val)).simplify();
@@ -1991,7 +1991,7 @@ RischAlgorithm::compute_algebraic_residues(
 
         // 构造符号形式的 N - c*D'
         int max_deg = std::max(numerator.degree(), den_deriv.degree());
-        std::vector<SymbolicExpression> P_coeffs(max_deg + 1, SymbolicExpression::number(0.0L));
+        std::vector<SymbolicExpression> P_coeffs(max_deg + 1, SymbolicExpression::number(Scalar(0)));
         for (int i = 0; i <= numerator.degree(); ++i) {
             P_coeffs[i] = numerator.coefficient(i);
         }
@@ -2044,7 +2044,7 @@ RischAlgorithm::compute_algebraic_residues(
 
         // 如果仍然失败，返回通用形式
         if (residues.empty()) {
-            SymbolicExpression generic_residue = SymbolicExpression::number(1.0L);
+            SymbolicExpression generic_residue = SymbolicExpression::number(Scalar(1.0L));
             SymbolicExpression generic_factor = denominator.to_expression();
             residues.push_back({generic_residue, generic_factor});
         }
@@ -2111,7 +2111,7 @@ QuotientRingElement multiply_exact(
     // 一般情况：使用模归约
     // 先计算完整乘积
     int prod_degree = 2 * n - 1;
-    std::vector<SymbolicExpression> prod_coeffs(prod_degree, SymbolicExpression::number(0.0L));
+    std::vector<SymbolicExpression> prod_coeffs(prod_degree, SymbolicExpression::number(Scalar(0)));
 
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j) {
@@ -2130,7 +2130,7 @@ QuotientRingElement multiply_exact(
                 SymbolicExpression term = (prod_coeffs[i] * make_negate(c_j)).simplify();
                 prod_coeffs[i - n + j] = (prod_coeffs[i - n + j] + term).simplify();
             }
-            prod_coeffs[i] = SymbolicExpression::number(0.0L);
+            prod_coeffs[i] = SymbolicExpression::number(Scalar(0));
         }
     }
 
@@ -2193,7 +2193,7 @@ bool inverse_exact(
     // 如果 gcd 不是常数，则 a 不可逆
     if (g.degree() > 0) {
         // 检查 g 是否是常数多项式
-        Scalar g_val = 0.0L;
+        Scalar g_val = Scalar(0.0L);
         if (g.degree() == 0 && g.coefficient(0).is_number(&g_val) && mymath::abs(g_val) > 1e-12) {
             // g 是非零常数，可以归一化
             SymbolicExpression g_inv = SymbolicExpression::number(1.0L / g_val);
@@ -2210,7 +2210,7 @@ bool inverse_exact(
         result->coefficients[i] = s.coefficient(i);
     }
     for (int i = s.degree() + 1; i < n; ++i) {
-        result->coefficients[i] = SymbolicExpression::number(0.0L);
+        result->coefficients[i] = SymbolicExpression::number(Scalar(0));
     }
 
     return true;
@@ -2339,7 +2339,7 @@ bool RischAlgorithm::generalized_euler_substitution(
         if (e.node_->type == NodeType::kPower) {
             SymbolicExpression base(e.node_->left);
             SymbolicExpression exp(e.node_->right);
-            Scalar exp_val = 0.0L;
+            Scalar exp_val = Scalar(0.0L);
             if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < 1e-9) {
                 if (structural_equals(base.simplify(), u.simplify())) {
                     return t;
@@ -2489,7 +2489,7 @@ bool RischAlgorithm::integrate_rational_in_nth_root(
         if (e.node_->type == NodeType::kPower) {
             SymbolicExpression base(e.node_->left);
             SymbolicExpression exp(e.node_->right);
-            Scalar exp_val = 0.0L;
+            Scalar exp_val = Scalar(0.0L);
             if (structural_equals(base.simplify(), u.simplify()) && exp.is_number(&exp_val)) {
                 // u^(exp_val) = t^(n*exp_val)
                 Scalar new_exp = n * exp_val;

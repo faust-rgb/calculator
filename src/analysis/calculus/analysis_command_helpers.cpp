@@ -36,14 +36,14 @@ std::string classify_critical_point(
 
     if (variables.size() == 1) {
         Scalar d2f = numeric_hessian[0][0];
-        if (mymath::precise128::isfinite(d2f) && mymath::precise128::abs(d2f) < precision::sqrt_epsilon<Scalar>() * Scalar(10)) return "degenerate";
+        if (mymath::isfinite(d2f) && mymath::abs(d2f) < precision::sqrt_epsilon<Scalar>() * Scalar(10)) return "degenerate";
         return d2f > Scalar(0) ? "local min" : "local max";
     }
 
     if (variables.size() == 2) {
         Scalar A = numeric_hessian[0][0], B = numeric_hessian[0][1], C = numeric_hessian[1][1];
         Scalar D = A * C - B * B;
-        if (mymath::precise128::isfinite(D) && mymath::precise128::abs(D) < precision::sqrt_epsilon<Scalar>() * Scalar(10)) return "degenerate";
+        if (mymath::isfinite(D) && mymath::abs(D) < precision::sqrt_epsilon<Scalar>() * Scalar(10)) return "degenerate";
         if (D < Scalar(0)) return "saddle point";
         return A > Scalar(0) ? "local min" : "local max";
     }
@@ -62,11 +62,11 @@ std::vector<Scalar> solve_linear_system(
     for (std::size_t col = 0; col < n; ++col) {
         std::size_t pivot = col;
         for (std::size_t row = col + 1; row < n; ++row) {
-            if (mymath::precise128::abs(matrix[row][col]) > mymath::precise128::abs(matrix[pivot][col])) {
+            if (mymath::abs(matrix[row][col]) > mymath::abs(matrix[pivot][col])) {
                 pivot = row;
             }
         }
-        if (mymath::precise128::isfinite(matrix[pivot][col]) && mymath::precise128::abs(matrix[pivot][col]) < precision::singular_value_threshold<Scalar>()) {
+        if (mymath::isfinite(matrix[pivot][col]) && mymath::abs(matrix[pivot][col]) < precision::singular_value_threshold<Scalar>()) {
             throw std::runtime_error("singular critical point system");
         }
         if (pivot != col) {
@@ -79,7 +79,7 @@ std::vector<Scalar> solve_linear_system(
         for (std::size_t row = 0; row < n; ++row) {
             if (row == col) continue;
             const Scalar factor = matrix[row][col];
-            if (mymath::precise128::isfinite(factor) && mymath::precise128::abs(factor) < precision::epsilon<Scalar>() * Scalar(100)) continue;
+            if (mymath::isfinite(factor) && mymath::abs(factor) < precision::epsilon<Scalar>() * Scalar(100)) continue;
             for (std::size_t c = col; c < n; ++c) matrix[row][c] = matrix[row][c] - factor * matrix[col][c];
             rhs[row] = rhs[row] - factor * rhs[col];
         }

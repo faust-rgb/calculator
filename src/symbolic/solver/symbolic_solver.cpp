@@ -352,10 +352,10 @@ Solution SymbolicSolver::solve_quadratic(
     c = c.simplify();
 
     // 检查 a 是否为零
-    Scalar a_ld = 0.0L;
+    Scalar a_ld = Scalar(0.0L);
     if (a.is_number(&a_ld)) {
         Scalar a_val(a_ld);
-        if (mymath::precise128::abs(a_val) < Scalar(1e-15L)) {
+        if (mymath::abs(a_val) < Scalar(1e-15L)) {
             // 退化为线性方程
             if (b.is_number(nullptr)) {
                 return solve_linear(make_add(make_multiply(b, SymbolicExpression::variable(variable)), c), variable);
@@ -365,24 +365,24 @@ Solution SymbolicSolver::solve_quadratic(
 
     // 判别式 Δ = b^2 - 4*a*c
     SymbolicExpression discriminant = make_subtract(
-        make_power(b, SymbolicExpression::number(2.0)),
-        make_multiply(SymbolicExpression::number(4.0), make_multiply(a, c))
+        make_power(b, SymbolicExpression::number(Scalar(2.0L))),
+        make_multiply(SymbolicExpression::number(Scalar(4.0L)), make_multiply(a, c))
     ).simplify();
 
     // 检查判别式是否为数值
-    Scalar disc_ld = 0.0L;
+    Scalar disc_ld = Scalar(0.0L);
     if (discriminant.is_number(&disc_ld)) {
         Scalar disc_val(disc_ld);
-        if (mymath::precise128::abs(disc_val) < Scalar(1e-15L)) {
+        if (mymath::abs(disc_val) < Scalar(1e-15L)) {
             // 重根: x = -b/(2a)
-            SymbolicExpression x = make_negate(make_divide(b, make_multiply(SymbolicExpression::number(2.0), a))).simplify();
+            SymbolicExpression x = make_negate(make_divide(b, make_multiply(SymbolicExpression::number(Scalar(2.0L)), a))).simplify();
             return Solution::single(x, "quadratic_repeated_root");
         }
 
         if (disc_val > Scalar(0)) {
             // 两个实根
             SymbolicExpression sqrt_disc = make_function("sqrt", discriminant);
-            SymbolicExpression two_a = make_multiply(SymbolicExpression::number(2.0), a);
+            SymbolicExpression two_a = make_multiply(SymbolicExpression::number(Scalar(2.0L)), a);
 
             SymbolicExpression x1 = make_divide(
                 make_subtract(make_negate(b), sqrt_disc),
@@ -399,8 +399,8 @@ Solution SymbolicSolver::solve_quadratic(
 
         // 复根
         SymbolicExpression abs_disc = make_function("sqrt",
-            make_multiply(SymbolicExpression::number(-1.0L), discriminant));
-        SymbolicExpression two_a = make_multiply(SymbolicExpression::number(2.0), a);
+            make_multiply(SymbolicExpression::number(Scalar(-1.0L)), discriminant));
+        SymbolicExpression two_a = make_multiply(SymbolicExpression::number(Scalar(2.0L)), a);
 
         SymbolicExpression real_part = make_negate(make_divide(b, two_a)).simplify();
         SymbolicExpression imag_part = make_divide(abs_disc, two_a).simplify();
@@ -416,7 +416,7 @@ Solution SymbolicSolver::solve_quadratic(
 
     // 符号判别式
     SymbolicExpression sqrt_disc = make_function("sqrt", discriminant);
-    SymbolicExpression two_a = make_multiply(SymbolicExpression::number(2.0), a);
+    SymbolicExpression two_a = make_multiply(SymbolicExpression::number(Scalar(2.0L)), a);
 
     SymbolicExpression x1 = make_divide(
         make_subtract(make_negate(b), sqrt_disc),
@@ -452,13 +452,13 @@ Solution SymbolicSolver::solve_cubic(
     d = d.simplify();
 
     // 检查是否为数值系数
-    Scalar a_ld = 0.0L, b_ld = 0.0L, c_ld = 0.0L, d_ld = 0.0L;
+    Scalar a_ld = Scalar(0.0L), b_ld = Scalar(0.0L), c_ld = Scalar(0.0L), d_ld = Scalar(0.0L);
     bool all_numeric = a.is_number(&a_ld) && b.is_number(&b_ld) &&
                        c.is_number(&c_ld) && d.is_number(&d_ld);
 
     if (all_numeric) {
         Scalar a_val(a_ld), b_val(b_ld), c_val(c_ld), d_val(d_ld);
-        if (!mymath::precise128::is_near_zero(a_val, Scalar(1e-15L))) {
+        if (!mymath::is_near_zero(a_val, Scalar(1e-15L))) {
             // 规范化为 x^3 + px + q = 0
             Scalar p = (Scalar(3) * a_val * c_val - b_val * b_val) / (Scalar(3) * a_val * a_val);
             Scalar q = (Scalar(2) * b_val * b_val * b_val - Scalar(9) * a_val * b_val * c_val + Scalar(27) * a_val * a_val * d_val) /
@@ -469,9 +469,9 @@ Solution SymbolicSolver::solve_cubic(
 
             std::vector<SymbolicExpression> roots;
 
-            if (mymath::precise128::is_near_zero(delta, Scalar(1e-15L))) {
+            if (mymath::is_near_zero(delta, Scalar(1e-15L))) {
                 // 重根情况
-                if (mymath::precise128::is_near_zero(p, Scalar(1e-15L)) && mymath::precise128::is_near_zero(q, Scalar(1e-15L))) {
+                if (mymath::is_near_zero(p, Scalar(1e-15L)) && mymath::is_near_zero(q, Scalar(1e-15L))) {
                     // 三重根 x = -b/(3a)
                     Scalar x = -b_val / (Scalar(3) * a_val);
                     roots.push_back(SymbolicExpression::number((x)));
@@ -484,16 +484,16 @@ Solution SymbolicSolver::solve_cubic(
                 }
             } else if (delta > Scalar(0)) {
                 // 一个实根，两个复根
-                Scalar sqrt_delta = mymath::precise128::sqrt(delta);
-                Scalar u = mymath::precise128::cbrt(-q / Scalar(2) + sqrt_delta);
-                Scalar v = mymath::precise128::cbrt(-q / Scalar(2) - sqrt_delta);
+                Scalar sqrt_delta = mymath::sqrt(delta);
+                Scalar u = mymath::cbrt(-q / Scalar(2) + sqrt_delta);
+                Scalar v = mymath::cbrt(-q / Scalar(2) - sqrt_delta);
 
                 Scalar x1 = u + v - b_val / (Scalar(3) * a_val);
                 roots.push_back(SymbolicExpression::number((x1)));
 
                 // 复根
                 Scalar real_part = -(u + v) / Scalar(2) - b_val / (Scalar(3) * a_val);
-                Scalar imag_part = mymath::precise128::sqrt(Scalar(3)) * (u - v) / Scalar(2);
+                Scalar imag_part = mymath::sqrt(Scalar(3)) * (u - v) / Scalar(2);
 
                 roots.push_back(make_function("complex",
                     SymbolicExpression::vector({SymbolicExpression::number((real_part)),
@@ -503,11 +503,11 @@ Solution SymbolicSolver::solve_cubic(
                                                SymbolicExpression::number((-imag_part))})));
             } else {
                 // 三个实根 (使用三角形式)
-                Scalar r = mymath::precise128::sqrt(-p * p * p / Scalar(27));
-                Scalar theta = mymath::precise128::acos(-q / (Scalar(2) * r));
+                Scalar r = mymath::sqrt(-p * p * p / Scalar(27));
+                Scalar theta = mymath::acos(-q / (Scalar(2) * r));
 
                 for (int k = 0; k < 3; ++k) {
-                    Scalar xk = Scalar(2) * mymath::precise128::cbrt(r) * mymath::precise128::cos((theta + Scalar(2) * mymath::precise128::pi() * Scalar(k)) / Scalar(3)) -
+                    Scalar xk = Scalar(2) * mymath::cbrt(r) * mymath::cos((theta + Scalar(2) * mymath::constants::pi<Scalar>() * Scalar(k)) / Scalar(3)) -
                                b_val / (Scalar(3) * a_val);
                     roots.push_back(SymbolicExpression::number((xk)));
                 }
@@ -533,7 +533,7 @@ Solution SymbolicSolver::solve_quartic(
     // 检查是否为数值系数
     std::vector<Scalar> num_coeffs;
     for (const auto& c : coeffs) {
-        Scalar val = 0.0L;
+        Scalar val = Scalar(0.0L);
         if (c.is_number(&val)) {
             num_coeffs.push_back(val);
         } else {
@@ -646,12 +646,12 @@ bool SymbolicSolver::extract_polynomial_coefficients(
     // 假设表达式已经是多项式形式
 
     // 回退：使用数值方法估计系数
-    Scalar test_values[] = {0.0L, 1.0L, 2.0, 3.0, 4.0};
+    Scalar test_values[] = {Scalar(0), Scalar(1), Scalar(2), Scalar(3), Scalar(4)};
     std::vector<Scalar> values;
     for (Scalar t : test_values) {
         SymbolicExpression sub = expr.substitute(variable, SymbolicExpression::number(t));
         sub = sub.simplify();
-        Scalar val = 0.0L;
+        Scalar val = Scalar(0.0L);
         if (sub.is_number(&val)) {
             values.push_back(val);
         } else {
@@ -719,8 +719,8 @@ bool SymbolicSolver::extract_linear_coefficients(
     std::vector<SymbolicExpression> terms;
     collect_additive_expressions(expr, &terms);
 
-    *a = SymbolicExpression::number(0.0L);
-    *b = SymbolicExpression::number(0.0L);
+    *a = SymbolicExpression::number(Scalar(0));
+    *b = SymbolicExpression::number(Scalar(0));
 
     for (const auto& term : terms) {
         // 检查项是否包含 var
@@ -732,7 +732,7 @@ bool SymbolicSolver::extract_linear_coefficients(
             // 包含 var 的项
             // 尝试提取系数
             if (term.node_->type == NodeType::kVariable && term.node_->text == var) {
-                *a = make_add(*a, SymbolicExpression::number(1.0L)).simplify();
+                *a = make_add(*a, SymbolicExpression::number(Scalar(1.0L))).simplify();
             } else if (term.node_->type == NodeType::kMultiply) {
                 // k * var 形式
                 SymbolicExpression left(term.node_->left);
@@ -768,7 +768,7 @@ bool parse_equation(const std::string& equation_str,
     if (eq_pos == std::string::npos) {
         // 没有等号，假设 = 0
         *lhs = SymbolicExpression::parse(equation_str);
-        *rhs = SymbolicExpression::number(0.0L);
+        *rhs = SymbolicExpression::number(Scalar(0));
         return true;
     }
 

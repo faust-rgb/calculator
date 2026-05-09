@@ -30,7 +30,7 @@ long double erf(long double x) {
         const Scalar denominator = factorial * Scalar(static_cast<long double>(2 * n + 1));
         const Scalar add = term / denominator;
         sum += (n % 2 == 0 ? add : -add);
-        if (precise128::abs(add).hi < 1e-35L) {
+        if (mymath::abs(add) < 1e-35L) {
             break;
         }
         term *= x_s * x_s;

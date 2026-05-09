@@ -62,19 +62,19 @@ using Scalar = mymath::Scalar;
  * 使用 kFormatEps (1e-12) 作为容差。
  */
 bool expr_is_zero(const SymbolicExpression& expression) {
-    Scalar value = 0.0L;
+    Scalar value = Scalar(0.0L);
     return expr_is_number(expression, &value) && mymath::is_near_zero(value, kFormatEps);
 }
 
 /** @brief 检查表达式是否为一 */
 bool expr_is_one(const SymbolicExpression& expression) {
-    Scalar value = 0.0L;
+    Scalar value = Scalar(0.0L);
     return expr_is_number(expression, &value) && mymath::is_near_zero(value - 1.0L, kFormatEps);
 }
 
 /** @brief 检查表达式是否为负一 */
 bool expr_is_minus_one(const SymbolicExpression& expression) {
-    Scalar value = 0.0L;
+    Scalar value = Scalar(0.0L);
     return expr_is_number(expression, &value) && mymath::is_near_zero(value + 1.0L, kFormatEps);
 }
 
@@ -226,12 +226,12 @@ bool decompose_constant_times_expression(const SymbolicExpression& expression,
                                          const std::string& variable_name,
                                          Scalar* constant,
                                          SymbolicExpression* rest) {
-    Scalar numeric = 0.0L;
+    Scalar numeric = Scalar(0.0L);
 
     // 纯常数
     if (expression.is_constant(variable_name) && expression.is_number(&numeric)) {
         *constant = numeric;
-        *rest = SymbolicExpression::number(1.0L);
+        *rest = SymbolicExpression::number(Scalar(1.0L));
         return true;
     }
 
@@ -438,7 +438,7 @@ bool decompose_numeric_factor(const SymbolicExpression& expression,
 
     *coefficient = numeric_factor;
     if (symbolic_factors.empty()) {
-        *rest = SymbolicExpression::number(1.0L);
+        *rest = SymbolicExpression::number(Scalar(1.0L));
         return true;
     }
 
@@ -625,8 +625,8 @@ bool try_combine_like_terms(const SymbolicExpression& left,
     SymbolicExpression left_rest;
     SymbolicExpression right_rest;
 
-    Scalar left_coeff_ld = 0.0L;
-    Scalar right_coeff_ld = 0.0L;
+    Scalar left_coeff_ld = Scalar(0.0L);
+    Scalar right_coeff_ld = Scalar(0.0L);
     if (!decompose_numeric_factor(left, &left_coeff_ld, &left_rest) ||
         !decompose_numeric_factor(right, &right_coeff_ld, &right_rest)) {
         return false;
@@ -697,7 +697,7 @@ bool decompose_linear(const SymbolicExpression& expression,
                       Scalar* coefficient,
                       Scalar* intercept) {
     const SymbolicExpression simplified = expression.simplify();
-    Scalar number = 0.0L;
+    Scalar number = Scalar(0.0L);
 
     // 单变量
     if (simplified.is_variable_named(variable_name)) {
@@ -726,10 +726,10 @@ bool decompose_linear(const SymbolicExpression& expression,
 
     // 加法或减法
     if (node->type == NodeType::kAdd || node->type == NodeType::kSubtract) {
-        Scalar left_a = 0.0L;
-        Scalar left_b = 0.0L;
-        Scalar right_a = 0.0L;
-        Scalar right_b = 0.0L;
+        Scalar left_a = Scalar(0.0L);
+        Scalar left_b = Scalar(0.0L);
+        Scalar right_a = Scalar(0.0L);
+        Scalar right_b = Scalar(0.0L);
         if (!decompose_linear(SymbolicExpression(node->left), variable_name, &left_a, &left_b) ||
             !decompose_linear(SymbolicExpression(node->right), variable_name, &right_a, &right_b)) {
             return false;
@@ -741,7 +741,7 @@ bool decompose_linear(const SymbolicExpression& expression,
 
     // 乘法：常数 * 变量
     if (node->type == NodeType::kMultiply) {
-        Scalar factor = 0.0L;
+        Scalar factor = Scalar(0.0L);
         SymbolicExpression rest;
         if (decompose_constant_times_expression(simplified, variable_name, &factor, &rest) &&
             rest.is_variable_named(variable_name)) {

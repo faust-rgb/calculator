@@ -137,7 +137,7 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
                 for (std::size_t i = 0; i < path_eval.size(); ++i) {
                     scope.push_back({names[i], path_eval[i]({{var, t}})});
                 }
-                Scalar sum = 0.0L;
+                Scalar sum = Scalar(0.0L);
                 for (std::size_t i = 0; i < path_eval.size(); ++i) {
                     sum += field_eval[i](scope) * derivative_at(path_eval[i], var, t);
                 }

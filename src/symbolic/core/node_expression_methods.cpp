@@ -188,7 +188,7 @@ BoundArgument parse_bound_argument(const std::string& text) {
     // 尝试解析为数值
     try {
         // 使用简单的数值解析
-        Scalar num = 0.0L;
+        Scalar num = Scalar(0.0L);
         bool has_digit = false;
         std::size_t i = 0;
 

@@ -917,16 +917,6 @@ PreciseDecimal::PreciseDecimal(long long value) {
     scale = 0;
 }
 
-PreciseDecimal::PreciseDecimal(mymath::Scalar value) {
-    if (mymath::precise128::isnan(value)) {
-        throw MathError("NaN cannot be converted to PreciseDecimal");
-    }
-    if (mymath::precise128::isinf(value)) {
-        throw MathError("Infinity cannot be converted to PreciseDecimal");
-    }
-    *this = from_decimal_literal(mymath::to_string(value, 32));
-}
-
 PreciseDecimal::PreciseDecimal(long double value) {
     *this = from_decimal_literal(format_decimal(value, 15));
 }

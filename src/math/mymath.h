@@ -24,6 +24,7 @@
 #include "math/core/floating_point.h"
 #include "math/core/basic_ops.h"
 #include "math/core/roots_powers.h"
+#include "math/core/scalar_traits.h"
 
 // Transcendental - trig, hyperbolic, exp/log
 #include "math/transcendental/trig.h"

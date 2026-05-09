@@ -42,7 +42,7 @@ bool t_is_effective_infinity_point(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return !std::isfinite(val);
     } else if constexpr (std::is_same_v<T, Scalar>) {
-        return !mymath::isfinite(val.hi);
+        return !mymath::isfinite(val);
     } else {
         return false;
     }
@@ -510,7 +510,7 @@ bool symbolic_limit_at_infinity(
     std::vector<Scalar> coeffs;
     try {
         if (series_ops::internal::evaluate_psa(substituted, "t_limit_inf_tmp", 0.0L, 2, coeffs, ctx)) {
-            if (!coeffs.empty() && mymath::isfinite(coeffs[0].hi)) {
+            if (!coeffs.empty() && mymath::isfinite(coeffs[0])) {
                 *result = T(coeffs[0]);
                 return true;
             }

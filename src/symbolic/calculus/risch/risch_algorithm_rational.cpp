@@ -29,7 +29,7 @@ bool numeric_coefficients(const SymbolicPolynomial& polynomial,
     coefficients->clear();
     coefficients->reserve(polynomial.degree() + 1);
     for (int i = 0; i <= polynomial.degree(); ++i) {
-        Scalar value = 0.0L;
+        Scalar value = Scalar(0.0L);
         if (!polynomial.coefficient(i).is_number(&value)) {
             return false;
         }
@@ -351,12 +351,12 @@ bool try_integrate_distinct_even_quadratic_product(const SymbolicPolynomial& num
         return false;
     }
 
-    Scalar num = 0.0L;
-    Scalar c0 = 0.0L;
-    Scalar c1 = 0.0L;
-    Scalar c2 = 0.0L;
-    Scalar c3 = 0.0L;
-    Scalar c4 = 0.0L;
+    Scalar num = Scalar(0.0L);
+    Scalar c0 = Scalar(0.0L);
+    Scalar c1 = Scalar(0.0L);
+    Scalar c2 = Scalar(0.0L);
+    Scalar c3 = Scalar(0.0L);
+    Scalar c4 = Scalar(0.0L);
     if (!numerator.coefficient(0).is_number(&num) ||
         !denominator.coefficient(0).is_number(&c0) ||
         !denominator.coefficient(1).is_number(&c1) ||
@@ -728,7 +728,7 @@ bool RischAlgorithm::integrate_rational(const SymbolicPolynomial& numerator,
                     SymbolicExpression first_part = (a_int * make_power(t, SymbolicExpression::number(Scalar(static_cast<long long>(i))))).simplify();
 
                     // 计算校正项: ∫ a_int * i * t^(i-1) * t' dx
-                    SymbolicExpression t_prime_val = t_prime ? *t_prime : SymbolicExpression::number(1.0L);
+                    SymbolicExpression t_prime_val = t_prime ? *t_prime : SymbolicExpression::number(Scalar(1.0L));
                     SymbolicExpression correction_integrand =
                         (a_int * SymbolicExpression::number(Scalar(static_cast<long long>(i))) *
                          make_power(t, SymbolicExpression::number(Scalar(static_cast<long long>(i - 1)))) *
@@ -1012,9 +1012,9 @@ bool RischAlgorithm::hermite_reduction(const SymbolicPolynomial& numerator,
             }
 
             // 归一化
-            SymbolicExpression inv_g = SymbolicExpression::number(1.0L);
+            SymbolicExpression inv_g = SymbolicExpression::number(Scalar(1.0L));
             if (!g.is_zero()) {
-                inv_g = (SymbolicExpression::number(1.0L) / g.leading_coefficient()).simplify();
+                inv_g = (SymbolicExpression::number(Scalar(1.0L)) / g.leading_coefficient()).simplify();
             }
 
             S = S.multiply(current_num).scale(inv_g);
@@ -1141,7 +1141,7 @@ bool RischAlgorithm::lazard_rioboo_trager(const SymbolicPolynomial& A,
             SymbolicExpression disc = (b * b - SymbolicExpression::number(4.0) * a * d).simplify();
 
             // 检查判别式是否为完全平方
-            Scalar disc_val = 0.0L;
+            Scalar disc_val = Scalar(0.0L);
             if (disc.is_number(&disc_val)) {
                 if (disc_val >= 0.0L &&
                     mymath::abs(mymath::sqrt(disc_val) * mymath::sqrt(disc_val) - disc_val) < 1e-12) {
@@ -1238,7 +1238,7 @@ bool RischAlgorithm::lazard_rioboo_trager(const SymbolicPolynomial& A,
             // 首先检查是否所有系数都是数值
             bool all_numeric = true;
             for (int k = 0; k <= ri.degree(); ++k) {
-                Scalar val = 0.0L;
+                Scalar val = Scalar(0.0L);
                 if (!ri.coefficient(k).is_number(&val)) {
                     all_numeric = false;
                     break;
@@ -1392,7 +1392,7 @@ bool RischAlgorithm::rothstein_trager(const SymbolicPolynomial& numerator,
     for (const auto& root : roots) {
         if (!root.is_complex) {
             // 实数根处理
-            Scalar c_val = 0.0L;
+            Scalar c_val = Scalar(0.0L);
             if (root.real_part.is_number(&c_val) && mymath::abs(c_val) < 1e-10) continue;
 
             std::vector<SymbolicExpression> cur_poly_coeffs;
@@ -1409,7 +1409,7 @@ bool RischAlgorithm::rothstein_trager(const SymbolicPolynomial& numerator,
             // 复数共轭对处理：c = a + bi 和 c' = a - bi
             // 使用 Lazard-Rioboo-Trager 转换为实数域的 arctan 和 ln
 
-            Scalar a_val = 0.0L, b_val = 0.0L;
+            Scalar a_val = Scalar(0.0L), b_val = 0.0L;
             root.real_part.is_number(&a_val);
             root.imag_part.is_number(&b_val);
 
@@ -1421,7 +1421,7 @@ bool RischAlgorithm::rothstein_trager(const SymbolicPolynomial& numerator,
 
             if (D.degree() == 2) {
                 // 获取二次多项式系数 D = a_d * x^2 + b_d * x + c_d
-                Scalar a_d = 0.0L, b_d = 0.0L, c_d = 0.0L;
+                Scalar a_d = Scalar(0.0L), b_d = 0.0L, c_d = 0.0L;
                 D.coefficient(2).is_number(&a_d);
                 D.coefficient(1).is_number(&b_d);
                 D.coefficient(0).is_number(&c_d);

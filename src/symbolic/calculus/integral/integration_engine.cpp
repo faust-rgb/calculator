@@ -44,7 +44,7 @@ void collect_rational_factors(const SymbolicExpression& expression,
                               Scalar* coefficient,
                               std::vector<std::string>* numerator_factors,
                               std::vector<std::string>* denominator_factors) {
-    Scalar value = 0.0L;
+    Scalar value = Scalar(0.0L);
     if (expression.is_number(&value)) {
         if (side > 0) {
             *coefficient *= value;
@@ -92,7 +92,7 @@ void collect_rational_factors(const SymbolicExpression& expression,
     }
     if (node->type == NodeType::kPower) {
         SymbolicExpression exponent(node->right);
-        Scalar exponent_value = 0.0L;
+        Scalar exponent_value = Scalar(0.0L);
         if (exponent.is_number(&exponent_value) &&
             mymath::is_integer(exponent_value, 1e-10)) {
             const int count = static_cast<int>(mymath::abs(exponent_value) + 0.5);
@@ -652,7 +652,7 @@ IntegrationResult IntegrationEngine::try_integrate_special(
                     (SymbolicExpression::number(0.5) *
                      (make_function("atan", x) *
                           (make_power(x, SymbolicExpression::number(2.0)) +
-                           SymbolicExpression::number(1.0L)) -
+                           SymbolicExpression::number(Scalar(1.0L))) -
                       x)).simplify();
                 return IntegrationResult::ok(result, "atan_by_parts");
             }
@@ -667,7 +667,7 @@ IntegrationResult IntegrationEngine::try_integrate_special(
         SymbolicExpression trig_arg;
 
         for (const SymbolicExpression& factor : factors) {
-            Scalar value = 0.0L;
+            Scalar value = Scalar(0.0L);
             if (factor.is_number(&value)) {
                 numeric_factor *= value;
                 continue;
@@ -809,7 +809,7 @@ IntegrationResult IntegrationEngine::try_integrate_special(
                 // ∫ asin(ax + b) dx = x*asin(ax + b) + sqrt(1 - (ax + b)^2) / a
                 SymbolicExpression x = SymbolicExpression::variable(variable_name);
                 SymbolicExpression sqrt_term = make_function("sqrt",
-                    (SymbolicExpression::number(1.0L) - make_power(arg, SymbolicExpression::number(2.0L))).simplify());
+                    (SymbolicExpression::number(Scalar(1.0L)) - make_power(arg, SymbolicExpression::number(2.0L))).simplify());
                 SymbolicExpression result = (x * expression + sqrt_term / a).simplify();
                 return IntegrationResult::ok(result, "asin_linear");
             }
@@ -819,7 +819,7 @@ IntegrationResult IntegrationEngine::try_integrate_special(
                 // ∫ acos(ax + b) dx = x*acos(ax + b) - sqrt(1 - (ax + b)^2) / a
                 SymbolicExpression x = SymbolicExpression::variable(variable_name);
                 SymbolicExpression sqrt_term = make_function("sqrt",
-                    (SymbolicExpression::number(1.0L) - make_power(arg, SymbolicExpression::number(2.0L))).simplify());
+                    (SymbolicExpression::number(Scalar(1.0L)) - make_power(arg, SymbolicExpression::number(2.0L))).simplify());
                 SymbolicExpression result = (x * expression - sqrt_term / a).simplify();
                 return IntegrationResult::ok(result, "acos_linear");
             }
@@ -829,7 +829,7 @@ IntegrationResult IntegrationEngine::try_integrate_special(
                 // ∫ atan(ax + b) dx = x*atan(ax + b) - ln(1 + (ax + b)^2) / (2a)
                 SymbolicExpression x = SymbolicExpression::variable(variable_name);
                 SymbolicExpression log_term = make_function("ln",
-                    (SymbolicExpression::number(1.0L) + make_power(arg, SymbolicExpression::number(2.0L))).simplify());
+                    (SymbolicExpression::number(Scalar(1.0L)) + make_power(arg, SymbolicExpression::number(2.0L))).simplify());
                 SymbolicExpression result = (x * expression - log_term / (SymbolicExpression::number(2.0L) * a)).simplify();
                 return IntegrationResult::ok(result, "atan_linear");
             }
@@ -872,7 +872,7 @@ IntegrationResult IntegrationEngine::try_integrate_special(
         SymbolicExpression exponent(node->right);
 
         if (base.node_->type == NodeType::kFunction) {
-            Scalar n = 0.0L;
+            Scalar n = Scalar(0.0L);
             SymbolicExpression a, b;
             SymbolicExpression arg(base.node_->left);
             if (exponent.is_number(&n) &&
@@ -906,7 +906,7 @@ IntegrationResult IntegrationEngine::try_integrate_special(
         }
 
         if (base.is_variable_named(variable_name)) {
-            Scalar n = 0.0L;
+            Scalar n = Scalar(0.0L);
             if (exponent.is_number(&n)) {
                 if (mymath::is_near_zero(n + 1.0L, 1e-10)) {
                     // ∫ x^(-1) dx = ln|x|
@@ -985,7 +985,7 @@ bool IntegrationEngine::try_non_elementary_pattern(
                 // 检查 arg 是否为线性
                 SymbolicExpression a, b;
                 if (symbolic_decompose_linear(arg, variable_name, &a, &b)) {
-                    Scalar a_val = 0.0L;
+                    Scalar a_val = Scalar(0.0L);
                     if (a.is_number(&a_val) && mymath::abs(a_val) > 1e-12) {
                         *result = (SymbolicExpression::number(1.0L / a_val) *
                                   make_function("Ei", arg)).simplify();
@@ -1019,7 +1019,7 @@ bool IntegrationEngine::try_non_elementary_pattern(
             if (structural_equals(den.simplify(), arg.simplify())) {
                 SymbolicExpression a, b;
                 if (symbolic_decompose_linear(arg, variable_name, &a, &b)) {
-                    Scalar a_val = 0.0L;
+                    Scalar a_val = Scalar(0.0L);
                     if (a.is_number(&a_val) && mymath::abs(a_val) > 1e-12) {
                         *result = (SymbolicExpression::number(1.0L / a_val) *
                                   make_function("Si", arg)).simplify();
@@ -1041,7 +1041,7 @@ bool IntegrationEngine::try_non_elementary_pattern(
             if (structural_equals(den.simplify(), arg.simplify())) {
                 SymbolicExpression a, b;
                 if (symbolic_decompose_linear(arg, variable_name, &a, &b)) {
-                    Scalar a_val = 0.0L;
+                    Scalar a_val = Scalar(0.0L);
                     if (a.is_number(&a_val) && mymath::abs(a_val) > 1e-12) {
                         *result = (SymbolicExpression::number(1.0L / a_val) *
                                   make_function("Ci", arg)).simplify();
@@ -1058,7 +1058,7 @@ bool IntegrationEngine::try_non_elementary_pattern(
         SymbolicExpression num(expression.node_->left);
         SymbolicExpression den(expression.node_->right);
 
-        Scalar num_val = 0.0L;
+        Scalar num_val = Scalar(0.0L);
         if (num.is_number(&num_val) && mymath::abs(num_val - 1.0L) < 1e-9) {
             if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
                 SymbolicExpression arg(den.node_->left);
@@ -1090,7 +1090,7 @@ bool IntegrationEngine::try_series_integration(
     // 尝试计算前几项泰勒级数
     SymbolicExpression series = SymbolicExpression::number(0.0L);
     SymbolicExpression current = expression;
-    SymbolicExpression x_power = SymbolicExpression::number(1.0L);
+    SymbolicExpression x_power = SymbolicExpression::number(Scalar(1.0L));
     Scalar factorial = 1.0L;
 
     for (int n = 0; n < 5; ++n) {
@@ -1098,7 +1098,7 @@ bool IntegrationEngine::try_series_integration(
         SymbolicExpression deriv = (n == 0) ? expression : current.derivative(variable_name);
         SymbolicExpression val_at_zero = deriv.substitute(variable_name, SymbolicExpression::number(0.0L)).simplify();
 
-        Scalar coeff = 0.0L;
+        Scalar coeff = Scalar(0.0L);
         if (val_at_zero.is_number(&coeff)) {
             if (n > 0) factorial *= n;
             SymbolicExpression term = (SymbolicExpression::number(coeff / factorial) * x_power).simplify();
@@ -1121,7 +1121,7 @@ bool IntegrationEngine::try_series_integration(
         }
         SymbolicExpression val_at_zero = deriv.substitute(variable_name, SymbolicExpression::number(0.0L)).simplify();
 
-        Scalar coeff = 0.0L;
+        Scalar coeff = Scalar(0.0L);
         if (val_at_zero.is_number(&coeff)) {
             if (n > 0) factorial *= n;
             Scalar new_coeff = coeff / factorial / (n + 1);
@@ -1185,7 +1185,7 @@ bool IntegrationEngine::verify_integration(
     }
 
     SymbolicExpression ratio = (derivative / original_simplified).simplify();
-    Scalar ratio_value = 0.0L;
+    Scalar ratio_value = Scalar(0.0L);
     if (ratio.is_number(&ratio_value) &&
         mymath::is_near_zero(ratio_value - 1.0L, 1e-8)) {
         return true;
@@ -1199,7 +1199,7 @@ bool IntegrationEngine::verify_integration(
     // 在几个点验证
     std::vector<Scalar> test_points = {2.0, 3.0, 5.0, 7.0};
     for (Scalar x : test_points) {
-        Scalar orig_val = 0.0L, deriv_val = 0.0L;
+        Scalar orig_val = Scalar(0.0L), deriv_val = 0.0L;
 
         try {
             SymbolicExpression subst_x = SymbolicExpression::number(x);
@@ -1300,7 +1300,7 @@ bool IntegrationEngine::try_substitution_with_candidate(
     }
 
     // 尝试检测模式
-    Scalar constant = 0.0L;
+    Scalar constant = Scalar(0.0L);
     SymbolicExpression h_expr;
 
     if (detect_derivative_pattern(expression, candidate, variable_name,
@@ -1348,7 +1348,7 @@ SymbolicExpression IntegrationEngine::rebuild_product(
     const std::vector<SymbolicExpression>& factors) {
 
     if (factors.empty()) {
-        return SymbolicExpression::number(1.0L);
+        return SymbolicExpression::number(Scalar(1.0L));
     }
 
     SymbolicExpression result = factors[0];
@@ -1462,7 +1462,7 @@ bool IntegrationEngine::solve_cyclic_integration(
 
     // 在各项中寻找 original 的倍数
     SymbolicExpression non_original_terms = SymbolicExpression::number(0.0L);
-    Scalar original_coefficient = 0.0L;  // original 前的系数
+    Scalar original_coefficient = Scalar(0.0L);  // original 前的系数
     bool found_original = false;
 
     for (const SymbolicExpression& term : terms) {
@@ -1577,7 +1577,7 @@ bool IntegrationEngine::solve_cyclic_integration_system(
     // 对每个方程，提取系数
     for (std::size_t i = 0; i < n; ++i) {
         // 初始化：M[i][i] = 1
-        matrix[i][i] = SymbolicExpression::number(1.0L);
+        matrix[i][i] = SymbolicExpression::number(Scalar(1.0L));
 
         // 从 after_parts 中提取各积分的系数
         const SymbolicExpression& after_parts = entries[i].after_parts;
@@ -1646,9 +1646,9 @@ bool IntegrationEngine::solve_cyclic_integration_system(
     for (std::size_t col = 0; col < n; ++col) {
         // 寻找主元（优先选择数值非零的）
         std::size_t pivot = col;
-        Scalar pivot_val = 0.0L;
+        Scalar pivot_val = Scalar(0.0L);
         for (std::size_t row = col; row < n; ++row) {
-            Scalar val = 0.0L;
+            Scalar val = Scalar(0.0L);
             if (matrix[row][col].is_number(&val) && !mymath::is_near_zero(val, kFormatEps)) {
                 if (pivot == col || mymath::abs(val) > mymath::abs(pivot_val)) {
                     pivot = row;
@@ -1664,7 +1664,7 @@ bool IntegrationEngine::solve_cyclic_integration_system(
         }
 
         // 检查主元是否为零
-        Scalar pv = 0.0L;
+        Scalar pv = Scalar(0.0L);
         if (!matrix[col][col].is_number(&pv) || mymath::is_near_zero(pv, kFormatEps)) {
             // 尝试符号消元（简化处理：返回失败）
             return false;
@@ -1672,21 +1672,21 @@ bool IntegrationEngine::solve_cyclic_integration_system(
 
         // 消元
         for (std::size_t row = col + 1; row < n; ++row) {
-            Scalar row_val = 0.0L;
+            Scalar row_val = Scalar(0.0L);
             if (!matrix[row][col].is_number(&row_val)) {
                 continue;  // 简化处理：跳过非数值系数
             }
 
             Scalar factor = row_val / pv;
             for (std::size_t j = col; j < n; ++j) {
-                Scalar m_val = 0.0L;
+                Scalar m_val = Scalar(0.0L);
                 if (matrix[col][j].is_number(&m_val)) {
                     matrix[row][j] = SymbolicExpression::number(
                         matrix[row][j].is_number(nullptr) ?
                         (matrix[row][j].is_number(&m_val) ? m_val : 0.0L) - factor * m_val : -factor * m_val);
                 }
             }
-            Scalar rhs_val = 0.0L;
+            Scalar rhs_val = Scalar(0.0L);
             if (rhs[col].is_number(&rhs_val)) {
                 rhs[row] = SymbolicExpression::number(
                     rhs[row].is_number(&rhs_val) ? rhs_val - factor * rhs_val : -factor * rhs_val);
@@ -1697,15 +1697,15 @@ bool IntegrationEngine::solve_cyclic_integration_system(
     // 回代
     results->resize(n);
     for (std::size_t i = n; i-- > 0; ) {
-        Scalar sum = 0.0L;
+        Scalar sum = Scalar(0.0L);
         if (rhs[i].is_number(&sum)) {
             for (std::size_t j = i + 1; j < n; ++j) {
-                Scalar m_val = 0.0L, r_val = 0.0L;
+                Scalar m_val = Scalar(0.0L), r_val = 0.0L;
                 if (matrix[i][j].is_number(&m_val) && (*results)[j].is_number(&r_val)) {
                     sum -= m_val * r_val;
                 }
             }
-            Scalar diag = 0.0L;
+            Scalar diag = Scalar(0.0L);
             if (matrix[i][i].is_number(&diag) && !mymath::is_near_zero(diag, kFormatEps)) {
                 (*results)[i] = SymbolicExpression::number(sum / diag);
             } else {
@@ -1743,14 +1743,14 @@ bool IntegrationEngine::extract_constant_factor(
         SymbolicExpression left(expression.node_->left);
         SymbolicExpression right(expression.node_->right);
 
-        Scalar left_val = 0.0L;
+        Scalar left_val = Scalar(0.0L);
         if (left.is_number(&left_val)) {
             *constant = left_val;
             *rest = right;
             return true;
         }
 
-        Scalar right_val = 0.0L;
+        Scalar right_val = Scalar(0.0L);
         if (right.is_number(&right_val)) {
             *constant = right_val;
             *rest = left;
@@ -1759,10 +1759,10 @@ bool IntegrationEngine::extract_constant_factor(
     }
 
     // 单独的常数
-    Scalar val = 0.0L;
+    Scalar val = Scalar(0.0L);
     if (expression.is_number(&val)) {
         *constant = val;
-        *rest = SymbolicExpression::number(1.0L);
+        *rest = SymbolicExpression::number(Scalar(1.0L));
         return true;
     }
 
@@ -1834,7 +1834,7 @@ bool detect_common_substitution_pattern(
 
         // 检查是否相差常数因子
         SymbolicExpression ratio = (num_simplified / denom_deriv).simplify();
-        Scalar ratio_val = 0.0L;
+        Scalar ratio_val = Scalar(0.0L);
         if (ratio.is_number(&ratio_val) && !mymath::is_near_zero(ratio_val, 1e-10)) {
             *result = (SymbolicExpression::number(ratio_val) *
                        make_function("ln", make_function("abs", denominator))).simplify();
@@ -1859,7 +1859,7 @@ bool detect_common_substitution_pattern(
                 SymbolicExpression deriv_simplified = maybe_deriv.simplify();
 
                 if (expressions_match(deriv_simplified, base_deriv)) {
-                    Scalar n = 0.0L;
+                    Scalar n = Scalar(0.0L);
                     if (exponent.is_number(&n)) {
                         // ∫ f' * f^n dx = f^(n+1) / (n+1)
                         SymbolicExpression new_exp = SymbolicExpression::number(n + 1.0L);
@@ -1900,7 +1900,7 @@ bool detect_common_substitution_pattern(
 
                 // 常数因子
                 SymbolicExpression ratio = (deriv_simplified / arg_deriv).simplify();
-                Scalar ratio_val = 0.0L;
+                Scalar ratio_val = Scalar(0.0L);
                 if (ratio.is_number(&ratio_val) && !mymath::is_near_zero(ratio_val, 1e-10)) {
                     *result = (SymbolicExpression::number(ratio_val) * maybe_exp).simplify();
                     *pattern_name = "c_f_prime_times_exp_f";

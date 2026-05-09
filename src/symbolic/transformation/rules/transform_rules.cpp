@@ -124,13 +124,13 @@ void TransformRuleRegistry::initialize_builtin_rules() {
             is_power_of_variable(expr, var, &power);
 
             // Compute factorial
-            Scalar factorial = 1.0L;
-            for (int i = 2; i <= power; ++i) factorial *= i;
+            Scalar factorial = Scalar(1.0L);
+            for (int i = 2; i <= power; ++i) factorial *= Scalar(static_cast<long long>(i));
 
             return make_divide(
                 SymbolicExpression::number(factorial),
                 make_power(SymbolicExpression::variable(output_var),
-                           SymbolicExpression::number(Scalar(power + 1)))
+                           SymbolicExpression::number(Scalar(static_cast<long long>(power + 1))))
             );
         },
         .priority = 80,
@@ -314,8 +314,8 @@ bool is_power_of_variable(const SymbolicExpression& expr, const std::string& var
         if (is_variable_expression(base, var)) {
             Scalar exp_val;
             if (exp.is_number(&exp_val)) {
-                int n = static_cast<int>(mymath::round(exp_val));
-                if (mymath::abs(exp_val - n) < 1e-9 && n > 0) {
+                int n = static_cast<int>(mymath::round(exp_val.to_long_double()));
+                if (mymath::abs(exp_val - Scalar(static_cast<long long>(n))) < Scalar(1e-9L) && n > 0) {
                     if (power) *power = n;
                     return true;
                 }

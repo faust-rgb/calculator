@@ -1151,7 +1151,7 @@ bool partial_fraction_decomposition(
     }
 
     // 计算分母多项式
-    SymbolicPolynomial denominator({SymbolicExpression::number(1.0L)}, variable_name);
+    SymbolicPolynomial denominator({SymbolicExpression::number(Scalar(1.0L))}, variable_name);
     for (const auto& [factor, power] : denominator_factors) {
         SymbolicPolynomial factor_power = factor.power(power);
         denominator = denominator.multiply(factor_power);
@@ -1185,19 +1185,19 @@ bool partial_fraction_decomposition(
             // 确定分子的形式
             if (factor.degree() == 1) {
                 // 线性因子：分子是常数
-                term_coefficients.push_back({SymbolicExpression::number(1.0L)});
+                term_coefficients.push_back({SymbolicExpression::number(Scalar(1.0L))});
             } else if (factor.degree() == 2) {
                 // 二次因子：分子是线性式 Bx + C
                 term_coefficients.push_back({
                     SymbolicExpression::variable(variable_name),
-                    SymbolicExpression::number(1.0L)
+                    SymbolicExpression::number(Scalar(1.0L))
                 });
             } else {
                 // 更高次因子：分子是 (degree-1) 次多项式
                 std::vector<SymbolicExpression> coeffs;
                 for (int d = 0; d < factor.degree(); ++d) {
                     if (d == 0) {
-                        coeffs.push_back(SymbolicExpression::number(1.0L));
+                        coeffs.push_back(SymbolicExpression::number(Scalar(1.0L)));
                     } else {
                         coeffs.push_back(SymbolicExpression::variable(variable_name).power(
                             SymbolicExpression::number((d))));
@@ -1223,7 +1223,7 @@ bool partial_fraction_decomposition(
 
     // 计算每个未知数对应的项的系数
     std::vector<std::vector<SymbolicExpression>> identity_terms;
-    SymbolicPolynomial product_denom({SymbolicExpression::number(1.0L)}, variable_name);
+    SymbolicPolynomial product_denom({SymbolicExpression::number(Scalar(1.0L))}, variable_name);
 
     // 计算公分母（所有项的分母的乘积）
     for (const auto& term_denom : term_denominators) {

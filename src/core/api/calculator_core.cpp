@@ -260,9 +260,13 @@ Scalar Calculator::normalize_result(Scalar value) {
     using Scalar = mymath::Scalar;
     if (!mymath::isfinite(value)) return value;
     Scalar v(value);
-    if (mymath::precise128::abs(v) < Scalar(kDisplayZeroEps)) return 0.0L;
-    if (mymath::precise128::abs(v) > Scalar(kDisplayIntegerEps) &&
-        is_integer_double(value, kDisplayIntegerEps)) {
+    if (mymath::abs(v) < kDisplayZeroEps()) return Scalar(0.0L);
+    // Only round to integer if within long long range
+    const Scalar kMaxLL(static_cast<long double>(std::numeric_limits<long long>::max()));
+    const Scalar kMinLL(static_cast<long double>(std::numeric_limits<long long>::min()));
+    if (mymath::abs(v) > kDisplayIntegerEps() &&
+        is_integer_double(value, 1e-9) &&
+        v < kMaxLL && v > kMinLL) {
         return (round_to_long_long(value));
     }
     return value;

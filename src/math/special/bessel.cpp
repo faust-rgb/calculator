@@ -23,7 +23,7 @@ long double bessel_j(int order, long double x) {
     }
 
     const Scalar abs_x = precise128::abs(Scalar(x));
-    if (abs_x.hi > 50.0L) {
+    if (abs_x > 50.0L) {
         const Scalar phase =
             abs_x - Scalar(static_cast<long double>(order)) * precise128::pi() * Scalar(0.5L) - precise128::pi() * Scalar(0.25L);
         const Scalar asymptotic =
@@ -39,7 +39,7 @@ long double bessel_j(int order, long double x) {
     for (int k = 0; k < 200; ++k) {
         const Scalar add = term;
         sum += add;
-        if (precise128::abs(add).hi <= 1e-35L * (1.0L + precise128::abs(sum).hi)) {
+        if (mymath::abs(add) <= 1e-35L * (1.0L + mymath::abs(sum))) {
             break;
         }
         term *= -(half_x * half_x) /

@@ -67,7 +67,7 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
         case NodeType::kPower: {
             const SymbolicExpression base(node_->left);
             const SymbolicExpression exponent(node_->right);
-            Scalar exponent_value = 0.0L;
+            Scalar exponent_value = Scalar(0.0L);
             if (exponent.is_number(&exponent_value)) {
                 return make_multiply(
                            make_multiply(SymbolicExpression::number(exponent_value),
@@ -96,7 +96,7 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                 return make_divide(
                            inner,
                            make_function("sqrt",
-                                         make_subtract(SymbolicExpression::number(1.0L),
+                                         make_subtract(SymbolicExpression::number(Scalar(1.0L)),
                                                        make_power(argument, SymbolicExpression::number(2.0)))))
                     .simplify();
             }
@@ -104,13 +104,13 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                 return make_negate(
                            make_divide(inner,
                                        make_function("sqrt",
-                                                     make_subtract(SymbolicExpression::number(1.0L),
+                                                     make_subtract(SymbolicExpression::number(Scalar(1.0L)),
                                                                    make_power(argument, SymbolicExpression::number(2.0))))))
                     .simplify();
             }
             if (node_->text == "atan") {
                 return make_divide(inner,
-                                   make_add(SymbolicExpression::number(1.0L), make_power(argument, SymbolicExpression::number(2.0))))
+                                   make_add(SymbolicExpression::number(Scalar(1.0L)), make_power(argument, SymbolicExpression::number(2.0))))
                     .simplify();
             }
             if (node_->text == "sin") {
@@ -120,7 +120,7 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                 return make_multiply(make_negate(make_function("sin", argument)), inner).simplify();
             }
             if (node_->text == "tan") {
-                return make_multiply(make_divide(SymbolicExpression::number(1.0L),
+                return make_multiply(make_divide(SymbolicExpression::number(Scalar(1.0L)),
                                                  make_power(make_function("cos", argument),
                                                             SymbolicExpression::number(2.0))),
                                      inner)

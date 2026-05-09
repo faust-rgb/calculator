@@ -246,7 +246,7 @@ SymbolicExpression integrate_symbolic_inverse_quadratic(
     SymbolicExpression u = (x + h).simplify();
 
     if (power == 1) {
-        Scalar k_val = 0.0L;
+        Scalar k_val = Scalar(0.0L);
         if (k.is_number(&k_val)) {
             if (k_val > 0) {
                 SymbolicExpression sqrt_k = make_function("sqrt", k);
@@ -270,7 +270,7 @@ SymbolicExpression integrate_symbolic_inverse_quadratic(
     }
 
     SymbolicExpression u2_plus_k = (u * u + k).simplify();
-    SymbolicExpression integral = SymbolicExpression::number(1.0L) / make_function("sqrt", k) *
+    SymbolicExpression integral = SymbolicExpression::number(Scalar(1.0L)) / make_function("sqrt", k) *
                                    make_function("atan", u / make_function("sqrt", k));
 
     for (int n = 2; n <= power; ++n) {
@@ -390,7 +390,7 @@ bool integrate_symbolic_partial_fractions(
 
         if (term.numerator_degree == 1) {
             SymbolicPolynomial x_poly({SymbolicExpression::number(0.0L),
-                                        SymbolicExpression::number(1.0L)}, variable_name);
+                                        SymbolicExpression::number(Scalar(1.0L))}, variable_name);
             quotient = quotient.multiply(x_poly);
         }
 

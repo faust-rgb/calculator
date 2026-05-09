@@ -866,7 +866,7 @@ bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& nod
                 return true;
             }
             if (node->text == "sign") {
-                *result = mymath::dual<Scalar>(v.hi > 0 ? Scalar(1) : (v.hi < 0 ? Scalar(-1) : Scalar(0)), Scalar(0));
+                *result = mymath::dual<Scalar>(v > 0 ? Scalar(1) : (v < 0 ? Scalar(-1) : Scalar(0)), Scalar(0));
                 return true;
             }
             if (node->text == "floor") {
@@ -956,7 +956,7 @@ std::string to_latex_impl(const std::shared_ptr<SymbolicExpression::Node>& node)
     if (!node) return "";
     switch (node->type) {
         case NodeType::kNumber: {
-            Scalar val = 0.0L;
+            Scalar val = Scalar(0.0L);
             try_evaluate_numeric_node(node, &val);
             return format_decimal(val);
         }

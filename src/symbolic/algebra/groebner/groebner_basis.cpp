@@ -83,7 +83,7 @@ MultivariatePoly from_expression(const SymbolicExpression& expr, const std::vect
     }
 
     // 处理常数
-    Scalar val = 0.0L;
+    Scalar val = Scalar(0.0L);
     if (expr.is_number(&val)) {
         res.terms[{}] = expr;
         return res;
@@ -93,7 +93,7 @@ MultivariatePoly from_expression(const SymbolicExpression& expr, const std::vect
     if (expr.node_->type == NodeType::kVariable) {
         Monomial m;
         m[expr.node_->text] = 1;
-        res.terms[m] = SymbolicExpression::number(1.0L);
+        res.terms[m] = SymbolicExpression::number(Scalar(1.0L));
         return res;
     }
 
@@ -151,7 +151,7 @@ MultivariatePoly from_expression(const SymbolicExpression& expr, const std::vect
         SymbolicExpression base(expr.node_->left);
         SymbolicExpression exp_expr(expr.node_->right);
 
-        Scalar exp_val = 0.0L;
+        Scalar exp_val = Scalar(0.0L);
         if (exp_expr.is_number(&exp_val) && exp_val >= Scalar(0.0L)) {
             // 检查是否为整数
             Scalar exp_floor = mymath::precise128::floor(exp_val);
@@ -160,7 +160,7 @@ MultivariatePoly from_expression(const SymbolicExpression& expr, const std::vect
                 auto base_poly = from_expression(base, vars);
 
                 // 计算 base_poly^n
-                res.terms[{}] = SymbolicExpression::number(1.0L);  // 初始化为 1
+                res.terms[{}] = SymbolicExpression::number(Scalar(1.0L));  // 初始化为 1
                 for (int i = 0; i < n; ++i) {
                     MultivariatePoly temp(vars);
                     for (const auto& [mon1, coeff1] : res.terms) {

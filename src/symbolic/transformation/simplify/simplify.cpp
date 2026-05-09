@@ -238,17 +238,17 @@ SymbolicExpression simplify_lightweight(const SymbolicExpression& expression) {
             left = simplify_lightweight(SymbolicExpression(node->left));
             right = simplify_lightweight(SymbolicExpression(node->right));
             if (left.is_number(&left_value) && right.is_number(&right_value))
-                return SymbolicExpression::number(mymath::precise128::pow(left_value, right_value));
+                return SymbolicExpression::number(mymath::pow(left_value, right_value));
             if (right.is_number(&right_value)) {
-                if (mymath::precise128::is_near_zero(right_value, kFormatEps))
+                if (mymath::is_near_zero(right_value, Scalar(kFormatEps)))
                     return SymbolicExpression::number(Scalar(1));
-                if (mymath::precise128::is_near_zero(right_value - Scalar(1), kFormatEps))
+                if (mymath::is_near_zero(right_value - Scalar(1), Scalar(kFormatEps)))
                     return left;
             }
-            if (left.is_number(&left_value) && mymath::precise128::is_near_zero(left_value, kFormatEps)) {
+            if (left.is_number(&left_value) && mymath::is_near_zero(left_value, Scalar(kFormatEps))) {
                 return SymbolicExpression::number(Scalar(0));
             }
-            if (left.is_number(&left_value) && mymath::precise128::is_near_zero(left_value - Scalar(1), kFormatEps)) {
+            if (left.is_number(&left_value) && mymath::is_near_zero(left_value - Scalar(1), Scalar(kFormatEps))) {
                 return SymbolicExpression::number(Scalar(1));
             }
             return make_power(left, right);
@@ -282,15 +282,15 @@ SymbolicExpression simplify_medium(const SymbolicExpression& expression) {
 
             // 数值参数的函数求值
             if (argument.is_number(&numeric)) {
-                if (node->text == "sin") return SymbolicExpression::number(mymath::precise128::sin(numeric));
-                if (node->text == "cos") return SymbolicExpression::number(mymath::precise128::cos(numeric));
-                if (node->text == "tan") return SymbolicExpression::number(mymath::precise128::tan(numeric));
-                if (node->text == "exp") return SymbolicExpression::number(mymath::precise128::exp(numeric));
+                if (node->text == "sin") return SymbolicExpression::number(mymath::sin(numeric));
+                if (node->text == "cos") return SymbolicExpression::number(mymath::cos(numeric));
+                if (node->text == "tan") return SymbolicExpression::number(mymath::tan(numeric));
+                if (node->text == "exp") return SymbolicExpression::number(mymath::exp(numeric));
                 if (node->text == "ln" && numeric > Scalar(0))
-                    return SymbolicExpression::number(mymath::precise128::ln(numeric));
+                    return SymbolicExpression::number(mymath::ln(numeric));
                 if (node->text == "sqrt" && numeric >= Scalar(0))
-                    return SymbolicExpression::number(mymath::precise128::sqrt(numeric));
-                if (node->text == "abs") return SymbolicExpression::number(mymath::precise128::abs(numeric));
+                    return SymbolicExpression::number(mymath::sqrt(numeric));
+                if (node->text == "abs") return SymbolicExpression::number(mymath::abs(numeric));
             }
 
             // exp(ln(x)) → x
@@ -302,7 +302,7 @@ SymbolicExpression simplify_medium(const SymbolicExpression& expression) {
                 return SymbolicExpression(argument.node_->left);
             }
             // ln(1) → 0
-            if (node->text == "ln" && argument.is_number(&numeric) && mymath::precise128::is_near_zero(numeric - Scalar(1), kFormatEps)) {
+            if (node->text == "ln" && argument.is_number(&numeric) && mymath::is_near_zero(numeric - Scalar(1), Scalar(kFormatEps))) {
                 return SymbolicExpression::number(Scalar(0));
             }
 
@@ -510,28 +510,28 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
 
             if (argument.is_number(&numeric)) {
-                if (node->text == "asin") return SymbolicExpression::number(mymath::precise128::asin(numeric));
-                if (node->text == "acos") return SymbolicExpression::number(mymath::precise128::acos(numeric));
-                if (node->text == "atan") return SymbolicExpression::number(mymath::precise128::atan(numeric));
-                if (node->text == "sin") return SymbolicExpression::number(mymath::precise128::sin(numeric));
-                if (node->text == "cos") return SymbolicExpression::number(mymath::precise128::cos(numeric));
-                if (node->text == "tan") return SymbolicExpression::number(mymath::precise128::tan(numeric));
-                if (node->text == "exp") return SymbolicExpression::number(mymath::precise128::exp(numeric));
-                if (node->text == "sinh") return SymbolicExpression::number(mymath::precise128::sinh(numeric));
-                if (node->text == "cosh") return SymbolicExpression::number(mymath::precise128::cosh(numeric));
-                if (node->text == "tanh") return SymbolicExpression::number(mymath::precise128::tanh(numeric));
+                if (node->text == "asin") return SymbolicExpression::number(mymath::asin(numeric));
+                if (node->text == "acos") return SymbolicExpression::number(mymath::acos(numeric));
+                if (node->text == "atan") return SymbolicExpression::number(mymath::atan(numeric));
+                if (node->text == "sin") return SymbolicExpression::number(mymath::sin(numeric));
+                if (node->text == "cos") return SymbolicExpression::number(mymath::cos(numeric));
+                if (node->text == "tan") return SymbolicExpression::number(mymath::tan(numeric));
+                if (node->text == "exp") return SymbolicExpression::number(mymath::exp(numeric));
+                if (node->text == "sinh") return SymbolicExpression::number(mymath::sinh(numeric));
+                if (node->text == "cosh") return SymbolicExpression::number(mymath::cosh(numeric));
+                if (node->text == "tanh") return SymbolicExpression::number(mymath::tanh(numeric));
                 if (node->text == "ln") {
                     if (numeric <= Scalar(0)) return make_function(node->text, argument);
-                    return SymbolicExpression::number(mymath::precise128::ln(numeric));
+                    return SymbolicExpression::number(mymath::ln(numeric));
                 }
                 if (node->text == "sqrt") {
                     if (numeric < Scalar(0)) return make_function(node->text, argument);
-                    Scalar root = mymath::precise128::sqrt(numeric);
+                    Scalar root = mymath::sqrt(numeric);
                     if (mymath::is_near_zero(root * root - numeric, Scalar(1e-12L)) && mymath::is_integer(root, Scalar(1e-10L))) {
                         return SymbolicExpression::number(root);
                     }
                     if (mymath::is_integer(numeric, Scalar(1e-10L)) && numeric > Scalar(0)) {
-                        long long val = static_cast<long long>(static_cast<long double>(numeric) + 0.5L);
+                        long long val = static_cast<long long>(numeric.to_long_double() + 0.5L);
                         long long extracted = 1;
                         for (long long i = 2; i * i <= val; ++i) {
                             while (val % (i * i) == 0) {
@@ -552,12 +552,12 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                     if (mymath::is_integer(numeric, Scalar(1e-10L)) && numeric <= Scalar(0)) return make_function(node->text, argument);
                     return SymbolicExpression::number(mymath::gamma(numeric));
                 }
-                if (node->text == "abs") return SymbolicExpression::number(mymath::precise128::abs(numeric));
-                if (node->text == "floor") return SymbolicExpression::number(mymath::precise128::floor(numeric));
-                if (node->text == "ceil") return SymbolicExpression::number(mymath::precise128::ceil(numeric));
-                if (node->text == "cbrt") return SymbolicExpression::number(mymath::precise128::cbrt(numeric));
+                if (node->text == "abs") return SymbolicExpression::number(mymath::abs(numeric));
+                if (node->text == "floor") return SymbolicExpression::number(mymath::floor(numeric));
+                if (node->text == "ceil") return SymbolicExpression::number(mymath::ceil(numeric));
+                if (node->text == "cbrt") return SymbolicExpression::number(mymath::cbrt(numeric));
                 if (node->text == "sign") {
-                    if (mymath::precise128::is_near_zero(numeric, kFormatEps)) return SymbolicExpression::number(Scalar(0));
+                    if (mymath::is_near_zero(numeric, kFormatEps)) return SymbolicExpression::number(Scalar(0));
                     return SymbolicExpression::number(numeric > Scalar(0) ? Scalar(1) : Scalar(-1));
                 }
             }
@@ -619,7 +619,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             // ln(1) → 0
             if (node->text == "ln") {
                 Scalar arg_val = Scalar(0);
-                if (argument.is_number(&arg_val) && mymath::precise128::is_near_zero(arg_val - Scalar(1), kFormatEps)) {
+                if (argument.is_number(&arg_val) && mymath::is_near_zero(arg_val - Scalar(1), kFormatEps)) {
                     return SymbolicExpression::number(Scalar(0));
                 }
                 // ln(x) where x is negative → ln(-x) + i*pi
@@ -633,9 +633,9 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (node->text == "gamma") {
                 Scalar val;
                 if (argument.is_number(&val)) {
-                    if (mymath::precise128::abs(val - Scalar(1)) < Scalar(1e-9L)) return SymbolicExpression::number(Scalar(1));
-                    if (mymath::precise128::abs(val - Scalar(0.5L)) < Scalar(1e-9L)) return (make_function("sqrt", SymbolicExpression::variable("pi"))).simplify();
-                    if (mymath::precise128::abs(val - Scalar(2)) < Scalar(1e-9L)) return SymbolicExpression::number(Scalar(1));
+                    if (mymath::abs(val - Scalar(1)) < Scalar(1e-9L)) return SymbolicExpression::number(Scalar(1));
+                    if (mymath::abs(val - Scalar(0.5L)) < Scalar(1e-9L)) return (make_function("sqrt", SymbolicExpression::variable("pi"))).simplify();
+                    if (mymath::abs(val - Scalar(2)) < Scalar(1e-9L)) return SymbolicExpression::number(Scalar(1));
                 }
             }
             if (node->text == "erf") {
@@ -657,7 +657,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             if (node->text == "sqrt" && argument.node_->type == NodeType::kPower) {
                 Scalar exponent = Scalar(0);
-                if (SymbolicExpression(argument.node_->right).is_number(&exponent) && mymath::precise128::is_near_zero(exponent - Scalar(2), kFormatEps)) {
+                if (SymbolicExpression(argument.node_->right).is_number(&exponent) && mymath::is_near_zero(exponent - Scalar(2), kFormatEps)) {
                     SymbolicExpression base(argument.node_->left);
                     if (is_known_positive_expression(base)) {
                         return base.simplify();
@@ -888,7 +888,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 std::vector<SymbolicExpression> num_f, den_f;
                 collect_division_factors(left, &num_c, &num_f);
                 collect_division_factors(right, &den_c, &den_f);
-                if (!mymath::precise128::is_near_zero(den_c, kFormatEps)) {
+                if (!mymath::is_near_zero(den_c, kFormatEps)) {
                     std::vector<bool> den_used(den_f.size(), false);
                     std::vector<SymbolicExpression> red_num;
                     for (const auto& nf : num_f) {
@@ -918,8 +918,8 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (left.is_variable_named("i")) {
                 Scalar exp_v;
                 if (right.is_number(&exp_v)) {
-                    int exp_i = static_cast<int>(mymath::precise128::round(exp_v));
-                    if (mymath::precise128::abs(exp_v - Scalar(exp_i)) < Scalar(1e-10L)) {
+                    int exp_i = static_cast<int>(mymath::round(exp_v.to_long_double()));
+                    if (mymath::abs(exp_v - Scalar(static_cast<long long>(exp_i))) < Scalar(1e-10L)) {
                         int m4 = ((exp_i % 4) + 4) % 4;
                         if (m4 == 0) return SymbolicExpression::number(Scalar(1));
                         if (m4 == 1) return left;
@@ -929,21 +929,21 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 }
             }
             if (left.is_number(&left_value)) {
-                if (mymath::precise128::is_near_zero(left_value, kFormatEps)) {
-                    if (right.is_number(&right_value)) return mymath::precise128::is_near_zero(right_value, kFormatEps) ? SymbolicExpression::number(Scalar(1)) : SymbolicExpression::number(Scalar(0));
+                if (mymath::is_near_zero(left_value, Scalar(kFormatEps))) {
+                    if (right.is_number(&right_value)) return mymath::is_near_zero(right_value, Scalar(kFormatEps)) ? SymbolicExpression::number(Scalar(1)) : SymbolicExpression::number(Scalar(0));
                 }
-                if (mymath::precise128::is_near_zero(left_value - Scalar(1), kFormatEps)) return SymbolicExpression::number(Scalar(1));
+                if (mymath::is_near_zero(left_value - Scalar(1), kFormatEps)) return SymbolicExpression::number(Scalar(1));
             }
             if (right.is_number(&right_value)) {
-                if (mymath::precise128::is_near_zero(right_value, kFormatEps)) return SymbolicExpression::number(Scalar(1));
-                if (mymath::precise128::is_near_zero(right_value - Scalar(1), kFormatEps)) return left;
+                if (mymath::is_near_zero(right_value, kFormatEps)) return SymbolicExpression::number(Scalar(1));
+                if (mymath::is_near_zero(right_value - Scalar(1), kFormatEps)) return left;
                 // sqrt(x)^2 → x (for x >= 0)
-                if (mymath::precise128::is_near_zero(right_value - Scalar(2), kFormatEps) &&
+                if (mymath::is_near_zero(right_value - Scalar(2), kFormatEps) &&
                     left.node_->type == NodeType::kFunction && left.node_->text == "sqrt") {
                     return SymbolicExpression(left.node_->left).simplify();
                 }
                 // abs(x)^2 → x^2
-                if (mymath::precise128::is_near_zero(right_value - Scalar(2), kFormatEps) &&
+                if (mymath::is_near_zero(right_value - Scalar(2), kFormatEps) &&
                     left.node_->type == NodeType::kFunction && left.node_->text == "abs") {
                     return make_power(SymbolicExpression(left.node_->left), SymbolicExpression::number(Scalar(2))).simplify();
                 }
@@ -954,10 +954,10 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                     return make_power(SymbolicExpression(left.node_->left).simplify(), SymbolicExpression::number(inner_exp * right_value)).simplify();
                 }
             }
-            if (left.is_number(&left_value) && right.is_number(&right_value)) return SymbolicExpression::number(mymath::precise128::pow(left_value, right_value));
+            if (left.is_number(&left_value) && right.is_number(&right_value)) return SymbolicExpression::number(mymath::pow(left_value, right_value));
             // Power simplifications based on assumptions
             // x^(1/2) → sqrt(x) for positive x
-            if (right.is_number(&right_value) && mymath::precise128::is_near_zero(right_value - Scalar(0.5L), kFormatEps)) {
+            if (right.is_number(&right_value) && mymath::is_near_zero(right_value - Scalar(0.5L), Scalar(kFormatEps))) {
                 if (is_known_positive_expression(left)) {
                     return make_function("sqrt", left).simplify();
                 }

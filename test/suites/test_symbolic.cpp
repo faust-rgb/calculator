@@ -590,9 +590,12 @@ int run_symbolic_tests(int& passed, int& failed) {
                  output == "1 / (z * (z - 1))");
             const bool fourier_equivalent =
                 (test.expression == "fourier(exp(-2 * t) * step(t), t, w)" &&
-                 output == "1 / (i * w - -2)") ||
+                 (output == "1 / (i * w - -2)" || output == "1 / (i * w + 2)")) ||
                 (test.expression == "fourier(exp(-2 * t) * step(t) + 3 * exp(-4 * t) * step(t), t, w)" &&
-                 output == "1 / (i * w - -2) + 3 * 1 / (i * w - -4)");
+                 (output == "1 / (i * w - -2) + 3 * 1 / (i * w - -4)" ||
+                  output == "3 * 1 / (i * w - -4) + 1 / (i * w - -2)" ||
+                  output == "1 / (i * w + 2) + 3 * 1 / (i * w + 4)" ||
+                  output == "3 * 1 / (i * w + 4) + 1 / (i * w + 2)"));
             const bool series_sum_equivalent =
                 test.expression == "series_sum(n^2, n, 1, N)" &&
                 (output == "N * (N + 1) * (2 * N + 1) / 6" ||

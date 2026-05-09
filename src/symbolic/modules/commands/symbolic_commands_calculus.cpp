@@ -73,7 +73,7 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
         // 获取当前点的值（需要从上下文获取变量值）
         std::vector<Scalar> point;
         for (const auto& var : vars) {
-            Scalar val = 0.0L;
+            Scalar val = Scalar(0.0L);
             // 尝试从上下文获取变量值，如果失败则使用默认值
             try {
                 auto var_eval = ctx.build_scoped_evaluator(var);
@@ -161,11 +161,11 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
             for (std::size_t i = 0; i < dimensions; ++i) {
                 vars.push_back(trim_copy(arguments[1 + i]));
             }
-            Scalar norm_sq = 0.0L;
+            Scalar norm_sq = Scalar(0.0L);
             for (std::size_t i = 0; i < dimensions; ++i) {
                 const SymbolicExpression component =
                     SymbolicExpression::parse(trim_copy(arguments[1 + dimensions + i]));
-                Scalar value = 0.0L;
+                Scalar value = Scalar(0.0L);
                 if (component.is_number(&value)) {
                     norm_sq += value * value;
                 }

@@ -38,7 +38,7 @@ bool extract_numerator_denominator(const SymbolicExpression& expr,
         return true;
     }
     *numerator = expr;
-    *denominator = SymbolicExpression::number(1.0L);
+    *denominator = SymbolicExpression::number(Scalar(1.0L));
     return false;
 }
 
@@ -48,7 +48,7 @@ std::optional<Scalar> evaluate_at_point(const SymbolicExpression& expr,
                                         Scalar point) {
     SymbolicExpression substituted = expr.substitute(var, SymbolicExpression::number(point));
     substituted = substituted.simplify();
-    Scalar val = 0.0L;
+    Scalar val = Scalar(0.0L);
     if (substituted.is_number(&val)) {
         return val;
     }
@@ -301,7 +301,7 @@ bool SymbolicLimitEngine::try_known_pattern(
                 // 检查参数是否为 var 或 k*var
                 if (arg.node_->type == NodeType::kVariable && arg.node_->text == var) {
                     if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
-                        *result = LimitResult::elementary(SymbolicExpression::number(1.0L), "known_pattern: sin(x)/x");
+                        *result = LimitResult::elementary(SymbolicExpression::number(Scalar(1.0L)), "known_pattern: sin(x)/x");
                         return true;
                     }
                 }
@@ -314,7 +314,7 @@ bool SymbolicLimitEngine::try_known_pattern(
                         SymbolicExpression(arg.node_->right).node_->text == var) {
                         SymbolicExpression expected_den = make_multiply(SymbolicExpression::number((k)), SymbolicExpression::variable(var));
                         if (expressions_match(den, expected_den)) {
-                            *result = LimitResult::elementary(SymbolicExpression::number(1.0L), "known_pattern: sin(kx)/(kx)");
+                            *result = LimitResult::elementary(SymbolicExpression::number(Scalar(1.0L)), "known_pattern: sin(kx)/(kx)");
                             return true;
                         }
                     }
@@ -331,7 +331,7 @@ bool SymbolicLimitEngine::try_known_pattern(
                 SymbolicExpression arg(num.node_->left);
                 if (arg.node_->type == NodeType::kVariable && arg.node_->text == var) {
                     if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
-                        *result = LimitResult::elementary(SymbolicExpression::number(1.0L), "known_pattern: tan(x)/x");
+                        *result = LimitResult::elementary(SymbolicExpression::number(Scalar(1.0L)), "known_pattern: tan(x)/x");
                         return true;
                     }
                 }
@@ -352,7 +352,7 @@ bool SymbolicLimitEngine::try_known_pattern(
                     if (arg.node_->type == NodeType::kVariable && arg.node_->text == var &&
                         right.is_number(nullptr) && mymath::precise128::is_near_zero(Scalar(right.node_->number_value - 1.0L), Scalar(1e-12))) {
                         if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
-                            *result = LimitResult::elementary(SymbolicExpression::number(1.0L), "known_pattern: (exp(x)-1)/x");
+                            *result = LimitResult::elementary(SymbolicExpression::number(Scalar(1.0L)), "known_pattern: (exp(x)-1)/x");
                             return true;
                         }
                     }
@@ -374,7 +374,7 @@ bool SymbolicLimitEngine::try_known_pattern(
                     if (left.is_number(&one) && mymath::precise128::is_near_zero(one - Scalar(1), Scalar(1e-12)) &&
                         right.node_->type == NodeType::kVariable && right.node_->text == var) {
                         if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
-                            *result = LimitResult::elementary(SymbolicExpression::number(1.0L), "known_pattern: ln(1+x)/x");
+                            *result = LimitResult::elementary(SymbolicExpression::number(Scalar(1.0L)), "known_pattern: ln(1+x)/x");
                             return true;
                         }
                     }
@@ -450,7 +450,7 @@ bool SymbolicLimitEngine::try_known_pattern(
 
             if (base.node_->type == NodeType::kVariable && base.node_->text == var &&
                 exp.node_->type == NodeType::kVariable && exp.node_->text == var) {
-                *result = LimitResult::elementary(SymbolicExpression::number(1.0L), "known_pattern: x^x (right limit)");
+                *result = LimitResult::elementary(SymbolicExpression::number(Scalar(1.0L)), "known_pattern: x^x (right limit)");
                 return true;
             }
         }
@@ -508,7 +508,7 @@ LimitResult SymbolicLimitEngine::limit_at_infinity(
         SymbolicExpression num(expr.node_->left);
         SymbolicExpression den(expr.node_->right);
 
-        Scalar num_val = 0.0L;
+        Scalar num_val = Scalar(0.0L);
         if (num.is_number(&num_val) && !mymath::precise128::is_near_zero(Scalar(num_val), Scalar(1e-15))) {
             // 检查分母是否为 x 的幂
             if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
@@ -516,7 +516,7 @@ LimitResult SymbolicLimitEngine::limit_at_infinity(
             }
             if (den.node_->type == NodeType::kPower) {
                 SymbolicExpression base(den.node_->left);
-                Scalar exp = 0.0L;
+                Scalar exp = Scalar(0.0L);
                 if (base.node_->type == NodeType::kVariable && base.node_->text == var &&
                     SymbolicExpression(den.node_->right).is_number(&exp) && exp > 0) {
                     return LimitResult::elementary(SymbolicExpression::number(0.0L), "1/x^n_at_infinity");
@@ -555,7 +555,7 @@ bool SymbolicLimitEngine::handle_one_to_infinity(
     // 需要计算 (base - 1) * exponent 的极限
 
     // 计算 base - 1
-    SymbolicExpression base_minus_one = make_subtract(base, SymbolicExpression::number(1.0L));
+    SymbolicExpression base_minus_one = make_subtract(base, SymbolicExpression::number(Scalar(1.0L)));
 
     // 计算 (base - 1) * exponent
     SymbolicExpression product = make_multiply(base_minus_one, exponent);

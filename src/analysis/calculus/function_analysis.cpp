@@ -42,10 +42,8 @@ template <typename T>
 T t_abs(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::abs(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::abs(val);
     } else {
-        return val < T(static_cast<long long>(0)) ? -val : val;
+        return mymath::abs(val);
     }
 }
 
@@ -54,10 +52,8 @@ template <typename T>
 T t_sqrt(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::sqrt(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::sqrt(val);
     } else {
-        throw std::runtime_error("t_sqrt not implemented for this type");
+        return mymath::sqrt(val);
     }
 }
 
@@ -66,10 +62,8 @@ template <typename T>
 T t_pow(const T& base, const T& exponent) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::pow(base, exponent);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::pow(base, exponent);
     } else {
-        throw std::runtime_error("t_pow not implemented for this type");
+        return mymath::pow(base, exponent);
     }
 }
 
@@ -78,10 +72,8 @@ template <typename T>
 bool t_isfinite(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::isfinite(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::isfinite(val.hi);
     } else {
-        return true;
+        return mymath::isfinite(val);
     }
 }
 
@@ -90,10 +82,8 @@ template <typename T>
 T t_sin(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::sin(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::sin(val);
     } else {
-        return T(mymath::sin(val.to_double()));
+        return mymath::sin(val);
     }
 }
 
@@ -102,10 +92,8 @@ template <typename T>
 T t_cos(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::cos(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::cos(val);
     } else {
-        return T(mymath::cos(val.to_double()));
+        return mymath::cos(val);
     }
 }
 
@@ -114,10 +102,8 @@ template <typename T>
 T t_tan(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::tan(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::tan(val);
     } else {
-        return T(mymath::tan(val.to_double()));
+        return mymath::tan(val);
     }
 }
 
@@ -126,10 +112,8 @@ template <typename T>
 T t_log(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::log(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::ln(val);
     } else {
-        return T(mymath::log(val.to_double()));
+        return mymath::ln(val);
     }
 }
 
@@ -138,10 +122,8 @@ template <typename T>
 T t_exp(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::exp(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::exp(val);
     } else {
-        return T(mymath::exp(val.to_double()));
+        return mymath::exp(val);
     }
 }
 
@@ -150,10 +132,8 @@ template <typename T>
 T t_sinh(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::sinh(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return Scalar(mymath::sinh(val.to_long_double()));
     } else {
-        return T(mymath::sinh(val.to_double()));
+        return mymath::sinh(val);
     }
 }
 
@@ -162,10 +142,8 @@ template <typename T>
 T t_cosh(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::cosh(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return Scalar(mymath::cosh(val.to_long_double()));
     } else {
-        return T(mymath::cosh(val.to_double()));
+        return mymath::cosh(val);
     }
 }
 
@@ -174,22 +152,18 @@ template <typename T>
 T t_tanh(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::tanh(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return Scalar(mymath::tanh(val.to_long_double()));
     } else {
-        return T(mymath::tanh(val.to_double()));
+        return mymath::tanh(val);
     }
 }
 
 /** @brief 泛型圆周率 */
 template <typename T>
 T t_pi() {
-    if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::pi();
-    } else if constexpr (std::is_floating_point_v<T>) {
+    if constexpr (std::is_floating_point_v<T>) {
         return T(3.1415926535897932384626433832795029L);
     } else {
-        return T(3.14159265358979323846);
+        return mymath::constants::pi<T>();
     }
 }
 
@@ -198,10 +172,9 @@ template <typename T>
 T t_infinity() {
     if constexpr (std::is_floating_point_v<T>) {
         return std::numeric_limits<T>::infinity();
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return Scalar(mymath::infinity());
     } else {
-        return T(1e300);
+        // PreciseDecimal doesn't have infinity, use a very large number
+        return T("1e1000");
     }
 }
 
@@ -209,10 +182,8 @@ template <typename T>
 bool t_is_effective_infinity_point(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return !std::isfinite(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return !mymath::isfinite(val.hi);
     } else {
-        return false;
+        return false;  // PreciseDecimal is always finite
     }
 }
 
@@ -227,8 +198,6 @@ template <typename T>
 bool t_is_integer(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::floor(val) == val;
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::is_integer(val.to_long_double());
     } else {
         return mymath::is_integer(val.to_long_double());
     }
@@ -704,9 +673,9 @@ bool try_symbolic_one_to_infinity_limit(const SymbolicExpression& base,
     const SymbolicExpression transformed =
         symbolic_expression_internal::make_function(
             "exp",
-            ((base - SymbolicExpression::number(1.0L)) * exponent).simplify()).simplify();
+            ((base - SymbolicExpression::number(Scalar(1.0L))) * exponent).simplify()).simplify();
     const SymbolicExpression product =
-        ((base - SymbolicExpression::number(1.0L)) * exponent).simplify();
+        ((base - SymbolicExpression::number(Scalar(1.0L))) * exponent).simplify();
     T product_limit = T(static_cast<long long>(0));
     if (symbolic_limit_at_infinity(product, variable_name, point > T(static_cast<long long>(0)), &product_limit)) {
         *result = t_exp(product_limit);
@@ -1273,16 +1242,16 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
     SymbolicExpression t_var = SymbolicExpression::variable("t_limit_inf_tmp");
     SymbolicExpression inv_t;
     if (positive) {
-        inv_t = SymbolicExpression::number(1.0L) / t_var;
+        inv_t = SymbolicExpression::number(Scalar(1.0L)) / t_var;
     } else {
-        inv_t = SymbolicExpression::number(-1.0L) / t_var;
+        inv_t = SymbolicExpression::number(Scalar(-1.0L)) / t_var;
     }
     SymbolicExpression substituted = expression.substitute(variable_name, inv_t).simplify();
 
     std::vector<Scalar> coeffs;
     try {
-        if (series_ops::internal::evaluate_psa(substituted, "t_limit_inf_tmp", 0.0L, 2, coeffs, ctx)) {
-            if (!coeffs.empty() && mymath::isfinite(coeffs[0].hi)) {
+        if (series_ops::internal::evaluate_psa(substituted, "t_limit_inf_tmp", Scalar(0.0L), 2, coeffs, ctx)) {
+            if (!coeffs.empty() && mymath::isfinite(coeffs[0])) {
                 *result = T(coeffs[0]);
                 return true;
             }
@@ -1401,7 +1370,7 @@ T TFunctionAnalysis<T>::evaluate(T x) const {
 
 template <>
 Scalar TFunctionAnalysis<Scalar>::derivative(Scalar x) const {
-    const Scalar scale = std::max(1.0L, mymath::abs(x).to_long_double());
+    const Scalar scale = std::max(Scalar(1.0L), mymath::abs(x));
     const Scalar center = evaluate_with_variable(x);
     if (!mymath::isfinite(center)) {
         throw std::runtime_error("derivative is undefined at this point");
@@ -1410,30 +1379,30 @@ Scalar TFunctionAnalysis<Scalar>::derivative(Scalar x) const {
     constexpr int kLayers = 4; // 恢复为 4 层，主要利用 float128 减少舍入误差
 
     // 计算曲率以确定步长
-    const Scalar curvature_sample_step = scale * 1e-3L;
+    const Scalar curvature_sample_step = scale * Scalar(1e-3L);
     const Scalar curvature_probe = evaluate_with_variable(x + curvature_sample_step) -
-                                   2.0L * center +
+                                   Scalar(2.0L) * center +
                                    evaluate_with_variable(x - curvature_sample_step);
     const Scalar curvature_scale =
-        std::max(1.0L,
-                 mymath::abs(curvature_probe).to_long_double() /
-                     std::max(1e-12L, mymath::abs(center).to_long_double()));
+        std::max(Scalar(1.0L),
+                 mymath::abs(curvature_probe) /
+                     std::max(Scalar(1e-12L), mymath::abs(center)));
 
     Scalar base_step = central_difference_step_value(
         scale,
-        1.0L / derivative_quarter_power_scale(curvature_scale));
+        Scalar(1.0L) / derivative_quarter_power_scale(curvature_scale));
 
     Scalar richardson[kLayers][kLayers] = {};
     bool row_valid[kLayers] = {};
-    Scalar best_value = 0.0L;
-    Scalar best_error = mymath::infinity();
+    Scalar best_value = Scalar(0.0L);
+    Scalar best_error = Scalar(1e300);  // Large number instead of infinity
 
     for (int row = 0; row < kLayers; ++row) {
-        const Scalar step = base_step / mymath::pow(2.0L, (row));
+        const Scalar step = base_step / mymath::pow(Scalar(2.0L), Scalar(static_cast<long long>(row)));
         const Scalar forward_x = x + step;
         const Scalar backward_x = x - step;
-        const Scalar actual_step = (forward_x - backward_x) * 0.5L;
-        if (actual_step <= 0.0L) {
+        const Scalar actual_step = (forward_x - backward_x) * Scalar(0.5L);
+        if (actual_step <= Scalar(0.0L)) {
             continue;
         }
         const Scalar forward = evaluate_with_variable(forward_x);
@@ -1441,8 +1410,8 @@ Scalar TFunctionAnalysis<Scalar>::derivative(Scalar x) const {
         if (!mymath::isfinite(forward) || !mymath::isfinite(backward)) {
             continue;
         }
-        richardson[row][0] = Scalar(forward - backward) / (2.0L * actual_step);
-        row_valid[row] = mymath::isfinite(richardson[row][0].hi);
+        richardson[row][0] = (forward - backward) / (Scalar(2.0L) * actual_step);
+        row_valid[row] = mymath::isfinite(richardson[row][0]);
         if (!row_valid[row]) {
             continue;
         }
@@ -1451,33 +1420,33 @@ Scalar TFunctionAnalysis<Scalar>::derivative(Scalar x) const {
                 row_valid[row] = false;
                 break;
             }
-            Scalar factor = mymath::precise128::pow(Scalar(4.0L), Scalar((col)));
+            Scalar factor = mymath::pow(Scalar(4.0L), Scalar(static_cast<long long>(col)));
             richardson[row][col] =
                 richardson[row][col - 1] +
                 (richardson[row][col - 1] - richardson[row - 1][col - 1]) /
                     (factor - 1.0L);
-            if (!mymath::isfinite(richardson[row][col].hi)) {
+            if (!mymath::isfinite(richardson[row][col])) {
                 row_valid[row] = false;
                 break;
             }
         }
         if (row > 0 && row_valid[row] && row_valid[row - 1]) {
             const Scalar candidate = richardson[row][row];
-            const Scalar error_estimate = mymath::precise128::abs(candidate - richardson[row - 1][row - 1]);
-            if (error_estimate < best_error && mymath::isfinite(candidate.hi)) {
+            const Scalar error_estimate = mymath::abs(candidate - richardson[row - 1][row - 1]);
+            if (error_estimate < best_error && mymath::isfinite(candidate)) {
                 best_error = error_estimate;
                 best_value = candidate;
 
-                Scalar tol = mymath::precise128::abs(best_value) * 1e-16L;
-                if (tol < 1e-18L) tol = 1e-18L;
+                Scalar tol = mymath::abs(best_value) * Scalar(1e-16L);
+                if (tol < Scalar(1e-18L)) tol = Scalar(1e-18L);
 
                 if (error_estimate < tol) break;
             }
         }
     }
 
-    if (best_error < mymath::infinity()) {
-        const Scalar side_step = std::max(1e-7L * scale, base_step / 64.0L);
+    if (best_error < Scalar(1e300)) {
+        const Scalar side_step = std::max(Scalar(1e-7L) * scale, base_step / Scalar(64.0L));
         const Scalar left_value = evaluate_with_variable(x - side_step);
         const Scalar right_value = evaluate_with_variable(x + side_step);
         if (!mymath::isfinite(left_value) || !mymath::isfinite(right_value)) {
@@ -1486,9 +1455,9 @@ Scalar TFunctionAnalysis<Scalar>::derivative(Scalar x) const {
         const Scalar left_slope = (center - left_value) / side_step;
         const Scalar right_slope = (right_value - center) / side_step;
         const Scalar slope_scale =
-            std::max({1.0L, mymath::abs(left_slope).to_long_double(), mymath::abs(right_slope).to_long_double(), mymath::abs(best_value).to_long_double()});
+            std::max({Scalar(1.0L), mymath::abs(left_slope), mymath::abs(right_slope), mymath::abs(best_value)});
         if (mymath::abs(left_slope - right_slope) >
-            std::max(1e-4L, (1e-5L * slope_scale).to_long_double())) {
+            std::max(Scalar(1e-4L), Scalar(1e-5L) * slope_scale)) {
             throw std::runtime_error("derivative does not exist at this point");
         }
         return best_value;
@@ -1601,8 +1570,8 @@ T TFunctionAnalysis<T>::derivative(T x) const {
     return richardson[0][0];
 }
 
-template <typename T>
-T TFunctionAnalysis<T>::limit(T x, int direction) const {
+template <>
+Scalar TFunctionAnalysis<Scalar>::limit(Scalar x, int direction) const {
     if (direction != -1 && direction != 0 && direction != 1) {
         throw std::runtime_error("limit direction must be -1, 0, or 1");
     }
@@ -1620,7 +1589,7 @@ T TFunctionAnalysis<T>::limit(T x, int direction) const {
         if (v == variable_name_) return p;
 
         // 尝试从表达式中提取数值
-        Scalar val = 0.0L;
+        Scalar val = Scalar(0.0L);
         if (e.is_number(&val)) return val;
 
         // 如果有外部变量查找函数，尝试使用它
@@ -1651,28 +1620,24 @@ T TFunctionAnalysis<T>::limit(T x, int direction) const {
     };
 
     if (t_is_effective_infinity_point(x)) {
-        bool positive = x > T(static_cast<long long>(0));
-        T inf_result = T(static_cast<long long>(0));
+        bool positive = x > Scalar(0.0L);
+        Scalar inf_result = Scalar(0.0L);
         if (symbolic_limit_at_infinity(expr, variable_name_, positive, &inf_result)) {
             return inf_result;
         }
     } else if (t_isfinite(x)) {
         std::vector<Scalar> coeffs;
         try {
-            Scalar p_val;
-            if constexpr (std::is_floating_point_v<T>) p_val = (x);
-            else if constexpr (std::is_same_v<T, Scalar>) p_val = x.to_long_double();
-            else p_val = x.to_long_double();
-
+            Scalar p_val = x;
             if (series_ops::internal::evaluate_psa(expr, variable_name_, p_val, 2, coeffs, ctx)) {
-                if (!coeffs.empty()) return T(coeffs[0]);
+                if (!coeffs.empty()) return coeffs[0];
             }
         } catch (const series_ops::internal::PoleException& e) {
-            return handle_pole_limit(e.shift, T(e.leading_coefficient), direction);
+            return handle_pole_limit(e.shift, Scalar(e.leading_coefficient), direction);
         }
     }
 
-    T lhopital_value = T(static_cast<long long>(0));
+    Scalar lhopital_value = Scalar(0.0L);
     if (direction == 0 &&
         try_symbolic_lhopital_limit(expr,
                                     variable_name_,
@@ -1705,8 +1670,8 @@ Scalar TFunctionAnalysis<Scalar>::compute_numerical_limit(Scalar x, int directio
         // Create substitution: x -> 1/t or x -> -1/t
         SymbolicExpression t_var = SymbolicExpression::variable("t_limit_inf_subst");
         SymbolicExpression inv_t = positive
-            ? SymbolicExpression::number(1.0L) / t_var
-            : SymbolicExpression::number(-1.0L) / t_var;
+            ? SymbolicExpression::number(Scalar(1.0L)) / t_var
+            : SymbolicExpression::number(Scalar(-1.0L)) / t_var;
         SymbolicExpression substituted = expr.substitute(variable_name_, inv_t).simplify();
 
         // Use float128 precision for the substituted expression
@@ -1716,8 +1681,8 @@ Scalar TFunctionAnalysis<Scalar>::compute_numerical_limit(Scalar x, int directio
         // Compute limit as t -> 0 using float128 precision
         try {
             Scalar result_128 = analysis_128.limit(Scalar(0.0L), direction);
-            if (mymath::isfinite(result_128.hi)) {
-                return result_128.to_long_double();
+            if (mymath::isfinite(result_128)) {
+                return result_128;
             }
         } catch (...) {
             // Fall through to direct computation
@@ -1728,32 +1693,32 @@ direct_computation:
     auto compute_limit_at = [this](Scalar x_target, int side) {
         Scalar richardson[14][14] = {};
         //bool row_valid[14] = {};
-        Scalar best_value = 0.0L;
-        Scalar best_error = mymath::infinity();
+        Scalar best_value = Scalar(0.0L);
+        Scalar best_error = Scalar(1e300);
         bool have_best = false;
 
         const Scalar base_h = t_is_effective_infinity_point(x_target)
-                             ? 1e-2L
+                             ? Scalar(1e-2L)
                              : limit_step_scale(x_target);
         Scalar adaptive_h = base_h;
         int consecutive_bad = 0;
         constexpr int kMaxBadSamples = 3;
 
-        Scalar prev_val = 0.0L;
+        Scalar prev_val = Scalar(0.0L);
         bool have_prev = false;
         int oscillation_count = 0;
-        Scalar total_amplitude = 0.0L;
+        Scalar total_amplitude = Scalar(0.0L);
 
         for (int row = 0; row < 14; ++row) {
-            const Scalar h = adaptive_h / mymath::pow(2.0L, (row + 4));
+            const Scalar h = adaptive_h / mymath::pow(Scalar(2.0L), Scalar(static_cast<long long>(row + 4)));
             Scalar sample_x;
             if (!t_is_effective_infinity_point(x_target)) {
-                sample_x = x_target + (side) * h;
+                sample_x = x_target + Scalar(static_cast<long long>(side)) * h;
             } else {
-                sample_x = (x_target > 0.0L ? 1.0L : -1.0L) / h;
+                sample_x = (x_target > Scalar(0.0L) ? Scalar(1.0L) : Scalar(-1.0L)) / h;
             }
 
-            Scalar val = 0.0L;
+            Scalar val = Scalar(0.0L);
             try {
                 val = evaluate_with_variable(sample_x);
             } catch (...) {
@@ -1802,7 +1767,7 @@ direct_computation:
             if (have_best && row > 0) {
                 const Scalar expected_change =
                     best_error * 10.0L + 1e-10L;
-                const Scalar actual_change = mymath::precise128::abs(f_val - best_value);
+                const Scalar actual_change = mymath::abs(f_val - best_value);
                 if (actual_change > expected_change * 1e6L) {
                     adaptive_h *= 0.5L;
                     row = -1;
@@ -1814,13 +1779,13 @@ direct_computation:
 
             richardson[row][0] = f_val;
             for (int col = 1; col <= row; ++col) {
-                Scalar p4 = mymath::precise128::pow(Scalar(2.0L), Scalar((col)));
+                Scalar p4 = mymath::pow(Scalar(2.0L), Scalar(static_cast<long long>(col)));
                 richardson[row][col] = (p4 * richardson[row][col - 1] - richardson[row - 1][col - 1]) / (p4 - 1.0L);
             }
             //row_valid[row] = true;
 
             if (row >= 1) {
-                const Scalar current_error = mymath::precise128::abs(richardson[row][row] - richardson[row - 1][row - 1]);
+                const Scalar current_error = mymath::abs(richardson[row][row] - richardson[row - 1][row - 1]);
                 if (!have_best || current_error < best_error) {
                     best_value = richardson[row][row];
                     best_error = current_error;
@@ -1848,191 +1813,6 @@ direct_computation:
     return compute_limit_at(x, direction);
 }
 
-template <typename T>
-T TFunctionAnalysis<T>::compute_numerical_limit(T x, int direction) const {
-    auto compute_limit_at = [this](T x_target, int side) {
-        T richardson[14][14] = {};
-        bool row_valid[14] = {};
-        T best_value = T(static_cast<long long>(0));
-        T best_error = t_infinity<T>();
-        bool have_best = false;
-
-        const T base_h = t_is_effective_infinity_point(x_target)
-                             ? numeric_control_value<T>("1e-2", 1e-2)
-                             : limit_step_scale(x_target);
-        T adaptive_h = base_h;
-        int consecutive_bad = 0;
-        constexpr int kMaxBadSamples = 3;
-
-        T prev_val = T(static_cast<long long>(0));
-        bool have_prev = false;
-        int oscillation_count = 0;
-        T total_amplitude = T(static_cast<long long>(0));
-
-        for (int row = 0; row < 14; ++row) {
-            const T h = adaptive_h / t_pow(T(static_cast<long long>(2)), T(static_cast<long long>(row + 4)));
-            T sample_x;
-            if (!t_is_effective_infinity_point(x_target)) {
-                sample_x = x_target + T(static_cast<long long>(side)) * h;
-            } else {
-                sample_x = (x_target > T(static_cast<long long>(0)) ? T(static_cast<long long>(1)) : -T(static_cast<long long>(1))) / h;
-            }
-
-            T val = T(static_cast<long long>(0));
-            try {
-                val = evaluate_with_variable(sample_x);
-            } catch (...) {
-                adaptive_h *= T(0.5L);
-                consecutive_bad++;
-                if (consecutive_bad >= kMaxBadSamples) {
-                    throw std::runtime_error("limit did not converge (sampling failures)");
-                }
-                continue;
-            }
-
-            if (!t_isfinite(val)) {
-                if (have_prev && t_isfinite(prev_val)) {
-                    if (prev_val > numeric_control_value<T>("1e10", 1e10)) {
-                        return t_infinity<T>();
-                    } else if (prev_val < -numeric_control_value<T>("1e10", 1e10)) {
-                        return -t_infinity<T>();
-                    }
-                }
-                adaptive_h *= T(0.5L);
-                consecutive_bad++;
-                if (consecutive_bad >= kMaxBadSamples) {
-                    throw std::runtime_error("limit appears to be infinite (numerical evidence)");
-                }
-                continue;
-            }
-
-            if (have_prev) {
-                const T diff = t_abs(val - prev_val);
-                total_amplitude += diff;
-                if ((val > T(static_cast<long long>(0)) && prev_val < T(static_cast<long long>(0))) || (val < T(static_cast<long long>(0)) && prev_val > T(static_cast<long long>(0)))) {
-                    oscillation_count++;
-                    if (oscillation_count >= 5) {
-                        const T avg_amp = total_amplitude / T(static_cast<long long>(row + 1));
-                        if (avg_amp > numeric_control_value<T>("1e-2", 1e-2)) {
-                            throw std::runtime_error("limit does not exist (oscillation)");
-                        }
-                        adaptive_h *= T(0.25);
-                        oscillation_count = 0;
-                    }
-                } else {
-                    oscillation_count = std::max(0, oscillation_count - 1);
-                }
-            }
-            prev_val = val;
-            have_prev = true;
-
-            if (have_best && row > 0) {
-                const T expected_change =
-                    best_error * T(static_cast<long long>(10)) +
-                    numeric_control_value<T>("1e-10", 1e-10);
-                const T actual_change = t_abs(val - best_value);
-                if (actual_change > expected_change * T(1e6)) {
-                    adaptive_h *= T(0.5L);
-                    consecutive_bad++;
-                    if (consecutive_bad >= kMaxBadSamples) {
-                        break;
-                    }
-                    continue;
-                }
-            }
-
-            consecutive_bad = 0;
-            richardson[row][0] = val;
-            row_valid[row] = true;
-
-            for (int col = 1; col <= row; ++col) {
-                if (!row_valid[row - 1]) {
-                    row_valid[row] = false;
-                    break;
-                }
-                const T factor = T(static_cast<long long>(1LL << col));
-                richardson[row][col] = richardson[row][col-1] +
-                    (richardson[row][col-1] - richardson[row-1][col-1]) / (factor - T(static_cast<long long>(1)));
-                if (!t_isfinite(richardson[row][col])) {
-                    row_valid[row] = false;
-                    break;
-                }
-            }
-
-            if (row > 0 && row_valid[row]) {
-                T err = t_abs(richardson[row][row] - richardson[row-1][row-1]);
-                if (err < best_error) {
-                    best_error = err;
-                    best_value = richardson[row][row];
-                    have_best = true;
-                }
-
-                if (err > best_error * T(0.9) && row > 3) {
-                    adaptive_h *= numeric_control_value<T>("0.75", 0.75);
-                }
-
-                if (err < numeric_control_value<T>("1e-15", 1e-15)) {
-                    return richardson[row][row];
-                }
-            } else if (row == 0 && row_valid[0]) {
-                best_value = richardson[0][0];
-            }
-        }
-
-        if (!have_best) {
-            throw std::runtime_error("limit did not converge");
-        }
-
-        const T scale = std::max(T(static_cast<long long>(1)), t_abs(best_value));
-        const T acceptable_error =
-            std::max(numeric_control_value<T>("1e-8", 1e-8),
-                     kLimitTolerance_v<T>() * T(static_cast<long long>(1000)) * scale);
-        if (best_error > acceptable_error) {
-            throw std::runtime_error("limit did not converge");
-        }
-        return best_value;
-    };
-
-    if (t_is_effective_infinity_point(x)) {
-        return compute_limit_at(x, 0);
-    }
-
-    if (direction == -1) return compute_limit_at(x, -1);
-    if (direction == 1) return compute_limit_at(x, 1);
-
-    T left = T(static_cast<long long>(0)), right = T(static_cast<long long>(0));
-    bool left_ok = false, right_ok = false;
-    std::string left_err, right_err;
-
-    try {
-        left = compute_limit_at(x, -1);
-        left_ok = true;
-    } catch (const std::exception& e) {
-        left_err = e.what();
-    }
-
-    try {
-        right = compute_limit_at(x, 1);
-        right_ok = true;
-    } catch (const std::exception& e) {
-        right_err = e.what();
-    }
-
-    if (left_ok && right_ok) {
-        if (t_abs(left - right) <= kLimitTolerance_v<T>() * T(static_cast<long long>(100)) ||
-            (!t_isfinite(left) && !t_isfinite(right) && ((left > T(static_cast<long long>(0))) == (right > T(static_cast<long long>(0)))))) {
-            return (left + right) * T(0.5L);
-        }
-        throw std::runtime_error("two-sided limit does not exist (left=" +
-                                 format_t(left) + ", right=" + format_t(right) + ")");
-    } else if (left_ok) {
-        return left;
-    } else if (right_ok) {
-        return right;
-    }
-
-    throw std::runtime_error("limit did not converge on either side: " + left_err + " / " + right_err);
-}
 
 template <typename T>
 T TFunctionAnalysis<T>::definite_integral(T lower_bound,
@@ -2569,49 +2349,49 @@ Scalar TFunctionAnalysis<Scalar>::gauss_kronrod_15(Scalar left,
                                                        Scalar right,
                                                        Scalar* error_estimate) const {
     static const Scalar kNodes[] = {
-        0.0L,
-        0.20778495500789846760L,
-        0.40584515137739716691L,
-        0.58608723546769113029L,
-        0.74153118559939443986L,
-        0.86486442335976907279L,
-        0.94910791234275852453L,
-        0.99145537112081263921L
+        Scalar(0.0L),
+        Scalar(0.20778495500789846760L),
+        Scalar(0.40584515137739716691L),
+        Scalar(0.58608723546769113029L),
+        Scalar(0.74153118559939443986L),
+        Scalar(0.86486442335976907279L),
+        Scalar(0.94910791234275852453L),
+        Scalar(0.99145537112081263921L)
     };
 
     static const Scalar kKronrodWeights[] = {
-        0.20948214108472782801L,
-        0.20443294007529889241L,
-        0.19035057806478540991L,
-        0.16900472663926790283L,
-        0.14065325971552591875L,
-        0.10479001032225018384L,
-        0.06309209262997855329L,
-        0.02293532201052922496L
+        Scalar(0.20948214108472782801L),
+        Scalar(0.20443294007529889241L),
+        Scalar(0.19035057806478540991L),
+        Scalar(0.16900472663926790283L),
+        Scalar(0.14065325971552591875L),
+        Scalar(0.10479001032225018384L),
+        Scalar(0.06309209262997855329L),
+        Scalar(0.02293532201052922496L)
     };
 
     static const Scalar kGaussWeights[] = {
-        0.41795918367346938776L,
-        0.0L,
-        0.38183005050511894495L,
-        0.0L,
-        0.27970539148927666790L,
-        0.0L,
-        0.12948496616886969327L,
-        0.0L
+        Scalar(0.41795918367346938776L),
+        Scalar(0.0L),
+        Scalar(0.38183005050511894495L),
+        Scalar(0.0L),
+        Scalar(0.27970539148927666790L),
+        Scalar(0.0L),
+        Scalar(0.12948496616886969327L),
+        Scalar(0.0L)
     };
 
-    const Scalar center = (left + right) * 0.5L;
-    const Scalar half_width = (right - left) * 0.5L;
+    const Scalar center = (left + right) * Scalar(0.5L);
+    const Scalar half_width = (right - left) * Scalar(0.5L);
 
-    Scalar kronrod_sum = 0.0L;
-    Scalar gauss_sum = 0.0L;
+    Scalar kronrod_sum = Scalar(0.0L);
+    Scalar gauss_sum = Scalar(0.0L);
 
     for (int i = 0; i < 8; ++i) {
-        if (mymath::is_near_zero(kNodes[i], 0.0L)) {
+        if (mymath::is_near_zero(kNodes[i], Scalar(0.0L))) {
             Scalar value(evaluate_with_variable(center));
-            kronrod_sum = kronrod_sum + Scalar(kKronrodWeights[i]) * value;
-            gauss_sum = gauss_sum + Scalar(kGaussWeights[i]) * value;
+            kronrod_sum = kronrod_sum + kKronrodWeights[i] * value;
+            gauss_sum = gauss_sum + kGaussWeights[i] * value;
             continue;
         }
 
@@ -2620,17 +2400,17 @@ Scalar TFunctionAnalysis<Scalar>::gauss_kronrod_15(Scalar left,
         Scalar right_val(evaluate_with_variable(center + offset));
         Scalar pair_sum = left_val + right_val;
 
-        kronrod_sum = kronrod_sum + Scalar(kKronrodWeights[i]) * pair_sum;
-        if (kGaussWeights[i] != 0.0L) {
-            gauss_sum = gauss_sum + Scalar(kGaussWeights[i]) * pair_sum;
+        kronrod_sum = kronrod_sum + kKronrodWeights[i] * pair_sum;
+        if (kGaussWeights[i] != Scalar(0.0L)) {
+            gauss_sum = gauss_sum + kGaussWeights[i] * pair_sum;
         }
     }
 
-    Scalar kronrod = Scalar(half_width) * kronrod_sum;
-    Scalar gauss = Scalar(half_width) * gauss_sum;
+    Scalar kronrod = half_width * kronrod_sum;
+    Scalar gauss = half_width * gauss_sum;
 
-    *error_estimate = mymath::precise128::abs(kronrod - gauss).hi;
-    return kronrod.hi;
+    *error_estimate = mymath::abs(kronrod - gauss);
+    return kronrod;
 }
 
 template <typename T>
@@ -2706,5 +2486,5 @@ T TFunctionAnalysis<T>::gauss_kronrod_15(T left,
 }
 
 // 显式模板实例化
-template class TFunctionAnalysis<long double>;
+//template class TFunctionAnalysis<long double>;
 template class TFunctionAnalysis<Scalar>;

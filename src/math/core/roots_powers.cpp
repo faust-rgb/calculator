@@ -76,6 +76,11 @@ Scalar root(Scalar value, Scalar degree) {
 
     long long n = static_cast<long long>(degree);
 
+    // Handle zero with negative degree (division by zero)
+    if (value == Scalar(0.0L) && n < 0) {
+        throw std::domain_error("cannot take negative root of zero");
+    }
+
     if (value < Scalar(0.0L) && n % 2 == 0) {
         throw std::domain_error("even root of negative number is not real");
     }

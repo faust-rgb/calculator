@@ -30,7 +30,7 @@ std::vector<RischAlgorithm::ComplexRoot> RischAlgorithm::find_all_roots(
     std::vector<Scalar> num_coeffs;
 
     for (const auto& c : coeffs) {
-        Scalar val = 0.0L;
+        Scalar val = Scalar(0.0L);
         if (c.is_number(&val)) {
             num_coeffs.push_back(val);
         } else {
@@ -128,7 +128,7 @@ std::vector<SymbolicExpression> RischAlgorithm::find_integer_roots(
     if (!lc.is_number(&lc_val)) lc_val = 1.0L;
 
     SymbolicExpression ct = coeffs.front();
-    Scalar ct_val = 0.0L;
+    Scalar ct_val = Scalar(0.0L);
     if (!ct.is_number(&ct_val)) ct_val = 0.0L;
 
     int max_search = 100;
@@ -143,7 +143,7 @@ std::vector<SymbolicExpression> RischAlgorithm::find_integer_roots(
 
         SymbolicExpression val = SymbolicExpression::number(0.0L);
         SymbolicExpression x_val = SymbolicExpression::number(i);
-        SymbolicExpression power = SymbolicExpression::number(1.0L);
+        SymbolicExpression power = SymbolicExpression::number(Scalar(1.0L));
 
         for (std::size_t j = 0; j < coeffs.size(); ++j) {
             val = (val + coeffs[j] * power).simplify();
@@ -196,7 +196,7 @@ std::vector<SymbolicExpression> RischAlgorithm::find_rational_roots(
 
             SymbolicExpression val = SymbolicExpression::number(0.0L);
             SymbolicExpression x_val = SymbolicExpression::number(rational);
-            SymbolicExpression power = SymbolicExpression::number(1.0L);
+            SymbolicExpression power = SymbolicExpression::number(Scalar(1.0L));
 
             for (std::size_t j = 0; j < coeffs.size(); ++j) {
                 val = (val + coeffs[j] * power).simplify();
@@ -222,7 +222,7 @@ std::vector<SymbolicExpression> RischAlgorithm::find_numeric_roots_newton(
     if (deg <= 0) return roots;
 
     auto eval_poly = [&coeffs](Scalar x) -> Scalar {
-        Scalar result = 0.0L;
+        Scalar result = Scalar(0.0L);
         Scalar power = 1.0L;
         for (Scalar c : coeffs) {
             result += c * power;
@@ -232,7 +232,7 @@ std::vector<SymbolicExpression> RischAlgorithm::find_numeric_roots_newton(
     };
 
     auto eval_deriv = [&coeffs, deg](Scalar x) -> Scalar {
-        Scalar result = 0.0L;
+        Scalar result = Scalar(0.0L);
         Scalar power = 1.0L;
         for (int i = 1; i <= deg; ++i) {
             result += i * coeffs[i] * power;
@@ -257,7 +257,7 @@ std::vector<SymbolicExpression> RischAlgorithm::find_numeric_roots_newton(
                 if (mymath::abs(eval_poly(next_x)) < 1e-9) {
                     bool already_found = false;
                     for (const auto& r : roots) {
-                        Scalar r_val = 0.0L;
+                        Scalar r_val = Scalar(0.0L);
                         if (r.is_number(&r_val) && mymath::abs(r_val - next_x) < 1e-6) {
                             already_found = true;
                             break;

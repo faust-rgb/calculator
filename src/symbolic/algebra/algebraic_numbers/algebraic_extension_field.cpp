@@ -38,7 +38,7 @@ AlgebraicExtensionField::Element AlgebraicExtensionField::zero() const {
 }
 
 AlgebraicExtensionField::Element AlgebraicExtensionField::one() const {
-    return Element::constant(SymbolicExpression::number(1.0L), t_var_, degree_);
+    return Element::constant(SymbolicExpression::number(Scalar(1.0L)), t_var_, degree_);
 }
 
 AlgebraicExtensionField::Element AlgebraicExtensionField::from_polynomial(
@@ -424,7 +424,7 @@ SymbolicPolynomial AlgebraicExtensionField::resultant_sum(
 
     // 计算行列式 (简化实现)
     // 实际实现需要符号行列式计算
-    SymbolicExpression det = SymbolicExpression::number(1.0L);
+    SymbolicExpression det = SymbolicExpression::number(Scalar(1.0L));
 
     // 返回结果多项式 (简化)
     std::vector<SymbolicExpression> result_coeffs(deg_alpha * deg_beta + 1, SymbolicExpression::number(0.0L));
@@ -460,7 +460,7 @@ SymbolicPolynomial AlgebraicExtensionField::resultant_product(
 
     // 类似 resultant_sum 的处理
     std::vector<SymbolicExpression> result_coeffs(deg_alpha * deg_beta + 1, SymbolicExpression::number(0.0L));
-    result_coeffs[deg_alpha * deg_beta] = SymbolicExpression::number(1.0L);
+    result_coeffs[deg_alpha * deg_beta] = SymbolicExpression::number(Scalar(1.0L));
 
     return SymbolicPolynomial(result_coeffs, z_var);
 }
@@ -763,7 +763,7 @@ SymbolicExpression AlgebraicExtensionField::compute_resultant(
     // 计算行列式 (简化实现)
     // 实际需要完整的符号行列式计算
 
-    SymbolicExpression det = SymbolicExpression::number(1.0L);
+    SymbolicExpression det = SymbolicExpression::number(Scalar(1.0L));
     for (int i = 0; i < n + m; ++i) {
         det = (det * matrix[i][i]).simplify();
     }

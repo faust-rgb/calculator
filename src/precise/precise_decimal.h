@@ -23,7 +23,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
-#include "core/common/scalar_type.h"
+#include "math/types/float128.h"
 
 /**
  * @struct PrecisionContext
@@ -85,16 +85,16 @@ struct PreciseDecimal {
     explicit PreciseDecimal(int value) : PreciseDecimal(static_cast<long long>(value)) {}
 
     /**
-     * @brief 从 Scalar 浮点数构造
-     * @param value 浮点数值
-     */
-    explicit PreciseDecimal(mymath::Scalar value);
-
-    /**
      * @brief 从 long double 浮点数构造（可能有精度损失）
      * @param value 浮点数值
      */
     explicit PreciseDecimal(long double value);
+
+    /**
+     * @brief 从 double 浮点数构造（可能有精度损失）
+     * @param value 浮点数值
+     */
+    explicit PreciseDecimal(double value) : PreciseDecimal(static_cast<long double>(value)) {}
 
     /**
      * @brief 从字符串构造

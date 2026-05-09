@@ -32,7 +32,7 @@ namespace {
  * @brief 线性因子及其重数
  */
 struct LinearFactorMultiplicity {
-    Scalar root = 0.0L;
+    Scalar root = Scalar(0.0L);
     int multiplicity = 0;
 };
 
@@ -235,7 +235,7 @@ bool extract_general_rational_factorization(
                     for (Scalar c_sign : {1.0L, -1.0L}) {
                         Scalar trial_c = c * c_sign;
                         // 估算 b：通过一次项或最高次项次一项
-                        Scalar b = 0.0L;
+                        Scalar b = Scalar(0.0L);
                         if (degree > 2) {
                             // (ax^2 + bx + c)^m = (ax^2)^m + m(ax^2)^{m-1}(bx) + ...
                             // coeff[deg-1] = m * a^{m-1} * b
@@ -334,7 +334,7 @@ struct RationalPartialFractionTerm {
     };
 
     Kind kind = Kind::kLinear;
-    Scalar root = 0.0L;
+    Scalar root = Scalar(0.0L);
     std::vector<Scalar> quadratic;
     int power = 0;
     int numerator_degree = 0;
@@ -629,7 +629,7 @@ bool try_integrate_repeated_unit_quadratic(const std::vector<Scalar>& numerator,
 
     const SymbolicExpression x = SymbolicExpression::variable(variable_name);
     const SymbolicExpression one_plus_x_squared =
-        make_add(SymbolicExpression::number(1.0L),
+        make_add(SymbolicExpression::number(Scalar(1.0L)),
                  make_power(x, SymbolicExpression::number(2.0)))
             .simplify();
     *integrated =
@@ -717,14 +717,14 @@ bool primitive_for_outer_function(const std::string& function_name,
     }
     if (function_name == "asin") {
         *primitive = make_add(make_multiply(argument, make_function("asin", argument)),
-                              make_function("sqrt", make_subtract(SymbolicExpression::number(1.0L),
+                              make_function("sqrt", make_subtract(SymbolicExpression::number(Scalar(1.0L)),
                                                                 make_power(argument, SymbolicExpression::number(2.0)))))
                         .simplify();
         return true;
     }
     if (function_name == "acos") {
         *primitive = make_subtract(make_multiply(argument, make_function("acos", argument)),
-                                   make_function("sqrt", make_subtract(SymbolicExpression::number(1.0L),
+                                   make_function("sqrt", make_subtract(SymbolicExpression::number(Scalar(1.0L)),
                                                                      make_power(argument, SymbolicExpression::number(2.0)))))
                         .simplify();
         return true;
@@ -732,7 +732,7 @@ bool primitive_for_outer_function(const std::string& function_name,
     if (function_name == "atan") {
         *primitive = make_subtract(make_multiply(argument, make_function("atan", argument)),
                                    make_multiply(SymbolicExpression::number(0.5),
-                                               make_function("ln", make_add(SymbolicExpression::number(1.0L),
+                                               make_function("ln", make_add(SymbolicExpression::number(Scalar(1.0L)),
                                                                           make_power(argument, SymbolicExpression::number(2.0))))))
                         .simplify();
         return true;
@@ -771,7 +771,7 @@ bool try_integrate_substitution_product(const SymbolicExpression& derivative_fac
         argument.derivative(variable_name).simplify();
     Scalar scale = 1.0L;
     if (!same_simplified_expression(derivative_factor, expected_derivative)) {
-        Scalar constant = 0.0L;
+        Scalar constant = Scalar(0.0L);
         SymbolicExpression rest;
         if (decompose_constant_times_expression(expected_derivative,
                                                 variable_name,
@@ -819,8 +819,8 @@ bool try_integrate_trig_power_identity(const SymbolicExpression& base,
     }
 
     const SymbolicExpression argument(base.node_->left);
-    Scalar a = 0.0L;
-    Scalar b = 0.0L;
+    Scalar a = Scalar(0.0L);
+    Scalar b = Scalar(0.0L);
     if (!decompose_linear(argument, variable_name, &a, &b) ||
         mymath::is_near_zero(a, kFormatEps)) {
         return false;
@@ -978,7 +978,7 @@ bool try_integrate_by_parts(const SymbolicExpression& left,
     const SymbolicExpression v_du = make_multiply(v, du).simplify();
 
     // 检查 v_du 是否是原始表达式的常数倍 (I = uv - k*I => I = uv/(1+k))
-    Scalar k = 0.0L;
+    Scalar k = Scalar(0.0L);
     SymbolicExpression remainder;
     if (decompose_constant_times_expression(v_du, variable_name, &k, &remainder) &&
         node_structural_key(remainder.node_) == original_key) {
@@ -1027,7 +1027,7 @@ bool try_integrate_by_parts(const SymbolicExpression& left,
                 SymbolicExpression v2_du2 = make_multiply(v2, du2).simplify();
                 
                 // 检查 v2_du2 是否回到 I
-                Scalar k2 = 0.0L;
+                Scalar k2 = Scalar(0.0L);
                 SymbolicExpression remainder2;
                 if (decompose_constant_times_expression(v2_du2, variable_name, &k2, &remainder2) &&
                     node_structural_key(remainder2.node_) == original_key) {
@@ -1071,8 +1071,8 @@ bool try_integrate_trig_product_identity(const SymbolicExpression& left,
     }
 
     const SymbolicExpression argument(left.node_->left);
-    Scalar a = 0.0L;
-    Scalar b = 0.0L;
+    Scalar a = Scalar(0.0L);
+    Scalar b = Scalar(0.0L);
     if (!decompose_linear(argument, variable_name, &a, &b) ||
         mymath::is_near_zero(a, kFormatEps)) {
         return false;
@@ -1107,8 +1107,8 @@ bool try_integrate_sec_csc_power_product(const SymbolicExpression& left,
         same_simplified_expression(SymbolicExpression(left.node_->left),
                                    SymbolicExpression(right.node_->left))) {
         const SymbolicExpression argument(left.node_->left);
-        Scalar a = 0.0L;
-        Scalar b = 0.0L;
+        Scalar a = Scalar(0.0L);
+        Scalar b = Scalar(0.0L);
         if (decompose_linear(argument, variable_name, &a, &b) &&
             !mymath::is_near_zero(a, kFormatEps)) {
             if ((left.node_->text == "sec" && right.node_->text == "tan") ||
@@ -1146,7 +1146,7 @@ bool try_integrate_sec_csc_power_product(const SymbolicExpression& left,
 
     const SymbolicExpression base(power_factor->node_->left);
     const SymbolicExpression exponent(power_factor->node_->right);
-    Scalar exponent_value = 0.0L;
+    Scalar exponent_value = Scalar(0.0L);
     if (base.node_->type != NodeType::kFunction ||
         !exponent.is_number(&exponent_value) ||
         !mymath::is_near_zero(exponent_value - 2.0, kFormatEps) ||
@@ -1156,8 +1156,8 @@ bool try_integrate_sec_csc_power_product(const SymbolicExpression& left,
     }
 
     const SymbolicExpression argument(base.node_->left);
-    Scalar a = 0.0L;
-    Scalar b = 0.0L;
+    Scalar a = Scalar(0.0L);
+    Scalar b = Scalar(0.0L);
     if (!decompose_linear(argument, variable_name, &a, &b) ||
         mymath::is_near_zero(a, kFormatEps)) {
         return false;
@@ -1409,7 +1409,7 @@ bool collect_symbolic_repeated_linear_and_linear_factors(
 
     auto try_order = [&](const SymbolicExpression& repeated_factor,
                          const SymbolicExpression& simple_factor) {
-        Scalar exponent_value = 0.0L;
+        Scalar exponent_value = Scalar(0.0L);
         if (repeated_factor.node_->type != NodeType::kPower ||
             !SymbolicExpression(repeated_factor.node_->right).is_number(&exponent_value) ||
             !mymath::is_near_zero(exponent_value - 2.0, kFormatEps)) {
@@ -1449,7 +1449,7 @@ bool collect_symbolic_repeated_linear_and_pure_quadratic_factors(
 
     auto try_order = [&](const SymbolicExpression& repeated_factor,
                          const SymbolicExpression& quadratic_factor) {
-        Scalar exponent_value = 0.0L;
+        Scalar exponent_value = Scalar(0.0L);
         if (repeated_factor.node_->type != NodeType::kPower ||
             !SymbolicExpression(repeated_factor.node_->right).is_number(&exponent_value) ||
             !mymath::is_near_zero(exponent_value - 2.0, kFormatEps)) {
@@ -1474,7 +1474,7 @@ bool collect_symbolic_repeated_pure_quadratic_factor(
     const std::string& variable_name,
     SymbolicExpression* constant_term) {
     const SymbolicExpression simplified = denominator.simplify();
-    Scalar exponent_value = 0.0L;
+    Scalar exponent_value = Scalar(0.0L);
     return simplified.node_->type == NodeType::kPower &&
            SymbolicExpression(simplified.node_->right).is_number(&exponent_value) &&
            mymath::is_near_zero(exponent_value - 2.0, kFormatEps) &&
@@ -1650,7 +1650,7 @@ bool try_integrate_symbolic_repeated_linear_and_linear(
                 make_multiply(make_divide(A, a1),
                               make_function("ln", make_function("abs", repeated_linear))),
                 make_multiply(make_negate(make_divide(B, a1)),
-                              make_divide(SymbolicExpression::number(1.0L), repeated_linear))),
+                              make_divide(SymbolicExpression::number(Scalar(1.0L)), repeated_linear))),
             make_multiply(make_divide(C, a2),
                           make_function("ln", make_function("abs", simple_linear))))
             .simplify();
@@ -1918,7 +1918,7 @@ bool try_integrate_symbolic_repeated_linear_times_pure_quadratic(
                     make_multiply(make_divide(A, a),
                                   make_function("ln", make_function("abs", linear))),
                     make_multiply(make_negate(make_divide(B, a)),
-                                  make_divide(SymbolicExpression::number(1.0L), linear))),
+                                  make_divide(SymbolicExpression::number(Scalar(1.0L)), linear))),
                 make_multiply(make_divide(C, SymbolicExpression::number(2.0)),
                               make_function("ln", make_function("abs", quadratic)))),
             make_multiply(D, integrate_inverse_symbolic_pure_quadratic(c, variable_name)))
@@ -1976,7 +1976,7 @@ bool try_integrate_symbolic_repeated_pure_quadratic(
                     make_multiply(
                         c1,
                         make_negate(
-                            make_divide(SymbolicExpression::number(1.0L),
+                            make_divide(SymbolicExpression::number(Scalar(1.0L)),
                                         make_multiply(SymbolicExpression::number(2.0),
                                                       quadratic)))))
                     .simplify();
@@ -1989,7 +1989,7 @@ bool try_integrate_symbolic_repeated_pure_quadratic(
             make_multiply(
                 c1,
                 make_negate(
-                    make_divide(SymbolicExpression::number(1.0L),
+                    make_divide(SymbolicExpression::number(Scalar(1.0L)),
                                 make_multiply(SymbolicExpression::number(2.0),
                                               quadratic))))
                 .simplify();
@@ -2140,14 +2140,14 @@ bool try_integrate_weierstrass_substitution(const SymbolicExpression& expression
     std::vector<SymbolicExpression> terms;
     collect_additive_expressions(denominator, &terms);
 
-    Scalar A = 0.0L;
+    Scalar A = Scalar(0.0L);
     SymbolicExpression B_expr = SymbolicExpression::number(0.0L);
     SymbolicExpression C_expr = SymbolicExpression::number(0.0L);
     SymbolicExpression argument;
     bool found_argument = false;
 
     for (const auto& term : terms) {
-        Scalar val = 0.0L;
+        Scalar val = Scalar(0.0L);
         if (term.is_number(&val)) {
             A += val;
         } else if (term.node_->type == NodeType::kFunction && term.node_->text == "sin") {
@@ -2157,7 +2157,7 @@ bool try_integrate_weierstrass_substitution(const SymbolicExpression& expression
             } else if (!expressions_match(argument, SymbolicExpression(term.node_->left))) {
                 return false;
             }
-            B_expr = make_add(B_expr, SymbolicExpression::number(1.0L)).simplify();
+            B_expr = make_add(B_expr, SymbolicExpression::number(Scalar(1.0L))).simplify();
         } else if (term.node_->type == NodeType::kFunction && term.node_->text == "cos") {
             if (!found_argument) {
                 argument = SymbolicExpression(term.node_->left);
@@ -2165,10 +2165,10 @@ bool try_integrate_weierstrass_substitution(const SymbolicExpression& expression
             } else if (!expressions_match(argument, SymbolicExpression(term.node_->left))) {
                 return false;
             }
-            C_expr = make_add(C_expr, SymbolicExpression::number(1.0L)).simplify();
+            C_expr = make_add(C_expr, SymbolicExpression::number(Scalar(1.0L))).simplify();
         } else if (term.node_->type == NodeType::kMultiply) {
             // 处理 B * sin(x) 或 C * cos(x)
-            Scalar coeff = 0.0L;
+            Scalar coeff = Scalar(0.0L);
             SymbolicExpression rest;
             if (decompose_constant_times_expression(term, variable_name, &coeff, &rest)) {
                 if (rest.node_->type == NodeType::kFunction && rest.node_->text == "sin") {
@@ -2200,7 +2200,7 @@ bool try_integrate_weierstrass_substitution(const SymbolicExpression& expression
 
     if (!found_argument) return false;
 
-    Scalar a = 0.0L, b = 0.0L;
+    Scalar a = Scalar(0.0L), b = 0.0L;
     if (!decompose_linear(argument, variable_name, &a, &b) || !mymath::is_near_zero(b, kFormatEps)) {
         // 目前仅支持 sin(ax), cos(ax)
         return false;
@@ -2213,7 +2213,7 @@ bool try_integrate_weierstrass_substitution(const SymbolicExpression& expression
     
     // 积分变为: integral( (2/a) / (A*(1+t^2) + B*(2t) + C*(1-t^2)), t )
     // 分母多项式: (A-C)t^2 + 2Bt + (A+C)
-    Scalar b_val = 0.0L, c_val = 0.0L;
+    Scalar b_val = Scalar(0.0L), c_val = 0.0L;
     if (!B_expr.is_number(&b_val) || !C_expr.is_number(&c_val)) return false;
 
     std::vector<Scalar> poly_numerator = { 2.0 / a };

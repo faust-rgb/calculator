@@ -61,7 +61,7 @@ using Scalar = mymath::Scalar;
  * - 根据 AssumptionEngine 设为正数的变量
  */
 bool is_known_positive_expression(const SymbolicExpression& expression) {
-    Scalar numeric = 0.0L;
+    Scalar numeric = Scalar(0.0L);
     if (expression.is_number(&numeric)) {
         return numeric > 0.0L;
     }
@@ -81,7 +81,7 @@ bool is_known_positive_expression(const SymbolicExpression& expression) {
     }
     if (node->type == NodeType::kPower) {
         // x^2 is positive if x is real and non-zero
-        Scalar exponent = 0.0L;
+        Scalar exponent = Scalar(0.0L);
         if (SymbolicExpression(node->right).is_number(&exponent)) {
             if (static_cast<long long>(exponent) % 2 == 0) {
                 // Check if base is real
@@ -108,7 +108,7 @@ bool is_known_positive_expression(const SymbolicExpression& expression) {
  * - 已知正数乘以 -1
  */
 bool is_known_negative_expression(const SymbolicExpression& expression) {
-    Scalar numeric = 0.0L;
+    Scalar numeric = Scalar(0.0L);
     if (expression.is_number(&numeric)) {
         return numeric < 0.0L;
     }
@@ -126,11 +126,11 @@ bool is_known_negative_expression(const SymbolicExpression& expression) {
     if (node->type == NodeType::kMultiply) {
         SymbolicExpression left(node->left);
         SymbolicExpression right(node->right);
-        Scalar left_val = 0.0L;
+        Scalar left_val = Scalar(0.0L);
         if (left.is_number(&left_val) && left_val < 0.0L && is_known_positive_expression(right)) {
             return true;
         }
-        Scalar right_val = 0.0L;
+        Scalar right_val = Scalar(0.0L);
         if (right.is_number(&right_val) && right_val < 0.0L && is_known_positive_expression(left)) {
             return true;
         }
@@ -164,7 +164,7 @@ bool polynomial_expression(const SymbolicExpression& expression,
 bool is_linear_function_argument(const SymbolicExpression& argument,
                                  const std::string& variable_name,
                                  Scalar* a) {
-    Scalar b = 0.0L;
+    Scalar b = Scalar(0.0L);
     return decompose_linear(argument, variable_name, a, &b) &&
            !mymath::is_near_zero(*a, kFormatEps);
 }
@@ -194,12 +194,12 @@ bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
                                          const SymbolicExpression& argument,
                                          const std::string& variable_name,
                                          SymbolicExpression* integrated) {
-    Scalar a = 0.0L;
+    Scalar a = Scalar(0.0L);
     if (!is_linear_function_argument(argument, variable_name, &a)) {
         return false;
     }
 
-    Scalar constant = 0.0L;
+    Scalar constant = Scalar(0.0L);
     if (polynomial.is_number(&constant)) {
         if (function_name == "exp") {
             *integrated = make_multiply(
@@ -269,7 +269,7 @@ bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
                             make_multiply(
                                 SymbolicExpression::number(0.5),
                                 make_multiply(
-                                    make_add(x_squared, SymbolicExpression::number(1.0L)),
+                                    make_add(x_squared, SymbolicExpression::number(Scalar(1.0L))),
                                     make_function("atan", x))),
                             make_multiply(SymbolicExpression::number(0.5), x)))
                         .simplify();
@@ -342,6 +342,7 @@ bool integrate_polynomial_times_function(const SymbolicExpression& polynomial,
  *
  * 将表达式分解为底数和数值指数：
  * - x^3 → base=x, exponent=3
+ * - 1/x → base=x, exponent=-1
  * - x → base=x, exponent=1
  */
 bool decompose_power_factor(const SymbolicExpression& expression,
@@ -351,6 +352,17 @@ bool decompose_power_factor(const SymbolicExpression& expression,
         SymbolicExpression(expression.node_->right).is_number(exponent)) {
         *base = SymbolicExpression(expression.node_->left);
         return true;
+    }
+
+    // 处理除法：1/x → base=x, exponent=-1
+    if (expression.node_->type == NodeType::kDivide) {
+        Scalar numerator = Scalar(0);
+        if (SymbolicExpression(expression.node_->left).is_number(&numerator) &&
+            mymath::is_near_zero(numerator - Scalar(1), Scalar(1e-15))) {
+            *base = SymbolicExpression(expression.node_->right);
+            *exponent = -1.0L;
+            return true;
+        }
     }
 
     *base = expression;
@@ -381,7 +393,7 @@ bool decompose_power_factor_expression(const SymbolicExpression& expression,
     }
 
     *base = expression;
-    *exponent = SymbolicExpression::number(1.0L);
+    *exponent = SymbolicExpression::number(Scalar(1.0L));
     return true;
 }
 
@@ -400,16 +412,16 @@ bool decompose_power_factor_expression(const SymbolicExpression& expression,
  */
 SymbolicExpression rebuild_power_difference(const SymbolicExpression& base, Scalar exponent) {
     if (mymath::is_near_zero(exponent, kFormatEps)) {
-        return SymbolicExpression::number(1.0L);
+        return SymbolicExpression::number(Scalar(1.0L));
     }
     if (mymath::is_near_zero(exponent - 1.0L, kFormatEps)) {
         return base;
     }
     if (mymath::is_near_zero(exponent + 1.0L, kFormatEps)) {
-        return make_divide(SymbolicExpression::number(1.0L), base).simplify();
+        return make_divide(SymbolicExpression::number(Scalar(1.0L)), base).simplify();
     }
     if (exponent < 0.0L) {
-        return make_divide(SymbolicExpression::number(1.0L),
+        return make_divide(SymbolicExpression::number(Scalar(1.0L)),
                            make_power(base, SymbolicExpression::number(-exponent)))
             .simplify();
     }
@@ -427,7 +439,7 @@ SymbolicExpression rebuild_power_expression(const SymbolicExpression& base,
     if (base.node_->type == NodeType::kVariable && base.node_->text == "e") {
         return make_function("exp", exponent);
     }
-    Scalar numeric_exponent = 0.0L;
+    Scalar numeric_exponent = Scalar(0.0L);
     if (exponent.is_number(&numeric_exponent)) {
         return rebuild_power_difference(base, numeric_exponent);
     }
@@ -591,7 +603,7 @@ bool try_canonical_factor_quotient(const SymbolicExpression& numerator,
     bool changed = numerator_factors.size() + denominator_factors.size() != grouped.size();
     for (const auto& item : grouped) {
         const SymbolicExpression exponent = item.second.exponent.simplify();
-        Scalar numeric_exponent = 0.0L;
+        Scalar numeric_exponent = Scalar(0.0L);
         if (exponent.is_number(&numeric_exponent)) {
             if (mymath::is_near_zero(numeric_exponent, kFormatEps)) {
                 changed = true;
@@ -751,7 +763,7 @@ bool is_squared_function(const SymbolicExpression& expression,
         return false;
     }
 
-    Scalar exponent = 0.0L;
+    Scalar exponent = Scalar(0.0L);
     if (!SymbolicExpression(expression.node_->right).is_number(&exponent) ||
         !mymath::is_near_zero(exponent - 2.0, kFormatEps)) {
         return false;
@@ -911,7 +923,7 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
         return ok;
     };
 
-    Scalar numeric = 0.0L;
+    Scalar numeric = Scalar(0.0L);
     if (expression.is_number(&numeric)) {
         *coefficients = {numeric};
         return finish(true);
@@ -984,7 +996,7 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
                                                          &left)) {
                 return finish(false);
             }
-            Scalar divisor = 0.0L;
+            Scalar divisor = Scalar(0.0L);
             if (!SymbolicExpression(node->right).is_number(&divisor) ||
                 mymath::is_near_zero(divisor, kFormatEps)) {
                 return finish(false);
@@ -997,7 +1009,7 @@ bool polynomial_coefficients_from_simplified(const SymbolicExpression& expressio
             return finish(true);
         }
         case NodeType::kPower: {
-            Scalar exponent = 0.0L;
+            Scalar exponent = Scalar(0.0L);
             if (!SymbolicExpression(node->right).is_number(&exponent) ||
                 !mymath::is_integer(exponent, 1e-10) || exponent < 0.0L) {
                 return finish(false);
@@ -1221,7 +1233,7 @@ bool symbolic_laurent_coefficients(
 
     // 基础情况：变量本身
     if (simplified.is_variable_named(variable_name)) {
-        (*coefficients)[1] = SymbolicExpression::number(1.0L);
+        (*coefficients)[1] = SymbolicExpression::number(Scalar(1.0L));
         return true;
     }
 
@@ -1322,7 +1334,7 @@ bool symbolic_laurent_coefficients(
         if (den.node_->type == NodeType::kPower) {
             SymbolicExpression base(den.node_->left);
             SymbolicExpression exp(den.node_->right);
-            Scalar exp_val = 0.0L;
+            Scalar exp_val = Scalar(0.0L);
             if (base.is_variable_named(variable_name) && exp.is_number(&exp_val)) {
                 int n = static_cast<int>(mymath::round(exp_val));
                 if (n > 0 && mymath::abs(exp_val - n) < 1e-9) {
@@ -1376,7 +1388,7 @@ bool symbolic_laurent_coefficients(
         if (symbolic_laurent_coefficients(num, variable_name, &num_coeffs)) {
             if (num_coeffs.empty()) return false;
             // 检查分母是否为常数
-            Scalar den_val = 0.0L;
+            Scalar den_val = Scalar(0.0L);
             if (den.is_number(&den_val) && mymath::abs(den_val) > 1e-12) {
                 for (const auto& [power, coeff] : num_coeffs) {
                     (*coefficients)[power] = (coeff / den).simplify();
@@ -1393,13 +1405,13 @@ bool symbolic_laurent_coefficients(
         SymbolicExpression base(node->left);
         SymbolicExpression exp(node->right);
 
-        Scalar exp_val = 0.0L;
+        Scalar exp_val = Scalar(0.0L);
         if (exp.is_number(&exp_val)) {
             int n = static_cast<int>(mymath::round(exp_val));
 
             // 负指数：t^(-n) = 1/t^n
             if (n < 0 && base.is_variable_named(variable_name)) {
-                (*coefficients)[n] = SymbolicExpression::number(1.0L);
+                (*coefficients)[n] = SymbolicExpression::number(Scalar(1.0L));
                 return true;
             }
 
@@ -1407,7 +1419,7 @@ bool symbolic_laurent_coefficients(
             if (n >= 0 && mymath::abs(exp_val - n) < 1e-9) {
                 // 特殊情况：base 是变量
                 if (base.is_variable_named(variable_name)) {
-                    (*coefficients)[n] = SymbolicExpression::number(1.0L);
+                    (*coefficients)[n] = SymbolicExpression::number(Scalar(1.0L));
                     return true;
                 }
 
@@ -1415,7 +1427,7 @@ bool symbolic_laurent_coefficients(
                 std::map<int, SymbolicExpression> base_coeffs;
                 if (symbolic_laurent_coefficients(base, variable_name, &base_coeffs)) {
                     // 初始化为 1
-                    *coefficients = {{0, SymbolicExpression::number(1.0L)}};
+                    *coefficients = {{0, SymbolicExpression::number(Scalar(1.0L))}};
 
                     // 幂运算通过重复乘法
                     for (int p = 0; p < n; ++p) {
@@ -1469,7 +1481,7 @@ bool symbolic_polynomial_coefficients_from_simplified(
     
     // 递归基础情况
     if (expression.is_variable_named(variable_name)) {
-        *coefficients = {SymbolicExpression::number(0.0L), SymbolicExpression::number(1.0L)};
+        *coefficients = {SymbolicExpression::number(0.0L), SymbolicExpression::number(Scalar(1.0L))};
         return true;
     }
     if (expression.is_constant(variable_name)) {
@@ -1542,12 +1554,12 @@ bool symbolic_polynomial_coefficients_from_simplified(
     }
 
     if (node->type == NodeType::kPower) {
-        Scalar exponent = 0.0L;
+        Scalar exponent = Scalar(0.0L);
         if (SymbolicExpression(node->right).is_number(&exponent) &&
             exponent >= 0.0L && mymath::is_integer(exponent, 1e-10)) {
             const int exp_int = static_cast<int>(exponent + 0.5);
             if (exp_int == 0) {
-                *coefficients = {SymbolicExpression::number(1.0L)};
+                *coefficients = {SymbolicExpression::number(Scalar(1.0L))};
                 return true;
             }
             std::vector<SymbolicExpression> base_coeffs;
@@ -1555,7 +1567,7 @@ bool symbolic_polynomial_coefficients_from_simplified(
                                                                 variable_name,
                                                                 &base_coeffs)) {
                 // 实现通用的多项式幂运算
-                std::vector<SymbolicExpression> res = {SymbolicExpression::number(1.0L)};
+                std::vector<SymbolicExpression> res = {SymbolicExpression::number(Scalar(1.0L))};
                 for (int p = 0; p < exp_int; ++p) {
                     std::vector<SymbolicExpression> next_res(res.size() + base_coeffs.size() - 1, SymbolicExpression::number(0.0L));
                     for (std::size_t i = 0; i < res.size(); ++i) {

@@ -11,6 +11,7 @@
 
 #include "core/common/scalar_type.h"
 #include "floating_point.h"
+#include "scalar_traits.h"
 
 namespace mymath {
 
@@ -28,12 +29,12 @@ namespace mymath {
  */
 long double sqrt(long double x);
 
-// Scalar overload
+// Scalar overload - uses dispatch from scalar_traits.h
 inline Scalar sqrt(Scalar x) {
     if (x < Scalar(0.0L)) {
         throw std::domain_error("sqrt is only defined for non-negative numbers");
     }
-    return precise128::sqrt(x);
+    return scalar_sqrt(x);
 }
 
 // ============================================================================
@@ -49,8 +50,10 @@ inline Scalar sqrt(Scalar x) {
  */
 long double cbrt(long double x);
 
-// Scalar overload
-inline Scalar cbrt(Scalar x) { return precise128::cbrt(x); }
+// Scalar overload - uses dispatch from scalar_traits.h
+inline Scalar cbrt(Scalar x) {
+    return scalar_cbrt(x);
+}
 
 // ============================================================================
 // General Root Functions
@@ -90,8 +93,10 @@ Scalar root(Scalar value, Scalar degree);
  */
 long double pow(long double base, long double exponent);
 
-// Scalar overload
-Scalar pow(Scalar base, Scalar exponent);
+// Scalar overload - uses dispatch from scalar_traits.h
+inline Scalar pow(Scalar base, Scalar exponent) {
+    return scalar_pow(base, exponent);
+}
 
 // ============================================================================
 // Euclidean Norm
@@ -107,8 +112,10 @@ Scalar pow(Scalar base, Scalar exponent);
  */
 long double hypot(long double x, long double y);
 
-// Scalar overload
-inline Scalar hypot(Scalar x, Scalar y) { return precise128::hypot(x, y); }
+// Scalar overload - uses dispatch from scalar_traits.h
+inline Scalar hypot(Scalar x, Scalar y) {
+    return scalar_hypot(x, y);
+}
 
 }  // namespace mymath
 

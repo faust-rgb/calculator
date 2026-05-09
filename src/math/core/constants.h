@@ -11,6 +11,7 @@
 
 #include <limits>
 #include "core/common/scalar_type.h"
+#include "scalar_traits.h"
 
 namespace mymath {
 
@@ -49,7 +50,7 @@ template <>
 inline long double pi<long double>() { return kPi; }
 
 template <>
-inline Scalar pi<Scalar>() { return precise128::pi(); }
+inline Scalar pi<Scalar>() { return scalar_pi(); }
 
 /**
  * @brief Get e value (automatically selects precision based on type)
@@ -61,7 +62,7 @@ template <>
 inline long double e<long double>() { return kE; }
 
 template <>
-inline Scalar e<Scalar>() { return precise128::e(); }
+inline Scalar e<Scalar>() { return scalar_e(); }
 
 /**
  * @brief Get √π value
@@ -73,7 +74,7 @@ template <>
 inline long double sqrt_pi<long double>() { return static_cast<long double>(precise128::sqrt_pi()); }
 
 template <>
-inline Scalar sqrt_pi<Scalar>() { return precise128::sqrt_pi(); }
+inline Scalar sqrt_pi<Scalar>() { return scalar_sqrt_pi(); }
 
 }  // namespace constants
 

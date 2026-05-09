@@ -11,6 +11,7 @@
 
 #include "core/common/scalar_type.h"
 #include "math/core/floating_point.h"
+#include "math/core/scalar_traits.h"
 
 namespace mymath {
 
@@ -44,25 +45,19 @@ long double cos(long double x);
  */
 long double tan(long double x);
 
-// Scalar overloads
+// Scalar overloads - use dispatch from scalar_traits.h
 inline Scalar sin(Scalar x) {
-    Scalar result = precise128::sin(x);
-    // Clean up near-zero values to avoid floating-point errors
-    return precise128::abs(result) < kNearZeroThresholdScalar ? Scalar(0.0L) : result;
+    Scalar result = scalar_sin(x);
+    return scalar_abs(result) < scalar_near_zero_threshold() ? Scalar(0.0L) : result;
 }
 
 inline Scalar cos(Scalar x) {
-    Scalar result = precise128::cos(x);
-    // Clean up near-zero values to avoid floating-point errors
-    return precise128::abs(result) < kNearZeroThresholdScalar ? Scalar(0.0L) : result;
+    Scalar result = scalar_cos(x);
+    return scalar_abs(result) < scalar_near_zero_threshold() ? Scalar(0.0L) : result;
 }
 
 inline Scalar tan(Scalar x) {
-    const Scalar cosine = precise128::cos(x);
-    if (precise128::abs(cosine) < Scalar(1e-10L)) {
-        throw std::domain_error("tan is undefined when cos(x) is zero");
-    }
-    return precise128::sin(x) / cosine;
+    return scalar_tan(x);
 }
 
 // ============================================================================
@@ -108,23 +103,28 @@ long double atan(long double x);
  */
 long double atan2(long double y, long double x);
 
-// Scalar overloads
+// Scalar overloads - use dispatch from scalar_traits.h
 inline Scalar asin(Scalar x) {
     if (x < Scalar(-1.0L) || x > Scalar(1.0L)) {
         throw std::domain_error("asin is only defined for values in [-1, 1]");
     }
-    return precise128::asin(x);
+    return scalar_asin(x);
 }
 
 inline Scalar acos(Scalar x) {
     if (x < Scalar(-1.0L) || x > Scalar(1.0L)) {
         throw std::domain_error("acos is only defined for values in [-1, 1]");
     }
-    return precise128::acos(x);
+    return scalar_acos(x);
 }
 
-inline Scalar atan(Scalar x) { return precise128::atan(x); }
-inline Scalar atan2(Scalar y, Scalar x) { return precise128::atan2(y, x); }
+inline Scalar atan(Scalar x) {
+    return scalar_atan(x);
+}
+
+inline Scalar atan2(Scalar y, Scalar x) {
+    return scalar_atan2(y, x);
+}
 
 // ============================================================================
 // Secant, Cosecant, Cotangent
@@ -151,15 +151,17 @@ long double csc(long double x);
  */
 long double cot(long double x);
 
-// Scalar overloads
-inline Scalar sec(Scalar x) { return precise128::sec(x); }
-inline Scalar csc(Scalar x) { return precise128::csc(x); }
+// Scalar overloads - use dispatch from scalar_traits.h
+inline Scalar sec(Scalar x) {
+    return scalar_sec(x);
+}
+
+inline Scalar csc(Scalar x) {
+    return scalar_csc(x);
+}
+
 inline Scalar cot(Scalar x) {
-    const Scalar sine = precise128::sin(x);
-    if (precise128::abs(sine) < Scalar(1e-10L)) {
-        throw std::domain_error("cot is undefined when sin(x) is zero");
-    }
-    return precise128::cos(x) / sine;
+    return scalar_cot(x);
 }
 
 // ============================================================================
@@ -187,22 +189,18 @@ long double acsc(long double x);
  */
 long double acot(long double x);
 
-// Scalar overloads
+// Scalar overloads - use dispatch from scalar_traits.h
 inline Scalar asec(Scalar x) {
-    if (precise128::abs(x) < Scalar(1.0L)) {
-        throw std::domain_error("asec is only defined for |x| >= 1");
-    }
-    return precise128::asec(x);
+    return scalar_asec(x);
 }
 
 inline Scalar acsc(Scalar x) {
-    if (precise128::abs(x) < Scalar(1.0L)) {
-        throw std::domain_error("acsc is only defined for |x| >= 1");
-    }
-    return precise128::acsc(x);
+    return scalar_acsc(x);
 }
 
-inline Scalar acot(Scalar x) { return precise128::acot(x); }
+inline Scalar acot(Scalar x) {
+    return scalar_acot(x);
+}
 
 }  // namespace mymath
 

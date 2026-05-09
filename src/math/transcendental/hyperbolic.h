@@ -9,6 +9,7 @@
 #define MATH_TRANSCENDENTAL_HYPERBOLIC_H
 
 #include "core/common/scalar_type.h"
+#include "math/core/scalar_traits.h"
 
 namespace mymath {
 
@@ -37,10 +38,18 @@ long double cosh(long double x);
  */
 long double tanh(long double x);
 
-// Scalar overloads
-inline Scalar sinh(Scalar x) { return precise128::sinh(x); }
-inline Scalar cosh(Scalar x) { return precise128::cosh(x); }
-inline Scalar tanh(Scalar x) { return precise128::tanh(x); }
+// Scalar overloads - use dispatch from scalar_traits.h
+inline Scalar sinh(Scalar x) {
+    return scalar_sinh(x);
+}
+
+inline Scalar cosh(Scalar x) {
+    return scalar_cosh(x);
+}
+
+inline Scalar tanh(Scalar x) {
+    return scalar_tanh(x);
+}
 
 // ============================================================================
 // Inverse Hyperbolic Functions
@@ -67,19 +76,23 @@ long double acosh(long double x);
  */
 long double atanh(long double x);
 
-// Scalar overloads
-inline Scalar asinh(Scalar x) { return precise128::asinh(x); }
+// Scalar overloads - use dispatch from scalar_traits.h
+inline Scalar asinh(Scalar x) {
+    return scalar_asinh(x);
+}
+
 inline Scalar acosh(Scalar x) {
     if (x < Scalar(1.0L)) {
         throw std::domain_error("acosh is only defined for x >= 1");
     }
-    return precise128::acosh(x);
+    return scalar_acosh(x);
 }
+
 inline Scalar atanh(Scalar x) {
     if (x <= Scalar(-1.0L) || x >= Scalar(1.0L)) {
         throw std::domain_error("atanh is only defined for values in (-1, 1)");
     }
-    return precise128::atanh(x);
+    return scalar_atanh(x);
 }
 
 }  // namespace mymath

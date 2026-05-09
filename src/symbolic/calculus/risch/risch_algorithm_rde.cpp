@@ -21,9 +21,9 @@ std::vector<int> detect_possible_integer_ratios_impl(const SymbolicExpression& r
     std::vector<int> candidates;
 
     // 尝试数值检测
-    Scalar val = 0.0L;
+    Scalar val = Scalar(0.0L);
     if (ratio.is_number(&val)) {
-        int n = static_cast<int>(mymath::round(val));
+        int n = static_cast<int>(mymath::round(val).to_long_double());
         if (mymath::abs(val - n) < 1e-9) {
             candidates.push_back(n);
         }
@@ -40,11 +40,11 @@ std::vector<int> detect_possible_integer_ratios_impl(const SymbolicExpression& r
     if (ratio.node_->type == NodeType::kDivide) {
         SymbolicExpression num(ratio.node_->left);
         SymbolicExpression den(ratio.node_->right);
-        Scalar num_val = 0.0L, den_val = 0.0L;
+        Scalar num_val = Scalar(0), den_val = Scalar(0);
         if (num.is_number(&num_val) && den.is_number(&den_val) &&
             mymath::abs(den_val) > 1e-12) {
             Scalar quotient = num_val / den_val;
-            int n = static_cast<int>(mymath::round(quotient));
+            int n = static_cast<int>(mymath::round(quotient).to_long_double());
             if (mymath::abs(quotient - n) < 1e-9) {
                 candidates.push_back(n);
             }
@@ -63,14 +63,14 @@ std::vector<int> detect_possible_integer_ratios_impl(const SymbolicExpression& r
  */
 struct RationalValueForCancellation {
     bool is_valid = false;
-    Scalar numerator = 0.0L;
-    Scalar denominator = 1.0L;
+    Scalar numerator = Scalar(0.0L);
+    Scalar denominator = Scalar(1);
 
     std::vector<int> nearby_integers() const {
         std::vector<int> result;
         if (!is_valid) return result;
         Scalar val = numerator / denominator;
-        int n = static_cast<int>(mymath::round(val));
+        int n = static_cast<int>(mymath::round(val).to_long_double());
         result.push_back(n);
         if (mymath::abs(val - n) < 0.5) {
             result.push_back(n - 1);
@@ -83,11 +83,11 @@ struct RationalValueForCancellation {
 RationalValueForCancellation extract_rational_for_cancellation(const SymbolicExpression& expr) {
     RationalValueForCancellation result;
 
-    Scalar val = 0.0L;
+    Scalar val = Scalar(0.0L);
     if (expr.is_number(&val)) {
         result.is_valid = true;
         result.numerator = val;
-        result.denominator = 1.0L;
+        result.denominator = Scalar(1);
         return result;
     }
 
@@ -95,7 +95,7 @@ RationalValueForCancellation extract_rational_for_cancellation(const SymbolicExp
         SymbolicExpression num(expr.node_->left);
         SymbolicExpression den(expr.node_->right);
 
-        Scalar num_val = 0.0L, den_val = 0.0L;
+        Scalar num_val = Scalar(0), den_val = Scalar(0);
         if (num.is_number(&num_val) && den.is_number(&den_val) && mymath::abs(den_val) > 1e-12) {
             result.is_valid = true;
             result.numerator = num_val;
@@ -122,9 +122,9 @@ RationalValueForCancellation extract_rational_for_cancellation(const SymbolicExp
  * @brief Check if expression represents an integer
  */
 bool is_integer_expression(const SymbolicExpression& expr, int* value = nullptr) {
-    Scalar val = 0.0L;
+    Scalar val = Scalar(0.0L);
     if (expr.is_number(&val)) {
-        int n = static_cast<int>(mymath::round(val));
+        int n = static_cast<int>(mymath::round(val).to_long_double());
         if (mymath::abs(val - n) < 1e-9) {
             if (value) *value = n;
             return true;
@@ -258,14 +258,14 @@ CancellationResult detect_cancellation_enhanced(
     SymbolicExpression ratio = (make_negate(f_simplified) / u_prime_simplified).simplify();
 
     // Case 1: ratio is a numeric constant
-    Scalar n_val = 0.0L;
+    Scalar n_val = Scalar(0.0L);
     if (ratio.is_number(&n_val)) {
-        int n = static_cast<int>(mymath::round(n_val));
+        int n = static_cast<int>(mymath::round(n_val).to_long_double());
         if (mymath::abs(n_val - n) < 1e-9) {
             result.type = CancellationType::kConstantN;
             result.n_value = n;
-            result.n_expr = SymbolicExpression::number((n));
-            result.remainder = SymbolicExpression::number(0.0L);
+            result.n_expr = SymbolicExpression::number(Scalar(static_cast<long long>(n)));
+            result.remainder = SymbolicExpression::number(Scalar(0));
             result.candidates.push_back(n);
             return result;
         }
@@ -294,7 +294,7 @@ CancellationResult detect_cancellation_enhanced(
             den_is_const = field->is_constant(den);
         } else {
             // Without field, check if they are numbers
-            Scalar num_val = 0.0L, den_val = 0.0L;
+            Scalar num_val = Scalar(0), den_val = Scalar(0);
             num_is_const = num.is_number(&num_val);
             den_is_const = den.is_number(&den_val);
         }
@@ -303,12 +303,12 @@ CancellationResult detect_cancellation_enhanced(
             auto r = extract_rational_for_cancellation(ratio);
             if (r.is_valid) {
                 Scalar quotient = r.numerator / r.denominator;
-                int n = static_cast<int>(mymath::round(quotient));
+                int n = static_cast<int>(mymath::round(quotient).to_long_double());
                 if (mymath::abs(quotient - n) < 1e-9) {
                     result.type = CancellationType::kConstantN;
                     result.n_value = n;
                     result.n_expr = ratio;
-                    result.remainder = SymbolicExpression::number(0.0L);
+                    result.remainder = SymbolicExpression::number(Scalar(0));
                     result.candidates.push_back(n);
                     return result;
                 }
@@ -355,7 +355,7 @@ CancellationResult detect_cancellation_enhanced(
                     result.type = CancellationType::kPolynomialN;
                     result.n_expr = ratio;
                 }
-                result.remainder = SymbolicExpression::number(0.0L);
+                result.remainder = SymbolicExpression::number(Scalar(0));
                 return result;
             }
         }
@@ -446,7 +446,7 @@ SymbolicExpression construct_laurent_polynomial(
     const std::map<int, SymbolicExpression>& coeffs,
     const std::string& t_var) {
 
-    SymbolicExpression result = SymbolicExpression::number(0.0L);
+    SymbolicExpression result = SymbolicExpression::number(Scalar(0));
     SymbolicExpression t = SymbolicExpression::variable(t_var);
 
     for (const auto& [power, coeff] : coeffs) {
@@ -456,10 +456,10 @@ SymbolicExpression construct_laurent_polynomial(
         if (power == 0) {
             term = coeff;
         } else if (power > 0) {
-            term = (coeff * make_power(t, SymbolicExpression::number((power)))).simplify();
+            term = (coeff * make_power(t, SymbolicExpression::number(Scalar(static_cast<long long>(power))))).simplify();
         } else {
             // Negative power: t^(-n) = 1/t^n
-            term = (coeff / make_power(t, SymbolicExpression::number((-power)))).simplify();
+            term = (coeff / make_power(t, SymbolicExpression::number(Scalar(static_cast<long long>(-power))))).simplify();
         }
         result = (result + term).simplify();
     }
@@ -551,9 +551,9 @@ RDEBounds RischAlgorithm::compute_rde_bounds_complete(
             SymbolicExpression ratio = (make_negate(f0) / u_prime_over_u).simplify();
 
             // 尝试检测整数比值
-            Scalar n_val = 0.0L;
+            Scalar n_val = Scalar(0.0L);
             if (ratio.is_number(&n_val)) {
-                int n = static_cast<int>(mymath::round(n_val));
+                int n = static_cast<int>(mymath::round(n_val).to_long_double());
                 if (mymath::abs(n_val - n) < 1e-9 && n > 0) {
                     // 存在消去: f = -n * u'/u
                     // 但对于对数扩展，这通常不增加度数界
@@ -593,10 +593,10 @@ RDEBounds RischAlgorithm::compute_rde_bounds_complete(
             // 检查首项系数 f_lc = -n * u' 对于某个整数 n
             // 这是 Bronstein 的消去条件
             SymbolicExpression ratio = (make_negate(f_lc) / u_prime).simplify();
-            Scalar n_val = 0.0L;
+            Scalar n_val = Scalar(0.0L);
 
             if (ratio.is_number(&n_val)) {
-                int n = static_cast<int>(mymath::round(n_val));
+                int n = static_cast<int>(mymath::round(n_val).to_long_double());
                 if (mymath::abs(n_val - n) < 1e-9) {
                     // 存在消去: f_lc = -n * u'
                     // Bronstein 公式: bound = max(deg(g), n) + 1
@@ -635,10 +635,10 @@ RDEBounds RischAlgorithm::compute_rde_bounds_complete(
             // 检查是否存在整数 n 使得 f0 + n*u' = 0
             // 这是 Laurent 多项式情况
             SymbolicExpression ratio = (make_negate(f0) / u_prime).simplify();
-            Scalar n_val = 0.0L;
+            Scalar n_val = Scalar(0.0L);
 
             if (ratio.is_number(&n_val)) {
-                int n = static_cast<int>(mymath::round(n_val));
+                int n = static_cast<int>(mymath::round(n_val).to_long_double());
                 if (mymath::abs(n_val - n) < 1e-9) {
                     // 消去情况: f = -n*u'
                     // 解可能有 t^(-n) 项
@@ -864,7 +864,7 @@ bool RischAlgorithm::solve_spde(
         // 设 y = sum_{i=0}^{d} a_i t^i
 
         int d = degree_bound;
-        std::vector<SymbolicExpression> y_coeffs(d + 1, SymbolicExpression::number(0.0L));
+        std::vector<SymbolicExpression> y_coeffs(d + 1, SymbolicExpression::number(Scalar(0)));
 
         // 从高次到低次求解
         SymbolicPolynomial current_g = g;
@@ -878,7 +878,7 @@ bool RischAlgorithm::solve_spde(
 
                 SymbolicExpression denom = f0;
                 if (!expr_is_zero(t_prime)) {
-                    denom = (f0 + SymbolicExpression::number((i)) * t_prime).simplify();
+                    denom = (f0 + SymbolicExpression::number(Scalar(static_cast<long long>(i))) * t_prime).simplify();
                 }
 
                 if (expr_is_zero(denom)) {
@@ -891,7 +891,7 @@ bool RischAlgorithm::solve_spde(
                 y_coeffs[i] = (gi / denom).simplify();
 
                 // 更新 current_g
-                std::vector<SymbolicExpression> term_coeffs(i + 1, SymbolicExpression::number(0.0L));
+                std::vector<SymbolicExpression> term_coeffs(i + 1, SymbolicExpression::number(Scalar(0)));
                 term_coeffs[i] = y_coeffs[i];
                 SymbolicPolynomial y_term(term_coeffs, t_var);
 
@@ -945,17 +945,17 @@ bool RischAlgorithm::handle_exponential_special_case(
     // 如果存在，则 (y / t^n)' = g / t^n => y = t^n * ∫(g / t^n) dx
     
     SymbolicExpression ratio = (make_negate(f) / u_prime).simplify();
-    Scalar n_val = 0.0L;
+    Scalar n_val = Scalar(0.0L);
     if (ratio.is_number(&n_val)) {
-        int n = static_cast<int>(mymath::round(n_val));
+        int n = static_cast<int>(mymath::round(n_val).to_long_double());
         if (mymath::abs(n_val - n) < 1e-9) {
-            SymbolicExpression integrand = (g / make_power(t, SymbolicExpression::number((n)))).simplify();
+            SymbolicExpression integrand = (g / make_power(t, SymbolicExpression::number(Scalar(static_cast<long long>(n))))).simplify();
             
             // 尝试在当前扩展中积分
             // 注意：我们必须防止无限递归，但这里通常是更简单的积分
             IntegrationResult int_res = integrate_in_extension(integrand, tower, tower_index, x_var);
             if (int_res.success && int_res.type == IntegralType::kElementary) {
-                *result = (int_res.value * make_power(t, SymbolicExpression::number((n)))).simplify();
+                *result = (int_res.value * make_power(t, SymbolicExpression::number(Scalar(static_cast<long long>(n))))).simplify();
                 return true;
             }
         }
@@ -1009,14 +1009,14 @@ int RischAlgorithm::compute_laurent_valuation(
     // 2. 一般情况: v_y = min(v_g - 1, v_f)
 
     // 检查 f 是否为常数（关于 t）
-    Scalar f_val = 0.0L;
-    Scalar u_prime_val = 0.0L;
+    Scalar f_val = Scalar(0.0L);
+    Scalar u_prime_val = Scalar(0.0L);
     if (f_coeffs.size() == 1 && f_coeffs.count(0) &&
         f_coeffs.at(0).is_number(&f_val) &&
         u_prime.is_number(&u_prime_val) && mymath::abs(u_prime_val) > 1e-12) {
         // 检查 f = -n*u' 对于某个整数 n
         Scalar ratio = -f_val / u_prime_val;
-        int n = static_cast<int>(mymath::round(ratio));
+        int n = static_cast<int>(mymath::round(ratio).to_long_double());
         if (mymath::abs(ratio - n) < 1e-9) {
             if (n > 0) {
                 // 特殊情况：解可能有 t^(-n) 项
@@ -1133,15 +1133,15 @@ bool RischAlgorithm::solve_laurent_rde(const SymbolicExpression& f,
 
     if (f_in_base) {
         // f 是基域元素 f0
-        SymbolicExpression f0 = f_laurent_coeffs.count(0) ? f_laurent_coeffs[0] : SymbolicExpression::number(0.0L);
+        SymbolicExpression f0 = f_laurent_coeffs.count(0) ? f_laurent_coeffs[0] : SymbolicExpression::number(Scalar(0));
 
         for (int i = negative_bound; i <= positive_bound; ++i) {
-            SymbolicExpression gi = g_laurent_coeffs.count(i) ? g_laurent_coeffs[i] : SymbolicExpression::number(0.0L);
+            SymbolicExpression gi = g_laurent_coeffs.count(i) ? g_laurent_coeffs[i] : SymbolicExpression::number(Scalar(0));
 
             if (SymbolicPolynomial::coeff_is_zero(gi)) continue;
 
             // 求解 c_i' + (f0 + i*u') c_i = gi
-            SymbolicExpression fi = (f0 + SymbolicExpression::number((i)) * u_prime).simplify();
+            SymbolicExpression fi = (f0 + SymbolicExpression::number(Scalar(static_cast<long long>(i))) * u_prime).simplify();
 
             // 检查 fi 是否为零
             if (SymbolicPolynomial::coeff_is_zero(fi)) {
@@ -1154,11 +1154,11 @@ bool RischAlgorithm::solve_laurent_rde(const SymbolicExpression& f,
                 }
             } else {
                 // 检查 fi 是否为常数
-                Scalar fi_val = 0.0L;
+                Scalar fi_val = Scalar(0.0L);
                 if (fi.is_number(&fi_val)) {
                     // c_i' + fi_val * c_i = gi
                     // 如果 gi 也是常数，则 c_i = gi / fi_val
-                    Scalar gi_val = 0.0L;
+                    Scalar gi_val = Scalar(0.0L);
                     if (gi.is_number(&gi_val)) {
                         y_coeffs[i] = SymbolicExpression::number(gi_val / fi_val);
                     } else {
@@ -1193,10 +1193,10 @@ bool RischAlgorithm::solve_laurent_rde(const SymbolicExpression& f,
 
         // 从高次到低次求解
         for (int k = positive_bound; k >= negative_bound; --k) {
-            SymbolicExpression rhs = g_laurent_coeffs.count(k) ? g_laurent_coeffs[k] : SymbolicExpression::number(0.0L);
+            SymbolicExpression rhs = g_laurent_coeffs.count(k) ? g_laurent_coeffs[k] : SymbolicExpression::number(Scalar(0));
 
             // 计算 f * y 的贡献（已知项）
-            SymbolicExpression f_contrib = SymbolicExpression::number(0.0L);
+            SymbolicExpression f_contrib = SymbolicExpression::number(Scalar(0));
             for (int j : f_powers) {
                 int i = k - j;
                 if (y_coeffs.count(i)) {
@@ -1210,12 +1210,12 @@ bool RischAlgorithm::solve_laurent_rde(const SymbolicExpression& f,
             rhs = (rhs - f_contrib).simplify();
 
             if (SymbolicPolynomial::coeff_is_zero(rhs)) {
-                y_coeffs[k] = SymbolicExpression::number(0.0L);
+                y_coeffs[k] = SymbolicExpression::number(Scalar(0));
                 continue;
             }
 
             // 求解 c_k' + k*u'*c_k = rhs
-            SymbolicExpression fi = (SymbolicExpression::number((k)) * u_prime).simplify();
+            SymbolicExpression fi = (SymbolicExpression::number(Scalar(static_cast<long long>(k))) * u_prime).simplify();
 
             if (SymbolicPolynomial::coeff_is_zero(fi)) {
                 // c_k' = rhs
@@ -1236,16 +1236,16 @@ bool RischAlgorithm::solve_laurent_rde(const SymbolicExpression& f,
     }
 
     // 构建结果
-    SymbolicExpression result = SymbolicExpression::number(0.0L);
+    SymbolicExpression result = SymbolicExpression::number(Scalar(0));
     for (int i = negative_bound; i <= positive_bound; ++i) {
         if (y_coeffs.count(i) && !SymbolicPolynomial::coeff_is_zero(y_coeffs[i])) {
             if (i == 0) {
                 result = (result + y_coeffs[i]).simplify();
             } else if (i > 0) {
-                result = (result + y_coeffs[i] * make_power(t, SymbolicExpression::number((i)))).simplify();
+                result = (result + y_coeffs[i] * make_power(t, SymbolicExpression::number(Scalar(static_cast<long long>(i))))).simplify();
             } else {
                 // 负幂次: t^(-n) = 1/t^n
-                result = (result + y_coeffs[i] / make_power(t, SymbolicExpression::number((-i)))).simplify();
+                result = (result + y_coeffs[i] / make_power(t, SymbolicExpression::number(Scalar(static_cast<long long>(-i))))).simplify();
             }
         }
     }
@@ -1363,29 +1363,29 @@ bool RischAlgorithm::solve_laurent_rde_complete(
 
     if (f_in_base) {
         // f = f0 在基域中
-        SymbolicExpression f0 = f_coeffs.count(0) ? f_coeffs[0] : SymbolicExpression::number(0.0L);
+        SymbolicExpression f0 = f_coeffs.count(0) ? f_coeffs[0] : SymbolicExpression::number(Scalar(0));
 
         // 对于每个幂次 k，求解 c_k' + (f0 + k*u') c_k = g_k
         for (int k = lower_bound; k <= upper_bound; ++k) {
-            SymbolicExpression gk = g_coeffs.count(k) ? g_coeffs[k] : SymbolicExpression::number(0.0L);
+            SymbolicExpression gk = g_coeffs.count(k) ? g_coeffs[k] : SymbolicExpression::number(Scalar(0));
 
             if (SymbolicPolynomial::coeff_is_zero(gk)) {
                 // gk = 0，检查是否需要非零解
                 // c_k' + (f0 + k*u') c_k = 0
                 // 齐次方程，只有零解（除非 f0 + k*u' = 0）
-                SymbolicExpression fi = (f0 + SymbolicExpression::number((k)) * u_prime).simplify();
+                SymbolicExpression fi = (f0 + SymbolicExpression::number(Scalar(static_cast<long long>(k))) * u_prime).simplify();
                 if (SymbolicPolynomial::coeff_is_zero(fi)) {
                     // fi = 0，任意常数都是解
                     // 取 c_k = 0（特解）
-                    y_coeffs[k] = SymbolicExpression::number(0.0L);
+                    y_coeffs[k] = SymbolicExpression::number(Scalar(0));
                 } else {
-                    y_coeffs[k] = SymbolicExpression::number(0.0L);
+                    y_coeffs[k] = SymbolicExpression::number(Scalar(0));
                 }
                 continue;
             }
 
             // 求解 c_k' + (f0 + k*u') c_k = gk
-            SymbolicExpression fi = (f0 + SymbolicExpression::number((k)) * u_prime).simplify();
+            SymbolicExpression fi = (f0 + SymbolicExpression::number(Scalar(static_cast<long long>(k))) * u_prime).simplify();
 
             // 检查 fi 是否为零
             if (SymbolicPolynomial::coeff_is_zero(fi)) {
@@ -1398,7 +1398,7 @@ bool RischAlgorithm::solve_laurent_rde_complete(
                 }
             } else {
                 // 检查 fi 和 gk 是否都是常数
-                Scalar fi_val = 0.0L, gk_val = 0.0L;
+                Scalar fi_val = Scalar(0), gk_val = Scalar(0);
                 if (fi.is_number(&fi_val) && gk.is_number(&gk_val) && mymath::abs(fi_val) > 1e-12) {
                     // c_k = gk / fi 是常数解
                     y_coeffs[k] = SymbolicExpression::number(gk_val / fi_val);
@@ -1424,10 +1424,10 @@ bool RischAlgorithm::solve_laurent_rde_complete(
 
         // 从高次到低次求解（消元法）
         for (int k = upper_bound; k >= lower_bound; --k) {
-            SymbolicExpression rhs = g_coeffs.count(k) ? g_coeffs[k] : SymbolicExpression::number(0.0L);
+            SymbolicExpression rhs = g_coeffs.count(k) ? g_coeffs[k] : SymbolicExpression::number(Scalar(0));
 
             // 计算 f * y 的贡献（已知项）
-            SymbolicExpression f_contrib = SymbolicExpression::number(0.0L);
+            SymbolicExpression f_contrib = SymbolicExpression::number(Scalar(0));
             for (int j : f_powers) {
                 int i = k - j;
                 if (y_coeffs.count(i)) {
@@ -1441,12 +1441,12 @@ bool RischAlgorithm::solve_laurent_rde_complete(
             rhs = (rhs - f_contrib).simplify();
 
             if (SymbolicPolynomial::coeff_is_zero(rhs)) {
-                y_coeffs[k] = SymbolicExpression::number(0.0L);
+                y_coeffs[k] = SymbolicExpression::number(Scalar(0));
                 continue;
             }
 
             // 求解 c_k' + k*u'*c_k = rhs
-            SymbolicExpression fi = (SymbolicExpression::number((k)) * u_prime).simplify();
+            SymbolicExpression fi = (SymbolicExpression::number(Scalar(static_cast<long long>(k))) * u_prime).simplify();
 
             if (SymbolicPolynomial::coeff_is_zero(fi)) {
                 // c_k' = rhs
@@ -1458,7 +1458,7 @@ bool RischAlgorithm::solve_laurent_rde_complete(
                 }
             } else {
                 // 检查 fi 和 rhs 是否都是常数
-                Scalar fi_val = 0.0L, rhs_val = 0.0L;
+                Scalar fi_val = Scalar(0), rhs_val = Scalar(0);
                 if (fi.is_number(&fi_val) && rhs.is_number(&rhs_val) && mymath::abs(fi_val) > 1e-12) {
                     y_coeffs[k] = SymbolicExpression::number(rhs_val / fi_val);
                 } else {
@@ -1498,7 +1498,7 @@ RDEResult RischAlgorithm::solve_polynomial_rde_in_extension(
 
     // 特殊情况处理
     if (expr_is_zero(g)) {
-        return RDEResult::has_solution(SymbolicExpression::number(0.0L));
+        return RDEResult::has_solution(SymbolicExpression::number(Scalar(0)));
     }
 
     if (expr_is_zero(f)) {
@@ -1576,7 +1576,7 @@ RDEResult RischAlgorithm::solve_polynomial_rde_in_extension(
         }
 
         // 使用待定系数法
-        std::vector<SymbolicExpression> y_coeffs(deg_y + 1, SymbolicExpression::number(0.0L));
+        std::vector<SymbolicExpression> y_coeffs(deg_y + 1, SymbolicExpression::number(Scalar(0)));
         SymbolicPolynomial current_g = g_poly;
 
         SymbolicExpression t_prime = ext.derivation;
@@ -1596,7 +1596,7 @@ RDEResult RischAlgorithm::solve_polynomial_rde_in_extension(
                 // 这里简化处理：假设 c_i 是常数
                 y_coeffs[i] = c_i;
 
-                std::vector<SymbolicExpression> term_coeffs(i + 1, SymbolicExpression::number(0.0L));
+                std::vector<SymbolicExpression> term_coeffs(i + 1, SymbolicExpression::number(Scalar(0)));
                 term_coeffs[i] = c_i;
                 SymbolicPolynomial y_term(term_coeffs, t_var);
 
@@ -1654,9 +1654,9 @@ RDEResult RischAlgorithm::solve_polynomial_rde_in_extension(
             // 所以 t'/t = u'/(2*t^2) = u'/(2*u)
             SymbolicExpression t_prime_over_t;
             SymbolicExpression u_prime = ext.argument.derivative(x_var).simplify();
-            t_prime_over_t = (u_prime / (SymbolicExpression::number((n)) * ext.argument)).simplify();
+            t_prime_over_t = (u_prime / (SymbolicExpression::number(Scalar(static_cast<long long>(n))) * ext.argument)).simplify();
 
-            SymbolicExpression f0 = f_coeffs.empty() ? SymbolicExpression::number(0.0L) : f_coeffs[0];
+            SymbolicExpression f0 = f_coeffs.empty() ? SymbolicExpression::number(Scalar(0)) : f_coeffs[0];
 
             // 将系数归约到度数 < n
             auto reduce_coeffs = [&](std::vector<SymbolicExpression>& coeffs, int max_deg) {
@@ -1674,15 +1674,15 @@ RDEResult RischAlgorithm::solve_polynomial_rde_in_extension(
             reduce_coeffs(f_coeffs, n - 1);
             reduce_coeffs(g_coeffs, n - 1);
 
-            std::vector<SymbolicExpression> y_coeffs(n, SymbolicExpression::number(0.0L));
+            std::vector<SymbolicExpression> y_coeffs(n, SymbolicExpression::number(Scalar(0)));
 
             for (int i = 0; i < n; ++i) {
-                SymbolicExpression g_i = (i < static_cast<int>(g_coeffs.size())) ? g_coeffs[i] : SymbolicExpression::number(0.0L);
+                SymbolicExpression g_i = (i < static_cast<int>(g_coeffs.size())) ? g_coeffs[i] : SymbolicExpression::number(Scalar(0));
 
                 if (SymbolicPolynomial::coeff_is_zero(g_i)) continue;
 
                 // 求解 c_i' + (f0 + i*t'/t) * c_i = g_i
-                SymbolicExpression fi = (f0 + SymbolicExpression::number((i)) * t_prime_over_t).simplify();
+                SymbolicExpression fi = (f0 + SymbolicExpression::number(Scalar(static_cast<long long>(i))) * t_prime_over_t).simplify();
 
                 // 递归到基域求解
                 RDEResult res = solve_polynomial_rde_in_extension(fi, g_i, x_var, field, -1, recursion_depth + 1);
@@ -1697,14 +1697,14 @@ RDEResult RischAlgorithm::solve_polynomial_rde_in_extension(
             }
 
             // 构建解
-            SymbolicExpression result = SymbolicExpression::number(0.0L);
+            SymbolicExpression result = SymbolicExpression::number(Scalar(0));
             SymbolicExpression t = SymbolicExpression::variable(t_var);
             for (int i = 0; i < n; ++i) {
                 if (!SymbolicPolynomial::coeff_is_zero(y_coeffs[i])) {
                     if (i == 0) {
                         result = (result + y_coeffs[i]).simplify();
                     } else {
-                        result = (result + y_coeffs[i] * make_power(t, SymbolicExpression::number((i)))).simplify();
+                        result = (result + y_coeffs[i] * make_power(t, SymbolicExpression::number(Scalar(static_cast<long long>(i))))).simplify();
                     }
                 }
             }
@@ -1736,7 +1736,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde(
     SymbolicExpression g_simplified = g.simplify();
 
     if (expr_is_zero(g_simplified)) {
-        return IntegrationResult::elementary(SymbolicExpression::number(0.0L));
+        return IntegrationResult::elementary(SymbolicExpression::number(Scalar(0)));
     }
 
     // f = 0: y' = g
@@ -1779,7 +1779,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde(
             }
         } else {
             if (symbolic_polynomial_coefficients_from_simplified(expr.simplify(), t_var, num)) {
-                den->push_back(SymbolicExpression::number(1.0L));
+                den->push_back(SymbolicExpression::number(Scalar(1.0L)));
                 return true;
             }
         }
@@ -1803,7 +1803,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde(
                 den->clear();
 
                 // 分子 = sum(c_i * t^{i - min_power})
-                num->resize(max_power - min_power + 1, SymbolicExpression::number(0.0L));
+                num->resize(max_power - min_power + 1, SymbolicExpression::number(Scalar(0)));
                 for (const auto& [p, c] : generalized_coeffs) {
                     if (!SymbolicPolynomial::coeff_is_zero(c)) {
                         (*num)[p - min_power] = c;
@@ -1812,24 +1812,24 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde(
 
                 // 分母 = t^(-min_power)
                 if (-min_power == 1) {
-                    den->push_back(SymbolicExpression::number(0.0L));
-                    den->push_back(SymbolicExpression::number(1.0L));
+                    den->push_back(SymbolicExpression::number(Scalar(0)));
+                    den->push_back(SymbolicExpression::number(Scalar(1.0L)));
                 } else {
-                    den->resize(-min_power + 1, SymbolicExpression::number(0.0L));
-                    (*den)[-min_power] = SymbolicExpression::number(1.0L);
+                    den->resize(-min_power + 1, SymbolicExpression::number(Scalar(0)));
+                    (*den)[-min_power] = SymbolicExpression::number(Scalar(1.0L));
                 }
                 return true;
             } else {
                 // 只有非负幂次
                 num->clear();
                 den->clear();
-                num->resize(max_power + 1, SymbolicExpression::number(0.0L));
+                num->resize(max_power + 1, SymbolicExpression::number(Scalar(0)));
                 for (const auto& [p, c] : generalized_coeffs) {
                     if (!SymbolicPolynomial::coeff_is_zero(c)) {
                         (*num)[p] = c;
                     }
                 }
-                den->push_back(SymbolicExpression::number(1.0L));
+                den->push_back(SymbolicExpression::number(Scalar(1.0L)));
                 return true;
             }
         }
@@ -1906,11 +1906,11 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde(
     }
 
     // 常数 f 情况：y = exp(-fx) * ∫ g*exp(fx) dx
-    Scalar f_const = 0.0L;
+    Scalar f_const = Scalar(0.0L);
     if (f_num.is_constant() && f_den.is_constant() &&
         f_num.leading_coefficient().is_number(&f_const)) {
 
-        Scalar f_den_val = 1.0L;
+        Scalar f_den_val = Scalar(1);
         f_den.leading_coefficient().is_number(&f_den_val);
         f_const /= f_den_val;
 
@@ -1918,7 +1918,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_rde(
             tower[tower_index].kind == DifferentialExtension::Kind::kExponential) {
             SymbolicExpression t = SymbolicExpression::variable(tower[tower_index].t_name);
             SymbolicExpression u_prime = (tower[tower_index].derivation / t).simplify();
-            Scalar u_prime_const = 0.0L;
+            Scalar u_prime_const = Scalar(0.0L);
             if (u_prime.is_number(&u_prime_const) &&
                 mymath::abs(u_prime_const - f_const) < 1e-10) {
                 return IntegrationResult::unknown("RDE integrating factor is current exponential extension");
@@ -1973,14 +1973,14 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_polynomial_rde(
                                          SymbolicExpression::variable(tower[tower_index].t_name)).simplify();
             
             int max_i = deg_g;
-            std::vector<SymbolicExpression> y_coeffs(max_i + 1, SymbolicExpression::number(0.0L));
+            std::vector<SymbolicExpression> y_coeffs(max_i + 1, SymbolicExpression::number(Scalar(0)));
             
             for (int i = 0; i <= max_i; ++i) {
                 SymbolicExpression gi = g_poly.coefficient(i);
                 if (expr_is_zero(gi)) continue;
                 
                 // 求解 y_i' + (f0 + i*u') y_i = g_i 在基域 K 中
-                SymbolicExpression fi = (f0 + SymbolicExpression::number((i)) * u_prime).simplify();
+                SymbolicExpression fi = (f0 + SymbolicExpression::number(Scalar(static_cast<long long>(i))) * u_prime).simplify();
                 IntegrationResult res = solve_rde(fi, gi, x_var, tower, tower_index - 1, recursion_depth + 1);
                 if (!res.success) return IntegrationResult::non_elementary("Failed to solve RDE for coefficient in exponential extension");
                 y_coeffs[i] = res.value;
@@ -1993,11 +1993,11 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_polynomial_rde(
     int deg_y = compute_rde_degree_bound(f_poly, g_poly, tower, tower_index);
     if (deg_y < 0) return IntegrationResult::non_elementary("No polynomial solution exists (degree < 0)");
 
-    std::vector<SymbolicExpression> y_coeffs(deg_y + 1, SymbolicExpression::number(0.0L));
+    std::vector<SymbolicExpression> y_coeffs(deg_y + 1, SymbolicExpression::number(Scalar(0)));
     SymbolicPolynomial current_g = g_poly;
     
     const std::string& main_var = x_var;
-    SymbolicExpression t_prime = (tower_index >= 0) ? tower[tower_index].derivation : SymbolicExpression::number(1.0L);
+    SymbolicExpression t_prime = (tower_index >= 0) ? tower[tower_index].derivation : SymbolicExpression::number(Scalar(1.0L));
 
     for (int i = deg_y; i >= 0; --i) {
         int target_deg = (deg_f > 0) ? i + deg_f : i;
@@ -2008,7 +2008,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::solve_polynomial_rde(
             SymbolicExpression c_i = (current_g.leading_coefficient() / f_lc).simplify();
             y_coeffs[i] = c_i;
             
-            std::vector<SymbolicExpression> term_coeffs(i + 1, SymbolicExpression::number(0.0L));
+            std::vector<SymbolicExpression> term_coeffs(i + 1, SymbolicExpression::number(Scalar(0)));
             term_coeffs[i] = c_i;
             SymbolicPolynomial y_term(term_coeffs, f_poly.variable_name());
             
@@ -2107,7 +2107,7 @@ bool RischAlgorithm::solve_polynomial_parametric_rde(
     // 因为需要同时满足多个 g_i
     deg_y = std::max(deg_y, max_deg_g + 1);
 
-    SymbolicExpression t_prime = (tower_index >= 0) ? tower[tower_index].derivation : SymbolicExpression::number(1.0L);
+    SymbolicExpression t_prime = (tower_index >= 0) ? tower[tower_index].derivation : SymbolicExpression::number(Scalar(1.0L));
     int num_c = static_cast<int>(g_polys.size());
     int num_y = deg_y + 1;
     int num_unknowns = num_y + num_c;
@@ -2118,8 +2118,8 @@ bool RischAlgorithm::solve_polynomial_parametric_rde(
     // y' + f*y = sum (a_j' t^j + j a_j t^{j-1} t' + f a_j t^j) = sum(c_i * g_i)
 
     std::vector<std::vector<SymbolicExpression>> matrix(num_eqs,
-        std::vector<SymbolicExpression>(num_unknowns, SymbolicExpression::number(0.0L)));
-    std::vector<SymbolicExpression> rhs(num_eqs, SymbolicExpression::number(0.0L));
+        std::vector<SymbolicExpression>(num_unknowns, SymbolicExpression::number(Scalar(0))));
+    std::vector<SymbolicExpression> rhs(num_eqs, SymbolicExpression::number(Scalar(0)));
 
     // f*y 的贡献
     for (int j = 0; j < num_y; ++j) {
@@ -2139,7 +2139,7 @@ bool RischAlgorithm::solve_polynomial_parametric_rde(
                 SymbolicPolynomial tp_poly(tp_coeffs, t_var);
                 for (int k = 0; k <= tp_poly.degree(); ++k) {
                     if (j - 1 + k < num_eqs) {
-                        SymbolicExpression term = (SymbolicExpression::number((j)) *
+                        SymbolicExpression term = (SymbolicExpression::number(Scalar(static_cast<long long>(j))) *
                                                    tp_poly.coefficient(k)).simplify();
                         matrix[j - 1 + k][j] = (matrix[j - 1 + k][j] + term).simplify();
                     }
@@ -2148,7 +2148,7 @@ bool RischAlgorithm::solve_polynomial_parametric_rde(
                 // t' 不是 t 的多项式，简化处理
                 // 假设 t' 是常数或简单表达式
                 if (j - 1 < num_eqs) {
-                    SymbolicExpression term = (SymbolicExpression::number((j)) * t_prime).simplify();
+                    SymbolicExpression term = (SymbolicExpression::number(Scalar(static_cast<long long>(j))) * t_prime).simplify();
                     matrix[j - 1][j] = (matrix[j - 1][j] + term).simplify();
                 }
             }
@@ -2162,7 +2162,7 @@ bool RischAlgorithm::solve_polynomial_parametric_rde(
     for (int i = 0; i < num_c; ++i) {
         for (int k = 0; k <= g_polys[i].degree(); ++k) {
             if (k < num_eqs) {
-                matrix[k][num_y + i] = (SymbolicExpression::number(-1.0L) *
+                matrix[k][num_y + i] = (SymbolicExpression::number(Scalar(-1)) *
                                        g_polys[i].coefficient(k)).simplify();
             }
         }
@@ -2250,7 +2250,7 @@ bool RischAlgorithm::solve_linear_system(
                 // 使用更激进的简化来检查系数是否真的不为零
                 SymbolicExpression current_val = matrix[r][col].simplify();
                 if (SymbolicPolynomial::coeff_is_zero(current_val)) {
-                    matrix[r][col] = SymbolicExpression::number(0.0L);
+                    matrix[r][col] = SymbolicExpression::number(Scalar(0));
                     continue;
                 }
 
@@ -2274,7 +2274,7 @@ bool RischAlgorithm::solve_linear_system(
     }
 
     // 回代
-    solution->assign(m, SymbolicExpression::number(0.0L));
+    solution->assign(m, SymbolicExpression::number(Scalar(0)));
     for (int i = static_cast<int>(pivot_cols.size()) - 1; i >= 0; --i) {
         std::size_t row = static_cast<std::size_t>(i);
         std::size_t col = pivot_cols[i];
@@ -2306,8 +2306,8 @@ bool RischAlgorithm::solve_coefficient_identity_for_rde(
     int n = std::max(expected_deg, deg_G);
 
     std::vector<std::vector<SymbolicExpression>> matrix(n + 1,
-        std::vector<SymbolicExpression>(max_deg + 1, SymbolicExpression::number(0.0L)));
-    std::vector<SymbolicExpression> rhs(n + 1, SymbolicExpression::number(0.0L));
+        std::vector<SymbolicExpression>(max_deg + 1, SymbolicExpression::number(Scalar(0))));
+    std::vector<SymbolicExpression> rhs(n + 1, SymbolicExpression::number(Scalar(0)));
 
     for (int k = 0; k <= deg_G; ++k) {
         rhs[k] = G.coefficient(k);
@@ -2325,7 +2325,7 @@ bool RischAlgorithm::solve_coefficient_identity_for_rde(
             for (int j = 0; j <= deg_D; ++j) {
                 if (i - 1 + j <= n) {
                     matrix[i - 1 + j][i] = (matrix[i - 1 + j][i] +
-                        SymbolicExpression::number(i) * D.coefficient(j)).simplify();
+                        SymbolicExpression::number(Scalar(static_cast<long long>(i))) * D.coefficient(j)).simplify();
                 }
             }
         }
@@ -2378,7 +2378,7 @@ bool RischAlgorithm::try_algebraic_substitution(
         if (e.node_->type == NodeType::kPower) {
             SymbolicExpression base(e.node_->left);
             SymbolicExpression exp(e.node_->right);
-            Scalar exp_val = 0.0L;
+            Scalar exp_val = Scalar(0.0L);
             if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < 1e-9) {
                 return {true, base};
             }
@@ -2406,10 +2406,10 @@ bool RischAlgorithm::try_algebraic_substitution(
         return generalized_euler_substitution(expr, u, x_var, result);
     }
 
-    SymbolicExpression a = coeffs.size() > 1 ? coeffs[1] : SymbolicExpression::number(0.0L);
+    SymbolicExpression a = coeffs.size() > 1 ? coeffs[1] : SymbolicExpression::number(Scalar(0));
     SymbolicExpression b = coeffs[0];
 
-    Scalar a_val = 0.0L;
+    Scalar a_val = Scalar(0.0L);
     if (!a.is_number(&a_val) || mymath::abs(a_val) < 1e-9) {
         // a 不是常数或为零，无法简单换元
         return false;
@@ -2440,7 +2440,7 @@ bool RischAlgorithm::try_algebraic_substitution(
         if (e.node_->type == NodeType::kPower) {
             SymbolicExpression base(e.node_->left);
             SymbolicExpression exp(e.node_->right);
-            Scalar exp_val = 0.0L;
+            Scalar exp_val = Scalar(0.0L);
             if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < 1e-9) {
                 // x^0.5 = sqrt(x)
                 SymbolicExpression base_sub = substitute(base);
@@ -2476,7 +2476,7 @@ bool RischAlgorithm::try_algebraic_substitution(
     SymbolicExpression substituted = substitute(expr).simplify();
 
     // 乘以 dx/dt = 2t/a
-    SymbolicExpression jacobian = (SymbolicExpression::number(2.0) * t / a).simplify();
+    SymbolicExpression jacobian = (SymbolicExpression::number(Scalar(2)) * t / a).simplify();
 
     // Handle the case where substituted has division by t
     // If substituted = something / t, then integrand = (something / t) * (2t/a) = 2*something/a
@@ -2492,9 +2492,9 @@ bool RischAlgorithm::try_algebraic_substitution(
              SymbolicExpression(den.node_->left).is_variable_named("_t"))) {
             // Cancel t in denominator with t in jacobian
             // integrand = num * (2/a) * t^(1 - power_of_t_in_den)
-            Scalar t_power_in_den = 1.0L;
+            Scalar t_power_in_den = Scalar(1);
             if (den.is_variable_named("_t")) {
-                t_power_in_den = 1.0L;
+                t_power_in_den = Scalar(1);
             } else if (den.node_->type == NodeType::kPower) {
                 SymbolicExpression exp(den.node_->right);
                 exp.is_number(&t_power_in_den);
@@ -2502,7 +2502,7 @@ bool RischAlgorithm::try_algebraic_substitution(
             // jacobian = 2t/a, so after cancellation: num * 2/a * t^(1 - t_power_in_den)
             if (t_power_in_den <= 1.0L) {
                 // Full or partial cancellation
-                SymbolicExpression coeff = (SymbolicExpression::number(2.0) / a).simplify();
+                SymbolicExpression coeff = (SymbolicExpression::number(Scalar(2)) / a).simplify();
                 if (t_power_in_den == 1.0L) {
                     integrand = (num * coeff).simplify();
                 } else {
@@ -2600,7 +2600,7 @@ ParametricRDEResult RischAlgorithm::solve_parametric_rde_in_field(
         return result;
     }
 
-    SymbolicExpression t_prime = (tower_index >= 0) ? tower[tower_index].derivation : SymbolicExpression::number(1.0L);
+    SymbolicExpression t_prime = (tower_index >= 0) ? tower[tower_index].derivation : SymbolicExpression::number(Scalar(1.0L));
     std::string t_var = (tower_index >= 0) ? tower[tower_index].t_name : x_var;
 
     int num_c = static_cast<int>(g_list.size());
@@ -2610,8 +2610,8 @@ ParametricRDEResult RischAlgorithm::solve_parametric_rde_in_field(
 
     // 构建线性方程组 (符号系数)
     std::vector<std::vector<SymbolicExpression>> matrix(num_eqs,
-        std::vector<SymbolicExpression>(num_unknowns, SymbolicExpression::number(0.0L)));
-    std::vector<SymbolicExpression> rhs(num_eqs, SymbolicExpression::number(0.0L));
+        std::vector<SymbolicExpression>(num_unknowns, SymbolicExpression::number(Scalar(0))));
+    std::vector<SymbolicExpression> rhs(num_eqs, SymbolicExpression::number(Scalar(0)));
 
     // y = sum_{j=0}^{deg_y} a_j t^j
     // y' + fy = sum (a_j' t^j + j a_j t^{j-1} t' + f a_j t^j)
@@ -2631,7 +2631,7 @@ ParametricRDEResult RischAlgorithm::solve_parametric_rde_in_field(
                 SymbolicPolynomial tp_poly(tp_coeffs, t_var);
                 for (int k = 0; k <= tp_poly.degree(); ++k) {
                     if (j - 1 + k < num_eqs) {
-                        SymbolicExpression term = (SymbolicExpression::number(j) * tp_poly.coefficient(k)).simplify();
+                        SymbolicExpression term = (SymbolicExpression::number(Scalar(static_cast<long long>(j))) * tp_poly.coefficient(k)).simplify();
                         matrix[j - 1 + k][j] = (matrix[j - 1 + k][j] + term).simplify();
                     }
                 }
@@ -2643,7 +2643,7 @@ ParametricRDEResult RischAlgorithm::solve_parametric_rde_in_field(
     for (int i = 0; i < num_c; ++i) {
         for (int k = 0; k <= g_list[i].degree(); ++k) {
             if (k < num_eqs) {
-                matrix[k][num_y + i] = (SymbolicExpression::number(-1.0L) * g_list[i].coefficient(k)).simplify();
+                matrix[k][num_y + i] = (SymbolicExpression::number(Scalar(-1)) * g_list[i].coefficient(k)).simplify();
             }
         }
     }
@@ -2707,7 +2707,7 @@ bool RischAlgorithm::solve_symbolic_linear_system(
             if (!SymbolicPolynomial::coeff_is_zero(matrix[r][col])) {
                 SymbolicExpression current_val = matrix[r][col].simplify();
                 if (SymbolicPolynomial::coeff_is_zero(current_val)) {
-                    matrix[r][col] = SymbolicExpression::number(0.0L);
+                    matrix[r][col] = SymbolicExpression::number(Scalar(0));
                     continue;
                 }
 
@@ -2741,7 +2741,7 @@ bool RischAlgorithm::solve_symbolic_linear_system(
     }
 
     // 回代
-    solution->assign(m, SymbolicExpression::number(0.0L));
+    solution->assign(m, SymbolicExpression::number(Scalar(0)));
     for (int i = static_cast<int>(pivot_cols.size()) - 1; i >= 0; --i) {
         std::size_t row = static_cast<std::size_t>(i);
         std::size_t col = pivot_cols[i];
@@ -2776,7 +2776,7 @@ RDEResult RischAlgorithm::solve_rde_strict(
 
     // 特殊情况: g = 0 → y = 0
     if (expr_is_zero(g_simplified)) {
-        return RDEResult::has_solution(SymbolicExpression::number(0.0L));
+        return RDEResult::has_solution(SymbolicExpression::number(Scalar(0)));
     }
 
     // 特殊情况: f = 0 → y = ∫g dx
@@ -2898,7 +2898,7 @@ RDEResult RischAlgorithm::solve_polynomial_rde_strict(
         return RDEResult::no_solution("Degree bound < 0 proves no polynomial solution");
     }
 
-    std::vector<SymbolicExpression> y_coeffs(deg_y + 1, SymbolicExpression::number(0.0L));
+    std::vector<SymbolicExpression> y_coeffs(deg_y + 1, SymbolicExpression::number(Scalar(0)));
     SymbolicPolynomial current_g = g.poly;
 
     for (int i = deg_y; i >= 0; --i) {
@@ -2918,7 +2918,7 @@ RDEResult RischAlgorithm::solve_polynomial_rde_strict(
 
             y_coeffs[i] = c_i;
 
-            std::vector<SymbolicExpression> term_coeffs(i + 1, SymbolicExpression::number(0.0L));
+            std::vector<SymbolicExpression> term_coeffs(i + 1, SymbolicExpression::number(Scalar(0)));
             term_coeffs[i] = c_i;
             SymbolicPolynomial y_term(term_coeffs, f.poly.variable_name());
 
@@ -2957,9 +2957,9 @@ CancellationResult RischAlgorithm::detect_cancellation_strict(
 
     SymbolicExpression ratio = (make_negate(f) / u_prime).simplify();
 
-    Scalar val = 0.0L;
+    Scalar val = Scalar(0.0L);
     if (ratio.is_number(&val)) {
-        int n = static_cast<int>(mymath::round(val));
+        int n = static_cast<int>(mymath::round(val).to_long_double());
         if (mymath::abs(val - n) < 1e-9) {
             result.type = CancellationType::kConstantN;
             result.n_value = n;
@@ -2972,10 +2972,10 @@ CancellationResult RischAlgorithm::detect_cancellation_strict(
         SymbolicExpression num(ratio.node_->left);
         SymbolicExpression den(ratio.node_->right);
 
-        Scalar num_val = 0.0L, den_val = 0.0L;
+        Scalar num_val = Scalar(0), den_val = Scalar(0);
         if (num.is_number(&num_val) && den.is_number(&den_val)) {
             Scalar quotient = num_val / den_val;
-            int n = static_cast<int>(mymath::round(quotient));
+            int n = static_cast<int>(mymath::round(quotient).to_long_double());
             if (mymath::abs(quotient - n) < 1e-9) {
                 result.type = CancellationType::kConstantN;
                 result.n_value = n;
@@ -3001,7 +3001,7 @@ RDEResult RischAlgorithm::solve_spde_strict(
     }
 
     if (g.is_zero()) {
-        return RDEResult::has_solution(SymbolicExpression::number(0.0L));
+        return RDEResult::has_solution(SymbolicExpression::number(Scalar(0)));
     }
 
     int m = f.degree();
@@ -3039,7 +3039,7 @@ RDEResult RischAlgorithm::solve_spde_strict(
     std::vector<SymbolicExpression> new_g_coeffs;
     for (int i = 0; i <= n; ++i) {
         if (i == n) {
-            new_g_coeffs.push_back(SymbolicExpression::number(0.0L));
+            new_g_coeffs.push_back(SymbolicExpression::number(Scalar(0)));
         } else {
             new_g_coeffs.push_back(g.poly.coefficient(i));
         }
@@ -3050,8 +3050,8 @@ RDEResult RischAlgorithm::solve_spde_strict(
 
     if (sub.has_solution()) {
         SymbolicExpression t = SymbolicExpression::variable(g.poly.variable_name());
-        SymbolicExpression term = (a * make_power(t, SymbolicExpression::number((n))) /
-                                  SymbolicExpression::number((n))).simplify();
+        SymbolicExpression term = (a * make_power(t, SymbolicExpression::number(Scalar(static_cast<long long>(n)))) /
+                                  SymbolicExpression::number(Scalar(static_cast<long long>(n)))).simplify();
         SymbolicExpression result = (sub.solution + term).simplify();
         return RDEResult::has_solution(result);
     }
@@ -3137,7 +3137,7 @@ ParametricRDESymbolicSolution RischAlgorithm::solve_parametric_rde_symbolic(
     if (g_list.empty()) {
         // 简单情况: y' + f*y = 0
         // 解为 y = C * exp(-∫f dx)
-        solution.y_particular = SymbolicExpression::number(0.0L);
+        solution.y_particular = SymbolicExpression::number(Scalar(0));
         solution.y_basis.push_back(make_function("exp",
             make_negate(make_function("integrate", f.to_expression()))));
         solution.parameters.push_back(SymbolicExpression::variable("_C"));
@@ -3160,7 +3160,7 @@ ParametricRDESymbolicSolution RischAlgorithm::solve_parametric_rde_symbolic(
                         ? tower[tower_index].t_name : x_var;
 
     SymbolicExpression t_prime = (tower_index >= 0) ? tower[tower_index].derivation
-                                                    : SymbolicExpression::number(1.0L);
+                                                    : SymbolicExpression::number(Scalar(1.0L));
 
     int num_g = static_cast<int>(g_list.size());
     int num_y = deg_y + 1;
@@ -3174,8 +3174,8 @@ ParametricRDESymbolicSolution RischAlgorithm::solve_parametric_rde_symbolic(
     int num_eqs = max_deg + 1;
 
     std::vector<std::vector<SymbolicExpression>> matrix(num_eqs,
-        std::vector<SymbolicExpression>(num_unknowns, SymbolicExpression::number(0.0L)));
-    std::vector<SymbolicExpression> rhs(num_eqs, SymbolicExpression::number(0.0L));
+        std::vector<SymbolicExpression>(num_unknowns, SymbolicExpression::number(Scalar(0))));
+    std::vector<SymbolicExpression> rhs(num_eqs, SymbolicExpression::number(Scalar(0)));
 
     // 填充矩阵: y' + f*y = sum(c_i * g_i)
     for (int j = 0; j < num_y; ++j) {
@@ -3193,7 +3193,7 @@ ParametricRDESymbolicSolution RischAlgorithm::solve_parametric_rde_symbolic(
                 SymbolicPolynomial tp_poly(tp_coeffs, t_var);
                 for (int k = 0; k <= tp_poly.degree(); ++k) {
                     if (j - 1 + k < num_eqs) {
-                        SymbolicExpression term = (SymbolicExpression::number(j) *
+                        SymbolicExpression term = (SymbolicExpression::number(Scalar(static_cast<long long>(j))) *
                                                    tp_poly.coefficient(k)).simplify();
                         matrix[j - 1 + k][j] = (matrix[j - 1 + k][j] + term).simplify();
                     }
@@ -3201,7 +3201,7 @@ ParametricRDESymbolicSolution RischAlgorithm::solve_parametric_rde_symbolic(
             } else {
                 if (j - 1 < num_eqs) {
                     matrix[j - 1][j] = (matrix[j - 1][j] +
-                                        SymbolicExpression::number(j) * t_prime).simplify();
+                                        SymbolicExpression::number(Scalar(static_cast<long long>(j))) * t_prime).simplify();
                 }
             }
         }
@@ -3211,7 +3211,7 @@ ParametricRDESymbolicSolution RischAlgorithm::solve_parametric_rde_symbolic(
     for (int i = 0; i < num_g; ++i) {
         for (int k = 0; k <= g_list[i].degree(); ++k) {
             if (k < num_eqs) {
-                matrix[k][num_y + i] = (SymbolicExpression::number(-1.0L) *
+                matrix[k][num_y + i] = (SymbolicExpression::number(Scalar(-1)) *
                                         g_list[i].coefficient(k)).simplify();
             }
         }
@@ -3238,7 +3238,7 @@ ParametricRDESymbolicSolution RischAlgorithm::solve_parametric_rde_symbolic(
             if (!all_zero) {
                 solution.y_particular = SymbolicPolynomial(y_coeffs, t_var).to_expression();
             } else {
-                solution.y_particular = SymbolicExpression::number(0.0L);
+                solution.y_particular = SymbolicExpression::number(Scalar(0));
             }
 
             // 提取参数值
@@ -3257,11 +3257,11 @@ ParametricRDESymbolicSolution RischAlgorithm::solve_parametric_rde_symbolic(
         for (int n : bounds.cancellation_candidates) {
             // 尝试 y = t^(-n) * z 的形式
             ParametricRDESymbolicSolution cancel_sol;
-            cancel_sol.y_particular = SymbolicExpression::number(0.0L);
+            cancel_sol.y_particular = SymbolicExpression::number(Scalar(0));
 
             // 对于消去情况，解的形式为 y = t^(-n)
             SymbolicExpression t = SymbolicExpression::variable(t_var);
-            cancel_sol.y_particular = make_power(t, SymbolicExpression::number(-n));
+            cancel_sol.y_particular = make_power(t, SymbolicExpression::number(Scalar(static_cast<long long>(-n))));
             cancel_sol.has_solution = true;
             cancel_sol.method_used = "cancellation_case_n=" + std::to_string(n);
 
@@ -3478,7 +3478,7 @@ bool RischAlgorithm::verify_parametric_rde_solution(
     SymbolicExpression lhs = (y_prime + f * y).simplify();
 
     // 计算 sum(c_i * g_i)
-    SymbolicExpression rhs = SymbolicExpression::number(0.0L);
+    SymbolicExpression rhs = SymbolicExpression::number(Scalar(0));
     for (size_t i = 0; i < g_list.size() && i < solution.parameters.size(); ++i) {
         rhs = (rhs + solution.parameters[i] * g_list[i]).simplify();
     }
@@ -3500,7 +3500,7 @@ bool RischAlgorithm::verify_parametric_rde_solution(
 bool has_fractional_power(const SymbolicExpression& expr) {
     if (expr.node_->type == NodeType::kPower) {
         SymbolicExpression exp(expr.node_->right);
-        Scalar val = 0.0L;
+        Scalar val = Scalar(0.0L);
         if (exp.is_number(&val)) {
             Scalar int_part;
             if (mymath::abs(mymath::modf(val, &int_part)) > 1e-12) {

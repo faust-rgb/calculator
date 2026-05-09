@@ -9,6 +9,7 @@
 #define MATH_TRANSCENDENTAL_EXP_LOG_H
 
 #include "core/common/scalar_type.h"
+#include "math/core/scalar_traits.h"
 
 namespace mymath {
 
@@ -27,8 +28,10 @@ namespace mymath {
  */
 long double exp(long double x);
 
-// Scalar overload
-inline Scalar exp(Scalar x) { return precise128::exp(x); }
+// Scalar overload - uses dispatch from scalar_traits.h
+inline Scalar exp(Scalar x) {
+    return scalar_exp(x);
+}
 
 // ============================================================================
 // Logarithmic Functions
@@ -75,26 +78,32 @@ long double log10(long double x);
  */
 long double log2(long double x);
 
-// Scalar overloads
+// Scalar overloads - use dispatch from scalar_traits.h
 inline Scalar ln(Scalar x) {
     if (x <= Scalar(0.0L)) {
         throw std::domain_error("ln is only defined for positive numbers");
     }
-    return precise128::ln(x);
+    return scalar_ln(x);
 }
+
 inline Scalar log(Scalar x) { return ln(x); }
-inline Scalar log1p(Scalar x) { return precise128::log1p(x); }
+
+inline Scalar log1p(Scalar x) {
+    return scalar_log1p(x);
+}
+
 inline Scalar log10(Scalar x) {
     if (x <= Scalar(0.0L)) {
         throw std::domain_error("log10 is only defined for positive numbers");
     }
-    return precise128::log10(x);
+    return scalar_log10(x);
 }
+
 inline Scalar log2(Scalar x) {
     if (x <= Scalar(0.0L)) {
         throw std::domain_error("log2 is only defined for positive numbers");
     }
-    return precise128::log2(x);
+    return scalar_log2(x);
 }
 
 }  // namespace mymath

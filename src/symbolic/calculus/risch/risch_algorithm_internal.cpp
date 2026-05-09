@@ -75,7 +75,7 @@ bool try_remove_multiplicative_factor(const SymbolicExpression& expression,
                                       const SymbolicExpression& factor,
                                       SymbolicExpression* rest) {
     if (structural_equals(expression, factor)) {
-        *rest = SymbolicExpression::number(1.0L);
+        *rest = SymbolicExpression::number(Scalar(1.0L));
         return true;
     }
 
@@ -129,7 +129,7 @@ bool try_integrate_low_degree_rational_in_variable(const SymbolicExpression& exp
         denominator_expr = SymbolicExpression(expression.node_->right);
     } else {
         numerator_expr = expression;
-        denominator_expr = SymbolicExpression::number(1.0L);
+        denominator_expr = SymbolicExpression::number(Scalar(1.0L));
     }
 
     std::vector<SymbolicExpression> num_coeffs;
@@ -183,9 +183,9 @@ bool try_integrate_low_degree_rational_in_variable(const SymbolicExpression& exp
     }
 
     if (den_degree == 2 && num_degree <= 1) {
-        Scalar a_val = 0.0L;
-        Scalar b_val = 0.0L;
-        Scalar c_val = 0.0L;
+        Scalar a_val = Scalar(0.0L);
+        Scalar b_val = Scalar(0.0L);
+        Scalar c_val = Scalar(0.0L);
         if (!denominator.coefficient(2).is_number(&a_val) ||
             !denominator.coefficient(1).is_number(&b_val) ||
             !denominator.coefficient(0).is_number(&c_val) ||
@@ -285,7 +285,7 @@ std::vector<int> detect_possible_integer_ratios(const SymbolicExpression& ratio)
     std::vector<int> candidates;
 
     // 尝试数值检测
-    Scalar val = 0.0L;
+    Scalar val = Scalar(0.0L);
     if (ratio.is_number(&val)) {
         int n = static_cast<int>(mymath::round(val));
         if (mymath::abs(val - n) < 1e-9) {
@@ -304,7 +304,7 @@ std::vector<int> detect_possible_integer_ratios(const SymbolicExpression& ratio)
     if (ratio.node_->type == NodeType::kDivide) {
         SymbolicExpression num(ratio.node_->left);
         SymbolicExpression den(ratio.node_->right);
-        Scalar num_val = 0.0L, den_val = 0.0L;
+        Scalar num_val = Scalar(0.0L), den_val = 0.0L;
         if (num.is_number(&num_val) && den.is_number(&den_val) &&
             mymath::abs(den_val) > 1e-12) {
             Scalar quotient = num_val / den_val;
@@ -415,7 +415,7 @@ void collect_log_terms(
         }
     };
 
-    collect(expr, SymbolicExpression::number(1.0L));
+    collect(expr, SymbolicExpression::number(Scalar(1.0L)));
 }
 
 // 分解常数乘积
@@ -442,7 +442,7 @@ bool decompose_constant_times_expression(
     collect_factors(expr);
 
     // 分离常数因子
-    SymbolicExpression remaining = SymbolicExpression::number(1.0L);
+    SymbolicExpression remaining = SymbolicExpression::number(Scalar(1.0L));
     Scalar total_const = 1.0L;
 
     for (const auto& factor : factors) {
@@ -451,7 +451,7 @@ bool decompose_constant_times_expression(
             total_const *= c;
         } else if (factor.is_constant(x_var)) {
             // 关于 x_var 是常数
-            Scalar v = 0.0L;
+            Scalar v = Scalar(0.0L);
             SymbolicExpression simplified = factor.simplify();
             if (simplified.is_number(&v)) {
                 total_const *= v;

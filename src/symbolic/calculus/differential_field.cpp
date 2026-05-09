@@ -803,7 +803,7 @@ IndependenceCheck DifferentialTowerBuilder::check_independence(
             };
             collect_terms(normalized_arg);
 
-            SymbolicExpression substitution_prod = SymbolicExpression::number(1.0L);
+            SymbolicExpression substitution_prod = SymbolicExpression::number(Scalar(1.0L));
             bool any_dependent = false;
 
             for (const auto& term : terms) {

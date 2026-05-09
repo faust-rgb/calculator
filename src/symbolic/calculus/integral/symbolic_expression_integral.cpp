@@ -38,7 +38,7 @@ namespace {
 } // namespace
 
 SymbolicExpression SymbolicExpression::integral(const std::string& variable_name) const {
-    Scalar numeric_value = 0.0L;
+    Scalar numeric_value = Scalar(0.0L);
     if (is_constant(variable_name)) {
         if (is_number(&numeric_value)) {
             return make_multiply(number(numeric_value), variable(variable_name)).simplify();
@@ -68,7 +68,7 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             return make_subtract(SymbolicExpression(node_->left).integral(variable_name),
                                  SymbolicExpression(node_->right).integral(variable_name)).simplify();
         case NodeType::kMultiply: {
-            Scalar constant = 0.0L;
+            Scalar constant = Scalar(0.0L);
             SymbolicExpression rest;
             const SymbolicExpression left(node_->left);
             const SymbolicExpression right(node_->right);
@@ -234,7 +234,7 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             Scalar scale = 1.0L;
             bool matched = same_simplified_expression(left, expected_derivative);
             if (!matched) {
-                Scalar constant = 0.0L;
+                Scalar constant = Scalar(0.0L);
                 SymbolicExpression rest;
                 if (decompose_constant_times_expression(expected_derivative,
                                                         variable_name,
@@ -262,7 +262,7 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             SymbolicExpression c_term;
             SymbolicExpression x2_coeff;
             if (is_pure_quadratic(inner, variable_name, &c_term, &x2_coeff)) {
-                Scalar a_value = 0.0L;
+                Scalar a_value = Scalar(0.0L);
                 if (x2_coeff.is_number(&a_value) &&
                     !mymath::is_near_zero(a_value, kFormatEps) &&
                     left.is_variable_named(variable_name)) {
@@ -381,7 +381,7 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
     if (node_->type == NodeType::kPower) {
         const SymbolicExpression base(node_->left);
         const SymbolicExpression exponent(node_->right);
-        Scalar exponent_value = 0.0L;
+        Scalar exponent_value = Scalar(0.0L);
         SymbolicExpression trig_identity_integral;
         if (exponent.is_number(&exponent_value) &&
             try_integrate_trig_power_identity(base,
@@ -410,8 +410,8 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
 
     if (node_->type == NodeType::kFunction) {
         const SymbolicExpression argument(node_->left);
-        Scalar a = 0.0L;
-        Scalar b = 0.0L;
+        Scalar a = Scalar(0.0L);
+        Scalar b = Scalar(0.0L);
         const bool linear = decompose_linear(argument, variable_name, &a, &b) &&
                             !mymath::is_near_zero(a, kFormatEps);
         

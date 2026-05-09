@@ -71,7 +71,7 @@ public:
     static AlgebraicNumber from_rational(const ExactRational& r) {
         std::vector<SymbolicExpression> coeffs;
         coeffs.push_back(SymbolicExpression::number(-r.to_double()));
-        coeffs.push_back(SymbolicExpression::number(1.0L));
+        coeffs.push_back(SymbolicExpression::number(Scalar(1.0L)));
         SymbolicPolynomial poly(coeffs, "_a");
 
         return AlgebraicNumber(poly, r, r, true, 0, 0);
@@ -107,7 +107,7 @@ public:
     bool is_rational(ExactRational* value = nullptr) const {
         if (minimal_polynomial.degree() != 1) return false;
 
-        Scalar a = 0.0L, b = 0.0L;
+        Scalar a = Scalar(0.0L), b = Scalar(0.0L);
         if (!minimal_polynomial.coefficient(1).is_number(&a)) return false;
         if (!minimal_polynomial.coefficient(0).is_number(&b)) return false;
 

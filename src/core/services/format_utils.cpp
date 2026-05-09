@@ -271,11 +271,11 @@ void set_process_display_precision(int precision) {
  */
 long double normalize_display_decimal(Scalar value) {
     const Scalar v(value);
-    if (mymath::precise128::abs(v) < Scalar(kDisplayZeroEps)) {
+    if (mymath::abs(v) < kDisplayZeroEps()) {
         return 0.0L;
     }
-    if (mymath::precise128::abs(v) > Scalar(kDisplayIntegerEps) &&
-        is_integer_double(value, kDisplayIntegerEps)) {
+    if (mymath::abs(v) > kDisplayIntegerEps() &&
+        is_integer_double(value, 1e-9)) {
         return static_cast<long double>(round_to_long_long(value));
     }
     return value.to_long_double();
@@ -354,14 +354,14 @@ bool try_make_simple_rational(long double value,
  */
 std::string format_symbolic_number(long double value) {
     const Scalar v(value);
-    const Scalar zero_eps(kDisplayZeroEps);
-    const Scalar int_eps(kDisplayIntegerEps);
+    const Scalar zero_eps = kDisplayZeroEps();
+    const Scalar int_eps = kDisplayIntegerEps();
 
-    if (mymath::precise128::abs(v) < zero_eps) {
+    if (mymath::abs(v) < zero_eps) {
         value = 0.0L;
     }
-    if (mymath::precise128::abs(v) > int_eps &&
-        is_integer_double(value, kDisplayIntegerEps)) {
+    if (mymath::abs(v) > int_eps &&
+        is_integer_double(value, 1e-9)) {
         return std::to_string(round_to_long_long(value));
     }
 
@@ -523,7 +523,7 @@ std::string format_stored_value(const StoredValue& value, bool symbolic_constant
         return symbolic_text;
     }
     if (value.has_precise_decimal_text && !value.precise_decimal_text.empty()) {
-        if (is_integer_double(value.decimal, kDisplayIntegerEps)) {
+        if (is_integer_double(value.decimal, 1e-9)) {
             return format_decimal(normalize_display_decimal(value.decimal));
         }
         return value.precise_decimal_text;

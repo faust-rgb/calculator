@@ -26,7 +26,7 @@ bool extract_laurent_coefficients(const SymbolicExpression& expr,
 
     // Handle direct power: t^n
     if (simplified.is_variable_named(t_var)) {
-        coefficients[1] = SymbolicExpression::number(1.0L);
+        coefficients[1] = SymbolicExpression::number(Scalar(1.0L));
         lowest_power = 1;
         highest_power = 1;
         return true;
@@ -52,7 +52,7 @@ bool extract_laurent_coefficients(const SymbolicExpression& expr,
         if (den.node_->type == NodeType::kPower) {
             SymbolicExpression base(den.node_->left);
             SymbolicExpression exp(den.node_->right);
-            Scalar exp_val = 0.0L;
+            Scalar exp_val = Scalar(0.0L);
             if (base.is_variable_named(t_var) && exp.is_number(&exp_val)) {
                 int n = static_cast<int>(mymath::round(exp_val));
                 if (n > 0 && mymath::abs(exp_val - n) < 1e-9) {
@@ -182,12 +182,12 @@ int compute_laurent_valuation_bound(const SymbolicExpression& f,
 
     // Check if f has a special form that affects the bound
     // If f = -n*u' for some integer n, there may be cancellation at power n
-    Scalar u_prime_val = 0.0L;
+    Scalar u_prime_val = Scalar(0.0L);
     bool u_prime_is_const = u_prime.is_number(&u_prime_val);
 
     if (u_prime_is_const && f_coeffs.size() == 1 && f_coeffs.count(0)) {
         // f is a constant (power 0)
-        Scalar f_val = 0.0L;
+        Scalar f_val = Scalar(0.0L);
         if (f_coeffs.at(0).is_number(&f_val)) {
             // Check if f = -n*u' for some integer n
             if (mymath::abs(u_prime_val) > 1e-12) {
@@ -230,10 +230,10 @@ int compute_laurent_degree_bound(const SymbolicExpression& f,
     }
 
     // Check for cancellation case
-    Scalar u_prime_val = 0.0L;
+    Scalar u_prime_val = Scalar(0.0L);
     if (u_prime.is_number(&u_prime_val) && mymath::abs(u_prime_val) > 1e-12) {
         if (f_coeffs.size() == 1 && f_coeffs.count(0)) {
-            Scalar f_val = 0.0L;
+            Scalar f_val = Scalar(0.0L);
             if (f_coeffs.at(0).is_number(&f_val)) {
                 Scalar ratio = -f_val / u_prime_val;
                 int n = static_cast<int>(mymath::round(ratio));
