@@ -2,7 +2,7 @@
 #include "matrix_internal.h"
 #include "dsp/signal_processing.h"
 #include "mymath.h"
-#include "mymath_complex.h"
+#include "math/types/complex.h"
 #include "string_utils.h"
 #include "precise/precise_decimal.h"
 #include "core/common/scalar_type.h"

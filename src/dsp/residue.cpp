@@ -3,7 +3,7 @@
 #include "core/services/string_utils.h"
 #include "calculator_internal_types.h"
 #include "math/mymath.h"
-#include "mymath_complex.h"
+#include "math/types/complex.h"
 #include "symbolic_expression.h"
 #include "symbolic_expression_internal.h"
 #include "matrix.h"

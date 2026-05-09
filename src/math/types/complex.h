@@ -1,14 +1,50 @@
-#ifndef MYMATH_COMPLEX_H
-#define MYMATH_COMPLEX_H
+/**
+ * @file complex.h
+ * @brief Complex number template class
+ *
+ * This file provides a complete complex number implementation with
+ * arithmetic operators and mathematical functions.
+ */
 
-#include "mymath.h"
-#include "mymath_float128.h"
+#ifndef MATH_TYPES_COMPLEX_H
+#define MATH_TYPES_COMPLEX_H
 
+#include "core/common/scalar_type.h"
 #include <istream>
 #include <ostream>
 #include <type_traits>
+#include <cmath>
 
 namespace mymath {
+
+// Forward declarations of functions used in this file
+// These are defined in math/core/ and math/transcendental/
+long double abs(long double x);
+Scalar abs(Scalar x);
+long double sqrt(long double x);
+Scalar sqrt(Scalar x);
+long double atan2(long double y, long double x);
+Scalar atan2(Scalar y, Scalar x);
+long double sin(long double x);
+Scalar sin(Scalar x);
+long double cos(long double x);
+Scalar cos(Scalar x);
+long double tan(long double x);
+Scalar tan(Scalar x);
+long double sinh(long double x);
+Scalar sinh(Scalar x);
+long double cosh(long double x);
+Scalar cosh(Scalar x);
+long double exp(long double x);
+Scalar exp(Scalar x);
+long double ln(long double x);
+Scalar ln(Scalar x);
+bool isnan(long double x);
+bool isnan(Scalar x);
+bool isinf(long double x);
+bool isinf(Scalar x);
+long double infinity();
+long double quiet_nan();
 
 // Helper to check if a type is arithmetic or float128_t
 template <typename T>
@@ -108,52 +144,39 @@ private:
     T imag_;
 };
 
+// Real and imaginary part accessors
 template <typename T>
-constexpr T real(const complex<T>& value) {
-    return value.real();
-}
+constexpr T real(const complex<T>& value) { return value.real(); }
 
 template <typename T>
-constexpr T imag(const complex<T>& value) {
-    return value.imag();
-}
+constexpr T imag(const complex<T>& value) { return value.imag(); }
 
 template <typename T>
-constexpr T real(const T& value) {
-    return value;
-}
+constexpr T real(const T& value) { return value; }
 
 template <typename T>
-constexpr T imag(const T&) {
-    return T();
-}
+constexpr T imag(const T&) { return T(); }
+
+// Unary operators
+template <typename T>
+complex<T> operator+(const complex<T>& value) { return value; }
 
 template <typename T>
-complex<T> operator+(const complex<T>& value) {
-    return value;
-}
+complex<T> operator-(const complex<T>& value) { return complex<T>(-value.real(), -value.imag()); }
 
-template <typename T>
-complex<T> operator-(const complex<T>& value) {
-    return complex<T>(-value.real(), -value.imag());
-}
-
+// Binary operators
 template <typename T, typename U>
 auto operator+(const complex<T>& lhs, const complex<U>& rhs)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;
-    complex<R> result(lhs);
-    result += complex<R>(rhs);
-    return result;
+    return complex<R>(lhs.real() + rhs.real(), lhs.imag() + rhs.imag());
 }
 
 template <typename T, typename U>
 auto operator-(const complex<T>& lhs, const complex<U>& rhs)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;
-    complex<R> result(lhs);
-    result -= complex<R>(rhs);
-    return result;
+    return complex<R>(lhs.real() - rhs.real(), lhs.imag() - rhs.imag());
 }
 
 template <typename T, typename U>
@@ -174,6 +197,7 @@ auto operator/(const complex<T>& lhs, const complex<U>& rhs)
     return result;
 }
 
+// Mixed arithmetic with numeric types
 template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<U>>::type>
 auto operator+(const complex<T>& lhs, const U& rhs)
     -> complex<typename std::common_type<T, U>::type> {
@@ -231,6 +255,7 @@ auto operator/(const T& lhs, const complex<U>& rhs)
     return complex<R>((lhs * rhs.real()) / denom, (-lhs * rhs.imag()) / denom);
 }
 
+// Comparison operators
 template <typename T, typename U>
 bool operator==(const complex<T>& lhs, const complex<U>& rhs) {
     return lhs.real() == rhs.real() && lhs.imag() == rhs.imag();
@@ -266,41 +291,19 @@ T norm(const complex<T>& value) {
     return value.real() * value.real() + value.imag() * value.imag();
 }
 
-// Helper to get absolute value for different types
-template <typename T>
-inline T type_abs(const T& val) {
-    return mymath::abs(val);
-}
-
-// Specialization for float128_t
-inline mymath::float128_t type_abs(const mymath::float128_t& val) {
-    return mymath::precise128::abs(val);
-}
-
-// Helper to get sqrt for different types
-template <typename T>
-inline T type_sqrt(const T& val) {
-    return mymath::sqrt(val);
-}
-
-// Specialization for float128_t
-inline mymath::float128_t type_sqrt(const mymath::float128_t& val) {
-    return mymath::precise128::sqrt(val);
-}
-
 template <typename T>
 T abs(const complex<T>& value) {
     // 使用 hypot 算法避免溢出
-    const T real_abs = type_abs(value.real());
-    const T imag_abs = type_abs(value.imag());
+    const T real_abs = mymath::abs(value.real());
+    const T imag_abs = mymath::abs(value.imag());
     if (real_abs == T()) return imag_abs;
     if (imag_abs == T()) return real_abs;
     if (real_abs > imag_abs) {
         const T ratio = imag_abs / real_abs;
-        return real_abs * type_sqrt(T(1) + ratio * ratio);
+        return real_abs * mymath::sqrt(T(1) + ratio * ratio);
     }
     const T ratio = real_abs / imag_abs;
-    return imag_abs * type_sqrt(T(1) + ratio * ratio);
+    return imag_abs * mymath::sqrt(T(1) + ratio * ratio);
 }
 
 template <typename T>
@@ -409,14 +412,14 @@ auto pow(const complex<T>& base, const complex<U>& exponent)
     return exp(complex<R>(exponent) * log(complex<R>(base)));
 }
 
-template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<U>>::type>
+template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<U>::value>::type>
 auto pow(const complex<T>& base, const U& exponent)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;
     return exp(complex<R>(exponent) * log(complex<R>(base)));
 }
 
-template <typename T, typename U, typename = typename std::enable_if<is_numeric_v<T>>::type>
+template <typename T, typename U, typename = typename std::enable_if<std::is_arithmetic<T>::value>::type>
 auto pow(const T& base, const complex<U>& exponent)
     -> complex<typename std::common_type<T, U>::type> {
     using R = typename std::common_type<T, U>::type;
@@ -529,11 +532,11 @@ std::istream& operator>>(std::istream& is, complex<T>& value) {
     value = complex<T>(real_value, imag_value);
     return is;
 }
-
+// Type aliases
 using complex_float = complex<float>;
 using complex_double = complex<long double>;
 using complex_long_double = complex<long double>;
 
 }  // namespace mymath
 
-#endif
+#endif // MATH_TYPES_COMPLEX_H

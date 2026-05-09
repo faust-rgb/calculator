@@ -6,7 +6,7 @@
 
 #include "core/services/format_utils.h"
 #include "math/mymath.h"
-#include "math/mymath_dual.h"
+#include "math/types/dual.h"
 
 #include <algorithm>
 #include <cctype>

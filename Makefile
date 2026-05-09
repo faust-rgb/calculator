@@ -34,17 +34,20 @@ DEPS := $(MAIN_OBJ:.o=.d) $(TEST_OBJS:.o=.d) $(COMMON_OBJS:.o=.d)
 all: $(APP)
 
 $(BIN_DIR):
-	mkdir -p $(BIN_DIR)
+	@mkdir -p $(BIN_DIR)
 
 $(BUILD_DIR)/%.o: %.cpp
-	mkdir -p $(dir $@)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+	@mkdir -p $(dir $@)
+	@echo "CXX $<"
+	@$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 $(APP): $(MAIN_OBJ) $(COMMON_OBJS) | $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(APP)
+	@echo "LINK $@"
+	@$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(APP)
 
 $(TEST_APP): $(TEST_OBJS) $(COMMON_OBJS) | $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(TEST_APP)
+	@echo "LINK $@"
+	@$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(TEST_APP)
 
 test: $(TEST_APP)
 	$(TEST_APP)

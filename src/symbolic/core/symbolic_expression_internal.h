@@ -2,7 +2,7 @@
 #define SYMBOLIC_EXPRESSION_INTERNAL_H
 
 #include "symbolic/core/symbolic_expression.h"
-#include "math/mymath_dual.h"
+#include "math/mymath.h"
 
 #include <initializer_list>
 #include <list>

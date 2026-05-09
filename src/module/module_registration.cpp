@@ -18,8 +18,8 @@
 #include "calculator_module.h"
 
 // ==================== 基础数学与系统模块 ====================
-#include "math/standard_math_module.h"    // 标准数学函数（sin, cos, exp 等）
-#include "math/integer_math_module.h"     // 整数运算（阶乘、组合数等）
+#include "math/modules/standard_math_module.h"    // 标准数学函数（sin, cos, exp 等）
+#include "math/modules/integer_math_module.h"     // 整数运算（阶乘、组合数等）
 #include "matrix/matrix_module.h"         // 矩阵运算
 #include "precise/precise_module.h"       // 高精度计算
 #include "statistics/statistics_module.h" // 统计函数

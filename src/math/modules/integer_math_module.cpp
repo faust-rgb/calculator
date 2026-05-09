@@ -7,12 +7,12 @@
  */
 
 #include "integer_math_module.h"
-#include "helpers/integer_helpers.h"
-#include "helpers/combinatorics.h"
-#include "helpers/bitwise_helpers.h"
-#include "helpers/base_conversions.h"
+#include "math/helpers/integer_helpers.h"
+#include "math/helpers/combinatorics.h"
+#include "math/helpers/bitwise_helpers.h"
+#include "math/helpers/base_conversions.h"
 #include "core/common/calculator_exceptions.h"
-#include "mymath.h"
+#include "math/mymath.h"
 #include <algorithm>
 #include <sstream>
 #include <set>
