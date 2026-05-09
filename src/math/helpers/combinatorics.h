@@ -9,7 +9,7 @@
 #define COMBINATORICS_HELPERS_H
 
 #include "precise/rational.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 
 // 函数声明直接使用 Scalar，避免全局 using 污染
 

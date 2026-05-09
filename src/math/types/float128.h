@@ -12,6 +12,7 @@
 
 #include <string>
 #include <iostream>
+#include <limits>
 
 namespace mymath {
 
@@ -41,6 +42,10 @@ struct float128_t {
     constexpr float128_t(float val) : hi(static_cast<long double>(val)), lo(0.0L) {}
     constexpr float128_t(double val) : hi(static_cast<long double>(val)), lo(0.0L) {}
 
+    // String constructor (declaration only, implemented after from_string function)
+    float128_t(const std::string& s);
+    float128_t(const char* s);
+
     // Explicit conversions
     long double to_long_double() const { return hi + lo; }
     explicit operator long double() const { return hi + lo; }
@@ -49,6 +54,31 @@ struct float128_t {
     explicit operator int() const { return static_cast<int>(hi + lo); }
     explicit operator long long() const { return static_cast<long long>(hi + lo); }
     explicit operator std::size_t() const { return static_cast<std::size_t>(hi + lo); }
+
+    // String conversion (declaration only, implemented after to_string function)
+    std::string to_string() const;
+
+    // Static methods for special values
+    static float128_t infinity() {
+        float128_t result;
+        result.hi = std::numeric_limits<long double>::infinity();
+        result.lo = 0.0L;
+        return result;
+    }
+
+    static float128_t neg_infinity() {
+        float128_t result;
+        result.hi = -std::numeric_limits<long double>::infinity();
+        result.lo = 0.0L;
+        return result;
+    }
+
+    static float128_t nan() {
+        float128_t result;
+        result.hi = std::numeric_limits<long double>::quiet_NaN();
+        result.lo = 0.0L;
+        return result;
+    }
 };
 
 // Basic arithmetic operator overloads
@@ -158,6 +188,19 @@ std::istream& operator>>(std::istream& is, float128_t& a);
 // String conversion
 std::string to_string(float128_t a, int precision = 36);
 float128_t from_string(const std::string& s);
+
+// Member function implementations
+inline std::string float128_t::to_string() const {
+    return mymath::to_string(*this, 36);
+}
+
+inline float128_t::float128_t(const std::string& s) : hi(0.0L), lo(0.0L) {
+    *this = from_string(s);
+}
+
+inline float128_t::float128_t(const char* s) : hi(0.0L), lo(0.0L) {
+    *this = from_string(std::string(s));
+}
 
 namespace precise128 {
     // Basic utility functions

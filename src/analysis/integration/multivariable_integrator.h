@@ -11,7 +11,7 @@
 #include <functional>
 #include <utility>
 #include <vector>
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 using Scalar = mymath::Scalar;
 /**
  * @class MultivariableIntegrator

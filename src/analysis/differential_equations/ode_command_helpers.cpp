@@ -5,7 +5,7 @@
 #include "analysis/differential_equations/ode_command_helpers.h"
 #include "analysis/modules/ode_module.h"
 #include "symbolic/core/symbolic_expression_internal.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 
 #include <algorithm>
 #include <sstream>

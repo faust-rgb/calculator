@@ -47,17 +47,20 @@ StandardMathModule::get_scalar_functions() const {
     // Log/Exp
     funcs["exp"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("exp expects 1 argument"); return mymath::exp(a[0]); };
     funcs["exp2"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("exp2 expects 1 argument"); return mymath::pow(2.0, a[0]); };
+    // Log/Exp
+    funcs["exp"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("exp expects 1 argument"); return mymath::exp(a[0]); };
+    funcs["exp2"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("exp2 expects 1 argument"); return mymath::pow(Scalar(2.0L), a[0]); };
     funcs["ln"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("ln expects 1 argument"); return mymath::ln(a[0]); };
     funcs["log"] = [](const std::vector<Scalar>& a) { 
         if(a.size()==1) return mymath::ln(a[0]); 
         if(a.size()==2) {
-            if (a[1] <= 0.0L || mymath::is_near_zero(a[1] - 1.0L)) throw MathError("log base must be positive and not equal to 1");
+            if (a[1] <= Scalar(0.0L) || mymath::is_near_zero(a[1] - Scalar(1.0L))) throw MathError("log base must be positive and not equal to 1");
             return mymath::ln(a[0]) / mymath::ln(a[1]);
         }
         throw MathError("log expects 1 or 2 arguments");
     };
-    funcs["log2"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("log2 expects 1 argument"); return mymath::ln(a[0]) / mymath::ln(2.0); };
-    funcs["log10"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("log10 expects 1 argument"); return mymath::ln(a[0]) / mymath::ln(10.0L); };
+    funcs["log2"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("log2 expects 1 argument"); return mymath::ln(a[0]) / mymath::ln(Scalar(2.0L)); };
+    funcs["log10"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("log10 expects 1 argument"); return mymath::ln(a[0]) / mymath::ln(Scalar(10.0L)); };
 
     // Roots/Power
     funcs["sqrt"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("sqrt expects 1 argument"); return mymath::sqrt(a[0]); };
@@ -69,13 +72,13 @@ StandardMathModule::get_scalar_functions() const {
     funcs["abs"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("abs expects 1 argument"); return mymath::abs(a[0]); };
     funcs["sign"] = [](const std::vector<Scalar>& a) { 
         if(a.size()!=1) throw MathError("sign expects 1 argument"); 
-        if (mymath::is_near_zero(a[0], 1e-12)) return 0.0L;
-        return a[0] > 0.0L ? 1.0L : -1.0L;
+        if (mymath::is_near_zero(a[0], Scalar(1e-12L))) return Scalar(0.0L);
+        return a[0] > Scalar(0.0L) ? Scalar(1.0L) : Scalar(-1.0L);
     };
-    funcs["floor"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("floor expects 1 argument"); return static_cast<Scalar>(floor_to_long_long(a[0])); };
-    funcs["ceil"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("ceil expects 1 argument"); return static_cast<Scalar>(ceil_to_long_long(a[0])); };
-    funcs["round"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("round expects 1 argument"); return static_cast<Scalar>(round_to_long_long(a[0])); };
-    funcs["trunc"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("trunc expects 1 argument"); return static_cast<Scalar>(trunc_to_long_long(a[0])); };
+    funcs["floor"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("floor expects 1 argument"); return mymath::floor(a[0]); };
+    funcs["ceil"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("ceil expects 1 argument"); return mymath::ceil(a[0]); };
+    funcs["round"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("round expects 1 argument"); return mymath::round(a[0]); };
+    funcs["trunc"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("trunc expects 1 argument"); return mymath::trunc(a[0]); };
     funcs["min"] = [](const std::vector<Scalar>& a) {
         if(a.empty()) throw MathError("min expects at least 1 argument");
         Scalar res = a[0];

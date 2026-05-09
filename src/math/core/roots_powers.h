@@ -9,7 +9,7 @@
 #ifndef MATH_CORE_ROOTS_POWERS_H
 #define MATH_CORE_ROOTS_POWERS_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "floating_point.h"
 #include "scalar_traits.h"
 

@@ -10,7 +10,7 @@
 #include "analysis/integration/integration_engine.h"
 #include "analysis/integration/multidim_integration.h"
 #include "analysis/integration/multivariable_integrator.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/mymath.h"
 
 #include <stdexcept>

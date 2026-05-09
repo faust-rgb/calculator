@@ -369,6 +369,9 @@ std::ostream& operator<<(std::ostream& os, const PreciseDecimal& val);
 inline PreciseDecimal infinity() { return PreciseDecimal::infinity(); }
 inline PreciseDecimal neg_infinity() { return PreciseDecimal::neg_infinity(); }
 
+// 字符串转换函数
+inline PreciseDecimal from_string(const std::string& s) { return PreciseDecimal(s); }
+
 // ============================================================================
 // 高精度数学函数命名空间
 // ============================================================================

@@ -6,7 +6,7 @@
 // ============================================================================
 
 #include "format_utils.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "calculator_internal_types.h"
 #include "math/helpers/integer_helpers.h"
 #include "math/mymath.h"

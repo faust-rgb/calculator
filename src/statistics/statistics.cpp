@@ -11,7 +11,7 @@
  */
 
 #include "statistics.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/mymath.h"
 #include <algorithm>
 #include <stdexcept>

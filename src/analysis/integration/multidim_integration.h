@@ -19,7 +19,7 @@
 #ifndef MULTIDIM_INTEGRATION_H
 #define MULTIDIM_INTEGRATION_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include <functional>
 #include <vector>
 

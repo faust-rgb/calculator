@@ -10,7 +10,7 @@
 
 #include <limits>
 #include <cmath>
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/core/basic_ops.h"
 #include "math/core/roots_powers.h"
 #include "precise/precise_decimal.h"

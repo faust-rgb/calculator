@@ -10,7 +10,7 @@
 #define MATH_CORE_CONSTANTS_H
 
 #include <limits>
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "scalar_traits.h"
 
 namespace mymath {

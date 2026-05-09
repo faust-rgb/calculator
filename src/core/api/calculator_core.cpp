@@ -10,7 +10,7 @@
 // ============================================================================
 
 #include "core/api/calculator_internal_types.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "parser/grammars/command_parser.h"
 #include "analysis/calculus/function_analysis.h"

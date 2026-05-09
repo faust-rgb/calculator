@@ -33,7 +33,7 @@
 #include "symbolic/algebra/polynomial/symbolic_polynomial.h"
 #include "symbolic/base/assumptions.h"
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/mymath.h"
 #include "polynomial/polynomial.h"
 

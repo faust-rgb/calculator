@@ -1,7 +1,7 @@
 #ifndef ANALYSIS_SERIES_PADE_APPROXIMATION_H
 #define ANALYSIS_SERIES_PADE_APPROXIMATION_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include <string>
 #include <vector>
 #include <functional>

@@ -7,7 +7,7 @@
  */
 
 #include "calculator_statistics.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/mymath.h"
 #include "statistics.h"
 #include "probability.h"

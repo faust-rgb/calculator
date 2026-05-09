@@ -9,7 +9,7 @@
 #ifndef MATH_TRANSCENDENTAL_TRIG_H
 #define MATH_TRANSCENDENTAL_TRIG_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/core/floating_point.h"
 #include "math/core/scalar_traits.h"
 

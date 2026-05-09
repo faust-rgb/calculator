@@ -172,7 +172,8 @@ TMatrix<long double> multiply<long double>(const TMatrix<long double>& lhs, cons
  * 使用延迟规范化优化：在累加过程中不规范化，
  * 最后统一规范化，减少规范化开销。
  */
-// 针对 PreciseDecimal 的优化版本 (延迟规范化)
+// 针对 PreciseDecimal 的优化版本 (延迟规范化) - 已注释，使用 Scalar 通用版本
+/*
 template <>
 TMatrix<PreciseDecimal> multiply<PreciseDecimal>(const TMatrix<PreciseDecimal>& lhs, const TMatrix<PreciseDecimal>& rhs) {
     if (lhs.cols != rhs.rows) {
@@ -197,6 +198,7 @@ TMatrix<PreciseDecimal> multiply<PreciseDecimal>(const TMatrix<PreciseDecimal>& 
     for (auto& val : result.data) val.normalize();
     return result;
 }
+*/
 
 template <typename T>
 TMatrix<T> multiply(const TMatrix<T>& lhs, T scalar) {

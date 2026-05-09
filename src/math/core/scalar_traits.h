@@ -14,7 +14,7 @@
 #ifndef MATH_CORE_SCALAR_TRAITS_H
 #define MATH_CORE_SCALAR_TRAITS_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/types/float128.h"
 #include "precise/precise_decimal.h"
 
@@ -62,21 +62,6 @@ inline T scalar_sqrt(T x) {
     }
 }
 
-/**
- * @brief Cube root dispatch
- */
-template <typename T = Scalar>
-inline T scalar_cbrt(T x) {
-    if constexpr (std::is_same_v<T, float128_t>) {
-        return precise128::cbrt(x);
-    } else {
-        // cbrt(x) = sign(x) * |x|^(1/3)
-        if (x.is_zero()) return x;
-        T abs_x = precise::abs(x);
-        T result = precise::pow(abs_x, T("0.333333333333333333333333333333"));
-        return x < T(0.0L) ? -result : result;
-    }
-}
 
 /**
  * @brief Power dispatch
@@ -87,6 +72,22 @@ inline T scalar_pow(T base, T exp) {
         return precise128::pow(base, exp);
     } else {
         return precise::pow(base, exp);
+    }
+}
+
+/**
+ * @brief Cube root dispatch
+ */
+template <typename T = Scalar>
+inline T scalar_cbrt(T x) {
+    if constexpr (std::is_same_v<T, float128_t>) {
+        return precise128::cbrt(x);
+    } else {
+        // cbrt(x) = sign(x) * |x|^(1/3)
+        if (x.is_zero()) return x;
+        T abs_x = scalar_abs(x);
+        T result = scalar_pow(abs_x, T("0.333333333333333333333333333333"));
+        return x < T(0.0L) ? -result : result;
     }
 }
 
@@ -134,9 +135,16 @@ inline T scalar_trunc(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::trunc(x);
     } else {
-        return precise::floor(precise::abs(x)) * (x >= T(0.0L) ? T(1.0L) : T(-1.0L));
+        return scalar_floor(scalar_abs(x)) * (x >= T(0.0L) ? T(1.0L) : T(-1.0L));
     }
 }
+
+// ============================================================================
+// Forward Declarations - Constants (needed by scalar_atan2)
+// ============================================================================
+
+template <typename T>
+inline T scalar_pi();
 
 // ============================================================================
 // Dispatch Functions - Trigonometric
@@ -202,13 +210,13 @@ inline T scalar_atan2(T y, T x) {
         return precise128::atan2(y, x);
     } else {
         // Simple atan2 implementation for PreciseDecimal
-        if (x > T(0.0L)) return precise::atan(y / x);
+        if (x > T(0.0L)) return scalar_atan(y / x);
         if (x < T(0.0L)) {
-            if (y >= T(0.0L)) return precise::atan(y / x) + precise::pi();
-            return precise::atan(y / x) - precise::pi();
+            if (y >= T(0.0L)) return scalar_atan(y / x) + scalar_pi<T>();
+            return scalar_atan(y / x) - scalar_pi<T>();
         }
-        if (y > T(0.0L)) return precise::pi() * T(0.5L);
-        if (y < T(0.0L)) return precise::pi() * T(-0.5L);
+        if (y > T(0.0L)) return scalar_pi<T>() * T(0.5L);
+        if (y < T(0.0L)) return scalar_pi<T>() * T(-0.5L);
         return T(0.0L);
     }
 }
@@ -307,7 +315,7 @@ inline T scalar_log2(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::log2(x);
     } else {
-        return precise::ln(x) / precise::ln(T(2.0L));
+        return scalar_ln(x) / scalar_ln(T(2.0L));
     }
 }
 
@@ -316,7 +324,7 @@ inline T scalar_log1p(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::log1p(x);
     } else {
-        return precise::ln(T(1.0L) + x);
+        return scalar_ln(T(1.0L) + x);
     }
 }
 
@@ -365,7 +373,7 @@ inline T scalar_sqrt_pi() {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::sqrt_pi();
     } else {
-        return precise::sqrt(precise::pi());
+        return scalar_sqrt(scalar_pi());
     }
 }
 
@@ -383,6 +391,11 @@ inline std::string scalar_to_string(T value, int precision = 36) {
     }
 }
 
+// Generic to_string for Scalar type (dispatches to appropriate implementation)
+//inline std::string to_string(Scalar value, int precision = 36) {
+//    return scalar_to_string(value, precision);
+//}
+
 // ============================================================================
 // Dispatch Functions - Special
 // ============================================================================
@@ -392,14 +405,14 @@ inline T scalar_hypot(T x, T y) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::hypot(x, y);
     } else {
-        T abs_x = precise::abs(x);
-        T abs_y = precise::abs(y);
+        T abs_x = scalar_abs(x);
+        T abs_y = scalar_abs(y);
         if (abs_x > abs_y) {
             T ratio = abs_y / abs_x;
-            return abs_x * precise::sqrt(T(1.0L) + ratio * ratio);
+            return abs_x * scalar_sqrt(T(1.0L) + ratio * ratio);
         } else if (!abs_y.is_zero()) {
             T ratio = abs_x / abs_y;
-            return abs_y * precise::sqrt(T(1.0L) + ratio * ratio);
+            return abs_y * scalar_sqrt(T(1.0L) + ratio * ratio);
         }
         return T(0.0L);
     }
@@ -410,7 +423,7 @@ inline T scalar_fmod(T x, T y) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::fmod(x, y);
     } else {
-        return x - precise::floor(x / y) * y;
+        return x - scalar_floor(x / y) * y;
     }
 }
 
@@ -419,7 +432,7 @@ inline T scalar_remainder(T x, T y) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::remainder(x, y);
     } else {
-        T q = precise::round(x / y);
+        T q = scalar_round(x / y);
         return x - q * y;
     }
 }
@@ -429,9 +442,9 @@ inline T scalar_normalize_angle(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::normalize_angle(x);
     } else {
-        T two_pi = precise::two_pi();
-        T pi = precise::pi();
-        return x - precise::floor((x + pi) / two_pi) * two_pi;
+        T two_pi = scalar_two_pi();
+        T pi = scalar_pi();
+        return x - scalar_floor((x + pi) / two_pi) * two_pi;
     }
 }
 
@@ -443,32 +456,36 @@ template <typename T = Scalar>
 inline bool scalar_isnan(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::isnan(x);
+    } else {
+        return false;
     }
-    return false;
 }
 
 template <typename T = Scalar>
 inline bool scalar_isinf(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::isinf(x);
+    } else {
+        return false;
     }
-    return false;
 }
 
 template <typename T = Scalar>
 inline bool scalar_isfinite(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::isfinite(x);
+    } else {
+        return true;
     }
-    return true;
 }
 
 template <typename T = Scalar>
 inline bool scalar_is_near_zero(T x, T eps) {
     if constexpr (std::is_same_v<T, float128_t>) {
-        return is_near_zero(x, eps);
+        return precise128::is_near_zero(x, eps);
+    } else {
+        return scalar_abs(x) <= eps;
     }
-    return precise::abs(x) <= eps;
 }
 
 template <typename T = Scalar>
@@ -486,8 +503,8 @@ inline T scalar_sec(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::sec(x);
     } else {
-        T c = precise::cos(x);
-        if (precise::abs(c) < T(1e-10L)) {
+        T c = scalar_cos(x);
+        if (scalar_abs(c) < T(1e-10L)) {
             throw std::domain_error("sec is undefined when cos(x) is zero");
         }
         return T(1.0L) / c;
@@ -499,8 +516,8 @@ inline T scalar_csc(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::csc(x);
     } else {
-        T s = precise::sin(x);
-        if (precise::abs(s) < T(1e-10L)) {
+        T s = scalar_sin(x);
+        if (scalar_abs(s) < T(1e-10L)) {
             throw std::domain_error("csc is undefined when sin(x) is zero");
         }
         return T(1.0L) / s;
@@ -516,11 +533,11 @@ inline T scalar_cot(T x) {
         }
         return precise128::cos(x) / sine;
     } else {
-        T s = precise::sin(x);
-        if (precise::abs(s) < T(1e-10L)) {
+        T s = scalar_sin(x);
+        if (scalar_abs(s) < T(1e-10L)) {
             throw std::domain_error("cot is undefined when sin(x) is zero");
         }
-        return precise::cos(x) / s;
+        return scalar_cos(x) / s;
     }
 }
 
@@ -532,10 +549,10 @@ inline T scalar_asec(T x) {
         }
         return precise128::asec(x);
     } else {
-        if (precise::abs(x) < T(1.0L)) {
+        if (scalar_abs(x) < T(1.0L)) {
             throw std::domain_error("asec is only defined for |x| >= 1");
         }
-        return precise::acos(T(1.0L) / x);
+        return scalar_acos(T(1.0L) / x);
     }
 }
 
@@ -547,10 +564,10 @@ inline T scalar_acsc(T x) {
         }
         return precise128::acsc(x);
     } else {
-        if (precise::abs(x) < T(1.0L)) {
+        if (scalar_abs(x) < T(1.0L)) {
             throw std::domain_error("acsc is only defined for |x| >= 1");
         }
-        return precise::asin(T(1.0L) / x);
+        return scalar_asin(T(1.0L) / x);
     }
 }
 
@@ -559,7 +576,7 @@ inline T scalar_acot(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::acot(x);
     } else {
-        return precise::pi() * T(0.5L) - precise::atan(x);
+        return scalar_pi() * T(0.5L) - scalar_atan(x);
     }
 }
 

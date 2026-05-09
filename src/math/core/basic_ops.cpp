@@ -178,9 +178,10 @@ bool approximate_fraction(Scalar value,
     const Scalar positive = value < Scalar(0.0L) ? -value : value;
 
     for (int den = 1; den <= max_denominator; ++den) {
-        const Scalar scaled = positive * Scalar(static_cast<long double>(den));
-        const long long num = static_cast<long long>(static_cast<long double>(scaled + Scalar(0.5L)));
-        const Scalar candidate = Scalar(static_cast<long double>(num)) / Scalar(static_cast<long double>(den));
+        const Scalar scaled = positive * Scalar(static_cast<long long>(den));
+        const Scalar num_s = mymath::round(scaled);
+        const long long num = static_cast<long long>(static_cast<long double>(num_s));
+        const Scalar candidate = Scalar(num) / Scalar(static_cast<long long>(den));
 
         if (mymath::abs(candidate - positive) <= eps) {
             const long long divisor = gcd(num, den);
@@ -250,9 +251,9 @@ bool best_rational_approximation(long double value,
         const long long num2 = h0 + candidate_step * h1;
         const long long den2 = k0 + candidate_step * k1;
 
-        const long double error1 = abs(target - static_cast<long double>(best_num) / static_cast<long double>(best_den));
+        const long double error1 = mymath::abs(target - static_cast<long double>(best_num) / static_cast<long double>(best_den));
         const long double error2 = den2 > 0
-                                  ? abs(target - static_cast<long double>(num2) / static_cast<long double>(den2))
+                                  ? mymath::abs(target - static_cast<long double>(num2) / static_cast<long double>(den2))
                                   : infinity();
         if (den2 > 0 && error2 <= error1) {
             best_num = num2;
@@ -278,7 +279,7 @@ long double normalize_angle(long double x) {
     const Scalar two_pi = mymath::pi() * Scalar(2.0L);
     Scalar x_s = Scalar(x);
     // fmod equivalent: x - floor(x/two_pi) * two_pi
-    Scalar result = x_s - precise::floor(x_s / two_pi) * two_pi;
+    Scalar result = x_s - mymath::floor(x_s / two_pi) * two_pi;
     if (result > mymath::pi()) {
         result -= two_pi;
     } else if (result < -mymath::pi()) {

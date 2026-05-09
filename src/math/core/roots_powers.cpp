@@ -22,8 +22,8 @@ long double sqrt(long double x) {
     if (x == 0.0L) {
         return 0.0L;
     }
-    // Use precise for high precision calculation
-    Scalar result = precise::sqrt(Scalar(x));
+    // Use scalar version for high precision calculation
+    Scalar result = mymath::sqrt(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -35,8 +35,8 @@ long double cbrt(long double x) {
     if (x == 0.0L) {
         return 0.0L;
     }
-    // Use pow(x, 1/3) for high precision calculation
-    Scalar result = precise::pow(Scalar(x), Scalar(1.0L / 3.0L));
+    // Use scalar version for high precision calculation
+    Scalar result = mymath::cbrt(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -60,7 +60,7 @@ long double root(long double value, long double degree) {
         throw std::domain_error("even root of negative number is not real");
     }
 
-    // Use precise for high precision calculation
+    // Use scalar version for high precision calculation
     Scalar result = root(Scalar(value), Scalar(degree));
     return static_cast<long double>(result);
 }
@@ -75,7 +75,7 @@ Scalar root(Scalar value, Scalar degree) {
         throw std::domain_error("root degree must be an integer");
     }
 
-    long long n = static_cast<long double>(degree);
+    long long n = static_cast<long long>(static_cast<long double>(degree));
 
     // Handle zero with negative degree (division by zero)
     if (value == Scalar(0.0L) && n < 0) {
@@ -92,7 +92,7 @@ Scalar root(Scalar value, Scalar degree) {
 
     // Compute |value|^(1/n)
     Scalar abs_degree = degree < Scalar(0.0L) ? -degree : degree;
-    Scalar result = precise::pow(abs_value, Scalar(1.0L) / abs_degree);
+    Scalar result = mymath::pow(abs_value, Scalar(1.0L) / abs_degree);
 
     // Apply sign for negative values with odd roots
     if (negative && n % 2 != 0) {
@@ -126,15 +126,15 @@ long double pow(long double base, long double exponent) {
     if (base < 0.0L) {
         // Check if exponent is an integer
         if (is_integer(exponent)) {
-            // Use precise for high precision calculation
-            Scalar result = precise::pow(Scalar(base), Scalar(exponent));
+            // Use scalar version for high precision calculation
+            Scalar result = mymath::pow(Scalar(base), Scalar(exponent));
             return static_cast<long double>(result);
         }
 
         // Check if exponent is a fraction with odd denominator
         long long numerator, denominator;
         if (approximate_fraction(exponent, &numerator, &denominator) && denominator % 2 != 0) {
-            Scalar result = precise::pow(Scalar(base), Scalar(exponent));
+            Scalar result = mymath::pow(Scalar(base), Scalar(exponent));
             return static_cast<long double>(result);
         }
 
@@ -142,8 +142,8 @@ long double pow(long double base, long double exponent) {
             "non-integer exponent requires a positive base unless the exponent is an odd-denominator fraction");
     }
 
-    // Use precise for high precision calculation
-    Scalar result = precise::pow(Scalar(base), Scalar(exponent));
+    // Use scalar version for high precision calculation
+    Scalar result = mymath::pow(Scalar(base), Scalar(exponent));
     return static_cast<long double>(result);
 }
 
@@ -161,10 +161,10 @@ long double hypot(long double x, long double y) {
         return infinity();
     }
 
-    // Use sqrt(x^2 + y^2) for high precision calculation
+    // Use scalar version for high precision calculation
     Scalar x_s = Scalar(x);
     Scalar y_s = Scalar(y);
-    Scalar result = precise::sqrt(x_s * x_s + y_s * y_s);
+    Scalar result = mymath::hypot(x_s, y_s);
     return static_cast<long double>(result);
 }
 

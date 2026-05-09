@@ -8,7 +8,7 @@
 #ifndef MATH_TRANSCENDENTAL_HYPERBOLIC_H
 #define MATH_TRANSCENDENTAL_HYPERBOLIC_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/core/scalar_traits.h"
 
 namespace mymath {

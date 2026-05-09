@@ -21,7 +21,7 @@
 #include "types/function.h"
 #include "precise/rational.h"
 #include "core/services/string_utils.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/helpers/integer_helpers.h"
 #include "math/helpers/base_conversions.h"
 #include "mymath.h"

@@ -11,7 +11,7 @@
 #include "calculator_exceptions.h"
 #include "calculator_internal_types.h"
 #include "execution/resolver/builtin_constants.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "mymath.h"
 #include "variable_resolver.h"
 #include "lazy_token_stream.h"

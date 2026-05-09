@@ -15,7 +15,7 @@
 // ============================================================================
 
 #include "core/api/calculator_internal_types.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "module/calculator_module.h"
 #include "analysis/series/psa_engine.h"

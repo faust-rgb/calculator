@@ -8,7 +8,7 @@
 #include "mymath.h"
 #include "polynomial.h"
 #include "precise_decimal.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 
 #include <stdexcept>
 #include <utility>

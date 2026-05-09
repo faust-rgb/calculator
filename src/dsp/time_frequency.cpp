@@ -10,7 +10,7 @@
 
 #include "signal_processing.h"
 #include "math/mymath.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 
 #include <algorithm>
 #include <numeric>
@@ -186,15 +186,15 @@ STFTResult stft(const std::vector<Scalar>& signal,
     }
 
     // 频率轴
-    const long long n_freqs = nfft / 2 + 1;
+    const std::size_t n_freqs = nfft / 2 + 1;
     result.freq_vector.resize(n_freqs);
-    for (long long k = 0; k < n_freqs; ++k) {
+    for (std::size_t k = 0; k < n_freqs; ++k) {
         result.freq_vector[k] = (k) / (nfft);
     }
 
     // 时间轴
     result.time_vector.resize(n_frames);
-    for (long long frame = 0; frame < n_frames; ++frame) {
+    for (std::size_t frame = 0; frame < n_frames; ++frame) {
         result.time_vector[frame] = (frame * step + nfft / 2);
     }
 
@@ -202,8 +202,8 @@ STFTResult stft(const std::vector<Scalar>& signal,
     result.stft_matrix.resize(n_frames);
     result.window_type = window_type;
 
-    for (long long frame = 0; frame < n_frames; ++frame) {
-        const long long start = frame * step;
+    for (std::size_t frame = 0; frame < n_frames; ++frame) {
+        const std::size_t start = frame * step;
 
         // 提取并加窗
         std::vector<Scalar> frame_data(nfft);

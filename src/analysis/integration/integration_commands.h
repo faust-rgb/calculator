@@ -13,7 +13,7 @@
 #ifndef INTEGRATION_COMMANDS_H
 #define INTEGRATION_COMMANDS_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include <string>
 #include <functional>
 #include <vector>

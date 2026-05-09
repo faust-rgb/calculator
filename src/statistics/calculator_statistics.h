@@ -12,7 +12,7 @@
 #include "calculator_internal_types.h"
 #include <vector>
 #include <string>
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 namespace stats_ops {
 
 /**

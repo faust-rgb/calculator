@@ -18,7 +18,7 @@
 #include "analysis/differential_equations/ode_command_helpers.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "math/helpers/integer_helpers.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 
 #include <stdexcept>
 #include <vector>

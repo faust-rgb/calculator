@@ -1,7 +1,7 @@
 #ifndef ANALYSIS_NUMERIC_LIMIT_SOLVER_H
 #define ANALYSIS_NUMERIC_LIMIT_SOLVER_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "analysis/calculus/numerical_calculus.h"
 #include <functional>

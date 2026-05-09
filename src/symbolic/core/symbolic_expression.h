@@ -1,7 +1,7 @@
 #ifndef SYMBOLIC_EXPRESSION_H
 #define SYMBOLIC_EXPRESSION_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include <memory>
 #include <string>
 #include <vector>

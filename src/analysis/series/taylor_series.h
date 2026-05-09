@@ -1,7 +1,7 @@
 #ifndef ANALYSIS_SERIES_TAYLOR_SERIES_H
 #define ANALYSIS_SERIES_TAYLOR_SERIES_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "analysis/series/psa_engine.h"
 #include <string>

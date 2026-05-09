@@ -8,7 +8,7 @@
 #ifndef MATH_SPECIAL_BESSEL_H
 #define MATH_SPECIAL_BESSEL_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 
 namespace mymath {
 

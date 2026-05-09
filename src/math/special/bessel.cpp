@@ -25,7 +25,7 @@ long double bessel_j(int order, long double x) {
     }
 
     const Scalar abs_x = mymath::abs(Scalar(x));
-    if (abs_x > 50.0L) {
+    if (abs_x > Scalar(50.0L)) {
         const Scalar phase =
             abs_x - Scalar(static_cast<long double>(order)) * mymath::pi() * Scalar(0.5L) - mymath::pi() * Scalar(0.25L);
         const Scalar asymptotic =
@@ -41,7 +41,7 @@ long double bessel_j(int order, long double x) {
     for (int k = 0; k < 200; ++k) {
         const Scalar add = term;
         sum += add;
-        if (mymath::abs(add) <= 1e-35L * (1.0L + mymath::abs(sum))) {
+        if (mymath::abs(add) <= Scalar(1e-35L) * (Scalar(1.0L) + mymath::abs(sum))) {
             break;
         }
         term *= -(half_x * half_x) /

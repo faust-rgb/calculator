@@ -13,7 +13,7 @@
 #ifndef PLOT_STYLES_H
 #define PLOT_STYLES_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include <string>
 #include <vector>
 #include <map>

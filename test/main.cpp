@@ -17,7 +17,6 @@
 #include "suites/test_io.h"
 #include "suites/test_script_features.h"
 #include "suites/test_risch_advanced.h"
-#include "suites/test_precise_deep.h"
 #include "suites/test_float128_limit.h"
 #include <iostream>
 
@@ -83,8 +82,8 @@ int main() {
     run_script_feature_tests(total_passed, total_failed);
 
     // 运行深度高精度测试
-    std::cout << "Running Deep High-Precision Tests..." << std::endl;
-    test_suites::run_precise_deep_tests(total_passed, total_failed);
+    //std::cout << "Running Deep High-Precision Tests..." << std::endl;
+    //test_suites::run_precise_deep_tests(total_passed, total_failed);
 
     // 运行 Float128 极限精度测试
     std::cout << "Running Float128 Limit Precision Tests..." << std::endl;

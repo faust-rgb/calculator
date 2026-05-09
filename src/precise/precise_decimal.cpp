@@ -1367,7 +1367,7 @@ PreciseDecimal ln(const PreciseDecimal& x) {
 
     // 对于其他值，使用 Newton 迭代
     // 使用更高精度的初始猜测：通过 to_long_double() 获取更多精度
-    PreciseDecimal y(mymath::Scalar(mymath::ln(x.to_long_double())));
+    PreciseDecimal y(mymath::ln(x.to_long_double()));
     const int iterations = std::max(16, scale / 6 + 10);
     for (int i = 0; i < iterations; ++i) y = y + x / exp(y) - one();
     return y;

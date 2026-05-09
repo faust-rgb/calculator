@@ -809,7 +809,7 @@ bool analyze_log_integral_form(
         if (base.node_->type == NodeType::kFunction && base.node_->text == "ln") {
             Scalar exp_val = Scalar(0.0L);
             if (exp.is_number(&exp_val)) {
-                *log_power = static_cast<int>(mymath::round(exp_val).to_double());
+                *log_power = static_cast<int>(mymath::round(exp_val).to_long_double());
                 *inner_arg = SymbolicExpression(base.node_->left);
                 return true;
             }

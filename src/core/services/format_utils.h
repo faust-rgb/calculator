@@ -10,7 +10,7 @@
 #define CORE_FORMAT_UTILS_H
 
 #include <string>
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 
 struct StoredValue;
 struct Rational;

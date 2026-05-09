@@ -9,7 +9,7 @@
 #ifndef MATH_CORE_BASIC_OPS_H
 #define MATH_CORE_BASIC_OPS_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "floating_point.h"
 #include "scalar_traits.h"
 #include <complex>
@@ -145,11 +145,11 @@ inline std::string scalar_to_string_val(Scalar value, int precision = 36) {
  * @return Parsed Scalar value
  */
 inline Scalar scalar_from_string(const std::string& s) {
-    if constexpr (std::is_same_v<Scalar, float128_t>) {
-        return from_string(s);
-    } else {
+    //if constexpr (std::is_same_v<Scalar, float128_t>) {
+   //     return from_string(s);
+   // } else {
         return Scalar(s);
-    }
+   // }
 }
 
 // ============================================================================

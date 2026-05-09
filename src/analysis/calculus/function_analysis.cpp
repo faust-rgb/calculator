@@ -13,7 +13,7 @@
 #include "analysis/base/precision_constants.h"
 
 #include "core/api/calculator.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/mymath.h"
 #include "analysis/modules/series_module.h"
 #include "symbolic/core/symbolic_expression.h"

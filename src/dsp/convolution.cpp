@@ -16,7 +16,7 @@
 
 #include "signal_processing.h"
 #include "math/mymath.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 
 #include <algorithm>
 #include <stdexcept>

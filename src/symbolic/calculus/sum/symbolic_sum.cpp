@@ -14,7 +14,7 @@
 #include "symbolic/calculus/sum/symbolic_sum.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/mymath.h"
 
 #include <algorithm>

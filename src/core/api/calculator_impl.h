@@ -13,7 +13,7 @@
 
 #include "core/api/calculator.h"
 #include "core/environment/scope.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "execution/registry/command_registry.h"
 #include "types/function.h"
 

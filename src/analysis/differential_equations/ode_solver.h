@@ -5,7 +5,7 @@
 #ifndef ODE_SOLVER_H
 #define ODE_SOLVER_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include <functional>
 #include <utility>
 #include <vector>

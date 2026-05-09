@@ -2,7 +2,7 @@
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/mymath.h"
 #include <vector>
 
@@ -115,7 +115,7 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
         out << "[";
         for (size_t i = 0; i < grad.size(); ++i) {
             if (i > 0) out << ", ";
-            out << mymath::to_string(grad[i], 15);
+            out << mymath::scalar_to_string(grad[i], 15);
         }
         out << "]";
         *output = out.str();

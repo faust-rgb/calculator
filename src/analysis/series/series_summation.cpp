@@ -1,6 +1,6 @@
 #include "analysis/series/series_summation.h"
 #include "analysis/modules/series_module.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "core/services/format_utils.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "symbolic/core/symbolic_expression_internal.h"

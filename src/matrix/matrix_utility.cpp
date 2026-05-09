@@ -5,7 +5,7 @@
 #include "math/types/complex.h"
 #include "string_utils.h"
 #include "precise/precise_decimal.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "core/common/display_precision.h"
 #include <algorithm>
 #include <iomanip>

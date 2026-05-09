@@ -5,7 +5,7 @@
 #include <functional>
 #include <vector>
 #include "module/calculator_module.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 
 namespace analysis_cmds {
 

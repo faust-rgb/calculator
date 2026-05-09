@@ -9,7 +9,7 @@
 #ifndef MATH_SPECIAL_GAMMA_BETA_H
 #define MATH_SPECIAL_GAMMA_BETA_H
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/core/floating_point.h"
 
 namespace mymath {

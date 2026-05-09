@@ -6,7 +6,7 @@
 #include "symbolic/calculus/risch/risch_algorithm_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "math/mymath.h"
 
 #include <algorithm>

@@ -96,11 +96,11 @@ long double gamma(long double x) {
     }
 
     if (x < 0.5L) {
-        const Scalar reflected_sine = mymath::sin(Scalar(kPi) * Scalar(x));
-        if (mymath::abs(reflected_sine) < 1e-12L) {
+        const Scalar reflected_sine = mymath::sin(mymath::pi() * Scalar(x));
+        if (mymath::abs(reflected_sine) < Scalar(1e-12L)) {
             throw std::domain_error("gamma is undefined at this input");
         }
-        return static_cast<long double>(Scalar(kPi) / (reflected_sine * gamma(Scalar(1.0L) - Scalar(x))));
+        return static_cast<long double>(mymath::pi() / (reflected_sine * gamma(Scalar(1.0L) - Scalar(x))));
     }
     return static_cast<long double>(finite_or_infinity_from_log(log_gamma_positive(Scalar(x))));
 }
@@ -114,11 +114,11 @@ long double lgamma(long double x) {
         return static_cast<long double>(log_gamma_positive(Scalar(x)));
     }
 
-    const Scalar reflected_sine = mymath::sin(Scalar(kPi) * Scalar(x));
-    if (mymath::abs(reflected_sine) < 1e-12L) {
+    const Scalar reflected_sine = mymath::sin(mymath::pi() * Scalar(x));
+    if (mymath::abs(reflected_sine) < Scalar(1e-12L)) {
         throw std::domain_error("lgamma is undefined at this input");
     }
-    return static_cast<long double>(mymath::ln(Scalar(kPi)) - mymath::ln(mymath::abs(reflected_sine)) - log_gamma_positive(Scalar(1.0L) - Scalar(x)));
+    return static_cast<long double>(mymath::ln(mymath::pi()) - mymath::ln(mymath::abs(reflected_sine)) - log_gamma_positive(Scalar(1.0L) - Scalar(x)));
 }
 
 long double inc_gamma(long double a, long double x) {
@@ -156,7 +156,7 @@ long double inc_gamma(long double a, long double x) {
             d = Scalar(1.0L) / d;
             Scalar delta = c * d;
             h *= delta;
-            if (mymath::abs(delta - Scalar(1.0L)) < 1e-35L) break;
+            if (mymath::abs(delta - Scalar(1.0L)) < Scalar(1e-35L)) break;
         }
         return static_cast<long double>(Scalar(1.0L) - h * prefix);
     }
@@ -289,7 +289,7 @@ long double inc_beta(long double a, long double b, long double x) {
         Scalar delta = c * d;
         h *= delta;
 
-        if (mymath::abs(delta - Scalar(1.0L)) < 1e-35L) break;
+        if (mymath::abs(delta - Scalar(1.0L)) < Scalar(1e-35L)) break;
     }
 
     return static_cast<long double>(prefix * h);

@@ -16,7 +16,7 @@
 #include "math/helpers/combinatorics.h"
 #include "math/helpers/integer_helpers.h"
 #include "core/api/calculator_internal_types.h"
-#include "core/common/scalar_type.h"
+#include "app/scalar_type.h"
 #include "mymath.h"
 
 #include <algorithm>
