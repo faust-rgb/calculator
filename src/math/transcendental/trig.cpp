@@ -22,8 +22,8 @@ long double sin(long double x) {
         return quiet_nan();
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::sin(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::sin(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -35,8 +35,8 @@ long double cos(long double x) {
         return quiet_nan();
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::cos(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::cos(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -48,8 +48,8 @@ long double tan(long double x) {
         return quiet_nan();
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::tan(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::tan(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -65,8 +65,8 @@ long double asin(long double x) {
         return quiet_nan();
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::asin(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::asin(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -78,8 +78,8 @@ long double acos(long double x) {
         return quiet_nan();
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::acos(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::acos(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -91,8 +91,8 @@ long double atan(long double x) {
         return x > 0.0L ? kPi / 2.0L : -kPi / 2.0L;
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::atan(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::atan(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -123,8 +123,29 @@ long double atan2(long double y, long double x) {
         return x_pos ? 0.0L : (y_pos ? kPi : -kPi);
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::atan2(Scalar(y), Scalar(x));
+    // Use precise for high precision calculation
+    // atan2(y, x) = atan(y/x) with quadrant correction
+    Scalar y_s = Scalar(y);
+    Scalar x_s = Scalar(x);
+    Scalar result;
+    if (x_s > Scalar(0.0L)) {
+        result = precise::atan(y_s / x_s);
+    } else if (x_s < Scalar(0.0L)) {
+        if (y_s >= Scalar(0.0L)) {
+            result = precise::atan(y_s / x_s) + mymath::pi();
+        } else {
+            result = precise::atan(y_s / x_s) - mymath::pi();
+        }
+    } else {
+        // x == 0
+        if (y_s > Scalar(0.0L)) {
+            result = mymath::pi() / Scalar(2.0L);
+        } else if (y_s < Scalar(0.0L)) {
+            result = -mymath::pi() / Scalar(2.0L);
+        } else {
+            result = Scalar(0.0L);  // atan2(0, 0) is undefined but return 0
+        }
+    }
     return static_cast<long double>(result);
 }
 

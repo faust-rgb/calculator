@@ -359,7 +359,7 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                     return static_cast<Scalar>(left / right);
                 case '%':
                     if (right == Scalar(0)) throw_ast_error<MathError>("modulo by zero", ast->position);
-                    return static_cast<Scalar>(mymath::precise128::fmod(left, right));
+                    return static_cast<Scalar>(mymath::fmod(left, right));
                 case '^': return static_cast<Scalar>(mymath::pow(left, right));
                 default:
                     throw_ast_error<MathError>("unknown operator", ast->position);
@@ -438,8 +438,8 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                                         functions, scalar_functions,
                                         has_script_function, invoke_script_function));
 
-            if (ast->comparison_op == "==") return mymath::precise128::abs(left - right) < Scalar(1e-10L) ? 1.0L : 0.0L;
-            if (ast->comparison_op == "!=") return mymath::precise128::abs(left - right) < Scalar(1e-10L) ? 0.0L : 1.0L;
+            if (ast->comparison_op == "==") return mymath::abs(left - right) < Scalar(1e-10L) ? 1.0L : 0.0L;
+            if (ast->comparison_op == "!=") return mymath::abs(left - right) < Scalar(1e-10L) ? 0.0L : 1.0L;
             if (ast->comparison_op == "<") return left < right ? 1.0L : 0.0L;
             if (ast->comparison_op == ">") return left > right ? 1.0L : 0.0L;
             if (ast->comparison_op == "<=") return left <= right ? 1.0L : 0.0L;

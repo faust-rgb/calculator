@@ -155,7 +155,7 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
             result.assign(degree + 1, Scalar(0));
 
             if (func_name == "exp") {
-                Scalar exp_center = mymath::precise128::exp(Scalar(center));
+                Scalar exp_center = mymath::exp(Scalar(center));
                 result[0] = exp_center;
                 for (int n = 1; n <= degree; ++n) {
                     result[n] = result[n - 1] * Scalar(h_coeff) / Scalar(n);
@@ -164,10 +164,10 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
             }
 
             if (func_name == "sin") {
-                Scalar sin_a = mymath::precise128::sin(Scalar(center));
-                Scalar cos_a = mymath::precise128::cos(Scalar(center));
+                Scalar sin_a = mymath::sin(Scalar(center));
+                Scalar cos_a = mymath::cos(Scalar(center));
                 for (int n = 0; n <= degree; ++n) {
-                    Scalar h_pow = mymath::precise128::pow(Scalar(h_coeff), Scalar(n));
+                    Scalar h_pow = mymath::pow(Scalar(h_coeff), Scalar(n));
                     if (n % 2 == 0) {
                         int sign = (n % 4 == 0) ? 1 : -1;
                         result[n] = sin_a * Scalar(sign) * h_pow / Scalar(prob::factorial(n));
@@ -180,10 +180,10 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
             }
 
             if (func_name == "cos") {
-                Scalar sin_a = mymath::precise128::sin(Scalar(center));
-                Scalar cos_a = mymath::precise128::cos(Scalar(center));
+                Scalar sin_a = mymath::sin(Scalar(center));
+                Scalar cos_a = mymath::cos(Scalar(center));
                 for (int n = 0; n <= degree; ++n) {
-                    Scalar h_pow = mymath::precise128::pow(Scalar(h_coeff), Scalar(n));
+                    Scalar h_pow = mymath::pow(Scalar(h_coeff), Scalar(n));
                     if (n % 2 == 0) {
                         int sign = (n % 4 == 0) ? 1 : -1;
                         result[n] = cos_a * Scalar(sign) * h_pow / Scalar(prob::factorial(n));
@@ -235,9 +235,9 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
         Scalar ln_eps = Scalar(-78.8L);
         Scalar ln_h = exponent * ln_eps;
         if (ln_h > Scalar(-40)) {
-            return mymath::precise128::exp(ln_h);
+            return mymath::exp(ln_h);
         } else {
-            return mymath::precise128::pow(eps, exponent);
+            return mymath::pow(eps, exponent);
         }
     };
 
@@ -247,7 +247,7 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
     } catch (...) {
         return false;
     }
-    if (!mymath::precise128::isfinite(f0)) return false;
+    if (!mymath::isfinite(f0)) return false;
     result.push_back(f0);
 
     auto compute_derivative = [&](int order, Scalar h) -> Scalar {
@@ -265,7 +265,7 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
             } catch (...) {
                 return Scalar(mymath::quiet_nan());
             }
-            if (!mymath::precise128::isfinite(val)) {
+            if (!mymath::isfinite(val)) {
                 return Scalar(mymath::quiet_nan());
             }
             points.push_back(val);
@@ -289,7 +289,7 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
         }
 
         Scalar coeff = nth_diff[nth_diff.size() / 2];
-        return coeff / mymath::precise128::pow(h, Scalar(order));
+        return coeff / mymath::pow(h, Scalar(order));
     };
 
     auto richardson_derivative = [&](int order) -> Scalar {
@@ -300,12 +300,12 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
         Scalar d1 = compute_derivative(order, h1);
         Scalar d2 = compute_derivative(order, h2);
 
-        if (!mymath::precise128::isfinite(d1) || !mymath::precise128::isfinite(d2)) {
+        if (!mymath::isfinite(d1) || !mymath::isfinite(d2)) {
             return compute_derivative(order, base_h);
         }
 
-        Scalar factor = mymath::precise128::pow(Scalar(2), Scalar(order)) - Scalar(1);
-        if (mymath::precise128::abs(factor) < Scalar(1e-10L)) {
+        Scalar factor = mymath::pow(Scalar(2), Scalar(order)) - Scalar(1);
+        if (mymath::abs(factor) < Scalar(1e-10L)) {
             return d2;
         }
         return d2 + (d2 - d1) / factor;
@@ -314,12 +314,12 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
     for (int order = 1; order <= degree; ++order) {
         Scalar deriv = richardson_derivative(order);
 
-        if (!mymath::precise128::isfinite(deriv)) {
+        if (!mymath::isfinite(deriv)) {
             Scalar fallback_h = optimal_step(order) / Scalar(10);
             deriv = compute_derivative(order, fallback_h);
         }
 
-        if (!mymath::precise128::isfinite(deriv)) {
+        if (!mymath::isfinite(deriv)) {
             return result.size() > 1;
         }
 
@@ -384,7 +384,7 @@ std::vector<Scalar> build_taylor_coefficients(
             found->second.has_value = true;
         }
         const Scalar derivative_value = found->second.value;
-        if (!mymath::precise128::isfinite(derivative_value)) {
+        if (!mymath::isfinite(derivative_value)) {
             std::vector<Scalar> ad_fallback;
             if (compute_taylor_coefficients_ad(ctx, expression, variable_name, center, degree, ad_fallback)) {
                 return ad_fallback;

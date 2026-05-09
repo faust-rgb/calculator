@@ -20,7 +20,7 @@ T t_abs(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::abs(val);
     } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::abs(val);
+        return mymath::abs(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::abs(val);
     } else {
@@ -33,7 +33,7 @@ T t_sqrt(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::sqrt(val);
     } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::sqrt(val);
+        return mymath::sqrt(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::sqrt(val);
     } else {
@@ -46,7 +46,7 @@ T t_pow(const T& base, const T& exponent) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::pow(base, exponent);
     } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::pow(base, exponent);
+        return mymath::pow(base, exponent);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::pow(base, exponent);
     } else {
@@ -59,7 +59,7 @@ bool t_isfinite(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::isfinite(val);
     } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::isfinite(val.hi);
+        return mymath::isfinite(val.hi);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return true;
     } else {
@@ -72,7 +72,7 @@ T t_sin(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::sin(val);
     } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::sin(val);
+        return mymath::sin(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::sin(val);
     } else {
@@ -85,7 +85,7 @@ T t_cos(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::cos(val);
     } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::cos(val);
+        return mymath::cos(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::cos(val);
     } else {
@@ -98,7 +98,7 @@ T t_tan(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::tan(val);
     } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::tan(val);
+        return mymath::tan(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::tan(val);
     } else {
@@ -111,7 +111,7 @@ T t_log(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::log(val);
     } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::ln(val);
+        return mymath::ln(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::ln(val);
     } else {
@@ -124,7 +124,7 @@ T t_exp(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::exp(val);
     } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::exp(val);
+        return mymath::exp(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::exp(val);
     } else {
@@ -137,7 +137,7 @@ T t_sinh(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::sinh(val);
     } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::sinh(val);
+        return mymath::sinh(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::sinh(val);
     } else {
@@ -150,7 +150,7 @@ T t_cosh(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::cosh(val);
     } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::cosh(val);
+        return mymath::cosh(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::cosh(val);
     } else {
@@ -163,7 +163,7 @@ T t_tanh(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::tanh(val);
     } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::tanh(val);
+        return mymath::tanh(val);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::tanh(val);
     } else {
@@ -174,7 +174,7 @@ T t_tanh(const T& val) {
 template <typename T>
 T t_pi() {
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::pi();
+        return mymath::pi();
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         return precise::pi();
     } else if constexpr (std::is_floating_point_v<T>) {
@@ -189,7 +189,7 @@ T t_infinity() {
     if constexpr (std::is_floating_point_v<T>) {
         return std::numeric_limits<T>::infinity();
     } else if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::infinity();
+        return mymath::infinity();
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         // PreciseDecimal doesn't have infinity, use a very large number or throw
         return PreciseDecimal("1e1000");

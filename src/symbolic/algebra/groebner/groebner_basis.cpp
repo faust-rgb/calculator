@@ -154,8 +154,8 @@ MultivariatePoly from_expression(const SymbolicExpression& expr, const std::vect
         Scalar exp_val = Scalar(0.0L);
         if (exp_expr.is_number(&exp_val) && exp_val >= Scalar(0.0L)) {
             // 检查是否为整数
-            Scalar exp_floor = mymath::precise128::floor(exp_val);
-            if (mymath::precise128::abs(exp_val - exp_floor) < Scalar(1e-15L)) {
+            Scalar exp_floor = mymath::floor(exp_val);
+            if (mymath::abs(exp_val - exp_floor) < Scalar(1e-15L)) {
                 int n = static_cast<int>(static_cast<long double>(exp_floor));
                 auto base_poly = from_expression(base, vars);
 

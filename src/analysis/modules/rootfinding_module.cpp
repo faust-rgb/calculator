@@ -185,16 +185,16 @@ std::string solve_polynomial_equation(std::vector<Scalar> coeffs,
             }
         } else if (Delta > 0) {
             Scalar sqrtDelta = mymath::sqrt(Delta);
-            Scalar u = mymath::precise128::cbrt(-B / 2 + sqrtDelta);
-            Scalar v = mymath::precise128::cbrt(-B / 2 - sqrtDelta);
+            Scalar u = mymath::cbrt(-B / 2 + sqrtDelta);
+            Scalar v = mymath::cbrt(-B / 2 - sqrtDelta);
             Scalar t1 = u + v;
             roots.push_back(t1 - shift);
         } else {
-            Scalar k = mymath::precise128::sqrt(-A * A * A / 27);
+            Scalar k = mymath::sqrt(-A * A * A / 27);
             Scalar theta = mymath::acos(-B / (2 * k)) / 3;
-            Scalar t1 = 2 * mymath::precise128::cbrt(k) * mymath::cos(theta);
-            Scalar t2 = 2 * mymath::precise128::cbrt(k) * mymath::cos(theta + 2 * mymath::precise128::pi() / 3);
-            Scalar t3 = 2 * mymath::precise128::cbrt(k) * mymath::cos(theta + 4 * mymath::precise128::pi() / 3);
+            Scalar t1 = 2 * mymath::cbrt(k) * mymath::cos(theta);
+            Scalar t2 = 2 * mymath::cbrt(k) * mymath::cos(theta + 2 * mymath::pi() / 3);
+            Scalar t3 = 2 * mymath::cbrt(k) * mymath::cos(theta + 4 * mymath::pi() / 3);
             roots.push_back(t1 - shift);
             roots.push_back(t2 - shift);
             roots.push_back(t3 - shift);
@@ -257,15 +257,15 @@ std::string solve_polynomial_equation(std::vector<Scalar> coeffs,
 
             if (zDelta >= 0) {
                 Scalar sqrtDelta = mymath::sqrt(zDelta);
-                Scalar u = mymath::precise128::cbrt(-zB / 2 + sqrtDelta);
-                Scalar v = mymath::precise128::cbrt(-zB / 2 - sqrtDelta);
+                Scalar u = mymath::cbrt(-zB / 2 + sqrtDelta);
+                Scalar v = mymath::cbrt(-zB / 2 - sqrtDelta);
                 z_root = u + v - zshift;
                 found_z = true;
             } else {
-                Scalar k = mymath::precise128::sqrt(-zA * zA * zA / 27);
+                Scalar k = mymath::sqrt(-zA * zA * zA / 27);
                 if (k > 0) {
                     Scalar theta = mymath::acos(-zB / (2 * k)) / 3;
-                    z_root = 2 * mymath::precise128::cbrt(k) * mymath::cos(theta) - zshift;
+                    z_root = 2 * mymath::cbrt(k) * mymath::cos(theta) - zshift;
                     found_z = true;
                 }
             }

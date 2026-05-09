@@ -223,7 +223,7 @@ IndeterminateForm SymbolicLimitEngine::detect_indeterminate_form(
         // 检查 base 是否趋于 1
         if (point.is_finite()) {
             auto base_val = evaluate_at_point(base, var, point.value);
-            if (base_val.has_value() && mymath::precise128::is_near_zero(Scalar(*base_val - 1.0L), Scalar(1e-10))) {
+            if (base_val.has_value() && mymath::is_near_zero(Scalar(*base_val - 1.0L), Scalar(1e-10))) {
                 base_one = true;
             }
         }
@@ -290,7 +290,7 @@ bool SymbolicLimitEngine::try_known_pattern(
     std::string expr_str = expr.to_string();
 
     // 模式 1: sin(x)/x → 1 (x → 0)
-    if (point.is_finite() && mymath::precise128::is_near_zero(Scalar(point.value), Scalar(1e-12))) {
+    if (point.is_finite() && mymath::is_near_zero(Scalar(point.value), Scalar(1e-12))) {
         // 检查 sin(var)/var 形式
         if (expr.node_->type == NodeType::kDivide) {
             SymbolicExpression num(expr.node_->left);
@@ -350,7 +350,7 @@ bool SymbolicLimitEngine::try_known_pattern(
                 if (left.node_->type == NodeType::kFunction && left.node_->text == "exp") {
                     SymbolicExpression arg(left.node_->left);
                     if (arg.node_->type == NodeType::kVariable && arg.node_->text == var &&
-                        right.is_number(nullptr) && mymath::precise128::is_near_zero(Scalar(right.node_->number_value - 1.0L), Scalar(1e-12))) {
+                        right.is_number(nullptr) && mymath::is_near_zero(Scalar(right.node_->number_value - 1.0L), Scalar(1e-12))) {
                         if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
                             *result = LimitResult::elementary(SymbolicExpression::number(Scalar(1.0L)), "known_pattern: (exp(x)-1)/x");
                             return true;
@@ -371,7 +371,7 @@ bool SymbolicLimitEngine::try_known_pattern(
                     SymbolicExpression left(arg.node_->left);
                     SymbolicExpression right(arg.node_->right);
                     Scalar one = Scalar(0);
-                    if (left.is_number(&one) && mymath::precise128::is_near_zero(one - Scalar(1), Scalar(1e-12)) &&
+                    if (left.is_number(&one) && mymath::is_near_zero(one - Scalar(1), Scalar(1e-12)) &&
                         right.node_->type == NodeType::kVariable && right.node_->text == var) {
                         if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
                             *result = LimitResult::elementary(SymbolicExpression::number(Scalar(1.0L)), "known_pattern: ln(1+x)/x");
@@ -394,13 +394,13 @@ bool SymbolicLimitEngine::try_known_pattern(
                 SymbolicExpression right(base.node_->right);
 
                 Scalar one = Scalar(0);
-                if (left.is_number(&one) && mymath::precise128::is_near_zero(one - Scalar(1), Scalar(1e-12))) {
+                if (left.is_number(&one) && mymath::is_near_zero(one - Scalar(1), Scalar(1e-12))) {
                     // 检查 right 是否为 1/var
                     if (right.node_->type == NodeType::kDivide) {
                         SymbolicExpression rnum(right.node_->left);
                         SymbolicExpression rden(right.node_->right);
                         Scalar one_check = Scalar(0);
-                        if (rnum.is_number(&one_check) && mymath::precise128::is_near_zero(one_check - Scalar(1), Scalar(1e-12)) &&
+                        if (rnum.is_number(&one_check) && mymath::is_near_zero(one_check - Scalar(1), Scalar(1e-12)) &&
                             rden.node_->type == NodeType::kVariable && rden.node_->text == var) {
                             *result = LimitResult::elementary(
                                 SymbolicExpression::parse("e"),
@@ -422,7 +422,7 @@ bool SymbolicLimitEngine::try_known_pattern(
                 SymbolicExpression right(base.node_->right);
 
                 Scalar one = Scalar(0);
-                if (left.is_number(&one) && mymath::precise128::is_near_zero(one - Scalar(1), Scalar(1e-12))) {
+                if (left.is_number(&one) && mymath::is_near_zero(one - Scalar(1), Scalar(1e-12))) {
                     // 检查 right 是否为 a/var
                     if (right.node_->type == NodeType::kDivide) {
                         SymbolicExpression rnum(right.node_->left);
@@ -443,7 +443,7 @@ bool SymbolicLimitEngine::try_known_pattern(
     }
 
     // 模式 7: x^x → 1 (x → 0+)
-    if (point.is_finite() && mymath::precise128::is_near_zero(Scalar(point.value), Scalar(1e-12)) && direction >= 0) {
+    if (point.is_finite() && mymath::is_near_zero(Scalar(point.value), Scalar(1e-12)) && direction >= 0) {
         if (expr.node_->type == NodeType::kPower) {
             SymbolicExpression base(expr.node_->left);
             SymbolicExpression exp(expr.node_->right);
@@ -484,7 +484,7 @@ LimitResult SymbolicLimitEngine::limit_at_infinity(
 
         // 找到最高次项
         int degree = static_cast<int>(coeffs.size()) - 1;
-        while (degree >= 0 && mymath::precise128::is_near_zero(Scalar(coeffs[degree]), Scalar(1e-15))) {
+        while (degree >= 0 && mymath::is_near_zero(Scalar(coeffs[degree]), Scalar(1e-15))) {
             degree--;
         }
 
@@ -509,7 +509,7 @@ LimitResult SymbolicLimitEngine::limit_at_infinity(
         SymbolicExpression den(expr.node_->right);
 
         Scalar num_val = Scalar(0.0L);
-        if (num.is_number(&num_val) && !mymath::precise128::is_near_zero(Scalar(num_val), Scalar(1e-15))) {
+        if (num.is_number(&num_val) && !mymath::is_near_zero(Scalar(num_val), Scalar(1e-15))) {
             // 检查分母是否为 x 的幂
             if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
                 return LimitResult::elementary(SymbolicExpression::number(0.0L), "1/x_at_infinity");
@@ -602,13 +602,13 @@ bool SymbolicLimitEngine::is_zero_at_point(
 
     // 常量零
     Scalar val = Scalar(0);
-    if (expr.is_number(&val) && mymath::precise128::is_near_zero(val, Scalar(1e-15))) {
+    if (expr.is_number(&val) && mymath::is_near_zero(val, Scalar(1e-15))) {
         return true;
     }
 
     // 变量在趋于零点时
     if (expr.node_->type == NodeType::kVariable && expr.node_->text == var) {
-        if (point.is_finite() && mymath::precise128::is_near_zero(Scalar(point.value), Scalar(1e-15))) {
+        if (point.is_finite() && mymath::is_near_zero(Scalar(point.value), Scalar(1e-15))) {
             return true;
         }
     }

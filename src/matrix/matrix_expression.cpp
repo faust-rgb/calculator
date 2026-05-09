@@ -1376,7 +1376,7 @@ private:
                 higher_moment += (name == "kurtosis") ? delta2 * delta2 : delta2 * delta;
             }
             second_moment /= Scalar(static_cast<long long>(values.size()));
-            if (mymath::precise128::is_near_zero(second_moment, Scalar(1e-12L))) {
+            if (mymath::is_near_zero(second_moment, Scalar(1e-12L))) {
                 throw std::runtime_error(name + " is undefined for zero variance data");
             }
             higher_moment /= Scalar(static_cast<long long>(values.size()));

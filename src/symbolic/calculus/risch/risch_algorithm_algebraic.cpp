@@ -809,7 +809,7 @@ bool analyze_log_integral_form(
         if (base.node_->type == NodeType::kFunction && base.node_->text == "ln") {
             Scalar exp_val = Scalar(0.0L);
             if (exp.is_number(&exp_val)) {
-                *log_power = static_cast<int>(mymath::round(exp_val));
+                *log_power = static_cast<int>(mymath::round(exp_val).to_double());
                 *inner_arg = SymbolicExpression(base.node_->left);
                 return true;
             }
@@ -1517,14 +1517,14 @@ bool RischAlgorithm::hermite_reduction_algebraic(
             // 计算 B_k = -current_num * S / k (在商环中)
             // 这里简化处理
             SymbolicPolynomial B_k = current_num.multiply(S).scale(
-                SymbolicExpression::number(-1.0L / (k)));
+                SymbolicExpression::number(Scalar(-1.0L / (k))));
 
             // 更新 current_num
             // current_num = current_num - (B_k' * D_k - k * B_k * D_k')
             SymbolicPolynomial B_k_deriv = B_k.total_derivative(x_var, ext.derivation);
             SymbolicPolynomial term1 = B_k_deriv.multiply(D_k);
             SymbolicPolynomial term2 = B_k.multiply(D_k_deriv).scale(
-                SymbolicExpression::number((k)));
+                SymbolicExpression::number(Scalar(k)));
             SymbolicPolynomial correction = term1.subtract(term2);
 
             current_num = current_num.subtract(correction);
@@ -1532,7 +1532,7 @@ bool RischAlgorithm::hermite_reduction_algebraic(
             // 添加到有理部分
             SymbolicExpression B_k_expr = B_k.to_expression();
             SymbolicExpression D_k_pow = make_power(D_k.to_expression(),
-                                                    SymbolicExpression::number((k - 1)));
+                                                    SymbolicExpression::number(Scalar(k - 1)));
             SymbolicExpression term = (B_k_expr / D_k_pow).simplify();
             *rational_part = (*rational_part + term).simplify();
         }

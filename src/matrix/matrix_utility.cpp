@@ -102,7 +102,10 @@ T matrix_tolerance(T scale) {
         std::string tol_s = "1e-" + std::to_string(std::max(10, current_scale - 5));
         return scale * PreciseDecimal(tol_s);
     } else if constexpr (std::is_same_v<T, mymath::Scalar>) {
-        return mymath::precise128::fmax(mymath::Scalar(kMatrixPivotAbsoluteEps), scale * mymath::Scalar(kMatrixPivotRelativeEps));
+        // 使用 std::fmax 或直接比较
+        auto abs_eps = mymath::Scalar(kMatrixPivotAbsoluteEps);
+        auto rel_eps = scale * mymath::Scalar(kMatrixPivotRelativeEps);
+        return (abs_eps > rel_eps) ? abs_eps : rel_eps;
     } else {
         return std::max(kMatrixPivotAbsoluteEps, scale * kMatrixPivotRelativeEps);
     }
@@ -320,6 +323,6 @@ void set_display_precision(int precision) {
     template std::vector<matrix::internal::TComplexSample<TYPE>> matrix::internal::discrete_fourier_transform(const std::vector<matrix::internal::TComplexSample<TYPE>>&, bool); \
     template std::vector<matrix::internal::TComplexSample<TYPE>> matrix::internal::convolve_sequences(const std::vector<matrix::internal::TComplexSample<TYPE>>&, const std::vector<matrix::internal::TComplexSample<TYPE>>&);
 
-INSTANTIATE_UTIL(long double)
-INSTANTIATE_UTIL(PreciseDecimal)
+//INSTANTIATE_UTIL(long double)
+//INSTANTIATE_UTIL(PreciseDecimal)
 INSTANTIATE_UTIL(mymath::Scalar)

@@ -6,9 +6,11 @@
 #include "error_functions.h"
 #include "gamma_beta.h"
 #include "math/core/floating_point.h"
+#include "math/core/basic_ops.h"
 #include "math/transcendental/exp_log.h"
 #include "math/transcendental/trig.h"
 #include "math/core/roots_powers.h"
+#include "math/core/constants.h"
 #include <stdexcept>
 
 namespace mymath {
@@ -30,13 +32,13 @@ long double erf(long double x) {
         const Scalar denominator = factorial * Scalar(static_cast<long double>(2 * n + 1));
         const Scalar add = term / denominator;
         sum += (n % 2 == 0 ? add : -add);
-        if (mymath::abs(add) < 1e-35L) {
+        if (mymath::abs(add) < Scalar(1e-35L)) {
             break;
         }
         term *= x_s * x_s;
         factorial *= Scalar(static_cast<long double>(n + 1));
     }
-    Scalar sqrt_pi = precise128::sqrt_pi();
+    Scalar sqrt_pi = mymath::sqrt(mymath::pi());
     return static_cast<long double>(Scalar(2.0L) * sum / sqrt_pi);
 }
 
@@ -56,13 +58,13 @@ Scalar erf(Scalar x) {
         const Scalar denominator = factorial * Scalar(static_cast<long double>(2 * n + 1));
         const Scalar add = term / denominator;
         sum += (n % 2 == 0 ? add : -add);
-        if (precise128::abs(add) < Scalar(1e-35L)) {
+        if (mymath::abs(add) < Scalar(1e-35L)) {
             break;
         }
         term *= x * x;
         factorial *= Scalar(static_cast<long double>(n + 1));
     }
-    Scalar sqrt_pi = precise128::sqrt_pi();
+    Scalar sqrt_pi = mymath::sqrt(mymath::pi());
     return Scalar(2.0L) * sum / sqrt_pi;
 }
 
@@ -79,7 +81,7 @@ long double erfc(long double x) {
     const Scalar poly =
         (((((Scalar(1.061405429L) * t - Scalar(1.453152027L)) * t) + Scalar(1.421413741L)) * t -
           Scalar(0.284496736L)) * t + Scalar(0.254829592L)) * t;
-    Scalar result = poly * precise128::exp(-Scalar(x) * Scalar(x));
+    Scalar result = poly * mymath::exp(-Scalar(x) * Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -96,7 +98,7 @@ Scalar erfc(Scalar x) {
     const Scalar poly =
         (((((Scalar(1.061405429L) * t - Scalar(1.453152027L)) * t) + Scalar(1.421413741L)) * t -
           Scalar(0.284496736L)) * t + Scalar(0.254829592L)) * t;
-    return poly * precise128::exp(-x * x);
+    return poly * mymath::exp(-x * x);
 }
 
 long double zeta(long double s) {
@@ -107,9 +109,9 @@ long double zeta(long double s) {
     const Scalar s_s = Scalar(s);
 
     if (s < 0.0L) {
-        Scalar two_pow_s = precise128::exp(s_s * precise128::ln(Scalar(2.0L)));
-        Scalar pi_pow_s_minus_1 = precise128::exp((s_s - Scalar(1.0L)) * precise128::ln(precise128::pi()));
-        Scalar sin_term = precise128::sin(precise128::pi() * s_s * Scalar(0.5L));
+        Scalar two_pow_s = mymath::exp(s_s * mymath::ln(Scalar(2.0L)));
+        Scalar pi_pow_s_minus_1 = mymath::exp((s_s - Scalar(1.0L)) * mymath::ln(mymath::pi()));
+        Scalar sin_term = mymath::sin(mymath::pi() * s_s * Scalar(0.5L));
         Scalar gamma_term = gamma(static_cast<long double>(Scalar(1.0L) - s_s));
         Scalar zeta_term = zeta(static_cast<long double>(Scalar(1.0L) - s_s));
         Scalar result = two_pow_s * pi_pow_s_minus_1 * sin_term * gamma_term * zeta_term;
@@ -129,12 +131,12 @@ long double zeta(long double s) {
 
     Scalar total = Scalar(0.0L);
     for (int n = 1; n < kEulerMaclaurinN; ++n) {
-        total += Scalar(1.0L) / precise128::exp(s_s * precise128::ln(Scalar(static_cast<long double>(n))));
+        total += Scalar(1.0L) / mymath::exp(s_s * mymath::ln(Scalar(static_cast<long double>(n))));
     }
 
     const Scalar n_ld = Scalar(static_cast<long double>(kEulerMaclaurinN));
-    total += precise128::exp((Scalar(1.0L) - s_s) * precise128::ln(n_ld)) / (s_s - Scalar(1.0L));
-    total += Scalar(0.5L) / precise128::exp(s_s * precise128::ln(n_ld));
+    total += mymath::exp((Scalar(1.0L) - s_s) * mymath::ln(n_ld)) / (s_s - Scalar(1.0L));
+    total += Scalar(0.5L) / mymath::exp(s_s * mymath::ln(n_ld));
 
     Scalar rising = s_s;
     Scalar factorial = Scalar(2.0L);
@@ -146,26 +148,26 @@ long double zeta(long double s) {
                          Scalar(static_cast<long double>(2 * k));
         }
         total += Scalar(kBernoulli[k - 1]) * rising / factorial /
-                 precise128::exp((s_s + Scalar(static_cast<long double>(2 * k - 1))) * precise128::ln(n_ld));
+                 mymath::exp((s_s + Scalar(static_cast<long double>(2 * k - 1))) * mymath::ln(n_ld));
     }
     return static_cast<long double>(total);
 }
 
 Scalar zeta(Scalar s) {
-    if (precise128::abs(s - Scalar(1.0L)) < Scalar(1e-30L)) {
+    if (mymath::abs(s - Scalar(1.0L)) < Scalar(1e-30L)) {
         throw std::domain_error("zeta is undefined at s = 1");
     }
 
     if (s < Scalar(0.0L)) {
-        Scalar two_pow_s = precise128::exp(s * precise128::ln(Scalar(2.0L)));
-        Scalar pi_pow_s_minus_1 = precise128::exp((s - Scalar(1.0L)) * precise128::ln(precise128::pi()));
-        Scalar sin_term = precise128::sin(precise128::pi() * s * Scalar(0.5L));
+        Scalar two_pow_s = mymath::exp(s * mymath::ln(Scalar(2.0L)));
+        Scalar pi_pow_s_minus_1 = mymath::exp((s - Scalar(1.0L)) * mymath::ln(mymath::pi()));
+        Scalar sin_term = mymath::sin(mymath::pi() * s * Scalar(0.5L));
         Scalar gamma_term = gamma(Scalar(1.0L) - s);
         Scalar zeta_term = zeta(Scalar(1.0L) - s);
         return two_pow_s * pi_pow_s_minus_1 * sin_term * gamma_term * zeta_term;
     }
 
-    if (precise128::abs(s) < Scalar(1e-30L)) {
+    if (mymath::abs(s) < Scalar(1e-30L)) {
         return Scalar(-0.5L);
     }
 
@@ -178,12 +180,12 @@ Scalar zeta(Scalar s) {
 
     Scalar total = Scalar(0.0L);
     for (int n = 1; n < kEulerMaclaurinN; ++n) {
-        total += Scalar(1.0L) / precise128::exp(s * precise128::ln(Scalar(static_cast<long double>(n))));
+        total += Scalar(1.0L) / mymath::exp(s * mymath::ln(Scalar(static_cast<long double>(n))));
     }
 
     const Scalar n_ld = Scalar(static_cast<long double>(kEulerMaclaurinN));
-    total += precise128::exp((Scalar(1.0L) - s) * precise128::ln(n_ld)) / (s - Scalar(1.0L));
-    total += Scalar(0.5L) / precise128::exp(s * precise128::ln(n_ld));
+    total += mymath::exp((Scalar(1.0L) - s) * mymath::ln(n_ld)) / (s - Scalar(1.0L));
+    total += Scalar(0.5L) / mymath::exp(s * mymath::ln(n_ld));
 
     Scalar rising = s;
     Scalar factorial = Scalar(2.0L);
@@ -195,7 +197,7 @@ Scalar zeta(Scalar s) {
                          Scalar(static_cast<long double>(2 * k));
         }
         total += kBernoulli[k - 1] * rising / factorial /
-                 precise128::exp((s + Scalar(static_cast<long double>(2 * k - 1))) * precise128::ln(n_ld));
+                 mymath::exp((s + Scalar(static_cast<long double>(2 * k - 1))) * mymath::ln(n_ld));
     }
     return total;
 }

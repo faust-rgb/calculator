@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <iostream>
 #include "math/types/float128.h"
 
 /**
@@ -66,6 +67,8 @@ struct PreciseDecimal {
     std::vector<uint32_t> data = {0}; ///< 基数为 10^9 的有效数字数组（小端序）
     int scale = 0;                    ///< 小数点后的位数
     bool negative = false;            ///< 是否为负数
+    bool is_inf = false;              ///< 是否为无穷大
+    bool is_nan = false;              ///< 是否为 NaN
 
     // ==================== 构造函数 ====================
 
@@ -76,31 +79,60 @@ struct PreciseDecimal {
      * @brief 从 long long 整数构造
      * @param value 整数值
      */
-    explicit PreciseDecimal(long long value);
+    PreciseDecimal(long long value);
+
+    /**
+     * @brief 从 unsigned long long 整数构造
+     * @param value 无符号整数值
+     */
+    PreciseDecimal(unsigned long long value) : PreciseDecimal(static_cast<long long>(value)) {}
 
     /**
      * @brief 从 int 整数构造
      * @param value 整数值
      */
-    explicit PreciseDecimal(int value) : PreciseDecimal(static_cast<long long>(value)) {}
+    PreciseDecimal(int value) : PreciseDecimal(static_cast<long long>(value)) {}
 
     /**
      * @brief 从 long double 浮点数构造（可能有精度损失）
      * @param value 浮点数值
      */
-    explicit PreciseDecimal(long double value);
+    PreciseDecimal(long double value);
 
     /**
      * @brief 从 double 浮点数构造（可能有精度损失）
      * @param value 浮点数值
      */
-    explicit PreciseDecimal(double value) : PreciseDecimal(static_cast<long double>(value)) {}
+    PreciseDecimal(double value) : PreciseDecimal(static_cast<long double>(value)) {}
+
+    /**
+     * @brief 从 float 浮点数构造（可能有精度损失）
+     * @param value 浮点数值
+     */
+    PreciseDecimal(float value) : PreciseDecimal(static_cast<long double>(value)) {}
 
     /**
      * @brief 从字符串构造
      * @param token 数值字符串，如 "123.45", "1e-6", "-0.5"
      */
     explicit PreciseDecimal(const std::string& token);
+
+    // ==================== 类型转换运算符 ====================
+
+    /** @brief 显式转换为 long double */
+    explicit operator long double() const { return to_double(); }
+
+    /** @brief 显式转换为 double */
+    explicit operator double() const { return static_cast<double>(to_double()); }
+
+    /** @brief 显式转换为 float */
+    explicit operator float() const { return static_cast<float>(to_double()); }
+
+    /** @brief 显式转换为 int */
+    explicit operator int() const { return static_cast<int>(to_double()); }
+
+    /** @brief 显式转换为 long long */
+    explicit operator long long() const { return static_cast<long long>(to_double()); }
 
     // ==================== 基本操作 ====================
 
@@ -204,6 +236,50 @@ struct PreciseDecimal {
      * @return 构造的 PreciseDecimal 对象
      */
     static PreciseDecimal from_decimal_literal(const std::string& token);
+
+    /**
+     * @brief 创建正无穷大
+     * @return 表示正无穷大的 PreciseDecimal 对象
+     */
+    static PreciseDecimal infinity() {
+        PreciseDecimal result;
+        result.is_inf = true;
+        result.negative = false;
+        return result;
+    }
+
+    /**
+     * @brief 创建负无穷大
+     * @return 表示负无穷大的 PreciseDecimal 对象
+     */
+    static PreciseDecimal neg_infinity() {
+        PreciseDecimal result;
+        result.is_inf = true;
+        result.negative = true;
+        return result;
+    }
+
+    /**
+     * @brief 创建 NaN
+     * @return 表示 NaN 的 PreciseDecimal 对象
+     */
+    static PreciseDecimal nan() {
+        PreciseDecimal result;
+        result.is_nan = true;
+        return result;
+    }
+
+    /**
+     * @brief 检查是否为无穷大
+     * @return 如果是无穷大返回 true
+     */
+    bool is_infinity() const { return is_inf; }
+
+    /**
+     * @brief 检查是否为 NaN
+     * @return 如果是 NaN 返回 true
+     */
+    bool is_nan_value() const { return is_nan; }
 };
 
 // ============================================================================
@@ -214,21 +290,37 @@ struct PreciseDecimal {
 PreciseDecimal operator+(PreciseDecimal lhs, const PreciseDecimal& rhs);
 PreciseDecimal operator+(PreciseDecimal lhs, long double rhs);
 PreciseDecimal operator+(long double lhs, const PreciseDecimal& rhs);
+PreciseDecimal operator+(PreciseDecimal lhs, double rhs);
+PreciseDecimal operator+(double lhs, const PreciseDecimal& rhs);
+PreciseDecimal operator+(PreciseDecimal lhs, int rhs);
+PreciseDecimal operator+(int lhs, const PreciseDecimal& rhs);
 
 // 减法运算符
 PreciseDecimal operator-(PreciseDecimal lhs, const PreciseDecimal& rhs);
 PreciseDecimal operator-(PreciseDecimal lhs, long double rhs);
 PreciseDecimal operator-(long double lhs, const PreciseDecimal& rhs);
+PreciseDecimal operator-(PreciseDecimal lhs, double rhs);
+PreciseDecimal operator-(double lhs, const PreciseDecimal& rhs);
+PreciseDecimal operator-(PreciseDecimal lhs, int rhs);
+PreciseDecimal operator-(int lhs, const PreciseDecimal& rhs);
 
 // 乘法运算符
 PreciseDecimal operator*(PreciseDecimal lhs, const PreciseDecimal& rhs);
 PreciseDecimal operator*(PreciseDecimal lhs, long double rhs);
 PreciseDecimal operator*(long double lhs, const PreciseDecimal& rhs);
+PreciseDecimal operator*(PreciseDecimal lhs, double rhs);
+PreciseDecimal operator*(double lhs, const PreciseDecimal& rhs);
+PreciseDecimal operator*(PreciseDecimal lhs, int rhs);
+PreciseDecimal operator*(int lhs, const PreciseDecimal& rhs);
 
 // 除法运算符
 PreciseDecimal operator/(PreciseDecimal lhs, const PreciseDecimal& rhs);
 PreciseDecimal operator/(PreciseDecimal lhs, long double rhs);
 PreciseDecimal operator/(long double lhs, const PreciseDecimal& rhs);
+PreciseDecimal operator/(PreciseDecimal lhs, double rhs);
+PreciseDecimal operator/(double lhs, const PreciseDecimal& rhs);
+PreciseDecimal operator/(PreciseDecimal lhs, int rhs);
+PreciseDecimal operator/(int lhs, const PreciseDecimal& rhs);
 
 // 混合类型比较运算符
 bool operator==(const PreciseDecimal& lhs, long double rhs);
@@ -243,6 +335,39 @@ bool operator<=(const PreciseDecimal& lhs, long double rhs);
 bool operator<=(long double lhs, const PreciseDecimal& rhs);
 bool operator>=(const PreciseDecimal& lhs, long double rhs);
 bool operator>=(long double lhs, const PreciseDecimal& rhs);
+
+bool operator==(const PreciseDecimal& lhs, double rhs);
+bool operator==(double lhs, const PreciseDecimal& rhs);
+bool operator!=(const PreciseDecimal& lhs, double rhs);
+bool operator!=(double lhs, const PreciseDecimal& rhs);
+bool operator<(const PreciseDecimal& lhs, double rhs);
+bool operator<(double lhs, const PreciseDecimal& rhs);
+bool operator>(const PreciseDecimal& lhs, double rhs);
+bool operator>(double lhs, const PreciseDecimal& rhs);
+bool operator<=(const PreciseDecimal& lhs, double rhs);
+bool operator<=(double lhs, const PreciseDecimal& rhs);
+bool operator>=(const PreciseDecimal& lhs, double rhs);
+bool operator>=(double lhs, const PreciseDecimal& rhs);
+
+bool operator==(const PreciseDecimal& lhs, int rhs);
+bool operator==(int lhs, const PreciseDecimal& rhs);
+bool operator!=(const PreciseDecimal& lhs, int rhs);
+bool operator!=(int lhs, const PreciseDecimal& rhs);
+bool operator<(const PreciseDecimal& lhs, int rhs);
+bool operator<(int lhs, const PreciseDecimal& rhs);
+bool operator>(const PreciseDecimal& lhs, int rhs);
+bool operator>(int lhs, const PreciseDecimal& rhs);
+bool operator<=(const PreciseDecimal& lhs, int rhs);
+bool operator<=(int lhs, const PreciseDecimal& rhs);
+bool operator>=(const PreciseDecimal& lhs, int rhs);
+bool operator>=(int lhs, const PreciseDecimal& rhs);
+
+// 流输出运算符
+std::ostream& operator<<(std::ostream& os, const PreciseDecimal& val);
+
+// 无穷大函数
+inline PreciseDecimal infinity() { return PreciseDecimal::infinity(); }
+inline PreciseDecimal neg_infinity() { return PreciseDecimal::neg_infinity(); }
 
 // ============================================================================
 // 高精度数学函数命名空间

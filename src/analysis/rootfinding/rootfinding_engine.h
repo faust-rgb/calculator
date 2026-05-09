@@ -17,6 +17,8 @@
 
 #include "core/common/scalar_type.h"
 #include "precise/precise_decimal.h"
+#include "math/core/basic_ops.h"
+#include "math/core/roots_powers.h"
 #include "analysis/base/precision_constants.h"
 
 #include <functional>
@@ -39,12 +41,8 @@ template <typename T>
 T t_abs(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::abs(val);
-    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        return precise::abs(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::abs(val);
     } else {
-        return val < T(static_cast<long long>(0)) ? -val : val;
+        return mymath::abs(val);
     }
 }
 
@@ -55,12 +53,8 @@ template <typename T>
 T t_sqrt(const T& val) {
     if constexpr (std::is_floating_point_v<T>) {
         return std::sqrt(val);
-    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        return precise::sqrt(val);
-    } else if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::sqrt(val);
     } else {
-        throw std::runtime_error("t_sqrt not implemented for this type");
+        return mymath::sqrt(val);
     }
 }
 
@@ -83,11 +77,6 @@ struct InternalType<Scalar> {
     using type = Scalar;
 };
 
-template <>
-struct InternalType<PreciseDecimal> {
-    using type = PreciseDecimal;
-};
-
 template <typename T>
 using internal_t = typename InternalType<T>::type;
 
@@ -105,12 +94,6 @@ T from_internal(internal_t<T> val) {
 template <>
 inline Scalar from_internal<Scalar>(internal_t<Scalar> val) {
     return val;  // 直接返回，不调用 to_long_double()
-}
-
-// 特化：对于 PreciseDecimal 类型，同样保持完整精度
-template <>
-inline PreciseDecimal from_internal<PreciseDecimal>(internal_t<PreciseDecimal> val) {
-    return val;
 }
 
 // ============================================================================
@@ -147,9 +130,7 @@ T root_derivative_step(T x) {
 template <typename T>
 constexpr int root_max_iterations() {
     if constexpr (std::is_same_v<T, Scalar>) {
-        return 200;  // float128 需要更多迭代
-    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        return 300;
+        return 300;  // PreciseDecimal 需要更多迭代
     } else {
         return 100;  // double/long double
     }

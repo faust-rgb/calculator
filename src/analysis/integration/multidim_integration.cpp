@@ -22,7 +22,7 @@ namespace {
 // ============================================================================
 
 // n=10 的 Gauss-Legendre 正节点
-constexpr Scalar kGaussNodes[] = {
+const Scalar kGaussNodes[] = {
     Scalar(0.1488743389816312L),
     Scalar(0.4333953941292472L),
     Scalar(0.6794095682990244L),
@@ -31,7 +31,7 @@ constexpr Scalar kGaussNodes[] = {
 };
 
 // n=10 的 Gauss-Legendre 权重
-constexpr Scalar kGaussWeights[] = {
+const Scalar kGaussWeights[] = {
     Scalar(0.2955242247147529L),
     Scalar(0.2692667193099963L),
     Scalar(0.2190863625159820L),
@@ -56,7 +56,7 @@ inline Scalar jacobian_factor(Scalar a, Scalar b) {
 [[maybe_unused]] Scalar max_abs_value(const std::vector<Scalar>& v) {
     Scalar m = Scalar(0);
     for (Scalar x : v) {
-        m = mymath::precise128::fmax(m, mymath::precise128::abs(x));
+        m = mymath::fmax(m, mymath::abs(x));
     }
     return m;
 }
@@ -295,7 +295,7 @@ IntegrationResult integrate_monte_carlo(
     const Scalar integral = mean * effective_volume;
 
     // 误差估计 (标准差)
-    const Scalar std_error = mymath::precise128::sqrt(variance / Scalar(valid_samples)) * effective_volume;
+    const Scalar std_error = mymath::sqrt(variance / Scalar(valid_samples)) * effective_volume;
 
     return {(integral), (std_error), num_samples, true};
 }
@@ -348,7 +348,7 @@ IntegrationResult integrate_importance_sampling(
     const Scalar variance = (sum_sq / Scalar(valid_samples)) - mean * mean;
     const Scalar effective_volume = volume * Scalar(valid_samples) / Scalar(num_samples);
     const Scalar integral = mean * effective_volume;
-    const Scalar std_error = mymath::precise128::sqrt(variance / Scalar(valid_samples)) * effective_volume;
+    const Scalar std_error = mymath::sqrt(variance / Scalar(valid_samples)) * effective_volume;
 
     return {(integral), (std_error), num_samples, true};
 }
@@ -366,7 +366,7 @@ Scalar integrate_over_circle(
 
     const Scalar cx = Scalar(center_x);
     const Scalar cy = Scalar(center_y);
-    const Scalar two_pi = Scalar(2.0L) * mymath::precise128::pi();
+    const Scalar two_pi = Scalar(2.0L) * mymath::pi();
 
     // 极坐标变换: x = cx + r*cos(θ), y = cy + r*sin(θ)
     // Jacobian = r
@@ -374,8 +374,8 @@ Scalar integrate_over_circle(
         // u[0] = r (0 to R), u[1] = θ (0 to 2π)
         const Scalar ur = Scalar(u[0]);
         const Scalar theta = Scalar(u[1]);
-        const Scalar x = cx + ur * mymath::precise128::cos(theta);
-        const Scalar y = cy + ur * mymath::precise128::sin(theta);
+        const Scalar x = cx + ur * mymath::cos(theta);
+        const Scalar y = cy + ur * mymath::sin(theta);
         return (Scalar(function((x), (y))) * ur);  // Jacobian = r
     };
 
@@ -398,8 +398,8 @@ Scalar integrate_over_sphere(
     const Scalar cx = Scalar(center[0]);
     const Scalar cy = Scalar(center[1]);
     const Scalar cz = Scalar(center[2]);
-    const Scalar two_pi = Scalar(2.0L) * mymath::precise128::pi();
-    const Scalar pi = mymath::precise128::pi();
+    const Scalar two_pi = Scalar(2.0L) * mymath::pi();
+    const Scalar pi = mymath::pi();
 
     // 球坐标变换
     // x = cx + r*sin(φ)*cos(θ)
@@ -411,10 +411,10 @@ Scalar integrate_over_sphere(
         const Scalar ur = Scalar(u[0]);
         const Scalar theta = Scalar(u[1]);
         const Scalar phi = Scalar(u[2]);
-        const Scalar x = cx + ur * mymath::precise128::sin(phi) * mymath::precise128::cos(theta);
-        const Scalar y = cy + ur * mymath::precise128::sin(phi) * mymath::precise128::sin(theta);
-        const Scalar z = cz + ur * mymath::precise128::cos(phi);
-        return (Scalar(function((x), (y), (z))) * ur * ur * mymath::precise128::sin(phi));  // Jacobian
+        const Scalar x = cx + ur * mymath::sin(phi) * mymath::cos(theta);
+        const Scalar y = cy + ur * mymath::sin(phi) * mymath::sin(theta);
+        const Scalar z = cz + ur * mymath::cos(phi);
+        return (Scalar(function((x), (y), (z))) * ur * ur * mymath::sin(phi));  // Jacobian
     };
 
     return integrate_tensor_product(
@@ -440,7 +440,7 @@ Scalar integrate_over_triangle(
     const Scalar x3 = Scalar(vertices[2][0]), y3 = Scalar(vertices[2][1]);
 
     // 三角形面积 (叉积)
-    const Scalar area = Scalar(0.5L) * mymath::precise128::abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1));
+    const Scalar area = Scalar(0.5L) * mymath::abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1));
 
     // 重心坐标变换: (u, v) -> (x, y)
     // x = x1 + u*(x2-x1) + v*(x3-x1)
@@ -504,9 +504,9 @@ namespace {
     }
     const int n = (1 << level) + 1;  // 2^level + 1
     std::vector<Scalar> points(n);
-    const Scalar pi = mymath::precise128::pi();
+    const Scalar pi = mymath::pi();
     for (int i = 0; i < n; ++i) {
-        points[i] = mymath::precise128::cos(pi * Scalar(n - 1 - i) / Scalar(n - 1));
+        points[i] = mymath::cos(pi * Scalar(n - 1 - i) / Scalar(n - 1));
     }
     return points;
 }
@@ -518,7 +518,7 @@ namespace {
     }
     const int n = (1 << level) + 1;
     std::vector<Scalar> weights(n, Scalar(0));
-    const Scalar pi = mymath::precise128::pi();
+    const Scalar pi = mymath::pi();
 
     for (int i = 0; i < n; ++i) {
         Scalar theta = pi * Scalar(i) / Scalar(n - 1);
@@ -526,7 +526,7 @@ namespace {
         for (int k = 0; k <= (n - 1) / 2; ++k) {
             Scalar coeff = (k == 0) ? Scalar(1.0L) : Scalar(2.0L);
             Scalar term = coeff / (Scalar(1.0L) - Scalar(4.0L) * Scalar(k * k)) *
-                          mymath::precise128::cos(Scalar(2.0L * k) * theta);
+                          mymath::cos(Scalar(2.0L * k) * theta);
             w += term;
         }
         weights[i] = w / Scalar(n - 1);
@@ -605,7 +605,7 @@ Scalar gauss_kronrod_2d(
                 return gauss_integrate_1d([&](Scalar x) { return f(x, y); }, x1, x2, 7);
             },
             y1, y2, 7);
-        *error_estimate = mymath::precise128::abs(result - coarse);
+        *error_estimate = mymath::abs(result - coarse);
     }
 
     return result;
@@ -625,7 +625,7 @@ Scalar adaptive_2d_recursive(
     Scalar whole = gauss_kronrod_2d(f, x1, x2, y1, y2, &error);
     *evaluations += 225;  // 15 x 15 点
 
-    const Scalar scale = mymath::precise128::fmax(Scalar(1), mymath::precise128::abs(whole));
+    const Scalar scale = mymath::fmax(Scalar(1), mymath::abs(whole));
     if (depth >= max_depth || error <= tolerance * scale) {
         return whole;
     }
@@ -664,7 +664,7 @@ IntegrationResult integrate_2d_adaptive(
         0, max_depth,
         &evaluations);
 
-    return {(value), (relative_tolerance * mymath::precise128::fmax(Scalar(1), mymath::precise128::abs(value))), evaluations, true};
+    return {(value), (relative_tolerance * mymath::fmax(Scalar(1), mymath::abs(value))), evaluations, true};
 }
 
 // ============================================================================
@@ -703,7 +703,7 @@ Scalar gauss_kronrod_3d(
             return gauss_integrate_1d([&](Scalar y) { return coarse_z(x, y); }, y1, y2, 7);
         };
         Scalar coarse = gauss_integrate_1d(coarse_y, x1, x2, 7);
-        *error_estimate = mymath::precise128::abs(result - coarse);
+        *error_estimate = mymath::abs(result - coarse);
     }
 
     return result;
@@ -724,7 +724,7 @@ Scalar adaptive_3d_recursive(
     Scalar whole = gauss_kronrod_3d(f, x1, x2, y1, y2, z1, z2, &error);
     *evaluations += 3375;  // 15 x 15 x 15 点
 
-    const Scalar scale = mymath::precise128::fmax(Scalar(1), mymath::precise128::abs(whole));
+    const Scalar scale = mymath::fmax(Scalar(1), mymath::abs(whole));
     if (depth >= max_depth || error <= tolerance * scale) {
         return whole;
     }
@@ -783,7 +783,7 @@ public:
 
         std::vector<Scalar> result(dim_);
         for (int d = 0; d < dim_; ++d) {
-            result[d] = Scalar(x_[d]) / Scalar(4294967296.0L);
+            result[d] = Scalar(static_cast<long long>(x_[d])) / Scalar(4294967296.0L);
         }
         return result;
     }
@@ -819,7 +819,7 @@ IntegrationResult integrate_3d_adaptive(
         0, max_depth,
         &evaluations);
 
-    return {(value), (relative_tolerance * mymath::precise128::fmax(Scalar(1), mymath::precise128::abs(value))), evaluations, true};
+    return {(value), (relative_tolerance * mymath::fmax(Scalar(1), mymath::abs(value))), evaluations, true};
 }
 
 // ============================================================================
@@ -871,7 +871,7 @@ IntegrationResult integrate_quasi_monte_carlo(
     const Scalar integral = mean * effective_volume;
 
     // 准蒙特卡洛的误差估计通常为 O(1/N)
-    const Scalar std_error = mymath::precise128::sqrt(variance / Scalar(valid_samples)) * effective_volume;
+    const Scalar std_error = mymath::sqrt(variance / Scalar(valid_samples)) * effective_volume;
 
     return {(integral), (std_error), num_samples, true};
 }
@@ -929,7 +929,7 @@ IntegrationResult integrate_sparse_grid_with_error(
     Scalar fine = Scalar(integrate_sparse_grid(function, bounds, level));
     Scalar coarse = Scalar(integrate_sparse_grid(function, bounds, level - 1));
 
-    return {(fine), (mymath::precise128::abs(fine - coarse)), 0, true};
+    return {(fine), (mymath::abs(fine - coarse)), 0, true};
 }
 
 // ============================================================================
@@ -938,7 +938,7 @@ IntegrationResult integrate_sparse_grid_with_error(
 
 Scalar estimate_error(Scalar fine, Scalar coarse, int order) {
     // Richardson 外推误差估计
-    return (mymath::precise128::abs(Scalar(fine) - Scalar(coarse)) / (mymath::precise128::pow(Scalar(2.0L), Scalar(order)) - Scalar(1)));
+    return (mymath::abs(Scalar(fine) - Scalar(coarse)) / (mymath::pow(Scalar(2.0L), Scalar(order)) - Scalar(1)));
 }
 
 IntegrationMethod select_method(int dimension, bool, bool has_constraint) {

@@ -71,12 +71,33 @@ template <typename T>
 inline T sqrt_pi();
 
 template <>
-inline long double sqrt_pi<long double>() { return static_cast<long double>(precise128::sqrt_pi()); }
+inline long double sqrt_pi<long double>() {
+    // sqrt(pi) to 18 decimal places
+    return 1.772453850905516027L;
+}
 
 template <>
 inline Scalar sqrt_pi<Scalar>() { return scalar_sqrt_pi(); }
 
 }  // namespace constants
+
+// ============================================================================
+// Convenience functions for direct access
+// ============================================================================
+
+/**
+ * @brief Get π value for Scalar type
+ */
+inline Scalar pi() {
+    return scalar_pi();
+}
+
+/**
+ * @brief Get e value for Scalar type
+ */
+inline Scalar e() {
+    return scalar_e();
+}
 
 // ============================================================================
 // Physical Constants

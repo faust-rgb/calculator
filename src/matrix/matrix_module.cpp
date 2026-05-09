@@ -421,8 +421,8 @@ MatrixModule::get_value_functions() const {
         const ComplexNumber z = require_complex_argument(args[0], "arg", se, ml, cl, mf);
         const Scalar real = z.real;
         const Scalar imag = z.imag;
-        if (mymath::precise128::is_near_zero(real, Scalar(1e-12L))) {
-            if (mymath::precise128::is_near_zero(imag, Scalar(1e-12L))) {
+        if (mymath::is_near_zero(real, Scalar(1e-12L))) {
+            if (mymath::is_near_zero(imag, Scalar(1e-12L))) {
                 return Value::from_scalar(Scalar(0.0L));
             }
             return Value::from_scalar(imag > Scalar(0.0L) ? Scalar(mymath::kPi / 2.0) : Scalar(-mymath::kPi / 2.0));

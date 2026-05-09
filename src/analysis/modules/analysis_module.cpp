@@ -114,7 +114,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
             auto add_point = [&](Scalar x) {
                 for (const auto& existing : critical_points) {
                     const auto it = existing.find(variable);
-                    if (it != existing.end() && mymath::precise128::abs(it->second - x) < Scalar(1e-5L)) {
+                    if (it != existing.end() && mymath::abs(it->second - x) < Scalar(1e-5L)) {
                         return;
                     }
                 }
@@ -146,7 +146,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                     for (int iter = 0; iter < 80; ++iter) {
                         const Scalar mid = (left + right) * Scalar(0.5L);
                         const Scalar mid_value = eval_derivative(mid);
-                        if (mymath::precise128::isfinite(mid_value) && mymath::precise128::abs(mid_value) < precision::newton_tolerance<Scalar>()) {
+                        if (mymath::isfinite(mid_value) && mymath::abs(mid_value) < precision::newton_tolerance<Scalar>()) {
                             left = right = mid;
                             break;
                         }
@@ -169,17 +169,17 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                 const Scalar deriv_val = eval_derivative(x);
                 const Scalar second_val = eval_second(x);
 
-                if (mymath::precise128::abs(deriv_val) < precision::gradient_convergence_threshold<Scalar>() && mymath::precise128::abs(second_val) > precision::sqrt_epsilon<Scalar>()) {
+                if (mymath::abs(deriv_val) < precision::gradient_convergence_threshold<Scalar>() && mymath::abs(second_val) > precision::sqrt_epsilon<Scalar>()) {
                     Scalar refined_x = x;
                     for (int iter = 0; iter < 20; ++iter) {
                         const Scalar f_prime = eval_derivative(refined_x);
                         const Scalar f_double_prime = eval_second(refined_x);
-                        if (mymath::precise128::isfinite(f_prime) && mymath::precise128::abs(f_prime) < precision::newton_tolerance<Scalar>()) break;
-                        if (mymath::precise128::abs(f_double_prime) < precision::gradient_convergence_threshold<Scalar>()) break;
+                        if (mymath::isfinite(f_prime) && mymath::abs(f_prime) < precision::newton_tolerance<Scalar>()) break;
+                        if (mymath::abs(f_double_prime) < precision::gradient_convergence_threshold<Scalar>()) break;
                         refined_x = refined_x - f_prime / f_double_prime;
                     }
-                    if (mymath::precise128::isfinite(eval_derivative(refined_x)) && mymath::precise128::abs(eval_derivative(refined_x)) < precision::newton_tolerance<Scalar>() &&
-                        mymath::precise128::abs(eval_second(refined_x)) > precision::sqrt_epsilon<Scalar>()) {
+                    if (mymath::isfinite(eval_derivative(refined_x)) && mymath::abs(eval_derivative(refined_x)) < precision::newton_tolerance<Scalar>() &&
+                        mymath::abs(eval_second(refined_x)) > precision::sqrt_epsilon<Scalar>()) {
                         add_point(refined_x);
                     }
                 }
@@ -204,7 +204,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                     const Scalar val = eval_gradient_at(g, point);
                     norm = norm + val * val;
                 }
-                return mymath::precise128::sqrt(norm);
+                return mymath::sqrt(norm);
             };
 
             auto add_critical_point = [&](const std::map<std::string, Scalar>& point) {
@@ -215,7 +215,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                         const auto it_existing = existing.find(v);
                         const auto it_current = point.find(v);
                         if (it_existing == existing.end() || it_current == point.end() ||
-                            mymath::precise128::abs(it_existing->second - it_current->second) > Scalar(1e-2L)) {
+                            mymath::abs(it_existing->second - it_current->second) > Scalar(1e-2L)) {
                             same = false;
                             break;
                         }
@@ -251,7 +251,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                         case NodeType::kPower: {
                             Scalar val;
                             if (SymbolicExpression(n->right).is_number(&val)) {
-                                if (val >= Scalar(0) && mymath::precise128::abs(val - mymath::precise128::floor(val)) < precision::epsilon<Scalar>() * Scalar(100)) {
+                                if (val >= Scalar(0) && mymath::abs(val - mymath::floor(val)) < precision::epsilon<Scalar>() * Scalar(100)) {
                                     return check(n->left);
                                 }
                             }
@@ -397,7 +397,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                         }
 
                         Scalar max_delta = 0.0L;
-                        for (auto d : delta) max_delta = mymath::precise128::fmax(max_delta, mymath::precise128::abs(d * alpha));
+                        for (auto d : delta) max_delta = mymath::fmax(max_delta, mymath::abs(d * alpha));
                         if (max_delta < precision::line_search_min_step<Scalar>()) break;
                     }
 
@@ -489,7 +489,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                         const Scalar zero_threshold = precision::positive_definite_threshold<Scalar>();
                         for (const auto& row : hessian_values) {
                             for (const Scalar& val : row) {
-                                if (mymath::precise128::abs(val) > zero_threshold) {
+                                if (mymath::abs(val) > zero_threshold) {
                                     all_zero = false;
                                     break;
                                 }

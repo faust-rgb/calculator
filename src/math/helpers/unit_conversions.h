@@ -10,7 +10,7 @@
 
 #include "core/common/scalar_type.h"
 
-// 函数声明直接使用 mymath::float128_t，避免全局 using 污染
+namespace mymath {
 
 /**
  * @brief 将角度转换为弧度
@@ -18,7 +18,7 @@
  * @return 对应的弧度值
  */
 long double degrees_to_radians(long double value);
-mymath::float128_t degrees_to_radians(mymath::float128_t value);
+Scalar degrees_to_radians(Scalar value);
 
 /**
  * @brief 将弧度转换为角度
@@ -26,7 +26,7 @@ mymath::float128_t degrees_to_radians(mymath::float128_t value);
  * @return 对应的角度值
  */
 long double radians_to_degrees(long double value);
-mymath::float128_t radians_to_degrees(mymath::float128_t value);
+Scalar radians_to_degrees(Scalar value);
 
 /**
  * @brief 将摄氏度转换为华氏度
@@ -34,7 +34,7 @@ mymath::float128_t radians_to_degrees(mymath::float128_t value);
  * @return 对应的华氏度值
  */
 long double celsius_to_fahrenheit(long double value);
-mymath::float128_t celsius_to_fahrenheit(mymath::float128_t value);
+Scalar celsius_to_fahrenheit(Scalar value);
 
 /**
  * @brief 将华氏度转换为摄氏度
@@ -42,6 +42,8 @@ mymath::float128_t celsius_to_fahrenheit(mymath::float128_t value);
  * @return 对应的摄氏度值
  */
 long double fahrenheit_to_celsius(long double value);
-mymath::float128_t fahrenheit_to_celsius(mymath::float128_t value);
+Scalar fahrenheit_to_celsius(Scalar value);
+
+}  // namespace mymath
 
 #endif

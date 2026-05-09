@@ -58,7 +58,7 @@ bool update_basis_inverse(
     const Scalar pivot = w[leaving_idx];
     // 使用精度感知的阈值检测数值不稳定
     const Scalar pivot_threshold = eps * precision::sqrt_epsilon<Scalar>();
-    if (mymath::precise128::abs(pivot) < pivot_threshold) {
+    if (mymath::abs(pivot) < pivot_threshold) {
         return false; // 数值不稳定
     }
 
@@ -112,9 +112,9 @@ bool solve_square_system(std::vector<std::vector<Scalar>> matrix,
     const std::size_t n = rhs.size();
     for (std::size_t col = 0; col < n; ++col) {
         std::size_t pivot = col;
-        Scalar best_abs = mymath::precise128::abs(matrix[col][col]);
+        Scalar best_abs = mymath::abs(matrix[col][col]);
         for (std::size_t row = col + 1; row < n; ++row) {
-            const Scalar candidate_abs = mymath::precise128::abs(matrix[row][col]);
+            const Scalar candidate_abs = mymath::abs(matrix[row][col]);
             if (candidate_abs > best_abs) {
                 best_abs = candidate_abs;
                 pivot = row;
@@ -135,7 +135,7 @@ bool solve_square_system(std::vector<std::vector<Scalar>> matrix,
         for (std::size_t row = 0; row < n; ++row) {
             if (row == col) continue;
             const Scalar factor = matrix[row][col];
-            if (mymath::precise128::abs(factor) <= eps) continue;
+            if (mymath::abs(factor) <= eps) continue;
             for (std::size_t j = col; j < n; ++j) {
                 matrix[row][j] -= factor * matrix[col][j];
             }
@@ -160,7 +160,7 @@ bool satisfies_equalities(const std::vector<Scalar>& point,
         for (std::size_t j = 0; j < point.size(); ++j) {
             lhs += constraint.coeffs[j] * point[j];
         }
-        if (mymath::precise128::abs(lhs - constraint.rhs) > eps) return false;
+        if (mymath::abs(lhs - constraint.rhs) > eps) return false;
     }
     return true;
 }
@@ -320,12 +320,12 @@ bool solve_by_vertex_enumeration(
     }
 
     for (std::size_t j = 0; j < n; ++j) {
-        if (mymath::precise128::abs(best_solution[j]) <= eps) best_solution[j] = Scalar(0);
-        if (mymath::precise128::abs(best_solution[j] - lower_bounds[j]) <= eps) {
+        if (mymath::abs(best_solution[j]) <= eps) best_solution[j] = Scalar(0);
+        if (mymath::abs(best_solution[j] - lower_bounds[j]) <= eps) {
             best_solution[j] = lower_bounds[j];
         }
         if (upper_bounds[j] < inf_val &&
-            mymath::precise128::abs(best_solution[j] - upper_bounds[j]) <= eps) {
+            mymath::abs(best_solution[j] - upper_bounds[j]) <= eps) {
             best_solution[j] = upper_bounds[j];
         }
     }
@@ -394,7 +394,7 @@ bool simplex_iterate(
         const Scalar cB_threshold = eps * precision::epsilon<Scalar>();
         for (std::size_t j = 0; j < m_total; ++j) {
             const Scalar cB_val = c_obj[basis_curr[j]];
-            if (mymath::precise128::abs(cB_val) < cB_threshold) continue;
+            if (mymath::abs(cB_val) < cB_threshold) continue;
             for (std::size_t i = 0; i < m_total; ++i) {
                 y[i] += cB_val * Scalar(B_inv.at(j, i));
             }
@@ -416,9 +416,9 @@ bool simplex_iterate(
 
             // 根据变量当前状态选择入基
             Scalar xj = x_curr[j];
-            bool at_lower = mymath::precise128::abs(xj - lb_full[j]) <= eps;
+            bool at_lower = mymath::abs(xj - lb_full[j]) <= eps;
             bool at_upper = (ub_full[j] < inf_val) &&
-                            mymath::precise128::abs(xj - ub_full[j]) <= eps;
+                            mymath::abs(xj - ub_full[j]) <= eps;
 
             if (minimize) {
                 // 最小化：检验数为负时可入基
@@ -440,7 +440,7 @@ bool simplex_iterate(
         }
 
         // 检查最优性
-        if (entering >= n_full || mymath::precise128::abs(best_rc) <= eps) {
+        if (entering >= n_full || mymath::abs(best_rc) <= eps) {
             return true; // 找到最优解
         }
 
@@ -483,7 +483,7 @@ bool simplex_iterate(
                 if (ratio < 0) ratio = 0;
                 if (ratio < theta - eps) {
                     theta = ratio; leaving = i;
-                } else if (mymath::precise128::abs(ratio - theta) <= eps && leaving < m_total) {
+                } else if (mymath::abs(ratio - theta) <= eps && leaving < m_total) {
                     // Bland 规则：比值相同时选择索引最小的出基变量
                     if (basis_curr[i] < basis_curr[leaving]) leaving = i;
                 }
@@ -494,7 +494,7 @@ bool simplex_iterate(
                     if (ratio < 0) ratio = 0;
                     if (ratio < theta - eps) {
                         theta = ratio; leaving = i;
-                    } else if (mymath::precise128::abs(ratio - theta) <= eps && leaving < m_total) {
+                    } else if (mymath::abs(ratio - theta) <= eps && leaving < m_total) {
                         if (basis_curr[i] < basis_curr[leaving]) leaving = i;
                     }
                 }
@@ -701,9 +701,9 @@ bool solve_linear_box_problem(
 
     Scalar art_sum = Scalar(0);
     for (std::size_t j = n_total; j < n_full; ++j) {
-        art_sum += mymath::precise128::abs(x[j]);
+        art_sum += mymath::abs(x[j]);
     }
-    if (art_sum > eps * Scalar((m_total))) {
+    if (art_sum > eps * Scalar(static_cast<long long>(m_total))) {
         return solve_by_vertex_enumeration(objective,
                                            inequality_matrix,
                                            inequality_rhs,
@@ -737,7 +737,7 @@ bool solve_linear_box_problem(
                     tableau_val += Scalar(B_inv_temp.at(i, k)) * A_full[k][j];
                 }
 
-                if (mymath::precise128::abs(tableau_val) > eps * precision::sqrt_epsilon<Scalar>()) {
+                if (mymath::abs(tableau_val) > eps * precision::sqrt_epsilon<Scalar>()) {
                     basis[i] = j;
                     break;
                 }
@@ -782,7 +782,7 @@ bool solve_linear_box_problem(
         for (std::size_t j = 0; j < n; ++j) {
             lhs += Scalar(equality_matrix.at(i, j)) * Scalar(result[j]);
         }
-        if (mymath::precise128::abs(lhs - Scalar(equality_rhs[i])) > eps) {
+        if (mymath::abs(lhs - Scalar(equality_rhs[i])) > eps) {
             if (diagnostic) *diagnostic = "solution violates equality constraint";
             return false;
         }

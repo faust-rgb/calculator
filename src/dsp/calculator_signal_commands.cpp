@@ -313,7 +313,7 @@ bool handle_cconv_command(const SignalContext& ctx,
     if (arg_list.size() >= 3) {
         try {
             UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
-            n = static_cast<std::size_t>(parser.evaluate(arg_list[2]));
+            n = static_cast<std::size_t>(static_cast<long long>(parser.evaluate(arg_list[2])));
         } catch (...) {
             // 使用默认值
         }
@@ -422,7 +422,7 @@ bool handle_window_command(const SignalContext& ctx,
 
     std::size_t length = 0;
     try {
-        length = static_cast<std::size_t>(parser.evaluate(arg_list[1]));
+        length = static_cast<std::size_t>(static_cast<long long>(parser.evaluate(arg_list[1])));
     } catch (...) {
         *output = "Error: invalid length";
         return false;
@@ -660,7 +660,7 @@ bool handle_freqz_command(const SignalContext& ctx,
     if (arg_list.size() >= 3) {
         try {
             UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
-            n = static_cast<std::size_t>(parser.evaluate(arg_list[2]));
+            n = static_cast<std::size_t>(static_cast<long long>(parser.evaluate(arg_list[2])));
         } catch (...) {
             // 使用默认值
         }
@@ -710,7 +710,7 @@ bool handle_psd_command(const SignalContext& ctx,
     if (arg_list.size() >= 2) {
         try {
             UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
-            nfft = static_cast<std::size_t>(parser.evaluate(arg_list[1]));
+            nfft = static_cast<std::size_t>(static_cast<long long>(parser.evaluate(arg_list[1])));
         } catch (...) {
             // 使用默认值
         }
@@ -751,7 +751,7 @@ bool handle_stft_command(const SignalContext& ctx,
     if (arg_list.size() >= 2) {
         try {
             UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
-            nfft = static_cast<std::size_t>(parser.evaluate(arg_list[1]));
+            nfft = static_cast<std::size_t>(static_cast<long long>(parser.evaluate(arg_list[1])));
         } catch (...) {
             // 使用默认值
         }
@@ -800,7 +800,7 @@ bool handle_spectrogram_command(const SignalContext& ctx,
     if (arg_list.size() >= 2) {
         try {
             UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
-            nfft = static_cast<std::size_t>(parser.evaluate(arg_list[1]));
+            nfft = static_cast<std::size_t>(static_cast<long long>(parser.evaluate(arg_list[1])));
         } catch (...) {
             // 使用默认值
         }

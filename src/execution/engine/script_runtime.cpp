@@ -849,9 +849,9 @@ StoredValue evaluate_expression_value(Calculator* calculator,
         if (try_symbolic_constant_expression(target_expr, variables, &impl->functions, &symbolic_text)) {
             bool symbolic_text_is_plain_decimal = false;
             try {
-                const Scalar parsed = mymath::from_string(symbolic_text);
+                const Scalar parsed = mymath::scalar_from_string(symbolic_text);
                 symbolic_text_is_plain_decimal =
-                    mymath::precise128::abs(parsed - result.decimal) < Scalar(1e-12L);
+                    mymath::abs(parsed - result.decimal) < Scalar(1e-12L);
             } catch (...) {
                 symbolic_text_is_plain_decimal = false;
             }

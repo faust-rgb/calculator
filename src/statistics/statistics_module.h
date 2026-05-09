@@ -79,14 +79,14 @@ public:
             Scalar mean_val = m.mean;
             Scalar variance_val = m.m2 / Scalar(static_cast<long long>(m.n));
             Scalar sample_variance_val = m.m2 / Scalar(static_cast<long long>(m.n - 1));
-            Scalar stddev_val = mymath::precise128::sqrt(sample_variance_val);
+            Scalar stddev_val = mymath::sqrt(sample_variance_val);
 
             // 计算偏度和峰度
             Scalar skew_val = Scalar(0);
             Scalar kurt_val = Scalar(0);
             if (variance_val > Scalar(1e-30L)) {
                 skew_val = (m.m3 / Scalar(static_cast<long long>(m.n))) /
-                          mymath::precise128::pow(variance_val, Scalar(1.5));
+                          mymath::pow(variance_val, Scalar(1.5));
                 kurt_val = (m.m4 / Scalar(static_cast<long long>(m.n))) /
                           (variance_val * variance_val) - Scalar(3);
             }
@@ -212,14 +212,14 @@ public:
             Scalar m2 = Scalar(stats::mean(y));
             Scalar s1 = Scalar(stats::sample_variance(x));
             Scalar s2 = Scalar(stats::sample_variance(y));
-            Scalar n1 = Scalar((x.size()));
-            Scalar n2 = Scalar((y.size()));
+            Scalar n1 = Scalar(static_cast<long long>(x.size()));
+            Scalar n2 = Scalar(static_cast<long long>(y.size()));
 
-            Scalar t = (m1 - m2) / mymath::precise128::sqrt(s1/n1 + s2/n2);
-            Scalar df = mymath::precise128::pow(s1/n1 + s2/n2, Scalar(2)) /
-                        (mymath::precise128::pow(s1/n1, Scalar(2))/(n1-Scalar(1)) + mymath::precise128::pow(s2/n2, Scalar(2))/(n2-Scalar(1)));
+            Scalar t = (m1 - m2) / mymath::sqrt(s1/n1 + s2/n2);
+            Scalar df = mymath::pow(s1/n1 + s2/n2, Scalar(2)) /
+                        (mymath::pow(s1/n1, Scalar(2))/(n1-Scalar(1)) + mymath::pow(s2/n2, Scalar(2))/(n2-Scalar(1)));
 
-            return wrap_scalar(2.0 * prob::student_t_cdf(-(mymath::precise128::abs(t)), (df)));
+            return wrap_scalar(2.0 * prob::student_t_cdf(-(mymath::abs(t)), (df)));
         };
 
         // 卡方检验函数
@@ -247,9 +247,9 @@ public:
             Scalar chi2 = Scalar(0);
             for (size_t i = 0; i < obs.size(); i++) {
                 if (exp[i] <= 0) throw std::runtime_error("chi2_test expected values must be positive");
-                chi2 += mymath::precise128::pow(Scalar(obs[i]) - Scalar(exp[i]), Scalar(2)) / Scalar(exp[i]);
+                chi2 += mymath::pow(Scalar(obs[i]) - Scalar(exp[i]), Scalar(2)) / Scalar(exp[i]);
             }
-            Scalar df = Scalar((obs.size() - 1));
+            Scalar df = Scalar(static_cast<long long>(obs.size() - 1));
             if (df < Scalar(1)) throw std::runtime_error("chi2_test requires at least 2 categories");
             return wrap_scalar(1.0L - prob::chi2_cdf((chi2), (df)));
         };

@@ -74,7 +74,7 @@ Scalar line_integral(const IntegrationContext& ctx, const std::string& expr,
         Scalar dy = Scalar(y_eval({{t_var, t_plus_h}}) - y_eval({{t_var, t_minus_h}})) / (Scalar(2.0L) * h);
         Scalar dz = has_z ? Scalar(z_eval({{t_var, t_plus_h}}) - z_eval({{t_var, t_minus_h}})) / (Scalar(2.0L) * h) : Scalar(0.0L);
 
-        Scalar ds = mymath::precise128::sqrt(dx*dx + dy*dy + dz*dz);
+        Scalar ds = mymath::sqrt(dx*dx + dy*dy + dz*dz);
 
         std::vector<std::pair<std::string, Scalar>> scope = {
             {t_var, t_ld}, {"x", x_val}, {"y", y_val}
@@ -134,7 +134,7 @@ Scalar surface_integral(const IntegrationContext& ctx, const std::string& expr,
         Scalar cy = zu * xv - xu * zv;
         Scalar cz = xu * yv - yu * xv;
 
-        Scalar dS = mymath::precise128::sqrt(cx*cx + cy*cy + cz*cz);
+        Scalar dS = mymath::sqrt(cx*cx + cy*cy + cz*cz);
 
         return (Scalar(f_eval({{u_var, u_ld}, {v_var, v_ld}, {"x", x_val}, {"y", y_val}, {"z", z_val}})) * dS);
     };
@@ -208,8 +208,8 @@ Scalar double_integral_polar(
         [evaluate_expression, theta_var, r_var](const std::vector<Scalar>& point) {
             const Scalar theta = Scalar(point[0]);
             const Scalar r = Scalar(point[1]);
-            const Scalar x = r * mymath::precise128::cos(theta);
-            const Scalar y = r * mymath::precise128::sin(theta);
+            const Scalar x = r * mymath::cos(theta);
+            const Scalar y = r * mymath::sin(theta);
             return (Scalar(evaluate_expression({{r_var, (r)}, {theta_var, (theta)}, {"x", (x)}, {"y", (y)}})) * r);
         });
     std::vector<MultivariableIntegrator::BoundFunc> bounds;
@@ -271,8 +271,8 @@ Scalar triple_integral_cyl(const IntegrationContext& ctx, const std::string& exp
         Scalar t = Scalar(pt[0]);
         Scalar r = Scalar(pt[1]);
         Scalar z = Scalar(pt[2]);
-        Scalar x = r * mymath::precise128::cos(t);
-        Scalar y = r * mymath::precise128::sin(t);
+        Scalar x = r * mymath::cos(t);
+        Scalar y = r * mymath::sin(t);
         return (Scalar(evaluate_expression({{r_v, (r)}, {t_v, (t)}, {z_v, (z)}, {"x", (x)}, {"y", (y)}})) * r);
     });
     std::vector<MultivariableIntegrator::BoundFunc> bounds;
@@ -294,10 +294,10 @@ Scalar triple_integral_sph(const IntegrationContext& ctx, const std::string& exp
         Scalar t = Scalar(pt[0]);
         Scalar p = Scalar(pt[1]);
         Scalar r = Scalar(pt[2]);
-        Scalar sp = mymath::precise128::sin(p);
-        Scalar x = r * sp * mymath::precise128::cos(t);
-        Scalar y = r * sp * mymath::precise128::sin(t);
-        Scalar z = r * mymath::precise128::cos(p);
+        Scalar sp = mymath::sin(p);
+        Scalar x = r * sp * mymath::cos(t);
+        Scalar y = r * sp * mymath::sin(t);
+        Scalar z = r * mymath::cos(p);
         Scalar jacobian = r * r * sp;
         return (Scalar(evaluate_expression({{r_v, (r)}, {t_v, (t)}, {p_v, (p)}, {"x", (x)}, {"y", (y)}, {"z", (z)}})) * jacobian);
     });

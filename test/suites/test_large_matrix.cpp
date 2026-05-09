@@ -816,7 +816,7 @@ void test_large_matrix_det_trace(int& passed, int& failed) {
     {
         Matrix D = Matrix::zero(30, 30);
         auto expected_det = mymath::Scalar(1.0L);
-        for (std::size_t i = 0; i < 30; ++i) {
+        for (int i = 0; i < 30; ++i) {
             auto val = static_cast<mymath::Scalar>(i + 2);
             D.at(i, i) = val;
             expected_det *= val;
@@ -883,7 +883,7 @@ void test_large_matrix_eigen(int& passed, int& failed) {
     {
         Matrix D = Matrix::zero(3, 3);
         std::vector<mymath::Scalar> expected_eigenvalues(3);
-        for (std::size_t i = 0; i < 3; ++i) {
+        for (int i = 0; i < 3; ++i) {
             auto val = static_cast<mymath::Scalar>((i + 1) * 2);
             D.at(i, i) = val;
             expected_eigenvalues[i] = val;

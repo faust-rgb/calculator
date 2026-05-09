@@ -25,7 +25,7 @@ bool compute_newton_polygon(const std::vector<int>& x_powers,
 
     std::vector<std::pair<int, int>> points;
     for (std::size_t i = 0; i < coefficients.size(); ++i) {
-        if (mymath::precise128::abs(coefficients[i]) >= Scalar(1e-15L)) {
+        if (mymath::abs(coefficients[i]) >= Scalar(1e-15L)) {
             points.emplace_back(x_powers[i], y_powers[i]);
         }
     }
@@ -83,7 +83,7 @@ bool newton_puiseux_expand(const std::vector<Scalar>& poly_coeffs,
     int leading_power = -1;
     Scalar leading_coeff = Scalar(0);
     for (std::size_t i = 0; i < poly_coeffs.size(); ++i) {
-        if (mymath::precise128::abs(poly_coeffs[i]) >= Scalar(1e-15L)) {
+        if (mymath::abs(poly_coeffs[i]) >= Scalar(1e-15L)) {
             leading_power = static_cast<int>(i);
             leading_coeff = poly_coeffs[i];
             break;
@@ -97,7 +97,7 @@ bool newton_puiseux_expand(const std::vector<Scalar>& poly_coeffs,
     result->clear();
     result->reserve(degree + 1);
 
-    Scalar sqrt_leading = mymath::precise128::sqrt(mymath::precise128::abs(leading_coeff));
+    Scalar sqrt_leading = mymath::sqrt(mymath::abs(leading_coeff));
     result->emplace_back(sqrt_leading, leading_power);
 
     if (leading_power + 1 >= static_cast<int>(poly_coeffs.size())) {
@@ -137,9 +137,9 @@ bool newton_puiseux_expand(const std::vector<Scalar>& poly_coeffs,
     for (int k = 1; k <= degree; ++k) {
         std::vector<Scalar> new_t_power(degree + 1, Scalar(0));
         for (int i = 0; i <= degree; ++i) {
-            if (mymath::precise128::abs(t_power[i]) < Scalar(1e-15L)) continue;
+            if (mymath::abs(t_power[i]) < Scalar(1e-15L)) continue;
             for (int j = 0; i + j <= degree; ++j) {
-                if (mymath::precise128::abs(t_series[j]) >= Scalar(1e-15L)) {
+                if (mymath::abs(t_series[j]) >= Scalar(1e-15L)) {
                     new_t_power[i + j] = new_t_power[i + j] + t_power[i] * t_series[j];
                 }
             }
@@ -152,7 +152,7 @@ bool newton_puiseux_expand(const std::vector<Scalar>& poly_coeffs,
     }
 
     for (int i = 0; i <= degree && i < static_cast<int>(sqrt_result.size()); ++i) {
-        if (mymath::precise128::abs(sqrt_result[i]) >= Scalar(1e-15L)) {
+        if (mymath::abs(sqrt_result[i]) >= Scalar(1e-15L)) {
             result->emplace_back(sqrt_leading * sqrt_result[i], leading_power + i);
         }
     }
@@ -190,7 +190,7 @@ std::string puiseux(const SeriesContext& ctx,
                 int leading_power = -1;
                 Scalar leading_coeff = Scalar(0);
                 for (std::size_t i = 0; i < poly_coeffs.size(); ++i) {
-                    if (mymath::precise128::abs(poly_coeffs[i]) >= Scalar(1e-10L)) {
+                    if (mymath::abs(poly_coeffs[i]) >= Scalar(1e-10L)) {
                         leading_power = static_cast<int>(i);
                         leading_coeff = poly_coeffs[i];
                         break;
@@ -203,7 +203,7 @@ std::string puiseux(const SeriesContext& ctx,
                         std::ostringstream result;
                         bool first = true;
                         for (const auto& [coeff, power] : puiseux_coeffs) {
-                            if (mymath::precise128::abs(coeff) < Scalar(1e-15L)) continue;
+                            if (mymath::abs(coeff) < Scalar(1e-15L)) continue;
 
                             Scalar coeff_ld = coeff.to_long_double();
                             if (!first) {

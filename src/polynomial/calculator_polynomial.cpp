@@ -102,7 +102,7 @@ void build_polynomial_recursive(
                     polynomial_divide(lhs_coefficients, rhs_coefficients);
                 bool zero_remainder = true;
                 for (Scalar coefficient : division.remainder) {
-                    if (mymath::precise128::abs(Scalar(coefficient)) >= Scalar(1e-10L)) {
+                    if (mymath::abs(Scalar(coefficient)) >= Scalar(1e-10L)) {
                         zero_remainder = false;
                         break;
                     }
@@ -247,8 +247,8 @@ std::string roots(const PolynomialData& poly) {
         const Scalar real_diff = Scalar(roots[i].real() - previous_root.real());
         const Scalar imag_diff = Scalar(roots[i].imag() - previous_root.imag());
         if (wrote_root &&
-            mymath::precise128::abs(real_diff) <= Scalar(1e-7L) &&
-            mymath::precise128::abs(imag_diff) <= Scalar(1e-7L)) {
+            mymath::abs(real_diff) <= Scalar(1e-7L) &&
+            mymath::abs(imag_diff) <= Scalar(1e-7L)) {
             continue;
         }
         if (wrote_root) {
@@ -262,7 +262,7 @@ std::string roots(const PolynomialData& poly) {
         if (is_integer_double(imag, 1e-6)) {
             imag = static_cast<Scalar>(round_to_long_long(imag));
         }
-        if (mymath::precise128::abs(Scalar(imag)) < Scalar(1e-8L)) {
+        if (mymath::abs(Scalar(imag)) < Scalar(1e-8L)) {
             out << format_symbolic_scalar(real);
         } else {
             out << matrix::internal::format_complex<Scalar>({real, imag});

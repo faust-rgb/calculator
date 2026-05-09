@@ -55,7 +55,7 @@ struct Node {
 };
 
 bool is_integer_val(Scalar val, Scalar eps) {
-    return mymath::precise128::abs(val - mymath::precise128::round(val)) <= eps;
+    return mymath::abs(val - mymath::round(val)) <= eps;
 }
 
 Scalar get_infinity() {
@@ -118,7 +118,7 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
             Scalar val = Scalar(sol[idx]);
             if (!is_integer_val(val, tolerance_scalar)) {
                 // 分支策略：选取最接近 0.5 的变量（Most fractional）
-                Scalar fractionality = mymath::precise128::abs(val - mymath::precise128::round(val));
+                Scalar fractionality = mymath::abs(val - mymath::round(val));
                 if (fractionality > max_fractionality) {
                     max_fractionality = fractionality;
                     branch_var = idx;
@@ -137,7 +137,7 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
 
             // 下分支节点: x_i <= floor(v)
             Node left = current;
-            left.upper[branch_var] = (mymath::precise128::floor(val + tolerance_scalar));
+            left.upper[branch_var] = (mymath::floor(val + tolerance_scalar));
             left.estimated_value = obj_val_scalar;
             if (Scalar(left.upper[branch_var]) >= Scalar(left.lower[branch_var])) {
                 nodes.push(left);
@@ -145,7 +145,7 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
 
             // 上分支节点: x_i >= ceil(v)
             Node right = current;
-            right.lower[branch_var] = (mymath::precise128::ceil(val - tolerance_scalar));
+            right.lower[branch_var] = (mymath::ceil(val - tolerance_scalar));
             right.estimated_value = obj_val_scalar;
             if (Scalar(right.lower[branch_var]) <= Scalar(right.upper[branch_var])) {
                 nodes.push(right);

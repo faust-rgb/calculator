@@ -75,7 +75,7 @@ std::string format_rational_with_constant(const Rational& r, const std::string& 
  * @return 格式化后的字符串，如 "pi / 4"、"2 * e"；无法匹配时返回空字符串
  */
 std::string try_format_with_named_constants(long double value, [[maybe_unused]] long double eps) {
-    const Scalar abs_value = mymath::precise128::abs(Scalar(value));
+    const Scalar abs_value = mymath::abs(Scalar(value));
     Rational r;
 
     for (const auto& const_entry : kNamedConstants) {
@@ -101,7 +101,7 @@ std::string try_format_with_named_constants(long double value, [[maybe_unused]] 
  * 提取平方因子以简化表达式，如 sqrt(8) = 2*sqrt(2)。
  */
 std::string try_format_as_sqrt(long double value, [[maybe_unused]] long double eps) {
-    const Scalar abs_value = mymath::precise128::abs(Scalar(value));
+    const Scalar abs_value = mymath::abs(Scalar(value));
     const Scalar squared = abs_value * abs_value;
 
     Rational r;
@@ -179,12 +179,12 @@ std::string try_format_as_sqrt(long double value, [[maybe_unused]] long double e
  */
 std::string try_format_symbolic_extended(long double value, long double eps) {
     const Scalar v(value);
-    if (!mymath::isfinite(value) || mymath::precise128::abs(v) < Scalar(eps)) {
+    if (!mymath::isfinite(value) || mymath::abs(v) < Scalar(eps)) {
         return "";
     }
 
     const bool negative = value < Scalar(0);
-    const Scalar abs_value = mymath::precise128::abs(v);
+    const Scalar abs_value = mymath::abs(v);
 
     // 1. 尝试命名常数比例 (pi, e, 等)
     std::string named_form = try_format_with_named_constants(static_cast<long double>(abs_value), eps);
@@ -400,7 +400,7 @@ std::string format_symbolic_scalar(long double value) {
  */
 std::string signed_center_text(long double center) {
     const Scalar c(center);
-    if (mymath::precise128::abs(c) < Scalar(1e-12)) {
+    if (mymath::abs(c) < Scalar(1e-12)) {
         return "";
     }
     return c > Scalar(0)
@@ -450,9 +450,9 @@ std::string power_term(const std::string& base, int numerator, int denominator) 
 std::string format_term(long double coefficient, const std::string& factor) {
     const bool has_factor = !factor.empty();
     const Scalar coeff(coefficient);
-    const Scalar abs_coefficient = mymath::precise128::abs(coeff);
+    const Scalar abs_coefficient = mymath::abs(coeff);
     const bool omit_unit =
-        has_factor && mymath::precise128::abs(abs_coefficient - Scalar(1)) < Scalar(1e-9);
+        has_factor && mymath::abs(abs_coefficient - Scalar(1)) < Scalar(1e-9);
 
     if (!has_factor) {
         return format_symbolic_number(coefficient);

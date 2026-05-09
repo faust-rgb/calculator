@@ -155,8 +155,8 @@ std::string SvgRenderer::marker_path(MarkerStyle style, Scalar cx, Scalar cy, Sc
                 for (int i = 0; i < 10; ++i) {
                     Scalar angle = Scalar(mymath::kPi) / Scalar(2) + Scalar(i) * Scalar(mymath::kPi) / Scalar(5);
                     Scalar r = (i % 2 == 0) ? r1 : r2;
-                    Scalar x = cx_s + r * mymath::precise128::cos(angle);
-                    Scalar y = cy_s - r * mymath::precise128::sin(angle);
+                    Scalar x = cx_s + r * mymath::cos(angle);
+                    Scalar y = cy_s - r * mymath::sin(angle);
                     path << x.to_long_double() << "," << y.to_long_double() << " ";
                 }
                 path << "\"/>";
@@ -180,7 +180,7 @@ std::vector<Scalar> SvgRenderer::compute_ticks(Scalar min_val, Scalar max_val, i
     Scalar rough_step = range / max_ticks;
 
     // 找到最接近的"漂亮"步长
-    Scalar magnitude = mymath::precise128::pow(Scalar(10), mymath::precise128::floor(mymath::precise128::log10(rough_step)));
+    Scalar magnitude = mymath::pow(Scalar(10), mymath::floor(mymath::log10(rough_step)));
     Scalar residual = rough_step / magnitude;
 
     Scalar nice_step;
@@ -189,7 +189,7 @@ std::vector<Scalar> SvgRenderer::compute_ticks(Scalar min_val, Scalar max_val, i
     else if (residual <= Scalar(7)) nice_step = Scalar(5) * magnitude;
     else nice_step = Scalar(10) * magnitude;
 
-    Scalar tick_start = mymath::precise128::ceil(min_v / nice_step) * nice_step;
+    Scalar tick_start = mymath::ceil(min_v / nice_step) * nice_step;
     for (Scalar t = tick_start; t <= max_v + nice_step * Scalar(0.01); t += nice_step) {
         ticks.push_back(t.to_long_double());
     }
@@ -199,9 +199,9 @@ std::vector<Scalar> SvgRenderer::compute_ticks(Scalar min_val, Scalar max_val, i
 
 std::string SvgRenderer::format_tick(Scalar value, int precision) {
     Scalar v(value);
-    if (mymath::precise128::abs(v) < Scalar(1e-10L)) return "0";
+    if (mymath::abs(v) < Scalar(1e-10L)) return "0";
 
-    Scalar abs_val = mymath::precise128::abs(v);
+    Scalar abs_val = mymath::abs(v);
     if (abs_val >= Scalar(1000) || abs_val < Scalar(0.01)) {
         std::ostringstream ss;
         ss << std::scientific << std::setprecision(precision - 1) << value;
@@ -248,10 +248,10 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
 
     for (const auto& series : all_series) {
         for (const auto& p : series.points) {
-            if (mymath::precise128::isnan(Scalar(p.x)) || mymath::precise128::isnan(Scalar(p.y)) ||
-                mymath::precise128::isinf(Scalar(p.x)) || mymath::precise128::isinf(Scalar(p.y))) continue;
-            Scalar x = options.log_x && p.x > 0 ? mymath::precise128::log10(Scalar(p.x)) : Scalar(p.x);
-            Scalar y = options.log_y && p.y > 0 ? mymath::precise128::log10(Scalar(p.y)) : Scalar(p.y);
+            if (mymath::isnan(Scalar(p.x)) || mymath::isnan(Scalar(p.y)) ||
+                mymath::isinf(Scalar(p.x)) || mymath::isinf(Scalar(p.y))) continue;
+            Scalar x = options.log_x && p.x > 0 ? mymath::log10(Scalar(p.x)) : Scalar(p.x);
+            Scalar y = options.log_y && p.y > 0 ? mymath::log10(Scalar(p.y)) : Scalar(p.y);
             x_min = std::min(x_min, x);
             x_max = std::max(x_max, x);
             y_min = std::min(y_min, y);
@@ -259,20 +259,20 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
         }
     }
 
-    if (mymath::precise128::abs(x_min) > Scalar(1e299L)) { x_min = Scalar(0); x_max = Scalar(1); }
-    if (mymath::precise128::abs(y_min) > Scalar(1e299L)) { y_min = Scalar(0); y_max = Scalar(1); }
+    if (mymath::abs(x_min) > Scalar(1e299L)) { x_min = Scalar(0); x_max = Scalar(1); }
+    if (mymath::abs(y_min) > Scalar(1e299L)) { y_min = Scalar(0); y_max = Scalar(1); }
     if (x_min == x_max) { x_min -= Scalar(1); x_max += Scalar(1); }
     if (y_min == y_max) { y_min -= Scalar(1); y_max += Scalar(1); }
 
     // 使用用户指定的范围
     if (!options.auto_range) {
         if (options.x_min != options.x_max) {
-            x_min = options.log_x ? mymath::precise128::log10(Scalar(options.x_min)) : Scalar(options.x_min);
-            x_max = options.log_x ? mymath::precise128::log10(Scalar(options.x_max)) : Scalar(options.x_max);
+            x_min = options.log_x ? mymath::log10(Scalar(options.x_min)) : Scalar(options.x_min);
+            x_max = options.log_x ? mymath::log10(Scalar(options.x_max)) : Scalar(options.x_max);
         }
         if (options.y_min != options.y_max) {
-            y_min = options.log_y ? mymath::precise128::log10(Scalar(options.y_min)) : Scalar(options.y_min);
-            y_max = options.log_y ? mymath::precise128::log10(Scalar(options.y_max)) : Scalar(options.y_max);
+            y_min = options.log_y ? mymath::log10(Scalar(options.y_min)) : Scalar(options.y_min);
+            y_max = options.log_y ? mymath::log10(Scalar(options.y_max)) : Scalar(options.y_max);
         }
     }
 
@@ -340,7 +340,7 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
             << "\" x2=\"" << tx.to_long_double() << "\" y2=\"" << (height - margin_bottom + 5)
             << "\" stroke=\"#333\"/>\n";
 
-        Scalar display_val = options.log_x ? mymath::precise128::pow(Scalar(10), Scalar(t)) : Scalar(t);
+        Scalar display_val = options.log_x ? mymath::pow(Scalar(10), Scalar(t)) : Scalar(t);
         svg << "<text x=\"" << tx.to_long_double() << "\" y=\"" << (height - margin_bottom + 18)
             << "\" text-anchor=\"middle\">" << format_tick(display_val.to_long_double()) << "</text>\n";
     }
@@ -352,7 +352,7 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
             << "\" x2=\"" << margin_left << "\" y2=\"" << ty.to_long_double()
             << "\" stroke=\"#333\"/>\n";
 
-        Scalar display_val = options.log_y ? mymath::precise128::pow(Scalar(10), Scalar(t)) : Scalar(t);
+        Scalar display_val = options.log_y ? mymath::pow(Scalar(10), Scalar(t)) : Scalar(t);
         svg << "<text x=\"" << (margin_left - 10) << "\" y=\"" << (ty.to_long_double() + 4)
             << "\" text-anchor=\"end\">" << format_tick(display_val.to_long_double()) << "</text>\n";
     }
@@ -399,10 +399,10 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
             svg << " points=\"";
             bool first = true;
             for (const auto& p : series.points) {
-                if (mymath::precise128::isnan(Scalar(p.x)) || mymath::precise128::isnan(Scalar(p.y)) ||
-                    mymath::precise128::isinf(Scalar(p.x)) || mymath::precise128::isinf(Scalar(p.y))) continue;
-                Scalar x = options.log_x && p.x > 0 ? mymath::precise128::log10(Scalar(p.x)) : Scalar(p.x);
-                Scalar y = options.log_y && p.y > 0 ? mymath::precise128::log10(Scalar(p.y)) : Scalar(p.y);
+                if (mymath::isnan(Scalar(p.x)) || mymath::isnan(Scalar(p.y)) ||
+                    mymath::isinf(Scalar(p.x)) || mymath::isinf(Scalar(p.y))) continue;
+                Scalar x = options.log_x && p.x > 0 ? mymath::log10(Scalar(p.x)) : Scalar(p.x);
+                Scalar y = options.log_y && p.y > 0 ? mymath::log10(Scalar(p.y)) : Scalar(p.y);
                 if (x < x_min || x > x_max || y < y_min || y > y_max) continue;
                 if (!first) svg << " ";
                 svg << map_x(x).to_long_double() << "," << map_y(y).to_long_double();
@@ -415,10 +415,10 @@ std::string SvgRenderer::render(const std::vector<DataSeries>& all_series, const
         if (series.style.marker_style != MarkerStyle::None && series.style.show_marker) {
             svg << "<g fill=\"" << color << "\" stroke=\"" << color << "\">\n";
             for (const auto& p : series.points) {
-                if (mymath::precise128::isnan(Scalar(p.x)) || mymath::precise128::isnan(Scalar(p.y)) ||
-                    mymath::precise128::isinf(Scalar(p.x)) || mymath::precise128::isinf(Scalar(p.y))) continue;
-                Scalar x = options.log_x && p.x > 0 ? mymath::precise128::log10(Scalar(p.x)) : Scalar(p.x);
-                Scalar y = options.log_y && p.y > 0 ? mymath::precise128::log10(Scalar(p.y)) : Scalar(p.y);
+                if (mymath::isnan(Scalar(p.x)) || mymath::isnan(Scalar(p.y)) ||
+                    mymath::isinf(Scalar(p.x)) || mymath::isinf(Scalar(p.y))) continue;
+                Scalar x = options.log_x && p.x > 0 ? mymath::log10(Scalar(p.x)) : Scalar(p.x);
+                Scalar y = options.log_y && p.y > 0 ? mymath::log10(Scalar(p.y)) : Scalar(p.y);
                 if (x < x_min || x > x_max || y < y_min || y > y_max) continue;
                 svg << marker_path(series.style.marker_style, map_x(x).to_long_double(), map_y(y).to_long_double(), series.style.marker_size) << "\n";
             }
@@ -487,7 +487,7 @@ std::string SvgRenderer::render_heatmap(const matrix::Matrix& z,
         for (size_t r = 0; r < z.rows; ++r) {
             for (size_t c = 0; c < z.cols; ++c) {
                 Scalar val(z.at(r, c));
-                if (mymath::precise128::isfinite(val)) {
+                if (mymath::isfinite(val)) {
                     z_min = std::min(z_min, val);
                     z_max = std::max(z_max, val);
                 }

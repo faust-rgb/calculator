@@ -11,9 +11,7 @@
 #include "mymath.h"
 #include "core/common/scalar_type.h"
 
-namespace {
-
-} // namespace
+namespace mymath {
 
 /**
  * @brief 将角度转换为弧度
@@ -23,7 +21,7 @@ namespace {
  * 转换公式：rad = deg * π / 180
  */
 Scalar degrees_to_radians(Scalar value) {
-    Scalar pi = mymath::precise128::pi();
+    Scalar pi = mymath::pi();
     return value * pi / Scalar(180.0L);
 }
 
@@ -32,7 +30,7 @@ long double degrees_to_radians(long double value) {
 }
 
 Scalar radians_to_degrees(Scalar value) {
-    Scalar pi = mymath::precise128::pi();
+    Scalar pi = mymath::pi();
     return value * Scalar(180.0L) / pi;
 }
 
@@ -55,3 +53,5 @@ Scalar fahrenheit_to_celsius(Scalar value) {
 long double fahrenheit_to_celsius(long double value) {
     return static_cast<long double>(fahrenheit_to_celsius(Scalar(value)));
 }
+
+}  // namespace mymath

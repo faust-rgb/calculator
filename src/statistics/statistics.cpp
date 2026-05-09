@@ -33,7 +33,7 @@ Scalar mean(const std::vector<Scalar>& data) {
     for (const auto& val : data) {
         sum += Scalar(val);
     }
-    return (sum / Scalar((data.size())));
+    return (sum / Scalar(static_cast<long long>(data.size())));
 }
 
 /**
@@ -82,7 +82,7 @@ Scalar mode(const std::vector<Scalar>& data) {
     Scalar data_range = sorted.back() - sorted.front();
     // 使用数据范围的相对阈值，结合机器 epsilon
     Scalar epsilon = std::numeric_limits<Scalar>::epsilon();
-    Scalar threshold = std::max(epsilon * mymath::precise128::abs(data_range), Scalar(1e-10L));
+    Scalar threshold = std::max(epsilon * mymath::abs(data_range), Scalar(1e-10L));
     // 对于极小数据范围，使用绝对阈值
     if (data_range < Scalar(1e-6L)) {
         threshold = Scalar(1e-10L);
@@ -94,7 +94,7 @@ Scalar mode(const std::vector<Scalar>& data) {
     int current_count = 0;
 
     for (const auto& val : sorted) {
-        if (mymath::precise128::abs(val - current_value) < threshold) {
+        if (mymath::abs(val - current_value) < threshold) {
             ++current_count;
         } else {
             if (current_count > best_count) {
@@ -116,7 +116,7 @@ void Moments::add(Scalar x) {
     long long n1 = n;
     n++;
     Scalar delta = x - mean;
-    Scalar delta_n = delta / Scalar((n));
+    Scalar delta_n = delta / Scalar(static_cast<long long>(n));
     Scalar delta_n2 = delta_n * delta_n;
     Scalar term1 = delta * delta_n * Scalar((n1));
     mean += delta_n;
@@ -145,11 +145,11 @@ Scalar sample_variance(const std::vector<Scalar>& data) {
 }
 
 Scalar stddev(const std::vector<Scalar>& data) {
-    return (mymath::precise128::sqrt(Scalar(variance(data))));
+    return (mymath::sqrt(Scalar(variance(data))));
 }
 
 Scalar sample_stddev(const std::vector<Scalar>& data) {
-    return (mymath::precise128::sqrt(Scalar(sample_variance(data))));
+    return (mymath::sqrt(Scalar(sample_variance(data))));
 }
 
 Scalar skewness(const std::vector<Scalar>& data) {
@@ -157,7 +157,7 @@ Scalar skewness(const std::vector<Scalar>& data) {
     Moments m = compute_moments(data);
     Scalar var = m.m2 / Scalar((m.n));
     if (var < Scalar(1e-20L)) throw std::runtime_error("skewness undefined for zero variance");
-    return ((m.m3 / Scalar((m.n))) / mymath::precise128::pow(var, Scalar(1.5)));
+    return ((m.m3 / Scalar((m.n))) / mymath::pow(var, Scalar(1.5)));
 }
 
 Scalar kurtosis(const std::vector<Scalar>& data) {
@@ -178,9 +178,9 @@ Scalar percentile(const std::vector<Scalar>& data, Scalar p) {
     for (const auto& val : data) {
         copy.push_back(Scalar(val));
     }
-    Scalar pos = Scalar(p) * Scalar((copy.size() - 1)) / Scalar(100);
-    size_t i = static_cast<size_t>((pos));
-    Scalar fraction = pos - Scalar((i));
+    Scalar pos = Scalar(p) * Scalar(static_cast<long long>(copy.size() - 1)) / Scalar(100);
+    size_t i = static_cast<size_t>(pos.to_long_double());
+    Scalar fraction = pos - Scalar(static_cast<long long>(i));
 
     if (fraction < Scalar(1e-12L)) {
         std::nth_element(copy.begin(), copy.begin() + i, copy.end());
@@ -208,11 +208,11 @@ Scalar covariance(const std::vector<Scalar>& x, const std::vector<Scalar>& y) {
     for (size_t i = 0; i < x.size(); ++i) {
         size_t n = i + 1;
         Scalar dx = Scalar(x[i]) - mean_x;
-        mean_x += dx / Scalar((n));
-        mean_y += (Scalar(y[i]) - mean_y) / Scalar((n));
+        mean_x += dx / Scalar(static_cast<long long>(n));
+        mean_y += (Scalar(y[i]) - mean_y) / Scalar(static_cast<long long>(n));
         C += dx * (Scalar(y[i]) - mean_y);
     }
-    return (C / Scalar((x.size())));
+    return (C / Scalar(static_cast<long long>(x.size())));
 }
 
 Scalar correlation(const std::vector<Scalar>& x, const std::vector<Scalar>& y) {
@@ -224,15 +224,15 @@ Scalar correlation(const std::vector<Scalar>& x, const std::vector<Scalar>& y) {
     for (size_t i = 0; i < x.size(); ++i) {
         size_t n = i + 1;
         Scalar dx = Scalar(x[i]) - mx;
-        mx += dx / Scalar((n));
+        mx += dx / Scalar(static_cast<long long>(n));
         vx += dx * (Scalar(x[i]) - mx);
         Scalar dy = Scalar(y[i]) - my;
-        my += dy / Scalar((n));
+        my += dy / Scalar(static_cast<long long>(n));
         vy += dy * (Scalar(y[i]) - my);
         cxy += dx * (Scalar(y[i]) - my);
     }
     if (vx < Scalar(1e-20L) || vy < Scalar(1e-20L)) throw std::runtime_error("correlation undefined for constant vectors");
-    return (cxy / mymath::precise128::sqrt(vx * vy));
+    return (cxy / mymath::sqrt(vx * vy));
 }
 
 std::vector<Scalar> linear_regression(const std::vector<Scalar>& x, const std::vector<Scalar>& y) {
@@ -243,10 +243,10 @@ std::vector<Scalar> linear_regression(const std::vector<Scalar>& x, const std::v
     for (size_t i = 0; i < x.size(); ++i) {
         size_t n = i + 1;
         Scalar dx = Scalar(x[i]) - mx;
-        mx += dx / Scalar((n));
+        mx += dx / Scalar(static_cast<long long>(n));
         vx += dx * (Scalar(x[i]) - mx);
         Scalar dy = Scalar(y[i]) - my;
-        my += dy / Scalar((n));
+        my += dy / Scalar(static_cast<long long>(n));
         cxy += dx * (Scalar(y[i]) - my);
     }
     if (vx < Scalar(1e-20L)) throw std::runtime_error("linear_regression requires non-constant x");
@@ -265,7 +265,7 @@ Scalar mad(const std::vector<Scalar>& data) {
     std::vector<Scalar> diffs;
     diffs.reserve(data.size());
     for (const auto& x : data) {
-        diffs.push_back(mymath::precise128::abs(Scalar(x) - Scalar(med)));
+        diffs.push_back(mymath::abs(Scalar(x) - Scalar(med)));
     }
     // Calculate median of diffs
     size_t n = diffs.size();
@@ -307,10 +307,10 @@ static std::vector<Scalar> get_ranks(const std::vector<Scalar>& data) {
     std::vector<Scalar> ranks(n);
     for (size_t i = 0; i < n; ) {
         size_t j = i + 1;
-        while (j < n && mymath::precise128::abs(Scalar(data[indices[j]]) - Scalar(data[indices[i]])) < Scalar(1e-10L)) {
+        while (j < n && mymath::abs(Scalar(data[indices[j]]) - Scalar(data[indices[i]])) < Scalar(1e-10L)) {
             j++;
         }
-        Scalar rank = (Scalar((i)) + Scalar((j)) + Scalar(1)) / Scalar(2);
+        Scalar rank = (Scalar(static_cast<long long>(i)) + Scalar(static_cast<long long>(j)) + Scalar(1)) / Scalar(2);
         for (size_t k = i; k < j; k++) {
             ranks[indices[k]] = rank;
         }
@@ -331,15 +331,15 @@ Scalar spearman_correlation(const std::vector<Scalar>& x, const std::vector<Scal
     for (size_t i = 0; i < rx.size(); ++i) {
         size_t n = i + 1;
         Scalar dx = rx[i] - mx;
-        mx += dx / Scalar((n));
+        mx += dx / Scalar(static_cast<long long>(n));
         vx += dx * (rx[i] - mx);
         Scalar dy = ry[i] - my;
-        my += dy / Scalar((n));
+        my += dy / Scalar(static_cast<long long>(n));
         vy += dy * (ry[i] - my);
         cxy += dx * (ry[i] - my);
     }
     if (vx < Scalar(1e-20L) || vy < Scalar(1e-20L)) throw std::runtime_error("spearman_correlation undefined for constant vectors");
-    return (cxy / mymath::precise128::sqrt(vx * vy));
+    return (cxy / mymath::sqrt(vx * vy));
 }
 
 } // namespace stats

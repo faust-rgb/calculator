@@ -1143,18 +1143,34 @@ PreciseDecimal PreciseDecimal::from_decimal_literal(const std::string& token) {
 PreciseDecimal operator+(PreciseDecimal lhs, const PreciseDecimal& rhs) { lhs += rhs; return lhs; }
 PreciseDecimal operator+(PreciseDecimal lhs, long double rhs) { lhs += PreciseDecimal(rhs); return lhs; }
 PreciseDecimal operator+(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) + rhs; }
+PreciseDecimal operator+(PreciseDecimal lhs, double rhs) { lhs += PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator+(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) + rhs; }
+PreciseDecimal operator+(PreciseDecimal lhs, int rhs) { lhs += PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator+(int lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) + rhs; }
 
 PreciseDecimal operator-(PreciseDecimal lhs, const PreciseDecimal& rhs) { lhs -= rhs; return lhs; }
 PreciseDecimal operator-(PreciseDecimal lhs, long double rhs) { lhs -= PreciseDecimal(rhs); return lhs; }
 PreciseDecimal operator-(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) - rhs; }
+PreciseDecimal operator-(PreciseDecimal lhs, double rhs) { lhs -= PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator-(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) - rhs; }
+PreciseDecimal operator-(PreciseDecimal lhs, int rhs) { lhs -= PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator-(int lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) - rhs; }
 
 PreciseDecimal operator*(PreciseDecimal lhs, const PreciseDecimal& rhs) { lhs *= rhs; return lhs; }
 PreciseDecimal operator*(PreciseDecimal lhs, long double rhs) { lhs *= PreciseDecimal(rhs); return lhs; }
 PreciseDecimal operator*(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) * rhs; }
+PreciseDecimal operator*(PreciseDecimal lhs, double rhs) { lhs *= PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator*(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) * rhs; }
+PreciseDecimal operator*(PreciseDecimal lhs, int rhs) { lhs *= PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator*(int lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) * rhs; }
 
 PreciseDecimal operator/(PreciseDecimal lhs, const PreciseDecimal& rhs) { lhs /= rhs; return lhs; }
 PreciseDecimal operator/(PreciseDecimal lhs, long double rhs) { lhs /= PreciseDecimal(rhs); return lhs; }
 PreciseDecimal operator/(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) / rhs; }
+PreciseDecimal operator/(PreciseDecimal lhs, double rhs) { lhs /= PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator/(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) / rhs; }
+PreciseDecimal operator/(PreciseDecimal lhs, int rhs) { lhs /= PreciseDecimal(rhs); return lhs; }
+PreciseDecimal operator/(int lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) / rhs; }
 
 bool operator==(const PreciseDecimal& lhs, long double rhs) { return lhs == PreciseDecimal(rhs); }
 bool operator==(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) == rhs; }
@@ -1168,6 +1184,37 @@ bool operator<=(const PreciseDecimal& lhs, long double rhs) { return lhs <= Prec
 bool operator<=(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) <= rhs; }
 bool operator>=(const PreciseDecimal& lhs, long double rhs) { return lhs >= PreciseDecimal(rhs); }
 bool operator>=(long double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) >= rhs; }
+
+bool operator==(const PreciseDecimal& lhs, double rhs) { return lhs == PreciseDecimal(rhs); }
+bool operator==(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) == rhs; }
+bool operator!=(const PreciseDecimal& lhs, double rhs) { return !(lhs == rhs); }
+bool operator!=(double lhs, const PreciseDecimal& rhs) { return !(lhs == rhs); }
+bool operator<(const PreciseDecimal& lhs, double rhs) { return lhs < PreciseDecimal(rhs); }
+bool operator<(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) < rhs; }
+bool operator>(const PreciseDecimal& lhs, double rhs) { return lhs > PreciseDecimal(rhs); }
+bool operator>(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) > rhs; }
+bool operator<=(const PreciseDecimal& lhs, double rhs) { return lhs <= PreciseDecimal(rhs); }
+bool operator<=(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) <= rhs; }
+bool operator>=(const PreciseDecimal& lhs, double rhs) { return lhs >= PreciseDecimal(rhs); }
+bool operator>=(double lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) >= rhs; }
+
+bool operator==(const PreciseDecimal& lhs, int rhs) { return lhs == PreciseDecimal(rhs); }
+bool operator==(int lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) == rhs; }
+bool operator!=(const PreciseDecimal& lhs, int rhs) { return !(lhs == rhs); }
+bool operator!=(int lhs, const PreciseDecimal& rhs) { return !(lhs == rhs); }
+bool operator<(const PreciseDecimal& lhs, int rhs) { return lhs < PreciseDecimal(rhs); }
+bool operator<(int lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) < rhs; }
+bool operator>(const PreciseDecimal& lhs, int rhs) { return lhs > PreciseDecimal(rhs); }
+bool operator>(int lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) > rhs; }
+bool operator<=(const PreciseDecimal& lhs, int rhs) { return lhs <= PreciseDecimal(rhs); }
+bool operator<=(int lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) <= rhs; }
+bool operator>=(const PreciseDecimal& lhs, int rhs) { return lhs >= PreciseDecimal(rhs); }
+bool operator>=(int lhs, const PreciseDecimal& rhs) { return PreciseDecimal(lhs) >= rhs; }
+
+std::ostream& operator<<(std::ostream& os, const PreciseDecimal& val) {
+    os << val.to_string();
+    return os;
+}
 
 namespace precise {
 

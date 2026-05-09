@@ -786,18 +786,18 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
             val += c * power;
             power *= r;
         }
-        return mymath::precise128::abs(val) < Scalar(1e-9L);
+        return mymath::abs(val) < Scalar(1e-9L);
     };
 
     // 搜索整数根
     std::vector<Scalar> roots;
     Scalar constant_term = num_coeffs.empty() ? Scalar(0) : num_coeffs[0];
 
-    int max_search = static_cast<int>(mymath::precise128::abs(constant_term) + Scalar(1));
+    int max_search = static_cast<int>(mymath::abs(constant_term) + Scalar(1));
     max_search = std::min(max_search, 100);
 
     for (int i = -max_search; i <= max_search; ++i) {
-        if (i == 0 && num_coeffs.size() > 1 && mymath::precise128::abs(num_coeffs[0]) > Scalar(1e-9L)) continue;
+        if (i == 0 && num_coeffs.size() > 1 && mymath::abs(num_coeffs[0]) > Scalar(1e-9L)) continue;
 
         // 使用有理根定理：p 必须整除常数项，q 必须整除首项系数
         // 对于整数根 r = p/q，如果 q=1，则 p 整除常数项
@@ -845,11 +845,11 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
             current.coefficients_[0].is_number(&c)) {
             Scalar disc = b * b - Scalar(4) * a * c;
             if (disc >= Scalar(0)) {
-                Scalar sqrt_disc = mymath::precise128::sqrt(disc);
+                Scalar sqrt_disc = mymath::sqrt(disc);
                 Scalar r1 = (-b + sqrt_disc) / (Scalar(2) * a);
                 Scalar r2 = (-b - sqrt_disc) / (Scalar(2) * a);
 
-                if (mymath::precise128::abs(r1 - r2) < Scalar(1e-9L)) {
+                if (mymath::abs(r1 - r2) < Scalar(1e-9L)) {
                     // 两个相同的根
                     SymbolicPolynomial linear_factor({SymbolicExpression::number(-r1),
                                                      SymbolicExpression::number(Scalar(1))}, variable_name_);

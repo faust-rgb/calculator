@@ -55,8 +55,8 @@ int require_int(Scalar value, const std::string& name) {
  */
 long long require_long_long(Scalar value, const std::string& name) {
     if (!is_exact_integer(value) ||
-        value < (mymath::kLongLongMin) ||
-        value > (mymath::kLongLongMax)) {
+        value < Scalar(mymath::kLongLongMin) ||
+        value > Scalar(mymath::kLongLongMax)) {
         throw std::runtime_error(name + " must be an integer");
     }
     return static_cast<long long>(value);
@@ -181,14 +181,14 @@ Scalar apply_statistic(const std::string& name, const std::vector<Scalar>& argum
         Scalar m2 = Scalar(stats::mean(y));
         Scalar s1 = Scalar(stats::sample_variance(x));
         Scalar s2 = Scalar(stats::sample_variance(y));
-        Scalar n1 = Scalar((x.size()));
-        Scalar n2 = Scalar((y.size()));
+        Scalar n1 = Scalar(static_cast<long long>(x.size()));
+        Scalar n2 = Scalar(static_cast<long long>(y.size()));
 
-        Scalar t = (m1 - m2) / mymath::precise128::sqrt(s1/n1 + s2/n2);
-        Scalar df = mymath::precise128::pow(s1/n1 + s2/n2, Scalar(2)) /
-                    (mymath::precise128::pow(s1/n1, Scalar(2))/(n1-Scalar(1)) + mymath::precise128::pow(s2/n2, Scalar(2))/(n2-Scalar(1)));
+        Scalar t = (m1 - m2) / mymath::sqrt(s1/n1 + s2/n2);
+        Scalar df = mymath::pow(s1/n1 + s2/n2, Scalar(2)) /
+                    (mymath::pow(s1/n1, Scalar(2))/(n1-Scalar(1)) + mymath::pow(s2/n2, Scalar(2))/(n2-Scalar(1)));
 
-        return 2.0 * prob::student_t_cdf(-(mymath::precise128::abs(t)), (df));
+        return 2.0 * prob::student_t_cdf(-(mymath::abs(t)), (df));
     }
     if (name == "chi2_test") return chi2_test(arguments);
 
@@ -316,11 +316,11 @@ Scalar t_test(const std::vector<Scalar>& arguments) {
     std::vector<Scalar> data(arguments.begin() + 1, arguments.end());
     Scalar m = Scalar(stats::mean(data));
     Scalar s = Scalar(stats::sample_stddev(data));
-    Scalar n = Scalar((data.size()));
-    if (s < Scalar(1e-20L)) return (mymath::precise128::abs(m - mu0) < Scalar(1e-20L)) ? 1.0L : 0.0L;
-    Scalar t = (m - mu0) / (s / mymath::precise128::sqrt(n));
+    Scalar n = Scalar(static_cast<long long>(data.size()));
+    if (s < Scalar(1e-20L)) return (mymath::abs(m - mu0) < Scalar(1e-20L)) ? 1.0L : 0.0L;
+    Scalar t = (m - mu0) / (s / mymath::sqrt(n));
     Scalar df = n - Scalar(1);
-    return 2.0 * prob::student_t_cdf(-(mymath::precise128::abs(t)), (df));
+    return 2.0 * prob::student_t_cdf(-(mymath::abs(t)), (df));
 }
 
 Scalar chi2_test(const std::vector<Scalar>& arguments) {
@@ -333,9 +333,9 @@ Scalar chi2_test(const std::vector<Scalar>& arguments) {
         Scalar obs = Scalar(arguments[i]);
         Scalar exp = Scalar(arguments[i + n]);
         if (exp <= Scalar(0)) throw std::runtime_error("chi2_test expected values must be positive");
-        chi2 += mymath::precise128::pow(obs - exp, Scalar(2)) / exp;
+        chi2 += mymath::pow(obs - exp, Scalar(2)) / exp;
     }
-    Scalar df = Scalar((n - 1));
+    Scalar df = Scalar(static_cast<long long>(n - 1));
     if (df < Scalar(1)) throw std::runtime_error("chi2_test requires at least 2 categories");
     return 1.0L - prob::chi2_cdf((chi2), (df));
 }

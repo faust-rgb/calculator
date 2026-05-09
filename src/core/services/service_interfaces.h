@@ -26,8 +26,7 @@
 #include <map>
 
 // 前向声明
-template <typename T> class TFunctionAnalysis;
-using FunctionAnalysis = TFunctionAnalysis<Scalar>;
+class FunctionAnalysis;
 
 /**
  * @struct IEvaluationService

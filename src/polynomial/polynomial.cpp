@@ -24,10 +24,10 @@ using Scalar = mymath::Scalar;
 // ============================================================================
 
 /** @brief 多项式运算的数值精度阈值 */
-constexpr Scalar kPolynomialEpsLD = 1e-10L;
+const Scalar kPolynomialEpsLD = Scalar(1e-10L);
 
 /** @brief 根隔离过程的精度阈值 */
-constexpr Scalar kRootIsolationEpsLD = 1e-8L;
+const Scalar kRootIsolationEpsLD = Scalar(1e-8L);
 
 /**
  * @brief 移除系数向量末尾的零系数
@@ -48,7 +48,7 @@ void trim_trailing_zeros(std::vector<Scalar>* coefficients) {
 
 void trim_trailing_zeros_scalar(std::vector<Scalar>* coefficients) {
     while (coefficients->size() > 1 &&
-           mymath::precise128::abs(coefficients->back()) < Scalar(kPolynomialEpsLD)) {
+           mymath::abs(coefficients->back()) < Scalar(kPolynomialEpsLD)) {
         coefficients->pop_back();
     }
     if (coefficients->empty()) {
@@ -83,10 +83,10 @@ std::vector<Scalar> from_scalar(const std::vector<Scalar>& coeffs) {
  * - 其他：显示小数形式（去除尾部多余的零）
  */
 std::string format_coefficient(Scalar value) {
-    constexpr Scalar kEps = Scalar(1e-10L);
+    const Scalar kEps = Scalar(1e-10L);
     if (mymath::is_integer(value, kEps)) {
         long long rounded =
-            static_cast<long long>(mymath::precise128::round(value));
+            static_cast<long long>(mymath::round(value));
         return std::to_string(rounded);
     }
 
@@ -181,7 +181,7 @@ Scalar polynomial_root_bound(const std::vector<Scalar>& coefficients) {
     const Scalar leading = coefficients.back();
     Scalar bound = Scalar(0.0L);
     for (std::size_t i = 0; i + 1 < coefficients.size(); ++i) {
-        const Scalar ratio = mymath::precise128::abs(coefficients[i] / leading);
+        const Scalar ratio = mymath::abs(coefficients[i] / leading);
         if (ratio > bound) bound = ratio;
     }
     return Scalar(1.0L) + bound;
@@ -202,8 +202,8 @@ Scalar bisect_root(const std::vector<Scalar>& coefficients, Scalar left, Scalar 
     for (int i = 0; i < 100; ++i) {
         const Scalar mid = (left + right) * Scalar(0.5L);
         const Scalar mid_value = polynomial_evaluate_scalar(coefficients, mid);
-        if (mymath::precise128::abs(mid_value) < Scalar(kRootIsolationEpsLD) ||
-            mymath::precise128::abs(right - left) <= Scalar(kRootIsolationEpsLD)) {
+        if (mymath::abs(mid_value) < Scalar(kRootIsolationEpsLD) ||
+            mymath::abs(right - left) <= Scalar(kRootIsolationEpsLD)) {
             return mid;
         }
         if ((left_value < Scalar(0.0L)) == (mid_value < Scalar(0.0L))) {
@@ -225,7 +225,7 @@ Scalar bisect_root(const std::vector<Scalar>& coefficients, Scalar left, Scalar 
  */
 void add_unique_root(std::vector<Scalar>* roots, Scalar candidate) {
     for (Scalar existing : *roots) {
-        if (mymath::precise128::abs(existing - candidate) <= Scalar(1e-6L)) return;
+        if (mymath::abs(existing - candidate) <= Scalar(1e-6L)) return;
     }
     roots->push_back(candidate);
 }
@@ -342,7 +342,7 @@ PolynomialDivisionResult polynomial_divide(const std::vector<Scalar>& dividend,
     while (remainder.size() >= normalized_divisor.size()) {
         trim_trailing_zeros_scalar(&remainder);
         if (remainder.size() < normalized_divisor.size()) break;
-        if (remainder.size() == 1 && mymath::precise128::abs(remainder[0]) < Scalar(kPolynomialEpsLD)) break;
+        if (remainder.size() == 1 && mymath::abs(remainder[0]) < Scalar(kPolynomialEpsLD)) break;
 
         const std::size_t degree_diff = remainder.size() - normalized_divisor.size();
         const Scalar factor = remainder.back() / divisor_scalar.back();
@@ -395,7 +395,7 @@ std::vector<Scalar> polynomial_real_roots_scalar(const std::vector<Scalar>& coef
 
     std::vector<Scalar> roots;
     for (const Scalar& point : critical_points) {
-        if (mymath::precise128::abs(polynomial_evaluate_scalar(normalized, point)) < Scalar(1e-6L)) {
+        if (mymath::abs(polynomial_evaluate_scalar(normalized, point)) < Scalar(1e-6L)) {
             add_unique_root(&roots, point);
         }
     }
@@ -406,11 +406,11 @@ std::vector<Scalar> polynomial_real_roots_scalar(const std::vector<Scalar>& coef
         const Scalar left_value = polynomial_evaluate_scalar(normalized, left);
         const Scalar right_value = polynomial_evaluate_scalar(normalized, right);
 
-        if (mymath::precise128::abs(left_value) < Scalar(1e-6L)) {
+        if (mymath::abs(left_value) < Scalar(1e-6L)) {
             add_unique_root(&roots, left);
             continue;
         }
-        if (mymath::precise128::abs(right_value) < Scalar(1e-6L)) {
+        if (mymath::abs(right_value) < Scalar(1e-6L)) {
             add_unique_root(&roots, right);
             continue;
         }
@@ -475,48 +475,48 @@ std::vector<mymath::complex<Scalar>> polynomial_complex_roots(
         return {mymath::complex<Scalar>(-normalized[0] / normalized[1], 0.0L)};
     }
 
-    const mymath::float128_t leading_128(normalized.back());
+    const Scalar leading_128(normalized.back());
     const std::vector<Scalar> normalized_scalar = to_scalar(normalized);
-    const mymath::float128_t bound_128(polynomial_root_bound(normalized_scalar));
-    const mymath::float128_t radius_128 = (bound_128 > mymath::float128_t(1.0L)) ? bound_128 : mymath::float128_t(1.0L);
+    const Scalar bound_128(polynomial_root_bound(normalized_scalar));
+    const Scalar radius_128 = (bound_128 > Scalar(1.0L)) ? bound_128 : Scalar(1.0L);
 
-    std::vector<mymath::complex<mymath::float128_t>> roots_128;
+    std::vector<mymath::complex<Scalar>> roots_128;
     roots_128.reserve(degree);
     for (std::size_t k = 0; k < degree; ++k) {
-        const mymath::float128_t angle_128 =
-            mymath::float128_t(2.0L) * mymath::precise128::pi() *
-            (mymath::float128_t(static_cast<long long>(k)) + mymath::float128_t(0.25L)) /
-            mymath::float128_t(static_cast<long long>(degree));
-        roots_128.emplace_back(radius_128 * mymath::precise128::cos(angle_128),
-                               radius_128 * mymath::precise128::sin(angle_128));
+        const Scalar angle_128 =
+            Scalar(2.0L) * mymath::constants::pi<Scalar>() *
+            (Scalar(static_cast<long long>(k)) + Scalar(0.25L)) /
+            Scalar(static_cast<long long>(degree));
+        roots_128.emplace_back(radius_128 * mymath::cos(angle_128),
+                               radius_128 * mymath::sin(angle_128));
     }
 
-    auto evaluate_complex_128 = [&](const mymath::complex<mymath::float128_t>& x) {
-        mymath::complex<mymath::float128_t> result(mymath::float128_t(0.0L), mymath::float128_t(0.0L));
+    auto evaluate_complex_128 = [&](const mymath::complex<Scalar>& x) {
+        mymath::complex<Scalar> result(Scalar(0.0L), Scalar(0.0L));
         for (std::size_t i = normalized.size(); i > 0; --i) {
             result = result * x;
-            result = result + mymath::complex<mymath::float128_t>(mymath::float128_t(normalized[i - 1]) / leading_128, mymath::float128_t(0.0L));
+            result = result + mymath::complex<Scalar>(Scalar(normalized[i - 1]) / leading_128, Scalar(0.0L));
         }
         return result;
     };
 
     for (int iteration = 0; iteration < 2000; ++iteration) {
-        mymath::float128_t max_delta_128(0.0L);
+        Scalar max_delta_128(0.0L);
         for (std::size_t i = 0; i < roots_128.size(); ++i) {
-            mymath::complex<mymath::float128_t> denominator(mymath::float128_t(1.0L), mymath::float128_t(0.0L));
+            mymath::complex<Scalar> denominator(Scalar(1.0L), Scalar(0.0L));
             for (std::size_t j = 0; j < roots_128.size(); ++j) {
                 if (i == j) continue;
                 denominator = denominator * (roots_128[i] - roots_128[j]);
             }
-            if (mymath::abs(denominator) <= mymath::float128_t(1e-24L)) {
-                denominator = mymath::complex<mymath::float128_t>(mymath::float128_t(1e-12L), mymath::float128_t(1e-12L));
+            if (mymath::abs(denominator) <= Scalar(1e-24L)) {
+                denominator = mymath::complex<Scalar>(Scalar(1e-12L), Scalar(1e-12L));
             }
-            const mymath::complex<mymath::float128_t> delta = evaluate_complex_128(roots_128[i]) / denominator;
+            const mymath::complex<Scalar> delta = evaluate_complex_128(roots_128[i]) / denominator;
             roots_128[i] = roots_128[i] - delta;
-            const mymath::float128_t abs_delta = mymath::abs(delta);
+            const Scalar abs_delta = mymath::abs(delta);
             max_delta_128 = (abs_delta > max_delta_128) ? abs_delta : max_delta_128;
         }
-        if (max_delta_128 <= mymath::float128_t(1e-12L)) {
+        if (max_delta_128 <= Scalar(1e-12L)) {
             break;
         }
     }
@@ -660,7 +660,7 @@ std::vector<Scalar> polynomial_fit(const std::vector<Scalar>& x_samples,
     const Scalar center = x_sum / Scalar(static_cast<long long>(n));
     Scalar scale = Scalar(0.0L);
     for (Scalar x : x_samples) {
-        const Scalar d = mymath::precise128::abs(x - center);
+        const Scalar d = mymath::abs(x - center);
         if (d > scale) scale = d;
     }
     if (scale < Scalar(1e-9L)) scale = Scalar(1.0L);

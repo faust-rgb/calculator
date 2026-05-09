@@ -284,8 +284,8 @@ private:
             throw std::runtime_error("expected number");
         }
         // Use Scalar for higher precision parsing
-        Scalar parsed = mymath::from_string(std::string(source_.substr(start, pos_ - start)));
-        return format_decimal(static_cast<Scalar>(parsed));
+        Scalar parsed(std::string(source_.substr(start, pos_ - start)));
+        return format_decimal(parsed);
     }
 
     VariableResolver variables_;

@@ -154,8 +154,8 @@ std::string handle_imshow_command(const PlotContext& ctx, const std::vector<std:
     // 生成坐标轴（默认使用索引）
     std::vector<Scalar> x_coords(z.cols);
     std::vector<Scalar> y_coords(z.rows);
-    for (size_t i = 0; i < z.cols; ++i) x_coords[i] = static_cast<Scalar>(i);
-    for (size_t i = 0; i < z.rows; ++i) y_coords[i] = static_cast<Scalar>(i);
+    for (size_t i = 0; i < z.cols; ++i) x_coords[i] = Scalar(static_cast<long long>(i));
+    for (size_t i = 0; i < z.rows; ++i) y_coords[i] = Scalar(static_cast<long long>(i));
 
     std::string svg = SvgRenderer::render_heatmap(z, x_coords, y_coords, options);
 

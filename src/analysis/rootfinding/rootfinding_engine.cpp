@@ -387,25 +387,11 @@ T brent_solve(
 // 显式模板实例化
 // ============================================================================
 
-template PreciseDecimal newton_solve<PreciseDecimal>(
-    const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
-    PreciseDecimal,
-    const std::function<PreciseDecimal(PreciseDecimal)>&,
-    const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
-    const std::string&);
-
 template Scalar newton_solve<Scalar>(
     const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
     Scalar,
     const std::function<Scalar(Scalar)>&,
     const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
-    const std::string&);
-
-template PreciseDecimal bisection_solve<PreciseDecimal>(
-    const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
-    PreciseDecimal,
-    PreciseDecimal,
-    const std::function<PreciseDecimal(PreciseDecimal)>&,
     const std::string&);
 
 template Scalar bisection_solve<Scalar>(
@@ -415,13 +401,6 @@ template Scalar bisection_solve<Scalar>(
     const std::function<Scalar(Scalar)>&,
     const std::string&);
 
-template PreciseDecimal secant_solve<PreciseDecimal>(
-    const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
-    PreciseDecimal,
-    PreciseDecimal,
-    const std::function<PreciseDecimal(PreciseDecimal)>&,
-    const std::string&);
-
 template Scalar secant_solve<Scalar>(
     const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
     Scalar,
@@ -429,23 +408,10 @@ template Scalar secant_solve<Scalar>(
     const std::function<Scalar(Scalar)>&,
     const std::string&);
 
-template PreciseDecimal fixed_point_solve<PreciseDecimal>(
-    const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
-    PreciseDecimal,
-    const std::function<PreciseDecimal(PreciseDecimal)>&,
-    const std::string&);
-
 template Scalar fixed_point_solve<Scalar>(
     const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
     Scalar,
     const std::function<Scalar(Scalar)>&,
-    const std::string&);
-
-template PreciseDecimal brent_solve<PreciseDecimal>(
-    const std::function<PreciseDecimal(const std::vector<std::pair<std::string, PreciseDecimal>>&)>&,
-    PreciseDecimal,
-    PreciseDecimal,
-    const std::function<PreciseDecimal(PreciseDecimal)>&,
     const std::string&);
 
 template Scalar brent_solve<Scalar>(

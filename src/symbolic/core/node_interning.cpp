@@ -47,7 +47,8 @@ std::string long_double_bits_key(long double value) {
 }
 
 std::string scalar_structural_number_key(Scalar value) {
-    return long_double_bits_key(value.hi) + ":" + long_double_bits_key(value.lo);
+    // 对于 PreciseDecimal，直接使用字符串表示作为键
+    return value.to_string();
 }
 
 } // namespace

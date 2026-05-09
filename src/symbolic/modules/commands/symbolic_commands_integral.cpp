@@ -34,8 +34,8 @@ Scalar derivative_at(
     const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>& f,
     const std::string& var,
     Scalar t) {
-    const Scalar scale = mymath::precise128::abs(t) > Scalar(1.0L)
-        ? mymath::precise128::abs(t)
+    const Scalar scale = mymath::abs(t) > Scalar(1.0L)
+        ? mymath::abs(t)
         : Scalar(1.0L);
     const Scalar h = std::max(precision::optimal_derivative_step<Scalar>(t),
                               Scalar(1e-6L) * scale);
@@ -196,11 +196,11 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
             auto integrand = [&](const std::vector<Scalar>& pt) {
                 const Scalar u = pt[0];
                 const Scalar v = pt[1];
-                const Scalar u_scale = mymath::precise128::abs(u) > Scalar(1.0L)
-                    ? mymath::precise128::abs(u)
+                const Scalar u_scale = mymath::abs(u) > Scalar(1.0L)
+                    ? mymath::abs(u)
                     : Scalar(1.0L);
-                const Scalar v_scale = mymath::precise128::abs(v) > Scalar(1.0L)
-                    ? mymath::precise128::abs(v)
+                const Scalar v_scale = mymath::abs(v) > Scalar(1.0L)
+                    ? mymath::abs(v)
                     : Scalar(1.0L);
                 const Scalar hu = std::max(precision::jacobian_step<Scalar>(u),
                                            Scalar(1e-6L) * u_scale);

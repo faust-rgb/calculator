@@ -320,14 +320,14 @@ std::vector<std::pair<Scalar, Scalar>> RischAlgorithm::find_complex_roots_aberth
                 }
             }
 
-            if (std::abs(denom) < 1e-15) {
+            if (mymath::abs(denom) < 1e-15) {
                 denom = 1e-15;
             }
 
             std::complex<Scalar> delta = p_z / denom;
             z[i] -= delta;
 
-            if (std::abs(delta) > 1e-10) {
+            if (mymath::abs(delta) > 1e-10) {
                 converged = false;
             }
         }

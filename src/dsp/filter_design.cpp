@@ -24,7 +24,7 @@ using Scalar = mymath::Scalar;
 
 // 使用 mymath 命名空间中的常量
 using mymath::kPi;
-static const Scalar kPiScalar = mymath::precise128::pi();
+static const Scalar kPiScalar = mymath::constants::pi<Scalar>();
 
 // ============================================================================
 // 滤波器类型转换
@@ -59,10 +59,10 @@ FilterType string_to_filter_type(const std::string& str) {
 
 static Scalar sinc_scalar(Scalar x) {
     const Scalar x_s(x);
-    if (mymath::precise128::abs(x_s) < Scalar(1e-10L)) {
+    if (mymath::abs(x_s) < Scalar(1e-10L)) {
         return 1.0L;
     }
-    return (mymath::precise128::sin(kPiScalar * x_s) / (kPiScalar * x_s));
+    return (mymath::sin(kPiScalar * x_s) / (kPiScalar * x_s));
 }
 
 // ============================================================================
@@ -143,7 +143,7 @@ FilterCoefficients design_fir_band(int order,
         for (int n = 0; n <= order; ++n) {
             const Scalar x = (n - half);
             h[n] = 2.0 * (fc2 - fc1) * sinc_scalar((fc2 - fc1) * x) *
-                   (mymath::precise128::cos((kPiScalar) * (fc2 + fc1) * x));
+                   (mymath::cos((kPiScalar) * (fc2 + fc1) * x));
         }
     } else if (type == FilterType::BandStop) {
         // 带阻 = 低通(fc1) + 高通(fc2)
@@ -151,7 +151,7 @@ FilterCoefficients design_fir_band(int order,
             const Scalar x = (n - half);
             h[n] = (n == half ? 1.0L : 0.0L) -
                    2.0 * (fc2 - fc1) * sinc_scalar((fc2 - fc1) * x) *
-                   (mymath::precise128::cos((kPiScalar) * (fc2 + fc1) * x));
+                   (mymath::cos((kPiScalar) * (fc2 + fc1) * x));
         }
     } else {
         throw std::runtime_error("Use design_fir for lowpass/highpass filters");
@@ -248,7 +248,7 @@ FilterCoefficients design_butterworth(int order,
     // Use Scalar for tan computation
     const Scalar cutoff_s(cutoff);
     const Scalar tan_arg = (kPiScalar) * cutoff_s / Scalar(2.0L);
-    const Scalar wc_scalar = Scalar(2.0L) * fs * mymath::precise128::tan(tan_arg);
+    const Scalar wc_scalar = Scalar(2.0L) * fs * mymath::tan(tan_arg);
     const Scalar wc = (wc_scalar);
 
     // 计算模拟巴特沃斯极点
@@ -305,22 +305,22 @@ FilterCoefficients design_chebyshev1(int order,
     // Use Scalar for tan computation
     const Scalar cutoff_s(cutoff);
     const Scalar tan_arg = (kPiScalar) * cutoff_s / Scalar(2.0L);
-    const Scalar wc_scalar = Scalar(2.0L) * fs * mymath::precise128::tan(tan_arg);
+    const Scalar wc_scalar = Scalar(2.0L) * fs * mymath::tan(tan_arg);
     const Scalar wc = (wc_scalar);
 
     // 从波纹计算 epsilon - use Scalar for precision
     const Scalar ripple_s(ripple);
-    const Scalar epsilon = mymath::precise128::sqrt(mymath::precise128::pow(Scalar(10.0L), ripple_s / Scalar(10.0L)) - Scalar(1.0L));
+    const Scalar epsilon = mymath::sqrt(mymath::pow(Scalar(10.0L), ripple_s / Scalar(10.0L)) - Scalar(1.0L));
 
     // 计算切比雪夫极点
-    const Scalar mu = mymath::precise128::asinh(Scalar(1.0L) / epsilon) / Scalar((order));
+    const Scalar mu = mymath::asinh(Scalar(1.0L) / epsilon) / Scalar((order));
 
     std::vector<Complex> s_poles;
     for (int k = 0; k < order; ++k) {
         const Scalar theta = kPiScalar * (Scalar(2.0L) * Scalar((k)) + Scalar(1.0L)) /
                               (Scalar(2.0L) * Scalar((order)));
-        const Scalar sigma_val = -mymath::precise128::sinh(mu) * mymath::precise128::sin(theta);
-        const Scalar omega_val = mymath::precise128::cosh(mu) * mymath::precise128::cos(theta);
+        const Scalar sigma_val = -mymath::sinh(mu) * mymath::sin(theta);
+        const Scalar omega_val = mymath::cosh(mu) * mymath::cos(theta);
         s_poles.push_back(wc * Complex((sigma_val), (omega_val)));
     }
 

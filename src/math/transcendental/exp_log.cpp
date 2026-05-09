@@ -22,8 +22,8 @@ long double exp(long double x) {
         return 0.0L;
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::exp(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::exp(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -36,8 +36,8 @@ long double ln(long double x) {
         throw std::domain_error("ln is only defined for positive numbers");
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::ln(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::ln(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -46,8 +46,8 @@ long double log(long double x) {
 }
 
 long double log1p(long double x) {
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::log1p(Scalar(x));
+    // Use ln(1+x) for high precision calculation
+    Scalar result = precise::ln(Scalar(1.0L) + Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -56,8 +56,8 @@ long double log10(long double x) {
         throw std::domain_error("log10 is only defined for positive numbers");
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::log10(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::log10(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -66,8 +66,8 @@ long double log2(long double x) {
         throw std::domain_error("log2 is only defined for positive numbers");
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::log2(Scalar(x));
+    // Use ln(x)/ln(2) for high precision calculation
+    Scalar result = precise::ln(Scalar(x)) / precise::ln(Scalar(2.0L));
     return static_cast<long double>(result);
 }
 

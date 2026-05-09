@@ -26,7 +26,7 @@ using Scalar = mymath::Scalar;
 
 // 使用 mymath 命名空间中的常量
 using mymath::kPi;
-static const Scalar kPiScalar = mymath::precise128::pi();
+static const Scalar kPiScalar = mymath::constants::pi<Scalar>();
 
 // ============================================================================
 // LRU 缓存（用于 Bluestein FFT）
@@ -398,7 +398,7 @@ std::vector<Complex> fft_bluestein(const std::vector<Complex>& input) {
         }
         for (std::size_t k = m - n + 1; k < m; ++k) {
             const std::size_t kk = k - m;  // 负索引
-            const Scalar angle = -kPiScalar * Scalar((kk * kk)) / Scalar(static_cast<long long>(n));
+            const Scalar angle = -kPiScalar * Scalar(static_cast<long long>(kk) * static_cast<long long>(kk)) / Scalar(static_cast<long long>(n));
             chirp[k] = twiddle_factor(angle);
         }
         chirp_fft = fft_radix2(chirp);
@@ -596,9 +596,9 @@ std::vector<Scalar> fft_frequencies(std::size_t n, Scalar sample_rate) {
     std::vector<Scalar> freqs(n);
     for (std::size_t i = 0; i < n; ++i) {
         if (i <= n / 2) {
-            freqs[i] = (i) * sample_rate / (n);
+            freqs[i] = Scalar(static_cast<long long>(i)) * sample_rate / Scalar(static_cast<long long>(n));
         } else {
-            freqs[i] = (i - n) * sample_rate / (n);
+            freqs[i] = Scalar(static_cast<long long>(i) - static_cast<long long>(n)) * sample_rate / Scalar(static_cast<long long>(n));
         }
     }
     return freqs;

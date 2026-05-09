@@ -108,9 +108,9 @@ Scalar BoundArgument::to_scalar() const {
         case BoundKind::kFinite:
             return value;
         case BoundKind::kPosInf:
-            return mymath::precise128::infinity();
+            return Scalar::infinity();
         case BoundKind::kNegInf:
-            return -mymath::precise128::infinity();
+            return Scalar::neg_infinity();
     }
     return value;
 }

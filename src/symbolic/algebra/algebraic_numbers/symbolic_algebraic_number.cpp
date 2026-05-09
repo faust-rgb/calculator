@@ -16,26 +16,26 @@ using Scalar = mymath::Scalar;
 
 AlgebraicNumber AlgebraicNumber::from_double(Scalar value) {
     // 尝试识别常见的代数数
-    Scalar sqrt2 = mymath::precise128::sqrt(Scalar(2));
-    Scalar sqrt3 = mymath::precise128::sqrt(Scalar(3));
-    Scalar sqrt5 = mymath::precise128::sqrt(Scalar(5));
+    Scalar sqrt2 = mymath::sqrt(Scalar(2));
+    Scalar sqrt3 = mymath::sqrt(Scalar(3));
+    Scalar sqrt5 = mymath::sqrt(Scalar(5));
 
-    if (mymath::precise128::abs(Scalar(value) - sqrt2) < Scalar(1e-10)) {
+    if (mymath::abs(Scalar(value) - sqrt2) < Scalar(1e-10)) {
         return sqrt(2);
     }
-    if (mymath::precise128::abs(Scalar(value) + sqrt2) < Scalar(1e-10)) {
+    if (mymath::abs(Scalar(value) + sqrt2) < Scalar(1e-10)) {
         return sqrt(2).negate();
     }
-    if (mymath::precise128::abs(Scalar(value) - sqrt3) < Scalar(1e-10)) {
+    if (mymath::abs(Scalar(value) - sqrt3) < Scalar(1e-10)) {
         return sqrt(3);
     }
-    if (mymath::precise128::abs(Scalar(value) + sqrt3) < Scalar(1e-10)) {
+    if (mymath::abs(Scalar(value) + sqrt3) < Scalar(1e-10)) {
         return sqrt(3).negate();
     }
-    if (mymath::precise128::abs(Scalar(value) - sqrt5) < Scalar(1e-10)) {
+    if (mymath::abs(Scalar(value) - sqrt5) < Scalar(1e-10)) {
         return sqrt(5);
     }
-    if (mymath::precise128::abs(Scalar(value) + sqrt5) < Scalar(1e-10)) {
+    if (mymath::abs(Scalar(value) + sqrt5) < Scalar(1e-10)) {
         return sqrt(5).negate();
     }
 
@@ -64,7 +64,7 @@ AlgebraicNumber AlgebraicNumber::sqrt(int n) {
     }
 
     // 检查是否是完全平方数
-    int root = static_cast<int>((mymath::precise128::sqrt(Scalar(n))));
+    int root = static_cast<int>((mymath::sqrt(Scalar(n))));
     if (root * root == n) {
         return from_integer(root);
     }

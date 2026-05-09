@@ -136,7 +136,7 @@ TMatrix<T> multiply(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     }
     return result;
 }
-
+#if 0
 /**
  * @brief 矩阵乘法 - long double 特化版本
  *
@@ -165,7 +165,7 @@ TMatrix<long double> multiply<long double>(const TMatrix<long double>& lhs, cons
     for (std::size_t i = 0; i < sums.size(); ++i) result.data[i] = static_cast<long double>(sums[i]);
     return result;
 }
-
+#endif
 /**
  * @brief 矩阵乘法 - PreciseDecimal 特化版本
  *
@@ -251,7 +251,7 @@ T dot(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     }
     return sum;
 }
-
+#if 0
 /**
  * @brief 向量点积 - long double 特化版本
  *
@@ -274,7 +274,7 @@ long double dot<long double>(const TMatrix<long double>& lhs, const TMatrix<long
     }
     return static_cast<long double>(sum);
 }
-
+#endif
 /**
  * @brief 向量外积
  *
@@ -464,8 +464,8 @@ TMatrix<T> hadamard(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     template TMatrix<TYPE> kronecker(const TMatrix<TYPE>&, const TMatrix<TYPE>&); \
     template TMatrix<TYPE> hadamard(const TMatrix<TYPE>&, const TMatrix<TYPE>&);
 
-INSTANTIATE_OPS(long double)
-INSTANTIATE_OPS(PreciseDecimal)
+//INSTANTIATE_OPS(long double)
+//INSTANTIATE_OPS(PreciseDecimal)
 INSTANTIATE_OPS(mymath::Scalar)
 
 } // namespace matrix

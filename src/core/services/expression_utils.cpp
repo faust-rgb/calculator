@@ -31,7 +31,7 @@ using Scalar = mymath::Scalar;
  */
 Scalar root_position_tolerance(Scalar value) {
     Scalar v(value);
-    return (Scalar(1e-10) * mymath::precise128::fmax(Scalar(1), mymath::precise128::abs(v)));
+    return (Scalar(1e-10) * mymath::fmax(Scalar(1), mymath::abs(v)));
 }
 
 /**
@@ -41,7 +41,7 @@ Scalar root_position_tolerance(Scalar value) {
  */
 Scalar root_function_tolerance(Scalar value) {
     Scalar v(value);
-    return (Scalar(1e-10) * mymath::precise128::fmax(Scalar(1), mymath::precise128::abs(v)));
+    return (Scalar(1e-10) * mymath::fmax(Scalar(1), mymath::abs(v)));
 }
 
 /**
@@ -51,7 +51,7 @@ Scalar root_function_tolerance(Scalar value) {
  */
 Scalar root_derivative_step(Scalar value) {
     Scalar v(value);
-    return (Scalar(1e-6) * mymath::precise128::fmax(Scalar(1), mymath::precise128::abs(v)));
+    return (Scalar(1e-6) * mymath::fmax(Scalar(1), mymath::abs(v)));
 }
 
 // ============================================================================
@@ -67,7 +67,7 @@ Scalar root_derivative_step(Scalar value) {
  * 当中心点为零时，直接返回变量名；否则返回 "(变量名 - 中心点)" 形式。
  */
 std::string shifted_series_base(const std::string& variable_name, Scalar center) {
-    if (mymath::precise128::is_near_zero(center, 1e-12)) {
+    if (mymath::is_near_zero(center, 1e-12)) {
         return variable_name;
     }
     return "(" + variable_name + signed_center_text(center.to_long_double()) + ")";

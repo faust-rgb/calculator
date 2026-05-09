@@ -151,7 +151,7 @@ bool decompose_numeric_multiple_of_symbol(const SymbolicExpression& expression,
     if (node->type == NodeType::kDivide) {
         Scalar divisor = Scalar(0);
         if (!SymbolicExpression(node->right).is_number(&divisor) ||
-            mymath::precise128::abs(divisor) < Scalar(kFormatEps)) {
+            mymath::abs(divisor) < Scalar(kFormatEps)) {
             return false;
         }
         if (decompose_numeric_multiple_of_symbol(SymbolicExpression(node->left),
@@ -383,7 +383,7 @@ void collect_division_factors(const SymbolicExpression& expression,
  */
 SymbolicExpression rebuild_product_expression(Scalar numeric_factor,
                                               const std::vector<SymbolicExpression>& factors) {
-    if (mymath::precise128::abs(Scalar(numeric_factor)) < Scalar(kFormatEps)) {
+    if (mymath::abs(Scalar(numeric_factor)) < Scalar(kFormatEps)) {
         return SymbolicExpression::number(0.0L);
     }
 
@@ -404,10 +404,10 @@ SymbolicExpression rebuild_product_expression(Scalar numeric_factor,
     if (!has_combined) {
         return SymbolicExpression::number(numeric_factor);
     }
-    if (mymath::precise128::abs(Scalar(numeric_factor - 1.0L)) < Scalar(kFormatEps)) {
+    if (mymath::abs(Scalar(numeric_factor - 1.0L)) < Scalar(kFormatEps)) {
         return combined;
     }
-    if (mymath::precise128::abs(Scalar(numeric_factor + 1.0L)) < Scalar(kFormatEps)) {
+    if (mymath::abs(Scalar(numeric_factor + 1.0L)) < Scalar(kFormatEps)) {
         return SymbolicExpression(make_unary(NodeType::kNegate, combined.node_)).simplify();
     }
 
@@ -554,7 +554,7 @@ SymbolicExpression make_sorted_sum(std::vector<SymbolicExpression> terms) {
                   auto lhs_vd = get_var_deg(lhs);
                   auto rhs_vd = get_var_deg(rhs);
                   if (lhs_vd.first != rhs_vd.first) return lhs_vd.first < rhs_vd.first;
-                  if (mymath::precise128::abs(lhs_vd.second - rhs_vd.second) >= Scalar(1e-10)) return lhs_vd.second > rhs_vd.second;
+                  if (mymath::abs(lhs_vd.second - rhs_vd.second) >= Scalar(1e-10)) return lhs_vd.second > rhs_vd.second;
 
                   return node_structural_key(lhs.node_) < node_structural_key(rhs.node_);
               });
@@ -644,7 +644,7 @@ bool try_combine_like_terms(const SymbolicExpression& left,
     const Scalar result_coefficient =
         left_coefficient + Scalar(right_sign) * right_coefficient;
 
-    if (mymath::precise128::abs(result_coefficient) < Scalar(kFormatEps)) {
+    if (mymath::abs(result_coefficient) < Scalar(kFormatEps)) {
         *combined = SymbolicExpression::number(0.0L);
         return true;
     }
@@ -652,11 +652,11 @@ bool try_combine_like_terms(const SymbolicExpression& left,
         *combined = SymbolicExpression::number((result_coefficient));
         return true;
     }
-    if (mymath::precise128::abs(result_coefficient - Scalar(1)) < Scalar(kFormatEps)) {
+    if (mymath::abs(result_coefficient - Scalar(1)) < Scalar(kFormatEps)) {
         *combined = left_rest;
         return true;
     }
-    if (mymath::precise128::abs(result_coefficient + Scalar(1)) < Scalar(kFormatEps)) {
+    if (mymath::abs(result_coefficient + Scalar(1)) < Scalar(kFormatEps)) {
         *combined = SymbolicExpression(
                         make_unary(NodeType::kNegate, left_rest.node_))
                         .simplify();
@@ -761,7 +761,7 @@ bool decompose_linear(const SymbolicExpression& expression,
 /** @brief 裁剪多项式系数向量末尾的零 */
 void trim_polynomial_coefficients(std::vector<Scalar>* coefficients) {
     while (coefficients->size() > 1 &&
-           mymath::precise128::abs(Scalar(coefficients->back())) < Scalar(kFormatEps)) {
+           mymath::abs(Scalar(coefficients->back())) < Scalar(kFormatEps)) {
         coefficients->pop_back();
     }
     if (coefficients->empty()) {
@@ -903,7 +903,7 @@ SymbolicExpression build_polynomial_expression_from_coefficients(
     for (std::size_t index = normalized.size(); index > 0; --index) {
         const std::size_t degree = index - 1;
         const Scalar coefficient = normalized[degree];
-        if (mymath::precise128::abs(Scalar(coefficient)) < Scalar(kFormatEps)) {
+        if (mymath::abs(Scalar(coefficient)) < Scalar(kFormatEps)) {
             continue;
         }
 
@@ -919,7 +919,7 @@ SymbolicExpression build_polynomial_expression_from_coefficients(
                        : make_power(SymbolicExpression::variable(variable_name),
                                     SymbolicExpression::number(
                                         Scalar(static_cast<long long>(degree))));
-            if (mymath::precise128::abs(Scalar(magnitude - 1.0L)) >= Scalar(kFormatEps)) {
+            if (mymath::abs(Scalar(magnitude - 1.0L)) >= Scalar(kFormatEps)) {
                 term = make_multiply(SymbolicExpression::number(magnitude), term);
             }
         }

@@ -233,7 +233,7 @@ std::vector<Scalar> normalized_xcorr(const std::vector<Scalar>& signal1,
     std::vector<Scalar> corr = xcorr(signal1, signal2);
 
     // 归一化
-    const Scalar norm_factor = mymath::precise128::sqrt(energy1 * energy2);
+    const Scalar norm_factor = mymath::sqrt(energy1 * energy2);
     for (Scalar& value : corr) {
         value = (Scalar(value) / norm_factor);
     }

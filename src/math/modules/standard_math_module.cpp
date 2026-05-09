@@ -109,14 +109,14 @@ StandardMathModule::get_scalar_functions() const {
     funcs["bessel_j"] = funcs["bessel"];
 
     // Conversions
-    funcs["deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("deg expects 1 argument"); return radians_to_degrees(a[0]); };
-    funcs["rad"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("rad expects 1 argument"); return degrees_to_radians(a[0]); };
+    funcs["deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("deg expects 1 argument"); return mymath::radians_to_degrees(a[0]); };
+    funcs["rad"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("rad expects 1 argument"); return mymath::degrees_to_radians(a[0]); };
     funcs["deg2rad"] = funcs["rad"];
     funcs["rad2deg"] = funcs["deg"];
-    funcs["sin_deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("sin_deg expects 1 argument"); return mymath::sin(degrees_to_radians(a[0])); };
-    funcs["cos_deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("cos_deg expects 1 argument"); return mymath::cos(degrees_to_radians(a[0])); };
-    funcs["celsius"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("celsius expects 1 argument"); return fahrenheit_to_celsius(a[0]); };
-    funcs["fahrenheit"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("fahrenheit expects 1 argument"); return celsius_to_fahrenheit(a[0]); };
+    funcs["sin_deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("sin_deg expects 1 argument"); return mymath::sin(mymath::degrees_to_radians(a[0])); };
+    funcs["cos_deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("cos_deg expects 1 argument"); return mymath::cos(mymath::degrees_to_radians(a[0])); };
+    funcs["celsius"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("celsius expects 1 argument"); return mymath::fahrenheit_to_celsius(a[0]); };
+    funcs["fahrenheit"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("fahrenheit expects 1 argument"); return mymath::celsius_to_fahrenheit(a[0]); };
     funcs["kelvin"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("kelvin expects 1 argument"); return a[0] + Scalar(273.15L); };
     funcs["c2f"] = funcs["fahrenheit"];
     funcs["f2c"] = funcs["celsius"];

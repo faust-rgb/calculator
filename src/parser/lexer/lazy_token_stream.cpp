@@ -327,8 +327,8 @@ Token LazyTokenStream::parse_number_token() {
             tok.number_value = static_cast<Scalar>(parse_prefixed_integer_token(num_str));
         } else {
             // Use Scalar for higher precision parsing
-            Scalar parsed = mymath::from_string(num_str);
-            tok.number_value = static_cast<Scalar>(parsed);
+            Scalar parsed(num_str);
+            tok.number_value = parsed;
         }
     } catch (...) {
         std::ostringstream oss;

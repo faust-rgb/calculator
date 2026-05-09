@@ -21,7 +21,7 @@ using Scalar = mymath::Scalar;
 template <typename T>
 T t_abs(const T& val) {
     if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::abs(val);
+        return mymath::abs(val);
     } else if constexpr (std::is_floating_point_v<T>) {
         return std::abs(val);
     } else {
@@ -32,7 +32,7 @@ T t_abs(const T& val) {
 template <typename T>
 T t_sqrt(const T& val) {
     if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::sqrt(val);
+        return mymath::sqrt(val);
     } else if constexpr (std::is_floating_point_v<T>) {
         return std::sqrt(val);
     } else {
@@ -43,7 +43,7 @@ T t_sqrt(const T& val) {
 template <typename T>
 T t_pow(const T& base, const T& exponent) {
     if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::pow(base, exponent);
+        return mymath::pow(base, exponent);
     } else if constexpr (std::is_floating_point_v<T>) {
         return std::pow(base, exponent);
     } else {
@@ -54,7 +54,7 @@ T t_pow(const T& base, const T& exponent) {
 template <typename T>
 bool t_isfinite(const T& val) {
     if constexpr (std::is_same_v<T, Scalar>) {
-        return mymath::precise128::isfinite(val);
+        return mymath::isfinite(val);
     } else if constexpr (std::is_floating_point_v<T>) {
         return std::isfinite(val);
     } else {
@@ -164,13 +164,13 @@ std::vector<T> combine_rkf_state(const std::vector<T>& y,
 }
 
 // BDF 系数表 (阶数 1-5)
-constexpr Scalar kBdfCoefficients[][7] = {
+const Scalar kBdfCoefficients[][7] = {
     {},  // 占位，阶数从 1 开始
-    {1.0L, -1.0L, 1.0L},                                    // BDF1: y_{n+1} - y_n = h * f_{n+1}
-    {3.0/2.0, -2.0, 1.0L/2.0, 1.0L},                       // BDF2
-    {11.0L/6.0, -3.0, 3.0/2.0, -1.0L/3.0, 1.0L},            // BDF3
-    {25.0/12.0, -4.0, 3.0, -4.0/3.0, 1.0L/4.0, 1.0L},      // BDF4
-    {137.0/60.0L, -5.0, 5.0, -10.0L/3.0, 5.0/4.0, -1.0L/5.0, 1.0L}  // BDF5
+    {Scalar(1.0L), Scalar(-1.0L), Scalar(1.0L)},                                    // BDF1: y_{n+1} - y_n = h * f_{n+1}
+    {Scalar(3.0/2.0), Scalar(-2.0), Scalar(1.0L/2.0), Scalar(1.0L)},                       // BDF2
+    {Scalar(11.0L/6.0), Scalar(-3.0), Scalar(3.0/2.0), Scalar(-1.0L/3.0), Scalar(1.0L)},            // BDF3
+    {Scalar(25.0/12.0), Scalar(-4.0), Scalar(3.0), Scalar(-4.0/3.0), Scalar(1.0L/4.0), Scalar(1.0L)},      // BDF4
+    {Scalar(137.0/60.0L), Scalar(-5.0), Scalar(5.0), Scalar(-10.0L/3.0), Scalar(5.0/4.0), Scalar(-1.0L/5.0), Scalar(1.0L)}  // BDF5
 };
 
 }  // namespace
@@ -1215,10 +1215,10 @@ std::vector<std::vector<T>> TStiffODESystemSolver<T>::numerical_jacobian_matrix(
 // 显式模板实例化
 // ============================================================================
 
-template class TODESolver<long double>;
-template class TODESystemSolver<long double>;
-template class TStiffODESolver<long double>;
-template class TStiffODESystemSolver<long double>;
+//template class TODESolver<long double>;
+//template class TODESystemSolver<long double>;
+//template class TStiffODESolver<long double>;
+//template class TStiffODESystemSolver<long double>;
 
 // Scalar-precision instantiations
 template class TODESolver<Scalar>;

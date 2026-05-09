@@ -276,7 +276,7 @@ std::string arith_geo_sum(const std::vector<Scalar>& poly_coeffs,
                 Scalar bj = prob::bernoulli(static_cast<int>(j));
                 if (mymath::is_near_zero(bj, 1e-10)) continue;
 
-                Scalar term_coeff = prob::nCr(m + 1, j) * bj;
+                Scalar term_coeff = prob::nCr(static_cast<long long>(m + 1), static_cast<long long>(j)) * bj;
                 if (!first) faulhaber << " + ";
                 faulhaber << format_symbolic_scalar(term_coeff) << " * ("
                           << index_name << " ^ " << (m + 1 - j) << ")";
@@ -759,7 +759,7 @@ std::string series_sum(const SeriesContext& ctx,
                     Scalar bj = prob::bernoulli(static_cast<int>(j));
                     if (mymath::is_near_zero(bj, 1e-10)) continue;
 
-                    Scalar term_coeff = prob::nCr(p + 1, j) * bj;
+                    Scalar term_coeff = prob::nCr(static_cast<long long>(p + 1), static_cast<long long>(j)) * bj;
                     if (!first) poly_part << " + ";
                     poly_part << format_symbolic_scalar(term_coeff) << " * (" << index_name << " ^ " << (p + 1 - j) << ")";
                     first = false;

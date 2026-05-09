@@ -18,7 +18,7 @@ using Scalar = mymath::Scalar;
 namespace {
 
 // 数值微分步长
-constexpr Scalar kDerivativeStep = Scalar(1e-6L);
+const Scalar kDerivativeStep = Scalar(1e-6L);
 
 // 前向声明辅助函数
 std::function<Scalar(const std::vector<Scalar>&)> make_bound_func(
@@ -141,7 +141,7 @@ TheoremResult greens_theorem(
 
     Scalar value = Scalar(integrator.integrate(bounds, {subdivisions}));
     result.value = (value);
-    result.error_estimate = (mymath::precise128::abs(value) * Scalar(1e-6L));  // 简单估计
+    result.error_estimate = (mymath::abs(value) * Scalar(1e-6L));  // 简单估计
 
     return result;
 }
@@ -189,7 +189,7 @@ TheoremResult greens_theorem_area(
 
     Scalar value = Scalar(integrator.integrate(bounds, {subdivisions, subdivisions}));
     result.value = (value);
-    result.error_estimate = (mymath::precise128::abs(value) * Scalar(1e-5L));
+    result.error_estimate = (mymath::abs(value) * Scalar(1e-5L));
 
     return result;
 }
@@ -277,7 +277,7 @@ TheoremResult divergence_theorem(
 
     Scalar value = Scalar(integrator.integrate(bounds, {subdivisions, subdivisions}));
     result.value = (value);
-    result.error_estimate = (mymath::precise128::abs(value) * Scalar(1e-5L));
+    result.error_estimate = (mymath::abs(value) * Scalar(1e-5L));
 
     return result;
 }
@@ -334,7 +334,7 @@ TheoremResult divergence_theorem_volume(
 
     Scalar value = Scalar(integrator.integrate(bounds, {subdivisions, subdivisions, subdivisions}));
     result.value = (value);
-    result.error_estimate = (mymath::precise128::abs(value) * Scalar(1e-4L));
+    result.error_estimate = (mymath::abs(value) * Scalar(1e-4L));
 
     return result;
 }
@@ -443,8 +443,8 @@ TheoremResult stokes_theorem(
     result.method_used = "line_integral";
     result.verified = true;
     Scalar line_val(line_result.value);
-    result.verification_diff = (mymath::precise128::abs(line_val - surface_result));
-    result.error_estimate = std::max(line_result.error_estimate, (mymath::precise128::abs(Scalar(result.verification_diff))));
+    result.verification_diff = (mymath::abs(line_val - surface_result));
+    result.error_estimate = std::max(line_result.error_estimate, (mymath::abs(Scalar(result.verification_diff))));
 
     return result;
 }
@@ -505,7 +505,7 @@ TheoremResult stokes_theorem_line(
 
     Scalar value = Scalar(integrator.integrate(bounds, {subdivisions}));
     result.value = (value);
-    result.error_estimate = (mymath::precise128::abs(value) * Scalar(1e-5L));
+    result.error_estimate = (mymath::abs(value) * Scalar(1e-5L));
 
     return result;
 }

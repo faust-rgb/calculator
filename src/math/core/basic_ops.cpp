@@ -182,7 +182,7 @@ bool approximate_fraction(Scalar value,
         const long long num = static_cast<long long>(static_cast<long double>(scaled + Scalar(0.5L)));
         const Scalar candidate = Scalar(static_cast<long double>(num)) / Scalar(static_cast<long double>(den));
 
-        if (precise128::abs(candidate - positive) <= eps) {
+        if (mymath::abs(candidate - positive) <= eps) {
             const long long divisor = gcd(num, den);
             *numerator = (value < Scalar(0.0L) ? -num : num) / divisor;
             *denominator = den / divisor;
@@ -274,7 +274,16 @@ long double normalize_angle(long double x) {
     if (!isfinite(x)) {
         return x;
     }
-    Scalar result = precise128::normalize_angle(Scalar(x));
+    // Normalize angle to [-pi, pi]
+    const Scalar two_pi = mymath::pi() * Scalar(2.0L);
+    Scalar x_s = Scalar(x);
+    // fmod equivalent: x - floor(x/two_pi) * two_pi
+    Scalar result = x_s - precise::floor(x_s / two_pi) * two_pi;
+    if (result > mymath::pi()) {
+        result -= two_pi;
+    } else if (result < -mymath::pi()) {
+        result += two_pi;
+    }
     return static_cast<long double>(result);
 }
 

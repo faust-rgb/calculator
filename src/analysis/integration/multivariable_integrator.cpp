@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "core/common/scalar_type.h"
+#include "math/core/basic_ops.h"
 
 namespace {
 
@@ -227,7 +228,7 @@ Scalar MultivariableIntegrator::integrate_adaptive_recursive(
     const Scalar right = h / Scalar(12.0L) * (sfc + Scalar(4.0L) * fe + sfb);
     const Scalar total = left + right;
 
-    if (depth <= 0 || mymath::precise128::abs(total - swhole) <= Scalar(15.0L) * Scalar(tolerance)) {
+    if (depth <= 0 || mymath::abs(total - swhole) <= Scalar(15.0L) * Scalar(tolerance)) {
         return (total + (total - swhole) / Scalar(15.0L));
     }
 

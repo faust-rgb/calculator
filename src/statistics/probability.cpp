@@ -55,10 +55,10 @@ static bool is_integer(Scalar value) {
  * @throws std::runtime_error 如果结果溢出
  */
 static Scalar checked_exp(Scalar log_value, const char* name) {
-    if (log_value > mymath::precise128::ln(mymath::kDoubleMax)) {
+    if (log_value > mymath::ln(mymath::kDoubleMax)) {
         throw std::runtime_error(std::string(name) + " result overflows double");
     }
-    return mymath::precise128::exp(log_value);
+    return mymath::exp(log_value);
 }
 
 /**
@@ -213,9 +213,9 @@ Scalar normal_pdf(Scalar x, Scalar mean, Scalar sigma) {
     }
     Scalar sx = Scalar(x), smean = Scalar(mean), ssigma = Scalar(sigma);
     // 计算指数部分
-    Scalar exponent = Scalar(-0.5L) * mymath::precise128::pow((sx - smean) / ssigma, Scalar(2));
+    Scalar exponent = Scalar(-0.5L) * mymath::pow((sx - smean) / ssigma, Scalar(2));
     // 计算归一化常数和 PDF 值
-    return ((Scalar(1) / (ssigma * mymath::precise128::sqrt(Scalar(2) * mymath::precise128::pi()))) * mymath::precise128::exp(exponent));
+    return ((Scalar(1) / (ssigma * mymath::sqrt(Scalar(2) * mymath::pi()))) * mymath::exp(exponent));
 }
 
 /**
@@ -236,7 +236,7 @@ Scalar normal_cdf(Scalar x, Scalar mean, Scalar sigma) {
     }
     Scalar sx = Scalar(x), smean = Scalar(mean), ssigma = Scalar(sigma);
     // 使用误差函数计算 CDF
-    return (Scalar(0.5L) * (Scalar(1) + Scalar(mymath::erf(((sx - smean) / (ssigma * mymath::precise128::sqrt(Scalar(2))))))));
+    return (Scalar(0.5L) * (Scalar(1) + Scalar(mymath::erf(((sx - smean) / (ssigma * mymath::sqrt(Scalar(2))))))));
 }
 
 /**
@@ -253,14 +253,14 @@ Scalar normal_cdf(Scalar x, Scalar mean, Scalar sigma) {
  */
 Scalar poisson_pmf(int k, Scalar lambda) {
     Scalar slambda = Scalar(lambda);
-    if (!mymath::precise128::isfinite(slambda) || slambda < Scalar(0)) {
+    if (!mymath::isfinite(slambda) || slambda < Scalar(0)) {
         throw std::runtime_error("poisson lambda must be non-negative");
     }
     // 边界情况
     if (k < 0) return 0.0L;
     if (slambda == Scalar(0)) return k == 0 ? 1.0L : 0.0L;
     // 使用对数空间计算：P(X=k) = exp(k * ln(lambda) - lambda - ln(k!))
-    return (mymath::precise128::exp(Scalar(k) * mymath::precise128::ln(slambda) - slambda - Scalar(mymath::lgamma(k + 1.0L))));
+    return (mymath::exp(Scalar(k) * mymath::ln(slambda) - slambda - Scalar(mymath::lgamma(k + 1.0L))));
 }
 
 /**
@@ -269,7 +269,7 @@ Scalar poisson_pmf(int k, Scalar lambda) {
  */
 Scalar poisson_cdf(int k, Scalar lambda) {
     Scalar slambda = Scalar(lambda);
-    if (!mymath::precise128::isfinite(slambda) || slambda < Scalar(0)) {
+    if (!mymath::isfinite(slambda) || slambda < Scalar(0)) {
         throw std::runtime_error("poisson lambda must be non-negative");
     }
     // 边界情况
@@ -278,10 +278,10 @@ Scalar poisson_cdf(int k, Scalar lambda) {
 
     if (slambda > Scalar(100)) {
         // 使用正态近似优化：N(lambda, lambda)，带连续性校正
-        return normal_cdf((k) + 0.5, lambda, (mymath::precise128::sqrt(slambda)));
+        return normal_cdf((k) + 0.5, lambda, (mymath::sqrt(slambda)));
     }
 
-    Scalar term = mymath::precise128::exp(-slambda); // P(X=0)
+    Scalar term = mymath::exp(-slambda); // P(X=0)
     Scalar sum = term;
     for (int i = 1; i <= k; ++i) {
         term *= slambda / Scalar(i);
@@ -309,7 +309,7 @@ Scalar binom_pmf(int n, int k, Scalar p) {
     if (n < 0) {
         throw std::runtime_error("binomial n must be non-negative");
     }
-    if (!mymath::precise128::isfinite(sp) || sp < Scalar(0) || sp > Scalar(1)) {
+    if (!mymath::isfinite(sp) || sp < Scalar(0) || sp > Scalar(1)) {
         throw std::runtime_error("binomial p must be in [0, 1]");
     }
     // 边界情况
@@ -321,9 +321,9 @@ Scalar binom_pmf(int n, int k, Scalar p) {
     const Scalar log_value = Scalar(mymath::lgamma((n) + 1.0L)) -
                              Scalar(mymath::lgamma((k) + 1.0L)) -
                              Scalar(mymath::lgamma((n - k) + 1.0L)) +
-                             Scalar(k) * mymath::precise128::ln(sp) +
-                             Scalar(n - k) * mymath::precise128::log1p(-sp);
-    return (mymath::precise128::exp(log_value));
+                             Scalar(k) * mymath::ln(sp) +
+                             Scalar(n - k) * mymath::log1p(-sp);
+    return (mymath::exp(log_value));
 }
 
 /**
@@ -332,7 +332,7 @@ Scalar binom_pmf(int n, int k, Scalar p) {
  */
 Scalar binom_cdf(int n, int k, Scalar p) {
     Scalar sp = Scalar(p);
-    if (n < 0 || !mymath::precise128::isfinite(sp) || sp < Scalar(0) || sp > Scalar(1)) {
+    if (n < 0 || !mymath::isfinite(sp) || sp < Scalar(0) || sp > Scalar(1)) {
         throw std::runtime_error("invalid binomial parameters");
     }
     // 边界情况
@@ -347,21 +347,21 @@ Scalar binom_cdf(int n, int k, Scalar p) {
         return normal_cdf(Scalar(k) + Scalar(0.5L), mean, mymath::sqrt(variance));
     }
 
-    Scalar log_term = Scalar(n) * mymath::precise128::log1p(-sp); // P(X=0)
+    Scalar log_term = Scalar(n) * mymath::log1p(-sp); // P(X=0)
     Scalar log_sum = log_term;
     Scalar p_ratio = sp / (Scalar(1) - sp);
 
     for (int i = 1; i <= k; ++i) {
-        log_term += mymath::precise128::ln(Scalar(n - i + 1) / Scalar(i) * p_ratio);
+        log_term += mymath::ln(Scalar(n - i + 1) / Scalar(i) * p_ratio);
         // Log-Sum-Exp 稳定累加
         if (log_term > log_sum) {
-            log_sum = log_term + mymath::precise128::log1p(mymath::precise128::exp(log_sum - log_term));
+            log_sum = log_term + mymath::log1p(mymath::exp(log_sum - log_term));
         } else {
-            log_sum = log_sum + mymath::precise128::log1p(mymath::precise128::exp(log_term - log_sum));
+            log_sum = log_sum + mymath::log1p(mymath::exp(log_term - log_sum));
         }
     }
     Scalar one = Scalar(1);
-    Scalar result = mymath::precise128::exp(log_sum);
+    Scalar result = mymath::exp(log_sum);
     return (result < one ? result : one);
 }
 
@@ -370,9 +370,9 @@ Scalar student_t_pdf(Scalar x, Scalar df) {
     if (sdf <= Scalar(0)) throw std::runtime_error("student_t df must be positive");
     Scalar df_ld = df;
     Scalar log_pdf = Scalar(mymath::lgamma((df_ld + 1.0L) / 2.0L)) -
-                     (Scalar(0.5L) * mymath::precise128::ln(sdf * mymath::precise128::pi()) + Scalar(mymath::lgamma(df_ld / 2.0L))) -
-                     ((sdf + Scalar(1)) / Scalar(2)) * mymath::precise128::ln(Scalar(1) + sx * sx / sdf);
-    return (mymath::precise128::exp(log_pdf));
+                     (Scalar(0.5L) * mymath::ln(sdf * mymath::pi()) + Scalar(mymath::lgamma(df_ld / 2.0L))) -
+                     ((sdf + Scalar(1)) / Scalar(2)) * mymath::ln(Scalar(1) + sx * sx / sdf);
+    return (mymath::exp(log_pdf));
 }
 
 Scalar student_t_cdf(Scalar x, Scalar df) {
@@ -391,9 +391,9 @@ Scalar chi2_pdf(Scalar x, Scalar df) {
     if (sx == Scalar(0) && sdf < Scalar(2)) return mymath::infinity();
     if (sx == Scalar(0) && sdf == Scalar(2)) return Scalar(0.5L);
     if (sx == Scalar(0) && sdf > Scalar(2)) return Scalar(0.0L);
-    Scalar log_pdf = (sdf / Scalar(2) - Scalar(1)) * mymath::precise128::ln(sx) - sx / Scalar(2) -
-                     (sdf / Scalar(2) * mymath::precise128::ln(Scalar(2)) + mymath::lgamma(sdf / Scalar(2.0L)));
-    return (mymath::precise128::exp(log_pdf));
+    Scalar log_pdf = (sdf / Scalar(2) - Scalar(1)) * mymath::ln(sx) - sx / Scalar(2) -
+                     (sdf / Scalar(2) * mymath::ln(Scalar(2)) + mymath::lgamma(sdf / Scalar(2.0L)));
+    return (mymath::exp(log_pdf));
 }
 
 Scalar chi2_cdf(Scalar x, Scalar df) {
@@ -408,11 +408,11 @@ Scalar f_pdf(Scalar x, Scalar df1, Scalar df2) {
     if (sdf1 <= Scalar(0) || sdf2 <= Scalar(0)) throw std::runtime_error("F-distribution df must be positive");
     if (sx <= Scalar(0)) return 0.0L;
 
-    Scalar log_pdf = Scalar(0.5L) * sdf1 * mymath::precise128::ln(sdf1) + Scalar(0.5L) * sdf2 * mymath::precise128::ln(sdf2) +
-                     (Scalar(0.5L) * sdf1 - Scalar(1)) * mymath::precise128::ln(sx) -
-                     Scalar(0.5L) * (sdf1 + sdf2) * mymath::precise128::ln(sdf1 * sx + sdf2) -
+    Scalar log_pdf = Scalar(0.5L) * sdf1 * mymath::ln(sdf1) + Scalar(0.5L) * sdf2 * mymath::ln(sdf2) +
+                     (Scalar(0.5L) * sdf1 - Scalar(1)) * mymath::ln(sx) -
+                     Scalar(0.5L) * (sdf1 + sdf2) * mymath::ln(sdf1 * sx + sdf2) -
                      (Scalar(mymath::lgamma(df1 / 2.0L)) + Scalar(mymath::lgamma(df2 / 2.0L)) - Scalar(mymath::lgamma((df1 + df2) / 2.0L)));
-    return (mymath::precise128::exp(log_pdf));
+    return (mymath::exp(log_pdf));
 }
 
 Scalar f_cdf(Scalar x, Scalar df1, Scalar df2) {
@@ -426,14 +426,14 @@ Scalar exp_pdf(Scalar x, Scalar lambda) {
     Scalar sx = Scalar(x), slambda = Scalar(lambda);
     if (slambda <= Scalar(0)) throw std::runtime_error("exponential lambda must be positive");
     if (sx < Scalar(0)) return 0.0L;
-    return (slambda * mymath::precise128::exp(-slambda * sx));
+    return (slambda * mymath::exp(-slambda * sx));
 }
 
 Scalar exp_cdf(Scalar x, Scalar lambda) {
     Scalar sx = Scalar(x), slambda = Scalar(lambda);
     if (slambda <= Scalar(0)) throw std::runtime_error("exponential lambda must be positive");
     if (sx < Scalar(0)) return 0.0L;
-    return (Scalar(1) - mymath::precise128::exp(-slambda * sx));
+    return (Scalar(1) - mymath::exp(-slambda * sx));
 }
 
 /**

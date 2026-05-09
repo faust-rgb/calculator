@@ -15,6 +15,7 @@
 #include "variable_resolver.h"
 #include "core/environment/scope.h"
 #include "execution/resolver/builtin_constants.h"
+#include "math/mymath.h"
 
 #include <map>
 #include <memory>
@@ -96,7 +97,7 @@ const StoredValue* VariableResolver::lookup(const std::string& name) const {
         // 使用线程本地缓存避免重复创建
         static thread_local std::map<std::string, StoredValue> constant_cache;
         auto& cached = constant_cache[name];
-        if (mymath::precise128::is_near_zero(cached.decimal, Scalar(1e-12L)) && !cached.exact) {
+        if (mymath::is_near_zero(cached.decimal, Scalar(1e-12L)) && !cached.exact) {
             cached.decimal = constant_value;
             cached.exact = false;
         }
@@ -237,7 +238,7 @@ const StoredValue* VariableResolver::lookup_at_scope(const std::string& name, in
         if (lookup_builtin_constant(name, &constant_value)) {
             static thread_local std::map<std::string, StoredValue> constant_cache;
             auto& cached = constant_cache[name];
-            if (mymath::precise128::is_near_zero(cached.decimal, Scalar(1e-12L)) && !cached.exact) {
+            if (mymath::is_near_zero(cached.decimal, Scalar(1e-12L)) && !cached.exact) {
                 cached.decimal = constant_value;
                 cached.exact = false;
             }

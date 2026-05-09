@@ -202,30 +202,22 @@ T correlation_values(const std::vector<T>& lhs,
     }
 }
 
-// Explicit template instantiations
+// Explicit template instantiations - only Scalar
 template Scalar mean_values<Scalar>(const std::vector<Scalar>&);
-template PreciseDecimal mean_values<PreciseDecimal>(const std::vector<PreciseDecimal>&);
 
 template Scalar median_values<Scalar>(const std::vector<Scalar>&);
-template PreciseDecimal median_values<PreciseDecimal>(const std::vector<PreciseDecimal>&);
 
 template Scalar mode_values<Scalar>(const std::vector<Scalar>&);
-template PreciseDecimal mode_values<PreciseDecimal>(const std::vector<PreciseDecimal>&);
 
 template Scalar variance_values<Scalar>(const std::vector<Scalar>&);
-template PreciseDecimal variance_values<PreciseDecimal>(const std::vector<PreciseDecimal>&);
 
 template Scalar percentile_values<Scalar>(const std::vector<Scalar>&, Scalar);
-template PreciseDecimal percentile_values<PreciseDecimal>(const std::vector<PreciseDecimal>&, PreciseDecimal);
 
 template Scalar quartile_values<Scalar>(const std::vector<Scalar>&, Scalar);
-template PreciseDecimal quartile_values<PreciseDecimal>(const std::vector<PreciseDecimal>&, PreciseDecimal);
 
 template Scalar covariance_values<Scalar>(const std::vector<Scalar>&, const std::vector<Scalar>&);
-template PreciseDecimal covariance_values<PreciseDecimal>(const std::vector<PreciseDecimal>&, const std::vector<PreciseDecimal>&);
 
 template Scalar correlation_values<Scalar>(const std::vector<Scalar>&, const std::vector<Scalar>&);
-template PreciseDecimal correlation_values<PreciseDecimal>(const std::vector<PreciseDecimal>&, const std::vector<PreciseDecimal>&);
 
 } // namespace internal
 } // namespace matrix

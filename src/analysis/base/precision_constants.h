@@ -11,6 +11,8 @@
 #include <limits>
 #include <cmath>
 #include "core/common/scalar_type.h"
+#include "math/core/basic_ops.h"
+#include "math/core/roots_powers.h"
 #include "precise/precise_decimal.h"
 
 namespace precision {
@@ -48,10 +50,9 @@ constexpr T epsilon() {
 template <typename T>
 inline T sqrt_epsilon() {
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        // 使用 float128 的 sqrt
-        return mymath::precise128::sqrt(epsilon<T>());
+        return mymath::sqrt(epsilon<T>());
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        return precise::sqrt(epsilon<T>());
+        return mymath::sqrt(epsilon<T>());
     } else {
         return std::sqrt(epsilon<T>());
     }
@@ -65,12 +66,9 @@ inline T sqrt_epsilon() {
 template <typename T>
 inline T cbrt_epsilon() {
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        return mymath::precise128::cbrt(epsilon<T>());
+        return mymath::cbrt(epsilon<T>());
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        // PreciseDecimal: 使用 pow(epsilon, 1/3)
-        // epsilon 对于 PreciseDecimal 是 10^(-scale)
-        // cbrt(epsilon) ≈ 10^(-scale/3)
-        return precise::pow(epsilon<T>(), PreciseDecimal(1) / PreciseDecimal(3));
+        return mymath::cbrt(epsilon<T>());
     } else {
         return std::cbrt(epsilon<T>());
     }
@@ -167,10 +165,10 @@ inline T min_step_size(T segment) {
     const T abs_segment = (segment < T(0)) ? -segment : segment;
     // 最小步长为 epsilon^(1/4) * segment
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
-        const T factor = mymath::precise128::sqrt(sqrt_epsilon<T>());
+        const T factor = mymath::sqrt(sqrt_epsilon<T>());
         return factor * abs_segment;
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        const T factor = precise::sqrt(sqrt_epsilon<T>());
+        const T factor = mymath::sqrt(sqrt_epsilon<T>());
         return factor * abs_segment;
     } else {
         return std::sqrt(sqrt_epsilon<T>()) * abs_segment;

@@ -41,13 +41,13 @@ std::vector<Scalar> periodogram(const std::vector<Scalar>& signal, Scalar sample
 
     // 计算功率谱 - use Scalar for precision
     std::vector<Scalar> psd(spectrum.size());
-    const Scalar scale = Scalar(2.0L) / (Scalar((n)) * Scalar(sample_rate));
+    const Scalar scale = Scalar(2.0L) / (Scalar(static_cast<long long>(n)) * Scalar(sample_rate));
 
     for (std::size_t i = 0; i < spectrum.size(); ++i) {
         const Scalar re(spectrum[i].real());
         const Scalar im(spectrum[i].imag());
         const Scalar norm_val = re * re + im * im;
-        psd[i] = (scale * norm_val / Scalar((n)));
+        psd[i] = (scale * norm_val / Scalar(static_cast<long long>(n)));
     }
 
     // 处理 DC 和 Nyquist (不需要乘2)
@@ -132,7 +132,7 @@ std::vector<Scalar> pwelch(const std::vector<Scalar>& signal,
 
     // 平均并归一化
     std::vector<Scalar> psd(psd_sum.size());
-    const Scalar scale = Scalar(2.0L) / (Scalar((n_segments)) *
+    const Scalar scale = Scalar(2.0L) / (Scalar(static_cast<long long>(n_segments)) *
                                           Scalar(sample_rate) * win_power);
 
     for (std::size_t k = 0; k < psd.size(); ++k) {
@@ -186,15 +186,15 @@ STFTResult stft(const std::vector<Scalar>& signal,
     }
 
     // 频率轴
-    const std::size_t n_freqs = nfft / 2 + 1;
+    const long long n_freqs = nfft / 2 + 1;
     result.freq_vector.resize(n_freqs);
-    for (std::size_t k = 0; k < n_freqs; ++k) {
+    for (long long k = 0; k < n_freqs; ++k) {
         result.freq_vector[k] = (k) / (nfft);
     }
 
     // 时间轴
     result.time_vector.resize(n_frames);
-    for (std::size_t frame = 0; frame < n_frames; ++frame) {
+    for (long long frame = 0; frame < n_frames; ++frame) {
         result.time_vector[frame] = (frame * step + nfft / 2);
     }
 
@@ -202,8 +202,8 @@ STFTResult stft(const std::vector<Scalar>& signal,
     result.stft_matrix.resize(n_frames);
     result.window_type = window_type;
 
-    for (std::size_t frame = 0; frame < n_frames; ++frame) {
-        const std::size_t start = frame * step;
+    for (long long frame = 0; frame < n_frames; ++frame) {
+        const long long start = frame * step;
 
         // 提取并加窗
         std::vector<Scalar> frame_data(nfft);

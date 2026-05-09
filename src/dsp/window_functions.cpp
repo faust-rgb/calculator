@@ -24,7 +24,7 @@ using Scalar = mymath::Scalar;
 
 // 使用 mymath 命名空间中的常量
 using mymath::kPi;
-static const Scalar kPiScalar = mymath::precise128::pi();
+static const Scalar kPiScalar = mymath::constants::pi<Scalar>();
 
 // ============================================================================
 // 窗函数类型转换
@@ -96,7 +96,7 @@ std::vector<Scalar> hanning_window(std::size_t length) {
 
     for (std::size_t i = 0; i < length; ++i) {
         const Scalar x = factor * Scalar(static_cast<long long>(i));
-        w[i] = (Scalar(0.5L) * (Scalar(1.0L) - mymath::precise128::cos(x)));
+        w[i] = (Scalar(0.5L) * (Scalar(1.0L) - mymath::cos(x)));
     }
 
     return w;
@@ -118,12 +118,12 @@ std::vector<Scalar> hamming_window(std::size_t length) {
     const Scalar factor = Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(length - 1));
 
     // Hamming 窗系数：a0 = 0.54, a1 = 0.46
-    constexpr Scalar a0 = Scalar(0.54L);
-    constexpr Scalar a1 = Scalar(0.46L);
+    const Scalar a0 = Scalar(0.54L);
+    const Scalar a1 = Scalar(0.46L);
 
     for (std::size_t i = 0; i < length; ++i) {
         const Scalar x = factor * Scalar(static_cast<long long>(i));
-        w[i] = (a0 - a1 * mymath::precise128::cos(x));
+        w[i] = (a0 - a1 * mymath::cos(x));
     }
 
     return w;
@@ -145,14 +145,14 @@ std::vector<Scalar> blackman_window(std::size_t length) {
     const Scalar factor = Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(length - 1));
 
     // Blackman 窗系数
-    constexpr Scalar a0 = Scalar(0.42L);
-    constexpr Scalar a1 = Scalar(0.5L);
-    constexpr Scalar a2 = Scalar(0.08L);
+    const Scalar a0 = Scalar(0.42L);
+    const Scalar a1 = Scalar(0.5L);
+    const Scalar a2 = Scalar(0.08L);
 
     for (std::size_t i = 0; i < length; ++i) {
         const Scalar x = factor * Scalar(static_cast<long long>(i));
-        w[i] = (a0 - a1 * mymath::precise128::cos(x) +
-                                        a2 * mymath::precise128::cos(Scalar(2.0L) * x));
+        w[i] = (a0 - a1 * mymath::cos(x) +
+                                        a2 * mymath::cos(Scalar(2.0L) * x));
     }
 
     return w;
@@ -174,16 +174,16 @@ std::vector<Scalar> blackman_harris_window(std::size_t length) {
     const Scalar factor = Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(length - 1));
 
     // 4 项 Blackman-Harris 窗系数
-    constexpr Scalar a0 = Scalar(0.35875L);
-    constexpr Scalar a1 = Scalar(0.48829L);
-    constexpr Scalar a2 = Scalar(0.14128L);
-    constexpr Scalar a3 = Scalar(0.01168L);
+    const Scalar a0 = Scalar(0.35875L);
+    const Scalar a1 = Scalar(0.48829L);
+    const Scalar a2 = Scalar(0.14128L);
+    const Scalar a3 = Scalar(0.01168L);
 
     for (std::size_t i = 0; i < length; ++i) {
         const Scalar x = factor * Scalar(static_cast<long long>(i));
-        w[i] = (a0 - a1 * mymath::precise128::cos(x) +
-                                        a2 * mymath::precise128::cos(Scalar(2.0L) * x) -
-                                        a3 * mymath::precise128::cos(Scalar(3.0L) * x));
+        w[i] = (a0 - a1 * mymath::cos(x) +
+                                        a2 * mymath::cos(Scalar(2.0L) * x) -
+                                        a3 * mymath::cos(Scalar(3.0L) * x));
     }
 
     return w;
@@ -206,7 +206,7 @@ std::vector<Scalar> bartlett_window(std::size_t length) {
 
     for (std::size_t i = 0; i < length; ++i) {
         const Scalar idx = Scalar(static_cast<long long>(i));
-        w[i] = (Scalar(1.0L) - mymath::precise128::abs(idx - half) / half);
+        w[i] = (Scalar(1.0L) - mymath::abs(idx - half) / half);
     }
 
     return w;
@@ -250,7 +250,7 @@ std::vector<Scalar> kaiser_window(std::size_t length, Scalar beta) {
     for (std::size_t i = 0; i < length; ++i) {
         const Scalar x = (Scalar(static_cast<long long>(i)) - half) / half;
         w[i] = (bessel_i0_scalar(beta_scalar *
-                                    mymath::precise128::sqrt(Scalar(1.0L) - x * x)) / i0_beta);
+                                    mymath::sqrt(Scalar(1.0L) - x * x)) / i0_beta);
     }
 
     return w;
@@ -276,7 +276,7 @@ std::vector<Scalar> gaussian_window(std::size_t length, Scalar sigma) {
     for (std::size_t i = 0; i < length; ++i) {
         const Scalar x = Scalar(static_cast<long long>(i)) - half;
         const Scalar ratio = x / sigma_scaled;
-        w[i] = (mymath::precise128::exp(Scalar(-0.5L) * ratio * ratio));
+        w[i] = (mymath::exp(Scalar(-0.5L) * ratio * ratio));
     }
 
     return w;
@@ -298,18 +298,18 @@ std::vector<Scalar> flattop_window(std::size_t length) {
     const Scalar factor = Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(length - 1));
 
     // 平顶窗系数
-    constexpr Scalar a0 = Scalar(0.21557895L);
-    constexpr Scalar a1 = Scalar(0.41663158L);
-    constexpr Scalar a2 = Scalar(0.277263158L);
-    constexpr Scalar a3 = Scalar(0.083578947L);
-    constexpr Scalar a4 = Scalar(0.006947368L);
+    const Scalar a0 = Scalar(0.21557895L);
+    const Scalar a1 = Scalar(0.41663158L);
+    const Scalar a2 = Scalar(0.277263158L);
+    const Scalar a3 = Scalar(0.083578947L);
+    const Scalar a4 = Scalar(0.006947368L);
 
     for (std::size_t i = 0; i < length; ++i) {
         const Scalar x = factor * Scalar(static_cast<long long>(i));
-        w[i] = (a0 - a1 * mymath::precise128::cos(x) +
-                                        a2 * mymath::precise128::cos(Scalar(2.0L) * x) -
-                                        a3 * mymath::precise128::cos(Scalar(3.0L) * x) +
-                                        a4 * mymath::precise128::cos(Scalar(4.0L) * x));
+        w[i] = (a0 - a1 * mymath::cos(x) +
+                                        a2 * mymath::cos(Scalar(2.0L) * x) -
+                                        a3 * mymath::cos(Scalar(3.0L) * x) +
+                                        a4 * mymath::cos(Scalar(4.0L) * x));
     }
 
     return w;
@@ -329,7 +329,8 @@ std::vector<Scalar> tukey_window(std::size_t length, Scalar alpha) {
 
     // 限制 alpha 在 [0, 1] 范围内
     Scalar alpha_scalar = Scalar(alpha);
-    alpha_scalar = mymath::precise128::fmax(Scalar(0.0L), mymath::precise128::fmin(Scalar(1.0L), alpha_scalar));
+    if (alpha_scalar < Scalar(0.0L)) alpha_scalar = Scalar(0.0L);
+    if (alpha_scalar > Scalar(1.0L)) alpha_scalar = Scalar(1.0L);
 
     std::vector<Scalar> w(length);
 
@@ -349,11 +350,11 @@ std::vector<Scalar> tukey_window(std::size_t length, Scalar alpha) {
         if (x < width) {
             // 上升沿
             w[i] = (Scalar(0.5L) * (Scalar(1.0L) +
-                    mymath::precise128::cos(kPiScalar * (x / width - Scalar(1.0L)))));
+                    mymath::cos(kPiScalar * (x / width - Scalar(1.0L)))));
         } else if (x > Scalar(static_cast<long long>(length - 1)) - width) {
             // 下降沿
             w[i] = (Scalar(0.5L) * (Scalar(1.0L) +
-                    mymath::precise128::cos(kPiScalar * ((x - Scalar(static_cast<long long>(length - 1))) / width +
+                    mymath::cos(kPiScalar * ((x - Scalar(static_cast<long long>(length - 1))) / width +
                     Scalar(1.0L)))));
         } else {
             // 平坦部分

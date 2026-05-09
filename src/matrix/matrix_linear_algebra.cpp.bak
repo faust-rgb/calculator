@@ -1522,85 +1522,167 @@ TMatrix<T> residue(const TMatrix<T>& b, const TMatrix<T>& a) {
 }
 
 // Explicit template instantiations
+template TLuResult<long double> internal::lu_decompose_with_pivoting(const TMatrix<long double>&);
+template TLuResult<PreciseDecimal> internal::lu_decompose_with_pivoting(const TMatrix<PreciseDecimal>&);
 template TLuResult<mymath::Scalar> internal::lu_decompose_with_pivoting(const TMatrix<mymath::Scalar>&);
 
+template TEigenResult<long double> internal::eigenvalues_with_vectors(const TMatrix<long double>&);
+template TEigenResult<PreciseDecimal> internal::eigenvalues_with_vectors(const TMatrix<PreciseDecimal>&);
 template TEigenResult<mymath::Scalar> internal::eigenvalues_with_vectors(const TMatrix<mymath::Scalar>&);
+template std::pair<TMatrix<long double>, TMatrix<long double>> qr_decompose(const TMatrix<long double>&);
+template std::pair<TMatrix<PreciseDecimal>, TMatrix<PreciseDecimal>> qr_decompose(const TMatrix<PreciseDecimal>&);
 template std::pair<TMatrix<mymath::Scalar>, TMatrix<mymath::Scalar>> qr_decompose(const TMatrix<mymath::Scalar>&);
 
+template std::pair<TMatrix<long double>, TMatrix<long double>> lu_decompose(const TMatrix<long double>&);
+template std::pair<TMatrix<PreciseDecimal>, TMatrix<PreciseDecimal>> lu_decompose(const TMatrix<PreciseDecimal>&);
 template std::pair<TMatrix<mymath::Scalar>, TMatrix<mymath::Scalar>> lu_decompose(const TMatrix<mymath::Scalar>&);
 
+template std::vector<std::size_t> rref_in_place(TMatrix<long double>*);
+template std::vector<std::size_t> rref_in_place(TMatrix<PreciseDecimal>*);
 template std::vector<std::size_t> rref_in_place(TMatrix<mymath::Scalar>*);
 
+template TMatrix<long double> nullspace_basis(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> nullspace_basis(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> nullspace_basis(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> inverse(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> inverse(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> inverse(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> pseudo_inverse(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> pseudo_inverse(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> pseudo_inverse(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> nullspace(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> nullspace(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> nullspace(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> least_squares(const TMatrix<long double>&, const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> least_squares(const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> least_squares(const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> qr_q(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> qr_q(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> qr_q(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> qr_r(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> qr_r(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> qr_r(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> lu_l(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> lu_l(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> lu_l(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> lu_u(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> lu_u(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> lu_u(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> lu_p(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> lu_p(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> lu_p(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> svd_u(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> svd_u(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> svd_u(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> svd_s(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> svd_s(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> svd_s(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> svd_vt(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> svd_vt(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> svd_vt(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> lu_solve_with_partial_pivoting(const TMatrix<long double>&, const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> lu_solve_with_partial_pivoting(const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> lu_solve_with_partial_pivoting(const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> solve(const TMatrix<long double>&, const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> solve(const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> solve(const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> power(TMatrix<long double>, long long);
+template TMatrix<PreciseDecimal> power(TMatrix<PreciseDecimal>, long long);
 template TMatrix<mymath::Scalar> power(TMatrix<mymath::Scalar>, long long);
 
+template long double condition_number(const TMatrix<long double>&);
+template PreciseDecimal condition_number(const TMatrix<PreciseDecimal>&);
 template mymath::Scalar condition_number(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> cholesky(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> cholesky(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> cholesky(const TMatrix<mymath::Scalar>&);
 
+template bool is_symmetric(const TMatrix<long double>&);
+template bool is_symmetric(const TMatrix<PreciseDecimal>&);
 template bool is_symmetric(const TMatrix<mymath::Scalar>&);
 
+template bool is_orthogonal(const TMatrix<long double>&);
+template bool is_orthogonal(const TMatrix<PreciseDecimal>&);
 template bool is_orthogonal(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> hessenberg(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> hessenberg(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> hessenberg(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> schur(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> schur(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> schur(const TMatrix<mymath::Scalar>&);
 
+template long double get(const TMatrix<long double>&, std::size_t, std::size_t);
+template PreciseDecimal get(const TMatrix<PreciseDecimal>&, std::size_t, std::size_t);
 template mymath::Scalar get(const TMatrix<mymath::Scalar>&, std::size_t, std::size_t);
 
+template long double get(const TMatrix<long double>&, std::size_t);
+template PreciseDecimal get(const TMatrix<PreciseDecimal>&, std::size_t);
 template mymath::Scalar get(const TMatrix<mymath::Scalar>&, std::size_t);
 
+template TMatrix<long double> set(TMatrix<long double>, std::size_t, std::size_t, long double);
+template TMatrix<PreciseDecimal> set(TMatrix<PreciseDecimal>, std::size_t, std::size_t, PreciseDecimal);
 template TMatrix<mymath::Scalar> set(TMatrix<mymath::Scalar>, std::size_t, std::size_t, mymath::Scalar);
 
+template TMatrix<long double> set(TMatrix<long double>, std::size_t, long double);
+template TMatrix<PreciseDecimal> set(TMatrix<PreciseDecimal>, std::size_t, PreciseDecimal);
 template TMatrix<mymath::Scalar> set(TMatrix<mymath::Scalar>, std::size_t, mymath::Scalar);
 
+template long double norm(const TMatrix<long double>&);
+//template PreciseDecimal norm(const TMatrix<PreciseDecimal>&);
 template mymath::Scalar norm(const TMatrix<mymath::Scalar>&);
 
+template long double trace(const TMatrix<long double>&);
+template PreciseDecimal trace(const TMatrix<PreciseDecimal>&);
 template mymath::Scalar trace(const TMatrix<mymath::Scalar>&);
 
+template long double determinant(const TMatrix<long double>&);
+template PreciseDecimal determinant(const TMatrix<PreciseDecimal>&);
 template mymath::Scalar determinant(const TMatrix<mymath::Scalar>&);
 
+template long double rank(const TMatrix<long double>&);
+template PreciseDecimal rank(const TMatrix<PreciseDecimal>&);
 template mymath::Scalar rank(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> rref(TMatrix<long double>);
+template TMatrix<PreciseDecimal> rref(TMatrix<PreciseDecimal>);
 template TMatrix<mymath::Scalar> rref(TMatrix<mymath::Scalar>);
 
+template TMatrix<long double> eigenvalues(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> eigenvalues(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> eigenvalues(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> eigenvectors(const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> eigenvectors(const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> eigenvectors(const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> filter(const TMatrix<long double>&, const TMatrix<long double>&, const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> filter(const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> filter(const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&);
 
+template TMatrix<long double> freqz(const TMatrix<long double>&, const TMatrix<long double>&, std::size_t);
+template TMatrix<PreciseDecimal> freqz(const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&, std::size_t);
 template TMatrix<mymath::Scalar> freqz(const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&, std::size_t);
 
+template TMatrix<long double> residue(const TMatrix<long double>&, const TMatrix<long double>&);
+template TMatrix<PreciseDecimal> residue(const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&);
 template TMatrix<mymath::Scalar> residue(const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&);
 
 }  // namespace matrix

@@ -21,8 +21,8 @@ long double sinh(long double x) {
         return x;
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::sinh(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::sinh(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -34,8 +34,8 @@ long double cosh(long double x) {
         return infinity();
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::cosh(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::cosh(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -47,8 +47,8 @@ long double tanh(long double x) {
         return x > 0.0L ? 1.0L : -1.0L;
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::tanh(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::tanh(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -64,8 +64,8 @@ long double asinh(long double x) {
         return x;
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::asinh(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::asinh(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -80,8 +80,8 @@ long double acosh(long double x) {
         throw std::domain_error("acosh is only defined for x >= 1");
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::acosh(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::acosh(Scalar(x));
     return static_cast<long double>(result);
 }
 
@@ -93,8 +93,8 @@ long double atanh(long double x) {
         throw std::domain_error("atanh is only defined for values in (-1, 1)");
     }
 
-    // Use precise128 for high precision calculation
-    Scalar result = precise128::atanh(Scalar(x));
+    // Use precise for high precision calculation
+    Scalar result = precise::atanh(Scalar(x));
     return static_cast<long double>(result);
 }
 

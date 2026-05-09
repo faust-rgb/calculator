@@ -12,6 +12,7 @@
 #include "core/common/scalar_type.h"
 #include "floating_point.h"
 #include "scalar_traits.h"
+#include <complex>
 
 namespace mymath {
 
@@ -33,6 +34,13 @@ long double abs_long_double(long double x);
 // Scalar overload - uses dispatch from scalar_traits.h
 inline Scalar abs(Scalar x) {
     return scalar_abs(x);
+}
+
+// std::complex<Scalar> overload
+inline Scalar abs(const std::complex<Scalar>& z) {
+    Scalar re = z.real();
+    Scalar im = z.imag();
+    return scalar_sqrt(re * re + im * im);
 }
 
 // ============================================================================
@@ -63,19 +71,35 @@ inline Scalar trunc(Scalar x) {
 }
 
 // Scalar overload for modf
-template <typename T = Scalar>
-inline T modf(T x, T* integer_part) {
-    if constexpr (std::is_same_v<T, float128_t>) {
-        long double ld_int;
-        long double frac = modf(static_cast<long double>(x), &ld_int);
-        *integer_part = T(ld_int);
-        return T(frac);
-    } else {
-        T int_part = precise::floor(precise::abs(x));
-        if (x < T(0.0L)) int_part = -int_part;
-        *integer_part = int_part;
-        return x - int_part;
-    }
+inline Scalar modf(Scalar x, Scalar* integer_part) {
+    Scalar int_part = scalar_floor(scalar_abs(x));
+    if (x < Scalar(0.0L)) int_part = -int_part;
+    *integer_part = int_part;
+    return x - int_part;
+}
+
+// ============================================================================
+// Maximum/Minimum Functions
+// ============================================================================
+
+/**
+ * @brief Calculate maximum of two values
+ * @param a First value
+ * @param b Second value
+ * @return Maximum value
+ */
+inline Scalar fmax(Scalar a, Scalar b) {
+    return (a > b) ? a : b;
+}
+
+/**
+ * @brief Calculate minimum of two values
+ * @param a First value
+ * @param b Second value
+ * @return Minimum value
+ */
+inline Scalar fmin(Scalar a, Scalar b) {
+    return (a < b) ? a : b;
 }
 
 // ============================================================================
@@ -99,6 +123,33 @@ inline Scalar fmod(Scalar x, Scalar y) {
 
 inline Scalar remainder(Scalar x, Scalar y) {
     return scalar_remainder(x, y);
+}
+
+// ============================================================================
+// String Conversion
+// ============================================================================
+
+/**
+ * @brief Convert Scalar to string with given precision
+ * @param value Scalar value
+ * @param precision Number of decimal places
+ * @return String representation
+ */
+inline std::string scalar_to_string_val(Scalar value, int precision = 36) {
+    return scalar_to_string(value, precision);
+}
+
+/**
+ * @brief Parse Scalar from string using explicit type tag
+ * @param s String to parse
+ * @return Parsed Scalar value
+ */
+inline Scalar scalar_from_string(const std::string& s) {
+    if constexpr (std::is_same_v<Scalar, float128_t>) {
+        return from_string(s);
+    } else {
+        return Scalar(s);
+    }
 }
 
 // ============================================================================

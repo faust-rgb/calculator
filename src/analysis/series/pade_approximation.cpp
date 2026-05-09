@@ -21,7 +21,7 @@ std::string format_pade_result(const std::vector<Scalar>& numerator,
     const std::string base = "x";
 
     Scalar scale = denominator[0];
-    if (mymath::precise128::abs(scale) < Scalar(1e-15L)) {
+    if (mymath::abs(scale) < Scalar(1e-15L)) {
         scale = Scalar(1);
     }
 
@@ -66,13 +66,13 @@ bool solve_tohplitz_stable(std::function<Scalar(int)> c, int n, std::vector<Scal
 
     Scalar ef = c(1);
 
-    if (mymath::precise128::abs(ef) < singular_threshold) {
+    if (mymath::abs(ef) < singular_threshold) {
         ef = singular_threshold;
     }
 
     for (int k = 0; k < n; ++k) {
         Scalar denom = ef;
-        if (mymath::precise128::abs(denom) < singular_threshold) {
+        if (mymath::abs(denom) < singular_threshold) {
             denom = singular_threshold * (denom < Scalar(0) ? Scalar(-1) : Scalar(1));
         }
         Scalar kappa = Scalar(0);
@@ -83,12 +83,12 @@ bool solve_tohplitz_stable(std::function<Scalar(int)> c, int n, std::vector<Scal
             sum_b = sum_b + b[i] * c(i + 1);
         }
 
-        if (mymath::precise128::abs(sum_b) > singular_threshold) {
+        if (mymath::abs(sum_b) > singular_threshold) {
             kappa = -sum_f / sum_b;
         }
 
-        if (mymath::precise128::abs(kappa) > Scalar(1)) {
-            kappa = kappa / mymath::precise128::abs(kappa) * Scalar(0.99L);
+        if (mymath::abs(kappa) > Scalar(1)) {
+            kappa = kappa / mymath::abs(kappa) * Scalar(0.99L);
         }
 
         std::vector<Scalar> f_new = f;
@@ -101,7 +101,7 @@ bool solve_tohplitz_stable(std::function<Scalar(int)> c, int n, std::vector<Scal
         f = f_new;
 
         ef = ef * (Scalar(1) - kappa * kappa);
-        if (mymath::precise128::abs(ef) < singular_threshold) {
+        if (mymath::abs(ef) < singular_threshold) {
             ef = singular_threshold;
         }
 
@@ -150,7 +150,7 @@ bool solve_pade_denominator(std::function<Scalar(int)> c,
     for (int i = 0; i < denominator_degree; ++i) {
         Scalar max_row = Scalar(0);
         for (int j = 0; j < denominator_degree; ++j) {
-            max_row = mymath::precise128::fmax(max_row, mymath::precise128::abs(matrix[i][j]));
+            max_row = mymath::fmax(max_row, mymath::abs(matrix[i][j]));
         }
         if (max_row > Scalar(0)) {
             diag_scale[i] = Scalar(1) / max_row;
@@ -163,9 +163,9 @@ bool solve_pade_denominator(std::function<Scalar(int)> c,
 
     for (int col = 0; col < denominator_degree; ++col) {
         int pivot = col;
-        Scalar pivot_abs = mymath::precise128::abs(matrix[col][col]);
+        Scalar pivot_abs = mymath::abs(matrix[col][col]);
         for (int row = col + 1; row < denominator_degree; ++row) {
-            const Scalar candidate = mymath::precise128::abs(matrix[row][col]);
+            const Scalar candidate = mymath::abs(matrix[row][col]);
             if (candidate > pivot_abs) {
                 pivot_abs = candidate;
                 pivot = row;
@@ -191,7 +191,7 @@ bool solve_pade_denominator(std::function<Scalar(int)> c,
         for (int row = 0; row < denominator_degree; ++row) {
             if (row == col) continue;
             const Scalar factor = matrix[row][col];
-            if (mymath::precise128::abs(factor) < singular_threshold) continue;
+            if (mymath::abs(factor) < singular_threshold) continue;
             for (int c_col = col; c_col < denominator_degree; ++c_col) {
                 matrix[row][c_col] = matrix[row][c_col] - factor * matrix[col][c_col];
             }
@@ -297,10 +297,10 @@ std::string pade(const SeriesContext& ctx,
     const std::vector<Scalar> coefficients = taylor::build_taylor_coefficients(
         ctx, expression, variable_name, center, total_degree);
 
-    if (coefficients.empty() || mymath::precise128::abs(coefficients[0]) < Scalar(1e-15L)) {
+    if (coefficients.empty() || mymath::abs(coefficients[0]) < Scalar(1e-15L)) {
         int first_nonzero = 0;
         for (int i = 0; i < static_cast<int>(coefficients.size()); ++i) {
-            if (mymath::precise128::abs(coefficients[i]) >= Scalar(1e-15L)) {
+            if (mymath::abs(coefficients[i]) >= Scalar(1e-15L)) {
                 first_nonzero = i;
                 break;
             }

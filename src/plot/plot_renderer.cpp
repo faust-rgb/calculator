@@ -74,7 +74,7 @@ std::string PlotRenderer::render_braille(const std::vector<Point>& points, int w
     Scalar y_min = Scalar(points[0].y), y_max = Scalar(points[0].y);
 
     for (const auto& p : points) {
-        if (mymath::precise128::isnan(Scalar(p.y)) || mymath::precise128::isinf(Scalar(p.y))) continue;
+        if (mymath::isnan(Scalar(p.y)) || mymath::isinf(Scalar(p.y))) continue;
         x_min = std::min(x_min, Scalar(p.x));
         x_max = std::max(x_max, Scalar(p.x));
         y_min = std::min(y_min, Scalar(p.y));
@@ -106,7 +106,7 @@ std::string PlotRenderer::render_braille(const std::vector<Point>& points, int w
     }
 
     for (const auto& p : points) {
-        if (mymath::precise128::isnan(Scalar(p.y)) || mymath::precise128::isinf(Scalar(p.y))) continue;
+        if (mymath::isnan(Scalar(p.y)) || mymath::isinf(Scalar(p.y))) continue;
         int px = static_cast<int>((Scalar(p.x) - x_min) / (x_max - x_min) * (canvas_w - 1));
         int py = static_cast<int>((Scalar(p.y) - y_min) / (y_max - y_min) * (canvas_h - 1));
         if (px >= 0 && px < canvas_w && py >= 0 && py < canvas_h) {

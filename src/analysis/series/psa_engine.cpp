@@ -53,9 +53,9 @@ std::vector<Scalar> ps_sub(const std::vector<Scalar>& a, const std::vector<Scala
 std::vector<Scalar> ps_mul(const std::vector<Scalar>& a, const std::vector<Scalar>& b, int degree) {
     std::vector<Scalar> res(degree + 1, Scalar(0));
     for (int i = 0; i <= degree; ++i) {
-        if (i >= static_cast<int>(a.size()) || mymath::precise128::abs(a[i]) < Scalar(1e-15L)) continue;
+        if (i >= static_cast<int>(a.size()) || mymath::abs(a[i]) < Scalar(1e-15L)) continue;
         for (int j = 0; i + j <= degree; ++j) {
-            if (j >= static_cast<int>(b.size()) || mymath::precise128::abs(b[j]) < Scalar(1e-15L)) continue;
+            if (j >= static_cast<int>(b.size()) || mymath::abs(b[j]) < Scalar(1e-15L)) continue;
             res[i + j] = res[i + j] + a[i] * b[j];
         }
     }
@@ -67,7 +67,7 @@ std::vector<Scalar> ps_div_with_laurent(const std::vector<Scalar>& a, const std:
 
     int start_a = -1;
     for (int i = 0; i < static_cast<int>(a.size()); ++i) {
-        if (mymath::precise128::abs(a[i]) >= Scalar(1e-18L)) {
+        if (mymath::abs(a[i]) >= Scalar(1e-18L)) {
             start_a = i;
             break;
         }
@@ -75,7 +75,7 @@ std::vector<Scalar> ps_div_with_laurent(const std::vector<Scalar>& a, const std:
 
     int start_b = -1;
     for (int i = 0; i < static_cast<int>(b.size()); ++i) {
-        if (mymath::precise128::abs(b[i]) >= Scalar(1e-18L)) {
+        if (mymath::abs(b[i]) >= Scalar(1e-18L)) {
             start_b = i;
             break;
         }
@@ -130,22 +130,22 @@ std::vector<Scalar> ps_div(const std::vector<Scalar>& a, const std::vector<Scala
     if (shift < 0) {
         Scalar leading = Scalar(0);
         for (const Scalar& v : result) {
-            if (mymath::precise128::abs(v) >= Scalar(1e-15L)) {
+            if (mymath::abs(v) >= Scalar(1e-15L)) {
                 leading = v;
                 break;
             }
         }
-        if (mymath::precise128::abs(leading) < Scalar(1e-15L)) {
+        if (mymath::abs(leading) < Scalar(1e-15L)) {
             int start_a = -1;
             for (int i = 0; i < static_cast<int>(a.size()); ++i) {
-                if (mymath::precise128::abs(a[i]) >= Scalar(1e-15L)) {
+                if (mymath::abs(a[i]) >= Scalar(1e-15L)) {
                     start_a = i;
                     break;
                 }
             }
             int start_b = -1;
             for (int i = 0; i < static_cast<int>(b.size()); ++i) {
-                if (mymath::precise128::abs(b[i]) >= Scalar(1e-15L)) {
+                if (mymath::abs(b[i]) >= Scalar(1e-15L)) {
                     start_b = i;
                     break;
                 }
@@ -162,7 +162,7 @@ std::vector<Scalar> ps_div(const std::vector<Scalar>& a, const std::vector<Scala
 std::vector<Scalar> ps_exp(const std::vector<Scalar>& a, int degree) {
     std::vector<Scalar> res(degree + 1, Scalar(0));
     Scalar a0 = a.empty() ? Scalar(0) : a[0];
-    res[0] = mymath::precise128::exp(a0);
+    res[0] = mymath::exp(a0);
     for (int i = 1; i <= degree; ++i) {
         Scalar sum = Scalar(0);
         for (int k = 1; k <= i; ++k) {
@@ -177,7 +177,7 @@ std::vector<Scalar> ps_exp(const std::vector<Scalar>& a, int degree) {
 std::vector<Scalar> ps_ln(const std::vector<Scalar>& a, int degree) {
     if (a.empty() || a[0] <= Scalar(0)) throw std::runtime_error("ln of non-positive power series base");
     std::vector<Scalar> res(degree + 1, Scalar(0));
-    res[0] = mymath::precise128::ln(a[0]);
+    res[0] = mymath::ln(a[0]);
     Scalar inv_a0 = Scalar(1) / a[0];
     for (int i = 1; i <= degree; ++i) {
         Scalar sum = Scalar(0);
@@ -195,8 +195,8 @@ void ps_sincos(const std::vector<Scalar>& a, int degree, std::vector<Scalar>& si
     sin_res.assign(degree + 1, Scalar(0));
     cos_res.assign(degree + 1, Scalar(0));
     Scalar a0 = a.empty() ? Scalar(0) : a[0];
-    sin_res[0] = mymath::precise128::sin(a0);
-    cos_res[0] = mymath::precise128::cos(a0);
+    sin_res[0] = mymath::sin(a0);
+    cos_res[0] = mymath::cos(a0);
     for (int i = 1; i <= degree; ++i) {
         Scalar sum_sin = Scalar(0);
         Scalar sum_cos = Scalar(0);
@@ -223,8 +223,8 @@ std::vector<Scalar> ps_cos(const std::vector<Scalar>& a, int degree) {
 }
 
 std::vector<Scalar> ps_pow_const(const std::vector<Scalar>& a, Scalar n, int degree) {
-    if (a.empty() || mymath::precise128::abs(a[0]) < Scalar(1e-15L)) {
-        if (mymath::precise128::abs(Scalar(n)) < Scalar(1e-15L)) {
+    if (a.empty() || mymath::abs(a[0]) < Scalar(1e-15L)) {
+        if (mymath::abs(Scalar(n)) < Scalar(1e-15L)) {
             std::vector<Scalar> res(degree + 1, Scalar(0));
             res[0] = Scalar(1);
             return res;
@@ -232,7 +232,7 @@ std::vector<Scalar> ps_pow_const(const std::vector<Scalar>& a, Scalar n, int deg
 
         int leading = -1;
         for (int i = 0; i < static_cast<int>(a.size()); ++i) {
-            if (mymath::precise128::abs(a[i]) >= Scalar(1e-18L)) {
+            if (mymath::abs(a[i]) >= Scalar(1e-18L)) {
                 leading = i;
                 break;
             }
@@ -268,7 +268,7 @@ std::vector<Scalar> ps_pow_const(const std::vector<Scalar>& a, Scalar n, int deg
         if (is_integer_double(shifted_power, 1e-10)) {
             const int shift = static_cast<int>(round_to_long_long(shifted_power));
             if (shift < 0) {
-                Scalar leading_coeff = mymath::precise128::pow(a[leading], Scalar(n));
+                Scalar leading_coeff = mymath::pow(a[leading], Scalar(n));
                 throw PoleException(shift, leading_coeff.to_long_double());
             }
             if (shift > degree) {
@@ -293,14 +293,14 @@ std::vector<Scalar> ps_pow_const(const std::vector<Scalar>& a, Scalar n, int deg
         if (shifted_power > 1e-10) {
             return std::vector<Scalar>(degree + 1, Scalar(0));
         } else if (shifted_power < -1e-10) {
-            Scalar leading_coeff = mymath::precise128::pow(a[leading], Scalar(n));
+            Scalar leading_coeff = mymath::pow(a[leading], Scalar(n));
             throw PoleException(-1, leading_coeff.to_long_double());
         }
     }
 
     std::vector<Scalar> res(degree + 1, Scalar(0));
     Scalar n_scalar(n);
-    res[0] = mymath::precise128::pow(a[0], n_scalar);
+    res[0] = mymath::pow(a[0], n_scalar);
     Scalar inv_a0 = Scalar(1) / a[0];
     for (int i = 1; i <= degree; ++i) {
         Scalar sum = Scalar(0);
@@ -347,7 +347,7 @@ std::vector<Scalar> ps_tan(const std::vector<Scalar>& a, int degree) {
 std::vector<Scalar> ps_asin(const std::vector<Scalar>& a, int degree) {
     if (a.empty()) return std::vector<Scalar>(degree + 1, Scalar(0));
     std::vector<Scalar> res(degree + 1, Scalar(0));
-    res[0] = mymath::precise128::asin(a[0]);
+    res[0] = mymath::asin(a[0]);
 
     std::vector<Scalar> one_minus_x2(degree + 1, Scalar(0));
     one_minus_x2[0] = Scalar(1);
@@ -361,7 +361,7 @@ std::vector<Scalar> ps_asin(const std::vector<Scalar>& a, int degree) {
 std::vector<Scalar> ps_acos(const std::vector<Scalar>& a, int degree) {
     if (a.empty()) return std::vector<Scalar>(degree + 1, Scalar(0));
     std::vector<Scalar> res(degree + 1, Scalar(0));
-    res[0] = mymath::precise128::acos(a[0]);
+    res[0] = mymath::acos(a[0]);
 
     std::vector<Scalar> one_minus_x2(degree + 1, Scalar(0));
     one_minus_x2[0] = Scalar(1);
@@ -375,7 +375,7 @@ std::vector<Scalar> ps_acos(const std::vector<Scalar>& a, int degree) {
 std::vector<Scalar> ps_atan(const std::vector<Scalar>& a, int degree) {
     if (a.empty()) return std::vector<Scalar>(degree + 1, Scalar(0));
     std::vector<Scalar> res(degree + 1, Scalar(0));
-    res[0] = mymath::precise128::atan(a[0]);
+    res[0] = mymath::atan(a[0]);
 
     std::vector<Scalar> one_plus_x2(degree + 1, Scalar(0));
     one_plus_x2[0] = Scalar(1);
@@ -470,7 +470,7 @@ bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, S
                 bool right_is_const = true;
                 for (int i = 1; i <= degree; ++i) {
                     if (i < static_cast<int>(right_res.size()) &&
-                        mymath::precise128::abs(right_res[i]) >= Scalar(1e-12L)) {
+                        mymath::abs(right_res[i]) >= Scalar(1e-12L)) {
                         right_is_const = false; break;
                     }
                 }

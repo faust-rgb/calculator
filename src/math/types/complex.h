@@ -53,6 +53,9 @@ struct is_numeric : std::is_arithmetic<T> {};
 template <>
 struct is_numeric<float128_t> : std::true_type {};
 
+template <>
+struct is_numeric<PreciseDecimal> : std::true_type {};
+
 template <typename T>
 inline constexpr bool is_numeric_v = is_numeric<T>::value;
 

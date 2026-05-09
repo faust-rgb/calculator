@@ -5,6 +5,7 @@
 
 #include "gamma_beta.h"
 #include "math/core/constants.h"
+#include "math/core/basic_ops.h"
 #include "math/transcendental/trig.h"
 #include "math/transcendental/exp_log.h"
 #include <stdexcept>
@@ -32,21 +33,21 @@ Scalar log_gamma_positive(Scalar x) {
 
     // Lanczos coefficients - 15 coefficients for 128-bit precision
     static const Scalar kLanczosCoefficients[] = {
-        Scalar(from_string("0.9999999999999999999999999999999999999999")),
-        Scalar(from_string("676.5203681218850985673128176371052398234")),
-        Scalar(from_string("-1259.139216722402817395917532711765588354")),
-        Scalar(from_string("771.3234287776530784524277305974442676726")),
-        Scalar(from_string("-176.6150291621405990658475958179519309306")),
-        Scalar(from_string("12.5073432786869048144549024413412222805")),
-        Scalar(from_string("-0.1385710952657201167951380765633685995")),
-        Scalar(from_string("9.9843695780195713327647181666978076955e-6")),
-        Scalar(from_string("1.5056327351493115583406971668418425116e-7")),
-        Scalar(from_string("-2.7211268110346075408493178428210295199e-9")),
-        Scalar(from_string("3.6084167189125978469326729085175444994e-11")),
-        Scalar(from_string("-3.5629806623731574192166799218408037935e-13")),
-        Scalar(from_string("2.5678155144267198066886215286289586998e-15")),
-        Scalar(from_string("-1.2516961743098358383832545968375398664e-17")),
-        Scalar(from_string("3.9036359333545648296399267763867249614e-20")),
+        Scalar("0.9999999999999999999999999999999999999999"),
+        Scalar("676.5203681218850985673128176371052398234"),
+        Scalar("-1259.139216722402817395917532711765588354"),
+        Scalar("771.3234287776530784524277305974442676726"),
+        Scalar("-176.6150291621405990658475958179519309306"),
+        Scalar("12.5073432786869048144549024413412222805"),
+        Scalar("-0.1385710952657201167951380765633685995"),
+        Scalar("9.9843695780195713327647181666978076955e-6"),
+        Scalar("1.5056327351493115583406971668418425116e-7"),
+        Scalar("-2.7211268110346075408493178428210295199e-9"),
+        Scalar("3.6084167189125978469326729085175444994e-11"),
+        Scalar("-3.5629806623731574192166799218408037935e-13"),
+        Scalar("2.5678155144267198066886215286289586998e-15"),
+        Scalar("-1.2516961743098358383832545968375398664e-17"),
+        Scalar("3.9036359333545648296399267763867249614e-20"),
     };
 
     const Scalar z = x - Scalar(1.0L);
@@ -56,8 +57,8 @@ Scalar log_gamma_positive(Scalar x) {
     }
 
     const Scalar t = z + Scalar(7.5L);
-    const Scalar two_pi = Scalar(2.0L) * precise128::pi();
-    return Scalar(0.5L) * precise128::ln(two_pi) + (z + Scalar(0.5L)) * precise128::ln(t) - t + precise128::ln(series);
+    const Scalar two_pi = Scalar(2.0L) * mymath::pi();
+    return Scalar(0.5L) * mymath::ln(two_pi) + (z + Scalar(0.5L)) * mymath::ln(t) - t + mymath::ln(series);
 }
 
 long double finite_or_infinity_from_log(long double log_value) {
@@ -77,7 +78,7 @@ Scalar finite_or_infinity_from_log(Scalar log_value) {
     if (log_value <= kLnDoubleDenormMin) {
         return Scalar(0.0L);
     }
-    return precise128::exp(log_value);
+    return mymath::exp(log_value);
 }
 
 }  // namespace internal
@@ -95,7 +96,7 @@ long double gamma(long double x) {
     }
 
     if (x < 0.5L) {
-        const Scalar reflected_sine = precise128::sin(Scalar(kPi) * Scalar(x));
+        const Scalar reflected_sine = mymath::sin(Scalar(kPi) * Scalar(x));
         if (mymath::abs(reflected_sine) < 1e-12L) {
             throw std::domain_error("gamma is undefined at this input");
         }
@@ -186,18 +187,18 @@ Scalar lgamma(Scalar x) {
         return log_gamma_positive(x);
     }
 
-    const Scalar reflected_sine = precise128::sin(precise128::pi() * x);
-    if (precise128::abs(reflected_sine) < Scalar(1e-35L)) {
+    const Scalar reflected_sine = mymath::sin(mymath::pi() * x);
+    if (mymath::abs(reflected_sine) < Scalar(1e-35L)) {
         throw std::domain_error("lgamma is undefined at this input");
     }
-    return precise128::ln(precise128::pi()) - precise128::ln(precise128::abs(reflected_sine)) - log_gamma_positive(Scalar(1.0L) - x);
+    return mymath::ln(mymath::pi()) - mymath::ln(mymath::abs(reflected_sine)) - log_gamma_positive(Scalar(1.0L) - x);
 }
 
 Scalar inc_gamma(Scalar a, Scalar x) {
     if (x <= Scalar(0.0L)) return Scalar(0.0L);
     if (a <= Scalar(0.0L)) return Scalar(1.0L);
 
-    const Scalar log_ax = a * precise128::ln(x) - x - log_gamma_positive(a);
+    const Scalar log_ax = a * mymath::ln(x) - x - log_gamma_positive(a);
     const Scalar prefix = finite_or_infinity_from_log(log_ax);
 
     if (x < a + Scalar(1.0L)) {
@@ -206,7 +207,7 @@ Scalar inc_gamma(Scalar a, Scalar x) {
         for (int n = 1; n < 300; ++n) {
             term *= x / (a + Scalar(static_cast<long double>(n)));
             sum += term;
-            if (precise128::abs(term) < precise128::abs(sum) * Scalar(1e-35L)) break;
+            if (mymath::abs(term) < mymath::abs(sum) * Scalar(1e-35L)) break;
         }
         return sum * prefix;
     } else {
@@ -219,13 +220,13 @@ Scalar inc_gamma(Scalar a, Scalar x) {
             Scalar an = -Scalar(static_cast<long double>(i)) * (Scalar(static_cast<long double>(i)) - a);
             b += Scalar(2.0L);
             d = an * d + b;
-            if (precise128::abs(d) < tiny) d = tiny;
+            if (mymath::abs(d) < tiny) d = tiny;
             c = b + an / c;
-            if (precise128::abs(c) < tiny) c = tiny;
+            if (mymath::abs(c) < tiny) c = tiny;
             d = Scalar(1.0L) / d;
             Scalar delta = c * d;
             h *= delta;
-            if (precise128::abs(delta - Scalar(1.0L)) < Scalar(1e-35L)) break;
+            if (mymath::abs(delta - Scalar(1.0L)) < Scalar(1e-35L)) break;
         }
         return Scalar(1.0L) - h * prefix;
     }
@@ -313,7 +314,7 @@ Scalar inc_beta(Scalar a, Scalar b, Scalar x) {
     }
 
     const Scalar log_beta = log_gamma_positive(a) + log_gamma_positive(b) - log_gamma_positive(a + b);
-    const Scalar prefix = precise128::exp(a * precise128::ln(x) + b * precise128::ln(Scalar(1.0L) - x) - log_beta) / a;
+    const Scalar prefix = mymath::exp(a * mymath::ln(x) + b * mymath::ln(Scalar(1.0L) - x) - log_beta) / a;
 
     const Scalar tiny = Scalar(1e-35L);
     Scalar h = Scalar(1.0L);
@@ -325,23 +326,23 @@ Scalar inc_beta(Scalar a, Scalar b, Scalar x) {
         Scalar num = m_d * (b - m_d) * x / ((a + Scalar(2.0L) * m_d - Scalar(1.0L)) * (a + Scalar(2.0L) * m_d));
 
         d = Scalar(1.0L) + num * d;
-        if (precise128::abs(d) < tiny) d = tiny;
+        if (mymath::abs(d) < tiny) d = tiny;
         c = Scalar(1.0L) + num / c;
-        if (precise128::abs(c) < tiny) c = tiny;
+        if (mymath::abs(c) < tiny) c = tiny;
         d = Scalar(1.0L) / d;
         h *= c * d;
 
         num = -(a + m_d) * (a + b + m_d) * x / ((a + Scalar(2.0L) * m_d) * (a + Scalar(2.0L) * m_d + Scalar(1.0L)));
 
         d = Scalar(1.0L) + num * d;
-        if (precise128::abs(d) < tiny) d = tiny;
+        if (mymath::abs(d) < tiny) d = tiny;
         c = Scalar(1.0L) + num / c;
-        if (precise128::abs(c) < tiny) c = tiny;
+        if (mymath::abs(c) < tiny) c = tiny;
         d = Scalar(1.0L) / d;
         Scalar delta = c * d;
         h *= delta;
 
-        if (precise128::abs(delta - Scalar(1.0L)) < Scalar(1e-35L)) break;
+        if (mymath::abs(delta - Scalar(1.0L)) < Scalar(1e-35L)) break;
     }
 
     return prefix * h;

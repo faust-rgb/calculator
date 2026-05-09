@@ -214,7 +214,7 @@ bool handle_optimization_command(const OptimizationContext& ctx,
     // 识别整数变量索引 - 使用 Scalar 进行内部比较
     std::vector<std::size_t> integer_indices;
     for (std::size_t i = 0; i < variable_count; ++i) {
-        if (mymath::precise128::abs(Scalar(integrality[i])) > planning_tolerance) integer_indices.push_back(i);
+        if (mymath::abs(Scalar(integrality[i])) > planning_tolerance) integer_indices.push_back(i);
     }
 
     std::vector<Scalar> final_solution;

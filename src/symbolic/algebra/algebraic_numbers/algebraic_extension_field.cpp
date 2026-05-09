@@ -79,7 +79,7 @@ bool AlgebraicExtensionField::is_one(const Element& elem) const {
     if (!SymbolicPolynomial::coeff_is_zero(elem.coefficients[0])) {
         // 检查系数是否为 1
         Scalar val = Scalar(0);
-        if (elem.coefficients[0].is_number(&val) && mymath::precise128::abs(val - Scalar(1)) < Scalar(1e-12)) {
+        if (elem.coefficients[0].is_number(&val) && mymath::abs(val - Scalar(1)) < Scalar(1e-12)) {
             // 检查其他系数是否为零
             for (int i = 1; i < degree_; ++i) {
                 if (!SymbolicPolynomial::coeff_is_zero(elem.coefficients[i])) {
@@ -177,7 +177,7 @@ bool AlgebraicExtensionField::inverse(const Element& a, Element* result) const {
     // 检查 GCD 是否为常数
     if (g.degree() == 0) {
         Scalar g_val = Scalar(0);
-        if (g.coefficient(0).is_number(&g_val) && mymath::precise128::abs(g_val) > Scalar(1e-12)) {
+        if (g.coefficient(0).is_number(&g_val) && mymath::abs(g_val) > Scalar(1e-12)) {
             // 归一化
             SymbolicExpression g_inv = SymbolicExpression::number((Scalar(1) / g_val));
             *result = zero();
@@ -620,10 +620,10 @@ bool AlgebraicExtensionField::detect_nested_algebraic_transcendental(
             Scalar exp_val = Scalar(0);
             if (exp.is_number(&exp_val)) {
                 Scalar int_part;
-                if (mymath::precise128::abs(mymath::modf(exp_val, &int_part)) > Scalar(1e-12)) {
+                if (mymath::abs(mymath::modf(exp_val, &int_part)) > Scalar(1e-12)) {
                     // 分数幂 -> 代数扩展
                     AlgebraicExtensionInfo ext = AlgebraicExtensionInfo::nth_root(
-                        base, static_cast<int>(mymath::precise128::round(Scalar(1) / (exp_val - int_part))), x_var);
+                        base, static_cast<int>(mymath::round(Scalar(1) / (exp_val - int_part))), x_var);
                     algebraic_exts->push_back(ext);
                 }
             }
