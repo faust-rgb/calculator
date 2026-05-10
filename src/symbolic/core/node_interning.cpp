@@ -19,6 +19,7 @@
 #include <cctype>
 #include <cstring>
 #include <iomanip>
+#include <limits>
 #include <list>
 #include <memory>
 #include <sstream>
@@ -33,6 +34,58 @@
 namespace symbolic_expression_internal {
 
 namespace {
+
+std::string trim_trailing_fraction_zeros(std::string text) {
+    const std::size_t dot = text.find('.');
+    if (dot == std::string::npos) return text;
+    while (!text.empty() && text.back() == '0') text.pop_back();
+    if (!text.empty() && text.back() == '.') text.pop_back();
+    if (text == "-0") return "0";
+    return text.empty() ? "0" : text;
+}
+
+std::string format_decimal_truncated(Scalar value, int precision) {
+    const bool negative = value < Scalar(0.0L);
+    if (negative) value = -value;
+
+    std::string text = value.to_string();
+    std::string digits;
+    digits.reserve(text.size());
+    std::size_t dot_digits = std::string::npos;
+    for (char ch : text) {
+        if (ch == '.') {
+            dot_digits = digits.size();
+        } else if (std::isdigit(static_cast<unsigned char>(ch))) {
+            digits.push_back(ch);
+        }
+    }
+    if (digits.empty()) return "0";
+    if (dot_digits == std::string::npos) dot_digits = digits.size();
+
+    std::size_t first_significant = 0;
+    while (first_significant < digits.size() && digits[first_significant] == '0') {
+        ++first_significant;
+    }
+    if (first_significant == digits.size()) return "0";
+
+    const std::size_t keep_until =
+        std::min(digits.size(), first_significant + static_cast<std::size_t>(precision));
+    const std::string kept = digits.substr(0, keep_until);
+
+    std::string result;
+    if (negative) result.push_back('-');
+    if (dot_digits == 0) {
+        result += "0.";
+        result += kept;
+    } else if (kept.size() <= dot_digits) {
+        result += kept;
+    } else {
+        result += kept.substr(0, dot_digits);
+        result.push_back('.');
+        result += kept.substr(dot_digits);
+    }
+    return trim_trailing_fraction_zeros(result);
+}
 
 std::string long_double_bits_key(long double value) {
     unsigned char bytes[sizeof(long double)] = {};
@@ -224,10 +277,14 @@ std::string format_number(Scalar value) {
         return std::to_string(n) + "/" + std::to_string(d);
     }
 
-    std::ostringstream out;
-    out.precision(mutable_display_precision());
-    out << value;
-    return out.str();
+    const std::string symbolic = format_symbolic_number(value);
+    if (symbolic.find_first_not_of("-0123456789.") != std::string::npos) {
+        const bool pi_form = symbolic.find("pi") != std::string::npos;
+        if (!pi_form || mymath::abs(value - mymath::scalar_pi<Scalar>()) < Scalar(1e-9L)) {
+            return symbolic;
+        }
+    }
+    return format_decimal_truncated(value, mutable_display_precision());
 }
 
 // ============================================================================

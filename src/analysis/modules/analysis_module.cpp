@@ -68,7 +68,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
             : ctx.parse_decimal(point_arg);
         Scalar limit_value = 0.0L;
         try {
-            limit_value = ctx.normalize_result(analysis.limit(point_value, dir));
+            limit_value = analysis.limit(point_value, dir);
         } catch (const std::runtime_error& ex) {
             const std::string message = ex.what();
             if (message.find("limit does not exist") != std::string::npos) {
@@ -76,10 +76,16 @@ bool handle_analysis_command(const AnalysisContext& ctx,
             }
             throw;
         }
-        if (!mymath::isfinite(limit_value)) {
+        
+        if (mymath::isnan(limit_value)) {
             throw std::runtime_error("limit did not converge");
         }
-        *output = format_decimal(limit_value);
+        
+        if (!mymath::isfinite(limit_value)) {
+            *output = (limit_value > 0.0L) ? "inf" : "-inf";
+        } else {
+            *output = format_decimal(ctx.normalize_result(limit_value));
+        }
         return true;
     }
 

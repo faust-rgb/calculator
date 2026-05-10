@@ -144,8 +144,13 @@ inline T default_absolute_tolerance() {
  */
 template <typename T>
 inline T newton_tolerance() {
-    // Newton 容差设为 epsilon^(1/3) * 10
-    return cbrt_epsilon<T>() * T(10);
+    if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        // 对于 PreciseDecimal，使用更严格的容差
+        return PreciseDecimal("1e-12");
+    } else {
+        // Newton 容差设为 epsilon^(1/3) * 10
+        return cbrt_epsilon<T>() * T(10);
+    }
 }
 
 /**

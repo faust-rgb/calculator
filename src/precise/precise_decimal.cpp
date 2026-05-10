@@ -2090,7 +2090,7 @@ bool try_integral_exponent(const PreciseDecimal& value, long long* exponent) {
 bool try_thirds_exponent(const PreciseDecimal& value, long long* thirds) {
     PreciseDecimal scaled = value * PreciseDecimal(3LL);
     PreciseDecimal rounded = precise::round(scaled);
-    if (precise::abs(scaled - rounded) > PreciseDecimal("1e-25")) return false;
+    if (precise::abs(scaled - rounded) > PreciseDecimal("1e-10")) return false;
     *thirds = static_cast<long long>(rounded.to_double());
     return true;
 }

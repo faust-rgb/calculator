@@ -772,11 +772,7 @@ T condition_number(const TMatrix<T>& matrix) {
 
     const std::size_t full_rank = matrix.rows < matrix.cols ? matrix.rows : matrix.cols;
     if (effective_rank < full_rank) {
-        if constexpr (std::is_same_v<T, PreciseDecimal>) {
-            return T("1e100");
-        } else {
-            return T(mymath::infinity());
-        }
+        return T(mymath::infinity());
     }
 
     const T tolerance = matrix_tolerance(matrix);
@@ -813,11 +809,7 @@ T condition_number(const TMatrix<T>& matrix) {
     }
 
     if (is_infinite) {
-        if constexpr (std::is_same_v<T, PreciseDecimal>) {
-            return T("1e100");
-        } else {
-            return T(mymath::infinity());
-        }
+        return T(mymath::infinity());
     }
     return largest / smallest;
 }
@@ -1105,8 +1097,7 @@ template <typename T>
 T rank(const TMatrix<T>& matrix) {
     TMatrix<T> reduced = matrix;
     if constexpr (std::is_same_v<T, PreciseDecimal> || std::is_same_v<T, mymath::Scalar>) {
-        const T scale = max_abs_entry(matrix);
-        const T tolerance = scale * T("1e-8");
+        const T tolerance = matrix_tolerance(matrix);
         std::size_t rank_count = 0;
         for (std::size_t col = 0; col < reduced.cols && rank_count < reduced.rows; ++col) {
             std::size_t best_row = rank_count;

@@ -56,6 +56,29 @@ void trim_trailing_zeros_scalar(std::vector<Scalar>* coefficients) {
     }
 }
 
+std::vector<Scalar> interpolate_polynomial(const std::vector<Scalar>& x_samples,
+                                           const std::vector<Scalar>& y_samples) {
+    std::vector<Scalar> coefficients(1, Scalar(0.0L));
+    for (std::size_t i = 0; i < x_samples.size(); ++i) {
+        std::vector<Scalar> basis(1, Scalar(1.0L));
+        Scalar denominator = Scalar(1.0L);
+        for (std::size_t j = 0; j < x_samples.size(); ++j) {
+            if (i == j) continue;
+            const Scalar delta = x_samples[i] - x_samples[j];
+            if (mymath::is_near_zero(delta, kPolynomialEpsLD)) {
+                throw std::runtime_error("polynomial_fit requires distinct x samples");
+            }
+            basis = polynomial_multiply(basis, {-x_samples[j], Scalar(1.0L)});
+            denominator *= delta;
+        }
+        const Scalar scale = y_samples[i] / denominator;
+        for (Scalar& coefficient : basis) coefficient *= scale;
+        coefficients = polynomial_add(coefficients, basis);
+    }
+    trim_trailing_zeros(&coefficients);
+    return coefficients;
+}
+
 std::vector<Scalar> to_scalar(const std::vector<Scalar>& coeffs) {
     std::vector<Scalar> result(coeffs.size());
     for (std::size_t i = 0; i < coeffs.size(); ++i) {
@@ -666,8 +689,10 @@ std::vector<Scalar> polynomial_fit(const std::vector<Scalar>& x_samples,
     if (scale < Scalar(1e-9L)) scale = Scalar(1.0L);
 
     matrix::Matrix A(n, m_vars);
+    std::vector<Scalar> scaled_x(n);
     for (std::size_t i = 0; i < n; ++i) {
         const Scalar sx = (x_samples[i] - center) / scale;
+        scaled_x[i] = sx;
         Scalar p = Scalar(1.0L);
         for (std::size_t j = 0; j < m_vars; ++j) {
             A.at(i, j) = static_cast<long double>(p);
@@ -680,9 +705,13 @@ std::vector<Scalar> polynomial_fit(const std::vector<Scalar>& x_samples,
     }
     matrix::Matrix b = matrix::Matrix::vector(y_samples_scalar);
     try {
-        matrix::Matrix solution = matrix::least_squares(A, b);
         std::vector<Scalar> scaled_coeffs(m_vars);
-        for (std::size_t i = 0; i < m_vars; ++i) scaled_coeffs[i] = solution.at(i, 0);
+        if (n == m_vars) {
+            scaled_coeffs = interpolate_polynomial(scaled_x, y_samples_scalar);
+        } else {
+            matrix::Matrix solution = matrix::least_squares(A, b);
+            for (std::size_t i = 0; i < m_vars; ++i) scaled_coeffs[i] = solution.at(i, 0);
+        }
         const std::vector<Scalar> linear_map = {-center / scale, 1.0L / scale};
         std::vector<Scalar> coefficients = polynomial_compose(scaled_coeffs, linear_map);
         trim_trailing_zeros(&coefficients);

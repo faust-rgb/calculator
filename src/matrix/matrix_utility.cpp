@@ -7,6 +7,7 @@
 #include "precise/precise_decimal.h"
 #include "app/scalar_type.h"
 #include "core/common/display_precision.h"
+#include "core/services/format_utils.h"
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
@@ -36,18 +37,33 @@ T t_sqrt(T v) {
 
 template <typename T>
 std::string format_number(T value) {
-    if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        // Apply display precision for PreciseDecimal
+    long double ld_val = static_cast<long double>(value);
+    if (mymath::is_near_zero(ld_val, 1e-10)) return "0";
+
+    // Check if value is close to an integer
+    long double rounded = std::round(ld_val);
+    if (std::abs(ld_val - rounded) < 1e-9) {
         std::ostringstream out;
-        out << std::setprecision(mutable_display_precision()) << static_cast<long double>(value);
+        out << std::fixed << std::setprecision(0) << rounded;
         return out.str();
     }
-    else {
-        if (mymath::is_near_zero(static_cast<long double>(value), 1e-10)) value = T(0);
-        std::ostringstream out;
-        out << std::setprecision(mutable_display_precision()) << static_cast<long double>(value);
-        return out.str();
+
+    // Check if value is close to a simple fraction (denominator <= 10)
+    for (int den = 2; den <= 10; ++den) {
+        long double scaled = ld_val * den;
+        long double num = std::round(scaled);
+        if (std::abs(scaled - num) < 1e-9) {
+            // Found a simple fraction, output the exact decimal
+            long double exact_val = num / den;
+            std::ostringstream out;
+            out << std::setprecision(mutable_display_precision()) << exact_val;
+            return out.str();
+        }
     }
+
+    std::ostringstream out;
+    out << std::setprecision(mutable_display_precision()) << ld_val;
+    return out.str();
 }
 
 template <typename T>

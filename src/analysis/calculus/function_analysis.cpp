@@ -52,9 +52,9 @@ Scalar t_pow(const Scalar& base, const Scalar& exponent) { return mymath::pow(ba
 /** @brief 泛型有限值检查 */
 
 bool t_isfinite(const Scalar& val) {
-    if constexpr (std::is_same_v<Scalar, PreciseDecimal>) {
-        return !val.is_infinity() && !val.is_nan_value();
-    }
+    //if constexpr (std::is_same_v<Scalar, PreciseDecimal>) {
+    //    return !val.is_infinity() && !val.is_nan_value();
+    //}
     return mymath::isfinite(val);
 }
 
@@ -958,16 +958,18 @@ Scalar handle_pole_limit(int shift, Scalar leading_coefficient, int direction) {
     if (direction == 0) {
         // 双侧极限：只有当 shift 为偶数时才存在
         if (shift % 2 == 0) {
-            throw std::runtime_error("limit diverges to infinity");
+            return (leading_coefficient > 0.0L) ? t_infinity() : -t_infinity();
         } else {
             throw std::runtime_error("two-sided limit does not exist (pole with odd shift)");
         }
     } else if (direction == 1) {
         // 右极限：(x - x0) > 0，符号不变
-        throw std::runtime_error("limit diverges to infinity");
+        return (leading_coefficient > 0.0L) ? t_infinity() : -t_infinity();
     } else {
         // 左极限：(x - x0) < 0，奇数 shift 时符号翻转
-        throw std::runtime_error("limit diverges to infinity");
+        bool flip_sign = (shift % 2 != 0);
+        Scalar effective_c = flip_sign ? -leading_coefficient : leading_coefficient;
+        return (effective_c > 0.0L) ? t_infinity() : -t_infinity();
     }
 }
 
@@ -1098,7 +1100,12 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
             return true;
         }
         if (is_infinite_probe(kind)) {
-            throw std::runtime_error("limit diverges to infinity");
+            if (kind == SymbolicLimitProbeKind::kPositiveInfinity) {
+                *result = t_infinity();
+            } else {
+                *result = -t_infinity();
+            }
+            return true;
         }
     }
 
@@ -1135,7 +1142,8 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
     }
 
     series_ops::SeriesContext ctx;
-    ctx.evaluate_at = [](const SymbolicExpression& e, const std::string& /*v*/, Scalar /*p*/) {
+    ctx.evaluate_at = [](const SymbolicExpression& e, const std::string& v, Scalar p) {
+        if (e.node_->type == NodeType::kVariable && e.node_->text == v) return p;
         Scalar val = 0.0L;
         if (e.is_number(&val)) return val;
         return Scalar(0.0L);
@@ -1476,11 +1484,17 @@ Scalar FunctionAnalysis::compute_numerical_limit(Scalar x, int direction) const 
         FunctionAnalysis analysis_128("t_limit_inf_subst");
         analysis_128.define(substituted.to_string());
 
-        // Compute limit as t -> 0 using float128 precision
+        // Compute limit as t -> 0+ using float128 precision
         try {
-            Scalar result_128 = analysis_128.limit(Scalar(0.0L), direction);
+            Scalar result_128 = analysis_128.limit(Scalar(0.0L), 1);
             if (mymath::isfinite(result_128)) {
                 return result_128;
+            }
+        } catch (const std::exception& e) {
+            std::string msg = e.what();
+            if (msg.find("infinity") != std::string::npos) {
+                if (msg.find("negative") != std::string::npos) return -t_infinity();
+                return t_infinity();
             }
         } catch (...) {
             // Fall through to direct computation
@@ -1513,7 +1527,7 @@ direct_computation:
             if (!t_is_effective_infinity_point(x_target)) {
                 sample_x = x_target + Scalar(static_cast<long long>(side)) * h;
             } else {
-                sample_x = (x_target > Scalar(0.0L) ? Scalar(1.0L) : Scalar(-1.0L)) / h;
+                sample_x = (x_target > 0.0L ? 1.0L : -1.0L) / h;
             }
 
             Scalar val = Scalar(0.0L);
@@ -1530,8 +1544,8 @@ direct_computation:
 
             if (!mymath::isfinite(val)) {
                 if (have_prev && mymath::isfinite(prev_val)) {
-                    if (prev_val > 1e20L) return Scalar(mymath::infinity());
-                    else if (prev_val < -1e20L) return Scalar(-mymath::infinity());
+                    if (prev_val > 1e15L) return t_infinity();
+                    else if (prev_val < -1e15L) return -t_infinity();
                 }
                 adaptive_h *= 0.5L;
                 consecutive_bad++;
@@ -1546,17 +1560,14 @@ direct_computation:
                 total_amplitude += diff;
                 if ((val > 0.0L && prev_val < 0.0L) || (val < 0.0L && prev_val > 0.0L)) {
                     oscillation_count++;
-                    if (oscillation_count >= 6) { // 稍微放宽震荡检测
+                    if (oscillation_count >= 4) { // 降低门槛，4 次变号即视为震荡
                         const Scalar avg_amp = total_amplitude / (row + 1);
                         if (avg_amp > 1e-2L) {
                             throw std::runtime_error("limit does not exist (oscillation)");
                         }
-                        adaptive_h *= 0.25L;
-                        oscillation_count = 0;
                     }
-                } else {
-                    oscillation_count = std::max(0, oscillation_count - 1);
                 }
+                // 移除了激进的 oscillation_count 递减，以更好地检测稀疏震荡
             }
             prev_val = val;
             have_prev = true;
@@ -1599,10 +1610,22 @@ direct_computation:
         }
 
         if (!have_best) throw std::runtime_error("limit did not converge");
+        
+        // 最终收敛性检查
+        if (best_error > 1e-3L) {
+            if (mymath::abs(best_value) > 1e10L) {
+                return (best_value > 0.0L) ? t_infinity() : -t_infinity();
+            }
+            throw std::runtime_error("limit did not converge (insufficient precision)");
+        }
+        
         return best_value;
     };
 
     if (direction == 0) {
+        if (t_is_effective_infinity_point(x)) {
+            return compute_limit_at(x, 1);
+        }
         Scalar left = compute_limit_at(x, -1);
         Scalar right = compute_limit_at(x, 1);
         if (mymath::abs(left - right) > 1e-7L && mymath::isfinite(left) && mymath::isfinite(right)) {
