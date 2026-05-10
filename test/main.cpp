@@ -48,9 +48,13 @@ int main() {
     test_suites::run_symbolic_tests(total_passed, total_failed);
 
     // 运行 Risch 算法测试
-    //std::cout << "Running Risch Algorithm Tests..." << std::endl;
+    std::cout << "Running Risch Algorithm Tests..." << std::endl;
     test_suites::test_risch();
+    std::cout << "Risch Algorithm Tests Completed." << std::endl;
+    
+    std::cout << "Running Risch Advanced Tests..." << std::endl;
     test_suites::run_risch_advanced_tests();
+    std::cout << "Risch Advanced Tests Completed." << std::endl;
     total_passed++; 
 
     // 运行分析测试：测试函数分析、微分方程求解等

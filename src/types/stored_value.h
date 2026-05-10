@@ -21,6 +21,8 @@
 #include <string>
 #include <vector>
 
+struct PreciseDecimal;
+
 /**
  * @struct StoredValue
  * @brief 计算器中存储的值
@@ -48,6 +50,7 @@ struct StoredValue {
     std::string string_value;            ///< 字符串值
     mutable std::string symbolic_text;   ///< 符号表达式文本（mutable 支持延迟计算）
     std::string precise_decimal_text;    ///< 精确小数文本
+    std::shared_ptr<PreciseDecimal> precise_decimal_value; ///< 缓存的高精度对象
     matrix::Matrix matrix;               ///< 矩阵值
     std::shared_ptr<std::vector<StoredValue>> list_value;       ///< 脚本列表值
     std::shared_ptr<std::map<std::string, StoredValue>> dict_value; ///< 脚本字典值

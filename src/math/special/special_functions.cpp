@@ -79,23 +79,14 @@ Scalar finite_or_infinity_from_log(Scalar log_value) {
     if (log_value >= kLnDoubleMax) {
         return Scalar(infinity());
     }
-    if (log_value <= kLnDoubleDenormMin) {
-        return Scalar(0.0L);
-    }
-    // For very small negative log values, construct the result directly
-    // to avoid precision loss in exp() calculation
+
     long double log_val_ld = static_cast<long double>(log_value);
-    if (log_val_ld < -300.0L) {
-        // Result would be smaller than 1e-300, which is essentially 0 for most purposes
-        // But we need to preserve it for beta function calculations
-        // Use scientific notation to construct the value
-        int exponent = static_cast<int>(std::floor(log_val_ld / std::log(10.0L)));
-        long double mantissa_log = log_val_ld - exponent * std::log(10.0L);
-        long double mantissa = std::exp(mantissa_log);
-        // Construct as mantissa * 10^exponent
-        std::ostringstream oss;
-        oss << std::scientific << std::setprecision(35) << mantissa << "e" << exponent;
-        return Scalar(oss.str());
+    if (mymath::abs(log_val_ld) > 100.0L) {
+        const long double log10_ld = std::log(10.0L);
+        const int decimal_exponent = static_cast<int>(std::floor(log_val_ld / log10_ld));
+        const Scalar reduced_log = log_value - Scalar(static_cast<long double>(decimal_exponent)) * mymath::ln(Scalar(10.0L));
+        const Scalar mantissa = mymath::exp(reduced_log);
+        return Scalar(mantissa.to_string() + "e" + std::to_string(decimal_exponent));
     }
     return mymath::exp(log_value);
 }

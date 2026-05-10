@@ -43,6 +43,8 @@ int run_core_basic_tests(int& passed, int& failed) {
     Calculator calculator;
     using namespace test_helpers;
 
+    std::cout << "DEBUG: Starting core basic tests..." << std::endl;
+
     // ========== 成功路径测试 ==========
     // 验证表达式解析和数值函数都能返回合理结果
     const std::vector<SuccessCase> success_cases = {
@@ -209,6 +211,7 @@ int run_core_basic_tests(int& passed, int& failed) {
 
     // 遍历所有成功测试用例，验证计算结果
     for (const auto& test : success_cases) {
+        std::cout << "DEBUG: Testing " << test.expression << std::endl;
         try {
             const auto actual = calculator.evaluate(test.expression);
             if (nearly_equal(actual, test.expected)) {
@@ -225,6 +228,7 @@ int run_core_basic_tests(int& passed, int& failed) {
         }
     }
 
+    std::cout << "DEBUG: Testing gamma(170)..." << std::endl;
     // 测试大参数Gamma函数的数值稳定性
     try {
         const auto actual = calculator.evaluate("gamma(170)");

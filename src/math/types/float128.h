@@ -55,6 +55,11 @@ struct float128_t {
     explicit operator long long() const { return static_cast<long long>(hi + lo); }
     explicit operator std::size_t() const { return static_cast<std::size_t>(hi + lo); }
 
+    // Check if value is zero
+    bool is_zero() const {
+        return hi == 0.0L && lo == 0.0L;
+    }
+
     // String conversion (declaration only, implemented after to_string function)
     std::string to_string() const;
 

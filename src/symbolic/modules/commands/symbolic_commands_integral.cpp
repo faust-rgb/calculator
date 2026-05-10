@@ -18,6 +18,9 @@ namespace {
 using namespace symbolic_expression_internal;
 using Scalar = mymath::Scalar;
 
+constexpr int kDefaultLineIntegralSubdivisions = 1024;
+constexpr int kDefaultSurfaceIntegralSubdivisions = 32;
+
 std::string with_constant(const SymbolicExpression& expression) {
     return expression.simplify().to_string() + " + C";
 }
@@ -84,7 +87,8 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
                     return std::pair<Scalar, Scalar>{x0, x1};
                 }
             };
-            *output = format_symbolic_numeric(ctx, integrator.integrate(bounds, {1024}));
+            *output = format_symbolic_numeric(
+                ctx, integrator.integrate(bounds, {kDefaultLineIntegralSubdivisions}));
             return true;
         }
 
@@ -118,7 +122,9 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
         const std::string var = trim_copy(arguments[2]);
         const Scalar t0 = ctx.parse_decimal(arguments[3]);
         const Scalar t1 = ctx.parse_decimal(arguments[4]);
-        const int subdivisions = arguments.size() >= 6 ? static_cast<int>(ctx.parse_decimal(arguments[5])) : 1024;
+        const int subdivisions = arguments.size() >= 6
+            ? static_cast<int>(ctx.parse_decimal(arguments[5]))
+            : kDefaultLineIntegralSubdivisions;
 
         if (trim_copy(arguments[0]).size() >= 2 && trim_copy(arguments[0]).front() == '[') {
             const std::vector<std::string> field = vector_literal_components(arguments[0]);
@@ -176,8 +182,12 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
         const std::string v_var = trim_copy(arguments[5]);
         const Scalar v0 = ctx.parse_decimal(arguments[6]);
         const Scalar v1 = ctx.parse_decimal(arguments[7]);
-        const int nu = arguments.size() >= 9 ? static_cast<int>(ctx.parse_decimal(arguments[8])) : 256;
-        const int nv = arguments.size() >= 10 ? static_cast<int>(ctx.parse_decimal(arguments[9])) : 256;
+        const int nu = arguments.size() >= 9
+            ? static_cast<int>(ctx.parse_decimal(arguments[8]))
+            : kDefaultSurfaceIntegralSubdivisions;
+        const int nv = arguments.size() >= 10
+            ? static_cast<int>(ctx.parse_decimal(arguments[9]))
+            : kDefaultSurfaceIntegralSubdivisions;
 
         if (trim_copy(arguments[0]).size() >= 2 && trim_copy(arguments[0]).front() == '[') {
             const std::vector<std::string> field = vector_literal_components(arguments[0]);

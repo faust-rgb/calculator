@@ -230,8 +230,10 @@ SymbolicExpression simplify_lightweight(const SymbolicExpression& expression) {
         case NodeType::kDivide:
             left = simplify_lightweight(SymbolicExpression(node->left));
             right = simplify_lightweight(SymbolicExpression(node->right));
-            if (left.is_number(&left_value) && right.is_number(&right_value))
+            if (left.is_number(&left_value) && right.is_number(&right_value)) {
+                if (expr_is_zero(right)) return make_divide(left, right);
                 return SymbolicExpression::number(left_value / right_value);
+            }
             if (expr_is_zero(left)) return SymbolicExpression::number(Scalar(0));
             if (expr_is_one(right)) return left;
             return make_divide(left, right);
@@ -872,7 +874,10 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
 
         case NodeType::kDivide:
-            if (left.is_number(&left_value) && right.is_number(&right_value)) return SymbolicExpression::number(left_value / right_value);
+            if (left.is_number(&left_value) && right.is_number(&right_value)) {
+                if (expr_is_zero(right)) return make_divide(left, right);
+                return SymbolicExpression::number(left_value / right_value);
+            }
             if (expr_is_zero(left)) return SymbolicExpression::number(Scalar(0));
             if (expr_is_one(right)) return left;
             {

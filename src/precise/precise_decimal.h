@@ -48,6 +48,250 @@ struct PrecisionContext {
 };
 
 /**
+ * @struct ScopedPrecision
+ * @brief 局部高精度上下文（RAII 机制），用于自动管理计算时的保护位
+ */
+struct ScopedPrecision {
+    int old_scale;
+    ScopedPrecision(int extra_scale) {
+        old_scale = PrecisionContext::get_default_scale();
+        PrecisionContext::set_default_scale(old_scale + extra_scale);
+    }
+    ~ScopedPrecision() {
+        PrecisionContext::set_default_scale(old_scale);
+    }
+};
+
+/**
+ * @struct BigIntData
+ * @brief 具有小对象优化（SSO）的大整数存储结构
+ *
+ * 当数据较小时直接存储在栈上，避免堆分配。
+ */
+struct BigIntData {
+    static constexpr size_t SSO_CAP = 16;
+    uint32_t* ptr;
+    uint32_t size_;
+    uint32_t capacity_;
+    uint32_t sso[SSO_CAP];
+
+    BigIntData();
+    BigIntData(size_t n, uint32_t val = 0);
+    BigIntData(const BigIntData& other);
+    BigIntData(BigIntData&& other) noexcept;
+    BigIntData(std::initializer_list<uint32_t> list);
+    BigIntData(const uint32_t* first, const uint32_t* last);
+    ~BigIntData();
+
+    BigIntData& operator=(const BigIntData& other);
+    BigIntData& operator=(BigIntData&& other) noexcept;
+
+    size_t size() const { return size_; }
+    bool empty() const { return size_ == 0; }
+    uint32_t& operator[](size_t i) { return ptr[i]; }
+    const uint32_t& operator[](size_t i) const { return ptr[i]; }
+    uint32_t& back() { return ptr[size_ - 1]; }
+    const uint32_t& back() const { return ptr[size_ - 1]; }
+
+    void push_back(uint32_t val);
+    void pop_back() { if (size_ > 0) size_--; }
+    void clear() { size_ = 0; }
+    void reserve(size_t n);
+    void resize(size_t n, uint32_t val = 0);
+
+    uint32_t* begin() { return ptr; }
+    const uint32_t* begin() const { return ptr; }
+    uint32_t* end() { return ptr + size_; }
+    const uint32_t* end() const { return ptr + size_; }
+    uint32_t* data() { return ptr; }
+    const uint32_t* data() const { return ptr; }
+
+    void erase(const uint32_t* first, const uint32_t* last);
+    void insert(uint32_t* pos, const uint32_t* first, const uint32_t* last);
+    void insert(uint32_t* pos, size_t count, uint32_t val);
+
+    /**
+     * @brief 获取当前容量
+     */
+    size_t capacity() const { return capacity_; }
+};
+
+/**
+ * @class BigIntArena
+ * @brief 简单的内存池，用于 NTT 等大规模运算
+ *
+ * 预分配一大块连续内存，通过偏移量管理内部的小型数组需求。
+ * 避免频繁的 new/delete 调用。
+ */
+class BigIntArena {
+public:
+    static constexpr size_t DEFAULT_SIZE = 1024 * 1024;  // 4MB (1M uint32_t)
+
+    explicit BigIntArena(size_t initial_size = DEFAULT_SIZE)
+        : buffer_(new uint32_t[initial_size]), capacity_(initial_size), offset_(0) {}
+
+    ~BigIntArena() { delete[] buffer_; }
+
+    // 禁止拷贝
+    BigIntArena(const BigIntArena&) = delete;
+    BigIntArena& operator=(const BigIntArena&) = delete;
+
+    // 允许移动
+    BigIntArena(BigIntArena&& other) noexcept
+        : buffer_(other.buffer_), capacity_(other.capacity_), offset_(other.offset_) {
+        other.buffer_ = nullptr;
+        other.capacity_ = 0;
+        other.offset_ = 0;
+    }
+
+    BigIntArena& operator=(BigIntArena&& other) noexcept {
+        if (this != &other) {
+            delete[] buffer_;
+            buffer_ = other.buffer_;
+            capacity_ = other.capacity_;
+            offset_ = other.offset_;
+            other.buffer_ = nullptr;
+            other.capacity_ = 0;
+            other.offset_ = 0;
+        }
+        return *this;
+    }
+
+    /**
+     * @brief 分配 n 个 uint32_t
+     * @return 指向分配内存的指针
+     */
+    uint32_t* allocate(size_t n) {
+        if (offset_ + n > capacity_) {
+            // 扩容：新大小为 max(2*capacity_, offset_ + n)
+            size_t new_capacity = std::max(capacity_ * 2, offset_ + n);
+            uint32_t* new_buffer = new uint32_t[new_capacity];
+            std::copy(buffer_, buffer_ + offset_, new_buffer);
+            delete[] buffer_;
+            buffer_ = new_buffer;
+            capacity_ = new_capacity;
+        }
+        uint32_t* result = buffer_ + offset_;
+        offset_ += n;
+        return result;
+    }
+
+    /**
+     * @brief 分配并初始化为指定值
+     */
+    uint32_t* allocate(size_t n, uint32_t val) {
+        uint32_t* result = allocate(n);
+        std::fill(result, result + n, val);
+        return result;
+    }
+
+    /**
+     * @brief 重置内存池（保留内存，只重置偏移量）
+     */
+    void reset() { offset_ = 0; }
+
+    /**
+     * @brief 获取当前使用量
+     */
+    size_t used() const { return offset_; }
+
+    /**
+     * @brief 获取总容量
+     */
+    size_t capacity() const { return capacity_; }
+
+private:
+    uint32_t* buffer_;
+    size_t capacity_;
+    size_t offset_;
+};
+
+/**
+ * @struct BinaryBigInt
+ * @brief 二进制基数的大整数表示（基数 2^32）
+ *
+ * 用于内部高效运算。使用 2^32 作为基数时：
+ * - 乘法可以通过位移和掩码快速完成
+ * - 模运算和除法通过位操作完成
+ * - 仅在输入/输出时进行进制转换
+ */
+struct BinaryBigInt {
+    static constexpr uint64_t kBase = 0x100000000ULL;  // 2^32
+    static constexpr uint32_t kMask = 0xFFFFFFFF;       // 32位掩码
+
+    BigIntData limbs;  ///< 小端序存储，每个 limb 是 32 位
+
+    BinaryBigInt() = default;
+    explicit BinaryBigInt(uint64_t val);
+    explicit BinaryBigInt(const BigIntData& decimal_data);  // 从十进制基数转换
+    explicit BinaryBigInt(BigIntData&& decimal_data);       // 从十进制基数转换（移动）
+
+    /**
+     * @brief 转换回十进制基数表示
+     */
+    BigIntData to_decimal() const;
+
+    /**
+     * @brief 检查是否为零
+     */
+    bool is_zero() const { return limbs.empty() || (limbs.size() == 1 && limbs[0] == 0); }
+
+    /**
+     * @brief 获取有效位数（去除前导零）
+     */
+    size_t effective_size() const;
+
+    /**
+     * @brief 规范化（去除前导零）
+     */
+    void normalize();
+
+    // ==================== 算术运算 ====================
+
+    /**
+     * @brief 二进制大整数加法
+     */
+    static BinaryBigInt add(const BinaryBigInt& a, const BinaryBigInt& b);
+
+    /**
+     * @brief 二进制大整数减法（要求 a >= b）
+     */
+    static BinaryBigInt sub(const BinaryBigInt& a, const BinaryBigInt& b);
+
+    /**
+     * @brief 二进制大整数乘法（使用快速算法）
+     */
+    static BinaryBigInt mul(const BinaryBigInt& a, const BinaryBigInt& b);
+
+    /**
+     * @brief 二进制大整数乘以小整数
+     */
+    static BinaryBigInt mul_uint32(const BinaryBigInt& a, uint32_t b);
+
+    /**
+     * @brief 二进制大整数除法
+     */
+    static void div(const BinaryBigInt& num, const BinaryBigInt& den,
+                    BinaryBigInt* quotient, BinaryBigInt* remainder);
+
+    /**
+     * @brief 比较两个二进制大整数
+     * @return -1 表示 a < b，0 表示相等，1 表示 a > b
+     */
+    static int compare(const BinaryBigInt& a, const BinaryBigInt& b);
+
+    /**
+     * @brief 左移（乘以 2^k）
+     */
+    BinaryBigInt operator<<(int bits) const;
+
+    /**
+     * @brief 右移（除以 2^k）
+     */
+    BinaryBigInt operator>>(int bits) const;
+};
+
+/**
  * @struct PreciseDecimal
  * @brief 精确小数表示结构体
  *
@@ -64,7 +308,7 @@ struct PrecisionContext {
  * - 1000000000000 → data={0, 1}, scale=0 （因为 10^9 为基数）
  */
 struct PreciseDecimal {
-    std::vector<uint32_t> data = {0}; ///< 基数为 10^9 的有效数字数组（小端序）
+    BigIntData data;                  ///< 基数为 10^9 的有效数字数组（小端序）
     int scale = 0;                    ///< 小数点后的位数
     bool negative = false;            ///< 是否为负数
     bool is_inf = false;              ///< 是否为无穷大
@@ -465,6 +709,18 @@ PreciseDecimal half_pi();
  */
 PreciseDecimal e();
 
+/**
+ * @brief ln(2) 常量
+ * @return 高精度的 ln(2) 值
+ */
+PreciseDecimal ln2();
+
+/**
+ * @brief log2(e) 常量
+ * @return 高精度的 log2(e) 值
+ */
+PreciseDecimal log2e();
+
 // ==================== 指数与对数函数 ====================
 
 /**
@@ -475,6 +731,13 @@ PreciseDecimal e();
 PreciseDecimal exp(const PreciseDecimal& x);
 
 /**
+ * @brief 2 的指数函数（优化版）
+ * @param x 指数值
+ * @return 2^x
+ */
+PreciseDecimal exp2(const PreciseDecimal& x);
+
+/**
  * @brief 自然对数函数
  * @param x 输入值（必须为正数）
  * @return ln(x)
@@ -483,11 +746,27 @@ PreciseDecimal exp(const PreciseDecimal& x);
 PreciseDecimal ln(const PreciseDecimal& x);
 
 /**
+ * @brief 以 2 为底的对数函数
+ * @param x 输入值（必须为正数）
+ * @return log2(x)
+ * @throws std::domain_error 如果 x 非正
+ */
+PreciseDecimal log2(const PreciseDecimal& x);
+
+/**
  * @brief 常用对数函数（以 10 为底）
  * @param x 输入值（必须为正数）
  * @return log10(x)
  */
 PreciseDecimal log10(const PreciseDecimal& x);
+
+/**
+ * @brief 快速幂运算（优化版）
+ * @param base 底数
+ * @param exp 指数
+ * @return base^exp
+ */
+PreciseDecimal pow_fast(const PreciseDecimal& base, const PreciseDecimal& exp);
 
 // ==================== 三角函数 ====================
 

@@ -18,8 +18,9 @@ StoredValue execute_precise_decimal_expression(
     const std::map<std::string, StoredValue>& variables) {
     PreciseDecimal result = parse_precise_decimal_expression(expression, &variables);
     StoredValue value;
-    value.decimal = result.to_double();
+    value.decimal = Scalar(result.to_string()); // Convert PreciseDecimal to float128_t via string
     value.precise_decimal_text = result.to_string();
+    value.precise_decimal_value = std::make_shared<PreciseDecimal>(result);
     value.has_precise_decimal_text = true;
     return value;
 }

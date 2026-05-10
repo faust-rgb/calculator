@@ -171,6 +171,7 @@ int run_symbolic_tests(int& passed, int& failed) {
 
     // 遍历所有矩阵显示测试用例
     for (const auto& test : matrix_display_cases) {
+        std::cout << "DEBUG: Testing matrix display: " << test.expression << std::endl;
         try {
             const std::string actual =
                 calculator.evaluate_for_display(test.expression, test.exact_mode);
@@ -190,6 +191,7 @@ int run_symbolic_tests(int& passed, int& failed) {
     }
 
     // 测试消元敏感的行列式计算
+    std::cout << "DEBUG: Testing cancellation-sensitive determinant" << std::endl;
     try {
         const auto actual =
             calculator.evaluate("det(mat(2, 2, 100001, 100000, 100000, 99999))");
@@ -580,6 +582,7 @@ int run_symbolic_tests(int& passed, int& failed) {
 
     // 遍历所有命令测试用例
     for (const auto& test : command_display_cases) {
+        std::cout << "DEBUG: Testing symbolic command: " << test.expression << std::endl;
         try {
             std::string output;
             const bool handled =
@@ -617,6 +620,8 @@ int run_symbolic_tests(int& passed, int& failed) {
                       << " threw unexpected error: " << ex.what() << '\n';
         }
     }
+
+    std::cout << "DEBUG: Finished symbolic command cases loop." << std::endl;
 
     // 测试SVD分解的格式化输出
     try {
@@ -659,8 +664,10 @@ int run_symbolic_tests(int& passed, int& failed) {
     }
 
     // ========== 脚本测试 ==========
+    std::cout << "DEBUG: Starting script tests..." << std::endl;
     // 测试脚本语言的print命令
     try {
+        std::cout << "DEBUG: Testing script print..." << std::endl;
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
             "greeting = \"hello\"\n"
@@ -699,6 +706,7 @@ int run_symbolic_tests(int& passed, int& failed) {
 
     // 测试 match/case 守卫条件
     try {
+        std::cout << "DEBUG: Testing script match guard..." << std::endl;
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
             "v = 1\n"

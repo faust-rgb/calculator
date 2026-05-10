@@ -276,7 +276,7 @@ Scalar poisson_cdf(int k, Scalar lambda) {
     if (k < 0) return 0.0L;
     if (slambda == Scalar(0)) return 1.0L;
 
-    if (slambda > Scalar(100)) {
+    if (slambda >= Scalar(100)) {
         // 使用正态近似优化：N(lambda, lambda)，带连续性校正
         return normal_cdf((k) + 0.5, lambda, (mymath::sqrt(slambda)));
     }

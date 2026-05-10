@@ -53,10 +53,22 @@ bool handle_analysis_command(const AnalysisContext& ctx,
         } else {
             analysis = ctx.build_analysis(arguments[0]); point_arg = arguments[1]; dir_idx = 2;
         }
-        int dir = 0; if (arguments.size() > dir_idx) dir = static_cast<int>(round_to_long_long(ctx.parse_decimal(arguments[dir_idx])));
+        const std::string trimmed_point = utils::trim_copy(point_arg);
+        const bool infinite_point = is_infinity_literal(trimmed_point);
+        const bool negative_infinity =
+            infinite_point && !trimmed_point.empty() && trimmed_point.front() == '-';
+        int dir = 0;
+        if (arguments.size() > dir_idx) {
+            dir = static_cast<int>(round_to_long_long(ctx.parse_decimal(arguments[dir_idx])));
+        } else if (infinite_point) {
+            dir = negative_infinity ? -1 : 1;
+        }
+        const Scalar point_value = infinite_point
+            ? (negative_infinity ? -Scalar::infinity() : Scalar::infinity())
+            : ctx.parse_decimal(point_arg);
         Scalar limit_value = 0.0L;
         try {
-            limit_value = ctx.normalize_result(analysis.limit(ctx.parse_decimal(point_arg), dir));
+            limit_value = ctx.normalize_result(analysis.limit(point_value, dir));
         } catch (const std::runtime_error& ex) {
             const std::string message = ex.what();
             if (message.find("limit does not exist") != std::string::npos) {

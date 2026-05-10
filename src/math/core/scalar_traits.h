@@ -456,6 +456,8 @@ template <typename T = Scalar>
 inline bool scalar_isnan(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::isnan(x);
+    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        return x.is_nan_value();
     } else {
         return false;
     }
@@ -465,6 +467,8 @@ template <typename T = Scalar>
 inline bool scalar_isinf(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::isinf(x);
+    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        return x.is_infinity();
     } else {
         return false;
     }
@@ -474,6 +478,8 @@ template <typename T = Scalar>
 inline bool scalar_isfinite(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         return precise128::isfinite(x);
+    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        return !x.is_infinity() && !x.is_nan_value();
     } else {
         return true;
     }

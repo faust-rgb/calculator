@@ -304,6 +304,9 @@ private:
             it->second.is_string || it->second.has_symbolic_text) {
             throw MathError("unsupported variable type for precise parsing: " + name);
         }
+        if (it->second.precise_decimal_value) {
+            return *(it->second.precise_decimal_value);
+        }
         return PreciseDecimal(stored_value_precise_decimal_text(it->second));
     }
 

@@ -75,17 +75,17 @@ std::string format_rational_with_constant(const Rational& r, const std::string& 
  * @param eps 匹配误差阈值
  * @return 格式化后的字符串，如 "pi / 4"、"2 * e"；无法匹配时返回空字符串
  */
-std::string try_format_with_named_constants(long double value, [[maybe_unused]] long double eps) {
-    const Scalar abs_value = mymath::abs(Scalar(value));
+std::string try_format_with_named_constants(Scalar value, [[maybe_unused]] long double eps) {
+    const Scalar abs_value = mymath::abs(value);
     Rational r;
 
     for (const auto& const_entry : kNamedConstants) {
         // 尝试 value = r * C
-        if (try_make_simple_rational(static_cast<long double>(abs_value / Scalar(const_entry.value)), 20, &r)) {
+        if (try_make_simple_rational(abs_value / Scalar(const_entry.value), 20, &r)) {
             return format_rational_with_constant(r, const_entry.name, false);
         }
         // 尝试 value = r / C
-        if (try_make_simple_rational(static_cast<long double>(abs_value * Scalar(const_entry.value)), 20, &r)) {
+        if (try_make_simple_rational(abs_value * Scalar(const_entry.value), 20, &r)) {
             return format_rational_with_constant(r, const_entry.name, true);
         }
     }
@@ -101,13 +101,13 @@ std::string try_format_with_named_constants(long double value, [[maybe_unused]] 
  * 检测形如 sqrt(n/d) 的值，其中 n/d 为简单有理数。
  * 提取平方因子以简化表达式，如 sqrt(8) = 2*sqrt(2)。
  */
-std::string try_format_as_sqrt(long double value, [[maybe_unused]] long double eps) {
-    const Scalar abs_value = mymath::abs(Scalar(value));
+std::string try_format_as_sqrt(Scalar value, [[maybe_unused]] long double eps) {
+    const Scalar abs_value = mymath::abs(value);
     const Scalar squared = abs_value * abs_value;
 
     Rational r;
     // 尝试识别平方后是有理数的情况
-    if (try_make_simple_rational(static_cast<long double>(squared), 100, &r)) {
+    if (try_make_simple_rational(squared, 100, &r)) {
         long long n = r.numerator;
         long long d = r.denominator;
 
@@ -178,23 +178,22 @@ std::string try_format_as_sqrt(long double value, [[maybe_unused]] long double e
  * 1. 命名常数比例形式（如 pi/4, 2*e）
  * 2. 平方根形式（如 sqrt(2), sqrt(3)/2）
  */
-std::string try_format_symbolic_extended(long double value, long double eps) {
-    const Scalar v(value);
-    if (!mymath::isfinite(value) || mymath::abs(v) < Scalar(eps)) {
+std::string try_format_symbolic_extended(Scalar value, long double eps) {
+    if (!mymath::isfinite(value) || mymath::abs(value) < Scalar(eps)) {
         return "";
     }
 
     const bool negative = value < Scalar(0);
-    const Scalar abs_value = mymath::abs(v);
+    const Scalar abs_value = mymath::abs(value);
 
     // 1. 尝试命名常数比例 (pi, e, 等)
-    std::string named_form = try_format_with_named_constants(static_cast<long double>(abs_value), eps);
+    std::string named_form = try_format_with_named_constants(abs_value, eps);
     if (!named_form.empty()) {
         return negative ? "-" + named_form : named_form;
     }
 
     // 2. 尝试平方根形式
-    std::string sqrt_form = try_format_as_sqrt(static_cast<long double>(abs_value), eps);
+    std::string sqrt_form = try_format_as_sqrt(abs_value, eps);
     if (!sqrt_form.empty()) {
         return negative ? "-" + sqrt_form : sqrt_form;
     }
@@ -204,12 +203,8 @@ std::string try_format_symbolic_extended(long double value, long double eps) {
 
 /**
  * @brief 尝试将数值格式化为含 pi 的分数形式（向后兼容接口）
- * @param value 输入数值
- * @param eps 匹配误差阈值
- * @return 格式化后的字符串；无法匹配时返回空字符串
  */
-std::string try_format_as_pi_fraction(long double value, long double eps) {
-    // 保持向前兼容，调用新的扩展识别
+std::string try_format_as_pi_fraction(Scalar value, long double eps) {
     return try_format_symbolic_extended(value, eps);
 }
 
@@ -270,19 +265,21 @@ void set_process_display_precision(int precision) {
  * - 接近零的值返回精确的 0
  * - 接近整数的值返回精确的整数
  */
-long double normalize_display_decimal(Scalar value) {
-    const Scalar v(value);
-    if (mymath::abs(v) < kDisplayZeroEps()) {
-        return 0.0L;
+Scalar normalize_display_decimal(Scalar value) {
+    if (mymath::abs(value) < kDisplayZeroEps()) {
+        return Scalar(0.0L);
     }
-    const Scalar max_ll(static_cast<long double>(std::numeric_limits<long long>::max()));
-    const Scalar min_ll(static_cast<long double>(std::numeric_limits<long long>::min()));
-    if (mymath::abs(v) > kDisplayIntegerEps() &&
-        v < max_ll && v > min_ll &&
-        is_integer_double(value, 1e-9)) {
-        return static_cast<long double>(round_to_long_long(value));
+    
+    // 只有在合理范围内才尝试整数转换
+    static const Scalar max_ll(static_cast<long long>(9223372036854775807LL));
+    static const Scalar min_ll(static_cast<long long>(-9223372036854775807LL - 1LL));
+    
+    if (mymath::abs(value) > kDisplayIntegerEps() &&
+        value < max_ll && value > min_ll &&
+        mymath::is_integer(value.to_long_double())) { // 这里使用 to_long_double 是安全的，因为已经在 long long 范围内
+        return Scalar(static_cast<long long>(mymath::round(value.to_long_double())));
     }
-    return value.to_long_double();
+    return value;
 }
 
 // ============================================================================
@@ -294,7 +291,7 @@ long double normalize_display_decimal(Scalar value) {
  * @param value 要格式化的数值
  * @return 格式化后的字符串
  */
-std::string format_decimal(long double value) {
+std::string format_decimal(Scalar value) {
     return format_decimal(value, process_display_precision());
 }
 
@@ -304,38 +301,40 @@ std::string format_decimal(long double value) {
  * @param precision 显示精度
  * @return 格式化后的字符串
  */
-std::string format_decimal(long double value, int precision) {
-    if (value != 0.0L && mymath::abs(value) < 1e-12L) {
-        // Preserve meaningful tiny values in scientific notation.
-    } else if (mymath::abs(value) < 1e-12L) {
-        value = 0.0L;
-    } else {
-        value = normalize_display_decimal(value);
+std::string format_decimal(Scalar value, int precision) {
+    Scalar normalized = normalize_display_decimal(value);
+    
+    if (normalized.is_zero()) {
+        return "0";
     }
+
+    // 对于 PreciseDecimal，如果它是高精度的，直接使用其 to_string
+    // 除非它是一个简单的整数
+    if (mymath::abs(normalized) < Scalar(1e-12L) || mymath::abs(normalized) > Scalar(1e15L)) {
+        // 对于极大或极小的数，使用科学计数法或 PreciseDecimal 的原生格式
+        return normalized.to_string();
+    }
+
+    // 默认回退到 long double 格式化用于短小数字（保持美观）
     precision = std::clamp(precision, kMinDisplayPrecision, kMaxDisplayPrecision);
     std::ostringstream out;
-    out << std::setprecision(precision) << value;
+    out << std::setprecision(precision) << normalized.to_long_double();
     return out.str();
 }
 
 /**
- * @brief 尝试将 long double 转换为简单的有理数
- * @param value 输入数值
- * @param max_denominator 最大分母限制
- * @param rational 输出的有理数
- * @return 转换是否成功
+ * @brief 尝试将 Scalar 转换为简单的有理数
  */
-bool try_make_simple_rational(long double value,
+bool try_make_simple_rational(Scalar value,
                               int max_denominator,
                               Rational* rational) {
     if (rational == nullptr || !mymath::isfinite(value)) {
         return false;
     }
 
-    const Scalar v(value);
     long long numerator = 0;
     long long denominator = 1;
-    if (!mymath::approximate_fraction(value,
+    if (!mymath::approximate_fraction(value.to_long_double(),
                                       &numerator,
                                       &denominator,
                                       max_denominator,
@@ -351,24 +350,19 @@ bool try_make_simple_rational(long double value,
  * @brief 格式化符号数值
  * @param value 要格式化的数值
  * @return 格式化后的字符串，优先使用符号形式（如 pi/4, sqrt(2)）
- *
- * 依次尝试：
- * 1. 整数检测
- * 2. 扩展符号识别（常数比例、平方根）
- * 3. 有理数近似
- * 4. 普通小数格式
  */
-std::string format_symbolic_number(long double value) {
-    const Scalar v(value);
+std::string format_symbolic_number(Scalar value) {
     const Scalar zero_eps = kDisplayZeroEps();
     const Scalar int_eps = kDisplayIntegerEps();
 
-    if (mymath::abs(v) < zero_eps) {
-        value = 0.0L;
+    if (mymath::abs(value) < zero_eps) {
+        return "0";
     }
-    if (mymath::abs(v) > int_eps &&
-        is_integer_double(value, 1e-9)) {
-        return std::to_string(round_to_long_long(value));
+    
+    Scalar normalized = normalize_display_decimal(value);
+    if (mymath::abs(normalized) > int_eps &&
+        mymath::is_integer(normalized.to_long_double())) {
+        return std::to_string(static_cast<long long>(mymath::round(normalized.to_long_double())));
     }
 
     // 1. 尝试扩展符号识别（常数、根式）
@@ -387,11 +381,9 @@ std::string format_symbolic_number(long double value) {
 }
 
 /**
- * @brief 格式化符号标量（format_symbolic_number 的别名）
- * @param value 要格式化的数值
- * @return 格式化后的字符串
+ * @brief 格式化符号标量
  */
-std::string format_symbolic_scalar(long double value) {
+std::string format_symbolic_scalar(Scalar value) {
     return format_symbolic_number(value);
 }
 
@@ -401,28 +393,18 @@ std::string format_symbolic_scalar(long double value) {
 
 /**
  * @brief 生成带符号的中心文本
- * @param center 展开中心点
- * @return 格式化后的中心文本，如 " - 1" 或 " + 2"
  */
-std::string signed_center_text(long double center) {
-    const Scalar c(center);
-    if (mymath::abs(c) < Scalar(1e-12)) {
+std::string signed_center_text(Scalar center) {
+    if (mymath::abs(center) < Scalar(1e-12)) {
         return "";
     }
-    return c > Scalar(0)
+    return center > Scalar(0)
                ? " - " + format_symbolic_number(center)
                : " + " + format_symbolic_number(-center);
 }
 
 /**
  * @brief 格式化幂次项
- * @param base 基表达式
- * @param numerator 幂次分子
- * @param denominator 幂次分母
- * @return 格式化后的幂次表达式
- *
- * 例如：power_term("x", 2, 1) 返回 "x ^ 2"
- *       power_term("x", 1, 2) 返回 "x ^ (1 / 2)"
  */
 std::string power_term(const std::string& base, int numerator, int denominator) {
     if (numerator == 0) {
@@ -447,23 +429,17 @@ std::string power_term(const std::string& base, int numerator, int denominator) 
 
 /**
  * @brief 格式化级数项
- * @param coefficient 系数
- * @param factor 因子表达式
- * @return 格式化后的项字符串
- *
- * 自动处理系数为 1 时的省略，以及负系数的符号处理。
  */
-std::string format_term(long double coefficient, const std::string& factor) {
+std::string format_term(Scalar coefficient, const std::string& factor) {
     const bool has_factor = !factor.empty();
-    const Scalar coeff(coefficient);
-    const Scalar abs_coefficient = mymath::abs(coeff);
+    const Scalar abs_coefficient = mymath::abs(coefficient);
     const bool omit_unit =
         has_factor && mymath::abs(abs_coefficient - Scalar(1)) < Scalar(1e-9);
 
     if (!has_factor) {
         return format_symbolic_number(coefficient);
     }
-    const std::string coeff_text = format_symbolic_number(static_cast<long double>(abs_coefficient));
+    const std::string coeff_text = format_symbolic_number(abs_coefficient);
     if (coeff_text == "1") {
         return coefficient < Scalar(0) ? "-" + factor : factor;
     }

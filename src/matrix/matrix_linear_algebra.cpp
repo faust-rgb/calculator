@@ -110,6 +110,11 @@ TLuResult<T> lu_decompose_with_pivoting(const TMatrix<T>& matrix) {
         }
 
         const T pivot_diag = result.lu.at(col, col);
+        // DEBUG: Check for zero pivot
+        if (pivot_diag.is_zero()) {
+            std::cerr << "DEBUG: Zero pivot at col " << col << ", pivot_value=" << pivot_value.to_string() << ", tolerance=" << tolerance.to_string() << std::endl;
+            std::cerr << "DEBUG: pivot_diag is zero but pivot_value > tolerance!" << std::endl;
+        }
         for (std::size_t row = col + 1; row < n; ++row) {
             const T factor = result.lu.at(row, col) / pivot_diag;
             result.lu.at(row, col) = factor;
@@ -1099,6 +1104,41 @@ T determinant(const TMatrix<T>& matrix) {
 template <typename T>
 T rank(const TMatrix<T>& matrix) {
     TMatrix<T> reduced = matrix;
+    if constexpr (std::is_same_v<T, PreciseDecimal> || std::is_same_v<T, mymath::Scalar>) {
+        const T scale = max_abs_entry(matrix);
+        const T tolerance = scale * T("1e-8");
+        std::size_t rank_count = 0;
+        for (std::size_t col = 0; col < reduced.cols && rank_count < reduced.rows; ++col) {
+            std::size_t best_row = rank_count;
+            T best_value = t_abs(reduced.at(best_row, col));
+            for (std::size_t row = rank_count + 1; row < reduced.rows; ++row) {
+                const T current = t_abs(reduced.at(row, col));
+                if (current > best_value) {
+                    best_value = current;
+                    best_row = row;
+                }
+            }
+            if (best_value <= tolerance) {
+                continue;
+            }
+            swap_rows(&reduced, rank_count, best_row);
+            const T pivot = reduced.at(rank_count, col);
+            for (std::size_t row = rank_count + 1; row < reduced.rows; ++row) {
+                const T factor = reduced.at(row, col) / pivot;
+                if (t_abs(factor) <= tolerance) {
+                    continue;
+                }
+                for (std::size_t current_col = col; current_col < reduced.cols; ++current_col) {
+                    reduced.at(row, current_col) -= factor * reduced.at(rank_count, current_col);
+                    if (t_abs(reduced.at(row, current_col)) <= tolerance) {
+                        reduced.at(row, current_col) = T(static_cast<long long>(0));
+                    }
+                }
+            }
+            ++rank_count;
+        }
+        return T(static_cast<long long>(rank_count));
+    }
     return T(static_cast<long long>(rref_in_place(&reduced).size()));
 }
 

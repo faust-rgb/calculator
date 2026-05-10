@@ -533,6 +533,7 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
                     *value = left * right;
                     return true;
                 case NodeType::kDivide:
+                    if (right == Scalar(0)) return false;
                     *value = left / right;
                     return true;
                 case NodeType::kPower:
@@ -1213,4 +1214,3 @@ std::size_t SymbolicExpression::node_count() const {
 SymbolicExpression SymbolicExpression::expand() const {
     return expand_impl(*this);
 }
-
