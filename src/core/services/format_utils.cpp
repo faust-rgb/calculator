@@ -338,7 +338,7 @@ bool try_make_simple_rational(Scalar value,
                                       &numerator,
                                       &denominator,
                                       max_denominator,
-                                      1e-10)) {
+                                      1e-8)) {
         return false;
     }
 

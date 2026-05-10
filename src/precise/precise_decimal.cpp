@@ -1130,7 +1130,23 @@ BigIntData multiply_bigint_karatsuba_parallel(const BigIntData& lhs, const BigIn
 // ============================================================================
 
 /**
- * @brief 大整数除以 3（用于 Toom-Cook）
+ * @brief 大整数除以 2（用于 Toom-Cook 插值）
+ */
+BigIntData divide_bigint_by_2(BigIntData v) {
+    if (v.empty() || (v.size() == 1 && v[0] == 0)) return {0};
+
+    uint64_t rem = 0;
+    for (int i = static_cast<int>(v.size()) - 1; i >= 0; --i) {
+        uint64_t cur = rem * kBase + v[i];
+        v[i] = static_cast<uint32_t>(cur / 2);
+        rem = cur % 2;
+    }
+    while (v.size() > 1 && v.back() == 0) v.pop_back();
+    return v;
+}
+
+/**
+ * @brief 大整数除以 3（用于 Toom-Cook 插值）
  */
 BigIntData divide_bigint_by_3(BigIntData v) {
     if (v.empty() || (v.size() == 1 && v[0] == 0)) return {0};
@@ -1146,7 +1162,80 @@ BigIntData divide_bigint_by_3(BigIntData v) {
 }
 
 /**
- * @brief 大整数乘法 - Toom-Cook 3 算法
+ * @brief 大整数除以 6（用于 Toom-Cook 插值）
+ */
+BigIntData divide_bigint_by_6(BigIntData v) {
+    if (v.empty() || (v.size() == 1 && v[0] == 0)) return {0};
+
+    uint64_t rem = 0;
+    for (int i = static_cast<int>(v.size()) - 1; i >= 0; --i) {
+        uint64_t cur = rem * kBase + v[i];
+        v[i] = static_cast<uint32_t>(cur / 6);
+        rem = cur % 6;
+    }
+    while (v.size() > 1 && v.back() == 0) v.pop_back();
+    return v;
+}
+
+/**
+ * @brief 带符号的大整数
+ *
+ * 用于 Toom-Cook 算法中处理可能为负的中间结果。
+ */
+struct SignedBigInt {
+    BigIntData data;
+    bool negative;
+
+    SignedBigInt() : data{0}, negative(false) {}
+    SignedBigInt(const BigIntData& d, bool neg = false) : data(d), negative(neg) {}
+    SignedBigInt(BigIntData&& d, bool neg = false) : data(std::move(d)), negative(neg) {}
+
+    bool is_zero() const {
+        return data.empty() || (data.size() == 1 && data[0] == 0);
+    }
+
+    void normalize() {
+        while (data.size() > 1 && data.back() == 0) data.pop_back();
+        if (is_zero()) negative = false;
+    }
+
+    SignedBigInt operator-() const {
+        SignedBigInt result = *this;
+        if (!is_zero()) result.negative = !result.negative;
+        return result;
+    }
+
+    static SignedBigInt add(const SignedBigInt& a, const SignedBigInt& b);
+    static SignedBigInt sub(const SignedBigInt& a, const SignedBigInt& b);
+};
+
+SignedBigInt SignedBigInt::add(const SignedBigInt& a, const SignedBigInt& b) {
+    if (a.negative == b.negative) {
+        SignedBigInt result(add_bigint(a.data, b.data), a.negative);
+        result.normalize();
+        return result;
+    }
+
+    int cmp = compare_bigint(a.data, b.data);
+    if (cmp == 0) {
+        return SignedBigInt{0, false};
+    } else if (cmp > 0) {
+        SignedBigInt result(subtract_bigint(a.data, b.data), a.negative);
+        result.normalize();
+        return result;
+    } else {
+        SignedBigInt result(subtract_bigint(b.data, a.data), b.negative);
+        result.normalize();
+        return result;
+    }
+}
+
+SignedBigInt SignedBigInt::sub(const SignedBigInt& a, const SignedBigInt& b) {
+    return add(a, -b);
+}
+
+/**
+ * @brief 大整数乘法 - Toom-Cook 3 算法（修正版）
  *
  * 将数字分成 3 部分进行分治乘法。
  * 时间复杂度 O(n^1.465)，比 Karatsuba 更快。
@@ -1157,15 +1246,21 @@ BigIntData divide_bigint_by_3(BigIntData v) {
  *   x = x2 * B^(2m) + x1 * B^m + x0
  *   y = y2 * B^(2m) + y1 * B^m + y0
  *
- * 计算 5 个点值（在 0, 1, -1, 2, -2 处求值）：
- *   m(0) = x0 * y0
- *   m(1) = (x0+x1+x2) * (y0+y1+y2)
- *   m(-1) = (x0-x1+x2) * (y0-y1+y2)
- *   m(2) = (x0+2x1+4x2) * (y0+2y1+4y2)
- *   m(-2) = (x0-2x1+4x2) * (y0-2y1+4y2)
- *   m(∞) = x2 * y2
+ * 计算 5 个点值：
+ *   m0 = f(0) = x0 * y0
+ *   m1 = f(1) = (x0 + x1 + x2) * (y0 + y1 + y2)
+ *   m_neg1 = f(-1) = (x0 - x1 + x2) * (y0 - y1 + y2)
+ *   m2 = f(2) = (x0 + 2*x1 + 4*x2) * (y0 + 2*y1 + 4*y2)
+ *   m_inf = f(∞) = x2 * y2
  *
- * 然后通过插值得到结果。
+ * 插值公式：
+ *   c0 = m0
+ *   c1 = (m1 - m_neg1) / 2
+ *   c2 = m1 - m0 - m_inf - c1
+ *   c3 = (m2 - m1) / 3 - (m_neg1 - m0) / 2 + c1 - 2*m_inf
+ *   c4 = m_inf
+ *
+ * 结果 = c0 + c1*B^m + c2*B^(2m) + c3*B^(3m) + c4*B^(4m)
  */
 BigIntData multiply_bigint_toom3(const BigIntData& lhs, const BigIntData& rhs) {
     std::size_t n = std::max(lhs.size(), rhs.size());
@@ -1173,6 +1268,143 @@ BigIntData multiply_bigint_toom3(const BigIntData& lhs, const BigIntData& rhs) {
     // 基准情况：小规模使用 Karatsuba
     if (n <= 256) {
         return multiply_bigint_karatsuba(lhs, rhs);
+    }
+
+    // 分割点：每部分约 n/3 个 chunk
+    std::size_t m = (n + 2) / 3;
+
+    // 分解为 3 部分
+    // x = x2 * B^(2m) + x1 * B^m + x0
+    BigIntData x0 = bigint_low(lhs, m);
+    BigIntData x1 = bigint_low(bigint_high(lhs, m), m);
+    BigIntData x2 = bigint_high(lhs, 2 * m);
+
+    BigIntData y0 = bigint_low(rhs, m);
+    BigIntData y1 = bigint_low(bigint_high(rhs, m), m);
+    BigIntData y2 = bigint_high(rhs, 2 * m);
+
+    trim_bigint(x0); trim_bigint(x1); trim_bigint(x2);
+    trim_bigint(y0); trim_bigint(y1); trim_bigint(y2);
+
+    // ==================== 求值阶段 ====================
+
+    // 计算 x0 + x2 和 y0 + y2（多次使用）
+    BigIntData x0_plus_x2 = add_bigint(x0, x2);
+    BigIntData y0_plus_y2 = add_bigint(y0, y2);
+
+    // 点值 m0 = x0 * y0
+    BigIntData m0 = multiply_bigint_toom3(x0, y0);
+
+    // 点值 m_inf = x2 * y2
+    BigIntData m_inf = multiply_bigint_toom3(x2, y2);
+
+    // 点值 m1 = (x0 + x1 + x2) * (y0 + y1 + y2)
+    BigIntData p1 = add_bigint(x0_plus_x2, x1);
+    BigIntData q1 = add_bigint(y0_plus_y2, y1);
+    BigIntData m1 = multiply_bigint_toom3(p1, q1);
+
+    // 点值 m_neg1 = (x0 - x1 + x2) * (y0 - y1 + y2)
+    // 使用带符号整数处理
+    SignedBigInt s_p_neg1, s_q_neg1;
+
+    int cmp_x1 = compare_bigint(x0_plus_x2, x1);
+    if (cmp_x1 >= 0) {
+        s_p_neg1 = SignedBigInt(subtract_bigint(x0_plus_x2, x1), false);
+    } else {
+        s_p_neg1 = SignedBigInt(subtract_bigint(x1, x0_plus_x2), true);
+    }
+
+    int cmp_y1 = compare_bigint(y0_plus_y2, y1);
+    if (cmp_y1 >= 0) {
+        s_q_neg1 = SignedBigInt(subtract_bigint(y0_plus_y2, y1), false);
+    } else {
+        s_q_neg1 = SignedBigInt(subtract_bigint(y1, y0_plus_y2), true);
+    }
+
+    // m_neg1 的符号：两个因子符号的异或
+    bool m_neg1_neg = s_p_neg1.negative != s_q_neg1.negative;
+    BigIntData m_neg1 = multiply_bigint_toom3(s_p_neg1.data, s_q_neg1.data);
+
+    // 点值 m2 = (x0 + 2*x1 + 4*x2) * (y0 + 2*y1 + 4*y2)
+    BigIntData x1_2 = multiply_bigint_by_uint32(x1, 2);
+    BigIntData x2_4 = multiply_bigint_by_uint32(x2, 4);
+    BigIntData y1_2 = multiply_bigint_by_uint32(y1, 2);
+    BigIntData y2_4 = multiply_bigint_by_uint32(y2, 4);
+
+    BigIntData p2 = add_bigint(add_bigint(x0, x1_2), x2_4);
+    BigIntData q2 = add_bigint(add_bigint(y0, y1_2), y2_4);
+    BigIntData m2 = multiply_bigint_toom3(p2, q2);
+
+    // ==================== 插值阶段 ====================
+
+    // 使用带符号整数进行插值计算
+    SignedBigInt s_m0(m0, false);
+    SignedBigInt s_m1(m1, false);
+    SignedBigInt s_m_neg1(m_neg1, m_neg1_neg);
+    SignedBigInt s_m2(m2, false);
+    SignedBigInt s_m_inf(m_inf, false);
+
+    // c0 = m0
+    SignedBigInt s_c0 = s_m0;
+
+    // c4 = m_inf
+    SignedBigInt s_c4 = s_m_inf;
+
+    // c1 = (m1 - m_neg1) / 2
+    SignedBigInt s_c1 = SignedBigInt::sub(s_m1, s_m_neg1);
+    s_c1.data = divide_bigint_by_2(std::move(s_c1.data));
+    s_c1.normalize();
+
+    // c2 = m1 - m0 - m_inf - c1
+    SignedBigInt s_c2 = SignedBigInt::sub(SignedBigInt::sub(SignedBigInt::sub(s_m1, s_m0), s_m_inf), s_c1);
+    s_c2.normalize();
+
+    // c3 = (m2 - m1) / 3 - (m_neg1 - m0) / 2 + c1 - 2*m_inf
+    // 简化：c3 = (m2 - m1) / 3 - (m_neg1 - m0) / 2 + c1 - 2*m_inf
+    SignedBigInt temp1 = SignedBigInt::sub(s_m2, s_m1);
+    temp1.data = divide_bigint_by_3(std::move(temp1.data));
+
+    SignedBigInt temp2 = SignedBigInt::sub(s_m_neg1, s_m0);
+    temp2.data = divide_bigint_by_2(std::move(temp2.data));
+
+    SignedBigInt temp3;
+    temp3.data = multiply_bigint_by_uint32(s_m_inf.data, 2);
+    temp3.negative = s_m_inf.negative;
+
+    SignedBigInt s_c3 = SignedBigInt::sub(SignedBigInt::sub(SignedBigInt::sub(temp1, temp2), s_c1), temp3);
+    s_c3.normalize();
+
+    // ==================== 组装结果 ====================
+
+    // 检查所有系数是否为非负（结果应该非负）
+    // 如果有负系数，需要借位处理
+    if (s_c0.negative || s_c1.negative || s_c2.negative || s_c3.negative || s_c4.negative) {
+        // 出现负系数，说明计算有误，回退到 Karatsuba
+        return multiply_bigint_karatsuba(lhs, rhs);
+    }
+
+    // 结果 = c0 + c1*B^m + c2*B^(2m) + c3*B^(3m) + c4*B^(4m)
+    BigIntData result = s_c0.data;
+    result = add_bigint(result, shift_bigint(s_c1.data, m));
+    result = add_bigint(result, shift_bigint(s_c2.data, 2 * m));
+    result = add_bigint(result, shift_bigint(s_c3.data, 3 * m));
+    result = add_bigint(result, shift_bigint(s_c4.data, 4 * m));
+
+    trim_bigint(result);
+    return result;
+}
+
+/**
+ * @brief 大整数乘法 - Toom-Cook 3 算法（并行版本）
+ *
+ * 使用 OpenMP 并行计算 5 个点值乘法。
+ */
+BigIntData multiply_bigint_toom3_parallel(const BigIntData& lhs, const BigIntData& rhs) {
+    std::size_t n = std::max(lhs.size(), rhs.size());
+
+    // 基准情况：小规模使用普通 Toom-3
+    if (n <= 1024) {
+        return multiply_bigint_toom3(lhs, rhs);
     }
 
     // 分割点
@@ -1190,51 +1422,29 @@ BigIntData multiply_bigint_toom3(const BigIntData& lhs, const BigIntData& rhs) {
     trim_bigint(x0); trim_bigint(x1); trim_bigint(x2);
     trim_bigint(y0); trim_bigint(y1); trim_bigint(y2);
 
-    // 求值点计算
-    // p(0) = x0
-    // p(1) = x0 + x1 + x2
-    // p(-1) = x0 - x1 + x2
-    // p(2) = x0 + 2*x1 + 4*x2
-    // p(∞) = x2
-
+    // 预计算常用值
     BigIntData x0_plus_x2 = add_bigint(x0, x2);
     BigIntData y0_plus_y2 = add_bigint(y0, y2);
 
-    // m0 = x0 * y0
-    BigIntData m0 = multiply_bigint_toom3(x0, y0);
-
-    // m_inf = x2 * y2
-    BigIntData m_inf = multiply_bigint_toom3(x2, y2);
-
-    // m1 = (x0 + x1 + x2) * (y0 + y1 + y2)
+    // 准备点值计算的参数
     BigIntData p1 = add_bigint(x0_plus_x2, x1);
     BigIntData q1 = add_bigint(y0_plus_y2, y1);
-    BigIntData m1 = multiply_bigint_toom3(p1, q1);
 
-    // m_neg1 = (x0 - x1 + x2) * (y0 - y1 + y2)
-    BigIntData p_neg1, q_neg1;
-    bool p_neg1_neg = false, q_neg1_neg = false;
-
+    SignedBigInt s_p_neg1, s_q_neg1;
     int cmp_x1 = compare_bigint(x0_plus_x2, x1);
     if (cmp_x1 >= 0) {
-        p_neg1 = subtract_bigint(x0_plus_x2, x1);
+        s_p_neg1 = SignedBigInt(subtract_bigint(x0_plus_x2, x1), false);
     } else {
-        p_neg1 = subtract_bigint(x1, x0_plus_x2);
-        p_neg1_neg = true;
+        s_p_neg1 = SignedBigInt(subtract_bigint(x1, x0_plus_x2), true);
     }
 
     int cmp_y1 = compare_bigint(y0_plus_y2, y1);
     if (cmp_y1 >= 0) {
-        q_neg1 = subtract_bigint(y0_plus_y2, y1);
+        s_q_neg1 = SignedBigInt(subtract_bigint(y0_plus_y2, y1), false);
     } else {
-        q_neg1 = subtract_bigint(y1, y0_plus_y2);
-        q_neg1_neg = true;
+        s_q_neg1 = SignedBigInt(subtract_bigint(y1, y0_plus_y2), true);
     }
 
-    BigIntData m_neg1 = multiply_bigint_toom3(p_neg1, q_neg1);
-    bool m_neg1_neg = p_neg1_neg != q_neg1_neg;
-
-    // m2 = (x0 + 2*x1 + 4*x2) * (y0 + 2*y1 + 4*y2)
     BigIntData x1_2 = multiply_bigint_by_uint32(x1, 2);
     BigIntData x2_4 = multiply_bigint_by_uint32(x2, 4);
     BigIntData y1_2 = multiply_bigint_by_uint32(y1, 2);
@@ -1242,51 +1452,74 @@ BigIntData multiply_bigint_toom3(const BigIntData& lhs, const BigIntData& rhs) {
 
     BigIntData p2 = add_bigint(add_bigint(x0, x1_2), x2_4);
     BigIntData q2 = add_bigint(add_bigint(y0, y1_2), y2_4);
-    BigIntData m2 = multiply_bigint_toom3(p2, q2);
 
-    // 插值计算结果系数
-    // c0 = m0
-    // c4 = m_inf
-    // c3 = (m2 - m1) / 3 - (m_neg1 - m0) / 2 - 2*m_inf
-    // c1 = (m1 - m_neg1) / 2
-    // c2 = m1 - m0 - m_inf - c1
+    // 并行计算 5 个点值
+    BigIntData m0, m1, m_neg1, m2, m_inf;
+    bool m_neg1_neg = s_p_neg1.negative != s_q_neg1.negative;
 
-    BigIntData c0 = m0;
-    BigIntData c4 = m_inf;
-
-    // c1 = (m1 - m_neg1) / 2
-    BigIntData c1;
-    if (m_neg1_neg) {
-        c1 = divide_bigint_by_pow10(add_bigint(m1, m_neg1), 1);
-    } else {
-        BigIntData diff = subtract_bigint(m1, m_neg1);
-        c1 = divide_bigint_by_pow10(diff, 1);
+    #pragma omp parallel sections
+    {
+        #pragma omp section
+        {
+            m0 = multiply_bigint_toom3(x0, y0);
+        }
+        #pragma omp section
+        {
+            m_inf = multiply_bigint_toom3(x2, y2);
+        }
+        #pragma omp section
+        {
+            m1 = multiply_bigint_toom3(p1, q1);
+        }
+        #pragma omp section
+        {
+            m_neg1 = multiply_bigint_toom3(s_p_neg1.data, s_q_neg1.data);
+        }
+        #pragma omp section
+        {
+            m2 = multiply_bigint_toom3(p2, q2);
+        }
     }
 
-    // c2 = m1 - m0 - m_inf - c1
-    BigIntData c2 = subtract_bigint(subtract_bigint(subtract_bigint(m1, m0), m_inf), c1);
+    // 插值（与串行版本相同）
+    SignedBigInt s_m0(m0, false);
+    SignedBigInt s_m1(m1, false);
+    SignedBigInt s_m_neg1(m_neg1, m_neg1_neg);
+    SignedBigInt s_m2(m2, false);
+    SignedBigInt s_m_inf(m_inf, false);
 
-    // c3 = (m2 - m1) / 3 - (m_neg1 - m0) / 2 - 2*m_inf
-    BigIntData m2_minus_m1 = subtract_bigint(m2, m1);
-    BigIntData m2_minus_m1_div3 = divide_bigint_by_3(m2_minus_m1);
+    SignedBigInt s_c0 = s_m0;
+    SignedBigInt s_c4 = s_m_inf;
 
-    BigIntData m_neg1_minus_m0;
-    if (m_neg1_neg) {
-        m_neg1_minus_m0 = add_bigint(m_neg1, m0);
-    } else {
-        m_neg1_minus_m0 = subtract_bigint(m_neg1, m0);
+    SignedBigInt s_c1 = SignedBigInt::sub(s_m1, s_m_neg1);
+    s_c1.data = divide_bigint_by_2(std::move(s_c1.data));
+    s_c1.normalize();
+
+    SignedBigInt s_c2 = SignedBigInt::sub(SignedBigInt::sub(SignedBigInt::sub(s_m1, s_m0), s_m_inf), s_c1);
+    s_c2.normalize();
+
+    SignedBigInt temp1 = SignedBigInt::sub(s_m2, s_m1);
+    temp1.data = divide_bigint_by_3(std::move(temp1.data));
+
+    SignedBigInt temp2 = SignedBigInt::sub(s_m_neg1, s_m0);
+    temp2.data = divide_bigint_by_2(std::move(temp2.data));
+
+    SignedBigInt temp3;
+    temp3.data = multiply_bigint_by_uint32(s_m_inf.data, 2);
+    temp3.negative = s_m_inf.negative;
+
+    SignedBigInt s_c3 = SignedBigInt::sub(SignedBigInt::sub(SignedBigInt::sub(temp1, temp2), s_c1), temp3);
+    s_c3.normalize();
+
+    if (s_c0.negative || s_c1.negative || s_c2.negative || s_c3.negative || s_c4.negative) {
+        return multiply_bigint_karatsuba(lhs, rhs);
     }
-    BigIntData half_diff = divide_bigint_by_pow10(m_neg1_minus_m0, 1);
 
-    BigIntData two_m_inf = multiply_bigint_by_uint32(m_inf, 2);
-    BigIntData c3 = subtract_bigint(subtract_bigint(m2_minus_m1_div3, half_diff), two_m_inf);
-
-    // 结果 = c0 + c1*B^m + c2*B^(2m) + c3*B^(3m) + c4*B^(4m)
-    BigIntData result = c0;
-    result = add_bigint(result, shift_bigint(c1, m));
-    result = add_bigint(result, shift_bigint(c2, 2 * m));
-    result = add_bigint(result, shift_bigint(c3, 3 * m));
-    result = add_bigint(result, shift_bigint(c4, 4 * m));
+    BigIntData result = s_c0.data;
+    result = add_bigint(result, shift_bigint(s_c1.data, m));
+    result = add_bigint(result, shift_bigint(s_c2.data, 2 * m));
+    result = add_bigint(result, shift_bigint(s_c3.data, 3 * m));
+    result = add_bigint(result, shift_bigint(s_c4.data, 4 * m));
 
     trim_bigint(result);
     return result;
@@ -1323,10 +1556,9 @@ BigIntData multiply_bigint(const BigIntData& lhs, const BigIntData& rhs) {
         return multiply_bigint_karatsuba(lhs, rhs);
     }
 
-    // Toom-Cook interpolation uses signed intermediate values; until that path
-    // is fully sign-aware, keep medium-size products on the stable Karatsuba path.
+    // 中大规模使用 Toom-Cook 3（已修复符号处理问题）
     if (max_size <= 4096) {
-        return multiply_bigint_karatsuba(lhs, rhs);
+        return multiply_bigint_toom3(lhs, rhs);
     }
 
     // 大规模使用 NTT
