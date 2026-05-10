@@ -1,13 +1,10 @@
 /**
- * @file trig.h
- * @brief Trigonometric functions and inverse trigonometric functions
- *
- * This file provides sin, cos, tan, and their inverses, as well as
- * secant, cosecant, cotangent and their inverses.
+ * @file transcendental.h
+ * @brief Trigonometric, hyperbolic, exponential, and logarithmic functions
  */
 
-#ifndef MATH_TRANSCENDENTAL_TRIG_H
-#define MATH_TRANSCENDENTAL_TRIG_H
+#ifndef MATH_TRANSCENDENTAL_TRANSCENDENTAL_H
+#define MATH_TRANSCENDENTAL_TRANSCENDENTAL_H
 
 #include "app/scalar_type.h"
 #include "math/core/floating_point.h"
@@ -21,31 +18,20 @@ namespace mymath {
 
 /**
  * @brief Calculate sine
- * @param x Angle (radians)
- * @return sin(x)
- *
- * Uses Taylor series expansion with angle reduction.
  */
 long double sin(long double x);
 
 /**
  * @brief Calculate cosine
- * @param x Angle (radians)
- * @return cos(x)
- *
- * Uses Taylor series expansion with angle reduction.
  */
 long double cos(long double x);
 
 /**
  * @brief Calculate tangent
- * @param x Angle (radians)
- * @return tan(x) = sin(x) / cos(x)
- * @throws std::domain_error when cos(x) is close to zero
  */
 long double tan(long double x);
 
-// Scalar overloads - use dispatch from scalar_traits.h
+// Scalar overloads
 inline Scalar sin(Scalar x) {
     Scalar result = scalar_sin(x);
     return scalar_abs(result) < scalar_near_zero_threshold() ? Scalar(0.0L) : result;
@@ -66,44 +52,25 @@ inline Scalar tan(Scalar x) {
 
 /**
  * @brief Calculate arcsine
- * @param x Input value, must be in [-1, 1] range
- * @return asin(x) (radians, range [-π/2, π/2])
- * @throws std::domain_error when |x| > 1
- *
- * Uses Newton-Raphson iteration to solve sin(θ) = x.
  */
 long double asin(long double x);
 
 /**
  * @brief Calculate arccosine
- * @param x Input value, must be in [-1, 1] range
- * @return acos(x) (radians, range [0, π])
- * @throws std::domain_error when |x| > 1
- *
- * Uses identity: acos(x) = π/2 - asin(x)
  */
 long double acos(long double x);
 
 /**
  * @brief Calculate arctangent
- * @param x Input value
- * @return atan(x) (radians, range [-π/2, π/2])
- *
- * Uses identity to reduce input range to [0, 0.5], then uses Taylor series.
  */
 long double atan(long double x);
 
 /**
  * @brief Calculate two-argument arctangent
- * @param y y coordinate
- * @param x x coordinate
- * @return atan2(y, x) (radians, range [-π, π])
- *
- * Correctly handles all quadrants and special values.
  */
 long double atan2(long double y, long double x);
 
-// Scalar overloads - use dispatch from scalar_traits.h
+// Scalar overloads
 inline Scalar asin(Scalar x) {
     if (x < Scalar(-1.0L) || x > Scalar(1.0L)) {
         throw std::domain_error("asin is only defined for values in [-1, 1]");
@@ -130,28 +97,11 @@ inline Scalar atan2(Scalar y, Scalar x) {
 // Secant, Cosecant, Cotangent
 // ============================================================================
 
-/**
- * @brief Calculate secant
- * @param x Angle (radians)
- * @return sec(x) = 1 / cos(x)
- */
 long double sec(long double x);
-
-/**
- * @brief Calculate cosecant
- * @param x Angle (radians)
- * @return csc(x) = 1 / sin(x)
- */
 long double csc(long double x);
-
-/**
- * @brief Calculate cotangent
- * @param x Angle (radians)
- * @return cot(x) = cos(x) / sin(x)
- */
 long double cot(long double x);
 
-// Scalar overloads - use dispatch from scalar_traits.h
+// Scalar overloads
 inline Scalar sec(Scalar x) {
     return scalar_sec(x);
 }
@@ -168,28 +118,11 @@ inline Scalar cot(Scalar x) {
 // Inverse Secant, Cosecant, Cotangent
 // ============================================================================
 
-/**
- * @brief Calculate arcsecant
- * @param x Input value, must satisfy |x| >= 1
- * @return asec(x)
- */
 long double asec(long double x);
-
-/**
- * @brief Calculate arccosecant
- * @param x Input value, must satisfy |x| >= 1
- * @return acsc(x)
- */
 long double acsc(long double x);
-
-/**
- * @brief Calculate arccotangent
- * @param x Input value
- * @return acot(x)
- */
 long double acot(long double x);
 
-// Scalar overloads - use dispatch from scalar_traits.h
+// Scalar overloads
 inline Scalar asec(Scalar x) {
     return scalar_asec(x);
 }
@@ -202,6 +135,103 @@ inline Scalar acot(Scalar x) {
     return scalar_acot(x);
 }
 
+// ============================================================================
+// Hyperbolic Functions
+// ============================================================================
+
+long double sinh(long double x);
+long double cosh(long double x);
+long double tanh(long double x);
+
+// Scalar overloads
+inline Scalar sinh(Scalar x) {
+    return scalar_sinh(x);
+}
+
+inline Scalar cosh(Scalar x) {
+    return scalar_cosh(x);
+}
+
+inline Scalar tanh(Scalar x) {
+    return scalar_tanh(x);
+}
+
+// ============================================================================
+// Inverse Hyperbolic Functions
+// ============================================================================
+
+long double asinh(long double x);
+long double acosh(long double x);
+long double atanh(long double x);
+
+// Scalar overloads
+inline Scalar asinh(Scalar x) {
+    return scalar_asinh(x);
+}
+
+inline Scalar acosh(Scalar x) {
+    if (x < Scalar(1.0L)) {
+        throw std::domain_error("acosh is only defined for x >= 1");
+    }
+    return scalar_acosh(x);
+}
+
+inline Scalar atanh(Scalar x) {
+    if (x <= Scalar(-1.0L) || x >= Scalar(1.0L)) {
+        throw std::domain_error("atanh is only defined for values in (-1, 1)");
+    }
+    return scalar_atanh(x);
+}
+
+// ============================================================================
+// Exponential Functions
+// ============================================================================
+
+long double exp(long double x);
+
+// Scalar overload
+inline Scalar exp(Scalar x) {
+    return scalar_exp(x);
+}
+
+// ============================================================================
+// Logarithmic Functions
+// ============================================================================
+
+long double ln(long double x);
+long double log(long double x);
+long double log1p(long double x);
+long double log10(long double x);
+long double log2(long double x);
+
+// Scalar overloads
+inline Scalar ln(Scalar x) {
+    if (x <= Scalar(0.0L)) {
+        throw std::domain_error("ln is only defined for positive numbers");
+    }
+    return scalar_ln(x);
+}
+
+inline Scalar log(Scalar x) { return ln(x); }
+
+inline Scalar log1p(Scalar x) {
+    return scalar_log1p(x);
+}
+
+inline Scalar log10(Scalar x) {
+    if (x <= Scalar(0.0L)) {
+        throw std::domain_error("log10 is only defined for positive numbers");
+    }
+    return scalar_log10(x);
+}
+
+inline Scalar log2(Scalar x) {
+    if (x <= Scalar(0.0L)) {
+        throw std::domain_error("log2 is only defined for positive numbers");
+    }
+    return scalar_log2(x);
+}
+
 }  // namespace mymath
 
-#endif // MATH_TRANSCENDENTAL_TRIG_H
+#endif // MATH_TRANSCENDENTAL_TRANSCENDENTAL_H

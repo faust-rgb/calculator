@@ -27,12 +27,12 @@
 bool lookup_builtin_constant(const std::string& name, Scalar* value) {
     // 数学常量 pi
     if (name == "pi") {
-        *value = mymath::kPi;
+        *value = mymath::pi();
         return true;
     }
     // 数学常量 e (自然对数的底)
     if (name == "e") {
-        *value = mymath::kE;
+        *value = mymath::e();
         return true;
     }
     // 物理常量：光速

@@ -27,13 +27,9 @@
 #include "math/core/scalar_traits.h"
 
 // Transcendental - trig, hyperbolic, exp/log
-#include "math/transcendental/trig.h"
-#include "math/transcendental/hyperbolic.h"
-#include "math/transcendental/exp_log.h"
+#include "math/transcendental/transcendental.h"
 
 // Special - gamma, beta, bessel, error functions
-#include "math/special/gamma_beta.h"
-#include "math/special/bessel.h"
-#include "math/special/error_functions.h"
+#include "math/special/special_functions.h"
 
 #endif // MYMATH_H

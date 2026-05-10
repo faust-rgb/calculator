@@ -6,7 +6,7 @@
 #include "roots_powers.h"
 #include "basic_ops.h"
 #include "constants.h"
-#include "math/transcendental/exp_log.h"
+#include "math/transcendental/transcendental.h"
 #include <stdexcept>
 
 namespace mymath {
@@ -118,7 +118,7 @@ long double pow(long double base, long double exponent) {
             return 1.0L;
         }
         if (exponent < 0.0L) {
-            return infinity();
+            throw std::domain_error("zero cannot be raised to a negative power");
         }
         return 0.0L;
     }

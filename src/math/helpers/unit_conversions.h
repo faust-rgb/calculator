@@ -17,7 +17,7 @@ namespace mymath {
  * @param value 角度值
  * @return 对应的弧度值
  */
-long double degrees_to_radians(long double value);
+//long double degrees_to_radians(long double value);
 Scalar degrees_to_radians(Scalar value);
 
 /**
@@ -25,7 +25,7 @@ Scalar degrees_to_radians(Scalar value);
  * @param value 弧度值
  * @return 对应的角度值
  */
-long double radians_to_degrees(long double value);
+//long double radians_to_degrees(long double value);
 Scalar radians_to_degrees(Scalar value);
 
 /**
@@ -33,7 +33,7 @@ Scalar radians_to_degrees(Scalar value);
  * @param value 摄氏度值
  * @return 对应的华氏度值
  */
-long double celsius_to_fahrenheit(long double value);
+//long double celsius_to_fahrenheit(long double value);
 Scalar celsius_to_fahrenheit(Scalar value);
 
 /**
@@ -41,7 +41,7 @@ Scalar celsius_to_fahrenheit(Scalar value);
  * @param value 华氏度值
  * @return 对应的摄氏度值
  */
-long double fahrenheit_to_celsius(long double value);
+//long double fahrenheit_to_celsius(long double value);
 Scalar fahrenheit_to_celsius(Scalar value);
 
 }  // namespace mymath

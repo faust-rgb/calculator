@@ -29,8 +29,10 @@
 
 #include "app/scalar_type.h"
 #include "math/mymath.h"
+#include "precise/precise_decimal.h"
 
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -237,8 +239,15 @@ SymbolicExpression simplify_lightweight(const SymbolicExpression& expression) {
         case NodeType::kPower:
             left = simplify_lightweight(SymbolicExpression(node->left));
             right = simplify_lightweight(SymbolicExpression(node->right));
-            if (left.is_number(&left_value) && right.is_number(&right_value))
+            if (left.is_number(&left_value) && right.is_number(&right_value)) {
+                if constexpr (std::is_same_v<Scalar, PreciseDecimal>) {
+                    if (mymath::is_integer(right_value, Scalar(1e-10L))) {
+                        return SymbolicExpression::number(
+                            mymath::pow(left_value, static_cast<long long>(right_value)));
+                    }
+                }
                 return SymbolicExpression::number(mymath::pow(left_value, right_value));
+            }
             if (right.is_number(&right_value)) {
                 if (mymath::is_near_zero(right_value, Scalar(kFormatEps)))
                     return SymbolicExpression::number(Scalar(1));

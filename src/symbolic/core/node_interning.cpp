@@ -218,8 +218,8 @@ std::string format_number(Scalar value) {
     }
 
     long long n, d;
-    long double ld_val = static_cast<long double>(value.to_long_double());
-    if (mymath::approximate_fraction(ld_val, &n, &d, 999, 1e-10)) {
+    //long double ld_val = static_cast<long double>(value.to_long_double());
+    if (mymath::approximate_fraction(value, &n, &d, 999, 1e-10)) {
         if (d == 1) return std::to_string(n);
         return std::to_string(n) + "/" + std::to_string(d);
     }

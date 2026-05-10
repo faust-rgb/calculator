@@ -146,7 +146,7 @@ long long gcd(long long a, long long b) {
     }
     return a < 0 ? -a : a;
 }
-
+/*
 bool approximate_fraction(long double value,
                           long long* numerator,
                           long long* denominator,
@@ -169,7 +169,7 @@ bool approximate_fraction(long double value,
 
     return false;
 }
-
+*/
 bool approximate_fraction(Scalar value,
                           long long* numerator,
                           long long* denominator,
@@ -270,8 +270,8 @@ bool best_rational_approximation(long double value,
     *denominator = best_den / divisor;
     return true;
 }
-
-long double normalize_angle(long double x) {
+/*
+//long double normalize_angle(long double x) {
     if (!isfinite(x)) {
         return x;
     }
@@ -287,5 +287,5 @@ long double normalize_angle(long double x) {
     }
     return static_cast<long double>(result);
 }
-
+*/
 }  // namespace mymath

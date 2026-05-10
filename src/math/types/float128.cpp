@@ -427,7 +427,13 @@ float128_t cos(float128_t a) {
 }
 
 float128_t tan(float128_t a) {
-    return precise128::sin(a) / precise128::cos(a);
+    float128_t c = precise128::cos(a);
+    // Check if cos(a) is near zero (within machine epsilon for the precision)
+    // This handles cases like tan(pi/2) where pi/2 is not exact
+    if (precise128::abs(c).hi < 1e-15L) {
+        throw std::domain_error("tan is undefined at odd multiples of pi/2");
+    }
+    return precise128::sin(a) / c;
 }
 
 float128_t asin(float128_t a) {
@@ -550,7 +556,7 @@ float128_t pow(float128_t base, float128_t exponent) {
             return {1.0L, 0.0L};
         }
         if (exponent.hi < 0 || (exponent.hi == 0 && exponent.lo < 0)) {
-            return {std::numeric_limits<long double>::infinity(), 0.0L};
+            throw std::domain_error("zero cannot be raised to a negative power");
         }
         return {0, 0};
     }
@@ -566,7 +572,29 @@ float128_t pow(float128_t base, float128_t exponent) {
             }
             return result;
         }
-        return {std::numeric_limits<long double>::quiet_NaN(), std::numeric_limits<long double>::quiet_NaN()};
+        // Check if exponent is a fraction with odd denominator
+        // Try to approximate as a fraction
+        float128_t abs_exp = precise128::abs(exponent);
+        for (int den = 1; den <= 100; ++den) {
+            float128_t scaled = abs_exp * float128_t(static_cast<long double>(den));
+            float128_t num_f = precise128::round(scaled);
+            if (precise128::abs(scaled - num_f).hi < 1e-30L) {
+                long long num = static_cast<long long>(num_f.hi);
+                // Check if denominator is odd
+                if (den % 2 != 0) {
+                    // Compute |base|^exponent and apply sign
+                    float128_t abs_base = precise128::abs(base);
+                    float128_t result = precise128::exp(exponent * precise128::ln(abs_base));
+                    // If numerator is odd, result is negative
+                    if (num % 2 != 0) {
+                        result = -result;
+                    }
+                    return result;
+                }
+                break;
+            }
+        }
+        throw std::domain_error("negative base with non-integer exponent");
     }
     return precise128::exp(exponent * precise128::ln(base));
 }

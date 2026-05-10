@@ -94,7 +94,9 @@ Scalar t_pi() { return mymath::pi(); }
 Scalar t_infinity() { return Scalar("1e1000"); }
 
 
-bool t_is_effective_infinity_point(const Scalar&) { return false; }
+bool t_is_effective_infinity_point(const Scalar& val) {
+    return !mymath::isfinite(val);
+}
 
 
 bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
@@ -931,18 +933,16 @@ Scalar handle_pole_limit(int shift, Scalar leading_coefficient, int direction) {
     if (direction == 0) {
         // 双侧极限：只有当 shift 为偶数时才存在
         if (shift % 2 == 0) {
-            return (leading_coefficient > Scalar(static_cast<long long>(0))) ? t_infinity() : -t_infinity();
+            throw std::runtime_error("limit diverges to infinity");
         } else {
             throw std::runtime_error("two-sided limit does not exist (pole with odd shift)");
         }
     } else if (direction == 1) {
         // 右极限：(x - x0) > 0，符号不变
-        return (leading_coefficient > Scalar(static_cast<long long>(0))) ? t_infinity() : -t_infinity();
+        throw std::runtime_error("limit diverges to infinity");
     } else {
         // 左极限：(x - x0) < 0，奇数 shift 时符号翻转
-        bool flip_sign = (shift % 2 != 0);
-        Scalar effective_c = flip_sign ? -leading_coefficient : leading_coefficient;
-        return (effective_c > Scalar(static_cast<long long>(0))) ? t_infinity() : -t_infinity();
+        throw std::runtime_error("limit diverges to infinity");
     }
 }
 
@@ -1073,8 +1073,7 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
             return true;
         }
         if (is_infinite_probe(kind)) {
-            *result = (kind == SymbolicLimitProbeKind::kPositiveInfinity) ? t_infinity() : -t_infinity();
-            return true;
+            throw std::runtime_error("limit diverges to infinity");
         }
     }
 

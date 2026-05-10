@@ -36,7 +36,12 @@ T t_sqrt(T v) {
 
 template <typename T>
 std::string format_number(T value) {
-    if constexpr (std::is_same_v<T, PreciseDecimal>) return value.to_string();
+    if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        // Apply display precision for PreciseDecimal
+        std::ostringstream out;
+        out << std::setprecision(mutable_display_precision()) << static_cast<long double>(value);
+        return out.str();
+    }
     else {
         if (mymath::is_near_zero(static_cast<long double>(value), 1e-10)) value = T(0);
         std::ostringstream out;

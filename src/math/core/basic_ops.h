@@ -176,11 +176,11 @@ long long gcd(long long a, long long b);
  * Suitable for display optimization or identifying values that should be fractions,
  * e.g., 0.3333333333 -> 1/3.
  */
-bool approximate_fraction(long double value,
-                          long long* numerator,
-                          long long* denominator,
-                          int max_denominator = 999,
-                          long double eps = 1e-10);
+//bool approximate_fraction(long double value,
+ //                         long long* numerator,
+ //                         long long* denominator,
+ //                         int max_denominator = 999,
+ //                         long double eps = 1e-10);
 
 // Scalar overload for approximate_fraction
 bool approximate_fraction(Scalar value,

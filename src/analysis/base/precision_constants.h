@@ -26,7 +26,7 @@ namespace precision {
  * 对于 double: ~2.2e-16
  * 对于 long double: ~1.1e-19 (80-bit) 或 ~1.9e-34 (128-bit)
  * 对于 float128_t: ~1.9e-34
- * 对于 PreciseDecimal: 10^(-scale)
+ * 对于 PreciseDecimal: 使用合理的数值计算容差，而不是理论精度
  */
 template <typename T>
 constexpr T epsilon() {
@@ -34,9 +34,9 @@ constexpr T epsilon() {
         // float128_t 约有 113 位有效数字，epsilon ≈ 2^(-113)
         return T(1.0L) / T(10384593717069655257060992658440192.0L); // 2^113
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        // PreciseDecimal 的精度取决于 scale 设置
-        // 使用默认精度（通常是 34 位）
-        return precise::pow(PreciseDecimal(10), PreciseDecimal(-PrecisionContext::get_default_scale()));
+        // 对于数值计算，使用 1e-15 作为合理的容差
+        // 这比理论精度（1e-40）更实用，避免收敛问题
+        return PreciseDecimal("1e-15");
     } else {
         return std::numeric_limits<T>::epsilon();
     }
@@ -52,7 +52,8 @@ inline T sqrt_epsilon() {
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
         return mymath::sqrt(epsilon<T>());
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        return mymath::sqrt(epsilon<T>());
+        // 使用 1e-8 作为合理的步长基数，与 double 类型类似
+        return PreciseDecimal("1e-8");
     } else {
         return std::sqrt(epsilon<T>());
     }
@@ -68,7 +69,8 @@ inline T cbrt_epsilon() {
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
         return mymath::cbrt(epsilon<T>());
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        return mymath::cbrt(epsilon<T>());
+        const int exponent = (PrecisionContext::get_default_scale() + 2) / 3;
+        return PreciseDecimal("1e-" + std::to_string(exponent));
     } else {
         return std::cbrt(epsilon<T>());
     }

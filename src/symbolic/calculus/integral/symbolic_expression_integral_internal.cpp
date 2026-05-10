@@ -121,7 +121,7 @@ SymbolicExpression clean_symbolic_constant(Scalar value) {
 
     long long numerator = 0;
     long long denominator = 1;
-    if (mymath::approximate_fraction(static_cast<long double>(value),
+    if (mymath::approximate_fraction(value,
                                      &numerator,
                                      &denominator,
                                      999,

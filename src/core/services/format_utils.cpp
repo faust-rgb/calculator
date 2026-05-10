@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <iomanip>
+#include <limits>
 #include <numeric>
 #include <sstream>
 
@@ -274,7 +275,10 @@ long double normalize_display_decimal(Scalar value) {
     if (mymath::abs(v) < kDisplayZeroEps()) {
         return 0.0L;
     }
+    const Scalar max_ll(static_cast<long double>(std::numeric_limits<long long>::max()));
+    const Scalar min_ll(static_cast<long double>(std::numeric_limits<long long>::min()));
     if (mymath::abs(v) > kDisplayIntegerEps() &&
+        v < max_ll && v > min_ll &&
         is_integer_double(value, 1e-9)) {
         return static_cast<long double>(round_to_long_long(value));
     }
@@ -301,7 +305,9 @@ std::string format_decimal(long double value) {
  * @return 格式化后的字符串
  */
 std::string format_decimal(long double value, int precision) {
-    if (mymath::abs(value) < 1e-12L) {
+    if (value != 0.0L && mymath::abs(value) < 1e-12L) {
+        // Preserve meaningful tiny values in scientific notation.
+    } else if (mymath::abs(value) < 1e-12L) {
         value = 0.0L;
     } else {
         value = normalize_display_decimal(value);
@@ -526,6 +532,7 @@ std::string format_stored_value(const StoredValue& value, bool symbolic_constant
         if (is_integer_double(value.decimal, 1e-9)) {
             return format_decimal(normalize_display_decimal(value.decimal));
         }
+        // Preserve the original high-precision text
         return value.precise_decimal_text;
     }
     if (value.is_matrix) {

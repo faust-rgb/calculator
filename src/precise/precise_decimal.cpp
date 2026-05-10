@@ -124,20 +124,22 @@ std::vector<uint32_t> string_to_bigint(const std::string& s) {
  * @brief 将基数为 10^9 的大整数数组转换为字符串
  *
  * 数组是小端序（低位在前），输出字符串是高位在前。
- *
- * @param v 大整数数组，小端序
- * @return 整数字符串
- *
- * @example [890123, 234567, 1] -> "1234567890123"
  */
 std::string bigint_to_string(const std::vector<uint32_t>& v) {
     if (v.empty() || (v.size() == 1 && v[0] == 0)) return "0";
-    std::ostringstream oss;
-    oss << v.back();
+    
+    std::string s;
+    s.reserve(v.size() * kBaseDigits);
+    
+    s.append(std::to_string(v.back()));
     for (int i = static_cast<int>(v.size()) - 2; i >= 0; --i) {
-        oss << std::setfill('0') << std::setw(kBaseDigits) << v[static_cast<std::size_t>(i)];
+        std::string chunk = std::to_string(v[i]);
+        if (chunk.size() < kBaseDigits) {
+            s.append(kBaseDigits - chunk.size(), '0');
+        }
+        s.append(chunk);
     }
-    return oss.str();
+    return s;
 }
 
 /**
@@ -488,6 +490,65 @@ std::vector<uint32_t> shift_bigint(const std::vector<uint32_t>& v, std::size_t n
 }
 
 /**
+ * @brief 统计大整数末尾的零的个数
+ */
+int count_trailing_zeros(const std::vector<uint32_t>& v) {
+    if (v.empty() || (v.size() == 1 && v[0] == 0)) return 0;
+    int count = 0;
+    std::size_t i = 0;
+    while (i < v.size() && v[i] == 0) {
+        count += kBaseDigits;
+        i++;
+    }
+    if (i < v.size()) {
+        uint32_t val = v[i];
+        while (val > 0 && val % 10 == 0) {
+            count++;
+            val /= 10;
+        }
+    }
+    return count;
+}
+
+/**
+ * @brief 大整数除以 10^n (原地修改或返回新向量)
+ */
+std::vector<uint32_t> divide_bigint_by_pow10(std::vector<uint32_t> v, int n) {
+    if (n <= 0) return v;
+    int chunk_shift = n / kBaseDigits;
+    int digit_shift = n % kBaseDigits;
+
+    if (chunk_shift >= static_cast<int>(v.size())) return {0};
+
+    if (chunk_shift > 0) {
+        v.erase(v.begin(), v.begin() + chunk_shift);
+    }
+
+    if (digit_shift > 0) {
+        uint32_t divisor = 1;
+        for (int i = 0; i < digit_shift; ++i) divisor *= 10;
+
+        uint32_t rem = 0;
+        for (int i = static_cast<int>(v.size()) - 1; i >= 0; --i) {
+            uint64_t current = v[i] + static_cast<uint64_t>(rem) * kBase;
+            v[i] = static_cast<uint32_t>(current / divisor);
+            rem = static_cast<uint32_t>(current % divisor);
+        }
+    }
+    while (v.size() > 1 && v.back() == 0) v.pop_back();
+    if (v.empty()) v = {0};
+    return v;
+}
+
+/**
+ * @brief 检查大整数是否能被 10^n 整除
+ */
+bool is_bigint_multiple_of_pow10(const std::vector<uint32_t>& v, int n) {
+    if (n <= 0) return true;
+    return count_trailing_zeros(v) >= n;
+}
+
+/**
  * @brief 大整数截取低位 n 个 chunk
  *
  * @param v 大整数数组
@@ -645,7 +706,9 @@ void div_bigint(const std::vector<uint32_t>& num,
                 const std::vector<uint32_t>& den,
                 std::vector<uint32_t>* quotient,
                 std::vector<uint32_t>* remainder) {
-    if (den.empty() || (den.size() == 1 && den[0] == 0)) {
+    std::size_t m = den.size();
+    while (m > 0 && den[m - 1] == 0) --m;
+    if (m == 0) {
         throw std::runtime_error("division by zero in div_bigint");
     }
 
@@ -659,9 +722,6 @@ void div_bigint(const std::vector<uint32_t>& num,
     // 确定实际长度（去除前导零）
     std::size_t n = num.size();
     while (n > 1 && num[n - 1] == 0) --n;
-    std::size_t m = den.size();
-    while (m > 1 && den[m - 1] == 0) --m;
-
     // 除数大于被除数
     if (m > n || (m == n && compare_bigint(
             std::vector<uint32_t>(num.begin(), num.begin() + static_cast<std::ptrdiff_t>(n)),
@@ -690,12 +750,8 @@ void div_bigint(const std::vector<uint32_t>& num,
 
     // Knuth 算法 D
     // D1: 归一化 - 找到 d 使得 den[m-1] * d >= kBase/2
-    uint32_t d = 1;
-    uint64_t top_den = den[m - 1];
-    while (top_den < kBase / 2) {
-        top_den *= 2;
-        d *= 2;
-    }
+    uint32_t d = static_cast<uint32_t>(kBase / (static_cast<uint64_t>(den[m - 1]) + 1));
+    if (d == 0) d = 1;
 
     // 归一化被除数和除数
     std::vector<uint32_t> u(n + 1, 0);  // 被除数，多一位防止溢出
@@ -847,6 +903,96 @@ PreciseDecimal decimal_from_uint(uint32_t value) {
     return PreciseDecimal(static_cast<long long>(value));
 }
 
+long double long_double_power_of_10(int exponent) {
+    long double result = 1.0L;
+    long double factor = 10.0L;
+    int n = exponent < 0 ? -exponent : exponent;
+
+    while (n > 0) {
+        if (n % 2 == 1) result *= factor;
+        factor *= factor;
+        n /= 2;
+    }
+
+    return exponent < 0 ? 1.0L / result : result;
+}
+
+PreciseDecimal decimal_power_of_10(int exponent) {
+    PreciseDecimal result(1LL);
+    if (exponent >= 0) {
+        result.data = multiply_bigint_by_power_of_10(result.data, exponent);
+    } else {
+        result.scale = -exponent;
+    }
+    result.normalize();
+    return result;
+}
+
+PreciseDecimal sqrt_initial_guess(const PreciseDecimal& val) {
+    std::string digits = bigint_to_string(val.data);
+    int decimal_exponent = static_cast<int>(digits.size()) - val.scale - 1;
+    int mantissa_digits = std::min<int>(18, digits.size());
+    std::string mantissa_text = digits.substr(0, static_cast<std::size_t>(mantissa_digits));
+
+    PreciseDecimal mantissa = PreciseDecimal::from_digits(mantissa_text, mantissa_digits - 1, false);
+    if (decimal_exponent % 2 != 0) {
+        mantissa *= PreciseDecimal(10LL);
+        --decimal_exponent;
+    }
+
+    PreciseDecimal x = mantissa > one() ? mantissa : one();
+    const PreciseDecimal one_half = half();
+    for (int i = 0; i < 8; ++i) {
+        x = one_half * (x + mantissa / x);
+    }
+
+    return x * decimal_power_of_10(decimal_exponent / 2);
+}
+
+PreciseDecimal ln_near_one(const PreciseDecimal& x) {
+    const PreciseDecimal z = (x - one()) / (x + one());
+    const PreciseDecimal z2 = z * z;
+    PreciseDecimal term = z;
+    PreciseDecimal sum = z;
+    const PreciseDecimal epsilon = scale_epsilon();
+    const int limit = series_iteration_limit(120);
+
+    for (int n = 3; n < limit * 2; n += 2) {
+        term *= z2;
+        PreciseDecimal add = term / decimal_from_uint(static_cast<uint32_t>(n));
+        sum += add;
+        if (precise::abs(add) < epsilon) break;
+    }
+
+    return two() * sum;
+}
+
+bool try_integral_exponent(const PreciseDecimal& value, long long* exponent) {
+    PreciseDecimal rounded = precise::round(value);
+    if (precise::abs(value - rounded) > scale_epsilon(2)) return false;
+    *exponent = static_cast<long long>(rounded.to_double());
+    return true;
+}
+
+bool try_thirds_exponent(const PreciseDecimal& value, long long* thirds) {
+    PreciseDecimal scaled = value * PreciseDecimal(3LL);
+    PreciseDecimal rounded = precise::round(scaled);
+    if (precise::abs(scaled - rounded) > PreciseDecimal("1e-25")) return false;
+    *thirds = static_cast<long long>(rounded.to_double());
+    return true;
+}
+
+PreciseDecimal cbrt_precise_decimal(const PreciseDecimal& val) {
+    if (val.is_zero()) return PreciseDecimal(0LL);
+    PreciseDecimal x = sqrt_initial_guess(precise::abs(val));
+    if (x.is_zero()) x = one();
+    const PreciseDecimal abs_val = precise::abs(val);
+    for (int i = 0; i < std::max(14, PrecisionContext::get_default_scale() / 6 + 8); ++i) {
+        x = (two() * x + abs_val / (x * x)) / PreciseDecimal(3LL);
+    }
+    return val.negative ? -x : x;
+}
+
 /**
  * @brief 生成精度相关的 epsilon 值
  *
@@ -913,12 +1059,35 @@ void PrecisionContext::set_default_scale(int s) { g_default_scale = s; }
 
 PreciseDecimal::PreciseDecimal(long long value) {
     negative = value < 0;
-    data = string_to_bigint(std::to_string(negative ? -value : value));
+    if (value == LLONG_MIN) {
+        // Special case: LLONG_MIN = -9223372036854775808
+        // -LLONG_MIN overflows, so handle it directly
+        data = string_to_bigint("9223372036854775808");
+    } else {
+        data = string_to_bigint(std::to_string(negative ? -value : value));
+    }
     scale = 0;
 }
 
 PreciseDecimal::PreciseDecimal(long double value) {
-    *this = from_decimal_literal(format_decimal(value, 15));
+    if (mymath::isnan(value)) {
+        *this = PreciseDecimal::nan();
+        return;
+    }
+    if (mymath::isinf(value)) {
+        *this = value < 0.0L ? PreciseDecimal::neg_infinity() : PreciseDecimal::infinity();
+        return;
+    }
+    // Use higher precision for small values to avoid truncation to zero
+    int precision = 40;
+    if (mymath::abs(value) > 0.0L && mymath::abs(value) < 1e-10L) {
+        // For very small values, use scientific notation with full precision
+        std::ostringstream out;
+        out << std::scientific << std::setprecision(35) << value;
+        *this = from_decimal_literal(out.str());
+    } else {
+        *this = from_decimal_literal(format_decimal(value, precision));
+    }
 }
 
 PreciseDecimal::PreciseDecimal(const std::string& token) {
@@ -926,7 +1095,9 @@ PreciseDecimal::PreciseDecimal(const std::string& token) {
 }
 
 void PreciseDecimal::normalize() {
-    if (data.empty()) {
+    if (is_inf || is_nan) return;
+
+    if (data.empty() || (data.size() == 1 && data[0] == 0)) {
         data = {0};
         scale = 0;
         negative = false;
@@ -934,21 +1105,12 @@ void PreciseDecimal::normalize() {
     }
 
     // 去除末尾的零（缩减 scale）
-    while (scale > 0 && !is_zero()) {
-        // 检查最后一个 chunk 是否被 10 整除
-        if (data[0] % 10 == 0) {
-            // 对所有 chunks 进行除以 10 的操作
-            uint32_t rem = 0;
-            for (int i = static_cast<int>(data.size()) - 1; i >= 0; --i) {
-                uint64_t current = data[i] + static_cast<uint64_t>(rem) * kBase;
-                data[i] = static_cast<uint32_t>(current / 10);
-                rem = static_cast<uint32_t>(current % 10);
-            }
-            scale--;
-            // 如果最高位变 0，移除它
-            while (data.size() > 1 && data.back() == 0) data.pop_back();
-        } else {
-            break;
+    if (scale > 0) {
+        int zeros = count_trailing_zeros(data);
+        int to_remove = std::min(zeros, scale);
+        if (to_remove > 0) {
+            data = divide_bigint_by_pow10(std::move(data), to_remove);
+            scale -= to_remove;
         }
     }
 
@@ -1077,7 +1239,7 @@ long double PreciseDecimal::to_double() const {
     long double exponent = static_cast<long double>(end_chunk) * 9.0L - static_cast<long double>(scale);
 
     if (exponent != 0.0L) {
-        res *= mymath::pow(10.0L, exponent);
+        res *= long_double_power_of_10(static_cast<int>(exponent));
     }
 
     if (!mymath::isfinite(static_cast<long double>(res))) {
@@ -1230,12 +1392,17 @@ PreciseDecimal sqrt(const PreciseDecimal& val) {
 
     // Newton 迭代: x_{n+1} = 0.5 * (x_n + val / x_n)
     // 初始猜测使用 long double 版 sqrt
-    PreciseDecimal x(mymath::sqrt(val.to_double()));
+    PreciseDecimal x = sqrt_initial_guess(val);
     const PreciseDecimal one_half = half();
+    const PreciseDecimal epsilon = scale_epsilon();
 
     const int iterations = std::max(12, PrecisionContext::get_default_scale() / 8 + 8);
     for (int i = 0; i < iterations; ++i) {
-        x = one_half * (x + val / x);
+        PreciseDecimal next = one_half * (x + val / x);
+        if (precise::abs(next - x) <= epsilon * std::max(one(), precise::abs(next))) {
+            return next;
+        }
+        x = next;
     }
     return x;
 }
@@ -1251,39 +1418,77 @@ PreciseDecimal pow(const PreciseDecimal& base, const PreciseDecimal& exp) {
         return PreciseDecimal(0LL);
     }
     if (base == one()) return one();
+
+    long long integer_exp = 0;
+    if (try_integral_exponent(exp, &integer_exp)) {
+        if (integer_exp < 0) return one() / pow(base, -integer_exp);
+        return pow(base, integer_exp);
+    }
+
+    long long thirds_exp = 0;
+    const bool is_thirds = try_thirds_exponent(exp, &thirds_exp);
+
     if (base.negative) {
-        // 对于负数底数，只有整数指数才有意义
-        if (exp.scale == 0) {
-            return pow(base, static_cast<long long>(exp.to_double()));
+        if (is_thirds && thirds_exp == 1) {
+            return cbrt_precise_decimal(base);
+        }
+        if (is_thirds && thirds_exp == 2) {
+            PreciseDecimal root = cbrt_precise_decimal(base);
+            return root * root;
+        }
+        if (is_thirds && thirds_exp == -1) {
+            return one() / cbrt_precise_decimal(base);
         }
         throw std::domain_error("negative base with non-integer exponent");
     }
+
+    if (exp == half()) return precise::sqrt(base);
+    if (is_thirds && thirds_exp == 1) {
+        return cbrt_precise_decimal(base);
+    }
+    if (is_thirds && thirds_exp == 2) {
+        PreciseDecimal root = cbrt_precise_decimal(base);
+        return root * root;
+    }
+    if (is_thirds && thirds_exp == -1) {
+        return one() / cbrt_precise_decimal(base);
+    }
+
     // 使用 exp(ln(base) * exp) 计算
     return precise::exp(precise::ln(base) * exp);
 }
 
 PreciseDecimal floor(const PreciseDecimal& val) {
     if (val.scale <= 0) return val;
-    std::string s = bigint_to_string(val.data);
-    if (static_cast<int>(s.size()) <= val.scale) {
-        return val.negative ? PreciseDecimal(-1LL) : PreciseDecimal(0LL);
+
+    PreciseDecimal res;
+    res.data = divide_bigint_by_pow10(val.data, val.scale);
+    res.scale = 0;
+    res.negative = val.negative;
+    res.normalize();
+
+    if (val.negative && !is_bigint_multiple_of_pow10(val.data, val.scale)) {
+        res -= PreciseDecimal(1LL);
     }
-    std::string integer_part = s.substr(0, s.size() - static_cast<std::size_t>(val.scale));
-    PreciseDecimal res = PreciseDecimal::from_integer_string(integer_part, val.negative);
-    if (val.negative) res -= PreciseDecimal(1LL);
     return res;
 }
 
 PreciseDecimal ceil(const PreciseDecimal& val) {
     if (val.scale <= 0) return val;
-    PreciseDecimal f = floor(val);
-    if (f == val) return val;
+    if (is_bigint_multiple_of_pow10(val.data, val.scale)) {
+        PreciseDecimal res = val;
+        res.normalize();
+        return res;
+    }
+    PreciseDecimal f = precise::floor(val);
     return f + PreciseDecimal(1LL);
 }
 
 PreciseDecimal round(const PreciseDecimal& val) {
-    if (val.negative) return precise::ceil(val - half());
-    return precise::floor(val + half());
+    if (val.is_zero()) return val;
+    PreciseDecimal half_val = half();
+    if (val.negative) return precise::ceil(val - half_val);
+    return precise::floor(val + half_val);
 }
 
 PreciseDecimal pi() {
@@ -1318,7 +1523,45 @@ PreciseDecimal e() {
 
 PreciseDecimal exp(const PreciseDecimal& x) {
     if (x.is_zero()) return one();
-    if (x.negative) return one() / exp(precise::abs(x));
+    if (x.negative) {
+        // For large negative values, construct the result directly
+        // to avoid precision loss in 1/exp(abs(x))
+        PreciseDecimal abs_x = precise::abs(x);
+        long double abs_x_ld = static_cast<long double>(abs_x);
+        if (abs_x_ld > 100.0L) {
+            // exp(-x) = 10^(log10(e) * (-x)) = 10^(-x * log10(e))
+            // log10(e) ≈ 0.4342944819032518
+            long double log10_e = 0.4342944819032518L;
+            long double exponent = -abs_x_ld * log10_e;
+            int int_exp = static_cast<int>(std::floor(exponent));
+            long double frac_exp = exponent - int_exp;
+            long double mantissa = std::pow(10.0L, frac_exp);
+            // Construct as mantissa * 10^int_exp
+            // Format: mantissa with high precision, then scale adjustment
+            std::ostringstream oss;
+            oss << std::fixed << std::setprecision(35) << mantissa;
+            std::string mantissa_str = oss.str();
+            // Remove trailing zeros after decimal point
+            std::size_t dot_pos = mantissa_str.find('.');
+            if (dot_pos != std::string::npos) {
+                std::size_t last_non_zero = mantissa_str.find_last_not_of('0');
+                if (last_non_zero != std::string::npos && last_non_zero > dot_pos) {
+                    mantissa_str = mantissa_str.substr(0, last_non_zero + 1);
+                }
+            }
+            // Now construct the PreciseDecimal with the correct scale
+            // The scale is -int_exp (number of decimal places)
+            // But we need to adjust for the decimal point in mantissa_str
+            if (dot_pos != std::string::npos) {
+                std::string digits = mantissa_str.substr(0, dot_pos) + mantissa_str.substr(dot_pos + 1);
+                int decimal_places = static_cast<int>(mantissa_str.size() - dot_pos - 1);
+                int total_scale = -int_exp + decimal_places;
+                return PreciseDecimal::from_digits(digits, total_scale, false);
+            }
+            return PreciseDecimal::from_digits(mantissa_str, -int_exp, false);
+        }
+        return one() / exp(abs_x);
+    }
     int k = 0;
     PreciseDecimal r = x;
     const PreciseDecimal threshold("0.01");
@@ -1343,34 +1586,18 @@ PreciseDecimal ln(const PreciseDecimal& x) {
     if (x <= PreciseDecimal(0LL)) throw std::domain_error("ln of non-positive number");
     if (x == one()) return PreciseDecimal(0LL);
 
-    // 对于接近 1 的值，使用专门的 Taylor 级数展开
-    // ln(1 + ε) = ε - ε²/2 + ε³/3 - ε⁴/4 + ...
-    // 当 ε 很小时，这个级数收敛很快
-    PreciseDecimal diff = x - one();
-    int scale = PrecisionContext::get_default_scale();
-
-    // 如果 |x - 1| < 1e-10，使用 Taylor 级数直接计算
-    if (precise::abs(diff) < PreciseDecimal("1e-10")) {
-        PreciseDecimal term = diff;
-        PreciseDecimal sum = diff;
-        PreciseDecimal diff2 = diff * diff;
-        const PreciseDecimal epsilon = scale_epsilon();
-        const int limit = series_iteration_limit(100);
-
-        for (int i = 2; i < limit; ++i) {
-            term = -term * diff / decimal_from_uint(static_cast<uint32_t>(i));
-            sum += term;
-            if (precise::abs(term) < epsilon) break;
-        }
-        return sum;
+    PreciseDecimal reduced = x;
+    int sqrt_count = 0;
+    const PreciseDecimal lower("0.75");
+    const PreciseDecimal upper("1.5");
+    while ((reduced < lower || reduced > upper) && sqrt_count < 32) {
+        reduced = precise::sqrt(reduced);
+        ++sqrt_count;
     }
 
-    // 对于其他值，使用 Newton 迭代
-    // 使用更高精度的初始猜测：通过 to_long_double() 获取更多精度
-    PreciseDecimal y(mymath::ln(x.to_long_double()));
-    const int iterations = std::max(16, scale / 6 + 10);
-    for (int i = 0; i < iterations; ++i) y = y + x / exp(y) - one();
-    return y;
+    PreciseDecimal result = ln_near_one(reduced);
+    for (int i = 0; i < sqrt_count; ++i) result *= two();
+    return result;
 }
 
 PreciseDecimal log10(const PreciseDecimal& x) {
@@ -1439,17 +1666,26 @@ PreciseDecimal acos(const PreciseDecimal& x) {
 }
 
 PreciseDecimal atan(const PreciseDecimal& x) {
+    if (x.is_zero()) return PreciseDecimal(0LL);
+    if (x == one()) return pi() / PreciseDecimal(4LL);
+    if (x == -one()) return -pi() / PreciseDecimal(4LL);
     if (precise::abs(x) > one()) {
         if (x.negative) return -pi() / two() - atan(one() / x);
         return pi() / two() - atan(one() / x);
     }
-    PreciseDecimal y(mymath::atan(x.to_double()));
-    const int iterations = std::max(12, PrecisionContext::get_default_scale() / 8 + 8);
-    for (int i = 0; i < iterations; ++i) {
-        PreciseDecimal ty = tan(y);
-        y = y - (ty - x) / (one() + ty * ty);
+
+    PreciseDecimal term = x;
+    PreciseDecimal sum = x;
+    const PreciseDecimal x2 = x * x;
+    const PreciseDecimal epsilon = scale_epsilon();
+    const int limit = series_iteration_limit(120);
+    for (int i = 1; i < limit; ++i) {
+        term = -term * x2;
+        PreciseDecimal add = term / decimal_from_uint(static_cast<uint32_t>(2 * i + 1));
+        sum += add;
+        if (precise::abs(add) < epsilon) break;
     }
-    return y;
+    return sum;
 }
 
 PreciseDecimal sinh(const PreciseDecimal& x) {
@@ -1485,6 +1721,19 @@ PreciseDecimal atanh(const PreciseDecimal& x) {
 } // namespace precise
 
 PreciseDecimal add_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs) {
+    // Handle infinity
+    if (lhs.is_inf && rhs.is_inf) {
+        if (lhs.negative != rhs.negative) {
+            return PreciseDecimal::nan(); // inf + (-inf) = nan
+        }
+        return lhs; // inf + inf = inf (with same sign)
+    }
+    if (lhs.is_inf) return lhs;
+    if (rhs.is_inf) return rhs;
+
+    // Handle NaN
+    if (lhs.is_nan || rhs.is_nan) return PreciseDecimal::nan();
+
     if (lhs.negative != rhs.negative) {
         PreciseDecimal rhs_flipped = rhs;
         rhs_flipped.negative = !rhs_flipped.negative;
@@ -1504,6 +1753,23 @@ PreciseDecimal add_precise_decimal(const PreciseDecimal& lhs, const PreciseDecim
 }
 
 PreciseDecimal subtract_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs) {
+    // Handle infinity
+    if (lhs.is_inf && rhs.is_inf) {
+        if (lhs.negative == rhs.negative) {
+            return PreciseDecimal::nan(); // inf - inf = nan
+        }
+        return lhs; // inf - (-inf) = inf
+    }
+    if (lhs.is_inf) return lhs;
+    if (rhs.is_inf) {
+        PreciseDecimal res = rhs;
+        res.negative = !res.negative; // -(-inf) = inf
+        return res;
+    }
+
+    // Handle NaN
+    if (lhs.is_nan || rhs.is_nan) return PreciseDecimal::nan();
+
     if (lhs.negative != rhs.negative) {
         PreciseDecimal rhs_flipped = rhs;
         rhs_flipped.negative = !rhs_flipped.negative;
@@ -1531,6 +1797,19 @@ PreciseDecimal subtract_precise_decimal(const PreciseDecimal& lhs, const Precise
 }
 
 PreciseDecimal multiply_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs) {
+    // Handle infinity
+    if (lhs.is_inf || rhs.is_inf) {
+        if (lhs.is_zero() || rhs.is_zero()) {
+            return PreciseDecimal::nan(); // 0 * inf = nan
+        }
+        PreciseDecimal res = lhs.is_inf ? lhs : rhs;
+        res.negative = lhs.negative != rhs.negative;
+        return res;
+    }
+
+    // Handle NaN
+    if (lhs.is_nan || rhs.is_nan) return PreciseDecimal::nan();
+
     PreciseDecimal res;
     res.data = multiply_bigint(lhs.data, rhs.data);
     res.scale = lhs.scale + rhs.scale;
@@ -1540,6 +1819,22 @@ PreciseDecimal multiply_precise_decimal(const PreciseDecimal& lhs, const Precise
 }
 
 PreciseDecimal divide_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs) {
+    // Handle infinity
+    if (lhs.is_inf && rhs.is_inf) {
+        return PreciseDecimal::nan(); // inf / inf = nan
+    }
+    if (lhs.is_inf) {
+        PreciseDecimal res = lhs;
+        res.negative = lhs.negative != rhs.negative;
+        return res;
+    }
+    if (rhs.is_inf) {
+        return PreciseDecimal(0LL); // finite / inf = 0
+    }
+
+    // Handle NaN
+    if (lhs.is_nan || rhs.is_nan) return PreciseDecimal::nan();
+
     if (rhs.is_zero()) throw std::runtime_error("division by zero");
     if (lhs.is_zero()) return {};
 
@@ -1571,11 +1866,17 @@ int compare_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs
     if (lhs.is_zero() && rhs.is_zero()) return 0;
     if (lhs.negative != rhs.negative) return lhs.negative ? -1 : 1;
 
-    PreciseDecimal l = lhs;
-    PreciseDecimal r = rhs;
-    align_precise_scales(&l, &r);
+    int res = 0;
+    if (lhs.scale == rhs.scale) {
+        res = compare_bigint(lhs.data, rhs.data);
+    } else if (lhs.scale < rhs.scale) {
+        std::vector<uint32_t> shifted_lhs = multiply_bigint_by_power_of_10(lhs.data, rhs.scale - lhs.scale);
+        res = compare_bigint(shifted_lhs, rhs.data);
+    } else {
+        std::vector<uint32_t> shifted_rhs = multiply_bigint_by_power_of_10(rhs.data, lhs.scale - rhs.scale);
+        res = compare_bigint(lhs.data, shifted_rhs);
+    }
 
-    int res = compare_bigint(l.data, r.data);
     return lhs.negative ? -res : res;
 }
 

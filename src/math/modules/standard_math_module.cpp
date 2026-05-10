@@ -46,9 +46,6 @@ StandardMathModule::get_scalar_functions() const {
 
     // Log/Exp
     funcs["exp"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("exp expects 1 argument"); return mymath::exp(a[0]); };
-    funcs["exp2"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("exp2 expects 1 argument"); return mymath::pow(2.0, a[0]); };
-    // Log/Exp
-    funcs["exp"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("exp expects 1 argument"); return mymath::exp(a[0]); };
     funcs["exp2"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("exp2 expects 1 argument"); return mymath::pow(Scalar(2.0L), a[0]); };
     funcs["ln"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("ln expects 1 argument"); return mymath::ln(a[0]); };
     funcs["log"] = [](const std::vector<Scalar>& a) { 
@@ -194,7 +191,7 @@ StandardMathModule::get_scalar_functions() const {
     // Signals
     funcs["step"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("step expects 1 argument"); return a[0] < 0.0L ? 0.0L : 1.0L; };
     funcs["heaviside"] = funcs["step"];
-    funcs["delta"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("delta expects 1 argument"); return mymath::is_near_zero(a[0], 1e-12) ? 1.0L : 0.0L; };
+    funcs["delta"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("delta expects 1 argument"); return mymath::is_near_zero(a[0], Scalar(1e-12L)) ? Scalar(1.0L) : Scalar(0.0L); };
     funcs["impulse"] = funcs["delta"];
 
     // Other

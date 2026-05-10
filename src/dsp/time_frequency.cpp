@@ -189,13 +189,13 @@ STFTResult stft(const std::vector<Scalar>& signal,
     const std::size_t n_freqs = nfft / 2 + 1;
     result.freq_vector.resize(n_freqs);
     for (std::size_t k = 0; k < n_freqs; ++k) {
-        result.freq_vector[k] = (k) / (nfft);
+        result.freq_vector[k] = Scalar(static_cast<long long>(k/nfft));
     }
 
     // 时间轴
     result.time_vector.resize(n_frames);
     for (std::size_t frame = 0; frame < n_frames; ++frame) {
-        result.time_vector[frame] = (frame * step + nfft / 2);
+        result.time_vector[frame] = Scalar(static_cast<long long>(frame * step + nfft / 2));
     }
 
     // STFT 矩阵
