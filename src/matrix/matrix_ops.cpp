@@ -18,8 +18,9 @@
 
 #include "matrix.h"
 #include "matrix_internal.h"
-#include "mymath.h"
-#include "precise/precise_decimal.h"
+#include "math/mymath.h"
+#include "math/precise/precise_decimal.h"
+#include "math/types/float128.h"
 #include <stdexcept>
 
 namespace matrix {
@@ -106,9 +107,11 @@ TMatrix<T> subtract(TMatrix<T>&& lhs, T scalar) {
 // ============================================================================
 
 /**
- * @brief 矩阵乘法（泛型版本）
+ * @brief 矩阵乘法（延迟规范化版本）
  *
- * 计算两个矩阵的乘积。使用稀疏优化：跳过零值元素以减少计算量。
+ * 使用延迟规范化优化：在累加过程中不规范化，
+ * 最后统一规范化，减少规范化开销。
+ * 对于浮点类型，规范化为空操作。
  *
  * @param lhs 左操作数矩阵 (m×k)
  * @param rhs 右操作数矩阵 (k×n)
@@ -122,79 +125,23 @@ TMatrix<T> multiply(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     }
 
     TMatrix<T> result(lhs.rows, rhs.cols, T(0));
+
     for (std::size_t i = 0; i < lhs.rows; ++i) {
         for (std::size_t k = 0; k < lhs.cols; ++k) {
             const T& lhs_val = lhs.at(i, k);
             if (lhs_val == T(0)) continue;
-            
+
             const std::size_t row_offset = i * rhs.cols;
             const std::size_t rhs_offset = k * rhs.cols;
             for (std::size_t j = 0; j < rhs.cols; ++j) {
-                result.data[row_offset + j] += lhs_val * rhs.data[rhs_offset + j];
+                multiply_add_without_normalize(result.data[row_offset + j], lhs_val, rhs.data[rhs_offset + j]);
             }
         }
     }
-    return result;
-}
 
-/**
- * @brief 矩阵乘法 - long double 特化版本
- *
- * 使用 long double 中间累加器提高数值精度。
- * 对于大规模矩阵乘法，减少精度损失。
- */
-// 针对 long double 的优化版本 (使用 long double 中间累加)
-template <>
-TMatrix<long double> multiply<long double>(const TMatrix<long double>& lhs, const TMatrix<long double>& rhs) {
-    if (lhs.cols != rhs.rows) {
-        throw std::runtime_error("matrix multiplication requires lhs.cols == rhs.rows");
-    }
-    TMatrix<long double> result(lhs.rows, rhs.cols, 0.0L);
-    std::vector<long double> sums(lhs.rows * rhs.cols, 0.0L);
-    for (std::size_t i = 0; i < lhs.rows; ++i) {
-        for (std::size_t k = 0; k < lhs.cols; ++k) {
-            const long double lhs_val = static_cast<long double>(lhs.at(i, k));
-            if (lhs_val == 0.0L) continue;
-            const std::size_t row_offset = i * rhs.cols;
-            const std::size_t rhs_offset = k * rhs.cols;
-            for (std::size_t j = 0; j < rhs.cols; ++j) {
-                sums[row_offset + j] += lhs_val * static_cast<long double>(rhs.data[rhs_offset + j]);
-            }
-        }
-    }
-    for (std::size_t i = 0; i < sums.size(); ++i) result.data[i] = static_cast<long double>(sums[i]);
-    return result;
-}
-
-/**
- * @brief 矩阵乘法 - PreciseDecimal 特化版本
- *
- * 使用延迟规范化优化：在累加过程中不规范化，
- * 最后统一规范化，减少规范化开销。
- */
-// 针对 PreciseDecimal 的优化版本 (延迟规范化)
-template <>
-TMatrix<PreciseDecimal> multiply<PreciseDecimal>(const TMatrix<PreciseDecimal>& lhs, const TMatrix<PreciseDecimal>& rhs) {
-    if (lhs.cols != rhs.rows) {
-        throw std::runtime_error("matrix multiplication requires lhs.cols == rhs.rows");
-    }
-    TMatrix<PreciseDecimal> result(lhs.rows, rhs.cols, PreciseDecimal(0LL));
-    for (std::size_t i = 0; i < lhs.rows; ++i) {
-        for (std::size_t k = 0; k < lhs.cols; ++k) {
-            const PreciseDecimal& lv = lhs.at(i, k);
-            if (lv.is_zero()) continue;
-            const std::size_t row_off = i * rhs.cols;
-            const std::size_t rhs_off = k * rhs.cols;
-            for (std::size_t j = 0; j < rhs.cols; ++j) {
-                // 核心优化：这里的 += 和 * 内部仍会 normalize，
-                // 但我们至少避免了最外层的多余操作。
-                // 真正的延迟规范化需要 PreciseDecimal 暴露更底层的接口。
-                result.data[row_off + j] += lv * rhs.data[rhs_off + j];
-            }
-        }
-    }
     // 最终对结果矩阵全量规范化
-    for (auto& val : result.data) val.normalize();
+    for (auto& val : result.data) normalize(val);
+
     return result;
 }
 
@@ -251,7 +198,7 @@ T dot(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     }
     return sum;
 }
-
+#if 0
 /**
  * @brief 向量点积 - long double 特化版本
  *
@@ -274,7 +221,7 @@ long double dot<long double>(const TMatrix<long double>& lhs, const TMatrix<long
     }
     return static_cast<long double>(sum);
 }
-
+#endif
 /**
  * @brief 向量外积
  *
@@ -464,7 +411,8 @@ TMatrix<T> hadamard(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     template TMatrix<TYPE> kronecker(const TMatrix<TYPE>&, const TMatrix<TYPE>&); \
     template TMatrix<TYPE> hadamard(const TMatrix<TYPE>&, const TMatrix<TYPE>&);
 
-INSTANTIATE_OPS(long double)
-INSTANTIATE_OPS(PreciseDecimal)
+//INSTANTIATE_OPS(long double)
+//INSTANTIATE_OPS(PreciseDecimal)
+INSTANTIATE_OPS(mymath::Scalar)
 
 } // namespace matrix

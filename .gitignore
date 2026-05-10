@@ -40,7 +40,6 @@
 
 # debug information files
 *.dwo
-*.txt
 .codex
 COMPLEX_TEST_REPORT.md
 TEST_REPORT.md

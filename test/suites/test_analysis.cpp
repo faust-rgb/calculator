@@ -55,8 +55,8 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("sin(x) + x ^ 2");
-        const long double actual = function.evaluate(2.0);
-        const long double expected = mymath::sin(2.0) + 4.0;
+        const auto actual = function.evaluate(2.0);
+        const auto expected = mymath::sin(2.0) + 4.0;
         if (nearly_equal(actual, expected, 1e-7)) {
             ++passed;
         } else {
@@ -74,7 +74,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("sin(x)");
-        const long double actual = function.derivative(0.0L);
+        const auto actual = function.derivative(0.0L);
         if (nearly_equal(actual, 1.0L, 1e-5)) {
             ++passed;
         } else {
@@ -91,7 +91,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("sin(x)");
-        const long double actual = function.derivative(1e-8);
+        const auto actual = function.derivative(1e-8);
         if (nearly_equal(actual, 1.0L, 1e-6)) {
             ++passed;
         } else {
@@ -108,7 +108,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("exp(x)");
-        const long double actual = function.derivative(2.0);
+        const auto actual = function.derivative(2.0);
         if (nearly_equal(actual, mymath::exp(2.0), 1e-7)) {
             ++passed;
         } else {
@@ -137,7 +137,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("x ^ 2");
-        const long double actual = function.definite_integral(0.0L, 3.0);
+        const auto actual = function.definite_integral(0.0L, 3.0);
         if (nearly_equal(actual, 9.0, 1e-6)) {
             ++passed;
         } else {
@@ -155,7 +155,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("1 / sqrt(x)");
-        const long double actual = function.definite_integral(0.0L, 1.0L);
+        const auto actual = function.definite_integral(0.0L, 1.0L);
         if (nearly_equal(actual, 2.0, 1e-6)) {
             ++passed;
         } else {
@@ -206,7 +206,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("sin(50 * x)");
-        const long double actual = function.definite_integral(0.0L, mymath::kPi);
+        const auto actual = function.definite_integral(0.0L, mymath::kPi);
         if (nearly_equal(actual, 0.0L, 1e-8)) {
             ++passed;
         } else {
@@ -224,7 +224,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("1 / (1 + x ^ 2)");
-        const long double actual = function.definite_integral(-1.0L, 1.0L);
+        const auto actual = function.definite_integral(-1.0L, 1.0L);
         if (nearly_equal(actual, mymath::kPi / 2.0, 1e-7)) {
             ++passed;
         } else {
@@ -242,7 +242,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("x ^ 2");
-        const long double actual = function.indefinite_integral_at(3.0, 0.0L, 5.0);
+        const auto actual = function.indefinite_integral_at(3.0, 0.0L, 5.0);
         if (nearly_equal(actual, 14.0, 1e-6)) {
             ++passed;
         } else {
@@ -260,7 +260,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("sin(x) / x");
-        const long double actual = function.limit(0.0L);
+        const auto actual = function.limit(0.0L);
         if (nearly_equal(actual, 1.0L, 1e-8)) {
             ++passed;
         } else {
@@ -278,7 +278,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("(1 - cos(x)) / (x ^ 2)");
-        const long double actual = function.limit(0.0L);
+        const auto actual = function.limit(0.0L);
         if (nearly_equal(actual, 0.5, 1e-8)) {
             ++passed;
         } else {
@@ -296,7 +296,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("(exp(x) - 1) / x");
-        const long double actual = function.limit(0.0L);
+        const auto actual = function.limit(0.0L);
         if (nearly_equal(actual, 1.0L, 1e-8)) {
             ++passed;
         } else {
@@ -314,7 +314,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("ln(x) / x");
-        const long double actual = function.limit(mymath::infinity());
+        const auto actual = function.limit(mymath::infinity());
         if (nearly_equal(actual, 0.0L, 1e-12)) {
             ++passed;
         } else {
@@ -332,7 +332,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("sqrt(x)");
-        const long double actual = function.limit(0.0L, 0); // 双侧极限请求
+        const auto actual = function.limit(0.0L, 0); // 双侧极限请求
         if (nearly_equal(actual, 0.0L, 1e-8)) {
             ++passed;
         } else {
@@ -377,11 +377,11 @@ int run_analysis_tests(int& passed, int& failed) {
     // ========== 微分方程求解测试 ==========
     // 测试ODE求解器
     try {
-        ODESolver solver([](long double x, long double y) {
+        ODESolver solver([](mymath::Scalar x, mymath::Scalar y) {
             return y - x * x + 1.0L;
         });
-        const long double actual = solver.solve(0.0L, 0.5, 2.0, 20);
-        const long double expected = 9.0 - 0.5 * mymath::exp(2.0);
+        const auto actual = solver.solve(0.0L, 0.5, 2.0, 20);
+        const auto expected = 9.0 - 0.5 * mymath::exp(2.0);
         if (nearly_equal(actual, expected, 1e-4)) {
             ++passed;
         } else {
@@ -397,10 +397,10 @@ int run_analysis_tests(int& passed, int& failed) {
 
     // 测试指数增长ODE
     try {
-        ODESolver solver([](double, long double y) {
+        ODESolver solver([](mymath::Scalar, mymath::Scalar y) {
             return y;
         });
-        const long double actual = solver.solve(0.0L, 1.0L, 1.0L, 100);
+        const auto actual = solver.solve(0.0L, 1.0L, 1.0L, 100);
         if (nearly_equal(actual, mymath::exp(1.0L), 1e-6)) {
             ++passed;
         } else {
@@ -438,8 +438,8 @@ int run_analysis_tests(int& passed, int& failed) {
         const std::string actual = calculator.process_line(
             "near_singular_solution = solve(mat(2, 2, 1, 1, 1, 1.0000001), vec(2, 2.0000001))",
             false);
-        const long double x0 = calculator.evaluate("get(near_singular_solution, 0, 0)");
-        const long double x1 = calculator.evaluate("get(near_singular_solution, 1, 0)");
+        const auto x0 = calculator.evaluate("get(near_singular_solution, 0, 0)");
+        const auto x1 = calculator.evaluate("get(near_singular_solution, 1, 0)");
         if (actual.find("near_singular_solution = [[") == 0 &&
             nearly_equal(x0, 1.0L, 1e-7) &&
             nearly_equal(x1, 1.0L, 1e-7)) {
@@ -674,10 +674,10 @@ int run_analysis_tests(int& passed, int& failed) {
     // ========== 多变量积分测试 ==========
     // 测试二重积分
     try {
-        MultivariableIntegrator integrator([](const std::vector<long double>& point) {
+        MultivariableIntegrator integrator([](const std::vector<mymath::Scalar>& point) {
             return point[0] + point[1];
         });
-        const long double actual = integrator.integrate({[](const std::vector<long double>&){ return std::make_pair(0.0L, 1.0L); }, [](const std::vector<long double>&){ return std::make_pair(0.0L, 2.0); }}, {24, 24});
+        const auto actual = integrator.integrate({[](const std::vector<mymath::Scalar>&){ return std::make_pair(mymath::Scalar(0.0L), mymath::Scalar(1.0L)); }, [](const std::vector<mymath::Scalar>&){ return std::make_pair(mymath::Scalar(0.0L), mymath::Scalar(2.0)); }}, {24, 24});
         if (nearly_equal(actual, 3.0, 1e-6)) {
             ++passed;
         } else {
@@ -693,11 +693,11 @@ int run_analysis_tests(int& passed, int& failed) {
 
     // 测试三重积分
     try {
-        MultivariableIntegrator integrator([](const std::vector<long double>& point) {
+        MultivariableIntegrator integrator([](const std::vector<mymath::Scalar>& point) {
             return point[0] * point[1] * point[2];
         });
-        const long double actual =
-            integrator.integrate({[](const std::vector<long double>&){ return std::make_pair(0.0L, 1.0L); }, [](const std::vector<long double>&){ return std::make_pair(0.0L, 1.0L); }, [](const std::vector<long double>&){ return std::make_pair(0.0L, 1.0L); }}, {12, 12, 12});
+        const auto actual =
+            integrator.integrate({[](const std::vector<mymath::Scalar>&){ return std::make_pair(mymath::Scalar(0.0L), mymath::Scalar(1.0L)); }, [](const std::vector<mymath::Scalar>&){ return std::make_pair(mymath::Scalar(0.0L), mymath::Scalar(1.0L)); }, [](const std::vector<mymath::Scalar>&){ return std::make_pair(mymath::Scalar(0.0L), mymath::Scalar(1.0L)); }}, {12, 12, 12});
         if (nearly_equal(actual, 0.125, 1e-6)) {
             ++passed;
         } else {
@@ -713,11 +713,11 @@ int run_analysis_tests(int& passed, int& failed) {
 
     // 测试二次函数积分
     try {
-        MultivariableIntegrator integrator([](const std::vector<long double>& point) {
+        MultivariableIntegrator integrator([](const std::vector<mymath::Scalar>& point) {
             return point[0] * point[0] + point[1] * point[1];
         });
-        const long double actual =
-            integrator.integrate({[](const std::vector<long double>&){ return std::make_pair(-1.0L, 1.0L); }, [](const std::vector<long double>&){ return std::make_pair(-1.0L, 1.0L); }}, {24, 24});
+        const auto actual =
+            integrator.integrate({[](const std::vector<mymath::Scalar>&){ return std::make_pair(mymath::Scalar(-1.0L), mymath::Scalar(1.0L)); }, [](const std::vector<mymath::Scalar>&){ return std::make_pair(mymath::Scalar(-1.0L), mymath::Scalar(1.0L)); }}, {24, 24});
         if (nearly_equal(actual, 8.0 / 3.0, 1e-6)) {
             ++passed;
         } else {
@@ -735,7 +735,7 @@ int run_analysis_tests(int& passed, int& failed) {
     try {
         FunctionAnalysis function("x");
         function.define("ln(x)");
-        const long double actual = function.evaluate(mymath::kE);
+        const auto actual = function.evaluate(mymath::kE);
         if (nearly_equal(actual, 1.0L, 1e-6)) {
             ++passed;
         } else {

@@ -1,6 +1,6 @@
-#include "symbolic/risch/risch_algorithm.h"
-#include "symbolic/integral/integration_engine.h"
-#include "symbolic/symbolic_expression_internal.h"
+#include "symbolic/calculus/risch/risch_algorithm.h"
+#include "symbolic/calculus/integral/integration_engine.h"
+#include "symbolic/core/symbolic_expression.h"
 #include <iostream>
 #include <cassert>
 
@@ -9,11 +9,11 @@ using namespace symbolic_expression_internal;
 namespace test_suites {
 
 // 辅助函数：检查两个表达式是否数值相等
-bool expressions_nearly_equal(const SymbolicExpression& a, const SymbolicExpression& b, long double tol = 1e-6) {
+bool expressions_nearly_equal(const SymbolicExpression& a, const SymbolicExpression& b, mymath::Scalar tol = mymath::Scalar(1e-6L)) {
     // 尝试数值比较
-    long double a_val = 0.0L, b_val = 0.0L;
+    mymath::Scalar a_val = 0.0L, b_val = 0.0L;
     if (a.is_number(&a_val) && b.is_number(&b_val)) {
-        return std::abs(a_val - b_val) < tol;
+        return mymath::abs(a_val - b_val) < tol;
     }
     // 字符串比较
     return a.simplify().to_string() == b.simplify().to_string();

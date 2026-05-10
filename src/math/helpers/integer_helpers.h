@@ -9,6 +9,7 @@
 #define INTEGER_HELPERS_H
 
 #include <string>
+#include "app/scalar_type.h"
 
 /**
  * @brief 计算两个整数的最大公约数（GCD）
@@ -61,6 +62,23 @@ long long floor_to_long_long(long double x);
  * @return 不小于 x 的最小整数
  */
 long long ceil_to_long_long(long double x);
+
+// Scalar overloads
+inline bool is_integer_double(Scalar x, Scalar eps = Scalar(1e-10L)) {
+    return is_integer_double(static_cast<long double>(x), static_cast<long double>(eps));
+}
+inline long long round_to_long_long(Scalar x) {
+    return round_to_long_long(static_cast<long double>(x));
+}
+inline long long trunc_to_long_long(Scalar x) {
+    return trunc_to_long_long(static_cast<long double>(x));
+}
+inline long long floor_to_long_long(Scalar x) {
+    return floor_to_long_long(static_cast<long double>(x));
+}
+inline long long ceil_to_long_long(Scalar x) {
+    return ceil_to_long_long(static_cast<long double>(x));
+}
 
 /**
  * @brief 判断一个整数是否为素数

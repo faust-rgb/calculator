@@ -5,7 +5,7 @@
 #include "calculator_matrix_commands.h"
 
 #include "calculator_internal_types.h"
-#include "parser/unified_expression_parser.h"
+#include "parser/grammars/unified_expression_parser.h"
 #include "matrix_internal.h"
 #include "mymath.h"
 
@@ -14,6 +14,8 @@
 
 namespace matrix_commands {
 namespace {
+
+using Scalar = mymath::Scalar;
 
 std::string format_eigenvalue_matrix(const matrix::Matrix& values) {
     if (values.rows <= 1 || values.cols != 2) {
@@ -25,8 +27,9 @@ std::string format_eigenvalue_matrix(const matrix::Matrix& values) {
         if (row != 0) {
             out << ", ";
         }
-        out << matrix::internal::format_complex<long double>({values.at(row, 0),
-                                                           values.at(row, 1)});    }
+        out << matrix::internal::format_complex<Scalar>({values.at(row, 0),
+                                                           values.at(row, 1)});
+    }
     out << "]";
     return out.str();
 }
@@ -76,12 +79,12 @@ bool handle_matrix_command(const MatrixCommandContext& ctx,
         return true;
     } catch (const std::exception&) {
         if (matrix_value.rows == 2 && matrix_value.cols == 2) {
-            const long double trace = matrix_value.at(0, 0) + matrix_value.at(1, 1);
-            const long double det = matrix::determinant(matrix_value);
-            const long double discriminant = trace * trace - 4.0 * det;
-            if (discriminant < 0.0L) {
-                const long double real = trace * 0.5;
-                const long double imag = mymath::sqrt(-discriminant) * 0.5;
+            const Scalar trace = matrix_value.at(0, 0) + matrix_value.at(1, 1);
+            const Scalar det = matrix::determinant(matrix_value);
+            const Scalar discriminant = trace * trace - Scalar(4.0L) * det;
+            if (discriminant < Scalar(0.0L)) {
+                const Scalar real = trace * Scalar(0.5L);
+                const Scalar imag = mymath::sqrt(-discriminant) * Scalar(0.5L);
                 std::ostringstream out;
                 out << "values: [complex(" << format_decimal(real) << ", "
                     << format_decimal(imag) << "), complex("

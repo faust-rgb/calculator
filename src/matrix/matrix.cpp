@@ -14,9 +14,12 @@
  */
 
 #include "matrix.h"
+#include "app/scalar_type.h"
+
+#include "matrix.h"
 #include "matrix_internal.h"
 #include "mymath.h"
-#include "precise/precise_decimal.h"
+#include "math/precise/precise_decimal.h"
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -110,7 +113,9 @@ template <typename T> TValue<T> TValue<T>::from_matrix(TMatrix<T>&& m) { TValue<
 } // namespace matrix
 
 // 显式实例化 (Core)
+template class matrix::TMatrix<mymath::Scalar>;
+template class matrix::TValue<mymath::Scalar>;
 template class matrix::TMatrix<long double>;
-template class matrix::TMatrix<PreciseDecimal>;
 template class matrix::TValue<long double>;
-template class matrix::TValue<PreciseDecimal>;
+//template class matrix::TMatrix<PreciseDecimal>;
+//template class matrix::TValue<PreciseDecimal>;

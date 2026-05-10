@@ -269,22 +269,32 @@ int run_logic_limit_root_tests(int& passed, int& failed) {
 
     try {
         std::string output;
-        (void)calculator.try_process_function_command("limit(k, 0, 1)", &output);
+        const bool handled = calculator.try_process_function_command("limit(k, 0, 1)", &output);
+        if (handled && output == "inf") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: right-sided divergent limit expected inf got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
         ++failed;
-        std::cout << "FAIL: right-sided divergent limit expected convergence error got "
-                  << output << '\n';
-    } catch (const std::exception&) {
-        ++passed;
+        std::cout << "FAIL: right-sided divergent limit threw unexpected error: " << ex.what() << '\n';
     }
 
     try {
         std::string output;
-        (void)calculator.try_process_function_command("limit(exp(x), inf)", &output);
+        const bool handled = calculator.try_process_function_command("limit(exp(x), inf)", &output);
+        if (handled && output == "inf") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: divergent infinity limit expected inf got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
         ++failed;
-        std::cout << "FAIL: divergent infinity limit expected convergence error got "
-                  << output << '\n';
-    } catch (const std::exception&) {
-        ++passed;
+        std::cout << "FAIL: divergent infinity limit threw unexpected error: " << ex.what() << '\n';
     }
 
     try {

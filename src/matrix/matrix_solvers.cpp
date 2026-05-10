@@ -18,7 +18,8 @@
 #include "matrix.h"
 #include "matrix_internal.h"
 #include "mymath.h"
-#include "precise/precise_decimal.h"
+#include "analysis/base/precision_constants.h"
+#include "math/precise/precise_decimal.h"
 #include <algorithm>
 #include <stdexcept>
 #include <vector>
@@ -224,7 +225,7 @@ TReducedSvd<T> compute_reduced_svd(const TMatrix<T>& matrix) {
     const std::size_t m = A.rows;
     const std::size_t n = A.cols; // n <= m
     TMatrix<T> V = TMatrix<T>::identity(n);
-    const T tol = T(1e-13L);
+    const T tol = precision::epsilon<T>();
     const int max_sweeps = 100;
 
     for (int sweep = 0; sweep < max_sweeps; ++sweep) {
@@ -332,20 +333,20 @@ TReducedSvd<T> compute_reduced_svd(const TMatrix<T>& matrix) {
 // ============================================================================
 
 /// RREF 变换的模板实例化
-template std::vector<std::size_t> rref_in_place<long double>(TMatrix<long double>*);
-template std::vector<std::size_t> rref_in_place<PreciseDecimal>(TMatrix<PreciseDecimal>*);
+//template std::vector<std::size_t> rref_in_place<long double>(TMatrix<long double>*);
+template std::vector<std::size_t> rref_in_place<mymath::Scalar>(TMatrix<mymath::Scalar>*);
 
 /// 零空间向量计算的模板实例化
-template std::vector<long double> nullspace_vector<long double>(const TMatrix<long double>&);
-template std::vector<PreciseDecimal> nullspace_vector<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
+//template std::vector<long double> nullspace_vector<long double>(const TMatrix<long double>&);
+template std::vector<mymath::Scalar> nullspace_vector<mymath::Scalar>(const TMatrix<mymath::Scalar>&);
 
 /// 零空间基计算的模板实例化
-template TMatrix<long double> nullspace_basis<long double>(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> nullspace_basis<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
+//template TMatrix<long double> nullspace_basis<long double>(const TMatrix<long double>&);
+template TMatrix<mymath::Scalar> nullspace_basis<mymath::Scalar>(const TMatrix<mymath::Scalar>&);
 
 /// SVD 分解的模板实例化
-template TReducedSvd<long double> compute_reduced_svd<long double>(const TMatrix<long double>&);
-template TReducedSvd<PreciseDecimal> compute_reduced_svd<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
+//template TReducedSvd<long double> compute_reduced_svd<long double>(const TMatrix<long double>&);
+template TReducedSvd<mymath::Scalar> compute_reduced_svd<mymath::Scalar>(const TMatrix<mymath::Scalar>&);
 
 } // namespace internal
 } // namespace matrix

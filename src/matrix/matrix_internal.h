@@ -20,16 +20,30 @@
 #define MATRIX_INTERNAL_H
 
 #include "matrix.h"
+#include "analysis/base/precision_constants.h"
 #include <utility>
 #include <vector>
 
 namespace matrix {
 namespace internal {
 
-// 矩阵计算中使用的数值精度常量
-constexpr long double kMatrixEps = 1e-10;
-constexpr long double kMatrixPivotRelativeEps = 1e-13;
-constexpr long double kMatrixPivotAbsoluteEps = 1e-16;
+// 矩阵计算中使用的数值精度常量 - 使用模板函数适配不同精度类型
+template <typename T>
+inline T matrix_epsilon() {
+    return precision::epsilon<T>();
+}
+
+template <typename T>
+inline T matrix_pivot_relative_eps() {
+    // 相对阈值设为 sqrt(epsilon)
+    return precision::sqrt_epsilon<T>();
+}
+
+template <typename T>
+inline T matrix_pivot_absolute_eps() {
+    // 绝对阈值设为 epsilon * 10
+    return precision::epsilon<T>() * T(10);
+}
 
 /// 紧缩型 SVD 分解结果结构体
 template <typename T>

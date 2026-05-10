@@ -25,7 +25,7 @@ namespace test_helpers {
  * @param eps 容差阈值，默认为1e-8
  * @return 如果两值之差的绝对值小于等于容差，返回true；否则返回false
  */
-inline bool nearly_equal(long double actual, long double expected, long double eps = 1e-8) {
+inline bool nearly_equal(mymath::Scalar actual, mymath::Scalar expected, mymath::Scalar eps = mymath::Scalar(1e-8L)) {
     return mymath::abs(actual - expected) <= eps;
 }
 
@@ -54,7 +54,7 @@ inline bool is_one_of(const std::string& actual,
  */
 struct SuccessCase {
     std::string expression;  ///< 待计算的表达式
-    long double expected;         ///< 期望的计算结果
+    mymath::Scalar expected; ///< 期望的计算结果
 };
 
 /**

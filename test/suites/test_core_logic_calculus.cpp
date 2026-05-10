@@ -31,8 +31,8 @@ int run_logic_calculus_tests(int& passed, int& failed) {
     // ========== 符号微积分测试 ==========
     // 测试自定义函数求值
     try {
-        const long double actual = calculator.evaluate("f(2)");
-        const long double expected = mymath::sin(2.0) + 4.0;
+        const auto actual = calculator.evaluate("f(2)");
+        const auto expected = mymath::sin(2.0) + 4.0;
         if (nearly_equal(actual, expected, 1e-7)) {
             ++passed;
         } else {
@@ -298,7 +298,7 @@ int run_logic_calculus_tests(int& passed, int& failed) {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("simplify((x + 1) + 2 * (1 + x))", &output);
-        if (handled && output == "3 * (x + 1)") {
+        if (handled && (output == "3 * (x + 1)" || output == "3 * x + 3")) {
             ++passed;
         } else {
             ++failed;
@@ -733,7 +733,8 @@ int run_logic_calculus_tests(int& passed, int& failed) {
             is_one_of(output, {
                 "-ln(abs(x)) + 1/2 * ln(abs(x + 1)) + 1/2 * ln(abs(x - 1)) + C",
                 "-ln(abs(x)) + 1/2 * ln(abs(x - 1)) + 1/2 * ln(abs(x + 1)) + C",
-                "-ln(abs(x)) + 1/2 * ln(abs(x - -1)) + 1/2 * ln(abs(x - 1)) + C"})) {
+                "-ln(abs(x)) + 1/2 * ln(abs(x - -1)) + 1/2 * ln(abs(x - 1)) + C",
+                "-ln(abs(x)) + 1/2 * ln(abs(x - 1)) + 1/2 * ln(abs(x - -1)) + C"})) {
             ++passed;
         } else {
             ++failed;
@@ -771,6 +772,7 @@ int run_logic_calculus_tests(int& passed, int& failed) {
             (output == "-(1/2 * 1 / (x - 1)) + 1/4 * (-ln(abs(x - 1)) + ln(abs(x + 1))) + C" ||
              output == "1/4 * (-ln(abs(x - 1)) + ln(abs(x + 1))) + -1/2 * 1 / (x - 1) + C" ||
              output == "-1/2 * 1 / (x - 1) + -1/4 * ln(abs(x - 1)) + 1/4 * ln(abs(x + 1)) + C" ||
+             output == "-1/2 * 1 / (x - 1) + 1/4 * ln(abs(x + 1)) + -1/4 * ln(abs(x - 1)) + C" ||
              output == "1/4 * (-ln(abs(x - 1)) + ln(abs(x + 1.00000000224))) + -1/2 * 1 / (x - 1) + C")) {
             ++passed;
         } else {
@@ -812,6 +814,7 @@ int run_logic_calculus_tests(int& passed, int& failed) {
             is_one_of(output, {
                 "-1/6 * atan(x / 2) + 1/3 * atan(x) + C",
                 "(atan(x) - atan(x / 2) / 2) / 3 + C",
+                "-1/3 * (1/2 * atan(1/2 * x) - atan(x)) + C",
                 "1/3 * (atan(x) - 1/2 * atan(1/2 * x)) + C"})) {
             ++passed;
         } else {
@@ -834,7 +837,8 @@ int run_logic_calculus_tests(int& passed, int& failed) {
             is_one_of(output, {
                 "1/6 * (-ln(abs(x ^ 2 + 4)) + ln(abs(x ^ 2 + 1))) + C",
                 "(ln(abs(x ^ 2 + 1)) - ln(abs(x ^ 2 + 4))) / 6 + C",
-                "1/6 * (ln(abs(x ^ 2 + 1)) - ln(abs(x ^ 2 + 4))) + C"})) {
+                "1/6 * (ln(abs(x ^ 2 + 1)) - ln(abs(x ^ 2 + 4))) + C",
+                "-1/6 * (ln(abs(x ^ 2 + 4)) - ln(abs(x ^ 2 + 1))) + C"})) {
             ++passed;
         } else {
             ++failed;
@@ -855,7 +859,8 @@ int run_logic_calculus_tests(int& passed, int& failed) {
         if (handled &&
             is_one_of(output, {
                 "1 / (-a + b) * (-ln(abs(-a + x)) + ln(abs(-b + x))) + C",
-                "-1 / (-a + b) * ln(abs(-a + x)) + 1 / (-a + b) * ln(abs(-b + x)) + C"})) {
+                "-1 / (-a + b) * ln(abs(-a + x)) + 1 / (-a + b) * ln(abs(-b + x)) + C",
+                "1 / (-a + b) * ln(abs(-b + x)) + -1 / (-a + b) * ln(abs(-a + x)) + C"})) {
             ++passed;
         } else {
             ++failed;

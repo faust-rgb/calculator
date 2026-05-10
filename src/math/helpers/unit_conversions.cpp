@@ -9,6 +9,9 @@
 
 #include "unit_conversions.h"
 #include "mymath.h"
+#include "app/scalar_type.h"
+
+namespace mymath {
 
 /**
  * @brief 将角度转换为弧度
@@ -17,39 +20,38 @@
  *
  * 转换公式：rad = deg * π / 180
  */
-long double degrees_to_radians(long double value) {
-    return value * mymath::kPi / 180.0L;
+Scalar degrees_to_radians(Scalar value) {
+    Scalar pi = mymath::pi();
+    return value * pi / Scalar(180.0L);
 }
 
-/**
- * @brief 将弧度转换为角度
- * @param value 弧度值
- * @return 对应的角度值
- *
- * 转换公式：deg = rad * 180 / π
- */
-long double radians_to_degrees(long double value) {
-    return value * 180.0L / mymath::kPi;
+//long double degrees_to_radians(long double value) {
+ //   return static_cast<long double>(degrees_to_radians(Scalar(value)));
+//}
+
+Scalar radians_to_degrees(Scalar value) {
+    Scalar pi = mymath::pi();
+    return value * Scalar(180.0L) / pi;
 }
 
-/**
- * @brief 将摄氏度转换为华氏度
- * @param value 摄氏度值
- * @return 对应的华氏度值
- *
- * 转换公式：F = C * 9/5 + 32
- */
-long double celsius_to_fahrenheit(long double value) {
-    return value * 9.0 / 5.0 + 32.0;
+//long double radians_to_degrees(long double value) {
+//    return static_cast<long double>(radians_to_degrees(Scalar(value)));
+//}
+
+Scalar celsius_to_fahrenheit(Scalar value) {
+    return value * Scalar(9.0L) / Scalar(5.0L) + Scalar(32.0L);
 }
 
-/**
- * @brief 将华氏度转换为摄氏度
- * @param value 华氏度值
- * @return 对应的摄氏度值
- *
- * 转换公式：C = (F - 32) * 5/9
- */
-long double fahrenheit_to_celsius(long double value) {
-    return (value - 32.0) * 5.0 / 9.0;
+//long double celsius_to_fahrenheit(long double value) {
+//    return static_cast<long double>(celsius_to_fahrenheit(Scalar(value)));
+//}
+
+Scalar fahrenheit_to_celsius(Scalar value) {
+    return (value - Scalar(32.0L)) * Scalar(5.0L) / Scalar(9.0L);
 }
+
+//long double fahrenheit_to_celsius(long double value) {
+//    return static_cast<long double>(fahrenheit_to_celsius(Scalar(value)));
+//}
+
+}  // namespace mymath

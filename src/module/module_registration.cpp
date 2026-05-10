@@ -18,26 +18,26 @@
 #include "calculator_module.h"
 
 // ==================== 基础数学与系统模块 ====================
-#include "math/standard_math_module.h"    // 标准数学函数（sin, cos, exp 等）
-#include "math/integer_math_module.h"     // 整数运算（阶乘、组合数等）
+#include "math/modules/standard_math_module.h"    // 标准数学函数（sin, cos, exp 等）
+#include "math/modules/integer_math_module.h"     // 整数运算（阶乘、组合数等）
 #include "matrix/matrix_module.h"         // 矩阵运算
-#include "precise/precise_module.h"       // 高精度计算
+#include "math/modules/precise_module.h"       // 高精度计算
 #include "statistics/statistics_module.h" // 统计函数
 #include "module/system_module.h"         // 系统命令（:vars, :clear 等）
 #include "io/io_module.h"                 // 输入输出操作
 #include "time/time_module.h"             // 时间相关功能
 
 // ==================== 分析模块 ====================
-#include "analysis/calculator_series.h"       // 级数展开（泰勒、傅里叶）
-#include "analysis/calculator_integration.h"   // 数值积分
-#include "analysis/calculator_rootfinding.h"   // 方程求根
-#include "analysis/calculator_optimization.h"  // 数值优化
-#include "analysis/calculator_analysis_cmds.h" // 分析相关命令
-#include "analysis/calculator_ode.h"           // 常微分方程求解
+#include "analysis/modules/series_module.h"       // 级数展开（泰勒、傅里叶）
+#include "analysis/modules/integration_module.h"   // 数值积分
+#include "analysis/modules/rootfinding_module.h"   // 方程求根
+#include "analysis/modules/optimization_module.h"  // 数值优化
+#include "analysis/modules/analysis_module.h" // 分析相关命令
+#include "analysis/modules/ode_module.h"           // 常微分方程求解
 
 // ==================== 符号计算与多项式 ====================
-#include "symbolic/calculator_symbolic_commands.h" // 符号运算命令
-#include "symbolic/calculator_transforms.h"        // 变换（傅里叶、拉普拉斯）
+#include "symbolic/modules/symbolic_module.h"  // 符号运算命令
+#include "symbolic/modules/transform_module.h" // 变换（傅里叶、拉普拉斯）
 #include "polynomial/calculator_polynomial.h"      // 多项式操作
 
 // ==================== 信号处理与绘图 ====================

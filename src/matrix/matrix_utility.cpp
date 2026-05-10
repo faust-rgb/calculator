@@ -2,9 +2,12 @@
 #include "matrix_internal.h"
 #include "dsp/signal_processing.h"
 #include "mymath.h"
-#include "mymath_complex.h"
+#include "math/types/complex.h"
 #include "string_utils.h"
-#include "precise/precise_decimal.h"
+#include "math/precise/precise_decimal.h"
+#include "app/scalar_type.h"
+#include "core/common/display_precision.h"
+#include "core/services/format_utils.h"
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
@@ -13,12 +16,11 @@ namespace matrix {
 namespace internal {
 
 int& mutable_display_precision() {
-    static int precision = 12;
-    return precision;
+    return display_precision::mutable_value();
 }
 
 int clamp_display_precision(int precision) {
-    return std::clamp(precision, 1, 17);
+    return display_precision::clamp(precision);
 }
 
 template <typename T>
@@ -35,13 +37,33 @@ T t_sqrt(T v) {
 
 template <typename T>
 std::string format_number(T value) {
-    if constexpr (std::is_same_v<T, PreciseDecimal>) return value.to_string();
-    else {
-        if (mymath::is_near_zero(static_cast<long double>(value), 1e-10)) value = T(0);
+    long double ld_val = static_cast<long double>(value);
+    if (mymath::is_near_zero(ld_val, 1e-10)) return "0";
+
+    // Check if value is close to an integer
+    long double rounded = std::round(ld_val);
+    if (std::abs(ld_val - rounded) < 1e-9) {
         std::ostringstream out;
-        out << std::setprecision(mutable_display_precision()) << static_cast<long double>(value);
+        out << std::fixed << std::setprecision(0) << rounded;
         return out.str();
     }
+
+    // Check if value is close to a simple fraction (denominator <= 10)
+    for (int den = 2; den <= 10; ++den) {
+        long double scaled = ld_val * den;
+        long double num = std::round(scaled);
+        if (std::abs(scaled - num) < 1e-9) {
+            // Found a simple fraction, output the exact decimal
+            long double exact_val = num / den;
+            std::ostringstream out;
+            out << std::setprecision(mutable_display_precision()) << exact_val;
+            return out.str();
+        }
+    }
+
+    std::ostringstream out;
+    out << std::setprecision(mutable_display_precision()) << ld_val;
+    return out.str();
 }
 
 template <typename T>
@@ -97,11 +119,16 @@ template <typename T>
 T matrix_tolerance(T scale) {
     if constexpr (std::is_same_v<T, PreciseDecimal>) {
         // 使用更动态的容差：基于当前默认 scale 的 1e-(scale-5)
-        int current_scale = PrecisionContext::get_default_scale();
+        int current_scale = app::get_default_scale();
         std::string tol_s = "1e-" + std::to_string(std::max(10, current_scale - 5));
         return scale * PreciseDecimal(tol_s);
+    } else if constexpr (std::is_same_v<T, mymath::Scalar>) {
+        // 使用动态精度函数
+        auto abs_eps = matrix_pivot_absolute_eps<T>();
+        auto rel_eps = scale * matrix_pivot_relative_eps<T>();
+        return (abs_eps > rel_eps) ? abs_eps : rel_eps;
     } else {
-        return std::max(kMatrixPivotAbsoluteEps, scale * kMatrixPivotRelativeEps);
+        return std::max(matrix_pivot_absolute_eps<T>(), scale * matrix_pivot_relative_eps<T>());
     }
 }
 
@@ -247,7 +274,7 @@ TMatrix<T> complex_sequence_to_matrix(const std::vector<TComplexSample<T>>& valu
 
 template <typename T>
 std::vector<TComplexSample<T>> discrete_fourier_transform(const std::vector<TComplexSample<T>>& input, bool inverse) {
-    if constexpr (std::is_same_v<T, long double>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         std::vector<signal::Complex> v;
         for (const auto& s : input) v.emplace_back(s.real, s.imag);
         auto trans = inverse ? signal::ifft(v) : signal::fft(v);
@@ -317,5 +344,6 @@ void set_display_precision(int precision) {
     template std::vector<matrix::internal::TComplexSample<TYPE>> matrix::internal::discrete_fourier_transform(const std::vector<matrix::internal::TComplexSample<TYPE>>&, bool); \
     template std::vector<matrix::internal::TComplexSample<TYPE>> matrix::internal::convolve_sequences(const std::vector<matrix::internal::TComplexSample<TYPE>>&, const std::vector<matrix::internal::TComplexSample<TYPE>>&);
 
-INSTANTIATE_UTIL(long double)
-INSTANTIATE_UTIL(PreciseDecimal)
+//INSTANTIATE_UTIL(long double)
+//INSTANTIATE_UTIL(PreciseDecimal)
+INSTANTIATE_UTIL(mymath::Scalar)

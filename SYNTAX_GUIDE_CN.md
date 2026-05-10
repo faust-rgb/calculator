@@ -7,13 +7,13 @@
 从项目根目录运行：
 
 ```bash
-./bin/calculator script.calc
+bin/calculator test/script/additional_validation.calc
 ```
 
 在交互式提示符中运行：
 
 ```text
-> :run script.calc
+> :run test/script/additional_validation.calc
 ```
 
 脚本文件应使用 `.calc` 扩展名。
@@ -394,7 +394,7 @@ my_fib(20)  # 快速执行
 
 ## 功能覆盖示例
 
-使用 `test/script/comprehensive_validation.calc` 作为广泛的回归测试脚本。它覆盖：
+使用 `test/script/additional_validation.calc` 作为广泛的回归测试脚本。它覆盖：
 
 - 注释、赋值、字符串、算术和比较
 - `if/elif/else`、嵌套条件、`while`、`for range`、`break` 和 `continue`

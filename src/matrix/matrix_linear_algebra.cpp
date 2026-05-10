@@ -8,6 +8,8 @@
 #include "mymath.h"
 #include "polynomial.h"
 #include "precise_decimal.h"
+#include "app/scalar_type.h"
+#include "analysis/base/precision_constants.h"
 
 #include <stdexcept>
 #include <utility>
@@ -19,9 +21,9 @@ namespace matrix {
 
 // Internal helper functions are in matrix::internal namespace
 using internal::vector_norm_squared;
-using internal::kMatrixEps;
-using internal::kMatrixPivotRelativeEps;
-using internal::kMatrixPivotAbsoluteEps;
+using internal::matrix_epsilon;
+using internal::matrix_pivot_relative_eps;
+using internal::matrix_pivot_absolute_eps;
 using internal::swap_rows;
 using internal::max_abs_entry;
 using internal::matrix_tolerance;
@@ -79,9 +81,9 @@ TLuResult<T> lu_decompose_with_pivoting(const TMatrix<T>& matrix) {
     } else {
         const T max_entry = max_abs_entry(matrix);
         tolerance = (t_abs(max_entry) > T(static_cast<long long>(0))) ?
-            (std::max<T>(T(kMatrixPivotAbsoluteEps),
-                      max_entry * T(kMatrixPivotRelativeEps) * T(static_cast<long long>(n)))) :
-            T(kMatrixPivotAbsoluteEps);
+            (std::max<T>(matrix_pivot_absolute_eps<T>(),
+                      max_entry * matrix_pivot_relative_eps<T>() * T(static_cast<long long>(n)))) :
+            matrix_pivot_absolute_eps<T>();
     }
 
     for (std::size_t col = 0; col < n; ++col) {
@@ -161,7 +163,9 @@ TEigenResult<T> eigenvalues_with_vectors(const TMatrix<T>& matrix) {
             for (std::size_t p = 0; p < n - 1; ++p) {
                 for (std::size_t q = p + 1; q < n; ++q) {
                     T apq = A.at(p, q);
-                    if (t_abs(apq) <= tolerance * T(static_cast<long long>(0))) continue;
+                    T apq_abs = t_abs(apq);
+                    // 使用精度感知的安全阈值，跳过非常小的非对角元素
+                    if (apq_abs <= precision::jacobi_safety_threshold<T>()) continue;
                     T app = A.at(p, p), aqq = A.at(q, q);
                     T theta = (aqq - app) / (T(static_cast<long long>(2)) * apq);
                     T t;
@@ -235,7 +239,7 @@ std::pair<TMatrix<T>, TMatrix<T>> qr_decompose(const TMatrix<T>& matrix) {
     TMatrix<T> r = matrix;
 
     const std::size_t limit = m < n ? m : n;
-    const T tolerance = T(kMatrixEps);
+    const T tolerance = matrix_epsilon<T>();
 
     for (std::size_t col = 0; col < limit; ++col) {
         std::vector<T> householder(m - col, T(static_cast<long long>(0)));
@@ -360,7 +364,7 @@ std::pair<TMatrix<T>, TMatrix<T>> lu_decompose(const TMatrix<T>& matrix) {
     const std::size_t n = matrix.rows;
     TMatrix<T> l = TMatrix<T>::identity(n);
     TMatrix<T> u(n, n, T(static_cast<long long>(0)));
-    const T tolerance = T(kMatrixEps);
+    const T tolerance = matrix_epsilon<T>();
 
     for (std::size_t i = 0; i < n; ++i) {
         for (std::size_t col = i; col < n; ++col) {
@@ -522,7 +526,7 @@ TMatrix<T> pseudo_inverse(const TMatrix<T>& matrix) {
         }
     }
 
-    if (t_abs(rank(matrix) - T(static_cast<long long>(1))) <= T(kMatrixEps)) {
+    if (t_abs(rank(matrix) - T(static_cast<long long>(1))) <= matrix_epsilon<T>()) {
         T frobenius_sq = T(static_cast<long long>(0));
         for (T value : matrix.data) {
             frobenius_sq += value * value;
@@ -766,11 +770,7 @@ T condition_number(const TMatrix<T>& matrix) {
 
     const std::size_t full_rank = matrix.rows < matrix.cols ? matrix.rows : matrix.cols;
     if (effective_rank < full_rank) {
-        if constexpr (std::is_same_v<T, PreciseDecimal>) {
-            return T("1e100");
-        } else {
-            return T(mymath::infinity());
-        }
+        return T(mymath::infinity());
     }
 
     const T tolerance = matrix_tolerance(matrix);
@@ -807,11 +807,7 @@ T condition_number(const TMatrix<T>& matrix) {
     }
 
     if (is_infinite) {
-        if constexpr (std::is_same_v<T, PreciseDecimal>) {
-            return T("1e100");
-        } else {
-            return T(mymath::infinity());
-        }
+        return T(mymath::infinity());
     }
     return largest / smallest;
 }
@@ -825,6 +821,9 @@ TMatrix<T> cholesky(const TMatrix<T>& matrix) {
         throw std::runtime_error("cholesky requires a square matrix");
     }
     TMatrix<T> result(matrix.rows, matrix.cols, T(static_cast<long long>(0)));
+    // 使用精度感知的正定性阈值
+    const T positive_threshold = precision::cholesky_positive_threshold<T>();
+
     for (std::size_t i = 0; i < matrix.rows; ++i) {
         for (std::size_t j = 0; j <= i; ++j) {
             T sum = matrix.at(i, j);
@@ -832,8 +831,13 @@ TMatrix<T> cholesky(const TMatrix<T>& matrix) {
                 sum -= result.at(i, k) * result.at(j, k);
             }
             if (i == j) {
-                if (sum <= T(static_cast<long long>(0))) {
-                    throw std::runtime_error("cholesky requires a positive-definite matrix");
+                // 使用更严格的正定性检测，允许小的正则化
+                if (sum <= positive_threshold) {
+                    if (sum <= T(static_cast<long long>(0))) {
+                        throw std::runtime_error("cholesky requires a positive-definite matrix");
+                    }
+                    // 对于接近零的正值，使用阈值作为最小值
+                    sum = std::max(sum, positive_threshold);
                 }
                 result.at(i, j) = t_sqrt(sum);
             } else {
@@ -900,7 +904,7 @@ TMatrix<T> hessenberg(const TMatrix<T>& matrix) {
         return h;
     }
 
-    const T eps_val = T(kMatrixEps);
+    const T eps_val = matrix_epsilon<T>();
 
     for (std::size_t k = 0; k + 2 < n; ++k) {
         std::vector<T> x(n - k - 1, T(static_cast<long long>(0)));
@@ -964,7 +968,7 @@ TMatrix<T> schur(const TMatrix<T>& matrix) {
         throw std::runtime_error("schur requires a square matrix");
     }
     TMatrix<T> current = hessenberg(matrix);
-    const T tolerance = T(1e-10L);
+    const T tolerance = precision::sqrt_epsilon<T>();
     for (int iteration = 0; iteration < 256; ++iteration) {
         const auto qr = qr_decompose(current);
         current = multiply(qr.second, qr.first);
@@ -1098,6 +1102,40 @@ T determinant(const TMatrix<T>& matrix) {
 template <typename T>
 T rank(const TMatrix<T>& matrix) {
     TMatrix<T> reduced = matrix;
+    if constexpr (std::is_same_v<T, PreciseDecimal> || std::is_same_v<T, mymath::Scalar>) {
+        const T tolerance = matrix_tolerance(matrix);
+        std::size_t rank_count = 0;
+        for (std::size_t col = 0; col < reduced.cols && rank_count < reduced.rows; ++col) {
+            std::size_t best_row = rank_count;
+            T best_value = t_abs(reduced.at(best_row, col));
+            for (std::size_t row = rank_count + 1; row < reduced.rows; ++row) {
+                const T current = t_abs(reduced.at(row, col));
+                if (current > best_value) {
+                    best_value = current;
+                    best_row = row;
+                }
+            }
+            if (best_value <= tolerance) {
+                continue;
+            }
+            swap_rows(&reduced, rank_count, best_row);
+            const T pivot = reduced.at(rank_count, col);
+            for (std::size_t row = rank_count + 1; row < reduced.rows; ++row) {
+                const T factor = reduced.at(row, col) / pivot;
+                if (t_abs(factor) <= tolerance) {
+                    continue;
+                }
+                for (std::size_t current_col = col; current_col < reduced.cols; ++current_col) {
+                    reduced.at(row, current_col) -= factor * reduced.at(rank_count, current_col);
+                    if (t_abs(reduced.at(row, current_col)) <= tolerance) {
+                        reduced.at(row, current_col) = T(static_cast<long long>(0));
+                    }
+                }
+            }
+            ++rank_count;
+        }
+        return T(static_cast<long long>(rank_count));
+    }
     return T(static_cast<long long>(rref_in_place(&reduced).size()));
 }
 
@@ -1134,7 +1172,7 @@ TMatrix<T> eigenvalues(const TMatrix<T>& matrix) {
         const T b = -(matrix.at(0, 0) + matrix.at(1, 1));
         const T c = determinant(matrix);
         const T discriminant = b * b - T(static_cast<long long>(4)) * a * c;
-        if (discriminant < -T(kMatrixEps)) {
+        if (discriminant < -matrix_epsilon<T>()) {
             const T real = -b * T(0.5L);
             const T imag = t_sqrt(-discriminant) * T(0.5L);
             TMatrix<T> result(2, 2, T(static_cast<long long>(0)));
@@ -1269,7 +1307,7 @@ TMatrix<T> eigenvectors(const TMatrix<T>& matrix) {
     const bool complex_value_matrix = values.rows > 1 && values.cols == 2;
     if (complex_value_matrix) {
         for (std::size_t row = 0; row < values.rows; ++row) {
-            if (t_abs(values.at(row, 1)) > T(kMatrixEps)) {
+            if (t_abs(values.at(row, 1)) > matrix_epsilon<T>()) {
                 throw std::runtime_error("eigvecs currently supports real eigenvalues only");
             }
         }
@@ -1294,7 +1332,7 @@ TMatrix<T> eigenvectors(const TMatrix<T>& matrix) {
     for (T lambda : real_vals) {
         bool already_done = false;
         for (T p : processed_lambdas) {
-            if (t_abs(lambda - p) < T(1e-8L)) {
+            if (t_abs(lambda - p) < precision::sqrt_epsilon<T>()) {
                 already_done = true;
                 break;
             }
@@ -1314,7 +1352,7 @@ TMatrix<T> eigenvectors(const TMatrix<T>& matrix) {
                 norm_sq += basis_mat.at(r, b_col) * basis_mat.at(r, b_col);
             }
             T mag = t_sqrt(norm_sq);
-            if (mag > T(1e-15L)) {
+            if (mag > precision::epsilon<T>()) {
                 for (std::size_t r = 0; r < basis_mat.rows; ++r) {
                     vectors.at(r, current_col) = basis_mat.at(r, b_col) / mag;
                 }
@@ -1335,7 +1373,7 @@ TMatrix<T> filter(const TMatrix<T>& b, const TMatrix<T>& a, const TMatrix<T>& x)
     const std::vector<T> av = as_vector_values(a, "filter");
     const std::vector<T> xv = as_vector_values(x, "filter");
 
-    if (av.empty() || t_abs(av[0]) <= T(kMatrixEps)) {
+    if (av.empty() || t_abs(av[0]) <= matrix_epsilon<T>()) {
         throw std::runtime_error("filter requires non-zero lead coefficient in a");
     }
 
@@ -1384,7 +1422,7 @@ TMatrix<T> freqz(const TMatrix<T>& b, const TMatrix<T>& a, std::size_t n) {
     TMatrix<T> res(n, 2, T(static_cast<long long>(0)));
     for (std::size_t i = 0; i < n; ++i) {
         const long double w = mymath::kPi * static_cast<long double>(i) / static_cast<long double>(n);
-        
+
         if constexpr (std::is_same_v<T, long double>) {
             long double num_r = 0, num_i = 0;
             for (std::size_t k = 0; k < bv.size(); ++k) {
@@ -1392,14 +1430,14 @@ TMatrix<T> freqz(const TMatrix<T>& b, const TMatrix<T>& a, std::size_t n) {
                 num_r += static_cast<long double>(bv[k]) * mymath::cos(phase);
                 num_i += static_cast<long double>(bv[k]) * mymath::sin(phase);
             }
-            
+
             long double den_r = 0, den_i = 0;
             for (std::size_t k = 0; k < av.size(); ++k) {
                 const long double phase = -static_cast<long double>(k) * w;
                 den_r += static_cast<long double>(av[k]) * mymath::cos(phase);
                 den_i += static_cast<long double>(av[k]) * mymath::sin(phase);
             }
-            
+
             const long double den_mag_sq = den_r * den_r + den_i * den_i;
             if (den_mag_sq > 1e-25L) {
                 res.at(i, 0) = static_cast<long double>((num_r * den_r + num_i * den_i) / den_mag_sq);
@@ -1407,6 +1445,28 @@ TMatrix<T> freqz(const TMatrix<T>& b, const TMatrix<T>& a, std::size_t n) {
             } else {
                 res.at(i, 0) = mymath::infinity();
                 res.at(i, 1) = 0.0L;
+            }
+        } else if constexpr (std::is_same_v<T, Scalar>) {
+            // Scalar (float128_t) - use static_cast<long double>
+            long double num_r = 0, num_i = 0;
+            for (std::size_t k = 0; k < bv.size(); ++k) {
+                const long double phase = -static_cast<long double>(k) * w;
+                num_r += static_cast<long double>(bv[k]) * mymath::cos(phase);
+                num_i += static_cast<long double>(bv[k]) * mymath::sin(phase);
+            }
+            long double den_r = 0, den_i = 0;
+            for (std::size_t k = 0; k < av.size(); ++k) {
+                const long double phase = -static_cast<long double>(k) * w;
+                den_r += static_cast<long double>(av[k]) * mymath::cos(phase);
+                den_i += static_cast<long double>(av[k]) * mymath::sin(phase);
+            }
+            const long double den_mag_sq = den_r * den_r + den_i * den_i;
+            if (den_mag_sq > 1e-25L) {
+                res.at(i, 0) = T((num_r * den_r + num_i * den_i) / den_mag_sq);
+                res.at(i, 1) = T((num_i * den_r - num_r * den_i) / den_mag_sq);
+            } else {
+                res.at(i, 0) = T(mymath::infinity());
+                res.at(i, 1) = T(static_cast<long long>(0));
             }
         } else {
             // PreciseDecimal fallback to long double for trig functions if not available
@@ -1444,44 +1504,44 @@ TMatrix<T> freqz(const TMatrix<T>& b, const TMatrix<T>& a, std::size_t n) {
  */
 template <typename T>
 TMatrix<T> residue(const TMatrix<T>& b, const TMatrix<T>& a) {
-    if constexpr (std::is_same_v<T, long double>) {
-        std::vector<long double> bv = as_vector_values(b, "residue");
-        std::vector<long double> av = as_vector_values(a, "residue");
+    if constexpr (std::is_same_v<T, Scalar>) {
+        std::vector<Scalar> bv = as_vector_values(b, "residue");
+        std::vector<Scalar> av = as_vector_values(a, "residue");
 
-        if (av.empty() || mymath::is_near_zero(av.back())) {
+        if (av.empty() || mymath::is_near_zero(av.back(), precision::epsilon<Scalar>())) {
             throw std::runtime_error("residue requires a non-zero denominator");
         }
 
-        while (bv.size() > 1 && mymath::is_near_zero(bv.back())) {
+        while (bv.size() > 1 && mymath::is_near_zero(bv.back(), precision::epsilon<Scalar>())) {
             bv.pop_back();
         }
 
-        std::vector<long double> k_term;
+        std::vector<Scalar> k_term;
         if (bv.size() >= av.size()) {
             auto div = polynomial_divide(bv, av);
             k_term = div.quotient;
             bv = div.remainder;
         }
 
-        std::vector<long double> poles = polynomial_real_roots(av);
+        std::vector<Scalar> poles = polynomial_real_roots(av);
         if (poles.size() < av.size() - 1) {
             throw std::runtime_error("residue currently only supports denominators with distinct real roots");
         }
 
         std::size_t num_poles = poles.size();
-        std::vector<long double> residues(num_poles);
+        std::vector<Scalar> residues(num_poles);
 
-        std::vector<long double> a_prime = polynomial_derivative(av);
+        std::vector<Scalar> a_prime = polynomial_derivative(av);
         for (std::size_t i = 0; i < num_poles; ++i) {
-            long double den = polynomial_evaluate(a_prime, poles[i]);
-            if (mymath::is_near_zero(den)) {
+            Scalar den = polynomial_evaluate(a_prime, poles[i]);
+            if (mymath::is_near_zero(den, precision::epsilon<Scalar>())) {
                 throw std::runtime_error("residue currently only supports simple poles");
             }
             residues[i] = polynomial_evaluate(bv, poles[i]) / den;
         }
 
         std::size_t total_rows = residues.size() + k_term.size();
-        TMatrix<long double> res(total_rows, 3, 0.0L);
+        TMatrix<Scalar> res(total_rows, 3, Scalar(0.0L));
         for (std::size_t i = 0; i < residues.size(); ++i) {
             res.at(i, 0) = residues[i];
             res.at(i, 1) = poles[i];
@@ -1499,127 +1559,85 @@ TMatrix<T> residue(const TMatrix<T>& b, const TMatrix<T>& a) {
 }
 
 // Explicit template instantiations
-template TLuResult<long double> internal::lu_decompose_with_pivoting(const TMatrix<long double>&);
-template TLuResult<PreciseDecimal> internal::lu_decompose_with_pivoting(const TMatrix<PreciseDecimal>&);
+template TLuResult<mymath::Scalar> internal::lu_decompose_with_pivoting(const TMatrix<mymath::Scalar>&);
 
-template TEigenResult<long double> internal::eigenvalues_with_vectors(const TMatrix<long double>&);
-template TEigenResult<PreciseDecimal> internal::eigenvalues_with_vectors(const TMatrix<PreciseDecimal>&);
+template TEigenResult<mymath::Scalar> internal::eigenvalues_with_vectors(const TMatrix<mymath::Scalar>&);
+template std::pair<TMatrix<mymath::Scalar>, TMatrix<mymath::Scalar>> qr_decompose(const TMatrix<mymath::Scalar>&);
 
-template std::pair<TMatrix<long double>, TMatrix<long double>> qr_decompose(const TMatrix<long double>&);
-template std::pair<TMatrix<PreciseDecimal>, TMatrix<PreciseDecimal>> qr_decompose(const TMatrix<PreciseDecimal>&);
+template std::pair<TMatrix<mymath::Scalar>, TMatrix<mymath::Scalar>> lu_decompose(const TMatrix<mymath::Scalar>&);
 
-template std::pair<TMatrix<long double>, TMatrix<long double>> lu_decompose(const TMatrix<long double>&);
-template std::pair<TMatrix<PreciseDecimal>, TMatrix<PreciseDecimal>> lu_decompose(const TMatrix<PreciseDecimal>&);
+template std::vector<std::size_t> rref_in_place(TMatrix<mymath::Scalar>*);
 
-template std::vector<std::size_t> rref_in_place(TMatrix<long double>*);
-template std::vector<std::size_t> rref_in_place(TMatrix<PreciseDecimal>*);
+template TMatrix<mymath::Scalar> nullspace_basis(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> nullspace_basis(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> nullspace_basis(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> inverse(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> inverse(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> inverse(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> pseudo_inverse(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> pseudo_inverse(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> pseudo_inverse(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> nullspace(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> nullspace(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> nullspace(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> least_squares(const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> least_squares(const TMatrix<long double>&, const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> least_squares(const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> qr_q(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> qr_q(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> qr_q(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> qr_r(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> qr_r(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> qr_r(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> lu_l(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> lu_l(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> lu_l(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> lu_u(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> lu_u(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> lu_u(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> lu_p(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> lu_p(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> lu_p(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> svd_u(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> svd_u(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> svd_u(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> svd_s(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> svd_s(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> svd_s(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> svd_vt(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> svd_vt(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> svd_vt(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> lu_solve_with_partial_pivoting(const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> lu_solve_with_partial_pivoting(const TMatrix<long double>&, const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> lu_solve_with_partial_pivoting(const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> solve(const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> solve(const TMatrix<long double>&, const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> solve(const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> power(TMatrix<mymath::Scalar>, long long);
 
-template TMatrix<long double> power(TMatrix<long double>, long long);
-template TMatrix<PreciseDecimal> power(TMatrix<PreciseDecimal>, long long);
+template mymath::Scalar condition_number(const TMatrix<mymath::Scalar>&);
 
-template long double condition_number(const TMatrix<long double>&);
-template PreciseDecimal condition_number(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> cholesky(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> cholesky(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> cholesky(const TMatrix<PreciseDecimal>&);
+template bool is_symmetric(const TMatrix<mymath::Scalar>&);
 
-template bool is_symmetric(const TMatrix<long double>&);
-template bool is_symmetric(const TMatrix<PreciseDecimal>&);
+template bool is_orthogonal(const TMatrix<mymath::Scalar>&);
 
-template bool is_orthogonal(const TMatrix<long double>&);
-template bool is_orthogonal(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> hessenberg(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> hessenberg(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> hessenberg(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> schur(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> schur(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> schur(const TMatrix<PreciseDecimal>&);
+template mymath::Scalar get(const TMatrix<mymath::Scalar>&, std::size_t, std::size_t);
 
-template long double get(const TMatrix<long double>&, std::size_t, std::size_t);
-template PreciseDecimal get(const TMatrix<PreciseDecimal>&, std::size_t, std::size_t);
+template mymath::Scalar get(const TMatrix<mymath::Scalar>&, std::size_t);
 
-template long double get(const TMatrix<long double>&, std::size_t);
-template PreciseDecimal get(const TMatrix<PreciseDecimal>&, std::size_t);
+template TMatrix<mymath::Scalar> set(TMatrix<mymath::Scalar>, std::size_t, std::size_t, mymath::Scalar);
 
-template TMatrix<long double> set(TMatrix<long double>, std::size_t, std::size_t, long double);
-template TMatrix<PreciseDecimal> set(TMatrix<PreciseDecimal>, std::size_t, std::size_t, PreciseDecimal);
+template TMatrix<mymath::Scalar> set(TMatrix<mymath::Scalar>, std::size_t, mymath::Scalar);
 
-template TMatrix<long double> set(TMatrix<long double>, std::size_t, long double);
-template TMatrix<PreciseDecimal> set(TMatrix<PreciseDecimal>, std::size_t, PreciseDecimal);
+template mymath::Scalar norm(const TMatrix<mymath::Scalar>&);
 
-template long double norm(const TMatrix<long double>&);
-template PreciseDecimal norm(const TMatrix<PreciseDecimal>&);
+template mymath::Scalar trace(const TMatrix<mymath::Scalar>&);
 
-template long double trace(const TMatrix<long double>&);
-template PreciseDecimal trace(const TMatrix<PreciseDecimal>&);
+template mymath::Scalar determinant(const TMatrix<mymath::Scalar>&);
 
-template long double determinant(const TMatrix<long double>&);
-template PreciseDecimal determinant(const TMatrix<PreciseDecimal>&);
+template mymath::Scalar rank(const TMatrix<mymath::Scalar>&);
 
-template long double rank(const TMatrix<long double>&);
-template PreciseDecimal rank(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> rref(TMatrix<mymath::Scalar>);
 
-template TMatrix<long double> rref(TMatrix<long double>);
-template TMatrix<PreciseDecimal> rref(TMatrix<PreciseDecimal>);
+template TMatrix<mymath::Scalar> eigenvalues(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> eigenvalues(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> eigenvalues(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> eigenvectors(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> eigenvectors(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> eigenvectors(const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> filter(const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> filter(const TMatrix<long double>&, const TMatrix<long double>&, const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> filter(const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> freqz(const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&, std::size_t);
 
-template TMatrix<long double> freqz(const TMatrix<long double>&, const TMatrix<long double>&, std::size_t);
-template TMatrix<PreciseDecimal> freqz(const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&, std::size_t);
-
-template TMatrix<long double> residue(const TMatrix<long double>&, const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> residue(const TMatrix<PreciseDecimal>&, const TMatrix<PreciseDecimal>&);
+template TMatrix<mymath::Scalar> residue(const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&);
 
 }  // namespace matrix

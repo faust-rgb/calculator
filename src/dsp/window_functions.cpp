@@ -11,6 +11,7 @@
 
 #include "signal_processing.h"
 #include "math/mymath.h"
+#include "app/scalar_type.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -18,8 +19,12 @@
 
 namespace signal {
 
-// 数学常量
-constexpr long double kPi = 3.14159265358979323846;
+// Use Scalar for internal high-precision real computations
+using Scalar = mymath::Scalar;
+
+// 使用 mymath 命名空间中的常量
+using mymath::kPi;
+static const Scalar kPiScalar = mymath::constants::pi<Scalar>();
 
 // ============================================================================
 // 窗函数类型转换
@@ -70,15 +75,15 @@ WindowType string_to_window_type(const std::string& str) {
 // 矩形窗
 // ============================================================================
 
-std::vector<long double> rectangular_window(std::size_t length) {
-    return std::vector<long double>(length, 1.0L);
+std::vector<Scalar> rectangular_window(std::size_t length) {
+    return std::vector<Scalar>(length, 1.0L);
 }
 
 // ============================================================================
 // 汉宁窗（Hanning / Hann）
 // ============================================================================
 
-std::vector<long double> hanning_window(std::size_t length) {
+std::vector<Scalar> hanning_window(std::size_t length) {
     if (length == 0) {
         return {};
     }
@@ -86,11 +91,12 @@ std::vector<long double> hanning_window(std::size_t length) {
         return {1.0L};
     }
 
-    std::vector<long double> w(length);
-    const long double factor = 2.0 * kPi / static_cast<long double>(length - 1);
+    std::vector<Scalar> w(length);
+    const Scalar factor = Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(length - 1));
 
     for (std::size_t i = 0; i < length; ++i) {
-        w[i] = 0.5 * (1.0L - mymath::cos(factor * static_cast<long double>(i)));
+        const Scalar x = factor * Scalar(static_cast<long long>(i));
+        w[i] = (Scalar(0.5L) * (Scalar(1.0L) - mymath::cos(x)));
     }
 
     return w;
@@ -100,7 +106,7 @@ std::vector<long double> hanning_window(std::size_t length) {
 // 汉明窗（Hamming）
 // ============================================================================
 
-std::vector<long double> hamming_window(std::size_t length) {
+std::vector<Scalar> hamming_window(std::size_t length) {
     if (length == 0) {
         return {};
     }
@@ -108,12 +114,16 @@ std::vector<long double> hamming_window(std::size_t length) {
         return {1.0L};
     }
 
-    std::vector<long double> w(length);
-    const long double factor = 2.0 * kPi / static_cast<long double>(length - 1);
+    std::vector<Scalar> w(length);
+    const Scalar factor = Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(length - 1));
 
     // Hamming 窗系数：a0 = 0.54, a1 = 0.46
+    const Scalar a0 = Scalar(0.54L);
+    const Scalar a1 = Scalar(0.46L);
+
     for (std::size_t i = 0; i < length; ++i) {
-        w[i] = 0.54 - 0.46 * mymath::cos(factor * static_cast<long double>(i));
+        const Scalar x = factor * Scalar(static_cast<long long>(i));
+        w[i] = (a0 - a1 * mymath::cos(x));
     }
 
     return w;
@@ -123,7 +133,7 @@ std::vector<long double> hamming_window(std::size_t length) {
 // 布莱克曼窗（Blackman）
 // ============================================================================
 
-std::vector<long double> blackman_window(std::size_t length) {
+std::vector<Scalar> blackman_window(std::size_t length) {
     if (length == 0) {
         return {};
     }
@@ -131,17 +141,18 @@ std::vector<long double> blackman_window(std::size_t length) {
         return {1.0L};
     }
 
-    std::vector<long double> w(length);
-    const long double factor = 2.0 * kPi / static_cast<long double>(length - 1);
+    std::vector<Scalar> w(length);
+    const Scalar factor = Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(length - 1));
 
     // Blackman 窗系数
-    constexpr long double a0 = 0.42;
-    constexpr long double a1 = 0.5;
-    constexpr long double a2 = 0.08;
+    const Scalar a0 = Scalar(0.42L);
+    const Scalar a1 = Scalar(0.5L);
+    const Scalar a2 = Scalar(0.08L);
 
     for (std::size_t i = 0; i < length; ++i) {
-        const long double x = factor * static_cast<long double>(i);
-        w[i] = a0 - a1 * mymath::cos(x) + a2 * mymath::cos(2.0 * x);
+        const Scalar x = factor * Scalar(static_cast<long long>(i));
+        w[i] = (a0 - a1 * mymath::cos(x) +
+                                        a2 * mymath::cos(Scalar(2.0L) * x));
     }
 
     return w;
@@ -151,7 +162,7 @@ std::vector<long double> blackman_window(std::size_t length) {
 // 布莱克曼-哈里斯窗（Blackman-Harris）
 // ============================================================================
 
-std::vector<long double> blackman_harris_window(std::size_t length) {
+std::vector<Scalar> blackman_harris_window(std::size_t length) {
     if (length == 0) {
         return {};
     }
@@ -159,18 +170,20 @@ std::vector<long double> blackman_harris_window(std::size_t length) {
         return {1.0L};
     }
 
-    std::vector<long double> w(length);
-    const long double factor = 2.0 * kPi / static_cast<long double>(length - 1);
+    std::vector<Scalar> w(length);
+    const Scalar factor = Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(length - 1));
 
     // 4 项 Blackman-Harris 窗系数
-    constexpr long double a0 = 0.35875;
-    constexpr long double a1 = 0.48829;
-    constexpr long double a2 = 0.14128;
-    constexpr long double a3 = 0.01168;
+    const Scalar a0 = Scalar(0.35875L);
+    const Scalar a1 = Scalar(0.48829L);
+    const Scalar a2 = Scalar(0.14128L);
+    const Scalar a3 = Scalar(0.01168L);
 
     for (std::size_t i = 0; i < length; ++i) {
-        const long double x = factor * static_cast<long double>(i);
-        w[i] = a0 - a1 * mymath::cos(x) + a2 * mymath::cos(2.0 * x) - a3 * mymath::cos(3.0 * x);
+        const Scalar x = factor * Scalar(static_cast<long long>(i));
+        w[i] = (a0 - a1 * mymath::cos(x) +
+                                        a2 * mymath::cos(Scalar(2.0L) * x) -
+                                        a3 * mymath::cos(Scalar(3.0L) * x));
     }
 
     return w;
@@ -180,7 +193,7 @@ std::vector<long double> blackman_harris_window(std::size_t length) {
 // 巴特利特窗（Bartlett / 三角窗）
 // ============================================================================
 
-std::vector<long double> bartlett_window(std::size_t length) {
+std::vector<Scalar> bartlett_window(std::size_t length) {
     if (length == 0) {
         return {};
     }
@@ -188,11 +201,12 @@ std::vector<long double> bartlett_window(std::size_t length) {
         return {1.0L};
     }
 
-    std::vector<long double> w(length);
-    const long double half = static_cast<long double>(length - 1) / 2.0;
+    std::vector<Scalar> w(length);
+    const Scalar half = Scalar(static_cast<long long>(length - 1)) / Scalar(2.0L);
 
     for (std::size_t i = 0; i < length; ++i) {
-        w[i] = 1.0L - mymath::abs(static_cast<long double>(i) - half) / half;
+        const Scalar idx = Scalar(static_cast<long long>(i));
+        w[i] = (Scalar(1.0L) - mymath::abs(idx - half) / half);
     }
 
     return w;
@@ -203,16 +217,16 @@ std::vector<long double> bartlett_window(std::size_t length) {
 // ============================================================================
 
 // 第一类修正贝塞尔函数 I0
-static long double bessel_i0(long double x) {
+static Scalar bessel_i0_scalar(Scalar x) {
     // 使用级数展开
-    long double result = 1.0L;
-    long double term = 1.0L;
-    long double x_squared_over_4 = x * x / 4.0;
+    Scalar result = Scalar(1.0L);
+    Scalar term = Scalar(1.0L);
+    Scalar x_squared_over_4 = x * x / Scalar(4.0L);
 
     for (int k = 1; k <= 25; ++k) {
-        term *= x_squared_over_4 / static_cast<long double>(k * k);
+        term *= x_squared_over_4 / Scalar((k * k));
         result += term;
-        if (term < 1e-12 * result) {
+        if (term < Scalar(1e-12L) * result) {
             break;
         }
     }
@@ -220,7 +234,7 @@ static long double bessel_i0(long double x) {
     return result;
 }
 
-std::vector<long double> kaiser_window(std::size_t length, long double beta) {
+std::vector<Scalar> kaiser_window(std::size_t length, Scalar beta) {
     if (length == 0) {
         return {};
     }
@@ -228,13 +242,15 @@ std::vector<long double> kaiser_window(std::size_t length, long double beta) {
         return {1.0L};
     }
 
-    std::vector<long double> w(length);
-    const long double i0_beta = bessel_i0(beta);
-    const long double half = static_cast<long double>(length - 1) / 2.0;
+    std::vector<Scalar> w(length);
+    const Scalar beta_scalar = Scalar(beta);
+    const Scalar i0_beta = bessel_i0_scalar(beta_scalar);
+    const Scalar half = Scalar(static_cast<long long>(length - 1)) / Scalar(2.0L);
 
     for (std::size_t i = 0; i < length; ++i) {
-        const long double x = (static_cast<long double>(i) - half) / half;
-        w[i] = bessel_i0(beta * mymath::sqrt(1.0L - x * x)) / i0_beta;
+        const Scalar x = (Scalar(static_cast<long long>(i)) - half) / half;
+        w[i] = (bessel_i0_scalar(beta_scalar *
+                                    mymath::sqrt(Scalar(1.0L) - x * x)) / i0_beta);
     }
 
     return w;
@@ -244,7 +260,7 @@ std::vector<long double> kaiser_window(std::size_t length, long double beta) {
 // 高斯窗（Gaussian）
 // ============================================================================
 
-std::vector<long double> gaussian_window(std::size_t length, long double sigma) {
+std::vector<Scalar> gaussian_window(std::size_t length, Scalar sigma) {
     if (length == 0) {
         return {};
     }
@@ -252,13 +268,15 @@ std::vector<long double> gaussian_window(std::size_t length, long double sigma) 
         return {1.0L};
     }
 
-    std::vector<long double> w(length);
-    const long double half = static_cast<long double>(length - 1) / 2.0;
-    const long double sigma_scaled = sigma * half;
+    std::vector<Scalar> w(length);
+    const Scalar half = Scalar(static_cast<long long>(length - 1)) / Scalar(2.0L);
+    const Scalar sigma_scalar = Scalar(sigma);
+    const Scalar sigma_scaled = sigma_scalar * half;
 
     for (std::size_t i = 0; i < length; ++i) {
-        const long double x = static_cast<long double>(i) - half;
-        w[i] = mymath::exp(-0.5 * (x / sigma_scaled) * (x / sigma_scaled));
+        const Scalar x = Scalar(static_cast<long long>(i)) - half;
+        const Scalar ratio = x / sigma_scaled;
+        w[i] = (mymath::exp(Scalar(-0.5L) * ratio * ratio));
     }
 
     return w;
@@ -268,7 +286,7 @@ std::vector<long double> gaussian_window(std::size_t length, long double sigma) 
 // 平顶窗（Flattop）
 // ============================================================================
 
-std::vector<long double> flattop_window(std::size_t length) {
+std::vector<Scalar> flattop_window(std::size_t length) {
     if (length == 0) {
         return {};
     }
@@ -276,20 +294,22 @@ std::vector<long double> flattop_window(std::size_t length) {
         return {1.0L};
     }
 
-    std::vector<long double> w(length);
-    const long double factor = 2.0 * kPi / static_cast<long double>(length - 1);
+    std::vector<Scalar> w(length);
+    const Scalar factor = Scalar(2.0L) * kPiScalar / Scalar(static_cast<long long>(length - 1));
 
     // 平顶窗系数
-    constexpr long double a0 = 0.21557895;
-    constexpr long double a1 = 0.41663158;
-    constexpr long double a2 = 0.277263158;
-    constexpr long double a3 = 0.083578947;
-    constexpr long double a4 = 0.006947368;
+    const Scalar a0 = Scalar(0.21557895L);
+    const Scalar a1 = Scalar(0.41663158L);
+    const Scalar a2 = Scalar(0.277263158L);
+    const Scalar a3 = Scalar(0.083578947L);
+    const Scalar a4 = Scalar(0.006947368L);
 
     for (std::size_t i = 0; i < length; ++i) {
-        const long double x = factor * static_cast<long double>(i);
-        w[i] = a0 - a1 * mymath::cos(x) + a2 * mymath::cos(2.0 * x)
-               - a3 * mymath::cos(3.0 * x) + a4 * mymath::cos(4.0 * x);
+        const Scalar x = factor * Scalar(static_cast<long long>(i));
+        w[i] = (a0 - a1 * mymath::cos(x) +
+                                        a2 * mymath::cos(Scalar(2.0L) * x) -
+                                        a3 * mymath::cos(Scalar(3.0L) * x) +
+                                        a4 * mymath::cos(Scalar(4.0L) * x));
     }
 
     return w;
@@ -299,7 +319,7 @@ std::vector<long double> flattop_window(std::size_t length) {
 // Tukey 窗
 // ============================================================================
 
-std::vector<long double> tukey_window(std::size_t length, long double alpha) {
+std::vector<Scalar> tukey_window(std::size_t length, Scalar alpha) {
     if (length == 0) {
         return {};
     }
@@ -308,29 +328,34 @@ std::vector<long double> tukey_window(std::size_t length, long double alpha) {
     }
 
     // 限制 alpha 在 [0, 1] 范围内
-    alpha = std::max(0.0L, std::min(1.0L, alpha));
+    Scalar alpha_scalar = Scalar(alpha);
+    if (alpha_scalar < Scalar(0.0L)) alpha_scalar = Scalar(0.0L);
+    if (alpha_scalar > Scalar(1.0L)) alpha_scalar = Scalar(1.0L);
 
-    std::vector<long double> w(length);
+    std::vector<Scalar> w(length);
 
-    if (alpha == 0.0L) {
+    if (alpha_scalar == Scalar(0.0L)) {
         // 退化为矩形窗
         return rectangular_window(length);
-    } else if (alpha == 1.0L) {
+    } else if (alpha_scalar == Scalar(1.0L)) {
         // 退化为汉宁窗
         return hanning_window(length);
     }
 
-    const long double width = alpha * static_cast<long double>(length - 1) / 2.0;
+    const Scalar width = alpha_scalar * Scalar(static_cast<long long>(length - 1)) / Scalar(2.0L);
 
     for (std::size_t i = 0; i < length; ++i) {
-        const long double x = static_cast<long double>(i);
+        const Scalar x = Scalar(static_cast<long long>(i));
 
         if (x < width) {
             // 上升沿
-            w[i] = 0.5 * (1.0L + mymath::cos(kPi * (x / width - 1.0L)));
-        } else if (x > static_cast<long double>(length - 1) - width) {
+            w[i] = (Scalar(0.5L) * (Scalar(1.0L) +
+                    mymath::cos(kPiScalar * (x / width - Scalar(1.0L)))));
+        } else if (x > Scalar(static_cast<long long>(length - 1)) - width) {
             // 下降沿
-            w[i] = 0.5 * (1.0L + mymath::cos(kPi * ((x - static_cast<long double>(length - 1)) / width + 1.0L)));
+            w[i] = (Scalar(0.5L) * (Scalar(1.0L) +
+                    mymath::cos(kPiScalar * ((x - Scalar(static_cast<long long>(length - 1))) / width +
+                    Scalar(1.0L)))));
         } else {
             // 平坦部分
             w[i] = 1.0L;
@@ -344,7 +369,7 @@ std::vector<long double> tukey_window(std::size_t length, long double alpha) {
 // 通用窗函数生成
 // ============================================================================
 
-std::vector<long double> window(WindowType type, std::size_t length, long double param) {
+std::vector<Scalar> window(WindowType type, std::size_t length, Scalar param) {
     switch (type) {
         case WindowType::Rectangular:
             return rectangular_window(length);
@@ -375,18 +400,19 @@ std::vector<long double> window(WindowType type, std::size_t length, long double
 // 应用窗函数
 // ============================================================================
 
-std::vector<long double> apply_window(const std::vector<long double>& signal,
+std::vector<Scalar> apply_window(const std::vector<Scalar>& signal,
                                   WindowType window_type,
-                                  long double param) {
+                                  Scalar param) {
     if (signal.empty()) {
         return {};
     }
 
-    std::vector<long double> win = window(window_type, signal.size(), param);
-    std::vector<long double> result(signal.size());
+    std::vector<Scalar> win = window(window_type, signal.size(), param);
+    std::vector<Scalar> result(signal.size());
 
+    // Use Scalar for multiplication to get higher precision
     for (std::size_t i = 0; i < signal.size(); ++i) {
-        result[i] = signal[i] * win[i];
+        result[i] = (Scalar(signal[i]) * Scalar(win[i]));
     }
 
     return result;

@@ -1,6 +1,6 @@
 #include "matrix.h"
 #include "matrix_internal.h"
-#include "precise/precise_decimal.h"
+#include "math/precise/precise_decimal.h"
 #include <sstream>
 #include <stdexcept>
 
@@ -164,28 +164,28 @@ std::string TMatrix<T>::to_string() const {
 }
 
 // Explicit template instantiations
-template TMatrix<long double> reshape<long double>(const TMatrix<long double>&, std::size_t, std::size_t);
-template TMatrix<PreciseDecimal> reshape<PreciseDecimal>(const TMatrix<PreciseDecimal>&, std::size_t, std::size_t);
+//template TMatrix<long double> reshape<long double>(const TMatrix<long double>&, std::size_t, std::size_t);
+template TMatrix<mymath::Scalar> reshape<mymath::Scalar>(const TMatrix<mymath::Scalar>&, std::size_t, std::size_t);
 
-template TMatrix<long double> vectorize<long double>(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> vectorize<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
+//template TMatrix<long double> vectorize<long double>(const TMatrix<long double>&);
+template TMatrix<mymath::Scalar> vectorize<mymath::Scalar>(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> diag<long double>(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> diag<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
+//template TMatrix<long double> diag<long double>(const TMatrix<long double>&);
+template TMatrix<mymath::Scalar> diag<mymath::Scalar>(const TMatrix<mymath::Scalar>&);
 
-template TMatrix<long double> transpose<long double>(const TMatrix<long double>&);
-template TMatrix<PreciseDecimal> transpose<PreciseDecimal>(const TMatrix<PreciseDecimal>&);
+//template TMatrix<long double> transpose<long double>(const TMatrix<long double>&);
+template TMatrix<mymath::Scalar> transpose<mymath::Scalar>(const TMatrix<mymath::Scalar>&);
 
-template void TMatrix<long double>::resize(std::size_t, std::size_t, long double);
-template void TMatrix<PreciseDecimal>::resize(std::size_t, std::size_t, PreciseDecimal);
+//template void TMatrix<long double>::resize(std::size_t, std::size_t, long double);
+template void TMatrix<mymath::Scalar>::resize(std::size_t, std::size_t, mymath::Scalar);
 
-template void TMatrix<long double>::append_row(const std::vector<long double>&);
-template void TMatrix<PreciseDecimal>::append_row(const std::vector<PreciseDecimal>&);
+//template void TMatrix<long double>::append_row(const std::vector<long double>&);
+template void TMatrix<mymath::Scalar>::append_row(const std::vector<mymath::Scalar>&);
 
-template void TMatrix<long double>::append_col(const std::vector<long double>&);
-template void TMatrix<PreciseDecimal>::append_col(const std::vector<PreciseDecimal>&);
+//template void TMatrix<long double>::append_col(const std::vector<long double>&);
+template void TMatrix<mymath::Scalar>::append_col(const std::vector<mymath::Scalar>&);
 
-template std::string TMatrix<long double>::to_string() const;
-template std::string TMatrix<PreciseDecimal>::to_string() const;
+//template std::string TMatrix<long double>::to_string() const;
+template std::string TMatrix<mymath::Scalar>::to_string() const;
 
 } // namespace matrix

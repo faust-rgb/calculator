@@ -167,9 +167,9 @@ int run_core_display_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
-    // 测试显示精度范围限制（最大允许17位）
+    // 测试显示精度范围限制（最大允许50位）
     try {
-        calculator.set_display_precision(18);
+        calculator.set_display_precision(51);
         ++failed;
         std::cout << "FAIL: display precision accepted an out-of-range value\n";
     } catch (const std::exception&) {

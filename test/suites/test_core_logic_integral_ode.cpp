@@ -23,6 +23,7 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
     Calculator calculator;
     using namespace test_helpers;
 
+    std::cout << "DEBUG: Testing double_integral (x + y)..." << std::endl;
     // ========== 多重积分测试 ==========
     // 测试二重积分
     try {
@@ -43,6 +44,7 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    std::cout << "DEBUG: Testing double_integral polar..." << std::endl;
     try {
         std::string output;
         const bool handled =
@@ -61,6 +63,7 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    std::cout << "DEBUG: Testing double_integral polar negative radius..." << std::endl;
     try {
         std::string output;
         const bool handled =
@@ -146,8 +149,10 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    std::cout << "DEBUG: Testing ODE..." << std::endl;
     // ========== ODE求解测试 ==========
     // 测试常微分方程求解
+    std::cout << "DEBUG: Testing ode(y - x ^ 2 + 1, 0, 0.5, 2, 20)..." << std::endl;
     try {
         std::string output;
         const bool handled =
@@ -170,8 +175,8 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
     try {
         const std::string assigned =
             calculator.process_line("traj = ode_table(y, 0, 1, 1, 4)", false);
-        const long double end_x = calculator.evaluate("get(traj, 4, 0)");
-        const long double end_y = calculator.evaluate("get(traj, 4, 1)");
+        const auto end_x = calculator.evaluate("get(traj, 4, 0)");
+        const auto end_y = calculator.evaluate("get(traj, 4, 1)");
         if (assigned.find("traj = [[0, 1]") == 0 &&
             nearly_equal(end_x, 1.0L, 1e-8) &&
             nearly_equal(end_y, mymath::exp(1.0L), 3e-3)) {
@@ -230,9 +235,9 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
             calculator.process_line(
                 "sys = ode_system_table(vec(y2, -y1), 0, vec(0, 1), 1.57079632679, 4)",
                 false);
-        const long double end_x = calculator.evaluate("get(sys, 4, 0)");
-        const long double end_y1 = calculator.evaluate("get(sys, 4, 1)");
-        const long double end_y2 = calculator.evaluate("get(sys, 4, 2)");
+        const auto end_x = calculator.evaluate("get(sys, 4, 0)");
+        const auto end_y1 = calculator.evaluate("get(sys, 4, 1)");
+        const auto end_y2 = calculator.evaluate("get(sys, 4, 2)");
         if (assigned.find("sys = [[0, 0, 1]") == 0 &&
             nearly_equal(end_x, 1.57079632679, 1e-8) &&
             nearly_equal(end_y1, 1.0L, 5e-4) &&
@@ -273,8 +278,8 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
             calculator.process_line(
                 "evt = ode_system_table(mat(1, 1, p1 * y1), 0, mat(1, 1, 1), 2, 80, y1 - 2, mat(1, 1, 1))",
                 false);
-        const long double end_x = calculator.evaluate("get(evt, 28, 0)");
-        const long double end_y = calculator.evaluate("get(evt, 28, 1)");
+        const auto end_x = calculator.evaluate("get(evt, 28, 0)");
+        const auto end_y = calculator.evaluate("get(evt, 28, 1)");
         if (assigned.find("evt = [[0, 1]") == 0 &&
             nearly_equal(end_x, mymath::ln(2.0), 2e-2) &&
             nearly_equal(end_y, 2.0, 2e-3)) {

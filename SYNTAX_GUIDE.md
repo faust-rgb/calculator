@@ -9,13 +9,13 @@ and no statement-ending semicolons.
 From the project root:
 
 ```bash
-bin/calculator test/script/comprehensive_validation.calc
+bin/calculator test/script/additional_validation.calc
 ```
 
 From the interactive prompt:
 
 ```text
-> :run test/script/comprehensive_validation.calc
+> :run test/script/additional_validation.calc
 ```
 
 Script files should use the `.calc` extension.
@@ -370,7 +370,7 @@ examples should use the Python-like form described above.
 
 ## Feature Coverage Example
 
-Use `test/script/comprehensive_validation.calc` as the broad regression script.
+Use `test/script/additional_validation.calc` as the broad regression script.
 It covers:
 
 - comments, assignments, strings, arithmetic, and comparisons

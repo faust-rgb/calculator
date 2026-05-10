@@ -1,7 +1,7 @@
 #include "matrix.h"
 #include "matrix_internal.h"
 #include "mymath.h"
-#include "precise/precise_decimal.h"
+#include "math/precise/precise_decimal.h"
 #include <vector>
 #include <stdexcept>
 #include <algorithm>
@@ -149,11 +149,11 @@ T spline_interpolate(const std::vector<T>& x,
 }
 
 // Explicit template instantiations
-template long double lagrange_interpolate<long double>(const std::vector<long double>&, const std::vector<long double>&, long double);
-template PreciseDecimal lagrange_interpolate<PreciseDecimal>(const std::vector<PreciseDecimal>&, const std::vector<PreciseDecimal>&, PreciseDecimal);
+///template long double lagrange_interpolate<long double>(const std::vector<long double>&, const std::vector<long double>&, long double);
+template mymath::Scalar lagrange_interpolate<mymath::Scalar>(const std::vector<mymath::Scalar>&, const std::vector<mymath::Scalar>&, mymath::Scalar);
 
-template long double spline_interpolate<long double>(const std::vector<long double>&, const std::vector<long double>&, long double);
-template PreciseDecimal spline_interpolate<PreciseDecimal>(const std::vector<PreciseDecimal>&, const std::vector<PreciseDecimal>&, PreciseDecimal);
+//template long double spline_interpolate<long double>(const std::vector<long double>&, const std::vector<long double>&, long double);
+template mymath::Scalar spline_interpolate<mymath::Scalar>(const std::vector<mymath::Scalar>&, const std::vector<mymath::Scalar>&, mymath::Scalar);
 
 } // namespace internal
 } // namespace matrix

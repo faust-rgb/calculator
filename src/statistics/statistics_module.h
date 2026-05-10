@@ -10,13 +10,15 @@
 #define STATISTICS_MODULE_H
 
 #include "module/calculator_module.h"
-#include "parser/unified_expression_parser.h"
+#include "parser/grammars/unified_expression_parser.h"
+#include "app/scalar_type.h"
 #include "calculator_statistics.h"
 #include "statistics.h"
 #include "probability.h"
 #include "mymath.h"
 #include <numeric>
 #include <sstream>
+#include <span>
 
 /**
  * @brief 统计模块类
@@ -35,6 +37,7 @@
  */
 class StatisticsModule : public CalculatorModule {
 public:
+    using Scalar = mymath::Scalar;
     /**
      * @brief 获取模块名称
      * @return 模块名称 "Statistics"
@@ -56,7 +59,7 @@ public:
                        const CoreServices& svc) override {
         // 解析参数并提取数据向量
         auto args_str = split_top_level_arguments(inside);
-        std::vector<long double> data;
+        std::vector<Scalar> data;
         for (const auto& arg_str : args_str) {
             auto val = svc.evaluation.evaluate_value(arg_str, false);
             auto vec = stats_ops::extract_vector(val);
@@ -70,36 +73,49 @@ public:
 
         // 处理统计摘要命令
         if (command == "stat_summary" || command == "describe") {
-            // 计算各种统计量
-            long double mean = stats::mean(data);
-            long double stddev = stats::sample_stddev(data);
-            long double variance = stats::sample_variance(data);
-            long double median = stats::median(data);
-            long double min = stats::percentile(data, 0);
-            long double max = stats::percentile(data, 100);
-            long double q1 = stats::percentile(data, 25);
-            long double q3 = stats::percentile(data, 75);
-            long double iqr = q3 - q1;
-            long double skew = stats::skewness(data);
-            long double kurt = stats::kurtosis(data);
-            long double mad = stats::mad(data);
+            // 使用单次遍历计算所有矩（均值、方差、偏度、峰度）
+            stats::Moments m = stats::compute_moments(data);
+
+            Scalar mean_val = m.mean;
+            Scalar variance_val = m.m2 / Scalar(static_cast<long long>(m.n));
+            Scalar sample_variance_val = m.m2 / Scalar(static_cast<long long>(m.n - 1));
+            Scalar stddev_val = mymath::sqrt(sample_variance_val);
+
+            // 计算偏度和峰度
+            Scalar skew_val = Scalar(0);
+            Scalar kurt_val = Scalar(0);
+            if (variance_val > Scalar(1e-30L)) {
+                skew_val = (m.m3 / Scalar(static_cast<long long>(m.n))) /
+                          mymath::pow(variance_val, Scalar(1.5));
+                kurt_val = (m.m4 / Scalar(static_cast<long long>(m.n))) /
+                          (variance_val * variance_val) - Scalar(3);
+            }
+
+            // 计算分位数（需要排序，无法与矩合并）
+            Scalar median_val = stats::median(data);
+            Scalar min_val = stats::percentile(data, 0);
+            Scalar max_val = stats::percentile(data, 100);
+            Scalar q1_val = stats::percentile(data, 25);
+            Scalar q3_val = stats::percentile(data, 75);
+            Scalar iqr_val = q3_val - q1_val;
+            Scalar mad_val = stats::mad(data);
 
             // 格式化输出统计摘要
             std::ostringstream out;
             out << "--- Statistical Summary ---\n"
                 << "Count:    " << data.size() << "\n"
-                << "Mean:     " << svc.evaluation.normalize_result(mean) << "\n"
-                << "StdDev(S):" << svc.evaluation.normalize_result(stddev) << "\n"
-                << "Variance: " << svc.evaluation.normalize_result(variance) << "\n"
-                << "Min:      " << svc.evaluation.normalize_result(min) << "\n"
-                << "25% (Q1): " << svc.evaluation.normalize_result(q1) << "\n"
-                << "50% (Med):" << svc.evaluation.normalize_result(median) << "\n"
-                << "75% (Q3): " << svc.evaluation.normalize_result(q3) << "\n"
-                << "Max:      " << svc.evaluation.normalize_result(max) << "\n"
-                << "IQR:      " << svc.evaluation.normalize_result(iqr) << "\n"
-                << "Skewness: " << svc.evaluation.normalize_result(skew) << "\n"
-                << "Kurtosis: " << svc.evaluation.normalize_result(kurt) << "\n"
-                << "MAD:      " << svc.evaluation.normalize_result(mad);
+                << "Mean:     " << svc.evaluation.normalize_result(mean_val) << "\n"
+                << "StdDev(S):" << svc.evaluation.normalize_result(stddev_val) << "\n"
+                << "Variance: " << svc.evaluation.normalize_result(sample_variance_val) << "\n"
+                << "Min:      " << svc.evaluation.normalize_result(min_val) << "\n"
+                << "25% (Q1): " << svc.evaluation.normalize_result(q1_val) << "\n"
+                << "50% (Med):" << svc.evaluation.normalize_result(median_val) << "\n"
+                << "75% (Q3): " << svc.evaluation.normalize_result(q3_val) << "\n"
+                << "Max:      " << svc.evaluation.normalize_result(max_val) << "\n"
+                << "IQR:      " << svc.evaluation.normalize_result(iqr_val) << "\n"
+                << "Skewness: " << svc.evaluation.normalize_result(skew_val) << "\n"
+                << "Kurtosis: " << svc.evaluation.normalize_result(kurt_val) << "\n"
+                << "MAD:      " << svc.evaluation.normalize_result(mad_val);
             return out.str();
         }
 
@@ -125,8 +141,8 @@ public:
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_native_functions() const override {
         std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
-        // 辅助函数：将 long double 包装为 StoredValue
-        auto wrap_scalar = [](long double val) -> StoredValue {
+        // 辅助函数：将 Scalar 包装为 StoredValue
+        auto wrap_scalar = [](Scalar val) -> StoredValue {
             StoredValue res;
             res.decimal = val;
             res.exact = false;
@@ -135,7 +151,7 @@ public:
 
         // 均值函数
         funcs["mean"] = [wrap_scalar](const std::vector<StoredValue>& args) {
-            std::vector<long double> data;
+            std::vector<Scalar> data;
             for (const auto& arg : args) {
                 auto v = stats_ops::extract_vector(arg);
                 data.insert(data.end(), v.begin(), v.end());
@@ -146,7 +162,7 @@ public:
 
         // 中位数函数
         funcs["median"] = [wrap_scalar](const std::vector<StoredValue>& args) {
-            std::vector<long double> data;
+            std::vector<Scalar> data;
             for (const auto& arg : args) {
                 auto v = stats_ops::extract_vector(arg);
                 data.insert(data.end(), v.begin(), v.end());
@@ -156,7 +172,7 @@ public:
 
         // 标准差函数
         funcs["std"] = [wrap_scalar](const std::vector<StoredValue>& args) {
-            std::vector<long double> data;
+            std::vector<Scalar> data;
             for (const auto& arg : args) {
                 auto v = stats_ops::extract_vector(arg);
                 data.insert(data.end(), v.begin(), v.end());
@@ -166,7 +182,7 @@ public:
 
         // 方差函数
         funcs["var"] = [wrap_scalar](const std::vector<StoredValue>& args) {
-            std::vector<long double> data;
+            std::vector<Scalar> data;
             for (const auto& arg : args) {
                 auto v = stats_ops::extract_vector(arg);
                 data.insert(data.end(), v.begin(), v.end());
@@ -176,12 +192,12 @@ public:
 
         // 双样本 T 检验函数
         funcs["t_test2"] = [wrap_scalar](const std::vector<StoredValue>& args) {
-            std::vector<long double> x, y;
+            std::vector<Scalar> x, y;
             if (args.size() == 2) {
                 x = stats_ops::extract_vector(args[0]);
                 y = stats_ops::extract_vector(args[1]);
             } else {
-                std::vector<long double> all;
+                std::vector<Scalar> all;
                 for (const auto& arg : args) {
                     auto v = stats_ops::extract_vector(arg);
                     all.insert(all.end(), v.begin(), v.end());
@@ -191,29 +207,29 @@ public:
                 x.assign(all.begin(), all.begin() + n);
                 y.assign(all.begin() + n, all.end());
             }
-            
-            long double m1 = stats::mean(x);
-            long double m2 = stats::mean(y);
-            long double s1 = stats::sample_variance(x);
-            long double s2 = stats::sample_variance(y);
-            long double n1 = static_cast<long double>(x.size());
-            long double n2 = static_cast<long double>(y.size());
-            
-            long double t = (m1 - m2) / mymath::sqrt(s1/n1 + s2/n2);
-            long double df = mymath::pow(s1/n1 + s2/n2, 2) / 
-                        (mymath::pow(s1/n1, 2)/(n1-1.0L) + mymath::pow(s2/n2, 2)/(n2-1.0L));
-            
-            return wrap_scalar(2.0 * prob::student_t_cdf(-mymath::abs(t), df));
+
+            Scalar m1 = Scalar(stats::mean(x));
+            Scalar m2 = Scalar(stats::mean(y));
+            Scalar s1 = Scalar(stats::sample_variance(x));
+            Scalar s2 = Scalar(stats::sample_variance(y));
+            Scalar n1 = Scalar(static_cast<long long>(x.size()));
+            Scalar n2 = Scalar(static_cast<long long>(y.size()));
+
+            Scalar t = (m1 - m2) / mymath::sqrt(s1/n1 + s2/n2);
+            Scalar df = mymath::pow(s1/n1 + s2/n2, Scalar(2)) /
+                        (mymath::pow(s1/n1, Scalar(2))/(n1-Scalar(1)) + mymath::pow(s2/n2, Scalar(2))/(n2-Scalar(1)));
+
+            return wrap_scalar(2.0 * prob::student_t_cdf(-(mymath::abs(t)), (df)));
         };
 
         // 卡方检验函数
         funcs["chi2_test"] = [wrap_scalar](const std::vector<StoredValue>& args) {
-            std::vector<long double> obs, exp;
+            std::vector<Scalar> obs, exp;
             if (args.size() == 2) {
                 obs = stats_ops::extract_vector(args[0]);
                 exp = stats_ops::extract_vector(args[1]);
             } else {
-                std::vector<long double> all;
+                std::vector<Scalar> all;
                 for (const auto& arg : args) {
                     auto v = stats_ops::extract_vector(arg);
                     all.insert(all.end(), v.begin(), v.end());
@@ -228,14 +244,14 @@ public:
                 throw std::runtime_error("chi2_test expects obs and exp datasets of same length");
             }
 
-            long double chi2 = 0;
+            Scalar chi2 = Scalar(0);
             for (size_t i = 0; i < obs.size(); i++) {
                 if (exp[i] <= 0) throw std::runtime_error("chi2_test expected values must be positive");
-                chi2 += mymath::pow(obs[i] - exp[i], 2) / exp[i];
+                chi2 += mymath::pow(Scalar(obs[i]) - Scalar(exp[i]), Scalar(2)) / Scalar(exp[i]);
             }
-            long double df = static_cast<long double>(obs.size() - 1);
-            if (df < 1) throw std::runtime_error("chi2_test requires at least 2 categories");
-            return wrap_scalar(1.0L - prob::chi2_cdf(chi2, df));
+            Scalar df = Scalar(static_cast<long long>(obs.size() - 1));
+            if (df < Scalar(1)) throw std::runtime_error("chi2_test requires at least 2 categories");
+            return wrap_scalar(1.0L - prob::chi2_cdf((chi2), (df)));
         };
 
         return funcs;

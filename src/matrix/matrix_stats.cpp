@@ -23,7 +23,7 @@
 #include "math/mymath.h"
 #include "matrix_internal.h"
 #include "statistics/statistics.h"
-#include "precise/precise_decimal.h"
+#include "math/precise/precise_decimal.h"
 #include <stdexcept>
 #include <numeric>
 #include <algorithm>
@@ -42,7 +42,7 @@ namespace internal {
  */
 template <typename T>
 T mean_values(const std::vector<T>& values) {
-    if constexpr (std::is_same_v<T, long double>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         return stats::mean(values);
     } else {
         if (values.empty()) return T(static_cast<long long>(0));
@@ -63,7 +63,7 @@ T mean_values(const std::vector<T>& values) {
  */
 template <typename T>
 T median_values(const std::vector<T>& values) {
-    if constexpr (std::is_same_v<T, long double>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         return stats::median(values);
     } else {
         if (values.empty()) throw std::runtime_error("median requires non-empty data");
@@ -90,7 +90,7 @@ T median_values(const std::vector<T>& values) {
  */
 template <typename T>
 T mode_values(const std::vector<T>& values) {
-    if constexpr (std::is_same_v<T, long double>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         return stats::mode(values);
     } else {
         if (values.empty()) throw std::runtime_error("mode requires non-empty data");
@@ -118,7 +118,7 @@ T mode_values(const std::vector<T>& values) {
  */
 template <typename T>
 T variance_values(const std::vector<T>& values) {
-    if constexpr (std::is_same_v<T, long double>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         return stats::variance(values);
     } else {
         if (values.empty()) return T(static_cast<long long>(0));
@@ -134,7 +134,7 @@ T variance_values(const std::vector<T>& values) {
 
 template <typename T>
 T percentile_values(const std::vector<T>& values, T p) {
-    if constexpr (std::is_same_v<T, long double>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         return stats::percentile(values, p);
     } else {
         if (values.empty()) throw std::runtime_error("percentile requires non-empty data");
@@ -155,13 +155,13 @@ T percentile_values(const std::vector<T>& values, T p) {
 
 template <typename T>
 T quartile_values(const std::vector<T>& values, T q) {
-    if constexpr (std::is_same_v<T, long double>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         if (!mymath::isfinite(q) || mymath::floor(q) != q ||
-            q < static_cast<long double>(mymath::kIntMin) ||
-            q > static_cast<long double>(mymath::kIntMax)) {
+            q < Scalar(static_cast<long long>(mymath::kIntMin)) ||
+            q > Scalar(static_cast<long long>(mymath::kIntMax))) {
             throw std::runtime_error("quartile q must be an integer");
         }
-        return stats::quartile(values, static_cast<int>(q));
+        return stats::quartile(values, static_cast<int>(static_cast<long double>(q)));
     } else {
         long double q_long = q.to_double();
         int q_int = static_cast<int>(q_long);
@@ -173,7 +173,7 @@ T quartile_values(const std::vector<T>& values, T q) {
 template <typename T>
 T covariance_values(const std::vector<T>& lhs,
                          const std::vector<T>& rhs) {
-    if constexpr (std::is_same_v<T, long double>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         return stats::covariance(lhs, rhs);
     } else {
         if (lhs.size() != rhs.size() || lhs.empty()) throw std::runtime_error("covariance requires vectors of same non-zero length");
@@ -190,7 +190,7 @@ T covariance_values(const std::vector<T>& lhs,
 template <typename T>
 T correlation_values(const std::vector<T>& lhs,
                           const std::vector<T>& rhs) {
-    if constexpr (std::is_same_v<T, long double>) {
+    if constexpr (std::is_same_v<T, Scalar>) {
         return stats::correlation(lhs, rhs);
     } else {
         T cov = covariance_values<T>(lhs, rhs);
@@ -202,30 +202,22 @@ T correlation_values(const std::vector<T>& lhs,
     }
 }
 
-// Explicit template instantiations
-template long double mean_values<long double>(const std::vector<long double>&);
-template PreciseDecimal mean_values<PreciseDecimal>(const std::vector<PreciseDecimal>&);
+// Explicit template instantiations - only Scalar
+template Scalar mean_values<Scalar>(const std::vector<Scalar>&);
 
-template long double median_values<long double>(const std::vector<long double>&);
-template PreciseDecimal median_values<PreciseDecimal>(const std::vector<PreciseDecimal>&);
+template Scalar median_values<Scalar>(const std::vector<Scalar>&);
 
-template long double mode_values<long double>(const std::vector<long double>&);
-template PreciseDecimal mode_values<PreciseDecimal>(const std::vector<PreciseDecimal>&);
+template Scalar mode_values<Scalar>(const std::vector<Scalar>&);
 
-template long double variance_values<long double>(const std::vector<long double>&);
-template PreciseDecimal variance_values<PreciseDecimal>(const std::vector<PreciseDecimal>&);
+template Scalar variance_values<Scalar>(const std::vector<Scalar>&);
 
-template long double percentile_values<long double>(const std::vector<long double>&, long double);
-template PreciseDecimal percentile_values<PreciseDecimal>(const std::vector<PreciseDecimal>&, PreciseDecimal);
+template Scalar percentile_values<Scalar>(const std::vector<Scalar>&, Scalar);
 
-template long double quartile_values<long double>(const std::vector<long double>&, long double);
-template PreciseDecimal quartile_values<PreciseDecimal>(const std::vector<PreciseDecimal>&, PreciseDecimal);
+template Scalar quartile_values<Scalar>(const std::vector<Scalar>&, Scalar);
 
-template long double covariance_values<long double>(const std::vector<long double>&, const std::vector<long double>&);
-template PreciseDecimal covariance_values<PreciseDecimal>(const std::vector<PreciseDecimal>&, const std::vector<PreciseDecimal>&);
+template Scalar covariance_values<Scalar>(const std::vector<Scalar>&, const std::vector<Scalar>&);
 
-template long double correlation_values<long double>(const std::vector<long double>&, const std::vector<long double>&);
-template PreciseDecimal correlation_values<PreciseDecimal>(const std::vector<PreciseDecimal>&, const std::vector<PreciseDecimal>&);
+template Scalar correlation_values<Scalar>(const std::vector<Scalar>&, const std::vector<Scalar>&);
 
 } // namespace internal
 } // namespace matrix

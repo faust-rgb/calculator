@@ -12,7 +12,7 @@
 #define CALCULATOR_PLOT_H
 
 #include "calculator_internal_types.h"
-#include "execution/variable_resolver.h"
+#include "execution/resolver/variable_resolver.h"
 #include <string>
 #include <vector>
 
@@ -31,7 +31,7 @@ namespace plot {
 struct PlotContext {
     VariableResolver variables;           ///< 变量解析器，用于访问当前作用域中的变量
     const std::map<std::string, CustomFunction>* functions;  ///< 自定义函数映射表
-    const std::map<std::string, std::function<long double(const std::vector<long double>&)>>* scalar_functions;  ///< 标量函数映射表
+    const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions;  ///< 标量函数映射表
     HasScriptFunctionCallback has_script_function;     ///< 检查脚本函数是否存在的回调
     InvokeScriptFunctionDecimalCallback invoke_script_function;  ///< 调用脚本函数的回调
 };

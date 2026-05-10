@@ -1,6 +1,6 @@
 CXX ?= g++
 BASE_CXXFLAGS := -std=c++23 -Wall -Wextra -pedantic -mfma
-OPT_CXXFLAGS ?= -O2 -g -static
+OPT_CXXFLAGS ?= -O0 -g -static
 CXXFLAGS ?= $(BASE_CXXFLAGS) $(OPT_CXXFLAGS)
 LDFLAGS ?=
 BIN_DIR := bin
@@ -29,22 +29,25 @@ TEST_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(TEST_SRCS))
 # Dependencies
 DEPS := $(MAIN_OBJ:.o=.d) $(TEST_OBJS:.o=.d) $(COMMON_OBJS:.o=.d)
 
-.PHONY: all test script-test check debug asan ubsan clean
+.PHONY: all test script-test check ckeck debug asan ubsan clean
 
 all: $(APP)
 
 $(BIN_DIR):
-	mkdir -p $(BIN_DIR)
+	@mkdir -p $(BIN_DIR)
 
 $(BUILD_DIR)/%.o: %.cpp
-	mkdir -p $(dir $@)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+	@mkdir -p $(dir $@)
+	@echo "CXX $<"
+	@$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 $(APP): $(MAIN_OBJ) $(COMMON_OBJS) | $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(APP)
+	@echo "LINK $@"
+	@$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(APP)
 
 $(TEST_APP): $(TEST_OBJS) $(COMMON_OBJS) | $(BIN_DIR)
-	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(TEST_APP)
+	@echo "LINK $@"
+	@$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $(TEST_APP)
 
 test: $(TEST_APP)
 	$(TEST_APP)
@@ -53,6 +56,8 @@ script-test: $(APP)
 	test/script/run_symbolic_cli_validation.sh
 
 check: test script-test
+
+ckeck: check
 
 debug:
 	$(MAKE) OPT_CXXFLAGS="-O0 -g"

@@ -14,6 +14,7 @@
 
 #include "rational.h"
 #include "matrix.h"
+#include "app/scalar_type.h"
 
 #include <map>
 #include <memory>
@@ -42,11 +43,12 @@ struct StoredValue {
     mutable std::string source_expression;   ///< 源表达式（用于延迟符号计算）
 
     Rational rational;                   ///< 有理数值
-    long double decimal = 0.0L;                ///< 浮点数值
-    matrix::ComplexNumber complex;       ///< 复数值
+    Scalar decimal = Scalar(0.0L);                ///< 浮点数值
+    matrix::TComplex<Scalar> complex;       ///< 复数值
     std::string string_value;            ///< 字符串值
     mutable std::string symbolic_text;   ///< 符号表达式文本（mutable 支持延迟计算）
     std::string precise_decimal_text;    ///< 精确小数文本
+    std::shared_ptr<PreciseDecimal> precise_decimal_value; ///< 缓存的高精度对象
     matrix::Matrix matrix;               ///< 矩阵值
     std::shared_ptr<std::vector<StoredValue>> list_value;       ///< 脚本列表值
     std::shared_ptr<std::map<std::string, StoredValue>> dict_value; ///< 脚本字典值
@@ -82,11 +84,15 @@ struct StoredValue {
     }
 };
 
+namespace precise {
 /**
  * @brief 获取存储值的精确小数文本表示
  * @param value 存储值
  * @return 精确小数文本
  */
 std::string stored_value_precise_decimal_text(const StoredValue& value);
+} // namespace precise
+
+using precise::stored_value_precise_decimal_text;
 
 #endif // TYPES_STORED_VALUE_H

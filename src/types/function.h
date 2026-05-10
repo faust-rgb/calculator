@@ -15,11 +15,11 @@
 #include <memory>
 #include <string>
 #include <vector>
-
+#include "app/scalar_type.h"
 namespace script {
 struct BlockStatement;
 }
-
+using Scalar = mymath::Scalar;
 // 前向声明
 struct ExpressionAST;
 
@@ -36,7 +36,7 @@ using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
  * @brief 调用脚本函数的回调类型（返回 double）
  */
 using InvokeScriptFunctionDecimalCallback =
-    std::function<long double(const std::string&, const std::vector<long double>&)>;
+    std::function<Scalar(const std::string&, const std::vector<Scalar>&)>;
 
 // ============================================================================
 // 用户函数结构

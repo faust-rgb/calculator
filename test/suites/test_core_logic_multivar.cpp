@@ -66,7 +66,7 @@ int run_logic_multivar_tests(int& passed, int& failed) {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("hessian(x ^ 2 * y + y ^ 3, x, y)", &output);
-        if (handled && output == "[[2 * y, 2 * x]; [2 * x, 6 * y]]") {
+        if (handled && output == "[[2 * y, 2 * x], [2 * x, 6 * y]]") {
             ++passed;
         } else {
             ++failed;
@@ -206,7 +206,7 @@ int run_logic_multivar_tests(int& passed, int& failed) {
         const bool handled =
             calculator.try_process_function_command(
                 "hessian(x ^ 2 + x * y + y ^ 2, x, y)", &output);
-        if (handled && output == "[[2, 1]; [1, 2]]") {
+        if (handled && output == "[[2, 1], [1, 2]]") {
             ++passed;
         } else {
             ++failed;

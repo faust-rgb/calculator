@@ -73,11 +73,11 @@ Matrix generate_spd_matrix(std::size_t size, unsigned int seed = 42) {
 /**
  * @brief 计算矩阵的最大元素绝对值
  */
-long double max_abs_element(const Matrix& m) {
-    long double max_val = 0.0L;
+mymath::Scalar max_abs_element(const Matrix& m) {
+    mymath::Scalar max_val = 0.0L;
     for (std::size_t i = 0; i < m.rows; ++i) {
         for (std::size_t j = 0; j < m.cols; ++j) {
-            max_val = std::max(max_val, std::abs(m.at(i, j)));
+            max_val = std::max(max_val, mymath::abs(m.at(i, j)));
         }
     }
     return max_val;
@@ -86,26 +86,26 @@ long double max_abs_element(const Matrix& m) {
 /**
  * @brief 计算两个矩阵的相对误差
  */
-long double relative_error(const Matrix& computed, const Matrix& expected) {
+mymath::Scalar relative_error(const Matrix& computed, const Matrix& expected) {
     if (computed.rows != expected.rows || computed.cols != expected.cols) {
-        return std::numeric_limits<long double>::max();
+        return std::numeric_limits<mymath::Scalar>::max();
     }
 
-    long double diff_norm = 0.0L;
-    long double expected_norm = 0.0L;
+    mymath::Scalar diff_norm = 0.0L;
+    mymath::Scalar expected_norm = 0.0L;
 
     for (std::size_t i = 0; i < computed.rows; ++i) {
         for (std::size_t j = 0; j < computed.cols; ++j) {
-            long double d = computed.at(i, j) - expected.at(i, j);
+            mymath::Scalar d = computed.at(i, j) - expected.at(i, j);
             diff_norm += d * d;
             expected_norm += expected.at(i, j) * expected.at(i, j);
         }
     }
 
     if (expected_norm < 1e-30) {
-        return std::sqrt(diff_norm);
+        return mymath::sqrt(diff_norm);
     }
-    return std::sqrt(diff_norm / expected_norm);
+    return mymath::sqrt(diff_norm / expected_norm);
 }
 
 /**
@@ -142,7 +142,7 @@ void test_large_matrix_creation(int& passed, int& failed) {
             for (std::size_t i = 0; i < 100 && correct; ++i) {
                 for (std::size_t j = 0; j < 100 && correct; ++j) {
                     long double expected = (i == j) ? 1.0L : 0.0L;
-                    if (std::abs(m.at(i, j) - expected) > 1e-15) {
+                    if (mymath::abs(m.at(i, j) - expected) > 1e-15) {
                         correct = false;
                     }
                 }
@@ -196,8 +196,8 @@ void test_large_matrix_add_sub(int& passed, int& failed) {
         bool correct = true;
         for (std::size_t i = 0; i < 100 && correct; ++i) {
             for (std::size_t j = 0; j < 100 && correct; ++j) {
-                long double expected = A.at(i, j) + B.at(i, j);
-                if (std::abs(C.at(i, j) - expected) > 1e-15) {
+                auto expected = A.at(i, j) + B.at(i, j);
+                if (mymath::abs(C.at(i, j) - expected) > 1e-15) {
                     correct = false;
                 }
             }
@@ -221,8 +221,8 @@ void test_large_matrix_add_sub(int& passed, int& failed) {
         bool correct = true;
         for (std::size_t i = 0; i < 100 && correct; ++i) {
             for (std::size_t j = 0; j < 100 && correct; ++j) {
-                long double expected = A.at(i, j) - B.at(i, j);
-                if (std::abs(C.at(i, j) - expected) > 1e-15) {
+                auto expected = A.at(i, j) - B.at(i, j);
+                if (mymath::abs(C.at(i, j) - expected) > 1e-15) {
                     correct = false;
                 }
             }
@@ -240,13 +240,13 @@ void test_large_matrix_add_sub(int& passed, int& failed) {
     {
         Matrix A = generate_random_matrix(50, 50, -10.0L, 10.0L, 33333);
         long double scalar = 5.5;
-        Matrix B = add(A, scalar);
+        Matrix B = add(A, mymath::Scalar(scalar));
 
         bool correct = true;
         for (std::size_t i = 0; i < 50 && correct; ++i) {
             for (std::size_t j = 0; j < 50 && correct; ++j) {
-                long double expected = A.at(i, j) + scalar;
-                if (std::abs(B.at(i, j) - expected) > 1e-15) {
+                auto expected = A.at(i, j) + mymath::Scalar(scalar);
+                if (mymath::abs(B.at(i, j) - expected) > 1e-15) {
                     correct = false;
                 }
             }
@@ -276,11 +276,11 @@ void test_large_matrix_multiplication(int& passed, int& failed) {
         bool correct = true;
         for (std::size_t i = 0; i < 50 && correct; ++i) {
             for (std::size_t j = 0; j < 50 && correct; ++j) {
-                long double expected = 0.0L;
+                auto expected = mymath::Scalar(0.0L);
                 for (std::size_t k = 0; k < 50; ++k) {
                     expected += A.at(i, k) * B.at(k, j);
                 }
-                if (std::abs(C.at(i, j) - expected) > LARGE_MATRIX_TOLERANCE) {
+                if (mymath::abs(C.at(i, j) - expected) > LARGE_MATRIX_TOLERANCE) {
                     correct = false;
                     std::cout << "    DEBUG: Mismatch at (" << i << "," << j << "): "
                               << "expected " << expected << ", got " << C.at(i, j) << std::endl;
@@ -313,11 +313,11 @@ void test_large_matrix_multiplication(int& passed, int& failed) {
         bool correct = true;
         for (std::size_t i = 0; i < 100 && correct; i += 10) {
             for (std::size_t j = 0; j < 80 && correct; j += 10) {
-                long double expected = 0.0L;
+                auto expected = mymath::Scalar(0.0L);
                 for (std::size_t k = 0; k < 50; ++k) {
                     expected += A.at(i, k) * B.at(k, j);
                 }
-                if (std::abs(C.at(i, j) - expected) > LARGE_MATRIX_TOLERANCE) {
+                if (mymath::abs(C.at(i, j) - expected) > LARGE_MATRIX_TOLERANCE) {
                     correct = false;
                 }
             }
@@ -338,7 +338,7 @@ void test_large_matrix_multiplication(int& passed, int& failed) {
 
         Matrix C = multiply(A, I);
 
-        long double err = relative_error(C, A);
+        auto err = relative_error(C, A);
         if (err < LARGE_MATRIX_TOLERANCE) {
             ++passed;
         } else {
@@ -352,13 +352,13 @@ void test_large_matrix_multiplication(int& passed, int& failed) {
     {
         Matrix A = generate_random_matrix(60, 60, -10.0L, 10.0L, 600);
         long double scalar = 3.5;
-        Matrix B = multiply(A, scalar);
+        Matrix B = multiply(A, mymath::Scalar(scalar));
 
         bool correct = true;
         for (std::size_t i = 0; i < 60 && correct; ++i) {
             for (std::size_t j = 0; j < 60 && correct; ++j) {
-                long double expected = A.at(i, j) * scalar;
-                if (std::abs(B.at(i, j) - expected) > 1e-12) {
+                auto expected = A.at(i, j) * scalar;
+                if (mymath::abs(B.at(i, j) - expected) > 1e-12) {
                     correct = false;
                 }
             }
@@ -391,7 +391,7 @@ void test_large_matrix_transpose(int& passed, int& failed) {
         bool correct = true;
         for (std::size_t i = 0; i < 100 && correct; ++i) {
             for (std::size_t j = 0; j < 200 && correct; ++j) {
-                if (std::abs(B.at(j, i) - A.at(i, j)) > 1e-15) {
+                if (mymath::abs(B.at(j, i) - A.at(i, j)) > 1e-15) {
                     correct = false;
                 }
             }
@@ -410,7 +410,7 @@ void test_large_matrix_transpose(int& passed, int& failed) {
         Matrix A = generate_random_matrix(80, 120, -10.0L, 10.0L, 800);
         Matrix B = transpose(transpose(A));
 
-        long double err = relative_error(B, A);
+        auto err = relative_error(B, A);
         if (err < 1e-15) {
             ++passed;
         } else {
@@ -432,7 +432,7 @@ void test_large_matrix_inverse(int& passed, int& failed) {
         Matrix I = multiply(A, Ainv);
 
         Matrix expected_I = Matrix::identity(30);
-        long double err = relative_error(I, expected_I);
+        auto err = relative_error(I, expected_I);
 
         if (err < VERY_LARGE_TOLERANCE) {
             ++passed;
@@ -454,7 +454,7 @@ void test_large_matrix_inverse(int& passed, int& failed) {
         Matrix I = multiply(D, Dinv);
 
         Matrix expected_I = Matrix::identity(50);
-        long double err = relative_error(I, expected_I);
+        auto err = relative_error(I, expected_I);
 
         if (err < LARGE_MATRIX_TOLERANCE) {
             ++passed;
@@ -472,7 +472,7 @@ void test_large_matrix_inverse(int& passed, int& failed) {
         Matrix product = multiply(A, Ainv);
         Matrix expected = Matrix::identity(20);
 
-        long double err = relative_error(product, expected);
+        auto err = relative_error(product, expected);
         if (err < VERY_LARGE_TOLERANCE) {
             ++passed;
         } else {
@@ -495,12 +495,12 @@ void test_large_matrix_qr(int& passed, int& failed) {
 
         // 验证 Q * R = A
         Matrix QR = multiply(Q, R);
-        long double err1 = relative_error(QR, A);
+        auto err1 = relative_error(QR, A);
 
         // 验证 Q 是正交矩阵 (Q^T * Q = I)
         Matrix QtQ = multiply(transpose(Q), Q);
         Matrix I = Matrix::identity(50);
-        long double err2 = relative_error(QtQ, I);
+        auto err2 = relative_error(QtQ, I);
 
         if (err1 < VERY_LARGE_TOLERANCE && err2 < VERY_LARGE_TOLERANCE) {
             ++passed;
@@ -519,7 +519,7 @@ void test_large_matrix_qr(int& passed, int& failed) {
 
         // 验证 Q * R = A
         Matrix QR = multiply(Q, R);
-        long double err = relative_error(QR, A);
+        auto err = relative_error(QR, A);
 
         if (err < VERY_LARGE_TOLERANCE) {
             ++passed;
@@ -549,7 +549,7 @@ void test_large_matrix_lu(int& passed, int& failed) {
         // 验证 P * A = L * U
         Matrix PA = multiply(P, A);
         Matrix LU = multiply(L, U);
-        long double err = relative_error(LU, PA);
+        auto err = relative_error(LU, PA);
 
         if (err < VERY_LARGE_TOLERANCE) {
             ++passed;
@@ -573,9 +573,9 @@ void test_large_matrix_lu(int& passed, int& failed) {
         // 验证 L 是单位下三角矩阵
         bool L_correct = true;
         for (std::size_t i = 0; i < 30 && L_correct; ++i) {
-            if (std::abs(L.at(i, i) - 1.0L) > 1e-10) L_correct = false;
+            if (mymath::abs(L.at(i, i) - 1.0L) > 1e-10) L_correct = false;
             for (std::size_t j = i + 1; j < 30 && L_correct; ++j) {
-                if (std::abs(L.at(i, j)) > 1e-10) L_correct = false;
+                if (mymath::abs(L.at(i, j)) > 1e-10) L_correct = false;
             }
         }
 
@@ -583,13 +583,13 @@ void test_large_matrix_lu(int& passed, int& failed) {
         bool U_correct = true;
         for (std::size_t i = 0; i < 30 && U_correct; ++i) {
             for (std::size_t j = 0; j < i && U_correct; ++j) {
-                if (std::abs(U.at(i, j)) > 1e-10) U_correct = false;
+                if (mymath::abs(U.at(i, j)) > 1e-10) U_correct = false;
             }
         }
 
         Matrix PA = multiply(P, A);
         Matrix LU = multiply(L, U);
-        long double err = relative_error(LU, PA);
+        auto err = relative_error(LU, PA);
 
         if (err < VERY_LARGE_TOLERANCE && L_correct && U_correct) {
             ++passed;
@@ -617,7 +617,7 @@ void test_large_matrix_svd(int& passed, int& failed) {
         // 验证 U * S * V^T = A
         Matrix US = multiply(U, S);
         Matrix USVT = multiply(US, VT);
-        long double err = relative_error(USVT, A);
+        auto err = relative_error(USVT, A);
 
         if (err < VERY_LARGE_TOLERANCE) {
             ++passed;
@@ -637,12 +637,12 @@ void test_large_matrix_svd(int& passed, int& failed) {
         // 验证 U 是正交的
         Matrix UtU = multiply(transpose(U), U);
         Matrix I = Matrix::identity(U.cols);
-        long double err_orth = relative_error(UtU, I);
+        auto err_orth = relative_error(UtU, I);
 
         // 验证重构
         Matrix US = multiply(U, S);
         Matrix USVT = multiply(US, VT);
-        long double err_recon = relative_error(USVT, A);
+        auto err_recon = relative_error(USVT, A);
 
         if (err_orth < VERY_LARGE_TOLERANCE && err_recon < VERY_LARGE_TOLERANCE) {
             ++passed;
@@ -663,7 +663,7 @@ void test_large_matrix_svd(int& passed, int& failed) {
         // 验证重构
         Matrix US = multiply(U, S);
         Matrix USVT = multiply(US, VT);
-        long double err_recon = relative_error(USVT, A);
+        auto err_recon = relative_error(USVT, A);
 
         if (err_recon < VERY_LARGE_TOLERANCE) {
             ++passed;
@@ -686,7 +686,7 @@ void test_large_matrix_cholesky(int& passed, int& failed) {
         // 验证 L * L^T = A
         Matrix Lt = transpose(L);
         Matrix LLt = multiply(L, Lt);
-        long double err = relative_error(LLt, A);
+        auto err = relative_error(LLt, A);
 
         if (err < VERY_LARGE_TOLERANCE) {
             ++passed;
@@ -705,7 +705,7 @@ void test_large_matrix_cholesky(int& passed, int& failed) {
         bool is_lower = true;
         for (std::size_t i = 0; i < 50 && is_lower; ++i) {
             for (std::size_t j = i + 1; j < 50 && is_lower; ++j) {
-                if (std::abs(L.at(i, j)) > 1e-10) {
+                if (mymath::abs(L.at(i, j)) > 1e-10) {
                     is_lower = false;
                 }
             }
@@ -713,7 +713,7 @@ void test_large_matrix_cholesky(int& passed, int& failed) {
 
         Matrix Lt = transpose(L);
         Matrix LLt = multiply(L, Lt);
-        long double err = relative_error(LLt, A);
+        auto err = relative_error(LLt, A);
 
         if (err < VERY_LARGE_TOLERANCE && is_lower) {
             ++passed;
@@ -738,7 +738,7 @@ void test_large_matrix_solve(int& passed, int& failed) {
 
         // 验证 A * x = b
         Matrix Ax = multiply(A, x);
-        long double err = relative_error(Ax, b);
+        auto err = relative_error(Ax, b);
 
         if (err < VERY_LARGE_TOLERANCE) {
             ++passed;
@@ -757,7 +757,7 @@ void test_large_matrix_solve(int& passed, int& failed) {
 
         // 验证 A * x = b
         Matrix Ax = multiply(A, x);
-        long double err = relative_error(Ax, b);
+        auto err = relative_error(Ax, b);
 
         if (err < VERY_LARGE_TOLERANCE) {
             ++passed;
@@ -779,7 +779,7 @@ void test_large_matrix_solve(int& passed, int& failed) {
             // 计算残差范数
             Matrix Ax = multiply(A, x);
             Matrix residual = subtract(Ax, b);
-            long double residual_norm = norm(residual);
+            auto residual_norm = norm(residual);
 
             // 残差应该相对较小
             if (residual_norm < 100.0L) {  // 宽松检查
@@ -802,9 +802,9 @@ void test_large_matrix_det_trace(int& passed, int& failed) {
     // 测试单位矩阵的行列式
     {
         Matrix I = Matrix::identity(100);
-        long double det = determinant(I);
+        auto det = determinant(I);
 
-        if (std::abs(det - 1.0L) < LARGE_MATRIX_TOLERANCE) {
+        if (mymath::abs(det - 1.0L) < LARGE_MATRIX_TOLERANCE) {
             ++passed;
         } else {
             ++failed;
@@ -815,16 +815,16 @@ void test_large_matrix_det_trace(int& passed, int& failed) {
     // 测试对角矩阵的行列式
     {
         Matrix D = Matrix::zero(30, 30);
-        long double expected_det = 1.0L;
-        for (std::size_t i = 0; i < 30; ++i) {
-            long double val = static_cast<long double>(i + 2);
+        auto expected_det = mymath::Scalar(1.0L);
+        for (int i = 0; i < 30; ++i) {
+            auto val = static_cast<mymath::Scalar>(i + 2);
             D.at(i, i) = val;
             expected_det *= val;
         }
 
-        long double det = determinant(D);
+        auto det = determinant(D);
 
-        if (std::abs(det - expected_det) / std::abs(expected_det) < VERY_LARGE_TOLERANCE) {
+        if (mymath::abs(det - expected_det)  / mymath::abs(expected_det) < VERY_LARGE_TOLERANCE) {
             ++passed;
         } else {
             ++failed;
@@ -838,14 +838,14 @@ void test_large_matrix_det_trace(int& passed, int& failed) {
         Matrix A = generate_random_matrix(50, 50, -10.0L, 10.0L, 2600);
 
         // 计算期望的迹
-        long double expected_trace = 0.0L;
+        auto expected_trace = mymath::Scalar(0.0L);
         for (std::size_t i = 0; i < 50; ++i) {
             expected_trace += A.at(i, i);
         }
 
-        long double tr = trace(A);
+        auto tr = trace(A);
 
-        if (std::abs(tr - expected_trace) < 1e-12) {
+        if (mymath::abs(tr - expected_trace) < 1e-12) {
             ++passed;
         } else {
             ++failed;
@@ -859,11 +859,11 @@ void test_large_matrix_det_trace(int& passed, int& failed) {
         Matrix A = generate_random_matrix(40, 40, -10.0L, 10.0L, 2700);
         Matrix B = generate_random_matrix(40, 40, -10.0L, 10.0L, 2800);
 
-        long double trA = trace(A);
-        long double trB = trace(B);
-        long double trAB = trace(add(A, B));
+        auto trA = trace(A);
+        auto trB = trace(B);
+        auto trAB = trace(add(A, B));
 
-        if (std::abs(trAB - (trA + trB)) < 1e-10) {
+        if (mymath::abs(trAB - (trA + trB)) < 1e-10) {
             ++passed;
         } else {
             ++failed;
@@ -882,9 +882,9 @@ void test_large_matrix_eigen(int& passed, int& failed) {
     // 测试 3x3 对角矩阵的特征值
     {
         Matrix D = Matrix::zero(3, 3);
-        std::vector<long double> expected_eigenvalues(3);
-        for (std::size_t i = 0; i < 3; ++i) {
-            long double val = static_cast<long double>((i + 1) * 2);
+        std::vector<mymath::Scalar> expected_eigenvalues(3);
+        for (int i = 0; i < 3; ++i) {
+            auto val = static_cast<mymath::Scalar>((i + 1) * 2);
             D.at(i, i) = val;
             expected_eigenvalues[i] = val;
         }
@@ -893,7 +893,7 @@ void test_large_matrix_eigen(int& passed, int& failed) {
 
         // 检查特征值是否匹配（顺序可能不同）
         // eigenvalues 返回一个向量（n×1 矩阵）
-        std::vector<long double> computed_eigenvalues;
+        std::vector<mymath::Scalar> computed_eigenvalues;
         if (eigenvals.cols == 1) {
             for (std::size_t i = 0; i < eigenvals.rows; ++i) {
                 computed_eigenvalues.push_back(eigenvals.at(i, 0));
@@ -914,7 +914,7 @@ void test_large_matrix_eigen(int& passed, int& failed) {
 
         bool match = true;
         for (std::size_t i = 0; i < 3 && match; ++i) {
-            if (std::abs(computed_eigenvalues[i] - expected_eigenvalues[i]) > VERY_LARGE_TOLERANCE) {
+            if (mymath::abs(computed_eigenvalues[i] - expected_eigenvalues[i]) > VERY_LARGE_TOLERANCE) {
                 match = false;
             }
         }
@@ -940,7 +940,7 @@ void test_large_matrix_eigen(int& passed, int& failed) {
         // 这个矩阵的特征值应该是 5 和 0
         // 因为 A = [4,2; 2,1] = [2;1] * [2 1]，秩为1
         // 特征值: trace = 5, det = 0, 所以特征值是 5 和 0
-        std::vector<long double> computed_vals;
+        std::vector<mymath::Scalar> computed_vals;
         if (vals.cols == 1) {
             for (std::size_t i = 0; i < vals.rows; ++i) {
                 computed_vals.push_back(vals.at(i, 0));
@@ -950,11 +950,11 @@ void test_large_matrix_eigen(int& passed, int& failed) {
                 computed_vals.push_back(vals.at(0, j));
             }
         }
-        std::sort(computed_vals.begin(), computed_vals.end(), std::greater<long double>());
+        std::sort(computed_vals.begin(), computed_vals.end(), std::greater<mymath::Scalar>());
 
         // 检查特征值是否接近 5 和 0
-        bool match = (std::abs(computed_vals[0] - 5.0) < VERY_LARGE_TOLERANCE) &&
-                     (std::abs(computed_vals[1] - 0.0L) < VERY_LARGE_TOLERANCE);
+        bool match = (mymath::abs(computed_vals[0] - 5.0) < VERY_LARGE_TOLERANCE) &&
+                     (mymath::abs(computed_vals[1] - 0.0L) < VERY_LARGE_TOLERANCE);
 
         if (match) {
             ++passed;
@@ -977,7 +977,7 @@ void test_large_matrix_eigen(int& passed, int& failed) {
         Matrix vecs = eigenvectors(A);
 
         // 提取特征值
-        std::vector<long double> lambda_vals;
+        std::vector<mymath::Scalar> lambda_vals;
         if (vals.cols == 1) {
             for (std::size_t i = 0; i < vals.rows; ++i) {
                 lambda_vals.push_back(vals.at(i, 0));
@@ -990,7 +990,7 @@ void test_large_matrix_eigen(int& passed, int& failed) {
 
         bool correct = true;
         for (std::size_t i = 0; i < 3 && correct; ++i) {
-            long double lambda = lambda_vals[i];
+            auto lambda = lambda_vals[i];
 
             // 提取第 i 个特征向量（vecs 的第 i 列）
             Matrix v(3, 1);
@@ -1002,10 +1002,10 @@ void test_large_matrix_eigen(int& passed, int& failed) {
             Matrix Av = multiply(A, v);
 
             // 计算 lambda * v
-            Matrix lv = multiply(v, lambda);
+            Matrix lv = multiply(v, mymath::Scalar(lambda));
 
             // 比较
-            long double err = relative_error(Av, lv);
+            auto err = relative_error(Av, lv);
             if (err > VERY_LARGE_TOLERANCE) {
                 correct = false;
             }
@@ -1029,17 +1029,17 @@ void test_large_matrix_norm_cond(int& passed, int& failed) {
         Matrix A = generate_random_matrix(50, 50, -1.0L, 1.0L, 3000);
 
         // 手动计算 Frobenius 范数
-        long double expected_norm = 0.0L;
+        auto expected_norm = mymath::Scalar(0.0L);
         for (std::size_t i = 0; i < 50; ++i) {
             for (std::size_t j = 0; j < 50; ++j) {
                 expected_norm += A.at(i, j) * A.at(i, j);
             }
         }
-        expected_norm = std::sqrt(expected_norm);
+        expected_norm = mymath::sqrt(expected_norm);
 
-        long double computed_norm = norm(A);
+        auto computed_norm = norm(A);
 
-        if (std::abs(computed_norm - expected_norm) < LARGE_MATRIX_TOLERANCE) {
+        if (mymath::abs(computed_norm - expected_norm) < LARGE_MATRIX_TOLERANCE) {
             ++passed;
         } else {
             ++failed;
@@ -1051,9 +1051,9 @@ void test_large_matrix_norm_cond(int& passed, int& failed) {
     // 测试单位矩阵的条件数
     {
         Matrix I = Matrix::identity(50);
-        long double cond = condition_number(I);
+        auto cond = condition_number(I);
 
-        if (std::abs(cond - 1.0L) < LARGE_MATRIX_TOLERANCE) {
+        if (mymath::abs(cond - 1.0L) < LARGE_MATRIX_TOLERANCE) {
             ++passed;
         } else {
             ++failed;
@@ -1064,7 +1064,7 @@ void test_large_matrix_norm_cond(int& passed, int& failed) {
     // 测试条件数性质
     {
         Matrix A = generate_spd_matrix(30, 3100);
-        long double cond = condition_number(A);
+        auto cond = condition_number(A);
 
         // 条件数应该 >= 1
         if (cond >= 1.0L) {
@@ -1083,9 +1083,9 @@ void test_large_matrix_rank_rref(int& passed, int& failed) {
     // 测试满秩矩阵
     {
         Matrix A = generate_spd_matrix(40, 3200);
-        long double r = rank(A);
+        auto r = rank(A);
 
-        if (std::abs(r - 40.0L) < 0.5) {
+        if (mymath::abs(r - 40.0L) < 0.5) {
             ++passed;
         } else {
             ++failed;
@@ -1100,9 +1100,9 @@ void test_large_matrix_rank_rref(int& passed, int& failed) {
         Matrix Bt = transpose(B);
         Matrix A = multiply(B, Bt);  // 秩最多为 20
 
-        long double r = rank(A);
+        auto r = rank(A);
 
-        if (std::abs(r - 20.0L) < 0.5) {
+        if (mymath::abs(r - 20.0L) < 0.5) {
             ++passed;
         } else {
             ++failed;
@@ -1115,7 +1115,7 @@ void test_large_matrix_rank_rref(int& passed, int& failed) {
         Matrix I = Matrix::identity(30);
         Matrix rref_I = rref(I);
 
-        long double err = relative_error(rref_I, I);
+        auto err = relative_error(rref_I, I);
         if (err < LARGE_MATRIX_TOLERANCE) {
             ++passed;
         } else {
@@ -1135,7 +1135,7 @@ void test_large_matrix_power(int& passed, int& failed) {
         Matrix A0 = power(A, 0);
         Matrix I = Matrix::identity(30);
 
-        long double err = relative_error(A0, I);
+        auto err = relative_error(A0, I);
         if (err < LARGE_MATRIX_TOLERANCE) {
             ++passed;
         } else {
@@ -1149,7 +1149,7 @@ void test_large_matrix_power(int& passed, int& failed) {
         Matrix A = generate_random_matrix(30, 30, -1.0L, 1.0L, 3500);
         Matrix A1 = power(A, 1);
 
-        long double err = relative_error(A1, A);
+        auto err = relative_error(A1, A);
         if (err < LARGE_MATRIX_TOLERANCE) {
             ++passed;
         } else {
@@ -1164,7 +1164,7 @@ void test_large_matrix_power(int& passed, int& failed) {
         Matrix A2 = power(A, 2);
         Matrix expected = multiply(A, A);
 
-        long double err = relative_error(A2, expected);
+        auto err = relative_error(A2, expected);
         if (err < VERY_LARGE_TOLERANCE) {
             ++passed;
         } else {
@@ -1180,7 +1180,7 @@ void test_large_matrix_power(int& passed, int& failed) {
         Matrix AA = multiply(A, A);
         Matrix expected = multiply(AA, A);
 
-        long double err = relative_error(A3, expected);
+        auto err = relative_error(A3, expected);
         if (err < VERY_LARGE_TOLERANCE) {
             ++passed;
         } else {
@@ -1195,7 +1195,7 @@ void test_large_matrix_power(int& passed, int& failed) {
         Matrix Ainv = power(A, -1);
         Matrix expected = inverse(A);
 
-        long double err = relative_error(Ainv, expected);
+        auto err = relative_error(Ainv, expected);
         if (err < VERY_LARGE_TOLERANCE) {
             ++passed;
         } else {
@@ -1229,10 +1229,10 @@ void test_large_matrix_kronecker(int& passed, int& failed) {
             for (std::size_t j = 0; j < 20 && correct; ++j) {
                 for (std::size_t k = 0; k < 5 && correct; ++k) {
                     for (std::size_t l = 0; l < 5 && correct; ++l) {
-                        long double expected = A.at(i, j) * B.at(k, l);
+                        auto expected = A.at(i, j) * B.at(k, l);
                         std::size_t row = i * 5 + k;
                         std::size_t col = j * 5 + l;
-                        if (std::abs(K.at(row, col) - expected) > LARGE_MATRIX_TOLERANCE) {
+                        if (mymath::abs(K.at(row, col) - expected) > LARGE_MATRIX_TOLERANCE) {
                             correct = false;
                         }
                     }
@@ -1263,8 +1263,8 @@ void test_large_matrix_hadamard(int& passed, int& failed) {
         bool correct = true;
         for (std::size_t i = 0; i < 100 && correct; ++i) {
             for (std::size_t j = 0; j < 100 && correct; ++j) {
-                long double expected = A.at(i, j) * B.at(i, j);
-                if (std::abs(H.at(i, j) - expected) > 1e-12) {
+                auto expected = A.at(i, j) * B.at(i, j);
+                if (mymath::abs(H.at(i, j) - expected) > 1e-12) {
                     correct = false;
                 }
             }
@@ -1301,7 +1301,7 @@ void test_numerical_stability(int& passed, int& failed) {
         Matrix x_computed = solve(H, b);
 
         // 验证解的相对误差
-        long double err = relative_error(x_computed, x);
+        auto err = relative_error(x_computed, x);
 
         // Hilbert 矩阵条件数很大，允许较大误差
         if (err < 0.1) {  // 10% 相对误差
@@ -1330,7 +1330,7 @@ void test_numerical_stability(int& passed, int& failed) {
             Matrix I = multiply(A, Ainv);
             Matrix expected_I = Matrix::identity(30);
 
-            long double err = relative_error(I, expected_I);
+            auto err = relative_error(I, expected_I);
             // 允许较大误差
             if (err < 1e-3) {
                 ++passed;

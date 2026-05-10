@@ -16,19 +16,22 @@
 
 #include "calculator_polynomial.h"
 
-#include "parser/unified_expression_parser.h"
+#include "app/scalar_type.h"
+#include "parser/grammars/unified_expression_parser.h"
 #include "matrix_internal.h"
 #include "polynomial.h"
 #include "mymath.h"
 #include "math/helpers/integer_helpers.h"
-#include "parser/command_parser.h"
-#include "core/string_utils.h"
+#include "parser/grammars/command_parser.h"
+#include "core/services/string_utils.h"
 
 #include <sstream>
 
 namespace polynomial_ops {
 
 namespace {
+
+using Scalar = mymath::Scalar;
 
 // ============================================================================
 // 内部辅助函数
@@ -60,7 +63,7 @@ void build_polynomial_recursive(
     const PolynomialContext& ctx,
     const std::string& argument,
     std::string* variable_name,
-    std::vector<long double>* coefficients) {
+    std::vector<Scalar>* coefficients) {
 
     const std::string trimmed_argument = trim_copy(argument);
     CommandASTNode ast = parse_command(trimmed_argument);
@@ -78,8 +81,8 @@ void build_polynomial_recursive(
 
             std::string lhs_variable;
             std::string rhs_variable;
-            std::vector<long double> lhs_coefficients;
-            std::vector<long double> rhs_coefficients;
+            std::vector<Scalar> lhs_coefficients;
+            std::vector<Scalar> rhs_coefficients;
             build_polynomial_recursive(ctx, std::string(call->arguments[0].text),
                                        &lhs_variable, &lhs_coefficients);
             build_polynomial_recursive(ctx, std::string(call->arguments[1].text),
@@ -98,8 +101,8 @@ void build_polynomial_recursive(
                 const PolynomialDivisionResult division =
                     polynomial_divide(lhs_coefficients, rhs_coefficients);
                 bool zero_remainder = true;
-                for (long double coefficient : division.remainder) {
-                    if (!mymath::is_near_zero(coefficient, 1e-10)) {
+                for (Scalar coefficient : division.remainder) {
+                    if (mymath::abs(Scalar(coefficient)) >= Scalar(1e-10L)) {
                         zero_remainder = false;
                         break;
                     }
@@ -231,7 +234,7 @@ std::string poly_div(const PolynomialData& lhs, const PolynomialData& rhs) {
  * 4. 实根直接输出数值，复根以 a + bi 形式输出
  */
 std::string roots(const PolynomialData& poly) {
-    const std::vector<mymath::complex<long double>> roots =
+    const std::vector<mymath::complex<Scalar>> roots =
         polynomial_complex_roots(poly.coefficients);
     if (roots.empty()) {
         return "No roots.";
@@ -239,28 +242,30 @@ std::string roots(const PolynomialData& poly) {
 
     std::ostringstream out;
     bool wrote_root = false;
-    mymath::complex<long double> previous_root(0.0L, 0.0L);
+    mymath::complex<Scalar> previous_root(0.0L, 0.0L);
     for (std::size_t i = 0; i < roots.size(); ++i) {
+        const Scalar real_diff = Scalar(roots[i].real() - previous_root.real());
+        const Scalar imag_diff = Scalar(roots[i].imag() - previous_root.imag());
         if (wrote_root &&
-            mymath::abs(roots[i].real() - previous_root.real()) <= 1e-7 &&
-            mymath::abs(roots[i].imag() - previous_root.imag()) <= 1e-7) {
+            mymath::abs(real_diff) <= Scalar(1e-7L) &&
+            mymath::abs(imag_diff) <= Scalar(1e-7L)) {
             continue;
         }
         if (wrote_root) {
             out << ", ";
         }
-        long double real = roots[i].real();
-        long double imag = roots[i].imag();
+        Scalar real = roots[i].real();
+        Scalar imag = roots[i].imag();
         if (is_integer_double(real, 1e-6)) {
-            real = static_cast<long double>(round_to_long_long(real));
+            real = static_cast<Scalar>(round_to_long_long(real));
         }
         if (is_integer_double(imag, 1e-6)) {
-            imag = static_cast<long double>(round_to_long_long(imag));
+            imag = static_cast<Scalar>(round_to_long_long(imag));
         }
-        if (mymath::is_near_zero(imag, 1e-8)) {
+        if (mymath::abs(Scalar(imag)) < Scalar(1e-8L)) {
             out << format_symbolic_scalar(real);
         } else {
-            out << matrix::internal::format_complex<long double>({real, imag});
+            out << matrix::internal::format_complex<Scalar>({real, imag});
         }
         previous_root = {real, imag};
         wrote_root = true;

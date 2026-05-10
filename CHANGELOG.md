@@ -25,10 +25,10 @@ helpers, interactive terminal UX, and project documentation.
   - Parameters stored directly in flat scope slots
   - No per-call `std::map` allocation for local variables
 - **New Files**:
-  - `src/core/expression_ast.cpp` / `src/core/expression_ast.h`: Compiled expression AST
-  - `src/core/variable_resolver.cpp` / `src/core/variable_resolver.h`: Scoped variable resolution
+  - `src/parser/ast/expression_ast.cpp` / `src/parser/ast/expression_ast.h`: Compiled expression AST
+  - `src/execution/resolver/variable_resolver.cpp` / `src/execution/resolver/variable_resolver.h`: Scoped variable resolution
 - **Documentation**:
-  - Added `test/script/SYNTAX_GUIDE_CN.md`: Chinese script syntax guide
+  - Added `SYNTAX_GUIDE_CN.md`: Chinese script syntax guide
   - Updated `ARCHITECTURE.md` with script engine performance section
 
 ## Latest Vector Calculus Improvements
@@ -92,7 +92,7 @@ helpers, interactive terminal UX, and project documentation.
   - `rol`, `ror`
   - `popcount`, `bitlen`, `ctz`, `clz`, `parity`, `reverse_bits`
 - Added `percentile(...)` and `quartile(...)` in both scalar-aggregate and vector forms
-- Extracted calculator help generation into `src/core/calculator_help.cpp` so the
+- Extracted calculator help generation into `src/core/api/calculator_help.cpp` so the
   main calculator implementation no longer carries the full help-text payload
 - Added scientific-notation parsing for decimal, exact, and high-precision
   decimal paths
@@ -212,6 +212,20 @@ helpers, interactive terminal UX, and project documentation.
 - Expanded regression tests
 - Handoff and architecture documentation
 
+## Version 1.7 (2026-05-09)
+
+- **Comprehensive Architecture Reorganization**:
+  - Successfully executed the core refactoring plan to modularize the codebase:
+    - **parser/**: Centralized all parsing logic including `unified_expression_parser.cpp`, `command_parser.cpp`, and `script_parser.cpp`.
+    - **execution/**: Consolidated runtime components such as `script_runtime.cpp`, `command_registry.cpp`, and `variable_resolver.cpp`.
+    - **analysis/**: Reorganized advanced calculus into domain-specific subdirectories (`calculus/`, `integration/`, `optimization/`, `differential_equations/`, `rootfinding/`, `series/`) and implemented a consistent `modules/` interface.
+    - **symbolic/**: Deeply refactored the CAS engine into specialized sub-modules for core representation, algebra, calculus, transformation, and solving.
+    - **types/**: Extracted fundamental data types like `StoredValue`, `Scalar`, and `Rational` into a dedicated layer.
+  - **Cleanup and Standardization**:
+    - Standardized internal header naming and inclusion patterns across all refactored modules.
+    - Removed redundant implementation fragments and consolidated logic into focused translation units.
+    - Updated project documentation (README, ARCHITECTURE, STYLE_GUIDE) to match the new physical layout.
+
 ## Version 1.6 (2026-04-28)
 
 - **ODE and Symbolic Calculus Enhancements:**
@@ -229,7 +243,7 @@ helpers, interactive terminal UX, and project documentation.
 ## Version 1.5 (2026-04-27)
 
 - **Performance Optimization:**
-  - Improved symbolic node interning with an incremental LRU eviction strategy in `src/symbolic/node_parser.cpp`, eliminating $O(N)$ scan overhead during high-frequency node creation.
+  - Improved symbolic node interning with an incremental LRU eviction strategy in `src/symbolic/core/node_parser_new.cpp`, eliminating $O(N)$ scan overhead during high-frequency node creation.
 - **Terminal UX Enhancements:**
   - Upgraded REPL in `src/app/main.cpp` with a full-featured line editor:
     - Inline cursor movement (Left/Right arrow keys).

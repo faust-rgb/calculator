@@ -9,6 +9,7 @@
 #ifndef PLOT_RENDERER_H
 #define PLOT_RENDERER_H
 
+#include "app/scalar_type.h"
 #include <string>
 #include <vector>
 
@@ -21,8 +22,8 @@ namespace plot {
  * 表示绑图用的二维坐标点，使用长双精度浮点数存储坐标值。
  */
 struct Point {
-    long double x;  ///< X 坐标
-    long double y;  ///< Y 坐标
+    Scalar x;  ///< X 坐标
+    Scalar y;  ///< Y 坐标
 };
 
 /**

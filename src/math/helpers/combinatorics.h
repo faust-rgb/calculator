@@ -8,7 +8,10 @@
 #ifndef COMBINATORICS_HELPERS_H
 #define COMBINATORICS_HELPERS_H
 
-#include "precise/rational.h"
+#include "math/precise/rational.h"
+#include "app/scalar_type.h"
+
+// 函数声明直接使用 Scalar，避免全局 using 污染
 
 /**
  * @brief 计算斐波那契数
@@ -16,6 +19,7 @@
  * @return 第 n 个斐波那契数
  */
 long double fibonacci_value(long long n);
+mymath::Scalar fibonacci_scalar(long long n);
 
 /**
  * @brief 计算阶乘 n!
@@ -23,6 +27,7 @@ long double fibonacci_value(long long n);
  * @return n! 的值
  */
 long double factorial_value(long long n);
+mymath::Scalar factorial_scalar(long long n);
 
 /**
  * @brief 计算阶乘并以有理数形式返回
@@ -38,6 +43,7 @@ Rational factorial_rational(long long n);
  * @return 组合数
  */
 long double combination_value(long long n, long long r);
+mymath::Scalar combination_scalar(long long n, long long r);
 
 /**
  * @brief 计算组合数并以有理数形式返回
@@ -54,6 +60,7 @@ Rational combination_rational(long long n, long long r);
  * @return 排列数
  */
 long double permutation_value(long long n, long long r);
+mymath::Scalar permutation_scalar(long long n, long long r);
 
 /**
  * @brief 计算排列数并以有理数形式返回

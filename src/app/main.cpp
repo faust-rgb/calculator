@@ -652,6 +652,7 @@ int main(int argc, char* argv[]) {
     bool exact_mode = false;
     bool plain_mode = !isatty(STDIN_FILENO);
     std::string script_path;
+    std::string command_to_execute;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -664,15 +665,42 @@ int main(int argc, char* argv[]) {
             std::cout << "Usage: " << argv[0] << " [options] [script.calc]\n"
                       << "Options:\n"
                       << "  --plain      Minimal output (no prompts/headers)\n"
+                      << "  -c <expr>    Execute expression and print result\n"
                       << "  --version    Show version info\n"
                       << "  --help, -h   Show this help\n";
             return 0;
+        } else if (arg == "-c") {
+            if (i + 1 < argc) {
+                command_to_execute = argv[++i];
+            } else {
+                std::cerr << "Error: -c requires an expression argument\n";
+                return 1;
+            }
         } else if (arg.size() > 5 && arg.substr(arg.size() - 5) == ".calc") {
             script_path = arg;
         } else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return 1;
         }
+    }
+
+    // Handle -c command execution
+    if (!command_to_execute.empty()) {
+        try {
+            std::string output;
+            if (calculator.try_process_function_command(command_to_execute, &output, exact_mode)) {
+                std::cout << output << '\n';
+            } else {
+                output = calculator.process_line(command_to_execute, exact_mode);
+                if (!output.empty()) {
+                    std::cout << output << '\n';
+                }
+            }
+        } catch (const std::exception& ex) {
+            std::cerr << "Error: " << ex.what() << '\n';
+            return 1;
+        }
+        return 0;
     }
 
     if (!script_path.empty()) {

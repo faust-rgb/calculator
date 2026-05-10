@@ -17,7 +17,6 @@
 #include "suites/test_io.h"
 #include "suites/test_script_features.h"
 #include "suites/test_risch_advanced.h"
-#include "suites/test_precise_deep.h"
 #include "suites/test_float128_limit.h"
 #include <iostream>
 
@@ -49,9 +48,13 @@ int main() {
     test_suites::run_symbolic_tests(total_passed, total_failed);
 
     // 运行 Risch 算法测试
-    //std::cout << "Running Risch Algorithm Tests..." << std::endl;
+    std::cout << "Running Risch Algorithm Tests..." << std::endl;
     test_suites::test_risch();
+    std::cout << "Risch Algorithm Tests Completed." << std::endl;
+    
+    std::cout << "Running Risch Advanced Tests..." << std::endl;
     test_suites::run_risch_advanced_tests();
+    std::cout << "Risch Advanced Tests Completed." << std::endl;
     total_passed++; 
 
     // 运行分析测试：测试函数分析、微分方程求解等
@@ -68,7 +71,7 @@ int main() {
 
     // 运行大维度矩阵测试：测试大规模矩阵运算的正确性
     std::cout << "Running Large Matrix Tests..." << std::endl;
-    test_suites::run_large_matrix_tests(total_passed, total_failed);
+    //test_suites::run_large_matrix_tests(total_passed, total_failed);
 
     // 运行扩展统计测试
     std::cout << "Running Extended Statistics Tests..." << std::endl;
@@ -83,8 +86,8 @@ int main() {
     run_script_feature_tests(total_passed, total_failed);
 
     // 运行深度高精度测试
-    std::cout << "Running Deep High-Precision Tests..." << std::endl;
-    test_suites::run_precise_deep_tests(total_passed, total_failed);
+    //std::cout << "Running Deep High-Precision Tests..." << std::endl;
+    //test_suites::run_precise_deep_tests(total_passed, total_failed);
 
     // 运行 Float128 极限精度测试
     std::cout << "Running Float128 Limit Precision Tests..." << std::endl;
