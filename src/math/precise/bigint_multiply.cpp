@@ -482,15 +482,10 @@ BigIntData multiply_bigint(const BigIntData& lhs, const BigIntData& rhs) {
         return multiply_bigint_naive(lhs, rhs);
     }
 
-    // 中等规模：零分配 Karatsuba（减少内存分配开销）
-    if (max_size <= 512) {
-        // 使用零分配版本以减少堆分配
-        return multiply_bigint_zero_allocation(lhs, rhs);
-    }
-
-    // 较大规模：Toom-Cook 3
+    // 中大型规模：使用递归 Karatsuba。零分配 Karatsuba 和 Toom-Cook
+    // 路径在长小数尾数的乘法中会产生错误尺度，先走稳定实现保证正确性。
     if (max_size <= 4096) {
-        return multiply_bigint_toom3(lhs, rhs);
+        return multiply_bigint_karatsuba(lhs, rhs);
     }
 
     // 大规模：优化的 NTT（使用 twiddle factors 缓存和并行）

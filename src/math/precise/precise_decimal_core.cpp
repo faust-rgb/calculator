@@ -359,7 +359,7 @@ PreciseDecimal& PreciseDecimal::add_without_normalize(const PreciseDecimal& rhs)
 
 PreciseDecimal& PreciseDecimal::mul_without_normalize(const PreciseDecimal& rhs) {
     PreciseDecimal product = multiply_precise_decimal(*this, rhs);
-    g_suppress_normalization = true;
+    NormalizationSuppressor suppressor;
     *this = product;
     return *this;
 }
@@ -678,7 +678,7 @@ std::ostream& operator<<(std::ostream& os, const PreciseDecimal& val) {
 
 PreciseDecimal& PreciseDecimal::multiply_add_without_normalize(const PreciseDecimal& a, const PreciseDecimal& b) {
     PreciseDecimal product = multiply_precise_decimal(a, b);
-    g_suppress_normalization = true;
+    NormalizationSuppressor suppressor;
     return add_without_normalize(product);
 }
 

@@ -22,6 +22,7 @@
 #include "math/precise/precise_decimal.h"
 #include "math/types/float128.h"
 #include <stdexcept>
+#include <type_traits>
 
 namespace matrix {
 
@@ -126,6 +127,22 @@ TMatrix<T> multiply(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
 
     TMatrix<T> result(lhs.rows, rhs.cols, T(0));
 
+    if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        for (std::size_t i = 0; i < lhs.rows; ++i) {
+            for (std::size_t j = 0; j < rhs.cols; ++j) {
+                T sum = T(0);
+                for (std::size_t k = 0; k < lhs.cols; ++k) {
+                    const T& lhs_val = lhs.at(i, k);
+                    const T& rhs_val = rhs.at(k, j);
+                    if (lhs_val == T(0) || rhs_val == T(0)) continue;
+                    sum += lhs_val * rhs_val;
+                }
+                result.at(i, j) = sum;
+            }
+        }
+        return result;
+    }
+
     for (std::size_t i = 0; i < lhs.rows; ++i) {
         for (std::size_t k = 0; k < lhs.cols; ++k) {
             const T& lhs_val = lhs.at(i, k);
@@ -139,7 +156,9 @@ TMatrix<T> multiply(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
         }
     }
 
-    // 最终对结果矩阵全量规范化
+    // 最终对结果矩阵全量规范化。矩阵乘法的 PreciseDecimal 快速累加会
+    // 延迟规范化中间值，收尾时需要确保规范化没有被外层抑制状态跳过。
+    precise::ScopedNormalizationEnable enable_normalization;
     for (auto& val : result.data) normalize(val);
 
     return result;

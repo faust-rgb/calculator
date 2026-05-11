@@ -91,21 +91,23 @@ mymath::Scalar relative_error(const Matrix& computed, const Matrix& expected) {
         return std::numeric_limits<mymath::Scalar>::max();
     }
 
-    mymath::Scalar diff_norm = 0.0L;
-    mymath::Scalar expected_norm = 0.0L;
+    // 使用 long double 累加以避免 PreciseDecimal 累加的精度问题
+    long double diff_norm = 0.0L;
+    long double expected_norm = 0.0L;
 
     for (std::size_t i = 0; i < computed.rows; ++i) {
         for (std::size_t j = 0; j < computed.cols; ++j) {
-            mymath::Scalar d = computed.at(i, j) - expected.at(i, j);
+            long double d = static_cast<long double>(computed.at(i, j)) - static_cast<long double>(expected.at(i, j));
             diff_norm += d * d;
-            expected_norm += expected.at(i, j) * expected.at(i, j);
+            expected_norm += static_cast<long double>(expected.at(i, j)) * static_cast<long double>(expected.at(i, j));
         }
     }
 
-    if (expected_norm < 1e-30) {
+    if (expected_norm < 1e-30L) {
         return mymath::sqrt(diff_norm);
     }
-    return mymath::sqrt(diff_norm / expected_norm);
+    long double rel_err = mymath::sqrt(diff_norm / expected_norm);
+    return Scalar(rel_err);
 }
 
 /**
@@ -501,6 +503,22 @@ void test_large_matrix_qr(int& passed, int& failed) {
         Matrix QtQ = multiply(transpose(Q), Q);
         Matrix I = Matrix::identity(50);
         auto err2 = relative_error(QtQ, I);
+
+        // 调试输出：检查 Q 的范数和最大元素
+        long double q_norm_ld = 0.0L;
+        long double q_max_ld = 0.0L;
+        for (std::size_t i = 0; i < 50; ++i) {
+            for (std::size_t j = 0; j < 50; ++j) {
+                long double val = static_cast<long double>(Q.at(i, j));
+                q_norm_ld += val * val;
+                if (std::abs(val) > q_max_ld) q_max_ld = std::abs(val);
+            }
+        }
+        std::cout << "DEBUG: Q norm squared (long double) = " << q_norm_ld << std::endl;
+        std::cout << "DEBUG: Q max element (long double) = " << q_max_ld << std::endl;
+        std::cout << "DEBUG: Q(0,0) = " << Q.at(0, 0).to_string() << std::endl;
+        std::cout << "DEBUG: QtQ(0,0) = " << QtQ.at(0, 0).to_string() << std::endl;
+        std::cout << "DEBUG: QtQ(0,1) = " << QtQ.at(0, 1).to_string() << std::endl;
 
         if (err1 < VERY_LARGE_TOLERANCE && err2 < VERY_LARGE_TOLERANCE) {
             ++passed;

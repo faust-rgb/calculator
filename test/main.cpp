@@ -18,6 +18,7 @@
 #include "suites/test_script_features.h"
 #include "suites/test_risch_advanced.h"
 #include "suites/test_float128_limit.h"
+#include "suites/test_precision_matrix.h"
 #include <iostream>
 
 /**
@@ -71,7 +72,7 @@ int main() {
 
     // 运行大维度矩阵测试：测试大规模矩阵运算的正确性
     std::cout << "Running Large Matrix Tests..." << std::endl;
-    //test_suites::run_large_matrix_tests(total_passed, total_failed);
+    test_suites::run_large_matrix_tests(total_passed, total_failed);
 
     // 运行扩展统计测试
     std::cout << "Running Extended Statistics Tests..." << std::endl;
@@ -92,6 +93,10 @@ int main() {
     // 运行 Float128 极限精度测试
     std::cout << "Running Float128 Limit Precision Tests..." << std::endl;
     test_suites::run_float128_limit_tests(total_passed, total_failed);
+
+    // 运行高精度矩阵测试
+    std::cout << "Running Precision Matrix Tests..." << std::endl;
+    test_suites::run_precision_matrix_tests(total_passed, total_failed);
 
     // 输出测试汇总结果
     std::cout << "\nTest Summary:" << std::endl;

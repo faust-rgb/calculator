@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 #include <algorithm>
+#include <cmath>
 #include <type_traits>
 
 namespace matrix {
@@ -38,6 +39,210 @@ using internal::t_abs;
 using internal::t_sqrt;
 
 namespace internal {
+
+/**
+ * @brief 构造正规矩阵 A^T * A (泛型版本)
+ */
+template <typename T>
+TMatrix<T> normal_matrix(const TMatrix<T>& matrix) {
+    const std::size_t n = matrix.cols;
+    TMatrix<T> normal(n, n, T(static_cast<long long>(0)));
+    for (std::size_t row = 0; row < matrix.rows; ++row) {
+        for (std::size_t i = 0; i < n; ++i) {
+            const T lhs = matrix.at(row, i);
+            for (std::size_t j = i; j < n; ++j) {
+                normal.at(i, j) += lhs * matrix.at(row, j);
+            }
+        }
+    }
+    for (std::size_t i = 0; i < n; ++i) {
+        for (std::size_t j = 0; j < i; ++j) {
+            normal.at(i, j) = normal.at(j, i);
+        }
+    }
+    return normal;
+}
+
+/**
+ * @brief Jacobi 特征值算法 - 计算极值特征值 (泛型版本)
+ */
+template <typename T>
+T jacobi_extreme_eigenvalue(TMatrix<T> a, bool largest) {
+    const std::size_t n = a.rows;
+    if (n == 0) return T(static_cast<long long>(0));
+    const T tolerance = precision::epsilon<T>();
+    for (int sweep = 0; sweep < 128; ++sweep) {
+        std::size_t p = 0;
+        std::size_t q = 0;
+        T max_off = T(static_cast<long long>(0));
+        for (std::size_t i = 0; i + 1 < n; ++i) {
+            for (std::size_t j = i + 1; j < n; ++j) {
+                const T off = t_abs(a.at(i, j));
+                if (off > max_off) {
+                    max_off = off;
+                    p = i;
+                    q = j;
+                }
+            }
+        }
+        if (max_off <= tolerance) {
+            break;
+        }
+
+        const T app = a.at(p, p);
+        const T aqq = a.at(q, q);
+        const T apq = a.at(p, q);
+        const T tau = (aqq - app) / (T(static_cast<long long>(2)) * apq);
+        const T sign = tau >= T(static_cast<long long>(0)) ? T(static_cast<long long>(1)) : T(static_cast<long long>(-1));
+        const T t = sign / (t_abs(tau) + t_sqrt(T(static_cast<long long>(1)) + tau * tau));
+        const T c = T(static_cast<long long>(1)) / t_sqrt(T(static_cast<long long>(1)) + t * t);
+        const T s = c * t;
+
+        a.at(p, p) = app - t * apq;
+        a.at(q, q) = aqq + t * apq;
+        a.at(p, q) = a.at(q, p) = T(static_cast<long long>(0));
+        for (std::size_t k = 0; k < n; ++k) {
+            if (k == p || k == q) {
+                continue;
+            }
+            const T akp = a.at(k, p);
+            const T akq = a.at(k, q);
+            a.at(k, p) = a.at(p, k) = c * akp - s * akq;
+            a.at(k, q) = a.at(q, k) = s * akp + c * akq;
+        }
+    }
+
+    T selected = a.at(0, 0);
+    for (std::size_t i = 1; i < n; ++i) {
+        selected = largest ? (selected > a.at(i, i) ? selected : a.at(i, i))
+                           : (selected < a.at(i, i) ? selected : a.at(i, i));
+    }
+    return selected < T(static_cast<long long>(0)) && selected > T("-1e-14") ? T(static_cast<long long>(0)) : selected;
+}
+
+/**
+ * @brief Jacobi 特征值算法 - 计算所有特征值 (泛型版本)
+ */
+template <typename T>
+std::vector<T> jacobi_eigenvalues(TMatrix<T> a) {
+    const std::size_t n = a.rows;
+    const T tolerance = precision::epsilon<T>();
+    for (int sweep = 0; sweep < 256; ++sweep) {
+        std::size_t p = 0;
+        std::size_t q = 0;
+        T max_off = T(static_cast<long long>(0));
+        for (std::size_t i = 0; i + 1 < n; ++i) {
+            for (std::size_t j = i + 1; j < n; ++j) {
+                const T off = t_abs(a.at(i, j));
+                if (off > max_off) {
+                    max_off = off;
+                    p = i;
+                    q = j;
+                }
+            }
+        }
+        if (max_off <= tolerance) {
+            break;
+        }
+
+        const T app = a.at(p, p);
+        const T aqq = a.at(q, q);
+        const T apq = a.at(p, q);
+        const T tau = (aqq - app) / (T(static_cast<long long>(2)) * apq);
+        const T sign = tau >= T(static_cast<long long>(0)) ? T(static_cast<long long>(1)) : T(static_cast<long long>(-1));
+        const T t = sign / (t_abs(tau) + t_sqrt(T(static_cast<long long>(1)) + tau * tau));
+        const T c = T(static_cast<long long>(1)) / t_sqrt(T(static_cast<long long>(1)) + t * t);
+        const T s = c * t;
+
+        a.at(p, p) = app - t * apq;
+        a.at(q, q) = aqq + t * apq;
+        a.at(p, q) = a.at(q, p) = T(static_cast<long long>(0));
+        for (std::size_t k = 0; k < n; ++k) {
+            if (k == p || k == q) {
+                continue;
+            }
+            const T akp = a.at(k, p);
+            const T akq = a.at(k, q);
+            a.at(k, p) = a.at(p, k) = c * akp - s * akq;
+            a.at(k, q) = a.at(q, k) = s * akp + c * akq;
+        }
+    }
+
+    std::vector<T> values(n, T(static_cast<long long>(0)));
+    for (std::size_t i = 0; i < n; ++i) {
+        values[i] = a.at(i, i) < T(static_cast<long long>(0)) && a.at(i, i) > T("-1e-14") ? T(static_cast<long long>(0)) : a.at(i, i);
+    }
+    return values;
+}
+
+/**
+ * @brief 快速数值秩计算 (泛型版本)
+ */
+template <typename T>
+std::size_t numerical_rank_fast(const TMatrix<T>& matrix) {
+    TMatrix<T> work = matrix;
+    T max_entry = T(static_cast<long long>(0));
+    for (std::size_t row = 0; row < matrix.rows; ++row) {
+        for (std::size_t col = 0; col < matrix.cols; ++col) {
+            const T value = t_abs(matrix.at(row, col));
+            if (value > max_entry) {
+                max_entry = value;
+            }
+        }
+    }
+    if (max_entry == T(static_cast<long long>(0))) {
+        return 0;
+    }
+
+    const T tolerance = max_entry * T(static_cast<long long>(std::max(matrix.rows, matrix.cols))) * precision::sqrt_epsilon<T>();
+    std::size_t rank_count = 0;
+    for (std::size_t col = 0; col < matrix.cols && rank_count < matrix.rows; ++col) {
+        std::size_t pivot_row = rank_count;
+        T pivot_abs = t_abs(work.at(pivot_row, col));
+        for (std::size_t row = rank_count + 1; row < matrix.rows; ++row) {
+            const T current_abs = t_abs(work.at(row, col));
+            if (current_abs > pivot_abs) {
+                pivot_abs = current_abs;
+                pivot_row = row;
+            }
+        }
+        if (pivot_abs <= tolerance) {
+            continue;
+        }
+        if (pivot_row != rank_count) {
+            swap_rows(&work, pivot_row, rank_count);
+        }
+        const T pivot = work.at(rank_count, col);
+        for (std::size_t row = rank_count + 1; row < matrix.rows; ++row) {
+            const T factor = work.at(row, col) / pivot;
+            if (t_abs(factor) <= tolerance) {
+                continue;
+            }
+            for (std::size_t current_col = col; current_col < matrix.cols; ++current_col) {
+                work.at(row, current_col) -= factor * work.at(rank_count, current_col);
+                if (t_abs(work.at(row, current_col)) <= tolerance) {
+                    work.at(row, current_col) = T(static_cast<long long>(0));
+                }
+            }
+        }
+        ++rank_count;
+    }
+    return rank_count;
+}
+
+/**
+ * @brief 快速条件数计算 (泛型版本)
+ */
+template <typename T>
+T condition_number_fast(const TMatrix<T>& matrix) {
+    const TMatrix<T> normal = normal_matrix(matrix);
+    const T largest = jacobi_extreme_eigenvalue(normal, true);
+    const T smallest = jacobi_extreme_eigenvalue(normal, false);
+    if (largest <= T(static_cast<long long>(0)) || smallest <= T(static_cast<long long>(0))) {
+        return T(mymath::infinity());
+    }
+    return t_sqrt(largest / smallest);
+}
 
 /**
  * @brief 带部分选主元的 LU 分解
@@ -235,124 +440,88 @@ template <typename T>
 std::pair<TMatrix<T>, TMatrix<T>> qr_decompose(const TMatrix<T>& matrix) {
     const std::size_t m = matrix.rows;
     const std::size_t n = matrix.cols;
+
     TMatrix<T> q = TMatrix<T>::identity(m);
     TMatrix<T> r = matrix;
 
     const std::size_t limit = m < n ? m : n;
-    const T tolerance = matrix_epsilon<T>();
+
+    // 使用机器精度相关的容差，而不是基于输入矩阵尺度的容差
+    // 这样可以正确处理大数值矩阵和小数值矩阵
+    const T machine_tol = precision::epsilon<T>();
 
     for (std::size_t col = 0; col < limit; ++col) {
-        std::vector<T> householder(m - col, T(static_cast<long long>(0)));
+        std::vector<T> v(m - col, T(static_cast<long long>(0)));
+        T norm_x_sq = T(static_cast<long long>(0));
         for (std::size_t row = col; row < m; ++row) {
-            householder[row - col] = r.at(row, col);
+            const T value = r.at(row, col);
+            v[row - col] = value;
+            norm_x_sq += value * value;
         }
+        const T norm_x = t_sqrt(norm_x_sq);
 
-        T norm_x;
-        if constexpr (std::is_same_v<T, long double>) {
-            norm_x = static_cast<long double>(mymath::sqrt(static_cast<long double>(vector_norm_squared(householder))));
-        } else {
-            norm_x = t_sqrt(vector_norm_squared(householder));
-        }
-
-        if (t_abs(norm_x) <= tolerance) {
+        // 判断列是否为零向量时，使用相对于该列范数的容差
+        if (norm_x <= machine_tol * t_sqrt(T(static_cast<long long>(m - col)))) {
             continue;
         }
 
-        householder[0] += householder[0] >= T(static_cast<long long>(0)) ? norm_x : -norm_x;
-        
-        T norm_v;
-        if constexpr (std::is_same_v<T, long double>) {
-            norm_v = static_cast<long double>(mymath::sqrt(static_cast<long double>(vector_norm_squared(householder))));
-        } else {
-            norm_v = t_sqrt(vector_norm_squared(householder));
+        v[0] += (v[0] >= T(static_cast<long long>(0))) ? norm_x : -norm_x;
+        T norm_v_sq = T(static_cast<long long>(0));
+        for (const T& value : v) {
+            norm_v_sq += value * value;
         }
-
-        if (t_abs(norm_v) <= tolerance) {
+        const T norm_v = t_sqrt(norm_v_sq);
+        if (norm_v <= machine_tol) {
             continue;
         }
-        for (T& value : householder) {
+        for (T& value : v) {
             value /= norm_v;
         }
 
+        // 更新 R 矩阵
         for (std::size_t current_col = col; current_col < n; ++current_col) {
-            if constexpr (std::is_same_v<T, long double>) {
-                long double projection = 0.0L;
-                for (std::size_t row = col; row < m; ++row) {
-                    projection += static_cast<long double>(householder[row - col]) *
-                                  static_cast<long double>(r.at(row, current_col));
-                }
-                projection *= 2.0L;
-                for (std::size_t row = col; row < m; ++row) {
-                    r.at(row, current_col) -= static_cast<long double>(
-                        projection * static_cast<long double>(householder[row - col]));
-                    if (t_abs(r.at(row, current_col)) <= tolerance) {
-                        r.at(row, current_col) = T(static_cast<long long>(0));
-                    }
-                }
-            } else {
-                T projection = T(static_cast<long long>(0));
-                for (std::size_t row = col; row < m; ++row) {
-                    projection += householder[row - col] * r.at(row, current_col);
-                }
-                projection *= T(static_cast<long long>(2));
-                for (std::size_t row = col; row < m; ++row) {
-                    r.at(row, current_col) -= projection * householder[row - col];
-                    if (t_abs(r.at(row, current_col)) <= tolerance) {
-                        r.at(row, current_col) = T(static_cast<long long>(0));
-                    }
+            T projection = T(static_cast<long long>(0));
+            for (std::size_t row = col; row < m; ++row) {
+                projection += v[row - col] * r.at(row, current_col);
+            }
+            projection *= T(static_cast<long long>(2));
+            for (std::size_t row = col; row < m; ++row) {
+                r.at(row, current_col) -= projection * v[row - col];
+                // R 矩阵的尺度与输入矩阵一致，使用相对于当前元素的容差
+                // 只在元素非常接近零时才清零
+                if (t_abs(r.at(row, current_col)) <= machine_tol * t_abs(projection * v[row - col])) {
+                    r.at(row, current_col) = T(static_cast<long long>(0));
                 }
             }
         }
 
+        // 更新 Q 矩阵 - Q 是正交矩阵，元素绝对值 ≤ 1
+        // 使用固定的机器精度容差，而不是基于输入矩阵尺度的容差
         for (std::size_t row = 0; row < m; ++row) {
-            if constexpr (std::is_same_v<T, long double>) {
-                long double projection = 0.0L;
-                for (std::size_t index = col; index < m; ++index) {
-                    projection += static_cast<long double>(q.at(row, index)) *
-                                  static_cast<long double>(householder[index - col]);
-                }
-                projection *= 2.0L;
-                for (std::size_t index = col; index < m; ++index) {
-                    q.at(row, index) -= static_cast<long double>(
-                        projection * static_cast<long double>(householder[index - col]));
-                    if (t_abs(q.at(row, index)) <= tolerance) {
-                        q.at(row, index) = T(static_cast<long long>(0));
-                    }
-                }
-            } else {
-                T projection = T(static_cast<long long>(0));
-                for (std::size_t index = col; index < m; ++index) {
-                    projection += q.at(row, index) * householder[index - col];
-                }
-                projection *= T(static_cast<long long>(2));
-                for (std::size_t index = col; index < m; ++index) {
-                    q.at(row, index) -= projection * householder[index - col];
-                    if (t_abs(q.at(row, index)) <= tolerance) {
-                        q.at(row, index) = T(static_cast<long long>(0));
-                    }
-                }
+            T projection = T(static_cast<long long>(0));
+            for (std::size_t index = col; index < m; ++index) {
+                projection += q.at(row, index) * v[index - col];
+            }
+            projection *= T(static_cast<long long>(2));
+            for (std::size_t index = col; index < m; ++index) {
+                q.at(row, index) -= projection * v[index - col];
             }
         }
     }
 
+    // 确保对角元素非负
     for (std::size_t diag = 0; diag < limit; ++diag) {
         if (r.at(diag, diag) < T(static_cast<long long>(0))) {
             for (std::size_t row = 0; row < m; ++row) {
                 q.at(row, diag) = -q.at(row, diag);
-                if (t_abs(q.at(row, diag)) <= tolerance) {
-                    q.at(row, diag) = T(static_cast<long long>(0));
-                }
             }
             for (std::size_t col = 0; col < n; ++col) {
                 r.at(diag, col) = -r.at(diag, col);
-                if (t_abs(r.at(diag, col)) <= tolerance) {
-                    r.at(diag, col) = T(static_cast<long long>(0));
-                }
             }
         }
     }
 
-    return {q, r} ;
+    return {q, r};
 }
 
 template <typename T>
@@ -773,6 +942,10 @@ T condition_number(const TMatrix<T>& matrix) {
         return T(mymath::infinity());
     }
 
+    if (matrix.rows >= 16 || matrix.cols >= 16) {
+        return internal::condition_number_fast(matrix);
+    }
+
     const T tolerance = matrix_tolerance(matrix);
     const TMatrix<T> singular_values = svd_s(matrix);
     T largest = T(static_cast<long long>(0));
@@ -1101,9 +1274,17 @@ T determinant(const TMatrix<T>& matrix) {
 
 template <typename T>
 T rank(const TMatrix<T>& matrix) {
+    if constexpr (std::is_same_v<T, PreciseDecimal> || std::is_same_v<T, mymath::Scalar>) {
+        if (matrix.rows >= 16 || matrix.cols >= 16) {
+            return T(static_cast<long long>(internal::numerical_rank_fast(matrix)));
+        }
+    }
+
     TMatrix<T> reduced = matrix;
     if constexpr (std::is_same_v<T, PreciseDecimal> || std::is_same_v<T, mymath::Scalar>) {
-        const T tolerance = matrix_tolerance(matrix);
+        const T dimension_scale = T(static_cast<long long>(
+            std::max<std::size_t>(std::size_t{1}, std::max(matrix.rows, matrix.cols))));
+        const T tolerance = matrix_tolerance(matrix) * dimension_scale;
         std::size_t rank_count = 0;
         for (std::size_t col = 0; col < reduced.cols && rank_count < reduced.rows; ++col) {
             std::size_t best_row = rank_count;
@@ -1365,7 +1546,7 @@ TMatrix<T> eigenvectors(const TMatrix<T>& matrix) {
 }
 
 /**
- * @brief 数字滤波器
+ * @brief 数字滤波器 (泛型版本)
  */
 template <typename T>
 TMatrix<T> filter(const TMatrix<T>& b, const TMatrix<T>& a, const TMatrix<T>& x) {
@@ -1381,25 +1562,14 @@ TMatrix<T> filter(const TMatrix<T>& b, const TMatrix<T>& a, const TMatrix<T>& x)
     std::vector<T> yv(n, T(static_cast<long long>(0)));
 
     for (std::size_t i = 0; i < n; ++i) {
-        if constexpr (std::is_same_v<T, long double>) {
-            long double sum = 0.0L;
-            for (std::size_t j = 0; j < bv.size() && j <= i; ++j) {
-                sum += static_cast<long double>(bv[j]) * static_cast<long double>(xv[i - j]);
-            }
-            for (std::size_t j = 1; j < av.size() && j <= i; ++j) {
-                sum -= static_cast<long double>(av[j]) * static_cast<long double>(yv[i - j]);
-            }
-            yv[i] = static_cast<long double>(sum / static_cast<long double>(av[0]));
-        } else {
-            T sum = T(static_cast<long long>(0));
-            for (std::size_t j = 0; j < bv.size() && j <= i; ++j) {
-                sum += bv[j] * xv[i - j];
-            }
-            for (std::size_t j = 1; j < av.size() && j <= i; ++j) {
-                sum -= av[j] * yv[i - j];
-            }
-            yv[i] = sum / av[0];
+        T sum = T(static_cast<long long>(0));
+        for (std::size_t j = 0; j < bv.size() && j <= i; ++j) {
+            sum += bv[j] * xv[i - j];
         }
+        for (std::size_t j = 1; j < av.size() && j <= i; ++j) {
+            sum -= av[j] * yv[i - j];
+        }
+        yv[i] = sum / av[0];
     }
 
     if (x.rows == 1) {
@@ -1412,7 +1582,7 @@ TMatrix<T> filter(const TMatrix<T>& b, const TMatrix<T>& a, const TMatrix<T>& x)
 }
 
 /**
- * @brief 频率响应计算
+ * @brief 频率响应计算 (泛型版本)
  */
 template <typename T>
 TMatrix<T> freqz(const TMatrix<T>& b, const TMatrix<T>& a, std::size_t n) {
@@ -1420,80 +1590,33 @@ TMatrix<T> freqz(const TMatrix<T>& b, const TMatrix<T>& a, std::size_t n) {
     const std::vector<T> av = as_vector_values(a, "freqz");
 
     TMatrix<T> res(n, 2, T(static_cast<long long>(0)));
+    const T pi = mymath::scalar_pi<T>();
+    const T tolerance = precision::epsilon<T>();
+
     for (std::size_t i = 0; i < n; ++i) {
-        const long double w = mymath::kPi * static_cast<long double>(i) / static_cast<long double>(n);
+        const T w = pi * T(static_cast<long long>(i)) / T(static_cast<long long>(n));
 
-        if constexpr (std::is_same_v<T, long double>) {
-            long double num_r = 0, num_i = 0;
-            for (std::size_t k = 0; k < bv.size(); ++k) {
-                const long double phase = -static_cast<long double>(k) * w;
-                num_r += static_cast<long double>(bv[k]) * mymath::cos(phase);
-                num_i += static_cast<long double>(bv[k]) * mymath::sin(phase);
-            }
+        T num_r = T(static_cast<long long>(0)), num_i = T(static_cast<long long>(0));
+        for (std::size_t k = 0; k < bv.size(); ++k) {
+            const T phase = -T(static_cast<long long>(k)) * w;
+            num_r += bv[k] * mymath::scalar_cos(phase);
+            num_i += bv[k] * mymath::scalar_sin(phase);
+        }
 
-            long double den_r = 0, den_i = 0;
-            for (std::size_t k = 0; k < av.size(); ++k) {
-                const long double phase = -static_cast<long double>(k) * w;
-                den_r += static_cast<long double>(av[k]) * mymath::cos(phase);
-                den_i += static_cast<long double>(av[k]) * mymath::sin(phase);
-            }
+        T den_r = T(static_cast<long long>(0)), den_i = T(static_cast<long long>(0));
+        for (std::size_t k = 0; k < av.size(); ++k) {
+            const T phase = -T(static_cast<long long>(k)) * w;
+            den_r += av[k] * mymath::scalar_cos(phase);
+            den_i += av[k] * mymath::scalar_sin(phase);
+        }
 
-            const long double den_mag_sq = den_r * den_r + den_i * den_i;
-            if (den_mag_sq > 1e-25L) {
-                res.at(i, 0) = static_cast<long double>((num_r * den_r + num_i * den_i) / den_mag_sq);
-                res.at(i, 1) = static_cast<long double>((num_i * den_r - num_r * den_i) / den_mag_sq);
-            } else {
-                res.at(i, 0) = mymath::infinity();
-                res.at(i, 1) = 0.0L;
-            }
-        } else if constexpr (std::is_same_v<T, Scalar>) {
-            // Scalar (float128_t) - use static_cast<long double>
-            long double num_r = 0, num_i = 0;
-            for (std::size_t k = 0; k < bv.size(); ++k) {
-                const long double phase = -static_cast<long double>(k) * w;
-                num_r += static_cast<long double>(bv[k]) * mymath::cos(phase);
-                num_i += static_cast<long double>(bv[k]) * mymath::sin(phase);
-            }
-            long double den_r = 0, den_i = 0;
-            for (std::size_t k = 0; k < av.size(); ++k) {
-                const long double phase = -static_cast<long double>(k) * w;
-                den_r += static_cast<long double>(av[k]) * mymath::cos(phase);
-                den_i += static_cast<long double>(av[k]) * mymath::sin(phase);
-            }
-            const long double den_mag_sq = den_r * den_r + den_i * den_i;
-            if (den_mag_sq > 1e-25L) {
-                res.at(i, 0) = T((num_r * den_r + num_i * den_i) / den_mag_sq);
-                res.at(i, 1) = T((num_i * den_r - num_r * den_i) / den_mag_sq);
-            } else {
-                res.at(i, 0) = T(mymath::infinity());
-                res.at(i, 1) = T(static_cast<long long>(0));
-            }
+        const T den_mag_sq = den_r * den_r + den_i * den_i;
+        if (den_mag_sq > tolerance) {
+            res.at(i, 0) = (num_r * den_r + num_i * den_i) / den_mag_sq;
+            res.at(i, 1) = (num_i * den_r - num_r * den_i) / den_mag_sq;
         } else {
-            // PreciseDecimal fallback to long double for trig functions if not available
-            long double num_r = 0, num_i = 0;
-            for (std::size_t k = 0; k < bv.size(); ++k) {
-                const long double phase = -static_cast<long double>(k) * w;
-                num_r += bv[k].to_double() * mymath::cos(phase);
-                num_i += bv[k].to_double() * mymath::sin(phase);
-            }
-            long double den_r = 0, den_i = 0;
-            for (std::size_t k = 0; k < av.size(); ++k) {
-                const long double phase = -static_cast<long double>(k) * w;
-                den_r += av[k].to_double() * mymath::cos(phase);
-                den_i += av[k].to_double() * mymath::sin(phase);
-            }
-            const long double den_mag_sq = den_r * den_r + den_i * den_i;
-            if (den_mag_sq > 1e-25) {
-                res.at(i, 0) = T((num_r * den_r + num_i * den_i) / den_mag_sq);
-                res.at(i, 1) = T((num_i * den_r - num_r * den_i) / den_mag_sq);
-            } else {
-                if constexpr (std::is_same_v<T, PreciseDecimal>) {
-                    res.at(i, 0) = T("1e100");
-                } else {
-                    res.at(i, 0) = T(mymath::infinity());
-                }
-                res.at(i, 1) = T(static_cast<long long>(0));
-            }
+            res.at(i, 0) = T(mymath::infinity());
+            res.at(i, 1) = T(static_cast<long long>(0));
         }
     }
     return res;
@@ -1562,6 +1685,12 @@ TMatrix<T> residue(const TMatrix<T>& b, const TMatrix<T>& a) {
 template TLuResult<mymath::Scalar> internal::lu_decompose_with_pivoting(const TMatrix<mymath::Scalar>&);
 
 template TEigenResult<mymath::Scalar> internal::eigenvalues_with_vectors(const TMatrix<mymath::Scalar>&);
+template TMatrix<mymath::Scalar> internal::normal_matrix(const TMatrix<mymath::Scalar>&);
+template mymath::Scalar internal::jacobi_extreme_eigenvalue(TMatrix<mymath::Scalar>, bool);
+template std::vector<mymath::Scalar> internal::jacobi_eigenvalues(TMatrix<mymath::Scalar>);
+template std::size_t internal::numerical_rank_fast(const TMatrix<mymath::Scalar>&);
+template mymath::Scalar internal::condition_number_fast(const TMatrix<mymath::Scalar>&);
+
 template std::pair<TMatrix<mymath::Scalar>, TMatrix<mymath::Scalar>> qr_decompose(const TMatrix<mymath::Scalar>&);
 
 template std::pair<TMatrix<mymath::Scalar>, TMatrix<mymath::Scalar>> lu_decompose(const TMatrix<mymath::Scalar>&);
