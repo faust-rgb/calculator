@@ -200,11 +200,37 @@ size_t multiply_naive_to_buffer(const uint32_t* a, size_t an,
         }
 
         if (carry) {
-            res[i + bn] += static_cast<uint32_t>(carry);
+            size_t k = i + bn;
+            while (carry && k < res_size) {
+                uint64_t cur = static_cast<uint64_t>(res[k]) + carry;
+                res[k] = static_cast<uint32_t>(cur % kBase);
+                carry = cur / kBase;
+                k++;
+            }
         }
     }
 
     return trim_zeros(res, res_size);
+}
+
+// 进位加法（在指定偏移处累加，结果原地更新）
+size_t add_inplace_at_offset(uint32_t* res, size_t res_n,
+                            const uint32_t* src, size_t src_n,
+                            size_t offset) {
+    uint64_t carry = 0;
+    size_t i = 0;
+    for (; i < src_n && (offset + i) < res_n; ++i) {
+        uint64_t sum = static_cast<uint64_t>(res[offset + i]) + src[i] + carry;
+        res[offset + i] = static_cast<uint32_t>(sum % kBase);
+        carry = sum / kBase;
+    }
+    while (carry && (offset + i) < res_n) {
+        uint64_t sum = static_cast<uint64_t>(res[offset + i]) + carry;
+        res[offset + i] = static_cast<uint32_t>(sum % kBase);
+        carry = sum / kBase;
+        i++;
+    }
+    return trim_zeros(res, res_n);
 }
 
 // ============================================================================
@@ -215,6 +241,9 @@ size_t multiply_karatsuba_scratch(const uint32_t* a, size_t an,
                                   const uint32_t* b, size_t bn,
                                   uint32_t* res,
                                   MultiplyScratchpad& scratch) {
+    // 记录初始偏移量，用于在函数返回前释放本层分配的所有临时空间
+    size_t initial_offset = scratch.used();
+
     // 基础情况：小规模使用朴素乘法
     size_t n = std::max(an, bn);
     if (n <= KARATSUBA_THRESHOLD) {
@@ -224,8 +253,6 @@ size_t multiply_karatsuba_scratch(const uint32_t* a, size_t an,
     size_t m = n / 2;
 
     // 分割：a = a1 * B^m + a0, b = b1 * B^m + b0
-    // 其中 B = 10^(9*m)
-
     const uint32_t* a0 = a;
     size_t a0n = std::min(an, m);
     const uint32_t* a1 = (an > m) ? (a + m) : nullptr;
@@ -236,104 +263,63 @@ size_t multiply_karatsuba_scratch(const uint32_t* a, size_t an,
     const uint32_t* b1 = (bn > m) ? (b + m) : nullptr;
     size_t b1n = (bn > m) ? (bn - m) : 0;
 
-    // 处理前导零
     a0n = trim_zeros(a0, a0n);
     if (a1) a1n = trim_zeros(a1, a1n);
     b0n = trim_zeros(b0, b0n);
     if (b1) b1n = trim_zeros(b1, b1n);
 
-    // 从 scratchpad 分配临时空间
-    size_t temp_size = std::max(a0n, a1n) + 1;
-    uint32_t* a0_plus_a1 = scratch.allocate(temp_size);
-    uint32_t* b0_plus_b1 = scratch.allocate(temp_size);
+    // 1. 分配临时空间计算 (a0 + a1) 和 (b0 + b1)
+    size_t sum_cap = std::max(a0n, a1n) + 1;
+    uint32_t* a0_plus_a1 = scratch.allocate(sum_cap);
+    uint32_t* b0_plus_b1 = scratch.allocate(sum_cap);
 
-    // 处理 a1 或 b1 为空的情况
     static const uint32_t zero_val = 0;
-    const uint32_t* a1_ptr = a1 ? a1 : &zero_val;
-    size_t a1_len = a1 ? a1n : 0;
-    const uint32_t* b1_ptr = b1 ? b1 : &zero_val;
-    size_t b1_len = b1 ? b1n : 0;
+    size_t a0_plus_a1n = add_to_buffer(a0, a0n, a1 ? a1 : &zero_val, a1n, a0_plus_a1);
+    size_t b0_plus_b1n = add_to_buffer(b0, b0n, b1 ? b1 : &zero_val, b1n, b0_plus_b1);
 
-    size_t a0_plus_a1n = add_to_buffer(a0, a0n, a1_ptr, a1_len, a0_plus_a1);
-    size_t b0_plus_b1n = add_to_buffer(b0, b0n, b1_ptr, b1_len, b0_plus_b1);
+    // 2. 分配 z0, z2, z1 结果空间
+    size_t z0_cap = a0n + b0n;
+    size_t z2_cap = (a1n > 0 && b1n > 0) ? (a1n + b1n) : 1;
+    size_t z1_cap = a0_plus_a1n + b0_plus_b1n;
 
-    // 递归计算三个乘积
-    // z0 = a0 * b0
-    // z2 = a1 * b1
-    // z1 = (a0 + a1) * (b0 + b1) - z0 - z2
+    uint32_t* z0 = scratch.allocate(z0_cap);
+    uint32_t* z2 = scratch.allocate(z2_cap);
+    uint32_t* z1 = scratch.allocate(z1_cap);
 
-    size_t z0_size = a0n + b0n;
-    size_t z2_size = (a1n > 0 && b1n > 0) ? (a1n + b1n) : 1;
-    size_t z1_size = a0_plus_a1n + b0_plus_b1n;
-
-    uint32_t* z0 = scratch.allocate(z0_size);
-    uint32_t* z2 = scratch.allocate(z2_size);
-    uint32_t* z1 = scratch.allocate(z1_size);
-
+    // 3. 递归计算
     size_t z0n = multiply_karatsuba_scratch(a0, a0n, b0, b0n, z0, scratch);
     size_t z2n = (a1n > 0 && b1n > 0) ?
                  multiply_karatsuba_scratch(a1, a1n, b1, b1n, z2, scratch) : 0;
+    
+    // z1_temp = (a0 + a1) * (b0 + b1)
+    // 借用 z1 的空间存放中间结果 z1_temp
+    size_t z1_tempn = multiply_karatsuba_scratch(a0_plus_a1, a0_plus_a1n, b0_plus_b1, b0_plus_b1n, z1, scratch);
 
-    uint32_t* z1_temp = scratch.allocate(z1_size);
-    size_t z1_tempn = multiply_karatsuba_scratch(a0_plus_a1, a0_plus_a1n,
-                                                  b0_plus_b1, b0_plus_b1n,
-                                                  z1_temp, scratch);
+    // 4. z1 = z1_temp - z0 - z2
+    // 由于 z1_tempn 之后还要进行减法，我们需要一个临时的 z1 结果
+    // 这里的 z1 目前存的是 z1_temp，通过原地减法得到最终 z1
+    z1_tempn = sub_to_buffer(z1, z1_tempn, z0, z0n, z1);
+    size_t z1n = sub_to_buffer(z1, z1_tempn, z2, z2n, z1);
 
-    // z1 = z1_temp - z0 - z2
-    // 先减 z0
-    uint32_t* z1_intermediate = scratch.allocate(z1_tempn);
-    size_t z1_intn = sub_to_buffer(z1_temp, z1_tempn, z0, z0n, z1_intermediate);
-
-    // 再减 z2
-    size_t z1n = sub_to_buffer(z1_intermediate, z1_intn, z2, z2n, z1);
-
-    // 合并结果：res = z2 * B^(2m) + z1 * B^m + z0
+    // 5. 合并结果：res = z2 * B^(2m) + z1 * B^m + z0
     size_t res_size = an + bn;
     std::fill(res, res + res_size, 0);
 
     // 复制 z0
     std::copy(z0, z0 + z0n, res);
 
-    // 加上 z1 * B^m
+    // 累加 z1 * B^m
     if (z1n > 0) {
-        uint32_t* temp_add = scratch.allocate(res_size);
-        std::fill(temp_add, temp_add + res_size, 0);
-        std::copy(z1, z1 + z1n, temp_add + m);
-
-        uint32_t* res_temp = scratch.allocate(res_size + 1);
-        size_t new_size = add_to_buffer(res, res_size, temp_add, res_size, res_temp);
-        std::copy(res_temp, res_temp + new_size, res);
-        res_size = new_size;
-
-        scratch.deallocate(res_size + 1);
-        scratch.deallocate(res_size);
+        add_inplace_at_offset(res, res_size, z1, z1n, m);
     }
 
-    // 加上 z2 * B^(2m)
+    // 累加 z2 * B^(2m)
     if (z2n > 0) {
-        uint32_t* temp_add = scratch.allocate(res_size);
-        std::fill(temp_add, temp_add + res_size, 0);
-        std::copy(z2, z2 + z2n, temp_add + 2 * m);
-
-        uint32_t* res_temp = scratch.allocate(res_size + 1);
-        size_t new_size = add_to_buffer(res, res_size, temp_add, res_size, res_temp);
-        std::copy(res_temp, res_temp + new_size, res);
-        res_size = new_size;
-
-        scratch.deallocate(res_size + 1);
-        scratch.deallocate(res_size);
+        add_inplace_at_offset(res, res_size, z2, z2n, 2 * m);
     }
 
-    // 释放临时空间
-    scratch.deallocate(z1_size);
-    scratch.deallocate(z1_tempn);
-    scratch.deallocate(z1_intn);
-    scratch.deallocate(z1_size);
-    scratch.deallocate(z2_size);
-    scratch.deallocate(z0_size);
-    scratch.deallocate(temp_size);
-    scratch.deallocate(temp_size);
-
+    // 恢复 Scratchpad 偏移量，释放本层分配的所有空间
+    scratch.deallocate(scratch.used() - initial_offset);
     return trim_zeros(res, res_size);
 }
 

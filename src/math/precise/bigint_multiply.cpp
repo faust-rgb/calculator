@@ -433,25 +433,41 @@ BigIntData multiply_bigint_toom3(const BigIntData& lhs, const BigIntData& rhs) {
     SignedBigInt s_c0 = s_m0;
     SignedBigInt s_c4 = s_m_inf;
 
-    SignedBigInt s_c1 = SignedBigInt::sub(s_m1, s_m_neg1);
-    s_c1.data = divide_bigint_by_2(std::move(s_c1.data));
-    s_c1.normalize();
+    // 3. r0 = (P(1) - P(-1)) / 2 = c1 + c3
+    SignedBigInt s_r0 = SignedBigInt::sub(s_m1, s_m_neg1);
+    s_r0.data = divide_bigint_by_2(std::move(s_r0.data));
+    s_r0.normalize();
 
-    SignedBigInt s_c2 = SignedBigInt::sub(SignedBigInt::sub(SignedBigInt::sub(s_m1, s_m0), s_m_inf), s_c1);
+    // 4. r1 = (P(1) + P(-1)) / 2 = c0 + c2 + c4
+    SignedBigInt s_r1 = SignedBigInt::add(s_m1, s_m_neg1);
+    s_r1.data = divide_bigint_by_2(std::move(s_r1.data));
+    s_r1.normalize();
+
+    // 5. c2 = r1 - c0 - c4
+    SignedBigInt s_c2 = SignedBigInt::sub(SignedBigInt::sub(s_r1, s_c0), s_c4);
     s_c2.normalize();
 
-    SignedBigInt temp1 = SignedBigInt::sub(s_m2, s_m1);
-    temp1.data = divide_bigint_by_3(std::move(temp1.data));
+    // 6. r2 = (P(2) - P(-1)) / 3 = c1 + c2 + 3c3 + 5c4
+    SignedBigInt s_r2 = SignedBigInt::sub(s_m2, s_m_neg1);
+    s_r2.data = divide_bigint_by_3(std::move(s_r2.data));
+    s_r2.normalize();
 
-    SignedBigInt temp2 = SignedBigInt::sub(s_m_neg1, s_m0);
-    temp2.data = divide_bigint_by_2(std::move(temp2.data));
+    // 7. 2c3 = r2 - c2 - 5c4 - r0
+    SignedBigInt s_c4_5;
+    s_c4_5.data = multiply_bigint_by_uint32(s_c4.data, 5);
+    s_c4_5.negative = s_c4.negative;
 
-    SignedBigInt temp3;
-    temp3.data = multiply_bigint_by_uint32(s_m_inf.data, 2);
-    temp3.negative = s_m_inf.negative;
-
-    SignedBigInt s_c3 = SignedBigInt::sub(SignedBigInt::sub(SignedBigInt::sub(temp1, temp2), s_c1), temp3);
+    SignedBigInt s_2c3 = SignedBigInt::sub(SignedBigInt::sub(SignedBigInt::sub(s_r2, s_c2), s_c4_5), s_r0);
+    s_2c3.normalize();
+    
+    // 8. c3 = (2c3) / 2
+    SignedBigInt s_c3 = s_2c3;
+    s_c3.data = divide_bigint_by_2(std::move(s_c3.data));
     s_c3.normalize();
+
+    // 9. c1 = r0 - c3
+    SignedBigInt s_c1 = SignedBigInt::sub(s_r0, s_c3);
+    s_c1.normalize();
 
     if (s_c0.negative || s_c1.negative || s_c2.negative || s_c3.negative || s_c4.negative) {
         return multiply_bigint_karatsuba(lhs, rhs);
@@ -482,13 +498,18 @@ BigIntData multiply_bigint(const BigIntData& lhs, const BigIntData& rhs) {
         return multiply_bigint_naive(lhs, rhs);
     }
 
-    // 中大型规模：使用递归 Karatsuba。零分配 Karatsuba 和 Toom-Cook
-    // 路径在长小数尾数的乘法中会产生错误尺度，先走稳定实现保证正确性。
-    if (max_size <= 4096) {
+    // 中等规模：零分配 Karatsuba（减少内存分配开销）
+    if (max_size <= 512) {
         return multiply_bigint_karatsuba(lhs, rhs);
+        //return multiply_bigint_zero_allocation(lhs, rhs);
     }
 
-    // 大规模：优化的 NTT（使用 twiddle factors 缓存和并行）
+    // 中大规模：Toom-Cook 3
+    if (max_size <= 4096) {
+        return multiply_bigint_toom3(lhs, rhs);
+    }
+
+    // 特大规模：优化的 NTT
     return multiply_bigint_ntt_optimized(lhs, rhs);
 }
 
