@@ -10,6 +10,7 @@
 #define PLOT_RENDERER_H
 
 #include "app/scalar_type.h"
+#include "plot_styles.h"
 #include <string>
 #include <vector>
 
@@ -27,52 +28,35 @@ struct Point {
 };
 
 /**
+ * @struct DataSeries
+ * @brief 绘图数据系列
+ */
+struct DataSeries {
+    std::vector<Point> points;
+    SeriesStyle style;
+};
+
+/**
  * @class PlotRenderer
  * @brief 终端绘图渲染器类
  *
  * 提供基于终端字符的二维图形渲染功能。
- * 主要使用 Braille 字符（Unicode）实现高分辨率显示，
- * 每个 Braille 字符可表示 2x4 的像素网格。
  */
 class PlotRenderer {
 public:
     /**
-     * @brief 渲染点集为终端字符串
+     * @brief 渲染多个数据系列为终端字符串
      *
-     * 将输入点集渲染为可在终端显示的字符串图形。
-     * 自动计算坐标范围并绘制坐标轴。
-     *
-     * @param points 要绑制的点集
+     * @param all_series 要绑制的所有数据系列
+     * @param options 绑图选项
      * @param width 绑图宽度（字符数）
      * @param height 绑图高度（字符数）
      * @return 格式化的绑图字符串
      */
-    static std::string render(const std::vector<Point>& points, int width, int height);
+    static std::string render(const std::vector<DataSeries>& all_series, const PlotOptions& options, int width, int height);
 
 private:
-    /**
-     * @brief 使用 Braille 字符渲染点集
-     *
-     * Braille 字符提供 2x4 的像素密度，可实现高分辨率终端图形。
-     *
-     * @param points 要绑制的点集
-     * @param width 绑图宽度（字符数）
-     * @param height 绑图高度（字符数）
-     * @return 格式化的绑图字符串
-     */
-    static std::string render_braille(const std::vector<Point>& points, int width, int height);
-
-    /**
-     * @brief 使用简单 ASCII 字符渲染点集
-     *
-     * 简单的 ASCII 字符渲染方法，作为不支持 Braille 字符时的备选方案。
-     *
-     * @param points 要绑制的点集
-     * @param width 绑图宽度（字符数）
-     * @param height 绑图高度（字符数）
-     * @return 格式化的绑图字符串
-     */
-    static std::string render_ascii(const std::vector<Point>& points, int width, int height);
+    static std::string render_braille(const std::vector<DataSeries>& all_series, const PlotOptions& options, int width, int height);
 };
 
 } // namespace plot

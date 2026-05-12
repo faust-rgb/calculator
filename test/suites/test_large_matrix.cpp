@@ -285,7 +285,7 @@ void test_large_matrix_multiplication(int& passed, int& failed) {
                 }
                 if (mymath::abs(C.at(i, j) - expected) > LARGE_MATRIX_TOLERANCE) {
                     correct = false;
-                    std::cout << "    DEBUG: Mismatch at (" << i << "," << j << "): "
+                    std::cout << "    Mismatch at (" << i << "," << j << "): "
                               << "expected " << expected << ", got " << C.at(i, j) << std::endl;
                 }
             }
@@ -515,11 +515,11 @@ void test_large_matrix_qr(int& passed, int& failed) {
                 if (std::abs(val) > q_max_ld) q_max_ld = std::abs(val);
             }
         }
-        std::cout << "DEBUG: Q norm squared (long double) = " << q_norm_ld << std::endl;
-        std::cout << "DEBUG: Q max element (long double) = " << q_max_ld << std::endl;
-        std::cout << "DEBUG: Q(0,0) = " << Q.at(0, 0).to_string() << std::endl;
-        std::cout << "DEBUG: QtQ(0,0) = " << QtQ.at(0, 0).to_string() << std::endl;
-        std::cout << "DEBUG: QtQ(0,1) = " << QtQ.at(0, 1).to_string() << std::endl;
+        std::cout << "Q norm squared (long double) = " << q_norm_ld << std::endl;
+        std::cout << "Q max element (long double) = " << q_max_ld << std::endl;
+        std::cout << "Q(0,0) = " << Q.at(0, 0).to_string() << std::endl;
+        std::cout << "QtQ(0,0) = " << QtQ.at(0, 0).to_string() << std::endl;
+        std::cout << "QtQ(0,1) = " << QtQ.at(0, 1).to_string() << std::endl;
 
         if (err1 < VERY_LARGE_TOLERANCE && err2 < VERY_LARGE_TOLERANCE) {
             ++passed;

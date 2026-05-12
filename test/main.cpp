@@ -19,6 +19,7 @@
 #include "suites/test_risch_advanced.h"
 #include "suites/test_float128_limit.h"
 #include "suites/test_precision_matrix.h"
+#include "suites/test_benchmark_precise.h"
 #include <iostream>
 
 /**
@@ -97,6 +98,14 @@ int main() {
     // 运行高精度矩阵测试
     std::cout << "Running Precision Matrix Tests..." << std::endl;
     test_suites::run_precision_matrix_tests(total_passed, total_failed);
+
+    // 运行高精度基准测试
+    std::cout << "Running Benchmark Precise Tests..." << std::endl;
+    test_suites::run_benchmark_precise_tests(total_passed, total_failed);
+
+    // 运行乘法基准测试
+    std::cout << "Running Benchmark Multiplication Tests..." << std::endl;
+    test_suites::run_benchmark_mult_tests(total_passed, total_failed);
 
     // 输出测试汇总结果
     std::cout << "\nTest Summary:" << std::endl;

@@ -46,8 +46,12 @@ thread_local bool g_suppress_normalization = false;
 // ============================================================================
 // 原始指针算术优化 (Raw Pointer Primitives)
 // ============================================================================
+// 使用 SIMD 优化版本，在无 AVX2 时回退到标量实现
 
 size_t add_raw(const uint32_t* a, size_t an, const uint32_t* b, size_t bn, uint32_t* res) {
+#ifdef __AVX2__
+    return add_raw_optimized(a, an, b, bn, res);
+#else
     uint32_t carry = 0;
     size_t i = 0;
     size_t min_n = std::min(an, bn);
@@ -67,9 +71,13 @@ size_t add_raw(const uint32_t* a, size_t an, const uint32_t* b, size_t bn, uint3
         res[i++] = carry;
     }
     return i;
+#endif
 }
 
 size_t sub_raw(const uint32_t* a, size_t an, const uint32_t* b, size_t bn, uint32_t* res) {
+#ifdef __AVX2__
+    return sub_raw_optimized(a, an, b, bn, res);
+#else
     int32_t borrow = 0;
     size_t i = 0;
     for (; i < bn; ++i) {
@@ -94,6 +102,7 @@ size_t sub_raw(const uint32_t* a, size_t an, const uint32_t* b, size_t bn, uint3
     }
     while (i > 1 && res[i - 1] == 0) i--;
     return i;
+#endif
 }
 
 size_t add_inplace_raw(uint32_t* a, size_t an, const uint32_t* b, size_t bn, size_t capacity) {
@@ -151,6 +160,9 @@ size_t sub_inplace_raw(uint32_t* a, size_t an, const uint32_t* b, size_t bn) {
 }
 
 int compare_raw(const uint32_t* a, size_t an, const uint32_t* b, size_t bn) {
+#ifdef __AVX2__
+    return compare_raw_optimized(a, an, b, bn);
+#else
     if (an != bn) return an < bn ? -1 : 1;
     for (size_t i = an; i > 0; --i) {
         if (a[i - 1] != b[i - 1]) {
@@ -158,6 +170,7 @@ int compare_raw(const uint32_t* a, size_t an, const uint32_t* b, size_t bn) {
         }
     }
     return 0;
+#endif
 }
 
 size_t mul_uint32_raw(const uint32_t* a, size_t an, uint32_t b, uint32_t* res) {
@@ -227,6 +240,9 @@ std::string bigint_to_string(const BigIntData& v) {
 }
 
 int compare_bigint(const BigIntData& lhs, const BigIntData& rhs) {
+#ifdef __AVX2__
+    return compare_raw_optimized(lhs.data(), lhs.size(), rhs.data(), rhs.size());
+#else
     if (lhs.size() != rhs.size()) return lhs.size() < rhs.size() ? -1 : 1;
     for (int i = static_cast<int>(lhs.size()) - 1; i >= 0; --i) {
         if (lhs[static_cast<std::size_t>(i)] != rhs[static_cast<std::size_t>(i)]) {
@@ -234,6 +250,7 @@ int compare_bigint(const BigIntData& lhs, const BigIntData& rhs) {
         }
     }
     return 0;
+#endif
 }
 
 BigIntData add_bigint(const BigIntData& lhs, const BigIntData& rhs) {

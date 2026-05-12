@@ -685,7 +685,11 @@ bool solve_linear_box_problem(
     bool phase1_ok = simplex_iterate(x, basis, c_phase1, A_full, lb_full, ub_full,
                                       m_total, n_full, true, kMaxSimplexIters, internal_eps);
 
-    if (!phase1_ok) {
+    auto try_fallback = [&](std::string* diag) {
+        if (n + m_total > 15) {
+            if (diag) *diag = "problem infeasible or numerical failure, and too large for vertex fallback";
+            return false;
+        }
         return solve_by_vertex_enumeration(objective,
                                            inequality_matrix,
                                            inequality_rhs,
@@ -696,7 +700,11 @@ bool solve_linear_box_problem(
                                            tolerance,
                                            solution,
                                            objective_value,
-                                           diagnostic);
+                                           diag);
+    };
+
+    if (!phase1_ok) {
+        return try_fallback(diagnostic);
     }
 
     Scalar art_sum = Scalar(0);
@@ -704,17 +712,7 @@ bool solve_linear_box_problem(
         art_sum += mymath::abs(x[j]);
     }
     if (art_sum > eps * Scalar(static_cast<long long>(m_total))) {
-        return solve_by_vertex_enumeration(objective,
-                                           inequality_matrix,
-                                           inequality_rhs,
-                                           equality_matrix,
-                                           equality_rhs,
-                                           lower_bounds,
-                                           upper_bounds,
-                                           tolerance,
-                                           solution,
-                                           objective_value,
-                                           diagnostic);
+        return try_fallback(diagnostic);
     }
 
     for (std::size_t i = 0; i < m_total; ++i) {

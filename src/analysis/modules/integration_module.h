@@ -6,6 +6,9 @@
 #include <vector>
 #include "module/calculator_module.h"
 
+// 前向声明
+class FunctionAnalysis;
+
 namespace integration_ops {
 
 /**
@@ -26,6 +29,7 @@ struct IntegrationContext {
     std::function<Scalar(const std::string&)> parse_decimal;
     std::function<std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>(const std::string&)> build_scoped_evaluator;
     std::function<Scalar(Scalar)> normalize_result;
+    std::function<FunctionAnalysis(const std::string&)> build_analysis;
 };
 
 // Line and Surface integral functions

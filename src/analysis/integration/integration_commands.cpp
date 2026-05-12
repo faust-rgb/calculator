@@ -201,9 +201,39 @@ Scalar double_integral_polar(
     const std::string& theta_var, Scalar theta0, Scalar theta1,
     const std::string& r_var, const std::string& r0_expr, const std::string& r1_expr,
     int ntheta, int nr, const std::string& method, Scalar tol) {
-    (void)method;
-    (void)tol;
     const auto evaluate_expression = ctx.build_scoped_evaluator(expr);
+
+    // 检查边界是否为常数
+    bool is_constant_bounds = false;
+    Scalar r0_c = 0.0L, r1_c = 0.0L;
+    try {
+        r0_c = ctx.parse_decimal(r0_expr);
+        r1_c = ctx.parse_decimal(r1_expr);
+        is_constant_bounds = true;
+    } catch (...) {}
+
+    // 对于常数边界且非 simpson 方法，使用自适应积分
+    if (is_constant_bounds && method != "simpson") {
+        auto integrand = [evaluate_expression, theta_var, r_var](const std::vector<Scalar>& pt) {
+            const Scalar theta = pt[0];
+            const Scalar r = pt[1];
+            const Scalar x = r * mymath::cos(theta);
+            const Scalar y = r * mymath::sin(theta);
+            return evaluate_expression({{r_var, r}, {theta_var, theta}, {"x", x}, {"y", y}}) * r;
+        };
+        std::vector<multidim::IntegrationBounds> rect_bounds = {{theta0, theta1}, {r0_c, r1_c}};
+        multidim::IntegrationOptions opts;
+        opts.relative_tolerance = tol;
+        opts.absolute_tolerance = precision::default_absolute_tolerance<Scalar>();
+        opts.max_evaluations = 500000;
+        if (method == "adaptive") opts.method = multidim::IntegrationMethod::Adaptive;
+        else if (method == "monte_carlo") opts.method = multidim::IntegrationMethod::MonteCarlo;
+        else if (method == "sparse_grid") opts.method = multidim::IntegrationMethod::SparseGrid;
+        else if (method == "tensor_product") opts.method = multidim::IntegrationMethod::TensorProduct;
+        return multidim::integrate_rectangular(integrand, rect_bounds, opts).value;
+    }
+
+    // 对于变边界或 simpson 方法，使用 MultivariableIntegrator
     const MultivariableIntegrator integrator(
         [evaluate_expression, theta_var, r_var](const std::vector<Scalar>& point) {
             const Scalar theta = Scalar(point[0]);
@@ -217,6 +247,11 @@ Scalar double_integral_polar(
     auto r0_f = make_scalar_bound_func(ctx, r0_expr, {theta_var}, 1);
     auto r1_f = make_scalar_bound_func(ctx, r1_expr, {theta_var}, 1);
     bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) -> std::pair<Scalar, Scalar> { return {r0_f(pt), r1_f(pt)}; });
+
+    // 如果指定了自适应方法，使用 integrate_adaptive
+    if (method == "adaptive") {
+        return integrator.integrate_adaptive(bounds, tol);
+    }
     return integrator.integrate(bounds, {ntheta, nr});
 }
 
@@ -264,9 +299,42 @@ Scalar triple_integral(const IntegrationContext& ctx, const std::string& expr, c
 }
 
 Scalar triple_integral_cyl(const IntegrationContext& ctx, const std::string& expr, const std::string& t_v, Scalar t0, Scalar t1, const std::string& r_v, const std::string& r0_e, const std::string& r1_e, const std::string& z_v, const std::string& z0_e, const std::string& z1_e, int nt, int nr, int nz, const std::string& method, Scalar tol) {
-    (void)method;
-    (void)tol;
     const auto evaluate_expression = ctx.build_scoped_evaluator(expr);
+
+    // 检查边界是否为常数
+    bool is_constant_bounds = false;
+    Scalar r0_c = 0.0L, r1_c = 0.0L, z0_c = 0.0L, z1_c = 0.0L;
+    try {
+        r0_c = ctx.parse_decimal(r0_e);
+        r1_c = ctx.parse_decimal(r1_e);
+        z0_c = ctx.parse_decimal(z0_e);
+        z1_c = ctx.parse_decimal(z1_e);
+        is_constant_bounds = true;
+    } catch (...) {}
+
+    // 对于常数边界且非 simpson 方法，使用自适应积分
+    if (is_constant_bounds && method != "simpson") {
+        auto integrand = [evaluate_expression, t_v, r_v, z_v](const std::vector<Scalar>& pt) {
+            const Scalar t = pt[0];
+            const Scalar r = pt[1];
+            const Scalar z = pt[2];
+            const Scalar x = r * mymath::cos(t);
+            const Scalar y = r * mymath::sin(t);
+            return evaluate_expression({{r_v, r}, {t_v, t}, {z_v, z}, {"x", x}, {"y", y}}) * r;
+        };
+        std::vector<multidim::IntegrationBounds> rect_bounds = {{t0, t1}, {r0_c, r1_c}, {z0_c, z1_c}};
+        multidim::IntegrationOptions opts;
+        opts.relative_tolerance = tol;
+        opts.absolute_tolerance = precision::default_absolute_tolerance<Scalar>();
+        opts.max_evaluations = 1000000;
+        if (method == "adaptive") opts.method = multidim::IntegrationMethod::Adaptive;
+        else if (method == "monte_carlo") opts.method = multidim::IntegrationMethod::MonteCarlo;
+        else if (method == "sparse_grid") opts.method = multidim::IntegrationMethod::SparseGrid;
+        else if (method == "tensor_product") opts.method = multidim::IntegrationMethod::TensorProduct;
+        return multidim::integrate_rectangular(integrand, rect_bounds, opts).value;
+    }
+
+    // 对于变边界或 simpson 方法，使用 MultivariableIntegrator
     const MultivariableIntegrator integrator([evaluate_expression, t_v, r_v, z_v](const std::vector<Scalar>& pt) {
         Scalar t = Scalar(pt[0]);
         Scalar r = Scalar(pt[1]);
@@ -283,13 +351,52 @@ Scalar triple_integral_cyl(const IntegrationContext& ctx, const std::string& exp
     auto z0_f = make_scalar_bound_func(ctx, z0_e, {t_v, r_v}, 2);
     auto z1_f = make_scalar_bound_func(ctx, z1_e, {t_v, r_v}, 2);
     bounds.push_back([z0_f, z1_f](const std::vector<Scalar>& pt) -> std::pair<Scalar, Scalar> { return std::make_pair(z0_f(pt), z1_f(pt)); });
+
+    // 如果指定了自适应方法，使用 integrate_adaptive
+    if (method == "adaptive") {
+        return integrator.integrate_adaptive(bounds, tol);
+    }
     return integrator.integrate(bounds, {nt, nr, nz});
 }
 
 Scalar triple_integral_sph(const IntegrationContext& ctx, const std::string& expr, const std::string& t_v, Scalar t0, Scalar t1, const std::string& p_v, Scalar p0, Scalar p1, const std::string& r_v, const std::string& r0_e, const std::string& r1_e, int nt, int np, int nr, const std::string& method, Scalar tol) {
-    (void)method;
-    (void)tol;
     const auto evaluate_expression = ctx.build_scoped_evaluator(expr);
+
+    // 检查边界是否为常数
+    bool is_constant_bounds = false;
+    Scalar r0_c = 0.0L, r1_c = 0.0L;
+    try {
+        r0_c = ctx.parse_decimal(r0_e);
+        r1_c = ctx.parse_decimal(r1_e);
+        is_constant_bounds = true;
+    } catch (...) {}
+
+    // 对于常数边界且非 simpson 方法，使用自适应积分
+    if (is_constant_bounds && method != "simpson") {
+        auto integrand = [evaluate_expression, t_v, p_v, r_v](const std::vector<Scalar>& pt) {
+            const Scalar t = pt[0];
+            const Scalar p = pt[1];
+            const Scalar r = pt[2];
+            const Scalar sp = mymath::sin(p);
+            const Scalar x = r * sp * mymath::cos(t);
+            const Scalar y = r * sp * mymath::sin(t);
+            const Scalar z = r * mymath::cos(p);
+            const Scalar jacobian = r * r * sp;
+            return evaluate_expression({{r_v, r}, {t_v, t}, {p_v, p}, {"x", x}, {"y", y}, {"z", z}}) * jacobian;
+        };
+        std::vector<multidim::IntegrationBounds> rect_bounds = {{t0, t1}, {p0, p1}, {r0_c, r1_c}};
+        multidim::IntegrationOptions opts;
+        opts.relative_tolerance = tol;
+        opts.absolute_tolerance = precision::default_absolute_tolerance<Scalar>();
+        opts.max_evaluations = 1000000;
+        if (method == "adaptive") opts.method = multidim::IntegrationMethod::Adaptive;
+        else if (method == "monte_carlo") opts.method = multidim::IntegrationMethod::MonteCarlo;
+        else if (method == "sparse_grid") opts.method = multidim::IntegrationMethod::SparseGrid;
+        else if (method == "tensor_product") opts.method = multidim::IntegrationMethod::TensorProduct;
+        return multidim::integrate_rectangular(integrand, rect_bounds, opts).value;
+    }
+
+    // 对于变边界或 simpson 方法，使用 MultivariableIntegrator
     const MultivariableIntegrator integrator([evaluate_expression, t_v, p_v, r_v](const std::vector<Scalar>& pt) {
         Scalar t = Scalar(pt[0]);
         Scalar p = Scalar(pt[1]);
@@ -307,6 +414,11 @@ Scalar triple_integral_sph(const IntegrationContext& ctx, const std::string& exp
     auto r0_f = make_scalar_bound_func(ctx, r0_e, {t_v, p_v}, 2);
     auto r1_f = make_scalar_bound_func(ctx, r1_e, {t_v, p_v}, 2);
     bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) -> std::pair<Scalar, Scalar> { return std::make_pair(r0_f(pt), r1_f(pt)); });
+
+    // 如果指定了自适应方法，使用 integrate_adaptive
+    if (method == "adaptive") {
+        return integrator.integrate_adaptive(bounds, tol);
+    }
     return integrator.integrate(bounds, {nt, np, nr});
 }
 

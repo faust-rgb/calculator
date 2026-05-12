@@ -117,17 +117,46 @@ bool handle_analysis_command(const AnalysisContext& ctx,
 
         std::vector<std::map<std::string, Scalar>> critical_points;
 
+        auto eval_ast = [](auto& self, const std::shared_ptr<SymbolicExpression::Node>& n, const std::map<std::string, Scalar>& pt) -> Scalar {
+            if (!n) return 0.0L;
+            switch (n->type) {
+                case NodeType::kNumber: return Scalar(n->number_value);
+                case NodeType::kVariable: {
+                    auto it = pt.find(n->text);
+                    if (it != pt.end()) return it->second;
+                    throw std::runtime_error("unknown variable: " + n->text);
+                }
+                case NodeType::kPi: return Scalar(mymath::pi());
+                case NodeType::kE: return Scalar(mymath::e());
+                case NodeType::kAdd: return self(self, n->left, pt) + self(self, n->right, pt);
+                case NodeType::kSubtract: return self(self, n->left, pt) - self(self, n->right, pt);
+                case NodeType::kMultiply: return self(self, n->left, pt) * self(self, n->right, pt);
+                case NodeType::kDivide: return self(self, n->left, pt) / self(self, n->right, pt);
+                case NodeType::kPower: return mymath::pow(self(self, n->left, pt), self(self, n->right, pt));
+                case NodeType::kNegate: return -self(self, n->left, pt);
+                case NodeType::kFunction: {
+                    Scalar arg = self(self, n->left, pt);
+                    if (n->text == "sin") return mymath::sin(arg);
+                    if (n->text == "cos") return mymath::cos(arg);
+                    if (n->text == "tan") return mymath::tan(arg);
+                    if (n->text == "exp") return mymath::exp(arg);
+                    if (n->text == "ln" || n->text == "log") return mymath::log(arg);
+                    if (n->text == "sqrt") return mymath::sqrt(arg);
+                    throw std::runtime_error("unsupported function in numeric eval: " + n->text);
+                }
+                default: throw std::runtime_error("unsupported node type in numeric eval");
+            }
+        };
+
         if (variables.size() == 1) {
             const std::string& variable = variables[0];
             const SymbolicExpression derivative = gradient[0];
             auto eval_derivative = [&](Scalar x) {
-                SymbolicExpression at_x =
-                    derivative.substitute(variable, SymbolicExpression::number((x))).simplify();
-                Scalar value = 0.0L;
-                if (!at_x.is_number(&value)) {
+                try {
+                    return eval_ast(eval_ast, derivative.node_, {{variable, x}});
+                } catch (...) {
                     throw std::runtime_error("derivative is not numeric at this point");
                 }
-                return Scalar(value);
             };
             auto add_point = [&](Scalar x) {
                 for (const auto& existing : critical_points) {
@@ -145,9 +174,11 @@ bool handle_analysis_command(const AnalysisContext& ctx,
 
             SymbolicExpression second_deriv = derivative.derivative(variable).simplify();
             auto eval_second = [&](Scalar x) {
-                SymbolicExpression at_x = second_deriv.substitute(variable, SymbolicExpression::number((x))).simplify();
-                Scalar value = 0.0L;
-                if (at_x.is_number(&value)) return Scalar(value);
+                try {
+                    return eval_ast(eval_ast, second_deriv.node_, {{variable, x}});
+                } catch (...) {
+                    return Scalar(0.0L);
+                }
                 return Scalar(0);
             };
 
@@ -205,15 +236,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
         } else {
             auto eval_gradient_at = [&](const SymbolicExpression& g,
                                         const std::map<std::string, Scalar>& point) {
-                SymbolicExpression current = g;
-                for (const auto& [name, value] : point) {
-                    current = current.substitute(name, SymbolicExpression::number((value))).simplify();
-                }
-                Scalar numeric = 0.0L;
-                if (!current.is_number(&numeric)) {
-                    throw std::runtime_error("gradient is not numeric at this point");
-                }
-                return Scalar(numeric);
+                return eval_ast(eval_ast, g.node_, point);
             };
 
             auto gradient_norm_at = [&](const std::map<std::string, Scalar>& point) {
@@ -372,14 +395,9 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                         for (std::size_t row = 0; row < variables.size(); ++row) {
                             rhs[row] = Scalar(0) - eval_gradient_at(gradient[row], current);
                             for (std::size_t col = 0; col < variables.size(); ++col) {
-                                auto val_expr = symbolic_hessian[row][col];
-                                for (const auto& [v, val] : current) {
-                                    val_expr = val_expr.substitute(v, SymbolicExpression::number(val)).simplify();
-                                }
-                                Scalar val;
-                                if (val_expr.is_number(&val)) {
-                                    jac[row][col] = val;
-                                } else {
+                                try {
+                                    jac[row][col] = eval_ast(eval_ast, symbolic_hessian[row][col].node_, current);
+                                } catch (...) {
                                     eval_ok = false;
                                     break;
                                 }
@@ -452,12 +470,10 @@ bool handle_analysis_command(const AnalysisContext& ctx,
 
             if (variables.size() == 1) {
                 SymbolicExpression second_deriv = expr.derivative(variables[0]).derivative(variables[0]).simplify();
-                auto second_at_pt = second_deriv;
-                for (const auto& [v, val] : pt) {
-                    second_at_pt = second_at_pt.substitute(v, SymbolicExpression::number((val))).simplify();
-                }
                 Scalar second_val = 0.0L;
-                second_at_pt.is_number(&second_val);
+                try {
+                    second_val = eval_ast(eval_ast, second_deriv.node_, pt);
+                } catch (...) {}
                 const Scalar hessian_threshold = precision::positive_definite_threshold<Scalar>();
                 if (second_val > hessian_threshold) out << " (local min)";
                 else if (second_val < -hessian_threshold) out << " (local max)";
@@ -469,16 +485,12 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                 bool hessian_evaluable = true;
                 for (size_t r = 0; r < hessian.size(); ++r) {
                     for (size_t c = 0; c < hessian[r].size(); ++c) {
-                        auto h_rc = hessian[r][c];
-                        for (const auto& [v, val] : pt) {
-                            h_rc = h_rc.substitute(v, SymbolicExpression::number((val))).simplify();
-                        }
-                        Scalar h_val = 0.0L;
-                        if (!h_rc.is_number(&h_val)) {
+                        try {
+                            hessian_values[r][c] = eval_ast(eval_ast, hessian[r][c].node_, pt);
+                        } catch (...) {
                             hessian_evaluable = false;
                             break;
                         }
-                        hessian_values[r][c] = Scalar(h_val);
                     }
                 }
 

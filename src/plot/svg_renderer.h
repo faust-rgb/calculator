@@ -9,11 +9,6 @@
 
 namespace plot {
 
-struct DataSeries {
-    std::vector<Point> points;
-    SeriesStyle style;
-};
-
 class SvgRenderer {
 public:
     /// 渲染 2D 折线图/散点图

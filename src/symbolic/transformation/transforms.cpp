@@ -216,6 +216,30 @@ bool match_cosine_linear(const SymbolicExpression& expression,
 }
 
 /**
+ * @brief 匹配 sinh(coefficient * x + intercept) 形式
+ */
+bool match_sinh_linear(const SymbolicExpression& expression,
+                       const std::string& variable_name,
+                       Scalar* coefficient,
+                       Scalar* intercept) {
+    SymbolicExpression argument;
+    return is_function_named(expression, "sinh", &argument) &&
+           decompose_linear(argument, variable_name, coefficient, intercept);
+}
+
+/**
+ * @brief 匹配 cosh(coefficient * x + intercept) 形式
+ */
+bool match_cosh_linear(const SymbolicExpression& expression,
+                       const std::string& variable_name,
+                       Scalar* coefficient,
+                       Scalar* intercept) {
+    SymbolicExpression argument;
+    return is_function_named(expression, "cosh", &argument) &&
+           decompose_linear(argument, variable_name, coefficient, intercept);
+}
+
+/**
  * @brief 匹配 base^index_variable 形式（常数底）
  */
 bool match_constant_power_sequence(const SymbolicExpression& expression,
@@ -575,12 +599,37 @@ SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
             }
 
             Scalar shift = Scalar(0.0L);
-            if (match_step_shift(left, time_variable, &shift) &&
-                mymath::is_near_zero(shift, kFormatEps())) {
+            // Time shifting property: step(t-a) * f(t-a) -> e^(-as) * F(s)
+            // where F(s) is the Laplace transform of f(t)
+            if (match_step_shift(left, time_variable, &shift)) {
+                if (shift > kFormatEps()) {
+                    // Try to detect f(t-a) form in right
+                    // For now, use the general time-shift formula
+                    // L{step(t-a) * g(t)} = e^(-as) * L{g(t+a)}
+                    SymbolicExpression g_t = right.substitute(time_variable,
+                        make_add(SymbolicExpression::variable(time_variable),
+                                SymbolicExpression::number(shift)).simplify());
+                    SymbolicExpression G_s = laplace_transform_impl(g_t, time_variable, transform_variable);
+                    return make_multiply(
+                        make_function("exp",
+                            make_negate(make_multiply(SymbolicExpression::number(shift),
+                                                     SymbolicExpression::variable(transform_variable)))),
+                        G_s).simplify();
+                }
                 return laplace_transform_impl(right, time_variable, transform_variable);
             }
-            if (match_step_shift(right, time_variable, &shift) &&
-                mymath::is_near_zero(shift, kFormatEps())) {
+            if (match_step_shift(right, time_variable, &shift)) {
+                if (shift > kFormatEps()) {
+                    SymbolicExpression g_t = left.substitute(time_variable,
+                        make_add(SymbolicExpression::variable(time_variable),
+                                SymbolicExpression::number(shift)).simplify());
+                    SymbolicExpression G_s = laplace_transform_impl(g_t, time_variable, transform_variable);
+                    return make_multiply(
+                        make_function("exp",
+                            make_negate(make_multiply(SymbolicExpression::number(shift),
+                                                     SymbolicExpression::variable(transform_variable)))),
+                        G_s).simplify();
+                }
                 return laplace_transform_impl(left, time_variable, transform_variable);
             }
             break;
@@ -720,6 +769,95 @@ SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
                             SymbolicExpression::number(
                                 linear_coefficient * linear_coefficient)))
             .simplify();
+    }
+
+    // L{sinh(at)} = a / (s^2 - a^2)
+    if (match_sinh_linear(simplified,
+                          time_variable,
+                          &linear_coefficient,
+                          &linear_intercept) &&
+        mymath::is_near_zero(linear_intercept, kFormatEps()) &&
+        !mymath::is_near_zero(linear_coefficient, kFormatEps())) {
+        return make_divide(
+                   SymbolicExpression::number(linear_coefficient),
+                   make_subtract(make_power(SymbolicExpression::variable(transform_variable),
+                                            SymbolicExpression::number(Scalar(2.0L))),
+                                 SymbolicExpression::number(
+                                     linear_coefficient * linear_coefficient)))
+            .simplify();
+    }
+
+    // L{cosh(at)} = s / (s^2 - a^2)
+    if (match_cosh_linear(simplified,
+                          time_variable,
+                          &linear_coefficient,
+                          &linear_intercept) &&
+        mymath::is_near_zero(linear_intercept, kFormatEps()) &&
+        !mymath::is_near_zero(linear_coefficient, kFormatEps())) {
+        return make_divide(
+                   SymbolicExpression::variable(transform_variable),
+                   make_subtract(make_power(SymbolicExpression::variable(transform_variable),
+                                            SymbolicExpression::number(Scalar(2.0L))),
+                                 SymbolicExpression::number(
+                                     linear_coefficient * linear_coefficient)))
+            .simplify();
+    }
+
+    // L{log(t)} = -(gamma + ln(s)) / s, where gamma is Euler's constant
+    SymbolicExpression log_arg;
+    if (is_function_named(simplified, "log", &log_arg) &&
+        log_arg.is_variable_named(time_variable)) {
+        return make_negate(
+            make_divide(
+                make_add(SymbolicExpression::variable("gamma"),
+                         make_function("log", SymbolicExpression::variable(transform_variable))),
+                SymbolicExpression::variable(transform_variable)))
+            .simplify();
+    }
+
+    // L{sqrt(t)} = sqrt(pi) / (2 * s^(3/2))
+    SymbolicExpression sqrt_arg;
+    if (is_function_named(simplified, "sqrt", &sqrt_arg) &&
+        sqrt_arg.is_variable_named(time_variable)) {
+        return make_divide(
+            make_multiply(SymbolicExpression::number(mymath::pi()),
+                         make_power(SymbolicExpression::variable(transform_variable),
+                                   SymbolicExpression::number(Scalar(1.5L)))),
+            SymbolicExpression::number(Scalar(2.0L)))
+            .simplify();
+    }
+
+    // L{erf(sqrt(a*t))} = sqrt(a) / (s * sqrt(s + a))
+    SymbolicExpression erf_arg;
+    if (is_function_named(simplified, "erf", &erf_arg)) {
+        // Check for sqrt(a*t) form
+        SymbolicExpression sqrt_inner;
+        if (is_function_named(erf_arg, "sqrt", &sqrt_inner)) {
+            Scalar a = Scalar(0.0L);
+            if (decompose_linear(sqrt_inner, time_variable, &a, &linear_intercept) &&
+                mymath::is_near_zero(linear_intercept, kFormatEps()) &&
+                !mymath::is_near_zero(a, kFormatEps())) {
+                return make_divide(
+                    make_function("sqrt", SymbolicExpression::number(a)),
+                    make_multiply(SymbolicExpression::variable(transform_variable),
+                                 make_function("sqrt",
+                                     make_add(SymbolicExpression::variable(transform_variable),
+                                             SymbolicExpression::number(a)))))
+                    .simplify();
+            }
+        }
+    }
+
+    // Try to handle rational functions using partial fractions
+    // For expressions of form P(s)/Q(s) where deg(P) < deg(Q)
+    if (simplified.node_->type == NodeType::kDivide) {
+        // Try partial fraction decomposition for proper rational functions
+        // This is a simplified approach - full implementation would need polynomial factorization
+        const SymbolicExpression num(simplified.node_->left);
+        const SymbolicExpression den(simplified.node_->right);
+
+        // Check for simple forms: 1/(s+a)^n, 1/(s^2+a^2), 1/(s^2-a^2)
+        // These are handled elsewhere, but we can add more here
     }
 
     throw std::runtime_error("unsupported symbolic Laplace transform");

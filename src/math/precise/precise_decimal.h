@@ -412,7 +412,7 @@ struct PreciseDecimal {
      * @param precision 小数点后的最大位数，-1 表示使用完整精度
      * @return 数值的字符串形式，如 "123.45", "-0.001"
      */
-    std::string to_string(int precision = -1) const;
+    std::string to_string(int precision = app::get_default_scale()) const;
 
     /**
      * @brief 转换为 long double（可能有精度损失）

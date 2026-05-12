@@ -56,88 +56,97 @@ static Scalar normalize_axis_bound(Scalar value) {
     return value;
 }
 
-/**
- * @brief 渲染点集为终端字符串
- *
- * 对外接口函数，内部调用 Braille 渲染方法。
- *
- * @param points 要绑制的点集
- * @param width 绑图宽度
- * @param height 绑图高度
- * @return 绑图字符串
- */
-std::string PlotRenderer::render(const std::vector<Point>& points, int width, int height) {
-    if (points.empty()) return "No data to plot.";
-    return render_braille(points, width, height);
+static const char* get_ansi_color(size_t index) {
+    static const char* colors[] = {
+        "\033[34m", // Blue
+        "\033[33m", // Orange/Yellow
+        "\033[32m", // Green
+        "\033[31m", // Red
+        "\033[35m", // Purple
+        "\033[36m", // Cyan
+        "\033[95m", // Magenta
+        "\033[93m", // Bright Yellow
+        "\033[37m"  // Gray
+    };
+    return colors[index % 9];
 }
 
 /**
- * @brief 使用 Braille 字符渲染点集
- *
- * 核心渲染函数，实现高分辨率终端图形显示。
- * 每个终端字符表示 2x4 像素网格，使用不同颜色区分数据点和坐标轴。
- *
- * @param points 要绑制的点集
- * @param width 绑图宽度（字符数）
- * @param height 绑图高度（字符数）
- * @return 格式化的绑图字符串
+ * @brief 渲染多系列点集为终端字符串
  */
-std::string PlotRenderer::render_braille(const std::vector<Point>& points, int width, int height) {
-    if (points.empty()) return "";
+std::string PlotRenderer::render(const std::vector<DataSeries>& all_series, const PlotOptions& options, int width, int height) {
+    if (all_series.empty()) return "No data to plot.";
+    return render_braille(all_series, options, width, height);
+}
 
-    Scalar x_min = Scalar(points[0].x), x_max = Scalar(points[0].x);
-    Scalar y_min = Scalar(points[0].y), y_max = Scalar(points[0].y);
+/**
+ * @brief 使用 Braille 字符渲染多系列点集
+ */
+std::string PlotRenderer::render_braille(const std::vector<DataSeries>& all_series, const PlotOptions& options, int width, int height) {
+    if (all_series.empty()) return "";
 
-    for (const auto& p : points) {
-        if (mymath::isnan(Scalar(p.y)) || mymath::isinf(Scalar(p.y))) continue;
-        x_min = std::min(x_min, Scalar(p.x));
-        x_max = std::max(x_max, Scalar(p.x));
-        y_min = std::min(y_min, Scalar(p.y));
-        y_max = std::max(y_max, Scalar(p.y));
+    Scalar x_min = options.x_min, x_max = options.x_max;
+    Scalar y_min = options.y_min, y_max = options.y_max;
+
+    bool auto_x = (x_min == x_max);
+    bool auto_y = (y_min == y_max);
+
+    if (auto_x || auto_y) {
+        bool first = true;
+        for (const auto& series : all_series) {
+            for (const auto& p : series.points) {
+                if (!mymath::isfinite(p.x) || !mymath::isfinite(p.y)) continue;
+                if (first) {
+                    if (auto_x) { x_min = p.x; x_max = p.x; }
+                    if (auto_y) { y_min = p.y; y_max = p.y; }
+                    first = false;
+                } else {
+                    if (auto_x) { x_min = std::min(x_min, p.x); x_max = std::max(x_max, p.x); }
+                    if (auto_y) { y_min = std::min(y_min, p.y); y_max = std::max(y_max, p.y); }
+                }
+            }
+        }
     }
 
-    if (y_min == y_max) {
-        y_min -= Scalar(1);
-        y_max += Scalar(1);
-    }
+    if (x_min == x_max) { x_min -= 1; x_max += 1; }
+    if (y_min == y_max) { y_min -= 1; y_max += 1; }
 
     int canvas_w = width * 2;
     int canvas_h = height * 4;
-    // 使用 enum 或 bitmask 表示点的类型（0:空, 1:轴, 2:数据）
+    // 使用正值存储系列索引 + 1，0 为空，-1 为坐标轴
     std::vector<std::vector<int>> canvas(canvas_h, std::vector<int>(canvas_w, 0));
 
-    // Draw axes if they are within range
-    if (x_min <= Scalar(0) && x_max >= Scalar(0) && x_max > x_min) {
-        int ax = static_cast<int>((Scalar(0) - x_min) / (x_max - x_min) * (canvas_w - 1));
+    // Draw axes
+    if (x_min <= 0 && x_max >= 0) {
+        int ax = static_cast<int>((0 - x_min) / (x_max - x_min) * (canvas_w - 1));
         if (ax >= 0 && ax < canvas_w) {
-            for (int y = 0; y < canvas_h; ++y) canvas[y][ax] = 1;
+            for (int y = 0; y < canvas_h; ++y) canvas[y][ax] = -1;
         }
     }
-    if (y_min <= Scalar(0) && y_max >= Scalar(0) && y_max > y_min) {
-        int ay = static_cast<int>((Scalar(0) - y_min) / (y_max - y_min) * (canvas_h - 1));
+    if (y_min <= 0 && y_max >= 0) {
+        int ay = static_cast<int>((0 - y_min) / (y_max - y_min) * (canvas_h - 1));
         if (ay >= 0 && ay < canvas_h) {
-            for (int x = 0; x < canvas_w; ++x) canvas[canvas_h - 1 - ay][x] = 1;
+            for (int x = 0; x < canvas_w; ++x) canvas[canvas_h - 1 - ay][x] = -1;
         }
     }
 
-    for (const auto& p : points) {
-        if (mymath::isnan(Scalar(p.y)) || mymath::isinf(Scalar(p.y))) continue;
-        int px = static_cast<int>((Scalar(p.x) - x_min) / (x_max - x_min) * (canvas_w - 1));
-        int py = static_cast<int>((Scalar(p.y) - y_min) / (y_max - y_min) * (canvas_h - 1));
-        if (px >= 0 && px < canvas_w && py >= 0 && py < canvas_h) {
-            canvas[canvas_h - 1 - py][px] = 2;
+    for (size_t s = 0; s < all_series.size(); ++s) {
+        for (const auto& p : all_series[s].points) {
+            if (!mymath::isfinite(p.x) || !mymath::isfinite(p.y)) continue;
+            int px = static_cast<int>((p.x - x_min) / (x_max - x_min) * (canvas_w - 1));
+            int py = static_cast<int>((p.y - y_min) / (y_max - y_min) * (canvas_h - 1));
+            if (px >= 0 && px < canvas_w && py >= 0 && py < canvas_h) {
+                canvas[canvas_h - 1 - py][px] = static_cast<int>(s + 1);
+            }
         }
     }
 
     std::ostringstream out;
-    out << std::fixed << std::setprecision(4);
-    // ANSI Colors: 34 (Blue) for data, 37 (Gray) for axes, 0 (Reset)
-    const char* color_data = "\033[34m";
     const char* color_axis = "\033[37m";
     const char* color_reset = "\033[0m";
 
-    out << "y: [" << normalize_axis_bound(y_min) << ", "
-        << normalize_axis_bound(y_max) << "]\n";
+    if (!options.title.empty()) out << "  " << options.title << "\n";
+    out << "y: [" << normalize_axis_bound(y_min) << ", " << normalize_axis_bound(y_max) << "]\n";
     out << " +";
     for (int i = 0; i < width; ++i) out << "-";
     out << "+\n";
@@ -146,13 +155,13 @@ std::string PlotRenderer::render_braille(const std::vector<Point>& points, int w
         out << " |";
         for (int x = 0; x < width; ++x) {
             int mask = 0;
-            int type = 0; // 0:empty, 1:axis predominates, 2:data predominates
+            int type = 0; // 0:empty, -1:axis, >0:series index + 1
             
             auto check = [&](int dy, int dx, int bit) {
                 int val = canvas[y * 4 + dy][x * 2 + dx];
-                if (val > 0) {
+                if (val != 0) {
                     mask |= bit;
-                    if (val > type) type = val;
+                    if (val > type || (type == -1 && val != 0)) type = val;
                 }
             };
 
@@ -161,7 +170,7 @@ std::string PlotRenderer::render_braille(const std::vector<Point>& points, int w
             check(3, 0, 0x40); check(3, 1, 0x80);
 
             if (mask > 0) {
-                if (type == 2) out << color_data;
+                if (type > 0) out << get_ansi_color(static_cast<size_t>(type - 1));
                 else out << color_axis;
                 out << encode_braille(mask) << color_reset;
             } else {
@@ -174,25 +183,17 @@ std::string PlotRenderer::render_braille(const std::vector<Point>& points, int w
     out << " +";
     for (int i = 0; i < width; ++i) out << "-";
     out << "+\n";
-    out << " x: [" << normalize_axis_bound(x_min) << ", "
-        << normalize_axis_bound(x_max) << "]";
+    out << " x: [" << normalize_axis_bound(x_min) << ", " << normalize_axis_bound(x_max) << "]";
+
+    if (options.show_legend && !all_series.empty()) {
+        out << "\nLegend: ";
+        for (size_t i = 0; i < all_series.size(); ++i) {
+            if (i > 0) out << ", ";
+            out << get_ansi_color(i) << (all_series[i].style.label.empty() ? "series " + std::to_string(i+1) : all_series[i].style.label) << color_reset;
+        }
+    }
 
     return out.str();
-}
-
-/**
- * @brief 使用 ASCII 字符渲染点集
- *
- * 简单的 ASCII 渲染备选方案（尚未完整实现）。
- *
- * @param points 要绑制的点集
- * @param width 绑图宽度
- * @param height 绑图高度
- * @return 绑图字符串
- */
-std::string PlotRenderer::render_ascii(const std::vector<Point>&, int, int) {
-    // Simple ASCII fallback if needed, but for now Braille is the target.
-    return "ASCII renderer not implemented yet. Use Braille-supported terminal.";
 }
 
 } // namespace plot

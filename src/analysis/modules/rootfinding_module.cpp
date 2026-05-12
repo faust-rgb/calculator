@@ -17,6 +17,7 @@
 #include "math/mymath.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/solver/symbolic_solver.h"
 #include "core/services/string_utils.h"
 #include "math/precise/precise_decimal.h"
 
@@ -393,6 +394,15 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
 
                     SymbolicExpression equation = symbolic_expression_internal::make_subtract(lhs, rhs).simplify();
 
+                    // 首先尝试使用符号求解器 (SymbolicSolver)
+                    symbolic_solver::SymbolicSolver solver;
+                    symbolic_solver::Solution sol = solver.solve(equation, var);
+                    if (sol.is_complete || !sol.values.empty() || sol.uses_root_of) {
+                        *output = symbolic_solver::format_solution(sol);
+                        return true;
+                    }
+
+                    // 如果符号求解失败，回退到多项式系数分析
                     std::vector<Scalar> coeffs;
                     if (equation.polynomial_coefficients(var, &coeffs)) {
                         std::string result = solve_polynomial_equation(coeffs, ctx.normalize_result);

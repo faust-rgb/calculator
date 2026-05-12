@@ -464,7 +464,6 @@ BigIntData crt_merge_optimized(const uint32_t* r1, const uint32_t* r2,
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
     unsigned __int128 carry = 0;
-#pragma GCC diagnostic pop
 
     for (size_t i = 0; i < n; ++i) {
         // ...
@@ -486,6 +485,7 @@ BigIntData crt_merge_optimized(const uint32_t* r1, const uint32_t* r2,
         res.push_back(static_cast<uint32_t>(carry % kBase));
         carry /= kBase;
     }
+#pragma GCC diagnostic pop
 
     // 去除前导零
     while (res.size() > 1 && res.back() == 0) {
@@ -505,7 +505,7 @@ void parallel_ntt_transform(uint32_t* fa1, uint32_t* fa2, uint32_t* fa3,
     using namespace ntt_mods;
 
     // 如果数据量足够大，使用线程池并行执行
-    if ( 0 /*n >= 4096*/) {
+    if ( n >= 4096) {
         ThreadPool& pool = ThreadPool::instance();
 
         // 使用 submit_and_wait 减少同步开销

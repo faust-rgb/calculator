@@ -17,6 +17,7 @@
 #include "math/mymath.h"
 #include "app/scalar_type.h"
 #include "analysis/base/precision_constants.h"
+#include "core/services/string_utils.h"
 
 #include <algorithm>
 #include <cmath>
@@ -639,55 +640,47 @@ bool SymbolicSolver::extract_polynomial_coefficients(
 
     coeffs->clear();
 
-    // 收集所有项
-    std::vector<SymbolicExpression> terms;
-    collect_additive_expressions(expr, &terms);
-
-    // 简化版本：尝试数值系数提取
-    // 假设表达式已经是多项式形式
-
-    // 回退：使用数值方法估计系数
-    Scalar test_values[] = {Scalar(0), Scalar(1), Scalar(2), Scalar(3), Scalar(4)};
-    std::vector<Scalar> values;
-    for (Scalar t : test_values) {
-        SymbolicExpression sub = expr.substitute(variable, SymbolicExpression::number(t));
-        sub = sub.simplify();
-        Scalar val = Scalar(0.0L);
-        if (sub.is_number(&val)) {
-            values.push_back(val);
-        } else {
-            return false;
+    // 使用 SymbolicPolynomial 提取符号系数
+    SymbolicPolynomial poly = SymbolicPolynomial::from_expression(expr, variable);
+    if (poly.degree() < 0 && !expr_is_zero(expr)) {
+        // 如果不是多项式，尝试数值评价作为回退
+        // (保持原有逻辑作为最后的保险，但优先使用 SymbolicPolynomial)
+        Scalar test_values[] = {Scalar(0), Scalar(1), Scalar(2), Scalar(3), Scalar(4)};
+        std::vector<Scalar> values;
+        for (Scalar t : test_values) {
+            SymbolicExpression sub = expr.substitute(variable, SymbolicExpression::number(t));
+            sub = sub.simplify();
+            Scalar val = Scalar(0.0L);
+            if (sub.is_number(&val)) {
+                values.push_back(val);
+            } else {
+                return false;
+            }
         }
+
+        if (values.size() >= 3) {
+            Scalar f0 = values[0];
+            Scalar f1 = values[1];
+            Scalar f2 = values[2];
+            Scalar c = f0;
+            Scalar a = (f2 - 2.0 * f1 + f0) / 2.0;
+            Scalar b = f1 - f0 - a;
+            coeffs->push_back(SymbolicExpression::number(c));
+            coeffs->push_back(SymbolicExpression::number(b));
+            coeffs->push_back(SymbolicExpression::number(a));
+            return true;
+        }
+        return false;
     }
 
-    // 从值反推系数（简化版本，仅适用于低次）
-    if (values.size() >= 3) {
-        // 假设是二次多项式
-        Scalar f0 = values[0];
-        Scalar f1 = values[1];
-        Scalar f2 = values[2];
-
-        // f(0) = c
-        // f(1) = a + b + c
-        // f(2) = 4a + 2b + c
-
-        Scalar c = f0;
-        Scalar a = (f2 - 2.0 * f1 + f0) / 2.0;
-        Scalar b = f1 - f0 - a;
-
-        coeffs->push_back(SymbolicExpression::number(c));
-        coeffs->push_back(SymbolicExpression::number(b));
-        coeffs->push_back(SymbolicExpression::number(a));
-
-        return true;
-    }
-
-    return false;
+    *coeffs = poly.coefficients();
+    return true;
 }
 
 SymbolicExpression SymbolicSolver::normalize_equation(const SymbolicExpression& equation) {
-    // 如果是减法形式 lhs - rhs，已经是规范化形式
-    return equation;
+    // 检查是否为等式 lhs = rhs (由解析器处理为 Subtract)
+    // 如果已经是规范化形式，直接返回
+    return equation.simplify();
 }
 
 bool SymbolicSolver::is_linear_in(const SymbolicExpression& expr, const std::string& var) {
@@ -793,13 +786,46 @@ bool parse_equation(const std::string& equation_str,
 
 bool parse_equation_system(const std::string& system_str,
                            std::vector<SymbolicExpression>* equations) {
-    (void)system_str;
-    (void)equations;
+    std::string s = trim_copy(system_str);
+    if (s.empty()) return false;
+    
+    // 支持 {eq1, eq2} 或 [eq1, eq2] 形式
+    if ((s.front() == '{' && s.back() == '}') || (s.front() == '[' && s.back() == ']')) {
+        s = s.substr(1, s.size() - 2);
+    }
+    
+    // 解析逗号分隔的列表，注意忽略括号内的逗号
+    std::vector<std::string> parts;
+    size_t start = 0;
+    int depth = 0;
+    for (size_t i = 0; i < s.size(); ++i) {
+        if (s[i] == '(' || s[i] == '[' || s[i] == '{') depth++;
+        else if (s[i] == ')' || s[i] == ']' || s[i] == '}') depth--;
+        else if (s[i] == ',' && depth == 0) {
+            parts.push_back(s.substr(start, i - start));
+            start = i + 1;
+        }
+    }
+    parts.push_back(s.substr(start));
 
-    // 解析 {eq1, eq2, ...} 形式
-    // 简化版本
-
-    return false;
+    for (const auto& p : parts) {
+        std::string trimmed_p = trim_copy(p);
+        if (trimmed_p.empty()) continue;
+        
+        SymbolicExpression lhs, rhs;
+        if (parse_equation(trimmed_p, &lhs, &rhs)) {
+            equations->push_back(symbolic_expression_internal::make_subtract(lhs, rhs).simplify());
+        } else {
+            // 如果不是等式，尝试直接作为表达式解析（假定 = 0）
+            try {
+                equations->push_back(SymbolicExpression::parse(trimmed_p).simplify());
+            } catch (...) {
+                return false;
+            }
+        }
+    }
+    
+    return !equations->empty();
 }
 
 std::string format_solution(const Solution& sol) {

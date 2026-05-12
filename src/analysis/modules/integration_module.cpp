@@ -15,6 +15,7 @@
 
 #include "analysis/modules/integration_module.h"
 #include "analysis/base/precision_constants.h"
+#include "analysis/calculus/function_analysis.h"
 #include "analysis/integration/integration_engine.h"
 #include "analysis/integration/integration_commands.h"
 #include "analysis/integration/multidim_integration.h"
@@ -71,17 +72,42 @@ bool handle_integration_command(const IntegrationContext& ctx,
     if (arguments.empty()) return false;
     if (command == "integral") {
         if (arguments.size() < 3) throw std::runtime_error("integral expects expr, x0, x1");
-        std::string x_var = "x"; Scalar x0, x1;
+        Scalar x0, x1;
         if (arguments.size() >= 4 && is_identifier_text(utils::trim_copy(arguments[1]))) {
-            x_var = utils::trim_copy(arguments[1]); x0 = ctx.parse_decimal(arguments[2]); x1 = ctx.parse_decimal(arguments[3]);
+            // integral(f, x, a, b) - 显式指定变量
+            std::string x_var = utils::trim_copy(arguments[1]);
+            x0 = ctx.parse_decimal(arguments[2]);
+            x1 = ctx.parse_decimal(arguments[3]);
+            // 使用 FunctionAnalysis 进行自适应 Gauss-Kronrod 积分
+            if (ctx.build_analysis) {
+                FunctionAnalysis analysis(x_var);
+                analysis.set_evaluator(ctx.build_scoped_evaluator(arguments[0]));
+                *output = format_decimal(ctx.normalize_result(analysis.definite_integral(x0, x1)));
+            } else {
+                // 回退到 Simpson 方法
+                auto f = ctx.build_scoped_evaluator(arguments[0]);
+                MultivariableIntegrator integrator([&f, x_var](const std::vector<Scalar>& pt) { return f({{ x_var, pt[0] }}); });
+                std::vector<MultivariableIntegrator::BoundFunc> bounds = { [x0, x1](const std::vector<Scalar>&) -> std::pair<Scalar, Scalar> { return {x0, x1}; } };
+                *output = format_decimal(ctx.normalize_result(integrator.integrate(bounds, {1024})));
+            }
+            return true;
         } else {
-            x0 = ctx.parse_decimal(arguments[1]); x1 = ctx.parse_decimal(arguments[2]);
+            // integral(f, a, b) - 默认变量 x
+            x0 = ctx.parse_decimal(arguments[1]);
+            x1 = ctx.parse_decimal(arguments[2]);
+            // 使用 FunctionAnalysis 进行自适应 Gauss-Kronrod 积分
+            if (ctx.build_analysis) {
+                FunctionAnalysis analysis = ctx.build_analysis(arguments[0]);
+                *output = format_decimal(ctx.normalize_result(analysis.definite_integral(x0, x1)));
+            } else {
+                // 回退到 Simpson 方法
+                auto f = ctx.build_scoped_evaluator(arguments[0]);
+                MultivariableIntegrator integrator([&f](const std::vector<Scalar>& pt) { return f({{ "x", pt[0] }}); });
+                std::vector<MultivariableIntegrator::BoundFunc> bounds = { [x0, x1](const std::vector<Scalar>&) -> std::pair<Scalar, Scalar> { return {x0, x1}; } };
+                *output = format_decimal(ctx.normalize_result(integrator.integrate(bounds, {1024})));
+            }
+            return true;
         }
-        auto f = ctx.build_scoped_evaluator(arguments[0]);
-        MultivariableIntegrator integrator([&f, x_var](const std::vector<Scalar>& pt) { return f({{ x_var, pt[0] }}); });
-        std::vector<MultivariableIntegrator::BoundFunc> bounds = { [x0, x1](const std::vector<Scalar>&) -> std::pair<Scalar, Scalar> { return {x0, x1}; } };
-        *output = format_decimal(ctx.normalize_result(integrator.integrate(bounds, {1024})));
-        return true;
     }
     std::string coord_system = "rect";
     std::string method = "simpson";
@@ -490,6 +516,7 @@ std::string IntegrationModule::execute_args(const std::string& command,
     ctx.parse_decimal = services.evaluation.parse_decimal;
     ctx.build_scoped_evaluator = services.evaluation.build_decimal_evaluator;
     ctx.normalize_result = services.evaluation.normalize_result;
+    ctx.build_analysis = services.symbolic.build_analysis;
 
     std::string output;
     if (handle_integration_command(ctx, command, args, &output)) {

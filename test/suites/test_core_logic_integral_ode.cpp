@@ -23,7 +23,7 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
     Calculator calculator;
     using namespace test_helpers;
 
-    std::cout << "DEBUG: Testing double_integral (x + y)..." << std::endl;
+    std::cout << "Testing double_integral (x + y)..." << std::endl;
     // ========== 多重积分测试 ==========
     // 测试二重积分
     try {
@@ -44,7 +44,7 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
-    std::cout << "DEBUG: Testing double_integral polar..." << std::endl;
+    std::cout << "Testing double_integral polar..." << std::endl;
     try {
         std::string output;
         const bool handled =
@@ -63,7 +63,7 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
-    std::cout << "DEBUG: Testing double_integral polar negative radius..." << std::endl;
+    std::cout << "Testing double_integral polar negative radius..." << std::endl;
     try {
         std::string output;
         const bool handled =
@@ -149,10 +149,10 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
-    std::cout << "DEBUG: Testing ODE..." << std::endl;
+    std::cout << "Testing ODE..." << std::endl;
     // ========== ODE求解测试 ==========
     // 测试常微分方程求解
-    std::cout << "DEBUG: Testing ode(y - x ^ 2 + 1, 0, 0.5, 2, 20)..." << std::endl;
+    std::cout << "Testing ode(y - x ^ 2 + 1, 0, 0.5, 2, 20)..." << std::endl;
     try {
         std::string output;
         const bool handled =

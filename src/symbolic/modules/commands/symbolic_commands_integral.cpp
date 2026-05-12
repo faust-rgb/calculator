@@ -74,21 +74,17 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
         }
 
         if (arguments.size() == 4 && is_identifier_text(trim_copy(arguments[1]))) {
-            auto f = ctx.build_scoped_evaluator(arguments[0]);
             const std::string var = trim_copy(arguments[1]);
             const Scalar x0 = ctx.parse_decimal(arguments[2]);
             const Scalar x1 = ctx.parse_decimal(arguments[3]);
-            MultivariableIntegrator integrator(
-                [&f, var](const std::vector<Scalar>& pt) {
-                    return f({{var, pt[0]}});
-                });
-            std::vector<MultivariableIntegrator::BoundFunc> bounds = {
-                [x0, x1](const std::vector<Scalar>&) {
-                    return std::pair<Scalar, Scalar>{x0, x1};
-                }
-            };
-            *output = format_symbolic_numeric(
-                ctx, integrator.integrate(bounds, {kDefaultLineIntegralSubdivisions}));
+            // 使用 FunctionAnalysis 进行自适应 Gauss-Kronrod 积分
+            FunctionAnalysis analysis = ctx.build_analysis(arguments[0]);
+            // 如果变量名不是默认的 "x"，需要重新创建分析对象
+            if (var != "x") {
+                analysis = FunctionAnalysis(var);
+                analysis.set_evaluator(ctx.build_scoped_evaluator(arguments[0]));
+            }
+            *output = format_symbolic_numeric(ctx, analysis.definite_integral(x0, x1));
             return true;
         }
 
@@ -159,7 +155,7 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
             return true;
         }
 
-        integration_ops::IntegrationContext ictx{ctx.parse_decimal, ctx.build_scoped_evaluator, ctx.normalize_result};
+        integration_ops::IntegrationContext ictx{ctx.parse_decimal, ctx.build_scoped_evaluator, ctx.normalize_result, ctx.build_analysis};
         const std::string z_expr = path.size() > 2 ? path[2] : "0";
         *output = format_symbolic_numeric(
             ctx,
@@ -246,7 +242,7 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
             return true;
         }
 
-        integration_ops::IntegrationContext ictx{ctx.parse_decimal, ctx.build_scoped_evaluator, ctx.normalize_result};
+        integration_ops::IntegrationContext ictx{ctx.parse_decimal, ctx.build_scoped_evaluator, ctx.normalize_result, ctx.build_analysis};
         *output = format_symbolic_numeric(
             ctx,
             integration_ops::surface_integral(ictx, arguments[0], u_var, u0, u1,

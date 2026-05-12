@@ -47,11 +47,16 @@ struct Node {
     std::vector<Scalar> upper;
     Scalar estimated_value;
 
-    // 用于优先队列 (Best-First Search)
+    // 用于优先队列 (Best-Bound Search)
     // 假设是最大化问题：估计值越大越优先
     bool operator<(const Node& other) const {
+        // Tie-breaker: 优先选择深度较大的节点，更早找到可行解
+        if (mymath::abs(estimated_value - other.estimated_value) < 1e-6L) {
+            return depth < other.depth;
+        }
         return estimated_value < other.estimated_value;
     }
+    int depth = 0;
 };
 
 bool is_integer_val(Scalar val, Scalar eps) {
@@ -73,9 +78,11 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
 
     // 根节点：初始 LP 松弛
     // 初始估计值设为无穷大，确保根节点首先被探索
-    nodes.push({initial_lower, initial_upper, get_infinity()});
+    nodes.push({initial_lower, initial_upper, get_infinity(), 0});
 
     Scalar tolerance_scalar = Scalar(ctx.tolerance);
+    std::vector<Scalar> pseudo_costs_up(ctx.variable_count, 1.0L);
+    std::vector<Scalar> pseudo_costs_down(ctx.variable_count, 1.0L);
 
     while (!nodes.empty()) {
         Node current = nodes.top();
@@ -112,15 +119,16 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
 
         // 检查所有应为整数的变量
         std::size_t branch_var = ctx.variable_count;
-        Scalar max_fractionality = Scalar(-1);
+        Scalar best_score = Scalar(-1);
 
         for (std::size_t idx : *ctx.integer_indices) {
             Scalar val = Scalar(sol[idx]);
             if (!is_integer_val(val, tolerance_scalar)) {
-                // 分支策略：选取最接近 0.5 的变量（Most fractional）
-                Scalar fractionality = mymath::abs(val - mymath::round(val));
-                if (fractionality > max_fractionality) {
-                    max_fractionality = fractionality;
+                // 分支策略：伪成本启发式 (Pseudo-cost heuristic)
+                Scalar frac = val - mymath::floor(val);
+                Scalar score = std::min(pseudo_costs_down[idx] * frac, pseudo_costs_up[idx] * (1.0L - frac));
+                if (score > best_score) {
+                    best_score = score;
                     branch_var = idx;
                 }
             }
@@ -134,19 +142,32 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
         } else {
             // 需要分支
             Scalar val = Scalar(sol[branch_var]);
+            Scalar floor_val = mymath::floor(val + tolerance_scalar);
+            Scalar ceil_val = mymath::ceil(val - tolerance_scalar);
+
+            // 更新伪成本估计 (简单启发式，通常使用强分支初始化)
+            if (current.estimated_value < get_infinity()) {
+                Scalar obj_diff = current.estimated_value - obj_val_scalar;
+                Scalar frac_down = val - floor_val;
+                Scalar frac_up = ceil_val - val;
+                if (frac_down > 1e-4L) pseudo_costs_down[branch_var] = 0.8L * pseudo_costs_down[branch_var] + 0.2L * (obj_diff / frac_down);
+                if (frac_up > 1e-4L) pseudo_costs_up[branch_var] = 0.8L * pseudo_costs_up[branch_var] + 0.2L * (obj_diff / frac_up);
+            }
 
             // 下分支节点: x_i <= floor(v)
             Node left = current;
-            left.upper[branch_var] = (mymath::floor(val + tolerance_scalar));
+            left.upper[branch_var] = floor_val;
             left.estimated_value = obj_val_scalar;
+            left.depth = current.depth + 1;
             if (Scalar(left.upper[branch_var]) >= Scalar(left.lower[branch_var])) {
                 nodes.push(left);
             }
 
             // 上分支节点: x_i >= ceil(v)
             Node right = current;
-            right.lower[branch_var] = (mymath::ceil(val - tolerance_scalar));
+            right.lower[branch_var] = ceil_val;
             right.estimated_value = obj_val_scalar;
+            right.depth = current.depth + 1;
             if (Scalar(right.lower[branch_var]) <= Scalar(right.upper[branch_var])) {
                 nodes.push(right);
             }

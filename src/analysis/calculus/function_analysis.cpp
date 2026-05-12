@@ -217,6 +217,19 @@ Scalar relative_tolerance(Scalar baseline, Scalar scale) {
 }
 
 
+Scalar quadrature_rule_tolerance(Scalar requested) {
+    if constexpr (std::is_same_v<Scalar, PreciseDecimal>) {
+        // The embedded G7-K15 weights/nodes are stored with decimal literals
+        // carrying about double precision. Keep all arithmetic on Scalar, but
+        // do not ask the adaptive controller to prove an error bound finer
+        // than the quadrature rule coefficients can support.
+        return std::max(requested, Scalar(1e-14L));
+    } else {
+        return requested;
+    }
+}
+
+
 Scalar extremum_derivative_zero_tolerance(Scalar left_bound, Scalar right_bound) {
     const Scalar scale =
         std::max({Scalar(static_cast<long long>(1)), t_abs(left_bound), t_abs(right_bound)});
@@ -536,11 +549,12 @@ Scalar adaptive_gauss_kronrod_callable(const std::function<Scalar(Scalar)>& func
                                        int depth) {
     Scalar error = Scalar(static_cast<long long>(0));
     const Scalar whole = gauss_kronrod_15_callable(function, left, right, &error);
+    const Scalar effective_eps = quadrature_rule_tolerance(eps);
     return require_finite_integral(
         adaptive_gauss_kronrod_callable_recursive(function,
                                                   left,
                                                   right,
-                                                  eps,
+                                                  effective_eps,
                                                   whole,
                                                   error,
                                                   depth));

@@ -496,7 +496,6 @@ BigIntData multiply_bigint(const BigIntData& lhs, const BigIntData& rhs) {
     if ((lhs.size() == 1 && lhs[0] == 0) || (rhs.size() == 1 && rhs[0] == 0)) return {0};
 
     std::size_t max_size = std::max(lhs.size(), rhs.size());
-    std::size_t min_size = std::min(lhs.size(), rhs.size());
 
     // 1. 小规模：朴素乘法
     //if (min_size <= 32 || max_size <= KARATSUBA_THRESHOLD) {
@@ -510,7 +509,7 @@ BigIntData multiply_bigint(const BigIntData& lhs, const BigIntData& rhs) {
     }
 
     // 3. 中大规模：Toom-Cook 3
-    if (max_size <= 4096) {
+    if (max_size <= 2048) {
         return multiply_bigint_toom3(lhs, rhs);
     }
 

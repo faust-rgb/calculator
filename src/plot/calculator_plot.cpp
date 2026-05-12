@@ -97,22 +97,18 @@ static std::vector<DataSeries> sample_multiple_series(const PlotContext& ctx, co
         series.points.reserve(num_points);
 
         std::map<std::string, StoredValue> scoped_variables = ctx.variables.snapshot();
+        VariableResolver resolver(&scoped_variables, nullptr);
+        UnifiedExpressionParser local_parser(resolver, ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+
         for (int i = 0; i < num_points; ++i) {
             Scalar x = start + (end - start) * Scalar(i) / Scalar(num_points - 1);
-            StoredValue x_val;
-            x_val.decimal = x.to_long_double();
-            scoped_variables[var_name] = x_val;
+            scoped_variables[var_name].decimal = x;
 
             try {
-                // We need to re-create parser or update its variable resolver for each x
-                // But parser holds a reference to variables.
-                // So we use a local resolver.
-                VariableResolver resolver(&scoped_variables, nullptr);
-                UnifiedExpressionParser local_parser(resolver, ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
                 Scalar y = local_parser.evaluate(expressions[s]);
-                series.points.push_back({x.to_long_double(), y});
+                series.points.push_back({x, y});
             } catch (...) {
-                series.points.push_back({x.to_long_double(), std::nan("")});
+                series.points.push_back({x, std::nan("")});
             }
         }
         all_series.push_back(std::move(series));
@@ -463,8 +459,7 @@ std::string handle_plot_command(const PlotContext& ctx, const std::vector<std::s
     if (user_options.width != 600) term_w = user_options.width / 10;
     if (user_options.height != 400) term_h = user_options.height / 25;
     
-    // 目前终端渲染器只支持单曲线，取第一条
-    return PlotRenderer::render(all_series[0].points, term_w, term_h);
+    return PlotRenderer::render(all_series, options, term_w, term_h);
 }
 
 /**

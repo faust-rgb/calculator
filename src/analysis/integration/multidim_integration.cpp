@@ -583,8 +583,8 @@ Scalar integrate_sparse_grid(
 
 namespace {
 
-// Gauss-Kronrod 7-15 用于二维积分
-Scalar gauss_kronrod_2d(
+// 二维 Gauss-Legendre 积分（嵌套一维 Gauss 积分）
+Scalar gauss_2d(
     const std::function<Scalar(Scalar, Scalar)>& f,
     Scalar x1, Scalar x2,
     Scalar y1, Scalar y2,
@@ -622,7 +622,7 @@ Scalar adaptive_2d_recursive(
     int* evaluations) {
 
     Scalar error = Scalar(0);
-    Scalar whole = gauss_kronrod_2d(f, x1, x2, y1, y2, &error);
+    Scalar whole = gauss_2d(f, x1, x2, y1, y2, &error);
     *evaluations += 225;  // 15 x 15 点
 
     const Scalar scale = mymath::fmax(Scalar(1), mymath::abs(whole));
@@ -673,8 +673,8 @@ IntegrationResult integrate_2d_adaptive(
 
 namespace {
 
-// 三维 Gauss-Kronrod 积分
-Scalar gauss_kronrod_3d(
+// 三维 Gauss-Legendre 积分（嵌套一维 Gauss 积分）
+Scalar gauss_3d(
     const std::function<Scalar(Scalar, Scalar, Scalar)>& f,
     Scalar x1, Scalar x2,
     Scalar y1, Scalar y2,
@@ -721,7 +721,7 @@ Scalar adaptive_3d_recursive(
     int* evaluations) {
 
     Scalar error = Scalar(0);
-    Scalar whole = gauss_kronrod_3d(f, x1, x2, y1, y2, z1, z2, &error);
+    Scalar whole = gauss_3d(f, x1, x2, y1, y2, z1, z2, &error);
     *evaluations += 3375;  // 15 x 15 x 15 点
 
     const Scalar scale = mymath::fmax(Scalar(1), mymath::abs(whole));

@@ -352,38 +352,40 @@ void div_bigint(const BigIntData& num,
         uint64_t numerator_val = static_cast<uint64_t>(u[j + m]) * kBase + u[j + m - 1];
         uint64_t q_hat = numerator_val / v[m - 1];
         uint64_t r_hat = numerator_val % v[m - 1];
+        if (q_hat >= kBase) {
+            q_hat = kBase - 1;
+            r_hat = numerator_val - q_hat * v[m - 1];
+        }
 
-        while (q_hat >= kBase ||
-               (q_hat * v[m - 2] > r_hat * kBase + (j + static_cast<int>(m) - 2 >= 0 ? u[j + m - 2] : 0))) {
+        while (q_hat * v[m - 2] > r_hat * kBase + u[j + m - 2]) {
             --q_hat;
             r_hat += v[m - 1];
             if (r_hat >= kBase) break;
         }
 
-        int64_t borrow = 0;
-        for (std::size_t i = 0; i < m; ++i) {
-            uint64_t product = q_hat * v[i];
-            int64_t diff = static_cast<int64_t>(u[j + i]) - static_cast<int64_t>(product % kBase) - borrow;
-            borrow = static_cast<int64_t>(product / kBase);
-            if (diff < 0) {
-                diff += kBase;
-                ++borrow;
-            }
-            u[j + i] = static_cast<uint32_t>(diff);
+        BigIntData window(u.begin() + j, u.begin() + j + static_cast<std::ptrdiff_t>(m + 1));
+        while (window.size() > 1 && window.back() == 0) window.pop_back();
+
+        BigIntData product = multiply_bigint_by_uint32(v, static_cast<uint32_t>(q_hat));
+        while (compare_bigint(product, window) > 0) {
+            --q_hat;
+            product = multiply_bigint_by_uint32(v, static_cast<uint32_t>(q_hat));
         }
-        int64_t diff = static_cast<int64_t>(u[j + m]) - borrow;
-        u[j + m] = static_cast<uint32_t>(diff);
 
         q[j] = static_cast<uint32_t>(q_hat);
-        if (diff < 0) {
-            --q[j];
-            uint64_t c = 0;
-            for (std::size_t i = 0; i < m; ++i) {
-                uint64_t sum = static_cast<uint64_t>(u[j + i]) + v[i] + c;
-                u[j + i] = static_cast<uint32_t>(sum % kBase);
-                c = sum / kBase;
+
+        uint64_t borrow = 0;
+        for (std::size_t i = 0; i < m + 1; ++i) {
+            uint64_t subtrahend = borrow;
+            if (i < product.size()) subtrahend += product[i];
+
+            if (static_cast<uint64_t>(u[j + i]) >= subtrahend) {
+                u[j + i] = static_cast<uint32_t>(static_cast<uint64_t>(u[j + i]) - subtrahend);
+                borrow = 0;
+            } else {
+                u[j + i] = static_cast<uint32_t>(static_cast<uint64_t>(u[j + i]) + kBase - subtrahend);
+                borrow = 1;
             }
-            u[j + m] += static_cast<uint32_t>(c);
         }
     }
 
