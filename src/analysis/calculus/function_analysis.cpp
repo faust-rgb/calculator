@@ -217,6 +217,13 @@ Scalar relative_tolerance(Scalar baseline, Scalar scale) {
 }
 
 
+Scalar extremum_derivative_zero_tolerance(Scalar left_bound, Scalar right_bound) {
+    const Scalar scale =
+        std::max({Scalar(static_cast<long long>(1)), t_abs(left_bound), t_abs(right_bound)});
+    return Scalar(1e-4L) * scale;
+}
+
+
 Scalar limit_step_scale(Scalar x) {
     return kLimitInitialStep_v() * std::max(Scalar(static_cast<long long>(1)), t_abs(x));
 }
@@ -264,6 +271,44 @@ void reject_divergent_transformed_endpoint(
             check_at(Scalar(static_cast<long long>(1)) - offset);
         }
     }
+}
+
+
+bool transformed_endpoint_appears_integrable(
+    const std::function<Scalar(Scalar)>& transformed,
+    bool check_left,
+    bool check_right) {
+    const Scalar near = Scalar(1e-5L);
+    const Scalar far = Scalar(1e-3L);
+
+    auto check_side = [&](bool left_side) {
+        const Scalar near_t = left_side ? near : Scalar(static_cast<long long>(1)) - near;
+        const Scalar far_t = left_side ? far : Scalar(static_cast<long long>(1)) - far;
+        const Scalar near_value = transformed(near_t);
+        const Scalar far_value = transformed(far_t);
+        if (!t_isfinite(near_value) || !t_isfinite(far_value)) {
+            return false;
+        }
+
+        const Scalar near_abs = t_abs(near_value);
+        const Scalar far_abs = t_abs(far_value);
+        if (near_abs > Scalar(static_cast<long long>(5000))) {
+            return false;
+        }
+        if (far_abs > Scalar(static_cast<long long>(0)) &&
+            near_abs > far_abs * Scalar(static_cast<long long>(50))) {
+            return false;
+        }
+        return true;
+    };
+
+    if (check_left && !check_side(true)) {
+        return false;
+    }
+    if (check_right && !check_side(false)) {
+        return false;
+    }
+    return true;
 }
 
 
@@ -337,7 +382,6 @@ Scalar adaptive_simpson_callable_recursive(const std::function<Scalar(Scalar)>& 
            adaptive_simpson_callable_recursive(func, c, b, right, right_left, right_right, eps / Scalar(static_cast<long long>(2)), depth - 1);
 }
 
-#if 0
 Scalar adaptive_simpson_callable(const std::function<Scalar(Scalar)>& func, Scalar left, Scalar right, Scalar eps, int max_depth) {
     const Scalar c = (left + right) / Scalar(static_cast<long long>(2));
     const Scalar whole = simpson_rule_callable(func, left, right);
@@ -345,7 +389,6 @@ Scalar adaptive_simpson_callable(const std::function<Scalar(Scalar)>& func, Scal
     const Scalar right_val = simpson_rule_callable(func, c, right);
     return adaptive_simpson_callable_recursive(func, left, right, whole, left_val, right_val, eps, max_depth);
 }
-#endif
 
 Scalar gauss_kronrod_15_callable(const std::function<Scalar(Scalar)>& function,
                                  Scalar left,
@@ -1750,26 +1793,64 @@ Scalar FunctionAnalysis::definite_integral(Scalar lower_bound,
         auto transformed = [this, lower_bound, upper_bound, width,
                             left_singular, right_singular](Scalar t) {
             if (left_singular && right_singular) {
+                if (t <= Scalar(static_cast<long long>(0)) ||
+                    t >= Scalar(static_cast<long long>(1))) {
+                    return Scalar(static_cast<long long>(0));
+                }
                 const Scalar s = t * t * (Scalar(static_cast<long long>(3)) - Scalar(static_cast<long long>(2)) * t);
                 const Scalar dx_dt = width * Scalar(static_cast<long long>(6)) * t * (Scalar(static_cast<long long>(1)) - t);
                 return evaluate_with_variable(lower_bound + width * s) * dx_dt;
             }
             if (left_singular) {
+                if (t <= Scalar(static_cast<long long>(0))) {
+                    const Scalar probe = Scalar(1e-8L);
+                    const Scalar x = lower_bound + width * probe * probe;
+                    const Scalar value = evaluate_with_variable(x) *
+                                         Scalar(static_cast<long long>(2)) * width * probe;
+                    if (t_isfinite(value)) {
+                        return value;
+                    }
+                    return Scalar(static_cast<long long>(0));
+                }
                 const Scalar x = lower_bound + width * t * t;
                 return evaluate_with_variable(x) * Scalar(static_cast<long long>(2)) * width * t;
             }
             const Scalar one_minus_t = Scalar(static_cast<long long>(1)) - t;
+            if (one_minus_t <= Scalar(static_cast<long long>(0))) {
+                const Scalar probe = Scalar(1e-8L);
+                const Scalar x = upper_bound - width * probe * probe;
+                const Scalar value = evaluate_with_variable(x) *
+                                     Scalar(static_cast<long long>(2)) * width * probe;
+                if (t_isfinite(value)) {
+                    return value;
+                }
+                return Scalar(static_cast<long long>(0));
+            }
             const Scalar x = upper_bound - width * one_minus_t * one_minus_t;
             return evaluate_with_variable(x) * Scalar(static_cast<long long>(2)) * width * one_minus_t;
         };
-        reject_divergent_transformed_endpoint(std::function<Scalar(Scalar)>(transformed),
+        const std::function<Scalar(Scalar)> transformed_function(transformed);
+        if (!transformed_endpoint_appears_integrable(transformed_function,
+                                                     left_singular,
+                                                     right_singular)) {
+            throw std::runtime_error("integral did not converge (divergence detected at endpoint)");
+        }
+        reject_divergent_transformed_endpoint(transformed_function,
                                               left_singular,
                                               right_singular);
-        return adaptive_gauss_kronrod_callable(std::function<Scalar(Scalar)>(transformed),
-                                               Scalar(static_cast<long long>(0)),
-                                               Scalar(static_cast<long long>(1)),
-                                               scaled_eps,
-                                               kMaxIntegralDepth);
+        try {
+            return adaptive_gauss_kronrod_callable(transformed_function,
+                                                   Scalar(static_cast<long long>(0)),
+                                                   Scalar(static_cast<long long>(1)),
+                                                   scaled_eps,
+                                                   kMaxIntegralDepth);
+        } catch (const std::exception&) {
+            return adaptive_simpson_callable(transformed_function,
+                                             Scalar(static_cast<long long>(0)),
+                                             Scalar(static_cast<long long>(1)),
+                                             scaled_eps,
+                                             kMaxIntegralDepth + 8);
+        }
     }
 
     Scalar prev_scan_val = evaluate_with_variable(lower_bound);
@@ -1886,41 +1967,85 @@ std::vector<ExtremumPoint> FunctionAnalysis::solve_extrema(Scalar left_bound,
     }
 
     std::vector<ExtremumPoint> extrema;
+    auto add_stationary_extremum = [&](Scalar stationary_x) {
+        for (const auto& point : extrema) {
+            if (same_extremum_x(point.x, stationary_x)) {
+                return;
+            }
+        }
+
+        const Scalar center_value = evaluate_with_variable(stationary_x);
+        const Scalar scale =
+            std::max({Scalar(static_cast<long long>(1)), t_abs(stationary_x), t_abs(right_bound - left_bound)});
+        const Scalar neighborhood =
+            std::max((right_bound - left_bound) / Scalar(scan_segments * 4),
+                     Scalar(1e-5L) * scale);
+        const Scalar left_x = std::max(left_bound, stationary_x - neighborhood);
+        const Scalar right_x = std::min(right_bound, stationary_x + neighborhood);
+
+        bool classified = false;
+        bool is_maximum = false;
+        if (left_x < stationary_x && right_x > stationary_x) {
+            const Scalar left_value = evaluate_with_variable(left_x);
+            const Scalar right_value = evaluate_with_variable(right_x);
+            const Scalar value_scale =
+                std::max({Scalar(static_cast<long long>(1)), t_abs(center_value), t_abs(left_value), t_abs(right_value)});
+            const Scalar value_tolerance = Scalar(1e-8L) * value_scale;
+
+            if (center_value >= left_value - value_tolerance &&
+                center_value >= right_value - value_tolerance &&
+                (center_value > left_value + value_tolerance ||
+                 center_value > right_value + value_tolerance)) {
+                classified = true;
+                is_maximum = true;
+            } else if (center_value <= left_value + value_tolerance &&
+                       center_value <= right_value + value_tolerance &&
+                       (center_value < left_value - value_tolerance ||
+                        center_value < right_value - value_tolerance)) {
+                classified = true;
+                is_maximum = false;
+            }
+        }
+
+        if (!classified) {
+            const Scalar second = second_derivative(stationary_x);
+            if (t_is_near_zero(second, Scalar(1e-4))) {
+                return;
+            }
+            is_maximum = second < Scalar(static_cast<long long>(0));
+        }
+
+        extrema.push_back({stationary_x, center_value, is_maximum});
+    };
+
+    auto derivative_at = [&](Scalar x) {
+        return derivative(x);
+    };
+
     Scalar previous_x = left_bound;
-    Scalar previous_derivative = derivative(previous_x);
+    Scalar previous_derivative = derivative_at(previous_x);
 
     for (int i = 1; i <= scan_segments; ++i) {
         const Scalar current_x =
             left_bound +
             (right_bound - left_bound) * Scalar((i)) /
                 Scalar((scan_segments));
-        const Scalar current_derivative = derivative(current_x);
+        const Scalar current_derivative = derivative_at(current_x);
 
-        if (t_is_near_zero(previous_derivative, Scalar(1e-5))) {
-            const Scalar stationary_x = previous_x;
-            const Scalar second = second_derivative(stationary_x);
-            if (!t_is_near_zero(second, Scalar(1e-4))) {
-                bool duplicate = false;
-                for (const auto& point : extrema) {
-                    if (same_extremum_x(point.x, stationary_x)) {
-                        duplicate = true;
-                        break;
-                    }
-                }
-                if (!duplicate) {
-                    extrema.push_back(
-                        {stationary_x, evaluate_with_variable(stationary_x), second < Scalar(static_cast<long long>(0))});
-                }
-            }
+        const Scalar derivative_zero_tolerance =
+            extremum_derivative_zero_tolerance(left_bound, right_bound);
+
+        if (t_is_near_zero(current_derivative, derivative_zero_tolerance)) {
+            add_stationary_extremum(current_x);
+        }
+
+        if (t_is_near_zero(previous_derivative, derivative_zero_tolerance)) {
+            add_stationary_extremum(previous_x);
         } else if ((previous_derivative < Scalar(static_cast<long long>(0)) && current_derivative > Scalar(static_cast<long long>(0))) ||
                    (previous_derivative > Scalar(static_cast<long long>(0)) && current_derivative < Scalar(static_cast<long long>(0)))) {
             const Scalar stationary_x =
                 bisect_stationary_point(previous_x, current_x);
-            const Scalar second = second_derivative(stationary_x);
-            if (!t_is_near_zero(second, Scalar(1e-4))) {
-                extrema.push_back(
-                    {stationary_x, evaluate_with_variable(stationary_x), second < Scalar(static_cast<long long>(0))});
-            }
+            add_stationary_extremum(stationary_x);
         }
 
         previous_x = current_x;

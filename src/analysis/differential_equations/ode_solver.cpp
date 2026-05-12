@@ -69,6 +69,24 @@ T t_clamp(const T& val, const T& low, const T& high) {
     return val;
 }
 
+
+template <typename T>
+T ode_relative_tolerance(const T& configured) {
+    if (configured > T(0)) {
+        return configured;
+    }
+    return std::max(precision::default_relative_tolerance<T>(), T(1e-10L));
+}
+
+
+template <typename T>
+T ode_absolute_tolerance(const T& configured) {
+    if (configured > T(0)) {
+        return configured;
+    }
+    return std::max(precision::default_absolute_tolerance<T>(), T(1e-12L));
+}
+
 /**
  * @brief 检查事件是否触发（精度感知版本）
  *
@@ -243,7 +261,9 @@ T TODESolver<T>::integrate_segment(T x0, T y0, T x1) const {
     const T segment_abs = t_abs(segment);
     const T min_step = std::max(precision::min_step_size<T>(segment_abs), segment_abs * T(1e-9));
     const T max_step = segment_abs;
-    const T tolerance = absolute_tolerance_ + relative_tolerance_ *
+    const T relative_tolerance = ode_relative_tolerance(relative_tolerance_);
+    const T absolute_tolerance = ode_absolute_tolerance(absolute_tolerance_);
+    const T tolerance = absolute_tolerance + relative_tolerance *
         std::max({T(1.0L), t_abs(segment), t_abs(x0), t_abs(x1)});
 
     T x = x0;
@@ -265,7 +285,7 @@ T TODESolver<T>::integrate_segment(T x0, T y0, T x1) const {
         const T error = step.second;
         const T scale = std::max({T(1.0L), t_abs(y), t_abs(candidate_y)});
 
-        const T allowed_error = tolerance + relative_tolerance_ * scale;
+        const T allowed_error = tolerance + relative_tolerance * scale;
 
         if (error <= allowed_error || t_abs(h) <= min_step) {
             x += h;
@@ -318,7 +338,9 @@ TODEPoint<T> TODESolver<T>::integrate_segment_with_event(T x0,
     const T segment_abs = t_abs(segment);
     const T min_step = std::max(precision::min_step_size<T>(segment_abs), segment_abs * T(1e-9));
     const T max_step = segment_abs;
-    const T tolerance = absolute_tolerance_ + relative_tolerance_ *
+    const T relative_tolerance = ode_relative_tolerance(relative_tolerance_);
+    const T absolute_tolerance = ode_absolute_tolerance(absolute_tolerance_);
+    const T tolerance = absolute_tolerance + relative_tolerance *
         std::max({T(1.0L), t_abs(segment), t_abs(x0), t_abs(x1)});
 
     T x = x0;
@@ -341,7 +363,7 @@ TODEPoint<T> TODESolver<T>::integrate_segment_with_event(T x0,
         const T error = step.second;
         const T scale = std::max({T(1.0L), t_abs(y), t_abs(candidate_y)});
 
-        const T allowed_error = tolerance + relative_tolerance_ * scale;
+        const T allowed_error = tolerance + relative_tolerance * scale;
 
         if (error > allowed_error && t_abs(h) > min_step) {
             const T shrink = t_clamp(T(0.9) * t_pow(allowed_error / error, T(0.25)),
@@ -500,7 +522,9 @@ std::vector<T> TODESystemSolver<T>::integrate_segment(T x0,
     const T segment_abs = t_abs(segment);
     const T min_step = std::max(precision::min_step_size<T>(segment_abs), segment_abs * T(1e-9));
     const T max_step = segment_abs;
-    const T tolerance = absolute_tolerance_ + relative_tolerance_ *
+    const T relative_tolerance = ode_relative_tolerance(relative_tolerance_);
+    const T absolute_tolerance = ode_absolute_tolerance(absolute_tolerance_);
+    const T tolerance = absolute_tolerance + relative_tolerance *
         std::max({T(1.0L), t_abs(segment), t_abs(x0), t_abs(x1)});
 
     T x = x0;
@@ -522,7 +546,7 @@ std::vector<T> TODESystemSolver<T>::integrate_segment(T x0,
         const T error = step.second;
         const T scale = std::max({T(1.0L), max_abs_component(y), max_abs_component(candidate_y)});
 
-        const T allowed_error = tolerance + relative_tolerance_ * scale;
+        const T allowed_error = tolerance + relative_tolerance * scale;
         if (error <= allowed_error || t_abs(h) <= min_step) {
             x += h;
             y = candidate_y;
@@ -576,7 +600,9 @@ TODESystemPoint<T> TODESystemSolver<T>::integrate_segment_with_event(T x0,
     const T segment_abs = t_abs(segment);
     const T min_step = std::max(precision::min_step_size<T>(segment_abs), segment_abs * T(1e-9));
     const T max_step = segment_abs;
-    const T tolerance = absolute_tolerance_ + relative_tolerance_ *
+    const T relative_tolerance = ode_relative_tolerance(relative_tolerance_);
+    const T absolute_tolerance = ode_absolute_tolerance(absolute_tolerance_);
+    const T tolerance = absolute_tolerance + relative_tolerance *
         std::max({T(1.0L), t_abs(segment), t_abs(x0), t_abs(x1)});
 
     T x = x0;
@@ -599,7 +625,7 @@ TODESystemPoint<T> TODESystemSolver<T>::integrate_segment_with_event(T x0,
         const T error = step.second;
         const T scale = std::max({T(1.0L), max_abs_component(y), max_abs_component(candidate_y)});
 
-        const T allowed_error = tolerance + relative_tolerance_ * scale;
+        const T allowed_error = tolerance + relative_tolerance * scale;
         if (error > allowed_error && t_abs(h) > min_step) {
             const T shrink = t_clamp(T(0.9) * t_pow(allowed_error / error, T(0.25)),
                                      T(0.1),

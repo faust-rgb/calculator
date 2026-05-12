@@ -142,6 +142,20 @@ struct FlatScopeStack {
         return nullptr;
     }
 
+    /// 从外层作用域搜索变量，不包含当前作用域
+    VariableSlot* find_in_outer_scopes(const std::string& name) {
+        if (scope_starts.empty()) return nullptr;
+        const std::size_t current_start = scope_starts.back();
+
+        for (std::size_t i = current_start; i > 0; --i) {
+            VariableSlot& slot = slots[i - 1];
+            if (slot.name == name) {
+                return &slot;
+            }
+        }
+        return nullptr;
+    }
+
     /// 设置变量值（在当前作用域）
     void set(const std::string& name, const StoredValue& value) {
         // 先在当前作用域查找是否已存在

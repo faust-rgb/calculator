@@ -510,7 +510,7 @@ BigIntData multiply_bigint(const BigIntData& lhs, const BigIntData& rhs) {
     }
 
     // 3. 中大规模：Toom-Cook 3
-    if (max_size <= 2048) {
+    if (max_size <= 4096) {
         return multiply_bigint_toom3(lhs, rhs);
     }
 

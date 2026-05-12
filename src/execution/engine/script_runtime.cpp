@@ -76,7 +76,11 @@ void assign_visible_variable(Calculator::Impl* impl,
                              const std::string& name,
                              const StoredValue& value) {
     // 先在局部作用域查找
-    if (VariableSlot* existing = impl->flat_scopes.find(name)) {
+    if (VariableSlot* existing = impl->flat_scopes.find_in_current_scope(name)) {
+        existing->value = value;
+        return;
+    }
+    if (VariableSlot* existing = impl->flat_scopes.find_in_outer_scopes(name)) {
         existing->value = value;
         return;
     }

@@ -64,8 +64,8 @@ public:
                         T relative_tolerance = T(0),
                         T absolute_tolerance = T(0))
         : rhs_(std::move(rhs)), event_(std::move(event)),
-          relative_tolerance_(relative_tolerance > T(0) ? relative_tolerance : precision::default_relative_tolerance<T>()),
-          absolute_tolerance_(absolute_tolerance > T(0) ? absolute_tolerance : precision::default_absolute_tolerance<T>()) {}
+          relative_tolerance_(relative_tolerance),
+          absolute_tolerance_(absolute_tolerance) {}
 
     T solve(T x0, T y0, T x1, int steps = 100) const;
 
@@ -104,8 +104,8 @@ public:
                               T relative_tolerance = T(0),
                               T absolute_tolerance = T(0))
         : rhs_(std::move(rhs)), event_(std::move(event)),
-          relative_tolerance_(relative_tolerance > T(0) ? relative_tolerance : precision::default_relative_tolerance<T>()),
-          absolute_tolerance_(absolute_tolerance > T(0) ? absolute_tolerance : precision::default_absolute_tolerance<T>()) {}
+          relative_tolerance_(relative_tolerance),
+          absolute_tolerance_(absolute_tolerance) {}
 
     std::vector<T> solve(T x0, const std::vector<T>& y0, T x1, int steps = 100) const;
 

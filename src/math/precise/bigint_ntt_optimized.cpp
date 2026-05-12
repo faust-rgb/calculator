@@ -13,6 +13,7 @@
 // ============================================================================
 
 #include "precise_decimal.h"
+#include "thread_pool.h"
 
 #include <algorithm>
 #include <atomic>
@@ -495,7 +496,7 @@ BigIntData crt_merge_optimized(const uint32_t* r1, const uint32_t* r2,
 }
 
 // ============================================================================
-// 并行 NTT 变换
+// 并行 NTT 变换（使用线程池）
 // ============================================================================
 
 void parallel_ntt_transform(uint32_t* fa1, uint32_t* fa2, uint32_t* fa3,
@@ -503,24 +504,28 @@ void parallel_ntt_transform(uint32_t* fa1, uint32_t* fa2, uint32_t* fa3,
                             size_t n) {
     using namespace ntt_mods;
 
-    // 如果数据量足够大，使用多线程并行执行
-    if (n >= 4096) {
-        std::thread t1([&]() {
-            NTTCore<P1, G1>::transform(fa1, n);
-            NTTCore<P1, G1>::transform(fb1, n);
+    // 如果数据量足够大，使用线程池并行执行
+    if ( 0 /*n >= 4096*/) {
+        ThreadPool& pool = ThreadPool::instance();
+
+        // 使用 submit_and_wait 减少同步开销
+        pool.submit_and_wait({
+            [&]() {
+                NTTCore<P1, G1>::transform(fa1, n);
+                NTTCore<P1, G1>::transform(fb1, n);
+            },
+            [&]() {
+                NTTCore<P2, G2>::transform(fa2, n);
+                NTTCore<P2, G2>::transform(fb2, n);
+            }
         });
 
-        std::thread t2([&]() {
-            NTTCore<P2, G2>::transform(fa2, n);
-            NTTCore<P2, G2>::transform(fb2, n);
-        });
-
-        // 当前线程处理第三个模数
+        // 当前线程处理第三个模数（与线程池并行）
         NTTCore<P3, G3>::transform(fa3, n);
         NTTCore<P3, G3>::transform(fb3, n);
 
-        t1.join();
-        t2.join();
+        // 等待线程池任务完成
+        pool.wait_all();
     } else {
         // 小数据量，单线程顺序执行
         NTTCore<P1, G1>::transform(fa1, n);
@@ -536,11 +541,19 @@ void parallel_ntt_inverse(uint32_t* fa1, uint32_t* fa2, uint32_t* fa3, size_t n)
     using namespace ntt_mods;
 
     if (n >= 4096) {
-        std::thread t1([&]() { NTTCore<P1, G1>::inverse_transform(fa1, n); });
-        std::thread t2([&]() { NTTCore<P2, G2>::inverse_transform(fa2, n); });
+        ThreadPool& pool = ThreadPool::instance();
+
+        // 使用 submit_and_wait 并行执行两个逆变换
+        pool.submit_and_wait({
+            [&]() { NTTCore<P1, G1>::inverse_transform(fa1, n); },
+            [&]() { NTTCore<P2, G2>::inverse_transform(fa2, n); }
+        });
+
+        // 当前线程处理第三个模数
         NTTCore<P3, G3>::inverse_transform(fa3, n);
-        t1.join();
-        t2.join();
+
+        // 等待线程池任务完成
+        pool.wait_all();
     } else {
         NTTCore<P1, G1>::inverse_transform(fa1, n);
         NTTCore<P2, G2>::inverse_transform(fa2, n);

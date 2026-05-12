@@ -1,5 +1,6 @@
 #include "analysis/series/puiseux_series.h"
 #include "analysis/series/taylor_series.h"
+#include "analysis/series/psa_engine.h"
 #include "analysis/modules/series_module.h"
 #include "app/scalar_type.h"
 #include "core/services/format_utils.h"
@@ -98,9 +99,9 @@ bool newton_puiseux_expand(const std::vector<Scalar>& poly_coeffs,
     result->reserve(degree + 1);
 
     Scalar sqrt_leading = mymath::sqrt(mymath::abs(leading_coeff));
-    result->emplace_back(sqrt_leading, leading_power);
 
     if (leading_power + 1 >= static_cast<int>(poly_coeffs.size())) {
+        result->emplace_back(sqrt_leading, leading_power);
         return true;
     }
 
@@ -153,7 +154,7 @@ bool newton_puiseux_expand(const std::vector<Scalar>& poly_coeffs,
 
     for (int i = 0; i <= degree && i < static_cast<int>(sqrt_result.size()); ++i) {
         if (mymath::abs(sqrt_result[i]) >= Scalar(1e-15L)) {
-            result->emplace_back(sqrt_leading * sqrt_result[i], leading_power + i);
+            result->emplace_back(sqrt_leading * sqrt_result[i], leading_power + 2 * i);
         }
     }
 
@@ -187,6 +188,16 @@ std::string puiseux(const SeriesContext& ctx,
                 for (const auto& c : ld_poly_coeffs) {
                     poly_coeffs.push_back(Scalar(c));
                 }
+            } else {
+                const int inner_degree = std::max(degree * 2, degree + 2);
+                if (!internal::evaluate_psa(
+                        sqrt_arg.simplify(), variable_name, center, inner_degree, poly_coeffs, ctx)) {
+                    poly_coeffs = taylor::build_taylor_coefficients(
+                        ctx, sqrt_arg, variable_name, center, inner_degree);
+                }
+            }
+
+            if (!poly_coeffs.empty()) {
                 int leading_power = -1;
                 Scalar leading_coeff = Scalar(0);
                 for (std::size_t i = 0; i < poly_coeffs.size(); ++i) {
@@ -204,6 +215,7 @@ std::string puiseux(const SeriesContext& ctx,
                         bool first = true;
                         for (const auto& [coeff, power] : puiseux_coeffs) {
                             if (mymath::abs(coeff) < Scalar(1e-15L)) continue;
+                            if (power > degree) continue;
 
                             Scalar coeff_ld = coeff.to_long_double();
                             if (!first) {
