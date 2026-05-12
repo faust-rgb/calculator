@@ -146,9 +146,7 @@ Current validation status:
 - `make test`
 - `make script-test`
 - `make check`
-- expected C++ regression result: `Passed: 867`, `Failed: 0`
-- expected planning result: `Planning passed: 6`, `Planning failed: 0`
-- comprehensive script check: `bin/calculator test/script/comprehensive_validation.calc`
+- comprehensive script check: `bin/calculator test/script/additional_validation.calc`
 
 ## Run
 
@@ -634,6 +632,6 @@ strings, matrices, expression functions, and script functions.
 ## Notes
 
 - Trigonometric functions use radians.
-- The implementation uses `double` and does not aim for arbitrary precision.
+- The implementation uses high-precision `PreciseDecimal` by default, supporting advanced numeric algorithms and exact rational arithmetic.
 - Exact fraction mode is intended for rational arithmetic and integer helpers.
 - Domain errors such as `ln(0)` and division by zero are reported at runtime.

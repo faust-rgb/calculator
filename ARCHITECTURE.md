@@ -16,37 +16,37 @@ the main functions.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        app/ (应用层)                         │
-│                     main.cpp, CLI 入口                       │
+│                        app/ (Application)                   │
+│                     main.cpp, CLI Entry                     │
 ├─────────────────────────────────────────────────────────────┤
-│                       module/ (模块层)                       │
-│              CalculatorModule, 外部功能扩展点                 │
+│                       module/ (Module Layer)                │
+│              CalculatorModule, Extension Points             │
 ├─────────────────────────────────────────────────────────────┤
-│                      analysis/ (分析层)                      │
-│            微积分、极限、ODE、优化、级数等高级功能               │
+│                      analysis/ (Analysis Layer)             │
+│            Calculus, Limits, ODE, Optimization, etc.        │
 ├─────────────────────────────────────────────────────────────┤
 │    ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
 │    │  plot/   │  │  stats/  │  │  dsp/    │  │ symbolic/│   │
-│    │  绘图    │  │  统计    │  │  信号处理 │  │  符号计算 │   │
+│    │  Plotting│  │  Stats   │  │  Signal  │  │   CAS    │   │
 │    └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
 ├─────────────────────────────────────────────────────────────┤
-│                       core/ (核心层)                         │
+│                       core/ (Core Layer)                    │
 │     Calculator, Scope, Exceptions, Utils, Services          │
 ├─────────────────────────────────────────────────────────────┤
-│                     execution/ (执行层)                      │
+│                     execution/ (Execution Layer)            │
 │    CommandRegistry, ScriptRuntime, VariableResolver         │
 ├─────────────────────────────────────────────────────────────┤
-│                       parser/ (解析层)                       │
+│                       parser/ (Parser Layer)                │
 │   UnifiedParser, CommandParser, ScriptParser, AST           │
 ├─────────────────────────────────────────────────────────────┤
-│                        io/ (IO层)                            │
-│                  文件读写、状态持久化                          │
+│                        io/ (IO Layer)                       │
+│              Persistence and File Operations                │
 ├─────────────────────────────────────────────────────────────┤
-│                       types/ (类型层)                        │
+│                       types/ (Type Layer)                   │
 │          StoredValue, Function, Matrix, Scalar              │
 ├─────────────────────────────────────────────────────────────┤
-│                        math/ (数学层)                        │
-│              基础数学函数、数值计算、辅助工具                    │
+│                        math/ (Math Layer)                   │
+│              Base Functions, Numeric, Helpers               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -92,6 +92,9 @@ the main functions.
 
 #### symbolic/ (Symbolic Layer)
 - `core/`, `algebra/`, `calculus/`, `transformation/`, `solver/`
+
+#### dsp/ (Signal Processing Layer)
+- `fft.cpp`, `filter_design.cpp`, `signal_processing.h`
 
 ## Main Files
 

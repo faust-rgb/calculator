@@ -215,12 +215,17 @@ BigIntData multiply_bigint_ntt(const BigIntData& lhs, const BigIntData& rhs) {
     uint32_t* fb2 = arena.allocate(n, 0);
     uint32_t* fb3 = arena.allocate(n, 0);
 
-    std::copy(lhs.begin(), lhs.end(), fa1);
-    std::copy(lhs.begin(), lhs.end(), fa2);
-    std::copy(lhs.begin(), lhs.end(), fa3);
-    std::copy(rhs.begin(), rhs.end(), fb1);
-    std::copy(rhs.begin(), rhs.end(), fb2);
-    std::copy(rhs.begin(), rhs.end(), fb3);
+    // 复制并取模
+    for (std::size_t i = 0; i < lhs.size(); ++i) {
+        fa1[i] = lhs[i] % ntt::P1;
+        fa2[i] = lhs[i] % ntt::P2;
+        fa3[i] = lhs[i] % ntt::P3;
+    }
+    for (std::size_t i = 0; i < rhs.size(); ++i) {
+        fb1[i] = rhs[i] % ntt::P1;
+        fb2[i] = rhs[i] % ntt::P2;
+        fb3[i] = rhs[i] % ntt::P3;
+    }
 
     ntt::NTTConfig<ntt::P1>::transform(fa1, n, false);
     ntt::NTTConfig<ntt::P1>::transform(fb1, n, false);
@@ -493,25 +498,26 @@ BigIntData multiply_bigint(const BigIntData& lhs, const BigIntData& rhs) {
     std::size_t max_size = std::max(lhs.size(), rhs.size());
     std::size_t min_size = std::min(lhs.size(), rhs.size());
 
-    // 小规模：朴素乘法
-    if (min_size <= 32 || max_size <= KARATSUBA_THRESHOLD) {
-        return multiply_bigint_naive(lhs, rhs);
-    }
+    // 1. 小规模：朴素乘法
+    //if (min_size <= 32 || max_size <= KARATSUBA_THRESHOLD) {
+    //    return multiply_bigint_naive(lhs, rhs);
+    //}
 
-    // 中等规模：零分配 Karatsuba（减少内存分配开销）
+    // 2. 中等规模：零分配 Karatsuba（减少递归中的内存分配开销）
     if (max_size <= 512) {
-        return multiply_bigint_karatsuba(lhs, rhs);
         //return multiply_bigint_zero_allocation(lhs, rhs);
+        return multiply_bigint_karatsuba(lhs, rhs);
     }
 
-    // 中大规模：Toom-Cook 3
-    if (max_size <= 4096) {
+    // 3. 中大规模：Toom-Cook 3
+    if (max_size <= 2048) {
         return multiply_bigint_toom3(lhs, rhs);
     }
 
-    // 特大规模：优化的 NTT
+    // 4. 特大规模：优化的 NTT
     return multiply_bigint_ntt_optimized(lhs, rhs);
 }
+
 
 } // namespace precise
 

@@ -435,7 +435,7 @@ Notes:
   an `N x 2` matrix with rows `[real, imag]`; `eigvecs` currently supports
   real-valued eigenvectors only
 - `dot(a, b)` and `outer(a, b)` require vector arguments
-- `qr_q(A)` and `qr_r(A)` currently require square matrices
+- `qr_q(A)` and `qr_r(A)` return the Q and R factors of the QR decomposition
 - `lu_l(A)` and `lu_u(A)` currently require square matrices and use LU decomposition without pivoting
 - `null(m)` returns a basis matrix whose columns span the nullspace
 - `svd_u(A)`, `svd_s(A)`, and `svd_vt(A)` return the reduced SVD factors

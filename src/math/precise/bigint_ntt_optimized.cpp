@@ -75,6 +75,8 @@ public:
     struct CacheEntry {
         std::vector<uint32_t> forward;   // 正向变换的 twiddle factors
         std::vector<uint32_t> inverse;   // 逆向变换的 twiddle factors
+        std::vector<uint32_t> forward_mont; // Montgomery domain forward twiddles
+        std::vector<uint32_t> inverse_mont; // Montgomery domain inverse twiddles
         size_t length;                   // 支持的长度
     };
 
@@ -127,20 +129,26 @@ private:
     CacheEntry create_entry(size_t n) {
         CacheEntry entry;
         entry.length = n;
-        entry.forward.reserve(n / 2);
-        entry.inverse.reserve(n / 2);
+        entry.forward.reserve(n);
+        entry.inverse.reserve(n);
+        entry.forward_mont.reserve(n);
+        entry.inverse_mont.reserve(n);
 
-        // 预计算所有层级的 twiddle factors
+        const uint64_t R = (1ULL << 32) % P;
+
         for (size_t len = 2; len <= n; len <<= 1) {
             uint32_t wlen = power(G, (P - 1) / static_cast<uint32_t>(len), P);
             uint32_t wlen_inv = inv(wlen, P);
 
-            // 存储该层级的 twiddle factors
             uint32_t w = 1;
             uint32_t w_inv = 1;
             for (size_t j = 0; j < len / 2; ++j) {
                 entry.forward.push_back(w);
                 entry.inverse.push_back(w_inv);
+                
+                entry.forward_mont.push_back(static_cast<uint32_t>((static_cast<uint64_t>(w) * R) % P));
+                entry.inverse_mont.push_back(static_cast<uint32_t>((static_cast<uint64_t>(w_inv) * R) % P));
+
                 w = static_cast<uint32_t>((static_cast<uint64_t>(w) * wlen) % P);
                 w_inv = static_cast<uint32_t>((static_cast<uint64_t>(w_inv) * wlen_inv) % P);
             }
@@ -157,6 +165,14 @@ private:
 template<uint32_t P, uint32_t G>
 class NTTCore {
 public:
+    // Montgomery constants
+    static constexpr uint32_t P_prime = []() {
+        uint32_t inv = 1;
+        for (int i = 0; i < 5; ++i) inv *= 2 - P * inv;
+        return -inv;
+    }();
+    static constexpr uint32_t R_mod_P = static_cast<uint32_t>((1ULL << 32) % P);
+
     static uint32_t power(uint32_t a, uint32_t b) {
         uint32_t res = 1;
         a %= P;
@@ -174,6 +190,55 @@ public:
         return power(n, P - 2);
     }
 
+    static inline uint32_t montgomery_reduce(uint64_t x) {
+        uint32_t m = static_cast<uint32_t>(x) * P_prime;
+        uint64_t res = (x + static_cast<uint64_t>(m) * P) >> 32;
+        return (res >= P) ? static_cast<uint32_t>(res - P) : static_cast<uint32_t>(res);
+    }
+
+#if HAS_AVX2
+    static inline __m256i montgomery_reduce_avx2(__m256i x_low, __m256i x_high) {
+        // x_low: [x0_lo, x0_hi, x1_lo, x1_hi] where each xi is 64-bit
+        // x_high: [x2_lo, x2_hi, x3_lo, x3_hi]
+        
+        __m256i p_prime_vec = _mm256_set1_epi32(P_prime);
+        __m256i p_vec = _mm256_set1_epi32(P);
+        __m256i p_minus_1 = _mm256_set1_epi32(static_cast<int32_t>(P) - 1);
+        
+        // m = (x_lo * P') mod 2^32
+        // We need 4 elements for x_low and 4 for x_high
+        // Since x is 64-bit, we need to extract the low 32 bits
+        
+        auto reduce_4 = [&](__m256i x) {
+            // x is 4x 64-bit
+            // Extract low 32 bits: [x0_lo, x1_lo, x2_lo, x3_lo]
+            // This is actually what _mm256_mul_epu32 uses anyway.
+            __m256i m = _mm256_mul_epu32(x, p_prime_vec);
+            __m256i mp = _mm256_mul_epu32(m, p_vec);
+            __m256i sum = _mm256_add_epi64(x, mp);
+            return _mm256_srli_epi64(sum, 32);
+        };
+        
+        __m256i res_low = reduce_4(x_low);   // [r0, r1, r2, r3] as 4x 64-bit
+        __m256i res_high = reduce_4(x_high); // [r4, r5, r6, r7] as 4x 64-bit
+        
+        // Combine into 8x 32-bit
+        // Pack res_low and res_high
+        __m256i res = _mm256_castps_si256(_mm256_shuffle_ps(
+            _mm256_castsi256_ps(res_low), _mm256_castsi256_ps(res_high),
+            _MM_SHUFFLE(2, 0, 2, 0)));
+        // Shuffle to get correct order: 0, 1, 4, 5, 2, 3, 6, 7 -> 0, 1, 2, 3, 4, 5, 6, 7
+        res = _mm256_permute4x64_epi64(res, _MM_SHUFFLE(3, 1, 2, 0));
+        
+        // Final conditional subtraction: res = (res >= P) ? res - P : res
+        // Since P < 2^30, we can use signed comparison
+        __m256i ge_mask = _mm256_cmpgt_epi32(res, p_minus_1);
+        res = _mm256_sub_epi32(res, _mm256_and_si256(ge_mask, p_vec));
+        
+        return res;
+    }
+#endif
+
     // 位反转排列（Bit-reversal permutation）
     static void bit_reverse(uint32_t* a, size_t n) {
         for (size_t i = 1, j = 0; i < n; ++i) {
@@ -188,37 +253,71 @@ public:
         }
     }
 
-    // NTT 正向变换（使用缓存的 twiddle factors）
+    // NTT 正向变换
     static void transform(uint32_t* a, size_t n, bool use_cache = true) {
         bit_reverse(a, n);
 
         if (use_cache) {
-            // 使用缓存的 twiddle factors
             auto& cache = TwiddleCache<P, G>::instance().get(n);
             size_t idx = 0;
 
             for (size_t len = 2; len <= n; len <<= 1) {
-                for (size_t i = 0; i < n; i += len) {
-                    for (size_t j = 0; j < len / 2; ++j) {
-                        uint32_t u = a[i + j];
-                        uint32_t v = static_cast<uint32_t>(
-                            (static_cast<uint64_t>(a[i + j + len / 2]) * cache.forward[idx + j]) % P);
-                        a[i + j] = (u + v < P) ? (u + v) : (u + v - P);
-                        a[i + j + len / 2] = (u >= v) ? (u - v) : (u + P - v);
+                size_t half = len / 2;
+#if HAS_AVX2
+                if (half >= 8) {
+                    __m256i p_vec = _mm256_set1_epi32(P);
+                    __m256i p_minus_1 = _mm256_set1_epi32(static_cast<int32_t>(P) - 1);
+                    for (size_t i = 0; i < n; i += len) {
+                        for (size_t j = 0; j < half; j += 8) {
+                            __m256i u = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(a + i + j));
+                            __m256i v_raw = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(a + i + j + half));
+                            __m256i w = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(cache.forward_mont.data() + idx + j));
+                            
+                            // v * w in Montgomery domain
+                            __m256i v_low = _mm256_mul_epu32(v_raw, w);
+                            __m256i v_high = _mm256_mul_epu32(_mm256_srli_si256(v_raw, 4), _mm256_srli_si256(w, 4));
+                            
+                            __m256i v_mont = montgomery_reduce_avx2(v_low, v_high);
+                            
+                            // Butterfly
+                            // u_new = (u + v_mont) % P
+                            __m256i u_new = _mm256_add_epi32(u, v_mont);
+                            __m256i ge_mask_u = _mm256_cmpgt_epi32(u_new, p_minus_1);
+                            u_new = _mm256_sub_epi32(u_new, _mm256_and_si256(ge_mask_u, p_vec));
+                            
+                            // v_new = (u - v_mont + P) % P
+                            __m256i v_new = _mm256_sub_epi32(u, v_mont);
+                            __m256i lt_mask_v = _mm256_cmpgt_epi32(_mm256_setzero_si256(), v_new);
+                            v_new = _mm256_add_epi32(v_new, _mm256_and_si256(lt_mask_v, p_vec));
+                            
+                            _mm256_storeu_si256(reinterpret_cast<__m256i*>(a + i + j), u_new);
+                            _mm256_storeu_si256(reinterpret_cast<__m256i*>(a + i + j + half), v_new);
+                        }
                     }
+                } else {
+#endif
+                    for (size_t i = 0; i < n; i += len) {
+                        for (size_t j = 0; j < half; ++j) {
+                            uint32_t u = a[i + j];
+                            uint32_t v = montgomery_reduce(static_cast<uint64_t>(a[i + j + half]) * cache.forward_mont[idx + j]);
+                            a[i + j] = (u + v < P) ? (u + v) : (u + v - P);
+                            a[i + j + half] = (u >= v) ? (u - v) : (u + P - v);
+                        }
+                    }
+#if HAS_AVX2
                 }
-                idx += len / 2;
+#endif
+                idx += half;
             }
         } else {
-            // 不使用缓存（动态计算）
+            // Non-cached version (stays scalar as it's rarely used)
             for (size_t len = 2; len <= n; len <<= 1) {
                 uint32_t wlen = power(G, (P - 1) / static_cast<uint32_t>(len));
                 for (size_t i = 0; i < n; i += len) {
                     uint32_t w = 1;
                     for (size_t j = 0; j < len / 2; ++j) {
                         uint32_t u = a[i + j];
-                        uint32_t v = static_cast<uint32_t>(
-                            (static_cast<uint64_t>(a[i + j + len / 2]) * w) % P);
+                        uint32_t v = static_cast<uint32_t>((static_cast<uint64_t>(a[i + j + len / 2]) * w) % P);
                         a[i + j] = (u + v < P) ? (u + v) : (u + v - P);
                         a[i + j + len / 2] = (u >= v) ? (u - v) : (u + P - v);
                         w = static_cast<uint32_t>((static_cast<uint64_t>(w) * wlen) % P);
@@ -237,16 +336,48 @@ public:
             size_t idx = 0;
 
             for (size_t len = 2; len <= n; len <<= 1) {
-                for (size_t i = 0; i < n; i += len) {
-                    for (size_t j = 0; j < len / 2; ++j) {
-                        uint32_t u = a[i + j];
-                        uint32_t v = static_cast<uint32_t>(
-                            (static_cast<uint64_t>(a[i + j + len / 2]) * cache.inverse[idx + j]) % P);
-                        a[i + j] = (u + v < P) ? (u + v) : (u + v - P);
-                        a[i + j + len / 2] = (u >= v) ? (u - v) : (u + P - v);
+                size_t half = len / 2;
+#if HAS_AVX2
+                if (half >= 8) {
+                    __m256i p_vec = _mm256_set1_epi32(P);
+                    __m256i p_minus_1 = _mm256_set1_epi32(static_cast<int32_t>(P) - 1);
+                    for (size_t i = 0; i < n; i += len) {
+                        for (size_t j = 0; j < half; j += 8) {
+                            __m256i u = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(a + i + j));
+                            __m256i v_raw = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(a + i + j + half));
+                            __m256i w = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(cache.inverse_mont.data() + idx + j));
+                            
+                            __m256i v_low = _mm256_mul_epu32(v_raw, w);
+                            __m256i v_high = _mm256_mul_epu32(_mm256_srli_si256(v_raw, 4), _mm256_srli_si256(w, 4));
+                            
+                            __m256i v_mont = montgomery_reduce_avx2(v_low, v_high);
+                            
+                            __m256i u_new = _mm256_add_epi32(u, v_mont);
+                            __m256i ge_mask_u = _mm256_cmpgt_epi32(u_new, p_minus_1);
+                            u_new = _mm256_sub_epi32(u_new, _mm256_and_si256(ge_mask_u, p_vec));
+                            
+                            __m256i v_new = _mm256_sub_epi32(u, v_mont);
+                            __m256i lt_mask_v = _mm256_cmpgt_epi32(_mm256_setzero_si256(), v_new);
+                            v_new = _mm256_add_epi32(v_new, _mm256_and_si256(lt_mask_v, p_vec));
+                            
+                            _mm256_storeu_si256(reinterpret_cast<__m256i*>(a + i + j), u_new);
+                            _mm256_storeu_si256(reinterpret_cast<__m256i*>(a + i + j + half), v_new);
+                        }
                     }
+                } else {
+#endif
+                    for (size_t i = 0; i < n; i += len) {
+                        for (size_t j = 0; j < half; ++j) {
+                            uint32_t u = a[i + j];
+                            uint32_t v = montgomery_reduce(static_cast<uint64_t>(a[i + j + half]) * cache.inverse_mont[idx + j]);
+                            a[i + j] = (u + v < P) ? (u + v) : (u + v - P);
+                            a[i + j + half] = (u >= v) ? (u - v) : (u + P - v);
+                        }
+                    }
+#if HAS_AVX2
                 }
-                idx += len / 2;
+#endif
+                idx += half;
             }
         } else {
             for (size_t len = 2; len <= n; len <<= 1) {
@@ -255,8 +386,7 @@ public:
                     uint32_t w = 1;
                     for (size_t j = 0; j < len / 2; ++j) {
                         uint32_t u = a[i + j];
-                        uint32_t v = static_cast<uint32_t>(
-                            (static_cast<uint64_t>(a[i + j + len / 2]) * w) % P);
+                        uint32_t v = static_cast<uint32_t>((static_cast<uint64_t>(a[i + j + len / 2]) * w) % P);
                         a[i + j] = (u + v < P) ? (u + v) : (u + v - P);
                         a[i + j + len / 2] = (u >= v) ? (u - v) : (u + P - v);
                         w = static_cast<uint32_t>((static_cast<uint64_t>(w) * wlen) % P);
@@ -336,27 +466,16 @@ BigIntData crt_merge_optimized(const uint32_t* r1, const uint32_t* r2,
 #pragma GCC diagnostic pop
 
     for (size_t i = 0; i < n; ++i) {
-        // 第一步：合并 P1 和 P2
-        // k1 = (r2 - r1) * inv(P1) mod P2
+        // ...
         uint32_t k1 = static_cast<uint32_t>(
             (static_cast<uint64_t>(r2[i] + P2 - r1[i]) * invP1_P2) % P2);
-
-        // r12 = r1 + k1 * P1
         uint64_t r12 = r1[i] + static_cast<uint64_t>(k1) * P1;
-
-        // 第二步：合并 P3
-        // k2 = (r3 - r12 mod P3) * inv(M12) mod P3
         uint32_t r12_mod_p3 = static_cast<uint32_t>(r12 % P3);
         uint32_t k2 = static_cast<uint32_t>(
             (static_cast<uint64_t>(r3[i] + P3 - r12_mod_p3) * invM12_P3) % P3);
 
-        // 最终值：r12 + k2 * M12
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
         unsigned __int128 val = carry + r12 + (unsigned __int128)k2 * M12;
-#pragma GCC diagnostic pop
 
-        // 转换为 10^9 基数
         res.push_back(static_cast<uint32_t>(val % kBase));
         carry = val / kBase;
     }
@@ -462,13 +581,19 @@ BigIntData multiply_bigint_ntt_optimized(const BigIntData& lhs, const BigIntData
     uint32_t* fb2 = arena.allocate(n, 0);
     uint32_t* fb3 = arena.allocate(n, 0);
 
-    // 复制数据
-    std::copy(lhs.begin(), lhs.end(), fa1);
-    std::copy(lhs.begin(), lhs.end(), fa2);
-    std::copy(lhs.begin(), lhs.end(), fa3);
-    std::copy(rhs.begin(), rhs.end(), fb1);
-    std::copy(rhs.begin(), rhs.end(), fb2);
-    std::copy(rhs.begin(), rhs.end(), fb3);
+    // 复制并取模（关键修复：确保输入在 [0, P) 范围内）
+    for (size_t i = 0; i < lhs.size(); ++i) {
+        uint32_t val = lhs[i];
+        fa1[i] = (val < P1) ? val : (val % P1);
+        fa2[i] = (val < P2) ? val : (val % P2);
+        fa3[i] = (val < P3) ? val : (val % P3);
+    }
+    for (size_t i = 0; i < rhs.size(); ++i) {
+        uint32_t val = rhs[i];
+        fb1[i] = (val < P1) ? val : (val % P1);
+        fb2[i] = (val < P2) ? val : (val % P2);
+        fb3[i] = (val < P3) ? val : (val % P3);
+    }
 
     // 并行 NTT 变换
     parallel_ntt_transform(fa1, fa2, fa3, fb1, fb2, fb3, n);

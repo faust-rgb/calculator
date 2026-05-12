@@ -35,7 +35,7 @@ namespace app {
  * - 10: 快速计算（较低精度）
  */
 inline int& default_scale() {
-    thread_local int scale = 20; // 默认小数位数为 40 位
+    thread_local int scale = 40; // 默认小数位数为 40 位
     return scale;
 }
 

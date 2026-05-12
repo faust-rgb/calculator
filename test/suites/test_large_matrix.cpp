@@ -14,6 +14,7 @@
 #include "test_helpers.h"
 #include "calculator.h"
 #include "matrix/matrix.h"
+#include "analysis/base/precision_constants.h"
 #include <iostream>
 #include <vector>
 #include <string>

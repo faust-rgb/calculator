@@ -11,7 +11,7 @@ namespace precise {
 // BigIntData 构造函数和析构函数
 // ============================================================================
 
-BigIntData::BigIntData() : ptr(sso), size_(1), capacity_(SSO_CAP) { sso[0] = 0; }
+BigIntData::BigIntData() : ptr(sso), size_(0), capacity_(SSO_CAP) { }
 
 BigIntData::BigIntData(size_t n, uint32_t val) : ptr(sso), size_(static_cast<uint32_t>(n)), capacity_(SSO_CAP) {
     if (n > SSO_CAP) {

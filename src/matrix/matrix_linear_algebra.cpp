@@ -181,6 +181,7 @@ std::vector<T> jacobi_eigenvalues(TMatrix<T> a) {
 template <typename T>
 std::size_t numerical_rank_fast(const TMatrix<T>& matrix) {
     TMatrix<T> work = matrix;
+    const std::size_t dimension = std::max(matrix.rows, matrix.cols);
     T max_entry = T(static_cast<long long>(0));
     for (std::size_t row = 0; row < matrix.rows; ++row) {
         for (std::size_t col = 0; col < matrix.cols; ++col) {
@@ -194,20 +195,48 @@ std::size_t numerical_rank_fast(const TMatrix<T>& matrix) {
         return 0;
     }
 
-    const T tolerance = max_entry * T(static_cast<long long>(std::max(matrix.rows, matrix.cols))) * precision::sqrt_epsilon<T>();
+    T tolerance;
+    const T dimension_factor = T(static_cast<long long>(dimension)) * T(static_cast<long long>(dimension));
+    if constexpr (std::is_same_v<T, PreciseDecimal> || std::is_same_v<T, mymath::Scalar>) {
+        tolerance = max_entry * dimension_factor * precision::sqrt_epsilon<T>();
+    } else {
+        tolerance = max_entry * T(static_cast<long long>(dimension)) * precision::sqrt_epsilon<T>();
+    }
+
+    std::vector<T> column_scales(matrix.cols, T(static_cast<long long>(0)));
+    for (std::size_t col = 0; col < matrix.cols; ++col) {
+        for (std::size_t row = 0; row < matrix.rows; ++row) {
+            const T value = t_abs(matrix.at(row, col));
+            if (value > column_scales[col]) {
+                column_scales[col] = value;
+            }
+        }
+    }
+
     std::size_t rank_count = 0;
     for (std::size_t col = 0; col < matrix.cols && rank_count < matrix.rows; ++col) {
         std::size_t pivot_row = rank_count;
-        T pivot_abs = t_abs(work.at(pivot_row, col));
-        for (std::size_t row = rank_count + 1; row < matrix.rows; ++row) {
-            const T current_abs = t_abs(work.at(row, col));
-            if (current_abs > pivot_abs) {
-                pivot_abs = current_abs;
-                pivot_row = row;
+        std::size_t pivot_col = col;
+        T pivot_abs = T(static_cast<long long>(0));
+        for (std::size_t scan_col = col; scan_col < matrix.cols; ++scan_col) {
+            for (std::size_t row = rank_count; row < matrix.rows; ++row) {
+                const T current_abs = t_abs(work.at(row, scan_col));
+                if (current_abs > pivot_abs) {
+                    pivot_abs = current_abs;
+                    pivot_row = row;
+                    pivot_col = scan_col;
+                }
             }
         }
-        if (pivot_abs <= tolerance) {
-            continue;
+        const T pivot_tolerance = std::max(tolerance, column_scales[pivot_col] * dimension_factor * precision::sqrt_epsilon<T>());
+        if (pivot_abs <= pivot_tolerance) {
+            break;
+        }
+        if (pivot_col != col) {
+            for (std::size_t row = 0; row < matrix.rows; ++row) {
+                std::swap(work.at(row, col), work.at(row, pivot_col));
+            }
+            std::swap(column_scales[col], column_scales[pivot_col]);
         }
         if (pivot_row != rank_count) {
             swap_rows(&work, pivot_row, rank_count);
@@ -215,12 +244,13 @@ std::size_t numerical_rank_fast(const TMatrix<T>& matrix) {
         const T pivot = work.at(rank_count, col);
         for (std::size_t row = rank_count + 1; row < matrix.rows; ++row) {
             const T factor = work.at(row, col) / pivot;
-            if (t_abs(factor) <= tolerance) {
+            if (t_abs(factor) <= precision::epsilon<T>()) {
                 continue;
             }
             for (std::size_t current_col = col; current_col < matrix.cols; ++current_col) {
                 work.at(row, current_col) -= factor * work.at(rank_count, current_col);
-                if (t_abs(work.at(row, current_col)) <= tolerance) {
+                const T entry_tolerance = std::max(tolerance, column_scales[current_col] * dimension_factor * precision::sqrt_epsilon<T>());
+                if (t_abs(work.at(row, current_col)) <= entry_tolerance) {
                     work.at(row, current_col) = T(static_cast<long long>(0));
                 }
             }
@@ -228,6 +258,67 @@ std::size_t numerical_rank_fast(const TMatrix<T>& matrix) {
         ++rank_count;
     }
     return rank_count;
+}
+
+template <typename T>
+std::size_t numerical_rank_orthogonal(const TMatrix<T>& matrix) {
+    const std::size_t dimension = std::max(matrix.rows, matrix.cols);
+    std::vector<std::vector<T>> basis;
+    basis.reserve(std::min(matrix.rows, matrix.cols));
+
+    T max_col_norm = T(static_cast<long long>(0));
+    for (std::size_t col = 0; col < matrix.cols; ++col) {
+        T norm_sq = T(static_cast<long long>(0));
+        for (std::size_t row = 0; row < matrix.rows; ++row) {
+            const T value = matrix.at(row, col);
+            norm_sq += value * value;
+        }
+        const T norm = t_sqrt(norm_sq);
+        if (norm > max_col_norm) {
+            max_col_norm = norm;
+        }
+    }
+    if (max_col_norm == T(static_cast<long long>(0))) {
+        return 0;
+    }
+
+    T relative_tolerance = precision::sqrt_epsilon<T>();
+    if constexpr (std::is_same_v<T, PreciseDecimal> || std::is_same_v<T, mymath::Scalar>) {
+        const T input_noise_floor("1e-12");
+        if (relative_tolerance < input_noise_floor) {
+            relative_tolerance = input_noise_floor;
+        }
+    }
+    const T tolerance = max_col_norm * T(static_cast<long long>(dimension)) * relative_tolerance;
+
+    for (std::size_t col = 0; col < matrix.cols; ++col) {
+        std::vector<T> v(matrix.rows, T(static_cast<long long>(0)));
+        for (std::size_t row = 0; row < matrix.rows; ++row) {
+            v[row] = matrix.at(row, col);
+        }
+
+        for (int pass = 0; pass < 2; ++pass) {
+            for (const auto& b : basis) {
+                T projection = T(static_cast<long long>(0));
+                for (std::size_t row = 0; row < matrix.rows; ++row) {
+                    projection += v[row] * b[row];
+                }
+                for (std::size_t row = 0; row < matrix.rows; ++row) {
+                    v[row] -= projection * b[row];
+                }
+            }
+        }
+
+        const T norm = t_sqrt(vector_norm_squared(v));
+        if (norm > tolerance) {
+            for (T& value : v) {
+                value /= norm;
+            }
+            basis.push_back(std::move(v));
+        }
+    }
+
+    return basis.size();
 }
 
 /**
@@ -505,6 +596,40 @@ std::pair<TMatrix<T>, TMatrix<T>> qr_decompose(const TMatrix<T>& matrix) {
             projection *= T(static_cast<long long>(2));
             for (std::size_t index = col; index < m; ++index) {
                 q.at(row, index) -= projection * v[index - col];
+            }
+        }
+    }
+
+    std::vector<std::vector<T>> orthonormal_columns;
+    orthonormal_columns.reserve(m);
+    for (std::size_t col = 0; col < m; ++col) {
+        std::vector<T> column(m, T(static_cast<long long>(0)));
+        for (std::size_t row = 0; row < m; ++row) {
+            column[row] = q.at(row, col);
+        }
+        if (!internal::orthonormalize(&column, orthonormal_columns)) {
+            for (std::size_t basis_index = 0; basis_index < m; ++basis_index) {
+                column = internal::standard_basis_vector<T>(m, basis_index);
+                if (internal::orthonormalize(&column, orthonormal_columns)) {
+                    break;
+                }
+            }
+        }
+        orthonormal_columns.push_back(column);
+    }
+    for (std::size_t col = 0; col < m; ++col) {
+        for (std::size_t row = 0; row < m; ++row) {
+            q.at(row, col) = orthonormal_columns[col][row];
+        }
+    }
+
+    r = multiply(transpose(q), matrix);
+    const T cleanup_tolerance = matrix_tolerance(matrix) *
+        T(static_cast<long long>(std::max<std::size_t>(std::size_t{1}, std::max(m, n))));
+    for (std::size_t row = 0; row < m; ++row) {
+        for (std::size_t col = 0; col < n; ++col) {
+            if (row > col && t_abs(r.at(row, col)) <= cleanup_tolerance) {
+                r.at(row, col) = T(static_cast<long long>(0));
             }
         }
     }
@@ -1276,7 +1401,7 @@ template <typename T>
 T rank(const TMatrix<T>& matrix) {
     if constexpr (std::is_same_v<T, PreciseDecimal> || std::is_same_v<T, mymath::Scalar>) {
         if (matrix.rows >= 16 || matrix.cols >= 16) {
-            return T(static_cast<long long>(internal::numerical_rank_fast(matrix)));
+            return T(static_cast<long long>(internal::numerical_rank_orthogonal(matrix)));
         }
     }
 

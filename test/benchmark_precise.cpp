@@ -2,7 +2,7 @@
 // 高精度算法性能基准测试
 // ============================================================================
 
-#include "precise/precise_decimal.h"
+#include "math/precise/precise_decimal.h"
 #include <chrono>
 #include <iostream>
 #include <random>
@@ -173,14 +173,15 @@ int main(int argc, char* argv[]) {
         std::cout << "快速测试模式\n";
         PrecisionContext::set_default_scale(50);
 
-        PreciseDecimal a = random_precise_decimal(1000);
-        PreciseDecimal b = random_precise_decimal(1000);
+        PreciseDecimal a = random_precise_decimal(30000);
+        PreciseDecimal b = random_precise_decimal(30000);
 
         auto start = high_resolution_clock::now();
         PreciseDecimal c = a * b;
         auto end = high_resolution_clock::now();
 
-        std::cout << "1000位乘法: " << duration_cast<microseconds>(end - start).count() << " us\n";
+        std::cout << "30000位乘法: " << duration_cast<microseconds>(end - start).count() << " us" << std::endl;
+
     } else {
         run_all_benchmarks();
     }
