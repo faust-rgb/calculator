@@ -1,3 +1,15 @@
+/**
+ * @file numerical_calculus.cpp
+ * @brief 数值微积分实现
+ *
+ * 本文件实现了数值微积分的核心算法：
+ * - Gauss-Kronrod 积分：G7-K15 自适应积分算法
+ * - 数值微分：中心差分和 Richardson 外推
+ * - 自适应步长：根据误差估计调整积分步长
+ *
+ * Gauss-Kronrod 方法在保持精度的同时提供误差估计。
+ */
+
 #include "analysis/calculus/numerical_calculus.h"
 #include "analysis/calculus/gauss_kronrod_constants.h"
 #include "math/mymath.h"

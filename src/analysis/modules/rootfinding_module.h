@@ -1,3 +1,14 @@
+/**
+ * @file rootfinding_module.h
+ * @brief 方程求根模块
+ *
+ * 本文件定义了方程求根模块：
+ * - 二分法：适用于连续函数，保证收敛
+ * - Newton 法：快速收敛，需要导数
+ * - Secant 法：无需导数的 Newton 法变体
+ * - Brent 法：结合二分法和逆二次插值
+ */
+
 #ifndef ROOTFINDING_MODULE_H
 #define ROOTFINDING_MODULE_H
 

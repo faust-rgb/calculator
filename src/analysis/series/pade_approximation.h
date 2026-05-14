@@ -1,3 +1,13 @@
+/**
+ * @file pade_approximation.h
+ * @brief Padé 逼近
+ *
+ * 本文件定义了 Padé 逼近算法：
+ * - 有理逼近：用有理函数逼近幂级数
+ * - 分子分母计算：求解 Padé 系数
+ * - 收敛加速：比 Taylor 级数收敛更快
+ */
+
 #ifndef ANALYSIS_SERIES_PADE_APPROXIMATION_H
 #define ANALYSIS_SERIES_PADE_APPROXIMATION_H
 

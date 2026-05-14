@@ -1,3 +1,17 @@
+/**
+ * @file symbolic_commands_algebra.cpp
+ * @brief 代数运算命令实现
+ *
+ * 本文件实现了符号代数相关的命令处理：
+ * - simplify: 表达式简化
+ * - expand: 表达式展开
+ * - factor: 因式分解
+ * - latex: 转换为 LaTeX 格式
+ * - groebner: Gröbner 基计算
+ *
+ * 这些命令用于符号表达式的代数变换。
+ */
+
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/base/assumptions.h"
 #include "symbolic/algebra/groebner/groebner_basis.h"

@@ -1,3 +1,15 @@
+/**
+ * @file symbolic_commands_utils.cpp
+ * @brief 符号命令工具函数实现
+ *
+ * 本文件实现了符号命令共用的工具函数：
+ * - symbolic_vector_to_string: 符号向量格式化输出
+ * - symbolic_matrix_to_string: 符号矩阵格式化输出
+ * - 表达式列表解析
+ *
+ * 这些工具函数被各符号命令处理函数调用。
+ */
+
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "core/services/string_utils.h"

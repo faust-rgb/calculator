@@ -1,3 +1,16 @@
+/**
+ * @file residue.cpp
+ * @brief 留数计算实现
+ *
+ * 本文件实现了有理函数留数的计算功能：
+ * - 解析有理函数表达式
+ * - 提取分子分母多项式系数
+ * - 计算指定极点处的留数
+ *
+ * 留数计算在复分析和信号处理中有重要应用，
+ * 如部分分式分解和拉普拉斯逆变换。
+ */
+
 #include "residue.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "core/services/string_utils.h"

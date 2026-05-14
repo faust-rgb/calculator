@@ -1,3 +1,13 @@
+/**
+ * @file groebner_basis.h
+ * @brief Gröbner 基计算
+ *
+ * 本文件定义了 Gröbner 基计算算法：
+ * - Buchberger 算法：计算 Gröbner 基
+ * - 项序：支持词典序等
+ * - 应用：多项式方程组求解、理想运算
+ */
+
 #ifndef SYMBOLIC_GROEBNER_BASIS_H
 #define SYMBOLIC_GROEBNER_BASIS_H
 

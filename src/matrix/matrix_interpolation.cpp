@@ -1,3 +1,15 @@
+/**
+ * @file matrix_interpolation.cpp
+ * @brief 矩阵插值函数实现
+ *
+ * 本文件实现了多种插值算法：
+ * - Lagrange 插值：多项式插值，适合小规模数据点
+ * - 三次样条插值：平滑插值，适合大规模数据点
+ * - 线性回归：最小二乘拟合
+ *
+ * 这些函数支持 long double 和 PreciseDecimal 两种数值类型。
+ */
+
 #include "matrix.h"
 #include "matrix_internal.h"
 #include "mymath.h"

@@ -1,3 +1,13 @@
+/**
+ * @file risch_algorithm_internal.h
+ * @brief Risch 算法内部辅助函数
+ *
+ * 本文件定义了 Risch 算法各模块共用的内部辅助函数：
+ * - 变量检测：检查表达式是否包含特定变量
+ * - 扩展塔遍历：检查表达式是否包含扩展变量
+ * - 表达式规范化：统一表达式表示形式
+ */
+
 #ifndef RISCH_ALGORITHM_INTERNAL_H
 #define RISCH_ALGORITHM_INTERNAL_H
 

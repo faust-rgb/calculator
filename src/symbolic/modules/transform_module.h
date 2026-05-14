@@ -1,3 +1,15 @@
+/**
+ * @file transform_module.h
+ * @brief 积分变换模块
+ *
+ * 本文件定义了积分变换模块：
+ * - Laplace 变换：将时域函数转换为复频域
+ * - Fourier 变换：将时域函数转换为频域
+ * - Z 变换：将离散序列转换为复频域
+ *
+ * 这些变换在信号处理和控制系统中有广泛应用。
+ */
+
 #ifndef TRANSFORM_MODULE_H
 #define TRANSFORM_MODULE_H
 

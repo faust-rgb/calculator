@@ -1,3 +1,15 @@
+/**
+ * @file risch_algorithm_algebraic.cpp
+ * @brief 代数函数积分实现
+ *
+ * 本文件实现了代数函数的积分算法：
+ * - 商环运算：在 K[x,t]/(P(t)) 中进行精确计算
+ * - 代数扩展处理：处理含根式的表达式
+ * - 结式方法：用于精确的代数运算
+ *
+ * 代数函数积分是 Risch 算法的扩展，处理含根式的表达式。
+ */
+
 #include "symbolic/calculus/risch/risch_algorithm.h"
 #include "symbolic/calculus/risch/risch_algorithm_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"

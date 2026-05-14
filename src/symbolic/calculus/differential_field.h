@@ -1,3 +1,13 @@
+/**
+ * @file differential_field.h
+ * @brief 微分域理论
+ *
+ * 本文件定义了微分域相关的数学工具：
+ * - ExactRational: 精确有理数表示
+ * - 微分域扩展：对数扩展、指数扩展
+ * - 微分代数运算：用于 Risch 积分算法
+ */
+
 #ifndef DIFFERENTIAL_FIELD_H
 #define DIFFERENTIAL_FIELD_H
 

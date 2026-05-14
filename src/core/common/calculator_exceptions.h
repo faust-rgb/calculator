@@ -1,3 +1,14 @@
+/**
+ * @file calculator_exceptions.h
+ * @brief 计算器异常类型定义
+ *
+ * 本文件定义了计算器使用的异常类型：
+ * - CalculatorError: 基础异常类
+ * - SyntaxError: 语法错误
+ * - MathError: 数学运算错误
+ * - DimensionError: 维度不匹配错误
+ */
+
 #ifndef CALCULATOR_EXCEPTIONS_H
 #define CALCULATOR_EXCEPTIONS_H
 

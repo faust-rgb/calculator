@@ -1,3 +1,14 @@
+/**
+ * @file standard_math_module.h
+ * @brief 标准数学函数模块
+ *
+ * 本文件定义了标准数学函数模块：
+ * - 三角函数：sin, cos, tan, asin, acos, atan
+ * - 双曲函数：sinh, cosh, tanh
+ * - 指数对数：exp, log, ln
+ * - 幂函数：pow, sqrt, cbrt
+ */
+
 #ifndef STANDARD_MATH_MODULE_H
 #define STANDARD_MATH_MODULE_H
 

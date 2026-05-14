@@ -1,3 +1,13 @@
+/**
+ * @file symbolic_expression_integral_helpers.h
+ * @brief 符号积分辅助函数
+ *
+ * 本文件定义了符号积分的辅助函数：
+ * - 换元积分：识别并应用换元法
+ * - 三角积分：处理三角函数乘积
+ * - 特殊形式：处理 sec^n, csc^n 等形式
+ */
+
 #ifndef SYMBOLIC_EXPRESSION_INTEGRAL_HELPERS_H
 #define SYMBOLIC_EXPRESSION_INTEGRAL_HELPERS_H
 

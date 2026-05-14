@@ -1,3 +1,13 @@
+/**
+ * @file symbolic_sum.h
+ * @brief 符号求和
+ *
+ * 本文件定义了符号求和算法：
+ * - 求和类型识别：多项式、几何、超几何
+ * - Gosper 算法：超几何项求和
+ * - Zeilberger 算法：递归求和
+ */
+
 #ifndef SYMBOLIC_SUM_H
 #define SYMBOLIC_SUM_H
 

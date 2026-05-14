@@ -1,3 +1,15 @@
+/**
+ * @file assumptions.h
+ * @brief 符号假设系统
+ *
+ * 本文件定义了符号变量的假设管理系统：
+ * - 假设类型：正数、负数、实数、整数
+ * - 假设查询：检查变量是否满足特定假设
+ * - 线程安全：使用互斥锁保护共享状态
+ *
+ * 假设系统用于符号计算中的简化决策。
+ */
+
 #ifndef SYMBOLIC_ASSUMPTIONS_H
 #define SYMBOLIC_ASSUMPTIONS_H
 

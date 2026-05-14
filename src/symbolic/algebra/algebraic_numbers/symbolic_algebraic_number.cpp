@@ -1,3 +1,15 @@
+/**
+ * @file symbolic_algebraic_number.cpp
+ * @brief 代数数表示与运算实现
+ *
+ * 本文件实现了代数数的符号表示和运算：
+ * - 代数数识别：从数值识别常见代数数（如 sqrt(2), sqrt(3)）
+ * - 代数数运算：加、减、乘、除
+ * - 最小多项式：计算代数数的定义多项式
+ *
+ * 代数数用于精确的符号计算，避免数值误差。
+ */
+
 #include "symbolic/algebra/algebraic_numbers/symbolic_algebraic_number.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 

@@ -1,3 +1,15 @@
+/**
+ * @file differential_field.cpp
+ * @brief 微分域理论实现
+ *
+ * 本文件实现了微分域相关的数学工具：
+ * - ExactRational: 精确有理数表示，支持连分数近似
+ * - 微分域扩展：对数扩展、指数扩展的判定
+ * - 微分代数运算：用于 Risch 积分算法的基础设施
+ *
+ * 微分域理论是符号积分的理论基础，用于判断函数是否可积。
+ */
+
 #include "symbolic/calculus/differential_field.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "symbolic/calculus/risch/risch_algorithm_internal.h"

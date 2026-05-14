@@ -1,3 +1,15 @@
+/**
+ * @file matrix_transform.cpp
+ * @brief 矩阵变换函数实现
+ *
+ * 本文件实现了矩阵的各种变换操作：
+ * - reshape: 改变矩阵形状（保持元素总数不变）
+ * - vectorize: 将矩阵向量化为列向量
+ * - diag: 提取对角线元素或构造对角矩阵
+ *
+ * 这些函数支持 long double 和 PreciseDecimal 两种数值类型。
+ */
+
 #include "matrix.h"
 #include "matrix_internal.h"
 #include "math/precise/precise_decimal.h"

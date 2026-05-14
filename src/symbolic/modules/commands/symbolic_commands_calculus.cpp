@@ -1,3 +1,16 @@
+/**
+ * @file symbolic_commands_calculus.cpp
+ * @brief 符号微积分命令实现
+ *
+ * 本文件实现了符号微积分相关的命令处理：
+ * - diff: 符号微分（支持高阶导数）
+ * - limit: 极限计算
+ * - taylor: Taylor 级数展开
+ * - series: 级数展开
+ *
+ * 支持数值微分和符号微分两种模式。
+ */
+
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "core/services/string_utils.h"

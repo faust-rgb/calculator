@@ -1,3 +1,15 @@
+/**
+ * @file pade_approximation.cpp
+ * @brief Padé 逼近实现
+ *
+ * 本文件实现了 Padé 逼近算法：
+ * - 有理逼近：用有理函数逼近幂级数
+ * - 分子分母计算：求解 Padé 系数的线性方程组
+ * - 收敛加速：Padé 逼近常比 Taylor 级数收敛更快
+ *
+ * Padé 逼近在物理和工程中有广泛应用。
+ */
+
 #include "analysis/series/pade_approximation.h"
 #include "analysis/series/taylor_series.h"
 #include "analysis/modules/series_module.h"

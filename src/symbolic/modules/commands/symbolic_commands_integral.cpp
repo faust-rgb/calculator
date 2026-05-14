@@ -1,3 +1,16 @@
+/**
+ * @file symbolic_commands_integral.cpp
+ * @brief 符号积分命令实现
+ *
+ * 本文件实现了符号积分相关的命令处理：
+ * - integral: 符号不定积分（使用 Risch 算法）
+ * - definite_integral: 定积分计算
+ * - line_integral: 曲线积分计算
+ * - surface_integral: 曲面积分计算
+ *
+ * 支持单变量和多变量积分。
+ */
+
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "symbolic/calculus/risch/risch_algorithm.h"

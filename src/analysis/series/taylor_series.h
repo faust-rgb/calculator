@@ -1,3 +1,13 @@
+/**
+ * @file taylor_series.h
+ * @brief Taylor 级数展开
+ *
+ * 本文件定义了 Taylor 级数展开算法：
+ * - 系数计算：通过符号微分计算 Taylor 系数
+ * - 级数生成：生成指定阶数的 Taylor 多项式
+ * - 余项估计：Lagrange 余项形式
+ */
+
 #ifndef ANALYSIS_SERIES_TAYLOR_SERIES_H
 #define ANALYSIS_SERIES_TAYLOR_SERIES_H
 

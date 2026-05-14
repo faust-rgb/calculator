@@ -1,3 +1,15 @@
+/**
+ * @file risch_algorithm_roots.cpp
+ * @brief 多项式根查找实现
+ *
+ * 本文件实现了 Risch 算法中需要的多项式根查找功能：
+ * - 数值根查找：使用数值方法求多项式的所有根
+ * - 复根处理：支持实根和复根的统一表示
+ * - 根的符号表示：返回根的符号表达式
+ *
+ * 根查找用于有理函数的部分分式分解。
+ */
+
 #include "symbolic/calculus/risch/risch_algorithm.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "app/default_precision.h"

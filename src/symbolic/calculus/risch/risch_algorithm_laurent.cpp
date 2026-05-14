@@ -1,3 +1,15 @@
+/**
+ * @file risch_algorithm_laurent.cpp
+ * @brief Laurent 级数积分实现
+ *
+ * 本文件实现了 Laurent 级数（含负幂项的多项式）的积分算法：
+ * - Laurent 系数提取：从表达式中提取 Laurent 级数系数
+ * - 负幂处理：处理 t^(-n) 形式的项
+ * - 积分计算：计算 Laurent 级数的积分
+ *
+ * Laurent 级数用于处理含极点的函数积分。
+ */
+
 #include "symbolic/calculus/risch/risch_algorithm.h"
 #include "symbolic/calculus/risch/risch_algorithm_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"

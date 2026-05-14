@@ -1,3 +1,15 @@
+/**
+ * @file ode_module.h
+ * @brief 常微分方程求解模块
+ *
+ * 本文件定义了常微分方程（ODE）数值求解模块：
+ * - 一阶 ODE 求解：Euler 法、Runge-Kutta 法
+ * - 高阶 ODE 求解：降阶后数值求解
+ * - ODE 系统求解：向量化的数值方法
+ *
+ * 支持初值问题和边值问题。
+ */
+
 #ifndef ODE_MODULE_H
 #define ODE_MODULE_H
 

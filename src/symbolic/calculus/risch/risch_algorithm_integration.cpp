@@ -1,3 +1,16 @@
+/**
+ * @file risch_algorithm_integration.cpp
+ * @brief Risch 积分算法核心流程实现
+ *
+ * 本文件实现了 Risch 积分算法的主要流程：
+ * - 扩展塔分解：将表达式按微分域层级分解
+ * - 有理部分积分：处理有理函数部分
+ * - 对数部分积分：处理含对数的表达式
+ * - 指数部分积分：处理含指数的表达式
+ *
+ * Risch 算法是判断初等函数是否有初等原函数的完备方法。
+ */
+
 #include "symbolic/calculus/risch/risch_algorithm.h"
 #include "symbolic/calculus/risch/risch_algorithm_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"

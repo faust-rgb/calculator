@@ -1,3 +1,15 @@
+/**
+ * @file risch_algorithm_rational.cpp
+ * @brief 有理函数积分实现
+ *
+ * 本文件实现了有理函数的 Risch 积分算法：
+ * - 部分分式分解：将有理函数分解为简单分式
+ * - 多项式部分：提取有理函数的多项式部分
+ * - 对数积分：计算分母线性因子的积分
+ *
+ * 有理函数积分是 Risch 算法的基础部分。
+ */
+
 #include "symbolic/calculus/risch/risch_algorithm.h"
 #include "symbolic/calculus/risch/risch_algorithm_internal.h"
 #include "symbolic/algebra/algebraic_numbers/symbolic_algebraic_number.h"

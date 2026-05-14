@@ -1,3 +1,14 @@
+/**
+ * @file integration_module.h
+ * @brief 数值积分模块
+ *
+ * 本文件定义了数值积分模块：
+ * - 一重积分：Gauss-Kronrod 自适应积分
+ * - 二重积分：嵌套的一重积分
+ * - 三重积分：嵌套的二重积分
+ * - 多重积分：蒙特卡洛方法
+ */
+
 #ifndef INTEGRATION_MODULE_H
 #define INTEGRATION_MODULE_H
 

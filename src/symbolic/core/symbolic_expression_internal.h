@@ -1,3 +1,15 @@
+/**
+ * @file symbolic_expression_internal.h
+ * @brief 符号表达式内部实现
+ *
+ * 本文件定义了符号表达式的内部实现细节：
+ * - 节点类型枚举：数值、变量、运算符、函数等
+ * - 节点结构：表达式树的节点表示
+ * - 内部辅助函数：表达式构造和操作
+ *
+ * 此文件仅供符号表达式模块内部使用。
+ */
+
 #ifndef SYMBOLIC_EXPRESSION_INTERNAL_H
 #define SYMBOLIC_EXPRESSION_INTERNAL_H
 

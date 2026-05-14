@@ -1,3 +1,16 @@
+/**
+ * @file symbolic_solver.h
+ * @brief 符号方程求解器
+ *
+ * 本文件定义了符号方程求解器：
+ * - 多项式方程求解
+ * - 线性方程组求解
+ * - 超越方程数值求解
+ * - 方程类型自动识别
+ *
+ * 支持符号解和数值解两种模式。
+ */
+
 #ifndef SYMBOLIC_SOLVER_H
 #define SYMBOLIC_SOLVER_H
 

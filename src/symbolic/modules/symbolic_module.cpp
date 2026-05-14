@@ -1,3 +1,16 @@
+/**
+ * @file symbolic_module.cpp
+ * @brief 符号计算模块主入口
+ *
+ * 本文件实现了符号计算模块的命令路由：
+ * - :assume - 变量假设管理
+ * - 代数命令：expand, factor, simplify 等
+ * - 微积分命令：diff, integral, limit 等
+ * - 矩阵符号命令：det, inverse 等
+ *
+ * 该模块将命令分发到各个子模块处理。
+ */
+
 #include "symbolic/modules/symbolic_module.h"
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/base/assumptions.h"

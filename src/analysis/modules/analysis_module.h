@@ -1,3 +1,15 @@
+/**
+ * @file analysis_module.h
+ * @brief 函数分析模块
+ *
+ * 本文件定义了函数分析模块：
+ * - 极限计算：符号极限和数值极限
+ * - 极值查找：局部极值和全局极值
+ * - 函数性质分析：单调性、凸性等
+ *
+ * 支持符号分析和数值分析两种模式。
+ */
+
 #ifndef ANALYSIS_MODULE_H
 #define ANALYSIS_MODULE_H
 

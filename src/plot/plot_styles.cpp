@@ -1,3 +1,17 @@
+/**
+ * @file plot_styles.cpp
+ * @brief 绘图样式解析实现
+ *
+ * 本文件实现了绘图命令的样式选项解析：
+ * - :grid - 网格线开关
+ * - :title/:xlabel/:ylabel - 标题和轴标签
+ * - :export/:format - 导出路径和格式
+ * - :colormap - 颜色映射选择
+ * - :legend - 图例标签列表
+ *
+ * 这些选项用于自定义图形外观。
+ */
+
 #include "plot_styles.h"
 #include "calculator_internal_types.h"
 #include "core/services/string_utils.h"

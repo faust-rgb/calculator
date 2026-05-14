@@ -1,3 +1,14 @@
+/**
+ * @file optimization_module.h
+ * @brief 优化模块
+ *
+ * 本文件定义了优化模块：
+ * - 线性规划：单纯形法求解线性规划问题
+ * - 整数规划：分支定界法求解整数规划问题
+ * - 无约束优化：梯度下降、牛顿法
+ * - 约束优化：拉格朗日乘数法
+ */
+
 #ifndef OPTIMIZATION_MODULE_H
 #define OPTIMIZATION_MODULE_H
 

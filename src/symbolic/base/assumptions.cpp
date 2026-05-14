@@ -1,3 +1,15 @@
+/**
+ * @file assumptions.cpp
+ * @brief 符号假设系统实现
+ *
+ * 本文件实现了符号变量的假设管理系统：
+ * - 假设类型：正数、负数、实数、整数
+ * - 假设查询：检查变量是否满足特定假设
+ * - 假设传播：某些假设隐含其他假设（如正数隐含实数）
+ *
+ * 假设系统用于符号计算中的简化决策，如 sqrt(x^2) 简化为 x（当 x > 0）。
+ */
+
 #include "symbolic/base/assumptions.h"
 #include <sstream>
 

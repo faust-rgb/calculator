@@ -1,3 +1,16 @@
+/**
+ * @file psa_engine.cpp
+ * @brief 幂级数分析（PSA）引擎实现
+ *
+ * 本文件实现了幂级数分析的核心算法：
+ * - Laurent 级数：支持负幂项的级数表示
+ * - 级数运算：加、减、乘、除、复合
+ * - 极点检测：识别级数的极点位置和阶数
+ * - 奇点分析：分析函数的奇点类型
+ *
+ * PSA 引擎是级数展开和奇点分析的基础设施。
+ */
+
 #include "analysis/series/psa_engine.h"
 #include "analysis/modules/series_module.h"
 #include "analysis/base/precision_constants.h"

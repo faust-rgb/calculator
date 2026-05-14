@@ -1,3 +1,15 @@
+/**
+ * @file symbolic_commands_matrix.cpp
+ * @brief 符号矩阵命令实现
+ *
+ * 本文件实现了符号矩阵相关的命令处理：
+ * - det: 符号行列式计算（使用 Bareiss 算法）
+ * - inverse: 符号矩阵求逆
+ * - eigenvalues: 符号特征值计算
+ *
+ * Bareiss 算法是无分数的高斯消元，适合符号计算。
+ */
+
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "symbolic/solver/symbolic_solver.h"

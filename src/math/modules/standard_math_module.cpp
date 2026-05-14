@@ -1,3 +1,18 @@
+/**
+ * @file standard_math_module.cpp
+ * @brief 标准数学函数模块实现
+ *
+ * 本文件实现了标准数学函数的模块注册：
+ * - 三角函数：sin, cos, tan, asin, acos, atan, atan2
+ * - 双曲函数：sinh, cosh, tanh, asinh, acosh, atanh
+ * - 指数对数：exp, log, log10, log2, ln
+ * - 幂函数：pow, sqrt, cbrt, hypot
+ * - 取整函数：floor, ceil, round, trunc
+ * - 其他函数：abs, sign, max, min
+ *
+ * 这些函数构成计算器的核心数学库。
+ */
+
 #include "standard_math_module.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"

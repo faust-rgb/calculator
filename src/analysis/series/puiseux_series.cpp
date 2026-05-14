@@ -1,3 +1,15 @@
+/**
+ * @file puiseux_series.cpp
+ * @brief Puiseux 级数实现
+ *
+ * 本文件实现了 Puiseux 级数展开算法：
+ * - Newton 多边形：用于确定级数的首项指数
+ * - 分数幂级数：支持分数指数的级数展开
+ * - 代数函数展开：处理含根式的函数展开
+ *
+ * Puiseux 级数是 Taylor 级数的推广，支持分数幂。
+ */
+
 #include "analysis/series/puiseux_series.h"
 #include "analysis/series/taylor_series.h"
 #include "analysis/series/psa_engine.h"

@@ -1,3 +1,16 @@
+/**
+ * @file matrix_utility.cpp
+ * @brief 矩阵工具函数实现
+ *
+ * 本文件实现了矩阵模块的辅助工具函数：
+ * - 显示精度管理
+ * - 数值格式化输出
+ * - 泛型数学函数封装（abs, sqrt 等）
+ * - 矩阵字符串表示生成
+ *
+ * 这些工具函数被矩阵模块的其他文件内部使用。
+ */
+
 #include "matrix.h"
 #include "matrix_internal.h"
 #include "dsp/signal_processing.h"

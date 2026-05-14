@@ -1,3 +1,13 @@
+/**
+ * @file symbolic_expression_integral_internal.h
+ * @brief 符号积分内部辅助函数
+ *
+ * 本文件定义了符号积分的内部辅助函数：
+ * - 多项式运算：系数裁剪、除法
+ * - 部分分式分解：有理函数分解
+ * - 积分表匹配：识别标准积分形式
+ */
+
 #ifndef SYMBOLIC_EXPRESSION_INTEGRAL_INTERNAL_H
 #define SYMBOLIC_EXPRESSION_INTEGRAL_INTERNAL_H
 

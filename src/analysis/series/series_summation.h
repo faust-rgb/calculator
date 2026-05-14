@@ -1,3 +1,13 @@
+/**
+ * @file series_summation.h
+ * @brief 级数求和
+ *
+ * 本文件定义了符号级数求和算法：
+ * - 几何级数求和：检测等比数列并计算闭式解
+ * - 调和级数：识别常见的调和级数形式
+ * - 符号求和：使用符号方法计算级数和
+ */
+
 #ifndef ANALYSIS_SERIES_SERIES_SUMMATION_H
 #define ANALYSIS_SERIES_SERIES_SUMMATION_H
 

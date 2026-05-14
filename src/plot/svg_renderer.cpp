@@ -1,3 +1,16 @@
+/**
+ * @file svg_renderer.cpp
+ * @brief SVG 图形渲染器实现
+ *
+ * 本文件实现了将图形数据渲染为 SVG 格式的功能：
+ * - 颜色映射（viridis, plasma, coolwarm 等色图）
+ * - 坐标轴和网格线绘制
+ * - 曲线和散点图绘制
+ * - 图例和标签生成
+ *
+ * SVG 输出支持矢量图形，可无损缩放。
+ */
+
 #include "svg_renderer.h"
 #include "app/scalar_type.h"
 #include "math/mymath.h"

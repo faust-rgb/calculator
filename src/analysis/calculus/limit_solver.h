@@ -1,3 +1,13 @@
+/**
+ * @file limit_solver.h
+ * @brief 极限求解器
+ *
+ * 本文件定义了极限求解算法：
+ * - 数值极限：逐步逼近法计算极限
+ * - 符号极限探测：识别无穷极限和振荡极限
+ * - L'Hôpital 法则：处理不定式极限
+ */
+
 #ifndef ANALYSIS_NUMERIC_LIMIT_SOLVER_H
 #define ANALYSIS_NUMERIC_LIMIT_SOLVER_H
 

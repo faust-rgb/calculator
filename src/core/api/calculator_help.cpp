@@ -1,3 +1,16 @@
+/**
+ * @file calculator_help.cpp
+ * @brief 计算器帮助系统实现
+ *
+ * 本文件实现了计算器的帮助系统：
+ * - help_text: 生成主帮助文本
+ * - help_topic: 生成特定主题的详细帮助
+ * - 命令别名说明
+ * - 模块帮助聚合
+ *
+ * 帮助系统从各模块收集帮助信息并统一展示。
+ */
+
 #include "core/api/calculator.h"
 #include "core/api/calculator_internal_types.h"
 #include "module/calculator_module.h"

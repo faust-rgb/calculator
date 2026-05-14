@@ -1,3 +1,13 @@
+/**
+ * @file dsp_module.cpp
+ * @brief 数字信号处理模块实现
+ *
+ * 本文件实现了 DSP 模块的命令处理：
+ * - residue: 计算有理函数在指定点的留数
+ *
+ * 该模块将命令路由到具体的信号处理函数实现。
+ */
+
 #include "dsp_module.h"
 #include "residue.h"
 #include "core/services/string_utils.h"

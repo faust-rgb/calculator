@@ -1,3 +1,13 @@
+/**
+ * @file symbolic_limit.h
+ * @brief 符号极限计算
+ *
+ * 本文件定义了符号极限计算算法：
+ * - 不定型识别：0/0, inf/inf, 0*inf 等
+ * - L'Hôpital 法则：处理不定式极限
+ * - Taylor 展开：通过级数展开计算极限
+ */
+
 #ifndef SYMBOLIC_LIMIT_H
 #define SYMBOLIC_LIMIT_H
 

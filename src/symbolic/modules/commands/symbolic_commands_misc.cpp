@@ -1,3 +1,15 @@
+/**
+ * @file symbolic_commands_misc.cpp
+ * @brief 其他符号命令实现
+ *
+ * 本文件实现了其他符号计算命令：
+ * - solve: 方程求解（代数方程、微分方程）
+ * - sum: 符号求和
+ * - ODE 求解器：一阶线性、二阶常系数等
+ *
+ * 这些命令扩展了符号计算的功能范围。
+ */
+
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "symbolic/solver/symbolic_solver.h"

@@ -1,3 +1,13 @@
+/**
+ * @file numerical_calculus.h
+ * @brief 数值微积分
+ *
+ * 本文件定义了数值微积分的核心算法：
+ * - Gauss-Kronrod 积分：G7-K15 自适应积分算法
+ * - 数值微分：中心差分和 Richardson 外推
+ * - 自适应步长：根据误差估计调整积分步长
+ */
+
 #ifndef ANALYSIS_NUMERIC_NUMERICAL_CALCULUS_H
 #define ANALYSIS_NUMERIC_NUMERICAL_CALCULUS_H
 

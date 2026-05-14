@@ -1,3 +1,13 @@
+/**
+ * @file puiseux_series.h
+ * @brief Puiseux 级数展开
+ *
+ * 本文件定义了 Puiseux 级数展开算法：
+ * - Newton 多边形：确定级数的首项指数
+ * - 分数幂级数：支持分数指数的级数展开
+ * - 代数函数展开：处理含根式的函数展开
+ */
+
 #ifndef ANALYSIS_SERIES_PUISEUX_SERIES_H
 #define ANALYSIS_SERIES_PUISEUX_SERIES_H
 

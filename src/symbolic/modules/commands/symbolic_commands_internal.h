@@ -1,3 +1,13 @@
+/**
+ * @file symbolic_commands_internal.h
+ * @brief 符号命令内部辅助函数
+ *
+ * 本文件定义了符号命令共用的辅助函数：
+ * - 符号向量/矩阵格式化输出
+ * - 符号表达式列表解析
+ * - 无穷大字面量识别
+ */
+
 #ifndef SYMBOLIC_COMMANDS_INTERNAL_H
 #define SYMBOLIC_COMMANDS_INTERNAL_H
 

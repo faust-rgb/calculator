@@ -1,3 +1,16 @@
+/**
+ * @file svg_renderer.h
+ * @brief SVG 图形渲染器
+ *
+ * 本文件定义了 SVG 格式的图形渲染器：
+ * - 折线图和散点图
+ * - 热力图
+ * - 柱状图和直方图
+ * - 等高线图
+ *
+ * SVG 输出支持矢量图形，可无损缩放。
+ */
+
 #ifndef SVG_RENDERER_H
 #define SVG_RENDERER_H
 

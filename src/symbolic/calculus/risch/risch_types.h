@@ -1,3 +1,13 @@
+/**
+ * @file risch_types.h
+ * @brief Risch 积分算法类型定义
+ *
+ * 本文件定义了 Risch 积分算法所需的数据类型：
+ * - 特殊函数类型枚举
+ * - 微分扩展结构
+ * - 积分结果表示
+ */
+
 #ifndef RISCH_TYPES_H
 #define RISCH_TYPES_H
 

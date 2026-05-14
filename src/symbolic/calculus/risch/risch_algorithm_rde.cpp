@@ -1,3 +1,15 @@
+/**
+ * @file risch_algorithm_rde.cpp
+ * @brief Risch 微分方程求解器实现
+ *
+ * 本文件实现了 Risch 微分方程（RDE）求解算法：
+ * - 参数化 RDE：求解 y' + f*y = g 类型的方程
+ * - 整数比值检测：判断指数系数是否为整数
+ * - 多项式解搜索：在多项式域中寻找解
+ *
+ * RDE 求解是 Risch 积分算法的关键子问题。
+ */
+
 #include "symbolic/calculus/risch/risch_algorithm.h"
 #include "symbolic/calculus/risch/risch_algorithm_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"
