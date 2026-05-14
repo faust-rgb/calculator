@@ -11,6 +11,7 @@
  */
 
 #include "statistics.h"
+#include "probability.h"
 #include "app/scalar_type.h"
 #include "math/mymath.h"
 #include <algorithm>
@@ -23,6 +24,31 @@ namespace stats {
 using Scalar = mymath::Scalar;
 
 /**
+ * @brief 内部辅助：百分位数计算（不带拷贝版本）
+ */
+static Scalar percentile_internal(std::vector<Scalar>& data, Scalar p) {
+    if (data.empty()) throw std::runtime_error("percentile expects at least one value");
+    if (p < 0.0L || p > 100.0L) throw std::runtime_error("percentile p must be in [0, 100]");
+    if (data.size() == 1) return data[0];
+
+    Scalar pos = p * Scalar(static_cast<long long>(data.size() - 1)) / Scalar(100);
+    size_t i = static_cast<size_t>(pos.to_long_double());
+    Scalar fraction = pos - Scalar(static_cast<long long>(i));
+
+    if (fraction < Scalar(1e-12L)) {
+        std::nth_element(data.begin(), data.begin() + i, data.end());
+        return data[i];
+    }
+
+    std::nth_element(data.begin(), data.begin() + i, data.end());
+    Scalar v0 = data[i];
+    // 为了准确获取 v1，我们需要在 i+1 之后寻找最小元素
+    std::nth_element(data.begin() + i + 1, data.begin() + i + 1, data.end());
+    Scalar v1 = data[i + 1];
+    return v0 + fraction * (v1 - v0);
+}
+
+/**
  * @brief 计算平均值（算术平均）
  */
 Scalar mean(const std::vector<Scalar>& data) {
@@ -31,34 +57,28 @@ Scalar mean(const std::vector<Scalar>& data) {
     }
     Scalar sum = Scalar(0);
     for (const auto& val : data) {
-        sum += Scalar(val);
+        sum += val;
     }
-    return (sum / Scalar(static_cast<long long>(data.size())));
+    return sum / Scalar(static_cast<long long>(data.size()));
 }
 
 /**
  * @brief 计算中位数
- * 使用 std::nth_element 以 O(n) 时间复杂度获取中位数，避免全排序。
  */
-Scalar median(const std::vector<Scalar>& data) {
+Scalar median(std::vector<Scalar> data) {
     if (data.empty()) {
         throw std::runtime_error("median expects at least one value");
     }
     size_t n = data.size();
-    std::vector<Scalar> copy;
-    copy.reserve(n);
-    for (const auto& val : data) {
-        copy.push_back(Scalar(val));
-    }
     if (n % 2 == 1) {
-        std::nth_element(copy.begin(), copy.begin() + n / 2, copy.end());
-        return (copy[n / 2]);
+        std::nth_element(data.begin(), data.begin() + n / 2, data.end());
+        return data[n / 2];
     } else {
-        std::nth_element(copy.begin(), copy.begin() + n / 2, copy.end());
-        Scalar right = copy[n / 2];
-        std::nth_element(copy.begin(), copy.begin() + n / 2 - 1, copy.begin() + n / 2);
-        Scalar left = copy[n / 2 - 1];
-        return ((left + right) / Scalar(2));
+        std::nth_element(data.begin(), data.begin() + n / 2, data.end());
+        Scalar right = data[n / 2];
+        std::nth_element(data.begin(), data.begin() + n / 2 - 1, data.begin() + n / 2);
+        Scalar left = data[n / 2 - 1];
+        return (left + right) / Scalar(2);
     }
 }
 
@@ -71,19 +91,12 @@ Scalar mode(const std::vector<Scalar>& data) {
     }
     if (data.size() == 1) return data[0];
 
-    std::vector<Scalar> sorted;
-    sorted.reserve(data.size());
-    for (const auto& val : data) {
-        sorted.push_back(Scalar(val));
-    }
+    std::vector<Scalar> sorted = data;
     std::sort(sorted.begin(), sorted.end());
 
-    // 动态计算阈值：基于数据范围和机器精度
     Scalar data_range = sorted.back() - sorted.front();
-    // 使用数据范围的相对阈值，结合机器 epsilon
     Scalar epsilon = std::numeric_limits<Scalar>::epsilon();
     Scalar threshold = std::max(epsilon * mymath::abs(data_range), Scalar(1e-10L));
-    // 对于极小数据范围，使用绝对阈值
     if (data_range < Scalar(1e-6L)) {
         threshold = Scalar(1e-10L);
     }
@@ -105,29 +118,28 @@ Scalar mode(const std::vector<Scalar>& data) {
             current_count = 1;
         }
     }
-    return ((current_count > best_count) ? current_value : best_value);
+    return (current_count > best_count) ? current_value : best_value;
 }
 
 /**
  * @brief 内部辅助：单次遍历计算均值、方差、三阶矩和四阶矩
- * 使用扩展的 Welford 算法。
  */
 void Moments::add(Scalar x) {
     long long n1 = n;
     n++;
     Scalar delta = x - mean;
-    Scalar delta_n = delta / Scalar(static_cast<long long>(n));
+    Scalar delta_n = delta / Scalar(n);
     Scalar delta_n2 = delta_n * delta_n;
-    Scalar term1 = delta * delta_n * Scalar((n1));
+    Scalar term1 = delta * delta_n * Scalar(n1);
     mean += delta_n;
-    m4 += term1 * delta_n2 * Scalar((n * n - 3 * n + 3)) + Scalar(6) * delta_n2 * m2 - Scalar(4) * delta_n * m3;
-    m3 += term1 * delta_n * Scalar((n - 2)) - Scalar(3) * delta_n * m2;
+    m4 += term1 * delta_n2 * Scalar(n * n - 3 * n + 3) + Scalar(6) * delta_n2 * m2 - Scalar(4) * delta_n * m3;
+    m3 += term1 * delta_n * Scalar(n - 2) - Scalar(3) * delta_n * m2;
     m2 += term1;
 }
 
 Moments compute_moments(const std::vector<Scalar>& data) {
     Moments m;
-    for (const auto& x : data) m.add(Scalar(x));
+    for (const auto& x : data) m.add(x);
     return m;
 }
 
@@ -135,104 +147,115 @@ Scalar variance(const std::vector<Scalar>& data) {
     if (data.empty()) throw std::runtime_error("variance expects at least one value");
     if (data.size() == 1) return 0.0L;
     Moments m = compute_moments(data);
-    return (m.m2 / Scalar((m.n)));
+    return m.m2 / Scalar(m.n);
 }
 
 Scalar sample_variance(const std::vector<Scalar>& data) {
     if (data.size() < 2) throw std::runtime_error("sample_variance requires at least two values");
     Moments m = compute_moments(data);
-    return (m.m2 / Scalar((m.n - 1)));
+    return m.m2 / Scalar(m.n - 1);
 }
 
 Scalar stddev(const std::vector<Scalar>& data) {
-    return (mymath::sqrt(Scalar(variance(data))));
+    return mymath::sqrt(variance(data));
 }
 
 Scalar sample_stddev(const std::vector<Scalar>& data) {
-    return (mymath::sqrt(Scalar(sample_variance(data))));
+    return mymath::sqrt(sample_variance(data));
 }
 
 Scalar skewness(const std::vector<Scalar>& data) {
     if (data.size() < 2) throw std::runtime_error("skewness requires at least two values");
     Moments m = compute_moments(data);
-    Scalar var = m.m2 / Scalar((m.n));
+    Scalar var = m.m2 / Scalar(m.n);
     if (var < Scalar(1e-20L)) throw std::runtime_error("skewness undefined for zero variance");
-    return ((m.m3 / Scalar((m.n))) / mymath::pow(var, Scalar(1.5)));
+    return (m.m3 / Scalar(m.n)) / mymath::pow(var, Scalar(1.5));
 }
 
 Scalar kurtosis(const std::vector<Scalar>& data) {
     if (data.size() < 2) throw std::runtime_error("kurtosis requires at least two values");
     Moments m = compute_moments(data);
-    Scalar var = m.m2 / Scalar((m.n));
+    Scalar var = m.m2 / Scalar(m.n);
     if (var < Scalar(1e-20L)) throw std::runtime_error("kurtosis undefined for zero variance");
-    return ((m.m4 / Scalar((m.n))) / (var * var) - Scalar(3));
+    return (m.m4 / Scalar(m.n)) / (var * var) - Scalar(3);
 }
 
-Scalar percentile(const std::vector<Scalar>& data, Scalar p) {
-    if (data.empty()) throw std::runtime_error("percentile expects at least one value");
-    if (p < 0.0L || p > 100.0L) throw std::runtime_error("percentile p must be in [0, 100]");
-    if (data.size() == 1) return data[0];
-
-    std::vector<Scalar> copy;
-    copy.reserve(data.size());
-    for (const auto& val : data) {
-        copy.push_back(Scalar(val));
-    }
-    Scalar pos = Scalar(p) * Scalar(static_cast<long long>(copy.size() - 1)) / Scalar(100);
-    size_t i = static_cast<size_t>(pos.to_long_double());
-    Scalar fraction = pos - Scalar(static_cast<long long>(i));
-
-    if (fraction < Scalar(1e-12L)) {
-        std::nth_element(copy.begin(), copy.begin() + i, copy.end());
-        return (copy[i]);
-    }
-
-    std::nth_element(copy.begin(), copy.begin() + i, copy.end());
-    Scalar v0 = copy[i];
-    std::nth_element(copy.begin() + i + 1, copy.begin() + i + 1, copy.end());
-    Scalar v1 = copy[i + 1];
-    return (v0 + fraction * (v1 - v0));
+Scalar percentile(std::vector<Scalar> data, Scalar p) {
+    return percentile_internal(data, p);
 }
 
-Scalar quartile(const std::vector<Scalar>& data, int q) {
+Scalar quartile(std::vector<Scalar> data, int q) {
     if (q < 0 || q > 4) throw std::runtime_error("quartile q must be between 0 and 4");
-    return percentile(data, q * 25.0);
+    return percentile_internal(data, q * 25.0);
+}
+
+DescriptiveSummary compute_summary(std::vector<Scalar> data) {
+    if (data.empty()) throw std::runtime_error("compute_summary expects at least one value");
+    DescriptiveSummary s;
+    s.count = data.size();
+
+    // 1. 矩计算（均值、方差、偏度、峰度）
+    Moments m = compute_moments(data);
+    s.mean = m.mean;
+    s.variance = m.m2 / Scalar(m.n);
+    Scalar sample_var = m.m2 / Scalar(m.n > 1 ? m.n - 1 : 1);
+    s.stddev = mymath::sqrt(sample_var);
+    if (s.variance > Scalar(1e-30L)) {
+        s.skewness = (m.m3 / Scalar(m.n)) / mymath::pow(s.variance, Scalar(1.5));
+        s.kurtosis = (m.m4 / Scalar(m.n)) / (s.variance * s.variance) - Scalar(3);
+    }
+
+    // 2. 分位数计算（需要部分排序）
+    s.min = percentile_internal(data, 0);
+    s.max = percentile_internal(data, 100);
+    s.median = percentile_internal(data, 50);
+    s.q1 = percentile_internal(data, 25);
+    s.q3 = percentile_internal(data, 75);
+    s.iqr = s.q3 - s.q1;
+
+    // 3. MAD
+    std::vector<Scalar> diffs;
+    diffs.reserve(data.size());
+    for (const auto& x : data) {
+        diffs.push_back(mymath::abs(x - s.median));
+    }
+    s.mad = median(std::move(diffs));
+
+    return s;
 }
 
 Scalar covariance(const std::vector<Scalar>& x, const std::vector<Scalar>& y) {
     if (x.size() != y.size() || x.empty()) {
         throw std::runtime_error("covariance requires two non-empty vectors of same length");
     }
-    // 单次遍历计算协方差
     Scalar mean_x = Scalar(0), mean_y = Scalar(0), C = Scalar(0);
     for (size_t i = 0; i < x.size(); ++i) {
-        size_t n = i + 1;
-        Scalar dx = Scalar(x[i]) - mean_x;
-        mean_x += dx / Scalar(static_cast<long long>(n));
-        mean_y += (Scalar(y[i]) - mean_y) / Scalar(static_cast<long long>(n));
-        C += dx * (Scalar(y[i]) - mean_y);
+        Scalar n_val = Scalar(static_cast<long long>(i + 1));
+        Scalar dx = x[i] - mean_x;
+        mean_x += dx / n_val;
+        mean_y += (y[i] - mean_y) / n_val;
+        C += dx * (y[i] - mean_y);
     }
-    return (C / Scalar(static_cast<long long>(x.size())));
+    return C / Scalar(static_cast<long long>(x.size()));
 }
 
 Scalar correlation(const std::vector<Scalar>& x, const std::vector<Scalar>& y) {
     if (x.size() != y.size() || x.empty()) {
         throw std::runtime_error("correlation requires two non-empty vectors of same length");
     }
-    // 单次遍历计算均值、方差和协方差
     Scalar mx = Scalar(0), my = Scalar(0), vx = Scalar(0), vy = Scalar(0), cxy = Scalar(0);
     for (size_t i = 0; i < x.size(); ++i) {
-        size_t n = i + 1;
-        Scalar dx = Scalar(x[i]) - mx;
-        mx += dx / Scalar(static_cast<long long>(n));
-        vx += dx * (Scalar(x[i]) - mx);
-        Scalar dy = Scalar(y[i]) - my;
-        my += dy / Scalar(static_cast<long long>(n));
-        vy += dy * (Scalar(y[i]) - my);
-        cxy += dx * (Scalar(y[i]) - my);
+        Scalar n_val = Scalar(static_cast<long long>(i + 1));
+        Scalar dx = x[i] - mx;
+        mx += dx / n_val;
+        vx += dx * (x[i] - mx);
+        Scalar dy = y[i] - my;
+        my += dy / n_val;
+        vy += dy * (y[i] - my);
+        cxy += dx * (y[i] - my);
     }
     if (vx < Scalar(1e-20L) || vy < Scalar(1e-20L)) throw std::runtime_error("correlation undefined for constant vectors");
-    return (cxy / mymath::sqrt(vx * vy));
+    return cxy / mymath::sqrt(vx * vy);
 }
 
 std::vector<Scalar> linear_regression(const std::vector<Scalar>& x, const std::vector<Scalar>& y) {
@@ -241,44 +264,34 @@ std::vector<Scalar> linear_regression(const std::vector<Scalar>& x, const std::v
     }
     Scalar mx = Scalar(0), my = Scalar(0), vx = Scalar(0), cxy = Scalar(0);
     for (size_t i = 0; i < x.size(); ++i) {
-        size_t n = i + 1;
-        Scalar dx = Scalar(x[i]) - mx;
-        mx += dx / Scalar(static_cast<long long>(n));
-        vx += dx * (Scalar(x[i]) - mx);
-        Scalar dy = Scalar(y[i]) - my;
-        my += dy / Scalar(static_cast<long long>(n));
-        cxy += dx * (Scalar(y[i]) - my);
+        Scalar n_val = Scalar(static_cast<long long>(i + 1));
+        Scalar dx = x[i] - mx;
+        mx += dx / n_val;
+        vx += dx * (x[i] - mx);
+        Scalar dy = y[i] - my;
+        my += dy / n_val;
+        cxy += dx * (y[i] - my);
     }
     if (vx < Scalar(1e-20L)) throw std::runtime_error("linear_regression requires non-constant x");
     Scalar slope = cxy / vx;
     Scalar intercept = my - slope * mx;
-    return {(intercept), (slope)};
+    return {intercept, slope};
 }
 
-Scalar iqr(const std::vector<Scalar>& data) {
-    return quartile(data, 3) - quartile(data, 1);
+Scalar iqr(std::vector<Scalar> data) {
+    if (data.empty()) return 0;
+    Scalar q1 = percentile_internal(data, 25);
+    Scalar q3 = percentile_internal(data, 75);
+    return q3 - q1;
 }
 
-Scalar mad(const std::vector<Scalar>& data) {
+Scalar mad(std::vector<Scalar> data) {
     if (data.empty()) throw std::runtime_error("mad expects at least one value");
-    Scalar med = median(data);
-    std::vector<Scalar> diffs;
-    diffs.reserve(data.size());
-    for (const auto& x : data) {
-        diffs.push_back(mymath::abs(Scalar(x) - Scalar(med)));
+    Scalar med = median(data); // data is already a copy
+    for (auto& x : data) {
+        x = mymath::abs(x - med);
     }
-    // Calculate median of diffs
-    size_t n = diffs.size();
-    if (n % 2 == 1) {
-        std::nth_element(diffs.begin(), diffs.begin() + n / 2, diffs.end());
-        return (diffs[n / 2]);
-    } else {
-        std::nth_element(diffs.begin(), diffs.begin() + n / 2, diffs.end());
-        Scalar right = diffs[n / 2];
-        std::nth_element(diffs.begin(), diffs.begin() + n / 2 - 1, diffs.begin() + n / 2);
-        Scalar left = diffs[n / 2 - 1];
-        return ((left + right) / Scalar(2));
-    }
+    return median(std::move(data));
 }
 
 Scalar weighted_mean(const std::vector<Scalar>& data, const std::vector<Scalar>& weights) {
@@ -288,13 +301,13 @@ Scalar weighted_mean(const std::vector<Scalar>& data, const std::vector<Scalar>&
     Scalar weighted_sum = Scalar(0);
     Scalar weight_sum = Scalar(0);
     for (size_t i = 0; i < data.size(); i++) {
-        weighted_sum += Scalar(data[i]) * Scalar(weights[i]);
-        weight_sum += Scalar(weights[i]);
+        weighted_sum += data[i] * weights[i];
+        weight_sum += weights[i];
     }
     if (weight_sum < Scalar(1e-30L)) {
         throw std::runtime_error("weighted_mean sum of weights is zero");
     }
-    return (weighted_sum / weight_sum);
+    return weighted_sum / weight_sum;
 }
 
 static std::vector<Scalar> get_ranks(const std::vector<Scalar>& data) {
@@ -307,7 +320,7 @@ static std::vector<Scalar> get_ranks(const std::vector<Scalar>& data) {
     std::vector<Scalar> ranks(n);
     for (size_t i = 0; i < n; ) {
         size_t j = i + 1;
-        while (j < n && mymath::abs(Scalar(data[indices[j]]) - Scalar(data[indices[i]])) < Scalar(1e-10L)) {
+        while (j < n && mymath::abs(data[indices[j]] - data[indices[i]]) < Scalar(1e-10L)) {
             j++;
         }
         Scalar rank = (Scalar(static_cast<long long>(i)) + Scalar(static_cast<long long>(j)) + Scalar(1)) / Scalar(2);
@@ -325,21 +338,48 @@ Scalar spearman_correlation(const std::vector<Scalar>& x, const std::vector<Scal
     }
     std::vector<Scalar> rx = get_ranks(x);
     std::vector<Scalar> ry = get_ranks(y);
+    return correlation(rx, ry);
+}
 
-    // Compute correlation using Scalar internally
-    Scalar mx = Scalar(0), my = Scalar(0), vx = Scalar(0), vy = Scalar(0), cxy = Scalar(0);
-    for (size_t i = 0; i < rx.size(); ++i) {
-        size_t n = i + 1;
-        Scalar dx = rx[i] - mx;
-        mx += dx / Scalar(static_cast<long long>(n));
-        vx += dx * (rx[i] - mx);
-        Scalar dy = ry[i] - my;
-        my += dy / Scalar(static_cast<long long>(n));
-        vy += dy * (ry[i] - my);
-        cxy += dx * (ry[i] - my);
+Scalar t_test(Scalar mu0, const std::vector<Scalar>& data) {
+    if (data.empty()) throw std::runtime_error("t_test requires data");
+    Scalar m = mean(data);
+    Scalar s = sample_stddev(data);
+    Scalar n = Scalar(static_cast<long long>(data.size()));
+    if (s < Scalar(1e-20L)) return (mymath::abs(m - mu0) < Scalar(1e-20L)) ? 1.0L : 0.0L;
+    Scalar t = (m - mu0) / (s / mymath::sqrt(n));
+    Scalar df = n - Scalar(1);
+    return 2.0 * prob::student_t_cdf(-(mymath::abs(t)), df);
+}
+
+Scalar t_test2(const std::vector<Scalar>& x, const std::vector<Scalar>& y) {
+    if (x.empty() || y.empty()) throw std::runtime_error("t_test2 requires two non-empty datasets");
+    Scalar m1 = mean(x);
+    Scalar m2 = mean(y);
+    Scalar s1 = sample_variance(x);
+    Scalar s2 = sample_variance(y);
+    Scalar n1 = Scalar(static_cast<long long>(x.size()));
+    Scalar n2 = Scalar(static_cast<long long>(y.size()));
+
+    Scalar t = (m1 - m2) / mymath::sqrt(s1/n1 + s2/n2);
+    Scalar df = mymath::pow(s1/n1 + s2/n2, Scalar(2)) /
+                (mymath::pow(s1/n1, Scalar(2))/(n1-Scalar(1)) + mymath::pow(s2/n2, Scalar(2))/(n2-Scalar(1)));
+
+    return 2.0 * prob::student_t_cdf(-(mymath::abs(t)), df);
+}
+
+Scalar chi2_test(const std::vector<Scalar>& obs, const std::vector<Scalar>& exp) {
+    if (obs.size() != exp.size() || obs.empty()) {
+        throw std::runtime_error("chi2_test requires two equal-length datasets");
     }
-    if (vx < Scalar(1e-20L) || vy < Scalar(1e-20L)) throw std::runtime_error("spearman_correlation undefined for constant vectors");
-    return (cxy / mymath::sqrt(vx * vy));
+    Scalar chi2 = 0;
+    for (size_t i = 0; i < obs.size(); i++) {
+        if (exp[i] <= 0) throw std::runtime_error("chi2_test expected values must be positive");
+        chi2 += mymath::pow(obs[i] - exp[i], 2) / exp[i];
+    }
+    Scalar df = Scalar(static_cast<long long>(obs.size() - 1));
+    if (df < 1) throw std::runtime_error("chi2_test requires at least 2 categories");
+    return 1.0L - prob::chi2_cdf(chi2, df);
 }
 
 } // namespace stats

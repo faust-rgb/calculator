@@ -14,6 +14,7 @@
 
 #include <vector>
 #include "app/scalar_type.h"
+#include "math/mymath.h"
 namespace prob {
 
 /**
@@ -51,7 +52,7 @@ Scalar bernoulli(int n);
  * @param x 输入值
  * @return Gamma(x)
  */
-Scalar gamma(Scalar x);
+inline Scalar gamma(Scalar x) { return mymath::gamma(x); }
 
 /**
  * @brief 计算 Log-Gamma 函数值
@@ -61,7 +62,7 @@ Scalar gamma(Scalar x);
  * @param x 输入值
  * @return ln(|Gamma(x)|)
  */
-Scalar lgamma(Scalar x);
+inline Scalar lgamma(Scalar x) { return mymath::lgamma(x); }
 
 /**
  * @brief 计算正态分布概率密度函数（PDF）
@@ -180,6 +181,70 @@ Scalar exp_pdf(Scalar x, Scalar lambda);
  * @return CDF 值
  */
 Scalar exp_cdf(Scalar x, Scalar lambda);
+
+/**
+ * @brief 计算正态分布分位数函数（Inverse CDF）
+ * @param p 概率值 (0, 1)
+ * @param mean 均值
+ * @param sigma 标准差
+ * @return 对应的 x 值
+ */
+Scalar inv_normal_cdf(Scalar p, Scalar mean = 0, Scalar sigma = 1);
+
+/**
+ * @brief 计算 Student's t 分布分位数函数（Inverse CDF）
+ * @param p 概率值 (0, 1)
+ * @param df 自由度
+ * @return 对应的 x 值
+ */
+Scalar inv_student_t_cdf(Scalar p, Scalar df);
+
+/**
+ * @brief 计算卡方分布分位数函数（Inverse CDF）
+ * @param p 概率值 (0, 1)
+ * @param df 自由度
+ * @return 对应的 x 值
+ */
+Scalar inv_chi2_cdf(Scalar p, Scalar df);
+
+/**
+ * @brief 计算 F 分布分位数函数（Inverse CDF）
+ * @param p 概率值 (0, 1)
+ * @param df1 自由度1
+ * @param df2 自由度2
+ * @return 对应的 x 值
+ */
+Scalar inv_f_cdf(Scalar p, Scalar df1, Scalar df2);
+
+/**
+ * @brief 计算 Gamma 分布 PDF
+ */
+Scalar gamma_pdf(Scalar x, Scalar shape, Scalar scale);
+
+/**
+ * @brief 计算 Gamma 分布 CDF
+ */
+Scalar gamma_cdf(Scalar x, Scalar shape, Scalar scale);
+
+/**
+ * @brief 计算 Beta 分布 PDF
+ */
+Scalar beta_pdf(Scalar x, Scalar alpha, Scalar beta);
+
+/**
+ * @brief 计算 Beta 分布 CDF
+ */
+Scalar beta_cdf(Scalar x, Scalar alpha, Scalar beta);
+
+/**
+ * @brief 计算 Log-Normal PDF
+ */
+Scalar lognormal_pdf(Scalar x, Scalar meanlog, Scalar sdlog);
+
+/**
+ * @brief 计算 Log-Normal CDF
+ */
+Scalar lognormal_cdf(Scalar x, Scalar meanlog, Scalar sdlog);
 
 /**
  * @brief 生成 [0, 1) 区间均匀分布随机数

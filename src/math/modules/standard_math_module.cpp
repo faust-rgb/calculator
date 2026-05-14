@@ -156,6 +156,19 @@ StandardMathModule::get_scalar_functions() const {
     funcs["kurtosis"] = [](const std::vector<Scalar>& a) { return stats::kurtosis(a); };
 
     // Probability & Statistics
+    funcs["inv_cdf_normal"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_normal", a); };
+    funcs["qnorm"] = funcs["inv_cdf_normal"];
+    funcs["inv_cdf_t"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_t", a); };
+    funcs["qt"] = funcs["inv_cdf_t"];
+    funcs["inv_cdf_chi2"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_chi2", a); };
+    funcs["qchi2"] = funcs["inv_cdf_chi2"];
+    funcs["inv_cdf_f"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_f", a); };
+    funcs["qf"] = funcs["inv_cdf_f"];
+
+    funcs["pdf_gamma"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_gamma", a); };
+    funcs["cdf_gamma"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_gamma", a); };
+    funcs["pdf_beta"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_beta", a); };
+    funcs["cdf_beta"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_beta", a); };
     funcs["rand"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("rand", a); };
     funcs["randn"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("randn", a); };
     funcs["randint"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("randint", a); };

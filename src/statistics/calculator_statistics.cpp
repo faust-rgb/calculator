@@ -112,6 +112,8 @@ Scalar apply_statistic(const std::string& name, const std::vector<Scalar>& argum
     if (name == "sample_std") return stats::sample_stddev(arguments);
     if (name == "skewness") return stats::skewness(arguments);
     if (name == "kurtosis") return stats::kurtosis(arguments);
+    if (name == "iqr") return stats::iqr(arguments);
+    if (name == "mad") return stats::mad(arguments);
 
     // 线性回归组件
     if (name == "slope" || name == "intercept") {
@@ -129,22 +131,20 @@ Scalar apply_statistic(const std::string& name, const std::vector<Scalar>& argum
     if (name == "percentile") {
         if (arguments.size() < 2) throw std::runtime_error("percentile expects p followed by data");
         std::vector<Scalar> data(arguments.begin() + 1, arguments.end());
-        return stats::percentile(data, arguments[0]);
+        return stats::percentile(std::move(data), arguments[0]);
     }
 
     // 四分位数：第一个参数为四分位数索引 q，后面为数据
     if (name == "quartile") {
         if (arguments.size() < 2) throw std::runtime_error("quartile expects q followed by data");
         std::vector<Scalar> data(arguments.begin() + 1, arguments.end());
-        return stats::quartile(data, require_int(arguments[0], "quartile q"));
+        return stats::quartile(std::move(data), require_int(arguments[0], "quartile q"));
     }
 
-    // 协方差和相关系数：支持直接传入两个向量数据（假设输入已按某种方式组织，
-    // 例如前一半是 X，后一半是 Y，或者通过矩阵模式提取。
-    // 这里我们支持 arguments 长度为偶数且对半开的情况作为备选。
+    // 协方差和相关系数
     if (name == "cov" || name == "covariance" || name == "corr" || name == "correlation" || name == "spearman") {
         if (arguments.size() % 2 != 0 || arguments.empty()) {
-            throw std::runtime_error(name + " expects two equal-length datasets (total size must be even)");
+            throw std::runtime_error(name + " expects two equal-length datasets");
         }
         size_t n = arguments.size() / 2;
         std::vector<Scalar> x(arguments.begin(), arguments.begin() + n);
@@ -153,13 +153,10 @@ Scalar apply_statistic(const std::string& name, const std::vector<Scalar>& argum
         if (name == "corr" || name == "correlation") return stats::correlation(x, y);
         return stats::spearman_correlation(x, y);
     }
-
-    if (name == "iqr") return stats::iqr(arguments);
-    if (name == "mad") return stats::mad(arguments);
     
     if (name == "weighted_mean") {
         if (arguments.size() % 2 != 0 || arguments.empty()) {
-            throw std::runtime_error("weighted_mean expects data followed by weights of same length");
+            throw std::runtime_error("weighted_mean expects data followed by weights");
         }
         size_t n = arguments.size() / 2;
         std::vector<Scalar> data(arguments.begin(), arguments.begin() + n);
@@ -167,30 +164,29 @@ Scalar apply_statistic(const std::string& name, const std::vector<Scalar>& argum
         return stats::weighted_mean(data, weights);
     }
 
-    if (name == "t_test") return t_test(arguments);
+    if (name == "t_test") {
+        if (arguments.size() < 2) throw std::runtime_error("t_test expects mu0 and data");
+        std::vector<Scalar> data(arguments.begin() + 1, arguments.end());
+        return stats::t_test(arguments[0], data);
+    }
     if (name == "t_test2") {
-        // Assume two-sample
         if (arguments.size() % 2 != 0 || arguments.empty()) {
             throw std::runtime_error("t_test2 expects two equal-length datasets");
         }
         size_t n = arguments.size() / 2;
         std::vector<Scalar> x(arguments.begin(), arguments.begin() + n);
         std::vector<Scalar> y(arguments.begin() + n, arguments.end());
-
-        Scalar m1 = Scalar(stats::mean(x));
-        Scalar m2 = Scalar(stats::mean(y));
-        Scalar s1 = Scalar(stats::sample_variance(x));
-        Scalar s2 = Scalar(stats::sample_variance(y));
-        Scalar n1 = Scalar(static_cast<long long>(x.size()));
-        Scalar n2 = Scalar(static_cast<long long>(y.size()));
-
-        Scalar t = (m1 - m2) / mymath::sqrt(s1/n1 + s2/n2);
-        Scalar df = mymath::pow(s1/n1 + s2/n2, Scalar(2)) /
-                    (mymath::pow(s1/n1, Scalar(2))/(n1-Scalar(1)) + mymath::pow(s2/n2, Scalar(2))/(n2-Scalar(1)));
-
-        return 2.0 * prob::student_t_cdf(-(mymath::abs(t)), (df));
+        return stats::t_test2(x, y);
     }
-    if (name == "chi2_test") return chi2_test(arguments);
+    if (name == "chi2_test") {
+        if (arguments.size() % 2 != 0 || arguments.empty()) {
+            throw std::runtime_error("chi2_test expects obs and exp datasets");
+        }
+        size_t n = arguments.size() / 2;
+        std::vector<Scalar> obs(arguments.begin(), arguments.begin() + n);
+        std::vector<Scalar> exp(arguments.begin() + n, arguments.end());
+        return stats::chi2_test(obs, exp);
+    }
 
     throw std::runtime_error("unknown statistic: " + name);
 }
@@ -227,12 +223,19 @@ Scalar apply_probability(const std::string& name, const std::vector<Scalar>& arg
     }
     // 正态分布
     if (name == "pdf_normal") {
+        if (arguments.size() == 1) return prob::normal_pdf(arguments[0], 0, 1);
         if (arguments.size() != 3) throw std::runtime_error("pdf_normal expects x, mean, sigma");
         return prob::normal_pdf(arguments[0], arguments[1], arguments[2]);
     }
     if (name == "cdf_normal") {
+        if (arguments.size() == 1) return prob::normal_cdf(arguments[0], 0, 1);
         if (arguments.size() != 3) throw std::runtime_error("cdf_normal expects x, mean, sigma");
         return prob::normal_cdf(arguments[0], arguments[1], arguments[2]);
+    }
+    if (name == "inv_cdf_normal" || name == "qnorm") {
+        if (arguments.size() == 1) return prob::inv_normal_cdf(arguments[0], 0, 1);
+        if (arguments.size() != 3) throw std::runtime_error("inv_cdf_normal expects p, mean, sigma");
+        return prob::inv_normal_cdf(arguments[0], arguments[1], arguments[2]);
     }
     // Student's t
     if (name == "pdf_t") {
@@ -243,6 +246,10 @@ Scalar apply_probability(const std::string& name, const std::vector<Scalar>& arg
         if (arguments.size() != 2) throw std::runtime_error("cdf_t expects x, df");
         return prob::student_t_cdf(arguments[0], arguments[1]);
     }
+    if (name == "inv_cdf_t" || name == "qt") {
+        if (arguments.size() != 2) throw std::runtime_error("inv_cdf_t expects p, df");
+        return prob::inv_student_t_cdf(arguments[0], arguments[1]);
+    }
     // Chi-square
     if (name == "pdf_chi2") {
         if (arguments.size() != 2) throw std::runtime_error("pdf_chi2 expects x, df");
@@ -251,6 +258,10 @@ Scalar apply_probability(const std::string& name, const std::vector<Scalar>& arg
     if (name == "cdf_chi2") {
         if (arguments.size() != 2) throw std::runtime_error("cdf_chi2 expects x, df");
         return prob::chi2_cdf(arguments[0], arguments[1]);
+    }
+    if (name == "inv_cdf_chi2" || name == "qchi2") {
+        if (arguments.size() != 2) throw std::runtime_error("inv_cdf_chi2 expects p, df");
+        return prob::inv_chi2_cdf(arguments[0], arguments[1]);
     }
     // F-distribution
     if (name == "pdf_f") {
@@ -261,6 +272,10 @@ Scalar apply_probability(const std::string& name, const std::vector<Scalar>& arg
         if (arguments.size() != 3) throw std::runtime_error("cdf_f expects x, df1, df2");
         return prob::f_cdf(arguments[0], arguments[1], arguments[2]);
     }
+    if (name == "inv_cdf_f" || name == "qf") {
+        if (arguments.size() != 3) throw std::runtime_error("inv_cdf_f expects p, df1, df2");
+        return prob::inv_f_cdf(arguments[0], arguments[1], arguments[2]);
+    }
     // Exponential
     if (name == "pdf_exp") {
         if (arguments.size() != 2) throw std::runtime_error("pdf_exp expects x, lambda");
@@ -269,6 +284,24 @@ Scalar apply_probability(const std::string& name, const std::vector<Scalar>& arg
     if (name == "cdf_exp") {
         if (arguments.size() != 2) throw std::runtime_error("cdf_exp expects x, lambda");
         return prob::exp_cdf(arguments[0], arguments[1]);
+    }
+    // Gamma
+    if (name == "pdf_gamma") {
+        if (arguments.size() != 3) throw std::runtime_error("pdf_gamma expects x, shape, scale");
+        return prob::gamma_pdf(arguments[0], arguments[1], arguments[2]);
+    }
+    if (name == "cdf_gamma") {
+        if (arguments.size() != 3) throw std::runtime_error("cdf_gamma expects x, shape, scale");
+        return prob::gamma_cdf(arguments[0], arguments[1], arguments[2]);
+    }
+    // Beta
+    if (name == "pdf_beta") {
+        if (arguments.size() != 3) throw std::runtime_error("pdf_beta expects x, alpha, beta");
+        return prob::beta_pdf(arguments[0], arguments[1], arguments[2]);
+    }
+    if (name == "cdf_beta") {
+        if (arguments.size() != 3) throw std::runtime_error("cdf_beta expects x, alpha, beta");
+        return prob::beta_cdf(arguments[0], arguments[1], arguments[2]);
     }
     // 泊松分布
     if (name == "poisson_pmf") {
@@ -310,34 +343,22 @@ Scalar apply_probability(const std::string& name, const std::vector<Scalar>& arg
     throw std::runtime_error("unknown probability function: " + name);
 }
 
+// 移除原有的 t_test 和 chi2_test 实现，它们现在直接调用 stats 命名空间的函数
 Scalar t_test(const std::vector<Scalar>& arguments) {
     if (arguments.size() < 2) throw std::runtime_error("t_test expects mu0 and data");
-    Scalar mu0 = Scalar(arguments[0]);
+    Scalar mu0 = arguments[0];
     std::vector<Scalar> data(arguments.begin() + 1, arguments.end());
-    Scalar m = Scalar(stats::mean(data));
-    Scalar s = Scalar(stats::sample_stddev(data));
-    Scalar n = Scalar(static_cast<long long>(data.size()));
-    if (s < Scalar(1e-20L)) return (mymath::abs(m - mu0) < Scalar(1e-20L)) ? 1.0L : 0.0L;
-    Scalar t = (m - mu0) / (s / mymath::sqrt(n));
-    Scalar df = n - Scalar(1);
-    return 2.0 * prob::student_t_cdf(-(mymath::abs(t)), (df));
+    return stats::t_test(mu0, data);
 }
 
 Scalar chi2_test(const std::vector<Scalar>& arguments) {
     if (arguments.size() < 2 || arguments.size() % 2 != 0) {
-        throw std::runtime_error("chi2_test expects obs and exp datasets of same length");
+        throw std::runtime_error("chi2_test expects obs and exp datasets");
     }
     size_t n = arguments.size() / 2;
-    Scalar chi2 = Scalar(0);
-    for (size_t i = 0; i < n; i++) {
-        Scalar obs = Scalar(arguments[i]);
-        Scalar exp = Scalar(arguments[i + n]);
-        if (exp <= Scalar(0)) throw std::runtime_error("chi2_test expected values must be positive");
-        chi2 += mymath::pow(obs - exp, Scalar(2)) / exp;
-    }
-    Scalar df = Scalar(static_cast<long long>(n - 1));
-    if (df < Scalar(1)) throw std::runtime_error("chi2_test requires at least 2 categories");
-    return 1.0L - prob::chi2_cdf((chi2), (df));
+    std::vector<Scalar> obs(arguments.begin(), arguments.begin() + n);
+    std::vector<Scalar> exp(arguments.begin() + n, arguments.end());
+    return stats::chi2_test(obs, exp);
 }
 
 } // namespace stats_ops

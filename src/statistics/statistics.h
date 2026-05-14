@@ -35,6 +35,32 @@ struct Moments {
 };
 
 /**
+ * @brief 统计摘要结果结构体
+ */
+struct DescriptiveSummary {
+    long long count = 0;
+    Scalar mean = 0;
+    Scalar stddev = 0;
+    Scalar variance = 0;
+    Scalar min = 0;
+    Scalar q1 = 0;
+    Scalar median = 0;
+    Scalar q3 = 0;
+    Scalar max = 0;
+    Scalar skewness = 0;
+    Scalar kurtosis = 0;
+    Scalar iqr = 0;
+    Scalar mad = 0;
+};
+
+/**
+ * @brief 计算数据集的完整统计摘要
+ * @param data 数据集（可能会被内部重排以提高效率）
+ * @return 统计摘要结构体
+ */
+DescriptiveSummary compute_summary(std::vector<Scalar> data);
+
+/**
  * @brief 计算数据集的所有矩
  * @param data 数据向量
  * @return 矩结构体
@@ -50,10 +76,10 @@ Scalar mean(const std::vector<Scalar>& data);
 
 /**
  * @brief 计算中位数
- * @param data 数据集
- * @return 中位数（若数据量为偶数则取中间两数的平均值）
+ * @param data 数据集（传入拷贝以支持 O(n) 计算而不影响原数据）
+ * @return 中位数
  */
-Scalar median(const std::vector<Scalar>& data);
+Scalar median(std::vector<Scalar> data);
 
 /**
  * @brief 计算众数
@@ -92,12 +118,6 @@ Scalar sample_stddev(const std::vector<Scalar>& data);
 
 /**
  * @brief 计算偏度（Skewness）
- *
- * 偏度衡量数据分布的不对称程度：
- * - 0 表示对称分布
- * - 正值表示右偏（右侧有长尾）
- * - 负值表示左偏（左侧有长尾）
- *
  * @param data 数据集
  * @return 偏度值
  */
@@ -105,12 +125,6 @@ Scalar skewness(const std::vector<Scalar>& data);
 
 /**
  * @brief 计算峰度（Kurtosis）
- *
- * 峰度衡量数据分布的尖锐程度（相对于正态分布）：
- * - 0 表示与正态分布相同
- * - 正值表示比正态分布更尖锐（厚尾）
- * - 负值表示比正态分布更平坦（薄尾）
- *
  * @param data 数据集
  * @return 超额峰度值
  */
@@ -118,19 +132,19 @@ Scalar kurtosis(const std::vector<Scalar>& data);
 
 /**
  * @brief 计算百分位数
- * @param data 数据集
+ * @param data 数据集（传入拷贝）
  * @param p 百分比（0-100）
  * @return 第 p 百分位数的值
  */
-Scalar percentile(const std::vector<Scalar>& data, Scalar p);
+Scalar percentile(std::vector<Scalar> data, Scalar p);
 
 /**
  * @brief 计算四分位数
- * @param data 数据集
- * @param q 第几个四分位数（0-4，其中 0 为最小值，4 为最大值）
+ * @param data 数据集（传入拷贝）
+ * @param q 第几个四分位数（0-4）
  * @return 第 q 四分位数的值
  */
-Scalar quartile(const std::vector<Scalar>& data, int q);
+Scalar quartile(std::vector<Scalar> data, int q);
 
 /**
  * @brief 计算协方差
@@ -161,17 +175,17 @@ std::vector<Scalar> linear_regression(const std::vector<Scalar>& x, const std::v
 
 /**
  * @brief 计算四分位距（IQR）
- * @param data 数据集
+ * @param data 数据集（传入拷贝）
  * @return IQR 值
  */
-Scalar iqr(const std::vector<Scalar>& data);
+Scalar iqr(std::vector<Scalar> data);
 
 /**
  * @brief 计算中位数绝对偏差（MAD）
- * @param data 数据集
+ * @param data 数据集（传入拷贝）
  * @return MAD 值
  */
-Scalar mad(const std::vector<Scalar>& data);
+Scalar mad(std::vector<Scalar> data);
 
 /**
  * @brief 计算加权平均值
@@ -188,6 +202,30 @@ Scalar weighted_mean(const std::vector<Scalar>& data, const std::vector<Scalar>&
  * @return 相关系数（-1 到 1 之间）
  */
 Scalar spearman_correlation(const std::vector<Scalar>& x, const std::vector<Scalar>& y);
+
+/**
+ * @brief 单样本 T 检验
+ * @param mu0 假设均值
+ * @param data 样本数据
+ * @return p-value (双侧)
+ */
+Scalar t_test(Scalar mu0, const std::vector<Scalar>& data);
+
+/**
+ * @brief 双样本 T 检验 (Welch's t-test)
+ * @param x 第一个样本
+ * @param y 第二个样本
+ * @return p-value (双侧)
+ */
+Scalar t_test2(const std::vector<Scalar>& x, const std::vector<Scalar>& y);
+
+/**
+ * @brief 卡方拟合优度检验
+ * @param obs 观测值
+ * @param exp 期望值
+ * @return p-value
+ */
+Scalar chi2_test(const std::vector<Scalar>& obs, const std::vector<Scalar>& exp);
 
 } // namespace stats
 
