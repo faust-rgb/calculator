@@ -28,15 +28,30 @@
 void CommandRegistry::register_command(const std::string& name,
                                         CommandHandler handler,
                                         const std::string& help_text,
-                                        const std::string& short_help) {
+                                        const std::string& short_help,
+                                        bool is_inlineable) {
     CommandInfo info;
     info.name = name;
     info.help_text = help_text;
     info.short_help = short_help.empty() ? help_text : short_help;
     info.handler = std::move(handler);
     info.is_prefix = false;
+    info.is_inlineable = is_inlineable;
 
     commands_[name] = std::move(info);
+}
+
+/**
+ * @brief 注册命令处理器（实现 ICommandRegistry 接口）
+ */
+void CommandRegistry::register_command_handler(const std::string& name,
+                                              std::function<bool(const std::string&,
+                                                                 const std::vector<std::string_view>&,
+                                                                 std::string*,
+                                                                 bool,
+                                                                 const CoreServices&)> handler,
+                                              const std::string& help_text) {
+    register_command(name, std::move(handler), help_text);
 }
 
 /**
@@ -182,6 +197,16 @@ bool CommandRegistry::try_process(const std::string& cmd_name,
  */
 bool CommandRegistry::has_command(const std::string& name) const {
     return find_command(name) != nullptr;
+}
+
+/**
+ * @brief 检查指定命令是否可内联
+ * @param name 命令名称
+ * @return 如果命令可内联返回 true
+ */
+bool CommandRegistry::is_inlineable(const std::string& name) const {
+    const CommandInfo* info = find_command(name);
+    return info ? info->is_inlineable : false;
 }
 
 /**

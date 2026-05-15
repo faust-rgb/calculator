@@ -9,6 +9,8 @@
  */
 
 #include "dsp_module.h"
+#include "core/services/service_locator.h"
+#include "core/services/core_manager_interfaces.h"
 #include "residue.h"
 #include "core/services/string_utils.h"
 #include <stdexcept>
@@ -20,9 +22,9 @@ std::vector<std::string> DspModule::get_commands() const {
 
 std::string DspModule::execute_args(const std::string& command,
                                     const std::vector<std::string>& args,
-                                    const CoreServices& services) {
+                                    ServiceLocator& locator) {
     // 命令已由路由层验证，无需再检查
-    return dsp_ops::handle_residue_command(command, args, services);
+    return dsp_ops::handle_residue_command(command, args, locator);
 }
 
 std::string DspModule::get_help_snippet(const std::string& topic) const {

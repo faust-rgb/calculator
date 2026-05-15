@@ -70,6 +70,9 @@ void attach_source_owner(CommandASTNode& node,
             attach_source_owner(child, source_owner);
         }
     }
+    // Note: For kFunctionCall, kFunctionDefinition, kAssignment, kIndexAssignment, kExpression,
+    // the string_views in the data field point into source_owner, which is now held by the node.
+    // No further recursion needed as these are leaf nodes in terms of CommandASTNode structure.
 }
 
 } // namespace

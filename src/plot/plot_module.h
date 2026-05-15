@@ -38,12 +38,12 @@ public:
      * @brief 执行绘图命令
      * @param command 命令名称
      * @param args 命令参数列表
-     * @param services 核心服务接口
+     * @param locator 服务定位器
      * @return 命令执行结果
      */
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             const CoreServices& services) override;
+                             ServiceLocator& locator) override;
 
     /**
      * @brief 获取帮助信息片段

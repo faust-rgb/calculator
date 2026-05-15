@@ -42,12 +42,12 @@ public:
      *
      * @param command 命令名称
      * @param args 命令参数列表
-     * @param services 核心服务接口
+     * @param locator 服务定位器
      * @return 命令执行结果的字符串表示
      */
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             const CoreServices& services) override;
+                             ServiceLocator& locator) override;
 
     /**
      * @brief 返回矩阵函数映射

@@ -377,12 +377,13 @@ bool handle_polynomial_command(const PolynomialContext& ctx,
  */
 std::string PolynomialModule::execute_args(const std::string& command,
                                           const std::vector<std::string>& args,
-                                          const CoreServices& services) {
+                                          ServiceLocator& locator) {
+    auto engine = locator.resolve<IEvaluationEngine>();
     PolynomialContext ctx;
     ctx.functions = nullptr;
     ctx.resolve_symbolic = [&](const std::string& name, std::string* var) {
         SymbolicExpression expr;
-        services.symbolic.resolve_symbolic(name, false, var, &expr);
+        engine->resolve_symbolic(name, false, var, &expr);
         return expr;
     };
 

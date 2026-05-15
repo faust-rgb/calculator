@@ -36,14 +36,15 @@
  *
  * 封装所有多项式相关的命令处理逻辑，与计算器核心解耦。
  */
+class ServiceLocator;
+
 namespace polynomial_ops {
 
 /**
  * @class PolynomialModule
- * @brief 多项式运算命令模块
+ * @brief 提供多项式操作的计算器模块
  *
- * 继承自 CalculatorModule，提供多项式运算命令的注册和执行。
- * 支持的命令包括：
+ * 该模块继承自 CalculatorModule，注册并处理各种多项式命令：
  * - poly_add: 多项式加法
  * - poly_sub: 多项式减法
  * - poly_mul: 多项式乘法
@@ -77,12 +78,13 @@ public:
      * @brief 执行多项式命令
      * @param command 命令名称
      * @param args 命令参数列表
-     * @param services 核心服务接口
+     * @param locator 服务定位器
      * @return 命令执行结果字符串
      */
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             const CoreServices& services) override;
+                             ServiceLocator& locator) override;
+
 
     /**
      * @brief 获取帮助信息片段

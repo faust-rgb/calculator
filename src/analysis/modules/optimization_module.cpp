@@ -9,6 +9,8 @@
 // - bip_max / bip_min: 二进制规划
 
 #include "analysis/modules/optimization_module.h"
+#include "core/services/core_manager_interfaces.h"
+#include "core/services/service_locator.h"
 
 #include "app/scalar_type.h"
 #include "math/mymath.h"
@@ -270,12 +272,14 @@ bool handle_optimization_command(const OptimizationContext& ctx,
 
 std::string OptimizationModule::execute_args(const std::string& command,
                                             const std::vector<std::string>& args,
-                                            const CoreServices& services) {
+                                            ServiceLocator& locator) {
+    auto engine = locator.resolve<IEvaluationEngine>();
+
     OptimizationContext ctx;
-    ctx.parse_matrix_argument = services.parse_matrix_argument;
-    ctx.normalize_result = services.evaluation.normalize_result;
-    ctx.is_integer_double = services.is_integer_double;
-    ctx.round_to_long_long = services.round_to_long_long;
+    ctx.parse_matrix_argument = [engine](const std::string& arg, const std::string& cmd) { return engine->parse_matrix_argument(arg, cmd); };
+    ctx.normalize_result = [engine](Scalar value) { return engine->normalize_result(value); };
+    ctx.is_integer_double = [](Scalar a, Scalar b) { (void)b; return mymath::is_integer(a); };
+    ctx.round_to_long_long = [](Scalar value) { return static_cast<long long>(static_cast<long double>(value) + 0.5); };
 
     std::string output;
     if (handle_optimization_command(ctx, command, args, &output)) {

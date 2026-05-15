@@ -7,6 +7,8 @@
  */
 
 #include "integer_math_module.h"
+#include "core/services/core_manager_interfaces.h"
+#include "core/services/service_locator.h"
 #include "math/helpers/integer_helpers.h"
 #include "math/helpers/combinatorics.h"
 #include "math/helpers/bitwise_helpers.h"
@@ -47,17 +49,19 @@ long long require_integer(Scalar x, const std::string& name, const std::string& 
  */
 std::string IntegerMathModule::execute_args(const std::string& command,
                                           const std::vector<std::string>& args,
-                                          const CoreServices& services) {
+                                          ServiceLocator& locator) {
+    auto engine = locator.resolve<IEvaluationEngine>();
+
     if (command == "factor") {
         if (args.empty()) throw std::runtime_error("factor expects 1 argument");
-        Scalar val = services.evaluation.parse_decimal(args[0]);
+        Scalar val = engine->parse_decimal(args[0]);
         return factor_integer(require_integer(val, "argument", "factor"));
     }
 
     if (command == "bin" || command == "oct" || command == "hex" || command == "base") {
         if (args.empty()) throw std::runtime_error(command + " expects at least 1 argument");
 
-        Scalar value = services.evaluation.parse_decimal(args[0]);
+        Scalar value = engine->parse_decimal(args[0]);
         int base = 10;
 
         if (command == "bin") base = 2;
@@ -65,36 +69,18 @@ std::string IntegerMathModule::execute_args(const std::string& command,
         else if (command == "hex") base = 16;
         else {
             if (args.size() < 2) throw std::runtime_error("base expects 2 arguments: value, base");
-            base = static_cast<int>(require_integer(services.evaluation.parse_decimal(args[1]), "base", "base"));
+            base = static_cast<int>(require_integer(engine->parse_decimal(args[1]), "base", "base"));
         }
 
-        std::string output;
-        // 使用 utils 中的转换逻辑，或者在此重写
-        // 这里为了简单，我们调用核心提供的转换服务（如果以后增加了的话）
-        // 目前我们直接复用 core/utils.cpp 中的 convert_base_value (如果它是公开的)
-        // 由于它是匿名的或非公开的，我们在此实现一个简版或者调用 evaluate_value
-        
-        // 我们先通过 execute_script 回调回核心，利用现有的 try_base_conversion_expression 逻辑
-        // 或者直接在这里重新实现 base conversion 逻辑以彻底解耦。
-        // 考虑到解耦目标，我们在这里实现。
-        
         if (base < 2 || base > 36) throw std::runtime_error("base must be in range [2, 36]");
-        
+
+        // 获取 hex 格式配置
+        auto config = locator.resolve<IConfigManager>();
+        bool uppercase = config->is_hex_uppercase_mode();
+        bool prefix = config->is_hex_prefix_mode();
+
         long long n = require_integer(value, "value", command);
-        bool negative = n < 0;
-        if (negative) n = -n;
-        
-        std::string res;
-        if (n == 0) res = "0";
-        else {
-            while (n > 0) {
-                int digit = n % base;
-                res += (digit < 10 ? (char)('0' + digit) : (char)('A' + digit - 10));
-                n /= base;
-            }
-            std::reverse(res.begin(), res.end());
-        }
-        return (negative ? "-" : "") + res;
+        return convert_to_base(n, base, uppercase, prefix);
     }
 
     return "";

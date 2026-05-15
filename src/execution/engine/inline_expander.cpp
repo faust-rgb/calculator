@@ -18,7 +18,6 @@
 // ============================================================================
 
 #include "inline_expander.h"
-#include "core/api/calculator.h"
 
 #include <cctype>
 #include <stdexcept>
@@ -114,14 +113,15 @@ std::size_t find_matching_paren(std::string_view text, std::size_t open_pos) {
 
 /**
  * @brief 展开表达式中的内联函数命令
- * @param calculator 计算器实例
+ * @param ctx 计算器实例
  * @param expression 输入表达式
  * @return 展开后的表达式
  *
  * 递归地扫描表达式，识别并执行内联函数命令，将结果替换回表达式。
  * 设置最大递归深度限制，防止无限递归。
  */
-std::string expand_inline_function_commands(Calculator* calculator,
+std::string expand_inline_function_commands(
+                                            IExecutionContext* ctx,
                                             std::string_view expression) {
     // 递归深度限制，防止无限递归
     static thread_local int depth = 0;
@@ -192,13 +192,13 @@ std::string expand_inline_function_commands(Calculator* calculator,
 
         // 递归展开括号内的内容
         const std::string inner =
-            expand_inline_function_commands(calculator,
+            expand_inline_function_commands(ctx,
                                             expression.substr(open_pos + 1,
                                                               close_pos - open_pos - 1));
         // 重建命令并执行
         const std::string rebuilt = std::string(name) + "(" + inner + ")";
         std::string command_output;
-        if (calculator->try_process_function_command(rebuilt, &command_output)) {
+        if (ctx->try_process_function_command(rebuilt, &command_output)) {
             expanded += "(" + command_output + ")";
         } else {
             expanded += rebuilt;

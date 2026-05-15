@@ -14,7 +14,8 @@
 // ============================================================================
 
 #include "system_module.h"
-
+#include "core/services/core_manager_interfaces.h"
+#include "core/services/service_locator.h"
 #include "string_utils.h"
 #include "format_utils.h"
 #include "math/precise/precise_decimal.h"
@@ -81,32 +82,77 @@ std::vector<std::string> SystemModule::get_commands() const {
  */
 std::string SystemModule::execute_args(const std::string& command,
                                        const std::vector<std::string>& args,
-                                       const CoreServices& svc) {
-    if (command == ":vars") return svc.env.list_variables();  // 列出所有变量
-    if (command == ":funcs") return svc.env.list_functions();  // 列出所有自定义函数
-    if (command == ":clear") {
-        // 清除变量：无参数时清除全部，有参数时清除指定变量
-        if (args.empty()) return svc.env.clear_all_variables();
-        return svc.env.clear_variable(trim_copy(args[0]));
+                                       ServiceLocator& locator) {
+    auto engine = locator.resolve<IEvaluationEngine>();
+    auto vars = locator.resolve<IVariableManager>();
+    auto funcs = locator.resolve<IFunctionManager>();
+    auto config = locator.resolve<IConfigManager>();
+
+    if (command == ":vars") {
+        auto all_vars = vars->get_all_globals();
+        std::string result;
+        for (const auto& [name, val] : all_vars) {
+            if (!result.empty()) result += "\n";
+            result += name + " = " + format_stored_value(val, false);
+        }
+        return result.empty() ? "No variables defined." : result;
     }
-    if (command == ":clearfuncs") return svc.env.clear_all_functions();  // 清除所有自定义函数
+    if (command == ":funcs") {
+        auto custom_funcs = funcs->get_custom_functions_map();
+        auto script_names = funcs->get_script_names();
+        std::string result;
+        for (const auto& [name, func] : *custom_funcs) {
+            if (!result.empty()) result += "\n";
+            // 构建参数列表
+            std::string params;
+            for (size_t i = 0; i < func.parameter_names.size(); ++i) {
+                if (i > 0) params += ", ";
+                params += func.parameter_names[i];
+            }
+            result += name + "(" + params + ") = " + func.expression;
+        }
+        for (const auto& name : script_names) {
+            if (!result.empty()) result += "\n";
+            const ScriptFunction* func = funcs->get_script(name);
+            result += name + "(";
+            if (func) {
+                for (size_t i = 0; i < func->parameter_names.size(); ++i) {
+                    if (i > 0) result += ", ";
+                    result += func->parameter_names[i];
+                }
+            }
+            result += ") = { ... }";
+        }
+        return result.empty() ? "No custom functions defined." : result;
+    }
+    if (command == ":clear") {
+        if (args.empty()) {
+            vars->clear_all();
+            return "All variables cleared.";
+        }
+        vars->remove(trim_copy(args[0]));
+        return "Variable " + trim_copy(args[0]) + " cleared.";
+    }
+    if (command == ":clearfuncs") {
+        funcs->clear_all();
+        return "Cleared all custom functions.";
+    }
     if (command == ":clearfunc") {
-        // 清除指定自定义函数
         if (args.empty()) throw std::runtime_error(":clearfunc expects a function name");
-        return svc.env.clear_function(trim_copy(args[0]));
+        funcs->remove_function(trim_copy(args[0]));
+        return "Cleared custom function: " + trim_copy(args[0]);
     }
     if (command == "print") {
-        // print 命令：打印表达式的值
         std::ostringstream out;
         for (std::size_t i = 0; i < args.size(); ++i) {
             if (i != 0) out << ' ';
-            const StoredValue value = svc.evaluation.evaluate_value(args[i], false);
+            const StoredValue value = engine->evaluate_expression_value(args[i], false);
             out << (value.is_string ? value.string_value
                                     : format_stored_value(value, false));
         }
         return out.str();
     }
-    if (command == ":history") return "History access via Module not implemented yet";  // 待实现
+    if (command == ":history") return "History access via Module not implemented yet";
 
     // Lambda：将参数列表拼接为逗号分隔的字符串
     auto join_args = [&]() {
@@ -118,15 +164,11 @@ std::string SystemModule::execute_args(const std::string& command,
         return trim_copy(res);
     };
 
-    // 状态持久化命令
-    if (command == ":save") return svc.env.save_state(join_args());   // 保存状态到文件
-    if (command == ":load") return svc.env.load_state(join_args());   // 从文件加载状态
-    if (command == ":export") return svc.env.export_variable(join_args()); // 导出变量
-    if (command == ":run") {
-        // 执行脚本文件
-        const std::string script_path = join_args();
-        return svc.env.execute_script_file(script_path, false);
-    }
+    // 状态持久化命令 - 需要环境服务，暂时返回未实现
+    if (command == ":save") return "Save state not yet implemented with ServiceLocator";
+    if (command == ":load") return "Load state not yet implemented with ServiceLocator";
+    if (command == ":export") return "Export not yet implemented with ServiceLocator";
+    if (command == ":run") return "Run script not yet implemented with ServiceLocator";
 
     // ==================== 模式设置命令 ====================
 
@@ -134,8 +176,8 @@ std::string SystemModule::execute_args(const std::string& command,
     if (command == ":exact") {
         if (args.empty()) return "Usage: :exact on|off";
         const std::string arg = trim_copy(args[0]);
-        if (arg == "on") return svc.env.set_exact_mode(true);
-        if (arg == "off") return svc.env.set_exact_mode(false);
+        if (arg == "on") { config->set_exact_mode(true); return "Exact mode enabled."; }
+        if (arg == "off") { config->set_exact_mode(false); return "Exact mode disabled."; }
         return "Usage: :exact on|off";
     }
 
@@ -143,16 +185,17 @@ std::string SystemModule::execute_args(const std::string& command,
     if (command == ":symbolic") {
         if (args.empty()) return "Usage: :symbolic on|off";
         const std::string arg = trim_copy(args[0]);
-        if (arg == "on") return svc.env.set_symbolic_mode(true);
-        if (arg == "off") return svc.env.set_symbolic_mode(false);
+        if (arg == "on") { config->set_symbolic_constants_mode(true); return "Symbolic constants mode enabled."; }
+        if (arg == "off") { config->set_symbolic_constants_mode(false); return "Symbolic constants mode disabled."; }
         return "Usage: :symbolic on|off";
     }
 
     // :precision - 显示精度设置
     if (command == ":precision") {
-        if (args.empty()) return "Current precision is visible in REPL status or via internal query";
+        if (args.empty()) return "Current precision: " + std::to_string(config->get_display_precision());
         try {
-            return svc.env.set_precision(std::stoi(args[0]));
+            config->set_display_precision(std::stoi(args[0]));
+            return "Display precision set to " + args[0];
         } catch (...) {
             return "Invalid precision value";
         }
@@ -175,8 +218,8 @@ std::string SystemModule::execute_args(const std::string& command,
     if (command == ":hexprefix") {
         if (args.empty()) return "Usage: :hexprefix on|off";
         const std::string arg = trim_copy(args[0]);
-        if (arg == "on") return svc.env.set_hex_prefix(true);
-        if (arg == "off") return svc.env.set_hex_prefix(false);
+        if (arg == "on") { config->set_hex_prefix_mode(true); return "Hex prefix enabled."; }
+        if (arg == "off") { config->set_hex_prefix_mode(false); return "Hex prefix disabled."; }
         return "Usage: :hexprefix on|off";
     }
 
@@ -184,8 +227,8 @@ std::string SystemModule::execute_args(const std::string& command,
     if (command == ":hexcase") {
         if (args.empty()) return "Usage: :hexcase upper|lower";
         const std::string arg = trim_copy(args[0]);
-        if (arg == "upper" || arg == "uppercase") return svc.env.set_hex_uppercase(true);
-        if (arg == "lower" || arg == "lowercase") return svc.env.set_hex_uppercase(false);
+        if (arg == "upper" || arg == "uppercase") { config->set_hex_uppercase_mode(true); return "Hex case set to uppercase."; }
+        if (arg == "lower" || arg == "lowercase") { config->set_hex_uppercase_mode(false); return "Hex case set to lowercase."; }
         return "Usage: :hexcase upper|lower";
     }
 

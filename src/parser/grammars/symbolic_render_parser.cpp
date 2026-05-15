@@ -185,8 +185,9 @@ private:
             }
             return "((" + arguments[0] + ") ^ (1 / (" + arguments[1] + ")))";
         }
-        const auto function_it = functions_->find(name);
-        if (function_it != functions_->end()) {
+        const auto function_it = functions_ ? functions_->find(name)
+                                            : std::map<std::string, CustomFunction>::const_iterator{};
+        if (functions_ && function_it != functions_->end()) {
             if (arguments.size() != function_it->second.parameter_names.size()) {
                 throw std::runtime_error("custom function " + name + " expects " +
                                          std::to_string(function_it->second.parameter_names.size()) +

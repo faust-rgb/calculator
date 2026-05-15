@@ -18,6 +18,7 @@
 #ifndef CORE_COMMAND_REGISTRY_H
 #define CORE_COMMAND_REGISTRY_H
 
+#include "core/services/core_manager_interfaces.h"
 #include <string>
 #include <string_view>
 #include <functional>
@@ -66,6 +67,7 @@ struct CommandInfo {
     std::string short_help;                    ///< 简短帮助（用于列表显示）
     CommandHandler handler;                    ///< 命令处理函数
     bool is_prefix = false;                    ///< 是否是前缀命令（如 plot3d 匹配 plot）
+    bool is_inlineable = false;                ///< 是否可以在表达式中内联执行
     std::vector<std::string> aliases;          ///< 命令别名列表（如 "h" 作为 "help" 的别名）
 };
 
@@ -83,9 +85,32 @@ struct CommandInfo {
  * 3. get_commands() 获取所有命令列表（用于补全）
  * 4. get_help() 获取命令帮助
  */
-class CommandRegistry {
+class CommandRegistry : public ICommandRegistry {
 public:
     CommandRegistry() = default;
+
+    // ========================================================================
+    // ICommandRegistry 接口实现
+    // ========================================================================
+
+    bool has_command(const std::string& name) const override;
+    bool is_inlineable(const std::string& name) const override;
+    std::vector<std::string> get_all_commands() const override { return get_commands(); }
+    std::string get_help(const std::string& name) const override;
+
+    bool try_process(const std::string& cmd_name,
+                     const std::vector<std::string_view>& args,
+                     std::string* output,
+                     bool exact_mode,
+                     const CoreServices& services) override;
+
+    void register_command_handler(const std::string& name,
+                                  std::function<bool(const std::string&,
+                                                     const std::vector<std::string_view>&,
+                                                     std::string*,
+                                                     bool,
+                                                     const CoreServices&)> handler,
+                                  const std::string& help_text = "") override;
 
     // ========================================================================
     // 命令注册接口
@@ -97,11 +122,13 @@ public:
      * @param handler 处理函数
      * @param help_text 完整帮助文本
      * @param short_help 简短帮助文本
+     * @param is_inlineable 是否可内联
      */
     void register_command(const std::string& name,
                           CommandHandler handler,
                           const std::string& help_text = "",
-                          const std::string& short_help = "");
+                          const std::string& short_help = "",
+                          bool is_inlineable = false);
 
     /**
      * @brief 注册前缀命令处理器
@@ -145,28 +172,6 @@ public:
     // ========================================================================
 
     /**
-     * @brief 尝试处理命令
-     * @param cmd_name 命令名（由解析器提供）
-     * @param args 已解析的参数列表
-     * @param output 输出字符串指针
-     * @param exact_mode 是否精确模式
-     * @param services 核心服务接口
-     * @return 如果命令被处理返回 true
-     */
-    bool try_process(const std::string& cmd_name,
-                     const std::vector<std::string_view>& args,
-                     std::string* output,
-                     bool exact_mode,
-                     const CoreServices& services);
-
-    /**
-     * @brief 检查命令是否存在
-     * @param name 命令名
-     * @return 如果存在返回 true
-     */
-    bool has_command(const std::string& name) const;
-
-    /**
      * @brief 快速检查标识符是否可能是命令（用于解析器预检测）
      * @param name 标识符名
      * @return 如果可能是命令返回 true
@@ -185,13 +190,6 @@ public:
      * @return 命令名列表（已排序）
      */
     std::vector<std::string> get_commands() const;
-
-    /**
-     * @brief 获取命令帮助
-     * @param name 命令名
-     * @return 帮助文本，如果命令不存在返回空字符串
-     */
-    std::string get_help(const std::string& name) const;
 
     /**
      * @brief 获取所有命令的简短帮助

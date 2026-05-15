@@ -12,6 +12,8 @@
  */
 
 #include "residue.h"
+#include "core/services/service_locator.h"
+#include "core/services/core_manager_interfaces.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "core/services/string_utils.h"
 #include "calculator_internal_types.h"
@@ -28,8 +30,9 @@ namespace dsp_ops {
 
 std::string handle_residue_command(const std::string& command,
                                    const std::vector<std::string>& arguments,
-                                   const CoreServices& svc) {
+                                   ServiceLocator& locator) {
     (void)command;
+    auto engine = locator.resolve<IEvaluationEngine>();
     if (arguments.size() != 3) {
         throw DimensionError("residue(expression, variable, point) expects 3 arguments");
     }
@@ -41,7 +44,7 @@ std::string handle_residue_command(const std::string& command,
 
     const SymbolicExpression expression =
         SymbolicExpression::parse(
-            trim_copy(svc.symbolic.expand_inline(arguments[0])))
+            trim_copy(engine->expand_inline(arguments[0])))
             .simplify();
     SymbolicExpression numerator = expression;
     SymbolicExpression denominator = SymbolicExpression::number(1.0L);
@@ -59,7 +62,7 @@ std::string handle_residue_command(const std::string& command,
         throw MathError("residue currently supports rational polynomial expressions");
     }
 
-    StoredValue point_value = svc.evaluation.evaluate_value(arguments[2], false);
+    StoredValue point_value = engine->evaluate_expression_value(arguments[2], false);
 
     mymath::complex<Scalar> point(point_value.exact
                                    ? rational_to_double(point_value.rational)

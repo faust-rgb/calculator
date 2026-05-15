@@ -23,6 +23,8 @@
 #include <string>
 #include <vector>
 
+class ServiceLocator;
+
 /**
  * @class SystemModule
  * @brief 系统命令模块，提供核心系统级命令
@@ -56,14 +58,14 @@ public:
      * @brief 执行系统命令
      * @param command 命令名（如 ":vars", ":clear"）
      * @param args 命令参数
-     * @param services 核心服务接口
+     * @param locator 服务定位器
      * @return 命令执行结果字符串
      *
      * 根据命令名分发到相应的处理函数。
      */
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             const CoreServices& services) override;
+                             ServiceLocator& locator) override;
 
     /**
      * @brief 返回指定主题的帮助文本

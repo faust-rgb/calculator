@@ -13,6 +13,8 @@
 // - analysis_command_helpers.cpp: 辅助函数
 
 #include "analysis/modules/analysis_module.h"
+#include "core/services/service_locator.h"
+#include "core/services/core_manager_interfaces.h"
 #include "analysis/base/precision_constants.h"
 #include "analysis/calculus/analysis_command_helpers.h"
 #include "symbolic/modules/symbolic_module.h"
@@ -563,13 +565,24 @@ bool handle_analysis_command(const AnalysisContext& ctx,
 
 std::string AnalysisModule::execute_args(const std::string& command,
                                         const std::vector<std::string>& args,
-                                        const CoreServices& services) {
+                                        ::ServiceLocator& locator) {
+    auto engine = locator.resolve<IEvaluationEngine>();
     AnalysisContext ctx;
-    ctx.resolve_symbolic = services.symbolic.resolve_symbolic;
-    ctx.parse_symbolic_variable_arguments = services.parse_symbolic_vars;
-    ctx.parse_decimal = services.evaluation.parse_decimal;
-    ctx.normalize_result = services.evaluation.normalize_result;
-    ctx.build_analysis = services.symbolic.build_analysis;
+    ctx.resolve_symbolic = [engine](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
+        engine->resolve_symbolic(arg, req, var, expr);
+    };
+    ctx.parse_symbolic_variable_arguments = [engine](const std::vector<std::string>& arguments, std::size_t start_index, const std::vector<std::string>& defaults) {
+        return engine->parse_symbolic_vars(arguments, start_index, defaults);
+    };
+    ctx.parse_decimal = [engine](const std::string& expr) {
+        return engine->parse_decimal(expr);
+    };
+    ctx.normalize_result = [engine](Scalar value) {
+        return engine->normalize_result(value);
+    };
+    ctx.build_analysis = [engine](const std::string& expression) {
+        return engine->build_analysis(expression);
+    };
     std::string out;
     if (handle_analysis_command(ctx, command, args, &out)) return out;
     throw std::runtime_error("Unknown analysis command: " + command);

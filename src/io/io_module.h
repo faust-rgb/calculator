@@ -19,6 +19,8 @@
 #include <map>
 #include <memory>
 
+class ServiceLocator;
+
 /**
  * @class IoModule
  * @brief 提供文件读写功能的模块
@@ -70,12 +72,12 @@ public:
      * @brief 执行命令行参数形式的命令
      * @param command 命令名称
      * @param args 参数列表
-     * @param services 核心服务引用
+     * @param locator 服务定位器
      * @return 返回命令执行结果的字符串表示
      */
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             const CoreServices& services) override;
+                             ServiceLocator& locator) override;
 
     /**
      * @brief 获取指定主题的帮助信息

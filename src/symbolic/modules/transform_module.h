@@ -17,20 +17,24 @@
 #include <string>
 #include <functional>
 #include "module/calculator_module.h"
+class ServiceLocator;
 
 namespace transforms {
 
 /**
  * @class TransformModule
- * @brief 提供积分变换功能（Laplace, Fourier, Z 变换）的模块
+ * @brief 提供离散和积分变换（如 FFT, Z 变换, 傅里叶变换, 拉普拉斯变换）的模块
  */
 class TransformModule : public CalculatorModule {
 public:
     std::string name() const override { return "Transforms"; }
+
     std::vector<std::string> get_commands() const override;
+
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             const CoreServices& services) override;
+                             ServiceLocator& locator) override;
+
     std::string get_help_snippet(const std::string& topic) const override;
 };
 

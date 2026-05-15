@@ -9,6 +9,19 @@
 
 namespace rootfinding_engine {
 
+template <typename T>
+T secant_function_tolerance(T fx) {
+    if constexpr (std::is_same_v<T, Scalar>) {
+        const int scale = app::get_default_scale();
+        const int tol_scale = std::max(scale + 2, 14);
+        return T("1e-" + std::to_string(tol_scale)) *
+               t_max(T(static_cast<long long>(1)), t_abs(fx));
+    } else {
+        return precision::default_absolute_tolerance<T>() *
+               t_max(T(static_cast<long long>(1)), t_abs(fx));
+    }
+}
+
 // ============================================================================
 // Newton 法实现
 // ============================================================================
@@ -182,16 +195,57 @@ T secant_solve(
 
     CalcT c_x0 = to_internal<T>(x0);
     CalcT c_x1 = to_internal<T>(x1);
+    CalcT best_x = c_x1;
+    CalcT best_f_abs = t_abs(eval(c_x1));
+    bool has_bracket = false;
+    bool preserve_initial_bracket = false;
+    CalcT bracket_left = c_x0;
+    CalcT bracket_right = c_x1;
+
+    auto has_opposite_sign = [](const CalcT& a, const CalcT& b) {
+        return (a < CalcT(static_cast<long long>(0)) && b > CalcT(static_cast<long long>(0))) ||
+               (a > CalcT(static_cast<long long>(0)) && b < CalcT(static_cast<long long>(0)));
+    };
+    auto remember_bracket = [&](const CalcT& a, const CalcT& fa,
+                                const CalcT& b, const CalcT& fb) {
+        if (!preserve_initial_bracket && has_opposite_sign(fa, fb)) {
+            has_bracket = true;
+            bracket_left = a;
+            bracket_right = b;
+        }
+    };
+    auto refine_bracket = [&]() {
+        return bisection_solve<T>(
+            evaluate,
+            from_internal<T>(bracket_left),
+            from_internal<T>(bracket_right),
+            normalize,
+            variable_name);
+    };
+    const CalcT initial_f0 = eval(c_x0);
+    const CalcT initial_f1 = eval(c_x1);
+    if (has_opposite_sign(initial_f0, initial_f1)) {
+        has_bracket = true;
+        preserve_initial_bracket = true;
+        bracket_left = c_x0;
+        bracket_right = c_x1;
+    }
 
     const int max_iter = root_max_iterations<T>();
     for (int iteration = 0; iteration < max_iter; ++iteration) {
         const CalcT f0 = eval(c_x0);
         const CalcT f1 = eval(c_x1);
+        remember_bracket(c_x0, f0, c_x1, f1);
+        const CalcT f1_abs = t_abs(f1);
+        if (f1_abs < best_f_abs) {
+            best_f_abs = f1_abs;
+            best_x = c_x1;
+        }
 
-        if (t_abs(f1) <= root_function_tolerance(f1)) {
+        if (f1_abs <= secant_function_tolerance(f1)) {
             return normalize(from_internal<T>(c_x1));
         }
-        if (t_abs(f0) <= root_function_tolerance(f0)) {
+        if (t_abs(f0) <= secant_function_tolerance(f0)) {
             return normalize(from_internal<T>(c_x0));
         }
 
@@ -199,21 +253,40 @@ T secant_solve(
         const CalcT denominator = f1 - f0;
         if (t_abs(denominator) <=
             precision::default_absolute_tolerance<CalcT>() * t_max(CalcT(1.0L), t_max(t_abs(f0), t_abs(f1)))) {
+            if (has_bracket) {
+                return refine_bracket();
+            }
             return normalize(from_internal<T>(t_abs(f0) < t_abs(f1) ? c_x0 : c_x1));
         }
 
         // 割线法公式：next = x1 - f1 * (x1 - x0) / (f1 - f0)
         const CalcT next = c_x1 - f1 * (c_x1 - c_x0) / denominator;
+        const CalcT next_f = eval(next);
+        const CalcT next_f_abs = t_abs(next_f);
+        remember_bracket(c_x1, f1, next, next_f);
+        remember_bracket(c_x0, f0, next, next_f);
+        if (next_f_abs < best_f_abs) {
+            best_f_abs = next_f_abs;
+            best_x = next;
+        }
 
         // 检查收敛
         if (t_abs(next - c_x1) <=
             root_position_tolerance(t_max(t_abs(next), t_abs(c_x1)))) {
-            return normalize(from_internal<T>(next));
+            if (next_f_abs <= secant_function_tolerance(next_f)) {
+                return normalize(from_internal<T>(next));
+            }
+            if (has_bracket) {
+                return refine_bracket();
+            }
         }
         c_x0 = c_x1;
         c_x1 = next;
     }
-    return normalize(from_internal<T>(c_x1));
+    if (has_bracket) {
+        return refine_bracket();
+    }
+    return normalize(from_internal<T>(best_x));
 }
 
 // ============================================================================

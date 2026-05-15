@@ -29,7 +29,6 @@
 // 前向声明
 class CalculatorModule;
 struct CoreServices;
-struct CommandKey;
 
 // ============================================================================
 // 显示精度常量（使用 app 命名空间中的统一定义）
@@ -59,13 +58,13 @@ using app::kMinDisplayPrecision;
 using app::kMaxDisplayPrecision;
 
 // ============================================================================
-// 模块绑定
+// Calculator 实现类
 // ============================================================================
 
-struct CommandBinding {
-    std::shared_ptr<CalculatorModule> module;
-    std::string dispatch_name;
-};
+#include "core/services/service_locator.h"
+#include "core/services/core_manager_interfaces.h"
+#include "execution/engine/script_context.h"
+#include "execution/engine/script_context.h"
 
 // ============================================================================
 // Calculator 实现类
@@ -81,47 +80,58 @@ struct CommandBinding {
  * - 模块注册
  * - 显示选项
  */
-struct Calculator::Impl {
-    // 变量存储
-    std::map<std::string, StoredValue> variables;          ///< 全局变量
-    FlatScopeStack flat_scopes;                            ///< 局部作用域栈
+struct Calculator::Impl : public IExecutionContext {
+    Calculator* parent = nullptr;
+    ServiceLocator locator;
 
-    // 函数存储
-    std::map<std::string, CustomFunction> functions;       ///< 简单函数
-    std::map<std::string, ScriptFunction> script_functions; ///< 脚本函数
+    // 快捷访问服务接口（延迟初始化）
+    std::shared_ptr<IVariableManager> variables_ptr;
+    std::shared_ptr<IFunctionManager> functions_ptr;
+    std::shared_ptr<IConfigManager> config_ptr;
+    std::shared_ptr<ICommandRegistry> commands_ptr;
+    std::shared_ptr<IModuleManager> modules;
+    std::shared_ptr<IStatePersistence> persistence;
 
-    // 模块管理
-    std::vector<std::shared_ptr<CalculatorModule>> registered_modules;
-    std::vector<std::shared_ptr<CalculatorModule>> implicit_evaluation_modules;
+    // IExecutionContext implementation
+    IVariableManager& variables() override { return *variables_ptr; }
+    const IVariableManager& variables() const override { return *variables_ptr; }
+    
+    IFunctionManager& functions() override { return *functions_ptr; }
+    const IFunctionManager& functions() const override { return *functions_ptr; }
+    
+    IConfigManager& config() override { return *config_ptr; }
+    const IConfigManager& config() const override { return *config_ptr; }
+    
+    ICommandRegistry& commands() override { return *commands_ptr; }
+    const ICommandRegistry& commands() const override { return *commands_ptr; }
+    
+    const CoreServices& services() const override;
+    StoredValue evaluate(const std::string& expression, bool exact_mode) override;
+    bool try_evaluate_implicit(const std::string& expression, 
+                               StoredValue* value, 
+                               const std::map<std::string, StoredValue>& vars) override;
+    std::string expand_inline(const std::string& expression) override;
+    std::string execute_script_file(const std::string& path, 
+                                   bool exact_mode, 
+                                   bool create_scope) override;
+    bool try_process_function_command(const std::string& expression, 
+                                     std::string* output, 
+                                     bool exact_mode = false) override;
 
-    // 函数汇总（由模块注册）
-    std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>> scalar_functions;
-    std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>> matrix_functions;
-    std::map<std::string, matrix::ValueFunction> value_functions;
-    std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> native_functions;
-
-    // 模块元数据
     std::vector<std::string> module_commands;
     std::vector<std::string> module_functions;
-    std::map<std::string, std::vector<std::shared_ptr<CalculatorModule>>> help_topic_to_modules;
-    std::map<CommandKey, CommandBinding> command_to_module;
 
-    // 命令注册表
-    CommandRegistry command_registry;
+    std::map<std::string, std::vector<std::shared_ptr<CalculatorModule>>> help_topic_to_modules;
+    std::vector<std::shared_ptr<CalculatorModule>> implicit_evaluation_modules;
+
+    // 优化的隐式求值：触发字符到模块的映射
+    std::array<std::vector<std::shared_ptr<CalculatorModule>>, 256> trigger_char_to_modules;
 
     // 核心服务缓存
     std::unique_ptr<CoreServices> core_services;
 
-    // 显示选项
-    bool symbolic_constants_mode = false;  ///< 符号常量模式（pi, e 保留符号形式）
-    bool hex_prefix_mode = false;          ///< 十六进制输出前缀
-    bool hex_uppercase_mode = true;        ///< 十六进制大写字母
-    int display_precision = kDefaultDisplayPrecision; ///< 十进制显示有效位数
-
     // 脚本执行状态
-    int script_call_depth = 0;             ///< 脚本递归深度计数器
-    std::vector<std::filesystem::path> script_file_stack; ///< 当前脚本文件栈
-    std::set<std::filesystem::path> importing_script_files; ///< 正在导入的脚本，防循环
+    ScriptContext script_context;
 };
 
 // ============================================================================
@@ -137,7 +147,7 @@ bool is_valid_variable_name(std::string_view name);
 bool is_identifier_text(std::string_view text);
 bool is_string_literal(std::string_view text);
 std::string parse_string_literal_value(std::string_view text);
-bool is_reserved_user_function_name(const Calculator::Impl* impl, std::string_view name);
+bool is_reserved_user_function_name(IExecutionContext* ctx, std::string_view name);
 
 // 状态持久化
 std::string encode_state_field(const std::string& text);

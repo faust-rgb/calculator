@@ -3,6 +3,8 @@
 // ============================================================================
 
 #include "symbolic/modules/transform_module.h"
+#include "core/services/service_locator.h"
+#include "core/services/core_manager_interfaces.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "core/services/string_utils.h"
 
@@ -210,9 +212,12 @@ bool handle_transform_command(const TransformContext& ctx,
 
 std::string TransformModule::execute_args(const std::string& command,
                                          const std::vector<std::string>& args,
-                                         const CoreServices& services) {
+                                         ServiceLocator& locator) {
+    auto engine = locator.resolve<IEvaluationEngine>();
     TransformContext ctx;
-    ctx.resolve_symbolic = services.symbolic.resolve_symbolic;
+    ctx.resolve_symbolic = [engine](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
+        engine->resolve_symbolic(arg, req, var, expr);
+    };
 
     std::string output;
     if (handle_transform_command(ctx, command, args, &output)) {

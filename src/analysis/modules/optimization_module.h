@@ -17,6 +17,8 @@
 #include <vector>
 #include "module/calculator_module.h"
 
+class ServiceLocator;
+
 namespace optimization {
 
 /**
@@ -29,7 +31,7 @@ public:
     std::vector<std::string> get_commands() const override;
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             const CoreServices& services) override;
+                             ServiceLocator& locator) override;
     std::string get_help_snippet(const std::string& topic) const override;
 };
 

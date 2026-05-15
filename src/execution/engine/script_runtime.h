@@ -17,8 +17,8 @@
 
 #include "script_signal.h"
 #include "script_ast.h"
+#include "script_context.h"
 #include "parser/grammars/command_parser.h"
-#include "core/api/calculator.h"
 #include <string>
 #include <vector>
 #include <memory>
@@ -33,28 +33,28 @@ class VariableResolver;
 
 /**
  * @brief 获取当前可见变量的解析器
- * @param impl 计算器实现指针
+ * @param ctx 执行上下文
  * @return 包含所有可见变量的 VariableResolver
  */
-VariableResolver visible_variables(const Calculator::Impl* impl);
+VariableResolver visible_variables(IExecutionContext* ctx);
 
 /**
  * @brief 检查是否存在可见的脚本函数
- * @param impl 计算器实现指针
+ * @param ctx 执行上下文
  * @param name 函数名
  * @return 如果存在返回 true
  */
-bool has_visible_script_function(const Calculator::Impl* impl, const std::string& name);
+bool has_visible_script_function(IExecutionContext* ctx, const std::string& name);
 
 /**
  * @brief 分配可见变量
- * @param impl 计算器实现指针
+ * @param ctx 执行上下文
  * @param name 变量名
  * @param value 变量值
  *
  * 按作用域优先级分配变量：先尝试更新现有变量，再创建新变量。
  */
-void assign_visible_variable(Calculator::Impl* impl,
+void assign_visible_variable(IExecutionContext* ctx,
                              const std::string& name,
                              const StoredValue& value);
 
@@ -64,27 +64,23 @@ void assign_visible_variable(Calculator::Impl* impl,
 
 /**
  * @brief 执行命令 AST 节点并返回输出字符串
- * @param calculator 计算器实例
- * @param impl 计算器实现指针
+ * @param ctx 执行上下文
  * @param ast 命令 AST 节点
  * @param exact_mode 是否精确模式
  * @return 执行结果字符串
  */
-std::string execute_command_ast(Calculator* calculator,
-                                Calculator::Impl* impl,
+std::string execute_command_ast(IExecutionContext* ctx,
                                 const CommandASTNode& ast,
                                 bool exact_mode);
 
 /**
  * @brief 求值命令 AST 节点为 StoredValue
- * @param calculator 计算器实例
- * @param impl 计算器实现指针
+ * @param ctx 执行上下文
  * @param ast 命令 AST 节点
  * @param exact_mode 是否精确模式
  * @return 求值结果
  */
-StoredValue evaluate_command_ast_to_value(Calculator* calculator,
-                                          Calculator::Impl* impl,
+StoredValue evaluate_command_ast_to_value(IExecutionContext* ctx,
                                           const CommandASTNode& ast,
                                           bool exact_mode);
 
@@ -94,8 +90,7 @@ StoredValue evaluate_command_ast_to_value(Calculator* calculator,
 
 /**
  * @brief 求值表达式并返回 StoredValue
- * @param calculator 计算器实例
- * @param impl 计算器实现指针
+ * @param ctx 执行上下文
  * @param expression 表达式字符串
  * @param exact_mode 是否精确模式
  * @param cache 可选的表达式缓存
@@ -103,23 +98,20 @@ StoredValue evaluate_command_ast_to_value(Calculator* calculator,
  *
  * 支持各种表达式类型：标量、矩阵、字符串、列表、字典等。
  */
-StoredValue evaluate_expression_value(Calculator* calculator,
-                                      Calculator::Impl* impl,
+StoredValue evaluate_expression_value(IExecutionContext* ctx,
                                       const std::string& expression,
                                       bool exact_mode,
                                       std::shared_ptr<ExpressionCache>* cache = nullptr);
 
 /**
  * @brief 兼容旧接口的求值包装
- * @param calculator 计算器实例
- * @param impl 计算器实现指针
+ * @param ctx 执行上下文
  * @param expression 表达式字符串
  * @param exact_mode 是否精确模式
  * @param cache 缓存指针（旧类型）
  * @return 求值结果
  */
-StoredValue evaluate_expression_value_legacy(Calculator* calculator,
-                                             Calculator::Impl* impl,
+StoredValue evaluate_expression_value_legacy(IExecutionContext* ctx,
                                              const std::string& expression,
                                              bool exact_mode,
                                              std::shared_ptr<void>* cache);
@@ -130,16 +122,14 @@ StoredValue evaluate_expression_value_legacy(Calculator* calculator,
 
 /**
  * @brief 执行单条脚本语句
- * @param calculator 计算器实例
- * @param impl 计算器实现指针
+ * @param ctx 执行上下文
  * @param statement 脚本语句
  * @param exact_mode 是否精确模式
  * @param last_output 输出字符串指针
  * @param create_scope 是否创建新作用域
  * @return 执行结果信号（用于控制流）
  */
-ScriptSignal execute_script_statement(Calculator* calculator,
-                                      Calculator::Impl* impl,
+ScriptSignal execute_script_statement(IExecutionContext* ctx,
                                       const script::Statement& statement,
                                       bool exact_mode,
                                       std::string* last_output,
@@ -147,16 +137,14 @@ ScriptSignal execute_script_statement(Calculator* calculator,
 
 /**
  * @brief 执行脚本块
- * @param calculator 计算器实例
- * @param impl 计算器实现指针
+ * @param ctx 执行上下文
  * @param block 脚本块语句
  * @param exact_mode 是否精确模式
  * @param last_output 输出字符串指针
  * @param create_scope 是否创建新作用域
  * @return 执行结果信号
  */
-ScriptSignal execute_script_block(Calculator* calculator,
-                                  Calculator::Impl* impl,
+ScriptSignal execute_script_block(IExecutionContext* ctx,
                                   const script::BlockStatement& block,
                                   bool exact_mode,
                                   std::string* last_output,
@@ -164,40 +152,34 @@ ScriptSignal execute_script_block(Calculator* calculator,
 
 /**
  * @brief 调用脚本函数（标量返回，兼容旧接口）
- * @param calculator 计算器实例
- * @param impl 计算器实现指针
+ * @param ctx 执行上下文
  * @param name 函数名
  * @param arguments 参数列表（标量值）
  * @return 函数返回值（标量）
  */
-Scalar invoke_script_function_decimal(Calculator* calculator,
-                                      Calculator::Impl* impl,
+Scalar invoke_script_function_decimal(IExecutionContext* ctx,
                                       const std::string& name,
                                       const std::vector<Scalar>& arguments);
 
 /**
  * @brief 调用脚本函数（完整类型返回）
- * @param calculator 计算器实例
- * @param impl 计算器实现指针
+ * @param ctx 执行上下文
  * @param name 函数名
  * @param arguments 参数列表（完整值）
  * @return 函数返回值
  */
-StoredValue invoke_script_function(Calculator* calculator,
-                                   Calculator::Impl* impl,
+StoredValue invoke_script_function(IExecutionContext* ctx,
                                    const std::string& name,
                                    const std::vector<StoredValue>& arguments);
 
 /**
  * @brief 执行简单脚本行（用于 REPL）
- * @param calculator 计算器实例
- * @param impl 计算器实现指针
+ * @param ctx 执行上下文
  * @param text 脚本文本
  * @param exact_mode 是否精确模式
  * @return 执行结果字符串
  */
-std::string execute_simple_script_line(Calculator* calculator,
-                                       Calculator::Impl* impl,
+std::string execute_simple_script_line(IExecutionContext* ctx,
                                        const std::string& text,
                                        bool exact_mode);
 

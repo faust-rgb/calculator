@@ -11,6 +11,8 @@
 // - rootfinding_engine.cpp: Newton、二分、割线、不动点、Brent 法
 
 #include "analysis/modules/rootfinding_module.h"
+#include "core/services/core_manager_interfaces.h"
+#include "core/services/service_locator.h"
 #include "analysis/rootfinding/rootfinding_engine.h"
 #include "analysis/base/precision_constants.h"
 #include "app/scalar_type.h"
@@ -456,6 +458,22 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
         Scalar x0 = ctx.parse_decimal(arguments[1]);
         Scalar x1 = ctx.parse_decimal(arguments[2]);
         Scalar result = rootfinding_engine::secant_solve<Scalar>(evaluate_expression, x0, x1, ctx.normalize_result, detected_var);
+        const Scalar f0 = evaluate_expression({{detected_var, x0}});
+        const Scalar f1 = evaluate_expression({{detected_var, x1}});
+        const bool bracketed =
+            (f0 < Scalar(0) && f1 > Scalar(0)) ||
+            (f0 > Scalar(0) && f1 < Scalar(0));
+        if (bracketed) {
+            const Scalar bracketed_result = rootfinding_engine::bisection_solve<Scalar>(
+                evaluate_expression, x0, x1, ctx.normalize_result, detected_var);
+            const Scalar result_residual =
+                mymath::abs(evaluate_expression({{detected_var, result}}));
+            const Scalar bracketed_residual =
+                mymath::abs(evaluate_expression({{detected_var, bracketed_result}}));
+            if (bracketed_residual <= result_residual) {
+                result = bracketed_result;
+            }
+        }
         *output = format_decimal(result);
         return true;
     }
@@ -491,22 +509,35 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
 
 std::string RootfindingModule::execute_args(const std::string& command,
                                            const std::vector<std::string>& args,
-                                           const CoreServices& services) {
+                                           ServiceLocator& locator) {
+    auto engine = locator.resolve<IEvaluationEngine>();
+
     RootfindingContext ctx;
-    ctx.parse_decimal = services.evaluation.parse_decimal;
-    ctx.build_scoped_evaluator = services.evaluation.build_decimal_evaluator;
-    ctx.get_derivative_expression = [&](const std::string& expr_str, const std::string& var_name) {
+    ctx.parse_decimal = [engine](const std::string& expr) { return engine->parse_decimal(expr); };
+    ctx.build_scoped_evaluator = [engine](const std::string& expr) {
+        auto stored_eval = engine->build_scoped_scalar_evaluator(expr);
+        return [stored_eval](const std::vector<std::pair<std::string, Scalar>>& vars) {
+            std::vector<std::pair<std::string, StoredValue>> stored_vars;
+            for (const auto& [k, v] : vars) {
+                StoredValue sv;
+                sv.decimal = v;
+                stored_vars.push_back({k, sv});
+            }
+            return stored_eval(stored_vars);
+        };
+    };
+    ctx.get_derivative_expression = [engine](const std::string& expr_str, const std::string& var_name) {
         try {
-            std::string var;
             SymbolicExpression expr;
-            services.symbolic.resolve_symbolic(expr_str, false, &var, &expr);
+            std::string var;
+            engine->resolve_symbolic(expr_str, false, &var, &expr);
             if (expr.node_) return expr.derivative(var_name).simplify().to_string();
         } catch (...) {}
         return std::string();
     };
-    ctx.is_matrix_argument = services.is_matrix_argument;
-    ctx.parse_matrix_argument = services.parse_matrix_argument;
-    ctx.normalize_result = services.evaluation.normalize_result;
+    ctx.is_matrix_argument = [engine](const std::string& arg) { return engine->is_matrix_argument(arg); };
+    ctx.parse_matrix_argument = [engine](const std::string& arg, const std::string& cmd) { return engine->parse_matrix_argument(arg, cmd); };
+    ctx.normalize_result = [engine](Scalar value) { return engine->normalize_result(value); };
 
     std::string output;
     if (handle_rootfinding_command(ctx, command, args, &output)) {

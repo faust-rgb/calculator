@@ -19,6 +19,8 @@
 #include "module/calculator_module.h"
 #include "matrix/matrix.h"
 
+class ServiceLocator;
+
 namespace rootfinding {
 
 using Scalar = mymath::Scalar;
@@ -33,7 +35,7 @@ public:
     std::vector<std::string> get_commands() const override;
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             const CoreServices& services) override;
+                             ServiceLocator& locator) override;
     std::string get_help_snippet(const std::string& topic) const override;
 };
 

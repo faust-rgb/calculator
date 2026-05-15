@@ -15,6 +15,8 @@
 // - series_summation.cpp: 级数求和
 
 #include "analysis/modules/series_module.h"
+#include "core/services/core_manager_interfaces.h"
+#include "core/services/service_locator.h"
 #include "analysis/series/psa_engine.h"
 #include "analysis/series/taylor_series.h"
 #include "analysis/series/pade_approximation.h"
@@ -171,13 +173,24 @@ bool handle_series_command(const SeriesContext& ctx,
 
 std::string SeriesModule::execute_args(const std::string& command,
                                       const std::vector<std::string>& args,
-                                      const CoreServices& services) {
+                                      ServiceLocator& locator) {
+    auto engine = locator.resolve<IEvaluationEngine>();
+
     SeriesContext ctx;
-    ctx.resolve_symbolic = services.symbolic.resolve_symbolic;
-    ctx.parse_decimal = services.evaluation.parse_decimal;
-    ctx.evaluate_at = services.symbolic.evaluate_symbolic_at;
-    ctx.simplify_symbolic = services.symbolic.simplify_symbolic;
-    ctx.expand_inline = services.symbolic.expand_inline;
+    ctx.resolve_symbolic = [engine](const std::string& a, bool r, std::string* v, SymbolicExpression* e) {
+        engine->resolve_symbolic(a, r, v, e);
+    };
+    ctx.parse_decimal = [engine](const std::string& a) { return engine->parse_decimal(a); };
+    ctx.evaluate_at = [engine](const SymbolicExpression& expr, const std::string& var, Scalar val) {
+        return engine->build_scoped_evaluator(expr.to_string())({{var, val}});
+    };
+    ctx.simplify_symbolic = [engine](const std::string& a) {
+        SymbolicExpression expr;
+        std::string var;
+        engine->resolve_symbolic(a, false, &var, &expr);
+        return expr.to_string();
+    };
+    ctx.expand_inline = [engine](const std::string& a) { return engine->expand_inline(a); };
 
     std::string output;
     if (handle_series_command(ctx, command, args, &output)) {

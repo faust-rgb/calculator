@@ -66,7 +66,7 @@ struct Statement : public execution::ExecutableNode {
     virtual ~Statement() = default;
 
     // 默认实现，由 script_runtime.cpp 中的子类具体实现或包装
-    StoredValue execute(Calculator* calc, bool exact_mode) const override;
+    StoredValue execute(IExecutionContext* ctx, bool exact_mode) const override;
 
     Kind kind;
     int line;

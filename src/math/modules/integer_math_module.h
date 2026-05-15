@@ -10,6 +10,8 @@
 
 #include "module/calculator_module.h"
 
+class ServiceLocator;
+
 /**
  * @class IntegerMathModule
  * @brief 提供整数数学、数论和进制转换功能的模块
@@ -37,12 +39,12 @@ public:
      * @brief 执行命令式操作
      * @param command 命令名称
      * @param args 参数列表
-     * @param services 核心服务接口
+     * @param locator 服务定位器
      * @return 执行结果的字符串表示
      */
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             const CoreServices& services) override;
+                             ServiceLocator& locator) override;
 
     /**
      * @brief 获取模块提供的标量函数映射

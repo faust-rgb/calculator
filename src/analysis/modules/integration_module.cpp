@@ -14,6 +14,8 @@
 // - multidim_integration.cpp: 多维积分
 
 #include "analysis/modules/integration_module.h"
+#include "core/services/service_locator.h"
+#include "core/services/core_manager_interfaces.h"
 #include "analysis/base/precision_constants.h"
 #include "analysis/calculus/function_analysis.h"
 #include "analysis/integration/integration_engine.h"
@@ -511,12 +513,13 @@ bool handle_integration_command(const IntegrationContext& ctx, const std::string
 
 std::string IntegrationModule::execute_args(const std::string& command,
                                             const std::vector<std::string>& args,
-                                            const CoreServices& services) {
+                                            ServiceLocator& locator) {
+    auto engine = locator.resolve<IEvaluationEngine>();
     IntegrationContext ctx;
-    ctx.parse_decimal = services.evaluation.parse_decimal;
-    ctx.build_scoped_evaluator = services.evaluation.build_decimal_evaluator;
-    ctx.normalize_result = services.evaluation.normalize_result;
-    ctx.build_analysis = services.symbolic.build_analysis;
+    ctx.parse_decimal = [engine](const std::string& expr) { return engine->parse_decimal(expr); };
+    ctx.build_scoped_evaluator = [engine](const std::string& expression) { return engine->build_scoped_evaluator(expression); };
+    ctx.normalize_result = [engine](Scalar value) { return engine->normalize_result(value); };
+    ctx.build_analysis = [engine](const std::string& expression) { return engine->build_analysis(expression); };
 
     std::string output;
     if (handle_integration_command(ctx, command, args, &output)) {

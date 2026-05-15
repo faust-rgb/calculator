@@ -96,6 +96,8 @@ struct CommandSpec {
     std::string dispatch_name;///< 派发名称（原始命令名）
 };
 
+class ServiceLocator;
+
 /**
  * @class CalculatorModule
  * @brief 所有数学模块的抽象基类，定义模块接口
@@ -120,7 +122,7 @@ public:
     virtual std::string name() const = 0;
 
     /// 初始化模块，在注册后调用一次
-    virtual void initialize(const CoreServices& /*services*/) {}
+    virtual void initialize(ServiceLocator& /*locator*/) {}
 
     /// 查询模块提供的扩展服务接口
     virtual void* query_service(const std::string& service_name) {
@@ -142,12 +144,12 @@ public:
     /// 使用字符串参数执行命令（推荐重写此方法）
     virtual std::string execute_args(const std::string& command,
                                     const std::vector<std::string>& args,
-                                    const CoreServices& services);
+                                    ServiceLocator& locator);
 
     /// 使用字符串视图参数执行命令（零拷贝接口）
     virtual std::string execute_args_view(std::string_view command,
                                           const std::vector<std::string_view>& args,
-                                          const CoreServices& services);
+                                          ServiceLocator& locator);
 
     /// 使用单个字符串执行命令（旧版接口，保持向后兼容）
     virtual std::string execute(const std::string& command,

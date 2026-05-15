@@ -13,6 +13,8 @@
  */
 
 #include "matrix_module.h"
+#include "core/services/service_locator.h"
+#include "core/services/core_manager_interfaces.h"
 #include "matrix.h"
 #include "matrix_internal.h"
 #include "mymath.h"
@@ -163,19 +165,20 @@ std::vector<std::string> MatrixModule::get_commands() const {
 
 std::string MatrixModule::execute_args(const std::string& command,
                                        const std::vector<std::string>& args,
-                                       const CoreServices& services) {
+                                       ServiceLocator& locator) {
     // 命令已由路由层验证，无需再检查
+    auto engine = locator.resolve<IEvaluationEngine>();
 
     if (args.size() != 1) {
         throw std::runtime_error(command + " expects exactly one matrix argument");
     }
 
     const std::string& arg = args[0];
-    if (!services.is_matrix_argument(arg)) {
+    if (!engine->is_matrix_argument(arg)) {
         throw std::runtime_error(command + " expects a matrix argument");
     }
 
-    const Matrix matrix_value = services.parse_matrix_argument(arg, command);
+    const Matrix matrix_value = engine->parse_matrix_argument(arg, command);
 
     if (command == "svd") {
         return "U: " + svd_u(matrix_value).to_string() +

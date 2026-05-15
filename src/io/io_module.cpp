@@ -10,6 +10,8 @@
  */
 
 #include "io_module.h"
+#include "core/services/core_manager_interfaces.h"
+#include "core/services/service_locator.h"
 #include "core/common/calculator_exceptions.h"
 #include "core/services/string_utils.h"
 #include "matrix/matrix.h"
@@ -706,7 +708,9 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
  */
 std::string IoModule::execute_args(const std::string& command,
                                    const std::vector<std::string>& args,
-                                   const CoreServices& services) {
+                                   ServiceLocator& locator) {
+    auto engine = locator.resolve<IEvaluationEngine>();
+
     // 命令行用法（无括号），例如: open "file.txt" w
     std::vector<StoredValue> s_args;
     for (const auto& arg : args) {
@@ -718,12 +722,12 @@ std::string IoModule::execute_args(const std::string& command,
             sv.string_value = parsed.substr(1, parsed.size() - 2);
             s_args.push_back(sv);
         } else {
-            // 使用 evaluate_value 而非 parse_decimal，以支持矩阵和复数变量
-            StoredValue sv = services.evaluation.evaluate_value(parsed, false);
+            // 使用 evaluate_expression_value 而非 parse_decimal，以支持矩阵和复数变量
+            StoredValue sv = engine->evaluate_expression_value(parsed, false);
             s_args.push_back(sv);
         }
     }
-    
+
     auto funcs = get_native_functions();
     auto it = funcs.find(command);
     if (it != funcs.end()) {
@@ -740,7 +744,7 @@ std::string IoModule::execute_args(const std::string& command,
         }
         return format_long_double(res.exact ? rational_to_double(res.rational) : res.decimal.to_long_double());
     }
-    
+
     return "";
 }
 
