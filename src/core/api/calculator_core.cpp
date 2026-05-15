@@ -570,42 +570,28 @@ std::string Calculator::list_variables() const {
 }
 
 std::string Calculator::factor_expression(const std::string& expression) const {
-    // 委托给 IntegerMathModule 处理
-    std::string output;
-    if (impl_->commands_ptr->has_command("factor")) {
-        auto is_command = [this](std::string_view name) {
-            return impl_->commands_ptr->has_command(std::string(name));
-        };
-        CommandASTNode ast = parse_command(expression, is_command);
-        const auto* call = ast.as_function_call();
-        if (call && call->name == "factor") {
-            std::vector<std::string_view> args;
-            for (const auto& arg : call->arguments) args.push_back(arg.text);
-            const CoreServices& svc = get_core_services();
-            if (impl_->commands_ptr->try_process("factor", args, &output, false, svc)) {
-                return output;
-            }
-        }
+    // 完全委托给 IntegerMathModule 处理
+    if (!impl_->commands_ptr->has_command("factor")) {
+        throw std::runtime_error("factor command not available - IntegerMathModule not loaded");
     }
-    // 回退到旧实现
+
     auto is_command = [this](std::string_view name) {
         return impl_->commands_ptr->has_command(std::string(name));
     };
     CommandASTNode ast = parse_command(expression, is_command);
     const auto* call = ast.as_function_call();
-    if (!call || call->name != "factor" || call->arguments.size() != 1) {
+    if (!call || call->name != "factor") {
         throw std::runtime_error("expected factor(expression)");
     }
 
-    const Scalar value = parse_decimal_expression(std::string(call->arguments[0].text),
-        impl_->variables_ptr->create_resolver(),
-        impl_->functions_ptr->get_custom_functions_map(),
-        impl_->functions_ptr->get_scalar_functions());
-    if (!is_integer_double(value)) {
-        throw std::runtime_error("factor only accepts integers");
+    std::vector<std::string_view> args;
+    for (const auto& arg : call->arguments) args.push_back(arg.text);
+    std::string output;
+    const CoreServices& svc = get_core_services();
+    if (!impl_->commands_ptr->try_process("factor", args, &output, false, svc)) {
+        throw std::runtime_error("factor command failed");
     }
-
-    return factor_integer(round_to_long_long(value));
+    return output;
 }
 
 std::string Calculator::plot_expression(const std::string& expression) const {
