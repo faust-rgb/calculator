@@ -54,7 +54,7 @@ bool is_series_command(const std::string& command);
 
 bool handle_series_command(const SeriesContext& ctx,
                            const std::string& command,
-                           const std::string& inside,
+                           const std::vector<std::string>& arguments,
                            std::string* output);
 
 // 内部命名空间中的 PoleException 和 evaluate_psa 已移至 series/psa_engine.h

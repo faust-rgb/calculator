@@ -49,9 +49,8 @@ bool is_series_command(const std::string& command) {
 
 bool handle_series_command(const SeriesContext& ctx,
                            const std::string& command,
-                           const std::string& inside,
+                           const std::vector<std::string>& arguments,
                            std::string* output) {
-    const std::vector<std::string> arguments = split_top_level_arguments(inside);
 
     if (command == "taylor") {
         if (arguments.size() != 3) {
@@ -180,14 +179,8 @@ std::string SeriesModule::execute_args(const std::string& command,
     ctx.simplify_symbolic = services.symbolic.simplify_symbolic;
     ctx.expand_inline = services.symbolic.expand_inline;
 
-    std::string inside;
-    for (std::size_t i = 0; i < args.size(); ++i) {
-        if (i != 0) inside += ", ";
-        inside += args[i];
-    }
-
     std::string output;
-    if (handle_series_command(ctx, command, inside, &output)) {
+    if (handle_series_command(ctx, command, args, &output)) {
         return output;
     }
     throw std::runtime_error("Series command failed: " + command);
@@ -210,3 +203,5 @@ std::string SeriesModule::get_help_snippet(const std::string& topic) const {
 }
 
 }  // namespace series_ops
+#include "module/module_registration.h"
+REGISTER_CALCULATOR_MODULE(series_ops::SeriesModule)

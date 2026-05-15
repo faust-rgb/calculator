@@ -61,9 +61,8 @@ bool is_ode_command(const std::string& command) {
 
 bool handle_ode_command(const ODEContext& ctx,
                         const std::string& command,
-                        const std::string& inside,
+                        const std::vector<std::string>& arguments,
                         std::string* output) {
-    const std::vector<std::string> arguments = split_top_level_arguments(inside);
 
     // ==================== 单方程求解 ====================
     if (command == "ode" || command == "ode_table") {
@@ -95,14 +94,8 @@ bool handle_ode_command(const ODEContext& ctx,
                 y0_mat.at(i, 0) = (initial_state[i]);
             new_args[2] = matrix_literal_expression(y0_mat);
 
-            std::string rec_inside;
-            for (std::size_t i = 0; i < new_args.size(); ++i) {
-                if (i > 0) rec_inside += ", ";
-                rec_inside += new_args[i];
-            }
-
             std::string sys_cmd = (command == "ode") ? "ode_system" : "ode_system_table";
-            return handle_ode_command(ctx, sys_cmd, rec_inside, output);
+            return handle_ode_command(ctx, sys_cmd, new_args, output);
         }
 
         Scalar y0 = initial_state[0];
@@ -334,7 +327,7 @@ bool handle_ode_command(const ODEContext& ctx,
 
     // ==================== 兼容性别名 ====================
     if (command == "ode_solve") {
-        return handle_ode_command(ctx, "ode", inside, output);
+        return handle_ode_command(ctx, "ode", arguments, output);
     }
 
     return false;
@@ -371,14 +364,8 @@ std::string ODEModule::execute_args(const std::string& command,
     ctx.evaluate_expression_value = services.evaluation.evaluate_value;
     ctx.normalize_result = services.evaluation.normalize_result;
 
-    std::string inside;
-    for (std::size_t i = 0; i < args.size(); ++i) {
-        if (i != 0) inside += ", ";
-        inside += args[i];
-    }
-
     std::string output;
-    if (handle_ode_command(ctx, command, inside, &output)) {
+    if (handle_ode_command(ctx, command, args, &output)) {
         return output;
     }
     throw std::runtime_error("ODE command failed: " + command);
@@ -399,3 +386,6 @@ std::string ODEModule::get_help_snippet(const std::string& topic) const {
 }
 
 }  // namespace ode_ops
+
+#include "module/module_registration.h"
+REGISTER_CALCULATOR_MODULE(ode_ops::ODEModule)

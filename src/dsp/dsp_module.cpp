@@ -22,15 +22,7 @@ std::string DspModule::execute_args(const std::string& command,
                                     const std::vector<std::string>& args,
                                     const CoreServices& services) {
     // 命令已由路由层验证，无需再检查
-
-    // 将参数列表转换回 inside 字符串格式
-    std::string inside;
-    for (std::size_t i = 0; i < args.size(); ++i) {
-        if (i != 0) inside += ", ";
-        inside += args[i];
-    }
-
-    return dsp_ops::handle_residue_command(command, inside, services);
+    return dsp_ops::handle_residue_command(command, args, services);
 }
 
 std::string DspModule::get_help_snippet(const std::string& topic) const {
@@ -40,3 +32,6 @@ std::string DspModule::get_help_snippet(const std::string& topic) const {
     }
     return "";
 }
+
+#include "module/module_registration.h"
+REGISTER_CALCULATOR_MODULE(DspModule)

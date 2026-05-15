@@ -14,42 +14,60 @@
 #ifndef MODULE_REGISTRATION_H
 #define MODULE_REGISTRATION_H
 
+#include <vector>
+#include <functional>
+#include <memory>
+
 class Calculator;
+class CalculatorModule;
 
 /**
- * @brief 注册所有标准模块到计算器实例
- * @param calculator 指向计算器实例的指针
- *
- * 此函数将所有内置模块注册到指定的计算器实例，包括：
- *
- * **基础数学模块：**
- * - StandardMathModule - 标准数学函数（sin, cos, log 等）
- * - IntegerMathModule - 整数运算（阶乘、组合数等）
- * - PreciseModule - 高精度计算
- * - StatisticsModule - 统计函数
- *
- * **矩阵与 DSP 模块：**
- * - MatrixModule - 矩阵运算
- * - DspModule - 数字信号处理
- *
- * **分析模块：**
- * - SeriesModule - 级数展开
- * - IntegrationModule - 数值积分
- * - RootfindingModule - 方程求根
- * - OptimizationModule - 数值优化
- * - ODEModule - 常微分方程求解
- *
- * **符号计算与多项式：**
- * - SymbolicModule - 符号运算
- * - TransformModule - 变换（傅里叶、拉普拉斯等）
- * - PolynomialModule - 多项式操作
- *
- * **其他模块：**
- * - PlotModule - 函数绘图
- * - SystemModule - 系统命令
- * - IoModule - 输入输出
- * - TimeModule - 时间相关功能
+ * @class ModuleRegistry
+ * @brief 全局模块注册表，用于去中心化注册
+ */
+class ModuleRegistry {
+public:
+    using ModuleFactory = std::function<std::shared_ptr<CalculatorModule>()>;
+
+    static ModuleRegistry& instance() {
+        static ModuleRegistry registry;
+        return registry;
+    }
+
+    void register_factory(ModuleFactory factory) {
+        factories_.push_back(std::move(factory));
+    }
+
+    const std::vector<ModuleFactory>& factories() const {
+        return factories_;
+    }
+
+private:
+    std::vector<ModuleFactory> factories_;
+};
+
+/**
+ * @brief 注册标准模块到计算器实例的辅助函数
+ * 遍历全局注册表，并将其中的所有模块注册到 Calculator 中。
  */
 void register_standard_modules(Calculator* calculator);
+
+/**
+ * @brief 模块注册宏，放在模块的 .cpp 文件末尾
+ * 
+ * 示例：
+ * REGISTER_CALCULATOR_MODULE(MyCustomModule)
+ */
+#define REGISTER_CALCULATOR_MODULE(ModuleClass) \
+    namespace { \
+        struct ModuleRegistrar { \
+            ModuleRegistrar() { \
+                ModuleRegistry::instance().register_factory([]() { \
+                    return std::make_shared<ModuleClass>(); \
+                }); \
+            } \
+        }; \
+        static ModuleRegistrar global_module_registrar; \
+    }
 
 #endif

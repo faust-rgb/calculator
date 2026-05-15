@@ -135,10 +135,9 @@ bool solve_linear_box_problem(const std::vector<Scalar>& objective,
  */
 bool handle_optimization_command(const OptimizationContext& ctx,
                                  const std::string& command,
-                                 const std::string& inside,
+                                 const std::vector<std::string>& arguments,
                                  std::string* output) {
     const std::string normalized = normalize_optimization_command(command);
-    const std::vector<std::string> arguments = split_top_level_arguments(inside);
 
     const ProblemType problem_type = get_problem_type(normalized);
     const bool maximize = is_maximize(normalized);
@@ -278,14 +277,8 @@ std::string OptimizationModule::execute_args(const std::string& command,
     ctx.is_integer_double = services.is_integer_double;
     ctx.round_to_long_long = services.round_to_long_long;
 
-    std::string inside;
-    for (std::size_t i = 0; i < args.size(); ++i) {
-        if (i != 0) inside += ", ";
-        inside += args[i];
-    }
-
     std::string output;
-    if (handle_optimization_command(ctx, command, inside, &output)) {
+    if (handle_optimization_command(ctx, command, args, &output)) {
         return output;
     }
     throw std::runtime_error("Optimization command failed: " + command);
@@ -308,3 +301,6 @@ std::string OptimizationModule::get_help_snippet(const std::string& topic) const
 }
 
 }  // namespace optimization
+
+#include "module/module_registration.h"
+REGISTER_CALCULATOR_MODULE(optimization::OptimizationModule)

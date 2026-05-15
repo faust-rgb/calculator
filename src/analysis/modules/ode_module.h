@@ -54,7 +54,7 @@ bool is_ode_command(const std::string& command);
 
 bool handle_ode_command(const ODEContext& ctx,
                         const std::string& command,
-                        const std::string& inside,
+                        const std::vector<std::string>& arguments,
                         std::string* output);
 
 std::string matrix_literal_expression(const matrix::Matrix& value);

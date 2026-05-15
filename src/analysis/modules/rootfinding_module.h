@@ -57,7 +57,7 @@ bool is_rootfinding_command(const std::string& command);
 
 bool handle_rootfinding_command(const RootfindingContext& ctx,
                                 const std::string& command,
-                                const std::string& inside,
+                                const std::vector<std::string>& arguments,
                                 std::string* output);
 
 // 泛型求根接口

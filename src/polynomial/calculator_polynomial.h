@@ -217,7 +217,7 @@ bool is_polynomial_command(const std::string& command);
  */
 bool handle_polynomial_command(const PolynomialContext& ctx,
                                const std::string& command,
-                               const std::string& inside,
+                               const std::vector<std::string>& arguments,
                                std::string* output);
 
 }  // namespace polynomial_ops

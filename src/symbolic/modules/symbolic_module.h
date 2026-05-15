@@ -98,7 +98,7 @@ std::vector<SymbolicExpression> parse_symbolic_expression_list(
 
 bool handle_symbolic_command(const SymbolicCommandContext& ctx,
                              const std::string& command,
-                             const std::string& inside,
+                             const std::vector<std::string>& arguments,
                              std::string* output);
 
 }  // namespace symbolic_commands

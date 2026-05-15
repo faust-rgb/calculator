@@ -540,16 +540,6 @@ bool handle_analysis_command(const AnalysisContext& ctx,
         return true;
     }
 
-    std::string inside;
-    for (size_t i = 0; i < arguments.size(); ++i) { if (i != 0) inside += ", "; inside += arguments[i]; }
-    return handle_analysis_command(ctx, command, inside, output);
-}
-
-bool handle_analysis_command(const AnalysisContext& ctx,
-                             const std::string& command,
-                             const std::string& inside,
-                             std::string* output) {
-    const std::vector<std::string> arguments = split_top_level_arguments(inside);
     if (command == "lagrange") {
         if (arguments.size() < 2) throw std::runtime_error("lagrange expects f, [g1, g2, ...], [vars]");
         SymbolicExpression f = SymbolicExpression::parse(arguments[0]);
@@ -566,6 +556,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
         for (std::size_t i = 0; i < all_vars.size(); ++i) { if (i > 0) all_vars_str += ", "; all_vars_str += all_vars[i]; }
         return handle_analysis_command(ctx, "critical", {lagrangian.to_string(), all_vars_str}, output);
     }
+    
     return false;
 }
 
@@ -600,3 +591,6 @@ std::string AnalysisModule::get_help_snippet(const std::string& topic) const {
 }
 
 }  // namespace analysis_cmds
+
+#include "module/module_registration.h"
+REGISTER_CALCULATOR_MODULE(analysis_cmds::AnalysisModule)

@@ -21,9 +21,13 @@ namespace symbolic_commands {
 
 bool handle_symbolic_command(const SymbolicCommandContext& ctx,
                              const std::string& command,
-                             const std::string& inside,
+                             const std::vector<std::string>& arguments,
                              std::string* output) {
-    const std::vector<std::string> arguments = split_top_level_arguments(inside);
+    std::string inside;
+    for (std::size_t i = 0; i < arguments.size(); ++i) {
+        if (i != 0) inside += ", ";
+        inside += arguments[i];
+    }
 
     if (handle_algebra_commands(ctx, command, inside, arguments, output)) return true;
     if (handle_matrix_commands(ctx, command, inside, arguments, output)) return true;
@@ -104,14 +108,8 @@ std::string SymbolicModule::execute_args(const std::string& command,
     ctx.parse_decimal = services.evaluation.parse_decimal;
     ctx.normalize_result = services.evaluation.normalize_result;
 
-    std::string inside;
-    for (std::size_t i = 0; i < args.size(); ++i) {
-        if (i != 0) inside += ", ";
-        inside += args[i];
-    }
-
     std::string output;
-    if (handle_symbolic_command(ctx, command, inside, &output)) {
+    if (handle_symbolic_command(ctx, command, args, &output)) {
         return output;
     }
     throw std::runtime_error("Symbolic command failed: " + command);
@@ -135,3 +133,6 @@ std::string SymbolicModule::get_help_snippet(const std::string& topic) const {
 }
 
 }  // namespace symbolic_commands
+
+#include "module/module_registration.h"
+REGISTER_CALCULATOR_MODULE(symbolic_commands::SymbolicModule)

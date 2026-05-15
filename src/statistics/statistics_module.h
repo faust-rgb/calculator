@@ -49,13 +49,12 @@ public:
      *
      * 处理统计相关的命令请求，如统计摘要生成等。
      */
-    std::string execute(const std::string& command,
-                       const std::string& inside,
-                       const CoreServices& svc) override {
+    std::string execute_args(const std::string& command,
+                        const std::vector<std::string>& args,
+                        const CoreServices& svc) override {
         // 解析参数并提取数据向量
-        auto args_str = split_top_level_arguments(inside);
         std::vector<Scalar> data;
-        for (const auto& arg_str : args_str) {
+        for (const auto& arg_str : args) {
             auto val = svc.evaluation.evaluate_value(arg_str, false);
             auto vec = stats_ops::extract_vector(val);
             data.insert(data.end(), vec.begin(), vec.end());

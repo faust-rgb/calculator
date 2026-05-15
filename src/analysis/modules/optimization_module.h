@@ -44,7 +44,7 @@ bool is_optimization_command(const std::string& command);
 
 bool handle_optimization_command(const OptimizationContext& ctx,
                                  const std::string& command,
-                                 const std::string& inside,
+                                 const std::vector<std::string>& arguments,
                                  std::string* output);
 
 }  // namespace optimization

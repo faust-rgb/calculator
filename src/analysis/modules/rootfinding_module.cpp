@@ -340,9 +340,8 @@ bool is_rootfinding_command(const std::string& command) {
 
 bool handle_rootfinding_command(const RootfindingContext& ctx,
                                 const std::string& command,
-                                const std::string& inside,
+                                const std::vector<std::string>& arguments,
                                 std::string* output) {
-    const std::vector<std::string> arguments = split_top_level_arguments(inside);
     if (command == "solve") {
         if (arguments.size() == 2 &&
             (ctx.is_matrix_argument(arguments[0]) || ctx.is_matrix_argument(arguments[1]))) {
@@ -509,14 +508,8 @@ std::string RootfindingModule::execute_args(const std::string& command,
     ctx.parse_matrix_argument = services.parse_matrix_argument;
     ctx.normalize_result = services.evaluation.normalize_result;
 
-    std::string inside;
-    for (std::size_t i = 0; i < args.size(); ++i) {
-        if (i != 0) inside += ", ";
-        inside += args[i];
-    }
-
     std::string output;
-    if (handle_rootfinding_command(ctx, command, inside, &output)) {
+    if (handle_rootfinding_command(ctx, command, args, &output)) {
         return output;
     }
     throw std::runtime_error("Rootfinding command failed: " + command);
@@ -541,3 +534,6 @@ std::string RootfindingModule::get_help_snippet(const std::string& topic) const 
 }
 
 }  // namespace rootfinding
+
+#include "module/module_registration.h"
+REGISTER_CALCULATOR_MODULE(rootfinding::RootfindingModule)

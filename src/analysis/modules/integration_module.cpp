@@ -546,3 +546,6 @@ std::vector<std::string> IntegrationModule::get_commands() const {
 }
 
 }  // namespace integration_ops
+
+#include "module/module_registration.h"
+REGISTER_CALCULATOR_MODULE(integration_ops::IntegrationModule)

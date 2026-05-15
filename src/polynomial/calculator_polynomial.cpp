@@ -327,10 +327,8 @@ bool is_polynomial_command(const std::string& command) {
  */
 bool handle_polynomial_command(const PolynomialContext& ctx,
                                const std::string& command,
-                               const std::string& inside,
+                               const std::vector<std::string>& arguments,
                                std::string* output) {
-    const std::vector<std::string> arguments = split_top_level_arguments(inside);
-
     if (command == "roots") {
         if (arguments.size() != 1) {
             throw std::runtime_error("roots expects exactly one argument");
@@ -388,14 +386,8 @@ std::string PolynomialModule::execute_args(const std::string& command,
         return expr;
     };
 
-    std::string inside;
-    for (std::size_t i = 0; i < args.size(); ++i) {
-        if (i != 0) inside += ", ";
-        inside += args[i];
-    }
-
     std::string output;
-    if (handle_polynomial_command(ctx, command, inside, &output)) {
+    if (handle_polynomial_command(ctx, command, args, &output)) {
         return output;
     }
     throw std::runtime_error("Unknown polynomial command: " + command);
@@ -419,3 +411,6 @@ std::string PolynomialModule::get_help_snippet(const std::string& topic) const {
 }
 
 }  // namespace polynomial_ops
+
+#include "module/module_registration.h"
+REGISTER_CALCULATOR_MODULE(polynomial_ops::PolynomialModule)

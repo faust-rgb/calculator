@@ -240,3 +240,6 @@ std::vector<std::string> TransformModule::get_commands() const {
 }
 
 }  // namespace transforms
+
+#include "module/module_registration.h"
+REGISTER_CALCULATOR_MODULE(transforms::TransformModule)

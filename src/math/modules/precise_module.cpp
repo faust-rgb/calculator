@@ -268,3 +268,6 @@ bool PreciseModule::should_try_precise_decimal_expression(
 std::string PreciseModule::get_implicit_trigger_chars() const {
     return "0123456789.";
 }
+
+#include "module/module_registration.h"
+REGISTER_CALCULATOR_MODULE(PreciseModule)

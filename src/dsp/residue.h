@@ -15,7 +15,7 @@ namespace dsp_ops {
  * @return 留数的字符串表示（复数向量）
  */
 std::string handle_residue_command(const std::string& command,
-                                   const std::string& inside,
+                                   const std::vector<std::string>& arguments,
                                    const CoreServices& svc);
 
 } // namespace dsp_ops
