@@ -14,7 +14,6 @@
 #include "analysis/calculus/gauss_kronrod_constants.h"
 #include "math/mymath.h"
 #include <algorithm>
-#include <cmath>
 
 namespace numeric {
 

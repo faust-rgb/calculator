@@ -15,7 +15,6 @@
 #include <utility>
 #include <vector>
 #include <algorithm>
-#include <cmath>
 #include <type_traits>
 
 namespace matrix {

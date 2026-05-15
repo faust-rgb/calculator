@@ -20,7 +20,6 @@
 #include "string_utils.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "parser/grammars/unified_parser_factory.h"
-#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <sstream>

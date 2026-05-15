@@ -22,7 +22,6 @@
 #include "math/precise/precise_decimal.h"
 
 #include <algorithm>
-#include <cmath>
 #include <stdexcept>
 #include <vector>
 #include <type_traits>

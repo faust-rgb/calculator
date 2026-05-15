@@ -13,7 +13,6 @@
 #include <istream>
 #include <ostream>
 #include <type_traits>
-#include <cmath>
 
 namespace mymath {
 

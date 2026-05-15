@@ -13,8 +13,6 @@
 #include <stdexcept>
 #include <sstream>
 #include <iomanip>
-#include <cmath>
-#include <limits>
 
 namespace mymath {
 

@@ -20,7 +20,6 @@
 #include "core/services/string_utils.h"
 
 #include <algorithm>
-#include <cmath>
 #include <sstream>
 #include <regex>
 

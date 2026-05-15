@@ -40,7 +40,7 @@ static std::mt19937& global_rng() {
  * @param value 待检查的值
  * @return 如果是整数返回 true
  */
-static bool is_integer(Scalar value) {
+static bool is_integer_scalar(Scalar value) {
     return mymath::isfinite(value) && mymath::floor(value) == value;
 }
 
@@ -61,7 +61,7 @@ static Scalar checked_exp(Scalar log_value, const char* name) {
  * @brief 计算阶乘 n!
  */
 Scalar factorial(Scalar n) {
-    if (n < 0 || !is_integer(n)) {
+    if (n < 0 || !is_integer_scalar(n)) {
         throw std::runtime_error("factorial only accepts non-negative integers");
     }
     if (n > 10000) { // 限制在 10000 以内防止过度消耗
@@ -75,7 +75,7 @@ Scalar factorial(Scalar n) {
  * @brief 计算组合数 C(n, r)
  */
 Scalar nCr(Scalar n, Scalar r) {
-    if (n < 0 || r < 0 || !is_integer(n) || !is_integer(r)) {
+    if (n < 0 || r < 0 || !is_integer_scalar(n) || !is_integer_scalar(r)) {
         throw std::runtime_error("nCr only accepts non-negative integers");
     }
     if (r > n) return 0.0L;
@@ -91,7 +91,7 @@ Scalar nCr(Scalar n, Scalar r) {
  * @brief 计算排列数 P(n, r)
  */
 Scalar nPr(Scalar n, Scalar r) {
-    if (n < 0 || r < 0 || !is_integer(n) || !is_integer(r)) {
+    if (n < 0 || r < 0 || !is_integer_scalar(n) || !is_integer_scalar(r)) {
         throw std::runtime_error("nPr only accepts non-negative integers");
     }
     if (r > n) return 0.0L;

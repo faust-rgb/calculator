@@ -30,7 +30,6 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
-#include <cmath>
 #include <type_traits>
 
 namespace {

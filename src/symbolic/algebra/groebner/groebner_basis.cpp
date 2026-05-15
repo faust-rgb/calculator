@@ -22,7 +22,6 @@
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "math/mymath.h"
 #include <algorithm>
-#include <cmath>
 #include <map>
 #include <vector>
 

@@ -8,8 +8,6 @@
 #ifndef PRECISION_CONSTANTS_H
 #define PRECISION_CONSTANTS_H
 
-#include <limits>
-#include <cmath>
 #include "app/scalar_type.h"
 #include "app/default_precision.h"
 #include "math/core/basic_ops.h"

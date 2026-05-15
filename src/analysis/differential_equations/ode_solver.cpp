@@ -12,7 +12,6 @@
 #include <algorithm>
 #include <stdexcept>
 #include <utility>
-#include <cmath>
 
 namespace {
 

@@ -14,7 +14,6 @@
 #include "math/mymath.h"
 
 #include <algorithm>
-#include <cmath>
 #include <iomanip>
 #include <sstream>
 #include <string>

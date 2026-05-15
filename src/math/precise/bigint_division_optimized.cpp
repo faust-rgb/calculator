@@ -17,7 +17,6 @@
 #include "math/mymath.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <memory>
 

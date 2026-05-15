@@ -17,7 +17,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <cmath>
 #include <mutex>
 #include <thread>
 #include <vector>

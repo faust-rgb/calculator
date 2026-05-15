@@ -5,7 +5,6 @@
 #include "analysis/rootfinding/rootfinding_engine.h"
 
 #include <algorithm>
-#include <cmath>
 #include <stdexcept>
 
 namespace rootfinding_engine {

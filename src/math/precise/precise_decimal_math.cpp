@@ -18,7 +18,6 @@
 #include "app/default_precision.h"
 
 #include <algorithm>
-#include <cmath>
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
