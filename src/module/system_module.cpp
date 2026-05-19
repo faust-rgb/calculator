@@ -19,15 +19,12 @@
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
 #include "math/precise/precise_decimal.h"
+#include "parser/grammars/command_parser.h"
 
 #include <fstream>
 #include <iterator>
 #include <sstream>
 #include <stdexcept>
-
-std::string SystemModule::name() const {
-    return "System";
-}
 
 std::vector<std::string> SystemModule::get_commands() const {
     return { ":vars", ":funcs", ":clear", ":clearfuncs", ":clearfunc",
@@ -36,21 +33,34 @@ std::vector<std::string> SystemModule::get_commands() const {
              ":help", "help", "print" };
 }
 
-std::string SystemModule::execute_args_view(std::string_view command,
-                                            const std::vector<std::string_view>& args,
-                                            ServiceLocator& locator) {
+std::string SystemModule::execute_command(const CommandASTNode& node,
+                                          ServiceLocator& locator) {
+    // 提取命令名和参数
+    std::string command;
+    std::vector<std::string_view> args;
+
+    if (node.kind == CommandKind::kMetaCommand) {
+        command = ":" + std::string(node.as_meta_command()->command);
+        for (const auto& arg : node.as_meta_command()->arguments) {
+            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                args.push_back(arg->as_expression()->text);
+            }
+        }
+    } else if (node.kind == CommandKind::kFunctionCall) {
+        command = std::string(node.as_function_call()->name);
+        for (const auto& arg : node.as_function_call()->arguments) {
+            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                args.push_back(arg->as_expression()->text);
+            }
+        }
+    } else {
+        throw std::runtime_error("Invalid command node type");
+    }
+
     auto engine = locator.resolve<IEvaluationEngine>();
     auto vars = locator.resolve<IVariableManager>();
     auto funcs = locator.resolve<IFunctionManager>();
     auto config = locator.resolve<IConfigManager>();
-
-    if (command == ":help" || command == "help") {
-        auto core_svc = locator.resolve<CoreServices>();
-        if (args.empty()) {
-            return core_svc->env.help_text();
-        }
-        return core_svc->env.help_topic(std::string(args[0]));
-    }
 
     if (command == ":vars") {
         auto all_vars = vars->get_all_globals();
@@ -119,10 +129,29 @@ std::string SystemModule::execute_args_view(std::string_view command,
     }
     if (command == ":history") return "History access via Module not implemented yet";
 
-    if (command == ":save") return "Save state not yet implemented with ServiceLocator";
-    if (command == ":load") return "Load state not yet implemented with ServiceLocator";
+    if (command == ":save") {
+        auto persistence = locator.resolve<IStatePersistence>();
+        if (args.empty()) {
+            return persistence->save_state("calculator_state.txt");
+        }
+        std::string path(args[0]);
+        return persistence->save_state(trim_copy(path));
+    }
+    if (command == ":load") {
+        auto persistence = locator.resolve<IStatePersistence>();
+        if (args.empty()) {
+            return persistence->load_state("calculator_state.txt");
+        }
+        std::string path(args[0]);
+        return persistence->load_state(trim_copy(path));
+    }
     if (command == ":export") return "Export not yet implemented with ServiceLocator";
-    if (command == ":run") return "Run script not yet implemented with ServiceLocator";
+    if (command == ":run") {
+        if (args.empty()) return "Usage: :run <script_file>";
+        std::string path(args[0]);
+        auto ctx = locator.resolve<IExecutionContext>();
+        return ctx->execute_script_file(trim_copy(path), false, false);
+    }
 
     if (command == ":exact") {
         if (args.empty()) return "Usage: :exact on|off";
@@ -180,17 +209,6 @@ std::string SystemModule::execute_args_view(std::string_view command,
     }
 
     return "Unknown system command";
-}
-
-std::string SystemModule::execute_args(const std::string& command,
-                                       const std::vector<std::string>& args,
-                                       ServiceLocator& locator) {
-    std::vector<std::string_view> args_view;
-    args_view.reserve(args.size());
-    for (const auto& arg : args) {
-        args_view.push_back(arg);
-    }
-    return execute_args_view(command, args_view, locator);
 }
 
 std::string SystemModule::get_help_snippet(const std::string& topic) const {

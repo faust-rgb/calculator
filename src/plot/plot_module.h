@@ -23,10 +23,18 @@
 class PlotModule : public CalculatorModule {
 public:
     /**
-     * @brief 获取模块名称
-     * @return 模块名称字符串 "Plot"
+     * @brief 获取模块元数据
+     * @return 包含名称、版本、描述等的元数据结构
      */
-    std::string name() const override { return "Plot"; }
+    ModuleMetadata get_metadata() const override {
+        return ModuleMetadata(
+            "Plot",
+            "1.0.0",
+            "Plotting module for 2D function visualization",
+            "Calculator Team",
+            {}  // 无依赖
+        );
+    }
 
     /**
      * @brief 获取模块支持的命令列表
@@ -36,14 +44,12 @@ public:
 
     /**
      * @brief 执行绘图命令
-     * @param command 命令名称
-     * @param args 命令参数列表
+     * @param node 命令 AST 节点
      * @param locator 服务定位器
      * @return 命令执行结果
      */
-    std::string execute_args(const std::string& command,
-                             const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+    std::string execute_command(const CommandASTNode& node,
+                                ServiceLocator& locator) override;
 
     /**
      * @brief 获取帮助信息片段

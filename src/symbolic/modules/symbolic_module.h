@@ -37,7 +37,15 @@ namespace symbolic_commands {
  */
 class SymbolicModule : public CalculatorModule {
 public:
-    std::string name() const override { return "Symbolic"; }
+    ModuleMetadata get_metadata() const override {
+        return ModuleMetadata(
+            "Symbolic",
+            "1.0.0",
+            "Symbolic computation module: differentiation, integration, simplification",
+            "Calculator Team",
+            {}  // 无依赖
+        );
+    }
 
     std::vector<std::string> get_commands() const override {
         return {":assume", "simplify", "expand", "cse", "groebner", "latex", "diff", "gradient", "numerical_gradient", "num_grad",
@@ -48,10 +56,8 @@ public:
                 "sum"};
     }
 
-
-    std::string execute_args(const std::string& command,
-                             const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+    std::string execute_command(const CommandASTNode& node,
+                                ServiceLocator& locator) override;
 
     std::string get_help_snippet(const std::string& topic) const override;
 };

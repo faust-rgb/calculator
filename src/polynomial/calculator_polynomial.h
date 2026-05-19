@@ -60,10 +60,18 @@ namespace polynomial_ops {
 class PolynomialModule : public CalculatorModule {
 public:
     /**
-     * @brief 获取模块名称
-     * @return 模块名称字符串 "Polynomial"
+     * @brief 获取模块元数据
+     * @return 包含名称、版本、描述等的元数据结构
      */
-    std::string name() const override { return "Polynomial"; }
+    ModuleMetadata get_metadata() const override {
+        return ModuleMetadata(
+            "Polynomial",
+            "1.0.0",
+            "Polynomial operations module: add, subtract, multiply, divide, roots, etc.",
+            "Calculator Team",
+            {}  // 无依赖
+        );
+    }
 
     /**
      * @brief 获取模块提供的所有命令
@@ -76,14 +84,12 @@ public:
 
     /**
      * @brief 执行多项式命令
-     * @param command 命令名称
-     * @param args 命令参数列表
+     * @param node 命令 AST 节点
      * @param locator 服务定位器
      * @return 命令执行结果字符串
      */
-    std::string execute_args(const std::string& command,
-                             const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+    std::string execute_command(const CommandASTNode& node,
+                                ServiceLocator& locator) override;
 
 
     /**

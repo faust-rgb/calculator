@@ -6,10 +6,32 @@
 #include "statistics/statistics_module.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
+#include "parser/grammars/command_parser.h"
 
-std::string StatisticsModule::execute_args(const std::string& command,
-                                           const std::vector<std::string>& args,
-                                           ServiceLocator& locator) {
+std::string StatisticsModule::execute_command(const CommandASTNode& node,
+                                              ServiceLocator& locator) {
+    // 提取命令名和参数
+    std::string command;
+    std::vector<std::string> args;
+
+    if (node.kind == CommandKind::kMetaCommand) {
+        command = ":" + std::string(node.as_meta_command()->command);
+        for (const auto& arg : node.as_meta_command()->arguments) {
+            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                args.push_back(std::string(arg->as_expression()->text));
+            }
+        }
+    } else if (node.kind == CommandKind::kFunctionCall) {
+        command = std::string(node.as_function_call()->name);
+        for (const auto& arg : node.as_function_call()->arguments) {
+            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                args.push_back(std::string(arg->as_expression()->text));
+            }
+        }
+    } else {
+        throw std::runtime_error("Invalid command node type");
+    }
+
     auto engine = locator.resolve<IEvaluationEngine>();
 
     // 解析参数并提取数据向量

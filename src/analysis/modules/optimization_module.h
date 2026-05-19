@@ -27,11 +27,17 @@ namespace optimization {
  */
 class OptimizationModule : public CalculatorModule {
 public:
-    std::string name() const override { return "Optimization"; }
+    ModuleMetadata get_metadata() const override {
+        return ModuleMetadata(
+            "Optimization",
+            "1.0.0",
+            "Linear and integer programming optimization module",
+            "Calculator Team",
+            {}  // 无依赖
+        );
+    }
     std::vector<std::string> get_commands() const override;
-    std::string execute_args(const std::string& command,
-                             const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+    std::string execute_command(const CommandASTNode& node, ServiceLocator& locator) override;
     std::string get_help_snippet(const std::string& topic) const override;
 };
 

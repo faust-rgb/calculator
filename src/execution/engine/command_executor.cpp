@@ -1,14 +1,14 @@
 #include "core/services/core_manager_interfaces.h"
 #include "types/function.h"
-#include "core/services/core_manager_interfaces.h"
+#include "core/api/calculator_impl.h"
 // ============================================================================
 // command_executor.cpp - 命令 AST 执行实现
 // ============================================================================
 
 #include "execution/engine/script_runtime_internal.h"
-#include "core/services/calculator_service_factory.h"
 #include "core/services/format_utils.h"
 #include "core/api/executable_node.h"
+#include "execution/registry/command_registry.h"
 #include <sstream>
 #include <stdexcept>
 
@@ -60,11 +60,11 @@ std::string execute_command_ast(
     }
 
     if (ast.kind == CommandKind::kMetaCommand || ast.kind == CommandKind::kFunctionCall) {
-        const CoreServices& svc = ctx->services();
         std::string output;
 
-        // 使用新接口分发命令
-        if (ctx->commands().try_process_ast(ast, &output, exact_mode, svc)) {
+        // 使用 CommandRegistry 处理命令
+        auto* registry = dynamic_cast<CommandRegistry*>(&ctx->commands());
+        if (registry && registry->try_process_ast(ast, &output, exact_mode)) {
             return output;
         }
 
@@ -160,7 +160,19 @@ StoredValue evaluate_ast_node(IExecutionContext* ctx,
         }
 
         // 4. 尝试脚本函数
-        return invoke_script_function(ctx, name, args);
+        try {
+            return invoke_script_function(ctx, name, args);
+        } catch (const std::runtime_error& e) {
+            // 5. 回退到表达式求值（处理 xgcd, hanning 等矩阵表达式函数）
+            if (node.source_owner) {
+                try {
+                    return evaluate_script_value_expression(ctx, *node.source_owner, exact_mode);
+                } catch (...) {
+                    throw; // 抛出原始错误
+                }
+            }
+            throw;
+        }
     }
     if (node.kind == CommandKind::kStringLiteral) {
         StoredValue value;

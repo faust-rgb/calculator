@@ -27,8 +27,16 @@ class ServiceLocator;
  */
 class IntegerMathModule : public CalculatorModule {
 public:
-    /// 获取模块名称
-    std::string name() const override { return "IntegerMath"; }
+    /// 获取模块元数据
+    ModuleMetadata get_metadata() const override {
+        return ModuleMetadata(
+            "IntegerMath",
+            "1.0.0",
+            "Integer math, number theory and base conversion module",
+            "Calculator Team",
+            {}  // 无依赖
+        );
+    }
 
     /// 获取模块提供的命令列表
     std::vector<std::string> get_commands() const override {
@@ -36,15 +44,12 @@ public:
     }
 
     /**
-     * @brief 执行命令式操作
-     * @param command 命令名称
-     * @param args 参数列表
+     * @brief 执行命令
+     * @param node 命令AST节点
      * @param locator 服务定位器
      * @return 执行结果的字符串表示
      */
-    std::string execute_args(const std::string& command,
-                             const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+    std::string execute_command(const CommandASTNode& node, ServiceLocator& locator) override;
 
     /**
      * @brief 获取模块提供的标量函数映射

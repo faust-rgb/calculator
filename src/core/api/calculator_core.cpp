@@ -21,10 +21,10 @@
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
 #include "parser/grammars/command_parser.h"
-#include "core/services/calculator_service_factory.h"
 #include "execution/engine/script_runtime.h"
 #include "parser/grammars/script_parser.h"
 #include "module/module_registration.h"
+#include "module/calculator_module.h"
 #include "math/helpers/integer_helpers.h"
 #include "plot/calculator_plot.h"
 
@@ -112,9 +112,8 @@ Calculator::Calculator() : impl_(new Impl()) {
     impl_->locator.register_service<ICommandRegistry>(impl_->commands_ptr);
     impl_->locator.register_service<IModuleManager>(impl_->modules);
     impl_->locator.register_service<IStatePersistence>(impl_->persistence);
-    
+
     // 注册执行上下文
-    // 注意：使用 shared_ptr 包装，由于 impl_ 生命周期由 parent 管理，这里我们手动创建一个不带删除器的 shared_ptr
     auto ctx_ptr = std::shared_ptr<IExecutionContext>(impl_.get(), [](IExecutionContext*){});
     impl_->locator.register_service<IExecutionContext>(ctx_ptr);
 
@@ -125,17 +124,9 @@ Calculator::Calculator() : impl_(new Impl()) {
 
     apply_calculator_display_precision(impl_.get());
 
-    // 3. 初始化核心逻辑服务（暂时保持旧的 CoreServices 结构用于过渡）
-    impl_->core_services = std::make_unique<CoreServices>(core::build_core_services(this, impl_.get()));
-    auto core_svc_ptr = std::shared_ptr<CoreServices>(impl_->core_services.get(), [](CoreServices*){});
-    impl_->locator.register_service<CoreServices>(core_svc_ptr);
-
+    // 3. 注册所有标准模块（按依赖拓扑顺序）
     register_standard_modules(this);
     broadcast_settings(this, impl_.get());
-}
-
-const CoreServices& Calculator::get_core_services() const {
-    return *impl_->core_services;
 }
 
 Calculator::~Calculator() = default;
@@ -254,7 +245,7 @@ Scalar Calculator::normalize_result(Scalar value) {
     if constexpr (mymath::is_scalar_float128) {
         if (mymath::abs(v) < Scalar(1e-70L)) return Scalar(0.0L);
     } else if constexpr (!mymath::is_scalar_precise_decimal) {
-        if (mymath::abs(v) < kDisplayZeroEps()) return Scalar(0.0L);
+        if (mymath::abs(v) < kDisplayZeroEps()) return Scalar(0.0);
     }
     // Only round to integer if within long long range
     const Scalar kMaxLL(static_cast<long double>(std::numeric_limits<long long>::max()));
@@ -565,17 +556,13 @@ std::string Calculator::load_state(const std::string& path) {
 // IExecutionContext 实现
 // ============================================================================
 
-const CoreServices& Calculator::Impl::services() const {
-    return *core_services;
-}
-
 StoredValue Calculator::Impl::evaluate(const std::string& expression, bool exact_mode) {
     auto engine = locator.resolve<IEvaluationEngine>();
     return engine->evaluate_expression_value(expression, exact_mode);
 }
 
-bool Calculator::Impl::try_evaluate_implicit(const std::string& expression, 
-                                            StoredValue* value, 
+bool Calculator::Impl::try_evaluate_implicit(const std::string& expression,
+                                            StoredValue* value,
                                             const std::map<std::string, StoredValue>& vars) {
     return parent->try_evaluate_implicit(expression, value, vars);
 }
@@ -584,14 +571,14 @@ std::string Calculator::Impl::expand_inline(const std::string& expression) {
     return expand_inline_function_commands(this, expression);
 }
 
-std::string Calculator::Impl::execute_script_file(const std::string& path, 
-                                                bool exact_mode, 
+std::string Calculator::Impl::execute_script_file(const std::string& path,
+                                                bool exact_mode,
                                                 bool create_scope) {
     return parent->execute_script_file(path, exact_mode, create_scope);
 }
 
-bool Calculator::Impl::try_process_function_command(const std::string& expression, 
-                                                 std::string* output, 
+bool Calculator::Impl::try_process_function_command(const std::string& expression,
+                                                 std::string* output,
                                                  bool exact_mode) const {
     return parent->try_process_function_command(expression, output, exact_mode);
 }

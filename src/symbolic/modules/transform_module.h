@@ -27,13 +27,19 @@ namespace transforms {
  */
 class TransformModule : public CalculatorModule {
 public:
-    std::string name() const override { return "Transforms"; }
+    ModuleMetadata get_metadata() const override {
+        return ModuleMetadata(
+            "Transforms",
+            "1.0.0",
+            "Integral transforms (Laplace, Fourier, Z-transform) module",
+            "Calculator Team",
+            {}  // 无依赖
+        );
+    }
 
     std::vector<std::string> get_commands() const override;
 
-    std::string execute_args(const std::string& command,
-                             const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+    std::string execute_command(const CommandASTNode& node, ServiceLocator& locator) override;
 
     std::string get_help_snippet(const std::string& topic) const override;
 };

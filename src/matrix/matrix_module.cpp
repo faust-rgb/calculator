@@ -229,18 +229,6 @@ std::string MatrixModule::execute_command(const CommandASTNode& node,
     }
 }
 
-std::string MatrixModule::execute_args(const std::string& command,
-                                       const std::vector<std::string>& args,
-                                       ServiceLocator& locator) {
-    // 转发给新的接口以保持兼容性
-    std::vector<CommandASTNode> arg_nodes;
-    for (const auto& arg : args) {
-        arg_nodes.push_back(CommandASTNode::make_expression(arg));
-    }
-    CommandASTNode node = CommandASTNode::make_function_call(command, std::move(arg_nodes));
-    return execute_command(node, locator);
-}
-
 std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>
 MatrixModule::get_matrix_functions() const {
     std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>> funcs;

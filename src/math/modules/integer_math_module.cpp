@@ -14,6 +14,7 @@
 #include "math/helpers/bitwise_helpers.h"
 #include "math/helpers/base_conversions.h"
 #include "core/common/calculator_exceptions.h"
+#include "parser/grammars/command_parser.h"
 #include "math/mymath.h"
 #include <algorithm>
 #include <sstream>
@@ -41,15 +42,35 @@ long long require_integer(Scalar x, const std::string& name, const std::string& 
 
 /**
  * @brief 执行命令式操作（如 factor、bin、oct、hex、base）
- * @param command 命令名称
- * @param args 参数列表
- * @param services 核心服务接口
+ * @param node 命令 AST 节点
+ * @param locator 服务定位器
  * @return 执行结果的字符串表示
  * @throws std::runtime_error 如果参数无效
  */
-std::string IntegerMathModule::execute_args(const std::string& command,
-                                          const std::vector<std::string>& args,
-                                          ServiceLocator& locator) {
+std::string IntegerMathModule::execute_command(const CommandASTNode& node,
+                                              ServiceLocator& locator) {
+    // 提取命令名和参数
+    std::string command;
+    std::vector<std::string> args;
+
+    if (node.kind == CommandKind::kMetaCommand) {
+        command = ":" + std::string(node.as_meta_command()->command);
+        for (const auto& arg : node.as_meta_command()->arguments) {
+            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                args.push_back(std::string(arg->as_expression()->text));
+            }
+        }
+    } else if (node.kind == CommandKind::kFunctionCall) {
+        command = std::string(node.as_function_call()->name);
+        for (const auto& arg : node.as_function_call()->arguments) {
+            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                args.push_back(std::string(arg->as_expression()->text));
+            }
+        }
+    } else {
+        throw std::runtime_error("Invalid command node type");
+    }
+
     auto engine = locator.resolve<IEvaluationEngine>();
 
     if (command == "factor") {

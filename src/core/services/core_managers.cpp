@@ -29,7 +29,6 @@ bool VariableManager::has(const std::string& name) const {
 
 void VariableManager::remove(const std::string& name) {
     globals_.erase(name);
-    // Note: We don't remove from scopes as they are usually transient/managed by stack
 }
 
 void VariableManager::clear_all() {
@@ -44,7 +43,6 @@ std::map<std::string, StoredValue> VariableManager::get_all_globals() const {
 std::vector<std::string> VariableManager::get_all_names() const {
     std::vector<std::string> names;
     for (const auto& [name, _] : globals_) names.push_back(name);
-    // Scopes might have duplicates or shadows, but we just want the names
     for (const auto& slot : scopes_.slots) {
         names.push_back(slot.name);
     }
@@ -250,8 +248,7 @@ void ModuleManager::register_module(std::shared_ptr<CalculatorModule> module) {
             cmd_name,
             [weak_module, &loc = this->locator_](const CommandASTNode& node,
                                                std::string* output,
-                                               bool /*exact_mode*/,
-                                               const CoreServices& /*services*/) -> bool {
+                                               bool /*exact_mode*/) -> bool {
                 auto mod = weak_module.lock();
                 if (!mod) return false;
                 *output = mod->execute_command(node, loc);

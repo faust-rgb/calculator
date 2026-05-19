@@ -6,6 +6,7 @@
 // - CommandSyntax 枚举：区分函数调用形式和元命令形式
 // - CommandKey 结构：命令的唯一标识符
 // - CalculatorSettings 结构：全局配置状态
+// - ModuleMetadata 结构：模块元数据
 // - CalculatorModule 基类：所有模块的抽象基类
 //
 // 模块系统采用插件架构，各功能模块继承 CalculatorModule 并实现
@@ -96,6 +97,29 @@ struct CommandSpec {
     std::string dispatch_name;///< 派发名称（原始命令名）
 };
 
+/**
+ * @struct ModuleMetadata
+ * @brief 模块元数据，包含版本、描述、依赖等信息
+ */
+struct ModuleMetadata {
+    std::string name;           ///< 模块名称
+    std::string version;        ///< 模块版本（语义化版本，如 "1.0.0"）
+    std::string description;    ///< 模块描述
+    std::string author;         ///< 作者信息
+    std::vector<std::string> dependencies;  ///< 依赖的其他模块名称
+
+    /// 默认构造
+    ModuleMetadata() = default;
+
+    /// 便捷构造函数
+    ModuleMetadata(std::string n, std::string v = "1.0.0",
+                   std::string desc = "", std::string auth = "",
+                   std::vector<std::string> deps = {})
+        : name(std::move(n)), version(std::move(v)),
+          description(std::move(desc)), author(std::move(auth)),
+          dependencies(std::move(deps)) {}
+};
+
 class ServiceLocator;
 class CommandASTNode;
 
@@ -117,10 +141,22 @@ class CalculatorModule {
 public:
     virtual ~CalculatorModule() = default;
 
-    // ==================== 模块基本信息 ====================
+    // ==================== 模块元数据 ====================
 
-    /// 返回模块名称，用于日志和调试
-    virtual std::string name() const = 0;
+    /**
+     * @brief 获取模块元数据
+     * @return 包含名称、版本、描述、依赖等的元数据结构
+     */
+    virtual ModuleMetadata get_metadata() const = 0;
+
+    /// 返回模块名称（便捷方法）
+    std::string name() const { return get_metadata().name; }
+
+    /// 返回模块版本（便捷方法）
+    std::string version() const { return get_metadata().version; }
+
+    /// 返回模块依赖列表（便捷方法）
+    std::vector<std::string> dependencies() const { return get_metadata().dependencies; }
 
     /// 初始化模块，在注册后调用一次
     virtual void initialize(ServiceLocator& /*locator*/) {}
@@ -143,7 +179,7 @@ public:
     virtual std::vector<CommandSpec> get_command_specs() const;
 
     /**
-     * @brief 统一的命令执行接口（推荐重写）
+     * @brief 统一的命令执行接口
      * @param node 已解析的命令 AST 节点
      * @param locator 服务定位器
      * @return 执行结果
@@ -157,8 +193,8 @@ protected:
     /**
      * @brief 评估 AST 参数为 StoredValue
      */
-    StoredValue evaluate_arg(const CommandASTNode& arg_node, 
-                             ServiceLocator& locator, 
+    StoredValue evaluate_arg(const CommandASTNode& arg_node,
+                             ServiceLocator& locator,
                              bool exact_mode = false);
 
     /**
@@ -176,35 +212,6 @@ protected:
                                const std::string& error_context = "");
 
 public:
-    /**
-     * @brief 使用字符串参数执行命令（向后兼容接口）
-     * @deprecated 建议重写 execute_command 以直接处理 AST 节点
-     */
-    [[deprecated("Use execute_command instead")]]
-    virtual std::string execute_args(const std::string& command,
-                                    const std::vector<std::string>& args,
-                                    ServiceLocator& locator);
-
-    /**
-     * @brief 使用字符串视图参数执行命令（向后兼容接口）
-     * @deprecated 建议重写 execute_command 以直接处理 AST 节点
-     */
-    [[deprecated("Use execute_command instead")]]
-    virtual std::string execute_args_view(std::string_view command,
-                                          const std::vector<std::string_view>& args,
-                                          ServiceLocator& locator);
-
-    /**
-     * @brief 使用单个字符串执行命令（旧版接口，保持向后兼容）
-     * @deprecated 此接口已废弃，仅为向后兼容保留
-     */
-    virtual std::string execute(const std::string& command,
-                               const std::string& inside,
-                               const CoreServices& services) {
-        (void)command; (void)inside; (void)services;
-        return "";
-    }
-
     // ==================== 隐式求值接口 ====================
 
     /// 返回触发隐式求值的字符集

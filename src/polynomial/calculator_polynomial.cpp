@@ -384,9 +384,23 @@ bool handle_polynomial_command(const PolynomialContext& ctx,
  * @return 命令执行结果字符串
  * @throw std::runtime_error 当命令未知或执行失败时抛出
  */
-std::string PolynomialModule::execute_args(const std::string& command,
-                                          const std::vector<std::string>& args,
-                                          ServiceLocator& locator) {
+std::string PolynomialModule::execute_command(const CommandASTNode& node,
+                                              ServiceLocator& locator) {
+    // 提取命令名和参数
+    std::string command;
+    std::vector<std::string> args;
+
+    if (node.kind == CommandKind::kFunctionCall) {
+        command = std::string(node.as_function_call()->name);
+        for (const auto& arg : node.as_function_call()->arguments) {
+            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                args.push_back(std::string(arg->as_expression()->text));
+            }
+        }
+    } else {
+        throw std::runtime_error("Invalid command node type for PolynomialModule");
+    }
+
     auto engine = locator.resolve<IEvaluationEngine>();
     PolynomialContext ctx;
     ctx.functions = nullptr;

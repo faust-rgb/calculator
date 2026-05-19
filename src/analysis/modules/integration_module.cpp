@@ -25,6 +25,7 @@
 #include "analysis/integration/vector_field_theorems.h"
 #include "core/api/calculator_internal_types.h"
 #include "parser/grammars/unified_expression_parser.h"
+#include "parser/grammars/command_parser.h"
 #include "math/helpers/integer_helpers.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
@@ -511,9 +512,30 @@ bool handle_integration_command(const IntegrationContext& ctx, const std::string
     return handle_integration_command(ctx, command, split_top_level_arguments(inside), output);
 }
 
-std::string IntegrationModule::execute_args(const std::string& command,
-                                            const std::vector<std::string>& args,
-                                            ServiceLocator& locator) {
+std::string IntegrationModule::execute_command(const CommandASTNode& node,
+                                               ServiceLocator& locator) {
+    // 提取命令名和参数
+    std::string command;
+    std::vector<std::string> args;
+
+    if (node.kind == CommandKind::kMetaCommand) {
+        command = ":" + std::string(node.as_meta_command()->command);
+        for (const auto& arg : node.as_meta_command()->arguments) {
+            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                args.push_back(std::string(arg->as_expression()->text));
+            }
+        }
+    } else if (node.kind == CommandKind::kFunctionCall) {
+        command = std::string(node.as_function_call()->name);
+        for (const auto& arg : node.as_function_call()->arguments) {
+            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                args.push_back(std::string(arg->as_expression()->text));
+            }
+        }
+    } else {
+        throw std::runtime_error("Invalid command node type");
+    }
+
     auto engine = locator.resolve<IEvaluationEngine>();
     IntegrationContext ctx;
     ctx.parse_decimal = [engine](const std::string& expr) { return engine->parse_decimal(expr); };

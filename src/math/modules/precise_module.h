@@ -20,7 +20,15 @@
  */
 class PreciseModule : public CalculatorModule {
 public:
-    std::string name() const override { return "PreciseDecimal"; }
+    ModuleMetadata get_metadata() const override {
+        return ModuleMetadata(
+            "PreciseDecimal",
+            "1.0.0",
+            "High-precision decimal calculation module",
+            "Calculator Team",
+            {}  // 无依赖
+        );
+    }
 
     bool wants_implicit_evaluation() const override { return true; }
 

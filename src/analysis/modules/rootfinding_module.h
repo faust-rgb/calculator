@@ -31,11 +31,17 @@ using Scalar = mymath::Scalar;
  */
 class RootfindingModule : public CalculatorModule {
 public:
-    std::string name() const override { return "Rootfinding"; }
+    ModuleMetadata get_metadata() const override {
+        return ModuleMetadata(
+            "Rootfinding",
+            "1.0.0",
+            "Equation root finding module",
+            "Calculator Team",
+            {}  // 无依赖
+        );
+    }
     std::vector<std::string> get_commands() const override;
-    std::string execute_args(const std::string& command,
-                             const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+    std::string execute_command(const CommandASTNode& node, ServiceLocator& locator) override;
     std::string get_help_snippet(const std::string& topic) const override;
 };
 

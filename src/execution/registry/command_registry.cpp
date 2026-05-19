@@ -36,45 +36,15 @@ void CommandRegistry::register_command(const std::string& name,
 }
 
 void CommandRegistry::register_ast_handler(const std::string& name,
-                                           CommandHandler handler,
+                                           CommandASTHandler handler,
                                            const std::string& help_text) {
-    register_command(name, std::move(handler), help_text);
-}
-
-void CommandRegistry::register_command_handler(const std::string& name,
-                                              std::function<bool(const std::string&,
-                                                                 const std::vector<std::string_view>&,
-                                                                 std::string*,
-                                                                 bool,
-                                                                 const CoreServices&)> handler,
-                                              const std::string& help_text) {
-    // 包装旧式处理器为新式 AST 处理器
-    CommandHandler ast_handler = [handler](const CommandASTNode& node,
-                                            std::string* output,
-                                            bool exact_mode,
-                                            const CoreServices& services) -> bool {
-        std::string cmd_name;
-        std::vector<std::string_view> args;
-
-        if (node.kind == CommandKind::kMetaCommand) {
-            cmd_name = ":" + std::string(node.as_meta_command()->command);
-            for (const auto& arg : node.as_meta_command()->arguments) {
-                if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
-                    args.push_back(arg->as_expression()->text);
-                }
-            }
-        } else if (node.kind == CommandKind::kFunctionCall) {
-            cmd_name = std::string(node.as_function_call()->name);
-            for (const auto& arg : node.as_function_call()->arguments) {
-                if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
-                    args.push_back(arg->as_expression()->text);
-                }
-            }
-        }
-
-        return handler(cmd_name, args, output, exact_mode, services);
+    // 将 CommandASTHandler 转换为 CommandHandler
+    CommandHandler wrapped = [handler](const CommandASTNode& node,
+                                       std::string* output,
+                                       bool exact_mode) -> bool {
+        return handler(node, output, exact_mode);
     };
-    register_ast_handler(name, std::move(ast_handler), help_text);
+    register_command(name, std::move(wrapped), help_text);
 }
 
 void CommandRegistry::register_prefix_command(const std::string& prefix,
@@ -130,36 +100,9 @@ void CommandRegistry::unregister_command(const std::string& name) {
 // 命令处理方法实现
 // ============================================================================
 
-bool CommandRegistry::try_process(const std::string& cmd_name,
-                                   const std::vector<std::string_view>& args,
-                                   std::string* output,
-                                   bool exact_mode,
-                                   const CoreServices& services) {
-    // 兼容性接口：手动构造一个 CommandASTNode
-    if (cmd_name.empty()) return false;
-    
-    bool is_meta = cmd_name.front() == ':';
-    std::string base_name = is_meta ? cmd_name.substr(1) : cmd_name;
-    
-    std::vector<CommandASTNode> arg_nodes;
-    for (auto sv : args) {
-        arg_nodes.push_back(CommandASTNode::make_expression(sv));
-    }
-    
-    CommandASTNode node;
-    if (is_meta) {
-        node = CommandASTNode::make_meta_command(base_name, std::move(arg_nodes));
-    } else {
-        node = CommandASTNode::make_function_call(base_name, std::move(arg_nodes));
-    }
-    
-    return try_process_ast(node, output, exact_mode, services);
-}
-
 bool CommandRegistry::try_process_ast(const CommandASTNode& node,
                                        std::string* output,
-                                       bool exact_mode,
-                                       const CoreServices& services) {
+                                       bool exact_mode) {
     std::string cmd_name;
     if (node.kind == CommandKind::kMetaCommand) {
         cmd_name = ":" + std::string(node.as_meta_command()->command);
@@ -177,14 +120,14 @@ bool CommandRegistry::try_process_ast(const CommandASTNode& node,
 
     auto it = commands_.find(resolved_name);
     if (it != commands_.end() && it->second.handler) {
-        return it->second.handler(node, output, exact_mode, services);
+        return it->second.handler(node, output, exact_mode);
     }
 
     for (const auto& info : prefix_commands_) {
         if (resolved_name.size() >= info.name.size() &&
             resolved_name.substr(0, info.name.size()) == info.name) {
             if (info.handler) {
-                return info.handler(node, output, exact_mode, services);
+                return info.handler(node, output, exact_mode);
             }
         }
     }

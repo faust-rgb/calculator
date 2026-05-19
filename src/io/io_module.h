@@ -47,10 +47,18 @@ class ServiceLocator;
 class IoModule : public CalculatorModule {
 public:
     /**
-     * @brief 获取模块名称
-     * @return 返回模块名称 "IO"
+     * @brief 获取模块元数据
+     * @return 返回模块元数据
      */
-    std::string name() const override { return "IO"; }
+    ModuleMetadata get_metadata() const override {
+        return ModuleMetadata(
+            "IO",
+            "1.0.0",
+            "Input/output module for file operations",
+            "Calculator Team",
+            {}  // 无依赖
+        );
+    }
 
     /**
      * @brief 获取模块支持的所有命令列表
@@ -69,15 +77,12 @@ public:
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_native_functions() const override;
 
     /**
-     * @brief 执行命令行参数形式的命令
-     * @param command 命令名称
-     * @param args 参数列表
+     * @brief 执行命令
+     * @param node 命令AST节点
      * @param locator 服务定位器
      * @return 返回命令执行结果的字符串表示
      */
-    std::string execute_args(const std::string& command,
-                             const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+    std::string execute_command(const CommandASTNode& node, ServiceLocator& locator) override;
 
     /**
      * @brief 获取指定主题的帮助信息

@@ -6,9 +6,8 @@
 //
 // 设计目标：
 // 1. 模块启动时自注册命令处理器
-// 2. 避免每次调用重建 CoreServices
-// 3. 统一的命令分发机制
-// 4. 支持命令补全和帮助
+// 2. 统一的命令分发机制
+// 3. 支持命令补全和帮助
 //
 // 使用场景：
 // - 模块初始化时注册命令
@@ -29,7 +28,6 @@
 #include <memory>
 
 // 前向声明
-struct CoreServices;
 class CommandASTNode;
 
 // ============================================================================
@@ -37,18 +35,16 @@ class CommandASTNode;
 // ============================================================================
 
 /**
- * @brief 命令处理器函数类型
+ * @brief 命令处理器函数类型（简化版，不依赖 CoreServices）
  * @param node 命令 AST 节点
  * @param output 输出字符串指针
  * @param exact_mode 是否精确模式
- * @param services 核心服务接口
  * @return 如果命令被处理返回 true
  */
 using CommandHandler = std::function<bool(
     const CommandASTNode& node,
     std::string* output,
-    bool exact_mode,
-    const CoreServices& services)>;
+    bool exact_mode)>;
 
 // ============================================================================
 // 命令信息结构体
@@ -98,36 +94,9 @@ public:
     std::vector<std::string> get_commands() const;
     std::string get_help(const std::string& name) const override;
 
-    bool try_process(const std::string& cmd_name,
-                     const std::vector<std::string_view>& args,
-                     std::string* output,
-                     bool exact_mode,
-                     const CoreServices& services) override;
-
-    /**
-     * @brief 使用 AST 节点处理命令
-     * @param node 命令 AST 节点
-     * @param output 输出字符串指针
-     * @param exact_mode 是否精确模式
-     * @param services 核心服务接口
-     * @return 如果命令被处理返回 true
-     */
-    bool try_process_ast(const CommandASTNode& node,
-                         std::string* output,
-                         bool exact_mode,
-                         const CoreServices& services);
-
     void register_ast_handler(const std::string& name,
-                              CommandHandler handler,
+                              CommandASTHandler handler,
                               const std::string& help_text = "") override;
-
-    void register_command_handler(const std::string& name,
-                                  std::function<bool(const std::string&,
-                                                     const std::vector<std::string_view>&,
-                                                     std::string*,
-                                                     bool,
-                                                     const CoreServices&)> handler,
-                                  const std::string& help_text = "") override;
 
     // ========================================================================
     // 命令注册接口
@@ -225,6 +194,21 @@ public:
      * @brief 获取特定主题的帮助
      */
     std::string get_topic_help(const std::string& topic) const override;
+
+    // ========================================================================
+    // 命令执行接口
+    // ========================================================================
+
+    /**
+     * @brief 使用 AST 节点处理命令
+     * @param node 命令 AST 节点
+     * @param output 输出字符串指针
+     * @param exact_mode 是否精确模式
+     * @return 如果命令被处理返回 true
+     */
+    bool try_process_ast(const CommandASTNode& node,
+                         std::string* output,
+                         bool exact_mode);
 
 private:
     /**

@@ -28,7 +28,6 @@
 
 // 前向声明
 class CalculatorModule;
-struct CoreServices;
 
 // ============================================================================
 // 显示精度常量（使用 app 命名空间中的统一定义）
@@ -64,7 +63,6 @@ using app::kMaxDisplayPrecision;
 #include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "execution/engine/script_context.h"
-#include "execution/engine/script_context.h"
 
 // ============================================================================
 // Calculator 实现类
@@ -95,27 +93,26 @@ struct Calculator::Impl : public IExecutionContext {
     // IExecutionContext implementation
     IVariableManager& variables() override { return *variables_ptr; }
     const IVariableManager& variables() const override { return *variables_ptr; }
-    
+
     IFunctionManager& functions() override { return *functions_ptr; }
     const IFunctionManager& functions() const override { return *functions_ptr; }
-    
+
     IConfigManager& config() override { return *config_ptr; }
     const IConfigManager& config() const override { return *config_ptr; }
-    
+
     ICommandRegistry& commands() override { return *commands_ptr; }
     const ICommandRegistry& commands() const override { return *commands_ptr; }
-    
-    const CoreServices& services() const override;
+
     StoredValue evaluate(const std::string& expression, bool exact_mode) override;
-    bool try_evaluate_implicit(const std::string& expression, 
-                               StoredValue* value, 
+    bool try_evaluate_implicit(const std::string& expression,
+                               StoredValue* value,
                                const std::map<std::string, StoredValue>& vars) override;
     std::string expand_inline(const std::string& expression) override;
-    std::string execute_script_file(const std::string& path, 
-                                   bool exact_mode, 
+    std::string execute_script_file(const std::string& path,
+                                   bool exact_mode,
                                    bool create_scope) override;
-    bool try_process_function_command(const std::string& expression, 
-                                     std::string* output, 
+    bool try_process_function_command(const std::string& expression,
+                                     std::string* output,
                                      bool exact_mode = false) const override;
 
     std::vector<std::string> module_commands;
@@ -126,9 +123,6 @@ struct Calculator::Impl : public IExecutionContext {
 
     // 优化的隐式求值：触发字符到模块的映射
     std::array<std::vector<std::shared_ptr<CalculatorModule>>, 256> trigger_char_to_modules;
-
-    // 核心服务缓存
-    std::unique_ptr<CoreServices> core_services;
 
     // 脚本执行状态
     ScriptContext script_context;

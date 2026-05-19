@@ -41,19 +41,25 @@ class StatisticsModule : public CalculatorModule {
 public:
     using Scalar = mymath::Scalar;
     /**
-     * @brief 获取模块名称
-     * @return 模块名称 "Statistics"
+     * @brief 获取模块元数据
+     * @return 模块元数据
      */
-    std::string name() const override { return "Statistics"; }
+    ModuleMetadata get_metadata() const override {
+        return ModuleMetadata(
+            "Statistics",
+            "1.0.0",
+            "Statistical analysis module",
+            "Calculator Team",
+            {}  // 无依赖
+        );
+    }
 
     /**
      * @brief 执行统计命令
      *
      * 处理统计相关的命令请求，如统计摘要生成等。
      */
-    std::string execute_args(const std::string& command,
-                        const std::vector<std::string>& args,
-                        ServiceLocator& locator) override;
+    std::string execute_command(const CommandASTNode& node, ServiceLocator& locator) override;
 
     /**
      * @brief 获取模块提供的原生函数映射

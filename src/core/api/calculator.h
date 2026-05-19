@@ -9,8 +9,8 @@
 #include <map>
 
 struct StoredValue;
-struct CoreServices;
 class CalculatorModule;
+class ServiceLocator;
 
 /**
  * @class Calculator
@@ -43,9 +43,6 @@ public:
      * @param module 实现了 CalculatorModule 接口的对象指针
      */
     void register_module(std::shared_ptr<CalculatorModule> module);
-
-    /** @brief 获取核心服务接口 */
-    const CoreServices& get_core_services() const;
 
     /** @brief 获取内部实现（仅供执行引擎使用） */
     Impl* get_impl_internal() { return impl_.get(); }

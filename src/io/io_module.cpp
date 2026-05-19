@@ -14,6 +14,7 @@
 #include "core/services/service_locator.h"
 #include "core/common/calculator_exceptions.h"
 #include "core/services/string_utils.h"
+#include "parser/grammars/command_parser.h"
 #include "matrix/matrix.h"
 
 #include <filesystem>
@@ -701,14 +702,34 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
  * 用于在命令行中直接使用 I/O 命令（不使用括号形式），
  * 例如: open "file.txt" w
  *
- * @param command 命令名称
- * @param args 参数字符串列表
- * @param services 核心服务引用，用于求值表达式
+ * @param node 命令 AST 节点
+ * @param locator 服务定位器
  * @return 返回命令执行结果的字符串表示
  */
-std::string IoModule::execute_args(const std::string& command,
-                                   const std::vector<std::string>& args,
-                                   ServiceLocator& locator) {
+std::string IoModule::execute_command(const CommandASTNode& node,
+                                      ServiceLocator& locator) {
+    // 提取命令名和参数
+    std::string command;
+    std::vector<std::string> args;
+
+    if (node.kind == CommandKind::kMetaCommand) {
+        command = ":" + std::string(node.as_meta_command()->command);
+        for (const auto& arg : node.as_meta_command()->arguments) {
+            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                args.push_back(std::string(arg->as_expression()->text));
+            }
+        }
+    } else if (node.kind == CommandKind::kFunctionCall) {
+        command = std::string(node.as_function_call()->name);
+        for (const auto& arg : node.as_function_call()->arguments) {
+            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                args.push_back(std::string(arg->as_expression()->text));
+            }
+        }
+    } else {
+        throw std::runtime_error("Invalid command node type");
+    }
+
     auto engine = locator.resolve<IEvaluationEngine>();
 
     // 命令行用法（无括号），例如: open "file.txt" w

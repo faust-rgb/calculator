@@ -20,8 +20,16 @@
  */
 class StandardMathModule : public CalculatorModule {
 public:
-    std::string name() const override { return "StandardMath"; }
-    
+    ModuleMetadata get_metadata() const override {
+        return ModuleMetadata(
+            "StandardMath",
+            "1.0.0",
+            "Standard mathematical functions (sin, cos, exp, log, etc.)",
+            "Calculator Team",
+            {}  // 无依赖
+        );
+    }
+
     std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>> get_scalar_functions() const override;
 
     std::vector<std::string> get_functions() const override;

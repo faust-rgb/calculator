@@ -2102,8 +2102,8 @@ void FunctionAnalysis::ensure_evaluator_initialized() const {
     }
 
     fallback_calculator_ = std::make_shared<Calculator>();
-    const auto decimal_evaluator =
-        fallback_calculator_->get_core_services().evaluation.build_decimal_evaluator(expression_);
+    auto engine = fallback_calculator_->get_impl_internal()->locator.resolve<IEvaluationEngine>();
+    const auto decimal_evaluator = engine->build_scoped_evaluator(expression_);
     evaluator_ = [decimal_evaluator](
                      const std::vector<std::pair<std::string, Scalar>>& assignments) -> Scalar {
         std::vector<std::pair<std::string, Scalar>> decimal_assignments;

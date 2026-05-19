@@ -11,11 +11,17 @@ class ServiceLocator;
 
 class DspModule : public CalculatorModule {
 public:
-    std::string name() const override { return "DSP"; }
+    ModuleMetadata get_metadata() const override {
+        return ModuleMetadata(
+            "DSP",
+            "1.0.0",
+            "Digital signal processing module",
+            "Calculator Team",
+            {}  // 无依赖
+        );
+    }
     std::vector<std::string> get_commands() const override;
-    std::string execute_args(const std::string& command,
-                             const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+    std::string execute_command(const CommandASTNode& node, ServiceLocator& locator) override;
     std::string get_help_snippet(const std::string& topic) const override;
 
 };
