@@ -12,12 +12,29 @@
 #include <sstream>
 #include <stdexcept>
 
+namespace {
+
+// 辅助函数：评估 AST 节点（支持新的完整 AST 或回退到文本）
+StoredValue evaluate_ast_node(IExecutionContext* ctx,
+                              const CommandASTNode& node,
+                              bool exact_mode);
+
+// 辅助函数：从 AST 节点获取表达式文本（用于显示）
+std::string get_expression_text(const CommandASTNode& node) {
+    if (node.kind == CommandKind::kExpression && node.as_expression()) {
+        return std::string(node.as_expression()->text);
+    }
+    return "";
+}
+
+} // namespace
+
 std::string execute_command_ast(
                                 IExecutionContext* ctx,
                                 const CommandASTNode& ast,
                                 bool exact_mode) {
     if (ast.kind == CommandKind::kEmpty) return "";
-    
+
     if (ast.kind == CommandKind::kSequence) {
         const auto* nodes = ast.as_sequence();
         std::ostringstream oss;
@@ -44,49 +61,44 @@ std::string execute_command_ast(
         }
         CustomFunction function;
         function.parameter_names = std::move(params);
+        // 使用 body.text 用于存储（向后兼容）
         function.expression = std::string(def->body.text);
         ctx->functions().add_custom_function(name, std::move(function));
         return name + "(" + params_display + ") = " + std::string(def->body.text);
     }
 
     if (ast.kind == CommandKind::kMetaCommand || ast.kind == CommandKind::kFunctionCall) {
-        std::string_view command_name;
-        std::vector<std::string_view> arg_views;
-        if (ast.kind == CommandKind::kMetaCommand) {
-            const auto* meta = ast.as_meta_command();
-            command_name = meta->command;
-            arg_views = meta->arguments;
-        } else {
-            const auto* call = ast.as_function_call();
-            command_name = call->name;
-            for (const auto& arg : call->arguments) arg_views.push_back(arg.text);
-        }
-
-        std::string cmd_name = (ast.kind == CommandKind::kMetaCommand) ? ":" + std::string(command_name) : std::string(command_name);
-        if (ast.kind == CommandKind::kFunctionCall && cmd_name == "print") {
-            std::ostringstream out;
-            for (std::size_t i = 0; i < arg_views.size(); ++i) {
-                if (i != 0) out << ' ';
-                const StoredValue value = evaluate_script_value_expression(ctx, std::string(arg_views[i]), exact_mode);
-                out << format_print_value(value, ctx->config().is_symbolic_constants_mode());
-            }
-            return out.str();
-        }
-
         const CoreServices& svc = ctx->services();
         std::string output;
-        if (ctx->commands().has_command(cmd_name)) {
-            if (ctx->commands().try_process(cmd_name, arg_views, &output, exact_mode, svc)) return output;
+
+        // 使用新接口分发命令
+        if (ctx->commands().try_process_ast(ast, &output, exact_mode, svc)) {
+            return output;
         }
+
+        // 如果不是命令，且是函数调用，则尝试求值
         if (ast.kind == CommandKind::kFunctionCall) {
             return format_stored_value(evaluate_command_ast_to_value(ctx, ast, exact_mode), ctx->config().is_symbolic_constants_mode());
         }
+
+        // 提取命令名用于报错
+        std::string cmd_name;
+        if (ast.kind == CommandKind::kMetaCommand) cmd_name = ":" + std::string(ast.as_meta_command()->command);
+        else cmd_name = std::string(ast.as_function_call()->name);
+
         throw std::runtime_error("unknown command: " + cmd_name);
     }
 
     if (ast.kind == CommandKind::kAssignment) {
         const auto* assign = ast.as_assignment();
-        StoredValue val = evaluate_script_value_expression(ctx, std::string(assign->expression.text), exact_mode);
+        // 使用新的完整 AST 节点（如果可用），避免二次解析
+        StoredValue val;
+        if (assign->value_expr) {
+            val = evaluate_ast_node(ctx, *assign->value_expr, exact_mode);
+        } else {
+            // 回退到文本解析
+            val = evaluate_script_value_expression(ctx, std::string(assign->expression.text), exact_mode);
+        }
         assign_visible_variable(ctx, std::string(assign->variable), val);
         return std::string(assign->variable) + " = " + format_stored_value(val, ctx->config().is_symbolic_constants_mode());
     }
@@ -100,6 +112,43 @@ std::string execute_command_ast(
     return "";
 }
 
+namespace {
+
+StoredValue evaluate_ast_node(IExecutionContext* ctx,
+                              const CommandASTNode& node,
+                              bool exact_mode) {
+    if (node.kind == CommandKind::kExpression) {
+        const auto* expr = node.as_expression();
+        return evaluate_script_value_expression(ctx, std::string(expr->text), exact_mode);
+    }
+    if (node.kind == CommandKind::kFunctionCall) {
+        const auto* call = node.as_function_call();
+        std::vector<StoredValue> args;
+        // 使用完整的 AST 子节点进行求值
+        for (const auto& arg : call->arguments) {
+            args.push_back(evaluate_ast_node(ctx, *arg, exact_mode));
+        }
+
+        auto native_funcs = ctx->functions().get_native_functions();
+        auto it = native_funcs->find(std::string(call->name));
+        if (it != native_funcs->end()) {
+            return it->second(args);
+        }
+
+        return invoke_script_function(ctx, std::string(call->name), args);
+    }
+    if (node.kind == CommandKind::kStringLiteral) {
+        StoredValue value;
+        value.is_string = true;
+        value.string_value = *node.as_string_literal();
+        return value;
+    }
+    // 回退到通用执行
+    return evaluate_command_ast_to_value(ctx, node, exact_mode);
+}
+
+} // namespace
+
 StoredValue evaluate_command_ast_to_value(
                                           IExecutionContext* ctx,
                                           const CommandASTNode& ast,
@@ -110,21 +159,30 @@ StoredValue evaluate_command_ast_to_value(
     }
     if (ast.kind == CommandKind::kAssignment) {
         const auto* assign = ast.as_assignment();
-        StoredValue val = evaluate_script_value_expression(ctx, std::string(assign->expression.text), exact_mode);
+        // 使用新的完整 AST 节点（如果可用）
+        StoredValue val;
+        if (assign->value_expr) {
+            val = evaluate_ast_node(ctx, *assign->value_expr, exact_mode);
+        } else {
+            val = evaluate_script_value_expression(ctx, std::string(assign->expression.text), exact_mode);
+        }
         assign_visible_variable(ctx, std::string(assign->variable), val);
         return val;
     }
     if (ast.kind == CommandKind::kFunctionCall) {
         const auto* call = ast.as_function_call();
         std::vector<StoredValue> args;
-        for (const auto& arg : call->arguments) args.push_back(evaluate_script_value_expression(ctx, std::string(arg.text), exact_mode));
-        
+        // 使用完整的 AST 子节点进行求值
+        for (const auto& arg : call->arguments) {
+            args.push_back(evaluate_ast_node(ctx, *arg, exact_mode));
+        }
+
         auto native_funcs = ctx->functions().get_native_functions();
         auto it = native_funcs->find(std::string(call->name));
         if (it != native_funcs->end()) {
             return it->second(args);
         }
-        
+
         return invoke_script_function(ctx, std::string(call->name), args);
     }
     if (ast.kind == CommandKind::kStringLiteral) {

@@ -197,8 +197,7 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
         cmd_registry->register_command(
             cmd_name,
             [weak_module, dispatch_name, key, this](
-                const std::string& /*input*/,
-                const std::vector<std::string_view>& args,
+                const CommandASTNode& node,
                 std::string* output,
                 bool exact_mode,
                 const CoreServices& /*services*/) -> bool {
@@ -206,8 +205,8 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
                 auto mod = weak_module.lock();
                 if (!mod) return false;
 
-                // 使用模块的 execute_args_view 方法处理命令，传入 ServiceLocator
-                *output = mod->execute_args_view(dispatch_name, args, impl_->locator);
+                // 使用模块的新接口处理命令
+                *output = mod->execute_command(node, impl_->locator);
                 return true;
             },
             module->get_help_snippet("commands")
@@ -585,7 +584,11 @@ std::string Calculator::factor_expression(const std::string& expression) const {
     }
 
     std::vector<std::string_view> args;
-    for (const auto& arg : call->arguments) args.push_back(arg.text);
+    for (const auto& arg : call->arguments) {
+        if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+            args.push_back(arg->as_expression()->text);
+        }
+    }
     std::string output;
     const CoreServices& svc = get_core_services();
     if (!impl_->commands_ptr->try_process("factor", args, &output, false, svc)) {
@@ -605,7 +608,11 @@ std::string Calculator::plot_expression(const std::string& expression) const {
         const auto* call = ast.as_function_call();
         if (call && call->name == "plot") {
             std::vector<std::string_view> args;
-            for (const auto& arg : call->arguments) args.push_back(arg.text);
+            for (const auto& arg : call->arguments) {
+                if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                    args.push_back(arg->as_expression()->text);
+                }
+            }
             const CoreServices& svc = get_core_services();
             if (impl_->commands_ptr->try_process("plot", args, &output, false, svc)) {
                 return output;
@@ -613,7 +620,10 @@ std::string Calculator::plot_expression(const std::string& expression) const {
         }
     }
     // 回退到旧实现
-    CommandASTNode ast = parse_command(expression);
+    auto is_command = [this](std::string_view name) {
+        return impl_->commands_ptr->has_command(std::string(name));
+    };
+    CommandASTNode ast = parse_command(expression, is_command);
     const auto* call = ast.as_function_call();
     if (!call || call->name != "plot") {
         throw std::runtime_error("expected plot(...)");
@@ -621,7 +631,9 @@ std::string Calculator::plot_expression(const std::string& expression) const {
 
     std::vector<std::string> arguments;
     for (const auto& arg : call->arguments) {
-        arguments.emplace_back(arg.text);
+        if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+            arguments.emplace_back(arg->as_expression()->text);
+        }
     }
 
     plot::PlotContext ctx;
@@ -667,7 +679,11 @@ std::string Calculator::base_conversion_expression(const std::string& expression
     const std::string cmd_name(call->name);
     if (impl_->commands_ptr->has_command(cmd_name)) {
         std::vector<std::string_view> args;
-        for (const auto& arg : call->arguments) args.push_back(arg.text);
+        for (const auto& arg : call->arguments) {
+            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                args.push_back(arg->as_expression()->text);
+            }
+        }
         std::string output;
         const CoreServices& svc = get_core_services();
         if (impl_->commands_ptr->try_process(cmd_name, args, &output, false, svc)) {

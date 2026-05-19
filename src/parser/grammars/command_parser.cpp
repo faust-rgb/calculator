@@ -5,6 +5,7 @@
 #include "parser/grammars/command_parser.h"
 #include "parser/infra/syntax_validator.h"
 #include "core/services/string_utils.h"
+#include "core/services/core_manager_interfaces.h"
 #include "parser/infra/parser_utils.h"
 #include <algorithm>
 #include <cctype>
@@ -17,32 +18,16 @@
 namespace {
 
 void compile_expression_info(ExpressionInfo& info) {
-    if (info.text.empty()) {
-        return;  // 空表达式
-    }
-
-    // 获取或创建缓存
+    if (info.text.empty()) return;
     ExpressionCache* cache = info.get_or_create_cache();
-
-    // 如果已经分析过，直接返回
-    if (cache->analyzed) {
-        return;
-    }
-
-    // 获取有效文本（展开后的或原始的）
+    if (cache->analyzed) return;
     std::string_view expr = cache->effective_text();
-
-    // 分析表达式
     cache->hint = analyze_expression_hint(std::string(expr));
     cache->features = analyze_expression_features(std::string(expr));
     cache->analyzed = true;
-
-    // 尝试编译 AST（仅对标量表达式）
     if (cache->hint == ExpressionHint::kScalar && !parser_utils::contains_script_syntax(expr)) {
         cache->compiled_ast = compile_expression_ast(std::string(expr));
-        if (cache->compiled_ast) {
-            cache->is_compiled = true;
-        }
+        if (cache->compiled_ast) cache->is_compiled = true;
     }
 }
 
@@ -66,13 +51,33 @@ void attach_source_owner(CommandASTNode& node,
     node.source_owner = source_owner;
     if (node.kind == CommandKind::kSequence) {
         auto* nodes = &std::get<std::vector<CommandASTNode>>(node.data);
-        for (auto& child : *nodes) {
-            attach_source_owner(child, source_owner);
-        }
+        for (auto& child : *nodes) attach_source_owner(child, source_owner);
+    } else if (node.kind == CommandKind::kMetaCommand) {
+        auto* meta = &std::get<MetaCommandInfo>(node.data);
+        for (auto& arg : meta->arguments) attach_source_owner(*arg, source_owner);
+    } else if (node.kind == CommandKind::kFunctionCall) {
+        auto* call = &std::get<FunctionCallInfo>(node.data);
+        for (auto& arg : call->arguments) attach_source_owner(*arg, source_owner);
+        for (auto& n_arg : call->named_args) attach_source_owner(*n_arg.value, source_owner);
+    } else if (node.kind == CommandKind::kFunctionDefinition) {
+        auto* def = &std::get<FunctionDefinitionInfo>(node.data);
+        if (def->body_expr) attach_source_owner(*def->body_expr, source_owner);
+    } else if (node.kind == CommandKind::kAssignment) {
+        auto* assign = &std::get<AssignmentInfo>(node.data);
+        if (assign->value_expr) attach_source_owner(*assign->value_expr, source_owner);
+    } else if (node.kind == CommandKind::kIndexAssignment) {
+        auto* idx_assign = &std::get<IndexAssignmentInfo>(node.data);
+        for (auto& idx : idx_assign->index_exprs) attach_source_owner(*idx, source_owner);
+        if (idx_assign->value_expr) attach_source_owner(*idx_assign->value_expr, source_owner);
     }
-    // Note: For kFunctionCall, kFunctionDefinition, kAssignment, kIndexAssignment, kExpression,
-    // the string_views in the data field point into source_owner, which is now held by the node.
-    // No further recursion needed as these are leaf nodes in terms of CommandASTNode structure.
+}
+
+std::vector<std::unique_ptr<CommandASTNode>> to_unique_ptrs(std::vector<CommandASTNode> nodes) {
+    std::vector<std::unique_ptr<CommandASTNode>> result;
+    for (auto& node : nodes) {
+        result.push_back(std::make_unique<CommandASTNode>(std::move(node)));
+    }
+    return result;
 }
 
 } // namespace
@@ -89,10 +94,10 @@ CommandASTNode CommandASTNode::make_empty() {
 }
 
 CommandASTNode CommandASTNode::make_meta_command(std::string_view cmd,
-                                                  const std::vector<std::string_view>& args) {
+                                                  std::vector<CommandASTNode> args) {
     CommandASTNode node;
     node.kind = CommandKind::kMetaCommand;
-    node.data = MetaCommandInfo{cmd, args};
+    node.data = MetaCommandInfo{cmd, to_unique_ptrs(std::move(args))};
     return node;
 }
 
@@ -111,14 +116,12 @@ CommandASTNode CommandASTNode::make_function_definition(std::string_view name,
 }
 
 CommandASTNode CommandASTNode::make_function_call(std::string_view name,
-                                                  const std::vector<std::string_view>& args) {
+                                                  std::vector<CommandASTNode> args) {
     CommandASTNode node;
     node.kind = CommandKind::kFunctionCall;
     FunctionCallInfo info;
     info.name = name;
-    for (const auto& arg : args) {
-        info.arguments.push_back(ExpressionInfo(arg));
-    }
+    info.arguments = to_unique_ptrs(std::move(args));
     node.data = std::move(info);
     return node;
 }
@@ -143,9 +146,7 @@ CommandASTNode CommandASTNode::make_index_assignment(
     node.kind = CommandKind::kIndexAssignment;
     IndexAssignmentInfo info;
     info.variable = var;
-    for (const auto& idx : indices) {
-        info.indices.push_back(ExpressionInfo(idx));
-    }
+    for (const auto& idx : indices) info.indices.emplace_back(idx);
     info.value = ExpressionInfo(value);
     compile_expression_info(info.value);
     node.data = std::move(info);
@@ -154,18 +155,73 @@ CommandASTNode CommandASTNode::make_index_assignment(
 
 CommandASTNode CommandASTNode::make_function_call_with_named(
     std::string_view name,
-    const std::vector<std::string_view>& positional_args,
-    const std::vector<std::pair<std::string_view, std::string_view>>& named_args) {
+    std::vector<CommandASTNode> positional_args,
+    std::vector<std::pair<std::string_view, CommandASTNode>> named_args) {
     CommandASTNode node;
     node.kind = CommandKind::kFunctionCall;
     FunctionCallInfo info;
     info.name = name;
-    for (const auto& arg : positional_args) {
-        info.arguments.push_back(ExpressionInfo(arg));
+    info.arguments = to_unique_ptrs(std::move(positional_args));
+    for (auto& pair : named_args) {
+        info.named_args.push_back(NamedArgument{pair.first, std::make_unique<CommandASTNode>(std::move(pair.second))});
     }
-    for (const auto& [name, value] : named_args) {
-        info.named_args.push_back(NamedArgument{name, ExpressionInfo(value)});
+    node.data = std::move(info);
+    return node;
+}
+
+CommandASTNode CommandASTNode::make_function_definition_ast(std::string_view name,
+                                                            const std::vector<std::string_view>& params,
+                                                            CommandASTNode body_expr) {
+    CommandASTNode node;
+    node.kind = CommandKind::kFunctionDefinition;
+    FunctionDefinitionInfo info;
+    info.name = name;
+    info.parameters = params;
+    // 保留文本视图用于显示
+    if (body_expr.kind == CommandKind::kExpression && body_expr.as_expression()) {
+        info.body = ExpressionInfo(body_expr.as_expression()->text);
     }
+    info.body_expr = std::make_unique<CommandASTNode>(std::move(body_expr));
+    node.data = std::move(info);
+    return node;
+}
+
+CommandASTNode CommandASTNode::make_assignment_ast(std::string_view var,
+                                                   CommandASTNode value_expr) {
+    CommandASTNode node;
+    node.kind = CommandKind::kAssignment;
+    AssignmentInfo info;
+    info.variable = var;
+    // 保留文本视图用于显示
+    if (value_expr.kind == CommandKind::kExpression && value_expr.as_expression()) {
+        info.expression = ExpressionInfo(value_expr.as_expression()->text);
+    }
+    info.value_expr = std::make_unique<CommandASTNode>(std::move(value_expr));
+    node.data = std::move(info);
+    return node;
+}
+
+CommandASTNode CommandASTNode::make_index_assignment_ast(
+    std::string_view var,
+    std::vector<CommandASTNode> index_exprs,
+    CommandASTNode value_expr) {
+    CommandASTNode node;
+    node.kind = CommandKind::kIndexAssignment;
+    IndexAssignmentInfo info;
+    info.variable = var;
+    // 保留文本视图用于显示
+    for (const auto& idx_expr : index_exprs) {
+        if (idx_expr.kind == CommandKind::kExpression && idx_expr.as_expression()) {
+            info.indices.emplace_back(idx_expr.as_expression()->text);
+        }
+    }
+    if (value_expr.kind == CommandKind::kExpression && value_expr.as_expression()) {
+        info.value = ExpressionInfo(value_expr.as_expression()->text);
+    }
+    for (auto& idx : index_exprs) {
+        info.index_exprs.push_back(std::make_unique<CommandASTNode>(std::move(idx)));
+    }
+    info.value_expr = std::make_unique<CommandASTNode>(std::move(value_expr));
     node.data = std::move(info);
     return node;
 }
@@ -195,91 +251,44 @@ CommandASTNode CommandASTNode::make_sequence(std::vector<CommandASTNode> nodes) 
 // CommandParser 实现
 // ============================================================================
 
+// CommandConfig 实现
+CommandParser::CommandConfig CommandParser::CommandConfig::from_registry(const ICommandRegistry& registry) {
+    CommandConfig config;
+    config.exact_commands = registry.get_all_commands();
+    return config;
+}
+
+CommandParser::CommandParser(std::string_view source, const CommandConfig& config)
+    : tokens_(source), config_(config) {}
+
 CommandParser::CommandParser(std::string_view source, IsCommandCallback is_command)
     : tokens_(source), is_command_(std::move(is_command)) {}
 
-// ============================================================================
-// Token 访问
-// ============================================================================
-
-const Token& CommandParser::peek_token() {
-    return tokens_.peek();
-}
-
-const Token& CommandParser::peek_token(std::size_t offset) {
-    return tokens_.peek(offset);
-}
-
-Token CommandParser::advance_token() {
-    return tokens_.advance();
-}
-
-bool CommandParser::check_token(TokenKind kind) const {
-    // 需要通过 tokens_ 的 peek 方法检查
-    // 由于 tokens_ 不是 const 方法，这里用一种间接方式
-    return const_cast<CommandParser*>(this)->tokens_.check(kind);
-}
-
-bool CommandParser::match_token(TokenKind kind) {
-    return tokens_.match(kind);
-}
-
-Token CommandParser::expect_token(TokenKind kind, const char* message) {
-    return tokens_.expect(kind, message);
-}
-
-// ============================================================================
-// 回溯支持
-// ============================================================================
-
-LazyTokenStream::Checkpoint CommandParser::save_checkpoint() {
-    return tokens_.save_checkpoint();
-}
-
-void CommandParser::restore_checkpoint(const LazyTokenStream::Checkpoint& cp) {
-    tokens_.restore_checkpoint(cp);
-}
-
-std::size_t CommandParser::current_position() const {
-    return const_cast<CommandParser*>(this)->peek_token().position;
-}
-
-// ============================================================================
-// 语法分析
-// ============================================================================
+const Token& CommandParser::peek_token() { return tokens_.peek(); }
+const Token& CommandParser::peek_token(std::size_t offset) { return tokens_.peek(offset); }
+Token CommandParser::advance_token() { return tokens_.advance(); }
+bool CommandParser::check_token(TokenKind kind) const { return const_cast<CommandParser*>(this)->tokens_.check(kind); }
+bool CommandParser::match_token(TokenKind kind) { return tokens_.match(kind); }
+Token CommandParser::expect_token(TokenKind kind, const char* message) { return tokens_.expect(kind, message); }
+LazyTokenStream::Checkpoint CommandParser::save_checkpoint() { return tokens_.save_checkpoint(); }
+void CommandParser::restore_checkpoint(const LazyTokenStream::Checkpoint& cp) { tokens_.restore_checkpoint(cp); }
+std::size_t CommandParser::current_position() const { return const_cast<CommandParser*>(this)->peek_token().position; }
 
 void CommandParser::throw_syntax_error(const std::string& message) {
     Token tok = peek_token();
     std::ostringstream oss;
-    oss << message << " at position " << tok.position << "\n";
-    oss << "  " << tokens_.source() << "\n";
-    oss << "  " << std::string(tok.position, ' ') << "^";
-
+    oss << message << " at position " << tok.position << "\n" << "  " << tokens_.source() << "\n" << "  " << std::string(tok.position, ' ') << "^";
     throw SyntaxError(oss.str());
 }
 
 CommandASTNode CommandParser::parse() {
-    if (peek_token().kind == TokenKind::kEnd) {
-        return CommandASTNode::make_empty();
-    }
-
+    if (peek_token().kind == TokenKind::kEnd) return CommandASTNode::make_empty();
     std::vector<CommandASTNode> nodes;
     while (peek_token().kind != TokenKind::kEnd) {
-        // 跳过可能的分号
-        while (match_token(TokenKind::kSemicolon)) {
-            if (peek_token().kind == TokenKind::kEnd) break;
-        }
+        while (match_token(TokenKind::kSemicolon)) { if (peek_token().kind == TokenKind::kEnd) break; }
         if (peek_token().kind == TokenKind::kEnd) break;
-
         nodes.push_back(parse_command(false));
-
-        // 必须以分号分隔或到达末尾
-        if (peek_token().kind != TokenKind::kEnd && !match_token(TokenKind::kSemicolon)) {
-            // 如果不是分号也不是结束，可能是语法错误或连续表达式
-            // 为了兼容性，我们继续尝试解析
-        }
     }
-
     if (nodes.empty()) return CommandASTNode::make_empty();
     if (nodes.size() == 1) return std::move(nodes[0]);
     return CommandASTNode::make_sequence(std::move(nodes));
@@ -288,302 +297,187 @@ CommandASTNode CommandParser::parse() {
 CommandASTNode CommandParser::parse_command(bool single_statement) {
     LazyTokenStream::Checkpoint statement_checkpoint = save_checkpoint();
     const Token& tok = peek_token();
-
-    // 1. 空输入
-    if (tok.kind == TokenKind::kEnd) {
-        return CommandASTNode::make_empty();
-    }
-
-    // 2. 元命令（以冒号开头）
-    if (tok.kind == TokenKind::kColon) {
-        return parse_meta_command();
-    }
-
-    // 3. 字符串字面量 - 需要检查后面是否还有内容
+    if (tok.kind == TokenKind::kEnd) return CommandASTNode::make_empty();
+    if (tok.kind == TokenKind::kColon) return parse_meta_command();
     if (tok.kind == TokenKind::kString) {
         Token str_tok = advance_token();
-
-        // 检查后面是否还有内容
         const TokenKind next_kind = peek_token().kind;
-        if (next_kind == TokenKind::kEnd || next_kind == TokenKind::kSemicolon) {
-            return CommandASTNode::make_string_literal(str_tok.string_value);
-        }
-
-        // 后面还有内容，回退并作为表达式处理
+        if (next_kind == TokenKind::kEnd || next_kind == TokenKind::kSemicolon) return CommandASTNode::make_string_literal(str_tok.string_value);
         restore_checkpoint(statement_checkpoint);
         return parse_expression(single_statement);
     }
-
-    // 4. 标识符开头：可能是函数定义、赋值、函数调用或表达式
-    if (tok.kind == TokenKind::kIdentifier) {
-        return parse_definition_or_assignment(tok, single_statement);
-    }
-
-    // 5. 其他情况作为表达式
+    if (tok.kind == TokenKind::kIdentifier) return parse_definition_or_assignment(tok, single_statement);
     return parse_expression(single_statement);
 }
 
 CommandASTNode CommandParser::parse_meta_command() {
     expect_token(TokenKind::kColon, "expected ':' for meta command");
-
-    Token cmd_tok = expect_token(TokenKind::kIdentifier,
-                                 "expected command name after ':'");
-
-    std::vector<std::string_view> arguments;
-    const TokenKind next = peek_token().kind;
-    if (next != TokenKind::kEnd && next != TokenKind::kSemicolon) {
-        arguments = parse_argument_list_by_tokens(false);
-    }
-
-    return CommandASTNode::make_meta_command(cmd_tok.text, arguments);
+    Token cmd_tok = expect_token(TokenKind::kIdentifier, "expected command name after ':'");
+    std::vector<CommandASTNode> arguments;
+    if (peek_token().kind != TokenKind::kEnd && peek_token().kind != TokenKind::kSemicolon) arguments = parse_argument_list_by_tokens(false);
+    return CommandASTNode::make_meta_command(cmd_tok.text, std::move(arguments));
 }
 
 CommandASTNode CommandParser::parse_definition_or_assignment(Token id_tok, bool single_statement) {
-    // 保存检查点，用于回退
     LazyTokenStream::Checkpoint checkpoint = save_checkpoint();
-
-    // 消费标识符
     advance_token();
-
     const Token& next = peek_token();
-
-    // 情况 1: f(...) 可能是函数定义或函数调用
     if (next.kind == TokenKind::kLParen) {
-        // 保存第二个检查点（在 '(' 之前）
         LazyTokenStream::Checkpoint paren_checkpoint = save_checkpoint();
-
-        advance_token(); // 消费 (
-
-        // 尝试解析参数名列表 (x, y, z)
+        advance_token();
         std::vector<std::string_view> params;
         bool is_valid_def_params = true;
-
         if (!check_token(TokenKind::kRParen)) {
             while (true) {
-                if (check_token(TokenKind::kIdentifier)) {
-                    params.push_back(advance_token().text);
-                } else {
-                    is_valid_def_params = false;
-                    break;
-                }
-
-                if (match_token(TokenKind::kComma)) {
-                    continue;
-                } else if (check_token(TokenKind::kRParen)) {
-                    break;
-                } else {
-                    is_valid_def_params = false;
-                    break;
-                }
+                if (check_token(TokenKind::kIdentifier)) params.push_back(advance_token().text);
+                else { is_valid_def_params = false; break; }
+                if (match_token(TokenKind::kComma)) continue;
+                else if (check_token(TokenKind::kRParen)) break;
+                else { is_valid_def_params = false; break; }
             }
         }
-
         if (is_valid_def_params && match_token(TokenKind::kRParen)) {
             if (match_token(TokenKind::kEqual)) {
-                // 这是函数定义
                 std::string_view body = collect_statement_expression();
                 validate_expression_text(body, tokens_, body.data() - tokens_.source().data());
-                return CommandASTNode::make_function_definition(id_tok.text, params, body);
+                // 使用新的带完整 AST 的工厂方法
+                CommandASTNode body_expr = CommandASTNode::make_expression(body);
+                compile_expression_info(*const_cast<ExpressionInfo*>(body_expr.as_expression()));
+                return CommandASTNode::make_function_definition_ast(id_tok.text, params, std::move(body_expr));
             }
         }
-
-        // 不是函数定义，回退到 '(' 之前
         restore_checkpoint(paren_checkpoint);
-
-        // 有命令注册表时只把注册命令识别为命令调用；没有回调时保留通用解析能力，
-        // 供 base/rat/poly_* 等 helper 直接解析完整 name(args)。
-        if (!is_command_ || is_command_(id_tok.text)) {
-            return parse_function_call(id_tok, single_statement, checkpoint);
-        }
-
-        // 否则回退，作为普通表达式解析
+        // 使用配置表或回调判断是否是命令
+        bool is_cmd = config_.could_be_command(id_tok.text) ||
+                      (is_command_ && is_command_(id_tok.text));
+        if (is_cmd) return parse_function_call(id_tok, single_statement, checkpoint);
         restore_checkpoint(checkpoint);
         return parse_expression(single_statement);
     }
-
-    // 情况 2: x[...] = value 索引赋值
-    if (next.kind == TokenKind::kLBracket) {
-        return parse_index_assignment(id_tok, single_statement, checkpoint);
-    }
-
-    // 情况 3: x = ... 赋值
+    if (next.kind == TokenKind::kLBracket) return parse_index_assignment(id_tok, single_statement, checkpoint);
     if (next.kind == TokenKind::kEqual) {
-        advance_token(); // 消费 =
-
+        advance_token();
         std::string_view expr = collect_statement_expression();
         validate_expression_text(expr, tokens_, expr.data() - tokens_.source().data());
-        return CommandASTNode::make_assignment(id_tok.text, expr);
+        // 使用新的带完整 AST 的工厂方法
+        CommandASTNode value_expr = CommandASTNode::make_expression(expr);
+        compile_expression_info(*const_cast<ExpressionInfo*>(value_expr.as_expression()));
+        return CommandASTNode::make_assignment_ast(id_tok.text, std::move(value_expr));
     }
-
-    // 情况 4: 其他情况作为表达式
     restore_checkpoint(checkpoint);
     return parse_expression(single_statement);
 }
 
-CommandASTNode CommandParser::parse_index_assignment(
-    Token id_tok,
-    bool single_statement,
-    const LazyTokenStream::Checkpoint& expression_checkpoint) {
-
+CommandASTNode CommandParser::parse_index_assignment(Token id_tok, bool single_statement, const LazyTokenStream::Checkpoint& expression_checkpoint) {
     expect_token(TokenKind::kLBracket, "expected '[' in index assignment");
-
-    // 解析索引列表
     std::vector<std::string_view> indices;
+    std::vector<CommandASTNode> index_exprs;
     if (!check_token(TokenKind::kRBracket)) {
-        indices = parse_argument_list_by_tokens(true);
-        if (!match_token(TokenKind::kRBracket)) {
-            throw_syntax_error("unmatched '[' in index assignment");
+        std::size_t start_pos = peek_token().position;
+        int depth = 0;
+        while (peek_token().kind != TokenKind::kEnd) {
+            if (peek_token().kind == TokenKind::kLBracket) depth++;
+            else if (peek_token().kind == TokenKind::kRBracket) { if (depth == 0) break; depth--; }
+            else if (peek_token().kind == TokenKind::kComma && depth == 0) {
+                std::string_view idx_text = trim_view(tokens_.source().substr(start_pos, peek_token().position - start_pos));
+                indices.push_back(idx_text);
+                // 创建完整的 AST 节点
+                CommandASTNode idx_expr = CommandASTNode::make_expression(idx_text);
+                compile_expression_info(*const_cast<ExpressionInfo*>(idx_expr.as_expression()));
+                index_exprs.push_back(std::move(idx_expr));
+                advance_token();
+                start_pos = peek_token().position;
+                continue;
+            }
+            advance_token();
         }
-    } else {
-        advance_token(); // 消费空的 ]
-    }
-
-    // 期望等号
-    if (!match_token(TokenKind::kEqual)) {
-        // 不是索引赋值，回退作为表达式解析
-        restore_checkpoint(expression_checkpoint);
-        return parse_expression(single_statement);
-    }
-
-    // 解析赋值值
+        std::string_view idx_text = trim_view(tokens_.source().substr(start_pos, peek_token().position - start_pos));
+        indices.push_back(idx_text);
+        // 创建完整的 AST 节点
+        CommandASTNode idx_expr = CommandASTNode::make_expression(idx_text);
+        compile_expression_info(*const_cast<ExpressionInfo*>(idx_expr.as_expression()));
+        index_exprs.push_back(std::move(idx_expr));
+        if (!match_token(TokenKind::kRBracket)) throw_syntax_error("unmatched '[' in index assignment");
+    } else advance_token();
+    if (!match_token(TokenKind::kEqual)) { restore_checkpoint(expression_checkpoint); return parse_expression(single_statement); }
     std::string_view value = collect_statement_expression();
     validate_expression_text(value, tokens_, value.data() - tokens_.source().data());
-
-    return CommandASTNode::make_index_assignment(id_tok.text, indices, value);
+    // 使用新的带完整 AST 的工厂方法
+    CommandASTNode value_expr = CommandASTNode::make_expression(value);
+    compile_expression_info(*const_cast<ExpressionInfo*>(value_expr.as_expression()));
+    return CommandASTNode::make_index_assignment_ast(id_tok.text, std::move(index_exprs), std::move(value_expr));
 }
 
-CommandASTNode CommandParser::parse_function_call(
-    Token id_tok,
-    bool single_statement,
-    const LazyTokenStream::Checkpoint& expression_checkpoint) {
+CommandASTNode CommandParser::parse_function_call(Token id_tok, bool single_statement, const LazyTokenStream::Checkpoint& expression_checkpoint) {
     expect_token(TokenKind::kLParen, "expected '(' in function call");
-
-    std::vector<std::string_view> arguments;
-
-    // 解析参数列表
+    std::vector<CommandASTNode> arguments;
     if (!check_token(TokenKind::kRParen)) {
         arguments = parse_argument_list_by_tokens(true);
-        if (!match_token(TokenKind::kRParen)) {
-            throw_syntax_error("unmatched '(' in function call");
-        }
-    } else {
-        advance_token(); // 消费空的 )
-    }
-
-    // 检查后面是否还有内容
+        if (!match_token(TokenKind::kRParen)) throw_syntax_error("unmatched '(' in function call");
+    } else advance_token();
     const TokenKind next = peek_token().kind;
-    if (next != TokenKind::kEnd && next != TokenKind::kSemicolon) {
-        // 后面还有内容，当前语句是以函数调用开头的普通表达式。
-        // 回到当前语句起点，而不是重置整个输入；否则在分号序列中会
-        // 反复跳回第一条语句。
-        restore_checkpoint(expression_checkpoint);
-        return parse_expression(single_statement);
-    }
-
-    return CommandASTNode::make_function_call(id_tok.text, arguments);
+    if (next != TokenKind::kEnd && next != TokenKind::kSemicolon) { restore_checkpoint(expression_checkpoint); return parse_expression(single_statement); }
+    return CommandASTNode::make_function_call(id_tok.text, std::move(arguments));
 }
 
-std::vector<std::string_view> CommandParser::parse_argument_list_by_tokens(bool stop_at_rparen) {
-    std::vector<std::string_view> arguments;
-    if (peek_token().kind == TokenKind::kEnd) {
-        return arguments;
-    }
-
-    std::size_t start_pos = peek_token().position;
-    int paren_depth = 0;
-    int bracket_depth = 0;
-
+std::vector<CommandASTNode> CommandParser::parse_argument_list_by_tokens(bool stop_at_rparen) {
+    std::vector<CommandASTNode> arguments;
+    if (peek_token().kind == TokenKind::kEnd) return arguments;
     while (peek_token().kind != TokenKind::kEnd) {
-        const Token& tok = peek_token();
-
-        if (tok.kind == TokenKind::kLParen) paren_depth++;
-        else if (tok.kind == TokenKind::kRParen) {
-            if (paren_depth == 0 && stop_at_rparen) {
-                // Reached the end of the argument list for a function call
-                break;
-            }
-            if (paren_depth > 0) paren_depth--;
-        }
-        else if (tok.kind == TokenKind::kLBracket) bracket_depth++;
-        else if (tok.kind == TokenKind::kRBracket) {
-            if (bracket_depth == 0) {
-                // Reached the end of the index list for index assignment
-                break;
-            }
-            if (bracket_depth > 0) bracket_depth--;
-        }
-        else if (tok.kind == TokenKind::kComma && paren_depth == 0 && bracket_depth == 0) {
-            // Found a top-level comma
-            std::size_t end_pos = tok.position;
-            arguments.push_back(trim_view(tokens_.source().substr(start_pos, end_pos - start_pos)));
-            advance_token(); // consume comma
-            if (peek_token().kind != TokenKind::kEnd) {
-                start_pos = peek_token().position;
-            } else {
-                start_pos = tokens_.source().size();
-            }
+        if (stop_at_rparen && peek_token().kind == TokenKind::kRParen) break;
+        arguments.push_back(parse_expression(false));
+        if (match_token(TokenKind::kComma)) {
+            if (stop_at_rparen && peek_token().kind == TokenKind::kRParen) { arguments.push_back(CommandASTNode::make_empty()); break; }
             continue;
-        }
-
-        advance_token();
+        } else break;
     }
-
-    // push the last argument
-    std::size_t end_pos = peek_token().kind == TokenKind::kEnd ? tokens_.source().size() : peek_token().position;
-    if (start_pos < end_pos) {
-        arguments.push_back(trim_view(tokens_.source().substr(start_pos, end_pos - start_pos)));
-    } else if (!arguments.empty()) {
-        // trailing comma case like `f(a, )`
-        arguments.push_back("");
-    }
-
     return arguments;
 }
 
 CommandASTNode CommandParser::parse_expression(bool single_statement) {
     (void)single_statement;
-    if (peek_token().kind == TokenKind::kEnd) {
-        return CommandASTNode::make_expression("");
-    }
-
+    if (peek_token().kind == TokenKind::kEnd) return CommandASTNode::make_expression("");
     std::string_view expr = collect_statement_expression();
-
     validate_expression_text(expr, tokens_, expr.data() - tokens_.source().data());
-
-    // 创建带预编译缓存的 ExpressionInfo
     ExpressionInfo info(expr);
     compile_expression_info(info);
-
     return CommandASTNode(CommandKind::kExpression, std::move(info));
 }
 
 std::string_view CommandParser::collect_statement_expression() {
     std::size_t start_pos = peek_token().position;
-    int paren_depth = 0;
-    int bracket_depth = 0;
-    int brace_depth = 0;
-
+    int paren_depth = 0, bracket_depth = 0, brace_depth = 0;
     while (peek_token().kind != TokenKind::kEnd) {
         const Token& tok = peek_token();
-        if (tok.kind == TokenKind::kSemicolon && paren_depth == 0 && bracket_depth == 0 && brace_depth == 0) {
-            break; // 遇到顶层分号，停止当前表达式解析
-        }
+        if (tok.kind == TokenKind::kSemicolon && paren_depth == 0 && bracket_depth == 0 && brace_depth == 0) break;
         if (tok.kind == TokenKind::kLParen) paren_depth++;
-        else if (tok.kind == TokenKind::kRParen) { if (paren_depth > 0) paren_depth--; }
+        else if (tok.kind == TokenKind::kRParen) {
+            if (paren_depth == 0) break;  // 在顶层右括号处停止
+            paren_depth--;
+        }
         else if (tok.kind == TokenKind::kLBracket) bracket_depth++;
-        else if (tok.kind == TokenKind::kRBracket) { if (bracket_depth > 0) bracket_depth--; }
+        else if (tok.kind == TokenKind::kRBracket) {
+            if (bracket_depth == 0) break;  // 在顶层右方括号处停止
+            bracket_depth--;
+        }
         else if (tok.kind == TokenKind::kLBrace) brace_depth++;
-        else if (tok.kind == TokenKind::kRBrace) { if (brace_depth > 0) brace_depth--; }
-        
+        else if (tok.kind == TokenKind::kRBrace) {
+            if (brace_depth == 0) break;  // 在顶层右花括号处停止
+            brace_depth--;
+        }
+        else if (tok.kind == TokenKind::kComma && paren_depth == 0 && bracket_depth == 0 && brace_depth == 0) break;  // 在顶层逗号处停止
         advance_token();
     }
-
     return trim_view(tokens_.source().substr(start_pos, peek_token().position - start_pos));
 }
 
-// ============================================================================
-// 便捷函数实现
-// ============================================================================
+CommandASTNode parse_command(std::string_view source, const CommandParser::CommandConfig& config) {
+    auto source_owner = std::make_shared<const std::string>(source);
+    CommandParser parser(*source_owner, config);
+    CommandASTNode node = parser.parse();
+    attach_source_owner(node, source_owner);
+    return node;
+}
 
 CommandASTNode parse_command(std::string_view source, CommandParser::IsCommandCallback is_command) {
     auto source_owner = std::make_shared<const std::string>(source);

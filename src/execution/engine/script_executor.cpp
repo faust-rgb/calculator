@@ -287,7 +287,12 @@ std::string command_ast_to_source(const CommandASTNode& ast) {
         case CommandKind::kMetaCommand: {
             const auto& meta = std::get<MetaCommandInfo>(ast.data);
             std::string text = ":" + std::string(meta.command);
-            for (std::string_view arg : meta.arguments) { text += " "; text += std::string(arg); }
+            for (const auto& arg : meta.arguments) {
+                text += " ";
+                if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                    text += std::string(arg->as_expression()->text);
+                }
+            }
             return text;
         }
         case CommandKind::kFunctionDefinition: {
@@ -305,7 +310,9 @@ std::string command_ast_to_source(const CommandASTNode& ast) {
             std::string text = std::string(call.name) + "(";
             for (std::size_t i = 0; i < call.arguments.size(); ++i) {
                 if (i != 0) text += ", ";
-                text += std::string(call.arguments[i].text);
+                if (call.arguments[i]->kind == CommandKind::kExpression && call.arguments[i]->as_expression()) {
+                    text += std::string(call.arguments[i]->as_expression()->text);
+                }
             }
             text += ")"; return text;
         }

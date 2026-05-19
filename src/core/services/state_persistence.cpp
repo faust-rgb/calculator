@@ -314,7 +314,7 @@ std::string StatePersistenceService::load_state(const std::string& path) {
                     throw std::runtime_error("invalid save file format");
                 }
                 const std::string definition = decode_field(parts[1]);
-                CommandASTNode ast = parse_command(definition);
+                CommandASTNode ast = parse_command(definition, CommandParser::CommandConfig{});
                 if (ast.kind == CommandKind::kFunctionDefinition) {
                     const FunctionDefinitionInfo* def = ast.as_function_definition();
                     if (def) {

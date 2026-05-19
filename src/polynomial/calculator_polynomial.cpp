@@ -66,7 +66,12 @@ void build_polynomial_recursive(
     std::vector<Scalar>* coefficients) {
 
     const std::string trimmed_argument = trim_copy(argument);
-    CommandASTNode ast = parse_command(trimmed_argument);
+
+    // 创建包含多项式命令的配置
+    CommandParser::CommandConfig config;
+    config.exact_commands = {"poly_add", "poly_sub", "poly_mul", "poly_div"};
+
+    CommandASTNode ast = parse_command(trimmed_argument, config);
 
     // 检查是否为嵌套的多项式操作
     if (ast.kind == CommandKind::kFunctionCall) {
@@ -83,9 +88,13 @@ void build_polynomial_recursive(
             std::string rhs_variable;
             std::vector<Scalar> lhs_coefficients;
             std::vector<Scalar> rhs_coefficients;
-            build_polynomial_recursive(ctx, std::string(call->arguments[0].text),
+            std::string arg0_text = call->arguments[0]->kind == CommandKind::kExpression && call->arguments[0]->as_expression()
+                ? std::string(call->arguments[0]->as_expression()->text) : "";
+            std::string arg1_text = call->arguments[1]->kind == CommandKind::kExpression && call->arguments[1]->as_expression()
+                ? std::string(call->arguments[1]->as_expression()->text) : "";
+            build_polynomial_recursive(ctx, arg0_text,
                                        &lhs_variable, &lhs_coefficients);
-            build_polynomial_recursive(ctx, std::string(call->arguments[1].text),
+            build_polynomial_recursive(ctx, arg1_text,
                                        &rhs_variable, &rhs_coefficients);
 
             *variable_name = lhs_variable;

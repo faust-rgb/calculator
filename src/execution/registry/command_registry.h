@@ -30,6 +30,7 @@
 
 // 前向声明
 struct CoreServices;
+class CommandASTNode;
 
 // ============================================================================
 // 命令处理器类型定义
@@ -37,16 +38,14 @@ struct CoreServices;
 
 /**
  * @brief 命令处理器函数类型
- * @param input 输入字符串
- * @param args 已解析的参数列表
+ * @param node 命令 AST 节点
  * @param output 输出字符串指针
  * @param exact_mode 是否精确模式
  * @param services 核心服务接口
  * @return 如果命令被处理返回 true
  */
 using CommandHandler = std::function<bool(
-    const std::string& input,
-    const std::vector<std::string_view>& args,
+    const CommandASTNode& node,
     std::string* output,
     bool exact_mode,
     const CoreServices& services)>;
@@ -103,6 +102,19 @@ public:
                      std::string* output,
                      bool exact_mode,
                      const CoreServices& services) override;
+
+    /**
+     * @brief 使用 AST 节点处理命令
+     * @param node 命令 AST 节点
+     * @param output 输出字符串指针
+     * @param exact_mode 是否精确模式
+     * @param services 核心服务接口
+     * @return 如果命令被处理返回 true
+     */
+    bool try_process_ast(const CommandASTNode& node,
+                         std::string* output,
+                         bool exact_mode,
+                         const CoreServices& services);
 
     void register_command_handler(const std::string& name,
                                   std::function<bool(const std::string&,

@@ -55,13 +55,22 @@ public:
     std::vector<std::string> get_commands() const override;
 
     /**
-     * @brief 执行系统命令
+     * @brief 执行系统命令（string_view 版本，推荐）
      * @param command 命令名（如 ":vars", ":clear"）
      * @param args 命令参数
      * @param locator 服务定位器
      * @return 命令执行结果字符串
      *
      * 根据命令名分发到相应的处理函数。
+     * 使用 string_view 避免不必要的字符串拷贝。
+     */
+    std::string execute_args_view(std::string_view command,
+                                  const std::vector<std::string_view>& args,
+                                  ServiceLocator& locator) override;
+
+    /**
+     * @brief 执行系统命令（string 版本，向后兼容）
+     * @deprecated 建议使用 execute_args_view
      */
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,

@@ -22,6 +22,7 @@ class FunctionAnalysis;
 class VariableResolver;
 struct FlatScopeStack;
 struct CoreServices;
+class CommandASTNode;
 
 /**
  * @class IVariableManager
@@ -180,6 +181,19 @@ public:
                              const CoreServices& services) = 0;
 
     /**
+     * @brief 使用 AST 节点处理命令（推荐）
+     * @param node 命令 AST 节点
+     * @param output 输出字符串指针
+     * @param exact_mode 是否精确模式
+     * @param services 核心服务接口
+     * @return 如果命令被处理返回 true
+     */
+    virtual bool try_process_ast(const CommandASTNode& node,
+                                 std::string* output,
+                                 bool exact_mode,
+                                 const CoreServices& services) = 0;
+
+    /**
      * @brief 注册命令处理器
      * @param name 命令名
      * @param handler 处理函数
@@ -192,6 +206,13 @@ public:
                                                              bool,
                                                              const CoreServices&)> handler,
                                           const std::string& help_text = "") = 0;
+
+    /**
+     * @brief 检查标识符是否可能是命令（用于解析器快速路径）
+     * @param name 标识符名
+     * @return 如果可能是命令返回 true
+     */
+    virtual bool could_be_command(std::string_view name) const = 0;
 };
 
 class CalculatorModule;

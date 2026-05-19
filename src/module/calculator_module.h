@@ -97,6 +97,7 @@ struct CommandSpec {
 };
 
 class ServiceLocator;
+class CommandASTNode;
 
 /**
  * @class CalculatorModule
@@ -141,17 +142,38 @@ public:
     /// 返回命令规范列表，包含命令键和派发名称
     virtual std::vector<CommandSpec> get_command_specs() const;
 
-    /// 使用字符串参数执行命令（推荐重写此方法）
+    /**
+     * @brief 统一的命令执行接口（推荐重写）
+     * @param node 已解析的命令 AST 节点
+     * @param locator 服务定位器
+     * @return 执行结果
+     *
+     * 新设计：模块应重写此方法以直接处理 AST 节点。
+     * AST 节点中的参数已经是完全解析的子节点，无需二次解析。
+     */
+    virtual std::string execute_command(const CommandASTNode& node,
+                                        ServiceLocator& locator);
+
+    /**
+     * @brief 使用字符串参数执行命令（向后兼容接口）
+     * @deprecated 建议重写 execute_command 以直接处理 AST 节点
+     */
     virtual std::string execute_args(const std::string& command,
                                     const std::vector<std::string>& args,
                                     ServiceLocator& locator);
 
-    /// 使用字符串视图参数执行命令（零拷贝接口）
+    /**
+     * @brief 使用字符串视图参数执行命令（向后兼容接口）
+     * @deprecated 建议重写 execute_command 以直接处理 AST 节点
+     */
     virtual std::string execute_args_view(std::string_view command,
                                           const std::vector<std::string_view>& args,
                                           ServiceLocator& locator);
 
-    /// 使用单个字符串执行命令（旧版接口，保持向后兼容）
+    /**
+     * @brief 使用单个字符串执行命令（旧版接口，保持向后兼容）
+     * @deprecated 此接口已废弃，仅为向后兼容保留
+     */
     virtual std::string execute(const std::string& command,
                                const std::string& inside,
                                const CoreServices& services) {

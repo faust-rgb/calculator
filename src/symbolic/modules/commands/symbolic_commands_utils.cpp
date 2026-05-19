@@ -102,28 +102,40 @@ void resolve_symbolic_expression(const SymbolicResolverContext& ctx,
                                  std::string* variable_name,
                                  SymbolicExpression* expression) {
     const std::string trimmed_argument = trim_copy(argument);
-    CommandASTNode ast = parse_command(trimmed_argument);
-    
+    CommandASTNode ast = parse_command(trimmed_argument, CommandParser::CommandConfig{});
+
     if (ast.kind == CommandKind::kFunctionCall) {
         const auto* call = ast.as_function_call();
         if (call->name == "diff") {
             SymbolicExpression nested;
-            resolve_symbolic_expression(ctx, std::string(call->arguments[0].text), call->arguments.size() == 1, variable_name, &nested);
+            std::string arg0_text = call->arguments[0]->kind == CommandKind::kExpression && call->arguments[0]->as_expression()
+                ? std::string(call->arguments[0]->as_expression()->text) : "";
+            resolve_symbolic_expression(ctx, arg0_text, call->arguments.size() == 1, variable_name, &nested);
             if (call->arguments.size() == 1) *expression = nested.derivative(*variable_name).simplify();
             else {
                 SymbolicExpression diffed = nested;
                 for (size_t i = 1; i < call->arguments.size(); ++i) {
-                    diffed = diffed.derivative(trim_copy(call->arguments[i].text)).simplify();
+                    std::string arg_text = call->arguments[i]->kind == CommandKind::kExpression && call->arguments[i]->as_expression()
+                        ? std::string(call->arguments[i]->as_expression()->text) : "";
+                    diffed = diffed.derivative(trim_copy(arg_text)).simplify();
                 }
-                *variable_name = trim_copy(call->arguments[1].text);
+                std::string arg1_text = call->arguments[1]->kind == CommandKind::kExpression && call->arguments[1]->as_expression()
+                    ? std::string(call->arguments[1]->as_expression()->text) : "";
+                *variable_name = trim_copy(arg1_text);
                 *expression = diffed;
             }
             return;
         }
         if (call->name == "integral") {
             SymbolicExpression nested;
-            resolve_symbolic_expression(ctx, std::string(call->arguments[0].text), call->arguments.size() == 1, variable_name, &nested);
-            if (call->arguments.size() == 2) *variable_name = trim_copy(call->arguments[1].text);
+            std::string arg0_text = call->arguments[0]->kind == CommandKind::kExpression && call->arguments[0]->as_expression()
+                ? std::string(call->arguments[0]->as_expression()->text) : "";
+            resolve_symbolic_expression(ctx, arg0_text, call->arguments.size() == 1, variable_name, &nested);
+            if (call->arguments.size() == 2) {
+                std::string arg1_text = call->arguments[1]->kind == CommandKind::kExpression && call->arguments[1]->as_expression()
+                    ? std::string(call->arguments[1]->as_expression()->text) : "";
+                *variable_name = trim_copy(arg1_text);
+            }
             auto res = RischAlgorithm::integrate_full(nested, *variable_name);
             if (!res.success || res.type != IntegralType::kElementary) throw std::runtime_error("Integration failed in nested integral");
             *expression = res.value.simplify();
