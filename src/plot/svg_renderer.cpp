@@ -11,7 +11,7 @@
  * SVG 输出支持矢量图形，可无损缩放。
  */
 
-#include "svg_renderer.h"
+#include "plot/svg_renderer.h"
 #include "app/scalar_type.h"
 #include "math/mymath.h"
 #include <sstream>

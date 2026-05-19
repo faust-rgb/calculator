@@ -12,8 +12,7 @@ TEST_DIR := test
 TEST_SUITE_DIR := $(TEST_DIR)/suites
 
 # Collect all source directories using wildcard
-SRC_DIRS := $(shell find $(SRC_DIR) -type d)
-INCLUDES := -I$(SRC_DIR) $(addprefix -I,$(SRC_DIRS)) -I$(TEST_DIR)
+INCLUDES := -I$(SRC_DIR) -I$(TEST_DIR)
 CPPFLAGS += $(INCLUDES) -MMD -MP
 
 # Collect all source files using wildcard (exclude main.cpp)

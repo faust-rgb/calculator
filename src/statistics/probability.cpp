@@ -9,7 +9,7 @@
  * - 随机数生成函数（均匀分布、正态分布、整数）
  */
 
-#include "probability.h"
+#include "statistics/probability.h"
 #include "app/scalar_type.h"
 #include "math/mymath.h"
 #include <random>

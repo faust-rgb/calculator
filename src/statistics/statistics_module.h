@@ -12,10 +12,10 @@
 #include "module/calculator_module.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "app/scalar_type.h"
-#include "calculator_statistics.h"
-#include "statistics.h"
-#include "probability.h"
-#include "mymath.h"
+#include "statistics/calculator_statistics.h"
+#include "statistics/statistics.h"
+#include "statistics/probability.h"
+#include "math/mymath.h"
 #include <numeric>
 #include <sstream>
 #include <span>

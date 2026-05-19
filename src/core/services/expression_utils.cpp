@@ -5,9 +5,9 @@
 // 提供级数格式化和数值容差计算功能。
 // ============================================================================
 
-#include "expression_utils.h"
+#include "core/services/expression_utils.h"
 #include "app/scalar_type.h"
-#include "format_utils.h"
+#include "core/services/format_utils.h"
 #include "math/mymath.h"
 
 #include <algorithm>

@@ -5,7 +5,7 @@
 #ifndef CALCULATOR_MATRIX_COMMANDS_H
 #define CALCULATOR_MATRIX_COMMANDS_H
 
-#include "matrix.h"
+#include "matrix/matrix.h"
 
 #include <functional>
 #include <string>

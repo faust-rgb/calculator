@@ -3,7 +3,7 @@
  * @brief 统计模块实现
  */
 
-#include "statistics_module.h"
+#include "statistics/statistics_module.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
 

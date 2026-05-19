@@ -35,6 +35,9 @@ public:
     /** @brief 返回模块支持的命令列表 {eig, svd, lu_p} */
     std::vector<std::string> get_commands() const override;
 
+    std::string execute_command(const CommandASTNode& node,
+                                ServiceLocator& locator) override;
+
     /**
      * @brief 执行矩阵命令
      *

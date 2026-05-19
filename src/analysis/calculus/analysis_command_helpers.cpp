@@ -5,14 +5,13 @@
 #include "analysis/calculus/analysis_command_helpers.h"
 #include "analysis/base/precision_constants.h"
 #include "math/mymath.h"
-#include "symbolic/core/symbolic_expression_internal.h"
+#include "math/helpers/linear_solver.h"
+#include "symbolic/core/symbolic_expression.h"
 
 #include <algorithm>
 #include <stdexcept>
 
 namespace analysis_cmds {
-
-using namespace symbolic_expression_internal;
 
 // ============================================================================
 // 临界点分类
@@ -29,8 +28,7 @@ std::string classify_critical_point(
             for (std::size_t k = 0; k < variables.size(); ++k) {
                 current = current.substitute(variables[k], SymbolicExpression::number((values[k]))).simplify();
             }
-            if (current.node_->type == NodeType::kNumber) numeric_hessian[i][j] = Scalar(current.node_->number_value);
-            else return "unknown";
+            if (!current.is_number(&numeric_hessian[i][j])) return "unknown";
         }
     }
 
@@ -58,33 +56,11 @@ std::string classify_critical_point(
 std::vector<Scalar> solve_linear_system(
     std::vector<std::vector<Scalar>> matrix,
     std::vector<Scalar> rhs) {
-    const std::size_t n = rhs.size();
-    for (std::size_t col = 0; col < n; ++col) {
-        std::size_t pivot = col;
-        for (std::size_t row = col + 1; row < n; ++row) {
-            if (mymath::abs(matrix[row][col]) > mymath::abs(matrix[pivot][col])) {
-                pivot = row;
-            }
-        }
-        if (mymath::isfinite(matrix[pivot][col]) && mymath::abs(matrix[pivot][col]) < precision::singular_value_threshold<Scalar>()) {
-            throw std::runtime_error("singular critical point system");
-        }
-        if (pivot != col) {
-            std::swap(matrix[pivot], matrix[col]);
-            std::swap(rhs[pivot], rhs[col]);
-        }
-        const Scalar divisor = matrix[col][col];
-        for (std::size_t c = col; c < n; ++c) matrix[col][c] = matrix[col][c] / divisor;
-        rhs[col] = rhs[col] / divisor;
-        for (std::size_t row = 0; row < n; ++row) {
-            if (row == col) continue;
-            const Scalar factor = matrix[row][col];
-            if (mymath::isfinite(factor) && mymath::abs(factor) < precision::epsilon<Scalar>() * Scalar(100)) continue;
-            for (std::size_t c = col; c < n; ++c) matrix[row][c] = matrix[row][c] - factor * matrix[col][c];
-            rhs[row] = rhs[row] - factor * rhs[col];
-        }
+    std::vector<Scalar> solution;
+    if (!math::helpers::solve_dense_linear_system(std::move(matrix), std::move(rhs), &solution)) {
+        throw std::runtime_error("singular critical point system or unsolvable linear system");
     }
-    return rhs;
+    return solution;
 }
 
 // ============================================================================

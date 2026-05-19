@@ -9,7 +9,7 @@
 #ifndef CORE_STATE_PERSISTENCE_H
 #define CORE_STATE_PERSISTENCE_H
 
-#include "core_manager_interfaces.h"
+#include "core/services/core_manager_interfaces.h"
 #include "types/stored_value.h"
 #include "types/function.h"
 #include <string>

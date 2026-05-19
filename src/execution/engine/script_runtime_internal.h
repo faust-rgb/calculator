@@ -5,7 +5,7 @@
 #ifndef SCRIPT_RUNTIME_INTERNAL_H
 #define SCRIPT_RUNTIME_INTERNAL_H
 
-#include "script_runtime.h"
+#include "execution/engine/script_runtime.h"
 #include <string>
 #include <vector>
 

@@ -9,7 +9,7 @@
 #ifndef CORE_SERVICE_REGISTRY_H
 #define CORE_SERVICE_REGISTRY_H
 
-#include "service_interfaces.h"
+#include "core/services/service_interfaces.h"
 #include "core/api/calculator.h"
 #include "core/api/calculator_impl.h"
 #include <functional>

@@ -347,12 +347,10 @@ CommandASTNode CommandParser::parse_definition_or_assignment(Token id_tok, bool 
             }
         }
         restore_checkpoint(paren_checkpoint);
-        // 使用配置表或回调判断是否是命令
-        bool is_cmd = config_.could_be_command(id_tok.text) ||
-                      (is_command_ && is_command_(id_tok.text));
-        if (is_cmd) return parse_function_call(id_tok, single_statement, checkpoint);
-        restore_checkpoint(checkpoint);
-        return parse_expression(single_statement);
+        
+        // 尝试解析为函数调用（如果是顶层唯一语句）
+        // 不再强依赖 is_command 回调或配置表，让执行层决定是命令还是函数
+        return parse_function_call(id_tok, single_statement, checkpoint);
     }
     if (next.kind == TokenKind::kLBracket) return parse_index_assignment(id_tok, single_statement, checkpoint);
     if (next.kind == TokenKind::kEqual) {

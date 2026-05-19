@@ -3,7 +3,7 @@
  * @brief Implementation of floating-point utilities
  */
 
-#include "floating_point.h"
+#include "math/core/floating_point.h"
 #include <cmath>
 
 namespace mymath {

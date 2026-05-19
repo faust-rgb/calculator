@@ -194,10 +194,21 @@ public:
                                  const CoreServices& services) = 0;
 
     /**
-     * @brief 注册命令处理器
+     * @brief 注册 AST 命令处理器
      * @param name 命令名
      * @param handler 处理函数
      * @param help_text 帮助文本
+     */
+    virtual void register_ast_handler(const std::string& name,
+                                     std::function<bool(const CommandASTNode&,
+                                                        std::string*,
+                                                        bool,
+                                                        const CoreServices&)> handler,
+                                     const std::string& help_text = "") = 0;
+
+    /**
+     * @brief 注册命令处理器
+     * @deprecated 请优先使用 register_ast_handler
      */
     virtual void register_command_handler(const std::string& name,
                                           std::function<bool(const std::string&,
@@ -213,6 +224,23 @@ public:
      * @return 如果可能是命令返回 true
      */
     virtual bool could_be_command(std::string_view name) const = 0;
+
+    /**
+     * @brief 注册帮助主题
+     * @param topic 主题名
+     * @param help_text 帮助文本
+     */
+    virtual void register_help_topic(const std::string& topic, const std::string& help_text) = 0;
+
+    /**
+     * @brief 获取所有注册的帮助主题名
+     */
+    virtual std::vector<std::string> get_help_topics() const = 0;
+
+    /**
+     * @brief 获取特定主题的帮助
+     */
+    virtual std::string get_topic_help(const std::string& topic) const = 0;
 };
 
 class CalculatorModule;

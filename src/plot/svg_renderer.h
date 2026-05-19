@@ -14,9 +14,9 @@
 #ifndef SVG_RENDERER_H
 #define SVG_RENDERER_H
 
-#include "plot_renderer.h"
-#include "plot_styles.h"
-#include "matrix.h"
+#include "plot/plot_renderer.h"
+#include "plot/plot_styles.h"
+#include "matrix/matrix.h"
 #include <string>
 #include <vector>
 

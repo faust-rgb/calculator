@@ -7,15 +7,15 @@
 //
 // ============================================================================
 
-#include "symbolic_render_parser.h"
-#include "calculator_internal_types.h"
+#include "parser/grammars/symbolic_render_parser.h"
+#include "core/api/calculator_internal_types.h"
 #include "core/services/format_utils.h"
 #include "app/scalar_type.h"
 #include "execution/resolver/builtin_constants.h"
 #include "parser/infra/base_parser.h"
 #include "math/helpers/base_conversions.h"
-#include "mymath.h"
-#include "symbolic_expression.h"
+#include "math/mymath.h"
+#include "symbolic/core/symbolic_expression.h"
 #include <algorithm>
 #include <cctype>
 #include <sstream>

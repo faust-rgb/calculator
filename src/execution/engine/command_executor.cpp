@@ -5,7 +5,7 @@
 // command_executor.cpp - 命令 AST 执行实现
 // ============================================================================
 
-#include "script_runtime_internal.h"
+#include "execution/engine/script_runtime_internal.h"
 #include "core/services/calculator_service_factory.h"
 #include "core/services/format_utils.h"
 #include "core/api/executable_node.h"
@@ -18,14 +18,6 @@ namespace {
 StoredValue evaluate_ast_node(IExecutionContext* ctx,
                               const CommandASTNode& node,
                               bool exact_mode);
-
-// 辅助函数：从 AST 节点获取表达式文本（用于显示）
-std::string get_expression_text(const CommandASTNode& node) {
-    if (node.kind == CommandKind::kExpression && node.as_expression()) {
-        return std::string(node.as_expression()->text);
-    }
-    return "";
-}
 
 } // namespace
 
@@ -129,13 +121,46 @@ StoredValue evaluate_ast_node(IExecutionContext* ctx,
             args.push_back(evaluate_ast_node(ctx, *arg, exact_mode));
         }
 
+        const std::string name(call->name);
+
+        // 1. 尝试原生函数 (StoredValue -> StoredValue)
         auto native_funcs = ctx->functions().get_native_functions();
-        auto it = native_funcs->find(std::string(call->name));
-        if (it != native_funcs->end()) {
-            return it->second(args);
+        auto it_native = native_funcs->find(name);
+        if (it_native != native_funcs->end()) {
+            return it_native->second(args);
         }
 
-        return invoke_script_function(ctx, std::string(call->name), args);
+        // 2. 尝试标量函数 (Scalar -> Scalar)
+        auto scalar_funcs = ctx->functions().get_scalar_functions();
+        auto it_scalar = scalar_funcs->find(name);
+        if (it_scalar != scalar_funcs->end()) {
+            std::vector<Scalar> scalar_args;
+            for (const auto& arg : args) {
+                if (arg.is_matrix) throw std::runtime_error("scalar function " + name + " does not support matrix arguments");
+                scalar_args.push_back(arg.decimal);
+            }
+            StoredValue res;
+            res.decimal = it_scalar->second(scalar_args);
+            return res;
+        }
+
+        // 3. 尝试矩阵函数 (Matrix -> Matrix)
+        auto matrix_funcs = ctx->functions().get_matrix_functions();
+        auto it_matrix = matrix_funcs->find(name);
+        if (it_matrix != matrix_funcs->end()) {
+            std::vector<matrix::Matrix> matrix_args;
+            for (const auto& arg : args) {
+                if (arg.is_matrix) matrix_args.push_back(arg.matrix);
+                else matrix_args.push_back(matrix::Matrix(1, 1, arg.decimal));
+            }
+            StoredValue res;
+            res.is_matrix = true;
+            res.matrix = it_matrix->second(matrix_args);
+            return res;
+        }
+
+        // 4. 尝试脚本函数
+        return invoke_script_function(ctx, name, args);
     }
     if (node.kind == CommandKind::kStringLiteral) {
         StoredValue value;
@@ -169,27 +194,8 @@ StoredValue evaluate_command_ast_to_value(
         assign_visible_variable(ctx, std::string(assign->variable), val);
         return val;
     }
-    if (ast.kind == CommandKind::kFunctionCall) {
-        const auto* call = ast.as_function_call();
-        std::vector<StoredValue> args;
-        // 使用完整的 AST 子节点进行求值
-        for (const auto& arg : call->arguments) {
-            args.push_back(evaluate_ast_node(ctx, *arg, exact_mode));
-        }
-
-        auto native_funcs = ctx->functions().get_native_functions();
-        auto it = native_funcs->find(std::string(call->name));
-        if (it != native_funcs->end()) {
-            return it->second(args);
-        }
-
-        return invoke_script_function(ctx, std::string(call->name), args);
-    }
-    if (ast.kind == CommandKind::kStringLiteral) {
-        StoredValue value;
-        value.is_string = true;
-        value.string_value = *ast.as_string_literal();
-        return value;
+    if (ast.kind == CommandKind::kFunctionCall || ast.kind == CommandKind::kStringLiteral || ast.kind == CommandKind::kExpression) {
+        return evaluate_ast_node(ctx, ast, exact_mode);
     }
     std::string out = execute_command_ast(ctx, ast, exact_mode);
     StoredValue res; res.is_string = true; res.string_value = out;

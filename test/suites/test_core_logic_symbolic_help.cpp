@@ -8,7 +8,7 @@
  */
 
 #include "suites/test_core_logic.h"
-#include "calculator.h"
+#include "core/api/calculator.h"
 #include "test_helpers.h"
 #include <iostream>
 #include <vector>

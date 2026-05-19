@@ -19,9 +19,9 @@
  * @date 2024
  */
 
-#include "matrix.h"
+#include "matrix/matrix.h"
 #include "math/mymath.h"
-#include "matrix_internal.h"
+#include "matrix/matrix_internal.h"
 #include "statistics/statistics.h"
 #include "math/precise/precise_decimal.h"
 #include <stdexcept>

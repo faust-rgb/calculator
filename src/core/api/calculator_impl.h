@@ -116,7 +116,7 @@ struct Calculator::Impl : public IExecutionContext {
                                    bool create_scope) override;
     bool try_process_function_command(const std::string& expression, 
                                      std::string* output, 
-                                     bool exact_mode = false) override;
+                                     bool exact_mode = false) const override;
 
     std::vector<std::string> module_commands;
     std::vector<std::string> module_functions;
@@ -155,12 +155,6 @@ std::string decode_state_field(const std::string& text);
 
 // 值格式化
 void apply_calculator_display_precision(const Calculator::Impl* impl);
-
-// 线性方程组
-std::vector<Scalar> solve_dense_linear_system(
-    std::vector<std::vector<Scalar>> matrix,
-    std::vector<Scalar> rhs,
-    const std::string& context);
 
 // 模块注册
 void register_standard_modules(Calculator* calculator);

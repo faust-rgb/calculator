@@ -6,7 +6,7 @@
  * 包括因式分解、进制转换、位运算和数论函数等。
  */
 
-#include "integer_math_module.h"
+#include "math/modules/integer_math_module.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
 #include "math/helpers/integer_helpers.h"

@@ -2,7 +2,7 @@
 // service_registry.cpp - 动态服务注册表实现
 // ============================================================================
 
-#include "service_registry.h"
+#include "core/services/service_registry.h"
 
 void ServiceRegistry::register_builder(const std::string& module_name, ServiceBuilder builder) {
     builders_.emplace_back(module_name, std::move(builder));

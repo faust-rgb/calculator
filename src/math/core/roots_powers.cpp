@@ -3,9 +3,9 @@
  * @brief Implementation of power and root functions
  */
 
-#include "roots_powers.h"
-#include "basic_ops.h"
-#include "constants.h"
+#include "math/core/roots_powers.h"
+#include "math/core/basic_ops.h"
+#include "math/core/constants.h"
 #include "math/transcendental/transcendental.h"
 #include <stdexcept>
 

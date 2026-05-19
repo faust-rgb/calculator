@@ -11,7 +11,7 @@
 // 从 core/utils.cpp 移出，职责更清晰。
 // ============================================================================
 
-#include "builtin_constants.h"
+#include "execution/resolver/builtin_constants.h"
 #include "math/mymath.h"
 
 // ============================================================================

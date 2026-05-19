@@ -10,7 +10,7 @@
 // 基数为 10^9，每个 limb 占用约 30 位
 // ============================================================================
 
-#include "precise_decimal.h"
+#include "math/precise/precise_decimal.h"
 
 #include <algorithm>
 #include <cstdint>

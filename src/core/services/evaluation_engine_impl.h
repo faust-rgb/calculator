@@ -5,7 +5,7 @@
 #ifndef EVALUATION_ENGINE_IMPL_H
 #define EVALUATION_ENGINE_IMPL_H
 
-#include "core_manager_interfaces.h"
+#include "core/services/core_manager_interfaces.h"
 #include "core/api/calculator.h"
 #include "analysis/calculus/function_analysis.h"
 

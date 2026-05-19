@@ -5,7 +5,7 @@
 // 提供字符串处理、解析和格式化的通用函数。
 // ============================================================================
 
-#include "string_utils.h"
+#include "core/services/string_utils.h"
 #include <cctype>
 #include <stdexcept>
 #include <unordered_set>

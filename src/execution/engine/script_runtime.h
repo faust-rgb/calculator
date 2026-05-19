@@ -15,9 +15,9 @@
 #ifndef SCRIPT_RUNTIME_H
 #define SCRIPT_RUNTIME_H
 
-#include "script_signal.h"
-#include "script_ast.h"
-#include "script_context.h"
+#include "execution/engine/script_signal.h"
+#include "parser/ast/script_ast.h"
+#include "execution/engine/script_context.h"
 #include "parser/grammars/command_parser.h"
 #include <string>
 #include <vector>

@@ -12,12 +12,13 @@
  * @date 2024
  */
 
-#include "matrix_module.h"
+#include "matrix/matrix_module.h"
+#include "parser/grammars/command_parser.h"
 #include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
-#include "matrix.h"
-#include "matrix_internal.h"
-#include "mymath.h"
+#include "matrix/matrix.h"
+#include "matrix/matrix_internal.h"
+#include "math/mymath.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
 #include "core/common/calculator_exceptions.h"
@@ -163,22 +164,30 @@ std::vector<std::string> MatrixModule::get_commands() const {
 }
 
 
-std::string MatrixModule::execute_args(const std::string& command,
-                                       const std::vector<std::string>& args,
-                                       ServiceLocator& locator) {
-    // 命令已由路由层验证，无需再检查
-    auto engine = locator.resolve<IEvaluationEngine>();
+std::string MatrixModule::execute_command(const CommandASTNode& node,
+                                        ServiceLocator& locator) {
+    const std::string* cmd_ptr = nullptr;
+    const std::vector<std::unique_ptr<CommandASTNode>>* args_ptr = nullptr;
 
-    if (args.size() != 1) {
+    if (node.kind == CommandKind::kFunctionCall) {
+        auto* call = node.as_function_call();
+        static const std::string eig = "eig";
+        static const std::string svd = "svd";
+        static const std::string lu_p_name = "lu_p";
+        if (call->name == "eig") cmd_ptr = &eig;
+        else if (call->name == "svd") cmd_ptr = &svd;
+        else if (call->name == "lu_p") cmd_ptr = &lu_p_name;
+        args_ptr = &call->arguments;
+    }
+
+    if (!cmd_ptr || !args_ptr) return "";
+    const std::string& command = *cmd_ptr;
+
+    if (args_ptr->size() != 1) {
         throw std::runtime_error(command + " expects exactly one matrix argument");
     }
 
-    const std::string& arg = args[0];
-    if (!engine->is_matrix_argument(arg)) {
-        throw std::runtime_error(command + " expects a matrix argument");
-    }
-
-    const Matrix matrix_value = engine->parse_matrix_argument(arg, command);
+    const Matrix matrix_value = evaluate_matrix_arg(*(*args_ptr)[0], locator, command);
 
     if (command == "svd") {
         return "U: " + svd_u(matrix_value).to_string() +
@@ -200,6 +209,7 @@ std::string MatrixModule::execute_args(const std::string& command,
         return "values: " + values.to_string() +
                "\nvectors: " + eigenvectors(matrix_value).to_string();
     } catch (const std::exception&) {
+        // ... (保持原有的 2x2 特殊处理逻辑)
         if (matrix_value.rows == 2 && matrix_value.cols == 2) {
             const Scalar trace = matrix_value.at(0, 0) + matrix_value.at(1, 1);
             const Scalar det = determinant(matrix_value);
@@ -217,6 +227,18 @@ std::string MatrixModule::execute_args(const std::string& command,
         }
         throw;
     }
+}
+
+std::string MatrixModule::execute_args(const std::string& command,
+                                       const std::vector<std::string>& args,
+                                       ServiceLocator& locator) {
+    // 转发给新的接口以保持兼容性
+    std::vector<CommandASTNode> arg_nodes;
+    for (const auto& arg : args) {
+        arg_nodes.push_back(CommandASTNode::make_expression(arg));
+    }
+    CommandASTNode node = CommandASTNode::make_function_call(command, std::move(arg_nodes));
+    return execute_command(node, locator);
 }
 
 std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>

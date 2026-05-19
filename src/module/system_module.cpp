@@ -13,11 +13,11 @@
 // - Call 命令：print
 // ============================================================================
 
-#include "system_module.h"
+#include "module/system_module.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
-#include "string_utils.h"
-#include "format_utils.h"
+#include "core/services/string_utils.h"
+#include "core/services/format_utils.h"
 #include "math/precise/precise_decimal.h"
 
 #include <fstream>
@@ -33,7 +33,7 @@ std::vector<std::string> SystemModule::get_commands() const {
     return { ":vars", ":funcs", ":clear", ":clearfuncs", ":clearfunc",
              ":history", ":save", ":load", ":export", ":run",
              ":exact", ":symbolic", ":precision", ":scale", ":hexprefix", ":hexcase",
-             "print" };
+             ":help", "help", "print" };
 }
 
 std::string SystemModule::execute_args_view(std::string_view command,
@@ -43,6 +43,14 @@ std::string SystemModule::execute_args_view(std::string_view command,
     auto vars = locator.resolve<IVariableManager>();
     auto funcs = locator.resolve<IFunctionManager>();
     auto config = locator.resolve<IConfigManager>();
+
+    if (command == ":help" || command == "help") {
+        auto core_svc = locator.resolve<CoreServices>();
+        if (args.empty()) {
+            return core_svc->env.help_text();
+        }
+        return core_svc->env.help_topic(std::string(args[0]));
+    }
 
     if (command == ":vars") {
         auto all_vars = vars->get_all_globals();

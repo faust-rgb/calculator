@@ -123,32 +123,23 @@ std::string Calculator::help_text() const {
 }
 
 std::string Calculator::help_topic(const std::string& topic) const {
-    std::ostringstream out;
-    bool found = false;
-
-    // 从模块中收集对应主题的内容
-    const auto it = impl_->help_topic_to_modules.find(topic);
-    if (it != impl_->help_topic_to_modules.end()) {
-        for (const auto& module : it->second) {
-            std::string snippet = module->get_help_snippet(topic);
-            if (!snippet.empty()) {
-                if (found) out << "\n\n";
-                out << "[" << module->name() << "]\n" << snippet;
-                found = true;
-            }
-        }
+    // 首先从命令注册表中获取已注册的主题帮助
+    std::string help = impl_->commands_ptr->get_topic_help(topic);
+    
+    if (help.empty()) {
+        // 兜底基础帮助
+        help = build_fallback_help(topic);
     }
 
-    if (!found) {
-        std::string fallback = build_fallback_help(topic);
-        if (!fallback.empty()) return fallback;
+    if (help.empty()) {
         throw std::runtime_error("unknown help topic: " + topic);
     }
 
+    // 添加补充信息
     const std::string extra = supplemental_help(topic);
     if (!extra.empty()) {
-        out << "\n\n" << extra;
+        help += "\n\n" + extra;
     }
 
-    return out.str();
+    return help;
 }

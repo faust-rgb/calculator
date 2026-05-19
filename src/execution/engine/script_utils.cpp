@@ -2,14 +2,14 @@
 // script_utils.cpp - 脚本运行时辅助函数实现
 // ============================================================================
 
-#include "script_runtime_internal.h"
+#include "execution/engine/script_runtime_internal.h"
 #include "execution/resolver/variable_resolver.h"
 #include "parser/infra/parser_utils.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
 #include "core/services/core_manager_interfaces.h"
 #include "math/helpers/integer_helpers.h"
-#include "mymath.h"
+#include "math/mymath.h"
 #include <algorithm>
 #include <cctype>
 

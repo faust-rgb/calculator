@@ -19,9 +19,9 @@
 #ifndef CALCULATOR_POLYNOMIAL_H
 #define CALCULATOR_POLYNOMIAL_H
 
-#include "calculator_internal_types.h"
+#include "core/api/calculator_internal_types.h"
 
-#include "symbolic_expression.h"
+#include "symbolic/core/symbolic_expression.h"
 
 #include <string>
 #include <vector>

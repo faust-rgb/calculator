@@ -4,7 +4,7 @@
 // script_functions.cpp - 脚本函数调用实现
 // ============================================================================
 
-#include "script_runtime_internal.h"
+#include "execution/engine/script_runtime_internal.h"
 #include <stdexcept>
 
 Scalar invoke_script_function_decimal(

@@ -3,11 +3,11 @@
  * @brief 矩阵线性代数与分解实现 (泛型版)
  */
 
-#include "calculator_exceptions.h"
-#include "matrix_internal.h"
-#include "mymath.h"
-#include "polynomial.h"
-#include "precise_decimal.h"
+#include "core/common/calculator_exceptions.h"
+#include "matrix/matrix_internal.h"
+#include "math/mymath.h"
+#include "polynomial/polynomial.h"
+#include "math/precise/precise_decimal.h"
 #include "app/scalar_type.h"
 #include "analysis/base/precision_constants.h"
 

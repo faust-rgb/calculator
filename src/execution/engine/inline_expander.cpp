@@ -17,7 +17,7 @@
 // - 多项式运算：poly_add, poly_sub, poly_mul
 // ============================================================================
 
-#include "inline_expander.h"
+#include "execution/engine/inline_expander.h"
 
 #include <cctype>
 #include <stdexcept>

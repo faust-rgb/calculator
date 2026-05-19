@@ -24,8 +24,8 @@
 #include "statistics/probability.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
-#include "expression_utils.h"
-#include "string_utils.h"
+#include "core/services/expression_utils.h"
+#include "core/services/string_utils.h"
 #include <sstream>
 #include <iomanip>
 #include <map>

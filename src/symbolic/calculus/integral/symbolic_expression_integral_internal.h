@@ -31,15 +31,7 @@ void trim_coefficients(std::vector<Scalar>* coefficients);
  */
 bool polynomial_is_zero(const std::vector<Scalar>& coefficients);
 
-/**
- * @brief 求解稠密线性方程组
- *
- * 使用高斯消元法求解 n×n 线性方程组。
- * 用于部分分式分解中的系数求解。
- */
-bool solve_dense_linear_system(std::vector<std::vector<Scalar>> matrix,
-                               std::vector<Scalar> rhs,
-                               std::vector<Scalar>* solution);
+// solve_dense_linear_system is now in math::helpers namespace and math/helpers/linear_solver.h
 
 // ============================================================================
 // 常数规范化函数

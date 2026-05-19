@@ -8,10 +8,10 @@
  * 该模块将命令路由到具体的信号处理函数实现。
  */
 
-#include "dsp_module.h"
+#include "dsp/dsp_module.h"
 #include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
-#include "residue.h"
+#include "dsp/residue.h"
 #include "core/services/string_utils.h"
 #include <stdexcept>
 

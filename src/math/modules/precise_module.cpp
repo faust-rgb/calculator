@@ -2,7 +2,7 @@
 // 高精度计算模块实现
 // ============================================================================
 
-#include "precise_module.h"
+#include "math/modules/precise_module.h"
 #include "math/precise/precise_decimal.h"
 #include "math/precise/precise_parser.h"
 #include "core/common/calculator_exceptions.h"

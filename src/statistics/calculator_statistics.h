@@ -9,7 +9,7 @@
 #ifndef CALCULATOR_STATISTICS_H
 #define CALCULATOR_STATISTICS_H
 
-#include "calculator_internal_types.h"
+#include "core/api/calculator_internal_types.h"
 #include <vector>
 #include <string>
 #include "app/scalar_type.h"

@@ -18,7 +18,7 @@
 #ifndef SYSTEM_MODULE_H
 #define SYSTEM_MODULE_H
 
-#include "calculator_module.h"
+#include "module/calculator_module.h"
 
 #include <string>
 #include <vector>

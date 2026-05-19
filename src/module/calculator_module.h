@@ -147,17 +147,40 @@ public:
      * @param node 已解析的命令 AST 节点
      * @param locator 服务定位器
      * @return 执行结果
-     *
-     * 新设计：模块应重写此方法以直接处理 AST 节点。
-     * AST 节点中的参数已经是完全解析的子节点，无需二次解析。
      */
     virtual std::string execute_command(const CommandASTNode& node,
                                         ServiceLocator& locator);
 
+protected:
+    // ==================== AST 辅助工具函数 ====================
+
+    /**
+     * @brief 评估 AST 参数为 StoredValue
+     */
+    StoredValue evaluate_arg(const CommandASTNode& arg_node, 
+                             ServiceLocator& locator, 
+                             bool exact_mode = false);
+
+    /**
+     * @brief 评估 AST 参数并要求其为矩阵
+     */
+    matrix::Matrix evaluate_matrix_arg(const CommandASTNode& arg_node,
+                                      ServiceLocator& locator,
+                                      const std::string& error_context = "");
+
+    /**
+     * @brief 评估 AST 参数并要求其为标量
+     */
+    Scalar evaluate_scalar_arg(const CommandASTNode& arg_node,
+                               ServiceLocator& locator,
+                               const std::string& error_context = "");
+
+public:
     /**
      * @brief 使用字符串参数执行命令（向后兼容接口）
      * @deprecated 建议重写 execute_command 以直接处理 AST 节点
      */
+    [[deprecated("Use execute_command instead")]]
     virtual std::string execute_args(const std::string& command,
                                     const std::vector<std::string>& args,
                                     ServiceLocator& locator);
@@ -166,6 +189,7 @@ public:
      * @brief 使用字符串视图参数执行命令（向后兼容接口）
      * @deprecated 建议重写 execute_command 以直接处理 AST 节点
      */
+    [[deprecated("Use execute_command instead")]]
     virtual std::string execute_args_view(std::string_view command,
                                           const std::vector<std::string_view>& args,
                                           ServiceLocator& locator);

@@ -2,6 +2,6 @@
 // IO Module Tests
 // ============================================================================
 
-#include "test_io.h"
+#include "suites/test_io.h"
 
 void run_io_tests(int& passed, int& failed);

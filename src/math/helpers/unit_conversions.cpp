@@ -7,8 +7,8 @@
  * - 摄氏度与华氏度之间的转换
  */
 
-#include "unit_conversions.h"
-#include "mymath.h"
+#include "math/helpers/unit_conversions.h"
+#include "math/mymath.h"
 #include "app/scalar_type.h"
 
 namespace mymath {

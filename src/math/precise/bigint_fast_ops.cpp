@@ -9,7 +9,7 @@
 // - 符号与绝对值分离
 // ============================================================================
 
-#include "precise_decimal.h"
+#include "math/precise/precise_decimal.h"
 
 #include <algorithm>
 #include <cstdint>

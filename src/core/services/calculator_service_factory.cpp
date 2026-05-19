@@ -28,7 +28,7 @@
 #include "statistics/statistics.h"
 #include "statistics/probability.h"
 #include "execution/engine/inline_expander.h"
-#include "mymath.h"
+#include "math/mymath.h"
 #include <sstream>
 
 namespace core {
@@ -184,6 +184,10 @@ CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl)
     s.env.set_precision = [impl](int p) { return impl->parent->set_display_precision(p); };
     s.env.set_hex_prefix = [impl](bool m) { return impl->parent->set_hex_prefix_mode(m); };
     s.env.set_hex_uppercase = [impl](bool m) { return impl->parent->set_hex_uppercase_mode(m); };
+
+    // Help Services
+    s.env.help_text = [impl]() { return impl->parent->help_text(); };
+    s.env.help_topic = [impl](const std::string& t) { return impl->parent->help_topic(t); };
 
     // Global Helpers
     s.parse_symbolic_vars = [](const std::vector<std::string>& args, std::size_t start, const std::vector<std::string>& fallback) {

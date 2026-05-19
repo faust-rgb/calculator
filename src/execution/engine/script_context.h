@@ -86,11 +86,11 @@ public:
                                            bool create_scope) = 0;
 
     /**
-     * @brief 尝试处理函数形式的命令（如 diff(x^2, x)）
+     * @brief 尝试处理函数式命令（如 limit, derivative, plot）
      */
     virtual bool try_process_function_command(const std::string& expression, 
                                              std::string* output, 
-                                             bool exact_mode = false) = 0;
+                                             bool exact_mode = false) const = 0;
 };
 
 #endif // SCRIPT_CONTEXT_H

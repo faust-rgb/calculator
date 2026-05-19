@@ -9,7 +9,7 @@
 #ifndef TEST_HELPERS_H
 #define TEST_HELPERS_H
 
-#include "mymath.h"
+#include "math/mymath.h"
 #include <string>
 #include <vector>
 #include <iostream>

@@ -97,7 +97,7 @@ Calculator::Calculator() : impl_(new Impl()) {
     impl_->functions_ptr = std::make_shared<FunctionManager>();
     impl_->config_ptr = std::make_shared<ConfigManager>();
     impl_->commands_ptr = std::make_shared<CommandRegistry>();
-    impl_->modules = std::make_shared<ModuleManager>();
+    impl_->modules = std::make_shared<ModuleManager>(impl_->locator);
 
     // 创建状态持久化服务
     auto persistence = std::make_shared<StatePersistenceService>(impl_->variables_ptr, impl_->functions_ptr);
@@ -112,6 +112,11 @@ Calculator::Calculator() : impl_(new Impl()) {
     impl_->locator.register_service<ICommandRegistry>(impl_->commands_ptr);
     impl_->locator.register_service<IModuleManager>(impl_->modules);
     impl_->locator.register_service<IStatePersistence>(impl_->persistence);
+    
+    // 注册执行上下文
+    // 注意：使用 shared_ptr 包装，由于 impl_ 生命周期由 parent 管理，这里我们手动创建一个不带删除器的 shared_ptr
+    auto ctx_ptr = std::shared_ptr<IExecutionContext>(impl_.get(), [](IExecutionContext*){});
+    impl_->locator.register_service<IExecutionContext>(ctx_ptr);
 
 
     // 2. 注册逻辑引擎服务
@@ -122,6 +127,8 @@ Calculator::Calculator() : impl_(new Impl()) {
 
     // 3. 初始化核心逻辑服务（暂时保持旧的 CoreServices 结构用于过渡）
     impl_->core_services = std::make_unique<CoreServices>(core::build_core_services(this, impl_.get()));
+    auto core_svc_ptr = std::shared_ptr<CoreServices>(impl_->core_services.get(), [](CoreServices*){});
+    impl_->locator.register_service<CoreServices>(core_svc_ptr);
 
     register_standard_modules(this);
     broadcast_settings(this, impl_.get());
@@ -136,36 +143,9 @@ Calculator::~Calculator() = default;
 void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
     if (!module) return;
 
-    // 获取底层管理器用于直接访问
-    auto* cmd_registry = static_cast<CommandRegistry*>(impl_->commands_ptr.get());
-    auto* mod_mgr = static_cast<ModuleManager*>(impl_->modules.get());
-
-    // 合并函数映射
-    auto new_scalar_funcs = module->get_scalar_functions();
-    for (auto& [name, func] : new_scalar_funcs) {
-        impl_->functions_ptr->add_scalar_function(name, std::move(func));
-    }
-
-    auto new_matrix_funcs = module->get_matrix_functions();
-    for (auto& [name, func] : new_matrix_funcs) {
-        impl_->functions_ptr->add_matrix_function(name, std::move(func));
-    }
-
-    auto new_value_funcs = module->get_value_functions();
-    for (auto& [name, func] : new_value_funcs) {
-        impl_->functions_ptr->add_value_function(name, std::move(func));
-    }
-
-    auto new_native_funcs = module->get_native_functions();
-    for (auto& [name, func] : new_native_funcs) {
-        impl_->functions_ptr->add_native_function(name, std::move(func));
-        impl_->help_topic_to_modules[name].push_back(module);
-    }
-
-    // 隐式求值路由优化：构建触发字符到模块的映射
+    // 隐式求值路由优化
     if (module->wants_implicit_evaluation()) {
         impl_->implicit_evaluation_modules.push_back(module);
-        // 构建触发字符映射
         const auto* trigger_table = module->get_cached_trigger_table();
         if (trigger_table) {
             for (int c = 0; c < 256; ++c) {
@@ -176,57 +156,16 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
         }
     }
 
-    // 收集元数据并注册命令到 CommandRegistry
+    // 委托给 ModuleManager 处理核心注册逻辑
+    impl_->modules->register_module(module);
+
+    // 记录命令和函数名用于补全
     auto specs = module->get_command_specs();
     for (const auto& spec : specs) {
-        std::string cmd_name = command_key_display(spec.key);
-
-        // 检查重复注册
-        if (cmd_registry->has_command(cmd_name)) {
-            throw std::runtime_error("duplicate command registration: " + cmd_name);
-        }
-
-        impl_->module_commands.push_back(cmd_name);
-
-        // 注册到 CommandRegistry
-        // 使用 weak_ptr 避免循环引用
-        std::weak_ptr<CalculatorModule> weak_module = module;
-        std::string dispatch_name = spec.dispatch_name;
-        CommandKey key = spec.key;
-
-        cmd_registry->register_command(
-            cmd_name,
-            [weak_module, dispatch_name, key, this](
-                const CommandASTNode& node,
-                std::string* output,
-                bool exact_mode,
-                const CoreServices& /*services*/) -> bool {
-                (void)exact_mode;
-                auto mod = weak_module.lock();
-                if (!mod) return false;
-
-                // 使用模块的新接口处理命令
-                *output = mod->execute_command(node, impl_->locator);
-                return true;
-            },
-            module->get_help_snippet("commands")
-        );
+        impl_->module_commands.push_back(command_key_display(spec.key));
     }
     auto funcs = module->get_functions();
     impl_->module_functions.insert(impl_->module_functions.end(), funcs.begin(), funcs.end());
-
-    // 建立帮助索引
-    static const std::vector<std::string> topics = {
-        "commands", "functions", "matrix", "symbolic", "analysis", "planning",
-        "examples", "exact", "variables", "persistence", "programmer"
-    };
-    for (const auto& topic : topics) {
-        if (!module->get_help_snippet(topic).empty()) {
-            impl_->help_topic_to_modules[topic].push_back(module);
-        }
-    }
-
-    mod_mgr->register_module(module);
 }
 
 bool is_reserved_user_function_name(IExecutionContext* ctx, std::string_view name) {
@@ -333,7 +272,7 @@ Scalar Calculator::normalize_result(Scalar value) {
 // ============================================================================
 
 bool Calculator::try_process_function_command(const std::string& expression,
-                                              std::string* output, bool exact_mode) {
+                                              std::string* output, bool exact_mode) const {
     auto is_command = [this](std::string_view name) {
         return impl_->commands_ptr->has_command(std::string(name)) ||
                impl_->commands_ptr->has_command(":" + std::string(name));
@@ -569,138 +508,45 @@ std::string Calculator::list_variables() const {
 }
 
 std::string Calculator::factor_expression(const std::string& expression) const {
-    // 完全委托给 IntegerMathModule 处理
-    if (!impl_->commands_ptr->has_command("factor")) {
-        throw std::runtime_error("factor command not available - IntegerMathModule not loaded");
-    }
-
-    auto is_command = [this](std::string_view name) {
-        return impl_->commands_ptr->has_command(std::string(name));
-    };
-    CommandASTNode ast = parse_command(expression, is_command);
-    const auto* call = ast.as_function_call();
-    if (!call || call->name != "factor") {
-        throw std::runtime_error("expected factor(expression)");
-    }
-
-    std::vector<std::string_view> args;
-    for (const auto& arg : call->arguments) {
-        if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
-            args.push_back(arg->as_expression()->text);
-        }
-    }
     std::string output;
-    const CoreServices& svc = get_core_services();
-    if (!impl_->commands_ptr->try_process("factor", args, &output, false, svc)) {
-        throw std::runtime_error("factor command failed");
+    if (try_process_function_command(expression, &output, false)) {
+        return output;
     }
-    return output;
+    throw std::runtime_error("factor command failed or not available");
 }
 
 std::string Calculator::plot_expression(const std::string& expression) const {
-    // 委托给 PlotModule 处理
     std::string output;
-    if (impl_->commands_ptr->has_command("plot")) {
-        auto is_command = [this](std::string_view name) {
-            return impl_->commands_ptr->has_command(std::string(name));
-        };
-        CommandASTNode ast = parse_command(expression, is_command);
-        const auto* call = ast.as_function_call();
-        if (call && call->name == "plot") {
-            std::vector<std::string_view> args;
-            for (const auto& arg : call->arguments) {
-                if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
-                    args.push_back(arg->as_expression()->text);
-                }
-            }
-            const CoreServices& svc = get_core_services();
-            if (impl_->commands_ptr->try_process("plot", args, &output, false, svc)) {
-                return output;
-            }
-        }
+    if (try_process_function_command(expression, &output, false)) {
+        return output;
     }
-    // 回退到旧实现
-    auto is_command = [this](std::string_view name) {
-        return impl_->commands_ptr->has_command(std::string(name));
-    };
-    CommandASTNode ast = parse_command(expression, is_command);
-    const auto* call = ast.as_function_call();
-    if (!call || call->name != "plot") {
-        throw std::runtime_error("expected plot(...)");
-    }
-
-    std::vector<std::string> arguments;
-    for (const auto& arg : call->arguments) {
-        if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
-            arguments.emplace_back(arg->as_expression()->text);
-        }
-    }
-
-    plot::PlotContext ctx;
-    ctx.variables = impl_->variables_ptr->create_resolver();
-    ctx.functions = impl_->functions_ptr->get_custom_functions_map();
-    ctx.scalar_functions = impl_->functions_ptr->get_scalar_functions();
-    ctx.has_script_function = [this](const std::string& name) {
-        return has_visible_script_function(impl_.get(), name);
-    };
-    ctx.invoke_script_function = [this](const std::string& name, const std::vector<Scalar>& args) {
-        return invoke_script_function_decimal(impl_.get(), name, args);
-    };
-
-    return plot::handle_plot_command(ctx, arguments);
+    throw std::runtime_error("plot command failed or not available");
 }
 
 std::string Calculator::export_variable(const std::string& line) const {
-    plot::PlotContext ctx;
-    ctx.variables = impl_->variables_ptr->create_resolver();
-    ctx.functions = impl_->functions_ptr->get_custom_functions_map();
-    ctx.scalar_functions = impl_->functions_ptr->get_scalar_functions();
-    ctx.has_script_function = [this](const std::string& name) {
-        return has_visible_script_function(impl_.get(), name);
-    };
-    ctx.invoke_script_function = [this](const std::string& name, const std::vector<Scalar>& args) {
-        return invoke_script_function_decimal(impl_.get(), name, args);
-    };
-    return plot::handle_export_command(ctx, line);
+    std::string output;
+    if (try_process_function_command(line, &output, false)) {
+        return output;
+    }
+    throw std::runtime_error("export command failed or not available");
 }
 
 std::string Calculator::base_conversion_expression(const std::string& expression) const {
-    // 委托给 IntegerMathModule 处理
-    auto is_command = [this](std::string_view name) {
-        return impl_->commands_ptr->has_command(std::string(name));
-    };
-    CommandASTNode ast = parse_command(expression, is_command);
-    const auto* call = ast.as_function_call();
-    if (!call) {
-        throw std::runtime_error("expected bin(...), oct(...), hex(...), or base(value, base)");
+    std::string output;
+    if (try_process_function_command(expression, &output, false)) {
+        return output;
     }
 
-    // 尝试通过模块系统处理
-    const std::string cmd_name(call->name);
-    if (impl_->commands_ptr->has_command(cmd_name)) {
-        std::vector<std::string_view> args;
-        for (const auto& arg : call->arguments) {
-            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
-                args.push_back(arg->as_expression()->text);
-            }
-        }
-        std::string output;
-        const CoreServices& svc = get_core_services();
-        if (impl_->commands_ptr->try_process(cmd_name, args, &output, false, svc)) {
-            return output;
-        }
-    }
-
-    // 回退到旧实现
+    // 回退到旧实现（处理非函数形式的进制转换）
     std::string converted;
-    if (!try_base_conversion_expression(expression,
+    if (try_base_conversion_expression(expression,
                                         impl_->variables_ptr->create_resolver(),
                                         impl_->functions_ptr->get_custom_functions_map(),
                                         {impl_->config_ptr->is_hex_prefix_mode(), impl_->config_ptr->is_hex_uppercase_mode()},
                                         &converted)) {
-        throw std::runtime_error("expected bin(...), oct(...), hex(...), or base(value, base)");
+        return converted;
     }
-    return converted;
+    throw std::runtime_error("base conversion failed or not available");
 }
 
 // ============================================================================
@@ -746,6 +592,6 @@ std::string Calculator::Impl::execute_script_file(const std::string& path,
 
 bool Calculator::Impl::try_process_function_command(const std::string& expression, 
                                                  std::string* output, 
-                                                 bool exact_mode) {
+                                                 bool exact_mode) const {
     return parent->try_process_function_command(expression, output, exact_mode);
 }

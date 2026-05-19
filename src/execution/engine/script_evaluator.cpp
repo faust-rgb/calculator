@@ -5,7 +5,7 @@
 // script_evaluator.cpp - 脚本值求值与表达式处理实现
 // ============================================================================
 
-#include "script_runtime_internal.h"
+#include "execution/engine/script_runtime_internal.h"
 #include "execution/resolver/variable_resolver.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "parser/grammars/symbolic_render_parser.h"
@@ -13,7 +13,7 @@
 #include "core/services/format_utils.h"
 #include "execution/engine/inline_expander.h"
 #include "math/helpers/integer_helpers.h"
-#include "mymath.h"
+#include "math/mymath.h"
 #include <map>
 #include <stdexcept>
 

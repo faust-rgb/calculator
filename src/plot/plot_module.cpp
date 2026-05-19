@@ -5,11 +5,11 @@
  * 本文件实现了 PlotModule 类的成员函数，用于注册和处理绘图命令。
  */
 
-#include "plot_module.h"
+#include "plot/plot_module.h"
 #include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_registry.h"
-#include "calculator_plot.h"
+#include "plot/calculator_plot.h"
 #include "execution/engine/script_runtime.h"
 
 #include <stdexcept>

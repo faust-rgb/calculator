@@ -9,7 +9,7 @@
 // - 原始指针算术优化
 // ============================================================================
 
-#include "precise_decimal.h"
+#include "math/precise/precise_decimal.h"
 #include "app/default_precision.h"
 #include "math/mymath.h"
 

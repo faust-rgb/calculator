@@ -2,8 +2,8 @@
 // main.cpp - 计算器应用程序入口
 // ============================================================================
 
-#include "calculator.h"
-#include "repl_application.h"
+#include "core/api/calculator.h"
+#include "app/repl_application.h"
 #include <iostream>
 #include <string>
 #include <vector>

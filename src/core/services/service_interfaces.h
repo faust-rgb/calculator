@@ -99,6 +99,10 @@ struct IEnvironmentService {
     std::function<std::string(int)> set_precision;        ///< 设置显示精度
     std::function<std::string(bool)> set_hex_prefix;      ///< 设置十六进制前缀模式
     std::function<std::string(bool)> set_hex_uppercase;   ///< 设置十六进制大小写模式
+
+    // 帮助系统
+    std::function<std::string()> help_text;                       ///< 获取主帮助文本
+    std::function<std::string(const std::string&)> help_topic;    ///< 获取特定主题的帮助
 };
 
 /**

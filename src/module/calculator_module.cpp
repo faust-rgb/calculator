@@ -10,8 +10,12 @@
 // 这些实现为所有派生模块提供通用的基础设施。
 // ============================================================================
 
-#include "calculator_module.h"
+#include "module/calculator_module.h"
 #include "parser/grammars/command_parser.h"
+#include "core/services/service_locator.h"
+#include "core/services/core_manager_interfaces.h"
+
+#include "execution/engine/script_runtime.h"
 
 /**
  * @brief 获取命令规范列表
@@ -32,8 +36,37 @@ std::vector<CommandSpec> CalculatorModule::get_command_specs() const {
     return specs;
 }
 
+StoredValue CalculatorModule::evaluate_arg(const CommandASTNode& arg_node, 
+                                          ServiceLocator& locator, 
+                                          bool exact_mode) {
+    auto ctx = locator.resolve<IExecutionContext>();
+    if (!ctx) throw std::runtime_error("Invalid execution context");
+
+    return evaluate_command_ast_to_value(ctx.get(), arg_node, exact_mode);
+}
+matrix::Matrix CalculatorModule::evaluate_matrix_arg(const CommandASTNode& arg_node,
+                                                   ServiceLocator& locator,
+                                                   const std::string& error_context) {
+    StoredValue val = evaluate_arg(arg_node, locator);
+    if (!val.is_matrix) {
+        throw std::runtime_error((error_context.empty() ? "Argument" : error_context) + " must be a matrix");
+    }
+    return val.matrix;
+}
+
+Scalar CalculatorModule::evaluate_scalar_arg(const CommandASTNode& arg_node,
+                                            ServiceLocator& locator,
+                                            const std::string& error_context) {
+    StoredValue val = evaluate_arg(arg_node, locator);
+    if (val.is_matrix || val.is_string) {
+        throw std::runtime_error((error_context.empty() ? "Argument" : error_context) + " must be a scalar");
+    }
+    return val.decimal;
+}
+
 /**
  * @brief 统一的命令执行接口（默认实现）
+
  *
  * 优化：使用 string_view 避免不必要的字符串分配，
  * 仅在需要时才转换为 string。

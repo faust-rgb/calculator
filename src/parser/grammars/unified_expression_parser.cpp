@@ -10,13 +10,13 @@
 //
 // ============================================================================
 
-#include "unified_expression_parser.h"
-#include "unified_parser_factory.h"
+#include "parser/grammars/unified_expression_parser.h"
+#include "parser/grammars/unified_parser_factory.h"
 #include "parser/grammars/command_parser.h"
 #include "parser/grammars/exact_evaluator.h"
 #include "parser/ast/expression_ast.h"
 #include "parser/ast/expression_compiler.h"
-#include "calculator_exceptions.h"
+#include "core/common/calculator_exceptions.h"
 #include "execution/resolver/variable_resolver.h"
 #include "types/function.h"
 #include "math/precise/rational.h"
@@ -24,7 +24,7 @@
 #include "app/scalar_type.h"
 #include "math/helpers/integer_helpers.h"
 #include "math/helpers/base_conversions.h"
-#include "mymath.h"
+#include "math/mymath.h"
 
 #include <cctype>
 

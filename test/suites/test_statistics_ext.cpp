@@ -1,4 +1,4 @@
-#include "test_statistics_ext.h"
+#include "suites/test_statistics_ext.h"
 #include "test_helpers.h"
 #include "statistics/probability.h"
 #include "statistics/statistics.h"

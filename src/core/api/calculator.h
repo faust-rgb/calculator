@@ -166,7 +166,7 @@ public:
      * 支持的命令：limit, derivative, integral, extrema 等
      * 也处理普通数学表达式求值和变量赋值
      */
-    bool try_process_function_command(const std::string& expression, std::string* output, bool exact_mode = false);
+    bool try_process_function_command(const std::string& expression, std::string* output, bool exact_mode = false) const;
 
     /**
      * @brief 尝试使用注册模块进行隐式求值（如大数识别）

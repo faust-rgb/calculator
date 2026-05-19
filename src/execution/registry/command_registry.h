@@ -95,6 +95,7 @@ public:
     bool has_command(const std::string& name) const override;
     bool is_inlineable(const std::string& name) const override;
     std::vector<std::string> get_all_commands() const override { return get_commands(); }
+    std::vector<std::string> get_commands() const;
     std::string get_help(const std::string& name) const override;
 
     bool try_process(const std::string& cmd_name,
@@ -115,6 +116,10 @@ public:
                          std::string* output,
                          bool exact_mode,
                          const CoreServices& services);
+
+    void register_ast_handler(const std::string& name,
+                              CommandHandler handler,
+                              const std::string& help_text = "") override;
 
     void register_command_handler(const std::string& name,
                                   std::function<bool(const std::string&,
@@ -179,29 +184,12 @@ public:
      */
     void unregister_command(const std::string& name);
 
-    // ========================================================================
-    // 命令处理接口
-    // ========================================================================
-
     /**
-     * @brief 快速检查标识符是否可能是命令（用于解析器预检测）
+     * @brief 检查标识符是否可能是命令（用于解析器快速路径）
      * @param name 标识符名
      * @return 如果可能是命令返回 true
-     *
-     * 此方法用于解析器的 Fast Path，在尝试解析 id(...) 之前快速判断。
-     * 如果返回 false，解析器可以直接走表达式路径，避免不必要的回溯。
      */
-    bool could_be_command(std::string_view name) const;
-
-    // ========================================================================
-    // 命令信息查询接口
-    // ========================================================================
-
-    /**
-     * @brief 获取所有命令名
-     * @return 命令名列表（已排序）
-     */
-    std::vector<std::string> get_commands() const;
+    bool could_be_command(std::string_view name) const override;
 
     /**
      * @brief 获取所有命令的简短帮助
@@ -210,29 +198,33 @@ public:
     std::map<std::string, std::string> get_command_helps() const;
 
     /**
-     * @brief 获取命令数量
-     * @return 已注册命令的总数
-     */
-    std::size_t size() const { return commands_.size() + prefix_commands_.size(); }
-
-    /**
      * @brief 清空所有命令
      */
     void clear();
-
-    // ========================================================================
-    // 命令名提取接口
-    // ========================================================================
 
     /**
      * @brief 从输入中提取命令名
      * @param input 输入字符串
      * @return 命令名
-     *
-     * 提取第一个标识符作为命令名。
-     * 例如，"plot(sin(x), 0, 2*pi)" 返回 "plot"。
      */
     static std::string extract_command_name(const std::string& input);
+
+    /**
+     * @brief 注册帮助主题
+     * @param topic 主题名
+     * @param help_text 帮助文本
+     */
+    void register_help_topic(const std::string& topic, const std::string& help_text) override;
+
+    /**
+     * @brief 获取所有注册的帮助主题名
+     */
+    std::vector<std::string> get_help_topics() const override;
+
+    /**
+     * @brief 获取特定主题的帮助
+     */
+    std::string get_topic_help(const std::string& topic) const override;
 
 private:
     /**
@@ -245,6 +237,7 @@ private:
     std::map<std::string, CommandInfo> commands_;        ///< 精确匹配命令映射
     std::vector<CommandInfo> prefix_commands_;           ///< 前缀命令列表
     std::unordered_map<std::string, std::string> aliases_; ///< 别名到命令名的映射（快速查找）
+    std::map<std::string, std::string> help_topics_;     ///< 帮助主题映射
 };
 
 #endif // CORE_COMMAND_REGISTRY_H

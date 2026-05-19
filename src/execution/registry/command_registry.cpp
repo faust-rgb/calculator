@@ -9,8 +9,8 @@
 //   - 提供命令名提取功能
 // ============================================================================
 
-#include "command_registry.h"
-#include "calculator_module.h"
+#include "execution/registry/command_registry.h"
+#include "module/calculator_module.h"
 #include "parser/grammars/command_parser.h"
 #include <cctype>
 #include <algorithm>
@@ -33,6 +33,12 @@ void CommandRegistry::register_command(const std::string& name,
     info.is_inlineable = is_inlineable;
 
     commands_[name] = std::move(info);
+}
+
+void CommandRegistry::register_ast_handler(const std::string& name,
+                                           CommandHandler handler,
+                                           const std::string& help_text) {
+    register_command(name, std::move(handler), help_text);
 }
 
 void CommandRegistry::register_command_handler(const std::string& name,
@@ -68,7 +74,7 @@ void CommandRegistry::register_command_handler(const std::string& name,
 
         return handler(cmd_name, args, output, exact_mode, services);
     };
-    register_command(name, std::move(ast_handler), help_text);
+    register_ast_handler(name, std::move(ast_handler), help_text);
 }
 
 void CommandRegistry::register_prefix_command(const std::string& prefix,
@@ -239,6 +245,29 @@ std::string CommandRegistry::extract_command_name(const std::string& input) {
     while (end < input.size() && (std::isalnum(static_cast<unsigned char>(input[end])) || input[end] == '_')) ++end;
     if (start == end) return "";
     return meta_command ? ":" + input.substr(start, end - start) : input.substr(start, end - start);
+}
+
+void CommandRegistry::register_help_topic(const std::string& topic, const std::string& help_text) {
+    if (!help_text.empty()) {
+        if (help_topics_.count(topic)) {
+            help_topics_[topic] += "\n\n" + help_text;
+        } else {
+            help_topics_[topic] = help_text;
+        }
+    }
+}
+
+std::vector<std::string> CommandRegistry::get_help_topics() const {
+    std::vector<std::string> result;
+    for (const auto& [topic, _] : help_topics_) {
+        result.push_back(topic);
+    }
+    return result;
+}
+
+std::string CommandRegistry::get_topic_help(const std::string& topic) const {
+    auto it = help_topics_.find(topic);
+    return it != help_topics_.end() ? it->second : "";
 }
 
 const CommandInfo* CommandRegistry::find_command(const std::string& name) const {

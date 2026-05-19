@@ -29,7 +29,7 @@
 #include "parser/lexer/token_types.h"
 #include "math/precise/rational.h"
 #include "types/stored_value.h"
-#include "matrix.h"
+#include "matrix/matrix.h"
 #include "core/services/format_utils.h"
 #include <string>
 #include <map>

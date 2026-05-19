@@ -12,7 +12,7 @@
 // - 开方：减少 2-3 次迭代
 // ============================================================================
 
-#include "precise_decimal.h"
+#include "math/precise/precise_decimal.h"
 #include "core/common/calculator_exceptions.h"
 #include "math/mymath.h"
 

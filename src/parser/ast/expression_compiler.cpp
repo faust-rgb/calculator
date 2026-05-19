@@ -6,6 +6,6 @@
 // 本文件保留为空，仅用于兼容旧的构建系统
 // ============================================================================
 
-#include "expression_compiler.h"
+#include "parser/ast/expression_compiler.h"
 
 // 所有实现已移至 expression_ast.cpp

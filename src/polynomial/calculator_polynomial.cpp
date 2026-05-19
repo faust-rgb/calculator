@@ -14,13 +14,13 @@
  * 3. 嵌套的多项式操作（如 "poly_add(poly_mul(p, q), r)"）
  */
 
-#include "calculator_polynomial.h"
+#include "polynomial/calculator_polynomial.h"
 
 #include "app/scalar_type.h"
 #include "parser/grammars/unified_expression_parser.h"
-#include "matrix_internal.h"
-#include "polynomial.h"
-#include "mymath.h"
+#include "matrix/matrix_internal.h"
+#include "polynomial/polynomial.h"
+#include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include "parser/grammars/command_parser.h"
 #include "core/services/string_utils.h"

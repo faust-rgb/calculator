@@ -5,10 +5,10 @@
 // script_executor.cpp - 脚本语句与块执行实现
 // ============================================================================
 
-#include "script_runtime_internal.h"
+#include "execution/engine/script_runtime_internal.h"
 #include "core/services/string_utils.h"
 #include "math/helpers/integer_helpers.h"
-#include "mymath.h"
+#include "math/mymath.h"
 #include <sstream>
 #include <stdexcept>
 

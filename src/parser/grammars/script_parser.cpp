@@ -3,12 +3,12 @@
  * @brief 脚本语言解析器实现
  */
 
-#include "script_parser.h"
+#include "parser/grammars/script_parser.h"
 #include "parser/infra/base_parser.h"
 #include "parser/ast/expression_compiler.h"
 #include "parser/lexer/lazy_token_stream.h"
 #include "parser/infra/parser_utils.h"
-#include "string_utils.h"
+#include "core/services/string_utils.h"
 
 #include <cctype>
 #include <stdexcept>

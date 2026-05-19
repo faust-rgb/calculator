@@ -5,13 +5,16 @@
 #ifndef CORE_MANAGERS_H
 #define CORE_MANAGERS_H
 
-#include "core_manager_interfaces.h"
+#include "core/services/core_manager_interfaces.h"
 #include "core/environment/scope.h"
+#include "core/services/service_locator.h"
 #include "app/default_precision.h"
 #include <map>
 #include <string>
 #include <vector>
 #include <memory>
+
+class ServiceLocator;
 
 /**
  * @class VariableManager
@@ -123,10 +126,13 @@ private:
  */
 class ModuleManager : public IModuleManager {
 public:
+    ModuleManager(ServiceLocator& locator) : locator_(locator) {}
+
     void register_module(std::shared_ptr<CalculatorModule> module) override;
     std::vector<std::shared_ptr<CalculatorModule>> get_all_modules() const override;
 
 private:
+    ServiceLocator& locator_;
     std::vector<std::shared_ptr<CalculatorModule>> modules_;
 };
 

@@ -12,8 +12,8 @@
 // 使用三个 32 位素数进行 NTT，然后通过 CRT 合并
 // ============================================================================
 
-#include "precise_decimal.h"
-#include "thread_pool.h"
+#include "math/precise/precise_decimal.h"
+#include "math/precise/thread_pool.h"
 
 #include <algorithm>
 #include <atomic>

@@ -3,8 +3,8 @@
  * @brief Implementation of basic mathematical operations
  */
 
-#include "basic_ops.h"
-#include "constants.h"
+#include "math/core/basic_ops.h"
+#include "math/core/constants.h"
 #include <stdexcept>
 
 namespace mymath {

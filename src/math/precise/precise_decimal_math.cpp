@@ -10,8 +10,8 @@
 // - 常量：pi, e, ln2
 // ============================================================================
 
-#include "precise_decimal.h"
-#include "rational.h"
+#include "math/precise/precise_decimal.h"
+#include "math/precise/rational.h"
 #include "types/stored_value.h"
 #include "core/common/calculator_exceptions.h"
 #include "math/mymath.h"

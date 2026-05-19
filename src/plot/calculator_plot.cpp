@@ -11,13 +11,13 @@
  * - :export 命令：将变量导出到文件
  */
 
-#include "calculator_plot.h"
-#include "plot_renderer.h"
-#include "svg_renderer.h"
-#include "plot_styles.h"
+#include "plot/calculator_plot.h"
+#include "plot/plot_renderer.h"
+#include "plot/svg_renderer.h"
+#include "plot/plot_styles.h"
 #include "app/scalar_type.h"
 #include "math/mymath.h"
-#include "string_utils.h"
+#include "core/services/string_utils.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "parser/grammars/unified_parser_factory.h"
 #include <fstream>

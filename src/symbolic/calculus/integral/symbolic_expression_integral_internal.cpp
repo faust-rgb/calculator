@@ -6,6 +6,8 @@
 #include "symbolic/calculus/integral/symbolic_expression_integral_helpers.h"
 #include "math/mymath.h"
 
+#include "math/helpers/linear_solver.h"
+
 namespace symbolic_expression_internal {
 
 // ============================================================================
@@ -31,49 +33,7 @@ bool polynomial_is_zero(const std::vector<Scalar>& coefficients) {
     return true;
 }
 
-bool solve_dense_linear_system(std::vector<std::vector<Scalar>> matrix,
-                               std::vector<Scalar> rhs,
-                               std::vector<Scalar>* solution) {
-    const std::size_t size = rhs.size();
-    for (std::size_t col = 0; col < size; ++col) {
-        std::size_t pivot = col;
-        for (std::size_t row = col + 1; row < size; ++row) {
-            if (mymath::abs(matrix[row][col]) > mymath::abs(matrix[pivot][col])) {
-                pivot = row;
-            }
-        }
-        if (mymath::is_near_zero(matrix[pivot][col], 1e-10)) {
-            return false;
-        }
-        if (pivot != col) {
-            std::swap(matrix[pivot], matrix[col]);
-            std::swap(rhs[pivot], rhs[col]);
-        }
-
-        const Scalar pivot_value = matrix[col][col];
-        for (std::size_t j = col; j < size; ++j) {
-            matrix[col][j] /= pivot_value;
-        }
-        rhs[col] /= pivot_value;
-
-        for (std::size_t row = 0; row < size; ++row) {
-            if (row == col) {
-                continue;
-            }
-            const Scalar factor = matrix[row][col];
-            if (mymath::is_near_zero(factor, 1e-12)) {
-                continue;
-            }
-            for (std::size_t j = col; j < size; ++j) {
-                matrix[row][j] -= factor * matrix[col][j];
-            }
-            rhs[row] -= factor * rhs[col];
-        }
-    }
-
-    *solution = rhs;
-    return true;
-}
+// solve_dense_linear_system is now provided by math/helpers/linear_solver.h
 
 // ============================================================================
 // 常数规范化函数

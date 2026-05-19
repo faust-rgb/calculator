@@ -9,8 +9,8 @@
  * - 排列数（nPr）
  */
 
-#include "combinatorics.h"
-#include "mymath.h"
+#include "math/helpers/combinatorics.h"
+#include "math/mymath.h"
 #include "app/scalar_type.h"
 #include <stdexcept>
 #include <algorithm>

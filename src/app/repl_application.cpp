@@ -5,7 +5,7 @@
 #ifndef APP_REPL_APPLICATION_CPP
 #define APP_REPL_APPLICATION_CPP
 
-#include "repl_application.h"
+#include "app/repl_application.h"
 #include "core/services/string_utils.h"
 #include <iostream>
 #include <termios.h>
