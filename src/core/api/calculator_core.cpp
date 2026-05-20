@@ -1,4 +1,3 @@
-#include "execution/engine/inline_expander.h"
 // ============================================================================
 // Calculator 核心实现
 // ============================================================================
@@ -20,7 +19,7 @@
 #include "symbolic/core/symbolic_expression.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
-#include "parser/grammars/command_parser.h"
+#include "execution/engine/inline_expander.h"
 #include "execution/engine/script_runtime.h"
 #include "parser/grammars/script_parser.h"
 #include "module/module_registration.h"
@@ -36,6 +35,7 @@
 #include <iomanip>
 #include <iostream>
 #include <set>
+#include <unordered_set>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -70,8 +70,7 @@ void apply_calculator_display_precision(const Calculator::Impl* impl) {
     SymbolicExpression::set_display_precision(precision);
 }
 
-void broadcast_settings(Calculator* calculator, Calculator::Impl* impl) {
-    (void)calculator;
+void broadcast_settings([[maybe_unused]] Calculator* calculator, Calculator::Impl* impl) {
     if (!impl->config_ptr || !impl->modules) return;
 
     CalculatorSettings settings;
@@ -282,13 +281,16 @@ bool Calculator::try_evaluate_implicit(std::string_view expression,
     if (expression.empty()) return false;
 
     // 优化：使用触发字符到模块的映射，直接找到相关模块
-    // 首先收集表达式中出现的所有触发字符对应的模块
-    std::set<std::shared_ptr<CalculatorModule>> candidate_modules;
+    // 首先按注册顺序收集表达式中出现的所有触发字符对应的模块（去重）
+    std::vector<std::shared_ptr<CalculatorModule>> candidate_modules;
+    std::unordered_set<CalculatorModule*> seen;
 
     for (char c : expression) {
         const auto& modules_for_char = impl_->trigger_char_to_modules[static_cast<unsigned char>(c)];
         for (const auto& mod : modules_for_char) {
-            candidate_modules.insert(mod);
+            if (seen.insert(mod.get()).second) {
+                candidate_modules.push_back(mod);
+            }
         }
     }
 
@@ -302,7 +304,7 @@ bool Calculator::try_evaluate_implicit(std::string_view expression,
         return false;
     }
 
-    // 尝试候选模块
+    // 尝试候选模块（按注册顺序）
     for (const auto& module : candidate_modules) {
         if (module->try_evaluate_implicit(std::string(expression), output, vars)) {
             return true;

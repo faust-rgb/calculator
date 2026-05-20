@@ -1,6 +1,5 @@
 #include "core/services/core_manager_interfaces.h"
 #include "types/function.h"
-#include "core/services/core_manager_interfaces.h"
 // ============================================================================
 // script_executor.cpp - 脚本语句与块执行实现
 // ============================================================================
@@ -93,8 +92,8 @@ ScriptSignal execute_script_statement(
                 const Scalar start = evaluate_scalar(ctx, for_range.start_ast, "range start");
                 const Scalar stop = evaluate_scalar(ctx, for_range.stop_ast, "range stop");
                 const Scalar step = evaluate_scalar(ctx, for_range.step_ast, "range step");
-                if (step == 0.0L) throw std::runtime_error("range step cannot be zero");
-                bool ascending = step > 0.0L;
+                if (mymath::is_near_zero(step)) throw std::runtime_error("range step cannot be zero");
+                bool ascending = step > Scalar(0.0L);
                 for (Scalar current = start; (ascending ? current < stop : current > stop); current += step) {
                     StoredValue loop_val; loop_val.decimal = current; loop_val.exact = false;
                     ctx->variables().set_local(for_range.variable, loop_val);

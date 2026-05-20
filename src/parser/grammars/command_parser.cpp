@@ -32,7 +32,7 @@ void compile_expression_info(ExpressionInfo& info) {
 }
 
 void validate_expression_text(std::string_view expr, LazyTokenStream& tokens, std::size_t source_offset) {
-    static SyntaxValidator validator;
+    SyntaxValidator validator;
     std::vector<SyntaxErrorInfo> syntax_errors = validator.validate(expr);
     for (const auto& err : syntax_errors) {
         if (err.severity == Severity::kError) {

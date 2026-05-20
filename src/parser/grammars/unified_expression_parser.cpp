@@ -239,8 +239,16 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
 
     // 矩阵/复数候选（使用分析结果，避免重复检测）
     if (analysis.has_bracket || analysis.has_matrix_func || analysis.has_matrix_or_complex_var) {
+        // 直接走矩阵求值路径，避免在 try_evaluate_value 中再次调用 factory_->analyze()
+        ensure_callbacks_initialized();
         matrix::Value matrix_val;
-        if (try_evaluate_value(expression, &matrix_val)) {
+        if (matrix::try_evaluate_expression(expression,
+                                            cached_scalar_evaluator_,
+                                            cached_matrix_lookup_,
+                                            cached_complex_lookup_,
+                                            matrix_functions_,
+                                            value_functions_,
+                                            &matrix_val)) {
             return convert_matrix_value_to_stored(std::move(matrix_val));
         }
         // 失败则回退到标量路径

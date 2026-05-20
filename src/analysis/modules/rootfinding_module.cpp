@@ -510,25 +510,11 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
 
 std::string RootfindingModule::execute_command(const CommandASTNode& node,
                                                ServiceLocator& locator) {
-    // 提取命令名和参数
-    std::string command;
-    std::vector<std::string> args;
+    // 使用辅助方法提取命令名和参数
+    const std::string command = node.get_command_name();
+    const std::vector<std::string> args = node.get_argument_texts();
 
-    if (node.kind == CommandKind::kMetaCommand) {
-        command = ":" + std::string(node.as_meta_command()->command);
-        for (const auto& arg : node.as_meta_command()->arguments) {
-            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
-                args.push_back(std::string(arg->as_expression()->text));
-            }
-        }
-    } else if (node.kind == CommandKind::kFunctionCall) {
-        command = std::string(node.as_function_call()->name);
-        for (const auto& arg : node.as_function_call()->arguments) {
-            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
-                args.push_back(std::string(arg->as_expression()->text));
-            }
-        }
-    } else {
+    if (command.empty()) {
         throw std::runtime_error("Invalid command node type");
     }
 

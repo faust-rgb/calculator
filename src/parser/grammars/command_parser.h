@@ -246,6 +246,42 @@ public:
     const std::vector<CommandASTNode>* as_sequence() const {
         return kind == CommandKind::kSequence ? &std::get<std::vector<CommandASTNode>>(data) : nullptr;
     }
+
+    /**
+     * @brief 提取命令名
+     * @return 命令名（元命令带 ":" 前缀），如果不是命令则返回空字符串
+     */
+    std::string get_command_name() const {
+        if (kind == CommandKind::kMetaCommand) {
+            return ":" + std::string(as_meta_command()->command);
+        }
+        if (kind == CommandKind::kFunctionCall) {
+            return std::string(as_function_call()->name);
+        }
+        return "";
+    }
+
+    /**
+     * @brief 提取参数文本列表
+     * @return 参数文本列表
+     */
+    std::vector<std::string> get_argument_texts() const {
+        std::vector<std::string> args;
+        if (kind == CommandKind::kMetaCommand) {
+            for (const auto& arg : as_meta_command()->arguments) {
+                if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                    args.push_back(std::string(arg->as_expression()->text));
+                }
+            }
+        } else if (kind == CommandKind::kFunctionCall) {
+            for (const auto& arg : as_function_call()->arguments) {
+                if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
+                    args.push_back(std::string(arg->as_expression()->text));
+                }
+            }
+        }
+        return args;
+    }
 };
 
 /**

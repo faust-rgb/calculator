@@ -17,6 +17,7 @@
 #include "app/scalar_type.h"
 #include "math/types/float128.h"
 #include "math/precise/precise_decimal.h"
+#include <cmath>
 
 namespace mymath {
 
@@ -84,9 +85,23 @@ inline T scalar_cbrt(T x) {
         return precise128::cbrt(x);
     } else {
         // cbrt(x) = sign(x) * |x|^(1/3)
+        // Use Newton's method: x_{n+1} = (2*x_n + a/x_n^2) / 3
+        // This avoids the precision error from approximating 1/3 as a fixed-length string.
         if (x.is_zero()) return x;
         T abs_x = scalar_abs(x);
-        T result = scalar_pow(abs_x, T("0.333333333333333333333333333333"));
+        // Initial estimate from long double cbrt for fast convergence
+        const long double ld_init = static_cast<long double>(abs_x);
+        T result = T(ld_init > 0.0L ? std::cbrt(ld_init) : 1.0L);
+        if (result.is_zero()) result = T(1.0L);
+        // Newton iterations: converges quadratically
+        for (int iter = 0; iter < 100; ++iter) {
+            const T x2 = result * result;
+            const T x3 = x2 * result;
+            const T delta = (x3 - abs_x) / (T(static_cast<long long>(3)) * x2);
+            result = result - delta;
+            // Converged when correction is negligible relative to result
+            if (scalar_abs(delta) <= scalar_abs(result) * T("1e-34")) break;
+        }
         return x < T(0.0L) ? -result : result;
     }
 }
