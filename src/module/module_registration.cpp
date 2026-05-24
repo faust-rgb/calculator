@@ -2,7 +2,7 @@
 // module_registration.cpp - 标准模块注册实现
 // ============================================================================
 
-#include "module_registration.h"
+#include "module/calculator_module.h"
 #include "core/api/calculator.h"
 
 void register_standard_modules(Calculator* calculator) {

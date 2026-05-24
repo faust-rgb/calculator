@@ -10,7 +10,7 @@
 // - calculator_state_persistence.cpp: 状态保存与加载
 // ============================================================================
 
-#include "core/api/calculator_internal_types.h"
+#include "core/api/calculator_impl.h"
 #include "app/scalar_type.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "parser/grammars/command_parser.h"
@@ -21,7 +21,7 @@
 #include "core/services/calculator_service_factory.h"
 #include "execution/engine/script_runtime.h"
 #include "parser/grammars/script_parser.h"
-#include "module/module_registration.h"
+#include "module/calculator_module.h"
 #include "math/helpers/integer_helpers.h"
 #include "execution/resolver/variable_resolver.h"
 
@@ -48,8 +48,8 @@
 
 namespace {
 
-// 检查表达式是否包含触发字符
-bool has_trigger_char(std::string_view expression, const std::array<bool, 256>& table) {
+// 检查表达式是否包含触发字符（保留供将来使用）
+[[maybe_unused]] bool has_trigger_char(std::string_view expression, const std::array<bool, 256>& table) {
     for (char c : expression) {
         if (table[static_cast<unsigned char>(c)]) {
             return true;
@@ -435,7 +435,7 @@ std::string Calculator::process_line(const std::string& expression, bool exact_m
 
 namespace {
 
-std::string execute_script_source(Calculator* calculator,
+std::string execute_script_source([[maybe_unused]] Calculator* calculator,
                                   Calculator::Impl* impl,
                                   const std::string& source,
                                   bool exact_mode,

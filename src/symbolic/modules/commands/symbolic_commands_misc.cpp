@@ -81,7 +81,7 @@ bool solve_first_order_linear(const SymbolicExpression& eq, const std::string& x
 }
 
 // Solve second order linear ODE with constant coefficients: ay'' + by' + cy = f(x)
-bool solve_second_order_constant_coeff(const SymbolicExpression& eq, const std::string& x_var,
+bool solve_second_order_constant_coeff([[maybe_unused]] const SymbolicExpression& eq, const std::string& x_var,
                                         const std::string& y_var, std::string* output) {
     // This is a simplified implementation for homogeneous case: ay'' + by' + cy = 0
     // Characteristic equation: ar^2 + br + c = 0
@@ -132,7 +132,7 @@ bool handle_misc_commands(const SymbolicCommandContext& ctx,
             std::string eq_str = rhs.to_string();
             bool has_second_deriv = eq_str.find(y_var + "''") != std::string::npos ||
                                     eq_str.find("diff(" + y_var + ", " + x_var + ", 2)") != std::string::npos;
-            bool has_first_deriv = eq_str.find(y_var + "'") != std::string::npos ||
+            [[maybe_unused]] bool has_first_deriv = eq_str.find(y_var + "'") != std::string::npos ||
                                    eq_str.find("diff(" + y_var + ", " + x_var + ")") != std::string::npos;
 
             // Try second-order ODE first

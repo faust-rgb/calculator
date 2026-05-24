@@ -17,7 +17,7 @@
 #include "execution/engine/script_context.h"
 #include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
-#include "analysis/base/precision_constants.h"
+#include "math/base/precision_constants.h"
 #include "analysis/calculus/analysis_command_helpers.h"
 #include "analysis/calculus/critical_point_solver.h"
 #include "symbolic/modules/symbolic_module.h"

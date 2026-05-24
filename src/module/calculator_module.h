@@ -345,4 +345,22 @@ inline std::string extract_string(const std::vector<std::string_view>& args,
 #define REGISTER_CALCULATOR_MODULE(ModuleClass) \
     REGISTER_CALCULATOR_MODULE_IMPL(ModuleClass, __LINE__)
 
+// ============================================================================
+// 标准模块注册函数
+// ============================================================================
+
+class Calculator;
+
+/**
+ * @brief 注册标准模块到计算器实例
+ *
+ * 遍历全局 ModuleRegistry，创建并注册所有通过 REGISTER_CALCULATOR_MODULE
+ * 宏注册的模块到 Calculator 实例中。
+ *
+ * 使用示例：
+ *   Calculator calc;
+ *   register_standard_modules(&calc);
+ */
+void register_standard_modules(Calculator* calculator);
+
 #endif

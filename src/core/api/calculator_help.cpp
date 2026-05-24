@@ -12,7 +12,7 @@
  */
 
 #include "core/api/calculator.h"
-#include "core/api/calculator_internal_types.h"
+#include "core/api/calculator_impl.h"
 #include "module/calculator_module.h"
 #include "execution/registry/command_registry.h"
 

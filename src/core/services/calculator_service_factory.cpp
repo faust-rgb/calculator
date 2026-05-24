@@ -11,7 +11,7 @@
 #include "core/services/calculator_service_factory.h"
 #include "core/services/core_managers.h"
 #include "core/services/service_registry.h"
-#include "core/api/calculator_internal_types.h"
+#include "core/api/calculator_impl.h"
 #include "math/helpers/integer_helpers.h"
 #include "math/helpers/combinatorics.h"
 #include "math/helpers/bitwise_helpers.h"
@@ -34,7 +34,7 @@
 namespace core {
 
 /// 构建核心服务对象
-CoreServices build_core_services(Calculator* calculator, Calculator::Impl* impl) {
+CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calculator::Impl* impl) {
     CoreServices s;
 
 

@@ -9,7 +9,7 @@
 #include "polynomial.h"
 #include "precise_decimal.h"
 #include "app/scalar_type.h"
-#include "analysis/base/precision_constants.h"
+#include "math/base/precision_constants.h"
 
 #include <stdexcept>
 #include <utility>

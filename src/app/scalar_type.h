@@ -24,9 +24,11 @@ namespace mymath {
  * Uses PreciseDecimal by default for higher precision.
  * Modify this to switch to other data types.
  */
+#if 1
 using Scalar = PreciseDecimal;
-//using Scalar = float128_t;
-
+#else
+using Scalar = float128_t;
+#endif
 } // namespace mymath
 
 // Export Scalar to global namespace for convenience

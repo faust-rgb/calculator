@@ -15,7 +15,7 @@
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
 #include "analysis/rootfinding/rootfinding_engine.h"
-#include "analysis/base/precision_constants.h"
+#include "math/base/precision_constants.h"
 #include "app/scalar_type.h"
 #include "math/mymath.h"
 #include "parser/grammars/unified_expression_parser.h"

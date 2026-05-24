@@ -6,7 +6,7 @@
 
 #include "analysis/integration/integration_commands.h"
 #include "analysis/modules/integration_module.h"
-#include "analysis/base/precision_constants.h"
+#include "math/base/precision_constants.h"
 #include "analysis/integration/integration_engine.h"
 #include "analysis/integration/multidim_integration.h"
 #include "analysis/integration/multivariable_integrator.h"

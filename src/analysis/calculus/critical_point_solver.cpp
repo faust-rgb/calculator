@@ -11,7 +11,7 @@
 // ============================================================================
 
 #include "critical_point_solver.h"
-#include "analysis/base/precision_constants.h"
+#include "math/base/precision_constants.h"
 #include "symbolic/algebra/groebner/groebner_basis.h"
 #include "symbolic/solver/symbolic_solver.h"
 #include "math/mymath.h"

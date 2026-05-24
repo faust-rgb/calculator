@@ -15,7 +15,7 @@
 
 #include "symbolic/core/symbolic_expression.h"
 #include "math/mymath.h"
-#include "analysis/base/precision_constants.h"
+#include "math/base/precision_constants.h"
 
 #include <initializer_list>
 #include <list>

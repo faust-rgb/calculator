@@ -18,7 +18,7 @@
 #include "symbolic/core/symbolic_expression.h"
 #include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
-#include "analysis/base/precision_constants.h"
+#include "math/base/precision_constants.h"
 #include "analysis/calculus/function_analysis.h"
 #include "analysis/integration/integration_engine.h"
 #include "analysis/integration/integration_commands.h"

@@ -12,7 +12,7 @@
 #define ANALYSIS_NUMERIC_NUMERICAL_CALCULUS_H
 
 #include "app/scalar_type.h"
-#include "analysis/base/precision_constants.h"
+#include "math/base/precision_constants.h"
 #include "math/mymath.h"
 #include <functional>
 #include <vector>

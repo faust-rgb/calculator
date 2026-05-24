@@ -12,7 +12,7 @@
 
 #include "analysis/optimization/simplex_engine.h"
 
-#include "analysis/base/precision_constants.h"
+#include "math/base/precision_constants.h"
 #include "app/scalar_type.h"
 #include "math/mymath.h"
 

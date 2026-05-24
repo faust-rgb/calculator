@@ -9,7 +9,7 @@
 #include "math/core/floating_point.h"
 #include "math/core/roots_powers.h"
 #include "math/transcendental/transcendental.h"
-#include "analysis/base/precision_constants.h"
+#include "math/base/precision_constants.h"
 #include <stdexcept>
 #include <sstream>
 #include <iomanip>

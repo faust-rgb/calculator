@@ -19,7 +19,7 @@
 #include "math/precise/precise_decimal.h"
 #include "math/core/basic_ops.h"
 #include "math/core/roots_powers.h"
-#include "analysis/base/precision_constants.h"
+#include "math/base/precision_constants.h"
 
 #include <functional>
 #include <string>

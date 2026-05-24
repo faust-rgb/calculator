@@ -10,7 +10,7 @@
  */
 
 #include "analysis/calculus/function_analysis.h"
-#include "analysis/base/precision_constants.h"
+#include "math/base/precision_constants.h"
 
 #include "core/api/calculator.h"
 #include "app/scalar_type.h"
