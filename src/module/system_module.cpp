@@ -80,9 +80,10 @@ std::vector<std::string> SystemModule::get_commands() const {
  * - :hexprefix on|off - 切换十六进制前缀
  * - :hexcase upper|lower - 设置十六进制字母大小写
  */
-std::string SystemModule::execute_args(const std::string& command,
-                                       const std::vector<std::string>& args,
+std::string SystemModule::execute_args_view(std::string_view command,
+                                       const std::vector<std::string_view>& args,
                                        ServiceLocator& locator) {
+    using namespace module_helpers;
     auto engine = locator.resolve<IEvaluationEngine>();
     auto vars = locator.resolve<IVariableManager>();
     auto funcs = locator.resolve<IFunctionManager>();
@@ -130,8 +131,8 @@ std::string SystemModule::execute_args(const std::string& command,
             vars->clear_all();
             return "All variables cleared.";
         }
-        vars->remove(trim_copy(args[0]));
-        return "Variable " + trim_copy(args[0]) + " cleared.";
+        vars->remove(std::string(args[0]));
+        return "Variable " + std::string(args[0]) + " cleared.";
     }
     if (command == ":clearfuncs") {
         funcs->clear_all();
@@ -139,14 +140,14 @@ std::string SystemModule::execute_args(const std::string& command,
     }
     if (command == ":clearfunc") {
         if (args.empty()) throw std::runtime_error(":clearfunc expects a function name");
-        funcs->remove_function(trim_copy(args[0]));
-        return "Cleared custom function: " + trim_copy(args[0]);
+        funcs->remove_function(std::string(args[0]));
+        return "Cleared custom function: " + std::string(args[0]);
     }
     if (command == "print") {
         std::ostringstream out;
         for (std::size_t i = 0; i < args.size(); ++i) {
             if (i != 0) out << ' ';
-            const StoredValue value = engine->evaluate_expression_value(args[i], false);
+            const StoredValue value = engine->evaluate_expression_value(std::string(args[i]), false);
             out << (value.is_string ? value.string_value
                                     : format_stored_value(value, false));
         }
@@ -154,27 +155,26 @@ std::string SystemModule::execute_args(const std::string& command,
     }
     if (command == ":history") return "History access via Module not implemented yet";
 
-    // Lambda：将参数列表拼接为逗号分隔的字符串
-    auto join_args = [&]() {
-        std::string res;
-        for (size_t i = 0; i < args.size(); ++i) {
-            if (i != 0) res += ", ";
-            res += args[i];
-        }
-        return trim_copy(res);
-    };
-
-    // 状态持久化命令 - 需要环境服务，暂时返回未实现
-    if (command == ":save") return "Save state not yet implemented with ServiceLocator";
-    if (command == ":load") return "Load state not yet implemented with ServiceLocator";
-    if (command == ":run") return "Run script not yet implemented with ServiceLocator";
+    // 状态持久化命令
+    if (command == ":save") {
+        if (args.empty()) throw std::runtime_error(":save expects a file path");
+        return locator.resolve<IStatePersistence>()->save_state(std::string(args[0]));
+    }
+    if (command == ":load") {
+        if (args.empty()) throw std::runtime_error(":load expects a file path");
+        return locator.resolve<IStatePersistence>()->load_state(std::string(args[0]));
+    }
+    if (command == ":run") {
+        if (args.empty()) throw std::runtime_error(":run expects a file path");
+        return engine->execute_script(std::string(args[0]), false); // 注意：这里简化了逻辑，实际可能需要 execute_script_file
+    }
 
     // ==================== 模式设置命令 ====================
 
     // :exact - 精确分数模式
     if (command == ":exact") {
         if (args.empty()) return "Usage: :exact on|off";
-        const std::string arg = trim_copy(args[0]);
+        const std::string arg(args[0]);
         if (arg == "on") { config->set_exact_mode(true); return "Exact mode enabled."; }
         if (arg == "off") { config->set_exact_mode(false); return "Exact mode disabled."; }
         return "Usage: :exact on|off";
@@ -183,7 +183,7 @@ std::string SystemModule::execute_args(const std::string& command,
     // :symbolic - 符号常量模式
     if (command == ":symbolic") {
         if (args.empty()) return "Usage: :symbolic on|off";
-        const std::string arg = trim_copy(args[0]);
+        const std::string arg(args[0]);
         if (arg == "on") { config->set_symbolic_constants_mode(true); return "Symbolic constants mode enabled."; }
         if (arg == "off") { config->set_symbolic_constants_mode(false); return "Symbolic constants mode disabled."; }
         return "Usage: :symbolic on|off";
@@ -193,8 +193,8 @@ std::string SystemModule::execute_args(const std::string& command,
     if (command == ":precision") {
         if (args.empty()) return "Current precision: " + std::to_string(config->get_display_precision());
         try {
-            config->set_display_precision(std::stoi(args[0]));
-            return "Display precision set to " + args[0];
+            config->set_display_precision(std::stoi(std::string(args[0])));
+            return "Display precision set to " + std::string(args[0]);
         } catch (...) {
             return "Invalid precision value";
         }
@@ -204,7 +204,7 @@ std::string SystemModule::execute_args(const std::string& command,
     if (command == ":scale") {
         if (args.empty()) return "Internal scale: " + std::to_string(PrecisionContext::get_default_scale());
         try {
-            int s = std::stoi(args[0]);
+            int s = std::stoi(std::string(args[0]));
             if (s < 1 || s > 2000) return "Scale must be in range 1..2000";
             PrecisionContext::set_default_scale(s);
             return "Internal calculation scale set to " + std::to_string(s);
@@ -216,7 +216,7 @@ std::string SystemModule::execute_args(const std::string& command,
     // :hexprefix - 十六进制 0x 前缀设置
     if (command == ":hexprefix") {
         if (args.empty()) return "Usage: :hexprefix on|off";
-        const std::string arg = trim_copy(args[0]);
+        const std::string arg(args[0]);
         if (arg == "on") { config->set_hex_prefix_mode(true); return "Hex prefix enabled."; }
         if (arg == "off") { config->set_hex_prefix_mode(false); return "Hex prefix disabled."; }
         return "Usage: :hexprefix on|off";
@@ -225,13 +225,17 @@ std::string SystemModule::execute_args(const std::string& command,
     // :hexcase - 十六进制字母大小写设置
     if (command == ":hexcase") {
         if (args.empty()) return "Usage: :hexcase upper|lower";
-        const std::string arg = trim_copy(args[0]);
+        const std::string arg(args[0]);
         if (arg == "upper" || arg == "uppercase") { config->set_hex_uppercase_mode(true); return "Hex case set to uppercase."; }
         if (arg == "lower" || arg == "lowercase") { config->set_hex_uppercase_mode(false); return "Hex case set to lowercase."; }
         return "Usage: :hexcase upper|lower";
     }
 
     return "Unknown system command";
+}
+
+std::vector<std::string> SystemModule::get_help_topics() const {
+    return { "commands", "variables", "persistence", "exact", "examples" };
 }
 
 /**

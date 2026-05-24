@@ -31,9 +31,9 @@ class AnalysisModule : public CalculatorModule {
 public:
     std::string name() const override { return "Analysis"; }
     std::vector<std::string> get_commands() const override;
-    std::string execute_args(const std::string& command,
-                             const std::vector<std::string>& args,
-                             ::ServiceLocator& locator) override;
+    std::string execute_args_view(std::string_view command,
+                                  const std::vector<std::string_view>& args,
+                                  ::ServiceLocator& locator) override;
     std::string get_help_snippet(const std::string& topic) const override;
 };
 

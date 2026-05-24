@@ -45,9 +45,9 @@ public:
      * @param locator 服务定位器
      * @return 命令执行结果的字符串表示
      */
-    std::string execute_args(const std::string& command,
-                             const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+    std::string execute_args_view(std::string_view command,
+                                  const std::vector<std::string_view>& args,
+                                  ServiceLocator& locator) override;
 
     /**
      * @brief 返回矩阵函数映射

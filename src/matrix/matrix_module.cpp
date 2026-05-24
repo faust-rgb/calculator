@@ -163,22 +163,14 @@ std::vector<std::string> MatrixModule::get_commands() const {
 }
 
 
-std::string MatrixModule::execute_args(const std::string& command,
-                                       const std::vector<std::string>& args,
-                                       ServiceLocator& locator) {
-    // 命令已由路由层验证，无需再检查
-    auto engine = locator.resolve<IEvaluationEngine>();
-
-    if (args.size() != 1) {
-        throw std::runtime_error(command + " expects exactly one matrix argument");
-    }
-
-    const std::string& arg = args[0];
-    if (!engine->is_matrix_argument(arg)) {
-        throw std::runtime_error(command + " expects a matrix argument");
-    }
-
-    const Matrix matrix_value = engine->parse_matrix_argument(arg, command);
+std::string MatrixModule::execute_args_view(std::string_view command,
+                                            const std::vector<std::string_view>& args,
+                                            ServiceLocator& locator) {
+    using namespace module_helpers;
+    require_args_count(args, 1, 1, command);
+    
+    auto& engine = *locator.resolve<IEvaluationEngine>();
+    const Matrix matrix_value = extract_matrix(args, 0, command, engine);
 
     if (command == "svd") {
         return "U: " + svd_u(matrix_value).to_string() +

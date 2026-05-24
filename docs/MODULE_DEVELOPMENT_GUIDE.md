@@ -4,53 +4,56 @@
 
 ### 1. 创建模块类
 
-在 `src/modules/` 目录下创建头文件和实现文件：
+在相应的模块目录下（如 `src/analysis/modules/`）创建头文件和实现文件。所有模块必须继承自 `CalculatorModule` 基类。
 
 ```cpp
 // my_module.h
 #ifndef MY_MODULE_H
 #define MY_MODULE_H
 
-#include "core/module.h"
+#include "module/calculator_module.h"
 
 namespace modules {
 
-class MyModule : public core::Module {
+class MyModule : public CalculatorModule {
 public:
-    // 必须实现：模块名称
-    std::string name() const override { return "my_module"; }
+    // 必须实现：模块名称，用于日志和调试
+    std::string name() const override { return "MyModule"; }
 
-    // 可选：模块描述
-    std::string description() const override { return "我的自定义模块"; }
-
-    // 必须实现：命令列表
-    std::vector<core::CommandDef> commands() const override {
-        return {
-            {
-                "my_command",           // 命令名
-                "命令帮助文本",          // 帮助
-                "(arg1, arg2)",         // 用法
-                my_command_handler      // 处理函数
-            }
-        };
+    // 初始化模块（可选），在注册后调用一次
+    void initialize(ServiceLocator& locator) override {
+        // 执行初始化逻辑
     }
 
-private:
-    static bool my_command_handler(
-        const std::string& command,
-        const std::string& inside,
-        std::string* output,
-        core::CommandContext& ctx) {
+    // 注册模块提供的数学服务（可选）
+    void register_services(CoreServices& services, ServiceLocator& locator) override {
+        // 向核心系统挂载服务
+    }
 
-        // 解析参数
-        auto args = split_arguments(inside);
+    // 返回模块支持的命令列表（可选）
+    std::vector<std::string> get_commands() const override {
+        return {"my_cmd"};
+    }
 
-        // 使用上下文
-        long double value = ctx.parse_decimal(args[0]);
+    // 执行命令的逻辑
+    std::string execute_args(const std::string& command,
+                            const std::vector<std::string>& args,
+                            ServiceLocator& locator) override {
+        if (command == "my_cmd") {
+             return "Hello from MyModule!";
+        }
+        return "";
+    }
+    
+    // 返回模块提供的函数列表（可选，用于帮助系统）
+    std::vector<std::string> get_functions() const override {
+        return {"my_func"};
+    }
 
-        // 返回结果
-        *output = std::to_string(value * 2);
-        return true;
+    // 提供帮助文本片段
+    std::string get_help_snippet(const std::string& topic) const override {
+        if (topic == "commands") return "my_cmd - 示例命令";
+        return "";
     }
 };
 
@@ -61,166 +64,64 @@ private:
 
 ### 2. 注册模块
 
+在实现文件中使用 `REGISTER_CALCULATOR_MODULE` 宏进行自动注册。
+
 ```cpp
 // my_module.cpp
 #include "my_module.h"
-#include "core/module_registry.h"
+#include "module/module_registration.h"
 
 namespace modules {
-namespace {
-    struct MyModuleRegistrar {
-        MyModuleRegistrar() {
-            core::ModuleRegistry::instance().register_module(
-                std::make_unique<MyModule>());
-        }
-    };
-    static MyModuleRegistrar my_module_registrar;
+    // 自动向全局注册表注册该模块
+    REGISTER_CALCULATOR_MODULE(MyModule)
 }
-} // namespace modules
 ```
 
-### 3. 更新构建系统
+## 核心接口说明
 
-在 `Makefile` 中添加：
+### 1. CalculatorModule 基类
 
-```makefile
-MODULES_SRC = src/modules/my_module.cpp
-```
+位于 `src/module/calculator_module.h`，定义了模块的标准扩展点。
 
-## CommandContext 结构
+*   `initialize(ServiceLocator&)`：模块启动时的初始化钩子。
+*   `register_services(CoreServices&, ServiceLocator&)`：允许模块将自己的功能注入到核心 `CoreServices` 中，供其他模块调用。
+*   `execute_args(...)`：处理模块注册的命令逻辑。
+*   `get_scalar_functions()` / `get_matrix_functions()`：注册数学函数到全局函数表。
 
-```cpp
-struct CommandContext {
-    // 变量表
-    std::map<std::string, StoredValue>* variables;
-    std::map<std::string, CustomFunction>* functions;
-    std::map<std::string, ScriptFunction>* script_functions;
+### 2. ServiceLocator
 
-    // 回调函数
-    std::function<long double(const std::string&)> parse_decimal;
-    std::function<std::string(const std::string&, bool)> evaluate_for_display;
-    std::function<long double(double)> normalize_result;
-
-    // 配置
-    bool symbolic_constants_mode;
-    int display_precision;
-};
-```
-
-## 命令处理器签名
-
-```cpp
-bool handler(
-    const std::string& command,   // 命令名
-    const std::string& inside,    // 括号内的参数字符串
-    std::string* output,          // 输出结果
-    core::CommandContext& ctx     // 执行上下文
-);
-```
-
-返回 `true` 表示命令已处理，`false` 表示未处理。
+提供依赖注入机制。模块可以通过 `locator.resolve<T>()` 获取核心组件，如：
+*   `IExecutionContext`：访问变量、函数、配置并执行求值。
+*   `IEvaluationEngine`：执行高性能的数值计算。
+*   `ICommandRegistry`：管理和查找命令。
 
 ## 最佳实践
 
-### 1. 参数解析
+### 1. 解耦设计
 
-```cpp
-// 使用 split_top_level_arguments 解析逗号分隔参数
-std::vector<std::string> args = split_top_level_arguments(inside);
-
-// 处理可选参数
-for (size_t i = required_count; i < args.size(); ++i) {
-    if (args[i] == ":option") {
-        // 处理选项
-    }
-}
-```
+*   **避免循环依赖**：如果模块 A 需要模块 B 的功能，应通过 `ServiceLocator` 解析对应的服务接口，而不是直接包含 B 的头文件。
+*   **职责分离**：将命令解析逻辑（Module 类）与数学算法实现逻辑（Engine/Solver 类）分开。
 
 ### 2. 错误处理
 
-```cpp
-if (args.size() < 2) {
-    throw std::runtime_error("my_command requires at least 2 arguments");
-}
-```
+在模块中抛出 `std::runtime_error`，计算器核心会捕获并以友好方式向终端用户显示错误信息。
 
-### 3. 使用上下文
+### 3. 文档与帮助
 
-```cpp
-// 解析数值
-long double value = ctx.parse_decimal(expression);
+务必实现 `get_help_snippet` 虚函数，并至少响应 `"commands"` 和 `"functions"` 主题，以便用户通过 `:help` 命令发现新功能。
 
-// 访问变量
-auto it = ctx.variables->find(var_name);
-if (it == ctx.variables->end()) {
-    throw std::runtime_error("unknown variable: " + var_name);
-}
-
-// 归一化结果
-*output = format_decimal(ctx.normalize_result(result));
-```
-
-### 4. 模块初始化
-
-```cpp
-class MyModule : public core::Module {
-public:
-    void initialize(core::CommandContext& ctx) override {
-        // 初始化资源、设置默认值等
-    }
-
-    void shutdown(core::CommandContext& ctx) override {
-        // 清理资源
-    }
-};
-```
-
-## 目录结构
+## 目录结构参考
 
 ```
 src/
 ├── core/
-│   ├── module.h           # 模块接口定义
-│   ├── module.cpp         # 模块基类实现
-│   └── module_registry.h  # 注册表
-│
-├── types/
-│   ├── rational.h         # 有理数
-│   ├── precise_decimal.h  # 精确小数
-│   ├── stored_value.h     # 存储值
-│   └── function.h         # 函数类型
-│
-├── modules/
-│   ├── example_module.h   # 示例模块
-│   ├── example_module.cpp
-│   ├── integration/       # 积分模块
-│   ├── symbolic/          # 符号计算模块
-│   └── ...
-│
-└── ...
+│   └── services/          # 服务接口定义 (IEvaluationEngine, etc.)
+├── module/
+│   ├── calculator_module.h # 基类定义
+│   └── module_registration.h # 注册宏
+├── execution/
+│   └── engine/            # 脚本运行时和上下文定义
+├── [domain]/              # 各数学领域目录
+│   ├── modules/           # 该领域的 Module 类实现
+│   └── [sub-domain]/      # 该领域的算法实现
 ```
-
-## 迁移现有模块
-
-### 步骤 1：创建模块类
-
-将现有的 `is_xxx_command` 和 `handle_xxx_command` 封装到模块类中。
-
-### 步骤 2：定义命令
-
-```cpp
-std::vector<core::CommandDef> commands() const override {
-    return {
-        {"command1", "help1", "(arg)", handler1},
-        {"command2", "help2", "(arg)", handler2},
-    };
-}
-```
-
-### 步骤 3：注册模块
-
-在实现文件末尾添加注册代码。
-
-### 步骤 4：更新 calculator_commands.cpp
-
-移除硬编码的注册代码，使用 ModuleRegistry。

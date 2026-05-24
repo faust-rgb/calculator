@@ -42,9 +42,12 @@ public:
      * @param locator 服务定位器
      * @return 执行结果的字符串表示
      */
-    std::string execute_args(const std::string& command,
-                             const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+    std::string execute_args_view(std::string_view command,
+                                  const std::vector<std::string_view>& args,
+                                  ServiceLocator& locator) override;
+
+    /** @brief 返回支持的帮助主题 */
+    std::vector<std::string> get_help_topics() const override;
 
     /**
      * @brief 获取模块提供的标量函数映射

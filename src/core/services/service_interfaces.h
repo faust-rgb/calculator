@@ -116,14 +116,15 @@ struct IEnvironmentService {
  * - symbolic: 符号计算服务
  * - env: 环境管理服务
  *
- * 还提供一些通用工具函数，如参数解析、矩阵处理等。
+ * 工具函数已移动到 service_utils 命名空间，此处的函数保留用于向后兼容。
  */
 struct CoreServices {
     IEvaluationService evaluation;   ///< 求值服务
     ISymbolicService symbolic;       ///< 符号计算服务
     IEnvironmentService env;         ///< 环境管理服务
 
-    // 参数解析与辅助（保留作为通用工具）
+    // 参数解析与辅助（已弃用，建议使用 service_utils 命名空间）
+    // 这些函数将在未来版本中移除
     std::function<std::vector<std::string>(const std::vector<std::string>&, std::size_t, const std::vector<std::string>&)> parse_symbolic_vars; ///< 解析符号变量
     std::function<bool(const std::string&)> is_matrix_argument;     ///< 检查参数是否为矩阵
     std::function<StoredValue(const std::string&, const std::string&)> parse_matrix_argument; ///< 解析矩阵参数（返回 StoredValue）

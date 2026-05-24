@@ -35,9 +35,10 @@ std::vector<std::string> PlotModule::get_commands() const {
  * @param locator 服务定位器
  * @return 绘图结果或错误信息
  */
-std::string PlotModule::execute_args(const std::string& command,
-                                     const std::vector<std::string>& args,
+std::string PlotModule::execute_args_view(std::string_view command,
+                                     const std::vector<std::string_view>& args,
                                      ServiceLocator& locator) {
+    using namespace module_helpers;
     auto ctx_ptr = locator.resolve<IExecutionContext>();
 
     plot::PlotContext ctx;
@@ -51,21 +52,25 @@ std::string PlotModule::execute_args(const std::string& command,
         return invoke_script_function_decimal(ctx_ptr.get(), name, call_args);
     };
 
+    // 转换参数
+    std::vector<std::string> string_args;
+    for (const auto& arg : args) string_args.emplace_back(arg);
+
     if (command == "plot") {
-        return plot::handle_plot_command(ctx, args);
+        return plot::handle_plot_command(ctx, string_args);
     }
     if (command == ":plot") {
-        return plot::handle_gnuplot_command(ctx, args);
+        return plot::handle_gnuplot_command(ctx, string_args);
     }
     if (command == ":export") {
         // 重建完整的命令行用于 handle_export_command
         std::string line = ":export";
         for (const auto& arg : args) {
-            line += " " + arg;
+            line += " " + std::string(arg);
         }
         return plot::handle_export_command(ctx, line);
     }
-    throw std::runtime_error("PlotModule cannot handle command: " + command);
+    throw std::runtime_error("PlotModule cannot handle command: " + std::string(command));
 }
 
 /**

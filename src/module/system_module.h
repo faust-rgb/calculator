@@ -63,9 +63,10 @@ public:
      *
      * 根据命令名分发到相应的处理函数。
      */
-    std::string execute_args(const std::string& command,
-                             const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+    std::string execute_args_view(std::string_view command,
+                                  const std::vector<std::string_view>& args,
+                                  ServiceLocator& locator) override;
+    std::vector<std::string> get_help_topics() const override;
 
     /**
      * @brief 返回指定主题的帮助文本

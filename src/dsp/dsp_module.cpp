@@ -20,11 +20,15 @@ std::vector<std::string> DspModule::get_commands() const {
 }
 
 
-std::string DspModule::execute_args(const std::string& command,
-                                    const std::vector<std::string>& args,
+std::string DspModule::execute_args_view(std::string_view command,
+                                    const std::vector<std::string_view>& args,
                                     ServiceLocator& locator) {
-    // 命令已由路由层验证，无需再检查
-    return dsp_ops::handle_residue_command(command, args, locator);
+    using namespace module_helpers;
+    // 使用 std::string 适配旧接口（如果 handle_residue_command 还没改）
+    std::vector<std::string> string_args;
+    for (const auto& arg : args) string_args.emplace_back(arg);
+    
+    return dsp_ops::handle_residue_command(std::string(command), string_args, locator);
 }
 
 std::string DspModule::get_help_snippet(const std::string& topic) const {

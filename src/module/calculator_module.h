@@ -16,6 +16,7 @@
 #define MODULE_CALCULATOR_MODULE_H
 
 #include "core/services/service_interfaces.h"
+#include "core/services/core_manager_interfaces.h"
 
 #include <string>
 #include <string_view>
@@ -200,6 +201,12 @@ public:
 
     // ==================== 帮助接口 ====================
 
+    /**
+     * @brief 返回模块提供的所有帮助主题
+     * @return 帮助主题列表
+     */
+    virtual std::vector<std::string> get_help_topics() const { return {}; }
+
     /// 返回指定主题的帮助文本片段
     virtual std::string get_help_snippet(const std::string& topic) const {
         (void)topic;
@@ -214,84 +221,63 @@ protected:
 };
 
 // ============================================================================
-// 声明式参数校验辅助函数
+// 声明式参数校验与提取辅助函数
 // ============================================================================
 
 namespace module_helpers {
 
 /**
  * @brief 要求参数数量在指定范围内
- * @throws std::runtime_error 如果参数数量不在范围内
  */
-inline void require_args_count(const std::vector<std::string>& args,
+inline void require_args_count(const std::vector<std::string_view>& args,
                                size_t min_args,
                                size_t max_args,
-                               const std::string& func_name) {
+                               std::string_view func_name) {
     if (args.size() < min_args || args.size() > max_args) {
+        std::string err(func_name);
         if (min_args == max_args) {
-            throw std::runtime_error(func_name + " expects " + std::to_string(min_args) + " argument(s)");
+            err += " expects " + std::to_string(min_args) + " argument(s)";
+        } else {
+            err += " expects " + std::to_string(min_args) + "-" + std::to_string(max_args) + " arguments";
         }
-        throw std::runtime_error(func_name + " expects " + std::to_string(min_args) + "-" + std::to_string(max_args) + " arguments");
+        throw std::runtime_error(err);
     }
 }
 
 /**
- * @brief 要求参数数量恰好等于指定值
- * @throws std::runtime_error 如果参数数量不等于指定值
+ * @brief 解析标量参数（使用引擎）
  */
-inline void require_args_exact(const std::vector<std::string>& args,
-                               size_t expected,
-                               const std::string& func_name) {
-    require_args_count(args, expected, expected, func_name);
+inline Scalar extract_scalar(const std::vector<std::string_view>& args,
+                             size_t index,
+                             std::string_view func_name,
+                             IEvaluationEngine& engine) {
+    if (index >= args.size()) throw std::runtime_error(std::string(func_name) + " missing argument " + std::to_string(index + 1));
+    return engine.parse_decimal(std::string(args[index]));
 }
 
 /**
- * @brief 要求参数至少为指定数量
+ * @brief 提取矩阵参数（使用引擎）
  */
-inline void require_args_min(const std::vector<std::string>& args,
-                             size_t min_args,
-                             const std::string& func_name) {
-    if (args.size() < min_args) {
-        throw std::runtime_error(func_name + " expects at least " + std::to_string(min_args) + " argument(s)");
-    }
+inline matrix::Matrix extract_matrix(const std::vector<std::string_view>& args,
+                                     size_t index,
+                                     std::string_view func_name,
+                                     IEvaluationEngine& engine) {
+    if (index >= args.size()) throw std::runtime_error(std::string(func_name) + " missing argument " + std::to_string(index + 1));
+    return engine.parse_matrix_argument(std::string(args[index]), std::string(func_name));
 }
 
 /**
- * @brief 解析标量参数
+ * @brief 提取表达式字符串并去空格
  */
-inline Scalar parse_scalar(const std::string& arg,
-                           const matrix::EvaluationContext& ctx,
-                           const std::string& func_name) {
-    return ctx.scalar_eval(arg);
-}
-
-/**
- * @brief 要求参数为矩阵并返回
- */
-inline matrix::Matrix require_matrix(const std::string& arg,
-                                     const matrix::EvaluationContext& ctx,
-                                     const std::string& func_name) {
-    matrix::Matrix mat;
-    if (!ctx.matrix_lookup || !ctx.matrix_lookup(arg, &mat)) {
-        throw std::runtime_error(func_name + " expects a matrix argument");
-    }
-    return mat;
-}
-
-/**
- * @brief 要求参数为复数并返回
- */
-inline matrix::ComplexNumber require_complex(const std::string& arg,
-                                             const matrix::EvaluationContext& ctx,
-                                             const std::string& func_name) {
-    matrix::ComplexNumber z;
-    if (ctx.complex_lookup && ctx.complex_lookup(arg, &z)) {
-        return z;
-    }
-    // 尝试解析为标量
-    z.real = ctx.scalar_eval(arg);
-    z.imag = 0;
-    return z;
+inline std::string extract_string(const std::vector<std::string_view>& args,
+                                 size_t index,
+                                 std::string_view func_name) {
+    if (index >= args.size()) throw std::runtime_error(std::string(func_name) + " missing argument " + std::to_string(index + 1));
+    std::string s(args[index]);
+    // 简单的去除首尾空格（实际逻辑可根据需要增强）
+    s.erase(0, s.find_first_not_of(" \t\n\r"));
+    s.erase(s.find_last_not_of(" \t\n\r") + 1);
+    return s;
 }
 
 } // namespace module_helpers

@@ -215,14 +215,22 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
     impl_->module_functions.insert(impl_->module_functions.end(), funcs.begin(), funcs.end());
 
     // 建立帮助索引
-    static const std::vector<std::string> topics = {
+    auto topics = module->get_help_topics();
+    // 始终尝试默认的主题
+    static const std::vector<std::string> default_topics = {
         "commands", "functions", "matrix", "symbolic", "analysis", "planning",
         "examples", "exact", "variables", "persistence", "programmer"
     };
-    for (const auto& topic : topics) {
-        if (!module->get_help_snippet(topic).empty()) {
-            impl_->help_topic_to_modules[topic].push_back(module);
+    for (const auto& topic : default_topics) {
+        if (std::find(topics.begin(), topics.end(), topic) == topics.end()) {
+            if (!module->get_help_snippet(topic).empty()) {
+                topics.push_back(topic);
+            }
         }
+    }
+
+    for (const auto& topic : topics) {
+        impl_->help_topic_to_modules[topic].push_back(module);
     }
 
     module->initialize(impl_->locator);
@@ -572,97 +580,60 @@ std::string Calculator::list_variables() const {
     return out.str();
 }
 
-std::string Calculator::factor_expression(const std::string& expression) const {
-    // 完全委托给 IntegerMathModule 处理
-    if (!impl_->commands_ptr->has_command("factor")) {
-        throw std::runtime_error("factor command not available - IntegerMathModule not loaded");
+// 辅助方法：通用命令执行
+namespace {
+std::string dispatch_command_call(const Calculator::Impl* impl, const std::string& name, const std::string& expression) {
+    if (!impl->commands_ptr->has_command(name)) {
+        throw std::runtime_error(name + " command not available");
     }
 
-    auto is_command = [this](std::string_view name) {
-        return impl_->commands_ptr->has_command(std::string(name));
+    auto is_command = [impl](std::string_view n) {
+        return impl->commands_ptr->has_command(std::string(n));
     };
     CommandASTNode ast = parse_command(expression, is_command);
     const auto* call = ast.as_function_call();
-    if (!call || call->name != "factor") {
-        throw std::runtime_error("expected factor(expression)");
+    if (!call || (call->name != name && name[0] != ':')) {
+        throw std::runtime_error("expected " + name + "(...)");
     }
 
     std::vector<std::string_view> args;
     for (const auto& arg : call->arguments) args.push_back(arg.text);
     std::string output;
-    const CoreServices& svc = get_core_services();
-    if (!impl_->commands_ptr->try_process("factor", args, &output, false, svc)) {
-        throw std::runtime_error("factor command failed");
+    if (!impl->commands_ptr->try_process(name, args, &output, false, impl->services())) {
+        throw std::runtime_error(name + " command failed");
     }
     return output;
+}
+}
+
+std::string Calculator::factor_expression(const std::string& expression) const {
+    return dispatch_command_call(impl_.get(), "factor", expression);
 }
 
 std::string Calculator::plot_expression(const std::string& expression) const {
-    // 完全委托给 PlotModule 处理
-    if (!impl_->commands_ptr->has_command("plot")) {
-        throw std::runtime_error("plot command not available - PlotModule not loaded");
-    }
-
-    auto is_command = [this](std::string_view name) {
-        return impl_->commands_ptr->has_command(std::string(name));
-    };
-    CommandASTNode ast = parse_command(expression, is_command);
-    const auto* call = ast.as_function_call();
-    if (!call || call->name != "plot") {
-        throw std::runtime_error("expected plot(...)");
-    }
-
-    std::vector<std::string_view> args;
-    for (const auto& arg : call->arguments) args.push_back(arg.text);
-    std::string output;
-    const CoreServices& svc = get_core_services();
-    if (!impl_->commands_ptr->try_process("plot", args, &output, false, svc)) {
-        throw std::runtime_error("plot command failed");
-    }
-    return output;
+    return dispatch_command_call(impl_.get(), "plot", expression);
 }
 
 std::string Calculator::export_variable(const std::string& line) const {
-    // 完全委托给 PlotModule 处理
-    if (!impl_->commands_ptr->has_command(":export")) {
-        throw std::runtime_error("export command not available - PlotModule not loaded");
-    }
-
+    // 特殊处理 :export，它不是函数调用语法
     std::vector<std::string_view> args;
-    // 将整行作为单个参数传递
     args.push_back(line);
     std::string output;
-    const CoreServices& svc = get_core_services();
-    if (!impl_->commands_ptr->try_process(":export", args, &output, false, svc)) {
+    if (!impl_->commands_ptr->try_process(":export", args, &output, false, impl_->services())) {
         throw std::runtime_error("export command failed");
     }
     return output;
 }
 
 std::string Calculator::base_conversion_expression(const std::string& expression) const {
-    // 完全委托给 IntegerMathModule 处理
-    auto is_command = [this](std::string_view name) {
-        return impl_->commands_ptr->has_command(std::string(name));
+    // 解析出命令名
+    auto is_command = [this](std::string_view n) {
+        return impl_->commands_ptr->has_command(std::string(n));
     };
     CommandASTNode ast = parse_command(expression, is_command);
     const auto* call = ast.as_function_call();
-    if (!call) {
-        throw std::runtime_error("expected bin(...), oct(...), hex(...), or base(value, base)");
-    }
-
-    const std::string cmd_name(call->name);
-    if (!impl_->commands_ptr->has_command(cmd_name)) {
-        throw std::runtime_error(cmd_name + " command not available - IntegerMathModule not loaded");
-    }
-
-    std::vector<std::string_view> args;
-    for (const auto& arg : call->arguments) args.push_back(arg.text);
-    std::string output;
-    const CoreServices& svc = get_core_services();
-    if (!impl_->commands_ptr->try_process(cmd_name, args, &output, false, svc)) {
-        throw std::runtime_error(cmd_name + " command failed");
-    }
-    return output;
+    if (!call) throw std::runtime_error("expected base conversion command");
+    return dispatch_command_call(impl_.get(), std::string(call->name), expression);
 }
 
 // ============================================================================

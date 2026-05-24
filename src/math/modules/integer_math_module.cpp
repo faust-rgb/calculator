@@ -47,21 +47,22 @@ long long require_integer(Scalar x, const std::string& name, const std::string& 
  * @return 执行结果的字符串表示
  * @throws std::runtime_error 如果参数无效
  */
-std::string IntegerMathModule::execute_args(const std::string& command,
-                                          const std::vector<std::string>& args,
+std::string IntegerMathModule::execute_args_view(std::string_view command,
+                                          const std::vector<std::string_view>& args,
                                           ServiceLocator& locator) {
+    using namespace module_helpers;
     auto engine = locator.resolve<IEvaluationEngine>();
 
     if (command == "factor") {
-        if (args.empty()) throw std::runtime_error("factor expects 1 argument");
-        Scalar val = engine->parse_decimal(args[0]);
+        require_args_count(args, 1, 1, command);
+        Scalar val = extract_scalar(args, 0, command, *engine);
         return factor_integer(require_integer(val, "argument", "factor"));
     }
 
     if (command == "bin" || command == "oct" || command == "hex" || command == "base") {
-        if (args.empty()) throw std::runtime_error(command + " expects at least 1 argument");
+        require_args_count(args, 1, 2, command);
 
-        Scalar value = engine->parse_decimal(args[0]);
+        Scalar value = extract_scalar(args, 0, command, *engine);
         int base = 10;
 
         if (command == "bin") base = 2;
@@ -69,7 +70,7 @@ std::string IntegerMathModule::execute_args(const std::string& command,
         else if (command == "hex") base = 16;
         else {
             if (args.size() < 2) throw std::runtime_error("base expects 2 arguments: value, base");
-            base = static_cast<int>(require_integer(engine->parse_decimal(args[1]), "base", "base"));
+            base = static_cast<int>(require_integer(extract_scalar(args, 1, "base", *engine), "base", "base"));
         }
 
         if (base < 2 || base > 36) throw std::runtime_error("base must be in range [2, 36]");
@@ -79,11 +80,15 @@ std::string IntegerMathModule::execute_args(const std::string& command,
         bool uppercase = config->is_hex_uppercase_mode();
         bool prefix = config->is_hex_prefix_mode();
 
-        long long n = require_integer(value, "value", command);
+        long long n = require_integer(value, "value", std::string(command));
         return convert_to_base(n, base, uppercase, prefix);
     }
 
     return "";
+}
+
+std::vector<std::string> IntegerMathModule::get_help_topics() const {
+    return {"programmer"};
 }
 
 /**

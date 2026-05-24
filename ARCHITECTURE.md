@@ -160,11 +160,12 @@ headers for shared declarations. Current internal split headers include:
 User input goes through this rough path:
 
 1. `src/app/main.cpp` reads a line from the terminal
-2. command-style inputs such as `:help`, `:vars`, `:save`, `:load` are handled first
-3. other expressions are passed to `Calculator::process_line(...)`
-4. `Calculator` either:
+2. expressions are passed to `Calculator::process_line(...)`
+3. command-style inputs (including native commands like `plot(...)` and meta-commands like `:help`) are dispatched via `CommandRegistry` to the corresponding `CalculatorModule`.
+4. The module executes the command using `execute_args_view`, resolving dependencies via `ServiceLocator`.
+5. `Calculator` either:
    - treats the line as an assignment, or
-   - evaluates it for display
+   - evaluates it for display via the `UnifiedParser`.
 
 ## Parsing Model
 
