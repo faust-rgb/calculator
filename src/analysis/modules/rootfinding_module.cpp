@@ -11,6 +11,7 @@
 // - rootfinding_engine.cpp: Newton、二分、割线、不动点、Brent 法
 
 #include "analysis/modules/rootfinding_module.h"
+#include "execution/engine/script_context.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
 #include "analysis/rootfinding/rootfinding_engine.h"
@@ -18,7 +19,6 @@
 #include "app/scalar_type.h"
 #include "math/mymath.h"
 #include "parser/grammars/unified_expression_parser.h"
-#include "parser/grammars/command_parser.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "symbolic/solver/symbolic_solver.h"
 #include "core/services/string_utils.h"
@@ -508,16 +508,9 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
 }
 
 
-std::string RootfindingModule::execute_command(const CommandASTNode& node,
-                                               ServiceLocator& locator) {
-    // 使用辅助方法提取命令名和参数
-    const std::string command = node.get_command_name();
-    const std::vector<std::string> args = node.get_argument_texts();
-
-    if (command.empty()) {
-        throw std::runtime_error("Invalid command node type");
-    }
-
+std::string RootfindingModule::execute_args(const std::string& command,
+                                           const std::vector<std::string>& args,
+                                           ServiceLocator& locator) {
     auto engine = locator.resolve<IEvaluationEngine>();
 
     RootfindingContext ctx;
@@ -534,11 +527,11 @@ std::string RootfindingModule::execute_command(const CommandASTNode& node,
             return stored_eval(stored_vars);
         };
     };
-    ctx.get_derivative_expression = [engine](const std::string& expr_str, const std::string& var_name) {
+    ctx.get_derivative_expression = [&locator](const std::string& expr_str, const std::string& var_name) {
         try {
             SymbolicExpression expr;
             std::string var;
-            engine->resolve_symbolic(expr_str, false, &var, &expr);
+            locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(expr_str, false, &var, &expr);
             if (expr.node_) return expr.derivative(var_name).simplify().to_string();
         } catch (...) {}
         return std::string();

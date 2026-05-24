@@ -16,13 +16,13 @@
  */
 
 #include "suites/test_analysis.h"
-#include "core/api/calculator.h"
+#include "calculator.h"
 #include "test_helpers.h"
 #include "math/mymath.h"
-#include "analysis/differential_equations/ode_solver.h"
-#include "analysis/integration/multivariable_integrator.h"
-#include "analysis/calculus/function_analysis.h"
-#include "symbolic/core/symbolic_expression.h"
+#include "ode_solver.h"
+#include "multivariable_integrator.h"
+#include "function_analysis.h"
+#include "symbolic_expression.h"
 #include <iostream>
 #include <vector>
 #include <string>

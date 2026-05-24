@@ -18,7 +18,7 @@
 #ifndef SYSTEM_MODULE_H
 #define SYSTEM_MODULE_H
 
-#include "module/calculator_module.h"
+#include "calculator_module.h"
 
 #include <string>
 #include <vector>
@@ -41,18 +41,10 @@ class ServiceLocator;
 class SystemModule : public CalculatorModule {
 public:
     /**
-     * @brief 返回模块元数据
-     * @return 包含名称、版本、描述等的元数据结构
+     * @brief 返回模块名称
+     * @return 模块名称字符串 "System"
      */
-    ModuleMetadata get_metadata() const override {
-        return ModuleMetadata(
-            "System",
-            "1.0.0",
-            "Core system commands for calculator state management",
-            "Calculator Team",
-            {}  // 无依赖
-        );
-    }
+    std::string name() const override;
 
     /**
      * @brief 返回支持的命令列表
@@ -64,12 +56,16 @@ public:
 
     /**
      * @brief 执行系统命令
-     * @param node 命令 AST 节点
+     * @param command 命令名（如 ":vars", ":clear"）
+     * @param args 命令参数
      * @param locator 服务定位器
      * @return 命令执行结果字符串
+     *
+     * 根据命令名分发到相应的处理函数。
      */
-    std::string execute_command(const CommandASTNode& node,
-                                ServiceLocator& locator) override;
+    std::string execute_args(const std::string& command,
+                             const std::vector<std::string>& args,
+                             ServiceLocator& locator) override;
 
     /**
      * @brief 返回指定主题的帮助文本

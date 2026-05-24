@@ -1,5 +1,5 @@
 #include "suites/test_float128_limit.h"
-#include "core/api/calculator.h"
+#include "calculator.h"
 #include "test_helpers.h"
 #include "math/mymath.h"
 #include <iostream>

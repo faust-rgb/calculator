@@ -3,7 +3,7 @@
  * @brief Implementation of special mathematical functions
  */
 
-#include "math/special/special_functions.h"
+#include "special_functions.h"
 #include "math/core/constants.h"
 #include "math/core/basic_ops.h"
 #include "math/core/floating_point.h"

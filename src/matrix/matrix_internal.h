@@ -19,7 +19,7 @@
 #ifndef MATRIX_INTERNAL_H
 #define MATRIX_INTERNAL_H
 
-#include "matrix/matrix.h"
+#include "matrix.h"
 #include "analysis/base/precision_constants.h"
 #include <utility>
 #include <vector>

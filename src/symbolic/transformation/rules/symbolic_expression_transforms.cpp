@@ -19,7 +19,7 @@
 // 具体实现在 transforms.cpp 中，本文件仅提供包装接口。
 // ============================================================================
 
-#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic_expression_internal.h"
 
 using namespace symbolic_expression_internal;
 

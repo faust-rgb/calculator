@@ -3,12 +3,12 @@
  * @brief 多项式运算实现
  */
 
-#include "polynomial/polynomial.h"
+#include "polynomial.h"
 
 #include "app/scalar_type.h"
 #include "core/services/format_utils.h"
-#include "matrix/matrix.h"
-#include "math/mymath.h"
+#include "matrix.h"
+#include "mymath.h"
 
 #include <algorithm>
 #include <cstddef>

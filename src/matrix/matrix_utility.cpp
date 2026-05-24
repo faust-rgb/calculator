@@ -11,12 +11,12 @@
  * 这些工具函数被矩阵模块的其他文件内部使用。
  */
 
-#include "matrix/matrix.h"
-#include "matrix/matrix_internal.h"
+#include "matrix.h"
+#include "matrix_internal.h"
 #include "dsp/signal_processing.h"
-#include "math/mymath.h"
+#include "mymath.h"
 #include "math/types/complex.h"
-#include "core/services/string_utils.h"
+#include "string_utils.h"
 #include "math/precise/precise_decimal.h"
 #include "app/scalar_type.h"
 #include "core/common/display_precision.h"

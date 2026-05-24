@@ -9,8 +9,8 @@
 // - 比较操作
 // ============================================================================
 
-#include "math/precise/precise_decimal.h"
-#include "math/precise/rational.h"
+#include "precise_decimal.h"
+#include "rational.h"
 #include "types/stored_value.h"
 #include "core/common/calculator_exceptions.h"
 #include "core/services/format_utils.h"

@@ -1,5 +1,5 @@
-#include "suites/test_plot.h"
-#include "core/api/calculator.h"
+#include "test_plot.h"
+#include "calculator.h"
 #include "test_helpers.h"
 #include <iostream>
 #include <string>

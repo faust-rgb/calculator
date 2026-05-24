@@ -18,8 +18,8 @@
 #ifndef CALCULATOR_SIGNAL_COMMANDS_H
 #define CALCULATOR_SIGNAL_COMMANDS_H
 
-#include "core/api/calculator_internal_types.h"
-#include "dsp/signal_processing.h"
+#include "calculator_internal_types.h"
+#include "signal_processing.h"
 
 #include <functional>
 #include <map>

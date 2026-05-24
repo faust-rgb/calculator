@@ -19,9 +19,9 @@
 #ifndef CALCULATOR_POLYNOMIAL_H
 #define CALCULATOR_POLYNOMIAL_H
 
-#include "core/api/calculator_internal_types.h"
+#include "calculator_internal_types.h"
 
-#include "symbolic/core/symbolic_expression.h"
+#include "symbolic_expression.h"
 
 #include <string>
 #include <vector>
@@ -60,18 +60,10 @@ namespace polynomial_ops {
 class PolynomialModule : public CalculatorModule {
 public:
     /**
-     * @brief 获取模块元数据
-     * @return 包含名称、版本、描述等的元数据结构
+     * @brief 获取模块名称
+     * @return 模块名称字符串 "Polynomial"
      */
-    ModuleMetadata get_metadata() const override {
-        return ModuleMetadata(
-            "Polynomial",
-            "1.0.0",
-            "Polynomial operations module: add, subtract, multiply, divide, roots, etc.",
-            "Calculator Team",
-            {}  // 无依赖
-        );
-    }
+    std::string name() const override { return "Polynomial"; }
 
     /**
      * @brief 获取模块提供的所有命令
@@ -84,12 +76,14 @@ public:
 
     /**
      * @brief 执行多项式命令
-     * @param node 命令 AST 节点
+     * @param command 命令名称
+     * @param args 命令参数列表
      * @param locator 服务定位器
      * @return 命令执行结果字符串
      */
-    std::string execute_command(const CommandASTNode& node,
-                                ServiceLocator& locator) override;
+    std::string execute_args(const std::string& command,
+                             const std::vector<std::string>& args,
+                             ServiceLocator& locator) override;
 
 
     /**

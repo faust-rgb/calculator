@@ -3,7 +3,7 @@
  * @brief Implementation of trigonometric, hyperbolic, exponential, and logarithmic functions
  */
 
-#include "math/transcendental/transcendental.h"
+#include "transcendental.h"
 #include "math/core/constants.h"
 #include "math/core/basic_ops.h"
 #include <stdexcept>

@@ -9,12 +9,11 @@
  * @date 2024
  */
 
-#include "io/io_module.h"
+#include "io_module.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
 #include "core/common/calculator_exceptions.h"
 #include "core/services/string_utils.h"
-#include "parser/grammars/command_parser.h"
 #include "matrix/matrix.h"
 
 #include <filesystem>
@@ -702,20 +701,14 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
  * 用于在命令行中直接使用 I/O 命令（不使用括号形式），
  * 例如: open "file.txt" w
  *
- * @param node 命令 AST 节点
- * @param locator 服务定位器
+ * @param command 命令名称
+ * @param args 参数字符串列表
+ * @param services 核心服务引用，用于求值表达式
  * @return 返回命令执行结果的字符串表示
  */
-std::string IoModule::execute_command(const CommandASTNode& node,
-                                      ServiceLocator& locator) {
-    // 使用辅助方法提取命令名和参数
-    const std::string command = node.get_command_name();
-    const std::vector<std::string> args = node.get_argument_texts();
-
-    if (command.empty()) {
-        throw std::runtime_error("Invalid command node type");
-    }
-
+std::string IoModule::execute_args(const std::string& command,
+                                   const std::vector<std::string>& args,
+                                   ServiceLocator& locator) {
     auto engine = locator.resolve<IEvaluationEngine>();
 
     // 命令行用法（无括号），例如: open "file.txt" w

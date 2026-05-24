@@ -8,7 +8,7 @@
 // - Barrett 约减 (重复除法优化)
 // ============================================================================
 
-#include "math/precise/precise_decimal.h"
+#include "precise_decimal.h"
 
 #include <algorithm>
 #include <stdexcept>

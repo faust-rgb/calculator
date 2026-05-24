@@ -2,7 +2,7 @@
 // BigIntData 实现 (SSO - Small Object Optimization)
 // ============================================================================
 
-#include "math/precise/precise_decimal.h"
+#include "precise_decimal.h"
 #include <algorithm>
 
 namespace precise {

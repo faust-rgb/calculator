@@ -7,7 +7,7 @@
  * - 将整数转换为指定进制的字符串表示
  */
 
-#include "math/helpers/base_conversions.h"
+#include "base_conversions.h"
 #include <stdexcept>
 
 /**

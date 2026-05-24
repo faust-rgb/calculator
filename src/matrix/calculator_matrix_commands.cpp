@@ -2,12 +2,12 @@
 // 矩阵命令实现
 // ============================================================================
 
-#include "matrix/calculator_matrix_commands.h"
+#include "calculator_matrix_commands.h"
 
-#include "core/api/calculator_internal_types.h"
+#include "calculator_internal_types.h"
 #include "parser/grammars/unified_expression_parser.h"
-#include "matrix/matrix_internal.h"
-#include "math/mymath.h"
+#include "matrix_internal.h"
+#include "mymath.h"
 
 #include <sstream>
 #include <stdexcept>

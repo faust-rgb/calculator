@@ -9,7 +9,7 @@
  * - 位反转和奇偶校验
  */
 
-#include "math/helpers/bitwise_helpers.h"
+#include "bitwise_helpers.h"
 #include <stdexcept>
 
 /// 程序员模式下使用的位宽度（64位）

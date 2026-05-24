@@ -163,7 +163,26 @@ using MatrixLookup = std::function<bool(const std::string&, Matrix*)>;
 using ComplexLookup = std::function<bool(const std::string&, ComplexNumber*)>;
 
 /**
- * @brief 值多态函数类型
+ * @brief 求值上下文，封装所有求值相关的回调
+ *
+ * 用于简化 ValueFunction 的签名，避免传递过多参数。
+ */
+struct EvaluationContext {
+    ScalarEvaluator scalar_eval;
+    MatrixLookup matrix_lookup;
+    ComplexLookup complex_lookup;
+    const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* matrix_functions = nullptr;
+};
+
+/**
+ * @brief 值多态函数类型（简化版）
+ */
+using ValueFunctionSimple = std::function<Value(
+    const std::vector<std::string>& arguments,
+    const EvaluationContext& ctx)>;
+
+/**
+ * @brief 值多态函数类型（旧版，保持向后兼容）
  */
 using ValueFunction = std::function<Value(
     const std::vector<std::string>& arguments,

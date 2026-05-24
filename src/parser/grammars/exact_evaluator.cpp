@@ -7,7 +7,7 @@
 
 #include "parser/grammars/exact_evaluator.h"
 #include "parser/ast/expression_ast.h"
-#include "core/common/calculator_exceptions.h"
+#include "calculator_exceptions.h"
 #include "execution/resolver/builtin_constants.h"
 #include "execution/resolver/variable_resolver.h"
 #include "types/function.h"
@@ -17,7 +17,7 @@
 #include "math/helpers/integer_helpers.h"
 #include "core/api/calculator_internal_types.h"
 #include "app/scalar_type.h"
-#include "math/mymath.h"
+#include "mymath.h"
 
 #include <algorithm>
 #include <cctype>

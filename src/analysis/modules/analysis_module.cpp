@@ -10,20 +10,22 @@
 // 核心计算已拆分到：
 // - function_analysis.cpp: 函数分析器
 // - limit_solver.cpp: 极限计算
+// - critical_point_solver.cpp: 临界点求解
 // - analysis_command_helpers.cpp: 辅助函数
 
 #include "analysis/modules/analysis_module.h"
+#include "execution/engine/script_context.h"
 #include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "analysis/base/precision_constants.h"
 #include "analysis/calculus/analysis_command_helpers.h"
+#include "analysis/calculus/critical_point_solver.h"
 #include "symbolic/modules/symbolic_module.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "symbolic/algebra/groebner/groebner_basis.h"
 #include "symbolic/solver/symbolic_solver.h"
 #include "analysis/calculus/function_analysis.h"
 #include "parser/grammars/unified_expression_parser.h"
-#include "parser/grammars/command_parser.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
 #include "math/mymath.h"
@@ -564,20 +566,13 @@ bool handle_analysis_command(const AnalysisContext& ctx,
 }
 
 
-std::string AnalysisModule::execute_command(const CommandASTNode& node,
-                                            ::ServiceLocator& locator) {
-    // 使用辅助方法提取命令名和参数
-    const std::string command = node.get_command_name();
-    const std::vector<std::string> args = node.get_argument_texts();
-
-    if (command.empty()) {
-        throw std::runtime_error("Invalid command node type");
-    }
-
+std::string AnalysisModule::execute_args(const std::string& command,
+                                        const std::vector<std::string>& args,
+                                        ::ServiceLocator& locator) {
     auto engine = locator.resolve<IEvaluationEngine>();
     AnalysisContext ctx;
-    ctx.resolve_symbolic = [engine](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
-        engine->resolve_symbolic(arg, req, var, expr);
+    ctx.resolve_symbolic = [&locator](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
+        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(arg, req, var, expr);
     };
     ctx.parse_symbolic_variable_arguments = [engine](const std::vector<std::string>& arguments, std::size_t start_index, const std::vector<std::string>& defaults) {
         return engine->parse_symbolic_vars(arguments, start_index, defaults);
@@ -588,8 +583,13 @@ std::string AnalysisModule::execute_command(const CommandASTNode& node,
     ctx.normalize_result = [engine](Scalar value) {
         return engine->normalize_result(value);
     };
-    ctx.build_analysis = [engine](const std::string& expression) {
-        return engine->build_analysis(expression);
+    ctx.build_analysis = [&locator, engine](const std::string& expression) {
+        SymbolicExpression expr; std::string var;
+        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(expression, false, &var, &expr);
+        FunctionAnalysis analysis(var);
+        analysis.define(expr.to_string());
+        analysis.set_evaluator(engine->build_scoped_evaluator(expr.to_string()));
+        return analysis;
     };
     std::string out;
     if (handle_analysis_command(ctx, command, args, &out)) return out;

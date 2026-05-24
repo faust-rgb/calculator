@@ -11,7 +11,7 @@
  */
 
 #include "suites/test_core_logic.h"
-#include "core/api/calculator.h"
+#include "calculator.h"
 #include "test_helpers.h"
 #include "math/mymath.h"
 #include <iostream>

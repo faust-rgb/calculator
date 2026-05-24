@@ -12,7 +12,7 @@
 // 通过分治法合并，使得分子分母的增长平衡
 // ============================================================================
 
-#include "math/precise/precise_decimal.h"
+#include "precise_decimal.h"
 
 #include <algorithm>
 #include <memory>

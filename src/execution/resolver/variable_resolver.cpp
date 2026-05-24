@@ -12,7 +12,7 @@
 // 5. 父解析器（parent_）- 嵌套解析器链
 // ============================================================================
 
-#include "execution/resolver/variable_resolver.h"
+#include "variable_resolver.h"
 #include "core/environment/scope.h"
 #include "execution/resolver/builtin_constants.h"
 #include "math/mymath.h"

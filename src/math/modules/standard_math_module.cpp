@@ -13,7 +13,7 @@
  * 这些函数构成计算器的核心数学库。
  */
 
-#include "math/modules/standard_math_module.h"
+#include "standard_math_module.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include "math/helpers/unit_conversions.h"

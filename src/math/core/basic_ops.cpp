@@ -3,8 +3,8 @@
  * @brief Implementation of basic mathematical operations
  */
 
-#include "math/core/basic_ops.h"
-#include "math/core/constants.h"
+#include "basic_ops.h"
+#include "constants.h"
 #include <stdexcept>
 
 namespace mymath {
@@ -146,7 +146,30 @@ long long gcd(long long a, long long b) {
     }
     return a < 0 ? -a : a;
 }
+/*
+bool approximate_fraction(long double value,
+                          long long* numerator,
+                          long long* denominator,
+                          int max_denominator,
+                          long double eps) {
+    const long double positive = value < 0.0L ? -value : value;
 
+    for (int den = 1; den <= max_denominator; ++den) {
+        const long double scaled = positive * static_cast<long double>(den);
+        const long long num = static_cast<long long>(scaled + 0.5);
+        const long double candidate = static_cast<long double>(num) / static_cast<long double>(den);
+
+        if (abs(candidate - positive) <= eps) {
+            const long long divisor = gcd(num, den);
+            *numerator = (value < 0.0L ? -num : num) / divisor;
+            *denominator = den / divisor;
+            return true;
+        }
+    }
+
+    return false;
+}
+*/
 bool approximate_fraction(Scalar value,
                           long long* numerator,
                           long long* denominator,
@@ -247,5 +270,22 @@ bool best_rational_approximation(long double value,
     *denominator = best_den / divisor;
     return true;
 }
-
+/*
+//long double normalize_angle(long double x) {
+    if (!isfinite(x)) {
+        return x;
+    }
+    // Normalize angle to [-pi, pi]
+    const Scalar two_pi = mymath::pi() * Scalar(2.0L);
+    Scalar x_s = Scalar(x);
+    // fmod equivalent: x - floor(x/two_pi) * two_pi
+    Scalar result = x_s - mymath::floor(x_s / two_pi) * two_pi;
+    if (result > mymath::pi()) {
+        result -= two_pi;
+    } else if (result < -mymath::pi()) {
+        result += two_pi;
+    }
+    return static_cast<long double>(result);
+}
+*/
 }  // namespace mymath

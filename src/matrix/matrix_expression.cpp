@@ -20,15 +20,15 @@
  * @date 2024
  */
 
-#include "matrix/matrix.h"
-#include "matrix/matrix_internal.h"
+#include "matrix.h"
+#include "matrix_internal.h"
 #include "parser/infra/base_parser.h"
 #include "statistics/calculator_statistics.h"
 #include "statistics/probability.h"
-#include "core/services/string_utils.h"
+#include "string_utils.h"
 
-#include "math/mymath.h"
-#include "polynomial/polynomial.h"
+#include "mymath.h"
+#include "polynomial.h"
 
 #include <algorithm>
 #include <cctype>

@@ -29,22 +29,25 @@
  */
 class MatrixModule : public CalculatorModule {
 public:
-    /** @brief 返回模块元数据 */
-    ModuleMetadata get_metadata() const override {
-        return ModuleMetadata(
-            "Matrix",
-            "1.0.0",
-            "Matrix operations module",
-            "Calculator Team",
-            {}  // 无依赖
-        );
-    }
+    /** @brief 返回模块名称 "Matrix" */
+    std::string name() const override { return "Matrix"; }
 
     /** @brief 返回模块支持的命令列表 {eig, svd, lu_p} */
     std::vector<std::string> get_commands() const override;
 
-    std::string execute_command(const CommandASTNode& node,
-                                ServiceLocator& locator) override;
+    /**
+     * @brief 执行矩阵命令
+     *
+     * 处理 eig, svd, lu_p 命令，返回相应的计算结果字符串。
+     *
+     * @param command 命令名称
+     * @param args 命令参数列表
+     * @param locator 服务定位器
+     * @return 命令执行结果的字符串表示
+     */
+    std::string execute_args(const std::string& command,
+                             const std::vector<std::string>& args,
+                             ServiceLocator& locator) override;
 
     /**
      * @brief 返回矩阵函数映射

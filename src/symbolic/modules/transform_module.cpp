@@ -3,10 +3,10 @@
 // ============================================================================
 
 #include "symbolic/modules/transform_module.h"
+#include "execution/engine/script_context.h"
 #include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "parser/grammars/unified_expression_parser.h"
-#include "parser/grammars/command_parser.h"
 #include "core/services/string_utils.h"
 
 #include <algorithm>
@@ -211,20 +211,13 @@ bool handle_transform_command(const TransformContext& ctx,
 }
 
 
-std::string TransformModule::execute_command(const CommandASTNode& node,
-                                             ServiceLocator& locator) {
-    // 使用辅助方法提取命令名和参数
-    const std::string command = node.get_command_name();
-    const std::vector<std::string> args = node.get_argument_texts();
-
-    if (command.empty()) {
-        throw std::runtime_error("Invalid command node type");
-    }
-
+std::string TransformModule::execute_args(const std::string& command,
+                                         const std::vector<std::string>& args,
+                                         ServiceLocator& locator) {
     auto engine = locator.resolve<IEvaluationEngine>();
     TransformContext ctx;
-    ctx.resolve_symbolic = [engine](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
-        engine->resolve_symbolic(arg, req, var, expr);
+    ctx.resolve_symbolic = [&locator](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
+        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(arg, req, var, expr);
     };
 
     std::string output;

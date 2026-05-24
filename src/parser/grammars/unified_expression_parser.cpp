@@ -10,13 +10,13 @@
 //
 // ============================================================================
 
-#include "parser/grammars/unified_expression_parser.h"
-#include "parser/grammars/unified_parser_factory.h"
+#include "unified_expression_parser.h"
+#include "unified_parser_factory.h"
 #include "parser/grammars/command_parser.h"
 #include "parser/grammars/exact_evaluator.h"
 #include "parser/ast/expression_ast.h"
 #include "parser/ast/expression_compiler.h"
-#include "core/common/calculator_exceptions.h"
+#include "calculator_exceptions.h"
 #include "execution/resolver/variable_resolver.h"
 #include "types/function.h"
 #include "math/precise/rational.h"
@@ -24,7 +24,7 @@
 #include "app/scalar_type.h"
 #include "math/helpers/integer_helpers.h"
 #include "math/helpers/base_conversions.h"
-#include "math/mymath.h"
+#include "mymath.h"
 
 #include <cctype>
 
@@ -239,16 +239,8 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
 
     // 矩阵/复数候选（使用分析结果，避免重复检测）
     if (analysis.has_bracket || analysis.has_matrix_func || analysis.has_matrix_or_complex_var) {
-        // 直接走矩阵求值路径，避免在 try_evaluate_value 中再次调用 factory_->analyze()
-        ensure_callbacks_initialized();
         matrix::Value matrix_val;
-        if (matrix::try_evaluate_expression(expression,
-                                            cached_scalar_evaluator_,
-                                            cached_matrix_lookup_,
-                                            cached_complex_lookup_,
-                                            matrix_functions_,
-                                            value_functions_,
-                                            &matrix_val)) {
+        if (try_evaluate_value(expression, &matrix_val)) {
             return convert_matrix_value_to_stored(std::move(matrix_val));
         }
         // 失败则回退到标量路径
@@ -256,9 +248,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
 
     // rat(expr[, max_denominator]) 显示用有理近似
     if (hint == ExpressionHint::kRatCall) {
-        CommandParser::CommandConfig rat_config;
-        rat_config.exact_commands = {"rat"};
-        CommandASTNode rat_ast = parse_command(expression, rat_config);
+        CommandASTNode rat_ast = parse_command(expression);
         const auto* call = rat_ast.as_function_call();
         if (call && call->name == "rat") {
             if (call->arguments.size() != 1 && call->arguments.size() != 2) {
@@ -266,10 +256,8 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
                     "rat expects one argument or expression plus max_denominator");
             }
 
-            std::string arg0_text = call->arguments[0]->kind == CommandKind::kExpression && call->arguments[0]->as_expression()
-                ? std::string(call->arguments[0]->as_expression()->text) : "";
             const StoredValue value =
-                evaluate_stored(arg0_text, false, symbolic_mode);
+                evaluate_stored(std::string(call->arguments[0].text), false, symbolic_mode);
             if (value.is_matrix || value.is_complex) {
                 throw std::runtime_error("rat cannot approximate a matrix or complex value");
             }
@@ -279,10 +267,8 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
 
             long long max_denominator = 999;
             if (call->arguments.size() == 2) {
-                std::string arg1_text = call->arguments[1]->kind == CommandKind::kExpression && call->arguments[1]->as_expression()
-                    ? std::string(call->arguments[1]->as_expression()->text) : "";
                 const StoredValue max_denominator_value =
-                    evaluate_stored(arg1_text, false, symbolic_mode);
+                    evaluate_stored(std::string(call->arguments[1].text), false, symbolic_mode);
                 if (max_denominator_value.is_matrix || max_denominator_value.is_complex ||
                     max_denominator_value.is_string) {
                     throw std::runtime_error("rat max_denominator must be a positive integer");
@@ -452,12 +438,8 @@ bool try_base_conversion_expression(
     const std::map<std::string, CustomFunction>* functions,
     const HexFormatOptions& hex_options,
     std::string* output) {
-
-    // 创建包含进制转换命令的配置
-    CommandParser::CommandConfig config;
-    config.exact_commands = {"bin", "oct", "hex", "base"};
-
-    CommandASTNode ast = parse_command(expression, config);
+    
+    CommandASTNode ast = parse_command(expression);
     const auto* call = ast.as_function_call();
     if (!call) return false;
 
@@ -476,18 +458,14 @@ bool try_base_conversion_expression(
         if (call->arguments.size() != 2) {
             throw std::runtime_error("base expects exactly two arguments");
         }
-        std::string arg1_text = call->arguments[1]->kind == CommandKind::kExpression && call->arguments[1]->as_expression()
-            ? std::string(call->arguments[1]->as_expression()->text) : "";
-        const Scalar base_value = parse_decimal_expression(arg1_text, variables, functions);
+        const Scalar base_value = parse_decimal_expression(std::string(call->arguments[1].text), variables, functions);
         if (!is_integer_double(base_value)) {
             throw std::runtime_error("base conversion requires an integer base");
         }
         base = static_cast<int>(round_to_long_long(base_value));
     }
 
-    std::string arg0_text = call->arguments[0]->kind == CommandKind::kExpression && call->arguments[0]->as_expression()
-        ? std::string(call->arguments[0]->as_expression()->text) : "";
-    const Scalar value = parse_decimal_expression(arg0_text, variables, functions);
+    const Scalar value = parse_decimal_expression(std::string(call->arguments[0].text), variables, functions);
     if (!is_integer_double(value)) {
         throw std::runtime_error("base conversion only accepts integers");
     }

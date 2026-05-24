@@ -6,7 +6,7 @@
  * 包括因式分解、进制转换、位运算和数论函数等。
  */
 
-#include "math/modules/integer_math_module.h"
+#include "integer_math_module.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
 #include "math/helpers/integer_helpers.h"
@@ -14,7 +14,6 @@
 #include "math/helpers/bitwise_helpers.h"
 #include "math/helpers/base_conversions.h"
 #include "core/common/calculator_exceptions.h"
-#include "parser/grammars/command_parser.h"
 #include "math/mymath.h"
 #include <algorithm>
 #include <sstream>
@@ -42,21 +41,15 @@ long long require_integer(Scalar x, const std::string& name, const std::string& 
 
 /**
  * @brief 执行命令式操作（如 factor、bin、oct、hex、base）
- * @param node 命令 AST 节点
- * @param locator 服务定位器
+ * @param command 命令名称
+ * @param args 参数列表
+ * @param services 核心服务接口
  * @return 执行结果的字符串表示
  * @throws std::runtime_error 如果参数无效
  */
-std::string IntegerMathModule::execute_command(const CommandASTNode& node,
-                                              ServiceLocator& locator) {
-    // 使用辅助方法提取命令名和参数
-    const std::string command = node.get_command_name();
-    const std::vector<std::string> args = node.get_argument_texts();
-
-    if (command.empty()) {
-        throw std::runtime_error("Invalid command node type");
-    }
-
+std::string IntegerMathModule::execute_args(const std::string& command,
+                                          const std::vector<std::string>& args,
+                                          ServiceLocator& locator) {
     auto engine = locator.resolve<IEvaluationEngine>();
 
     if (command == "factor") {

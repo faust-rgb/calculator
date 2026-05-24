@@ -10,9 +10,9 @@
  * 这些函数支持 long double 和 PreciseDecimal 两种数值类型。
  */
 
-#include "matrix/matrix.h"
-#include "matrix/matrix_internal.h"
-#include "math/mymath.h"
+#include "matrix.h"
+#include "matrix_internal.h"
+#include "mymath.h"
 #include "math/precise/precise_decimal.h"
 #include <vector>
 #include <stdexcept>

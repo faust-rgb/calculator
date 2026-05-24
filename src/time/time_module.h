@@ -52,18 +52,10 @@
 class TimeModule : public CalculatorModule {
 public:
     /**
-     * @brief 获取模块元数据
-     * @return 返回模块元数据
+     * @brief 获取模块名称
+     * @return 返回模块名称 "Time"
      */
-    ModuleMetadata get_metadata() const override {
-        return ModuleMetadata(
-            "Time",
-            "1.0.0",
-            "Time and timer functions module",
-            "Calculator Team",
-            {}  // 无依赖
-        );
-    }
+    std::string name() const override { return "Time"; }
 
     /**
      * @brief 获取模块支持的命令列表

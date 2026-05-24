@@ -3,11 +3,11 @@
  * @brief 矩阵线性代数与分解实现 (泛型版)
  */
 
-#include "core/common/calculator_exceptions.h"
-#include "matrix/matrix_internal.h"
-#include "math/mymath.h"
-#include "polynomial/polynomial.h"
-#include "math/precise/precise_decimal.h"
+#include "calculator_exceptions.h"
+#include "matrix_internal.h"
+#include "mymath.h"
+#include "polynomial.h"
+#include "precise_decimal.h"
 #include "app/scalar_type.h"
 #include "analysis/base/precision_constants.h"
 
@@ -63,20 +63,14 @@ TMatrix<T> normal_matrix(const TMatrix<T>& matrix) {
 }
 
 /**
- * @brief Jacobi 对角化辅助函数 - 将对称矩阵通过 Jacobi 旋转对角化 (泛型版本)
- *
- * 执行最多 max_sweeps 次 Jacobi sweep，将矩阵 a 对角化。
- * 对角化完成后，a 的对角元素即为特征值近似值。
- *
- * @param a       待对角化的对称矩阵（原地修改）
- * @param max_sweeps 最大 sweep 次数
+ * @brief Jacobi 特征值算法 - 计算极值特征值 (泛型版本)
  */
 template <typename T>
-void jacobi_diagonalize(TMatrix<T>& a, int max_sweeps) {
+T jacobi_extreme_eigenvalue(TMatrix<T> a, bool largest) {
     const std::size_t n = a.rows;
+    if (n == 0) return T(static_cast<long long>(0));
     const T tolerance = precision::epsilon<T>();
-    for (int sweep = 0; sweep < max_sweeps; ++sweep) {
-        // 找到绝对值最大的非对角元素
+    for (int sweep = 0; sweep < 128; ++sweep) {
         std::size_t p = 0;
         std::size_t q = 0;
         T max_off = T(static_cast<long long>(0));
@@ -91,10 +85,9 @@ void jacobi_diagonalize(TMatrix<T>& a, int max_sweeps) {
             }
         }
         if (max_off <= tolerance) {
-            break;  // 已收敛
+            break;
         }
 
-        // 计算 Jacobi 旋转参数
         const T app = a.at(p, p);
         const T aqq = a.at(q, q);
         const T apq = a.at(p, q);
@@ -104,35 +97,26 @@ void jacobi_diagonalize(TMatrix<T>& a, int max_sweeps) {
         const T c = T(static_cast<long long>(1)) / t_sqrt(T(static_cast<long long>(1)) + t * t);
         const T s = c * t;
 
-        // 更新矩阵
         a.at(p, p) = app - t * apq;
         a.at(q, q) = aqq + t * apq;
         a.at(p, q) = a.at(q, p) = T(static_cast<long long>(0));
         for (std::size_t k = 0; k < n; ++k) {
-            if (k == p || k == q) continue;
+            if (k == p || k == q) {
+                continue;
+            }
             const T akp = a.at(k, p);
             const T akq = a.at(k, q);
             a.at(k, p) = a.at(p, k) = c * akp - s * akq;
             a.at(k, q) = a.at(q, k) = s * akp + c * akq;
         }
     }
-}
 
-/**
- * @brief Jacobi 特征值算法 - 计算极值特征值 (泛型版本)
- */
-template <typename T>
-T jacobi_extreme_eigenvalue(TMatrix<T> a, bool largest) {
-    const std::size_t n = a.rows;
-    if (n == 0) return T(static_cast<long long>(0));
-    jacobi_diagonalize(a, 128);
     T selected = a.at(0, 0);
     for (std::size_t i = 1; i < n; ++i) {
         selected = largest ? (selected > a.at(i, i) ? selected : a.at(i, i))
                            : (selected < a.at(i, i) ? selected : a.at(i, i));
     }
-    const T neg_eps = -precision::epsilon<T>();
-    return selected < T(static_cast<long long>(0)) && selected > neg_eps ? T(static_cast<long long>(0)) : selected;
+    return selected < T(static_cast<long long>(0)) && selected > T("-1e-14") ? T(static_cast<long long>(0)) : selected;
 }
 
 /**
@@ -141,11 +125,51 @@ T jacobi_extreme_eigenvalue(TMatrix<T> a, bool largest) {
 template <typename T>
 std::vector<T> jacobi_eigenvalues(TMatrix<T> a) {
     const std::size_t n = a.rows;
-    jacobi_diagonalize(a, 256);
-    const T neg_eps = -precision::epsilon<T>();
+    const T tolerance = precision::epsilon<T>();
+    for (int sweep = 0; sweep < 256; ++sweep) {
+        std::size_t p = 0;
+        std::size_t q = 0;
+        T max_off = T(static_cast<long long>(0));
+        for (std::size_t i = 0; i + 1 < n; ++i) {
+            for (std::size_t j = i + 1; j < n; ++j) {
+                const T off = t_abs(a.at(i, j));
+                if (off > max_off) {
+                    max_off = off;
+                    p = i;
+                    q = j;
+                }
+            }
+        }
+        if (max_off <= tolerance) {
+            break;
+        }
+
+        const T app = a.at(p, p);
+        const T aqq = a.at(q, q);
+        const T apq = a.at(p, q);
+        const T tau = (aqq - app) / (T(static_cast<long long>(2)) * apq);
+        const T sign = tau >= T(static_cast<long long>(0)) ? T(static_cast<long long>(1)) : T(static_cast<long long>(-1));
+        const T t = sign / (t_abs(tau) + t_sqrt(T(static_cast<long long>(1)) + tau * tau));
+        const T c = T(static_cast<long long>(1)) / t_sqrt(T(static_cast<long long>(1)) + t * t);
+        const T s = c * t;
+
+        a.at(p, p) = app - t * apq;
+        a.at(q, q) = aqq + t * apq;
+        a.at(p, q) = a.at(q, p) = T(static_cast<long long>(0));
+        for (std::size_t k = 0; k < n; ++k) {
+            if (k == p || k == q) {
+                continue;
+            }
+            const T akp = a.at(k, p);
+            const T akq = a.at(k, q);
+            a.at(k, p) = a.at(p, k) = c * akp - s * akq;
+            a.at(k, q) = a.at(q, k) = s * akp + c * akq;
+        }
+    }
+
     std::vector<T> values(n, T(static_cast<long long>(0)));
     for (std::size_t i = 0; i < n; ++i) {
-        values[i] = a.at(i, i) < T(static_cast<long long>(0)) && a.at(i, i) > neg_eps ? T(static_cast<long long>(0)) : a.at(i, i);
+        values[i] = a.at(i, i) < T(static_cast<long long>(0)) && a.at(i, i) > T("-1e-14") ? T(static_cast<long long>(0)) : a.at(i, i);
     }
     return values;
 }

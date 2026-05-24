@@ -11,7 +11,7 @@
 #ifndef CALCULATOR_PLOT_H
 #define CALCULATOR_PLOT_H
 
-#include "core/api/calculator_internal_types.h"
+#include "calculator_internal_types.h"
 #include "execution/resolver/variable_resolver.h"
 #include <string>
 #include <vector>

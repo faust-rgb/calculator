@@ -1,6 +1,6 @@
 CXX ?= g++
 BASE_CXXFLAGS := -std=c++23 -Wall -Wextra -pedantic -mfma
-OPT_CXXFLAGS ?= -O2 -static
+OPT_CXXFLAGS ?= -O0 -g -static
 CXXFLAGS ?= $(BASE_CXXFLAGS) $(OPT_CXXFLAGS)
 LDFLAGS ?=
 BIN_DIR := bin
@@ -12,7 +12,8 @@ TEST_DIR := test
 TEST_SUITE_DIR := $(TEST_DIR)/suites
 
 # Collect all source directories using wildcard
-INCLUDES := -I$(SRC_DIR) -I$(TEST_DIR)
+SRC_DIRS := $(shell find $(SRC_DIR) -type d)
+INCLUDES := -I$(SRC_DIR) $(addprefix -I,$(SRC_DIRS)) -I$(TEST_DIR)
 CPPFLAGS += $(INCLUDES) -MMD -MP
 
 # Collect all source files using wildcard (exclude main.cpp)

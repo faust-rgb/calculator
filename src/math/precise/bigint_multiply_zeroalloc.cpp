@@ -12,7 +12,7 @@
 // - Toom-Cook 3: O(n^1.465)
 // ============================================================================
 
-#include "math/precise/precise_decimal.h"
+#include "precise_decimal.h"
 
 #include <algorithm>
 #include <cstring>

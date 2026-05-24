@@ -6,7 +6,7 @@
  * 主要使用 Braille Unicode 字符实现高分辨率终端图形。
  */
 
-#include "plot/plot_renderer.h"
+#include "plot_renderer.h"
 #include "app/scalar_type.h"
 #include "math/mymath.h"
 #include <algorithm>

@@ -11,17 +11,24 @@
 
 #include "types/stored_value.h"
 #include "types/function.h"
+#include "app/scalar_type.h"
 #include <string>
 #include <vector>
 #include <map>
 #include <optional>
 #include <functional>
 
+// 前向声明 - 避免直接依赖具体类型
 class SymbolicExpression;
 class FunctionAnalysis;
 class VariableResolver;
 struct FlatScopeStack;
-class CommandASTNode;
+struct CoreServices;
+
+namespace matrix {
+template<typename T> class TMatrix;
+using Matrix = TMatrix<Scalar>;
+}
 
 /**
  * @class IVariableManager
@@ -87,7 +94,7 @@ public:
      * @return 自定义函数映射表的指针
      */
     virtual const std::map<std::string, CustomFunction>* get_custom_functions_map() const = 0;
-
+    
     // 内置函数映射表
     virtual const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* get_scalar_functions() const = 0;
     virtual const std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>* get_matrix_functions() const = 0;
@@ -105,16 +112,16 @@ public:
 
     virtual void set_display_precision(int precision) = 0;
     virtual int get_display_precision() const = 0;
-
+    
     virtual void set_exact_mode(bool enabled) = 0;
     virtual bool is_exact_mode() const = 0;
-
+    
     virtual void set_symbolic_constants_mode(bool enabled) = 0;
     virtual bool is_symbolic_constants_mode() const = 0;
-
+    
     virtual void set_hex_prefix_mode(bool enabled) = 0;
     virtual bool is_hex_prefix_mode() const = 0;
-
+    
     virtual void set_hex_uppercase_mode(bool enabled) = 0;
     virtual bool is_hex_uppercase_mode() const = 0;
 };
@@ -135,10 +142,6 @@ public:
     virtual bool is_matrix_argument(const std::string& arg) = 0;
     virtual matrix::Matrix parse_matrix_argument(const std::string& arg, const std::string& command) = 0;
 
-    // 符号与绘图辅助
-    virtual void resolve_symbolic(const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) = 0;
-    virtual std::string render_plot(const std::vector<std::string>& args, bool gnuplot) = 0;
-
     // 辅助求值功能
     virtual Scalar parse_decimal(const std::string& expr) = 0;
     virtual Scalar normalize_result(Scalar value) = 0;
@@ -146,13 +149,9 @@ public:
     virtual std::function<Scalar(const std::vector<std::pair<std::string, StoredValue>>&)> build_scoped_scalar_evaluator(const std::string& expression) = 0;
     virtual std::function<matrix::Matrix(const std::vector<std::pair<std::string, StoredValue>>&)> build_scoped_matrix_evaluator(const std::string& expression) = 0;
     virtual StoredValue evaluate_expression_value(const std::string& arg, bool exact) = 0;
-    virtual FunctionAnalysis build_analysis(const std::string& expression) = 0;
     virtual std::vector<std::string> parse_symbolic_vars(const std::vector<std::string>& arguments, std::size_t start_index, const std::vector<std::string>& defaults) = 0;
     virtual std::string expand_inline(const std::string& expression) = 0;
 };
-
-// 前向声明命令处理器类型
-using CommandASTHandler = std::function<bool(const CommandASTNode&, std::string*, bool)>;
 
 /**
  * @class ICommandRegistry
@@ -168,38 +167,33 @@ public:
     virtual std::string get_help(const std::string& name) const = 0;
 
     /**
-     * @brief 注册 AST 命令处理器
+     * @brief 尝试处理命令
+     * @param cmd_name 命令名
+     * @param args 已解析的参数列表
+     * @param output 输出字符串指针
+     * @param exact_mode 是否精确模式
+     * @param services 核心服务接口
+     * @return 如果命令被处理返回 true
+     */
+    virtual bool try_process(const std::string& cmd_name,
+                             const std::vector<std::string_view>& args,
+                             std::string* output,
+                             bool exact_mode,
+                             const CoreServices& services) = 0;
+
+    /**
+     * @brief 注册命令处理器
      * @param name 命令名
      * @param handler 处理函数
      * @param help_text 帮助文本
      */
-    virtual void register_ast_handler(const std::string& name,
-                                     CommandASTHandler handler,
-                                     const std::string& help_text = "") = 0;
-
-    /**
-     * @brief 检查标识符是否可能是命令（用于解析器快速路径）
-     * @param name 标识符名
-     * @return 如果可能是命令返回 true
-     */
-    virtual bool could_be_command(std::string_view name) const = 0;
-
-    /**
-     * @brief 注册帮助主题
-     * @param topic 主题名
-     * @param help_text 帮助文本
-     */
-    virtual void register_help_topic(const std::string& topic, const std::string& help_text) = 0;
-
-    /**
-     * @brief 获取所有注册的帮助主题名
-     */
-    virtual std::vector<std::string> get_help_topics() const = 0;
-
-    /**
-     * @brief 获取特定主题的帮助
-     */
-    virtual std::string get_topic_help(const std::string& topic) const = 0;
+    virtual void register_command_handler(const std::string& name,
+                                          std::function<bool(const std::string&,
+                                                             const std::vector<std::string_view>&,
+                                                             std::string*,
+                                                             bool,
+                                                             const CoreServices&)> handler,
+                                          const std::string& help_text = "") = 0;
 };
 
 class CalculatorModule;
@@ -226,56 +220,6 @@ public:
 
     virtual std::string save_state(const std::string& path) const = 0;
     virtual std::string load_state(const std::string& path) = 0;
-};
-
-/**
- * @class IExecutionContext
- * @brief 执行上下文接口，提供对核心服务的访问
- */
-class IExecutionContext {
-public:
-    virtual ~IExecutionContext() = default;
-
-    virtual IVariableManager& variables() = 0;
-    virtual IFunctionManager& functions() = 0;
-    virtual IConfigManager& config() = 0;
-    virtual ICommandRegistry& commands() = 0;
-
-    virtual const IVariableManager& variables() const = 0;
-    virtual const IFunctionManager& functions() const = 0;
-    virtual const IConfigManager& config() const = 0;
-    virtual const ICommandRegistry& commands() const = 0;
-
-    /**
-     * @brief 求值表达式并返回 StoredValue
-     */
-    virtual StoredValue evaluate(const std::string& expression, bool exact_mode) = 0;
-
-    /**
-     * @brief 尝试隐式求值
-     */
-    virtual bool try_evaluate_implicit(const std::string& expression,
-                                      StoredValue* value,
-                                      const std::map<std::string, StoredValue>& vars) = 0;
-
-    /**
-     * @brief 展开内联函数命令
-     */
-    virtual std::string expand_inline(const std::string& expression) = 0;
-
-    /**
-     * @brief 执行脚本文件
-     */
-    virtual std::string execute_script_file(const std::string& path,
-                                           bool exact_mode,
-                                           bool create_scope) = 0;
-
-    /**
-     * @brief 尝试处理函数式命令
-     */
-    virtual bool try_process_function_command(const std::string& expression,
-                                             std::string* output,
-                                             bool exact_mode = false) const = 0;
 };
 
 #endif // CORE_MANAGER_INTERFACES_H

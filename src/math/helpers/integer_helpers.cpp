@@ -11,8 +11,8 @@
  * - 整数因式分解
  */
 
-#include "math/helpers/integer_helpers.h"
-#include "math/mymath.h"
+#include "integer_helpers.h"
+#include "mymath.h"
 #include <stdexcept>
 #include <sstream>
 

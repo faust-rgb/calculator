@@ -15,7 +15,7 @@
  * @date 2024
  */
 
-#include "dsp/calculator_signal_commands.h"
+#include "calculator_signal_commands.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "execution/resolver/variable_resolver.h"
 #include "parser/infra/parser_utils.h"

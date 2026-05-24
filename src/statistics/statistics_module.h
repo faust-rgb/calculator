@@ -12,10 +12,10 @@
 #include "module/calculator_module.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "app/scalar_type.h"
-#include "statistics/calculator_statistics.h"
-#include "statistics/statistics.h"
-#include "statistics/probability.h"
-#include "math/mymath.h"
+#include "calculator_statistics.h"
+#include "statistics.h"
+#include "probability.h"
+#include "mymath.h"
 #include <numeric>
 #include <sstream>
 #include <span>
@@ -41,25 +41,19 @@ class StatisticsModule : public CalculatorModule {
 public:
     using Scalar = mymath::Scalar;
     /**
-     * @brief 获取模块元数据
-     * @return 模块元数据
+     * @brief 获取模块名称
+     * @return 模块名称 "Statistics"
      */
-    ModuleMetadata get_metadata() const override {
-        return ModuleMetadata(
-            "Statistics",
-            "1.0.0",
-            "Statistical analysis module",
-            "Calculator Team",
-            {}  // 无依赖
-        );
-    }
+    std::string name() const override { return "Statistics"; }
 
     /**
      * @brief 执行统计命令
      *
      * 处理统计相关的命令请求，如统计摘要生成等。
      */
-    std::string execute_command(const CommandASTNode& node, ServiceLocator& locator) override;
+    std::string execute_args(const std::string& command,
+                        const std::vector<std::string>& args,
+                        ServiceLocator& locator) override;
 
     /**
      * @brief 获取模块提供的原生函数映射

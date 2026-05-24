@@ -14,13 +14,14 @@
  * 3. 嵌套的多项式操作（如 "poly_add(poly_mul(p, q), r)"）
  */
 
-#include "polynomial/calculator_polynomial.h"
+#include "execution/engine/script_context.h"
+#include "calculator_polynomial.h"
 
 #include "app/scalar_type.h"
 #include "parser/grammars/unified_expression_parser.h"
-#include "matrix/matrix_internal.h"
-#include "polynomial/polynomial.h"
-#include "math/mymath.h"
+#include "matrix_internal.h"
+#include "polynomial.h"
+#include "mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include "parser/grammars/command_parser.h"
 #include "core/services/string_utils.h"
@@ -66,12 +67,7 @@ void build_polynomial_recursive(
     std::vector<Scalar>* coefficients) {
 
     const std::string trimmed_argument = trim_copy(argument);
-
-    // 创建包含多项式命令的配置
-    CommandParser::CommandConfig config;
-    config.exact_commands = {"poly_add", "poly_sub", "poly_mul", "poly_div"};
-
-    CommandASTNode ast = parse_command(trimmed_argument, config);
+    CommandASTNode ast = parse_command(trimmed_argument);
 
     // 检查是否为嵌套的多项式操作
     if (ast.kind == CommandKind::kFunctionCall) {
@@ -88,13 +84,9 @@ void build_polynomial_recursive(
             std::string rhs_variable;
             std::vector<Scalar> lhs_coefficients;
             std::vector<Scalar> rhs_coefficients;
-            std::string arg0_text = call->arguments[0]->kind == CommandKind::kExpression && call->arguments[0]->as_expression()
-                ? std::string(call->arguments[0]->as_expression()->text) : "";
-            std::string arg1_text = call->arguments[1]->kind == CommandKind::kExpression && call->arguments[1]->as_expression()
-                ? std::string(call->arguments[1]->as_expression()->text) : "";
-            build_polynomial_recursive(ctx, arg0_text,
+            build_polynomial_recursive(ctx, std::string(call->arguments[0].text),
                                        &lhs_variable, &lhs_coefficients);
-            build_polynomial_recursive(ctx, arg1_text,
+            build_polynomial_recursive(ctx, std::string(call->arguments[1].text),
                                        &rhs_variable, &rhs_coefficients);
 
             *variable_name = lhs_variable;
@@ -384,29 +376,15 @@ bool handle_polynomial_command(const PolynomialContext& ctx,
  * @return 命令执行结果字符串
  * @throw std::runtime_error 当命令未知或执行失败时抛出
  */
-std::string PolynomialModule::execute_command(const CommandASTNode& node,
-                                              ServiceLocator& locator) {
-    // 提取命令名和参数
-    std::string command;
-    std::vector<std::string> args;
-
-    if (node.kind == CommandKind::kFunctionCall) {
-        command = std::string(node.as_function_call()->name);
-        for (const auto& arg : node.as_function_call()->arguments) {
-            if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
-                args.push_back(std::string(arg->as_expression()->text));
-            }
-        }
-    } else {
-        throw std::runtime_error("Invalid command node type for PolynomialModule");
-    }
-
+std::string PolynomialModule::execute_args(const std::string& command,
+                                          const std::vector<std::string>& args,
+                                          ServiceLocator& locator) {
     auto engine = locator.resolve<IEvaluationEngine>();
     PolynomialContext ctx;
     ctx.functions = nullptr;
     ctx.resolve_symbolic = [&](const std::string& name, std::string* var) {
         SymbolicExpression expr;
-        engine->resolve_symbolic(name, false, var, &expr);
+        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(name, false, var, &expr);
         return expr;
     };
 

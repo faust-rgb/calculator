@@ -17,7 +17,6 @@
 #include "analysis/optimization/optimization_helpers.h"
 #include "analysis/optimization/simplex_engine.h"
 #include "parser/grammars/unified_expression_parser.h"
-#include "parser/grammars/command_parser.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -271,16 +270,9 @@ bool handle_optimization_command(const OptimizationContext& ctx,
 }
 
 
-std::string OptimizationModule::execute_command(const CommandASTNode& node,
-                                                ServiceLocator& locator) {
-    // 使用辅助方法提取命令名和参数
-    const std::string command = node.get_command_name();
-    const std::vector<std::string> args = node.get_argument_texts();
-
-    if (command.empty()) {
-        throw std::runtime_error("Invalid command node type");
-    }
-
+std::string OptimizationModule::execute_args(const std::string& command,
+                                            const std::vector<std::string>& args,
+                                            ServiceLocator& locator) {
     auto engine = locator.resolve<IEvaluationEngine>();
 
     OptimizationContext ctx;

@@ -2,7 +2,7 @@
 // 高精度算法性能基准测试
 // ============================================================================
 
-#include "suites/test_benchmark_precise.h"
+#include "test_benchmark_precise.h"
 #include "math/precise/precise_decimal.h"
 #include "test_helpers.h"
 

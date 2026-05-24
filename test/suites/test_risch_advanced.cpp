@@ -6,7 +6,7 @@
 
 using namespace symbolic_expression_internal;
 
-#include "suites/test_risch_advanced.h"
+#include "test_risch_advanced.h"
 
 namespace test_suites {
 

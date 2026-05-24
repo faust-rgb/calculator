@@ -3,21 +3,13 @@
  * @brief 统计模块实现
  */
 
-#include "statistics/statistics_module.h"
+#include "statistics_module.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
-#include "parser/grammars/command_parser.h"
 
-std::string StatisticsModule::execute_command(const CommandASTNode& node,
-                                              ServiceLocator& locator) {
-    // 使用辅助方法提取命令名和参数
-    const std::string command = node.get_command_name();
-    const std::vector<std::string> args = node.get_argument_texts();
-
-    if (command.empty()) {
-        throw std::runtime_error("Invalid command node type");
-    }
-
+std::string StatisticsModule::execute_args(const std::string& command,
+                                           const std::vector<std::string>& args,
+                                           ServiceLocator& locator) {
     auto engine = locator.resolve<IEvaluationEngine>();
 
     // 解析参数并提取数据向量

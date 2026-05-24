@@ -1,13 +1,14 @@
 #include "core/services/core_manager_interfaces.h"
 #include "types/function.h"
+#include "core/services/core_manager_interfaces.h"
 // ============================================================================
 // script_executor.cpp - 脚本语句与块执行实现
 // ============================================================================
 
-#include "execution/engine/script_runtime_internal.h"
+#include "script_runtime_internal.h"
 #include "core/services/string_utils.h"
 #include "math/helpers/integer_helpers.h"
-#include "math/mymath.h"
+#include "mymath.h"
 #include <sstream>
 #include <stdexcept>
 
@@ -92,8 +93,8 @@ ScriptSignal execute_script_statement(
                 const Scalar start = evaluate_scalar(ctx, for_range.start_ast, "range start");
                 const Scalar stop = evaluate_scalar(ctx, for_range.stop_ast, "range stop");
                 const Scalar step = evaluate_scalar(ctx, for_range.step_ast, "range step");
-                if (mymath::is_near_zero(step)) throw std::runtime_error("range step cannot be zero");
-                bool ascending = step > Scalar(0.0L);
+                if (step == 0.0L) throw std::runtime_error("range step cannot be zero");
+                bool ascending = step > 0.0L;
                 for (Scalar current = start; (ascending ? current < stop : current > stop); current += step) {
                     StoredValue loop_val; loop_val.decimal = current; loop_val.exact = false;
                     ctx->variables().set_local(for_range.variable, loop_val);
@@ -286,12 +287,7 @@ std::string command_ast_to_source(const CommandASTNode& ast) {
         case CommandKind::kMetaCommand: {
             const auto& meta = std::get<MetaCommandInfo>(ast.data);
             std::string text = ":" + std::string(meta.command);
-            for (const auto& arg : meta.arguments) {
-                text += " ";
-                if (arg->kind == CommandKind::kExpression && arg->as_expression()) {
-                    text += std::string(arg->as_expression()->text);
-                }
-            }
+            for (std::string_view arg : meta.arguments) { text += " "; text += std::string(arg); }
             return text;
         }
         case CommandKind::kFunctionDefinition: {
@@ -309,9 +305,7 @@ std::string command_ast_to_source(const CommandASTNode& ast) {
             std::string text = std::string(call.name) + "(";
             for (std::size_t i = 0; i < call.arguments.size(); ++i) {
                 if (i != 0) text += ", ";
-                if (call.arguments[i]->kind == CommandKind::kExpression && call.arguments[i]->as_expression()) {
-                    text += std::string(call.arguments[i]->as_expression()->text);
-                }
+                text += std::string(call.arguments[i].text);
             }
             text += ")"; return text;
         }

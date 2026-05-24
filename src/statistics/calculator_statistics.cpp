@@ -6,11 +6,11 @@
  * 与底层统计/概率库之间的桥梁，负责参数验证和函数调用分发。
  */
 
-#include "statistics/calculator_statistics.h"
+#include "calculator_statistics.h"
 #include "app/scalar_type.h"
 #include "math/mymath.h"
-#include "statistics/statistics.h"
-#include "statistics/probability.h"
+#include "statistics.h"
+#include "probability.h"
 #include <stdexcept>
 #include <string>
 

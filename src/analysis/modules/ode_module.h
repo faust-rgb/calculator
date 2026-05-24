@@ -33,17 +33,11 @@ using Scalar = mymath::Scalar;
  */
 class ODEModule : public CalculatorModule {
 public:
-    ModuleMetadata get_metadata() const override {
-        return ModuleMetadata(
-            "ODE",
-            "1.0.0",
-            "Ordinary differential equation solver module",
-            "Calculator Team",
-            {}  // 无依赖
-        );
-    }
+    std::string name() const override { return "ODE"; }
     std::vector<std::string> get_commands() const override;
-    std::string execute_command(const CommandASTNode& node, ::ServiceLocator& locator) override;
+    std::string execute_args(const std::string& command,
+                             const std::vector<std::string>& args,
+                             ::ServiceLocator& locator) override;
     std::string get_help_snippet(const std::string& topic) const override;
 };
 

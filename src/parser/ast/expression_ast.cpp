@@ -5,16 +5,16 @@
  * 提供表达式的编译、求值和分析功能，解决循环中重复解析问题。
  */
 
-#include "parser/ast/expression_ast.h"
+#include "expression_ast.h"
 #include "parser/infra/base_parser.h"
 #include "parser/grammars/unified_parser_factory.h"
-#include "core/common/calculator_exceptions.h"
-#include "core/api/calculator_internal_types.h"
+#include "calculator_exceptions.h"
+#include "calculator_internal_types.h"
 #include "execution/resolver/builtin_constants.h"
 #include "app/scalar_type.h"
-#include "math/mymath.h"
-#include "execution/resolver/variable_resolver.h"
-#include "parser/lexer/lazy_token_stream.h"
+#include "mymath.h"
+#include "variable_resolver.h"
+#include "lazy_token_stream.h"
 
 #include <algorithm>
 #include <functional>

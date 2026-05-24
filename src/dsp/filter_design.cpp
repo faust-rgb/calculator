@@ -9,7 +9,7 @@
  * - 频率响应计算
  */
 
-#include "dsp/signal_processing.h"
+#include "signal_processing.h"
 #include "math/mymath.h"
 #include "app/scalar_type.h"
 

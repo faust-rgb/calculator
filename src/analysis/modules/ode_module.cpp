@@ -19,7 +19,6 @@
 #include "analysis/differential_equations/ode_solver.h"
 #include "analysis/differential_equations/ode_command_helpers.h"
 #include "parser/grammars/unified_expression_parser.h"
-#include "parser/grammars/command_parser.h"
 #include "math/helpers/integer_helpers.h"
 #include "app/scalar_type.h"
 
@@ -355,16 +354,9 @@ std::string matrix_literal_expression(const matrix::Matrix& value) {
 }
 
 
-std::string ODEModule::execute_command(const CommandASTNode& node,
-                                       ::ServiceLocator& locator) {
-    // 使用辅助方法提取命令名和参数
-    const std::string command = node.get_command_name();
-    const std::vector<std::string> args = node.get_argument_texts();
-
-    if (command.empty()) {
-        throw std::runtime_error("Invalid command node type");
-    }
-
+std::string ODEModule::execute_args(const std::string& command,
+                                   const std::vector<std::string>& args,
+                                   ::ServiceLocator& locator) {
     auto engine = locator.resolve<IEvaluationEngine>();
     ODEContext ctx;
     ctx.parse_decimal = [engine](const std::string& expr) { return engine->parse_decimal(expr); };

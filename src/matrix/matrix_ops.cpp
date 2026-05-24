@@ -16,8 +16,8 @@
  * @date 2024
  */
 
-#include "matrix/matrix.h"
-#include "matrix/matrix_internal.h"
+#include "matrix.h"
+#include "matrix_internal.h"
 #include "math/mymath.h"
 #include "math/precise/precise_decimal.h"
 #include "math/types/float128.h"

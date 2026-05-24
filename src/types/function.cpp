@@ -10,7 +10,7 @@
 // - function.h: 用户函数类型定义
 // - parser/expression_ast.h: AST 编译函数声明
 
-#include "types/function.h"
+#include "function.h"
 #include "parser/ast/expression_ast.h"
 
 /**

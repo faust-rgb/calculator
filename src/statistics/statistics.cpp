@@ -10,8 +10,8 @@
  * - 线性回归分析
  */
 
-#include "statistics/statistics.h"
-#include "statistics/probability.h"
+#include "statistics.h"
+#include "probability.h"
 #include "app/scalar_type.h"
 #include "math/mymath.h"
 #include <algorithm>

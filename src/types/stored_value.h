@@ -12,8 +12,8 @@
 #ifndef TYPES_STORED_VALUE_H
 #define TYPES_STORED_VALUE_H
 
-#include "math/precise/rational.h"
-#include "matrix/matrix.h"
+#include "rational.h"
+#include "matrix.h"
 #include "app/scalar_type.h"
 
 #include <map>

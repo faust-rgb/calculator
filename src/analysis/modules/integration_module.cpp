@@ -14,6 +14,8 @@
 // - multidim_integration.cpp: 多维积分
 
 #include "analysis/modules/integration_module.h"
+#include "execution/engine/script_context.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "analysis/base/precision_constants.h"
@@ -25,7 +27,6 @@
 #include "analysis/integration/vector_field_theorems.h"
 #include "core/api/calculator_internal_types.h"
 #include "parser/grammars/unified_expression_parser.h"
-#include "parser/grammars/command_parser.h"
 #include "math/helpers/integer_helpers.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
@@ -512,22 +513,22 @@ bool handle_integration_command(const IntegrationContext& ctx, const std::string
     return handle_integration_command(ctx, command, split_top_level_arguments(inside), output);
 }
 
-std::string IntegrationModule::execute_command(const CommandASTNode& node,
-                                               ServiceLocator& locator) {
-    // 使用辅助方法提取命令名和参数
-    const std::string command = node.get_command_name();
-    const std::vector<std::string> args = node.get_argument_texts();
-
-    if (command.empty()) {
-        throw std::runtime_error("Invalid command node type");
-    }
-
+std::string IntegrationModule::execute_args(const std::string& command,
+                                            const std::vector<std::string>& args,
+                                            ServiceLocator& locator) {
     auto engine = locator.resolve<IEvaluationEngine>();
     IntegrationContext ctx;
     ctx.parse_decimal = [engine](const std::string& expr) { return engine->parse_decimal(expr); };
     ctx.build_scoped_evaluator = [engine](const std::string& expression) { return engine->build_scoped_evaluator(expression); };
     ctx.normalize_result = [engine](Scalar value) { return engine->normalize_result(value); };
-    ctx.build_analysis = [engine](const std::string& expression) { return engine->build_analysis(expression); };
+    ctx.build_analysis = [&locator, engine](const std::string& expression) {
+        SymbolicExpression expr; std::string var;
+        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(expression, false, &var, &expr);
+        FunctionAnalysis analysis(var);
+        analysis.define(expr.to_string());
+        analysis.set_evaluator(engine->build_scoped_evaluator(expr.to_string()));
+        return analysis;
+    };
 
     std::string output;
     if (handle_integration_command(ctx, command, args, &output)) {

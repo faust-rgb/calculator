@@ -14,9 +14,8 @@
 #include "symbolic/algebra/polynomial/symbolic_polynomial.h"
 #include "symbolic/calculus/integral/symbolic_expression_integral_helpers.h"
 #include "symbolic/calculus/integral/symbolic_expression_integral_internal.h"
+
 #include "math/mymath.h"
-#include "math/helpers/linear_solver.h"
-#include <algorithm>
 #include "polynomial/polynomial.h"
 
 #include <algorithm>
@@ -455,7 +454,7 @@ bool integrate_general_partial_fractions(
     }
 
     std::vector<Scalar> coeffs;
-    if (!math::helpers::solve_dense_linear_system(matrix, rhs, &coeffs)) return false;
+    if (!solve_dense_linear_system(matrix, rhs, &coeffs)) return false;
 
     SymbolicExpression result = SymbolicExpression::number(0.0L);
     std::vector<SymbolicExpression> term_exprs;

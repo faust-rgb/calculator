@@ -12,18 +12,93 @@
  */
 
 #include "symbolic/modules/symbolic_module.h"
+#include "execution/engine/script_context.h"
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/base/assumptions.h"
 #include "core/services/string_utils.h"
-#include "core/services/service_locator.h"
-#include "core/services/core_manager_interfaces.h"
+#include "core/services/service_registry.h"
 #include "parser/grammars/unified_expression_parser.h"
-#include "parser/grammars/command_parser.h"
 #include "execution/engine/inline_expander.h"
 #include "analysis/calculus/function_analysis.h"
 #include "math/mymath.h"
 
+namespace {
+
+void register_symbolic_services_internal(CoreServices& s, IExecutionContext* ctx) {
+    s.symbolic.resolve_symbolic = [ctx](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
+        symbolic_commands::SymbolicResolverContext symbolic_resolver_ctx;
+        symbolic_resolver_ctx.resolve_custom_function = [ctx](const std::string& name, std::string* v) {
+            const CustomFunction* func = ctx->functions().get_custom(name);
+            if (!func) throw std::runtime_error("unknown custom function: " + name);
+
+            std::string params;
+            for (std::size_t i = 0; i < func->parameter_names.size(); ++i) {
+                params += func->parameter_names[i];
+                if (i + 1 < func->parameter_names.size()) params += ",";
+            }
+            *v = params;
+            return SymbolicExpression::parse(func->expression);
+        };
+        symbolic_resolver_ctx.has_custom_function = [ctx](const std::string& name) {
+            return ctx->functions().get_custom(name) != nullptr;
+        };
+        symbolic_resolver_ctx.expand_inline = [ctx](const std::string& a) {
+            return ctx->expand_inline(a);
+        };
+        symbolic_commands::resolve_symbolic_expression(symbolic_resolver_ctx, arg, req, var, expr);
+    };
+
+    s.symbolic.expand_inline = [ctx](const std::string& arg) {
+        return ctx->expand_inline(arg);
+    };
+
+    s.symbolic.simplify_symbolic = [](const std::string& text) {
+        return SymbolicExpression::parse(text).simplify().to_string();
+    };
+
+    s.symbolic.evaluate_symbolic_at = [ctx](const SymbolicExpression& expr, const std::string& var, Scalar p) {
+        const bool had_existing = ctx->variables().has(var);
+        StoredValue backup;
+        if (had_existing) backup = ctx->variables().get(var).value();
+        StoredValue temporary;
+        temporary.decimal = p;
+        temporary.exact = false;
+        ctx->variables().set_global(var, temporary);
+        auto cleanup = [&]() {
+            if (had_existing) ctx->variables().set_global(var, backup);
+            else ctx->variables().remove(var);
+        };
+        try {
+            const Scalar value = ctx->evaluate(expr.to_string(), false).decimal; 
+            cleanup();
+            if (!mymath::isfinite(value)) throw std::runtime_error("Non-finite value");
+            return value;
+        } catch (...) {
+            cleanup();
+            try {
+                FunctionAnalysis analysis(var);
+                analysis.define(expr.to_string());
+                return analysis.limit(p, 1);
+            } catch (...) {
+                return Scalar(mymath::quiet_nan());
+            }
+        }
+    };
+
+    s.symbolic.parse_symbolic_expr_list = [ctx](const std::string& arg) {
+        return symbolic_commands::parse_symbolic_expression_list(arg,
+            [ctx](const std::string& a) { return ctx->expand_inline(a); });
+    };
+}
+
+} // namespace
+
 namespace symbolic_commands {
+
+void SymbolicModule::register_services(CoreServices& services, ServiceLocator& locator) {
+    auto ctx = locator.resolve<IExecutionContext>();
+    register_symbolic_services_internal(services, ctx.get());
+}
 
 bool handle_symbolic_command(const SymbolicCommandContext& ctx,
                              const std::string& command,
@@ -44,16 +119,9 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
     return false;
 }
 
-std::string SymbolicModule::execute_command(const CommandASTNode& node,
-                                            ServiceLocator& locator) {
-    // 使用辅助方法提取命令名和参数
-    const std::string command = node.get_command_name();
-    const std::vector<std::string> args = node.get_argument_texts();
-
-    if (command.empty()) {
-        throw std::runtime_error("Invalid command node type");
-    }
-
+std::string SymbolicModule::execute_args(const std::string& command,
+                                        const std::vector<std::string>& args,
+                                        ServiceLocator& locator) {
     if (command == ":assume") {
         if (args.empty()) {
             auto assumptions = symbolic_assumptions::AssumptionEngine::instance().get_all_assumptions_text();
@@ -74,7 +142,7 @@ std::string SymbolicModule::execute_command(const CommandASTNode& node,
                 return "Cleared assumptions for " + args[1] + ".";
             }
         }
-
+        
         std::string joined;
         for (const auto& a : args) joined += a;
         
@@ -115,20 +183,27 @@ std::string SymbolicModule::execute_command(const CommandASTNode& node,
     auto engine = locator.resolve<IEvaluationEngine>();
     
     SymbolicCommandContext ctx;
-    ctx.resolve_symbolic = [engine](const std::string& a, bool r, std::string* v, SymbolicExpression* e) {
-        engine->resolve_symbolic(a, r, v, e);
+    ctx.resolve_symbolic = [&locator](const std::string& a, bool r, std::string* v, SymbolicExpression* e) {
+        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(a, r, v, e);
     };
     ctx.parse_symbolic_variable_arguments = [engine](const std::vector<std::string>& a, std::size_t s, const std::vector<std::string>& f) {
         return engine->parse_symbolic_vars(a, s, f);
     };
-    ctx.parse_symbolic_expression_list = [engine](const std::string& a) {
-        return parse_symbolic_expression_list(a, [engine](const std::string& arg) { 
+    ctx.parse_symbolic_expression_list = [&locator](const std::string& a) {
+        return parse_symbolic_expression_list(a, [&locator](const std::string& arg) { 
             SymbolicExpression expr; std::string var;
-            engine->resolve_symbolic(arg, false, &var, &expr);
+            locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(arg, false, &var, &expr);
             return expr.to_string(); 
         });
     };
-    ctx.build_analysis = [engine](const std::string& a) { return engine->build_analysis(a); };
+    ctx.build_analysis = [&locator, engine](const std::string& a) { 
+        SymbolicExpression expr; std::string var;
+        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(a, false, &var, &expr);
+        FunctionAnalysis analysis(var);
+        analysis.define(expr.to_string());
+        analysis.set_evaluator(engine->build_scoped_evaluator(expr.to_string()));
+        return analysis;
+    };
     ctx.build_scoped_evaluator = [engine](const std::string& a) { return engine->build_scoped_evaluator(a); };
     ctx.parse_decimal = [engine](const std::string& a) { return engine->parse_decimal(a); };
     ctx.normalize_result = [engine](Scalar v) { return engine->normalize_result(v); };

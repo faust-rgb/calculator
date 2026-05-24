@@ -13,12 +13,12 @@
  * @date 2024
  */
 
-#include "matrix/matrix.h"
+#include "matrix.h"
 #include "app/scalar_type.h"
 
-#include "matrix/matrix.h"
-#include "matrix/matrix_internal.h"
-#include "math/mymath.h"
+#include "matrix.h"
+#include "matrix_internal.h"
+#include "mymath.h"
 #include "math/precise/precise_decimal.h"
 #include <stdexcept>
 #include <utility>

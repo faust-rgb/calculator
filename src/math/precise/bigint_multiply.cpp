@@ -12,7 +12,7 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 
-#include "math/precise/precise_decimal.h"
+#include "precise_decimal.h"
 
 #include <algorithm>
 #include <mutex>

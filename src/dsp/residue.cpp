@@ -11,19 +11,19 @@
  * 如部分分式分解和拉普拉斯逆变换。
  */
 
-#include "dsp/residue.h"
+#include "residue.h"
 #include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "core/services/string_utils.h"
-#include "core/api/calculator_internal_types.h"
+#include "calculator_internal_types.h"
 #include "math/mymath.h"
 #include "math/types/complex.h"
-#include "symbolic/core/symbolic_expression.h"
-#include "symbolic/core/symbolic_expression_internal.h"
-#include "matrix/matrix.h"
-#include "polynomial/polynomial.h"
-#include "core/common/calculator_exceptions.h"
+#include "symbolic_expression.h"
+#include "symbolic_expression_internal.h"
+#include "matrix.h"
+#include "polynomial.h"
+#include "calculator_exceptions.h"
 #include "module/calculator_module.h"
 
 namespace dsp_ops {

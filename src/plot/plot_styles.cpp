@@ -12,8 +12,8 @@
  * 这些选项用于自定义图形外观。
  */
 
-#include "plot/plot_styles.h"
-#include "core/api/calculator_internal_types.h"
+#include "plot_styles.h"
+#include "calculator_internal_types.h"
 #include "core/services/string_utils.h"
 #include <sstream>
 

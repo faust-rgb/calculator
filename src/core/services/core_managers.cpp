@@ -2,7 +2,7 @@
 // core_managers.cpp - 核心管理服务实现类定义
 // ============================================================================
 
-#include "core/services/core_managers.h"
+#include "core_managers.h"
 #include "execution/resolver/variable_resolver.h"
 #include <algorithm>
 
@@ -29,6 +29,7 @@ bool VariableManager::has(const std::string& name) const {
 
 void VariableManager::remove(const std::string& name) {
     globals_.erase(name);
+    // Note: We don't remove from scopes as they are usually transient/managed by stack
 }
 
 void VariableManager::clear_all() {
@@ -43,6 +44,7 @@ std::map<std::string, StoredValue> VariableManager::get_all_globals() const {
 std::vector<std::string> VariableManager::get_all_names() const {
     std::vector<std::string> names;
     for (const auto& [name, _] : globals_) names.push_back(name);
+    // Scopes might have duplicates or shadows, but we just want the names
     for (const auto& slot : scopes_.slots) {
         names.push_back(slot.name);
     }
@@ -211,63 +213,11 @@ bool ConfigManager::is_hex_uppercase_mode() const {
     return hex_uppercase_mode_;
 }
 
-#include "module/calculator_module.h"
-
 // ==================== ModuleManager ====================
 
 void ModuleManager::register_module(std::shared_ptr<CalculatorModule> module) {
-    if (!module) return;
-
-    modules_.push_back(module);
-    module->initialize(locator_);
-
-    auto functions = locator_.resolve<IFunctionManager>();
-    auto commands = locator_.resolve<ICommandRegistry>();
-
-    // 1. 注册各种类型的函数
-    for (auto& [name, func] : module->get_scalar_functions()) {
-        functions->add_scalar_function(name, std::move(func));
-    }
-    for (auto& [name, func] : module->get_matrix_functions()) {
-        functions->add_matrix_function(name, std::move(func));
-    }
-    for (auto& [name, func] : module->get_value_functions()) {
-        functions->add_value_function(name, std::move(func));
-    }
-    for (auto& [name, func] : module->get_native_functions()) {
-        functions->add_native_function(name, std::move(func));
-    }
-
-    // 2. 注册命令
-    auto specs = module->get_command_specs();
-    for (const auto& spec : specs) {
-        std::string cmd_name = command_key_display(spec.key);
-
-        std::weak_ptr<CalculatorModule> weak_module = module;
-        commands->register_ast_handler(
-            cmd_name,
-            [weak_module, &loc = this->locator_](const CommandASTNode& node,
-                                               std::string* output,
-                                               bool /*exact_mode*/) -> bool {
-                auto mod = weak_module.lock();
-                if (!mod) return false;
-                *output = mod->execute_command(node, loc);
-                return true;
-            },
-            module->get_help_snippet("commands")
-        );
-    }
-
-    // 3. 建立帮助索引
-    static const std::vector<std::string> help_topics = {
-        "commands", "functions", "matrix", "symbolic", "analysis", "planning",
-        "examples", "exact", "variables", "persistence", "programmer", "io", "file"
-    };
-    for (const auto& topic : help_topics) {
-        std::string snippet = module->get_help_snippet(topic);
-        if (!snippet.empty()) {
-            commands->register_help_topic(topic, snippet);
-        }
+    if (module) {
+        modules_.push_back(module);
     }
 }
 

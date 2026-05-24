@@ -1,3 +1,4 @@
+#include "execution/engine/inline_expander.h"
 // ============================================================================
 // Calculator 核心实现
 // ============================================================================
@@ -13,19 +14,16 @@
 #include "app/scalar_type.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "parser/grammars/command_parser.h"
-#include "analysis/calculus/function_analysis.h"
-#include "matrix/matrix.h"
 #include "math/mymath.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
-#include "execution/engine/inline_expander.h"
+#include "core/services/calculator_service_factory.h"
 #include "execution/engine/script_runtime.h"
 #include "parser/grammars/script_parser.h"
 #include "module/module_registration.h"
-#include "module/calculator_module.h"
 #include "math/helpers/integer_helpers.h"
-#include "plot/calculator_plot.h"
+#include "execution/resolver/variable_resolver.h"
 
 #include <algorithm>
 #include <array>
@@ -35,7 +33,6 @@
 #include <iomanip>
 #include <iostream>
 #include <set>
-#include <unordered_set>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -70,7 +67,8 @@ void apply_calculator_display_precision(const Calculator::Impl* impl) {
     SymbolicExpression::set_display_precision(precision);
 }
 
-void broadcast_settings([[maybe_unused]] Calculator* calculator, Calculator::Impl* impl) {
+void broadcast_settings(Calculator* calculator, Calculator::Impl* impl) {
+    (void)calculator;
     if (!impl->config_ptr || !impl->modules) return;
 
     CalculatorSettings settings;
@@ -96,7 +94,7 @@ Calculator::Calculator() : impl_(new Impl()) {
     impl_->functions_ptr = std::make_shared<FunctionManager>();
     impl_->config_ptr = std::make_shared<ConfigManager>();
     impl_->commands_ptr = std::make_shared<CommandRegistry>();
-    impl_->modules = std::make_shared<ModuleManager>(impl_->locator);
+    impl_->modules = std::make_shared<ModuleManager>();
 
     // 创建状态持久化服务
     auto persistence = std::make_shared<StatePersistenceService>(impl_->variables_ptr, impl_->functions_ptr);
@@ -111,10 +109,7 @@ Calculator::Calculator() : impl_(new Impl()) {
     impl_->locator.register_service<ICommandRegistry>(impl_->commands_ptr);
     impl_->locator.register_service<IModuleManager>(impl_->modules);
     impl_->locator.register_service<IStatePersistence>(impl_->persistence);
-
-    // 注册执行上下文
-    auto ctx_ptr = std::shared_ptr<IExecutionContext>(impl_.get(), [](IExecutionContext*){});
-    impl_->locator.register_service<IExecutionContext>(ctx_ptr);
+    impl_->locator.register_service<IExecutionContext>(std::shared_ptr<IExecutionContext>(impl_.get(), [](IExecutionContext*){}));
 
 
     // 2. 注册逻辑引擎服务
@@ -123,9 +118,15 @@ Calculator::Calculator() : impl_(new Impl()) {
 
     apply_calculator_display_precision(impl_.get());
 
-    // 3. 注册所有标准模块（按依赖拓扑顺序）
+    // 3. 初始化核心逻辑服务（暂时保持旧的 CoreServices 结构用于过渡）
+    impl_->core_services = std::make_unique<CoreServices>(core::build_core_services(this, impl_.get()));
+
     register_standard_modules(this);
     broadcast_settings(this, impl_.get());
+}
+
+const CoreServices& Calculator::get_core_services() const {
+    return *impl_->core_services;
 }
 
 Calculator::~Calculator() = default;
@@ -133,9 +134,36 @@ Calculator::~Calculator() = default;
 void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
     if (!module) return;
 
-    // 隐式求值路由优化
+    // 获取底层管理器用于直接访问
+    auto* cmd_registry = static_cast<CommandRegistry*>(impl_->commands_ptr.get());
+    auto* mod_mgr = static_cast<ModuleManager*>(impl_->modules.get());
+
+    // 合并函数映射
+    auto new_scalar_funcs = module->get_scalar_functions();
+    for (auto& [name, func] : new_scalar_funcs) {
+        impl_->functions_ptr->add_scalar_function(name, std::move(func));
+    }
+
+    auto new_matrix_funcs = module->get_matrix_functions();
+    for (auto& [name, func] : new_matrix_funcs) {
+        impl_->functions_ptr->add_matrix_function(name, std::move(func));
+    }
+
+    auto new_value_funcs = module->get_value_functions();
+    for (auto& [name, func] : new_value_funcs) {
+        impl_->functions_ptr->add_value_function(name, std::move(func));
+    }
+
+    auto new_native_funcs = module->get_native_functions();
+    for (auto& [name, func] : new_native_funcs) {
+        impl_->functions_ptr->add_native_function(name, std::move(func));
+        impl_->help_topic_to_modules[name].push_back(module);
+    }
+
+    // 隐式求值路由优化：构建触发字符到模块的映射
     if (module->wants_implicit_evaluation()) {
         impl_->implicit_evaluation_modules.push_back(module);
+        // 构建触发字符映射
         const auto* trigger_table = module->get_cached_trigger_table();
         if (trigger_table) {
             for (int c = 0; c < 256; ++c) {
@@ -146,16 +174,63 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
         }
     }
 
-    // 委托给 ModuleManager 处理核心注册逻辑
-    impl_->modules->register_module(module);
-
-    // 记录命令和函数名用于补全
+    // 收集元数据并注册命令到 CommandRegistry
     auto specs = module->get_command_specs();
     for (const auto& spec : specs) {
-        impl_->module_commands.push_back(command_key_display(spec.key));
+        std::string cmd_name = command_key_display(spec.key);
+
+        // 检查重复注册
+        if (cmd_registry->has_command(cmd_name)) {
+            throw std::runtime_error("duplicate command registration: " + cmd_name);
+        }
+
+        impl_->module_commands.push_back(cmd_name);
+
+        // 注册到 CommandRegistry
+        // 使用 weak_ptr 避免循环引用
+        std::weak_ptr<CalculatorModule> weak_module = module;
+        std::string dispatch_name = spec.dispatch_name;
+        CommandKey key = spec.key;
+
+        cmd_registry->register_command(
+            cmd_name,
+            [weak_module, dispatch_name, key, this](
+                const std::string& /*input*/,
+                const std::vector<std::string_view>& args,
+                std::string* output,
+                bool exact_mode,
+                const CoreServices& /*services*/) -> bool {
+                (void)exact_mode;
+                auto mod = weak_module.lock();
+                if (!mod) return false;
+
+                // 使用模块的 execute_args_view 方法处理命令，传入 ServiceLocator
+                *output = mod->execute_args_view(dispatch_name, args, impl_->locator);
+                return true;
+            },
+            module->get_help_snippet("commands")
+        );
     }
     auto funcs = module->get_functions();
     impl_->module_functions.insert(impl_->module_functions.end(), funcs.begin(), funcs.end());
+
+    // 建立帮助索引
+    static const std::vector<std::string> topics = {
+        "commands", "functions", "matrix", "symbolic", "analysis", "planning",
+        "examples", "exact", "variables", "persistence", "programmer"
+    };
+    for (const auto& topic : topics) {
+        if (!module->get_help_snippet(topic).empty()) {
+            impl_->help_topic_to_modules[topic].push_back(module);
+        }
+    }
+
+    module->initialize(impl_->locator);
+    if (impl_->core_services) {
+        module->register_services(*impl_->core_services, impl_->locator);
+    }
+
+    mod_mgr->register_module(module);
 }
 
 bool is_reserved_user_function_name(IExecutionContext* ctx, std::string_view name) {
@@ -244,7 +319,7 @@ Scalar Calculator::normalize_result(Scalar value) {
     if constexpr (mymath::is_scalar_float128) {
         if (mymath::abs(v) < Scalar(1e-70L)) return Scalar(0.0L);
     } else if constexpr (!mymath::is_scalar_precise_decimal) {
-        if (mymath::abs(v) < kDisplayZeroEps()) return Scalar(0.0);
+        if (mymath::abs(v) < kDisplayZeroEps()) return Scalar(0.0L);
     }
     // Only round to integer if within long long range
     const Scalar kMaxLL(static_cast<long double>(std::numeric_limits<long long>::max()));
@@ -262,7 +337,7 @@ Scalar Calculator::normalize_result(Scalar value) {
 // ============================================================================
 
 bool Calculator::try_process_function_command(const std::string& expression,
-                                              std::string* output, bool exact_mode) const {
+                                              std::string* output, bool exact_mode) {
     auto is_command = [this](std::string_view name) {
         return impl_->commands_ptr->has_command(std::string(name)) ||
                impl_->commands_ptr->has_command(":" + std::string(name));
@@ -281,16 +356,13 @@ bool Calculator::try_evaluate_implicit(std::string_view expression,
     if (expression.empty()) return false;
 
     // 优化：使用触发字符到模块的映射，直接找到相关模块
-    // 首先按注册顺序收集表达式中出现的所有触发字符对应的模块（去重）
-    std::vector<std::shared_ptr<CalculatorModule>> candidate_modules;
-    std::unordered_set<CalculatorModule*> seen;
+    // 首先收集表达式中出现的所有触发字符对应的模块
+    std::set<std::shared_ptr<CalculatorModule>> candidate_modules;
 
     for (char c : expression) {
         const auto& modules_for_char = impl_->trigger_char_to_modules[static_cast<unsigned char>(c)];
         for (const auto& mod : modules_for_char) {
-            if (seen.insert(mod.get()).second) {
-                candidate_modules.push_back(mod);
-            }
+            candidate_modules.insert(mod);
         }
     }
 
@@ -304,7 +376,7 @@ bool Calculator::try_evaluate_implicit(std::string_view expression,
         return false;
     }
 
-    // 尝试候选模块（按注册顺序）
+    // 尝试候选模块
     for (const auto& module : candidate_modules) {
         if (module->try_evaluate_implicit(std::string(expression), output, vars)) {
             return true;
@@ -501,45 +573,96 @@ std::string Calculator::list_variables() const {
 }
 
 std::string Calculator::factor_expression(const std::string& expression) const {
-    std::string output;
-    if (try_process_function_command(expression, &output, false)) {
-        return output;
+    // 完全委托给 IntegerMathModule 处理
+    if (!impl_->commands_ptr->has_command("factor")) {
+        throw std::runtime_error("factor command not available - IntegerMathModule not loaded");
     }
-    throw std::runtime_error("factor command failed or not available");
+
+    auto is_command = [this](std::string_view name) {
+        return impl_->commands_ptr->has_command(std::string(name));
+    };
+    CommandASTNode ast = parse_command(expression, is_command);
+    const auto* call = ast.as_function_call();
+    if (!call || call->name != "factor") {
+        throw std::runtime_error("expected factor(expression)");
+    }
+
+    std::vector<std::string_view> args;
+    for (const auto& arg : call->arguments) args.push_back(arg.text);
+    std::string output;
+    const CoreServices& svc = get_core_services();
+    if (!impl_->commands_ptr->try_process("factor", args, &output, false, svc)) {
+        throw std::runtime_error("factor command failed");
+    }
+    return output;
 }
 
 std::string Calculator::plot_expression(const std::string& expression) const {
-    std::string output;
-    if (try_process_function_command(expression, &output, false)) {
-        return output;
+    // 完全委托给 PlotModule 处理
+    if (!impl_->commands_ptr->has_command("plot")) {
+        throw std::runtime_error("plot command not available - PlotModule not loaded");
     }
-    throw std::runtime_error("plot command failed or not available");
+
+    auto is_command = [this](std::string_view name) {
+        return impl_->commands_ptr->has_command(std::string(name));
+    };
+    CommandASTNode ast = parse_command(expression, is_command);
+    const auto* call = ast.as_function_call();
+    if (!call || call->name != "plot") {
+        throw std::runtime_error("expected plot(...)");
+    }
+
+    std::vector<std::string_view> args;
+    for (const auto& arg : call->arguments) args.push_back(arg.text);
+    std::string output;
+    const CoreServices& svc = get_core_services();
+    if (!impl_->commands_ptr->try_process("plot", args, &output, false, svc)) {
+        throw std::runtime_error("plot command failed");
+    }
+    return output;
 }
 
 std::string Calculator::export_variable(const std::string& line) const {
-    std::string output;
-    if (try_process_function_command(line, &output, false)) {
-        return output;
+    // 完全委托给 PlotModule 处理
+    if (!impl_->commands_ptr->has_command(":export")) {
+        throw std::runtime_error("export command not available - PlotModule not loaded");
     }
-    throw std::runtime_error("export command failed or not available");
+
+    std::vector<std::string_view> args;
+    // 将整行作为单个参数传递
+    args.push_back(line);
+    std::string output;
+    const CoreServices& svc = get_core_services();
+    if (!impl_->commands_ptr->try_process(":export", args, &output, false, svc)) {
+        throw std::runtime_error("export command failed");
+    }
+    return output;
 }
 
 std::string Calculator::base_conversion_expression(const std::string& expression) const {
-    std::string output;
-    if (try_process_function_command(expression, &output, false)) {
-        return output;
+    // 完全委托给 IntegerMathModule 处理
+    auto is_command = [this](std::string_view name) {
+        return impl_->commands_ptr->has_command(std::string(name));
+    };
+    CommandASTNode ast = parse_command(expression, is_command);
+    const auto* call = ast.as_function_call();
+    if (!call) {
+        throw std::runtime_error("expected bin(...), oct(...), hex(...), or base(value, base)");
     }
 
-    // 回退到旧实现（处理非函数形式的进制转换）
-    std::string converted;
-    if (try_base_conversion_expression(expression,
-                                        impl_->variables_ptr->create_resolver(),
-                                        impl_->functions_ptr->get_custom_functions_map(),
-                                        {impl_->config_ptr->is_hex_prefix_mode(), impl_->config_ptr->is_hex_uppercase_mode()},
-                                        &converted)) {
-        return converted;
+    const std::string cmd_name(call->name);
+    if (!impl_->commands_ptr->has_command(cmd_name)) {
+        throw std::runtime_error(cmd_name + " command not available - IntegerMathModule not loaded");
     }
-    throw std::runtime_error("base conversion failed or not available");
+
+    std::vector<std::string_view> args;
+    for (const auto& arg : call->arguments) args.push_back(arg.text);
+    std::string output;
+    const CoreServices& svc = get_core_services();
+    if (!impl_->commands_ptr->try_process(cmd_name, args, &output, false, svc)) {
+        throw std::runtime_error(cmd_name + " command failed");
+    }
+    return output;
 }
 
 // ============================================================================
@@ -558,13 +681,17 @@ std::string Calculator::load_state(const std::string& path) {
 // IExecutionContext 实现
 // ============================================================================
 
+const CoreServices& Calculator::Impl::services() const {
+    return *core_services;
+}
+
 StoredValue Calculator::Impl::evaluate(const std::string& expression, bool exact_mode) {
     auto engine = locator.resolve<IEvaluationEngine>();
     return engine->evaluate_expression_value(expression, exact_mode);
 }
 
-bool Calculator::Impl::try_evaluate_implicit(const std::string& expression,
-                                            StoredValue* value,
+bool Calculator::Impl::try_evaluate_implicit(const std::string& expression, 
+                                            StoredValue* value, 
                                             const std::map<std::string, StoredValue>& vars) {
     return parent->try_evaluate_implicit(expression, value, vars);
 }
@@ -573,14 +700,14 @@ std::string Calculator::Impl::expand_inline(const std::string& expression) {
     return expand_inline_function_commands(this, expression);
 }
 
-std::string Calculator::Impl::execute_script_file(const std::string& path,
-                                                bool exact_mode,
+std::string Calculator::Impl::execute_script_file(const std::string& path, 
+                                                bool exact_mode, 
                                                 bool create_scope) {
     return parent->execute_script_file(path, exact_mode, create_scope);
 }
 
-bool Calculator::Impl::try_process_function_command(const std::string& expression,
-                                                 std::string* output,
-                                                 bool exact_mode) const {
+bool Calculator::Impl::try_process_function_command(const std::string& expression, 
+                                                 std::string* output, 
+                                                 bool exact_mode) {
     return parent->try_process_function_command(expression, output, exact_mode);
 }

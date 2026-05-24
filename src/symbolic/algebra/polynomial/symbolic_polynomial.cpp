@@ -9,7 +9,7 @@
 #include "app/scalar_type.h"
 
 #include <algorithm>
-#include "math/mymath.h"
+#include <mymath.h>
 
 using namespace symbolic_expression_internal;
 

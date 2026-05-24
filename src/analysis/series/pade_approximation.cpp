@@ -18,8 +18,8 @@
 #include "symbolic/core/symbolic_expression.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "math/mymath.h"
-#include "core/services/expression_utils.h"
-#include "core/services/string_utils.h"
+#include "expression_utils.h"
+#include "string_utils.h"
 #include "polynomial/polynomial.h"
 #include <sstream>
 #include <algorithm>

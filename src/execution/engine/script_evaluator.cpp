@@ -1,10 +1,11 @@
 #include "core/services/core_manager_interfaces.h"
 #include "types/function.h"
+#include "core/services/core_manager_interfaces.h"
 // ============================================================================
 // script_evaluator.cpp - 脚本值求值与表达式处理实现
 // ============================================================================
 
-#include "execution/engine/script_runtime_internal.h"
+#include "script_runtime_internal.h"
 #include "execution/resolver/variable_resolver.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "parser/grammars/symbolic_render_parser.h"
@@ -12,7 +13,7 @@
 #include "core/services/format_utils.h"
 #include "execution/engine/inline_expander.h"
 #include "math/helpers/integer_helpers.h"
-#include "math/mymath.h"
+#include "mymath.h"
 #include <map>
 #include <stdexcept>
 
@@ -41,9 +42,9 @@ StoredValue evaluate_range_list(
         stop = eval_scalar(args[1]);
         step = eval_scalar(args[2]);
     }
-    if (mymath::is_near_zero(step)) throw std::runtime_error("range step cannot be zero");
+    if (step == 0.0L) throw std::runtime_error("range step cannot be zero");
     std::vector<StoredValue> values;
-    for (Scalar current = start; step > Scalar(0.0L) ? current < stop : current > stop; current += step) {
+    for (Scalar current = start; step > 0 ? current < stop : current > stop; current += step) {
         StoredValue item;
         item.decimal = current;
         values.push_back(item);

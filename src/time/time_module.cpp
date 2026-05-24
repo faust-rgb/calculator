@@ -9,7 +9,7 @@
  * @date 2024
  */
 
-#include "time/time_module.h"
+#include "time_module.h"
 #include "module/calculator_module.h"
 
 #include <chrono>

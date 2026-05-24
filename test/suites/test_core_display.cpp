@@ -11,12 +11,12 @@
  */
 
 #include "suites/test_core.h"
-#include "core/api/calculator.h"
+#include "calculator.h"
 #include "test_helpers.h"
 #include "math/mymath.h"
-#include "symbolic/core/symbolic_expression.h"
-#include "analysis/calculus/function_analysis.h"
-#include "analysis/differential_equations/ode_solver.h"
+#include "symbolic_expression.h"
+#include "function_analysis.h"
+#include "ode_solver.h"
 #include <iostream>
 #include <vector>
 #include <string>

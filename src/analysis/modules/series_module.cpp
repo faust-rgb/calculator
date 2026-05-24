@@ -15,6 +15,7 @@
 // - series_summation.cpp: 级数求和
 
 #include "analysis/modules/series_module.h"
+#include "execution/engine/script_context.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
 #include "analysis/series/psa_engine.h"
@@ -27,9 +28,8 @@
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include "parser/grammars/unified_expression_parser.h"
-#include "parser/grammars/command_parser.h"
-#include "core/services/expression_utils.h"
-#include "core/services/string_utils.h"
+#include "expression_utils.h"
+#include "string_utils.h"
 #include <sstream>
 #include <iomanip>
 
@@ -172,30 +172,23 @@ bool handle_series_command(const SeriesContext& ctx,
 }
 
 
-std::string SeriesModule::execute_command(const CommandASTNode& node,
-                                          ServiceLocator& locator) {
-    // 使用辅助方法提取命令名和参数
-    const std::string command = node.get_command_name();
-    const std::vector<std::string> args = node.get_argument_texts();
-
-    if (command.empty()) {
-        throw std::runtime_error("Invalid command node type");
-    }
-
+std::string SeriesModule::execute_args(const std::string& command,
+                                      const std::vector<std::string>& args,
+                                      ServiceLocator& locator) {
     auto engine = locator.resolve<IEvaluationEngine>();
 
     SeriesContext ctx;
-    ctx.resolve_symbolic = [engine](const std::string& a, bool r, std::string* v, SymbolicExpression* e) {
-        engine->resolve_symbolic(a, r, v, e);
+    ctx.resolve_symbolic = [&locator](const std::string& a, bool r, std::string* v, SymbolicExpression* e) {
+        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(a, r, v, e);
     };
     ctx.parse_decimal = [engine](const std::string& a) { return engine->parse_decimal(a); };
     ctx.evaluate_at = [engine](const SymbolicExpression& expr, const std::string& var, Scalar val) {
         return engine->build_scoped_evaluator(expr.to_string())({{var, val}});
     };
-    ctx.simplify_symbolic = [engine](const std::string& a) {
+    ctx.simplify_symbolic = [&locator](const std::string& a) {
         SymbolicExpression expr;
         std::string var;
-        engine->resolve_symbolic(a, false, &var, &expr);
+        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(a, false, &var, &expr);
         return expr.to_string();
     };
     ctx.expand_inline = [engine](const std::string& a) { return engine->expand_inline(a); };

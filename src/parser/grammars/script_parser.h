@@ -34,7 +34,7 @@
 #ifndef SCRIPT_PARSER_H
 #define SCRIPT_PARSER_H
 
-#include "parser/ast/script_ast.h"
+#include "script_ast.h"
 
 #include <string>
 
