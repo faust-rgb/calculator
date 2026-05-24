@@ -19,7 +19,7 @@
 #ifndef CALCULATOR_POLYNOMIAL_H
 #define CALCULATOR_POLYNOMIAL_H
 
-#include "calculator_internal_types.h"
+#include "core/types/module_types.h"
 
 #include "symbolic_expression.h"
 

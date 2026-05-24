@@ -18,7 +18,7 @@
 #ifndef CALCULATOR_SIGNAL_COMMANDS_H
 #define CALCULATOR_SIGNAL_COMMANDS_H
 
-#include "calculator_internal_types.h"
+#include "core/types/module_types.h"
 #include "signal_processing.h"
 
 #include <functional>

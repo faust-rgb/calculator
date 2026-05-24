@@ -25,7 +25,7 @@
 #include "analysis/integration/multidim_integration.h"
 #include "analysis/integration/multivariable_integrator.h"
 #include "analysis/integration/vector_field_theorems.h"
-#include "core/api/calculator_internal_types.h"
+#include "core/types/module_types.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "math/helpers/integer_helpers.h"
 #include "core/services/string_utils.h"
@@ -559,5 +559,4 @@ std::vector<std::string> IntegrationModule::get_commands() const {
 
 }  // namespace integration_ops
 
-#include "module/module_registration.h"
 REGISTER_CALCULATOR_MODULE(integration_ops::IntegrationModule)

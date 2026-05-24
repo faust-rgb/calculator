@@ -39,5 +39,4 @@ std::string DspModule::get_help_snippet(const std::string& topic) const {
     return "";
 }
 
-#include "module/module_registration.h"
 REGISTER_CALCULATOR_MODULE(DspModule)

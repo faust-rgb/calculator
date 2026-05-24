@@ -450,5 +450,4 @@ Examples:
     return "";
 }
 
-#include "module/module_registration.h"
 REGISTER_CALCULATOR_MODULE(TimeModule)

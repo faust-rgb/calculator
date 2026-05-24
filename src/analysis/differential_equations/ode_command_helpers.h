@@ -11,7 +11,7 @@
 #define ODE_COMMAND_HELPERS_H
 
 #include "app/scalar_type.h"
-#include "core/api/calculator_internal_types.h"
+#include "core/types/module_types.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "matrix/matrix.h"
 #include <string>

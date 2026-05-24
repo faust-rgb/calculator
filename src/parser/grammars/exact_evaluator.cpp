@@ -15,7 +15,7 @@
 #include "math/helpers/bitwise_helpers.h"
 #include "math/helpers/combinatorics.h"
 #include "math/helpers/integer_helpers.h"
-#include "core/api/calculator_internal_types.h"
+#include "core/types/module_types.h"
 #include "app/scalar_type.h"
 #include "mymath.h"
 

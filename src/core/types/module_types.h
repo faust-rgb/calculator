@@ -15,7 +15,10 @@
 #define CORE_MODULE_TYPES_H
 
 #include "types/stored_value.h"
+#include "types/function.h"
 #include "app/scalar_type.h"
+#include "core/services/service_locator.h"
+#include "core/services/service_interfaces.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -26,14 +29,9 @@
 // 前向声明
 // ============================================================================
 
-class ServiceLocator;
 class IExecutionContext;
-struct CoreServices;
 class SymbolicExpression;
 class IEvaluationEngine;
-
-// 注意：VariableResolver 已在其他头文件中定义为类型别名
-// 此处不再重复定义以避免冲突
 
 // ============================================================================
 // 类型别名
@@ -43,6 +41,7 @@ class IEvaluationEngine;
 namespace module_types {
     using Scalar = ::Scalar;
     using StoredValue = ::StoredValue;
+    using CustomFunction = ::CustomFunction;
 }
 
 #endif // CORE_MODULE_TYPES_H

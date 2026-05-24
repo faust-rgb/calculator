@@ -17,6 +17,7 @@
 #include "symbolic/algebra/groebner/groebner_basis.h"
 #include "core/services/string_utils.h"
 #include <vector>
+#include <sstream>
 
 namespace symbolic_commands {
 

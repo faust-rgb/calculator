@@ -19,7 +19,7 @@
 #include "math/helpers/unit_conversions.h"
 #include "math/helpers/combinatorics.h"
 #include "core/common/calculator_exceptions.h"
-#include "core/api/calculator_internal_types.h"
+#include "core/types/module_types.h"
 #include "core/services/string_utils.h"
 #include "statistics/calculator_statistics.h"
 #include "statistics/statistics.h"
@@ -250,5 +250,4 @@ std::string StandardMathModule::get_help_snippet(const std::string& topic) const
     return "";
 }
 
-#include "module/module_registration.h"
 REGISTER_CALCULATOR_MODULE(StandardMathModule)

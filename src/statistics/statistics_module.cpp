@@ -121,5 +121,4 @@ StatisticsModule::get_native_functions() const {
     return funcs;
 }
 
-#include "module/module_registration.h"
 REGISTER_CALCULATOR_MODULE(StatisticsModule)

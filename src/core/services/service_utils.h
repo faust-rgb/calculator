@@ -5,10 +5,12 @@
 // 从 CoreServices 中提取的工具函数，供模块使用。
 // 包括：
 // - 参数解析函数
-// - 矩阵参数检测和解析
+// - 矩阵参数检测
 // - 数值工具函数
 //
 // 这些是无状态的纯函数，不依赖于服务状态。
+//
+// 注意：矩阵解析函数 (parse_matrix_argument) 由 IEvaluationEngine 提供。
 // ============================================================================
 
 #ifndef CORE_SERVICE_UTILS_H
@@ -43,14 +45,6 @@ std::vector<std::string> parse_symbolic_vars(
  * @return true 如果参数是矩阵格式（如 [1,2;3,4]）
  */
 bool is_matrix_argument(const std::string& arg);
-
-/**
- * @brief 解析矩阵参数
- * @param arg 参数字符串
- * @param context 上下文名称（用于错误信息）
- * @return 解析后的存储值
- */
-StoredValue parse_matrix_argument(const std::string& arg, const std::string& context);
 
 // ============================================================================
 // 数值工具

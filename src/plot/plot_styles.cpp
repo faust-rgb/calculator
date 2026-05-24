@@ -13,7 +13,7 @@
  */
 
 #include "plot_styles.h"
-#include "calculator_internal_types.h"
+#include "core/types/module_types.h"
 #include "core/services/string_utils.h"
 #include <sstream>
 

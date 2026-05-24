@@ -234,5 +234,4 @@ std::string SymbolicModule::get_help_snippet(const std::string& topic) const {
 
 }  // namespace symbolic_commands
 
-#include "module/module_registration.h"
 REGISTER_CALCULATOR_MODULE(symbolic_commands::SymbolicModule)

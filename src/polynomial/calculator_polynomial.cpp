@@ -19,7 +19,8 @@
 
 #include "app/scalar_type.h"
 #include "parser/grammars/unified_expression_parser.h"
-#include "matrix_internal.h"
+#include "matrix/public/matrix_format.h"
+#include "matrix/matrix_internal.h"
 #include "polynomial.h"
 #include "mymath.h"
 #include "math/helpers/integer_helpers.h"
@@ -414,5 +415,4 @@ std::string PolynomialModule::get_help_snippet(const std::string& topic) const {
 
 }  // namespace polynomial_ops
 
-#include "module/module_registration.h"
 REGISTER_CALCULATOR_MODULE(polynomial_ops::PolynomialModule)

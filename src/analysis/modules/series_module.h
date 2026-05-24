@@ -14,8 +14,7 @@
 //
 // ============================================================================
 
-#include "core/api/calculator_internal_types.h"
-#include "app/scalar_type.h"
+#include "core/types/module_types.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "module/calculator_module.h"
 #include "analysis/series/psa_engine.h"
@@ -23,8 +22,6 @@
 #include <vector>
 #include <map>
 #include <functional>
-
-class ServiceLocator;
 
 namespace series_ops {
 

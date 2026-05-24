@@ -9,7 +9,7 @@
 #include "parser/infra/base_parser.h"
 #include "parser/grammars/unified_parser_factory.h"
 #include "calculator_exceptions.h"
-#include "calculator_internal_types.h"
+#include "core/types/module_types.h"
 #include "execution/resolver/builtin_constants.h"
 #include "app/scalar_type.h"
 #include "mymath.h"

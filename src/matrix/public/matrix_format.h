@@ -14,7 +14,7 @@
 #ifndef MATRIX_PUBLIC_FORMAT_H
 #define MATRIX_PUBLIC_FORMAT_H
 
-#include "matrix/tcomplex.h"
+#include "math/types/complex.h"
 #include "app/scalar_type.h"
 #include <string>
 
