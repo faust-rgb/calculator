@@ -45,6 +45,14 @@ public:
     void set_evaluator(std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)> evaluator);
 
     /**
+     * @brief 设置求值器工厂函数
+     * 当没有外部求值器时，使用此工厂创建求值器，而非创建新的 Calculator 实例。
+     * @param factory 接受表达式字符串，返回求值器函数
+     */
+    void set_evaluator_factory(
+        std::function<std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>(const std::string&)> factory);
+
+    /**
      * @brief 设置外部变量查找函数
      * 用于极限计算时查询非极限变量的值
      * @param lookup 变量查找函数，返回变量值或默认值
@@ -103,6 +111,7 @@ private:
     std::string expression_;
     std::string variable_name_;
     mutable std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)> evaluator_;
+    mutable std::function<std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>(const std::string&)> evaluator_factory_;
     mutable std::shared_ptr<Calculator> fallback_calculator_;
     mutable std::function<Scalar(const std::string&)> variable_lookup_;  ///< 外部变量查找函数
     mutable std::list<std::pair<std::string, Scalar>> evaluation_cache_entries_;

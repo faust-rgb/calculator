@@ -45,11 +45,11 @@ StoredValue convert_matrix_value_to_stored(matrix::Value&& matrix_val) {
     StoredValue result;
     if (matrix_val.is_matrix) {
         result.is_matrix = true;
-        result.matrix = std::move(matrix_val.matrix);
+        result.matrix_ptr = std::make_shared<matrix::Matrix>(std::move(matrix_val.matrix));
     } else if (matrix_val.is_complex) {
         result.is_complex = true;
         result.complex = matrix_val.complex;
-        result.decimal = matrix_val.complex.real;
+        result.decimal = matrix_val.complex.real();
     } else {
         result.decimal = matrix_val.scalar;
     }
@@ -122,10 +122,10 @@ void UnifiedExpressionParser::ensure_callbacks_initialized() const {
 
     cached_matrix_lookup_ = [this](const std::string& name, matrix::Matrix* matrix_value) {
         const StoredValue* found = variables_.lookup(name);
-        if (!found || !found->is_matrix) {
+        if (!found || !found->is_matrix || !found->matrix_ptr) {
             return false;
         }
-        *matrix_value = found->matrix;
+        *matrix_value = *found->matrix_ptr;
         return true;
     };
 
@@ -406,10 +406,10 @@ bool try_evaluate_matrix_expression(
     const matrix::MatrixLookup matrix_lookup =
         [&variables](const std::string& name, matrix::Matrix* matrix_value) {
             const StoredValue* found = variables.lookup(name);
-            if (!found || !found->is_matrix) {
+            if (!found || !found->is_matrix || !found->matrix_ptr) {
                 return false;
             }
-            *matrix_value = found->matrix;
+            *matrix_value = *found->matrix_ptr;
             return true;
         };
 

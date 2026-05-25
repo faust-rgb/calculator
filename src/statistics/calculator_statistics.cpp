@@ -7,6 +7,7 @@
  */
 
 #include "calculator_statistics.h"
+#include "matrix/matrix.h"
 #include "app/scalar_type.h"
 #include "math/mymath.h"
 #include "statistics.h"
@@ -74,19 +75,19 @@ long long require_long_long(Scalar value, const std::string& name) {
  * - 普通数值：直接包装为单元素向量
  */
 std::vector<Scalar> extract_vector(const StoredValue& value) {
-    if (value.is_matrix) {
+    if (value.is_matrix && value.matrix_ptr) {
         // 矩阵类型：展开为一维向量
         std::vector<Scalar> result;
-        result.reserve(value.matrix.rows * value.matrix.cols);
-        for (std::size_t i = 0; i < value.matrix.rows; ++i) {
-            for (std::size_t j = 0; j < value.matrix.cols; ++j) {
-                result.push_back(value.matrix.at(i, j));
+        result.reserve(value.matrix_ptr->rows * value.matrix_ptr->cols);
+        for (std::size_t i = 0; i < value.matrix_ptr->rows; ++i) {
+            for (std::size_t j = 0; j < value.matrix_ptr->cols; ++j) {
+                result.push_back(value.matrix_ptr->at(i, j));
             }
         }
         return result;
     } else if (value.is_complex) {
         // 复数类型：取实部
-        return { value.complex.real };
+        return { value.complex.real() };
     } else if (value.has_precise_decimal_text) {
         // 精确小数文本：转换为 double
         return { std::stod(value.precise_decimal_text) };

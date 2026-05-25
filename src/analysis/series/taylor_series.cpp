@@ -20,6 +20,7 @@
 #include "app/default_precision.h"
 #include "app/scalar_type.h"
 #include "core/services/format_utils.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "statistics/probability.h"
 #include "math/mymath.h"
@@ -42,23 +43,23 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
                             Scalar center,
                             int degree,
                             std::vector<Scalar>& result) {
-    if (!expr.node_) return false;
+    if (!expr.has_node()) return false;
 
-    if (expr.node_->type == NodeType::kFunction) {
-        const std::string& func_name = expr.node_->text;
-        SymbolicExpression arg(expr.node_->left);
+    if (expr.node_type() == NodeType::kFunction) {
+        const std::string func_name = expr.node_text();
+        SymbolicExpression arg = expr.left_child();
 
         Scalar arg_coeff = 0.0L, arg_const = 0.0L;
         bool is_linear_arg = false;
 
-        if (arg.node_->type == NodeType::kVariable && arg.node_->text == var_name) {
+        if (arg.node_type() == NodeType::kVariable && arg.node_text() == var_name) {
             arg_coeff = 1.0L;
             arg_const = -center;
             is_linear_arg = true;
-        } else if (arg.node_->type == NodeType::kSubtract) {
-            SymbolicExpression left(arg.node_->left);
-            SymbolicExpression right(arg.node_->right);
-            if (left.node_->type == NodeType::kVariable && left.node_->text == var_name &&
+        } else if (arg.node_type() == NodeType::kSubtract) {
+            SymbolicExpression left = arg.left_child();
+            SymbolicExpression right = arg.right_child();
+            if (left.node_type() == NodeType::kVariable && left.node_text() == var_name &&
                 right.is_number(&arg_const)) {
                 arg_coeff = 1.0L;
                 arg_const = arg_const - center;
@@ -66,7 +67,7 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
             }
         }
 
-        if (mymath::is_near_zero(center, app::series_tolerance()) && arg.node_->type == NodeType::kVariable && arg.node_->text == var_name) {
+        if (mymath::is_near_zero(center, app::series_tolerance()) && arg.node_type() == NodeType::kVariable && arg.node_text() == var_name) {
             result.assign(degree + 1, Scalar(0));
 
             if (func_name == "exp") {
@@ -198,12 +199,12 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
         }
     }
 
-    if (expr.node_->type == NodeType::kPower) {
-        SymbolicExpression base(expr.node_->left);
-        SymbolicExpression exponent(expr.node_->right);
+    if (expr.node_type() == NodeType::kPower) {
+        SymbolicExpression base = expr.left_child();
+        SymbolicExpression exponent = expr.right_child();
 
         Scalar exp_val = 0.0L;
-        if (base.node_->type == NodeType::kVariable && base.node_->text == var_name &&
+        if (base.node_type() == NodeType::kVariable && base.node_text() == var_name &&
             exponent.is_number(&exp_val) && mymath::is_near_zero(center, app::series_tolerance())) {
             if (exp_val > 0 && mymath::is_integer(exp_val, app::series_tolerance())) {
                 int p = static_cast<int>(exp_val + 0.5);

@@ -24,7 +24,7 @@
 #include "analysis/series/puiseux_series.h"
 #include "analysis/series/series_summation.h"
 #include "app/scalar_type.h"
-#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include "parser/grammars/unified_expression_parser.h"
@@ -175,23 +175,22 @@ bool handle_series_command(const SeriesContext& ctx,
 std::string SeriesModule::execute_args(const std::string& command,
                                       const std::vector<std::string>& args,
                                       ServiceLocator& locator) {
-    auto engine = locator.resolve<IEvaluationEngine>();
-
+    auto services = locator.resolve<CoreServices>();
     SeriesContext ctx;
     ctx.resolve_symbolic = [&locator](const std::string& a, bool r, std::string* v, SymbolicExpression* e) {
-        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(a, r, v, e);
+        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(a, r, v, e);
     };
-    ctx.parse_decimal = [engine](const std::string& a) { return engine->parse_decimal(a); };
-    ctx.evaluate_at = [engine](const SymbolicExpression& expr, const std::string& var, Scalar val) {
-        return engine->build_scoped_evaluator(expr.to_string())({{var, val}});
+    ctx.parse_decimal = [services](const std::string& a) { return services->evaluation.parse_decimal(a); };
+    ctx.evaluate_at = [services](const SymbolicExpression& expr, const std::string& var, Scalar val) {
+        return services->evaluation.build_decimal_evaluator(expr.to_string())({{var, val}});
     };
     ctx.simplify_symbolic = [&locator](const std::string& a) {
         SymbolicExpression expr;
         std::string var;
-        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(a, false, &var, &expr);
+        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(a, false, &var, &expr);
         return expr.to_string();
     };
-    ctx.expand_inline = [engine](const std::string& a) { return engine->expand_inline(a); };
+    ctx.expand_inline = [services](const std::string& a) { return services->symbolic.expand_inline(a); };
 
     std::string output;
     if (handle_series_command(ctx, command, args, &output)) {

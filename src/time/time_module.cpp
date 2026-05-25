@@ -106,7 +106,7 @@ std::time_t parse_time(const std::string& time_str, const std::string& format) {
  *
  * @return 函数名到函数实现的映射表
  */
-std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> TimeModule::get_native_functions() const {
+std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> TimeModule::get_functions_map() const {
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
     // ==================== 时间戳函数 ====================

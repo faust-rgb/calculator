@@ -10,12 +10,12 @@
 std::string StatisticsModule::execute_args(const std::string& command,
                                            const std::vector<std::string>& args,
                                            ServiceLocator& locator) {
-    auto engine = locator.resolve<IEvaluationEngine>();
+    auto services = locator.resolve<CoreServices>();
 
     // 解析参数并提取数据向量
     std::vector<Scalar> data;
     for (const auto& arg_str : args) {
-        auto val = engine->evaluate_expression_value(arg_str, false);
+        auto val = services->evaluation.evaluate_value(arg_str, false);
         auto vec = stats_ops::extract_vector(val);
         data.insert(data.end(), vec.begin(), vec.end());
     }
@@ -29,18 +29,18 @@ std::string StatisticsModule::execute_args(const std::string& command,
         std::ostringstream out;
         out << "--- Statistical Summary ---\n"
             << "Count:    " << s.count << "\n"
-            << "Mean:     " << engine->normalize_result(s.mean) << "\n"
-            << "StdDev(S):" << engine->normalize_result(s.stddev) << "\n"
-            << "Variance: " << engine->normalize_result(s.variance) << "\n"
-            << "Min:      " << engine->normalize_result(s.min) << "\n"
-            << "25% (Q1): " << engine->normalize_result(s.q1) << "\n"
-            << "50% (Med):" << engine->normalize_result(s.median) << "\n"
-            << "75% (Q3): " << engine->normalize_result(s.q3) << "\n"
-            << "Max:      " << engine->normalize_result(s.max) << "\n"
-            << "IQR:      " << engine->normalize_result(s.iqr) << "\n"
-            << "Skewness: " << engine->normalize_result(s.skewness) << "\n"
-            << "Kurtosis: " << engine->normalize_result(s.kurtosis) << "\n"
-            << "MAD:      " << engine->normalize_result(s.mad);
+            << "Mean:     " << services->evaluation.normalize_result(s.mean) << "\n"
+            << "StdDev(S):" << services->evaluation.normalize_result(s.stddev) << "\n"
+            << "Variance: " << services->evaluation.normalize_result(s.variance) << "\n"
+            << "Min:      " << services->evaluation.normalize_result(s.min) << "\n"
+            << "25% (Q1): " << services->evaluation.normalize_result(s.q1) << "\n"
+            << "50% (Med):" << services->evaluation.normalize_result(s.median) << "\n"
+            << "75% (Q3): " << services->evaluation.normalize_result(s.q3) << "\n"
+            << "Max:      " << services->evaluation.normalize_result(s.max) << "\n"
+            << "IQR:      " << services->evaluation.normalize_result(s.iqr) << "\n"
+            << "Skewness: " << services->evaluation.normalize_result(s.skewness) << "\n"
+            << "Kurtosis: " << services->evaluation.normalize_result(s.kurtosis) << "\n"
+            << "MAD:      " << services->evaluation.normalize_result(s.mad);
         return out.str();
     }
 
@@ -48,7 +48,7 @@ std::string StatisticsModule::execute_args(const std::string& command,
 }
 
 std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>
-StatisticsModule::get_native_functions() const {
+StatisticsModule::get_functions_map() const {
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
     auto wrap_scalar = [](Scalar val) -> StoredValue {

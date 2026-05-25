@@ -56,9 +56,11 @@ Large subsystems are split across focused directories and translation units:
 - `src/symbolic/core/`, `src/symbolic/calculus/`, `src/symbolic/transformation/` for symbolic engine components
 
 Shared internal declarations live in private headers such as
-`src/core/api/calculator_internal_types.h`,
-`src/matrix/matrix_internal.h`, and
+`src/matrix/matrix_internal.h`,
+`src/matrix/matrix_dsp.h`, and
 `src/symbolic/core/symbolic_expression_internal.h`.
+Public type definitions that replace internal dependencies are in
+`src/symbolic/public/symbolic_node_types.h`.
 
 ## Features
 

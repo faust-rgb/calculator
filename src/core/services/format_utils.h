@@ -10,6 +10,7 @@
 #define CORE_FORMAT_UTILS_H
 
 #include <string>
+#include <complex>
 #include "app/scalar_type.h"
 
 struct StoredValue;
@@ -105,5 +106,29 @@ std::string format_stored_value(const StoredValue& value, bool symbolic_constant
  * @brief 格式化 StoredValue 用于 print 命令
  */
 std::string format_print_value(const StoredValue& value, bool symbolic_constants_mode);
+
+/**
+ * @brief 检查复数是否在数值上等价于实数（虚部接近零）
+ * @param z 复数值
+ * @param epsilon 判定阈值（默认使用 COMPARISON_EPSILON）
+ * @return true 如果 |imag(z)| < epsilon
+ */
+bool is_complex_effectively_real(const std::complex<long double>& z,
+                                 long double epsilon = 0);
+
+/**
+ * @brief 格式化复数为显示字符串
+ * @param real 实部
+ * @param imag 虚部
+ * @param epsilon 判定阈值（默认使用 COMPARISON_EPSILON）
+ * @return 格式化字符串，如 "3+2i"、"5"、"-i"、"1-i"
+ *
+ * 规则：
+ * - 虚部接近零时只显示实部
+ * - 实部接近零且虚部非零时只显示虚部
+ * - 虚部为 ±1 时省略系数
+ */
+std::string format_complex_display(long double real, long double imag,
+                                   long double epsilon = 0);
 
 #endif // CORE_FORMAT_UTILS_H

@@ -14,7 +14,7 @@
 #include "analysis/series/psa_engine.h"
 #include "analysis/modules/series_module.h"
 #include "math/base/precision_constants.h"
-#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include <algorithm>
@@ -447,27 +447,26 @@ std::vector<Scalar> ps_tanh(const std::vector<Scalar>& a, int degree) {
 }
 
 bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, Scalar center, int degree, std::vector<Scalar>& result, const SeriesContext& ctx) {
-    if (!expr.node_) return false;
-    auto node = expr.node_;
+    if (!expr.has_node()) return false;
 
-    if (node->type == NodeType::kNumber) {
+    if (expr.node_type() == NodeType::kNumber) {
         result.assign(degree + 1, Scalar(0));
-        result[0] = Scalar(node->number_value);
+        result[0] = Scalar(expr.node_numeric_value());
         return true;
     }
-    if (node->type == NodeType::kPi) {
+    if (expr.node_type() == NodeType::kPi) {
         result.assign(degree + 1, Scalar(0));
         result[0] = Scalar(mymath::kPi);
         return true;
     }
-    if (node->type == NodeType::kE) {
+    if (expr.node_type() == NodeType::kE) {
         result.assign(degree + 1, Scalar(0));
         result[0] = Scalar(mymath::kE);
         return true;
     }
-    if (node->type == NodeType::kVariable) {
+    if (expr.node_type() == NodeType::kVariable) {
         result.assign(degree + 1, Scalar(0));
-        if (node->text == var_name) {
+        if (expr.node_text() == var_name) {
             result[0] = Scalar(center);
             if (degree >= 1) result[1] = Scalar(1);
         } else {
@@ -477,11 +476,13 @@ bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, S
     }
 
     std::vector<Scalar> left_res, right_res;
-    if (node->left && !evaluate_psa(SymbolicExpression(node->left), var_name, center, degree, left_res, ctx)) return false;
-    if (node->right && !evaluate_psa(SymbolicExpression(node->right), var_name, center, degree, right_res, ctx)) return false;
+    SymbolicExpression left_expr = expr.left_child();
+    SymbolicExpression right_expr = expr.right_child();
+    if (left_expr.has_node() && !evaluate_psa(left_expr, var_name, center, degree, left_res, ctx)) return false;
+    if (right_expr.has_node() && !evaluate_psa(right_expr, var_name, center, degree, right_res, ctx)) return false;
 
     try {
-        switch (node->type) {
+        switch (expr.node_type()) {
             case NodeType::kAdd: result = ps_add(left_res, right_res, degree); return true;
             case NodeType::kSubtract: result = ps_sub(left_res, right_res, degree); return true;
             case NodeType::kMultiply: result = ps_mul(left_res, right_res, degree); return true;
@@ -508,18 +509,19 @@ bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, S
                 }
             }
             case NodeType::kFunction: {
-                if (node->text == "exp") { result = ps_exp(left_res, degree); return true; }
-                if (node->text == "ln") { result = ps_ln(left_res, degree); return true; }
-                if (node->text == "sin") { result = ps_sin(left_res, degree); return true; }
-                if (node->text == "cos") { result = ps_cos(left_res, degree); return true; }
-                if (node->text == "tan") { result = ps_tan(left_res, degree); return true; }
-                if (node->text == "asin" || node->text == "arcsin") { result = ps_asin(left_res, degree); return true; }
-                if (node->text == "acos" || node->text == "arccos") { result = ps_acos(left_res, degree); return true; }
-                if (node->text == "atan" || node->text == "arctan") { result = ps_atan(left_res, degree); return true; }
-                if (node->text == "sinh") { result = ps_sinh(left_res, degree); return true; }
-                if (node->text == "cosh") { result = ps_cosh(left_res, degree); return true; }
-                if (node->text == "tanh") { result = ps_tanh(left_res, degree); return true; }
-                if (node->text == "sqrt") { result = ps_pow_const(left_res, 0.5, degree); return true; }
+                const std::string func_name = expr.node_text();
+                if (func_name == "exp") { result = ps_exp(left_res, degree); return true; }
+                if (func_name == "ln") { result = ps_ln(left_res, degree); return true; }
+                if (func_name == "sin") { result = ps_sin(left_res, degree); return true; }
+                if (func_name == "cos") { result = ps_cos(left_res, degree); return true; }
+                if (func_name == "tan") { result = ps_tan(left_res, degree); return true; }
+                if (func_name == "asin" || func_name == "arcsin") { result = ps_asin(left_res, degree); return true; }
+                if (func_name == "acos" || func_name == "arccos") { result = ps_acos(left_res, degree); return true; }
+                if (func_name == "atan" || func_name == "arctan") { result = ps_atan(left_res, degree); return true; }
+                if (func_name == "sinh") { result = ps_sinh(left_res, degree); return true; }
+                if (func_name == "cosh") { result = ps_cosh(left_res, degree); return true; }
+                if (func_name == "tanh") { result = ps_tanh(left_res, degree); return true; }
+                if (func_name == "sqrt") { result = ps_pow_const(left_res, 0.5, degree); return true; }
                 return false;
             }
             default: return false;

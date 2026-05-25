@@ -26,6 +26,7 @@
 #include "math/helpers/integer_helpers.h"
 #include "parser/grammars/command_parser.h"
 #include "core/services/string_utils.h"
+#include "core/services/format_utils.h"
 
 #include <sstream>
 
@@ -264,7 +265,7 @@ std::string roots(const PolynomialData& poly) {
         if (is_integer_double(imag, 1e-6)) {
             imag = static_cast<Scalar>(round_to_long_long(imag));
         }
-        if (mymath::abs(Scalar(imag)) < Scalar(1e-8L)) {
+        if (is_complex_effectively_real(std::complex<long double>(real.to_long_double(), imag.to_long_double()))) {
             out << format_symbolic_scalar(real);
         } else {
             out << matrix::internal::format_complex<Scalar>({real, imag});
@@ -380,12 +381,12 @@ bool handle_polynomial_command(const PolynomialContext& ctx,
 std::string PolynomialModule::execute_args(const std::string& command,
                                           const std::vector<std::string>& args,
                                           ServiceLocator& locator) {
-    auto engine = locator.resolve<IEvaluationEngine>();
+    auto services = locator.resolve<CoreServices>();
     PolynomialContext ctx;
     ctx.functions = nullptr;
     ctx.resolve_symbolic = [&](const std::string& name, std::string* var) {
         SymbolicExpression expr;
-        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(name, false, var, &expr);
+        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(name, false, var, &expr);
         return expr;
     };
 

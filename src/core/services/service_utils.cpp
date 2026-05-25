@@ -44,8 +44,7 @@ bool is_matrix_argument(const std::string& arg) {
     return arg[0] == '[';
 }
 
-// 注意：parse_matrix_argument 的实际实现由 IEvaluationEngine 提供
-// service_utils 中只提供类型声明，实际调用通过 IEvaluationEngine
+// parse_matrix_argument is provided by CoreServices
 
 bool is_integer_double(Scalar value, Scalar epsilon) {
     const Scalar abs_val = value < Scalar(0) ? -value : value;

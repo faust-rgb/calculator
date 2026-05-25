@@ -5,6 +5,7 @@
 
 #include "calculator_exceptions.h"
 #include "matrix_internal.h"
+#include "matrix_dsp.h"
 #include "mymath.h"
 #include "polynomial.h"
 #include "precise_decimal.h"
@@ -1532,7 +1533,7 @@ TMatrix<T> eigenvalues(const TMatrix<T>& matrix) {
         }
     }
 
-    std::vector<TComplex<T>> values;
+    std::vector<mymath::complex<T>> values;
     values.reserve(current.rows);
     for (std::size_t i = 0; i < current.rows;) {
         if (i + 1 < current.rows && t_abs(current.at(i + 1, i)) > tolerance) {
@@ -1547,24 +1548,24 @@ TMatrix<T> eigenvalues(const TMatrix<T>& matrix) {
             if (block_discriminant < -tolerance) {
                 const T real = block_trace * T(0.5L);
                 const T imag = t_sqrt(-block_discriminant) * T(0.5L);
-                values.push_back({real, imag});
-                values.push_back({real, -imag});
+                values.push_back(mymath::complex<T>(real, imag));
+                values.push_back(mymath::complex<T>(real, -imag));
                 i += 2;
                 continue;
             }
             const T block_root =
                 t_sqrt(block_discriminant < T(static_cast<long long>(0)) ? T(static_cast<long long>(0)) : block_discriminant);
-            values.push_back({(block_trace + block_root) * T(0.5L), T(static_cast<long long>(0))});
-            values.push_back({(block_trace - block_root) * T(0.5L), T(static_cast<long long>(0))});
+            values.push_back(mymath::complex<T>((block_trace + block_root) * T(0.5L), T(static_cast<long long>(0))));
+            values.push_back(mymath::complex<T>((block_trace - block_root) * T(0.5L), T(static_cast<long long>(0))));
             i += 2;
             continue;
         }
-        values.push_back({current.at(i, i), T(static_cast<long long>(0))});
+        values.push_back(mymath::complex<T>(current.at(i, i), T(static_cast<long long>(0))));
         ++i;
     }
     bool all_real = true;
     for (const auto& value : values) {
-        if (t_abs(value.imag) > tolerance) {
+        if (t_abs(value.imag()) > tolerance) {
             all_real = false;
             break;
         }
@@ -1573,17 +1574,17 @@ TMatrix<T> eigenvalues(const TMatrix<T>& matrix) {
         std::vector<T> real_values;
         real_values.reserve(values.size());
         for (const auto& value : values) {
-            real_values.push_back(t_abs(value.real) <= tolerance
+            real_values.push_back(t_abs(value.real()) <= tolerance
                                       ? T(static_cast<long long>(0))
-                                      : value.real);
+                                      : value.real());
         }
         return TMatrix<T>::vector(real_values);
     }
     TMatrix<T> result(values.size(), 2, T(static_cast<long long>(0)));
     for (std::size_t row = 0; row < values.size(); ++row) {
-        const TComplex<T> value = normalize_complex(values[row]);
-        result.at(row, 0) = value.real;
-        result.at(row, 1) = value.imag;
+        const mymath::complex<T> value = normalize_complex(values[row]);
+        result.at(row, 0) = value.real();
+        result.at(row, 1) = value.imag();
     }
     return result;
 }

@@ -39,7 +39,7 @@
 
 #include "core/services/core_managers.h"
 #include "execution/registry/command_registry.h"
-#include "core/services/evaluation_engine_impl.h"
+// IEvaluationEngine shim removed — modules now resolve CoreServices directly
 #include "core/services/state_persistence.h"
 
 // ============================================================================
@@ -112,14 +112,11 @@ Calculator::Calculator() : impl_(new Impl()) {
     impl_->locator.register_service<IExecutionContext>(std::shared_ptr<IExecutionContext>(impl_.get(), [](IExecutionContext*){}));
 
 
-    // 2. 注册逻辑引擎服务
-    auto engine = std::make_shared<EvaluationEngineImpl>(this, impl_.get());
-    impl_->locator.register_service<IEvaluationEngine>(engine);
-
     apply_calculator_display_precision(impl_.get());
 
-    // 3. 初始化核心逻辑服务（暂时保持旧的 CoreServices 结构用于过渡）
+    // 2. 初始化核心逻辑服务（暂时保持旧的 CoreServices 结构用于过渡）
     impl_->core_services = std::make_unique<CoreServices>(core::build_core_services(this, impl_.get()));
+    impl_->locator.register_service<CoreServices>(std::shared_ptr<CoreServices>(impl_->core_services.get(), [](CoreServices*){}));
 
     register_standard_modules(this);
     broadcast_settings(this, impl_.get());
@@ -134,34 +131,29 @@ Calculator::~Calculator() = default;
 void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
     if (!module) return;
 
+    const auto caps = module->capabilities();
+
     // 获取底层管理器用于直接访问
     auto* cmd_registry = static_cast<CommandRegistry*>(impl_->commands_ptr.get());
     auto* mod_mgr = static_cast<ModuleManager*>(impl_->modules.get());
 
-    // 合并函数映射
-    auto new_scalar_funcs = module->get_scalar_functions();
-    for (auto& [name, func] : new_scalar_funcs) {
-        impl_->functions_ptr->add_scalar_function(name, std::move(func));
+    // 1. 注册函数 (IFunctionProvider)
+    if (caps & ModuleCapability::kFunctions) {
+        auto new_functions = module->get_functions_map();
+        for (auto& [name, func] : new_functions) {
+            impl_->functions_ptr->add_native_function(name, std::move(func));
+            impl_->help_topic_to_modules[name].push_back(module);
+        }
+
+        // 过渡支持：注册标量函数
+        auto new_scalar_funcs = module->get_scalar_functions();
+        for (auto& [name, func] : new_scalar_funcs) {
+            impl_->functions_ptr->add_scalar_function(name, std::move(func));
+        }
     }
 
-    auto new_matrix_funcs = module->get_matrix_functions();
-    for (auto& [name, func] : new_matrix_funcs) {
-        impl_->functions_ptr->add_matrix_function(name, std::move(func));
-    }
-
-    auto new_value_funcs = module->get_value_functions();
-    for (auto& [name, func] : new_value_funcs) {
-        impl_->functions_ptr->add_value_function(name, std::move(func));
-    }
-
-    auto new_native_funcs = module->get_native_functions();
-    for (auto& [name, func] : new_native_funcs) {
-        impl_->functions_ptr->add_native_function(name, std::move(func));
-        impl_->help_topic_to_modules[name].push_back(module);
-    }
-
-    // 隐式求值路由优化：构建触发字符到模块的映射
-    if (module->wants_implicit_evaluation()) {
+    // 2. 隐式求值 (IImplicitEvaluator)
+    if ((caps & ModuleCapability::kImplicit) && module->wants_implicit_evaluation()) {
         impl_->implicit_evaluation_modules.push_back(module);
         // 构建触发字符映射
         const auto* trigger_table = module->get_cached_trigger_table();
@@ -174,65 +166,50 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
         }
     }
 
-    // 收集元数据并注册命令到 CommandRegistry
-    auto specs = module->get_command_specs();
-    for (const auto& spec : specs) {
-        std::string cmd_name = command_key_display(spec.key);
+    // 3. 注册命令 (ICommandProvider)
+    if (caps & ModuleCapability::kCommands) {
+        auto specs = module->get_command_specs();
+        for (const auto& spec : specs) {
+            std::string cmd_name = command_key_display(spec.key);
 
-        // 检查重复注册
-        if (cmd_registry->has_command(cmd_name)) {
-            throw std::runtime_error("duplicate command registration: " + cmd_name);
+            // 注册到 CommandRegistry
+            std::weak_ptr<CalculatorModule> weak_module = module;
+            std::string dispatch_name = spec.dispatch_name;
+
+            cmd_registry->register_command_handler(
+                cmd_name,
+                [weak_module, dispatch_name, this](
+                    const std::string& /*input*/,
+                    const std::vector<std::string_view>& args,
+                    std::string* output,
+                    bool /*exact_mode*/,
+                    const CoreServices& /*services*/) -> bool {
+                    auto mod = weak_module.lock();
+                    if (!mod) return false;
+
+                    // 使用模块的 execute_args_view 方法处理命令，传入 ServiceLocator
+                    *output = mod->execute_args_view(dispatch_name, args, impl_->locator);
+                    return true;
+                },
+                module->get_help_snippet(cmd_name)
+            );
+            impl_->module_commands.push_back(cmd_name);
         }
 
-        impl_->module_commands.push_back(cmd_name);
-
-        // 注册到 CommandRegistry
-        // 使用 weak_ptr 避免循环引用
-        std::weak_ptr<CalculatorModule> weak_module = module;
-        std::string dispatch_name = spec.dispatch_name;
-        CommandKey key = spec.key;
-
-        cmd_registry->register_command(
-            cmd_name,
-            [weak_module, dispatch_name, key, this](
-                const std::string& /*input*/,
-                const std::vector<std::string_view>& args,
-                std::string* output,
-                bool exact_mode,
-                const CoreServices& /*services*/) -> bool {
-                (void)exact_mode;
-                auto mod = weak_module.lock();
-                if (!mod) return false;
-
-                // 使用模块的 execute_args_view 方法处理命令，传入 ServiceLocator
-                *output = mod->execute_args_view(dispatch_name, args, impl_->locator);
-                return true;
-            },
-            module->get_help_snippet("commands")
-        );
+        // 4. 注册函数名用于补全
+        auto funcs = module->get_function_names();
+        impl_->module_functions.insert(impl_->module_functions.end(), funcs.begin(), funcs.end());
     }
-    auto funcs = module->get_functions();
-    impl_->module_functions.insert(impl_->module_functions.end(), funcs.begin(), funcs.end());
 
-    // 建立帮助索引
-    auto topics = module->get_help_topics();
-    // 始终尝试默认的主题
-    static const std::vector<std::string> default_topics = {
-        "commands", "functions", "matrix", "symbolic", "analysis", "planning",
-        "examples", "exact", "variables", "persistence", "programmer"
-    };
-    for (const auto& topic : default_topics) {
-        if (std::find(topics.begin(), topics.end(), topic) == topics.end()) {
-            if (!module->get_help_snippet(topic).empty()) {
-                topics.push_back(topic);
-            }
+    // 5. 建立帮助索引
+    if (caps & ModuleCapability::kHelp) {
+        auto topics = module->get_help_topics();
+        for (const auto& topic : topics) {
+            impl_->help_topic_to_modules[topic].push_back(module);
         }
     }
 
-    for (const auto& topic : topics) {
-        impl_->help_topic_to_modules[topic].push_back(module);
-    }
-
+    // 6. 初始化与服务注册
     module->initialize(impl_->locator);
     if (impl_->core_services) {
         module->register_services(*impl_->core_services, impl_->locator);
@@ -606,14 +583,6 @@ std::string dispatch_command_call(const Calculator::Impl* impl, const std::strin
 }
 }
 
-std::string Calculator::factor_expression(const std::string& expression) const {
-    return dispatch_command_call(impl_.get(), "factor", expression);
-}
-
-std::string Calculator::plot_expression(const std::string& expression) const {
-    return dispatch_command_call(impl_.get(), "plot", expression);
-}
-
 std::string Calculator::export_variable(const std::string& line) const {
     // 特殊处理 :export，它不是函数调用语法
     std::vector<std::string_view> args;
@@ -623,17 +592,6 @@ std::string Calculator::export_variable(const std::string& line) const {
         throw std::runtime_error("export command failed");
     }
     return output;
-}
-
-std::string Calculator::base_conversion_expression(const std::string& expression) const {
-    // 解析出命令名
-    auto is_command = [this](std::string_view n) {
-        return impl_->commands_ptr->has_command(std::string(n));
-    };
-    CommandASTNode ast = parse_command(expression, is_command);
-    const auto* call = ast.as_function_call();
-    if (!call) throw std::runtime_error("expected base conversion command");
-    return dispatch_command_call(impl_.get(), std::string(call->name), expression);
 }
 
 // ============================================================================
@@ -657,8 +615,8 @@ const CoreServices& Calculator::Impl::services() const {
 }
 
 StoredValue Calculator::Impl::evaluate(const std::string& expression, bool exact_mode) {
-    auto engine = locator.resolve<IEvaluationEngine>();
-    return engine->evaluate_expression_value(expression, exact_mode);
+    auto services = locator.resolve<CoreServices>();
+    return services->evaluation.evaluate_value(expression, exact_mode);
 }
 
 bool Calculator::Impl::try_evaluate_implicit(const std::string& expression, 

@@ -10,7 +10,7 @@
 //
 // 这些是无状态的纯函数，不依赖于服务状态。
 //
-// 注意：矩阵解析函数 (parse_matrix_argument) 由 IEvaluationEngine 提供。
+// 注意：矩阵解析函数 (parse_matrix_argument) 由 CoreServices 提供。
 // ============================================================================
 
 #ifndef CORE_SERVICE_UTILS_H

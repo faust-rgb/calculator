@@ -21,6 +21,7 @@
 #include "analysis/calculus/analysis_command_helpers.h"
 #include "analysis/calculus/critical_point_solver.h"
 #include "symbolic/modules/symbolic_module.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "symbolic/algebra/groebner/groebner_basis.h"
 #include "symbolic/solver/symbolic_solver.h"
@@ -252,26 +253,26 @@ std::string AnalysisModule::execute_args_view(std::string_view command,
                                              const std::vector<std::string_view>& args,
                                              ::ServiceLocator& locator) {
     using namespace module_helpers;
-    auto engine = locator.resolve<IEvaluationEngine>();
+    auto services = locator.resolve<CoreServices>();
     AnalysisContext ctx;
     ctx.resolve_symbolic = [&locator](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
-        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(arg, req, var, expr);
+        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(arg, req, var, expr);
     };
-    ctx.parse_symbolic_variable_arguments = [engine](const std::vector<std::string>& arguments, std::size_t start_index, const std::vector<std::string>& defaults) {
-        return engine->parse_symbolic_vars(arguments, start_index, defaults);
+    ctx.parse_symbolic_variable_arguments = [services](const std::vector<std::string>& arguments, std::size_t start_index, const std::vector<std::string>& defaults) {
+        return services->parse_symbolic_vars(arguments, start_index, defaults);
     };
-    ctx.parse_decimal = [engine](const std::string& expr) {
-        return engine->parse_decimal(expr);
+    ctx.parse_decimal = [services](const std::string& expr) {
+        return services->evaluation.parse_decimal(expr);
     };
-    ctx.normalize_result = [engine](Scalar value) {
-        return engine->normalize_result(value);
+    ctx.normalize_result = [services](Scalar value) {
+        return services->evaluation.normalize_result(value);
     };
-    ctx.build_analysis = [&locator, engine](const std::string& expression) {
+    ctx.build_analysis = [&locator, services](const std::string& expression) {
         SymbolicExpression expr; std::string var;
-        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(expression, false, &var, &expr);
+        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(expression, false, &var, &expr);
         FunctionAnalysis analysis(var);
         analysis.define(expr.to_string());
-        analysis.set_evaluator(engine->build_scoped_evaluator(expr.to_string()));
+        analysis.set_evaluator(services->evaluation.build_decimal_evaluator(expr.to_string()));
         return analysis;
     };
 

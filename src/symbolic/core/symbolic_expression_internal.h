@@ -14,6 +14,7 @@
 #define SYMBOLIC_EXPRESSION_INTERNAL_H
 
 #include "symbolic/core/symbolic_expression.h"
+#include "symbolic/public/symbolic_node_types.h"
 #include "math/mymath.h"
 #include "math/base/precision_constants.h"
 
@@ -30,44 +31,10 @@
 class SymbolicPolynomial;
 
 // ============================================================================
-// 节点类型枚举
+// 节点类型枚举（由 symbolic_node_types.h 提供）
 // ============================================================================
 
-/**
- * @enum NodeType
- * @brief 表达式树节点类型
- *
- * 每种类型对应一种表达式构造：
- * - kNumber: 数值常量，如 3.14, 2.0
- * - kVariable: 变量，如 x, y, pi, e
- * - kAdd/kSubtract/kMultiply/kDivide/kPower: 二元运算
- * - kNegate: 一元取负
- * - kFunction: 函数调用，如 sin(x), exp(x)
- * - kVector: 向量表达式，children 存储各分量
- * - kTensor: 张量（矩阵）表达式，children 存储各行
- * - kDifferentialOp: 微分算子，text 存储算子名（grad, div, curl, laplacian）
- */
-enum class NodeType {
-    kNumber,         ///< 数值常量节点
-    kVariable,       ///< 变量节点
-    kPi,             ///< 精确常数 pi
-    kE,              ///< 精确常数 e
-    kInfinity,       ///< 无穷大节点 (+inf 或 -inf)
-    kAdd,            ///< 加法节点: left + right
-    kSubtract,       ///< 减法节点: left - right
-    kMultiply,       ///< 乘法节点: left * right
-    kDivide,         ///< 除法节点: left / right
-    kPower,          ///< 幂运算节点: left ^ right
-    kNegate,         ///< 取负节点: -left
-    kFunction,       ///< 函数调用节点: text(left)，如 sin(x)
-    kVector,         ///< 向量节点: children 存储各分量
-    kTensor,         ///< 张量节点: children 存储各行（每行为 kVector）
-    kDifferentialOp, ///< 微分算子节点: text 为算子名，left 为操作数
-    kRootOf,         ///< 代数数节点: RootOf(poly, var, root_index)
-                     ///< - children[0]: 最小多项式（多项式表达式）
-                     ///< - text: 变量名
-                     ///< - number_value: 根编号（第几个实根）
-};
+// NodeType, BoundKind, BoundArgument 已在 symbolic_node_types.h 中定义
 
 // ============================================================================
 // 表达式节点结构
@@ -109,74 +76,6 @@ struct SymbolicExpression::Node {
      */
     explicit Node(Scalar value) : type(NodeType::kNumber), number_value(value) {}
 };
-
-// ============================================================================
-// 边界/端点解析协议
-// ============================================================================
-
-/**
- * @enum BoundKind
- * @brief 边界值类型
- */
-enum class BoundKind {
-    kFinite,   ///< 有限数值
-    kPosInf,   ///< 正无穷大 (+inf)
-    kNegInf,   ///< 负无穷大 (-inf)
-};
-
-/**
- * @struct BoundArgument
- * @brief 边界参数解析结果
- *
- * 统一表示有限值和无穷大，用于 integral、limit 等命令的边界解析。
- */
-struct BoundArgument {
-    BoundKind kind = BoundKind::kFinite;
-    Scalar value = Scalar(0);  ///< 仅当 kind == kFinite 时有效
-
-    /** @brief 是否为有限值 */
-    bool is_finite() const { return kind == BoundKind::kFinite; }
-
-    /** @brief 是否为无穷大（正或负） */
-    bool is_infinite() const { return kind != BoundKind::kFinite; }
-
-    /** @brief 是否为正无穷 */
-    bool is_pos_inf() const { return kind == BoundKind::kPosInf; }
-
-    /** @brief 是否为负无穷 */
-    bool is_neg_inf() const { return kind == BoundKind::kNegInf; }
-
-    /** @brief 获取数值（无穷大返回 ±inf） */
-    Scalar to_scalar() const;
-
-    /** @brief 创建有限边界 */
-    static BoundArgument finite(Scalar v);
-
-    /** @brief 创建正无穷边界 */
-    static BoundArgument pos_inf();
-
-    /** @brief 创建负无穷边界 */
-    static BoundArgument neg_inf();
-};
-
-/**
- * @brief 解析边界参数字符串
- * @param text 边界参数文本（如 "0", "inf", "+inf", "-inf", "infinity", "oo"）
- * @return 解析后的 BoundArgument
- *
- * 支持的格式：
- * - 有限数值：直接解析为 double
- * - 正无穷：inf, +inf, infinity, +infinity, oo, +oo
- * - 负无穷：-inf, -infinity, -oo
- */
-BoundArgument parse_bound_argument(const std::string& text);
-
-/**
- * @brief 检查字符串是否为无穷大字面量
- * @param text 待检查文本
- * @return true 如果是 inf/infinity/oo（不含符号）
- */
-bool is_infinity_literal(const std::string& text);
 
 // ============================================================================
 // 内部实现命名空间

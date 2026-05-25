@@ -17,7 +17,6 @@
 #include "app/scalar_type.h"
 #include "core/services/format_utils.h"
 #include "symbolic/core/symbolic_expression.h"
-#include "symbolic/core/symbolic_expression_internal.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include "statistics/probability.h"
@@ -184,9 +183,9 @@ std::string puiseux(const SeriesContext& ctx,
 
     bool is_sqrt_form = false;
     SymbolicExpression sqrt_arg;
-    if (expression.node_->type == NodeType::kFunction &&
-        expression.node_->text == "sqrt") {
-        sqrt_arg = SymbolicExpression(expression.node_->left);
+    if (expression.node_type() == NodeType::kFunction &&
+        expression.node_text() == "sqrt") {
+        sqrt_arg = expression.left_child();
         is_sqrt_form = true;
     }
 

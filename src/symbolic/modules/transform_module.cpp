@@ -214,10 +214,10 @@ bool handle_transform_command(const TransformContext& ctx,
 std::string TransformModule::execute_args(const std::string& command,
                                          const std::vector<std::string>& args,
                                          ServiceLocator& locator) {
-    auto engine = locator.resolve<IEvaluationEngine>();
+    auto services = locator.resolve<CoreServices>();
     TransformContext ctx;
     ctx.resolve_symbolic = [&locator](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
-        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(arg, req, var, expr);
+        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(arg, req, var, expr);
     };
 
     std::string output;

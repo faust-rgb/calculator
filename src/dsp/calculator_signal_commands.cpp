@@ -21,6 +21,7 @@
 #include "parser/infra/parser_utils.h"
 #include "core/services/string_utils.h"
 #include "math/mymath.h"
+#include "matrix/matrix.h"
 
 #include <algorithm>
 #include <iomanip>
@@ -52,8 +53,8 @@ static std::vector<Scalar> parse_vector(const SignalContext& ctx, const std::str
     StoredValue val = parser.evaluate_stored(str);
 
     std::vector<Scalar> result;
-    if (val.is_matrix) {
-        for (Scalar d : val.matrix.data) result.push_back(d);
+    if (val.is_matrix && val.matrix_ptr) {
+        for (Scalar d : val.matrix_ptr->data) result.push_back(d);
     } else if (val.is_list && val.list_value) {
         for (const auto& item : *val.list_value) {
             result.push_back(item.exact ? rational_to_double(item.rational) : item.decimal);

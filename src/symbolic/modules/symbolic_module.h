@@ -40,12 +40,9 @@ public:
     std::string name() const override { return "Symbolic"; }
 
     std::vector<std::string> get_commands() const override {
-        return {":assume", "simplify", "expand", "cse", "groebner", "latex", "diff", "gradient", "numerical_gradient", "num_grad",
-                "jacobian", "hessian", "divergence", "div",
-                "curl", "curl_2d", "laplacian", "implicit_diff", "param_deriv", "directional",
-                "line_integral", "line_integral_vector", "surface_integral", "greens_theorem",
-                "stokes_theorem", "divergence_theorem", "integrate_region", "integral", "dsolve",
-                "sum"};
+        return {":assume", "simplify", "expand", "cse", "groebner", "latex",
+                "jacobian", "hessian",
+                "dsolve", "sum"};
     }
 
 

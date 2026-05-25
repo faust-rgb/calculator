@@ -94,16 +94,16 @@ std::string StatePersistenceService::save_state(const std::string& path) const {
     for (const auto& [name, value] : all_vars) {
         if (value.is_matrix) {
             out << "VAR\t" << encode_field(name)
-                << "\tMATRIX\t" << value.matrix.rows
-                << '\t' << value.matrix.cols;
-            for (Scalar element : value.matrix.data) {
+                << "\tMATRIX\t" << value.matrix_ptr->rows
+                << '\t' << value.matrix_ptr->cols;
+            for (Scalar element : value.matrix_ptr->data) {
                 out << '\t' << std::setprecision(17) << element;
             }
             out << '\n';
         } else if (value.is_complex) {
             out << "VAR\t" << encode_field(name)
-                << "\tCOMPLEX\t" << std::setprecision(17) << value.complex.real
-                << '\t' << std::setprecision(17) << value.complex.imag << '\n';
+                << "\tCOMPLEX\t" << std::setprecision(17) << value.complex.real()
+                << '\t' << std::setprecision(17) << value.complex.imag() << '\n';
         } else if (value.is_string) {
             out << "VAR\t" << encode_field(name)
                 << "\tSTRING\t" << encode_field(value.string_value) << '\n';
@@ -244,17 +244,17 @@ std::string StatePersistenceService::load_state(const std::string& path) {
                         throw std::runtime_error("invalid save file format");
                     }
                     value.is_matrix = true;
-                    value.matrix = matrix::Matrix(rows, cols, 0.0L);
-                    for (std::size_t i = 0; i < value.matrix.data.size(); ++i) {
-                        value.matrix.data[i] = std::stod(parts[i + 5]);
+                    value.matrix_ptr = std::make_shared<matrix::Matrix>(rows, cols, 0.0L);
+                    for (std::size_t i = 0; i < value.matrix_ptr->data.size(); ++i) {
+                        value.matrix_ptr->data[i] = std::stod(parts[i + 5]);
                     }
                 } else if (parts[2] == "COMPLEX" && state_version >= 5) {
                     if (parts.size() != 5) {
                         throw std::runtime_error("invalid save file format");
                     }
                     value.is_complex = true;
-                    value.complex.real = std::stod(parts[3]);
-                    value.complex.imag = std::stod(parts[4]);
+                    value.complex.real(std::stod(parts[3]));
+                    value.complex.imag(std::stod(parts[4]));
                 } else if (parts[2] == "EXACT") {
                     if (parts.size() != 6) {
                         throw std::runtime_error("invalid save file format");

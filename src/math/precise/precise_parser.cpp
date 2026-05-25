@@ -11,7 +11,6 @@
 
 #include <algorithm>
 #include <map>
-#include "symbolic/core/symbolic_expression_internal.h"
 
 namespace {
 

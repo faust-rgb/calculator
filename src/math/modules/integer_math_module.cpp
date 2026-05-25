@@ -51,18 +51,18 @@ std::string IntegerMathModule::execute_args_view(std::string_view command,
                                           const std::vector<std::string_view>& args,
                                           ServiceLocator& locator) {
     using namespace module_helpers;
-    auto engine = locator.resolve<IEvaluationEngine>();
+    auto& services = *locator.resolve<CoreServices>();
 
     if (command == "factor") {
         require_args_count(args, 1, 1, command);
-        Scalar val = extract_scalar(args, 0, command, *engine);
+        Scalar val = services.evaluation.parse_decimal(std::string(args[0]));
         return factor_integer(require_integer(val, "argument", "factor"));
     }
 
     if (command == "bin" || command == "oct" || command == "hex" || command == "base") {
         require_args_count(args, 1, 2, command);
 
-        Scalar value = extract_scalar(args, 0, command, *engine);
+        Scalar value = services.evaluation.parse_decimal(std::string(args[0]));
         int base = 10;
 
         if (command == "bin") base = 2;
@@ -70,7 +70,7 @@ std::string IntegerMathModule::execute_args_view(std::string_view command,
         else if (command == "hex") base = 16;
         else {
             if (args.size() < 2) throw std::runtime_error("base expects 2 arguments: value, base");
-            base = static_cast<int>(require_integer(extract_scalar(args, 1, "base", *engine), "base", "base"));
+            base = static_cast<int>(require_integer(services.evaluation.parse_decimal(std::string(args[1])), "base", "base"));
         }
 
         if (base < 2 || base > 36) throw std::runtime_error("base must be in range [2, 36]");

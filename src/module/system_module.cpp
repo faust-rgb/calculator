@@ -84,7 +84,7 @@ std::string SystemModule::execute_args_view(std::string_view command,
                                        const std::vector<std::string_view>& args,
                                        ServiceLocator& locator) {
     using namespace module_helpers;
-    auto engine = locator.resolve<IEvaluationEngine>();
+    auto services = locator.resolve<CoreServices>();
     auto vars = locator.resolve<IVariableManager>();
     auto funcs = locator.resolve<IFunctionManager>();
     auto config = locator.resolve<IConfigManager>();
@@ -147,7 +147,7 @@ std::string SystemModule::execute_args_view(std::string_view command,
         std::ostringstream out;
         for (std::size_t i = 0; i < args.size(); ++i) {
             if (i != 0) out << ' ';
-            const StoredValue value = engine->evaluate_expression_value(std::string(args[i]), false);
+            const StoredValue value = services->evaluation.evaluate_value(std::string(args[i]), false);
             out << (value.is_string ? value.string_value
                                     : format_stored_value(value, false));
         }
@@ -166,7 +166,7 @@ std::string SystemModule::execute_args_view(std::string_view command,
     }
     if (command == ":run") {
         if (args.empty()) throw std::runtime_error(":run expects a file path");
-        return engine->execute_script(std::string(args[0]), false); // 注意：这里简化了逻辑，实际可能需要 execute_script_file
+        return services->env.execute_script(std::string(args[0]), false); // 注意：这里简化了逻辑，实际可能需要 execute_script_file
     }
 
     // ==================== 模式设置命令 ====================

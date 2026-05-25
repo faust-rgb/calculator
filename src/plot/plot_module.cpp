@@ -39,17 +39,20 @@ std::string PlotModule::execute_args_view(std::string_view command,
                                      const std::vector<std::string_view>& args,
                                      ServiceLocator& locator) {
     using namespace module_helpers;
-    auto ctx_ptr = locator.resolve<IExecutionContext>();
+    auto services = locator.resolve<CoreServices>();
+    auto vars = locator.resolve<IVariableManager>();
+    auto funcs = locator.resolve<IFunctionManager>();
+    auto exec_ctx = locator.resolve<IExecutionContext>();
 
-    plot::PlotContext ctx;
-    ctx.variables = ctx_ptr->variables().create_resolver();
-    ctx.functions = ctx_ptr->functions().get_custom_functions_map();
-    ctx.scalar_functions = ctx_ptr->functions().get_scalar_functions();
-    ctx.has_script_function = [ctx_ptr](const std::string& name) {
-        return has_visible_script_function(ctx_ptr.get(), name);
+    plot::PlotContext pctx;
+    pctx.variables = vars->create_resolver();
+    pctx.functions = funcs->get_custom_functions_map();
+    pctx.scalar_functions = funcs->get_scalar_functions();
+    pctx.has_script_function = [exec_ctx](const std::string& name) {
+        return has_visible_script_function(exec_ctx.get(), name);
     };
-    ctx.invoke_script_function = [ctx_ptr](const std::string& name, const std::vector<Scalar>& call_args) {
-        return invoke_script_function_decimal(ctx_ptr.get(), name, call_args);
+    pctx.invoke_script_function = [exec_ctx](const std::string& name, const std::vector<Scalar>& call_args) {
+        return invoke_script_function_decimal(exec_ctx.get(), name, call_args);
     };
 
     // 转换参数
@@ -57,10 +60,10 @@ std::string PlotModule::execute_args_view(std::string_view command,
     for (const auto& arg : args) string_args.emplace_back(arg);
 
     if (command == "plot") {
-        return plot::handle_plot_command(ctx, string_args);
+        return plot::handle_plot_command(pctx, string_args);
     }
     if (command == ":plot") {
-        return plot::handle_gnuplot_command(ctx, string_args);
+        return plot::handle_gnuplot_command(pctx, string_args);
     }
     if (command == ":export") {
         // 重建完整的命令行用于 handle_export_command
@@ -68,7 +71,7 @@ std::string PlotModule::execute_args_view(std::string_view command,
         for (const auto& arg : args) {
             line += " " + std::string(arg);
         }
-        return plot::handle_export_command(ctx, line);
+        return plot::handle_export_command(pctx, line);
     }
     throw std::runtime_error("PlotModule cannot handle command: " + std::string(command));
 }

@@ -14,6 +14,7 @@
 #include "execution/engine/inline_expander.h"
 #include "math/helpers/integer_helpers.h"
 #include "mymath.h"
+#include "matrix/matrix.h"
 #include <map>
 #include <stdexcept>
 
@@ -193,24 +194,25 @@ StoredValue evaluate_index_or_slice(
         return it->second;
     }
     if (base.is_matrix) {
+        if (!base.matrix_ptr) throw std::runtime_error("invalid matrix value");
         const std::vector<std::string> parts = split_script_top_level(index_expr, ',');
         if (parts.size() == 1) {
             long long index = stored_to_index(evaluate_script_value_expression(ctx, parts[0], exact_mode), "matrix index");
-            if (index < 0) index += static_cast<long long>(base.matrix.data.size());
-            if (index < 0 || index >= static_cast<long long>(base.matrix.data.size())) throw std::runtime_error("matrix index out of range");
+            if (index < 0) index += static_cast<long long>(base.matrix_ptr->data.size());
+            if (index < 0 || index >= static_cast<long long>(base.matrix_ptr->data.size())) throw std::runtime_error("matrix index out of range");
             StoredValue result;
-            result.decimal = base.matrix.data[static_cast<std::size_t>(index)];
+            result.decimal = base.matrix_ptr->data[static_cast<std::size_t>(index)];
             return result;
         } else if (parts.size() == 2) {
             long long row = stored_to_index(evaluate_script_value_expression(ctx, parts[0], exact_mode), "matrix row");
             long long col = stored_to_index(evaluate_script_value_expression(ctx, parts[1], exact_mode), "matrix col");
-            if (row < 0) row += static_cast<long long>(base.matrix.rows);
-            if (col < 0) col += static_cast<long long>(base.matrix.cols);
-            if (row < 0 || row >= static_cast<long long>(base.matrix.rows) || col < 0 || col >= static_cast<long long>(base.matrix.cols)) {
+            if (row < 0) row += static_cast<long long>(base.matrix_ptr->rows);
+            if (col < 0) col += static_cast<long long>(base.matrix_ptr->cols);
+            if (row < 0 || row >= static_cast<long long>(base.matrix_ptr->rows) || col < 0 || col >= static_cast<long long>(base.matrix_ptr->cols)) {
                 throw std::runtime_error("matrix index out of range");
             }
             StoredValue result;
-            result.decimal = base.matrix.at(static_cast<std::size_t>(row), static_cast<std::size_t>(col));
+            result.decimal = base.matrix_ptr->at(static_cast<std::size_t>(row), static_cast<std::size_t>(col));
             return result;
         } else {
             throw std::runtime_error("matrix indexing requires 1 or 2 indices");
@@ -311,6 +313,7 @@ bool try_execute_index_assignment(
         return true;
     }
     if (base_value.is_matrix) {
+        if (!base_value.matrix_ptr) throw std::runtime_error("invalid matrix value");
         if (new_value.is_matrix || new_value.is_list || new_value.is_dict || new_value.is_string) {
             throw std::runtime_error("matrix element assignment requires a scalar value");
         }
@@ -318,21 +321,21 @@ bool try_execute_index_assignment(
         const std::vector<std::string> parts = split_script_top_level(index_expr, ',');
         if (parts.size() == 1) {
             long long index = stored_to_index(evaluate_script_value_expression(ctx, parts[0], exact_mode), "matrix index");
-            if (index < 0) index += static_cast<long long>(base_value.matrix.data.size());
-            if (index < 0 || index >= static_cast<long long>(base_value.matrix.data.size())) throw std::runtime_error("matrix index out of range");
-            base_value.matrix.data[static_cast<std::size_t>(index)] = val;
+            if (index < 0) index += static_cast<long long>(base_value.matrix_ptr->data.size());
+            if (index < 0 || index >= static_cast<long long>(base_value.matrix_ptr->data.size())) throw std::runtime_error("matrix index out of range");
+            base_value.matrix_ptr->data[static_cast<std::size_t>(index)] = val;
             *output = base_name + "[" + index_expr + "] = " + format_stored_value(new_value, ctx->config().is_symbolic_constants_mode());
             ctx->variables().assign_visible(base_name, base_value);
             return true;
         } else if (parts.size() == 2) {
             long long row = stored_to_index(evaluate_script_value_expression(ctx, parts[0], exact_mode), "matrix row");
             long long col = stored_to_index(evaluate_script_value_expression(ctx, parts[1], exact_mode), "matrix col");
-            if (row < 0) row += static_cast<long long>(base_value.matrix.rows);
-            if (col < 0) col += static_cast<long long>(base_value.matrix.cols);
-            if (row < 0 || row >= static_cast<long long>(base_value.matrix.rows) || col < 0 || col >= static_cast<long long>(base_value.matrix.cols)) {
+            if (row < 0) row += static_cast<long long>(base_value.matrix_ptr->rows);
+            if (col < 0) col += static_cast<long long>(base_value.matrix_ptr->cols);
+            if (row < 0 || row >= static_cast<long long>(base_value.matrix_ptr->rows) || col < 0 || col >= static_cast<long long>(base_value.matrix_ptr->cols)) {
                 throw std::runtime_error("matrix index out of range");
             }
-            base_value.matrix.at(static_cast<std::size_t>(row), static_cast<std::size_t>(col)) = val;
+            base_value.matrix_ptr->at(static_cast<std::size_t>(row), static_cast<std::size_t>(col)) = val;
             *output = base_name + "[" + index_expr + "] = " + format_stored_value(new_value, ctx->config().is_symbolic_constants_mode());
             ctx->variables().assign_visible(base_name, base_value);
             return true;

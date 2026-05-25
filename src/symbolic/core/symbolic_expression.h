@@ -2,6 +2,7 @@
 #define SYMBOLIC_EXPRESSION_H
 
 #include "app/scalar_type.h"
+#include "symbolic/public/symbolic_node_types.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -280,6 +281,15 @@ public:
     bool is_number(Scalar* value = nullptr) const;
 
     /**
+     * @brief 检查表达式在数值上是否接近零
+     * @return true 如果表达式可求值为接近零的数值
+     *
+     * 区别于 is_number(&v) && v == 0：此方法处理取负、
+     * 常数折叠等情况，使用精度容差判断。
+     */
+    bool is_effectively_zero() const;
+
+    /**
      * @brief 检查表达式是否为指定变量
      * @param variable_name 变量名
      * @return true 如果表达式就是该变量
@@ -367,6 +377,34 @@ public:
      * @return shape 向量返回 [n]，张量返回 [rows, cols]
      */
     std::vector<std::size_t> get_shape() const;
+
+    // ========================================================================
+    // 节点访问器（公共 API，替代直接访问 node_）
+    // ========================================================================
+
+    /** @brief 获取节点类型 */
+    NodeType node_type() const;
+
+    /** @brief 获取节点文本（变量名、函数名、算子名） */
+    const std::string& node_text() const;
+
+    /** @brief 获取节点数值（仅 kNumber/kPi/kE/kInfinity 类型有效） */
+    Scalar node_numeric_value() const;
+
+    /** @brief 获取左子节点表达式 */
+    SymbolicExpression left_child() const;
+
+    /** @brief 获取右子节点表达式 */
+    SymbolicExpression right_child() const;
+
+    /** @brief 获取子节点数量 */
+    std::size_t child_count() const;
+
+    /** @brief 获取指定索引的子节点表达式 */
+    SymbolicExpression child_at(std::size_t index) const;
+
+    /** @brief 检查表达式是否有有效节点 */
+    bool has_node() const { return node_ != nullptr; }
 
     /**
      * @brief 从现有节点构造表达式（内部使用）

@@ -66,16 +66,13 @@ struct TLuResult {
 
 using LuResult = TLuResult<long double>;
 
-/// 复数采样点结构体
+/// 复数采样点类型（使用 mymath::complex）
 template <typename T>
-struct TComplexSample {
-    T real = T(0);
-    T imag = T(0);
-};
+using TComplexSample = mymath::complex<T>;
 
 using ComplexSample = TComplexSample<long double>;
 
-template <typename T> std::string format_complex(TComplex<T> value);
+template <typename T> std::string format_complex(mymath::complex<T> value);
 template <typename T> std::string format_number(T value);
 std::string trim_copy(const std::string& text);
 
@@ -151,9 +148,9 @@ template <typename T> bool is_complex_vector(const TMatrix<T>& matrix);
 template <typename T> T complex_real(const TMatrix<T>& matrix);
 template <typename T> T complex_imag(const TMatrix<T>& matrix);
 template <typename T> TMatrix<T> complex_value(T real, T imag);
-template <typename T> TComplex<T> complex_from_matrix(const TMatrix<T>& matrix);
-template <typename T> bool try_complex_from_value(const TValue<T>& value, TComplex<T>* complex);
-template <typename T> TComplex<T> normalize_complex(TComplex<T> value);
+template <typename T> mymath::complex<T> complex_from_matrix(const TMatrix<T>& matrix);
+template <typename T> bool try_complex_from_value(const TValue<T>& value, mymath::complex<T>* complex);
+template <typename T> mymath::complex<T> normalize_complex(mymath::complex<T> value);
 
 // ==================== 信号处理函数 ====================
 

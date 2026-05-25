@@ -31,7 +31,6 @@
 
 class IExecutionContext;
 class SymbolicExpression;
-class IEvaluationEngine;
 
 // ============================================================================
 // 类型别名

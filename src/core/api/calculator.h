@@ -47,10 +47,7 @@ public:
     /** @brief 获取核心服务接口 */
     const CoreServices& get_core_services() const;
 
-    /** @brief 获取内部实现（仅供执行引擎使用） */
-    Impl* get_impl_internal() { return impl_.get(); }
-    const Impl* get_impl_internal() const { return impl_.get(); }
-
+    
     /**
      * @brief 计算数学表达式的数值结果
      * @param expression 数学表达式字符串，如 "2 + 3 * sin(pi/4)"
@@ -134,39 +131,6 @@ public:
      * @return 操作结果消息
      */
     std::string clear_all_variables();
-
-    /**
-     * @brief 对整数表达式进行因式分解
-     * @param expression 整数表达式，如 "120"
-     * @return 因式分解结果，如 "2^3 * 3 * 5"
-     */
-    std::string factor_expression(const std::string& expression) const;
-
-    /**
-     * @brief 绘制函数图形
-     * @param expression 绘图表达式，如 "plot(sin(x), -pi, pi)"
-     * @return 终端字符画图形
-     */
-    std::string plot_expression(const std::string& expression) const;
-
-    /**
-     * @brief 执行进制转换
-     * @param expression 转换表达式，如 "0b1010 to hex"
-     * @return 转换结果
-     */
-    std::string base_conversion_expression(const std::string& expression) const;
-
-    /**
-     * @brief 尝试处理函数分析相关命令或数学表达式
-     * @param expression 输入表达式
-     * @param output 输出结果存储位置
-     * @param exact_mode 是否使用精确分数模式
-     * @return 是否成功识别并处理
-     *
-     * 支持的命令：limit, derivative, integral, extrema 等
-     * 也处理普通数学表达式求值和变量赋值
-     */
-    bool try_process_function_command(const std::string& expression, std::string* output, bool exact_mode = false);
 
     /**
      * @brief 尝试使用注册模块进行隐式求值（如大数识别）
@@ -275,6 +239,17 @@ public:
      * @return 函数名列表
      */
     std::vector<std::string> custom_function_names() const;
+
+    /**
+     * @brief 尝试处理函数形式的命令（如 diff(x^2, x)）
+     * @param expression 输入表达式
+     * @param output 结果输出
+     * @param exact_mode 是否使用精确模式
+     * @return true 如果成功作为命令处理
+     */
+    bool try_process_function_command(const std::string& expression,
+                                      std::string* output,
+                                      bool exact_mode = false);
 
     /**
      * @brief 规范化计算结果（处理 -0 等边界情况）

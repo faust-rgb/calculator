@@ -83,6 +83,77 @@ std::vector<std::size_t> SymbolicExpression::get_shape() const {
     return node_->shape;
 }
 
+// ============================================================================
+// 节点访问器实现
+// ============================================================================
+
+NodeType SymbolicExpression::node_type() const {
+    if (!node_) return NodeType::kNumber;
+    return node_->type;
+}
+
+const std::string& SymbolicExpression::node_text() const {
+    if (!node_) { static const std::string empty; return empty; }
+    return node_->text;
+}
+
+Scalar SymbolicExpression::node_numeric_value() const {
+    if (!node_) return Scalar(0);
+    return node_->number_value;
+}
+
+bool SymbolicExpression::is_effectively_zero() const {
+    if (!node_) return true;
+    // 数值零
+    if (node_->type == NodeType::kNumber) {
+        return mymath::abs(node_->number_value) < precision::epsilon<Scalar>();
+    }
+    // 精确常数不会为零
+    if (node_->type == NodeType::kPi || node_->type == NodeType::kE) {
+        return false;
+    }
+    // 取负的零
+    if (node_->type == NodeType::kNegate) {
+        SymbolicExpression inner(node_->left);
+        return inner.is_effectively_zero();
+    }
+    // 尝试求值
+    Scalar val;
+    if (is_number(&val)) {
+        return mymath::abs(val) < precision::epsilon<Scalar>();
+    }
+    return false;
+}
+
+SymbolicExpression SymbolicExpression::left_child() const {
+    if (!node_ || !node_->left) {
+        static const SymbolicExpression empty_expr;
+        return empty_expr;
+    }
+    return SymbolicExpression(node_->left);
+}
+
+SymbolicExpression SymbolicExpression::right_child() const {
+    if (!node_ || !node_->right) {
+        static const SymbolicExpression empty_expr;
+        return empty_expr;
+    }
+    return SymbolicExpression(node_->right);
+}
+
+std::size_t SymbolicExpression::child_count() const {
+    if (!node_) return 0;
+    return node_->children.size();
+}
+
+SymbolicExpression SymbolicExpression::child_at(std::size_t index) const {
+    if (!node_ || index >= node_->children.size()) {
+        static const SymbolicExpression empty_expr;
+        return empty_expr;
+    }
+    return SymbolicExpression(node_->children[index]);
+}
+
 SymbolicExpression SymbolicExpression::substitute(
     const std::string& variable_name,
     const SymbolicExpression& replacement) const {

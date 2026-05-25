@@ -66,7 +66,7 @@ public:
      * @brief 获取模块提供的原生函数映射
      * @return 返回函数名到函数实现的映射表
      */
-    std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_native_functions() const override;
+    std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_functions_map() const override;
 
     /**
      * @brief 执行命令行参数形式的命令

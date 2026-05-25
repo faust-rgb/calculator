@@ -12,6 +12,7 @@
 #include "types/stored_value.h"
 #include "types/function.h"
 #include "app/scalar_type.h"
+#include "matrix/matrix.h"
 #include <string>
 #include <vector>
 #include <map>
@@ -124,33 +125,6 @@ public:
     
     virtual void set_hex_uppercase_mode(bool enabled) = 0;
     virtual bool is_hex_uppercase_mode() const = 0;
-};
-
-/**
- * @class IEvaluationEngine
- * @brief 表达式求值与脚本执行引擎接口
- */
-class IEvaluationEngine {
-public:
-    virtual ~IEvaluationEngine() = default;
-
-    virtual Scalar evaluate(const std::string& expression) = 0;
-    virtual std::string evaluate_for_display(const std::string& expression, bool exact_mode) = 0;
-    virtual std::string execute_script(const std::string& source, bool exact_mode) = 0;
-
-    // 矩阵辅助
-    virtual bool is_matrix_argument(const std::string& arg) = 0;
-    virtual matrix::Matrix parse_matrix_argument(const std::string& arg, const std::string& command) = 0;
-
-    // 辅助求值功能
-    virtual Scalar parse_decimal(const std::string& expr) = 0;
-    virtual Scalar normalize_result(Scalar value) = 0;
-    virtual std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)> build_scoped_evaluator(const std::string& expression) = 0;
-    virtual std::function<Scalar(const std::vector<std::pair<std::string, StoredValue>>&)> build_scoped_scalar_evaluator(const std::string& expression) = 0;
-    virtual std::function<matrix::Matrix(const std::vector<std::pair<std::string, StoredValue>>&)> build_scoped_matrix_evaluator(const std::string& expression) = 0;
-    virtual StoredValue evaluate_expression_value(const std::string& arg, bool exact) = 0;
-    virtual std::vector<std::string> parse_symbolic_vars(const std::vector<std::string>& arguments, std::size_t start_index, const std::vector<std::string>& defaults) = 0;
-    virtual std::string expand_inline(const std::string& expression) = 0;
 };
 
 /**

@@ -141,7 +141,10 @@ std::string handle_imshow_command(const PlotContext& ctx, const std::vector<std:
         throw std::runtime_error("imshow requires a matrix variable");
     }
 
-    const matrix::Matrix& z = found->matrix;
+    if (!found->matrix_ptr) {
+        throw std::runtime_error("imshow: matrix data is null");
+    }
+    const matrix::Matrix& z = *found->matrix_ptr;
 
     // 解析选项
     HeatmapOptions options = parse_heatmap_options(arguments, 1);
@@ -246,7 +249,10 @@ std::string handle_bar_command(const PlotContext& ctx, const std::vector<std::st
             if (!found->is_matrix) {
                 throw std::runtime_error("bar requires a matrix or list for values");
             }
-            const auto& mat = found->matrix;
+            if (!found->matrix_ptr) {
+                throw std::runtime_error("bar: matrix data is null");
+            }
+            const auto& mat = *found->matrix_ptr;
             for (size_t i = 0; i < mat.rows; ++i) {
                 for (size_t j = 0; j < mat.cols; ++j) {
                     values.push_back(mat.at(i, j));
@@ -258,7 +264,10 @@ std::string handle_bar_command(const PlotContext& ctx, const std::vector<std::st
         // bar(values, ...) 或 bar(values, labels, ...)
         const StoredValue* found = ctx.variables.lookup(first_arg);
         if (found && found->is_matrix) {
-            const auto& mat = found->matrix;
+            if (!found->matrix_ptr) {
+                throw std::runtime_error("bar: matrix data is null");
+            }
+            const auto& mat = *found->matrix_ptr;
             for (size_t i = 0; i < mat.rows; ++i) {
                 for (size_t j = 0; j < mat.cols; ++j) {
                     values.push_back(mat.at(i, j));
@@ -378,7 +387,10 @@ std::string handle_hist_command(const PlotContext& ctx, const std::vector<std::s
         if (!found->is_matrix) {
             data.push_back(found->decimal);
         } else {
-            const auto& mat = found->matrix;
+            if (!found->matrix_ptr) {
+                throw std::runtime_error("hist: matrix data is null");
+            }
+            const auto& mat = *found->matrix_ptr;
             for (size_t i = 0; i < mat.rows; ++i) {
                 for (size_t j = 0; j < mat.cols; ++j) {
                     data.push_back(mat.at(i, j));
@@ -501,10 +513,14 @@ std::string handle_export_command(const PlotContext& ctx, const std::string& lin
     }
     
     if (found->is_matrix) {
-        for (size_t r = 0; r < found->matrix.rows; ++r) {
-            for (size_t c = 0; c < found->matrix.cols; ++c) {
+        if (!found->matrix_ptr) {
+            throw std::runtime_error("export: matrix data is null");
+        }
+        const auto& mat = *found->matrix_ptr;
+        for (size_t r = 0; r < mat.rows; ++r) {
+            for (size_t c = 0; c < mat.cols; ++c) {
                 if (c > 0) out << ",";
-                out << found->matrix.at(r, c);
+                out << mat.at(r, c);
             }
             out << "\n";
         }

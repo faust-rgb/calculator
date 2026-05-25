@@ -142,6 +142,8 @@ std::string Calculator::help_topic(const std::string& topic) const {
     if (!found) {
         std::string fallback = build_fallback_help(topic);
         if (!fallback.empty()) return fallback;
+        const std::string extra = supplemental_help(topic);
+        if (!extra.empty()) return extra;
         throw std::runtime_error("unknown help topic: " + topic);
     }
 

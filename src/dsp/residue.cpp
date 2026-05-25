@@ -24,6 +24,7 @@
 #include "matrix.h"
 #include "polynomial.h"
 #include "calculator_exceptions.h"
+#include "math/base/precision_constants.h"
 #include "module/calculator_module.h"
 
 namespace dsp_ops {
@@ -32,7 +33,7 @@ std::string handle_residue_command(const std::string& command,
                                    const std::vector<std::string>& arguments,
                                    ServiceLocator& locator) {
     (void)command;
-    auto engine = locator.resolve<IEvaluationEngine>();
+    auto services = locator.resolve<CoreServices>();
     if (arguments.size() != 3) {
         throw DimensionError("residue(expression, variable, point) expects 3 arguments");
     }
@@ -44,13 +45,13 @@ std::string handle_residue_command(const std::string& command,
 
     const SymbolicExpression expression =
         SymbolicExpression::parse(
-            trim_copy(engine->expand_inline(arguments[0])))
+            trim_copy(services->symbolic.expand_inline(arguments[0])))
             .simplify();
     SymbolicExpression numerator = expression;
     SymbolicExpression denominator = SymbolicExpression::number(1.0L);
-    if (expression.node_->type == NodeType::kDivide) {
-        numerator = SymbolicExpression(expression.node_->left).simplify();
-        denominator = SymbolicExpression(expression.node_->right).simplify();
+    if (expression.node_type() == NodeType::kDivide) {
+        numerator = expression.left_child().simplify();
+        denominator = expression.right_child().simplify();
     }
 
     std::vector<Scalar> numerator_coefficients;
@@ -62,14 +63,14 @@ std::string handle_residue_command(const std::string& command,
         throw MathError("residue currently supports rational polynomial expressions");
     }
 
-    StoredValue point_value = engine->evaluate_expression_value(arguments[2], false);
+    StoredValue point_value = services->evaluation.evaluate_value(arguments[2], false);
 
     mymath::complex<Scalar> point(point_value.exact
                                    ? rational_to_double(point_value.rational)
                                    : point_value.decimal,
                                0.0L);
-    if (point_value.is_matrix) {
-        const matrix::Matrix& point_matrix = point_value.matrix;
+    if (point_value.is_matrix && point_value.matrix_ptr) {
+        const matrix::Matrix& point_matrix = *point_value.matrix_ptr;
         if (!point_matrix.is_vector() ||
             point_matrix.rows * point_matrix.cols != 2) {
             throw DimensionError("residue point must be scalar or complex(real, imag)");
@@ -78,9 +79,9 @@ std::string handle_residue_command(const std::string& command,
                                                    : point_matrix.at(0, 0);
         const Scalar imag = point_matrix.rows == 1 ? point_matrix.at(0, 1)
                                                    : point_matrix.at(1, 0);
-        point = {real, imag};
+        point = mymath::complex<Scalar>(real, imag);
     } else if (point_value.is_complex) {
-        point = {point_value.complex.real, point_value.complex.imag};
+        point = point_value.complex;
     }
 
     auto evaluate_polynomial_complex =
@@ -113,7 +114,7 @@ std::string handle_residue_command(const std::string& command,
     // 规范化结果
     auto normalize = [](Scalar x) -> Scalar {
         if (!mymath::isfinite(x)) return x;
-        if (mymath::is_near_zero(x, 1e-10)) return 0.0L;
+        if (mymath::is_near_zero(x, precision::epsilon<Scalar>() * Scalar(100))) return Scalar(0);
         return x;
     };
 

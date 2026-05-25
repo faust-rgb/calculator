@@ -12,23 +12,25 @@
  */
 
 #include "symbolic/modules/symbolic_module.h"
-#include "execution/engine/script_context.h"
+#include "core/services/core_manager_interfaces.h"
+#include "core/services/service_locator.h"
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/base/assumptions.h"
 #include "core/services/string_utils.h"
 #include "core/services/service_registry.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "execution/engine/inline_expander.h"
+#include "execution/engine/script_context.h"
 #include "analysis/calculus/function_analysis.h"
 #include "math/mymath.h"
 
 namespace {
 
-void register_symbolic_services_internal(CoreServices& s, IExecutionContext* ctx) {
-    s.symbolic.resolve_symbolic = [ctx](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
+void register_symbolic_services_internal(CoreServices& s, ServiceLocator& locator) {
+    s.symbolic.resolve_symbolic = [&locator](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
         symbolic_commands::SymbolicResolverContext symbolic_resolver_ctx;
-        symbolic_resolver_ctx.resolve_custom_function = [ctx](const std::string& name, std::string* v) {
-            const CustomFunction* func = ctx->functions().get_custom(name);
+        symbolic_resolver_ctx.resolve_custom_function = [&locator](const std::string& name, std::string* v) {
+            const CustomFunction* func = locator.resolve<IFunctionManager>()->get_custom(name);
             if (!func) throw std::runtime_error("unknown custom function: " + name);
 
             std::string params;
@@ -39,37 +41,38 @@ void register_symbolic_services_internal(CoreServices& s, IExecutionContext* ctx
             *v = params;
             return SymbolicExpression::parse(func->expression);
         };
-        symbolic_resolver_ctx.has_custom_function = [ctx](const std::string& name) {
-            return ctx->functions().get_custom(name) != nullptr;
+        symbolic_resolver_ctx.has_custom_function = [&locator](const std::string& name) {
+            return locator.resolve<IFunctionManager>()->get_custom(name) != nullptr;
         };
-        symbolic_resolver_ctx.expand_inline = [ctx](const std::string& a) {
-            return ctx->expand_inline(a);
+        symbolic_resolver_ctx.expand_inline = [&locator](const std::string& a) {
+            return locator.resolve<IExecutionContext>()->expand_inline(a);
         };
         symbolic_commands::resolve_symbolic_expression(symbolic_resolver_ctx, arg, req, var, expr);
     };
 
-    s.symbolic.expand_inline = [ctx](const std::string& arg) {
-        return ctx->expand_inline(arg);
+    s.symbolic.expand_inline = [&locator](const std::string& arg) {
+        return locator.resolve<IExecutionContext>()->expand_inline(arg);
     };
 
     s.symbolic.simplify_symbolic = [](const std::string& text) {
         return SymbolicExpression::parse(text).simplify().to_string();
     };
 
-    s.symbolic.evaluate_symbolic_at = [ctx](const SymbolicExpression& expr, const std::string& var, Scalar p) {
-        const bool had_existing = ctx->variables().has(var);
+    s.symbolic.evaluate_symbolic_at = [&locator](const SymbolicExpression& expr, const std::string& var, Scalar p) {
+        auto vars = locator.resolve<IVariableManager>();
+        const bool had_existing = vars->has(var);
         StoredValue backup;
-        if (had_existing) backup = ctx->variables().get(var).value();
+        if (had_existing) backup = vars->get(var).value();
         StoredValue temporary;
         temporary.decimal = p;
         temporary.exact = false;
-        ctx->variables().set_global(var, temporary);
+        vars->set_global(var, temporary);
         auto cleanup = [&]() {
-            if (had_existing) ctx->variables().set_global(var, backup);
-            else ctx->variables().remove(var);
+            if (had_existing) vars->set_global(var, backup);
+            else vars->remove(var);
         };
         try {
-            const Scalar value = ctx->evaluate(expr.to_string(), false).decimal; 
+            const Scalar value = locator.resolve<CoreServices>()->evaluation.evaluate_value(expr.to_string(), false).decimal;
             cleanup();
             if (!mymath::isfinite(value)) throw std::runtime_error("Non-finite value");
             return value;
@@ -78,6 +81,10 @@ void register_symbolic_services_internal(CoreServices& s, IExecutionContext* ctx
             try {
                 FunctionAnalysis analysis(var);
                 analysis.define(expr.to_string());
+                analysis.set_evaluator_factory(
+                    [&locator](const std::string& e) -> std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)> {
+                        return locator.resolve<CoreServices>()->evaluation.build_decimal_evaluator(e);
+                    });
                 return analysis.limit(p, 1);
             } catch (...) {
                 return Scalar(mymath::quiet_nan());
@@ -85,9 +92,9 @@ void register_symbolic_services_internal(CoreServices& s, IExecutionContext* ctx
         }
     };
 
-    s.symbolic.parse_symbolic_expr_list = [ctx](const std::string& arg) {
+    s.symbolic.parse_symbolic_expr_list = [&locator](const std::string& arg) {
         return symbolic_commands::parse_symbolic_expression_list(arg,
-            [ctx](const std::string& a) { return ctx->expand_inline(a); });
+            [&locator](const std::string& a) { return locator.resolve<IExecutionContext>()->expand_inline(a); });
     };
 }
 
@@ -96,8 +103,7 @@ void register_symbolic_services_internal(CoreServices& s, IExecutionContext* ctx
 namespace symbolic_commands {
 
 void SymbolicModule::register_services(CoreServices& services, ServiceLocator& locator) {
-    auto ctx = locator.resolve<IExecutionContext>();
-    register_symbolic_services_internal(services, ctx.get());
+    register_symbolic_services_internal(services, locator);
 }
 
 bool handle_symbolic_command(const SymbolicCommandContext& ctx,
@@ -112,8 +118,6 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
 
     if (handle_algebra_commands(ctx, command, inside, arguments, output)) return true;
     if (handle_matrix_commands(ctx, command, inside, arguments, output)) return true;
-    if (handle_calculus_commands(ctx, command, inside, arguments, output)) return true;
-    if (handle_integral_commands(ctx, command, inside, arguments, output)) return true;
     if (handle_misc_commands(ctx, command, inside, arguments, output)) return true;
 
     return false;
@@ -180,33 +184,33 @@ std::string SymbolicModule::execute_args(const std::string& command,
         return "Usage: :assume x > 0 | :assume x real | :assume x integer | :assume clear [x|all]";
     }
 
-    auto engine = locator.resolve<IEvaluationEngine>();
-    
+    auto services = locator.resolve<CoreServices>();
+
     SymbolicCommandContext ctx;
     ctx.resolve_symbolic = [&locator](const std::string& a, bool r, std::string* v, SymbolicExpression* e) {
-        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(a, r, v, e);
+        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(a, r, v, e);
     };
-    ctx.parse_symbolic_variable_arguments = [engine](const std::vector<std::string>& a, std::size_t s, const std::vector<std::string>& f) {
-        return engine->parse_symbolic_vars(a, s, f);
+    ctx.parse_symbolic_variable_arguments = [services](const std::vector<std::string>& a, std::size_t s, const std::vector<std::string>& f) {
+        return services->parse_symbolic_vars(a, s, f);
     };
     ctx.parse_symbolic_expression_list = [&locator](const std::string& a) {
-        return parse_symbolic_expression_list(a, [&locator](const std::string& arg) { 
+        return parse_symbolic_expression_list(a, [&locator](const std::string& arg) {
             SymbolicExpression expr; std::string var;
-            locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(arg, false, &var, &expr);
-            return expr.to_string(); 
+            locator.resolve<CoreServices>()->symbolic.resolve_symbolic(arg, false, &var, &expr);
+            return expr.to_string();
         });
     };
-    ctx.build_analysis = [&locator, engine](const std::string& a) { 
+    ctx.build_analysis = [&locator, services](const std::string& a) {
         SymbolicExpression expr; std::string var;
-        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(a, false, &var, &expr);
+        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(a, false, &var, &expr);
         FunctionAnalysis analysis(var);
         analysis.define(expr.to_string());
-        analysis.set_evaluator(engine->build_scoped_evaluator(expr.to_string()));
+        analysis.set_evaluator(services->evaluation.build_decimal_evaluator(expr.to_string()));
         return analysis;
     };
-    ctx.build_scoped_evaluator = [engine](const std::string& a) { return engine->build_scoped_evaluator(a); };
-    ctx.parse_decimal = [engine](const std::string& a) { return engine->parse_decimal(a); };
-    ctx.normalize_result = [engine](Scalar v) { return engine->normalize_result(v); };
+    ctx.build_scoped_evaluator = [services](const std::string& a) { return services->evaluation.build_decimal_evaluator(a); };
+    ctx.parse_decimal = [services](const std::string& a) { return services->evaluation.parse_decimal(a); };
+    ctx.normalize_result = [services](Scalar v) { return services->evaluation.normalize_result(v); };
 
     std::string output;
     if (handle_symbolic_command(ctx, command, args, &output)) {
@@ -222,11 +226,7 @@ std::string SymbolicModule::get_help_snippet(const std::string& topic) const {
                "  :assume clear [var]    Clear assumptions\n"
                "  simplify(expr)         Simplify an algebraic expression\n"
                "  expand(expr)           Expand polynomial/algebraic expression\n"
-               "  diff(expr, [var])      Symbolic derivative\n"
-               "  integral(expr, [var])  Symbolic indefinite integral\n"
                "  dsolve(rhs, [x, y])    Solve simple linear ODEs\n"
-               "  limit(expr, var, point [, dir])  Symbolic limit\n"
-               "  solve(equation, var)   Solve equation for variable\n"
                "  sum(expr, var, lo, hi) Symbolic summation";
     }
     return "";

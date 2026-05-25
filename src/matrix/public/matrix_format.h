@@ -31,7 +31,7 @@ namespace public_interface {
  * @return 格式化后的字符串，如 "3+4i"
  */
 template <typename T>
-std::string format_complex(TComplex<T> value);
+std::string format_complex(mymath::complex<T> value);
 
 /**
  * @brief 格式化数值为字符串

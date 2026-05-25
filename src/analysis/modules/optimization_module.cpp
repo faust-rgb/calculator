@@ -273,11 +273,14 @@ bool handle_optimization_command(const OptimizationContext& ctx,
 std::string OptimizationModule::execute_args(const std::string& command,
                                             const std::vector<std::string>& args,
                                             ServiceLocator& locator) {
-    auto engine = locator.resolve<IEvaluationEngine>();
+    auto services = locator.resolve<CoreServices>();
 
     OptimizationContext ctx;
-    ctx.parse_matrix_argument = [engine](const std::string& arg, const std::string& cmd) { return engine->parse_matrix_argument(arg, cmd); };
-    ctx.normalize_result = [engine](Scalar value) { return engine->normalize_result(value); };
+    ctx.parse_matrix_argument = [services](const std::string& arg, const std::string& cmd) -> matrix::Matrix {
+        auto val = services->parse_matrix_argument(arg, cmd);
+        return val.matrix_ptr ? *val.matrix_ptr : matrix::Matrix();
+    };
+    ctx.normalize_result = [services](Scalar value) { return services->evaluation.normalize_result(value); };
     ctx.is_integer_double = [](Scalar a, Scalar b) { (void)b; return mymath::is_integer(a); };
     ctx.round_to_long_long = [](Scalar value) { return static_cast<long long>(static_cast<long double>(value) + 0.5); };
 

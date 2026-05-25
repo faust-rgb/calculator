@@ -15,7 +15,6 @@
 #include "app/scalar_type.h"
 #include "core/services/format_utils.h"
 #include "symbolic/core/symbolic_expression.h"
-#include "symbolic/core/symbolic_expression_internal.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"
 #include "statistics/probability.h"
@@ -336,9 +335,9 @@ std::string arith_geo_sum(const std::vector<Scalar>& poly_coeffs,
 bool detect_telescoping(const SymbolicExpression& summand,
                         const std::string& index_name,
                         SymbolicExpression* g_function) {
-    if (summand.node_->type == NodeType::kSubtract) {
-        SymbolicExpression left(summand.node_->left);
-        SymbolicExpression right(summand.node_->right);
+    if (summand.node_type() == NodeType::kSubtract) {
+        SymbolicExpression left = summand.left_child();
+        SymbolicExpression right = summand.right_child();
 
         SymbolicExpression n_plus_1 = SymbolicExpression::parse("(" + index_name + ") + 1");
         SymbolicExpression left_shifted = left.substitute(index_name, n_plus_1).simplify();
@@ -350,15 +349,15 @@ bool detect_telescoping(const SymbolicExpression& summand,
         }
     }
 
-    if (summand.node_->type == NodeType::kDivide) {
-        SymbolicExpression numerator(summand.node_->left);
-        SymbolicExpression denominator(summand.node_->right);
+    if (summand.node_type() == NodeType::kDivide) {
+        SymbolicExpression numerator = summand.left_child();
+        SymbolicExpression denominator = summand.right_child();
 
         Scalar num_val = 0.0L;
         if (numerator.is_number(&num_val) && mymath::is_near_zero(num_val - 1.0L, 1e-10)) {
-            if (denominator.node_->type == NodeType::kMultiply) {
-                SymbolicExpression left_factor(denominator.node_->left);
-                SymbolicExpression right_factor(denominator.node_->right);
+            if (denominator.node_type() == NodeType::kMultiply) {
+                SymbolicExpression left_factor = denominator.left_child();
+                SymbolicExpression right_factor = denominator.right_child();
 
                 SymbolicExpression n_plus_1 = SymbolicExpression::parse("(" + index_name + ") + 1");
                 SymbolicExpression left_shifted = left_factor.substitute(index_name, n_plus_1).simplify();

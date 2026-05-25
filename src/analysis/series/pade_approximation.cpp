@@ -16,7 +16,6 @@
 #include "app/default_precision.h"
 #include "app/scalar_type.h"
 #include "symbolic/core/symbolic_expression.h"
-#include "symbolic/core/symbolic_expression_internal.h"
 #include "math/mymath.h"
 #include "expression_utils.h"
 #include "string_utils.h"

@@ -11,7 +11,9 @@
 #include "math/helpers/integer_helpers.h"
 #include "math/mymath.h"
 #include "math/precise/rational.h"
+#include "math/base/precision_constants.h"
 #include "types/stored_value.h"
+#include "matrix/matrix.h"
 
 #include <algorithm>
 #include <iomanip>
@@ -395,7 +397,7 @@ std::string format_symbolic_scalar(Scalar value) {
  * @brief 生成带符号的中心文本
  */
 std::string signed_center_text(Scalar center) {
-    if (mymath::abs(center) < Scalar(1e-12)) {
+    if (mymath::abs(center) < precision::epsilon<Scalar>() * Scalar(100)) {
         return "";
     }
     return center > Scalar(0)
@@ -512,11 +514,16 @@ std::string format_stored_value(const StoredValue& value, bool symbolic_constant
         return value.precise_decimal_text;
     }
     if (value.is_matrix) {
-        return value.matrix.to_string();
+        return value.matrix_ptr->to_string();
     }
     if (value.is_complex) {
-        return "complex(" + format_symbolic_number(value.complex.real) + ", " +
-               format_symbolic_number(value.complex.imag) + ")";
+        long double re = value.complex.real().to_long_double();
+        long double im = value.complex.imag().to_long_double();
+        if (is_complex_effectively_real(std::complex<long double>(re, im))) {
+            return format_symbolic_number(value.complex.real());
+        }
+        return "complex(" + format_symbolic_number(value.complex.real()) + ", " +
+               format_symbolic_number(value.complex.imag()) + ")";
     }
     if (value.exact) {
         return value.rational.to_string();
@@ -540,4 +547,56 @@ std::string format_print_value(const StoredValue& value, bool symbolic_constants
         return value.string_value;
     }
     return format_stored_value(value, symbolic_constants_mode);
+}
+
+// ============================================================================
+// 复数格式化
+// ============================================================================
+
+bool is_complex_effectively_real(const std::complex<long double>& z,
+                                 long double epsilon) {
+    if (epsilon == 0) {
+        epsilon = precision::epsilon<Scalar>().to_long_double() * 100.0L;
+    }
+    return std::abs(z.imag()) < epsilon;
+}
+
+std::string format_complex_display(long double real, long double imag,
+                                   long double epsilon) {
+    if (epsilon == 0) {
+        epsilon = precision::epsilon<Scalar>().to_long_double() * 100.0L;
+    }
+
+    bool real_near_zero = std::abs(real) < epsilon;
+    bool imag_near_zero = std::abs(imag) < epsilon;
+
+    if (imag_near_zero) {
+        return format_symbolic_number(Scalar(real));
+    }
+
+    if (real_near_zero) {
+        if (std::abs(std::abs(imag) - 1.0L) < epsilon) {
+            return imag > 0 ? "i" : "-i";
+        }
+        return format_symbolic_number(Scalar(imag)) + "i";
+    }
+
+    std::string result = format_symbolic_number(Scalar(real));
+    if (imag > 0) {
+        result += "+";
+        if (std::abs(imag - 1.0L) < epsilon) {
+            result += "i";
+        } else {
+            result += format_symbolic_number(Scalar(imag)) + "i";
+        }
+    } else {
+        if (std::abs(imag + 1.0L) < epsilon) {
+            result += "-i";
+        } else {
+            result += format_symbolic_number(Scalar(-imag)) + "i";
+            // Note: we format the absolute imag with a minus prefix
+            result = format_symbolic_number(Scalar(real)) + "-" + format_symbolic_number(Scalar(-imag)) + "i";
+        }
+    }
+    return result;
 }

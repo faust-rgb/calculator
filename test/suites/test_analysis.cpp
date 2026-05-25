@@ -751,7 +751,7 @@ int run_analysis_tests(int& passed, int& failed) {
 
     // 测试因数分解
     try {
-        const std::string fact = calculator.factor_expression("factor(-1)");
+        const std::string fact = calculator.process_line("factor(-1)", false);
         if (fact == "-1") {
             ++passed;
         } else {
@@ -765,7 +765,7 @@ int run_analysis_tests(int& passed, int& failed) {
     }
 
     try {
-        const std::string fact = calculator.factor_expression("factor(13)");
+        const std::string fact = calculator.process_line("factor(13)", false);
         if (fact == "13") {
             ++passed;
         } else {

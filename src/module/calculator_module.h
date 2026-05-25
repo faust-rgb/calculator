@@ -134,22 +134,101 @@ private:
 };
 
 /**
+ * @class ICommandProvider
+ * @brief 提供命令执行能力的接口
+ */
+class ICommandProvider {
+public:
+    virtual ~ICommandProvider() = default;
+    virtual std::vector<std::string> get_commands() const { return {}; }
+    virtual std::vector<CommandSpec> get_command_specs() const;
+    virtual std::string execute_args_view(std::string_view command,
+                                          const std::vector<std::string_view>& args,
+                                          ServiceLocator& locator) = 0;
+};
+
+/**
+ * @class IFunctionProvider
+ * @brief 提供数学函数注册能力的接口
+ */
+class IFunctionProvider {
+public:
+    virtual ~IFunctionProvider() = default;
+    virtual std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_functions_map() const { return {}; }
+    virtual std::vector<std::string> get_function_names() const { return {}; }
+};
+
+/**
+ * @class IImplicitEvaluator
+ * @brief 提供隐式求值能力的接口
+ */
+class IImplicitEvaluator {
+public:
+    virtual ~IImplicitEvaluator() = default;
+    virtual std::string get_implicit_trigger_chars() const { return ""; }
+    virtual bool wants_implicit_evaluation() const { return false; }
+    virtual bool try_evaluate_implicit(const std::string& token,
+                                      StoredValue* output,
+                                      const std::map<std::string, StoredValue>& vars) const = 0;
+};
+
+/**
+ * @class IHelpProvider
+ * @brief 提供帮助信息查询能力的接口
+ */
+class IHelpProvider {
+public:
+    virtual ~IHelpProvider() = default;
+    virtual std::vector<std::string> get_help_topics() const { return {}; }
+    virtual std::string get_help_snippet(const std::string& topic) const = 0;
+};
+
+/**
  * @class CalculatorModule
  * @brief 所有数学模块的抽象基类，定义模块接口
  *
  * CalculatorModule 是计算器模块系统的核心抽象基类。所有功能模块
  * （如标准数学、矩阵、绘图、符号计算等）都继承此类并实现相应的虚函数。
- *
- * 模块可以提供以下功能：
- * - 命令：如 :help, plot(), solve() 等
- * - 函数：标量函数、矩阵函数、值函数
- * - 隐式求值：对特定字符触发的自动求值
- *
- * 模块通过 Calculator::register_module() 注册到计算器实例。
  */
-class CalculatorModule {
+/**
+ * @enum ModuleCapability
+ * @brief 模块能力标志位
+ *
+ * 模块通过 capabilities() 返回位掩码声明自己支持哪些接口，
+ * Calculator::register_module 只查询已声明的能力。
+ */
+enum class ModuleCapability : unsigned {
+    kNone       = 0,
+    kCommands   = 1 << 0,  ///< 提供 ICommandProvider 命令
+    kFunctions  = 1 << 1,  ///< 提供 IFunctionProvider 函数
+    kImplicit   = 1 << 2,  ///< 提供 IImplicitEvaluator 隐式求值
+    kHelp       = 1 << 3,  ///< 提供 IHelpProvider 帮助信息
+    kAll        = kCommands | kFunctions | kImplicit | kHelp
+};
+
+inline ModuleCapability operator|(ModuleCapability a, ModuleCapability b) {
+    return static_cast<ModuleCapability>(static_cast<unsigned>(a) | static_cast<unsigned>(b));
+}
+
+inline bool operator&(ModuleCapability a, ModuleCapability b) {
+    return (static_cast<unsigned>(a) & static_cast<unsigned>(b)) != 0;
+}
+
+class CalculatorModule : public ICommandProvider,
+                         public IFunctionProvider, 
+                         public IImplicitEvaluator, 
+                         public IHelpProvider {
 public:
     virtual ~CalculatorModule() = default;
+
+    /**
+     * @brief 声明模块支持的能力
+     * @return 能力位掩码，默认 kAll（向后兼容）
+     *
+     * 子类可以覆盖此方法声明自己实际支持的能力，
+     * Calculator::register_module 只查询已声明的接口。
+     */
+    virtual ModuleCapability capabilities() const { return ModuleCapability::kAll; }
 
     // ==================== 模块基本信息 ====================
 
@@ -171,81 +250,37 @@ public:
     /// 配置变更通知，当用户设置改变时调用
     virtual void on_settings_changed(const CalculatorSettings& /*settings*/) {}
 
-    // ==================== 命令注册接口 ====================
+    // ==================== 接口默认实现 ====================
 
-    /// 返回模块支持的命令名列表（如 ":help", "plot"）
-    virtual std::vector<std::string> get_commands() const { return {}; }
-
-    /// 返回命令规范列表，包含命令键和派发名称
-    virtual std::vector<CommandSpec> get_command_specs() const;
-
-    /// 使用字符串参数执行命令（推荐重写此方法）
-    virtual std::string execute_args(const std::string& command,
-                                    const std::vector<std::string>& args,
-                                    ServiceLocator& locator);
-
-    /// 使用字符串视图参数执行命令（零拷贝接口，推荐使用）
-    virtual std::string execute_args_view(std::string_view command,
-                                          const std::vector<std::string_view>& args,
-                                          ServiceLocator& locator);
-
-    /// 使用单个字符串执行命令（旧版接口，已废弃，保持向后兼容）
-    [[deprecated("Use execute_args_view instead")]]
-    virtual std::string execute(const std::string& command,
-                               const std::string& inside,
-                               const CoreServices& services) {
-        (void)command; (void)inside; (void)services;
-        return "";
+    std::string execute_args_view(std::string_view command,
+                                  const std::vector<std::string_view>& args,
+                                  ServiceLocator& locator) override {
+        std::string cmd(command);
+        std::vector<std::string> string_args;
+        string_args.reserve(args.size());
+        for (auto arg : args) string_args.emplace_back(arg);
+        return execute_args(cmd, string_args, locator);
     }
 
-    // ==================== 隐式求值接口 ====================
+    virtual std::string execute_args(const std::string& /*command*/,
+                                     const std::vector<std::string>& /*args*/,
+                                     ServiceLocator& /*locator*/) { return ""; }
 
-    /// 返回触发隐式求值的字符集
-    virtual std::string get_implicit_trigger_chars() const { return ""; }
+    bool try_evaluate_implicit(const std::string& /*token*/,
+                               StoredValue* /*output*/,
+                               const std::map<std::string, StoredValue>& /*vars*/) const override { return false; }
 
-    /// 返回是否启用隐式求值
-    virtual bool wants_implicit_evaluation() const { return false; }
+    std::string get_help_snippet(const std::string& /*topic*/) const override { return ""; }
+
+    // ==================== 过渡辅助（已弃用） ====================
+
+    virtual std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>> get_scalar_functions() const { return {}; }
+    
+    /// @deprecated 使用 IFunctionProvider::get_function_names()
+    virtual std::vector<std::string> get_functions() const { return get_function_names(); }
 
     /// 获取缓存的触发字符表（性能优化）
     const std::array<bool, 256>* get_cached_trigger_table() const;
-
-    /// 尝试执行隐式求值
-    virtual bool try_evaluate_implicit(const std::string&,
-                                      StoredValue*,
-                                      const std::map<std::string, StoredValue>&) const { return false; }
-
-    // ==================== 函数注册接口 ====================
-
-    /// 返回标量函数映射（函数名 -> 计算函数）
-    virtual std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>> get_scalar_functions() const { return {}; }
-
-    /// 返回矩阵函数映射（函数名 -> 计算函数）
-    virtual std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>> get_matrix_functions() const { return {}; }
-
-    using ValueFunction = matrix::ValueFunction;
-
-    /// 返回值函数映射（函数名 -> 计算函数）
-    virtual std::map<std::string, ValueFunction> get_value_functions() const { return {}; }
-
-    /// 返回原生函数映射（函数名 -> 计算函数）
-    virtual std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_native_functions() const { return {}; }
-
-    /// 返回支持的函数名列表（用于帮助和自动补全）
-    virtual std::vector<std::string> get_functions() const { return {}; }
-
-    // ==================== 帮助接口 ====================
-
-    /**
-     * @brief 返回模块提供的所有帮助主题
-     * @return 帮助主题列表
-     */
-    virtual std::vector<std::string> get_help_topics() const { return {}; }
-
-    /// 返回指定主题的帮助文本片段
-    virtual std::string get_help_snippet(const std::string& topic) const {
-        (void)topic;
-        return "";
-    }
 
 protected:
     /// 触发字符查找表（ASCII 字符 -> 是否触发）
@@ -284,9 +319,9 @@ inline void require_args_count(const std::vector<std::string_view>& args,
 inline Scalar extract_scalar(const std::vector<std::string_view>& args,
                              size_t index,
                              std::string_view func_name,
-                             IEvaluationEngine& engine) {
+                             CoreServices& services) {
     if (index >= args.size()) throw std::runtime_error(std::string(func_name) + " missing argument " + std::to_string(index + 1));
-    return engine.parse_decimal(std::string(args[index]));
+    return services.evaluation.parse_decimal(std::string(args[index]));
 }
 
 /**
@@ -295,9 +330,11 @@ inline Scalar extract_scalar(const std::vector<std::string_view>& args,
 inline matrix::Matrix extract_matrix(const std::vector<std::string_view>& args,
                                      size_t index,
                                      std::string_view func_name,
-                                     IEvaluationEngine& engine) {
+                                     CoreServices& services) {
     if (index >= args.size()) throw std::runtime_error(std::string(func_name) + " missing argument " + std::to_string(index + 1));
-    return engine.parse_matrix_argument(std::string(args[index]), std::string(func_name));
+    StoredValue sv = services.parse_matrix_argument(std::string(args[index]), std::string(func_name));
+    if (!sv.matrix_ptr) throw std::runtime_error(std::string(func_name) + " argument is not a matrix");
+    return *sv.matrix_ptr;
 }
 
 /**

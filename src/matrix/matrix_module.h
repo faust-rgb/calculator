@@ -50,26 +50,20 @@ public:
                                   ServiceLocator& locator) override;
 
     /**
-     * @brief 返回矩阵函数映射
-     *
-     * 提供矩阵操作函数，如 transpose, inverse, qr_q, svd_u 等。
-     * 这些函数接受 Matrix 参数并返回 Matrix 结果。
+     * @brief 返回函数映射
      */
-    std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>> get_matrix_functions() const override;
-
-    /**
-     * @brief 返回值多态函数映射
-     *
-     * 提供值多态函数，如 complex, polar, real, imag, abs, exp 等。
-     * 这些函数可以处理标量、矩阵或复数参数。
-     */
-    std::map<std::string, ValueFunction> get_value_functions() const override;
+    std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_functions_map() const override;
 
     /** @brief 返回模块提供的所有函数名称列表 */
-    std::vector<std::string> get_functions() const override;
+    std::vector<std::string> get_function_names() const override;
 
     /** @brief 返回矩阵相关的帮助提示信息 */
     std::string get_help_snippet(const std::string& topic) const override;
+
+private:
+    // Legacy internal helpers
+    std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>> get_matrix_functions() const;
+    std::map<std::string, matrix::ValueFunction> get_value_functions() const;
 };
 
 #endif

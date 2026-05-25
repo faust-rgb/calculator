@@ -661,8 +661,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
     try {
         if (t_is_effective_infinity_point(point)) {
             expression = expression.simplify();
-            const std::shared_ptr<SymbolicExpression::Node>& node = expression.node_;
-            switch (node->type) {
+            switch (expression.node_type()) {
                 case NodeType::kNumber:
                 case NodeType::kPi:
                 case NodeType::kE:
@@ -675,7 +674,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                     return SymbolicLimitProbeKind::kUnknown;
                 }
                 case NodeType::kVariable:
-                    if (node->text == variable_name) {
+                    if (expression.node_text() == variable_name) {
                         return point > Scalar(static_cast<long long>(0)) ? SymbolicLimitProbeKind::kPositiveInfinity
                                            : SymbolicLimitProbeKind::kNegativeInfinity;
                     }
@@ -683,7 +682,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                 case NodeType::kNegate: {
                     Scalar child_value = Scalar(static_cast<long long>(0));
                     const SymbolicLimitProbeKind child_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                        probe_symbolic_value_at(expression.left_child(),
                                                 variable_name,
                                                 point,
                                                 &child_value);
@@ -704,16 +703,16 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                     Scalar left_value = Scalar(static_cast<long long>(0));
                     Scalar right_value = Scalar(static_cast<long long>(0));
                     SymbolicLimitProbeKind left_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                        probe_symbolic_value_at(expression.left_child(),
                                                 variable_name,
                                                 point,
                                                 &left_value);
                     SymbolicLimitProbeKind right_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->right),
+                        probe_symbolic_value_at(expression.right_child(),
                                                 variable_name,
                                                 point,
                                                 &right_value);
-                    if (node->type == NodeType::kSubtract) {
+                    if (expression.node_type() == NodeType::kSubtract) {
                         if (right_kind == SymbolicLimitProbeKind::kFinite) {
                             right_value = -right_value;
                         } else if (right_kind == SymbolicLimitProbeKind::kPositiveInfinity) {
@@ -736,12 +735,12 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                     Scalar left_value = Scalar(static_cast<long long>(0));
                     Scalar right_value = Scalar(static_cast<long long>(0));
                     const SymbolicLimitProbeKind left_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                        probe_symbolic_value_at(expression.left_child(),
                                                 variable_name,
                                                 point,
                                                 &left_value);
                     const SymbolicLimitProbeKind right_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->right),
+                        probe_symbolic_value_at(expression.right_child(),
                                                 variable_name,
                                                 point,
                                                 &right_value);
@@ -777,12 +776,12 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                     Scalar left_value = Scalar(static_cast<long long>(0));
                     Scalar right_value = Scalar(static_cast<long long>(0));
                     const SymbolicLimitProbeKind left_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                        probe_symbolic_value_at(expression.left_child(),
                                                 variable_name,
                                                 point,
                                                 &left_value);
                     const SymbolicLimitProbeKind right_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->right),
+                        probe_symbolic_value_at(expression.right_child(),
                                                 variable_name,
                                                 point,
                                                 &right_value);
@@ -809,8 +808,8 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                     return SymbolicLimitProbeKind::kUnknown;
                 }
                 case NodeType::kPower: {
-                    const SymbolicExpression base(node->left);
-                    const SymbolicExpression exponent(node->right);
+                    const SymbolicExpression base = expression.left_child();
+                    const SymbolicExpression exponent = expression.right_child();
                     Scalar one_to_infinity_value = Scalar(static_cast<long long>(0));
                     if (try_symbolic_one_to_infinity_limit(base,
                                                            exponent,
@@ -876,10 +875,10 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                     return SymbolicLimitProbeKind::kUnknown;
                 }
                 case NodeType::kFunction: {
-                    const std::string& name = node->text;
+                    const std::string& name = expression.node_text();
                     Scalar argument_value = Scalar(static_cast<long long>(0));
                     const SymbolicLimitProbeKind argument_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                        probe_symbolic_value_at(expression.left_child(),
                                                 variable_name,
                                                 point,
                                                 &argument_value);
@@ -1037,12 +1036,12 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
                                  Scalar* result,
                                  std::function<Scalar(const SymbolicExpression&, const std::string&, Scalar)> evaluate_at_override = nullptr) {
     SymbolicExpression current = expression.simplify();
-    if (current.node_->type != NodeType::kDivide) {
+    if (current.node_type() != NodeType::kDivide) {
         return false;
     }
 
-    SymbolicExpression numerator(current.node_->left);
-    SymbolicExpression denominator(current.node_->right);
+    SymbolicExpression numerator = current.left_child();
+    SymbolicExpression denominator = current.right_child();
     Scalar numerator_value = Scalar(static_cast<long long>(0));
     Scalar denominator_value = Scalar(static_cast<long long>(0));
     const SymbolicLimitProbeKind numerator_kind =
@@ -1143,8 +1142,8 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
     static constexpr int kMaxLhopitalDepth = 5;
     SymbolicExpression iter_expr = current;
     for (int depth = 0; depth < kMaxLhopitalDepth; ++depth) {
-        SymbolicExpression n(iter_expr.node_->left);
-        SymbolicExpression d(iter_expr.node_->right);
+        SymbolicExpression n = iter_expr.left_child();
+        SymbolicExpression d = iter_expr.right_child();
         iter_expr = (n.derivative(variable_name).simplify() /
                      d.derivative(variable_name).simplify()).simplify();
 
@@ -1173,10 +1172,10 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
                                 const std::string& variable_name,
                                 bool positive,
                                 Scalar* result) {
-    if (expression.node_ && expression.node_->type == NodeType::kPower) {
+    if (expression.has_node() && expression.node_type() == NodeType::kPower) {
         Scalar transformed = Scalar(static_cast<long long>(0));
-        if (try_symbolic_one_to_infinity_limit(SymbolicExpression(expression.node_->left),
-                                               SymbolicExpression(expression.node_->right),
+        if (try_symbolic_one_to_infinity_limit(expression.left_child(),
+                                               expression.right_child(),
                                                variable_name,
                                                positive ? t_infinity()
                                                         : -t_infinity(),
@@ -1199,7 +1198,7 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
 
     series_ops::SeriesContext ctx;
     ctx.evaluate_at = [](const SymbolicExpression& e, const std::string& v, Scalar p) {
-        if (e.node_->type == NodeType::kVariable && e.node_->text == v) return p;
+        if (e.node_type() == NodeType::kVariable && e.node_text() == v) return p;
         Scalar val = 0.0L;
         if (e.is_number(&val)) return val;
         return Scalar(0.0L);
@@ -1322,6 +1321,11 @@ void FunctionAnalysis::set_evaluator(std::function<Scalar(const std::vector<std:
     fallback_calculator_.reset();
     evaluation_cache_entries_.clear();
     evaluation_cache_index_.clear();
+}
+
+void FunctionAnalysis::set_evaluator_factory(
+    std::function<std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>(const std::string&)> factory) {
+    evaluator_factory_ = std::move(factory);
 }
 
 
@@ -2099,6 +2103,11 @@ void FunctionAnalysis::ensure_evaluator_initialized() const {
     }
     if (expression_.empty()) {
         throw std::runtime_error("function is not defined");
+    }
+
+    if (evaluator_factory_) {
+        evaluator_ = evaluator_factory_(expression_);
+        return;
     }
 
     fallback_calculator_ = std::make_shared<Calculator>();

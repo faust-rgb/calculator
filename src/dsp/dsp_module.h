@@ -5,7 +5,7 @@
 
 /**
  * @class DspModule
- * @brief 提供数字信号处理功能（留数计算等）的模块
+ * @brief 提供数字信号处理功能（滤波器、频率响应、留数计算等）的模块
  */
 class ServiceLocator;
 
@@ -18,6 +18,8 @@ public:
                                   ServiceLocator& locator) override;
     std::string get_help_snippet(const std::string& topic) const override;
 
+    std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_functions_map() const override;
+    std::vector<std::string> get_function_names() const override;
 };
 
 #endif

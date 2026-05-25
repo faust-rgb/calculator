@@ -516,17 +516,17 @@ bool handle_integration_command(const IntegrationContext& ctx, const std::string
 std::string IntegrationModule::execute_args(const std::string& command,
                                             const std::vector<std::string>& args,
                                             ServiceLocator& locator) {
-    auto engine = locator.resolve<IEvaluationEngine>();
+    auto services = locator.resolve<CoreServices>();
     IntegrationContext ctx;
-    ctx.parse_decimal = [engine](const std::string& expr) { return engine->parse_decimal(expr); };
-    ctx.build_scoped_evaluator = [engine](const std::string& expression) { return engine->build_scoped_evaluator(expression); };
-    ctx.normalize_result = [engine](Scalar value) { return engine->normalize_result(value); };
-    ctx.build_analysis = [&locator, engine](const std::string& expression) {
+    ctx.parse_decimal = [services](const std::string& expr) { return services->evaluation.parse_decimal(expr); };
+    ctx.build_scoped_evaluator = [services](const std::string& expression) { return services->evaluation.build_decimal_evaluator(expression); };
+    ctx.normalize_result = [services](Scalar value) { return services->evaluation.normalize_result(value); };
+    ctx.build_analysis = [&locator, services](const std::string& expression) {
         SymbolicExpression expr; std::string var;
-        locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(expression, false, &var, &expr);
+        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(expression, false, &var, &expr);
         FunctionAnalysis analysis(var);
         analysis.define(expr.to_string());
-        analysis.set_evaluator(engine->build_scoped_evaluator(expr.to_string()));
+        analysis.set_evaluator(services->evaluation.build_decimal_evaluator(expr.to_string()));
         return analysis;
     };
 
@@ -554,7 +554,8 @@ std::string IntegrationModule::get_help_snippet(const std::string& topic) const 
 }
 
 std::vector<std::string> IntegrationModule::get_commands() const {
-    return {"double_integral", "double_integral_cyl", "triple_integral", "triple_integral_sph"};
+    return {"double_integral", "double_integral_cyl", "triple_integral", "triple_integral_sph",
+            "integrate_region", "greens_theorem", "divergence_theorem", "stokes_theorem"};
 }
 
 }  // namespace integration_ops

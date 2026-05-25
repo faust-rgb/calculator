@@ -80,9 +80,9 @@ std::string format_number(T value) {
 }
 
 template <typename T>
-std::string format_complex(TComplex<T> value) {
+std::string format_complex(mymath::complex<T> value) {
     value = normalize_complex(value);
-    return "complex(" + format_number(value.real) + ", " + format_number(value.imag) + ")";
+    return "complex(" + format_number(value.real()) + ", " + format_number(value.imag()) + ")";
 }
 
 std::string trim_copy(const std::string& text) { return utils::trim_copy(text); }
@@ -225,10 +225,10 @@ std::pair<T, T> linear_regression_fit(const std::vector<T>& x, const std::vector
 }
 
 template <typename T>
-TComplex<T> normalize_complex(TComplex<T> v) {
+mymath::complex<T> normalize_complex(mymath::complex<T> v) {
     T eps = matrix_tolerance(T(1)) * T(100);
-    if (t_abs(v.real) < eps) v.real = T(0);
-    if (t_abs(v.imag) < eps) v.imag = T(0);
+    if (t_abs(v.real()) < eps) v.real(T(0));
+    if (t_abs(v.imag()) < eps) v.imag(T(0));
     return v;
 }
 
@@ -238,21 +238,21 @@ template <typename T> T complex_imag(const TMatrix<T>& m) { return m.rows==1 ? m
 template <typename T> TMatrix<T> complex_value(T re, T im) { TMatrix<T> r(1,2); r.at(0,0)=re; r.at(0,1)=im; return r; }
 
 template <typename T>
-TComplex<T> complex_from_matrix(const TMatrix<T>& m) {
+mymath::complex<T> complex_from_matrix(const TMatrix<T>& m) {
     if (!is_complex_vector(m)) throw std::runtime_error("2-element vector required");
     return normalize_complex<T>({complex_real(m), complex_imag(m)});
 }
 
 template <typename T>
-bool try_complex_from_value(const TValue<T>& val, TComplex<T>* c) {
+bool try_complex_from_value(const TValue<T>& val, mymath::complex<T>* c) {
     if (!c) return false;
     if (val.is_complex) { *c = normalize_complex(val.complex); return true; }
     if (val.is_matrix) {
         if (is_complex_vector(val.matrix)) { *c = complex_from_matrix(val.matrix); return true; }
-        if (val.matrix.rows==1 && val.matrix.cols==1) { *c = {val.matrix.at(0,0), T(0)}; return true; }
+        if (val.matrix.rows==1 && val.matrix.cols==1) { *c = mymath::complex<T>(val.matrix.at(0,0), T(0)); return true; }
         return false;
     }
-    *c = {val.scalar, T(0)}; return true;
+    *c = mymath::complex<T>(val.scalar, T(0)); return true;
 }
 
 template <typename T>
@@ -274,14 +274,14 @@ template <typename T>
 TMatrix<T> complex_sequence_to_matrix(const std::vector<TComplexSample<T>>& values, bool prefer_real) {
     bool all_real = prefer_real;
     T eps = matrix_tolerance(T(1)) * T(100);
-    for (const auto& v : values) if (t_abs(v.imag) > eps) { all_real = false; break; }
+    for (const auto& v : values) if (t_abs(v.imag()) > eps) { all_real = false; break; }
     if (all_real) {
         TMatrix<T> r(1, values.size());
-        for (std::size_t i = 0; i < values.size(); ++i) r.at(0,i) = values[i].real;
+        for (std::size_t i = 0; i < values.size(); ++i) r.at(0,i) = values[i].real();
         return r;
     }
     TMatrix<T> r(values.size(), 2);
-    for (std::size_t i = 0; i < values.size(); ++i) { r.at(i,0) = values[i].real; r.at(i,1) = values[i].imag; }
+    for (std::size_t i = 0; i < values.size(); ++i) { r.at(i,0) = values[i].real(); r.at(i,1) = values[i].imag(); }
     return r;
 }
 
@@ -289,10 +289,10 @@ template <typename T>
 std::vector<TComplexSample<T>> discrete_fourier_transform(const std::vector<TComplexSample<T>>& input, bool inverse) {
     if constexpr (std::is_same_v<T, Scalar>) {
         std::vector<signal::Complex> v;
-        for (const auto& s : input) v.emplace_back(s.real, s.imag);
+        for (const auto& s : input) v.emplace_back(s.real(), s.imag());
         auto trans = inverse ? signal::ifft(v) : signal::fft(v);
         std::vector<TComplexSample<T>> res;
-        for (const auto& val : trans) res.push_back({val.real(), val.imag()});
+        for (const auto& val : trans) res.push_back(mymath::complex<T>(val.real(), val.imag()));
         return res;
     } else {
         throw std::runtime_error("DFT not supported for this type yet");
@@ -302,16 +302,16 @@ std::vector<TComplexSample<T>> discrete_fourier_transform(const std::vector<TCom
 template <typename T>
 std::vector<TComplexSample<T>> convolve_sequences(const std::vector<TComplexSample<T>>& lhs, const std::vector<TComplexSample<T>>& rhs) {
     if (lhs.empty() || rhs.empty()) return {};
-    std::vector<TComplexSample<T>> res(lhs.size() + rhs.size() - 1, {T(0), T(0)});
+    std::vector<TComplexSample<T>> res(lhs.size() + rhs.size() - 1, mymath::complex<T>(T(0), T(0)));
     for (std::size_t i = 0; i < lhs.size(); ++i) {
         for (std::size_t j = 0; j < rhs.size(); ++j) {
             // (a+bi)(c+di) = (ac-bd) + (ad+bc)i
-            T ac = lhs[i].real * rhs[j].real;
-            T bd = lhs[i].imag * rhs[j].imag;
-            T ad = lhs[i].real * rhs[j].imag;
-            T bc = lhs[i].imag * rhs[j].real;
-            res[i+j].real += (ac - bd);
-            res[i+j].imag += (ad + bc);
+            T ac = lhs[i].real() * rhs[j].real();
+            T bd = lhs[i].imag() * rhs[j].imag();
+            T ad = lhs[i].real() * rhs[j].imag();
+            T bc = lhs[i].imag() * rhs[j].real();
+            res[i+j].real(res[i+j].real() + (ac - bd));
+            res[i+j].imag(res[i+j].imag() + (ad + bc));
         }
     }
     return res;
@@ -329,7 +329,7 @@ void set_display_precision(int precision) {
     template TYPE matrix::internal::t_abs(TYPE); \
     template TYPE matrix::internal::t_sqrt(TYPE); \
     template std::string matrix::internal::format_number(TYPE); \
-    template std::string matrix::internal::format_complex(matrix::TComplex<TYPE>); \
+    template std::string matrix::internal::format_complex(mymath::complex<TYPE>); \
     template void matrix::internal::require_same_shape(const matrix::TMatrix<TYPE>&, const matrix::TMatrix<TYPE>&, const std::string&); \
     template void matrix::internal::swap_rows(matrix::TMatrix<TYPE>*, std::size_t, std::size_t); \
     template TYPE matrix::internal::vector_norm_squared(const std::vector<TYPE>&); \
@@ -345,13 +345,13 @@ void set_display_precision(int precision) {
     template std::vector<TYPE> matrix::internal::standard_basis_vector(std::size_t, std::size_t); \
     template std::vector<TYPE> matrix::internal::as_vector_values(const matrix::TMatrix<TYPE>&, const std::string&); \
     template std::pair<TYPE, TYPE> matrix::internal::linear_regression_fit(const std::vector<TYPE>&, const std::vector<TYPE>&); \
-    template matrix::TComplex<TYPE> matrix::internal::normalize_complex(matrix::TComplex<TYPE>); \
+    template mymath::complex<TYPE> matrix::internal::normalize_complex(mymath::complex<TYPE>); \
     template bool matrix::internal::is_complex_vector(const matrix::TMatrix<TYPE>&); \
     template TYPE matrix::internal::complex_real(const matrix::TMatrix<TYPE>&); \
     template TYPE matrix::internal::complex_imag(const matrix::TMatrix<TYPE>&); \
     template matrix::TMatrix<TYPE> matrix::internal::complex_value(TYPE, TYPE); \
-    template matrix::TComplex<TYPE> matrix::internal::complex_from_matrix(const matrix::TMatrix<TYPE>&); \
-    template bool matrix::internal::try_complex_from_value(const matrix::TValue<TYPE>&, matrix::TComplex<TYPE>*); \
+    template mymath::complex<TYPE> matrix::internal::complex_from_matrix(const matrix::TMatrix<TYPE>&); \
+    template bool matrix::internal::try_complex_from_value(const matrix::TValue<TYPE>&, mymath::complex<TYPE>*); \
     template std::vector<matrix::internal::TComplexSample<TYPE>> matrix::internal::as_complex_sequence(const matrix::TMatrix<TYPE>&, const std::string&); \
     template matrix::TMatrix<TYPE> matrix::internal::complex_sequence_to_matrix(const std::vector<matrix::internal::TComplexSample<TYPE>>&, bool); \
     template std::vector<matrix::internal::TComplexSample<TYPE>> matrix::internal::discrete_fourier_transform(const std::vector<matrix::internal::TComplexSample<TYPE>>&, bool); \

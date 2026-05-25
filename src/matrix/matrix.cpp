@@ -105,8 +105,8 @@ TMatrix<T>& TMatrix<T>::operator/=(T scalar) {
 // ============================================================================
 
 template <typename T> TValue<T> TValue<T>::from_scalar(T v) { TValue<T> r; r.scalar = v; return r; }
-template <typename T> TValue<T> TValue<T>::from_complex(T re, T im) { TValue<T> r; r.is_complex = true; r.complex.real = re; r.complex.imag = im; return r; }
-template <typename T> TValue<T> TValue<T>::from_complex(TComplex<T> c) { TValue<T> r; r.is_complex = true; r.complex = c; return r; }
+template <typename T> TValue<T> TValue<T>::from_complex(T re, T im) { TValue<T> r; r.is_complex = true; r.complex = mymath::complex<T>(re, im); return r; }
+template <typename T> TValue<T> TValue<T>::from_complex(mymath::complex<T> c) { TValue<T> r; r.is_complex = true; r.complex = c; return r; }
 template <typename T> TValue<T> TValue<T>::from_matrix(const TMatrix<T>& m) { TValue<T> r; r.is_matrix = true; r.matrix = m; return r; }
 template <typename T> TValue<T> TValue<T>::from_matrix(TMatrix<T>&& m) { TValue<T> r; r.is_matrix = true; r.matrix = std::move(m); return r; }
 

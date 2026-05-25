@@ -5,6 +5,7 @@
 
 #include "test_helpers.h"
 #include "matrix/matrix.h"
+#include "matrix/matrix_dsp.h"
 #include "math/precise/precise_decimal.h"
 #include "app/scalar_type.h"
 #include <iostream>

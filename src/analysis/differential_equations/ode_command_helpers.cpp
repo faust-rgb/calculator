@@ -4,8 +4,9 @@
 
 #include "analysis/differential_equations/ode_command_helpers.h"
 #include "analysis/modules/ode_module.h"
-#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "app/scalar_type.h"
+#include "matrix/matrix.h"
 
 #include <algorithm>
 #include <sstream>
@@ -43,7 +44,6 @@ std::string order_to_var(int order) {
 // ============================================================================
 
 ODEInfo analyze_ode_expression(const std::string& expr_str) {
-    using namespace symbolic_expression_internal;
 
     SymbolicExpression expr = SymbolicExpression::parse(expr_str);
     std::vector<std::string> vars = expr.identifier_variables();
@@ -65,7 +65,7 @@ ODEInfo analyze_ode_expression(const std::string& expr_str) {
     const std::string highest_var = order_to_var(info.order);
 
     SymbolicExpression coeff_A = expr.derivative(highest_var).simplify();
-    if (coeff_A.is_constant(highest_var) && !expr_is_zero(coeff_A)) {
+    if (coeff_A.is_constant(highest_var) && !coeff_A.is_effectively_zero()) {
         SymbolicExpression term_B = expr.substitute(highest_var, SymbolicExpression::number(0.0L)).simplify();
         info.rhs = ((-term_B) / coeff_A).simplify();
     } else {
@@ -186,19 +186,19 @@ void append_parameter_assignments(
     const StoredValue& parameter_value,
     std::vector<std::pair<std::string, StoredValue>>* assignments) {
     assignments->push_back({"p", parameter_value});
-    if (!parameter_value.is_matrix || !parameter_value.matrix.is_vector()) {
+    if (!parameter_value.is_matrix || !parameter_value.matrix_ptr->is_vector()) {
         return;
     }
 
     const std::size_t size =
-        parameter_value.matrix.rows == 1
-            ? parameter_value.matrix.cols
-            : parameter_value.matrix.rows;
+        parameter_value.matrix_ptr->rows == 1
+            ? parameter_value.matrix_ptr->cols
+            : parameter_value.matrix_ptr->rows;
     for (std::size_t i = 0; i < size; ++i) {
         const Scalar component_value =
-            parameter_value.matrix.rows == 1
-                ? Scalar(parameter_value.matrix.at(0, i))
-                : Scalar(parameter_value.matrix.at(i, 0));
+            parameter_value.matrix_ptr->rows == 1
+                ? Scalar(parameter_value.matrix_ptr->at(0, i))
+                : Scalar(parameter_value.matrix_ptr->at(i, 0));
         assignments->push_back({"p" + std::to_string(i + 1),
                                 make_scalar_stored(ctx, component_value)});
     }

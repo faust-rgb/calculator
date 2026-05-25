@@ -69,7 +69,7 @@ public:
 ```cpp
 // my_module.cpp
 #include "my_module.h"
-#include "module/module_registration.h"
+#include "module/calculator_module.h"
 
 namespace modules {
     // 自动向全局注册表注册该模块
@@ -85,8 +85,9 @@ namespace modules {
 
 *   `initialize(ServiceLocator&)`：模块启动时的初始化钩子。
 *   `register_services(CoreServices&, ServiceLocator&)`：允许模块将自己的功能注入到核心 `CoreServices` 中，供其他模块调用。
+*   `capabilities()`：声明模块支持的能力（命令、函数、隐式求值、帮助），返回 `ModuleCapability` 位掩码。
 *   `execute_args(...)`：处理模块注册的命令逻辑。
-*   `get_scalar_functions()` / `get_matrix_functions()`：注册数学函数到全局函数表。
+*   `get_functions_map()` / `get_function_names()`：注册数学函数到全局函数表。
 
 ### 2. ServiceLocator
 
@@ -117,8 +118,7 @@ src/
 ├── core/
 │   └── services/          # 服务接口定义 (IEvaluationEngine, etc.)
 ├── module/
-│   ├── calculator_module.h # 基类定义
-│   └── module_registration.h # 注册宏
+│   └── calculator_module.h # 基类定义 + 注册宏
 ├── execution/
 │   └── engine/            # 脚本运行时和上下文定义
 ├── [domain]/              # 各数学领域目录

@@ -151,9 +151,10 @@ the main functions.
 Large implementation areas are split into focused translation units with internal
 headers for shared declarations. Current internal split headers include:
 
-- `src/core/api/calculator_internal_types.h`
 - `src/matrix/matrix_internal.h`
+- `src/matrix/matrix_dsp.h` (DSP 函数声明，从 matrix.h 分离)
 - `src/symbolic/core/symbolic_expression_internal.h`
+- `src/symbolic/public/symbolic_node_types.h` (公共类型定义，避免跨模块依赖内部头文件)
 
 ## Execution Flow
 

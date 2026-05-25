@@ -21,6 +21,7 @@
  */
 
 #include "matrix.h"
+#include "matrix_dsp.h"
 #include "matrix_internal.h"
 #include "parser/infra/base_parser.h"
 #include "statistics/calculator_statistics.h"
@@ -441,7 +442,7 @@ private:
                 break;
             }
 
-            Scalar left_val = value.is_matrix ? norm(value.matrix) : (value.is_complex ? value.complex.real : value.scalar);
+            Scalar left_val = value.is_matrix ? norm(value.matrix) : (value.is_complex ? value.complex.real() : value.scalar);
             
             if (op == "&&") {
                 if (mymath::is_near_zero(left_val, 1e-10)) {
@@ -460,7 +461,7 @@ private:
             }
 
             Value rhs = parse_comparison();
-            Scalar right_val = rhs.is_matrix ? norm(rhs.matrix) : (rhs.is_complex ? rhs.complex.real : rhs.scalar);
+            Scalar right_val = rhs.is_matrix ? norm(rhs.matrix) : (rhs.is_complex ? rhs.complex.real() : rhs.scalar);
             
             if (op == "&&") {
                 value = Value::from_scalar((!mymath::is_near_zero(left_val, 1e-10) && !mymath::is_near_zero(right_val, 1e-10)) ? 1.0L : 0.0L);
@@ -503,8 +504,8 @@ private:
     }
 
     long double compare_values(const Value& lhs, const Value& rhs, const std::string& op) {
-        Scalar l = lhs.is_matrix ? norm(lhs.matrix) : (lhs.is_complex ? lhs.complex.real : lhs.scalar);
-        Scalar r = rhs.is_matrix ? norm(rhs.matrix) : (rhs.is_complex ? rhs.complex.real : rhs.scalar);
+        Scalar l = lhs.is_matrix ? norm(lhs.matrix) : (lhs.is_complex ? lhs.complex.real() : lhs.scalar);
+        Scalar r = rhs.is_matrix ? norm(rhs.matrix) : (rhs.is_complex ? rhs.complex.real() : rhs.scalar);
 
         if (op == "<") return l < r ? 1.0L : 0.0L;
         if (op == "<=") return l <= r ? 1.0L : 0.0L;
@@ -584,7 +585,7 @@ private:
         if (match('-')) {
             Value value = parse_unary();
             if (value.is_complex) {
-                return Value::from_complex(-value.complex.real, -value.complex.imag);
+                return Value::from_complex(-value.complex.real(), -value.complex.imag());
             }
             if (value.is_matrix) {
                 return Value::from_matrix(multiply(value.matrix, Scalar(-1.0L)));
@@ -1608,7 +1609,7 @@ private:
                 throw std::runtime_error("real expects exactly one argument");
             }
             const ComplexNumber value = require_complex_argument(arguments[0], "real");
-            return Value::from_scalar(value.real);
+            return Value::from_scalar(value.real());
         }
 
         if (name == "imag") {
@@ -1616,7 +1617,7 @@ private:
                 throw std::runtime_error("imag expects exactly one argument");
             }
             const ComplexNumber value = require_complex_argument(arguments[0], "imag");
-            return Value::from_scalar(value.imag);
+            return Value::from_scalar(value.imag());
         }
 
         if (name == "arg") {
@@ -1624,8 +1625,8 @@ private:
                 throw std::runtime_error("arg expects exactly one argument");
             }
             const ComplexNumber value = require_complex_argument(arguments[0], "arg");
-            const Scalar real = value.real;
-            const Scalar imag = value.imag;
+            const Scalar real = value.real();
+            const Scalar imag = value.imag();
             if (mymath::is_near_zero(real, matrix_epsilon<Scalar>())) {
                 if (mymath::is_near_zero(imag, matrix_epsilon<Scalar>())) {
                     return Value::from_scalar(0.0L);
@@ -1645,7 +1646,7 @@ private:
                 throw std::runtime_error("conj expects exactly one argument");
             }
             const ComplexNumber value = require_complex_argument(arguments[0], "conj");
-            return Value::from_complex(value.real, -value.imag);
+            return Value::from_complex(value.real(), -value.imag());
         }
 
         if (name == "abs") {
@@ -1654,7 +1655,7 @@ private:
             if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, value_functions_, &v)) {
                 ComplexNumber z;
                 if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                    const Scalar r = z.real, i = z.imag;
+                    const Scalar r = z.real(), i = z.imag();
                     return Value::from_scalar(mymath::sqrt(r * r + i * i));
                 } else if (v.is_matrix) {
                     return Value::from_scalar(norm(v.matrix));
@@ -1671,7 +1672,7 @@ private:
             if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, value_functions_, &v)) {
                 ComplexNumber z;
                 if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                    const Scalar r = z.real, i = z.imag, m = mymath::exp(r);
+                    const Scalar r = z.real(), i = z.imag(), m = mymath::exp(r);
                     return Value::from_complex(m * mymath::cos(i), m * mymath::sin(i));
                 } else if (!v.is_matrix) {
                     return Value::from_scalar(mymath::exp(v.scalar));
@@ -1686,7 +1687,7 @@ private:
             if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, value_functions_, &v)) {
                 ComplexNumber z;
                 if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                    const Scalar r = z.real, i = z.imag;
+                    const Scalar r = z.real(), i = z.imag();
                     return Value::from_complex(0.5 * mymath::ln(r * r + i * i), mymath::atan2(i, r));
                 } else if (!v.is_matrix) {
                     return Value::from_scalar(mymath::ln(v.scalar));
@@ -1701,7 +1702,7 @@ private:
             if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, value_functions_, &v)) {
                 ComplexNumber z;
                 if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                    const Scalar r = z.real, i = z.imag;
+                    const Scalar r = z.real(), i = z.imag();
                     return Value::from_complex(mymath::sin(r) * mymath::cosh(i), mymath::cos(r) * mymath::sinh(i));
                 } else if (!v.is_matrix) {
                     return Value::from_scalar(mymath::sin(v.scalar));
@@ -1716,7 +1717,7 @@ private:
             if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, value_functions_, &v)) {
                 ComplexNumber z;
                 if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                    const Scalar r = z.real, i = z.imag;
+                    const Scalar r = z.real(), i = z.imag();
                     return Value::from_complex(mymath::cos(r) * mymath::cosh(i), -mymath::sin(r) * mymath::sinh(i));
                 } else if (!v.is_matrix) {
                     return Value::from_scalar(mymath::cos(v.scalar));
@@ -2007,7 +2008,7 @@ private:
             if (!try_complex_from_value(lhs, &a) || !try_complex_from_value(rhs, &b)) {
                 throw std::runtime_error("cannot add matrix and complex value");
             }
-            return Value::from_complex(a.real + b.real, a.imag + b.imag);
+            return Value::from_complex(a.real() + b.real(), a.imag() + b.imag());
         }
         if (lhs.is_matrix && rhs.is_matrix) {
             return Value::from_matrix(add(std::move(lhs.matrix), rhs.matrix));
@@ -2045,7 +2046,7 @@ private:
             if (!try_complex_from_value(lhs, &a) || !try_complex_from_value(rhs, &b)) {
                 throw std::runtime_error("cannot subtract matrix and complex value");
             }
-            return Value::from_complex(a.real - b.real, a.imag - b.imag);
+            return Value::from_complex(a.real() - b.real(), a.imag() - b.imag());
         }
         if (lhs.is_matrix && rhs.is_matrix) {
             return Value::from_matrix(subtract(std::move(lhs.matrix), rhs.matrix));
@@ -2084,8 +2085,8 @@ private:
             if (!try_complex_from_value(lhs, &a) || !try_complex_from_value(rhs, &b)) {
                 throw std::runtime_error("cannot multiply matrix and complex value");
             }
-            return Value::from_complex(a.real * b.real - a.imag * b.imag,
-                                       a.real * b.imag + a.imag * b.real);
+            return Value::from_complex(a.real() * b.real() - a.imag() * b.imag(),
+                                       a.real() * b.imag() + a.imag() * b.real());
         }
         if (lhs.is_matrix && rhs.is_matrix) {
             if (lhs.matrix.rows == 1 && lhs.matrix.cols == 2 && 
@@ -2125,12 +2126,12 @@ private:
             if (!try_complex_from_value(lhs, &a) || !try_complex_from_value(rhs, &b)) {
                 throw std::runtime_error("cannot divide matrix and complex value");
             }
-            const Scalar denom = b.real * b.real + b.imag * b.imag;
+            const Scalar denom = b.real() * b.real() + b.imag() * b.imag();
             if (mymath::is_near_zero(denom)) {
                 throw std::runtime_error("complex division by zero");
             }
-            return Value::from_complex((a.real * b.real + a.imag * b.imag) / denom,
-                                       (a.imag * b.real - a.real * b.imag) / denom);
+            return Value::from_complex((a.real() * b.real() + a.imag() * b.imag()) / denom,
+                                       (a.imag() * b.real() - a.real() * b.imag()) / denom);
         }
         if (rhs.is_matrix && rhs.matrix.rows == 1 && rhs.matrix.cols == 2) {
             const Scalar c = rhs.matrix.at(0, 0);
@@ -2178,8 +2179,8 @@ private:
             if (!try_complex_from_value(lhs, &z)) {
                 throw std::runtime_error("cannot exponentiate matrix as a complex value");
             }
-            const Scalar magnitude = mymath::sqrt(z.real * z.real + z.imag * z.imag);
-            const Scalar angle = mymath::atan2(z.imag, z.real);
+            const Scalar magnitude = mymath::sqrt(z.real() * z.real() + z.imag() * z.imag());
+            const Scalar angle = mymath::atan2(z.imag(), z.real());
             const Scalar powered_magnitude = mymath::pow(magnitude, rhs.scalar);
             const Scalar powered_angle = angle * rhs.scalar;
             return Value::from_complex(powered_magnitude * mymath::cos(powered_angle),

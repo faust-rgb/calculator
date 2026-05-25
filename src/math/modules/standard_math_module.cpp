@@ -21,9 +21,6 @@
 #include "core/common/calculator_exceptions.h"
 #include "core/types/module_types.h"
 #include "core/services/string_utils.h"
-#include "statistics/calculator_statistics.h"
-#include "statistics/statistics.h"
-#include "statistics/probability.h"
 #include <algorithm>
 #include <map>
 
@@ -135,86 +132,6 @@ StandardMathModule::get_scalar_functions() const {
     funcs["kelvin"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("kelvin expects 1 argument"); return a[0] + Scalar(273.15L); };
     funcs["c2f"] = funcs["fahrenheit"];
     funcs["f2c"] = funcs["celsius"];
-
-    // Aggregates
-    funcs["sum"] = [](const std::vector<Scalar>& a) {
-        if(a.empty()) throw MathError("sum expects at least 1 argument");
-        Scalar sum = 0.0, compensation = 0.0;
-        for (const Scalar& val : a) {
-            Scalar adjusted = val - compensation;
-            Scalar next = sum + adjusted;
-            compensation = (next - sum) - adjusted;
-            sum = next;
-        }
-        return sum;
-    };
-    funcs["mean"] = [](const std::vector<Scalar>& a) { return stats::mean(a); };
-    funcs["avg"] = funcs["mean"];
-    funcs["median"] = [](const std::vector<Scalar>& a) { return stats::median(a); };
-    funcs["mode"] = [](const std::vector<Scalar>& a) { return stats::mode(a); };
-    funcs["percentile"] = [](const std::vector<Scalar>& a) {
-        if (a.size() < 2) throw MathError("percentile expects percentage and data");
-        std::vector<Scalar> data(a.begin() + 1, a.end());
-        return stats::percentile(data, a[0]);
-    };
-    funcs["quartile"] = [](const std::vector<Scalar>& a) {
-        if (a.size() < 2) throw MathError("quartile expects q and data");
-        if (!is_integer_double(a[0])) throw MathError("quartile q must be an integer");
-        std::vector<Scalar> data(a.begin() + 1, a.end());
-        return stats::quartile(data, static_cast<int>(a[0]));
-    };
-    funcs["var"] = [](const std::vector<Scalar>& a) { return stats::variance(a); };
-    funcs["std"] = [](const std::vector<Scalar>& a) { return stats::stddev(a); };
-    funcs["sample_var"] = [](const std::vector<Scalar>& a) { return stats::sample_variance(a); };
-    funcs["sample_std"] = [](const std::vector<Scalar>& a) { return stats::sample_stddev(a); };
-    funcs["skewness"] = [](const std::vector<Scalar>& a) { return stats::skewness(a); };
-    funcs["kurtosis"] = [](const std::vector<Scalar>& a) { return stats::kurtosis(a); };
-
-    // Probability & Statistics
-    funcs["inv_cdf_normal"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_normal", a); };
-    funcs["qnorm"] = funcs["inv_cdf_normal"];
-    funcs["inv_cdf_t"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_t", a); };
-    funcs["qt"] = funcs["inv_cdf_t"];
-    funcs["inv_cdf_chi2"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_chi2", a); };
-    funcs["qchi2"] = funcs["inv_cdf_chi2"];
-    funcs["inv_cdf_f"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_f", a); };
-    funcs["qf"] = funcs["inv_cdf_f"];
-
-    funcs["pdf_gamma"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_gamma", a); };
-    funcs["cdf_gamma"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_gamma", a); };
-    funcs["pdf_beta"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_beta", a); };
-    funcs["cdf_beta"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_beta", a); };
-    funcs["rand"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("rand", a); };
-    funcs["randn"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("randn", a); };
-    funcs["randint"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("randint", a); };
-    funcs["pdf_normal"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_normal", a); };
-    funcs["cdf_normal"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_normal", a); };
-    funcs["pdf_t"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_t", a); };
-    funcs["cdf_t"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_t", a); };
-    funcs["pdf_chi2"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_chi2", a); };
-    funcs["cdf_chi2"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_chi2", a); };
-    funcs["pdf_f"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_f", a); };
-    funcs["cdf_f"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_f", a); };
-    funcs["pdf_exp"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_exp", a); };
-    funcs["cdf_exp"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_exp", a); };
-    funcs["poisson_pmf"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("poisson_pmf", a); };
-    funcs["poisson_cdf"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("poisson_cdf", a); };
-    funcs["binom_pmf"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("binom_pmf", a); };
-    funcs["binom_cdf"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("binom_cdf", a); };
-    funcs["bernoulli"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("bernoulli", a); };
-    funcs["lgamma"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("lgamma", a); };
-
-    funcs["cov"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_statistic("cov", a); };
-    funcs["covariance"] = funcs["cov"];
-    funcs["corr"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_statistic("corr", a); };
-    funcs["correlation"] = funcs["corr"];
-    funcs["spearman"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_statistic("spearman", a); };
-    funcs["iqr"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_statistic("iqr", a); };
-    funcs["mad"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_statistic("mad", a); };
-    funcs["weighted_mean"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_statistic("weighted_mean", a); };
-    funcs["t_test"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_statistic("t_test", a); };
-    funcs["t_test2"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_statistic("t_test2", a); };
-    funcs["chi2_test"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_statistic("chi2_test", a); };
 
     // Signals
     funcs["step"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("step expects 1 argument"); return a[0] < 0.0L ? 0.0L : 1.0L; };

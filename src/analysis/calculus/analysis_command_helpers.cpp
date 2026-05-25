@@ -5,14 +5,13 @@
 #include "analysis/calculus/analysis_command_helpers.h"
 #include "math/base/precision_constants.h"
 #include "math/mymath.h"
-#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_expression.h"
 
 #include <algorithm>
 #include <stdexcept>
 
 namespace analysis_cmds {
 
-using namespace symbolic_expression_internal;
 
 // ============================================================================
 // 临界点分类
@@ -29,7 +28,7 @@ std::string classify_critical_point(
             for (std::size_t k = 0; k < variables.size(); ++k) {
                 current = current.substitute(variables[k], SymbolicExpression::number((values[k]))).simplify();
             }
-            if (current.node_->type == NodeType::kNumber) numeric_hessian[i][j] = Scalar(current.node_->number_value);
+            if (current.node_type() == NodeType::kNumber) numeric_hessian[i][j] = Scalar(current.node_numeric_value());
             else return "unknown";
         }
     }

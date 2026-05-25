@@ -58,7 +58,7 @@ public:
     /**
      * @brief 获取模块提供的原生函数映射
      */
-    std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_native_functions() const override;
+    std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_functions_map() const override;
 
     /**
      * @brief 获取帮助信息片段

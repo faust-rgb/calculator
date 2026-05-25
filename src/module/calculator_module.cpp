@@ -19,7 +19,7 @@
  * 遍历 get_commands() 返回的命令名，自动判断是 Meta 命令（以冒号开头）
  * 还是 Call 命令，并生成对应的 CommandSpec。
  */
-std::vector<CommandSpec> CalculatorModule::get_command_specs() const {
+std::vector<CommandSpec> ICommandProvider::get_command_specs() const {
     std::vector<CommandSpec> specs;
     for (const std::string& cmd : get_commands()) {
         bool is_meta = !cmd.empty() && cmd.front() == ':';
@@ -29,43 +29,6 @@ std::vector<CommandSpec> CalculatorModule::get_command_specs() const {
         specs.push_back({key, cmd});
     }
     return specs;
-}
-
-/**
- * @brief 使用字符串参数执行命令（默认实现）
- * @param command 命令名
- * @param args 参数列表
- * @param locator 服务定位器
- * @return 命令执行结果字符串
- *
- * 默认实现。派生类应重写此方法以处理具体逻辑。
- */
-std::string CalculatorModule::execute_args(const std::string& command,
-                                           const std::vector<std::string>& args,
-                                           ServiceLocator& locator) {
-    (void)command; (void)args; (void)locator;
-    return "";
-}
-
-/**
- * @brief 使用字符串视图参数执行命令
- * @param command 命令名（字符串视图）
- * @param args 参数列表（字符串视图向量）
- * @param locator 服务定位器
- * @return 命令执行结果字符串
- *
- * 将字符串视图参数转换为字符串，然后调用 execute_args()。
- */
-std::string CalculatorModule::execute_args_view(std::string_view command,
-                                                const std::vector<std::string_view>& args,
-                                                ServiceLocator& locator) {
-    std::string cmd(command);
-    std::vector<std::string> string_args;
-    string_args.reserve(args.size());
-    for (auto arg : args) {
-        string_args.emplace_back(arg);
-    }
-    return execute_args(cmd, string_args, locator);
 }
 
 /**

@@ -12,7 +12,6 @@
 // - ode_command_helpers.cpp: 高阶 ODE 转换等辅助函数
 
 #include "symbolic/core/symbolic_expression.h"
-#include "symbolic/core/symbolic_expression_internal.h"
 #include "analysis/modules/ode_module.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
@@ -21,6 +20,7 @@
 #include "parser/grammars/unified_expression_parser.h"
 #include "math/helpers/integer_helpers.h"
 #include "app/scalar_type.h"
+#include "matrix/matrix.h"
 
 #include <stdexcept>
 #include <vector>
@@ -80,8 +80,8 @@ bool handle_ode_command(const ODEContext& ctx,
         std::vector<Scalar> initial_state;
 
         StoredValue y0_val = ctx.evaluate_expression_value(arguments[2], false);
-        if (y0_val.is_matrix && y0_val.matrix.is_vector()) {
-            initial_state = matrix_to_vector_values(y0_val.matrix, "ODE initial state");
+        if (y0_val.is_matrix && y0_val.matrix_ptr->is_vector()) {
+            initial_state = matrix_to_vector_values(*y0_val.matrix_ptr, "ODE initial state");
         } else {
             initial_state = { Scalar(ctx.parse_decimal(arguments[2])) };
         }
@@ -250,7 +250,7 @@ bool handle_ode_command(const ODEContext& ctx,
 
                 StoredValue y_matrix_stored;
                 y_matrix_stored.is_matrix = true;
-                y_matrix_stored.matrix = vector_to_column_matrix(ctx, y_value);
+                y_matrix_stored.matrix_ptr = std::make_shared<matrix::Matrix>(vector_to_column_matrix(ctx, y_value));
                 assignments.push_back({"y", y_matrix_stored});
 
                 for (std::size_t i = 0; i < y_value.size(); ++i) {
@@ -289,7 +289,7 @@ bool handle_ode_command(const ODEContext& ctx,
 
                           StoredValue y_matrix_stored;
                           y_matrix_stored.is_matrix = true;
-                          y_matrix_stored.matrix = vector_to_column_matrix(ctx, y_value);
+                          y_matrix_stored.matrix_ptr = std::make_shared<matrix::Matrix>(vector_to_column_matrix(ctx, y_value));
                           assignments.push_back({"y", y_matrix_stored});
 
                           for (std::size_t i = 0; i < y_value.size(); ++i) {
@@ -357,15 +357,18 @@ std::string matrix_literal_expression(const matrix::Matrix& value) {
 std::string ODEModule::execute_args(const std::string& command,
                                    const std::vector<std::string>& args,
                                    ::ServiceLocator& locator) {
-    auto engine = locator.resolve<IEvaluationEngine>();
+    auto services = locator.resolve<CoreServices>();
     ODEContext ctx;
-    ctx.parse_decimal = [engine](const std::string& expr) { return engine->parse_decimal(expr); };
-    ctx.build_scoped_scalar_evaluator = [engine](const std::string& expression) { return engine->build_scoped_scalar_evaluator(expression); };
-    ctx.build_scoped_matrix_evaluator = [engine](const std::string& expression) { return engine->build_scoped_matrix_evaluator(expression); };
-    ctx.is_matrix_argument = [engine](const std::string& arg) { return engine->is_matrix_argument(arg); };
-    ctx.parse_matrix_argument = [engine](const std::string& arg, const std::string& cmd) { return engine->parse_matrix_argument(arg, cmd); };
-    ctx.evaluate_expression_value = [engine](const std::string& arg, bool exact) { return engine->evaluate_expression_value(arg, exact); };
-    ctx.normalize_result = [engine](Scalar value) { return engine->normalize_result(value); };
+    ctx.parse_decimal = [services](const std::string& expr) { return services->evaluation.parse_decimal(expr); };
+    ctx.build_scoped_scalar_evaluator = [services](const std::string& expression) { return services->evaluation.build_scalar_evaluator(expression); };
+    ctx.build_scoped_matrix_evaluator = [services](const std::string& expression) { return services->evaluation.build_matrix_evaluator(expression); };
+    ctx.is_matrix_argument = [services](const std::string& arg) { return services->is_matrix_argument(arg); };
+    ctx.parse_matrix_argument = [services](const std::string& arg, const std::string& cmd) -> matrix::Matrix {
+        auto val = services->parse_matrix_argument(arg, cmd);
+        return val.matrix_ptr ? *val.matrix_ptr : matrix::Matrix();
+    };
+    ctx.evaluate_expression_value = [services](const std::string& arg, bool exact) { return services->evaluation.evaluate_value(arg, exact); };
+    ctx.normalize_result = [services](Scalar value) { return services->evaluation.normalize_result(value); };
 
     std::string output;
     if (handle_ode_command(ctx, command, args, &output)) {

@@ -124,7 +124,7 @@ int run_logic_varmanage_base_tests(int& passed, int& failed) {
     // ========== 进制转换测试 ==========
     // 测试因数分解
     try {
-        const std::string fact = calculator.factor_expression("factor(360)");
+        const std::string fact = calculator.process_line("factor(360)", false);
         if (fact == "2^3 * 3^2 * 5") {
             ++passed;
         } else {
@@ -134,12 +134,12 @@ int run_logic_varmanage_base_tests(int& passed, int& failed) {
         }
     } catch (const std::exception& ex) {
         ++failed;
-        std::cout << "FAIL: factor_expression threw unexpected error: "
+        std::cout << "FAIL: process_line factor threw unexpected error: "
                   << ex.what() << '\n';
     }
 
     try {
-        const std::string converted = calculator.base_conversion_expression("hex(255)");
+        const std::string converted = calculator.process_line("hex(255)", false);
         if (converted == "FF") {
             ++passed;
         } else {
@@ -148,12 +148,12 @@ int run_logic_varmanage_base_tests(int& passed, int& failed) {
         }
     } catch (const std::exception& ex) {
         ++failed;
-        std::cout << "FAIL: base_conversion_expression threw unexpected error: "
+        std::cout << "FAIL: process_line base conversion threw unexpected error: "
                   << ex.what() << '\n';
     }
 
     try {
-        const std::string converted = calculator.base_conversion_expression("base(-31, 16)");
+        const std::string converted = calculator.process_line("base(-31, 16)", false);
         if (converted == "-1F") {
             ++passed;
         } else {
@@ -162,13 +162,13 @@ int run_logic_varmanage_base_tests(int& passed, int& failed) {
         }
     } catch (const std::exception& ex) {
         ++failed;
-        std::cout << "FAIL: base_conversion_expression negative threw unexpected error: "
+        std::cout << "FAIL: process_line base conversion negative threw unexpected error: "
                   << ex.what() << '\n';
     }
 
     try {
         const std::string status = calculator.set_hex_prefix_mode(true);
-        const std::string converted = calculator.base_conversion_expression("hex(255)");
+        const std::string converted = calculator.process_line("hex(255)", false);
         if (status == "Hex prefix mode: ON" && converted == "0xFF") {
             ++passed;
         } else {
@@ -184,7 +184,7 @@ int run_logic_varmanage_base_tests(int& passed, int& failed) {
 
     try {
         const std::string status = calculator.set_hex_uppercase_mode(false);
-        const std::string converted = calculator.base_conversion_expression("base(-31, 16)");
+        const std::string converted = calculator.process_line("base(-31, 16)", false);
         if (status == "Hex letter case: LOWER" && converted == "-0x1f") {
             ++passed;
         } else {
@@ -215,7 +215,7 @@ int run_logic_varmanage_base_tests(int& passed, int& failed) {
     }
 
     try {
-        (void)calculator.base_conversion_expression("base(10, 1)");
+        (void)calculator.process_line("base(10, 1)", false);
         ++failed;
         std::cout << "FAIL: base invalid radix expected error but succeeded\n";
     } catch (const std::exception&) {
@@ -223,15 +223,15 @@ int run_logic_varmanage_base_tests(int& passed, int& failed) {
     }
 
     try {
-        (void)calculator.factor_expression("factor(3.5)");
+        (void)calculator.process_line("factor(3.5)", false);
         ++failed;
-        std::cout << "FAIL: factor_expression non-integer expected error but succeeded\n";
+        std::cout << "FAIL: factor non-integer expected error but succeeded\n";
     } catch (const std::exception&) {
         ++passed;
     }
 
     try {
-        const std::string fact = calculator.factor_expression("factor(0)");
+        const std::string fact = calculator.process_line("factor(0)", false);
         if (fact == "0") {
             ++passed;
         } else {

@@ -18,6 +18,7 @@
 #include "analysis/calculus/limit_solver.h"
 #include "analysis/series/psa_engine.h"
 #include "analysis/modules/series_module.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "math/mymath.h"
 #include <algorithm>
@@ -73,9 +74,9 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
     try {
         if (t_is_effective_infinity_point(point)) {
             expression = expression.simplify();
-            const std::shared_ptr<SymbolicExpression::Node>& node = expression.node_;
+            expression = expression.simplify();
 
-            switch (node->type) {
+            switch (expression.node_type()) {
                 case NodeType::kNumber:
                 case NodeType::kPi:
                 case NodeType::kE:
@@ -88,7 +89,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                     return SymbolicLimitProbeKind::kUnknown;
                 }
                 case NodeType::kVariable:
-                    if (node->text == variable_name) {
+                    if (expression.node_text() == variable_name) {
                         return point > T(static_cast<long long>(0)) ? SymbolicLimitProbeKind::kPositiveInfinity
                                            : SymbolicLimitProbeKind::kNegativeInfinity;
                     }
@@ -96,7 +97,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                 case NodeType::kNegate: {
                     T child_value = T(static_cast<long long>(0));
                     const SymbolicLimitProbeKind child_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                        probe_symbolic_value_at(expression.left_child(),
                                                 variable_name,
                                                 point,
                                                 &child_value);
@@ -117,16 +118,16 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                     T left_value = T(static_cast<long long>(0));
                     T right_value = T(static_cast<long long>(0));
                     SymbolicLimitProbeKind left_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                        probe_symbolic_value_at(expression.left_child(),
                                                 variable_name,
                                                 point,
                                                 &left_value);
                     SymbolicLimitProbeKind right_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->right),
+                        probe_symbolic_value_at(expression.right_child(),
                                                 variable_name,
                                                 point,
                                                 &right_value);
-                    if (node->type == NodeType::kSubtract) {
+                    if (expression.node_type() == NodeType::kSubtract) {
                         if (right_kind == SymbolicLimitProbeKind::kFinite) {
                             right_value = -right_value;
                         } else if (right_kind == SymbolicLimitProbeKind::kPositiveInfinity) {
@@ -149,12 +150,12 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                     T left_value = T(static_cast<long long>(0));
                     T right_value = T(static_cast<long long>(0));
                     const SymbolicLimitProbeKind left_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                        probe_symbolic_value_at(expression.left_child(),
                                                 variable_name,
                                                 point,
                                                 &left_value);
                     const SymbolicLimitProbeKind right_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->right),
+                        probe_symbolic_value_at(expression.right_child(),
                                                 variable_name,
                                                 point,
                                                 &right_value);
@@ -190,12 +191,12 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                     T left_value = T(static_cast<long long>(0));
                     T right_value = T(static_cast<long long>(0));
                     const SymbolicLimitProbeKind left_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                        probe_symbolic_value_at(expression.left_child(),
                                                 variable_name,
                                                 point,
                                                 &left_value);
                     const SymbolicLimitProbeKind right_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->right),
+                        probe_symbolic_value_at(expression.right_child(),
                                                 variable_name,
                                                 point,
                                                 &right_value);
@@ -222,10 +223,10 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
                     return SymbolicLimitProbeKind::kUnknown;
                 }
                 case NodeType::kFunction: {
-                    const std::string& name = node->text;
+                    const std::string name = expression.node_text();
                     T argument_value = T(static_cast<long long>(0));
                     const SymbolicLimitProbeKind argument_kind =
-                        probe_symbolic_value_at(SymbolicExpression(node->left),
+                        probe_symbolic_value_at(expression.left_child(),
                                                 variable_name,
                                                 point,
                                                 &argument_value);
@@ -351,12 +352,12 @@ bool try_symbolic_lhopital_limit(
     T* result,
     std::function<Scalar(const SymbolicExpression&, const std::string&, Scalar)> evaluate_at_override) {
     SymbolicExpression current = expression.simplify();
-    if (current.node_->type != NodeType::kDivide) {
+    if (current.node_type() != NodeType::kDivide) {
         return false;
     }
 
-    SymbolicExpression numerator(current.node_->left);
-    SymbolicExpression denominator(current.node_->right);
+    SymbolicExpression numerator = current.left_child();
+    SymbolicExpression denominator = current.right_child();
     T numerator_value = T(static_cast<long long>(0));
     T denominator_value = T(static_cast<long long>(0));
     const SymbolicLimitProbeKind numerator_kind =
@@ -450,8 +451,8 @@ bool try_symbolic_lhopital_limit(
     static constexpr int kMaxLhopitalDepth = 5;
     SymbolicExpression iter_expr = current;
     for (int depth = 0; depth < kMaxLhopitalDepth; ++depth) {
-        SymbolicExpression n(iter_expr.node_->left);
-        SymbolicExpression d(iter_expr.node_->right);
+        SymbolicExpression n = iter_expr.left_child();
+        SymbolicExpression d = iter_expr.right_child();
         iter_expr = (n.derivative(variable_name).simplify() /
                      d.derivative(variable_name).simplify()).simplify();
 
@@ -477,10 +478,10 @@ bool symbolic_limit_at_infinity(
     const std::string& variable_name,
     bool positive,
     T* result) {
-    if (expression.node_ && expression.node_->type == NodeType::kPower) {
+    if (expression.has_node() && expression.node_type() == NodeType::kPower) {
         T transformed = T(static_cast<long long>(0));
-        if (try_symbolic_one_to_infinity_limit(SymbolicExpression(expression.node_->left),
-                                               SymbolicExpression(expression.node_->right),
+        if (try_symbolic_one_to_infinity_limit(expression.left_child(),
+                                               expression.right_child(),
                                                variable_name,
                                                positive ? t_infinity<T>()
                                                         : -t_infinity<T>(),

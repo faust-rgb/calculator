@@ -11,7 +11,7 @@ int run_plot_tests(int& passed, int& failed) {
 
     // Test 1: Basic plot command (3 arguments)
     try {
-        std::string output = calculator.plot_expression("plot(sin(x), -3.14, 3.14)");
+        std::string output = calculator.process_line("plot(sin(x), -3.14, 3.14)", false);
         if (!output.empty() && output.find("y: [") != std::string::npos) {
             passed++;
         } else {
@@ -25,7 +25,7 @@ int run_plot_tests(int& passed, int& failed) {
 
     // Test 2: Plot with variable (4 arguments)
     try {
-        std::string output = calculator.plot_expression("plot(t^2, t, 0, 10)");
+        std::string output = calculator.process_line("plot(t^2, t, 0, 10)", false);
         // Accept both formats: "y: [0.0000, 100.0000]" or "y: [0, 100]"
         if (!output.empty() && (output.find("y: [0") != std::string::npos &&
             (output.find("100") != std::string::npos))) {
@@ -41,7 +41,7 @@ int run_plot_tests(int& passed, int& failed) {
 
     // Test 3: Plot with points (5 arguments)
     try {
-        std::string output = calculator.plot_expression("plot(x, x, 0, 1, 10)");
+        std::string output = calculator.process_line("plot(x, x, 0, 1, 10)", false);
         // Accept both formats with x range
         if (!output.empty() && output.find("x: [") != std::string::npos &&
             output.find("0") != std::string::npos && output.find("1") != std::string::npos) {
@@ -59,7 +59,7 @@ int run_plot_tests(int& passed, int& failed) {
     try {
         std::string dummy;
         calculator.try_process_function_command("f(x) = x^3", &dummy);
-        std::string output = calculator.plot_expression("plot(f(x), -2, 2)");
+        std::string output = calculator.process_line("plot(f(x), -2, 2)", false);
         // Accept both formats with y range containing -8 and 8
         if (!output.empty() && output.find("y: [") != std::string::npos &&
             output.find("-8") != std::string::npos && output.find("8") != std::string::npos) {

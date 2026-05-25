@@ -19,6 +19,7 @@
 #include "app/scalar_type.h"
 #include "math/mymath.h"
 #include "parser/grammars/unified_expression_parser.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "symbolic/solver/symbolic_solver.h"
 #include "core/services/string_utils.h"
@@ -511,34 +512,28 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
 std::string RootfindingModule::execute_args(const std::string& command,
                                            const std::vector<std::string>& args,
                                            ServiceLocator& locator) {
-    auto engine = locator.resolve<IEvaluationEngine>();
+    auto services = locator.resolve<CoreServices>();
 
     RootfindingContext ctx;
-    ctx.parse_decimal = [engine](const std::string& expr) { return engine->parse_decimal(expr); };
-    ctx.build_scoped_evaluator = [engine](const std::string& expr) {
-        auto stored_eval = engine->build_scoped_scalar_evaluator(expr);
-        return [stored_eval](const std::vector<std::pair<std::string, Scalar>>& vars) {
-            std::vector<std::pair<std::string, StoredValue>> stored_vars;
-            for (const auto& [k, v] : vars) {
-                StoredValue sv;
-                sv.decimal = v;
-                stored_vars.push_back({k, sv});
-            }
-            return stored_eval(stored_vars);
-        };
+    ctx.parse_decimal = [services](const std::string& expr) { return services->evaluation.parse_decimal(expr); };
+    ctx.build_scoped_evaluator = [services](const std::string& expr) {
+        return services->evaluation.build_decimal_evaluator(expr);
     };
     ctx.get_derivative_expression = [&locator](const std::string& expr_str, const std::string& var_name) {
         try {
             SymbolicExpression expr;
             std::string var;
-            locator.resolve<IExecutionContext>()->services().symbolic.resolve_symbolic(expr_str, false, &var, &expr);
-            if (expr.node_) return expr.derivative(var_name).simplify().to_string();
+            locator.resolve<CoreServices>()->symbolic.resolve_symbolic(expr_str, false, &var, &expr);
+            if (expr.has_node()) return expr.derivative(var_name).simplify().to_string();
         } catch (...) {}
         return std::string();
     };
-    ctx.is_matrix_argument = [engine](const std::string& arg) { return engine->is_matrix_argument(arg); };
-    ctx.parse_matrix_argument = [engine](const std::string& arg, const std::string& cmd) { return engine->parse_matrix_argument(arg, cmd); };
-    ctx.normalize_result = [engine](Scalar value) { return engine->normalize_result(value); };
+    ctx.is_matrix_argument = [services](const std::string& arg) { return services->is_matrix_argument(arg); };
+    ctx.parse_matrix_argument = [services](const std::string& arg, const std::string& cmd) -> matrix::Matrix {
+        auto val = services->parse_matrix_argument(arg, cmd);
+        return val.matrix_ptr ? *val.matrix_ptr : matrix::Matrix();
+    };
+    ctx.normalize_result = [services](Scalar value) { return services->evaluation.normalize_result(value); };
 
     std::string output;
     if (handle_rootfinding_command(ctx, command, args, &output)) {

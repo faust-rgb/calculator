@@ -22,19 +22,11 @@
 #include <string>
 #include <vector>
 
+#include "math/types/complex.h"
+
 namespace matrix {
 
-/**
- * @struct TComplex
- * @brief 泛型复数表示
- */
-template <typename T>
-struct TComplex {
-    T real = T(0);
-    T imag = T(0);
-};
-
-using ComplexNumber = TComplex<Scalar>;
+using ComplexNumber = mymath::complex<Scalar>;
 
 /**
  * @namespace matrix
@@ -141,12 +133,12 @@ struct TValue {
     bool is_matrix = false;   ///< true 表示矩阵，false 表示标量
     bool is_complex = false;  ///< true 表示复数标量
     T scalar = T(0);          ///< 标量值
-    TComplex<T> complex;      ///< 复数值
+    mymath::complex<T> complex;      ///< 复数值
     TMatrix<T> matrix;        ///< 矩阵值
 
     static TValue from_scalar(T scalar_value);
     static TValue from_complex(T real, T imag);
-    static TValue from_complex(TComplex<T> complex_value);
+    static TValue from_complex(mymath::complex<T> complex_value);
     static TValue from_matrix(const TMatrix<T>& matrix_value);
     static TValue from_matrix(TMatrix<T>&& matrix_value);
 };
@@ -268,14 +260,6 @@ template <typename T> TMatrix<T> eigenvectors(const TMatrix<T>& matrix);
 template <typename T> TMatrix<T> reshape(const TMatrix<T>& matrix, std::size_t rows, std::size_t cols);
 template <typename T> TMatrix<T> vectorize(const TMatrix<T>& matrix);
 template <typename T> TMatrix<T> diag(const TMatrix<T>& matrix);
-
-// ============================================================================
-// 信号处理运算 (泛型)
-// ============================================================================
-
-template <typename T> TMatrix<T> filter(const TMatrix<T>& b, const TMatrix<T>& a, const TMatrix<T>& x);
-template <typename T> TMatrix<T> freqz(const TMatrix<T>& b, const TMatrix<T>& a, std::size_t n = 512);
-template <typename T> TMatrix<T> residue(const TMatrix<T>& b, const TMatrix<T>& a);
 
 // ============================================================================
 // 表达式求值

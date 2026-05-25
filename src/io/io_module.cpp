@@ -75,7 +75,10 @@ namespace {
      * @throw std::runtime_error 如果值不是矩阵类型
      */
     matrix::Matrix get_matrix(const StoredValue& val, const std::string& ctx) {
-        if (val.is_matrix) return val.matrix;
+        if (val.is_matrix) {
+            if (!val.matrix_ptr) throw std::runtime_error(ctx + " has invalid matrix");
+            return *val.matrix_ptr;
+        }
         throw std::runtime_error(ctx + " must be a matrix");
     }
 
@@ -104,15 +107,16 @@ namespace {
             return "\"" + escaped + "\"";
         }
         if (val.is_matrix) {
+            if (!val.matrix_ptr) return "[]";
             std::string result = "[";
-            for (std::size_t r = 0; r < val.matrix.rows; ++r) {
+            for (std::size_t r = 0; r < val.matrix_ptr->rows; ++r) {
                 if (r > 0) result += ", ";
-                if (val.matrix.cols > 1) result += "[";
-                for (std::size_t c = 0; c < val.matrix.cols; ++c) {
+                if (val.matrix_ptr->cols > 1) result += "[";
+                for (std::size_t c = 0; c < val.matrix_ptr->cols; ++c) {
                     if (c > 0) result += ", ";
-                    result += format_long_double(val.matrix.at(r, c).to_long_double());
+                    result += format_long_double(val.matrix_ptr->at(r, c).to_long_double());
                 }
-                if (val.matrix.cols > 1) result += "]";
+                if (val.matrix_ptr->cols > 1) result += "]";
             }
             result += "]";
             return result;
@@ -138,7 +142,7 @@ namespace {
             return result;
         }
         if (val.is_complex) {
-            return "[" + format_long_double(val.complex.real.to_long_double()) + ", " + format_long_double(val.complex.imag.to_long_double()) + "]";
+            return "[" + format_long_double(val.complex.real().to_long_double()) + ", " + format_long_double(val.complex.imag().to_long_double()) + "]";
         }
         // 标量数值
         return format_long_double(val.exact ? rational_to_double(val.rational) : val.decimal.to_long_double());
@@ -289,7 +293,7 @@ namespace {
                         }
                     }
                     result.is_matrix = true;
-                    result.matrix = mat;
+                    result.matrix_ptr = std::make_shared<matrix::Matrix>(std::move(mat));
                 } else {
                     result.is_list = true;
                     result.list_value = std::make_shared<std::vector<StoredValue>>(std::move(items));
@@ -355,7 +359,7 @@ namespace {
  *
  * @return 函数名到函数实现的映射表
  */
-std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> IoModule::get_native_functions() const {
+std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> IoModule::get_functions_map() const {
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
     // ========== open 函数 ==========
@@ -607,7 +611,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         if (rows.empty()) {
             StoredValue res;
             res.is_matrix = true;
-            res.matrix = matrix::Matrix(0, 0, 0.0L);
+            res.matrix_ptr = std::make_shared<matrix::Matrix>(0, 0, 0.0L);
             return res;
         }
 
@@ -622,7 +626,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
 
         StoredValue res;
         res.is_matrix = true;
-        res.matrix = result;
+        res.matrix_ptr = std::make_shared<matrix::Matrix>(std::move(result));
         return res;
     };
 
@@ -709,7 +713,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
 std::string IoModule::execute_args(const std::string& command,
                                    const std::vector<std::string>& args,
                                    ServiceLocator& locator) {
-    auto engine = locator.resolve<IEvaluationEngine>();
+    auto services = locator.resolve<CoreServices>();
 
     // 命令行用法（无括号），例如: open "file.txt" w
     std::vector<StoredValue> s_args;
@@ -722,13 +726,13 @@ std::string IoModule::execute_args(const std::string& command,
             sv.string_value = parsed.substr(1, parsed.size() - 2);
             s_args.push_back(sv);
         } else {
-            // 使用 evaluate_expression_value 而非 parse_decimal，以支持矩阵和复数变量
-            StoredValue sv = engine->evaluate_expression_value(parsed, false);
+            // 使用 evaluate_value 而非 parse_decimal，以支持矩阵和复数变量
+            StoredValue sv = services->evaluation.evaluate_value(parsed, false);
             s_args.push_back(sv);
         }
     }
 
-    auto funcs = get_native_functions();
+    auto funcs = get_functions_map();
     auto it = funcs.find(command);
     if (it != funcs.end()) {
         StoredValue res = it->second(s_args);

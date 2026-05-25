@@ -9,6 +9,7 @@
 #include "core/services/string_utils.h"
 #include "math/helpers/integer_helpers.h"
 #include "mymath.h"
+#include "matrix/matrix.h"
 #include <sstream>
 #include <stdexcept>
 
@@ -127,12 +128,13 @@ ScriptSignal execute_script_statement(
                     }
                 }
                 else if (iterable.is_matrix) {
-                    for (std::size_t row = 0; row < iterable.matrix.rows; ++row) {
+                    if (!iterable.matrix_ptr) throw std::runtime_error("invalid matrix value");
+                    for (std::size_t row = 0; row < iterable.matrix_ptr->rows; ++row) {
                         StoredValue row_value;
                         row_value.is_matrix = true;
-                        row_value.matrix = matrix::Matrix(1, iterable.matrix.cols);
-                        for (std::size_t col = 0; col < iterable.matrix.cols; ++col) {
-                            row_value.matrix.at(0, col) = iterable.matrix.at(row, col);
+                        row_value.matrix_ptr = std::make_shared<matrix::Matrix>(1, iterable.matrix_ptr->cols);
+                        for (std::size_t col = 0; col < iterable.matrix_ptr->cols; ++col) {
+                            row_value.matrix_ptr->at(0, col) = iterable.matrix_ptr->at(row, col);
                         }
                         ctx->variables().set_local(for_in.variable, row_value);
                         const ScriptSignal signal = execute_script_statement(ctx, *for_in.body, exact_mode, last_output, true);
@@ -204,10 +206,12 @@ ScriptSignal execute_script_statement(
                         StoredValue pattern = evaluate_command_ast_to_value(ctx, clause.pattern_ast, exact_mode);
                         if (subject.is_matrix || pattern.is_matrix) {
                             if (subject.is_matrix && pattern.is_matrix) {
-                                if (subject.matrix.rows == pattern.matrix.rows && subject.matrix.cols == pattern.matrix.cols) {
+                                if (subject.matrix_ptr && pattern.matrix_ptr &&
+                                    subject.matrix_ptr->rows == pattern.matrix_ptr->rows && 
+                                    subject.matrix_ptr->cols == pattern.matrix_ptr->cols) {
                                     matches = true;
-                                    for (std::size_t i = 0; i < subject.matrix.data.size(); ++i) {
-                                        if (!mymath::is_near_zero(subject.matrix.data[i] - pattern.matrix.data[i], 1e-10)) {
+                                    for (std::size_t i = 0; i < subject.matrix_ptr->data.size(); ++i) {
+                                        if (!mymath::is_near_zero(subject.matrix_ptr->data[i] - pattern.matrix_ptr->data[i], 1e-10)) {
                                             matches = false;
                                             break;
                                         }
@@ -216,8 +220,8 @@ ScriptSignal execute_script_statement(
                             } else matches = false;
                         } else if (subject.is_complex || pattern.is_complex) {
                             if (subject.is_complex && pattern.is_complex) {
-                                matches = mymath::is_near_zero(subject.complex.real - pattern.complex.real, 1e-10) &&
-                                          mymath::is_near_zero(subject.complex.imag - pattern.complex.imag, 1e-10);
+                                matches = mymath::is_near_zero(subject.complex.real() - pattern.complex.real(), 1e-10) &&
+                                          mymath::is_near_zero(subject.complex.imag() - pattern.complex.imag(), 1e-10);
                             } else matches = false;
                         } else if (subject.is_string || pattern.is_string) {
                             if (subject.is_string && pattern.is_string) matches = subject.string_value == pattern.string_value;
