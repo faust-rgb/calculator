@@ -16,6 +16,7 @@
 #define MATRIX_H
 
 #include "app/scalar_type.h"
+#include "types/stored_value.h"
 #include <cstddef>
 #include <functional>
 #include <map>
@@ -164,6 +165,7 @@ struct EvaluationContext {
     MatrixLookup matrix_lookup;
     ComplexLookup complex_lookup;
     const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* matrix_functions = nullptr;
+    const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions = nullptr;
 };
 
 /**
@@ -270,7 +272,7 @@ bool try_evaluate_expression(const std::string& expression,
                                const MatrixLookup& matrix_lookup,
                                const ComplexLookup& complex_lookup,
                                const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* matrix_functions,
-                               const std::map<std::string, ValueFunction>* value_functions,
+                               const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions,
                                Value* value);
 }  // namespace matrix
 

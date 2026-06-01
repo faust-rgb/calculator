@@ -399,13 +399,13 @@ public:
                            const MatrixLookup* matrix_lookup,
                            const ComplexLookup* complex_lookup,
                            const std::map<std::string, MatrixFunction>* matrix_functions = nullptr,
-                           const std::map<std::string, ValueFunction>* value_functions = nullptr)
+                           const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions = nullptr)
         : BaseParser(source),
           scalar_evaluator_(scalar_evaluator),
           matrix_lookup_(matrix_lookup),
           complex_lookup_(complex_lookup),
           matrix_functions_(matrix_functions),
-          value_functions_(value_functions) {}
+          native_functions_(native_functions) {}
     /**
      * @brief 执行解析
      *
@@ -735,7 +735,7 @@ private:
                                             *matrix_lookup_,
                                             *complex_lookup_,
                                             matrix_functions_,
-                                            value_functions_,
+                                            native_functions_,
                                             &value)) {
                     if (value.is_matrix || value.is_complex) {
                         throw std::runtime_error("matrix literal entries must be scalar expressions");
@@ -1214,7 +1214,7 @@ private:
                                             *matrix_lookup_,
                                             *complex_lookup_,
                                             matrix_functions_,
-                                            value_functions_,
+                                            native_functions_,
                                             &value) &&
                     value.is_matrix) {
                     values = as_vector_values(value.matrix, "mean");
@@ -1242,7 +1242,7 @@ private:
                                             *matrix_lookup_,
                                             *complex_lookup_,
                                             matrix_functions_,
-                                            value_functions_,
+                                            native_functions_,
                                             &value) &&
                     value.is_matrix) {
                     values = as_vector_values(value.matrix, "median");
@@ -1270,7 +1270,7 @@ private:
                                             *matrix_lookup_,
                                             *complex_lookup_,
                                             matrix_functions_,
-                                            value_functions_,
+                                            native_functions_,
                                             &value) &&
                     value.is_matrix) {
                     values = as_vector_values(value.matrix, "mode");
@@ -1298,7 +1298,7 @@ private:
                                             *matrix_lookup_,
                                             *complex_lookup_,
                                             matrix_functions_,
-                                            value_functions_,
+                                            native_functions_,
                                             &value) &&
                     value.is_matrix) {
                     values = as_vector_values(value.matrix, "var");
@@ -1326,7 +1326,7 @@ private:
                                             *matrix_lookup_,
                                             *complex_lookup_,
                                             matrix_functions_,
-                                            value_functions_,
+                                            native_functions_,
                                             &value) &&
                     value.is_matrix) {
                     values = as_vector_values(value.matrix, "std");
@@ -1354,7 +1354,7 @@ private:
                                             *matrix_lookup_,
                                             *complex_lookup_,
                                             matrix_functions_,
-                                            value_functions_,
+                                            native_functions_,
                                             &value) &&
                     value.is_matrix) {
                     values = as_vector_values(value.matrix, name);
@@ -1401,7 +1401,7 @@ private:
                                             *matrix_lookup_,
                                             *complex_lookup_,
                                             matrix_functions_,
-                                            value_functions_,
+                                            native_functions_,
                                             &value) &&
                     value.is_matrix) {
                     return Value::from_scalar(percentile_values(
@@ -1429,7 +1429,7 @@ private:
                                             *matrix_lookup_,
                                             *complex_lookup_,
                                             matrix_functions_,
-                                            value_functions_,
+                                            native_functions_,
                                             &value) &&
                     value.is_matrix) {
                     return Value::from_scalar(quartile_values(
@@ -1652,7 +1652,7 @@ private:
         if (name == "abs") {
             if (arguments.size() != 1) throw std::runtime_error("abs expects 1 argument");
             Value v;
-            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, value_functions_, &v)) {
+            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, native_functions_, &v)) {
                 ComplexNumber z;
                 if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
                     const Scalar r = z.real(), i = z.imag();
@@ -1669,7 +1669,7 @@ private:
         if (name == "exp") {
             if (arguments.size() != 1) throw std::runtime_error("exp expects 1 argument");
             Value v;
-            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, value_functions_, &v)) {
+            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, native_functions_, &v)) {
                 ComplexNumber z;
                 if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
                     const Scalar r = z.real(), i = z.imag(), m = mymath::exp(r);
@@ -1684,7 +1684,7 @@ private:
         if (name == "ln") {
             if (arguments.size() != 1) throw std::runtime_error("ln expects 1 argument");
             Value v;
-            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, value_functions_, &v)) {
+            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, native_functions_, &v)) {
                 ComplexNumber z;
                 if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
                     const Scalar r = z.real(), i = z.imag();
@@ -1699,7 +1699,7 @@ private:
         if (name == "sin") {
             if (arguments.size() != 1) throw std::runtime_error("sin expects 1 argument");
             Value v;
-            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, value_functions_, &v)) {
+            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, native_functions_, &v)) {
                 ComplexNumber z;
                 if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
                     const Scalar r = z.real(), i = z.imag();
@@ -1714,7 +1714,7 @@ private:
         if (name == "cos") {
             if (arguments.size() != 1) throw std::runtime_error("cos expects 1 argument");
             Value v;
-            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, value_functions_, &v)) {
+            if (try_evaluate_expression(arguments[0], *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_, native_functions_, &v)) {
                 ComplexNumber z;
                 if (try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
                     const Scalar r = z.real(), i = z.imag();
@@ -1727,13 +1727,6 @@ private:
         }
 
         // 首先检查值多态函数
-        if (value_functions_) {
-            const auto it = value_functions_->find(name);
-            if (it != value_functions_->end()) {
-                return it->second(arguments, *scalar_evaluator_, *matrix_lookup_, *complex_lookup_, matrix_functions_);
-            }
-        }
-
         if (matrix_functions_) {
             const auto it = matrix_functions_->find(name);
             if (it != matrix_functions_->end()) {
@@ -1743,6 +1736,28 @@ private:
                     matrix_args.push_back(require_matrix(arg, name));
                 }
                 return Value::from_matrix(it->second(matrix_args));
+            }
+        }
+
+        // 检查原生 StoredValue 函数
+        if (native_functions_) {
+            const auto it = native_functions_->find(name);
+            if (it != native_functions_->end()) {
+                std::vector<StoredValue> sv_args;
+                sv_args.reserve(arguments.size());
+                for (const auto& arg : arguments) {
+                    sv_args.push_back(evaluate_to_stored_value(arg));
+                }
+                StoredValue result = it->second(sv_args);
+                Value v;
+                if (result.is_matrix && result.matrix_ptr) {
+                    v = Value::from_matrix(*result.matrix_ptr);
+                } else if (result.is_complex) {
+                    v = Value::from_complex(result.complex);
+                } else {
+                    v = Value::from_scalar(result.decimal);
+                }
+                return v;
             }
         }
 
@@ -1821,7 +1836,7 @@ private:
                                      *matrix_lookup_,
                                      *complex_lookup_,
                                      matrix_functions_,
-                                     value_functions_,
+                                     native_functions_,
                                      &value) ||
             !value.is_matrix) {
             throw std::runtime_error(func_name + " expects a matrix as its first argument");
@@ -1844,11 +1859,26 @@ private:
                                     *matrix_lookup_,
                                     *complex_lookup_,
                                     matrix_functions_,
-                                    value_functions_,
+                                    native_functions_,
                                     &value)) {
             return value;
         }
         return Value::from_scalar((*scalar_evaluator_)(expression));
+    }
+
+    StoredValue evaluate_to_stored_value(const std::string& expression) const {
+        Value v = evaluate_value_argument(expression);
+        StoredValue sv;
+        if (v.is_matrix) {
+            sv.is_matrix = true;
+            sv.matrix_ptr = std::make_shared<Matrix>(v.matrix);
+        } else if (v.is_complex) {
+            sv.is_complex = true;
+            sv.complex = v.complex;
+        } else {
+            sv.decimal = v.scalar;
+        }
+        return sv;
     }
 
     /**
@@ -2199,6 +2229,7 @@ private:
     const ComplexLookup* complex_lookup_;
     const std::map<std::string, MatrixFunction>* matrix_functions_;
     const std::map<std::string, ValueFunction>* value_functions_;
+    const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions_;
 };
 
 
@@ -2225,7 +2256,7 @@ bool try_evaluate_expression(const std::string& expression,
                              const MatrixLookup& matrix_lookup,
                              const ComplexLookup& complex_lookup,
                              const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* matrix_functions,
-                             const std::map<std::string, ValueFunction>* value_functions,
+                             const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions,
                              Value* value) {
     const std::string trimmed = utils::trim_copy(expression);
     const bool looks_like_matrix_expression =
@@ -2350,7 +2381,7 @@ bool try_evaluate_expression(const std::string& expression,
     }
 
     try {
-        MatrixExpressionParser parser(trimmed, &scalar_evaluator, &matrix_lookup, &complex_lookup, matrix_functions, value_functions);
+        MatrixExpressionParser parser(trimmed, &scalar_evaluator, &matrix_lookup, &complex_lookup, matrix_functions, native_functions);
         *value = parser.parse();
         return true;
     } catch (...) {

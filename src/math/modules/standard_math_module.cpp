@@ -2,15 +2,8 @@
  * @file standard_math_module.cpp
  * @brief 标准数学函数模块实现
  *
- * 本文件实现了标准数学函数的模块注册：
- * - 三角函数：sin, cos, tan, asin, acos, atan, atan2
- * - 双曲函数：sinh, cosh, tanh, asinh, acosh, atanh
- * - 指数对数：exp, log, log10, log2, ln
- * - 幂函数：pow, sqrt, cbrt, hypot
- * - 取整函数：floor, ceil, round, trunc
- * - 其他函数：abs, sign, max, min
- *
- * 这些函数构成计算器的核心数学库。
+ * 所有函数通过统一的 StoredValue 接口注册，
+ * 使用 wrap_scalar 辅助函数将标量计算包装为 StoredValue 签名。
  */
 
 #include "standard_math_module.h"
@@ -24,133 +17,143 @@
 #include <algorithm>
 #include <map>
 
-// 辅助函数声明 (已在 unit_conversions.h 中定义，但为了保持一致可以移除或更新)
+namespace {
 
-std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>> 
-StandardMathModule::get_scalar_functions() const {
-    std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>> funcs;
+using Scalar = mymath::Scalar;
+
+auto wrap_scalar(std::function<Scalar(const std::vector<Scalar>&)> f,
+                 const std::string& name, std::size_t min_args, std::size_t max_args) {
+    return [f = std::move(f), name, min_args, max_args]
+           (const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() < min_args || args.size() > max_args)
+            throw MathError(name + " expects " + std::to_string(min_args) +
+                            (min_args == max_args ? "" : " to " + std::to_string(max_args)) +
+                            " argument(s)");
+        std::vector<Scalar> sa;
+        sa.reserve(args.size());
+        for (const auto& a : args) sa.push_back(a.decimal);
+        StoredValue sv;
+        sv.decimal = f(sa);
+        return sv;
+    };
+}
+
+} // namespace
+
+std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>
+StandardMathModule::get_functions_map() const {
+    std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
     // Trigonometric
-    funcs["sin"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("sin expects 1 argument"); return mymath::sin(a[0]); };
-    funcs["cos"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("cos expects 1 argument"); return mymath::cos(a[0]); };
-    funcs["tan"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("tan expects 1 argument"); return mymath::tan(a[0]); };
-    funcs["asin"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("asin expects 1 argument"); return mymath::asin(a[0]); };
-    funcs["acos"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("acos expects 1 argument"); return mymath::acos(a[0]); };
-    funcs["atan"] = [](const std::vector<Scalar>& a) { 
-        if(a.size()==1) return mymath::atan(a[0]); 
-        if(a.size()==2) return mymath::atan2(a[0], a[1]);
-        throw MathError("atan expects 1 or 2 arguments");
-    };
-    funcs["sec"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("sec expects 1 argument"); return mymath::sec(a[0]); };
-    funcs["csc"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("csc expects 1 argument"); return mymath::csc(a[0]); };
-    funcs["cot"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("cot expects 1 argument"); return mymath::cot(a[0]); };
-    funcs["asec"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("asec expects 1 argument"); return mymath::asec(a[0]); };
-    funcs["acsc"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("acsc expects 1 argument"); return mymath::acsc(a[0]); };
-    funcs["acot"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("acot expects 1 argument"); return mymath::acot(a[0]); };
+    funcs["sin"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::sin(a[0]); }, "sin", 1, 1);
+    funcs["cos"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::cos(a[0]); }, "cos", 1, 1);
+    funcs["tan"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::tan(a[0]); }, "tan", 1, 1);
+    funcs["asin"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::asin(a[0]); }, "asin", 1, 1);
+    funcs["acos"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::acos(a[0]); }, "acos", 1, 1);
+    funcs["atan"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        if (a.size() == 1) return mymath::atan(a[0]);
+        return mymath::atan2(a[0], a[1]);
+    }, "atan", 1, 2);
+    funcs["sec"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::sec(a[0]); }, "sec", 1, 1);
+    funcs["csc"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::csc(a[0]); }, "csc", 1, 1);
+    funcs["cot"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::cot(a[0]); }, "cot", 1, 1);
+    funcs["asec"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::asec(a[0]); }, "asec", 1, 1);
+    funcs["acsc"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::acsc(a[0]); }, "acsc", 1, 1);
+    funcs["acot"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::acot(a[0]); }, "acot", 1, 1);
 
     // Hyperbolic
-    funcs["sinh"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("sinh expects 1 argument"); return mymath::sinh(a[0]); };
-    funcs["cosh"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("cosh expects 1 argument"); return mymath::cosh(a[0]); };
-    funcs["tanh"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("tanh expects 1 argument"); return mymath::tanh(a[0]); };
-    funcs["asinh"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("asinh expects 1 argument"); return mymath::asinh(a[0]); };
-    funcs["acosh"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("acosh expects 1 argument"); return mymath::acosh(a[0]); };
-    funcs["atanh"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("atanh expects 1 argument"); return mymath::atanh(a[0]); };
+    funcs["sinh"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::sinh(a[0]); }, "sinh", 1, 1);
+    funcs["cosh"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::cosh(a[0]); }, "cosh", 1, 1);
+    funcs["tanh"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::tanh(a[0]); }, "tanh", 1, 1);
+    funcs["asinh"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::asinh(a[0]); }, "asinh", 1, 1);
+    funcs["acosh"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::acosh(a[0]); }, "acosh", 1, 1);
+    funcs["atanh"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::atanh(a[0]); }, "atanh", 1, 1);
 
     // Log/Exp
-    funcs["exp"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("exp expects 1 argument"); return mymath::exp(a[0]); };
-    funcs["exp2"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("exp2 expects 1 argument"); return mymath::pow(Scalar(2.0L), a[0]); };
-    funcs["ln"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("ln expects 1 argument"); return mymath::ln(a[0]); };
-    funcs["log"] = [](const std::vector<Scalar>& a) { 
-        if(a.size()==1) return mymath::ln(a[0]); 
-        if(a.size()==2) {
-            if (a[1] <= Scalar(0.0L) || mymath::is_near_zero(a[1] - Scalar(1.0L))) throw MathError("log base must be positive and not equal to 1");
-            return mymath::ln(a[0]) / mymath::ln(a[1]);
-        }
-        throw MathError("log expects 1 or 2 arguments");
-    };
-    funcs["log2"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("log2 expects 1 argument"); return mymath::ln(a[0]) / mymath::ln(Scalar(2.0L)); };
-    funcs["log10"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("log10 expects 1 argument"); return mymath::ln(a[0]) / mymath::ln(Scalar(10.0L)); };
+    funcs["exp"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::exp(a[0]); }, "exp", 1, 1);
+    funcs["exp2"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::pow(Scalar(2.0L), a[0]); }, "exp2", 1, 1);
+    funcs["ln"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::ln(a[0]); }, "ln", 1, 1);
+    funcs["log"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        if (a.size() == 1) return mymath::ln(a[0]);
+        if (a[1] <= Scalar(0.0L) || mymath::is_near_zero(a[1] - Scalar(1.0L)))
+            throw MathError("log base must be positive and not equal to 1");
+        return mymath::ln(a[0]) / mymath::ln(a[1]);
+    }, "log", 1, 2);
+    funcs["log2"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::ln(a[0]) / mymath::ln(Scalar(2.0L)); }, "log2", 1, 1);
+    funcs["log10"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::ln(a[0]) / mymath::ln(Scalar(10.0L)); }, "log10", 1, 1);
 
     // Roots/Power
-    funcs["sqrt"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("sqrt expects 1 argument"); return mymath::sqrt(a[0]); };
-    funcs["cbrt"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("cbrt expects 1 argument"); return mymath::cbrt(a[0]); };
-    funcs["root"] = [](const std::vector<Scalar>& a) { if(a.size()!=2) throw MathError("root expects 2 arguments"); return mymath::root(a[0], a[1]); };
-    funcs["pow"] = [](const std::vector<Scalar>& a) { if(a.size()!=2) throw MathError("pow expects 2 arguments"); return mymath::pow(a[0], a[1]); };
+    funcs["sqrt"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::sqrt(a[0]); }, "sqrt", 1, 1);
+    funcs["cbrt"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::cbrt(a[0]); }, "cbrt", 1, 1);
+    funcs["root"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::root(a[0], a[1]); }, "root", 2, 2);
+    funcs["pow"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::pow(a[0], a[1]); }, "pow", 2, 2);
 
     // Basic
-    funcs["abs"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("abs expects 1 argument"); return mymath::abs(a[0]); };
-    funcs["sign"] = [](const std::vector<Scalar>& a) { 
-        if(a.size()!=1) throw MathError("sign expects 1 argument"); 
+    funcs["abs"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::abs(a[0]); }, "abs", 1, 1);
+    funcs["sign"] = wrap_scalar([](const std::vector<Scalar>& a) {
         if (mymath::is_near_zero(a[0], Scalar(1e-12L))) return Scalar(0.0L);
         return a[0] > Scalar(0.0L) ? Scalar(1.0L) : Scalar(-1.0L);
-    };
-    funcs["floor"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("floor expects 1 argument"); return mymath::floor(a[0]); };
-    funcs["ceil"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("ceil expects 1 argument"); return mymath::ceil(a[0]); };
-    funcs["round"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("round expects 1 argument"); return mymath::round(a[0]); };
-    funcs["trunc"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("trunc expects 1 argument"); return mymath::trunc(a[0]); };
-    funcs["min"] = [](const std::vector<Scalar>& a) {
-        if(a.empty()) throw MathError("min expects at least 1 argument");
+    }, "sign", 1, 1);
+    funcs["floor"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::floor(a[0]); }, "floor", 1, 1);
+    funcs["ceil"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::ceil(a[0]); }, "ceil", 1, 1);
+    funcs["round"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::round(a[0]); }, "round", 1, 1);
+    funcs["trunc"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::trunc(a[0]); }, "trunc", 1, 1);
+    funcs["min"] = wrap_scalar([](const std::vector<Scalar>& a) {
         Scalar res = a[0];
         for (std::size_t i = 1; i < a.size(); ++i) res = std::min(res, a[i]);
         return res;
-    };
-    funcs["max"] = [](const std::vector<Scalar>& a) {
-        if(a.empty()) throw MathError("max expects at least 1 argument");
+    }, "min", 1, 255);
+    funcs["max"] = wrap_scalar([](const std::vector<Scalar>& a) {
         Scalar res = a[0];
         for (std::size_t i = 1; i < a.size(); ++i) res = std::max(res, a[i]);
         return res;
-    };
-    funcs["clamp"] = [](const std::vector<Scalar>& a) {
-        if(a.size()!=3) throw MathError("clamp expects 3 arguments");
-        const Scalar low = std::min(a[1], a[2]);
-        const Scalar high = std::max(a[1], a[2]);
-        return std::clamp(a[0], low, high);
-    };
+    }, "max", 1, 255);
+    funcs["clamp"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return std::clamp(a[0], std::min(a[1], a[2]), std::max(a[1], a[2]));
+    }, "clamp", 3, 3);
 
     // Special Functions
-    funcs["gamma"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("gamma expects 1 argument"); return mymath::gamma(a[0]); };
-    funcs["beta"] = [](const std::vector<Scalar>& a) { if(a.size()!=2) throw MathError("beta expects 2 arguments"); return mymath::beta(a[0], a[1]); };
-    funcs["zeta"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("zeta expects 1 argument"); return mymath::zeta(a[0]); };
-    funcs["erf"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("erf expects 1 argument"); return mymath::erf(a[0]); };
-    funcs["erfc"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("erfc expects 1 argument"); return mymath::erfc(a[0]); };
-    funcs["bessel"] = [](const std::vector<Scalar>& a) { 
-        if(a.size()!=2) throw MathError("bessel expects 2 arguments"); 
+    funcs["gamma"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::gamma(a[0]); }, "gamma", 1, 1);
+    funcs["beta"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::beta(a[0], a[1]); }, "beta", 2, 2);
+    funcs["zeta"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::zeta(a[0]); }, "zeta", 1, 1);
+    funcs["erf"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::erf(a[0]); }, "erf", 1, 1);
+    funcs["erfc"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::erfc(a[0]); }, "erfc", 1, 1);
+    funcs["bessel"] = wrap_scalar([](const std::vector<Scalar>& a) {
         if (!is_integer_double(a[0])) throw MathError("bessel order must be an integer");
         return mymath::bessel_j(static_cast<int>(round_to_long_long(a[0])), a[1]);
-    };
+    }, "bessel", 2, 2);
     funcs["bessel_j"] = funcs["bessel"];
 
     // Conversions
-    funcs["deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("deg expects 1 argument"); return mymath::radians_to_degrees(a[0]); };
-    funcs["rad"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("rad expects 1 argument"); return mymath::degrees_to_radians(a[0]); };
+    funcs["deg"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::radians_to_degrees(a[0]); }, "deg", 1, 1);
+    funcs["rad"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::degrees_to_radians(a[0]); }, "rad", 1, 1);
     funcs["deg2rad"] = funcs["rad"];
     funcs["rad2deg"] = funcs["deg"];
-    funcs["sin_deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("sin_deg expects 1 argument"); return mymath::sin(mymath::degrees_to_radians(a[0])); };
-    funcs["cos_deg"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("cos_deg expects 1 argument"); return mymath::cos(mymath::degrees_to_radians(a[0])); };
-    funcs["celsius"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("celsius expects 1 argument"); return mymath::fahrenheit_to_celsius(a[0]); };
-    funcs["fahrenheit"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("fahrenheit expects 1 argument"); return mymath::celsius_to_fahrenheit(a[0]); };
-    funcs["kelvin"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("kelvin expects 1 argument"); return a[0] + Scalar(273.15L); };
+    funcs["sin_deg"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::sin(mymath::degrees_to_radians(a[0])); }, "sin_deg", 1, 1);
+    funcs["cos_deg"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::cos(mymath::degrees_to_radians(a[0])); }, "cos_deg", 1, 1);
+    funcs["celsius"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::fahrenheit_to_celsius(a[0]); }, "celsius", 1, 1);
+    funcs["fahrenheit"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::celsius_to_fahrenheit(a[0]); }, "fahrenheit", 1, 1);
+    funcs["kelvin"] = wrap_scalar([](const std::vector<Scalar>& a) { return a[0] + Scalar(273.15L); }, "kelvin", 1, 1);
     funcs["c2f"] = funcs["fahrenheit"];
     funcs["f2c"] = funcs["celsius"];
 
     // Signals
-    funcs["step"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("step expects 1 argument"); return a[0] < 0.0L ? 0.0L : 1.0L; };
+    funcs["step"] = wrap_scalar([](const std::vector<Scalar>& a) { return a[0] < 0.0L ? 0.0L : 1.0L; }, "step", 1, 1);
     funcs["heaviside"] = funcs["step"];
-    funcs["delta"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("delta expects 1 argument"); return mymath::is_near_zero(a[0], Scalar(1e-12L)) ? Scalar(1.0L) : Scalar(0.0L); };
+    funcs["delta"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return mymath::is_near_zero(a[0], Scalar(1e-12L)) ? Scalar(1.0L) : Scalar(0.0L);
+    }, "delta", 1, 1);
     funcs["impulse"] = funcs["delta"];
 
     // Other
-    funcs["rat"] = [](const std::vector<Scalar>& a) { 
-        if(a.size() < 1 || a.size() > 2) throw MathError("rat expects 1 or 2 arguments");
-        return a[0]; 
-    };
+    funcs["rat"] = wrap_scalar([](const std::vector<Scalar>& a) { return a[0]; }, "rat", 1, 2);
 
     return funcs;
 }
 
-std::vector<std::string> StandardMathModule::get_functions() const {
+std::vector<std::string> StandardMathModule::get_function_names() const {
     std::vector<std::string> names;
-    auto funcs = get_scalar_functions();
+    auto funcs = get_functions_map();
     for (const auto& [name, _] : funcs) names.push_back(name);
     return names;
 }

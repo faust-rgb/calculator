@@ -413,9 +413,10 @@ StoredValue evaluate_expression_value(
     };
 
     UnifiedExpressionParser parser(variables, ctx->functions().get_custom_functions_map(),
-                                   ctx->functions().get_scalar_functions(),
-                                   ctx->functions().get_matrix_functions(),
-                                   ctx->functions().get_value_functions(),
+                                   nullptr,
+                                   nullptr,
+                                   nullptr,
+                                   ctx->functions().get_native_functions(),
                                    has_script_function, invoke_script_function);
     StoredValue result = parser.evaluate_stored(target_expr, exact_mode, ctx->config().is_symbolic_constants_mode());
 

@@ -96,6 +96,7 @@ UnifiedExpressionParser::UnifiedExpressionParser(
     const std::map<std::string, ScalarFunction>* scalar_functions,
     const std::map<std::string, MatrixFunction>* matrix_functions,
     const std::map<std::string, matrix::ValueFunction>* value_functions,
+    const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions,
     HasScriptFunctionCallback has_script_function,
     InvokeScriptFunctionCallback invoke_script_function)
     : variables_(variables),
@@ -103,6 +104,7 @@ UnifiedExpressionParser::UnifiedExpressionParser(
       scalar_functions_(scalar_functions),
       matrix_functions_(matrix_functions),
       value_functions_(value_functions),
+      native_functions_(native_functions),
       has_script_function_(std::move(has_script_function)),
       invoke_script_function_(std::move(invoke_script_function)),
       factory_(std::make_unique<UnifiedParserFactory>()) {}
@@ -190,7 +192,7 @@ bool UnifiedExpressionParser::try_evaluate_value(const std::string& expression, 
                                                cached_matrix_lookup_,
                                                cached_complex_lookup_,
                                                matrix_functions_,
-                                               value_functions_,
+                                               native_functions_,
                                                value);
     }
 
@@ -336,6 +338,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
 
 Scalar UnifiedExpressionParser::evaluate_ast(const ExpressionAST* ast) const {
     return evaluate_compiled_ast(ast, variables_, functions_, scalar_functions_,
+                                  native_functions_,
                                   has_script_function_, invoke_script_function_);
 }
 
@@ -360,6 +363,7 @@ Scalar parse_decimal_expression(
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
     const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions,
+    const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions,
     HasScriptFunctionCallback has_script_function,
     InvokeScriptFunctionCallback invoke_script_function) {
 
@@ -368,6 +372,7 @@ Scalar parse_decimal_expression(
         throw SyntaxError("Failed to parse expression: " + expression);
     }
     return evaluate_compiled_ast(ast.get(), variables, functions, scalar_functions,
+                                  native_functions,
                                   has_script_function, invoke_script_function);
 }
 
@@ -390,7 +395,7 @@ bool try_evaluate_matrix_expression(
     const std::map<std::string, CustomFunction>* functions,
     const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions,
     const std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>* matrix_functions,
-    const std::map<std::string, matrix::ValueFunction>* value_functions,
+    const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions,
     HasScriptFunctionCallback has_script_function,
     InvokeScriptFunctionCallback invoke_script_function,
     matrix::Value* value) {
@@ -399,6 +404,7 @@ bool try_evaluate_matrix_expression(
         [&](std::string_view text) {
             const Scalar scalar_value = parse_decimal_expression(
                 std::string(text), variables, functions, scalar_functions,
+                native_functions,
                 has_script_function, invoke_script_function);
             return mymath::is_near_zero(scalar_value, 1e-10L) ? 0.0L : scalar_value;
         };
@@ -428,7 +434,7 @@ bool try_evaluate_matrix_expression(
                                            matrix_lookup,
                                            complex_lookup,
                                            matrix_functions,
-                                           value_functions,
+                                           native_functions,
                                            value);
 }
 

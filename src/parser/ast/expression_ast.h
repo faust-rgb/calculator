@@ -29,6 +29,9 @@ class VariableResolver;
 struct CustomFunction;
 struct StoredValue;
 
+// Native function type (unified StoredValue-based interface)
+using NativeFunction = std::function<StoredValue(const std::vector<StoredValue>&)>;
+
 // 回调类型定义（来自 types/function.h）
 using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
 using InvokeScriptFunctionDecimalCallback = std::function<Scalar(const std::string&, const std::vector<Scalar>&)>;
@@ -120,6 +123,7 @@ Scalar evaluate_compiled_ast(
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions,
     const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions,
+    const std::map<std::string, NativeFunction>* native_functions,
     const HasScriptFunctionCallback& has_script_function,
     const InvokeScriptFunctionDecimalCallback& invoke_script_function);
 

@@ -64,7 +64,7 @@ struct ComplexSignalData {
 struct SignalContext {
     const std::map<std::string, StoredValue>* variables;
     const std::map<std::string, CustomFunction>* functions;
-    const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions;
+    const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions;
     std::function<bool(const std::string&)> has_script_function;
     std::function<Scalar(const std::string&, const std::vector<Scalar>&)> invoke_script_function;
     std::function<SignalData(const std::string&, std::string*)> resolve_signal;

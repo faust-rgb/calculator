@@ -4,6 +4,8 @@
  *
  * 本文件实现了 IntegerMathModule 类，提供整数数学、数论和进制转换功能。
  * 包括因式分解、进制转换、位运算和数论函数等。
+ * 所有函数通过统一的 StoredValue 接口注册，
+ * 使用 wrap_scalar 辅助函数将标量计算包装为 StoredValue 签名。
  */
 
 #include "integer_math_module.h"
@@ -21,6 +23,8 @@
 
 namespace {
 
+using Scalar = mymath::Scalar;
+
 /**
  * @brief 确保参数为整数并转换为 long long
  * @param x 待检查的值
@@ -34,6 +38,23 @@ long long require_integer(Scalar x, const std::string& name, const std::string& 
         throw MathError(func + " requires an integer " + name);
     }
     return round_to_long_long(static_cast<long double>(x)); // round_to_long_long only takes long double
+}
+
+auto wrap_scalar(std::function<Scalar(const std::vector<Scalar>&)> f,
+                 const std::string& name, std::size_t min_args, std::size_t max_args) {
+    return [f = std::move(f), name, min_args, max_args]
+           (const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() < min_args || args.size() > max_args)
+            throw MathError(name + " expects " + std::to_string(min_args) +
+                            (min_args == max_args ? "" : " to " + std::to_string(max_args)) +
+                            " argument(s)");
+        std::vector<Scalar> sa;
+        sa.reserve(args.size());
+        for (const auto& a : args) sa.push_back(a.decimal);
+        StoredValue sv;
+        sv.decimal = f(sa);
+        return sv;
+    };
 }
 
 } // namespace
@@ -92,81 +113,118 @@ std::vector<std::string> IntegerMathModule::get_help_topics() const {
 }
 
 /**
- * @brief 获取模块提供的标量函数映射
+ * @brief 获取模块提供的函数映射
  * @return 函数名称到函数实现的映射
  *
  * 包括数论函数（gcd、lcm、factorial、nCr、nPr等）、
  * 位运算函数（and、or、xor、shl、shr、rol、ror等）
  * 以及位统计函数（popcount、bitlen、ctz、clz等）。
  */
-std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>
-IntegerMathModule::get_scalar_functions() const {
-    std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>> funcs;
+std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>
+IntegerMathModule::get_functions_map() const {
+    std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
     // Number Theory
-    funcs["gcd"] = [](const std::vector<Scalar>& a) { if(a.size()!=2) throw MathError("gcd expects 2 arguments"); return Scalar(gcd_ll(require_integer(a[0], "a", "gcd"), require_integer(a[1], "b", "gcd"))); };
-    funcs["lcm"] = [](const std::vector<Scalar>& a) { if(a.size()!=2) throw MathError("lcm expects 2 arguments"); return Scalar(lcm_ll(require_integer(a[0], "a", "lcm"), require_integer(a[1], "b", "lcm"))); };
-    funcs["mod"] = [](const std::vector<Scalar>& a) {
-        if(a.size()!=2) throw MathError("mod expects 2 arguments");
+    funcs["gcd"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(gcd_ll(require_integer(a[0], "a", "gcd"), require_integer(a[1], "b", "gcd")));
+    }, "gcd", 2, 2);
+    funcs["lcm"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(lcm_ll(require_integer(a[0], "a", "lcm"), require_integer(a[1], "b", "lcm")));
+    }, "lcm", 2, 2);
+    funcs["mod"] = wrap_scalar([](const std::vector<Scalar>& a) {
         const long long lhs = require_integer(a[0], "lhs", "mod");
         const long long rhs = require_integer(a[1], "rhs", "mod");
         if (rhs == 0) throw MathError("mod by zero");
         return Scalar(lhs % rhs);
-    };
-    funcs["factorial"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("factorial expects 1 argument"); return factorial_scalar(require_integer(a[0], "argument", "factorial")); };
-    funcs["nCr"] = [](const std::vector<Scalar>& a) { if(a.size()!=2) throw MathError("nCr expects 2 arguments"); return combination_scalar(require_integer(a[0], "n", "nCr"), require_integer(a[1], "r", "nCr")); };
+    }, "mod", 2, 2);
+    funcs["factorial"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return factorial_scalar(require_integer(a[0], "argument", "factorial"));
+    }, "factorial", 1, 1);
+    funcs["nCr"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return combination_scalar(require_integer(a[0], "n", "nCr"), require_integer(a[1], "r", "nCr"));
+    }, "nCr", 2, 2);
     funcs["binom"] = funcs["nCr"];
-    funcs["nPr"] = [](const std::vector<Scalar>& a) { if(a.size()!=2) throw MathError("nPr expects 2 arguments"); return permutation_scalar(require_integer(a[0], "n", "nPr"), require_integer(a[1], "r", "nPr")); };
-    funcs["fib"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("fib expects 1 argument"); return fibonacci_scalar(require_integer(a[0], "argument", "fib")); };
-    funcs["is_prime"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("is_prime expects 1 argument"); return Scalar(is_prime_ll(require_integer(a[0], "argument", "is_prime")) ? 1LL : 0LL); };
-    funcs["next_prime"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("next_prime expects 1 argument"); return Scalar(next_prime_ll(require_integer(a[0], "argument", "next_prime"))); };
-    funcs["prev_prime"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("prev_prime expects 1 argument"); return Scalar(prev_prime_ll(require_integer(a[0], "argument", "prev_prime"))); };
-    funcs["euler_phi"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("euler_phi expects 1 argument"); return Scalar(euler_phi_ll(require_integer(a[0], "argument", "euler_phi"))); };
+    funcs["nPr"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return permutation_scalar(require_integer(a[0], "n", "nPr"), require_integer(a[1], "r", "nPr"));
+    }, "nPr", 2, 2);
+    funcs["fib"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return fibonacci_scalar(require_integer(a[0], "argument", "fib"));
+    }, "fib", 1, 1);
+    funcs["is_prime"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(is_prime_ll(require_integer(a[0], "argument", "is_prime")) ? 1LL : 0LL);
+    }, "is_prime", 1, 1);
+    funcs["next_prime"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(next_prime_ll(require_integer(a[0], "argument", "next_prime")));
+    }, "next_prime", 1, 1);
+    funcs["prev_prime"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(prev_prime_ll(require_integer(a[0], "argument", "prev_prime")));
+    }, "prev_prime", 1, 1);
+    funcs["euler_phi"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(euler_phi_ll(require_integer(a[0], "argument", "euler_phi")));
+    }, "euler_phi", 1, 1);
     funcs["phi"] = funcs["euler_phi"];
-    funcs["mobius"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("mobius expects 1 argument"); return Scalar(mobius_ll(require_integer(a[0], "argument", "mobius"))); };
-    funcs["prime_pi"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("prime_pi expects 1 argument"); return Scalar(prime_pi_ll(require_integer(a[0], "argument", "prime_pi"))); };
-
-    funcs["egcd"] = [](const std::vector<Scalar>& a) {
-        if(a.size()!=2) throw MathError("egcd expects 2 arguments");
+    funcs["mobius"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(mobius_ll(require_integer(a[0], "argument", "mobius")));
+    }, "mobius", 1, 1);
+    funcs["prime_pi"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(prime_pi_ll(require_integer(a[0], "argument", "prime_pi")));
+    }, "prime_pi", 1, 1);
+    funcs["egcd"] = wrap_scalar([](const std::vector<Scalar>& a) {
         long long x = 0, y = 0;
         return Scalar(extended_gcd_ll(require_integer(a[0], "a", "egcd"), require_integer(a[1], "b", "egcd"), &x, &y));
-    };
+    }, "egcd", 2, 2);
 
     // Bitwise
-    funcs["and"] = [](const std::vector<Scalar>& a) { if(a.size()!=2) throw MathError("and expects 2 arguments"); return Scalar(require_integer(a[0], "lhs", "and") & require_integer(a[1], "rhs", "and")); };
-    funcs["or"] = [](const std::vector<Scalar>& a) { if(a.size()!=2) throw MathError("or expects 2 arguments"); return Scalar(require_integer(a[0], "lhs", "or") | require_integer(a[1], "rhs", "or")); };
-    funcs["xor"] = [](const std::vector<Scalar>& a) { if(a.size()!=2) throw MathError("xor expects 2 arguments"); return Scalar(require_integer(a[0], "lhs", "xor") ^ require_integer(a[1], "rhs", "xor")); };
-    funcs["not"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("not expects 1 argument"); return Scalar(~require_integer(a[0], "argument", "not")); };
-    funcs["shl"] = [](const std::vector<Scalar>& a) {
-        if(a.size()!=2) throw MathError("shl expects 2 arguments");
+    funcs["and"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(require_integer(a[0], "lhs", "and") & require_integer(a[1], "rhs", "and"));
+    }, "and", 2, 2);
+    funcs["or"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(require_integer(a[0], "lhs", "or") | require_integer(a[1], "rhs", "or"));
+    }, "or", 2, 2);
+    funcs["xor"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(require_integer(a[0], "lhs", "xor") ^ require_integer(a[1], "rhs", "xor"));
+    }, "xor", 2, 2);
+    funcs["not"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(~require_integer(a[0], "argument", "not"));
+    }, "not", 1, 1);
+    funcs["shl"] = wrap_scalar([](const std::vector<Scalar>& a) {
         const long long count = require_integer(a[1], "shift", "shl");
         if (count < 0) throw MathError("shift count cannot be negative");
         return Scalar(require_integer(a[0], "value", "shl") << count);
-    };
-    funcs["shr"] = [](const std::vector<Scalar>& a) {
-        if(a.size()!=2) throw MathError("shr expects 2 arguments");
+    }, "shl", 2, 2);
+    funcs["shr"] = wrap_scalar([](const std::vector<Scalar>& a) {
         const long long count = require_integer(a[1], "shift", "shr");
         if (count < 0) throw MathError("shift count cannot be negative");
         return Scalar(require_integer(a[0], "value", "shr") >> count);
-    };
-    funcs["rol"] = [](const std::vector<Scalar>& a) {
-        if(a.size()!=2) throw MathError("rol expects 2 arguments");
+    }, "shr", 2, 2);
+    funcs["rol"] = wrap_scalar([](const std::vector<Scalar>& a) {
         return Scalar(static_cast<long long>(from_unsigned_bits(rotate_left_bits(
             to_unsigned_bits(require_integer(a[0], "value", "rol")),
             normalize_rotation_count(require_integer(a[1], "shift", "rol"))))));
-    };
-    funcs["ror"] = [](const std::vector<Scalar>& a) {
-        if(a.size()!=2) throw MathError("ror expects 2 arguments");
+    }, "rol", 2, 2);
+    funcs["ror"] = wrap_scalar([](const std::vector<Scalar>& a) {
         return Scalar(static_cast<long long>(from_unsigned_bits(rotate_right_bits(
             to_unsigned_bits(require_integer(a[0], "value", "ror")),
             normalize_rotation_count(require_integer(a[1], "shift", "ror"))))));
-    };
-    funcs["popcount"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("popcount expects 1 argument"); return Scalar(static_cast<long long>(popcount_bits(to_unsigned_bits(require_integer(a[0], "argument", "popcount"))))); };
-    funcs["bitlen"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("bitlen expects 1 argument"); return Scalar(static_cast<long long>(bit_length_bits(to_unsigned_bits(require_integer(a[0], "argument", "bitlen"))))); };
-    funcs["ctz"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("ctz expects 1 argument"); return Scalar(static_cast<long long>(trailing_zero_count_bits(to_unsigned_bits(require_integer(a[0], "argument", "ctz"))))); };
-    funcs["clz"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("clz expects 1 argument"); return Scalar(static_cast<long long>(leading_zero_count_bits(to_unsigned_bits(require_integer(a[0], "argument", "clz"))))); };
-    funcs["parity"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("parity expects 1 argument"); return Scalar(static_cast<long long>(parity_bits(to_unsigned_bits(require_integer(a[0], "argument", "parity"))))); };
-    funcs["reverse_bits"] = [](const std::vector<Scalar>& a) { if(a.size()!=1) throw MathError("reverse_bits expects 1 argument"); return Scalar(static_cast<long long>(from_unsigned_bits(reverse_bits(to_unsigned_bits(require_integer(a[0], "argument", "reverse_bits")))))); };
+    }, "ror", 2, 2);
+    funcs["popcount"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(static_cast<long long>(popcount_bits(to_unsigned_bits(require_integer(a[0], "argument", "popcount")))));
+    }, "popcount", 1, 1);
+    funcs["bitlen"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(static_cast<long long>(bit_length_bits(to_unsigned_bits(require_integer(a[0], "argument", "bitlen")))));
+    }, "bitlen", 1, 1);
+    funcs["ctz"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(static_cast<long long>(trailing_zero_count_bits(to_unsigned_bits(require_integer(a[0], "argument", "ctz")))));
+    }, "ctz", 1, 1);
+    funcs["clz"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(static_cast<long long>(leading_zero_count_bits(to_unsigned_bits(require_integer(a[0], "argument", "clz")))));
+    }, "clz", 1, 1);
+    funcs["parity"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(static_cast<long long>(parity_bits(to_unsigned_bits(require_integer(a[0], "argument", "parity")))));
+    }, "parity", 1, 1);
+    funcs["reverse_bits"] = wrap_scalar([](const std::vector<Scalar>& a) {
+        return Scalar(static_cast<long long>(from_unsigned_bits(reverse_bits(to_unsigned_bits(require_integer(a[0], "argument", "reverse_bits"))))));
+    }, "reverse_bits", 1, 1);
 
     return funcs;
 }
@@ -175,10 +233,10 @@ IntegerMathModule::get_scalar_functions() const {
  * @brief 获取模块提供的所有函数名称列表
  * @return 函数名称列表
  */
-std::vector<std::string> IntegerMathModule::get_functions() const {
+std::vector<std::string> IntegerMathModule::get_function_names() const {
     std::vector<std::string> names;
-    auto sfuncs = get_scalar_functions();
-    for (const auto& [name, _] : sfuncs) names.push_back(name);
+    auto funcs = get_functions_map();
+    for (const auto& [name, _] : funcs) names.push_back(name);
     return names;
 }
 

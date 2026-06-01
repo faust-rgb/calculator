@@ -61,7 +61,7 @@ static std::vector<DataSeries> sample_multiple_series(const PlotContext& ctx, co
     int num_points = 100;
     size_t consumed = 1;
 
-    UnifiedExpressionParser parser(ctx.variables, ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+    UnifiedExpressionParser parser(ctx.variables, ctx.functions, nullptr, nullptr, nullptr, ctx.native_functions, ctx.has_script_function, ctx.invoke_script_function);
 
     if (args.size() >= 3 && !trim_copy(args[1]).empty() && args[1][0] != ':' && !is_identifier_text(trim_copy(args[1]))) {
         start = Scalar(parser.evaluate(args[1]));
@@ -97,7 +97,7 @@ static std::vector<DataSeries> sample_multiple_series(const PlotContext& ctx, co
 
         std::map<std::string, StoredValue> scoped_variables = ctx.variables.snapshot();
         VariableResolver resolver(&scoped_variables, nullptr);
-        UnifiedExpressionParser local_parser(resolver, ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+        UnifiedExpressionParser local_parser(resolver, ctx.functions, nullptr, nullptr, nullptr, ctx.native_functions, ctx.has_script_function, ctx.invoke_script_function);
 
         for (int i = 0; i < num_points; ++i) {
             Scalar x = start + (end - start) * Scalar(i) / Scalar(num_points - 1);
@@ -192,7 +192,7 @@ std::string handle_bar_command(const PlotContext& ctx, const std::vector<std::st
     size_t next_idx = 0;
 
     auto eval = [&](const std::string& e) {
-        return parse_decimal_expression(e, ctx.variables, ctx.functions, ctx.scalar_functions, ctx.has_script_function, ctx.invoke_script_function);
+        return parse_decimal_expression(e, ctx.variables, ctx.functions, nullptr, ctx.native_functions, ctx.has_script_function, ctx.invoke_script_function);
     };
 
     // 检查第一个参数是否是列表（标签）
@@ -355,7 +355,7 @@ std::string handle_hist_command(const PlotContext& ctx, const std::vector<std::s
     std::vector<Scalar> data;
 
     auto eval = [&](const std::string& e) {
-        return parse_decimal_expression(e, ctx.variables, ctx.functions, ctx.scalar_functions, ctx.has_script_function, ctx.invoke_script_function);
+        return parse_decimal_expression(e, ctx.variables, ctx.functions, nullptr, ctx.native_functions, ctx.has_script_function, ctx.invoke_script_function);
     };
 
     std::string first_arg = trim_copy(arguments[0]);

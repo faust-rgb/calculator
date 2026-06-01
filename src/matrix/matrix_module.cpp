@@ -2,26 +2,21 @@
  * @file matrix_module.cpp
  * @brief 矩阵模块实现
  *
- * 本文件实现了 MatrixModule 类的所有方法，包括：
- * - 命令处理：eig, svd, lu_p 命令的执行逻辑
- * - 矩阵函数注册：transpose, inverse, pinv, qr分解, lu分解, svd分解等
- * - 值函数注册：complex, polar, real, imag, abs, exp, sin, cos等多态函数
- * - 辅助函数：参数解析、矩阵/复数要求检查、特征值格式化等
- *
- * @author Calculator Team
- * @date 2024
+ * 所有函数通过统一的 StoredValue 接口注册，
+ * 不再依赖 ScalarEvaluator/ValueFunction 遗留类型。
  */
 
 #include "matrix_module.h"
 #include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "matrix.h"
-#include "matrix_dsp.h"
 #include "matrix_internal.h"
+#include "matrix_dsp.h"
 #include "mymath.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
 #include "core/common/calculator_exceptions.h"
+#include "math/helpers/integer_helpers.h"
 #include <stdexcept>
 #include <algorithm>
 #include <sstream>
@@ -29,54 +24,9 @@
 namespace {
 
 using namespace matrix;
+using Scalar = mymath::Scalar;
+using ComplexNumber = mymath::complex<Scalar>;
 
-/**
- * @brief Format an eigenvalue matrix with complex entries
- *
- * When eigenvalues come back as an Nx2 matrix (real, imag columns),
- * format each row as a complex number string.
- */
-std::string format_eigenvalue_matrix(const Matrix& values) {
-    if (values.rows <= 1 || values.cols != 2) {
-        return values.to_string();
-    }
-    std::ostringstream out;
-    out << "[";
-    for (std::size_t row = 0; row < values.rows; ++row) {
-        if (row != 0) {
-            out << ", ";
-        }
-        out << matrix::internal::format_complex<Scalar>({values.at(row, 0),
-                                                           values.at(row, 1)});
-    }
-    out << "]";
-    return out.str();
-}
-
-/**
- * @brief 解析索引参数
- *
- * 将表达式字符串解析为非负整数索引。
- *
- * @param expression 包含索引的表达式字符串
- * @param scalar_evaluator 标量求值器
- * @param func_name 函数名称（用于错误信息）
- * @return 解析得到的索引值
- * @throws 如果结果不是非负整数则抛出异常
- */
-std::size_t parse_index_argument(const std::string& expression,
-                                 const ScalarEvaluator& scalar_evaluator,
-                                 const std::string& func_name) {
-    const Scalar value = scalar_evaluator(expression);
-    if (!mymath::is_integer(value) || value < Scalar(0.0L)) {
-        throw std::runtime_error(func_name + " requires non-negative integer index");
-    }
-    return static_cast<std::size_t>(static_cast<long double>(value) + 0.5);
-}
-
-/**
- * @brief 要求参数为矩阵并返回
- */
 Matrix require_matrix(const StoredValue& val, const std::string& func_name) {
     if (!val.is_matrix || !val.matrix_ptr) {
         throw std::runtime_error(func_name + " expects a matrix argument");
@@ -84,9 +34,6 @@ Matrix require_matrix(const StoredValue& val, const std::string& func_name) {
     return *val.matrix_ptr;
 }
 
-/**
- * @brief 尝试从 StoredValue 获取复数
- */
 bool try_complex_from_stored(const StoredValue& v, ComplexNumber* z) {
     if (v.is_complex) {
         *z = v.complex;
@@ -100,70 +47,54 @@ bool try_complex_from_stored(const StoredValue& v, ComplexNumber* z) {
     return false;
 }
 
-/**
- * @brief 要求参数为复数并返回
- */
 ComplexNumber require_complex_argument(const StoredValue& val, const std::string& func_name) {
     ComplexNumber z;
-    if (try_complex_from_stored(val, &z)) {
-        return z;
-    }
+    if (try_complex_from_stored(val, &z)) return z;
     throw std::runtime_error(func_name + " expects a scalar or complex argument");
 }
 
-/**
- * @brief 从字符串表达式求值并要求结果为矩阵
- */
-Matrix require_matrix(const std::string& expression,
-                      const std::string& func_name,
-                      const ScalarEvaluator& se,
-                      const MatrixLookup& ml,
-                      const ComplexLookup& cl,
-                      const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) {
-    Value v;
-    if (!try_evaluate_expression(expression, se, ml, cl, mf, nullptr, &v)) {
-        throw std::runtime_error(func_name + ": failed to evaluate expression");
+std::size_t parse_index_argument(const StoredValue& val, const std::string& func_name) {
+    if (val.is_matrix || val.is_complex) {
+        throw std::runtime_error(func_name + " requires non-negative integer index");
     }
-    if (!v.is_matrix) {
-        throw std::runtime_error(func_name + " expects a matrix argument");
+    if (!mymath::is_integer(val.decimal) || val.decimal < Scalar(0.0L)) {
+        throw std::runtime_error(func_name + " requires non-negative integer index");
     }
-    return v.matrix;
+    return static_cast<std::size_t>(static_cast<long double>(val.decimal) + 0.5);
 }
 
-/**
- * @brief 从字符串表达式求值并要求结果为复数或标量
- */
-ComplexNumber require_complex_argument(const std::string& expression,
-                                       const std::string& func_name,
-                                       const ScalarEvaluator& se,
-                                       const MatrixLookup& ml,
-                                       const ComplexLookup& cl,
-                                       const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) {
-    Value v;
-    if (!try_evaluate_expression(expression, se, ml, cl, mf, nullptr, &v)) {
-        throw std::runtime_error(func_name + ": failed to evaluate expression");
-    }
-    ComplexNumber z;
-    if (matrix::internal::try_complex_from_value(v, &z)) {
-        return z;
-    }
-    throw std::runtime_error(func_name + " expects a scalar or complex argument");
+StoredValue make_matrix_result(Matrix m) {
+    StoredValue res;
+    res.is_matrix = true;
+    res.matrix_ptr = std::make_shared<Matrix>(std::move(m));
+    return res;
 }
 
-/**
- * @brief 包装矩阵函数为 StoredValue 函数
- */
-auto wrap_matrix_func(std::function<Matrix(const std::vector<Matrix>&)> func, const std::string& name) {
-    return [func, name](const std::vector<StoredValue>& args) -> StoredValue {
-        std::vector<Matrix> mat_args;
-        for (const auto& arg : args) {
-            mat_args.push_back(require_matrix(arg, name));
-        }
-        StoredValue res;
-        res.is_matrix = true;
-        res.matrix_ptr = std::make_shared<Matrix>(func(mat_args));
-        return res;
-    };
+StoredValue make_scalar_result(Scalar s) {
+    StoredValue res;
+    res.decimal = s;
+    return res;
+}
+
+StoredValue make_complex_result(ComplexNumber z) {
+    StoredValue res;
+    res.is_complex = true;
+    res.complex = z;
+    return res;
+}
+
+std::string format_eigenvalue_matrix(const Matrix& values) {
+    if (values.rows <= 1 || values.cols != 2) {
+        return values.to_string();
+    }
+    std::ostringstream out;
+    out << "[";
+    for (std::size_t row = 0; row < values.rows; ++row) {
+        if (row != 0) out << ", ";
+        out << matrix::internal::format_complex<Scalar>({values.at(row, 0), values.at(row, 1)});
+    }
+    out << "]";
+    return out.str();
 }
 
 } // namespace
@@ -176,41 +107,39 @@ std::vector<std::string> MatrixModule::get_commands() const {
     return {"eig", "svd", "lu_p"};
 }
 
-
 std::string MatrixModule::execute_args_view(std::string_view command,
                                             const std::vector<std::string_view>& args,
                                             ServiceLocator& locator) {
     using namespace module_helpers;
     require_args_count(args, 1, 1, command);
-    
+
     auto& services = *locator.resolve<CoreServices>();
-    // Matrix extraction logic needs update to use matrix_ptr
     const StoredValue val = services.evaluation.evaluate_value(std::string(args[0]), false);
     const Matrix matrix_value = require_matrix(val, std::string(command));
 
     if (command == "svd") {
-        return "U: " + svd_u(matrix_value).to_string() +
-               "\nS: " + svd_s(matrix_value).to_string() +
-               "\nVt: " + svd_vt(matrix_value).to_string();
+        return "U: " + svd_u<Scalar>(matrix_value).to_string() +
+               "\nS: " + svd_s<Scalar>(matrix_value).to_string() +
+               "\nVt: " + svd_vt<Scalar>(matrix_value).to_string();
     }
 
     if (command == "lu_p") {
-        return lu_p(matrix_value).to_string();
+        return lu_p<Scalar>(matrix_value).to_string();
     }
 
-    // command == "eig"
+    // eig
     try {
-        const Matrix values = eigenvalues(matrix_value);
+        const Matrix values = eigenvalues<Scalar>(matrix_value);
         if (values.rows > 1 && values.cols == 2) {
             return "values: " + format_eigenvalue_matrix(values) +
                    "\nvectors: unavailable for complex eigenvalues";
         }
         return "values: " + values.to_string() +
-               "\nvectors: " + eigenvectors(matrix_value).to_string();
+               "\nvectors: " + eigenvectors<Scalar>(matrix_value).to_string();
     } catch (const std::exception&) {
         if (matrix_value.rows == 2 && matrix_value.cols == 2) {
             const Scalar tr = matrix_value.at(0, 0) + matrix_value.at(1, 1);
-            const Scalar det = determinant(matrix_value);
+            const Scalar det = determinant<Scalar>(matrix_value);
             const Scalar discriminant = tr * tr - Scalar(4.0L) * det;
             if (discriminant < Scalar(0.0L)) {
                 const Scalar real = tr * Scalar(0.5L);
@@ -227,481 +156,217 @@ std::string MatrixModule::execute_args_view(std::string_view command,
     }
 }
 
+// ============================================================================
+// 函数注册 — 全部使用 StoredValue 统一接口
+// ============================================================================
+
 std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>
 MatrixModule::get_functions_map() const {
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
-    auto legacy_mat_funcs = get_matrix_functions();
-    for (auto& [name, func] : legacy_mat_funcs) {
-        funcs[name] = wrap_matrix_func(func, name);
-    }
+    // --- Matrix-only functions (1 matrix arg → matrix result) ---
+    auto mat_func_1 = [](auto f, const std::string& name) {
+        return [f, name](const std::vector<StoredValue>& args) -> StoredValue {
+            if (args.size() != 1) throw std::runtime_error(name + " expects 1 argument");
+            return make_matrix_result(f(require_matrix(args[0], name)));
+        };
+    };
 
-    // Unify multi-type functions
+    funcs["transpose"] = mat_func_1(transpose<Scalar>, "transpose");
+    funcs["inverse"] = mat_func_1(inverse<Scalar>, "inverse");
+    funcs["pinv"] = mat_func_1(pseudo_inverse<Scalar>, "pinv");
+    funcs["null"] = mat_func_1(nullspace<Scalar>, "null");
+    funcs["qr_q"] = mat_func_1(qr_q<Scalar>, "qr_q");
+    funcs["qr_r"] = mat_func_1(qr_r<Scalar>, "qr_r");
+    funcs["lu_l"] = mat_func_1(lu_l<Scalar>, "lu_l");
+    funcs["lu_u"] = mat_func_1(lu_u<Scalar>, "lu_u");
+    funcs["lu_p"] = mat_func_1(lu_p<Scalar>, "lu_p");
+    funcs["svd_u"] = mat_func_1(svd_u<Scalar>, "svd_u");
+    funcs["svd_s"] = mat_func_1(svd_s<Scalar>, "svd_s");
+    funcs["svd_vt"] = mat_func_1(svd_vt<Scalar>, "svd_vt");
+    funcs["cholesky"] = mat_func_1(cholesky<Scalar>, "cholesky");
+    funcs["hessenberg"] = mat_func_1(hessenberg<Scalar>, "hessenberg");
+    funcs["schur"] = mat_func_1(schur<Scalar>, "schur");
+    funcs["diag"] = mat_func_1(diag<Scalar>, "diag");
+    funcs["rref"] = mat_func_1(rref<Scalar>, "rref");
+    funcs["eigvals"] = mat_func_1(eigenvalues<Scalar>, "eigvals");
+
+    // --- Matrix-only functions (1 matrix arg → scalar result) ---
+    auto mat_scalar_1 = [](auto f, const std::string& name) {
+        return [f, name](const std::vector<StoredValue>& args) -> StoredValue {
+            if (args.size() != 1) throw std::runtime_error(name + " expects 1 argument");
+            return make_scalar_result(f(require_matrix(args[0], name)));
+        };
+    };
+
+    funcs["norm"] = mat_scalar_1(norm<Scalar>, "norm");
+    funcs["trace"] = mat_scalar_1(trace<Scalar>, "trace");
+    funcs["det"] = mat_scalar_1(determinant<Scalar>, "det");
+    funcs["rank"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1) throw std::runtime_error("rank expects 1 argument");
+        return make_scalar_result(static_cast<long double>(rank<Scalar>(require_matrix(args[0], "rank"))));
+    };
+    funcs["cond"] = mat_scalar_1(condition_number<Scalar>, "cond");
+
+    // --- Matrix-only functions (2 matrix args) ---
+    funcs["outer"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("outer expects 2 arguments");
+        return make_matrix_result(outer<Scalar>(require_matrix(args[0], "outer"), require_matrix(args[1], "outer")));
+    };
+    funcs["kron"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("kron expects 2 arguments");
+        return make_matrix_result(kronecker<Scalar>(require_matrix(args[0], "kron"), require_matrix(args[1], "kron")));
+    };
+    funcs["hadamard"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("hadamard expects 2 arguments");
+        return make_matrix_result(hadamard<Scalar>(require_matrix(args[0], "hadamard"), require_matrix(args[1], "hadamard")));
+    };
+    funcs["least_squares"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("least_squares expects 2 arguments");
+        return make_matrix_result(least_squares<Scalar>(require_matrix(args[0], "least_squares"), require_matrix(args[1], "least_squares")));
+    };
+    funcs["solve"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("solve expects 2 arguments");
+        return make_matrix_result(solve<Scalar>(require_matrix(args[0], "solve"), require_matrix(args[1], "solve")));
+    };
+    funcs["dot"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("dot expects 2 arguments");
+        return make_scalar_result(dot<Scalar>(require_matrix(args[0], "dot"), require_matrix(args[1], "dot")));
+    };
+
+    // --- reshape (1 matrix + 2 scalar args) ---
+    funcs["reshape"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 3) throw std::runtime_error("reshape expects 3 arguments");
+        auto rows = static_cast<std::size_t>(static_cast<long double>(args[1].decimal) + 0.5);
+        auto cols = static_cast<std::size_t>(static_cast<long double>(args[2].decimal) + 0.5);
+        return make_matrix_result(reshape<Scalar>(require_matrix(args[0], "reshape"), rows, cols));
+    };
+
+    // --- get (1 matrix + 1 or 2 index args → scalar) ---
+    funcs["get"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2 && args.size() != 3)
+            throw std::runtime_error("get expects 2 or 3 arguments");
+        Matrix m = require_matrix(args[0], "get");
+        if (args.size() == 2) {
+            return make_scalar_result(get<Scalar>(m, parse_index_argument(args[1], "get")));
+        }
+        return make_scalar_result(get<Scalar>(m,
+            parse_index_argument(args[1], "get"),
+            parse_index_argument(args[2], "get")));
+    };
+
+    // --- set (1 matrix + 2 or 3 args → matrix) ---
+    funcs["set"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 3 && args.size() != 4)
+            throw std::runtime_error("set expects 3 or 4 arguments");
+        Matrix m = require_matrix(args[0], "set");
+        if (args.size() == 3) {
+            return make_matrix_result(set<Scalar>(m,
+                parse_index_argument(args[1], "set"),
+                args[2].decimal));
+        }
+        return make_matrix_result(set<Scalar>(m,
+            parse_index_argument(args[1], "set"),
+            parse_index_argument(args[2], "set"),
+            args[3].decimal));
+    };
+
+    // --- Complex construction ---
+    funcs["complex"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("complex expects 2 arguments");
+        return make_complex_result(ComplexNumber(args[0].decimal, args[1].decimal));
+    };
+
+    funcs["polar"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("polar expects 2 arguments");
+        Scalar r = args[0].decimal, theta = args[1].decimal;
+        return make_complex_result(ComplexNumber(r * mymath::cos(theta), r * mymath::sin(theta)));
+    };
+
+    // --- Complex/scalar extraction ---
     funcs["real"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() != 1) throw std::runtime_error("real expects 1 argument");
-        const ComplexNumber z = require_complex_argument(args[0], "real");
-        StoredValue res;
-        res.decimal = z.real();
-        return res;
+        return make_scalar_result(require_complex_argument(args[0], "real").real());
     };
 
     funcs["imag"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() != 1) throw std::runtime_error("imag expects 1 argument");
-        const ComplexNumber z = require_complex_argument(args[0], "imag");
-        StoredValue res;
-        res.decimal = z.imag();
-        return res;
-    };
-    
-    // ... add more unified functions ...
-    return funcs;
-}
-
-std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>
-MatrixModule::get_matrix_functions() const {
-    std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>> funcs;
-
-    // 矩阵转置
-    funcs["transpose"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("transpose expects 1 argument");
-        return transpose(args[0]);
+        return make_scalar_result(require_complex_argument(args[0], "imag").imag());
     };
 
-    // 矩阵求逆
-    funcs["inverse"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("inverse expects 1 argument");
-        return inverse(args[0]);
-    };
-
-    // 伪逆
-    funcs["pinv"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("pinv expects 1 argument");
-        return pseudo_inverse(args[0]);
-    };
-
-    // 外积
-    funcs["outer"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 2) throw std::runtime_error("outer expects 2 arguments");
-        return outer(args[0], args[1]);
-    };
-
-    // Kronecker 积
-    funcs["kron"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 2) throw std::runtime_error("kron expects 2 arguments");
-        return kronecker(args[0], args[1]);
-    };
-
-    // Hadamard 积
-    funcs["hadamard"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 2) throw std::runtime_error("hadamard expects 2 arguments");
-        return hadamard(args[0], args[1]);
-    };
-
-    // 零空间
-    funcs["null"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("null expects 1 argument");
-        return nullspace(args[0]);
-    };
-
-    // 最小二乘
-    funcs["least_squares"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 2) throw std::runtime_error("least_squares expects 2 arguments");
-        return least_squares(args[0], args[1]);
-    };
-
-    // QR 分解
-    funcs["qr_q"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("qr_q expects 1 argument");
-        return qr_q(args[0]);
-    };
-    funcs["qr_r"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("qr_r expects 1 argument");
-        return qr_r(args[0]);
-    };
-
-    // LU 分解
-    funcs["lu_l"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("lu_l expects 1 argument");
-        return lu_l(args[0]);
-    };
-    funcs["lu_u"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("lu_u expects 1 argument");
-        return lu_u(args[0]);
-    };
-    funcs["lu_p"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("lu_p expects 1 argument");
-        return lu_p(args[0]);
-    };
-
-    // SVD 分解
-    funcs["svd_u"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("svd_u expects 1 argument");
-        return svd_u(args[0]);
-    };
-    funcs["svd_s"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("svd_s expects 1 argument");
-        return svd_s(args[0]);
-    };
-    funcs["svd_vt"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("svd_vt expects 1 argument");
-        return svd_vt(args[0]);
-    };
-
-    // Cholesky 分解
-    funcs["cholesky"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("cholesky expects 1 argument");
-        return cholesky(args[0]);
-    };
-
-    // Hessenberg 形式
-    funcs["hessenberg"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("hessenberg expects 1 argument");
-        return hessenberg(args[0]);
-    };
-
-    // Schur 分解
-    funcs["schur"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("schur expects 1 argument");
-        return schur(args[0]);
-    };
-
-    // 对角矩阵
-    funcs["diag"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 1) throw std::runtime_error("diag expects 1 argument");
-        return diag(args[0]);
-    };
-
-    // 矩阵重塑
-    funcs["reshape"] = [](const std::vector<Matrix>& args) -> Matrix {
-        if (args.size() != 3) throw std::runtime_error("reshape expects 3 arguments");
-        const std::size_t rows = static_cast<std::size_t>(static_cast<long double>(args[1].at(0, 0)) + 0.5);
-        const std::size_t cols = static_cast<std::size_t>(static_cast<long double>(args[2].at(0, 0)) + 0.5);
-        return reshape(args[0], rows, cols);
-    };
-
-    return funcs;
-}
-
-std::map<std::string, matrix::ValueFunction>
-MatrixModule::get_value_functions() const {
-    std::map<std::string, matrix::ValueFunction> funcs;
-
-    // complex - 构造复数
-    funcs["complex"] = [](const std::vector<std::string>& args,
-                          const ScalarEvaluator& se,
-                          const MatrixLookup&,
-                          const ComplexLookup&,
-                          const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>*) -> Value {
-        if (args.size() != 2) throw std::runtime_error("complex expects 2 arguments");
-        return Value::from_complex(se(args[0]), se(args[1]));
-    };
-
-    // polar - 极坐标构造复数
-    funcs["polar"] = [](const std::vector<std::string>& args,
-                        const ScalarEvaluator& se,
-                        const MatrixLookup&,
-                        const ComplexLookup&,
-                        const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>*) -> Value {
-        if (args.size() != 2) throw std::runtime_error("polar expects 2 arguments");
-        const Scalar r = se(args[0]);
-        const Scalar theta = se(args[1]);
-        return Value::from_complex(r * mymath::cos(theta), r * mymath::sin(theta));
-    };
-
-    // real - 取实部
-    funcs["real"] = [](const std::vector<std::string>& args,
-                       const ScalarEvaluator& se,
-                       const MatrixLookup& ml,
-                       const ComplexLookup& cl,
-                       const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
-        if (args.size() != 1) throw std::runtime_error("real expects 1 argument");
-        const ComplexNumber z = require_complex_argument(args[0], "real", se, ml, cl, mf);
-        return Value::from_scalar(z.real());
-    };
-
-    // imag - 取虚部
-    funcs["imag"] = [](const std::vector<std::string>& args,
-                       const ScalarEvaluator& se,
-                       const MatrixLookup& ml,
-                       const ComplexLookup& cl,
-                       const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
-        if (args.size() != 1) throw std::runtime_error("imag expects 1 argument");
-        const ComplexNumber z = require_complex_argument(args[0], "imag", se, ml, cl, mf);
-        return Value::from_scalar(z.imag());
-    };
-
-    // arg - 复数辐角
-    funcs["arg"] = [](const std::vector<std::string>& args,
-                      const ScalarEvaluator& se,
-                      const MatrixLookup& ml,
-                      const ComplexLookup& cl,
-                      const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
+    funcs["arg"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() != 1) throw std::runtime_error("arg expects 1 argument");
-        const ComplexNumber z = require_complex_argument(args[0], "arg", se, ml, cl, mf);
-        const Scalar real = z.real();
-        const Scalar imag = z.imag();
-        if (mymath::is_near_zero(real, matrix::internal::matrix_epsilon<Scalar>())) {
-            if (mymath::is_near_zero(imag, matrix::internal::matrix_epsilon<Scalar>())) {
-                return Value::from_scalar(Scalar(0.0L));
-            }
-            return Value::from_scalar(imag > Scalar(0.0L) ? Scalar(mymath::kPi / 2.0) : Scalar(-mymath::kPi / 2.0));
+        const ComplexNumber z = require_complex_argument(args[0], "arg");
+        const Scalar real = z.real(), imag = z.imag();
+        const Scalar eps = matrix::internal::matrix_epsilon<Scalar>();
+        if (mymath::is_near_zero(real, eps)) {
+            if (mymath::is_near_zero(imag, eps)) return make_scalar_result(Scalar(0.0L));
+            return make_scalar_result(imag > Scalar(0.0L) ? Scalar(mymath::kPi / 2.0) : Scalar(-mymath::kPi / 2.0));
         }
         Scalar angle = mymath::atan(imag / real);
         if (real < Scalar(0.0L)) {
             angle += imag >= Scalar(0.0L) ? Scalar(mymath::kPi) : Scalar(-mymath::kPi);
         }
-        return Value::from_scalar(angle);
+        return make_scalar_result(angle);
     };
 
-    // conj - 共轭复数
-    funcs["conj"] = [](const std::vector<std::string>& args,
-                       const ScalarEvaluator& se,
-                       const MatrixLookup& ml,
-                       const ComplexLookup& cl,
-                       const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
+    funcs["conj"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() != 1) throw std::runtime_error("conj expects 1 argument");
-        const ComplexNumber z = require_complex_argument(args[0], "conj", se, ml, cl, mf);
-        return Value::from_complex(z.real(), -z.imag());
+        const ComplexNumber z = require_complex_argument(args[0], "conj");
+        return make_complex_result(ComplexNumber(z.real(), -z.imag()));
     };
 
-    // abs - 多态绝对值
-    funcs["abs"] = [](const std::vector<std::string>& args,
-                      const ScalarEvaluator& se,
-                      const MatrixLookup& ml,
-                      const ComplexLookup& cl,
-                      const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
+    // --- Polymorphic functions (scalar/complex/matrix) ---
+    funcs["abs"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() != 1) throw std::runtime_error("abs expects 1 argument");
-        Value v;
-        if (try_evaluate_expression(args[0], se, ml, cl, mf, nullptr, &v)) {
-            ComplexNumber z;
-            if (matrix::internal::try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                const Scalar r = z.real(), i = z.imag();
-                return Value::from_scalar(mymath::sqrt(r * r + i * i));
-            } else if (v.is_matrix) {
-                return Value::from_scalar(norm(v.matrix));
-            } else {
-                return Value::from_scalar(mymath::abs(v.scalar));
-            }
+        if (args[0].is_matrix) {
+            return make_scalar_result(norm<Scalar>(require_matrix(args[0], "abs")));
         }
-        return Value::from_scalar(se("abs(" + args[0] + ")"));
+        ComplexNumber z;
+        if (try_complex_from_stored(args[0], &z) && args[0].is_complex) {
+            return make_scalar_result(mymath::sqrt(z.real() * z.real() + z.imag() * z.imag()));
+        }
+        return make_scalar_result(mymath::abs(args[0].decimal));
     };
 
-    // exp - 多态指数
-    funcs["exp"] = [](const std::vector<std::string>& args,
-                      const ScalarEvaluator& se,
-                      const MatrixLookup& ml,
-                      const ComplexLookup& cl,
-                      const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
+    funcs["exp"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() != 1) throw std::runtime_error("exp expects 1 argument");
-        Value v;
-        if (try_evaluate_expression(args[0], se, ml, cl, mf, nullptr, &v)) {
-            ComplexNumber z;
-            if (matrix::internal::try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                const Scalar r = z.real(), i = z.imag(), m = mymath::exp(r);
-                return Value::from_complex(m * mymath::cos(i), m * mymath::sin(i));
-            } else if (!v.is_matrix) {
-                return Value::from_scalar(mymath::exp(v.scalar));
-            }
+        ComplexNumber z;
+        if (try_complex_from_stored(args[0], &z) && args[0].is_complex) {
+            Scalar m = mymath::exp(z.real());
+            return make_complex_result(ComplexNumber(m * mymath::cos(z.imag()), m * mymath::sin(z.imag())));
         }
-        return Value::from_scalar(se("exp(" + args[0] + ")"));
+        return make_scalar_result(mymath::exp(args[0].decimal));
     };
 
-    // ln - 多态对数
-    funcs["ln"] = [](const std::vector<std::string>& args,
-                     const ScalarEvaluator& se,
-                     const MatrixLookup& ml,
-                     const ComplexLookup& cl,
-                     const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
+    funcs["ln"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() != 1) throw std::runtime_error("ln expects 1 argument");
-        Value v;
-        if (try_evaluate_expression(args[0], se, ml, cl, mf, nullptr, &v)) {
-            ComplexNumber z;
-            if (matrix::internal::try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                const Scalar r = z.real(), i = z.imag();
-                return Value::from_complex(Scalar(0.5L) * mymath::ln(r * r + i * i), mymath::atan2(i, r));
-            } else if (!v.is_matrix) {
-                return Value::from_scalar(mymath::ln(v.scalar));
-            }
+        ComplexNumber z;
+        if (try_complex_from_stored(args[0], &z) && args[0].is_complex) {
+            Scalar r = z.real(), i = z.imag();
+            return make_complex_result(ComplexNumber(Scalar(0.5L) * mymath::ln(r * r + i * i), mymath::atan2(i, r)));
         }
-        return Value::from_scalar(se("ln(" + args[0] + ")"));
+        return make_scalar_result(mymath::ln(args[0].decimal));
     };
 
-    // sin - 多态正弦
-    funcs["sin"] = [](const std::vector<std::string>& args,
-                      const ScalarEvaluator& se,
-                      const MatrixLookup& ml,
-                      const ComplexLookup& cl,
-                      const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
+    funcs["sin"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() != 1) throw std::runtime_error("sin expects 1 argument");
-        Value v;
-        if (try_evaluate_expression(args[0], se, ml, cl, mf, nullptr, &v)) {
-            ComplexNumber z;
-            if (matrix::internal::try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                const Scalar r = z.real(), i = z.imag();
-                return Value::from_complex(mymath::sin(r) * mymath::cosh(i), mymath::cos(r) * mymath::sinh(i));
-            } else if (!v.is_matrix) {
-                return Value::from_scalar(mymath::sin(v.scalar));
-            }
+        ComplexNumber z;
+        if (try_complex_from_stored(args[0], &z) && args[0].is_complex) {
+            Scalar r = z.real(), i = z.imag();
+            return make_complex_result(ComplexNumber(mymath::sin(r) * mymath::cosh(i), mymath::cos(r) * mymath::sinh(i)));
         }
-        return Value::from_scalar(se("sin(" + args[0] + ")"));
+        return make_scalar_result(mymath::sin(args[0].decimal));
     };
 
-    // cos - 多态余弦
-    funcs["cos"] = [](const std::vector<std::string>& args,
-                      const ScalarEvaluator& se,
-                      const MatrixLookup& ml,
-                      const ComplexLookup& cl,
-                      const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
+    funcs["cos"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() != 1) throw std::runtime_error("cos expects 1 argument");
-        Value v;
-        if (try_evaluate_expression(args[0], se, ml, cl, mf, nullptr, &v)) {
-            ComplexNumber z;
-            if (matrix::internal::try_complex_from_value(v, &z) && (v.is_complex || v.is_matrix)) {
-                const Scalar r = z.real(), i = z.imag();
-                return Value::from_complex(mymath::cos(r) * mymath::cosh(i), -mymath::sin(r) * mymath::sinh(i));
-            } else if (!v.is_matrix) {
-                return Value::from_scalar(mymath::cos(v.scalar));
-            }
+        ComplexNumber z;
+        if (try_complex_from_stored(args[0], &z) && args[0].is_complex) {
+            Scalar r = z.real(), i = z.imag();
+            return make_complex_result(ComplexNumber(mymath::cos(r) * mymath::cosh(i), -mymath::sin(r) * mymath::sinh(i)));
         }
-        return Value::from_scalar(se("cos(" + args[0] + ")"));
-    };
-
-    // norm - 矩阵范数
-    funcs["norm"] = [](const std::vector<std::string>& args,
-                       const ScalarEvaluator& se,
-                       const MatrixLookup& ml,
-                       const ComplexLookup& cl,
-                       const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
-        if (args.size() != 1) throw std::runtime_error("norm expects 1 argument");
-        const Matrix m = require_matrix(args[0], "norm", se, ml, cl, mf);
-        return Value::from_scalar(norm(m));
-    };
-
-    // dot - 点积
-    funcs["dot"] = [](const std::vector<std::string>& args,
-                      const ScalarEvaluator& se,
-                      const MatrixLookup& ml,
-                      const ComplexLookup& cl,
-                      const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
-        if (args.size() != 2) throw std::runtime_error("dot expects 2 arguments");
-        const Matrix a = require_matrix(args[0], "dot", se, ml, cl, mf);
-        const Matrix b = require_matrix(args[1], "dot", se, ml, cl, mf);
-        return Value::from_scalar(dot(a, b));
-    };
-
-    // cond - 条件数
-    funcs["cond"] = [](const std::vector<std::string>& args,
-                       const ScalarEvaluator& se,
-                       const MatrixLookup& ml,
-                       const ComplexLookup& cl,
-                       const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
-        if (args.size() != 1) throw std::runtime_error("cond expects 1 argument");
-        const Matrix m = require_matrix(args[0], "cond", se, ml, cl, mf);
-        return Value::from_scalar(condition_number(m));
-    };
-
-    // trace - 迹
-    funcs["trace"] = [](const std::vector<std::string>& args,
-                        const ScalarEvaluator& se,
-                        const MatrixLookup& ml,
-                        const ComplexLookup& cl,
-                        const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
-        if (args.size() != 1) throw std::runtime_error("trace expects 1 argument");
-        const Matrix m = require_matrix(args[0], "trace", se, ml, cl, mf);
-        return Value::from_scalar(trace(m));
-    };
-
-    // det - 行列式
-    funcs["det"] = [](const std::vector<std::string>& args,
-                      const ScalarEvaluator& se,
-                      const MatrixLookup& ml,
-                      const ComplexLookup& cl,
-                      const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
-        if (args.size() != 1) throw std::runtime_error("det expects 1 argument");
-        const Matrix m = require_matrix(args[0], "det", se, ml, cl, mf);
-        return Value::from_scalar(determinant(m));
-    };
-
-    // rank - 秩
-    funcs["rank"] = [](const std::vector<std::string>& args,
-                       const ScalarEvaluator& se,
-                       const MatrixLookup& ml,
-                       const ComplexLookup& cl,
-                       const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
-        if (args.size() != 1) throw std::runtime_error("rank expects 1 argument");
-        const Matrix m = require_matrix(args[0], "rank", se, ml, cl, mf);
-        return Value::from_scalar(static_cast<long double>(rank(m)));
-    };
-
-    // rref - 行最简形
-    funcs["rref"] = [](const std::vector<std::string>& args,
-                       const ScalarEvaluator& se,
-                       const MatrixLookup& ml,
-                       const ComplexLookup& cl,
-                       const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
-        if (args.size() != 1) throw std::runtime_error("rref expects 1 argument");
-        const Matrix m = require_matrix(args[0], "rref", se, ml, cl, mf);
-        return Value::from_matrix(rref(m));
-    };
-
-    // eigvals - 特征值
-    funcs["eigvals"] = [](const std::vector<std::string>& args,
-                          const ScalarEvaluator& se,
-                          const MatrixLookup& ml,
-                          const ComplexLookup& cl,
-                          const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
-        if (args.size() != 1) throw std::runtime_error("eigvals expects 1 argument");
-        const Matrix m = require_matrix(args[0], "eigvals", se, ml, cl, mf);
-        return Value::from_matrix(eigenvalues(m));
-    };
-
-    // solve - 线性方程组求解
-    funcs["solve"] = [](const std::vector<std::string>& args,
-                        const ScalarEvaluator& se,
-                        const MatrixLookup& ml,
-                        const ComplexLookup& cl,
-                        const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
-        if (args.size() != 2) throw std::runtime_error("solve expects 2 arguments");
-        const Matrix A = require_matrix(args[0], "solve", se, ml, cl, mf);
-        const Matrix b = require_matrix(args[1], "solve", se, ml, cl, mf);
-        return Value::from_matrix(solve(A, b));
-    };
-
-    // get - 获取矩阵元素
-    funcs["get"] = [](const std::vector<std::string>& args,
-                      const ScalarEvaluator& se,
-                      const MatrixLookup& ml,
-                      const ComplexLookup& cl,
-                      const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
-        if (args.size() != 2 && args.size() != 3) {
-            throw std::runtime_error("get expects 2 or 3 arguments");
-        }
-        Matrix m = require_matrix(args[0], "get", se, ml, cl, mf);
-        if (args.size() == 2) {
-            return Value::from_scalar(get(m, parse_index_argument(args[1], se, "get")));
-        }
-        return Value::from_scalar(get(m,
-            parse_index_argument(args[1], se, "get"),
-            parse_index_argument(args[2], se, "get")));
-    };
-
-    // set - 设置矩阵元素
-    funcs["set"] = [](const std::vector<std::string>& args,
-                      const ScalarEvaluator& se,
-                      const MatrixLookup& ml,
-                      const ComplexLookup& cl,
-                      const std::map<std::string, std::function<Matrix(const std::vector<Matrix>&)>>* mf) -> Value {
-        if (args.size() != 3 && args.size() != 4) {
-            throw std::runtime_error("set expects 3 or 4 arguments");
-        }
-        Matrix m = require_matrix(args[0], "set", se, ml, cl, mf);
-        if (args.size() == 3) {
-            return Value::from_matrix(set(m, parse_index_argument(args[1], se, "set"), se(args[2])));
-        }
-        return Value::from_matrix(set(m,
-            parse_index_argument(args[1], se, "set"),
-            parse_index_argument(args[2], se, "set"),
-            se(args[3])));
+        return make_scalar_result(mymath::cos(args[0].decimal));
     };
 
     return funcs;
@@ -709,13 +374,11 @@ MatrixModule::get_value_functions() const {
 
 std::vector<std::string> MatrixModule::get_function_names() const {
     std::vector<std::string> names;
-    auto mat_funcs = get_matrix_functions();
-    for (const auto& [name, _] : mat_funcs) names.push_back(name);
-    auto val_funcs = get_value_functions();
-    for (const auto& [name, _] : val_funcs) names.push_back(name);
-    
-    // Add matrix creation functions
-    std::vector<std::string> creation = { "vec", "mat", "zeros", "eye", "identity", "randmat" };
+    auto funcs = get_functions_map();
+    for (const auto& [name, _] : funcs) names.push_back(name);
+
+    // Matrix creation commands (handled separately by the expression parser)
+    std::vector<std::string> creation = {"vec", "mat", "zeros", "eye", "identity", "randmat"};
     names.insert(names.end(), creation.begin(), creation.end());
 
     std::sort(names.begin(), names.end());

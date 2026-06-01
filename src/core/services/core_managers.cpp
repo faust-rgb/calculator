@@ -95,18 +95,6 @@ void FunctionManager::add_script_function(const std::string& name, const ScriptF
     script_functions_[name] = func;
 }
 
-void FunctionManager::add_scalar_function(const std::string& name, std::function<Scalar(const std::vector<Scalar>&)> func) {
-    scalar_functions_[name] = std::move(func);
-}
-
-void FunctionManager::add_matrix_function(const std::string& name, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)> func) {
-    matrix_functions_[name] = std::move(func);
-}
-
-void FunctionManager::add_value_function(const std::string& name, matrix::ValueFunction func) {
-    value_functions_[name] = std::move(func);
-}
-
 void FunctionManager::add_native_function(const std::string& name, std::function<StoredValue(const std::vector<StoredValue>&)> func) {
     native_functions_[name] = std::move(func);
 }
@@ -124,27 +112,18 @@ const ScriptFunction* FunctionManager::get_script(const std::string& name) const
 bool FunctionManager::has_function(const std::string& name) const {
     return custom_functions_.find(name) != custom_functions_.end() ||
            script_functions_.find(name) != script_functions_.end() ||
-           scalar_functions_.find(name) != scalar_functions_.end() ||
-           matrix_functions_.find(name) != matrix_functions_.end() ||
-           value_functions_.find(name) != value_functions_.end() ||
            native_functions_.find(name) != native_functions_.end();
 }
 
 void FunctionManager::remove_function(const std::string& name) {
     custom_functions_.erase(name);
     script_functions_.erase(name);
-    scalar_functions_.erase(name);
-    matrix_functions_.erase(name);
-    value_functions_.erase(name);
     native_functions_.erase(name);
 }
 
 void FunctionManager::clear_all() {
     custom_functions_.clear();
     script_functions_.clear();
-    scalar_functions_.clear();
-    matrix_functions_.clear();
-    value_functions_.clear();
     native_functions_.clear();
 }
 
@@ -162,9 +141,6 @@ std::vector<std::string> FunctionManager::get_script_names() const {
 
 std::vector<std::string> FunctionManager::get_builtin_names() const {
     std::vector<std::string> names;
-    for (const auto& [name, _] : scalar_functions_) names.push_back(name);
-    for (const auto& [name, _] : matrix_functions_) names.push_back(name);
-    for (const auto& [name, _] : value_functions_) names.push_back(name);
     for (const auto& [name, _] : native_functions_) names.push_back(name);
     std::sort(names.begin(), names.end());
     names.erase(std::unique(names.begin(), names.end()), names.end());

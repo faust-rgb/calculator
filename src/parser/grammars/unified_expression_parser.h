@@ -76,6 +76,7 @@ public:
         const std::map<std::string, ScalarFunction>* scalar_functions = nullptr,
         const std::map<std::string, MatrixFunction>* matrix_functions = nullptr,
         const std::map<std::string, matrix::ValueFunction>* value_functions = nullptr,
+        const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions = nullptr,
         HasScriptFunctionCallback has_script_function = {},
         InvokeScriptFunctionCallback invoke_script_function = {});
 
@@ -185,6 +186,7 @@ Scalar parse_decimal_expression(
     const VariableResolver& variables,
     const std::map<std::string, CustomFunction>* functions = nullptr,
     const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions = nullptr,
+    const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions = nullptr,
     HasScriptFunctionCallback has_script_function = {},
     InvokeScriptFunctionCallback invoke_script_function = {});
 
@@ -206,7 +208,7 @@ bool try_evaluate_matrix_expression(
     const std::map<std::string, CustomFunction>* functions,
     const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions,
     const std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>* matrix_functions,
-    const std::map<std::string, matrix::ValueFunction>* value_functions,
+    const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions,
     HasScriptFunctionCallback has_script_function,
     InvokeScriptFunctionCallback invoke_script_function,
     matrix::Value* value);

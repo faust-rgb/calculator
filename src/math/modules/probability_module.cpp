@@ -3,53 +3,93 @@
 #include "statistics/probability.h"
 #include <map>
 
-std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>
-ProbabilityModule::get_scalar_functions() const {
-    std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>> funcs;
+namespace {
+
+auto wrap_scalar = [](std::function<Scalar(const std::vector<Scalar>&)> scalar_fn)
+    -> std::function<StoredValue(const std::vector<StoredValue>&)> {
+    return [scalar_fn](const std::vector<StoredValue>& args) -> StoredValue {
+        std::vector<Scalar> scalars;
+        scalars.reserve(args.size());
+        for (const auto& arg : args) {
+            scalars.push_back(arg.decimal);
+        }
+        Scalar result = scalar_fn(scalars);
+        StoredValue sv;
+        sv.decimal = result;
+        sv.exact = false;
+        return sv;
+    };
+};
+
+} // anonymous namespace
+
+std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>
+ProbabilityModule::get_functions_map() const {
+    std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
     // Inverse CDF
-    funcs["inv_cdf_normal"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_normal", a); };
-    funcs["qnorm"] = funcs["inv_cdf_normal"];
-    funcs["inv_cdf_t"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_t", a); };
-    funcs["qt"] = funcs["inv_cdf_t"];
-    funcs["inv_cdf_chi2"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_chi2", a); };
-    funcs["qchi2"] = funcs["inv_cdf_chi2"];
-    funcs["inv_cdf_f"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_f", a); };
-    funcs["qf"] = funcs["inv_cdf_f"];
+    auto inv_cdf_normal_fn = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_normal", a); });
+    funcs["inv_cdf_normal"] = inv_cdf_normal_fn;
+    funcs["qnorm"] = inv_cdf_normal_fn;
+
+    auto inv_cdf_t_fn = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_t", a); });
+    funcs["inv_cdf_t"] = inv_cdf_t_fn;
+    funcs["qt"] = inv_cdf_t_fn;
+
+    auto inv_cdf_chi2_fn = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_chi2", a); });
+    funcs["inv_cdf_chi2"] = inv_cdf_chi2_fn;
+    funcs["qchi2"] = inv_cdf_chi2_fn;
+
+    auto inv_cdf_f_fn = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("inv_cdf_f", a); });
+    funcs["inv_cdf_f"] = inv_cdf_f_fn;
+    funcs["qf"] = inv_cdf_f_fn;
 
     // PDF/CDF
-    funcs["pdf_gamma"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_gamma", a); };
-    funcs["cdf_gamma"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_gamma", a); };
-    funcs["pdf_beta"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_beta", a); };
-    funcs["cdf_beta"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_beta", a); };
-    funcs["rand"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("rand", a); };
-    funcs["randn"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("randn", a); };
-    funcs["randint"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("randint", a); };
-    funcs["pdf_normal"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_normal", a); };
-    funcs["cdf_normal"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_normal", a); };
-    funcs["pdf_t"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_t", a); };
-    funcs["cdf_t"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_t", a); };
-    funcs["pdf_chi2"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_chi2", a); };
-    funcs["cdf_chi2"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_chi2", a); };
-    funcs["pdf_f"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_f", a); };
-    funcs["cdf_f"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_f", a); };
-    funcs["pdf_exp"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_exp", a); };
-    funcs["cdf_exp"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_exp", a); };
-    funcs["poisson_pmf"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("poisson_pmf", a); };
-    funcs["poisson_cdf"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("poisson_cdf", a); };
-    funcs["binom_pmf"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("binom_pmf", a); };
-    funcs["binom_cdf"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("binom_cdf", a); };
-    funcs["bernoulli"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("bernoulli", a); };
-    funcs["lgamma"] = [](const std::vector<Scalar>& a) { return stats_ops::apply_probability("lgamma", a); };
+    funcs["pdf_gamma"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_gamma", a); });
+    funcs["cdf_gamma"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_gamma", a); });
+    funcs["pdf_beta"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_beta", a); });
+    funcs["cdf_beta"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_beta", a); });
+    funcs["rand"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("rand", a); });
+    funcs["randn"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("randn", a); });
+    funcs["randint"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("randint", a); });
+    funcs["pdf_normal"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_normal", a); });
+    funcs["cdf_normal"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_normal", a); });
+    funcs["pdf_t"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_t", a); });
+    funcs["cdf_t"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_t", a); });
+    funcs["pdf_chi2"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_chi2", a); });
+    funcs["cdf_chi2"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_chi2", a); });
+    funcs["pdf_f"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_f", a); });
+    funcs["cdf_f"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_f", a); });
+    funcs["pdf_exp"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("pdf_exp", a); });
+    funcs["cdf_exp"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("cdf_exp", a); });
+    funcs["poisson_pmf"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("poisson_pmf", a); });
+    funcs["poisson_cdf"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("poisson_cdf", a); });
+    funcs["binom_pmf"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("binom_pmf", a); });
+    funcs["binom_cdf"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("binom_cdf", a); });
+    funcs["bernoulli"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("bernoulli", a); });
+    funcs["lgamma"] = wrap_scalar([](const std::vector<Scalar>& a) { return stats_ops::apply_probability("lgamma", a); });
 
     return funcs;
 }
 
-std::vector<std::string> ProbabilityModule::get_functions() const {
-    std::vector<std::string> names;
-    auto funcs = get_scalar_functions();
-    for (const auto& [name, _] : funcs) names.push_back(name);
-    return names;
+std::vector<std::string> ProbabilityModule::get_function_names() const {
+    return {
+        "inv_cdf_normal", "qnorm",
+        "inv_cdf_t", "qt",
+        "inv_cdf_chi2", "qchi2",
+        "inv_cdf_f", "qf",
+        "pdf_gamma", "cdf_gamma",
+        "pdf_beta", "cdf_beta",
+        "rand", "randn", "randint",
+        "pdf_normal", "cdf_normal",
+        "pdf_t", "cdf_t",
+        "pdf_chi2", "cdf_chi2",
+        "pdf_f", "cdf_f",
+        "pdf_exp", "cdf_exp",
+        "poisson_pmf", "poisson_cdf",
+        "binom_pmf", "binom_cdf",
+        "bernoulli", "lgamma"
+    };
 }
 
 std::string ProbabilityModule::get_help_snippet(const std::string& topic) const {

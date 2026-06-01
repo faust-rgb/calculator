@@ -49,7 +49,7 @@ using mymath::kPi;
 static std::vector<Scalar> parse_vector(const SignalContext& ctx, const std::string& str) {
     if (utils::trim_view(str).empty()) return {};
 
-    UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+    UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, nullptr, nullptr, nullptr, ctx.native_functions, ctx.has_script_function, ctx.invoke_script_function);
     StoredValue val = parser.evaluate_stored(str);
 
     std::vector<Scalar> result;
@@ -313,7 +313,7 @@ bool handle_cconv_command(const SignalContext& ctx,
     std::size_t n = 0;
     if (arg_list.size() >= 3) {
         try {
-            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, nullptr, nullptr, nullptr, ctx.native_functions, ctx.has_script_function, ctx.invoke_script_function);
             n = static_cast<std::size_t>(static_cast<long long>(parser.evaluate(arg_list[2])));
         } catch (...) {
             // 使用默认值
@@ -416,7 +416,7 @@ bool handle_window_command(const SignalContext& ctx,
         return false;
     }
 
-    UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+    UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, nullptr, nullptr, nullptr, ctx.native_functions, ctx.has_script_function, ctx.invoke_script_function);
     
     std::string type_str = arg_list[0];
     if (type_str.front() == '"' || type_str.front() == '\'') type_str = type_str.substr(1, type_str.size() - 2);
@@ -512,7 +512,7 @@ bool handle_fir_design_command(const SignalContext& ctx,
         return false;
     }
 
-    UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+    UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, nullptr, nullptr, nullptr, ctx.native_functions, ctx.has_script_function, ctx.invoke_script_function);
 
     int order = 0;
     Scalar cutoff = 0.0L;
@@ -591,7 +591,7 @@ bool handle_iir_design_command(const SignalContext& ctx,
         return false;
     }
 
-    UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+    UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, nullptr, nullptr, nullptr, ctx.native_functions, ctx.has_script_function, ctx.invoke_script_function);
 
     int order = 0;
     Scalar cutoff = 0.0L;
@@ -660,7 +660,7 @@ bool handle_freqz_command(const SignalContext& ctx,
     std::size_t n = 512;
     if (arg_list.size() >= 3) {
         try {
-            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, nullptr, nullptr, nullptr, ctx.native_functions, ctx.has_script_function, ctx.invoke_script_function);
             n = static_cast<std::size_t>(static_cast<long long>(parser.evaluate(arg_list[2])));
         } catch (...) {
             // 使用默认值
@@ -710,7 +710,7 @@ bool handle_psd_command(const SignalContext& ctx,
     std::size_t nfft = 256;
     if (arg_list.size() >= 2) {
         try {
-            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, nullptr, nullptr, nullptr, ctx.native_functions, ctx.has_script_function, ctx.invoke_script_function);
             nfft = static_cast<std::size_t>(static_cast<long long>(parser.evaluate(arg_list[1])));
         } catch (...) {
             // 使用默认值
@@ -751,7 +751,7 @@ bool handle_stft_command(const SignalContext& ctx,
     std::size_t nfft = 256;
     if (arg_list.size() >= 2) {
         try {
-            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, nullptr, nullptr, nullptr, ctx.native_functions, ctx.has_script_function, ctx.invoke_script_function);
             nfft = static_cast<std::size_t>(static_cast<long long>(parser.evaluate(arg_list[1])));
         } catch (...) {
             // 使用默认值
@@ -800,7 +800,7 @@ bool handle_spectrogram_command(const SignalContext& ctx,
     std::size_t nfft = 256;
     if (arg_list.size() >= 2) {
         try {
-            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, ctx.scalar_functions, nullptr, nullptr, ctx.has_script_function, ctx.invoke_script_function);
+            UnifiedExpressionParser parser(VariableResolver(ctx.variables, nullptr), ctx.functions, nullptr, nullptr, nullptr, ctx.native_functions, ctx.has_script_function, ctx.invoke_script_function);
             nfft = static_cast<std::size_t>(static_cast<long long>(parser.evaluate(arg_list[1])));
         } catch (...) {
             // 使用默认值

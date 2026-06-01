@@ -74,9 +74,6 @@ public:
     virtual void add_script_function(const std::string& name, const ScriptFunction& func) = 0;
 
     // 内置/原生函数
-    virtual void add_scalar_function(const std::string& name, std::function<Scalar(const std::vector<Scalar>&)> func) = 0;
-    virtual void add_matrix_function(const std::string& name, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)> func) = 0;
-    virtual void add_value_function(const std::string& name, matrix::ValueFunction func) = 0;
     virtual void add_native_function(const std::string& name, std::function<StoredValue(const std::vector<StoredValue>&)> func) = 0;
 
     virtual const CustomFunction* get_custom(const std::string& name) const = 0;
@@ -97,9 +94,6 @@ public:
     virtual const std::map<std::string, CustomFunction>* get_custom_functions_map() const = 0;
     
     // 内置函数映射表
-    virtual const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* get_scalar_functions() const = 0;
-    virtual const std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>* get_matrix_functions() const = 0;
-    virtual const std::map<std::string, matrix::ValueFunction>* get_value_functions() const = 0;
     virtual const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* get_native_functions() const = 0;
 };
 

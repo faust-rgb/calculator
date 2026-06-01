@@ -47,7 +47,7 @@ std::string PlotModule::execute_args_view(std::string_view command,
     plot::PlotContext pctx;
     pctx.variables = vars->create_resolver();
     pctx.functions = funcs->get_custom_functions_map();
-    pctx.scalar_functions = funcs->get_scalar_functions();
+    pctx.native_functions = funcs->get_native_functions();
     pctx.has_script_function = [exec_ctx](const std::string& name) {
         return has_visible_script_function(exec_ctx.get(), name);
     };

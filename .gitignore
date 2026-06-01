@@ -41,6 +41,7 @@
 # debug information files
 *.dwo
 .codex
+*.txt
 COMPLEX_TEST_REPORT.md
 TEST_REPORT.md
 TEST_REPORT_COMPREHENSIVE.md

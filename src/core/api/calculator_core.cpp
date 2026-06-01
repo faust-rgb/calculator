@@ -144,12 +144,6 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
             impl_->functions_ptr->add_native_function(name, std::move(func));
             impl_->help_topic_to_modules[name].push_back(module);
         }
-
-        // 过渡支持：注册标量函数
-        auto new_scalar_funcs = module->get_scalar_functions();
-        for (auto& [name, func] : new_scalar_funcs) {
-            impl_->functions_ptr->add_scalar_function(name, std::move(func));
-        }
     }
 
     // 2. 隐式求值 (IImplicitEvaluator)
@@ -230,9 +224,7 @@ bool is_reserved_user_function_name(IExecutionContext* ctx, std::string_view nam
     if (ctx->commands().has_command(name_text)) {
         return true;
     }
-    return ctx->functions().get_scalar_functions()->count(name_text) > 0 ||
-           ctx->functions().get_matrix_functions()->count(name_text) > 0 ||
-           ctx->functions().get_value_functions()->count(name_text) > 0;
+    return ctx->functions().get_native_functions()->count(name_text) > 0;
 }
 
 

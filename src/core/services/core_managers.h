@@ -55,9 +55,6 @@ public:
     void add_script_function(const std::string& name, const ScriptFunction& func) override;
 
     // 内置/原生函数
-    void add_scalar_function(const std::string& name, std::function<Scalar(const std::vector<Scalar>&)> func) override;
-    void add_matrix_function(const std::string& name, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)> func) override;
-    void add_value_function(const std::string& name, matrix::ValueFunction func) override;
     void add_native_function(const std::string& name, std::function<StoredValue(const std::vector<StoredValue>&)> func) override;
 
     const CustomFunction* get_custom(const std::string& name) const override;
@@ -73,18 +70,12 @@ public:
 
     const std::map<std::string, CustomFunction>* get_custom_functions_map() const override { return &custom_functions_; }
     
-    const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* get_scalar_functions() const override { return &scalar_functions_; }
-    const std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>>* get_matrix_functions() const override { return &matrix_functions_; }
-    const std::map<std::string, matrix::ValueFunction>* get_value_functions() const override { return &value_functions_; }
     const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* get_native_functions() const override { return &native_functions_; }
 
 private:
     std::map<std::string, CustomFunction> custom_functions_;
     std::map<std::string, ScriptFunction> script_functions_;
 
-    std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>> scalar_functions_;
-    std::map<std::string, std::function<matrix::Matrix(const std::vector<matrix::Matrix>&)>> matrix_functions_;
-    std::map<std::string, matrix::ValueFunction> value_functions_;
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> native_functions_;
 };
 

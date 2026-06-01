@@ -42,7 +42,8 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
     s.evaluation.parse_decimal = [impl](const std::string& arg) {
         return parse_decimal_expression(arg, impl->variables_ptr->create_resolver(),
             impl->functions_ptr->get_custom_functions_map(),
-            impl->functions_ptr->get_scalar_functions());
+            nullptr,
+            impl->functions_ptr->get_native_functions());
     };
 
     s.evaluation.evaluate_value = [impl](const std::string& arg, bool exact) {
@@ -71,7 +72,8 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
             VariableResolver chained_resolver(nullptr, nullptr, &override_vars, &base_resolver);
             return parse_decimal_expression(scoped_expression, chained_resolver,
                 impl->functions_ptr->get_custom_functions_map(),
-                impl->functions_ptr->get_scalar_functions(),
+                nullptr,
+                impl->functions_ptr->get_native_functions(),
                 has_script_function, invoke_script_function);
         };
     };
@@ -113,9 +115,9 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
             if (!try_evaluate_matrix_expression(scoped_expression,
                     VariableResolver(&scoped_variables, nullptr),
                     impl->functions_ptr->get_custom_functions_map(),
-                    impl->functions_ptr->get_scalar_functions(),
-                    impl->functions_ptr->get_matrix_functions(),
-                    impl->functions_ptr->get_value_functions(),
+                    nullptr,
+                    nullptr,
+                    impl->functions_ptr->get_native_functions(),
                     has_script_function, invoke_script_function, &val) || !val.is_matrix) {
                 throw std::runtime_error("expected a matrix-valued expression");
             }
@@ -200,9 +202,9 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
         matrix::Value value;
         return try_evaluate_matrix_expression(trim_copy(arg), visible,
             impl->functions_ptr->get_custom_functions_map(),
-            impl->functions_ptr->get_scalar_functions(),
-            impl->functions_ptr->get_matrix_functions(),
-            impl->functions_ptr->get_value_functions(),
+            nullptr,
+            nullptr,
+            impl->functions_ptr->get_native_functions(),
             has_script_function, invoke_script_function, &value) && value.is_matrix;
     };
 

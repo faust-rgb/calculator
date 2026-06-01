@@ -295,6 +295,7 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                     const VariableResolver& variables,
                     const std::map<std::string, CustomFunction>* functions,
                     const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions,
+                    const std::map<std::string, NativeFunction>* native_functions,
                     const HasScriptFunctionCallback& has_script_function,
                     const InvokeScriptFunctionDecimalCallback& invoke_script_function) {
     if (!ast) {
@@ -344,10 +345,10 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                 throw_ast_error<MathError>("invalid binary operation", ast->position);
             }
             Scalar left = Scalar(evaluate_ast(ast->children[0].get(), variables,
-                                       functions, scalar_functions,
+                                       functions, scalar_functions, native_functions,
                                        has_script_function, invoke_script_function));
             Scalar right = Scalar(evaluate_ast(ast->children[1].get(), variables,
-                                        functions, scalar_functions,
+                                        functions, scalar_functions, native_functions,
                                         has_script_function, invoke_script_function));
 
             switch (ast->op_char) {
@@ -371,7 +372,7 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                 throw_ast_error<MathError>("invalid unary operation", ast->position);
             }
             Scalar operand = Scalar(evaluate_ast(ast->children[0].get(), variables,
-                                          functions, scalar_functions,
+                                          functions, scalar_functions, native_functions,
                                           has_script_function, invoke_script_function));
             switch (ast->op_char) {
                 case '-': return static_cast<Scalar>(-operand);
@@ -432,10 +433,10 @@ Scalar evaluate_ast(const ExpressionAST* ast,
 
             // 标量比较
             Scalar left = Scalar(evaluate_ast(left_child, variables,
-                                       functions, scalar_functions,
+                                       functions, scalar_functions, native_functions,
                                        has_script_function, invoke_script_function));
             Scalar right = Scalar(evaluate_ast(right_child, variables,
-                                        functions, scalar_functions,
+                                        functions, scalar_functions, native_functions,
                                         has_script_function, invoke_script_function));
 
             if (ast->comparison_op == "==") return mymath::abs(left - right) < Scalar(1e-10L) ? 1.0L : 0.0L;
@@ -455,14 +456,14 @@ Scalar evaluate_ast(const ExpressionAST* ast,
 
             // 逻辑运算符支持短路求值
             Scalar left = Scalar(evaluate_ast(ast->children[0].get(), variables,
-                                       functions, scalar_functions,
+                                       functions, scalar_functions, native_functions,
                                        has_script_function, invoke_script_function));
 
             if (ast->comparison_op == "&&") {
                 // &&: 如果左边为假，直接返回 0，不计算右边
                 if (left == Scalar(0)) return 0.0L;
                 Scalar right = Scalar(evaluate_ast(ast->children[1].get(), variables,
-                                            functions, scalar_functions,
+                                            functions, scalar_functions, native_functions,
                                             has_script_function, invoke_script_function));
                 return (right != Scalar(0)) ? 1.0L : 0.0L;
             }
@@ -471,7 +472,7 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                 // ||: 如果左边为真，直接返回 1，不计算右边
                 if (left != Scalar(0)) return 1.0L;
                 Scalar right = Scalar(evaluate_ast(ast->children[1].get(), variables,
-                                            functions, scalar_functions,
+                                            functions, scalar_functions, native_functions,
                                             has_script_function, invoke_script_function));
                 return (right != Scalar(0)) ? 1.0L : 0.0L;
             }
@@ -484,7 +485,7 @@ Scalar evaluate_ast(const ExpressionAST* ast,
             args.reserve(ast->children.size());
             for (const auto& child : ast->children) {
                 args.push_back(Scalar(evaluate_ast(child.get(), variables,
-                                            functions, scalar_functions,
+                                            functions, scalar_functions, native_functions,
                                             has_script_function, invoke_script_function)));
             }
 
@@ -508,7 +509,7 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                     if (!compiled) {
                         throw_ast_error<MathError>("failed to compile custom function " + ast->identifier, ast->position);
                     }
-                    return evaluate_ast(compiled.get(), custom_vars, functions, scalar_functions, has_script_function, invoke_script_function);
+                    return evaluate_ast(compiled.get(), custom_vars, functions, scalar_functions, native_functions, has_script_function, invoke_script_function);
                 }
             }
 
@@ -535,6 +536,26 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                 }
             }
 
+            // 原生函数 (StoredValue-based)
+            if (native_functions) {
+                auto it = native_functions->find(ast->identifier);
+                if (it != native_functions->end()) {
+                    std::vector<StoredValue> sv_args;
+                    sv_args.reserve(args.size());
+                    for (const auto& arg : args) {
+                        StoredValue sv;
+                        sv.decimal = static_cast<Scalar>(arg);
+                        sv_args.push_back(sv);
+                    }
+                    StoredValue result = it->second(sv_args);
+                    if (result.is_matrix || result.is_complex || result.is_string) {
+                        throw_ast_error<MathError>("native function " + ast->identifier +
+                            " returned non-scalar value in scalar context", ast->position);
+                    }
+                    return result.exact ? Scalar(rational_to_double(result.rational)) : result.decimal;
+                }
+            }
+
             throw_ast_error<UndefinedError>("unknown function: " + ast->identifier, ast->position);
         }
 
@@ -543,15 +564,15 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                 throw_ast_error<MathError>("invalid conditional", ast->position);
             }
             Scalar cond = Scalar(evaluate_ast(ast->children[0].get(), variables,
-                                       functions, scalar_functions,
+                                       functions, scalar_functions, native_functions,
                                        has_script_function, invoke_script_function));
             if (cond != Scalar(0)) {
                 return evaluate_ast(ast->children[1].get(), variables,
-                                   functions, scalar_functions,
+                                   functions, scalar_functions, native_functions,
                                    has_script_function, invoke_script_function);
             }
             return evaluate_ast(ast->children[2].get(), variables,
-                               functions, scalar_functions,
+                               functions, scalar_functions, native_functions,
                                has_script_function, invoke_script_function);
         }
 
@@ -646,9 +667,10 @@ std::unique_ptr<ExpressionAST> compile_expression_ast(const std::string& express
                              const VariableResolver& variables,
                              const std::map<std::string, CustomFunction>* functions,
                              const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions,
+                             const std::map<std::string, NativeFunction>* native_functions,
                              const HasScriptFunctionCallback& has_script_function,
                              const InvokeScriptFunctionDecimalCallback& invoke_script_function) {
-    return evaluate_ast(ast, variables, functions, scalar_functions,
+    return evaluate_ast(ast, variables, functions, scalar_functions, native_functions,
                         has_script_function, invoke_script_function);
 }
 
