@@ -394,6 +394,126 @@ int run_logic_limit_root_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("solve(2 * x + 4 = 0, x)", &output);
+        if (handled && output.find("-2") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: solve(2 * x + 4 = 0, x) returned unexpected output " << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: solve(2 * x + 4 = 0, x) threw unexpected error: " << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("laplace(t^3, t, s)", &output);
+        if (handled && output.find("6") != std::string::npos && (output.find("s^4") != std::string::npos || output.find("s * s * s * s") != std::string::npos || output.find("s") != std::string::npos)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: laplace(t^3, t, s) returned unexpected output " << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: laplace(t^3, t, s) threw unexpected error: " << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("ifourier(2 / (1 + w^2), w, t)", &output);
+        if (handled && output.find("exp(-abs(t))") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ifourier(2 / (1 + w^2), w, t) returned unexpected output " << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: ifourier(2 / (1 + w^2), w, t) threw unexpected error: " << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("ilaplace(s / ((s - 1) * (s - 2)), s, t)", &output);
+        if (handled && (output.find("exp(2 * t)") != std::string::npos || output.find("exp(t)") != std::string::npos)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ilaplace(s / ((s - 1) * (s - 2)), s, t) returned unexpected output " << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: ilaplace(s / ((s - 1) * (s - 2)), s, t) threw unexpected error: " << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("iztrans(1 / (z - 2), z, n)", &output);
+        if (handled && (output.find("2^(n - 1)") != std::string::npos || output.find("step(n - 1)") != std::string::npos)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: iztrans(1 / (z - 2), z, n) returned unexpected output " << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: iztrans(1 / (z - 2), z, n) threw unexpected error: " << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("iztrans(z / (z + 2), z, n)", &output);
+        if (handled && (output.find("(-2)^n") != std::string::npos || output.find("-2") != std::string::npos)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: iztrans(z / (z + 2), z, n) returned unexpected output " << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: iztrans(z / (z + 2), z, n) threw unexpected error: " << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(":help commands", &output);
+        if (handled && output.find(":vars") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: :help commands returned unexpected output " << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: :help commands threw unexpected error: " << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("double_integral(x * y, x, 0, 1, y, 0, 1)", &output);
+        if (handled && (output.find("0.25") != std::string::npos || output.find("1/4") != std::string::npos)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: double_integral(x * y, x, 0, 1, y, 0, 1) returned unexpected output " << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: double_integral threw unexpected error: " << ex.what() << '\n';
+    }
+
     return 0;
 }
 

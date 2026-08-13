@@ -644,14 +644,11 @@ SymbolicExpression laplace_transform_impl(const SymbolicExpression& expression,
                 mymath::is_integer(exponent, Scalar(1e-10L)) &&
                 exponent > Scalar(0.0L)) {
                 const int k = static_cast<int>(exponent.to_long_double() + 0.5L);
-                // t^k is just 1 multiplied by t, k times.
-                // But we can also handle base^exponent * rest in kMultiply.
-                // Here we handle the case where the whole expression is t^k.
-                SymbolicExpression result = SymbolicExpression::number(Scalar(1.0L)).laplace_transform(time_variable, transform_variable);
-                for (int i = 0; i < k; ++i) {
-                    result = make_negate(result.derivative(transform_variable)).simplify();
-                }
-                return result;
+                // 直接使用 L{t^k} = k! / s^(k+1)
+                Scalar k_fact = factorial_double(k);
+                SymbolicExpression s_pow = make_power(SymbolicExpression::variable(transform_variable),
+                                                       SymbolicExpression::number(Scalar(static_cast<long long>(k + 1))));
+                return make_divide(SymbolicExpression::number(k_fact), s_pow).simplify();
             }
             break;
         }
@@ -1140,10 +1137,8 @@ SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expr
             }
         }
 
-        // Product of linear factors: 1 / ((s - a) * (s - b)) -> (exp(at) - exp(bt)) / (a - b)
-        if (numerator_base.is_number(&numeric) &&
-            mymath::is_near_zero(numeric - 1.0L, kFormatEps()) &&
-            denominator.node_->type == NodeType::kMultiply) {
+        // Product of linear factors: (cs + d) / ((s - a) * (s - b)) -> partial fraction expansion
+        if (denominator.node_->type == NodeType::kMultiply) {
             const SymbolicExpression left_factor = SymbolicExpression(denominator.node_->left).simplify();
             const SymbolicExpression right_factor = SymbolicExpression(denominator.node_->right).simplify();
             Scalar a1 = Scalar(0.0L), b1 = Scalar(0.0L);
@@ -1153,21 +1148,26 @@ SymbolicExpression inverse_laplace_transform_impl(const SymbolicExpression& expr
                 const Scalar pole1 = -b1 / a1;
                 const Scalar pole2 = -b2 / a2;
                 const Scalar scale = Scalar(1.0L) / (a1 * a2);
-                if (mymath::is_near_zero(pole1 - pole2, kFormatEps())) {
-                    // Falls back to (s-a)^2 handled above if we simplify it to power
-                } else {
-                    SymbolicExpression term1 = make_function("exp",
-                                                            make_multiply(SymbolicExpression::number(pole1),
-                                                                          SymbolicExpression::variable(time_variable)));
-                    SymbolicExpression term2 = make_function("exp",
-                                                            make_multiply(SymbolicExpression::number(pole2),
-                                                                          SymbolicExpression::variable(time_variable)));
-                    SymbolicExpression result = make_multiply(
-                        SymbolicExpression::number(scale / (pole1 - pole2)),
-                        make_subtract(term1, term2));
-                    return make_multiply(SymbolicExpression::number(numerator_factor),
-                                         make_multiply(result, make_step_expression(time_variable, Scalar(0.0L))))
-                        .simplify();
+                Scalar c_slope = Scalar(0.0L), d_intercept = Scalar(0.0L);
+                if (decompose_linear(numerator_base, transform_variable, &c_slope, &d_intercept)) {
+                    if (!mymath::is_near_zero(pole1 - pole2, kFormatEps())) {
+                        const Scalar A = (c_slope * pole1 + d_intercept) / (pole1 - pole2);
+                        const Scalar B = (c_slope * pole2 + d_intercept) / (pole2 - pole1);
+                        SymbolicExpression term1 = make_multiply(
+                            SymbolicExpression::number(A),
+                            make_function("exp", make_multiply(SymbolicExpression::number(pole1),
+                                                              SymbolicExpression::variable(time_variable))));
+                        SymbolicExpression term2 = make_multiply(
+                            SymbolicExpression::number(B),
+                            make_function("exp", make_multiply(SymbolicExpression::number(pole2),
+                                                              SymbolicExpression::variable(time_variable))));
+                        SymbolicExpression result = make_multiply(
+                            SymbolicExpression::number(scale),
+                            make_add(term1, term2));
+                        return make_multiply(SymbolicExpression::number(numerator_factor),
+                                             make_multiply(result, make_step_expression(time_variable, Scalar(0.0L))))
+                            .simplify();
+                    }
                 }
             }
         }
@@ -1708,20 +1708,50 @@ SymbolicExpression inverse_fourier_transform_impl(const SymbolicExpression& expr
     }
 
     Scalar constant = Scalar(0.0L);
-    if (simplified.node_->type == NodeType::kDivide &&
-        SymbolicExpression(simplified.node_->left).is_number(&constant) &&
-        match_i_frequency_minus_constant(SymbolicExpression(simplified.node_->right),
-                                         frequency_variable,
-                                         &shift)) {
-        return make_multiply(
-                   make_multiply(SymbolicExpression::number(constant),
-                                 make_function(
-                                     "exp",
-                                     make_multiply(SymbolicExpression::number(shift),
-                                                   SymbolicExpression::variable(
-                                                       time_variable)))),
-                   make_step_expression(time_variable, Scalar(0.0L)))
-            .simplify();
+    if (simplified.node_->type == NodeType::kDivide) {
+        if (SymbolicExpression(simplified.node_->left).is_number(&constant) &&
+            match_i_frequency_minus_constant(SymbolicExpression(simplified.node_->right),
+                                             frequency_variable,
+                                             &shift)) {
+            return make_multiply(
+                       make_multiply(SymbolicExpression::number(constant),
+                                     make_function(
+                                         "exp",
+                                         make_multiply(SymbolicExpression::number(shift),
+                                                       SymbolicExpression::variable(
+                                                           time_variable)))),
+                       make_step_expression(time_variable, Scalar(0.0L)))
+                .simplify();
+        }
+
+        // F^-1{ C / (w^2 + a^2) } = C / (2*a) * exp(-a * |t|)
+        const SymbolicExpression den = SymbolicExpression(simplified.node_->right).simplify();
+        if (den.node_->type == NodeType::kAdd) {
+            SymbolicExpression d_left(den.node_->left);
+            SymbolicExpression d_right(den.node_->right);
+            Scalar a_sq = Scalar(0.0L);
+            bool has_w_sq = false;
+            auto check_w_sq = [&](const SymbolicExpression& e) {
+                return e.node_->type == NodeType::kPower &&
+                       SymbolicExpression(e.node_->left).is_variable_named(frequency_variable) &&
+                       SymbolicExpression(e.node_->right).is_number(&numeric) &&
+                       mymath::is_near_zero(numeric - Scalar(2.0L), kFormatEps());
+            };
+            if (check_w_sq(d_left) && d_right.is_number(&a_sq) && a_sq > Scalar(0.0L)) {
+                has_w_sq = true;
+            } else if (check_w_sq(d_right) && d_left.is_number(&a_sq) && a_sq > Scalar(0.0L)) {
+                has_w_sq = true;
+            }
+            if (has_w_sq && SymbolicExpression(simplified.node_->left).is_number(&constant)) {
+                Scalar a = mymath::sqrt(a_sq);
+                return make_multiply(
+                           SymbolicExpression::number(constant / (2.0 * a)),
+                           make_function("exp",
+                               make_negate(make_multiply(SymbolicExpression::number(a),
+                                                         make_function("abs", SymbolicExpression::variable(time_variable))))))
+                    .simplify();
+            }
+        }
     }
 
     throw std::runtime_error("unsupported symbolic inverse Fourier transform");
@@ -2114,36 +2144,54 @@ SymbolicExpression inverse_z_transform_impl(const SymbolicExpression& expression
             }
         }
 
-        if (numerator_base.is_variable_named(transform_variable) &&
-            denominator.node_->type == NodeType::kSubtract &&
-            SymbolicExpression(denominator.node_->left).is_variable_named(transform_variable) &&
-            SymbolicExpression(denominator.node_->right).is_number(&numeric)) {
-            return make_multiply(
-                       SymbolicExpression::number(numerator_factor),
-                       make_multiply(
-                           make_power(SymbolicExpression::number(numeric),
-                                      SymbolicExpression::variable(index_variable)),
-                           make_step_expression(index_variable, Scalar(0.0L))))
-                .simplify();
+        // Z^-1{ 1 / (z - a) } = a^(n-1) * step[n-1]
+        if (numerator_base.is_number(&numeric) &&
+            mymath::is_near_zero(numeric - 1.0L, kFormatEps())) {
+            Scalar z_coeff = Scalar(0.0L), z_inter = Scalar(0.0L);
+            if (decompose_linear(denominator, transform_variable, &z_coeff, &z_inter) &&
+                mymath::is_near_zero(z_coeff - 1.0L, kFormatEps())) {
+                Scalar a = -z_inter;
+                SymbolicExpression n_minus_1 = make_subtract(SymbolicExpression::variable(index_variable),
+                                                              SymbolicExpression::number(Scalar(1.0L))).simplify();
+                SymbolicExpression term = make_multiply(make_power(SymbolicExpression::number(a), n_minus_1),
+                                                        make_function("step", n_minus_1));
+                return make_multiply(SymbolicExpression::number(numerator_factor), term).simplify();
+            }
         }
 
+        // Z^-1{ z / (z - a) } = a^n * step[n]
+        if (numerator_base.is_variable_named(transform_variable)) {
+            Scalar z_coeff = Scalar(0.0L), z_inter = Scalar(0.0L);
+            if (decompose_linear(denominator, transform_variable, &z_coeff, &z_inter) &&
+                mymath::is_near_zero(z_coeff - 1.0L, kFormatEps())) {
+                Scalar a = -z_inter;
+                return make_multiply(
+                           SymbolicExpression::number(numerator_factor),
+                           make_multiply(
+                               make_power(SymbolicExpression::number(a),
+                                          SymbolicExpression::variable(index_variable)),
+                               make_step_expression(index_variable, Scalar(0.0L))))
+                    .simplify();
+            }
+        }
+
+        // Z^-1{ z / (z - a)^2 } = n * a^(n-1) * step[n]
         if (numerator_base.is_variable_named(transform_variable) &&
-            denominator.node_->type == NodeType::kPower &&
-            SymbolicExpression(denominator.node_->left).node_->type == NodeType::kSubtract &&
-            SymbolicExpression(
-                SymbolicExpression(denominator.node_->left).node_->left)
-                .is_variable_named(transform_variable) &&
-            SymbolicExpression(
-                SymbolicExpression(denominator.node_->left).node_->right)
-                .is_number(&numeric) &&
-            mymath::is_near_zero(numeric - 1.0L, kFormatEps()) &&
-            SymbolicExpression(denominator.node_->right).is_number(&numeric) &&
-            mymath::is_near_zero(numeric - 2.0, kFormatEps())) {
-            return make_multiply(
-                       SymbolicExpression::number(numerator_factor),
-                       make_multiply(SymbolicExpression::variable(index_variable),
-                                     make_step_expression(index_variable, Scalar(0.0L))))
-                .simplify();
+            denominator.node_->type == NodeType::kPower) {
+            Scalar exponent = Scalar(0.0L);
+            Scalar z_coeff = Scalar(0.0L), z_inter = Scalar(0.0L);
+            if (decompose_linear(SymbolicExpression(denominator.node_->left), transform_variable, &z_coeff, &z_inter) &&
+                mymath::is_near_zero(z_coeff - 1.0L, kFormatEps()) &&
+                SymbolicExpression(denominator.node_->right).is_number(&exponent) &&
+                mymath::is_near_zero(exponent - 2.0L, kFormatEps())) {
+                Scalar a = -z_inter;
+                SymbolicExpression n_var = SymbolicExpression::variable(index_variable);
+                SymbolicExpression n_minus_1 = make_subtract(n_var, SymbolicExpression::number(Scalar(1.0L))).simplify();
+                SymbolicExpression term = make_multiply(n_var, make_power(SymbolicExpression::number(a), n_minus_1));
+                return make_multiply(SymbolicExpression::number(numerator_factor),
+                                     make_multiply(term, make_step_expression(index_variable, Scalar(0.0L))))
+                    .simplify();
+            }
         }
     }
 

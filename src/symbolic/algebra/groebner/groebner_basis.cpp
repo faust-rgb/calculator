@@ -266,7 +266,7 @@ MultivariatePoly reduce(MultivariatePoly p, const std::vector<MultivariatePoly>&
                 if (d_p > d_f) quot_mon[v] = d_p - d_f;
             }
             
-            if (divides) {
+            if (divides && !expr_is_zero(c_f)) {
                 SymbolicExpression quot_coeff = (c_p / c_f).simplify();
                 // p = p - (quot_coeff * quot_mon) * f
                 for (const auto& [f_mon, f_coeff] : f.terms) {

@@ -406,11 +406,10 @@ Solution SymbolicSolver::solve_quadratic(
         SymbolicExpression real_part = make_negate(make_divide(b, two_a)).simplify();
         SymbolicExpression imag_part = make_divide(abs_disc, two_a).simplify();
 
-        // 返回复数形式 (使用 complex 函数)
-        SymbolicExpression z1 = make_function("complex",
-            SymbolicExpression::vector({real_part, imag_part}));
-        SymbolicExpression z2 = make_function("complex",
-            SymbolicExpression::vector({real_part, make_negate(imag_part)}));
+        // 返回复数形式 (real_part ± imag_part * i)
+        SymbolicExpression i_sym = SymbolicExpression::variable("i");
+        SymbolicExpression z1 = make_add(real_part, make_multiply(imag_part, i_sym)).simplify();
+        SymbolicExpression z2 = make_subtract(real_part, make_multiply(imag_part, i_sym)).simplify();
 
         return Solution::multiple({z1, z2}, "quadratic_complex_roots");
     }
@@ -519,36 +518,16 @@ Solution SymbolicSolver::solve_cubic(
     }
 
     // 符号系数：返回 RootOf 表示
-    SymbolicExpression poly = SymbolicExpression::parse("cubic_polynomial");
+    SymbolicExpression poly = build_symbolic_polynomial_expression(coeffs, variable);
     return Solution::root_of_representation(poly, 0);
 }
 
 Solution SymbolicSolver::solve_quartic(
     const std::vector<SymbolicExpression>& coeffs,
     const std::string& variable) {
-    (void)variable;
 
-    // a*x^4 + b*x^3 + c*x^2 + d*x + e = 0
-    // Ferrari 方法的实现较为复杂，这里使用数值回退
-
-    // 检查是否为数值系数
-    std::vector<Scalar> num_coeffs;
-    for (const auto& c : coeffs) {
-        Scalar val = Scalar(0.0L);
-        if (c.is_number(&val)) {
-            num_coeffs.push_back(val);
-        } else {
-            // 符号系数：返回 RootOf
-            return Solution::root_of_representation(
-                SymbolicExpression::parse("polynomial"), 0);
-        }
-    }
-
-    // 使用数值方法求根（简化版本）
-    // 实际应调用多项式求根函数
-    // 这里返回 RootOf 表示
-    return Solution::root_of_representation(
-        SymbolicExpression::parse("quartic"), 0);
+    SymbolicExpression poly = build_symbolic_polynomial_expression(coeffs, variable);
+    return Solution::root_of_representation(poly, 0);
 }
 
 Solution SymbolicSolver::solve_linear_system(
@@ -642,33 +621,7 @@ bool SymbolicSolver::extract_polynomial_coefficients(
     // 使用 SymbolicPolynomial 提取符号系数
     SymbolicPolynomial poly = SymbolicPolynomial::from_expression(expr, variable);
     if (poly.degree() < 0 && !expr_is_zero(expr)) {
-        // 如果不是多项式，尝试数值评价作为回退
-        // (保持原有逻辑作为最后的保险，但优先使用 SymbolicPolynomial)
-        Scalar test_values[] = {Scalar(0), Scalar(1), Scalar(2), Scalar(3), Scalar(4)};
-        std::vector<Scalar> values;
-        for (Scalar t : test_values) {
-            SymbolicExpression sub = expr.substitute(variable, SymbolicExpression::number(t));
-            sub = sub.simplify();
-            Scalar val = Scalar(0.0L);
-            if (sub.is_number(&val)) {
-                values.push_back(val);
-            } else {
-                return false;
-            }
-        }
-
-        if (values.size() >= 3) {
-            Scalar f0 = values[0];
-            Scalar f1 = values[1];
-            Scalar f2 = values[2];
-            Scalar c = f0;
-            Scalar a = (f2 - 2.0 * f1 + f0) / 2.0;
-            Scalar b = f1 - f0 - a;
-            coeffs->push_back(SymbolicExpression::number(c));
-            coeffs->push_back(SymbolicExpression::number(b));
-            coeffs->push_back(SymbolicExpression::number(a));
-            return true;
-        }
+        // 不是多项式（例如超越函数 sin(x), exp(x) 等），不进行伪拟合
         return false;
     }
 
@@ -683,21 +636,9 @@ SymbolicExpression SymbolicSolver::normalize_equation(const SymbolicExpression& 
 }
 
 bool SymbolicSolver::is_linear_in(const SymbolicExpression& expr, const std::string& var) {
-    // 检查表达式是否线性依赖于 var
-    // 即 var 的最高幂次为 1
-
-    std::string str = expr.to_string();
-
-    // 检查是否包含 var^2 或更高次幂
-    std::string var_sq = var + "^2";
-    if (str.find(var_sq) != std::string::npos) {
-        return false;
-    }
-
-    // 更精确的检查需要分析表达式树
-    // 简化版本：假设没有显式的幂次就是线性的
-
-    return true;
+    // 检查表达式是否线性依赖于 var（即多项式次数精确为 1）
+    SymbolicPolynomial poly = SymbolicPolynomial::from_expression(expr, var);
+    return poly.degree() == 1;
 }
 
 bool SymbolicSolver::extract_linear_coefficients(

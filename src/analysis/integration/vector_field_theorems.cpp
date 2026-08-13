@@ -9,6 +9,8 @@
 
 #include <sstream>
 
+#include "analysis/integration/integration_engine.h"
+
 namespace integration_ops {
 
 using MultivariableIntegrator = ::MultivariableIntegrator;
@@ -16,9 +18,6 @@ using MultivariableIntegrator = ::MultivariableIntegrator;
 using Scalar = mymath::Scalar;
 
 namespace {
-
-// 数值微分步长
-const Scalar kDerivativeStep = Scalar(1e-6L);
 
 // 前向声明辅助函数
 std::function<Scalar(const std::vector<Scalar>&)> make_bound_func(
@@ -47,7 +46,7 @@ Scalar partial_derivative_x_scalar(const IntegrationContext& ctx,
                              const std::string& z_var,
                              Scalar x, Scalar y, Scalar z) {
     auto eval = ctx.build_scoped_evaluator(expr);
-    Scalar h = kDerivativeStep;
+    Scalar h = integration_engine::adaptive_derivative_step(x);
     Scalar f_plus = Scalar(eval({{x_var, (x + h)}, {y_var, (y)}, {z_var, (z)}}));
     Scalar f_minus = Scalar(eval({{x_var, (x - h)}, {y_var, (y)}, {z_var, (z)}}));
     return (f_plus - f_minus) / (Scalar(2) * h);
@@ -61,7 +60,7 @@ Scalar partial_derivative_y_scalar(const IntegrationContext& ctx,
                              const std::string& z_var,
                              Scalar x, Scalar y, Scalar z) {
     auto eval = ctx.build_scoped_evaluator(expr);
-    Scalar h = kDerivativeStep;
+    Scalar h = integration_engine::adaptive_derivative_step(y);
     Scalar f_plus = Scalar(eval({{x_var, (x)}, {y_var, (y + h)}, {z_var, (z)}}));
     Scalar f_minus = Scalar(eval({{x_var, (x)}, {y_var, (y - h)}, {z_var, (z)}}));
     return (f_plus - f_minus) / (Scalar(2) * h);
@@ -75,7 +74,7 @@ Scalar partial_derivative_z_scalar(const IntegrationContext& ctx,
                              const std::string& z_var,
                              Scalar x, Scalar y, Scalar z) {
     auto eval = ctx.build_scoped_evaluator(expr);
-    Scalar h = kDerivativeStep;
+    Scalar h = integration_engine::adaptive_derivative_step(z);
     Scalar f_plus = Scalar(eval({{x_var, (x)}, {y_var, (y)}, {z_var, (z + h)}}));
     Scalar f_minus = Scalar(eval({{x_var, (x)}, {y_var, (y)}, {z_var, (z - h)}}));
     return (f_plus - f_minus) / (Scalar(2) * h);
@@ -113,7 +112,7 @@ TheoremResult greens_theorem(
 
     auto integrand = [&](const std::vector<Scalar>& pt) {
         Scalar t(pt[0]);
-        Scalar h = kDerivativeStep;
+        Scalar h = integration_engine::adaptive_derivative_step(t);
 
         // 计算曲线点
         Scalar x = Scalar(x_eval({{t_var, (t)}}));
@@ -231,7 +230,7 @@ TheoremResult divergence_theorem(
 
     auto integrand = [&](const std::vector<Scalar>& pt) {
         Scalar u(pt[0]), v(pt[1]);
-        Scalar h = kDerivativeStep;
+        Scalar h = integration_engine::adaptive_derivative_step(u);
 
         // 计算曲面点
         Scalar x = Scalar(x_eval({{u_var, (u)}, {v_var, (v)}}));
@@ -385,7 +384,7 @@ TheoremResult stokes_theorem(
 
     auto surface_integrand = [&](const std::vector<Scalar>& pt) {
         Scalar u(pt[0]), v(pt[1]);
-        Scalar h = kDerivativeStep;
+        Scalar h = integration_engine::adaptive_derivative_step(u);
 
         // 计算曲面点
         Scalar x = Scalar(x_eval({{u_var, (u)}, {v_var, (v)}}));
@@ -477,7 +476,7 @@ TheoremResult stokes_theorem_line(
 
     auto integrand = [&](const std::vector<Scalar>& pt) {
         Scalar t(pt[0]);
-        Scalar h = kDerivativeStep;
+        Scalar h = integration_engine::adaptive_derivative_step(t);
 
         Scalar x = Scalar(x_eval({{t_var, (t)}}));
         Scalar y = Scalar(y_eval({{t_var, (t)}}));

@@ -21,6 +21,20 @@ namespace {
 // Gauss-Legendre 积分点和权重
 // ============================================================================
 
+// n=7 的 Gauss-Legendre 节点与权重 (1 个零节点 + 3 个正节点)
+const Scalar kGauss7Nodes[] = {
+    Scalar(0.0L),
+    Scalar(0.4058451513773972L),
+    Scalar(0.7415311855993944L),
+    Scalar(0.9491079123427585L)
+};
+const Scalar kGauss7Weights[] = {
+    Scalar(0.4179591836734694L),
+    Scalar(0.3818300505051189L),
+    Scalar(0.2797053914892767L),
+    Scalar(0.1294849661688697L)
+};
+
 // n=10 的 Gauss-Legendre 正节点
 const Scalar kGaussNodes[] = {
     Scalar(0.1488743389816312L),
@@ -67,16 +81,26 @@ inline Scalar jacobian_factor(Scalar a, Scalar b) {
 
 Scalar gauss_integrate_1d(
     const std::function<Scalar(Scalar)>& f,
-    Scalar a, Scalar b, int) {
+    Scalar a, Scalar b, int points) {
 
     Scalar result = Scalar(0);
     const Scalar jac = jacobian_factor(a, b);
 
-    // 使用 10 点对称性 (5 个正点)
-    for (int i = 0; i < 5; ++i) {
-        const Scalar t = kGaussNodes[i];
-        const Scalar w = kGaussWeights[i];
-        result += w * (f(map_to_interval(t, a, b)) + f(map_to_interval(-t, a, b)));
+    if (points <= 7) {
+        // 7 点 Gauss-Legendre 积分 (1 个中心点 + 3 对对称点)
+        result += kGauss7Weights[0] * f(map_to_interval(Scalar(0), a, b));
+        for (int i = 1; i <= 3; ++i) {
+            const Scalar t = kGauss7Nodes[i];
+            const Scalar w = kGauss7Weights[i];
+            result += w * (f(map_to_interval(t, a, b)) + f(map_to_interval(-t, a, b)));
+        }
+    } else {
+        // 10 点对称 Gauss-Legendre 积分 (5 对对称点)
+        for (int i = 0; i < 5; ++i) {
+            const Scalar t = kGaussNodes[i];
+            const Scalar w = kGaussWeights[i];
+            result += w * (f(map_to_interval(t, a, b)) + f(map_to_interval(-t, a, b)));
+        }
     }
 
     return result * jac;
@@ -753,16 +777,26 @@ Scalar adaptive_3d_recursive(
     return total;
 }
 
-// Sobol 序列生成器（简化实现）
+// Sobol 序列生成器
 class SobolSequence {
 public:
     explicit SobolSequence(int dimension) : dim_(dimension), index_(0) {
-        // 初始化方向数（简化版，使用固定的初始值）
+        // 使用 Joe & Kuo 线性无关本原多项式初始方向数表 m_i
+        static const unsigned int m_init[6][5] = {
+            {1, 1, 1, 1, 1},
+            {1, 3, 5, 15, 17},
+            {1, 3, 1, 5, 9},
+            {1, 1, 3, 3, 11},
+            {1, 3, 7, 5, 3},
+            {1, 1, 5, 13, 27}
+        };
         direction_.resize(dimension);
         for (int d = 0; d < dimension; ++d) {
             direction_[d].resize(32);
+            int pattern_idx = d % 6;
             for (int i = 0; i < 32; ++i) {
-                direction_[d][i] = static_cast<unsigned int>(1ULL << (31 - i));
+                unsigned int m = (i < 5) ? m_init[pattern_idx][i] : ((m_init[pattern_idx][i % 5] * (i + 1)) | 1);
+                direction_[d][i] = m << (31 - (i % 32));
             }
         }
         x_.resize(dimension, 0);
@@ -778,7 +812,7 @@ public:
         }
 
         for (int d = 0; d < dim_; ++d) {
-            x_[d] ^= direction_[d][c];
+            x_[d] ^= direction_[d][c % 32];
         }
 
         std::vector<Scalar> result(dim_);

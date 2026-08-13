@@ -348,12 +348,18 @@ SymbolicExpression simplify_medium(const SymbolicExpression& expression) {
             SymbolicExpression left = simplify_medium(SymbolicExpression(node->left));
             SymbolicExpression right = simplify_medium(SymbolicExpression(node->right));
 
-            // (x^a)^b → x^(a*b)
+            // (x^a)^b → x^(a*b) (只有当底数已知为正、内层指数为奇整数或外层指数为整数时适用)
             if (left.node_->type == NodeType::kPower) {
                 Scalar inner_exp, outer_exp;
                 if (SymbolicExpression(left.node_->right).is_number(&inner_exp) && right.is_number(&outer_exp)) {
-                    return make_power(SymbolicExpression(left.node_->left),
-                                      SymbolicExpression::number(inner_exp * outer_exp));
+                    SymbolicExpression base(left.node_->left);
+                    bool is_pos = is_known_positive_expression(base);
+                    bool inner_is_odd = mymath::is_integer(inner_exp, Scalar(app::integer_tolerance())) &&
+                                        (static_cast<long long>(mymath::round(inner_exp).to_long_double()) % 2 != 0);
+                    bool outer_is_int = mymath::is_integer(outer_exp, Scalar(app::integer_tolerance()));
+                    if (is_pos || inner_is_odd || outer_is_int) {
+                        return make_power(base, SymbolicExpression::number(inner_exp * outer_exp));
+                    }
                 }
             }
 
@@ -608,25 +614,32 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (node->text == "ln" && argument.node_->type == NodeType::kFunction && argument.node_->text == "exp") {
                 return SymbolicExpression(argument.node_->left).simplify();
             }
-            // ln(x^n) → n*ln(x) (ln domain implies x > 0)
+            // ln(x^n) → n*ln(x) (只有当 x > 0 时适用，避免 ln((-1)^2) 化简错误)
             if (node->text == "ln" && argument.node_->type == NodeType::kPower) {
                 Scalar exponent = Scalar(0);
                 if (SymbolicExpression(argument.node_->right).is_number(&exponent)) {
-                    return make_multiply(SymbolicExpression::number(exponent),
-                                         make_function("ln", SymbolicExpression(argument.node_->left))).simplify();
+                    SymbolicExpression base(argument.node_->left);
+                    if (is_known_positive_expression(base)) {
+                        return make_multiply(SymbolicExpression::number(exponent),
+                                             make_function("ln", base)).simplify();
+                    }
                 }
             }
-            // ln(x*y) → ln(x) + ln(y) (ln domain implies x, y > 0)
+            // ln(x*y) → ln(x) + ln(y) (需要 x > 0 且 y > 0)
             if (node->text == "ln" && argument.node_->type == NodeType::kMultiply) {
                 SymbolicExpression mult_left(argument.node_->left);
                 SymbolicExpression mult_right(argument.node_->right);
-                return (make_function("ln", mult_left) + make_function("ln", mult_right)).simplify();
+                if (is_known_positive_expression(mult_left) && is_known_positive_expression(mult_right)) {
+                    return (make_function("ln", mult_left) + make_function("ln", mult_right)).simplify();
+                }
             }
-            // ln(a/b) → ln(a) - ln(b) (ln domain implies a, b > 0)
+            // ln(a/b) → ln(a) - ln(b) (需要 a > 0 且 b > 0)
             if (node->text == "ln" && argument.node_->type == NodeType::kDivide) {
                 SymbolicExpression div_left(argument.node_->left);
                 SymbolicExpression div_right(argument.node_->right);
-                return (make_function("ln", div_left) - make_function("ln", div_right)).simplify();
+                if (is_known_positive_expression(div_left) && is_known_positive_expression(div_right)) {
+                    return (make_function("ln", div_left) - make_function("ln", div_right)).simplify();
+                }
             }
             // ln(1) → 0
             if (node->text == "ln") {

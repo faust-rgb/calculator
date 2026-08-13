@@ -119,6 +119,22 @@ Calculator::Calculator() : impl_(new Impl()) {
     impl_->locator.register_service<CoreServices>(std::shared_ptr<CoreServices>(impl_->core_services.get(), [](CoreServices*){}));
 
     register_standard_modules(this);
+
+    // 注册 help 与 :help 命令处理器
+    auto* cmd_registry = static_cast<CommandRegistry*>(impl_->commands_ptr.get());
+    cmd_registry->register_command_handler(
+        "help",
+        [this](const std::string&, const std::vector<std::string_view>& args, std::string* output, bool, const CoreServices&) -> bool {
+            if (args.empty()) {
+                *output = help_text();
+            } else {
+                *output = help_topic(std::string(args[0]));
+            }
+            return true;
+        },
+        "Show help text"
+    );
+
     broadcast_settings(this, impl_.get());
 }
 

@@ -492,6 +492,7 @@ std::vector<std::string_view> CommandParser::parse_argument_list_by_tokens(bool 
     std::size_t start_pos = peek_token().position;
     int paren_depth = 0;
     int bracket_depth = 0;
+    int brace_depth = 0;
 
     while (peek_token().kind != TokenKind::kEnd) {
         const Token& tok = peek_token();
@@ -512,7 +513,11 @@ std::vector<std::string_view> CommandParser::parse_argument_list_by_tokens(bool 
             }
             if (bracket_depth > 0) bracket_depth--;
         }
-        else if (tok.kind == TokenKind::kComma && paren_depth == 0 && bracket_depth == 0) {
+        else if (tok.kind == TokenKind::kLBrace) brace_depth++;
+        else if (tok.kind == TokenKind::kRBrace) {
+            if (brace_depth > 0) brace_depth--;
+        }
+        else if (tok.kind == TokenKind::kComma && paren_depth == 0 && bracket_depth == 0 && brace_depth == 0) {
             // Found a top-level comma
             std::size_t end_pos = tok.position;
             arguments.push_back(trim_view(tokens_.source().substr(start_pos, end_pos - start_pos)));

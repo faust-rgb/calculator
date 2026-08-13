@@ -164,27 +164,9 @@ bool CommandRegistry::try_process(const std::string& cmd_name,
         return false;
     }
 
-    // 先检查别名映射
-    std::string resolved_name = cmd_name;
-    auto alias_it = aliases_.find(cmd_name);
-    if (alias_it != aliases_.end()) {
-        resolved_name = alias_it->second;
-    }
-
-    // 查找精确匹配（使用解析后的名称）
-    auto it = commands_.find(resolved_name);
-    if (it != commands_.end() && it->second.handler) {
-        return it->second.handler(cmd_name, args, output, exact_mode, services);
-    }
-
-    // 再查找前缀匹配
-    for (const auto& info : prefix_commands_) {
-        if (resolved_name.size() >= info.name.size() &&
-            resolved_name.substr(0, info.name.size()) == info.name) {
-            if (info.handler) {
-                return info.handler(cmd_name, args, output, exact_mode, services);
-            }
-        }
+    const CommandInfo* info = find_command(cmd_name);
+    if (info && info->handler) {
+        return info->handler(cmd_name, args, output, exact_mode, services);
     }
 
     return false;
@@ -360,6 +342,21 @@ const CommandInfo* CommandRegistry::find_command(const std::string& name) const 
     auto it = commands_.find(resolved_name);
     if (it != commands_.end()) {
         return &it->second;
+    }
+
+    // 冒号前缀双向容错
+    if (!resolved_name.empty() && resolved_name[0] == ':') {
+        std::string uncolonized = resolved_name.substr(1);
+        auto alias_uncol = aliases_.find(uncolonized);
+        if (alias_uncol != aliases_.end()) uncolonized = alias_uncol->second;
+        auto it_uncol = commands_.find(uncolonized);
+        if (it_uncol != commands_.end()) return &it_uncol->second;
+    } else if (!resolved_name.empty()) {
+        std::string colonized = ":" + resolved_name;
+        auto alias_col = aliases_.find(colonized);
+        if (alias_col != aliases_.end()) colonized = alias_col->second;
+        auto it_col = commands_.find(colonized);
+        if (it_col != commands_.end()) return &it_col->second;
     }
 
     // 前缀匹配

@@ -383,7 +383,10 @@ StoredValue evaluate_expression_value(
     }
 
     CommandParser::IsCommandCallback is_cmd = [ctx](std::string_view name) {
-        return ctx->commands().has_command(std::string(name)) || ctx->functions().get_native_functions()->count(std::string(name)) > 0;
+        std::string s_name(name);
+        return ctx->commands().has_command(s_name) ||
+               ctx->commands().has_command(":" + s_name) ||
+               ctx->functions().get_native_functions()->count(s_name) > 0;
     };
     try {
         CommandASTNode ast = parse_command(trimmed_expr, is_cmd);
@@ -407,6 +410,11 @@ StoredValue evaluate_expression_value(
                     return evaluate_command_ast_to_value(ctx, ast, exact_mode);
                 }
             }
+        }
+    } catch (const SyntaxError& err) {
+        const std::size_t paren_pos = trimmed_expr.find('(');
+        if (paren_pos != std::string::npos && is_cmd(utils::trim_copy(trimmed_expr.substr(0, paren_pos)))) {
+            throw;
         }
     } catch (...) {}
 

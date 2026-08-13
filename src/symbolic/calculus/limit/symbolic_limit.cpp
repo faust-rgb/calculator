@@ -18,6 +18,7 @@
 #include "math/mymath.h"
 
 #include <algorithm>
+#include <functional>
 #include <sstream>
 
 namespace symbolic_limit {
@@ -66,13 +67,35 @@ LimitResult SymbolicLimitEngine::compute_limit(
     const BoundArgument& point,
     int direction) {
 
-    // 策略 1: 直接代入（仅对有限点）
+    // 策略 1: 直接代入（仅对有限点且可能连续的函数）
     if (point.is_finite()) {
-        auto direct_val = try_direct_substitution(expr, var, point.value);
-        if (direct_val.has_value() && mymath::isfinite(*direct_val)) {
-            return LimitResult::elementary(
-                SymbolicExpression::number(*direct_val),
-                "direct_substitution");
+        // 检查表达式在代入点是否含有已知不连续节点
+        bool is_discontinuous = false;
+        std::function<void(const SymbolicExpression&)> check_disc = [&](const SymbolicExpression& e) {
+            if (!e.node_ || is_discontinuous) return;
+            if (e.node_->type == NodeType::kFunction) {
+                if (e.node_->text == "floor" || e.node_->text == "ceil" || e.node_->text == "sign") {
+                    is_discontinuous = true;
+                    return;
+                }
+            }
+            if (e.node_->left) check_disc(SymbolicExpression(e.node_->left));
+            if (e.node_->right) check_disc(SymbolicExpression(e.node_->right));
+            for (const auto& child : e.node_->children) {
+                check_disc(SymbolicExpression(child));
+            }
+        };
+        check_disc(expr);
+
+        // 如果表达式不含阶梯/符号不连续节点，且不属于 0/0 或 inf/inf 型不定型
+        IndeterminateForm form_check = detect_indeterminate_form(expr, var, point);
+        if (!is_discontinuous && form_check == IndeterminateForm::kNone) {
+            auto direct_val = try_direct_substitution(expr, var, point.value);
+            if (direct_val.has_value() && mymath::isfinite(*direct_val)) {
+                return LimitResult::elementary(
+                    SymbolicExpression::number(*direct_val),
+                    "direct_substitution");
+            }
         }
     }
 

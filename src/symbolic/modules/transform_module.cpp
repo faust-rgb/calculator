@@ -230,12 +230,12 @@ std::string TransformModule::execute_args(const std::string& command,
 std::string TransformModule::get_help_snippet(const std::string& topic) const {
     if (topic == "symbolic") {
         return "Transforms:\n"
-               "  laplace(f, [s], [t])       Laplace transform\n"
-               "  ilaplace(F, [t], [s])      Inverse Laplace transform\n"
-               "  fourier(f, [w], [t])       Fourier transform\n"
-               "  ifourier(F, [t], [w])      Inverse Fourier transform\n"
-               "  ztrans(f, [z], [n])        Z transform\n"
-               "  iztrans(F, [n], [z])       Inverse Z transform";
+               "  laplace(f, [t], [s])       Laplace transform\n"
+               "  ilaplace(F, [s], [t])      Inverse Laplace transform\n"
+               "  fourier(f, [t], [w])       Fourier transform\n"
+               "  ifourier(F, [w], [t])      Inverse Fourier transform\n"
+               "  ztrans(f, [n], [z])        Z transform\n"
+               "  iztrans(F, [z], [n])       Inverse Z transform";
     }
     return "";
 }

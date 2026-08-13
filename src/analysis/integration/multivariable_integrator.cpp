@@ -217,8 +217,8 @@ Scalar MultivariableIntegrator::integrate_adaptive_recursive(
     auto get_f = [&](Scalar x) {
         (*point)[dimension] = x;
         if (dimension + 1 == bounds.size()) return integrand_(*point);
-        // 递归处理内层
-        return integrate_recursive(bounds, std::vector<int>(bounds.size(), 16), point, dimension + 1, 1.0L);
+        // 递归处理内层（统一使用 32 步分段，防止函数阶跃噪声）
+        return integrate_recursive(bounds, std::vector<int>(bounds.size(), 32), point, dimension + 1, 1.0L);
     };
 
     const Scalar fd = Scalar(get_f((sd)));
