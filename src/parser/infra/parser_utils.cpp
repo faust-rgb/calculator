@@ -22,7 +22,7 @@ namespace parser_utils {
  */
 class StringScanState {
 public:
-    StringScanState() : in_string_(false), escaping_(false), depth_(0) {}
+    StringScanState() : in_string_(false), quote_char_('\0'), escaping_(false), depth_(0) {}
 
     /// 更新状态
     void update(char ch) {
@@ -31,14 +31,16 @@ public:
                 escaping_ = false;
             } else if (ch == '\\') {
                 escaping_ = true;
-            } else if (ch == '"') {
+            } else if (ch == quote_char_) {
                 in_string_ = false;
+                quote_char_ = '\0';
             }
             return;
         }
 
-        if (ch == '"') {
+        if (ch == '"' || ch == '\'') {
             in_string_ = true;
+            quote_char_ = ch;
             return;
         }
 
@@ -63,6 +65,7 @@ public:
 
 private:
     bool in_string_;
+    char quote_char_;
     bool escaping_;
     int depth_;
 };

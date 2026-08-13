@@ -65,10 +65,7 @@ std::string handle_residue_command(const std::string& command,
 
     StoredValue point_value = services->evaluation.evaluate_value(arguments[2], false);
 
-    mymath::complex<Scalar> point(point_value.exact
-                                   ? rational_to_double(point_value.rational)
-                                   : point_value.decimal,
-                               0.0L);
+    mymath::complex<Scalar> point(point_value.get_decimal(), 0.0L);
     if (point_value.is_matrix && point_value.matrix_ptr) {
         const matrix::Matrix& point_matrix = *point_value.matrix_ptr;
         if (!point_matrix.is_vector() ||

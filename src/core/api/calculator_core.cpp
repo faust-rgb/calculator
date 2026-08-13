@@ -157,7 +157,14 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
     if (caps & ModuleCapability::kFunctions) {
         auto new_functions = module->get_functions_map();
         for (auto& [name, func] : new_functions) {
-            impl_->functions_ptr->add_native_function(name, std::move(func));
+            auto func_copy = func;
+            impl_->functions_ptr->add_native_function(name, func);
+            impl_->execution_ctx.functions().register_function(
+                name,
+                [f = std::move(func_copy)](const std::vector<StoredValue>& args, core::ExecutionContext&) {
+                    return f(args);
+                }
+            );
             impl_->help_topic_to_modules[name].push_back(module);
         }
     }
@@ -290,6 +297,7 @@ std::string Calculator::set_display_precision(int precision) {
                                  std::to_string(kMaxDisplayPrecision));
     }
     impl_->config_ptr->set_display_precision(precision);
+    impl_->execution_ctx.set_display_precision(precision);
     apply_calculator_display_precision(impl_.get());
     broadcast_settings(this, impl_.get());
     return "Display precision: " + std::to_string(precision);
@@ -391,7 +399,7 @@ Scalar Calculator::evaluate_raw(const std::string& expression) {
     if (value.is_matrix || value.is_complex) {
         throw std::runtime_error("matrix or complex expression cannot be used as a scalar");
     }
-    return value.decimal;
+    return value.as_scalar();
 }
 
 std::string Calculator::evaluate_for_display(const std::string& expression, bool exact_mode) {

@@ -17,7 +17,7 @@
 #define SYMBOLIC_PUBLIC_ACCESSORS_H
 
 #include "symbolic/public/symbolic_node_types.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 
 #include <string>
 #include <vector>

@@ -176,13 +176,28 @@ private:
         expect_symbol("}"); return b;
     }
 
-    StatementPtr parse_indented_block() {
+    StatementPtr parse_indented_block(int header_line = -1) {
         if (match_symbol("{")) return parse_block_after_open();
-        if (peek().kind != Token::Kind::kIndent) throw std::runtime_error("Line " + std::to_string(peek().line) + ": Expected indent");
-        advance(); auto b = std::make_unique<BlockStatement>();
-        while (!is_at_end() && peek().kind != Token::Kind::kDedent) { b->statements.push_back(parse_statement()); skip_newlines(); }
-        if (peek().kind != Token::Kind::kDedent) throw std::runtime_error("Line " + std::to_string(peek().line) + ": Expected dedent");
-        advance(); return b;
+        if (peek().kind == Token::Kind::kIndent) {
+            advance();
+            auto b = std::make_unique<BlockStatement>();
+            while (!is_at_end() && peek().kind != Token::Kind::kDedent) {
+                b->statements.push_back(parse_statement());
+                skip_newlines();
+            }
+            if (peek().kind == Token::Kind::kDedent) {
+                advance();
+            }
+            return b;
+        }
+        // 单行语句或纯注释空代码块
+        auto b = std::make_unique<BlockStatement>();
+        if (!is_at_end() && peek().kind != Token::Kind::kDedent && peek().kind != Token::Kind::kNewline) {
+            if (header_line < 0 || peek().line == header_line) {
+                b->statements.push_back(parse_statement());
+            }
+        }
+        return b;
     }
 
     StatementPtr parse_simple_statement() {
@@ -198,25 +213,35 @@ private:
     StatementPtr parse_function() {
         int l = peek().line; if (peek().kind != Token::Kind::kIdentifier) throw std::runtime_error("Line " + std::to_string(l) + ": Expected name");
         std::string n = std::string(advance().text); expect_symbol("("); std::vector<std::string> p;
+        std::map<std::string, CommandASTNode> defs;
         if (!match_symbol(")")) {
             while (true) {
                 if (peek().kind != Token::Kind::kIdentifier) throw std::runtime_error("Line " + std::to_string(peek().line) + ": Expected param");
-                p.push_back(std::string(advance().text)); if (!match_symbol(",")) break;
+                std::string param_name = std::string(advance().text);
+                if (match_symbol("=")) {
+                    std::string def_expr = parse_expr_fragment({ false, true, true, false });
+                    if (!def_expr.empty()) {
+                        defs[param_name] = parse_script_command(def_expr);
+                    }
+                }
+                p.push_back(param_name);
+                if (match_symbol(",")) continue;
+                if (match_symbol(")")) break;
+                expect_symbol(")");
             }
-            expect_symbol(")");
         }
         std::shared_ptr<const BlockStatement> body;
-        if (match_symbol(":")) { skip_newlines(); body = std::shared_ptr<const BlockStatement>(static_cast<BlockStatement*>(parse_indented_block().release())); }
+        if (match_symbol(":")) { skip_newlines(); body = std::shared_ptr<const BlockStatement>(static_cast<BlockStatement*>(parse_indented_block(l).release())); }
         else { expect_symbol("{"); body = std::shared_ptr<const BlockStatement>(static_cast<BlockStatement*>(parse_block_after_open().release())); }
-        auto s = std::make_unique<FunctionStatement>(); s->line = l; s->name = n; s->parameters = p; s->body = std::move(body);
+        auto s = std::make_unique<FunctionStatement>(); s->line = l; s->name = n; s->parameters = p; s->default_values = std::move(defs); s->body = std::move(body);
         return s;
     }
 
     StatementPtr parse_if() {
         auto s = std::make_unique<IfStatement>(); s->line = peek().line; s->condition_ast = parse_script_command(parse_expr_str());
-        if (match_symbol(":")) { skip_newlines(); s->then_branch = parse_indented_block(); } else s->then_branch = parse_statement();
+        if (match_symbol(":")) { skip_newlines(); s->then_branch = parse_indented_block(s->line); } else s->then_branch = parse_statement();
         skip_newlines();
-        if (match_keyword("else")) { if (match_symbol(":")) { skip_newlines(); s->else_branch = parse_indented_block(); } else s->else_branch = parse_statement(); }
+        if (match_keyword("else")) { if (match_symbol(":")) { skip_newlines(); s->else_branch = parse_indented_block(s->line); } else s->else_branch = parse_statement(); }
         else if (match_keyword("elif")) s->else_branch = parse_if();
         return s;
     }
@@ -307,7 +332,7 @@ private:
 
     StatementPtr parse_while() {
         auto s = std::make_unique<WhileStatement>(); s->line = peek().line; s->condition_ast = parse_script_command(parse_expr_str());
-        if (match_symbol(":")) { skip_newlines(); s->body = parse_indented_block(); } else s->body = parse_statement();
+        if (match_symbol(":")) { skip_newlines(); s->body = parse_indented_block(s->line); } else s->body = parse_statement();
         return s;
     }
 
@@ -368,7 +393,7 @@ private:
                         throw std::runtime_error("Line " + std::to_string(l) + ": range() takes 1-3 arguments");
                     }
 
-                    if (match_symbol(":")) { skip_newlines(); s->body = parse_indented_block(); }
+                    if (match_symbol(":")) { skip_newlines(); s->body = parse_indented_block(l); }
                     else s->body = parse_statement();
                     return s;
                 } else {
@@ -377,7 +402,7 @@ private:
                     s->line = l;
                     s->variable = variable;
                     s->iterable_ast = parse_script_command(parse_expr_str());
-                    if (match_symbol(":")) { skip_newlines(); s->body = parse_indented_block(); }
+                    if (match_symbol(":")) { skip_newlines(); s->body = parse_indented_block(l); }
                     else s->body = parse_statement();
                     return s;
                 }
@@ -393,12 +418,20 @@ private:
         std::vector<std::string> pts;
         std::size_t st = 0;
         int d = 0;
+        bool in_str = false;
+        char quote_char = '\0';
         for (std::size_t i = 0; i < h.size(); ++i) {
-            if (h[i] == '(') d++;
-            else if (h[i] == ')') d--;
-            else if (h[i] == ';' && d == 0) {
-                pts.push_back(trim_copy(h.substr(st, i - st)));
-                st = i + 1;
+            char c = h[i];
+            if (in_str) {
+                if (c == quote_char && (i == 0 || h[i - 1] != '\\')) in_str = false;
+            } else {
+                if (c == '"' || c == '\'') { in_str = true; quote_char = c; }
+                else if (c == '(' || c == '[' || c == '{') d++;
+                else if (c == ')' || c == ']' || c == '}') d--;
+                else if (c == ';' && d == 0) {
+                    pts.push_back(trim_copy(h.substr(st, i - st)));
+                    st = i + 1;
+                }
             }
         }
         pts.push_back(trim_copy(h.substr(st)));
@@ -411,7 +444,7 @@ private:
             s->cond_ast = parse_script_command(h);
         }
 
-        if (match_symbol(":")) { skip_newlines(); s->body = parse_indented_block(); }
+        if (match_symbol(":")) { skip_newlines(); s->body = parse_indented_block(l); }
         else s->body = parse_statement();
         return s;
     }

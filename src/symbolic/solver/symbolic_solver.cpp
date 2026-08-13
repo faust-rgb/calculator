@@ -15,7 +15,7 @@
 #include "symbolic/algebra/groebner/groebner_basis.h"
 #include "symbolic/algebra/polynomial/symbolic_polynomial.h"
 #include "math/mymath.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/base/precision_constants.h"
 #include "core/services/string_utils.h"
 

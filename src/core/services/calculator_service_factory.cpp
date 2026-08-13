@@ -58,8 +58,7 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
         return [impl, scoped_expression, base_resolver](const std::vector<std::pair<std::string, Scalar>>& assignments) {
             std::map<std::string, StoredValue> override_vars;
             for (const auto& [name, value] : assignments) {
-                StoredValue stored;
-                stored.decimal = value;
+                StoredValue stored(value);
                 stored.exact = false;
                 override_vars[name] = stored;
             }
@@ -78,9 +77,9 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
         };
     };
 
-    s.evaluation.build_scalar_evaluator = [impl](const std::string& arg) {
+    s.evaluation.build_scalar_evaluator = [impl](const std::string& arg) -> std::function<Scalar(const std::vector<std::pair<std::string, StoredValue>>&)> {
         const std::string scoped_expression = trim_copy(impl->expand_inline(arg));
-        return [impl, scoped_expression](const std::vector<std::pair<std::string, StoredValue>>& assignments) {
+        return [impl, scoped_expression](const std::vector<std::pair<std::string, StoredValue>>& assignments) -> Scalar {
             impl->variables_ptr->push_scope();
             for (const auto& [name, value] : assignments) {
                 impl->variables_ptr->set_local(name, value);
@@ -88,9 +87,9 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
             try {
                 const StoredValue value = evaluate_expression_value(impl, scoped_expression, false);
                 impl->variables_ptr->pop_scope();
-                if (value.is_matrix || value.is_complex || value.is_string)
+                if (value.is_matrix() || value.is_complex() || value.is_string())
                     throw std::runtime_error("expected a scalar-valued expression");
-                return Calculator::normalize_result(value.exact ? rational_to_double(value.rational) : value.decimal);
+                return Calculator::normalize_result(value.exact ? rational_to_double(value.rational) : value.as_scalar());
             } catch (...) {
                 impl->variables_ptr->pop_scope();
                 throw;

@@ -37,7 +37,7 @@
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "symbolic/algebra/polynomial/symbolic_polynomial.h"
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/mymath.h"
 
 #include <algorithm>

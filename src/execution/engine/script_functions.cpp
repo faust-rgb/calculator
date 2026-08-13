@@ -13,13 +13,12 @@ Scalar invoke_script_function_decimal(
                                       const std::vector<Scalar>& arguments) {
     std::vector<StoredValue> stored_args;
     for (Scalar arg : arguments) {
-        StoredValue sv;
-        sv.decimal = arg;
+        StoredValue sv(arg);
         sv.exact = false;
         stored_args.push_back(sv);
     }
     StoredValue result = invoke_script_function(ctx, name, stored_args);
-    return result.exact ? rational_to_double(result.rational) : result.decimal;
+    return result.get_decimal();
 }
 
 StoredValue invoke_script_function(
@@ -35,9 +34,23 @@ StoredValue invoke_script_function(
     const ScriptFunction* script_func = ctx->functions().get_script(name);
     if (!script_func) throw std::runtime_error("unknown function: " + name);
     
+    core::ExecutionContext::ScopeGuard guard(ctx->core_context());
     ctx->variables().push_scope();
-    for (std::size_t i = 0; i < arguments.size(); ++i) {
-        ctx->variables().set_local(script_func->parameter_names[i], arguments[i]);
+    for (std::size_t i = 0; i < script_func->parameter_names.size(); ++i) {
+        const std::string& param_name = script_func->parameter_names[i];
+        StoredValue val;
+        if (i < arguments.size()) {
+            val = arguments[i];
+        } else {
+            auto it = script_func->default_values.find(param_name);
+            if (it != script_func->default_values.end() && it->second.kind != CommandKind::kEmpty) {
+                val = evaluate_command_ast_to_value(ctx, it->second, false);
+            } else {
+                throw std::runtime_error("script function " + name + " missing argument: " + param_name);
+            }
+        }
+        ctx->variables().set_local(param_name, val);
+        ctx->core_context().scope().set(param_name, val);
     }
     
     std::string ignored;

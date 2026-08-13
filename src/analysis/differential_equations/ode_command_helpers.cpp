@@ -177,7 +177,7 @@ matrix::Matrix vector_to_column_matrix(
 
 StoredValue make_scalar_stored(const ODEContext& ctx, Scalar value) {
     StoredValue stored;
-    stored.decimal = ctx.normalize_result((value));
+    stored.set_decimal(ctx.normalize_result((value)));
     return stored;
 }
 

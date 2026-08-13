@@ -9,7 +9,7 @@
 #include "mymath.h"
 #include "polynomial.h"
 #include "precise_decimal.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/base/precision_constants.h"
 
 #include <stdexcept>
@@ -92,6 +92,9 @@ T jacobi_extreme_eigenvalue(TMatrix<T> a, bool largest) {
         const T app = a.at(p, p);
         const T aqq = a.at(q, q);
         const T apq = a.at(p, q);
+        if (t_abs(apq) <= precision::jacobi_safety_threshold<T>()) {
+            break;
+        }
         const T tau = (aqq - app) / (T(static_cast<long long>(2)) * apq);
         const T sign = tau >= T(static_cast<long long>(0)) ? T(static_cast<long long>(1)) : T(static_cast<long long>(-1));
         const T t = sign / (t_abs(tau) + t_sqrt(T(static_cast<long long>(1)) + tau * tau));
@@ -148,6 +151,9 @@ std::vector<T> jacobi_eigenvalues(TMatrix<T> a) {
         const T app = a.at(p, p);
         const T aqq = a.at(q, q);
         const T apq = a.at(p, q);
+        if (t_abs(apq) <= precision::jacobi_safety_threshold<T>()) {
+            break;
+        }
         const T tau = (aqq - app) / (T(static_cast<long long>(2)) * apq);
         const T sign = tau >= T(static_cast<long long>(0)) ? T(static_cast<long long>(1)) : T(static_cast<long long>(-1));
         const T t = sign / (t_abs(tau) + t_sqrt(T(static_cast<long long>(1)) + tau * tau));
@@ -326,13 +332,7 @@ std::size_t numerical_rank_orthogonal(const TMatrix<T>& matrix) {
  */
 template <typename T>
 T condition_number_fast(const TMatrix<T>& matrix) {
-    const TMatrix<T> normal = normal_matrix(matrix);
-    const T largest = jacobi_extreme_eigenvalue(normal, true);
-    const T smallest = jacobi_extreme_eigenvalue(normal, false);
-    if (largest <= T(static_cast<long long>(0)) || smallest <= T(static_cast<long long>(0))) {
-        return T(mymath::infinity());
-    }
-    return t_sqrt(largest / smallest);
+    return condition_number(matrix);
 }
 
 /**
@@ -857,28 +857,25 @@ TMatrix<T> nullspace(const TMatrix<T>& matrix) {
  */
 template <typename T>
 TMatrix<T> least_squares(const TMatrix<T>& coefficients, const TMatrix<T>& rhs) {
-    if (rhs.cols != 1 && rhs.rows != 1) {
-        throw std::runtime_error("least_squares currently requires the right-hand side to be a vector");
+    if (coefficients.rows == 0 || coefficients.cols == 0) {
+        throw std::runtime_error("least_squares requires non-empty coefficient matrix");
     }
 
-    const std::size_t rhs_size = rhs.rows == 1 ? rhs.cols : rhs.rows;
-    if (rhs_size != coefficients.rows) {
-        throw std::runtime_error("least_squares requires rhs to match the number of rows in A");
+    TMatrix<T> rhs_mat = rhs;
+    const std::size_t m = coefficients.rows;
+    if (rhs.rows == 1 && rhs.cols == m && m > 1) {
+        rhs_mat = TMatrix<T>(m, 1);
+        for (std::size_t i = 0; i < m; ++i) {
+            rhs_mat.at(i, 0) = rhs.at(0, i);
+        }
     }
 
-    TMatrix<T> rhs_column(coefficients.rows, 1, T(static_cast<long long>(0)));
-    for (std::size_t row = 0; row < coefficients.rows; ++row) {
-        rhs_column.at(row, 0) = rhs.rows == 1 ? rhs.at(0, row) : rhs.at(row, 0);
-    }
-    const TMatrix<T> at = transpose(coefficients);
-    if (coefficients.rows >= coefficients.cols) {
-        const TMatrix<T> normal = multiply(at, coefficients);
-        const TMatrix<T> projected_rhs = multiply(at, rhs_column);
-        return multiply(inverse(normal), projected_rhs);
+    if (rhs_mat.rows != m) {
+        throw std::runtime_error("least_squares requires rhs row count (or length if 1D) to match coefficient matrix rows");
     }
 
-    const TMatrix<T> gram = multiply(coefficients, at);
-    return multiply(at, multiply(inverse(gram), rhs_column));
+    const TMatrix<T> pinv = pseudo_inverse(coefficients);
+    return multiply(pinv, rhs_mat);
 }
 
 /**
@@ -1009,20 +1006,34 @@ TMatrix<T> solve(const TMatrix<T>& coefficients, const TMatrix<T>& rhs) {
     if (!coefficients.is_square()) {
         throw std::runtime_error("solve requires a square coefficient matrix");
     }
-    if (rhs.cols != 1 && rhs.rows != 1) {
-        throw std::runtime_error("solve currently requires the right-hand side to be a vector");
-    }
 
     const std::size_t n = coefficients.rows;
-    const std::size_t rhs_size = rhs.rows == 1 ? rhs.cols : rhs.rows;
-    if (rhs_size != n) {
-        throw std::runtime_error("solve requires rhs to match the coefficient matrix dimension");
+    TMatrix<T> rhs_mat = rhs;
+    if (rhs.rows == 1 && rhs.cols == n && n > 1) {
+        rhs_mat = TMatrix<T>(n, 1);
+        for (std::size_t i = 0; i < n; ++i) {
+            rhs_mat.at(i, 0) = rhs.at(0, i);
+        }
     }
-    TMatrix<T> rhs_column(n, 1, T(static_cast<long long>(0)));
-    for (std::size_t row = 0; row < n; ++row) {
-        rhs_column.at(row, 0) = rhs.rows == 1 ? rhs.at(0, row) : rhs.at(row, 0);
+
+    if (rhs_mat.rows != n) {
+        throw std::runtime_error("solve requires rhs dimension to match the coefficient matrix dimension");
     }
-    return lu_solve_with_partial_pivoting(coefficients, rhs_column);
+
+    const std::size_t k_cols = rhs_mat.cols;
+    TMatrix<T> result(n, k_cols, T(static_cast<long long>(0)));
+
+    for (std::size_t col = 0; col < k_cols; ++col) {
+        TMatrix<T> rhs_column(n, 1, T(static_cast<long long>(0)));
+        for (std::size_t row = 0; row < n; ++row) {
+            rhs_column.at(row, 0) = rhs_mat.at(row, col);
+        }
+        TMatrix<T> sol_col = lu_solve_with_partial_pivoting(coefficients, rhs_column);
+        for (std::size_t row = 0; row < n; ++row) {
+            result.at(row, col) = sol_col.at(row, 0);
+        }
+    }
+    return result;
 }
 
 /**
@@ -1055,6 +1066,34 @@ TMatrix<T> power(TMatrix<T> base, long long exponent) {
  */
 template <typename T>
 T condition_number(const TMatrix<T>& matrix) {
+    if (matrix.rows == 0 || matrix.cols == 0) {
+        return T(static_cast<long long>(1));
+    }
+    const TMatrix<T> singular_values = svd_s(matrix);
+    const std::size_t diagonal =
+        singular_values.rows < singular_values.cols ? singular_values.rows : singular_values.cols;
+    if (diagonal == 0) {
+        return T(mymath::infinity());
+    }
+
+    const T tolerance = matrix_tolerance(matrix);
+    T largest = T(static_cast<long long>(0));
+    T smallest = T(static_cast<long long>(0));
+    bool smallest_set = false;
+
+    for (std::size_t i = 0; i < diagonal; ++i) {
+        const T sigma = t_abs(singular_values.at(i, i));
+        if (sigma > largest) {
+            largest = sigma;
+        }
+        if (sigma > tolerance) {
+            if (!smallest_set || sigma < smallest) {
+                smallest = sigma;
+                smallest_set = true;
+            }
+        }
+    }
+
     std::size_t effective_rank;
     if constexpr (std::is_same_v<T, PreciseDecimal>) {
         effective_rank = static_cast<std::size_t>(rank(matrix).to_double());
@@ -1062,49 +1101,7 @@ T condition_number(const TMatrix<T>& matrix) {
         effective_rank = static_cast<std::size_t>(rank(matrix));
     }
 
-    const std::size_t full_rank = matrix.rows < matrix.cols ? matrix.rows : matrix.cols;
-    if (effective_rank < full_rank) {
-        return T(mymath::infinity());
-    }
-
-    if (matrix.rows >= 16 || matrix.cols >= 16) {
-        return internal::condition_number_fast(matrix);
-    }
-
-    const T tolerance = matrix_tolerance(matrix);
-    const TMatrix<T> singular_values = svd_s(matrix);
-    T largest = T(static_cast<long long>(0));
-    T smallest;
-    if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        smallest = T("1e100");
-    } else {
-        smallest = T(mymath::infinity());
-    }
-
-    const std::size_t diagonal =
-        singular_values.rows < singular_values.cols ? singular_values.rows : singular_values.cols;
-    for (std::size_t i = 0; i < diagonal; ++i) {
-        const T sigma = t_abs(singular_values.at(i, i));
-        if (sigma > largest) {
-            largest = sigma;
-        }
-        if (sigma > tolerance && sigma < smallest) {
-            smallest = sigma;
-        }
-    }
-
-    bool is_infinite = false;
-    if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        if (largest <= tolerance || smallest >= T("1e100")) {
-            is_infinite = true;
-        }
-    } else {
-        if (largest <= tolerance || smallest == T(mymath::infinity())) {
-            is_infinite = true;
-        }
-    }
-
-    if (is_infinite) {
+    if (effective_rank < diagonal || !smallest_set || smallest <= tolerance) {
         return T(mymath::infinity());
     }
     return largest / smallest;
@@ -1117,6 +1114,9 @@ template <typename T>
 TMatrix<T> cholesky(const TMatrix<T>& matrix) {
     if (!matrix.is_square()) {
         throw std::runtime_error("cholesky requires a square matrix");
+    }
+    if (!is_symmetric(matrix)) {
+        throw std::runtime_error("cholesky requires a symmetric positive-definite matrix");
     }
     TMatrix<T> result(matrix.rows, matrix.cols, T(static_cast<long long>(0)));
     // 使用精度感知的正定性阈值
@@ -1428,9 +1428,6 @@ T rank(const TMatrix<T>& matrix) {
             const T pivot = reduced.at(rank_count, col);
             for (std::size_t row = rank_count + 1; row < reduced.rows; ++row) {
                 const T factor = reduced.at(row, col) / pivot;
-                if (t_abs(factor) <= tolerance) {
-                    continue;
-                }
                 for (std::size_t current_col = col; current_col < reduced.cols; ++current_col) {
                     reduced.at(row, current_col) -= factor * reduced.at(rank_count, current_col);
                     if (t_abs(reduced.at(row, current_col)) <= tolerance) {

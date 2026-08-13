@@ -66,6 +66,9 @@ struct CustomFunction {
     std::shared_ptr<ExpressionAST> get_or_compile_ast() const;
 };
 
+#include "parser/grammars/command_parser.h"
+#include <map>
+
 /**
  * @struct ScriptFunction
  * @brief 脚本定义的函数
@@ -75,6 +78,7 @@ struct CustomFunction {
  */
 struct ScriptFunction {
     std::vector<std::string> parameter_names;              ///< 参数名列表
+    std::map<std::string, CommandASTNode> default_values;   ///< 默认参数表达式
     std::shared_ptr<const script::BlockStatement> body;    ///< 函数体 AST
 };
 

@@ -14,7 +14,7 @@
 #ifndef SYMBOLIC_PUBLIC_NODE_TYPES_H
 #define SYMBOLIC_PUBLIC_NODE_TYPES_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include <string>
 
 // ============================================================================

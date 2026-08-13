@@ -222,7 +222,7 @@ namespace {
  * @return 静态精度值的引用
  */
 int& mutable_process_display_precision() {
-    static int precision = kDefaultDisplayPrecision;
+    static thread_local int precision = kDefaultDisplayPrecision;
     return precision;
 }
 
@@ -507,29 +507,30 @@ std::string format_stored_value(const StoredValue& value, bool symbolic_constant
         return symbolic_text;
     }
     if (value.has_precise_decimal_text && !value.precise_decimal_text.empty()) {
-        if (is_integer_double(value.decimal, 1e-9)) {
-            return format_decimal(normalize_display_decimal(value.decimal));
+        if (is_integer_double(value.as_scalar(), 1e-9)) {
+            return format_decimal(normalize_display_decimal(value.as_scalar()));
         }
         // Preserve the original high-precision text
         return value.precise_decimal_text;
     }
-    if (value.is_matrix) {
-        return value.matrix_ptr->to_string();
+    if (value.is_matrix()) {
+        return value.as_matrix().to_string();
     }
-    if (value.is_complex) {
-        long double re = value.complex.real().to_long_double();
-        long double im = value.complex.imag().to_long_double();
+    if (value.is_complex()) {
+        auto c = value.as_complex();
+        long double re = static_cast<long double>(c.real());
+        long double im = static_cast<long double>(c.imag());
         if (is_complex_effectively_real(std::complex<long double>(re, im))) {
-            return format_symbolic_number(value.complex.real());
+            return format_symbolic_number(c.real());
         }
-        return "complex(" + format_symbolic_number(value.complex.real()) + ", " +
-               format_symbolic_number(value.complex.imag()) + ")";
+        return "complex(" + format_symbolic_number(c.real()) + ", " +
+               format_symbolic_number(c.imag()) + ")";
     }
     if (value.exact) {
         return value.rational.to_string();
     }
-    return symbolic_constants_mode ? format_symbolic_number(value.decimal)
-                                   : format_decimal(normalize_display_decimal(value.decimal));
+    return symbolic_constants_mode ? format_symbolic_number(value.as_scalar())
+                                   : format_decimal(normalize_display_decimal(value.as_scalar()));
 }
 
 /**

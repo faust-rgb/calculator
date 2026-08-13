@@ -16,6 +16,7 @@
 #include "parser/grammars/exact_evaluator.h"
 #include "parser/ast/expression_ast.h"
 #include "parser/ast/expression_compiler.h"
+#include "parser/ast/unified_ast.h"
 #include "calculator_exceptions.h"
 #include "execution/resolver/variable_resolver.h"
 #include "types/function.h"
@@ -49,7 +50,6 @@ StoredValue convert_matrix_value_to_stored(matrix::Value&& matrix_val) {
     } else if (matrix_val.is_complex) {
         result.is_complex = true;
         result.complex = matrix_val.complex;
-        result.decimal = matrix_val.complex.real();
     } else {
         result.decimal = matrix_val.scalar;
     }
@@ -275,10 +275,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
                     max_denominator_value.is_string) {
                     throw std::runtime_error("rat max_denominator must be a positive integer");
                 }
-                const Scalar scalar =
-                    max_denominator_value.exact
-                        ? rational_to_double(max_denominator_value.rational)
-                        : max_denominator_value.decimal;
+                const Scalar scalar = max_denominator_value.get_decimal();
                 if (!is_integer_double(scalar) || scalar <= 0.0L) {
                     throw std::runtime_error("rat max_denominator must be a positive integer");
                 }
@@ -289,9 +286,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
                 return value;
             }
 
-            const Scalar decimal_value = value.exact
-                                             ? Scalar(rational_to_double(value.rational))
-                                             : Scalar(value.decimal);
+            const Scalar decimal_value = value.get_decimal();
             long long numerator = 0;
             long long denominator = 1;
             if (!mymath::best_rational_approximation(static_cast<Scalar>(decimal_value).to_long_double(),

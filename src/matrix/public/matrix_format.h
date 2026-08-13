@@ -15,7 +15,7 @@
 #define MATRIX_PUBLIC_FORMAT_H
 
 #include "math/types/complex.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include <string>
 
 namespace matrix {

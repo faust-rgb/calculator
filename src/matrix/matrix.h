@@ -15,7 +15,7 @@
 #ifndef MATRIX_H
 #define MATRIX_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "types/stored_value.h"
 #include <cstddef>
 #include <functional>

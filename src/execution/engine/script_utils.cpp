@@ -47,10 +47,7 @@ bool truthy_value(const StoredValue& value) {
     if (value.is_dict) {
         return value.dict_value && !value.dict_value->empty();
     }
-    return !mymath::is_near_zero(value.exact
-                                     ? rational_to_double(value.rational)
-                                     : value.decimal,
-                                 1e-10);
+    return !mymath::is_near_zero(value.get_decimal(), 1e-10);
 }
 
 Scalar evaluate_scalar( IExecutionContext* ctx, const CommandASTNode& ast, const char* context) {
@@ -58,7 +55,7 @@ Scalar evaluate_scalar( IExecutionContext* ctx, const CommandASTNode& ast, const
     if (val.is_matrix || val.is_complex || val.is_string) {
         throw std::runtime_error(std::string(context) + " must be a scalar");
     }
-    return val.exact ? rational_to_double(val.rational) : val.decimal;
+    return val.get_decimal();
 }
 
 bool is_wrapped_by(std::string_view text, char open, char close) {
@@ -133,7 +130,7 @@ long long stored_to_index(const StoredValue& value, const char* context) {
     if (value.is_matrix || value.is_complex || value.is_string || value.is_list || value.is_dict) {
         throw std::runtime_error(std::string(context) + " must be an integer");
     }
-    const Scalar scalar = value.exact ? rational_to_double(value.rational) : value.decimal;
+    const Scalar scalar = value.get_decimal();
     if (!is_integer_double(scalar)) {
         throw std::runtime_error(std::string(context) + " must be an integer");
     }

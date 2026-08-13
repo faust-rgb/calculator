@@ -3,11 +3,16 @@
 // ============================================================================
 
 #include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/core/symbolic_evaluator.h"
 
 #include <algorithm>
 #include <cctype>
 #include <memory>
 #include <vector>
+
+StoredValue SymbolicExpression::evalf(core::ExecutionContext& ctx) const {
+    return symbolic::SymbolicEvaluator::evalf(*this, ctx);
+}
 
 using namespace symbolic_expression_internal;
 

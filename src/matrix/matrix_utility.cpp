@@ -18,7 +18,7 @@
 #include "math/types/complex.h"
 #include "string_utils.h"
 #include "math/precise/precise_decimal.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "core/common/display_precision.h"
 #include "core/services/format_utils.h"
 #include <algorithm>

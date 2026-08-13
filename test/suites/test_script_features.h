@@ -383,6 +383,72 @@ print("m[-1,-1]: ", val)
     }
 }
 
+inline void test_script_advanced_parser_features(int& passed, int& failed) {
+    Calculator calc;
+    std::string output;
+
+    // Test default parameter in function definition
+    try {
+        output = calc.execute_script(R"(
+def add_with_default(a, b = 10):
+    return a + b
+res = add_with_default(5)
+print("default param res: ", res)
+)", false);
+
+        if (output.find("15") != std::string::npos) {
+            passed++;
+        } else {
+            std::cout << "FAIL: default param: " << output << "\n";
+            failed++;
+        }
+    } catch (const std::exception& e) {
+        std::cout << "FAIL: default param threw: " << e.what() << "\n";
+        failed++;
+    }
+
+    // Test comment-only indented block
+    try {
+        output = calc.execute_script(R"(
+x = 10
+if x > 0:
+    # comment line
+y = 20
+print("y after comment block: ", y)
+)", false);
+
+        if (output.find("20") != std::string::npos) {
+            passed++;
+        } else {
+            std::cout << "FAIL: comment block: " << output << "\n";
+            failed++;
+        }
+    } catch (const std::exception& e) {
+        std::cout << "FAIL: comment block threw: " << e.what() << "\n";
+        failed++;
+    }
+
+    // Test string semicolon in C-style for loop
+    try {
+        output = calc.execute_script(R"(
+sum_len = 0
+for (s = ";"; sum_len < 1; sum_len = sum_len + 1):
+    pass
+print("semicolon loop: ", sum_len)
+)", false);
+
+        if (output.find("1") != std::string::npos) {
+            passed++;
+        } else {
+            std::cout << "FAIL: semicolon in for header: " << output << "\n";
+            failed++;
+        }
+    } catch (const std::exception& e) {
+        std::cout << "FAIL: semicolon in for header threw: " << e.what() << "\n";
+        failed++;
+    }
+}
+
 inline void run_script_feature_tests(int& passed, int& failed) {
     test_script_match_case(passed, failed);
     test_script_for_in_list(passed, failed);
@@ -392,6 +458,7 @@ inline void run_script_feature_tests(int& passed, int& failed) {
     test_script_dict_operations(passed, failed);
     test_script_logical_operators(passed, failed);
     test_script_matrix_indexing(passed, failed);
+    test_script_advanced_parser_features(passed, failed);
 }
 
 #endif // TEST_SCRIPT_FEATURES_H

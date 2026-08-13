@@ -144,7 +144,7 @@ ScriptSignal execute_script_statement(
                     }
                 }
                 else if (iterable.is_string) {
-                    for (char ch : iterable.string_value) {
+                    for (char ch : iterable.get_string_value()) {
                         StoredValue char_value;
                         char_value.is_string = true;
                         char_value.string_value = std::string(1, ch);
@@ -188,7 +188,10 @@ ScriptSignal execute_script_statement(
         }
         case script::Statement::Kind::kFunction: {
             const auto& fs = static_cast<const script::FunctionStatement&>(statement);
-            ScriptFunction function; function.parameter_names = fs.parameters; function.body = fs.body;
+            ScriptFunction function;
+            function.parameter_names = fs.parameters;
+            function.default_values = fs.default_values;
+            function.body = fs.body;
             ctx->functions().add_script_function(fs.name, function);
             *last_output = fs.name + "(...)";
             return {};
@@ -227,8 +230,8 @@ ScriptSignal execute_script_statement(
                             if (subject.is_string && pattern.is_string) matches = subject.string_value == pattern.string_value;
                             else matches = false;
                         } else {
-                            Scalar subj_val = subject.exact ? rational_to_double(subject.rational) : subject.decimal;
-                            Scalar pat_val = pattern.exact ? rational_to_double(pattern.rational) : pattern.decimal;
+                            Scalar subj_val = subject.get_decimal();
+                            Scalar pat_val = pattern.get_decimal();
                             matches = mymath::is_near_zero(subj_val - pat_val, 1e-10);
                         }
                     }
@@ -247,13 +250,19 @@ ScriptSignal execute_script_statement(
     return {};
 }
 
+#include "parser/ast/unified_ast.h"
+
 ScriptSignal execute_script_block(
                                   IExecutionContext* ctx,
                                   const script::BlockStatement& block,
                                   bool exact_mode,
                                   std::string* last_output,
                                   bool create_scope) {
-    if (create_scope) ctx->variables().push_scope();
+    std::unique_ptr<core::ExecutionContext::ScopeGuard> guard;
+    if (create_scope && ctx) {
+        guard = std::make_unique<core::ExecutionContext::ScopeGuard>(ctx->core_context());
+        ctx->variables().push_scope();
+    }
     try {
         for (const auto& stmt : block.statements) {
             const ScriptSignal signal = execute_script_statement(ctx, *stmt, exact_mode, last_output, true);
@@ -264,9 +273,14 @@ ScriptSignal execute_script_block(
         }
         if (create_scope) ctx->variables().pop_scope();
         return {};
-    } catch (...) {
+    } catch (const core::ScriptRuntimeError&) {
         if (create_scope) ctx->variables().pop_scope();
         throw;
+    } catch (const std::exception& e) {
+        if (create_scope) ctx->variables().pop_scope();
+        core::SourceLocation loc;
+        loc.line = block.line;
+        throw core::ScriptRuntimeError(e.what(), loc);
     }
 }
 

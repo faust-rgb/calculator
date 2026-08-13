@@ -15,7 +15,7 @@
 #define SYMBOLIC_PUBLIC_FACTORY_H
 
 #include "symbolic/public/symbolic_node_types.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include <string>
 
 // 使用 internal 命名空间中的构造函数

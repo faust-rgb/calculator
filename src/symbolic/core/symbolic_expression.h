@@ -1,11 +1,14 @@
 #ifndef SYMBOLIC_EXPRESSION_H
 #define SYMBOLIC_EXPRESSION_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "symbolic/public/symbolic_node_types.h"
 #include <memory>
 #include <string>
 #include <vector>
+
+struct StoredValue;
+namespace core { class ExecutionContext; }
 
 /**
  * @file symbolic_expression.h
@@ -253,6 +256,13 @@ public:
      * 用于防止表达式膨胀导致的内存问题。
      */
     SymbolicExpression simplify_with_budget(std::size_t max_nodes) const;
+
+    /**
+     * @brief 显式求值为数值 StoredValue (Phase 3 CAS Decoupling)
+     * @param ctx 执行上下文
+     * @return 数值 StoredValue 结果
+     */
+    StoredValue evalf(core::ExecutionContext& ctx) const;
 
     /**
      * @brief 计算表达式树的节点数

@@ -14,7 +14,7 @@
  */
 
 #include "matrix.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 
 #include "matrix.h"
 #include "matrix_internal.h"

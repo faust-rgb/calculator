@@ -23,7 +23,7 @@ namespace display_precision {
  * @return 显示精度的可变引用
  */
 inline int& mutable_value() {
-    static int precision = 12;
+    static thread_local int precision = 12;
     return precision;
 }
 

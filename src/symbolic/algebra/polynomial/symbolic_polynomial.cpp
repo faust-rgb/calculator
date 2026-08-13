@@ -6,7 +6,7 @@
 #include "symbolic/algebra/polynomial/symbolic_polynomial.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 
 #include <algorithm>
 #include <mymath.h>

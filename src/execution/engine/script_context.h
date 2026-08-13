@@ -34,15 +34,20 @@ struct ScriptContext {
     static constexpr int kMaxCallDepth = 100;     ///< 最大递归深度限制
 };
 
+#include "core/execution_context.h"
+
 /**
  * @class IExecutionContext
  * @brief 抽象执行上下文接口，用于解耦执行引擎与核心类
  *
- * 执行引擎通过此接口访问变量、函数、配置和服务，而无需知道 Calculator 类的具体实现。
+ * 执行引擎通过此接口访问变量、函数、配置和服务，并统一提供底层 core::ExecutionContext。
  */
 class IExecutionContext {
 public:
     virtual ~IExecutionContext() = default;
+
+    virtual core::ExecutionContext& core_context() = 0;
+    virtual const core::ExecutionContext& core_context() const = 0;
 
     virtual IVariableManager& variables() = 0;
     virtual const IVariableManager& variables() const = 0;

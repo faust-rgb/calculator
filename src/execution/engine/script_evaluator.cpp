@@ -318,7 +318,7 @@ bool try_execute_index_assignment(
         if (new_value.is_matrix || new_value.is_list || new_value.is_dict || new_value.is_string) {
             throw std::runtime_error("matrix element assignment requires a scalar value");
         }
-        Scalar val = new_value.exact ? rational_to_double(new_value.rational) : new_value.decimal;
+        Scalar val = new_value.get_decimal();
         const std::vector<std::string> parts = split_script_top_level(index_expr, ',');
         if (parts.size() == 1) {
             long long index = stored_to_index(evaluate_script_value_expression(ctx, parts[0], exact_mode), "matrix index");
@@ -378,8 +378,7 @@ StoredValue evaluate_expression_value(
 
     std::string trimmed_expr = utils::trim_copy(target_expr);
     if (is_string_literal(trimmed_expr)) {
-        StoredValue res; res.is_string = true; res.string_value = parse_string_literal_value(trimmed_expr);
-        return res;
+        return StoredValue(parse_string_literal_value(trimmed_expr));
     }
 
     CommandParser::IsCommandCallback is_cmd = [ctx](std::string_view name) {
@@ -425,8 +424,7 @@ StoredValue evaluate_expression_value(
 
     std::string converted;
     if (try_base_conversion_expression(target_expr, variables, ctx->functions().get_custom_functions_map(), {ctx->config().is_hex_prefix_mode(), ctx->config().is_hex_uppercase_mode()}, &converted)) {
-        StoredValue res; res.is_string = true; res.string_value = converted;
-        return res;
+        return StoredValue(converted);
     }
 
     const HasScriptFunctionCallback has_script_function = [ctx](const std::string& name) {
@@ -444,13 +442,13 @@ StoredValue evaluate_expression_value(
                                    has_script_function, invoke_script_function);
     StoredValue result = parser.evaluate_stored(target_expr, exact_mode, ctx->config().is_symbolic_constants_mode());
 
-    if (ctx->config().is_symbolic_constants_mode() && !result.has_symbolic_text && !result.is_string && !result.is_matrix) {
+    if (ctx->config().is_symbolic_constants_mode() && !result.has_symbolic_text && !result.is_string() && !result.is_matrix()) {
         std::string symbolic_text;
         if (try_symbolic_constant_expression(target_expr, variables, ctx->functions().get_custom_functions_map(), &symbolic_text)) {
             bool symbolic_text_is_plain_decimal = false;
             try {
                 const Scalar parsed = mymath::scalar_from_string(symbolic_text);
-                symbolic_text_is_plain_decimal = mymath::abs(parsed - result.decimal) < Scalar(1e-12L);
+                symbolic_text_is_plain_decimal = mymath::abs(parsed - result.as_scalar()) < Scalar(1e-12L);
             } catch (...) { symbolic_text_is_plain_decimal = false; }
             if (!symbolic_text_is_plain_decimal) {
                 result.has_symbolic_text = true;

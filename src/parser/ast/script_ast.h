@@ -165,6 +165,7 @@ struct FunctionStatement : Statement {
 
     std::string name;
     std::vector<std::string> parameters;
+    std::map<std::string, CommandASTNode> default_values;
     SharedBlockPtr body;
 };
 

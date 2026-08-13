@@ -13,6 +13,7 @@
 
 #include "core/api/calculator.h"
 #include "core/environment/scope.h"
+#include "core/execution_context.h"
 #include "app/scalar_type.h"
 #include "app/default_precision.h"
 #include "execution/registry/command_registry.h"
@@ -64,7 +65,6 @@ using app::kMaxDisplayPrecision;
 #include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "execution/engine/script_context.h"
-#include "execution/engine/script_context.h"
 
 // ============================================================================
 // Calculator 实现类
@@ -83,6 +83,7 @@ using app::kMaxDisplayPrecision;
 struct Calculator::Impl : public IExecutionContext {
     Calculator* parent = nullptr;
     ServiceLocator locator;
+    core::ExecutionContext execution_ctx;
 
     // 快捷访问服务接口（延迟初始化）
     std::shared_ptr<IVariableManager> variables_ptr;
@@ -93,6 +94,9 @@ struct Calculator::Impl : public IExecutionContext {
     std::shared_ptr<IStatePersistence> persistence;
 
     // IExecutionContext implementation
+    core::ExecutionContext& core_context() override { return execution_ctx; }
+    const core::ExecutionContext& core_context() const override { return execution_ctx; }
+
     IVariableManager& variables() override { return *variables_ptr; }
     const IVariableManager& variables() const override { return *variables_ptr; }
     

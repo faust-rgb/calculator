@@ -18,6 +18,8 @@
 #include "suites/test_core_logic.h"
 #include "suites/test_core.h"
 #include "math/mymath.h"
+#include "parser/ast/unified_ast.h"
+#include "symbolic/core/symbolic_evaluator.h"
 #include <iostream>
 #include <string>
 
@@ -97,6 +99,41 @@ int run_core_logic_tests(int& passed, int& failed) {
     std::cout << "Running extrema func tests..." << std::endl;
     // 运行极值与自定义函数管理测试
     run_logic_extrema_func_tests(passed, failed);
+
+    // 运行 ASTEvaluator 与 SymbolicEvaluator 单元测试
+    std::cout << "Running ASTEvaluator & SymbolicEvaluator tests..." << std::endl;
+    try {
+        core::ExecutionContext ctx;
+        ctx.scope().set("x", StoredValue(mymath::Scalar(10.0L)));
+        ctx.scope().set("y", StoredValue(mymath::Scalar(5.0L)));
+
+        // Test VariableNode and BinaryOpNode with ASTEvaluator
+        auto add_node = std::make_unique<core::BinaryOpNode>(
+            "+",
+            std::make_unique<core::VariableNode>("x"),
+            std::make_unique<core::VariableNode>("y")
+        );
+        StoredValue result = core::ASTEvaluator::evaluate(*add_node, ctx);
+        if (result.is_scalar() && result.get_decimal() == mymath::Scalar(15.0L)) {
+            passed++;
+        } else {
+            failed++;
+            std::cout << "FAIL: ASTEvaluator BinaryOpNode result: " << result.get_decimal() << std::endl;
+        }
+
+        // Test SymbolicEvaluator::evalf
+        SymbolicExpression sym = SymbolicExpression::parse("x + y");
+        StoredValue sym_res = symbolic::SymbolicEvaluator::evalf(sym, ctx);
+        if (sym_res.is_scalar() && sym_res.get_decimal() == mymath::Scalar(15.0L)) {
+            passed++;
+        } else {
+            failed++;
+            std::cout << "FAIL: SymbolicEvaluator evalf result: " << sym_res.get_decimal() << std::endl;
+        }
+    } catch (const std::exception& e) {
+        failed++;
+        std::cout << "FAIL: ASTEvaluator test threw exception: " << e.what() << std::endl;
+    }
 
     return 0;
 }

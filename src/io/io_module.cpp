@@ -52,7 +52,7 @@ namespace {
         if (val.is_matrix || val.is_complex || val.is_string || val.is_list || val.is_dict) {
             throw std::runtime_error(ctx + " must be a scalar");
         }
-        return val.exact ? rational_to_double(val.rational) : val.decimal.to_long_double();
+        return static_cast<long double>(val.get_decimal());
     }
 
     /**
@@ -145,7 +145,7 @@ namespace {
             return "[" + format_long_double(val.complex.real().to_long_double()) + ", " + format_long_double(val.complex.imag().to_long_double()) + "]";
         }
         // 标量数值
-        return format_long_double(val.exact ? rational_to_double(val.rational) : val.decimal.to_long_double());
+        return format_long_double(static_cast<long double>(val.get_decimal()));
     }
 
     /**
@@ -746,7 +746,7 @@ std::string IoModule::execute_args(const std::string& command,
             out += "]";
             return out;
         }
-        return format_long_double(res.exact ? rational_to_double(res.rational) : res.decimal.to_long_double());
+        return format_long_double(static_cast<long double>(res.get_decimal()));
     }
 
     return "";

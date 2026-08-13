@@ -320,7 +320,7 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                         found->is_string || found->has_symbolic_text) {
                         throw_ast_error<MathError>("unsupported variable type: " + ast->identifier, ast->position);
                     }
-                    return found->exact ? rational_to_double(found->rational) : found->decimal;
+                    return found->get_decimal();
                 }
             }
 
@@ -335,7 +335,7 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                     found->is_string || found->has_symbolic_text) {
                     throw_ast_error<MathError>("unsupported variable type: " + ast->identifier, ast->position);
                 }
-                return found->exact ? rational_to_double(found->rational) : found->decimal;
+                return found->get_decimal();
             }
             throw_ast_error<UndefinedError>("unknown variable: " + ast->identifier, ast->position);
         }
@@ -552,7 +552,7 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                         throw_ast_error<MathError>("native function " + ast->identifier +
                             " returned non-scalar value in scalar context", ast->position);
                     }
-                    return result.exact ? Scalar(rational_to_double(result.rational)) : result.decimal;
+                    return result.get_decimal();
                 }
             }
 
