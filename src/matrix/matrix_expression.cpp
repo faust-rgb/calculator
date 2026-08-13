@@ -68,6 +68,16 @@ namespace internal {
 namespace {
 
 /**
+ * @brief 标量参数回退信号
+ *
+ * 用于 abs/exp/sin/cos/ln 这类多态函数：当参数既非矩阵也非复数、
+ * 只是普通标量时，矩阵路径不应该消费它们（否则会丢失有理形式）。
+ * 抛出此信号让上层 matrix::try_evaluate_expression 返回 false，
+ * 进而回退到 evaluate_stored 的精确有理 / 标量路径。
+ */
+struct ScalarFallbackSignal {};
+
+/**
  * @brief 解析尺寸参数（行数或列数）
  *
  * 将表达式字符串解析为非负整数尺寸值。
@@ -1660,10 +1670,13 @@ private:
                 } else if (v.is_matrix) {
                     return Value::from_scalar(norm(v.matrix));
                 } else {
-                    return Value::from_scalar(mymath::abs(v.scalar));
+                    // 普通标量参数：交给 evaluate_stored 精确有理 / 标量路径，
+                    // 以便精确模式下保留有理形式（如 abs(-7/3) => 7/3）。
+                    throw ScalarFallbackSignal{};
                 }
             }
-            return Value::from_scalar((*scalar_evaluator_)("abs(" + arguments[0] + ")"));
+            // 参数无法解析为矩阵/复数值，同样让上层标量路径处理。
+            throw ScalarFallbackSignal{};
         }
 
         if (name == "exp") {

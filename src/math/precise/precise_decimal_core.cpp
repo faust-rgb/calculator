@@ -147,6 +147,7 @@ void PreciseDecimal::normalize() {
 }
 
 bool PreciseDecimal::is_zero() const {
+    if (is_inf || is_nan) return false;
     return data.empty() || (data.size() == 1 && data[0] == 0);
 }
 
@@ -157,6 +158,11 @@ bool PreciseDecimal::is_integer_value() const {
 
 PreciseDecimal PreciseDecimal::operator-() const {
     PreciseDecimal res = *this;
+    if (res.is_inf) {
+        // 无穷大翻转负号，避免被空的 data 误判为零导致符号无法翻转
+        res.negative = !res.negative;
+        return res;
+    }
     if (!res.is_zero()) res.negative = !res.negative;
     return res;
 }
@@ -390,6 +396,8 @@ bool PreciseDecimal::operator<(const PreciseDecimal& rhs) const {
 // ============================================================================
 
 std::string PreciseDecimal::to_string(int precision) const {
+    if (is_nan) return "nan";
+    if (is_inf) return negative ? "-inf" : "inf";
     if (is_zero()) return "0";
 
     std::string s = bigint_to_string(data);
@@ -431,6 +439,8 @@ std::string PreciseDecimal::to_string(int precision) const {
 }
 
 long double PreciseDecimal::to_double() const {
+    if (is_nan) return mymath::quiet_nan();
+    if (is_inf) return negative ? -mymath::infinity() : mymath::infinity();
     if (is_zero()) return 0.0L;
 
     int start_chunk = static_cast<int>(data.size()) - 1;

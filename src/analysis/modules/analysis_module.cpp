@@ -65,7 +65,20 @@ bool handle_analysis_command(const AnalysisContext& ctx,
             infinite_point && !trimmed_point.empty() && trimmed_point.front() == '-';
         int dir = 0;
         if (arguments.size() > dir_idx) {
-            dir = static_cast<int>(round_to_long_long(ctx.parse_decimal(arguments[dir_idx])));
+            std::string dir_str = utils::trim_copy(arguments[dir_idx]);
+            if (dir_str == "+" || dir_str == "right" || dir_str == ">" || dir_str == "1") {
+                dir = 1;
+            } else if (dir_str == "-" || dir_str == "left" || dir_str == "<" || dir_str == "-1") {
+                dir = -1;
+            } else if (dir_str == "0" || dir_str == "both") {
+                dir = 0;
+            } else {
+                try {
+                    dir = static_cast<int>(round_to_long_long(ctx.parse_decimal(dir_str)));
+                } catch (...) {
+                    dir = 0;
+                }
+            }
         } else if (infinite_point) {
             dir = negative_infinity ? -1 : 1;
         }

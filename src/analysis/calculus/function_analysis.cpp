@@ -1035,8 +1035,46 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
                                  int direction,
                                  Scalar* result,
                                  std::function<Scalar(const SymbolicExpression&, const std::string&, Scalar)> evaluate_at_override = nullptr) {
+    using namespace symbolic_expression_internal;
     SymbolicExpression current = expression.simplify();
-    if (current.node_type() != NodeType::kDivide) {
+    if (current.node_type() == NodeType::kMultiply) {
+        SymbolicExpression left = current.left_child();
+        SymbolicExpression right = current.right_child();
+        Scalar left_val = Scalar(0.0L), right_val = Scalar(0.0L);
+        const auto left_kind = probe_symbolic_value_at(left, variable_name, point, &left_val);
+        const auto right_kind = probe_symbolic_value_at(right, variable_name, point, &right_val);
+        if (is_zero_probe(left_kind, left_val) && is_infinite_probe(right_kind)) {
+            SymbolicExpression transformed = make_divide(right, make_divide(SymbolicExpression::number(Scalar(1.0L)), left)).simplify();
+            return try_symbolic_lhopital_limit(transformed, variable_name, point, direction, result, evaluate_at_override);
+        } else if (is_zero_probe(right_kind, right_val) && is_infinite_probe(left_kind)) {
+            SymbolicExpression transformed = make_divide(left, make_divide(SymbolicExpression::number(Scalar(1.0L)), right)).simplify();
+            return try_symbolic_lhopital_limit(transformed, variable_name, point, direction, result, evaluate_at_override);
+        }
+        return false;
+    } else if (current.node_type() == NodeType::kPower) {
+        SymbolicExpression base = current.left_child();
+        SymbolicExpression exp_expr = current.right_child();
+        Scalar base_val = Scalar(0.0L), exp_val = Scalar(0.0L);
+        const auto base_kind = probe_symbolic_value_at(base, variable_name, point, &base_val);
+        const auto exp_kind = probe_symbolic_value_at(exp_expr, variable_name, point, &exp_val);
+        bool is_indet = false;
+        if (base_kind == SymbolicLimitProbeKind::kFinite && mymath::is_near_zero(base_val - 1.0L, 1e-6L) && is_infinite_probe(exp_kind)) {
+            is_indet = true;
+        } else if (is_zero_probe(base_kind, base_val) && is_zero_probe(exp_kind, exp_val)) {
+            is_indet = true;
+        } else if (is_infinite_probe(base_kind) && is_zero_probe(exp_kind, exp_val)) {
+            is_indet = true;
+        }
+        if (is_indet) {
+            SymbolicExpression exponent = make_multiply(exp_expr, make_function("ln", base)).simplify();
+            Scalar exp_limit = Scalar(0.0L);
+            if (try_symbolic_lhopital_limit(exponent, variable_name, point, direction, &exp_limit, evaluate_at_override)) {
+                *result = mymath::exp(exp_limit);
+                return true;
+            }
+        }
+        return false;
+    } else if (current.node_type() != NodeType::kDivide) {
         return false;
     }
 
@@ -1779,9 +1817,6 @@ Scalar FunctionAnalysis::definite_integral(Scalar lower_bound,
             }
             prev_val_scan = val;
         }
-        if (sign_changes > 20) {
-            throw std::runtime_error("integral did not converge (excessive oscillations detected)");
-        }
         reject_divergent_transformed_endpoint(std::function<Scalar(Scalar)>(transformed), false, true);
         return adaptive_gauss_kronrod_callable(std::function<Scalar(Scalar)>(transformed),
                                                Scalar(static_cast<long long>(0)),
@@ -1875,8 +1910,17 @@ Scalar FunctionAnalysis::definite_integral(Scalar lower_bound,
         const Scalar x =
             lower_bound + (upper_bound - lower_bound) *
                               (Scalar((i)) / Scalar(40.0L));
-        Scalar value = evaluate_with_variable(x);
-        if (!t_isfinite(value)) {
+        Scalar value = Scalar(0.0L);
+        bool eval_ok = true;
+        try {
+            value = evaluate_with_variable(x);
+        } catch (...) {
+            eval_ok = false;
+        }
+        if (!eval_ok || !t_isfinite(value)) {
+            if (x > lower_bound + Scalar(1e-12L) && x < upper_bound - Scalar(1e-12L)) {
+                return definite_integral(lower_bound, x) + definite_integral(x, upper_bound);
+            }
             throw std::runtime_error("integral did not converge");
         }
         if (t_isfinite(prev_scan_val)) {

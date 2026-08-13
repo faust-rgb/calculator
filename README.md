@@ -28,7 +28,7 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 - `src/io`
   File I/O operations and state persistence
 - `test`
-  Regression tests and runnable example scripts
+  Regression test executable `bin/calculator_tests` (suite sources under `test/suites/`)
 
 ## Additional Docs
 
@@ -141,7 +141,7 @@ make
 
 This generates the executable `bin/calculator`.
 
-The regression suite lives in `test/tests.cpp`.
+The regression suite lives under `test/suites/` and is driven by `test/main.cpp`.
 
 Current validation status:
 
@@ -528,16 +528,19 @@ the first argument, or use `:run file.calc` in the REPL.
 
 Runnable script-related inputs are provided in `test/script/`:
 
-- `test/script/comprehensive_validation.calc`
-  Broad script and calculator feature validation; expected final output is `11`
+- `test/script/additional_validation.calc`
+  Broad script and calculator feature validation; expected final output is `== additional script validation done ==`
+- `test/script/run_symbolic_cli_validation.sh`
+  CLI feature validation harness driving `bin/calculator` against many scripted inputs
 - `SYNTAX_GUIDE.md`
   The dedicated scripting syntax guide
 
 Example commands:
 
 ```bash
-bin/calculator test/script/comprehensive_validation.calc
-printf ':run test/script/comprehensive_validation.calc\n' | bin/calculator
+bin/calculator test/script/additional_validation.calc
+printf ':run test/script/additional_validation.calc\n' | bin/calculator
+bash test/script/run_symbolic_cli_validation.sh
 ```
 
 For syntax and behavior details, see `SYNTAX_GUIDE.md`.

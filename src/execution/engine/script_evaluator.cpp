@@ -8,6 +8,7 @@
 #include "script_runtime_internal.h"
 #include "execution/resolver/variable_resolver.h"
 #include "parser/grammars/unified_expression_parser.h"
+#include "parser/grammars/unified_parser_factory.h"
 #include "parser/grammars/symbolic_render_parser.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
@@ -388,8 +389,23 @@ StoredValue evaluate_expression_value(
         CommandASTNode ast = parse_command(trimmed_expr, is_cmd);
         if (ast.kind == CommandKind::kFunctionCall) {
             const auto* call = ast.as_function_call();
-            if (ctx->functions().get_native_functions()->count(std::string(call->name)) > 0) {
-                return evaluate_command_ast_to_value(ctx, ast, exact_mode);
+            const std::string call_name = call ? std::string(call->name) : std::string();
+            if (!call_name.empty() &&
+                ctx->functions().get_native_functions()->count(call_name) > 0) {
+                // 让 evaluate_stored 优先处理以下情形，否则原生分发会过早消费它们
+                // 并丢失有理、矩阵或特殊语义：
+                //   - rat(...) 走 evaluate_stored 中的有理逼近分支
+                //   - 精确有理模式 让 exact_evaluator 优先尝试
+                //   - 含矩阵/复数元素的调用 需要矩阵路径才能正确解包 vec/mat 等参数
+                UnifiedParserFactory analysis_factory;
+                const auto analysis = analysis_factory.analyze(trimmed_expr, &variables);
+                const bool defer_to_stored =
+                    call_name == "rat" || exact_mode ||
+                    analysis.has_bracket || analysis.has_matrix_func ||
+                    analysis.has_matrix_or_complex_var;
+                if (!defer_to_stored) {
+                    return evaluate_command_ast_to_value(ctx, ast, exact_mode);
+                }
             }
         }
     } catch (...) {}

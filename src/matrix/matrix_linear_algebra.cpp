@@ -1667,6 +1667,10 @@ TMatrix<T> eigenvectors(const TMatrix<T>& matrix) {
         }
     }
 
+    if (current_col < vectors.cols && current_col > 0) {
+        vectors.resize(matrix.rows, current_col, T(static_cast<long long>(0)));
+    }
+
     return vectors;
 }
 

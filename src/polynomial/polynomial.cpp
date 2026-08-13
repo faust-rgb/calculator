@@ -418,7 +418,7 @@ std::vector<Scalar> polynomial_real_roots_scalar(const std::vector<Scalar>& coef
 
     std::vector<Scalar> roots;
     for (const Scalar& point : critical_points) {
-        if (mymath::abs(polynomial_evaluate_scalar(normalized, point)) < Scalar(1e-6L)) {
+        if (mymath::abs(polynomial_evaluate_scalar(normalized, point)) < Scalar(1e-4L)) {
             add_unique_root(&roots, point);
         }
     }
@@ -429,11 +429,11 @@ std::vector<Scalar> polynomial_real_roots_scalar(const std::vector<Scalar>& coef
         const Scalar left_value = polynomial_evaluate_scalar(normalized, left);
         const Scalar right_value = polynomial_evaluate_scalar(normalized, right);
 
-        if (mymath::abs(left_value) < Scalar(1e-6L)) {
+        if (mymath::abs(left_value) < Scalar(1e-4L)) {
             add_unique_root(&roots, left);
             continue;
         }
-        if (mymath::abs(right_value) < Scalar(1e-6L)) {
+        if (mymath::abs(right_value) < Scalar(1e-4L)) {
             add_unique_root(&roots, right);
             continue;
         }

@@ -550,30 +550,6 @@ std::string Calculator::list_variables() const {
 }
 
 // 辅助方法：通用命令执行
-namespace {
-std::string dispatch_command_call(const Calculator::Impl* impl, const std::string& name, const std::string& expression) {
-    if (!impl->commands_ptr->has_command(name)) {
-        throw std::runtime_error(name + " command not available");
-    }
-
-    auto is_command = [impl](std::string_view n) {
-        return impl->commands_ptr->has_command(std::string(n));
-    };
-    CommandASTNode ast = parse_command(expression, is_command);
-    const auto* call = ast.as_function_call();
-    if (!call || (call->name != name && name[0] != ':')) {
-        throw std::runtime_error("expected " + name + "(...)");
-    }
-
-    std::vector<std::string_view> args;
-    for (const auto& arg : call->arguments) args.push_back(arg.text);
-    std::string output;
-    if (!impl->commands_ptr->try_process(name, args, &output, false, impl->services())) {
-        throw std::runtime_error(name + " command failed");
-    }
-    return output;
-}
-}
 
 std::string Calculator::export_variable(const std::string& line) const {
     // 特殊处理 :export，它不是函数调用语法

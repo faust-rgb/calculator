@@ -478,9 +478,14 @@ long double zeta(long double s) {
         throw std::domain_error("zeta is undefined at s = 1");
     }
 
-    const Scalar s_s = Scalar(s);
-
     if (s < 0.0L) {
+        if (is_integer(s)) {
+            long long int_s = static_cast<long long>(mymath::round(s));
+            if (int_s % 2 == 0) {
+                return 0.0L;
+            }
+        }
+        const Scalar s_s = Scalar(s);
         Scalar two_pow_s = mymath::pow(Scalar(2.0L), s_s);
         Scalar pi_pow_s_minus_1 = mymath::pow(mymath::pi(), s_s - Scalar(1.0L));
         Scalar sin_term = mymath::sin(mymath::pi() * s_s * Scalar(0.5L));
@@ -495,7 +500,6 @@ long double zeta(long double s) {
     }
 
     static constexpr long double kBernoulli[] = {
-        // 扩展到 16 项以支持更高精度
         1.0L / 6.0L, -1.0L / 30.0L, 1.0L / 42.0L, -1.0L / 30.0L,
         5.0L / 66.0L, -691.0L / 2730.0L, 7.0L / 6.0L, -3617.0L / 510.0L,
         43867.0L / 798.0L, -174611.0L / 330.0L, 854513.0L / 138.0L,
@@ -505,21 +509,20 @@ long double zeta(long double s) {
     constexpr int kEulerMaclaurinTerms = 16;
     constexpr int kEulerMaclaurinN = 32;
 
+    const Scalar s_s = Scalar(s);
     Scalar total = Scalar(0.0L);
     for (int n = 1; n < kEulerMaclaurinN; ++n) {
-        // Use pow for integer base to maintain precision
         Scalar n_val(static_cast<long long>(n));
         total += Scalar(1.0L) / mymath::pow(n_val, s_s);
     }
 
     const Scalar n_ld(static_cast<long long>(kEulerMaclaurinN));
-    // Integral term: N^(1-s)/(s-1)
     total += mymath::pow(n_ld, Scalar(1.0L) - s_s) / (s_s - Scalar(1.0L));
-    // Half term: 1/(2*N^s)
     total += Scalar(0.5L) / mymath::pow(n_ld, s_s);
 
     Scalar rising = s_s;
     Scalar factorial = Scalar(2.0L);
+    Scalar last_abs_term = Scalar(1e300L);
     for (int k = 1; k <= kEulerMaclaurinTerms; ++k) {
         if (k > 1) {
             rising *= (s_s + Scalar(static_cast<long long>(2 * k - 3))) *
@@ -527,9 +530,15 @@ long double zeta(long double s) {
             factorial *= Scalar(static_cast<long long>(2 * k - 1)) *
                          Scalar(static_cast<long long>(2 * k));
         }
-        // Correction term: B_{2k}/(2k)! * s(s+1)...(s+2k-2) / N^(s+2k-1)
-        total += Scalar(kBernoulli[k - 1]) * rising / factorial /
-                 mymath::pow(n_ld, s_s + Scalar(static_cast<long long>(2 * k - 1)));
+        Scalar term = Scalar(kBernoulli[k - 1]) * rising / factorial /
+                     mymath::pow(n_ld, s_s + Scalar(static_cast<long long>(2 * k - 1)));
+        Scalar abs_term = mymath::abs(term);
+        if (k > 1 && abs_term > last_abs_term) {
+            break; // Term energy growing in asymptotic expansion
+        }
+        last_abs_term = abs_term;
+        total += term;
+        if (abs_term < Scalar(1e-35L)) break;
     }
     return static_cast<long double>(total);
 }
@@ -540,7 +549,12 @@ Scalar zeta(Scalar s) {
     }
 
     if (s < Scalar(0.0L)) {
-        // Reflection formula: zeta(s) = 2^s * pi^(s-1) * sin(pi*s/2) * gamma(1-s) * zeta(1-s)
+        if (is_integer(s)) {
+            long long int_s = static_cast<long long>(mymath::round(s));
+            if (int_s % 2 == 0) {
+                return Scalar(0.0L);
+            }
+        }
         Scalar two_pow_s = mymath::pow(Scalar(2.0L), s);
         Scalar pi_pow_s_minus_1 = mymath::pow(mymath::pi(), s - Scalar(1.0L));
         Scalar sin_term = mymath::sin(mymath::pi() * s * Scalar(0.5L));
@@ -554,42 +568,39 @@ Scalar zeta(Scalar s) {
     }
 
     static const Scalar kBernoulli[] = {
-        // 扩展到 16 项以支持更高精度
-        Scalar("0.1666666666666666666666666666666666666667"),      // B_2 = 1/6
-        Scalar("-0.03333333333333333333333333333333333333333"),    // B_4 = -1/30
-        Scalar("0.02380952380952380952380952380952380952381"),     // B_6 = 1/42
-        Scalar("-0.03333333333333333333333333333333333333333"),    // B_8 = -1/30
-        Scalar("0.07575757575757575757575757575757575757576"),     // B_10 = 5/66
-        Scalar("-0.2531135531135531135531135531135531135531"),     // B_12 = -691/2730
-        Scalar("1.166666666666666666666666666666666666667"),       // B_14 = 7/6
-        Scalar("-7.092156862745098039215686274509803921569"),      // B_16 = -3617/510
-        Scalar("54.97117794486215538884979270083542188609"),       // B_18 = 43867/798
-        Scalar("-529.1242424242424242424242424242424242424"),      // B_20 = -174611/330
-        Scalar("6192.188405797101449275362318840579710145"),       // B_22 = 854513/138
-        Scalar("-86580.25311355311355311355311355311355311"),      // B_24 = -236364091/2730
-        Scalar("1425517.166666666666666666666666666666667"),       // B_26 = 8553103/6
-        Scalar("-27298231.06781609195402298850574712643678"),      // B_28 = -23749461029/870
-        Scalar("601580873.9006427981530343007915567282322"),       // B_30 = 8615841276005/14322
-        Scalar("-15116315767.09218656076374841189040590398"),      // B_32 = -7709321041217/510
+        Scalar("0.1666666666666666666666666666666666666667"),
+        Scalar("-0.03333333333333333333333333333333333333333"),
+        Scalar("0.02380952380952380952380952380952380952381"),
+        Scalar("-0.03333333333333333333333333333333333333333"),
+        Scalar("0.07575757575757575757575757575757575757576"),
+        Scalar("-0.2531135531135531135531135531135531135531"),
+        Scalar("1.166666666666666666666666666666666666667"),
+        Scalar("-7.092156862745098039215686274509803921569"),
+        Scalar("54.97117794486215538884979270083542188609"),
+        Scalar("-529.1242424242424242424242424242424242424"),
+        Scalar("6192.188405797101449275362318840579710145"),
+        Scalar("-86580.25311355311355311355311355311355311"),
+        Scalar("1425517.166666666666666666666666666666667"),
+        Scalar("-27298231.06781609195402298850574712643678"),
+        Scalar("601580873.9006427981530343007915567282322"),
+        Scalar("-15116315767.09218656076374841189040590398"),
     };
     constexpr int kEulerMaclaurinTerms = 16;
     constexpr int kEulerMaclaurinN = 64;
 
     Scalar total = Scalar(0.0L);
     for (int n = 1; n < kEulerMaclaurinN; ++n) {
-        // Use pow for integer base to maintain precision
         Scalar n_val(static_cast<long long>(n));
         total += Scalar(1.0L) / mymath::pow(n_val, s);
     }
 
     const Scalar n_ld(static_cast<long long>(kEulerMaclaurinN));
-    // Integral term: N^(1-s)/(s-1)
     total += mymath::pow(n_ld, Scalar(1.0L) - s) / (s - Scalar(1.0L));
-    // Half term: 1/(2*N^s)
     total += Scalar(0.5L) / mymath::pow(n_ld, s);
 
     Scalar rising = s;
     Scalar factorial = Scalar(2.0L);
+    Scalar last_abs_term = Scalar("1e300");
     for (int k = 1; k <= kEulerMaclaurinTerms; ++k) {
         if (k > 1) {
             rising *= (s + Scalar(static_cast<long long>(2 * k - 3))) *
@@ -597,9 +608,15 @@ Scalar zeta(Scalar s) {
             factorial *= Scalar(static_cast<long long>(2 * k - 1)) *
                          Scalar(static_cast<long long>(2 * k));
         }
-        // Correction term: B_{2k}/(2k)! * s(s+1)...(s+2k-2) / N^(s+2k-1)
-        total += kBernoulli[k - 1] * rising / factorial /
-                 mymath::pow(n_ld, s + Scalar(static_cast<long long>(2 * k - 1)));
+        Scalar term = kBernoulli[k - 1] * rising / factorial /
+                     mymath::pow(n_ld, s + Scalar(static_cast<long long>(2 * k - 1)));
+        Scalar abs_term = mymath::abs(term);
+        if (k > 1 && abs_term > last_abs_term) {
+            break;
+        }
+        last_abs_term = abs_term;
+        total += term;
+        if (abs_term < Scalar(1e-35L)) break;
     }
     return total;
 }
@@ -612,6 +629,11 @@ long double bessel_j(int order, long double x) {
     if (order < 0) {
         const long double value = bessel_j(-order, x);
         return ((-order) % 2 == 0) ? value : -value;
+    }
+
+    if (x < 0.0L) {
+        const long double value = bessel_j(order, -x);
+        return (order % 2 == 0) ? value : -value;
     }
 
     if (is_near_zero(x)) {
@@ -649,6 +671,11 @@ Scalar bessel_j(int order, Scalar x) {
     if (order < 0) {
         const Scalar value = bessel_j(-order, x);
         return ((-order) % 2 == 0) ? value : -value;
+    }
+
+    if (x < Scalar(0.0L)) {
+        const Scalar value = bessel_j(order, -x);
+        return (order % 2 == 0) ? value : -value;
     }
 
     if (mymath::abs(x) < Scalar(1e-35L)) {

@@ -59,16 +59,19 @@ Current expected summary:
 
 Runnable example inputs are stored in `test/script/`:
 
-- `test/script/comprehensive_validation.calc`
+- `test/script/additional_validation.calc`
   Broad script and calculator feature validation
-- `test/script/SYNTAX_GUIDE.md`
+- `test/script/example.calc`
+  Example script demonstrating Python-like `.calc` syntax
+- `SYNTAX_GUIDE.md`
   The dedicated script syntax guide (English)
-- `test/script/SYNTAX_GUIDE_CN.md`
+- `SYNTAX_GUIDE_CN.md`
   The dedicated script syntax guide (Chinese)
 
 You can run them with:
 
 ```bash
-bin/calculator test/script/comprehensive_validation.calc
-printf ':run test/script/comprehensive_validation.calc\n' | bin/calculator
+bin/calculator test/script/additional_validation.calc
+printf ':run test/script/additional_validation.calc\n' | bin/calculator
+bash test/script/run_symbolic_cli_validation.sh
 ```

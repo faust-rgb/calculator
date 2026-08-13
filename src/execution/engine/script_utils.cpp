@@ -18,7 +18,10 @@ VariableResolver visible_variables(IExecutionContext* ctx) {
 }
 
 bool has_visible_script_function(IExecutionContext* ctx, const std::string& name) {
-    if (ctx->functions().get_native_functions()->count(name) > 0) return true;
+    // 仅检查真正的脚本函数（由用户在 `:func ... :end` 中定义的函数），
+    // 原生函数模块自身在 native_functions 表中分发，此处不应将它们视为脚本函数，
+    // 否则 apply_function_exact 等路径会误以为 `min/max/abs/...` 等内建函数
+    // 不可参与精确有理求值。
     return ctx->functions().get_script(name) != nullptr;
 }
 

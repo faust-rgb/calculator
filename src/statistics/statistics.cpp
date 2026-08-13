@@ -42,8 +42,7 @@ static Scalar percentile_internal(std::vector<Scalar>& data, Scalar p) {
 
     std::nth_element(data.begin(), data.begin() + i, data.end());
     Scalar v0 = data[i];
-    // 为了准确获取 v1，我们需要在 i+1 之后寻找最小元素
-    std::nth_element(data.begin() + i + 1, data.begin() + i + 1, data.end());
+    std::nth_element(data.begin(), data.begin() + i + 1, data.end());
     Scalar v1 = data[i + 1];
     return v0 + fraction * (v1 - v0);
 }
