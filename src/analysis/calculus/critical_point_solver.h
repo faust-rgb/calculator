@@ -64,6 +64,14 @@ std::vector<Scalar> solve_linear_system(
     const std::vector<std::vector<Scalar>>& A,
     const std::vector<Scalar>& b);
 
+/**
+ * @brief 求解线性系统 (A + lambda * I)x = b（带阻尼保护）
+ */
+std::vector<Scalar> solve_linear_system_damped(
+    std::vector<std::vector<Scalar>> A,
+    const std::vector<Scalar>& b,
+    Scalar lambda);
+
 } // namespace analysis
 
 #endif // ANALYSIS_CALCULUS_CRITICAL_POINT_SOLVER_H

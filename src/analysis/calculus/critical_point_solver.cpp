@@ -350,7 +350,7 @@ std::vector<std::map<std::string, Scalar>> find_multivariate_critical_points(
         try {
             std::map<std::string, Scalar> current = start;
 
-            if (gradient_norm_at(current) < precision::gradient_convergence_threshold<Scalar>()) {
+            if (gradient_norm_at(current) < precision::newton_tolerance<Scalar>()) {
                 add_critical_point(current);
                 continue;
             }
@@ -379,8 +379,22 @@ std::vector<std::map<std::string, Scalar>> find_multivariate_critical_points(
 
                 if (!eval_ok) break;
 
-                // 求解线性系统
-                const std::vector<Scalar> delta = solve_linear_system(jac, rhs);
+                // 使用自适应阻尼求解牛顿方向 (Levenberg-Marquardt)
+                Scalar lambda = Scalar("1e-4");
+                std::vector<Scalar> delta;
+                bool solved = false;
+                for (int d_iter = 0; d_iter < 5; ++d_iter) {
+                    try {
+                        delta = solve_linear_system_damped(jac, rhs, lambda);
+                        solved = true;
+                        break;
+                    } catch (...) {
+                        lambda *= Scalar(10.0L);
+                    }
+                }
+                if (!solved) {
+                    delta = rhs; // 回退为最速下降方向
+                }
 
                 // 线搜索
                 Scalar alpha = Scalar(1.0L);
@@ -413,7 +427,7 @@ std::vector<std::map<std::string, Scalar>> find_multivariate_critical_points(
             }
 
             const Scalar grad_norm = gradient_norm_at(current);
-            if (grad_norm < precision::gradient_convergence_threshold<Scalar>()) {
+            if (grad_norm < precision::newton_tolerance<Scalar>()) {
                 add_critical_point(current);
             }
         } catch (const std::exception&) {
@@ -425,44 +439,46 @@ std::vector<std::map<std::string, Scalar>> find_multivariate_critical_points(
 }
 
 // ============================================================================
-// 线性系统求解
+// 线性系统求解（带 Levenberg-Marquardt 阻尼保护）
 // ============================================================================
 
-std::vector<Scalar> solve_linear_system(
-    const std::vector<std::vector<Scalar>>& A,
-    const std::vector<Scalar>& b) {
+std::vector<Scalar> solve_linear_system_damped(
+    std::vector<std::vector<Scalar>> A,
+    const std::vector<Scalar>& b,
+    Scalar lambda) {
 
     const size_t n = A.size();
     if (n == 0 || b.size() != n) {
         throw std::runtime_error("invalid linear system dimensions");
     }
 
-    // 创建增广矩阵
+    for (size_t i = 0; i < n; ++i) {
+        A[i][i] += lambda;
+    }
+
     std::vector<std::vector<Scalar>> aug(n, std::vector<Scalar>(n + 1));
     for (size_t i = 0; i < n; ++i) {
         for (size_t j = 0; j < n; ++j) aug[i][j] = A[i][j];
         aug[i][n] = b[i];
     }
 
-    // 高斯消元
     for (size_t col = 0; col < n; ++col) {
-        // 寻找主元
         size_t max_row = col;
         for (size_t row = col + 1; row < n; ++row) {
             if (mymath::abs(aug[row][col]) > mymath::abs(aug[max_row][col])) {
                 max_row = row;
             }
         }
-
-        // 交换行
         std::swap(aug[col], aug[max_row]);
 
-        // 检查奇异性
-        if (mymath::abs(aug[col][col]) < precision::epsilon<Scalar>() * Scalar(1000)) {
-            throw std::runtime_error("singular matrix in linear system");
+        if (mymath::abs(aug[col][col]) < precision::epsilon<Scalar>() * Scalar(100)) {
+            std::vector<Scalar> grad_step(n);
+            for (size_t i = 0; i < n; ++i) {
+                grad_step[i] = b[i] / (lambda > Scalar(0) ? lambda : Scalar(1.0L));
+            }
+            return grad_step;
         }
 
-        // 消元
         for (size_t row = col + 1; row < n; ++row) {
             const Scalar factor = aug[row][col] / aug[col][col];
             for (size_t j = col; j <= n; ++j) {
@@ -471,7 +487,6 @@ std::vector<Scalar> solve_linear_system(
         }
     }
 
-    // 回代
     std::vector<Scalar> x(n);
     for (size_t i = n; i-- > 0;) {
         x[i] = aug[i][n];
@@ -482,6 +497,12 @@ std::vector<Scalar> solve_linear_system(
     }
 
     return x;
+}
+
+std::vector<Scalar> solve_linear_system(
+    const std::vector<std::vector<Scalar>>& A,
+    const std::vector<Scalar>& b) {
+    return solve_linear_system_damped(A, b, Scalar(0));
 }
 
 } // namespace analysis

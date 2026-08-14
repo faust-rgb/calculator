@@ -4,6 +4,7 @@
  */
 
 #include "test_helpers.h"
+#include "core/api/calculator.h"
 #include "matrix/matrix.h"
 #include "matrix/matrix_dsp.h"
 #include "math/precise/precise_decimal.h"
@@ -320,6 +321,74 @@ void test_performance_comparison(int& passed, int& failed) {
     }
 }
 
+void test_bracket_matrix_complex_expressions(int& passed, int& failed) {
+    std::cout << "  Testing bracket matrix complex expressions..." << std::endl;
+
+    Calculator calc;
+
+    // 1. 复合矩阵乘法与加法
+    std::string out1 = calc.process_line("det([1, 2; 3, 4]) * [1, 0; 0, 1] + [2, 1; 0, 2]", false);
+    if (out1.find("[[0, 1], [0, 0]]") != std::string::npos || out1.find("[[0, 1],\n [0, 0]]") != std::string::npos) {
+        ++passed;
+        std::cout << "    PASS: Compound det and matrix add: " << out1 << std::endl;
+    } else {
+        ++failed;
+        std::cout << "    FAIL: Compound det and matrix add, got: " << out1 << std::endl;
+    }
+
+    // 2. 括号分组矩阵乘向量
+    std::string out2 = calc.process_line("([1, 2; 3, 4] + [2, 0; 1, 3]) * [1; 2]", false);
+    if (out2.find("[[7], [18]]") != std::string::npos || out2.find("[[7],\n [18]]") != std::string::npos) {
+        ++passed;
+        std::cout << "    PASS: Parenthesized matrix addition times vector: " << out2 << std::endl;
+    } else {
+        ++failed;
+        std::cout << "    FAIL: Parenthesized matrix addition times vector, got: " << out2 << std::endl;
+    }
+
+    // 3. 矩阵幂与代数组合
+    std::string out3 = calc.process_line("[1, 2; 3, 4]^2 + 2 * [1, 2; 3, 4] - eye(2)", false);
+    if (out3.find("[[8, 14], [21, 29]]") != std::string::npos || out3.find("[[8, 14],\n [21, 29]]") != std::string::npos) {
+        ++passed;
+        std::cout << "    PASS: Matrix power and linear combination: " << out3 << std::endl;
+    } else {
+        ++failed;
+        std::cout << "    FAIL: Matrix power and linear combination, got: " << out3 << std::endl;
+    }
+
+    // 4. 矩阵求逆与乘法
+    std::string out4 = calc.process_line("inv([1, 2; 3, 4]) * [1, 2; 3, 4]", false);
+    if (out4.find("[[1, 0], [0, 1]]") != std::string::npos || out4.find("[[1, 0],\n [0, 1]]") != std::string::npos) {
+        ++passed;
+        std::cout << "    PASS: Matrix inv and multiplication: " << out4 << std::endl;
+    } else {
+        ++failed;
+        std::cout << "    FAIL: Matrix inv and multiplication, got: " << out4 << std::endl;
+    }
+
+    // 5. 标量迹与行列式混合
+    std::string out5 = calc.process_line("det([1, 2; 3, 4]) + trace([5, 6; 7, 8])", false);
+    if (out5 == "11" || out5.find("11") != std::string::npos) {
+        ++passed;
+        std::cout << "    PASS: Mixed det and trace scalars: " << out5 << std::endl;
+    } else {
+        ++failed;
+        std::cout << "    FAIL: Mixed det and trace scalars, got: " << out5 << std::endl;
+    }
+
+    // 6. 变量赋值与下标索引
+    calc.process_line("A = [1, 2; 3, 4]", false);
+    calc.process_line("B = [2, 0; 0, 2]", false);
+    std::string out6 = calc.process_line("A[0, 1] + B[1, 1]", false);
+    if (out6 == "4" || out6.find("4") != std::string::npos) {
+        ++passed;
+        std::cout << "    PASS: Matrix variable indexing addition: " << out6 << std::endl;
+    } else {
+        ++failed;
+        std::cout << "    FAIL: Matrix variable indexing addition, got: " << out6 << std::endl;
+    }
+}
+
 void run_precision_matrix_tests(int& passed, int& failed) {
     std::cout << "Running Precision Matrix Tests..." << std::endl;
 
@@ -329,6 +398,7 @@ void run_precision_matrix_tests(int& passed, int& failed) {
     test_rank_precision(passed, failed);
     test_freqz_precision(passed, failed);
     test_performance_comparison(passed, failed);
+    test_bracket_matrix_complex_expressions(passed, failed);
 
     std::cout << "Precision Matrix Tests Completed." << std::endl;
 }

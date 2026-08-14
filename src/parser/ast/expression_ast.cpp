@@ -44,7 +44,7 @@ class ASTCompiler {
         if (tokens_.is_at_end()) {
             return nullptr;
         }
-        auto ast = parse_logical();
+        auto ast = parse_conditional();
         if (tokens_.peek().kind != TokenKind::kEnd) {
             throw_syntax_error("unexpected token near: " + std::string(tokens_.peek().text));
         }
@@ -93,6 +93,24 @@ private:
         std::ostringstream oss;
         oss << message << " at position " << error_pos;
         throw SyntaxError(oss.str());
+    }
+
+    std::unique_ptr<ExpressionAST> parse_conditional() {
+        auto expr = parse_logical();
+        if (match_kind(TokenKind::kQuestion) || match_operator("?")) {
+            auto then_branch = parse_conditional();
+            if (!match_kind(TokenKind::kColon) && !match_operator(":")) {
+                throw_syntax_error("expected ':' in conditional expression");
+            }
+            auto else_branch = parse_conditional();
+            auto node = std::make_unique<ExpressionAST>(ExprKind::kConditional);
+            node->position = expr ? expr->position : 0;
+            node->children.push_back(std::move(expr));
+            node->children.push_back(std::move(then_branch));
+            node->children.push_back(std::move(else_branch));
+            return node;
+        }
+        return expr;
     }
 
     std::unique_ptr<ExpressionAST> parse_logical() {
@@ -641,40 +659,6 @@ bool bind_variable_slots(ExpressionAST* ast, const VariableResolver& variables) 
 }
 
 // ============================================================================
-// 公共 API
-// ============================================================================
-
-bool can_compile_to_ast(const std::string& expression) {
-    if (expression.empty()) return false;
-    return true;
-}
-
-std::unique_ptr<ExpressionAST> compile_expression_ast(const std::string& expression) {
-    if (!can_compile_to_ast(expression)) {
-        return nullptr;
-    }
-
-    ASTCompiler compiler(expression);
-    try {
-        return compiler.compile();
-    } catch (...) {
-        // Will throw SyntaxError if not matching
-        throw;
-    }
-}
-
- Scalar evaluate_compiled_ast(const ExpressionAST* ast,
-                             const VariableResolver& variables,
-                             const std::map<std::string, CustomFunction>* functions,
-                             const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions,
-                             const std::map<std::string, NativeFunction>* native_functions,
-                             const HasScriptFunctionCallback& has_script_function,
-                             const InvokeScriptFunctionDecimalCallback& invoke_script_function) {
-    return evaluate_ast(ast, variables, functions, scalar_functions, native_functions,
-                        has_script_function, invoke_script_function);
-}
-
-// ============================================================================
 // 表达式分析函数（委托给 UnifiedParserFactory）
 // ============================================================================
 
@@ -683,6 +667,39 @@ namespace {
         static UnifiedParserFactory factory;
         return factory;
     }
+}
+
+// ============================================================================
+// 公共 API
+// ============================================================================
+
+bool can_compile_to_ast(const std::string& expression) {
+    if (expression.empty()) return false;
+    return get_global_factory().can_compile_to_ast(expression);
+}
+
+std::unique_ptr<ExpressionAST> compile_expression_ast(const std::string& expression) {
+    if (expression.empty()) {
+        return nullptr;
+    }
+
+    try {
+        ASTCompiler compiler(expression);
+        return compiler.compile();
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+Scalar evaluate_compiled_ast(const ExpressionAST* ast,
+                             const VariableResolver& variables,
+                             const std::map<std::string, CustomFunction>* functions,
+                             const std::map<std::string, std::function<Scalar(const std::vector<Scalar>&)>>* scalar_functions,
+                             const std::map<std::string, NativeFunction>* native_functions,
+                             const HasScriptFunctionCallback& has_script_function,
+                             const InvokeScriptFunctionDecimalCallback& invoke_script_function) {
+    return evaluate_ast(ast, variables, functions, scalar_functions, native_functions,
+                        has_script_function, invoke_script_function);
 }
 
 ExpressionFeature analyze_expression_features(const std::string& expression) {

@@ -577,17 +577,26 @@ Solution SymbolicSolver::solve_linear_system(
         }
     }
 
-    // Back substitution (already in reduced row echelon form due to k != i)
+    // Back substitution (in reduced row echelon form)
     std::map<std::string, SymbolicExpression> results;
-    for (size_t i = 0; i < n; ++i) {
+    int param_count = 1;
+
+    for (size_t i = n; i-- > 0; ) {
         if (expr_is_zero(aug[i][i])) {
             if (!expr_is_zero(aug[i][n])) {
                 return Solution::no_solution("contradiction: system has no solution");
             }
-            // Underdetermined: could return parametric solution, but for now mark as incomplete
-            return Solution::no_solution("system is underdetermined (infinite solutions)");
+            std::string param_name = "t" + std::to_string(param_count++);
+            results[variables[i]] = SymbolicExpression::variable(param_name);
+        } else {
+            SymbolicExpression rhs_val = aug[i][n];
+            for (size_t j = i + 1; j < n; ++j) {
+                if (!expr_is_zero(aug[i][j]) && results.count(variables[j])) {
+                    rhs_val = (rhs_val - aug[i][j] * results[variables[j]]).simplify();
+                }
+            }
+            results[variables[i]] = (rhs_val / aug[i][i]).simplify();
         }
-        results[variables[i]] = (aug[i][n] / aug[i][i]).simplify();
     }
 
     return Solution::system(results, "symbolic_gaussian_elimination");

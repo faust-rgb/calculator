@@ -64,8 +64,7 @@ bool is_integer_val(Scalar val, Scalar eps) {
 }
 
 Scalar get_infinity() {
-    // Return a large value as Scalar infinity for priority queue ordering
-    return Scalar(std::numeric_limits<Scalar>::max());
+    return Scalar(mymath::infinity());
 }
 
 }  // namespace
@@ -74,13 +73,30 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
                                       const std::vector<Scalar>& initial_lower,
                                       const std::vector<Scalar>& initial_upper) {
 
+    // 预求解阶段：收紧整数变量的边界 (Presolve Bound Tightening)
+    std::vector<Scalar> lower = initial_lower;
+    std::vector<Scalar> upper = initial_upper;
+    Scalar tolerance_scalar = Scalar(ctx.tolerance);
+
+    for (std::size_t idx : *ctx.integer_indices) {
+        if (mymath::isfinite(lower[idx])) {
+            lower[idx] = mymath::ceil(lower[idx] - tolerance_scalar);
+        }
+        if (mymath::isfinite(upper[idx])) {
+            upper[idx] = mymath::floor(upper[idx] + tolerance_scalar);
+        }
+        if (lower[idx] > upper[idx]) {
+            // 整数变量下界大于上界，直接判定不可行
+            return;
+        }
+    }
+
     std::priority_queue<Node> nodes;
 
     // 根节点：初始 LP 松弛
     // 初始估计值设为无穷大，确保根节点首先被探索
-    nodes.push({initial_lower, initial_upper, get_infinity(), 0});
+    nodes.push({lower, upper, get_infinity(), 0});
 
-    Scalar tolerance_scalar = Scalar(ctx.tolerance);
     std::vector<Scalar> pseudo_costs_up(ctx.variable_count, 1.0L);
     std::vector<Scalar> pseudo_costs_down(ctx.variable_count, 1.0L);
 
@@ -112,8 +128,8 @@ void search_integer_branch_and_bound(IntegerSearchContext& ctx,
 
         Scalar obj_val_scalar = Scalar(obj_val);
 
-        // 边界剪枝
-        if (*ctx.found && obj_val_scalar <= Scalar(*ctx.best_value) + tolerance_scalar) {
+        // 边界剪枝：当 LP 上界严格小于已知最优解时安全剪枝
+        if (*ctx.found && obj_val_scalar < Scalar(*ctx.best_value) - tolerance_scalar) {
             continue;
         }
 

@@ -515,11 +515,12 @@ bool simplex_iterate(
 
         // 换基与 B_inv 更新
         if (leaving < m_total) {
-            if (!update_basis_inverse(B_inv, a_enter, leaving, eps)) {
-                // 秩 1 更新失败，尝试重新计算
+            bool update_ok = update_basis_inverse(B_inv, a_enter, leaving, eps);
+            basis_curr[leaving] = entering;
+            if (!update_ok) {
+                // 秩 1 更新失败，使用更新后的基重新计算逆矩阵
                 if (!reinvert_basis(B_inv, basis_curr, A_full, m_total)) return false;
             }
-            basis_curr[leaving] = entering;
         }
     }
 

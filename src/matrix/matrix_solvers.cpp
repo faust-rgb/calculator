@@ -226,7 +226,7 @@ TReducedSvd<T> compute_reduced_svd(const TMatrix<T>& matrix) {
     const std::size_t n = A.cols; // n <= m
     TMatrix<T> V = TMatrix<T>::identity(n);
     const T tol = precision::epsilon<T>();
-    const int max_sweeps = 100;
+    const int max_sweeps = std::max(150, static_cast<int>(n * 15));
 
     for (int sweep = 0; sweep < max_sweeps; ++sweep) {
         bool changed = false;

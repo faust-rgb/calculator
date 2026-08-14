@@ -22,6 +22,9 @@
 
 #include "matrix.h"
 #include "matrix_dsp.h"
+#include "matrix_eval_stats.h"
+#include "matrix_eval_dsp.h"
+#include "matrix_eval_poly.h"
 #include "matrix_internal.h"
 #include "parser/infra/base_parser.h"
 #include "statistics/calculator_statistics.h"
@@ -152,41 +155,6 @@ long long parse_integer_argument(const std::string& expression,
         throw std::runtime_error(name + " requires integer arguments");
     }
     return static_cast<long long>(value >= 0.0L ? value + 0.5 : value - 0.5);
-}
-
-/**
- * @brief 创建窗函数向量
- *
- * 生成指定类型的窗函数系数向量（Hann/Hamming/Blackman）。
- * 这些窗函数常用于信号处理中的频谱分析。
- *
- * @param n 窗函数长度
- * @param name 窗函数类型名称
- * @return 包含窗函数系数的行向量矩阵
- */
-Matrix make_window(std::size_t n, const std::string& name) {
-    if (n == 0) {
-        throw std::runtime_error(name + " requires a positive length");
-    }
-    Matrix result(1, n, 0.0L);
-    if (n == 1) {
-        result.at(0, 0) = 1.0L;
-        return result;
-    }
-
-    for (std::size_t i = 0; i < n; ++i) {
-        const Scalar phase =
-            2.0 * mymath::kPi * static_cast<long double>(i) / static_cast<long double>(n - 1);
-        if (name == "hann" || name == "hanning") {
-            result.at(0, i) = 0.5 - 0.5 * mymath::cos(phase);
-        } else if (name == "hamming") {
-            result.at(0, i) = 0.54 - 0.46 * mymath::cos(phase);
-        } else if (name == "blackman") {
-            result.at(0, i) = 0.42 - 0.5 * mymath::cos(phase) +
-                              0.08 * mymath::cos(2.0 * phase);
-        }
-    }
-    return result;
 }
 
 /**
@@ -640,6 +608,40 @@ private:
 
             Matrix matrix_value;
             if ((*matrix_lookup_)(name, &matrix_value)) {
+                skip_spaces();
+                if (match('[')) {
+                    const std::vector<std::string> idx_args = parse_bracket_arguments();
+                    if (idx_args.size() == 2) {
+                        const Scalar r = (*scalar_evaluator_)(idx_args[0]);
+                        const Scalar c = (*scalar_evaluator_)(idx_args[1]);
+                        const std::size_t row_idx = static_cast<std::size_t>(r);
+                        const std::size_t col_idx = static_cast<std::size_t>(c);
+                        if (row_idx >= matrix_value.rows || col_idx >= matrix_value.cols) {
+                            throw std::runtime_error("matrix index out of bounds: [" +
+                                                     std::to_string(row_idx) + ", " + std::to_string(col_idx) +
+                                                     "] for " + std::to_string(matrix_value.rows) + "x" +
+                                                     std::to_string(matrix_value.cols) + " matrix");
+                        }
+                        return Value::from_scalar(matrix_value.at(row_idx, col_idx));
+                    } else if (idx_args.size() == 1) {
+                        const Scalar idx = (*scalar_evaluator_)(idx_args[0]);
+                        const std::size_t linear_idx = static_cast<std::size_t>(idx);
+                        if (matrix_value.rows == 1) {
+                            if (linear_idx >= matrix_value.cols) throw std::runtime_error("vector index out of bounds");
+                            return Value::from_scalar(matrix_value.at(0, linear_idx));
+                        } else if (matrix_value.cols == 1) {
+                            if (linear_idx >= matrix_value.rows) throw std::runtime_error("vector index out of bounds");
+                            return Value::from_scalar(matrix_value.at(linear_idx, 0));
+                        } else {
+                            if (linear_idx >= matrix_value.rows) throw std::runtime_error("matrix row index out of bounds");
+                            Matrix row_vec(1, matrix_value.cols);
+                            for (std::size_t j = 0; j < matrix_value.cols; ++j) row_vec.at(0, j) = matrix_value.at(linear_idx, j);
+                            return Value::from_matrix(row_vec);
+                        }
+                    } else {
+                        throw std::runtime_error("invalid matrix indexing: expected 1 or 2 indices");
+                    }
+                }
                 return Value::from_matrix(matrix_value);
             }
 
@@ -843,15 +845,6 @@ private:
                 Matrix::identity(parse_size_argument(arguments[0], *scalar_evaluator_)));
         }
 
-        if (name == "hann" || name == "hanning" ||
-            name == "hamming" || name == "blackman") {
-            if (arguments.size() != 1) {
-                throw std::runtime_error(name + " expects exactly one argument");
-            }
-            return Value::from_matrix(
-                make_window(parse_size_argument(arguments[0], *scalar_evaluator_), name));
-        }
-
         if (name == "divisors") {
             if (arguments.size() != 1) {
                 throw std::runtime_error("divisors expects exactly one argument");
@@ -926,11 +919,11 @@ private:
             return Value::from_matrix(transpose(require_matrix(arguments[0], "transpose")));
         }
 
-        if (name == "inverse") {
+        if (name == "inverse" || name == "inv") {
             if (arguments.size() != 1) {
-                throw std::runtime_error("inverse expects exactly one argument");
+                throw std::runtime_error(name + " expects exactly one argument");
             }
-            return Value::from_matrix(inverse(require_matrix(arguments[0], "inverse")));
+            return Value::from_matrix(inverse(require_matrix(arguments[0], name)));
         }
 
         if (name == "pinv") {
@@ -1212,388 +1205,42 @@ private:
             return Value::from_matrix(residue(require_matrix(arguments[0], "residue"), require_matrix(arguments[1], "residue")));
         }
 
-        if (name == "mean") {
-            if (arguments.empty()) {
-                throw std::runtime_error("mean expects at least one argument");
-            }
-            std::vector<Scalar> values;
-            if (arguments.size() == 1) {
-                Value value;
-                if (try_evaluate_expression(arguments[0],
-                                            *scalar_evaluator_,
-                                            *matrix_lookup_,
-                                            *complex_lookup_,
-                                            matrix_functions_,
-                                            native_functions_,
-                                            &value) &&
-                    value.is_matrix) {
-                    values = as_vector_values(value.matrix, "mean");
-                } else {
-                    values.push_back((*scalar_evaluator_)(arguments[0]));
-                }
-            } else {
-                values.reserve(arguments.size());
-                for (const std::string& argument : arguments) {
-                    values.push_back((*scalar_evaluator_)(argument));
-                }
-            }
-            return Value::from_scalar(mean_values(values));
+        // ====================================================================
+        // 领域细分求值分发 (Domain Splitting Evaluators)
+        // ====================================================================
+
+        Value domain_result;
+        if (try_evaluate_stats_function(
+                name, arguments,
+                [this](const std::string& arg, Value* out) {
+                    return try_evaluate_expression(arg, *scalar_evaluator_, *matrix_lookup_,
+                                                  *complex_lookup_, matrix_functions_,
+                                                  native_functions_, out);
+                },
+                *scalar_evaluator_,
+                [this](const std::string& arg, const std::string& fn_name) {
+                    return require_matrix(arg, fn_name);
+                },
+                &domain_result)) {
+            return domain_result;
         }
 
-        if (name == "median") {
-            if (arguments.empty()) {
-                throw std::runtime_error("median expects at least one argument");
-            }
-            std::vector<Scalar> values;
-            if (arguments.size() == 1) {
-                Value value;
-                if (try_evaluate_expression(arguments[0],
-                                            *scalar_evaluator_,
-                                            *matrix_lookup_,
-                                            *complex_lookup_,
-                                            matrix_functions_,
-                                            native_functions_,
-                                            &value) &&
-                    value.is_matrix) {
-                    values = as_vector_values(value.matrix, "median");
-                } else {
-                    values.push_back((*scalar_evaluator_)(arguments[0]));
-                }
-            } else {
-                values.reserve(arguments.size());
-                for (const std::string& argument : arguments) {
-                    values.push_back((*scalar_evaluator_)(argument));
-                }
-            }
-            return Value::from_scalar(median_values(values));
+        if (try_evaluate_dsp_function(
+                name, arguments, *scalar_evaluator_,
+                [this](const std::string& arg, const std::string& fn_name) {
+                    return require_matrix(arg, fn_name);
+                },
+                &domain_result)) {
+            return domain_result;
         }
 
-        if (name == "mode") {
-            if (arguments.empty()) {
-                throw std::runtime_error("mode expects at least one argument");
-            }
-            std::vector<Scalar> values;
-            if (arguments.size() == 1) {
-                Value value;
-                if (try_evaluate_expression(arguments[0],
-                                            *scalar_evaluator_,
-                                            *matrix_lookup_,
-                                            *complex_lookup_,
-                                            matrix_functions_,
-                                            native_functions_,
-                                            &value) &&
-                    value.is_matrix) {
-                    values = as_vector_values(value.matrix, "mode");
-                } else {
-                    values.push_back((*scalar_evaluator_)(arguments[0]));
-                }
-            } else {
-                values.reserve(arguments.size());
-                for (const std::string& argument : arguments) {
-                    values.push_back((*scalar_evaluator_)(argument));
-                }
-            }
-            return Value::from_scalar(mode_values(values));
-        }
-
-        if (name == "var") {
-            if (arguments.empty()) {
-                throw std::runtime_error("var expects at least one argument");
-            }
-            std::vector<Scalar> values;
-            if (arguments.size() == 1) {
-                Value value;
-                if (try_evaluate_expression(arguments[0],
-                                            *scalar_evaluator_,
-                                            *matrix_lookup_,
-                                            *complex_lookup_,
-                                            matrix_functions_,
-                                            native_functions_,
-                                            &value) &&
-                    value.is_matrix) {
-                    values = as_vector_values(value.matrix, "var");
-                } else {
-                    values.push_back((*scalar_evaluator_)(arguments[0]));
-                }
-            } else {
-                values.reserve(arguments.size());
-                for (const std::string& argument : arguments) {
-                    values.push_back((*scalar_evaluator_)(argument));
-                }
-            }
-            return Value::from_scalar(variance_values(values));
-        }
-
-        if (name == "std") {
-            if (arguments.empty()) {
-                throw std::runtime_error("std expects at least one argument");
-            }
-            std::vector<Scalar> values;
-            if (arguments.size() == 1) {
-                Value value;
-                if (try_evaluate_expression(arguments[0],
-                                            *scalar_evaluator_,
-                                            *matrix_lookup_,
-                                            *complex_lookup_,
-                                            matrix_functions_,
-                                            native_functions_,
-                                            &value) &&
-                    value.is_matrix) {
-                    values = as_vector_values(value.matrix, "std");
-                } else {
-                    values.push_back((*scalar_evaluator_)(arguments[0]));
-                }
-            } else {
-                values.reserve(arguments.size());
-                for (const std::string& argument : arguments) {
-                    values.push_back((*scalar_evaluator_)(argument));
-                }
-            }
-            return Value::from_scalar(mymath::sqrt(variance_values(values)));
-        }
-
-        if (name == "skewness" || name == "skew" || name == "kurtosis") {
-            if (arguments.empty()) {
-                throw std::runtime_error(name + " expects at least one argument");
-            }
-            std::vector<Scalar> values;
-            if (arguments.size() == 1) {
-                Value value;
-                if (try_evaluate_expression(arguments[0],
-                                            *scalar_evaluator_,
-                                            *matrix_lookup_,
-                                            *complex_lookup_,
-                                            matrix_functions_,
-                                            native_functions_,
-                                            &value) &&
-                    value.is_matrix) {
-                    values = as_vector_values(value.matrix, name);
-                } else {
-                    values.push_back((*scalar_evaluator_)(arguments[0]));
-                }
-            } else {
-                values.reserve(arguments.size());
-                for (const std::string& argument : arguments) {
-                    values.push_back((*scalar_evaluator_)(argument));
-                }
-            }
-            const Scalar mean = mean_values(values);
-            Scalar second_moment = Scalar(0.0L);
-            Scalar higher_moment = Scalar(0.0L);
-            for (Scalar value : values) {
-                const Scalar delta = value - mean;
-                const Scalar delta2 = delta * delta;
-                second_moment += delta2;
-                higher_moment += (name == "kurtosis") ? delta2 * delta2 : delta2 * delta;
-            }
-            second_moment /= Scalar(static_cast<long long>(values.size()));
-            if (mymath::is_near_zero(second_moment, Scalar(1e-12L))) {
-                throw std::runtime_error(name + " is undefined for zero variance data");
-            }
-            higher_moment /= Scalar(static_cast<long long>(values.size()));
-            if (name == "kurtosis") {
-                return Value::from_scalar(
-                    higher_moment / (second_moment * second_moment) - Scalar(3.0L));
-            }
-            return Value::from_scalar(
-                higher_moment /
-                mymath::pow(second_moment, Scalar(1.5L)));
-        }
-
-        if (name == "percentile") {
-            if (arguments.size() < 2) {
-                throw std::runtime_error("percentile expects vector,p or p,value...");
-            }
-            if (arguments.size() == 2) {
-                Value value;
-                if (try_evaluate_expression(arguments[0],
-                                            *scalar_evaluator_,
-                                            *matrix_lookup_,
-                                            *complex_lookup_,
-                                            matrix_functions_,
-                                            native_functions_,
-                                            &value) &&
-                    value.is_matrix) {
-                    return Value::from_scalar(percentile_values(
-                        as_vector_values(value.matrix, "percentile"),
-                        (*scalar_evaluator_)(arguments[1])));
-                }
-            }
-            std::vector<Scalar> values;
-            values.reserve(arguments.size() - 1);
-            const Scalar p = (*scalar_evaluator_)(arguments[0]);
-            for (std::size_t i = 1; i < arguments.size(); ++i) {
-                values.push_back((*scalar_evaluator_)(arguments[i]));
-            }
-            return Value::from_scalar(percentile_values(values, p));
-        }
-
-        if (name == "quartile") {
-            if (arguments.size() < 2) {
-                throw std::runtime_error("quartile expects vector,q or q,value...");
-            }
-            if (arguments.size() == 2) {
-                Value value;
-                if (try_evaluate_expression(arguments[0],
-                                            *scalar_evaluator_,
-                                            *matrix_lookup_,
-                                            *complex_lookup_,
-                                            matrix_functions_,
-                                            native_functions_,
-                                            &value) &&
-                    value.is_matrix) {
-                    return Value::from_scalar(quartile_values(
-                        as_vector_values(value.matrix, "quartile"),
-                        (*scalar_evaluator_)(arguments[1])));
-                }
-            }
-            std::vector<Scalar> values;
-            values.reserve(arguments.size() - 1);
-            const Scalar q = (*scalar_evaluator_)(arguments[0]);
-            for (std::size_t i = 1; i < arguments.size(); ++i) {
-                values.push_back((*scalar_evaluator_)(arguments[i]));
-            }
-            return Value::from_scalar(quartile_values(values, q));
-        }
-
-        if (name == "cov") {
-            if (arguments.size() != 2) {
-                throw std::runtime_error("cov expects exactly two vector arguments");
-            }
-            return Value::from_scalar(covariance_values(
-                as_vector_values(require_matrix(arguments[0], "cov"), "cov"),
-                as_vector_values(require_matrix(arguments[1], "cov"), "cov")));
-        }
-
-        if (name == "corr") {
-            if (arguments.size() != 2) {
-                throw std::runtime_error("corr expects exactly two vector arguments");
-            }
-            return Value::from_scalar(correlation_values(
-                as_vector_values(require_matrix(arguments[0], "corr"), "corr"),
-                as_vector_values(require_matrix(arguments[1], "corr"), "corr")));
-        }
-
-        if (name == "lagrange") {
-            if (arguments.size() != 3) {
-                throw std::runtime_error("lagrange expects x samples, y samples, and xi");
-            }
-            return Value::from_scalar(lagrange_interpolate(
-                as_vector_values(require_matrix(arguments[0], "lagrange"), "lagrange"),
-                as_vector_values(require_matrix(arguments[1], "lagrange"), "lagrange"),
-                (*scalar_evaluator_)(arguments[2])));
-        }
-
-        if (name == "spline") {
-            if (arguments.size() != 3) {
-                throw std::runtime_error("spline expects x samples, y samples, and xi");
-            }
-            return Value::from_scalar(spline_interpolate(
-                as_vector_values(require_matrix(arguments[0], "spline"), "spline"),
-                as_vector_values(require_matrix(arguments[1], "spline"), "spline"),
-                (*scalar_evaluator_)(arguments[2])));
-        }
-
-        if (name == "linear_regression") {
-            if (arguments.size() != 2) {
-                throw std::runtime_error("linear_regression expects exactly two vector arguments");
-            }
-            const auto fit = linear_regression_fit(
-                as_vector_values(require_matrix(arguments[0], "linear_regression"),
-                                 "linear_regression"),
-                as_vector_values(require_matrix(arguments[1], "linear_regression"),
-                                 "linear_regression"));
-            return Value::from_matrix(Matrix::vector({fit.first, fit.second}));
-        }
-
-        if (name == "poly_fit" || name == "polynomial_fit") {
-            if (arguments.size() != 3) {
-                throw std::runtime_error(name + " expects x samples, y samples, and degree");
-            }
-            const Scalar degree_value = (*scalar_evaluator_)(arguments[2]);
-            if (!mymath::is_integer(degree_value) || degree_value < 0.0L) {
-                throw std::runtime_error(name + " degree must be a non-negative integer");
-            }
-            return Value::from_matrix(Matrix::vector(polynomial_fit(
-                as_vector_values(require_matrix(arguments[0], name), name),
-                as_vector_values(require_matrix(arguments[1], name), name),
-                static_cast<int>(degree_value + 0.5))));
-        }
-
-        if (name == "dft" || name == "fft") {
-            if (arguments.size() != 1) {
-                throw std::runtime_error(name + " expects exactly one sequence argument");
-            }
-            return Value::from_matrix(complex_sequence_to_matrix(
-                discrete_fourier_transform(
-                    as_complex_sequence(require_matrix(arguments[0], name), name),
-                    false),
-                false));
-        }
-
-        if (name == "idft" || name == "ifft") {
-            if (arguments.size() != 1) {
-                throw std::runtime_error(name + " expects exactly one sequence argument");
-            }
-            return Value::from_matrix(complex_sequence_to_matrix(
-                discrete_fourier_transform(
-                    as_complex_sequence(require_matrix(arguments[0], name), name),
-                    true),
-                true));
-        }
-
-        if (name == "convolve" || name == "conv") {
-            if (arguments.size() != 2) {
-                throw std::runtime_error(name + " expects exactly two sequence arguments");
-            }
-            return Value::from_matrix(complex_sequence_to_matrix(
-                convolve_sequences(
-                    as_complex_sequence(require_matrix(arguments[0], name), name),
-                    as_complex_sequence(require_matrix(arguments[1], name), name)),
-                true));
-        }
-
-        if (name == "poly_eval") {
-            if (arguments.size() != 2) {
-                throw std::runtime_error("poly_eval expects coefficient vector and x");
-            }
-            return Value::from_scalar(polynomial_evaluate(
-                as_vector_values(require_matrix(arguments[0], "poly_eval"), "poly_eval"),
-                (*scalar_evaluator_)(arguments[1])));
-        }
-
-        if (name == "poly_deriv") {
-            if (arguments.size() != 1) {
-                throw std::runtime_error("poly_deriv expects exactly one coefficient vector");
-            }
-            return Value::from_matrix(Matrix::vector(polynomial_derivative(
-                as_vector_values(require_matrix(arguments[0], "poly_deriv"), "poly_deriv"))));
-        }
-
-        if (name == "poly_integ") {
-            if (arguments.size() != 1) {
-                throw std::runtime_error("poly_integ expects exactly one coefficient vector");
-            }
-            return Value::from_matrix(Matrix::vector(polynomial_integral(
-                as_vector_values(require_matrix(arguments[0], "poly_integ"), "poly_integ"))));
-        }
-
-        if (name == "poly_compose") {
-            if (arguments.size() != 2) {
-                throw std::runtime_error("poly_compose expects exactly two coefficient vectors");
-            }
-            return Value::from_matrix(Matrix::vector(polynomial_compose(
-                as_vector_values(require_matrix(arguments[0], "poly_compose"), "poly_compose"),
-                as_vector_values(require_matrix(arguments[1], "poly_compose"), "poly_compose"))));
-        }
-
-        if (name == "poly_gcd") {
-            if (arguments.size() != 2) {
-                throw std::runtime_error("poly_gcd expects exactly two coefficient vectors");
-            }
-            return Value::from_matrix(Matrix::vector(polynomial_gcd(
-                as_vector_values(require_matrix(arguments[0], "poly_gcd"), "poly_gcd"),
-                as_vector_values(require_matrix(arguments[1], "poly_gcd"), "poly_gcd"))));
+        if (try_evaluate_poly_function(
+                name, arguments, *scalar_evaluator_,
+                [this](const std::string& arg, const std::string& fn_name) {
+                    return require_matrix(arg, fn_name);
+                },
+                &domain_result)) {
+            return domain_result;
         }
 
         if (name == "complex") {
@@ -1833,6 +1480,48 @@ private:
         return arguments;
     }
 
+    std::vector<std::string> parse_bracket_arguments() {
+        std::vector<std::string> arguments;
+        skip_spaces();
+        if (match(']')) {
+            return arguments;
+        }
+
+        while (true) {
+            const std::size_t start = pos_;
+            int paren_depth = 0;
+            int bracket_depth = 0;
+            while (!is_at_end()) {
+                const char ch = source_[pos_];
+                if (ch == '(') {
+                    ++paren_depth;
+                } else if (ch == ')') {
+                    if (paren_depth > 0) --paren_depth;
+                } else if (ch == '[') {
+                    ++bracket_depth;
+                } else if (ch == ']') {
+                    if (paren_depth == 0 && bracket_depth == 0) {
+                        break;
+                    }
+                    if (bracket_depth > 0) --bracket_depth;
+                } else if (ch == ',' && paren_depth == 0 && bracket_depth == 0) {
+                    break;
+                }
+                ++pos_;
+            }
+
+            arguments.push_back(trim_copy(std::string(source_.substr(start, pos_ - start))));
+            skip_spaces();
+            if (!match(',')) {
+                break;
+            }
+            skip_spaces();
+        }
+
+        expect(']');
+        return arguments;
+    }
+
     /**
      * @brief 要求参数为矩阵并返回
      *
@@ -2003,7 +1692,7 @@ private:
                name == "hamming" || name == "blackman" ||
                name == "divisors" || name == "extended_gcd" || name == "xgcd" ||
                name == "append_row" || name == "append_col" ||
-               name == "transpose" || name == "inverse" ||
+               name == "transpose" || name == "inverse" || name == "inv" ||
                name == "pinv" ||
                name == "dot" || name == "outer" || name == "kron" ||
                name == "hadamard" || name == "null" ||
@@ -2043,9 +1732,18 @@ private:
      * 支持标量+标量、矩阵+矩阵、矩阵+标量、复数+复数等组合。
      */
     static Value add_values(Value lhs, Value rhs) {
-        if (lhs.is_complex || rhs.is_complex ||
-            (lhs.is_matrix && is_complex_vector(lhs.matrix)) ||
-            (rhs.is_matrix && is_complex_vector(rhs.matrix))) {
+        if (lhs.is_matrix && rhs.is_matrix) {
+            if (lhs.matrix.rows == rhs.matrix.rows && lhs.matrix.cols == rhs.matrix.cols) {
+                return Value::from_matrix(add(std::move(lhs.matrix), rhs.matrix));
+            }
+            // 维度不匹配时，尝试作为 2-element 复数向量回退
+            ComplexNumber a, b;
+            if (try_complex_from_value(lhs, &a) && try_complex_from_value(rhs, &b)) {
+                return Value::from_complex(a.real() + b.real(), a.imag() + b.imag());
+            }
+            throw std::runtime_error("matrix dimension mismatch for addition");
+        }
+        if (lhs.is_complex || rhs.is_complex) {
             ComplexNumber a;
             ComplexNumber b;
             if (!try_complex_from_value(lhs, &a) || !try_complex_from_value(rhs, &b)) {
@@ -2053,23 +1751,10 @@ private:
             }
             return Value::from_complex(a.real() + b.real(), a.imag() + b.imag());
         }
-        if (lhs.is_matrix && rhs.is_matrix) {
-            return Value::from_matrix(add(std::move(lhs.matrix), rhs.matrix));
-        }
         if (lhs.is_matrix) {
-            if (is_complex_vector(lhs.matrix)) {
-                Matrix result = lhs.matrix;
-                result.at(0, 0) += rhs.scalar;
-                return Value::from_matrix(result);
-            }
             return Value::from_matrix(add(std::move(lhs.matrix), rhs.scalar));
         }
         if (rhs.is_matrix) {
-            if (is_complex_vector(rhs.matrix)) {
-                Matrix result = rhs.matrix;
-                result.at(0, 0) += lhs.scalar;
-                return Value::from_matrix(result);
-            }
             return Value::from_matrix(add(std::move(rhs.matrix), lhs.scalar));
         }
         return Value::from_scalar(lhs.scalar + rhs.scalar);
@@ -2081,9 +1766,17 @@ private:
      * 支持标量-标量、矩阵-矩阵、矩阵-标量、复数-复数等组合。
      */
     static Value subtract_values(Value lhs, Value rhs) {
-        if (lhs.is_complex || rhs.is_complex ||
-            (lhs.is_matrix && is_complex_vector(lhs.matrix)) ||
-            (rhs.is_matrix && is_complex_vector(rhs.matrix))) {
+        if (lhs.is_matrix && rhs.is_matrix) {
+            if (lhs.matrix.rows == rhs.matrix.rows && lhs.matrix.cols == rhs.matrix.cols) {
+                return Value::from_matrix(subtract(std::move(lhs.matrix), rhs.matrix));
+            }
+            ComplexNumber a, b;
+            if (try_complex_from_value(lhs, &a) && try_complex_from_value(rhs, &b)) {
+                return Value::from_complex(a.real() - b.real(), a.imag() - b.imag());
+            }
+            throw std::runtime_error("matrix dimension mismatch for subtraction");
+        }
+        if (lhs.is_complex || rhs.is_complex) {
             ComplexNumber a;
             ComplexNumber b;
             if (!try_complex_from_value(lhs, &a) || !try_complex_from_value(rhs, &b)) {
@@ -2091,24 +1784,10 @@ private:
             }
             return Value::from_complex(a.real() - b.real(), a.imag() - b.imag());
         }
-        if (lhs.is_matrix && rhs.is_matrix) {
-            return Value::from_matrix(subtract(std::move(lhs.matrix), rhs.matrix));
-        }
         if (lhs.is_matrix) {
-            if (is_complex_vector(lhs.matrix)) {
-                Matrix result = lhs.matrix;
-                result.at(0, 0) -= rhs.scalar;
-                return Value::from_matrix(result);
-            }
             return Value::from_matrix(subtract(std::move(lhs.matrix), rhs.scalar));
         }
         if (rhs.is_matrix) {
-            if (is_complex_vector(rhs.matrix)) {
-                Matrix result = rhs.matrix;
-                result.at(0, 0) = lhs.scalar - result.at(0, 0);
-                result.at(0, 1) = -result.at(0, 1);
-                return Value::from_matrix(result);
-            }
             return Value::from_matrix(add(multiply(std::move(rhs.matrix), Scalar(-1.0L)), lhs.scalar));
         }
         return Value::from_scalar(lhs.scalar - rhs.scalar);
@@ -2120,18 +1799,10 @@ private:
      * 支持标量*标量、矩阵*矩阵（矩阵乘法）、矩阵*标量、复数*复数等组合。
      */
     static Value multiply_values(Value lhs, Value rhs) {
-        if (lhs.is_complex || rhs.is_complex ||
-            (lhs.is_matrix && is_complex_vector(lhs.matrix)) ||
-            (rhs.is_matrix && is_complex_vector(rhs.matrix))) {
-            ComplexNumber a;
-            ComplexNumber b;
-            if (!try_complex_from_value(lhs, &a) || !try_complex_from_value(rhs, &b)) {
-                throw std::runtime_error("cannot multiply matrix and complex value");
-            }
-            return Value::from_complex(a.real() * b.real() - a.imag() * b.imag(),
-                                       a.real() * b.imag() + a.imag() * b.real());
-        }
         if (lhs.is_matrix && rhs.is_matrix) {
+            if (lhs.matrix.cols == rhs.matrix.rows) {
+                return Value::from_matrix(multiply(lhs.matrix, rhs.matrix));
+            }
             if (lhs.matrix.rows == 1 && lhs.matrix.cols == 2 && 
                 rhs.matrix.rows == 1 && rhs.matrix.cols == 2) {
                 const Scalar a = lhs.matrix.at(0, 0);
@@ -2143,7 +1814,18 @@ private:
                 res.at(0, 1) = a * d + b * c;
                 return Value::from_matrix(res);
             }
-            return Value::from_matrix(multiply(lhs.matrix, rhs.matrix));
+            throw std::runtime_error("matrix dimension mismatch for multiplication: " +
+                                     std::to_string(lhs.matrix.rows) + "x" + std::to_string(lhs.matrix.cols) +
+                                     " vs " + std::to_string(rhs.matrix.rows) + "x" + std::to_string(rhs.matrix.cols));
+        }
+        if (lhs.is_complex || rhs.is_complex) {
+            ComplexNumber a;
+            ComplexNumber b;
+            if (!try_complex_from_value(lhs, &a) || !try_complex_from_value(rhs, &b)) {
+                throw std::runtime_error("cannot multiply matrix and complex value");
+            }
+            return Value::from_complex(a.real() * b.real() - a.imag() * b.imag(),
+                                       a.real() * b.imag() + a.imag() * b.real());
         }
         if (lhs.is_matrix) {
             return Value::from_matrix(multiply(std::move(lhs.matrix), rhs.scalar));
@@ -2161,6 +1843,12 @@ private:
      * 不支持矩阵作为除数。
      */
     static Value divide_values(Value lhs, Value rhs) {
+        if (lhs.is_matrix && !rhs.is_matrix && !rhs.is_complex) {
+            if (mymath::is_near_zero(rhs.scalar)) {
+                throw std::runtime_error("division by zero");
+            }
+            return Value::from_matrix(multiply(std::move(lhs.matrix), Scalar(1.0L) / rhs.scalar));
+        }
         if (lhs.is_complex || rhs.is_complex ||
             (lhs.is_matrix && is_complex_vector(lhs.matrix)) ||
             (rhs.is_matrix && is_complex_vector(rhs.matrix))) {
@@ -2195,13 +1883,10 @@ private:
             return Value::from_matrix(res);
         }
         if (rhs.is_matrix) {
-            throw std::runtime_error("division by a matrix is not supported");
+            throw std::runtime_error("matrix division not supported (use inv(B) * A or solve(B, A))");
         }
         if (mymath::is_near_zero(rhs.scalar)) {
             throw std::runtime_error("division by zero");
-        }
-        if (lhs.is_matrix) {
-            return Value::from_matrix(divide(std::move(lhs.matrix), rhs.scalar));
         }
         return Value::from_scalar(lhs.scalar / rhs.scalar);
     }

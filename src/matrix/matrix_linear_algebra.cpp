@@ -71,7 +71,8 @@ T jacobi_extreme_eigenvalue(TMatrix<T> a, bool largest) {
     const std::size_t n = a.rows;
     if (n == 0) return T(static_cast<long long>(0));
     const T tolerance = precision::epsilon<T>();
-    for (int sweep = 0; sweep < 128; ++sweep) {
+    const int max_sweeps = std::max(150, static_cast<int>(n * 15));
+    for (int sweep = 0; sweep < max_sweeps; ++sweep) {
         std::size_t p = 0;
         std::size_t q = 0;
         T max_off = T(static_cast<long long>(0));
@@ -1115,8 +1116,13 @@ TMatrix<T> cholesky(const TMatrix<T>& matrix) {
     if (!matrix.is_square()) {
         throw std::runtime_error("cholesky requires a square matrix");
     }
-    if (!is_symmetric(matrix)) {
-        throw std::runtime_error("cholesky requires a symmetric positive-definite matrix");
+    const T sym_tol = matrix_tolerance(matrix);
+    for (std::size_t i = 0; i < matrix.rows; ++i) {
+        for (std::size_t j = i + 1; j < matrix.cols; ++j) {
+            if (t_abs(matrix.at(i, j) - matrix.at(j, i)) > sym_tol) {
+                throw std::runtime_error("cholesky requires a symmetric positive-definite matrix");
+            }
+        }
     }
     TMatrix<T> result(matrix.rows, matrix.cols, T(static_cast<long long>(0)));
     // 使用精度感知的正定性阈值
@@ -1371,23 +1377,32 @@ T determinant(const TMatrix<T>& matrix) {
     const TLuResult<T> lu = internal::lu_decompose_with_pivoting(matrix);
     if (lu.det_sign == 0) return T(static_cast<long long>(0));
 
-    if constexpr (std::is_same_v<T, long double>) {
-        long double log_sum = 0.0L;
-        int sign = lu.det_sign;
+    int sign = lu.det_sign;
+    T log_sum = T(static_cast<long long>(0));
+    bool use_log = false;
+
+    for (std::size_t i = 0; i < n; ++i) {
+        const T diag = lu.lu.at(i, i);
+        if (mymath::is_near_zero(diag)) return T(static_cast<long long>(0));
+        if (t_abs(diag) > T(1e8L) || t_abs(diag) < T(1e-8L) || n >= 16) {
+            use_log = true;
+        }
+    }
+
+    if (use_log) {
         for (std::size_t i = 0; i < n; ++i) {
-            const long double diag = lu.lu.at(i, i);
-            if (mymath::is_near_zero(diag)) return 0.0L;
-            if (diag < 0.0L) {
+            const T diag = lu.lu.at(i, i);
+            if (diag < T(static_cast<long long>(0))) {
                 sign = -sign;
                 log_sum += mymath::ln(-diag);
             } else {
                 log_sum += mymath::ln(diag);
             }
         }
-        if (log_sum > 709.0L) {
+        if (log_sum > T(11350.0L)) {
             return sign > 0 ? mymath::infinity() : -mymath::infinity();
         }
-        return sign * static_cast<long double>(mymath::exp(static_cast<long double>(log_sum)));
+        return T(static_cast<long long>(sign)) * mymath::exp(log_sum);
     } else {
         T det = T(static_cast<long long>(lu.det_sign));
         for (std::size_t i = 0; i < n; ++i) {

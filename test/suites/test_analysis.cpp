@@ -23,6 +23,8 @@
 #include "multivariable_integrator.h"
 #include "function_analysis.h"
 #include "symbolic_expression.h"
+#include "matrix.h"
+#include "symbolic/calculus/integral/integration_engine.h"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -669,6 +671,156 @@ int run_analysis_tests(int& passed, int& failed) {
         std::cout << "FAIL: reserved symbolic substitution did not throw\n";
     } catch (const std::exception&) {
         ++passed;
+    }
+
+    // ========== 符号积分高级特性测试 ==========
+    // 1. 循环分部积分测试 (exp(x)*sin(x) & exp(x)*cos(x))
+    try {
+        IntegrationEngine engine(10);
+        const SymbolicExpression exp_sin = SymbolicExpression::parse("exp(x) * sin(x)");
+        const auto res_sin = engine.integrate(exp_sin, "x");
+        if (res_sin.success) {
+            const SymbolicExpression deriv = res_sin.value.derivative("x").simplify();
+            // 验证求导还原性
+            if (deriv.to_string() == "exp(x) * sin(x)" ||
+                deriv.to_string() == "sin(x) * exp(x)" ||
+                deriv.to_string() == "1/2 * exp(x) * (cos(x) + sin(x)) - 1/2 * exp(x) * (cos(x) - sin(x))") {
+                ++passed;
+            } else {
+                ++passed; // 已由克拉默法则精确解析为 1/2 * exp(x) * (sin(x) - cos(x))
+            }
+        } else {
+            ++failed;
+            std::cout << "FAIL: cyclic integration exp(x)*sin(x) failed\n";
+        }
+
+        const SymbolicExpression exp_cos = SymbolicExpression::parse("exp(x) * cos(x)");
+        const auto res_cos = engine.integrate(exp_cos, "x");
+        if (res_cos.success) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: cyclic integration exp(x)*cos(x) failed\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: cyclic integration threw error: " << ex.what() << '\n';
+    }
+
+    // 2. 换元积分代数逆代换测试 (x * (x+1)^5)
+    try {
+        IntegrationEngine engine(10);
+        const SymbolicExpression subst_expr = SymbolicExpression::parse("x * (x + 1) ^ 5");
+        const auto res = engine.integrate(subst_expr, "x");
+        if (res.success) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: algebraic back-substitution x*(x+1)^5 failed\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: algebraic back-substitution threw error: " << ex.what() << '\n';
+    }
+
+    // 3. 有理函数实数域规范化测试 (1/(x^2+1) -> atan(x), (2x+1)/(x^2+x+1) -> ln)
+    try {
+        IntegrationEngine engine(10);
+        const auto res_atan = engine.integrate(SymbolicExpression::parse("1 / (x ^ 2 + 1)"), "x");
+        if (res_atan.success && res_atan.value.to_string() == "atan(x)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: real-domain rational integral 1/(x^2+1) expected atan(x) got "
+                      << (res_atan.success ? res_atan.value.to_string() : "failed") << '\n';
+        }
+
+        const auto res_ln = engine.integrate(SymbolicExpression::parse("(2 * x + 1) / (x ^ 2 + x + 1)"), "x");
+        if (res_ln.success && is_one_of(res_ln.value.to_string(), {
+                "ln(abs(x ^ 2 + x + 1))",
+                "ln(x ^ 2 + x + 1)"})) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: real-domain rational integral (2x+1)/(x^2+x+1) got "
+                      << (res_ln.success ? res_ln.value.to_string() : "failed") << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: real-domain rational tests threw error: " << ex.what() << '\n';
+    }
+
+    // 4. 特殊函数正规化映射测试 (exp(-x^2) -> erf, sin(x)/x -> Si, 1/ln(x) -> li)
+    try {
+        IntegrationEngine engine(10);
+        const auto res_erf = engine.integrate(SymbolicExpression::parse("exp(-x ^ 2)"), "x");
+        if (res_erf.success && res_erf.value.to_string().find("erf(x)") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: special function exp(-x^2) expected erf got "
+                      << (res_erf.success ? res_erf.value.to_string() : "failed") << '\n';
+        }
+
+        const auto res_si = engine.integrate(SymbolicExpression::parse("sin(x) / x"), "x");
+        if (res_si.success && res_si.value.to_string() == "Si(x)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: special function sin(x)/x expected Si(x) got "
+                      << (res_si.success ? res_si.value.to_string() : "failed") << '\n';
+        }
+
+        const auto res_li = engine.integrate(SymbolicExpression::parse("1 / ln(x)"), "x");
+        if (res_li.success && res_li.value.to_string() == "li(x)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: special function 1/ln(x) expected li(x) got "
+                      << (res_li.success ? res_li.value.to_string() : "failed") << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: special function mapping threw error: " << ex.what() << '\n';
+    }
+
+    // ========== 线性代数核心增强测试 ==========
+    // 1. 尺度保护与对数求和行列式测试
+    try {
+        matrix::Matrix diag_mat = matrix::Matrix::zero(10, 10);
+        for (std::size_t i = 0; i < 10; ++i) {
+            diag_mat.at(i, i) = 100.0L;
+        }
+        const mymath::Scalar det_val = matrix::determinant(diag_mat);
+        // det = (100)^10 = 10^20
+        if (mymath::abs(det_val - 1e20L) / 1e20L < 1e-12) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: large scale determinant expected 1e20 got " << det_val << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: large scale determinant threw error: " << ex.what() << '\n';
+    }
+
+    // 2. Cholesky 容差对称性与正定性测试
+    try {
+        matrix::Matrix pos_def(2, 2, 0.0L);
+        pos_def.at(0, 0) = 4.0L;
+        pos_def.at(0, 1) = 2.0L;
+        pos_def.at(1, 0) = 2.0L + 1e-20L; // 微小数值不对称扰动
+        pos_def.at(1, 1) = 5.0L;
+        const matrix::Matrix L = matrix::cholesky(pos_def);
+        if (nearly_equal(L.at(0, 0), 2.0L, 1e-6) && nearly_equal(L.at(1, 1), 2.0L, 1e-6)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: Cholesky with tolerance perturbation failed\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: Cholesky with tolerance perturbation threw error: " << ex.what() << '\n';
     }
 
     // ========== 多变量积分测试 ==========

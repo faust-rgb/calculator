@@ -179,7 +179,19 @@ bool parse_index_expression(std::string_view expression, std::string* base, std:
     if (open_pos == std::string::npos) return false;
     *base = utils::trim_copy(text.substr(0, open_pos));
     *index = utils::trim_copy(text.substr(open_pos + 1, text.size() - open_pos - 2));
-    return !base->empty();
+    if (base->empty()) return false;
+
+    // 检查 base 末尾字符：如果是运算符或开括号，说明 '[' 是字面量而非索引
+    const char last_ch = base->back();
+    if (last_ch == '+' || last_ch == '-' || last_ch == '*' || last_ch == '/' ||
+        last_ch == '^' || last_ch == '%' || last_ch == '=' || last_ch == ',' ||
+        last_ch == ';' || last_ch == '(' || last_ch == '[' || last_ch == '{' ||
+        last_ch == '<' || last_ch == '>' || last_ch == '&' || last_ch == '|' ||
+        last_ch == '!' || last_ch == '~') {
+        return false;
+    }
+
+    return true;
 }
 
 bool has_top_level_semicolon(std::string_view text) {

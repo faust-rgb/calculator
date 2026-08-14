@@ -13,8 +13,16 @@ namespace mymath {
 
 /**
  * @brief Global scalar type definition
+ *
+ * Uses PreciseDecimal by default for higher precision.
+ * Modify this to switch to other data types.
  */
+#if 1
+using Scalar = PreciseDecimal;
+#else
 using Scalar = float128_t;
+#endif
+//using Scalar = float128_t;
 
 } // namespace mymath
 

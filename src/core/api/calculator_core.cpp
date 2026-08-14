@@ -419,6 +419,19 @@ std::string Calculator::evaluate_for_display(const std::string& expression, bool
 }
 
 std::string Calculator::process_line(const std::string& expression, bool exact_mode) {
+    const std::string trimmed = trim_copy(expression);
+    if (trimmed.empty()) return "";
+
+    // 优先识别脚本控制流关键字（if, for, while, fn, def, match, import, return 等）
+    static const std::vector<std::string_view> script_prefixes = {
+        "if ", "if(", "for ", "for(", "while ", "while(", "fn ", "def ", "match ", "import ", "return ", "pass"
+    };
+    for (const auto& prefix : script_prefixes) {
+        if (trimmed.size() >= prefix.size() && trimmed.substr(0, prefix.size()) == prefix) {
+            return execute_script(expression, exact_mode);
+        }
+    }
+
     std::string output;
     if (try_process_function_command(expression, &output, exact_mode)) {
         return output;

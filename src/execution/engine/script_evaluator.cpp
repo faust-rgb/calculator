@@ -411,9 +411,12 @@ StoredValue evaluate_expression_value(
             }
         }
     } catch (const SyntaxError& err) {
+        // 只有当整个表达式仅仅是一个独立的命令调用（以 ')' 结尾，后面没有其它复合运算符）时才 rethrow
         const std::size_t paren_pos = trimmed_expr.find('(');
         if (paren_pos != std::string::npos && is_cmd(utils::trim_copy(trimmed_expr.substr(0, paren_pos)))) {
-            throw;
+            if (trimmed_expr.back() == ')') {
+                throw;
+            }
         }
     } catch (...) {}
 

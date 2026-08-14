@@ -583,7 +583,8 @@ std::string_view CommandParser::collect_statement_expression() {
         advance_token();
     }
 
-    return trim_view(tokens_.source().substr(start_pos, peek_token().position - start_pos));
+    std::size_t end_pos = (peek_token().kind == TokenKind::kEnd) ? tokens_.source().size() : peek_token().position;
+    return trim_view(tokens_.source().substr(start_pos, end_pos - start_pos));
 }
 
 // ============================================================================

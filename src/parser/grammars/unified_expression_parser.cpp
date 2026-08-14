@@ -440,7 +440,20 @@ bool try_base_conversion_expression(
     const HexFormatOptions& hex_options,
     std::string* output) {
     
-    CommandASTNode ast = parse_command(expression);
+    std::string_view trimmed = utils::trim_view(expression);
+    if (!trimmed.starts_with("bin(") && !trimmed.starts_with("oct(") &&
+        !trimmed.starts_with("hex(") && !trimmed.starts_with("base(") &&
+        !trimmed.starts_with("bin ") && !trimmed.starts_with("oct ") &&
+        !trimmed.starts_with("hex ") && !trimmed.starts_with("base ")) {
+        return false;
+    }
+
+    CommandASTNode ast;
+    try {
+        ast = parse_command(expression);
+    } catch (...) {
+        return false;
+    }
     const auto* call = ast.as_function_call();
     if (!call) return false;
 

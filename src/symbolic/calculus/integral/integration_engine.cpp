@@ -424,11 +424,19 @@ IntegrationResult IntegrationEngine::try_integrate_rational(
                                                               variable_name,
                                                               &den_coeffs)) {
 
-            // 尝试符号部分分式分解
+            // 优先尝试实数域符号部分分式分解（产生实数域 arctan 和 ln）
             SymbolicPolynomial num_poly(num_coeffs, variable_name);
             SymbolicPolynomial den_poly(den_coeffs, variable_name);
 
             SymbolicExpression result;
+            if (integrate_symbolic_partial_fractions(num_poly, den_poly,
+                                                      variable_name, &result)) {
+                if (!verify_results_ ||
+                    verify_integration(expression, result, variable_name)) {
+                    return IntegrationResult::ok(result, "partial_fractions");
+                }
+            }
+
             if (RischAlgorithm::integrate_rational(num_poly,
                                                    den_poly,
                                                    variable_name,
@@ -436,14 +444,6 @@ IntegrationResult IntegrationEngine::try_integrate_rational(
                 if (!verify_results_ ||
                     verify_integration(expression, result, variable_name)) {
                     return IntegrationResult::ok(result, "risch_rational");
-                }
-            }
-
-            if (integrate_symbolic_partial_fractions(num_poly, den_poly,
-                                                      variable_name, &result)) {
-                if (!verify_results_ ||
-                    verify_integration(expression, result, variable_name)) {
-                    return IntegrationResult::ok(result, "partial_fractions");
                 }
             }
 
@@ -936,11 +936,11 @@ IntegrationResult IntegrationEngine::try_integrate_fallback(
     // Phase 5.1: 统一后备框架
     // 按优先级尝试多种后备策略
 
-    // 1. 尝试模式表匹配 (非初等函数积分)
+    // 1. 尝试模式表匹配 (特殊函数/非初等函数积分映射)
     SymbolicExpression pattern_result;
     std::string pattern_name;
     if (try_non_elementary_pattern(expression, variable_name, &pattern_result, &pattern_name)) {
-        return IntegrationResult::non_elementary("pattern_" + pattern_name);
+        return IntegrationResult::ok(pattern_result.simplify(), "special_" + pattern_name);
     }
 
     // 2. Do not run speculative Taylor expansion as a fallback here.  It is
@@ -1641,85 +1641,63 @@ bool IntegrationEngine::solve_cyclic_integration_system(
         }
     }
 
-    // 使用符号高斯消元求解
-    // 前向消元
+    // 2x2 系统：使用符号克拉默法则精确求解（支持参数化 a, b 循环积分）
+    if (n == 2) {
+        SymbolicExpression det = (matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0]).simplify();
+        if (expr_is_zero(det)) {
+            return false;
+        }
+        SymbolicExpression sol0 = ((rhs[0] * matrix[1][1] - rhs[1] * matrix[0][1]) / det).simplify();
+        SymbolicExpression sol1 = ((matrix[0][0] * rhs[1] - matrix[1][0] * rhs[0]) / det).simplify();
+        results->resize(2);
+        (*results)[0] = sol0;
+        (*results)[1] = sol1;
+        return true;
+    }
+
+    // 通用 n×n 符号消元与回代求解
     for (std::size_t col = 0; col < n; ++col) {
-        // 寻找主元（优先选择数值非零的）
         std::size_t pivot = col;
-        Scalar pivot_val = Scalar(0.0L);
         for (std::size_t row = col; row < n; ++row) {
-            Scalar val = Scalar(0.0L);
-            if (matrix[row][col].is_number(&val) && !mymath::is_near_zero(val, kFormatEps())) {
-                if (pivot == col || mymath::abs(val) > mymath::abs(pivot_val)) {
-                    pivot = row;
-                    pivot_val = val;
-                }
+            if (!expr_is_zero(matrix[row][col])) {
+                pivot = row;
+                break;
             }
         }
 
-        // 交换行
         if (pivot != col) {
             std::swap(matrix[col], matrix[pivot]);
             std::swap(rhs[col], rhs[pivot]);
         }
 
-        // 检查主元是否为零
-        Scalar pv = Scalar(0.0L);
-        if (!matrix[col][col].is_number(&pv) || mymath::is_near_zero(pv, kFormatEps())) {
-            // 尝试符号消元（简化处理：返回失败）
+        if (expr_is_zero(matrix[col][col])) {
             return false;
         }
 
-        // 消元
+        SymbolicExpression pv = matrix[col][col];
         for (std::size_t row = col + 1; row < n; ++row) {
-            Scalar row_val = Scalar(0.0L);
-            if (!matrix[row][col].is_number(&row_val)) {
-                continue;  // 简化处理：跳过非数值系数
+            if (expr_is_zero(matrix[row][col])) {
+                continue;
             }
-
-            Scalar factor = row_val / pv;
+            SymbolicExpression factor = (matrix[row][col] / pv).simplify();
             for (std::size_t j = col; j < n; ++j) {
-                Scalar m_val = Scalar(0.0L);
-                if (matrix[col][j].is_number(&m_val)) {
-                    matrix[row][j] = SymbolicExpression::number(
-                        matrix[row][j].is_number(nullptr) ?
-                        (matrix[row][j].is_number(&m_val) ? m_val : 0.0L) - factor * m_val : -factor * m_val);
-                }
+                matrix[row][j] = (matrix[row][j] - factor * matrix[col][j]).simplify();
             }
-            Scalar rhs_val = Scalar(0.0L);
-            if (rhs[col].is_number(&rhs_val)) {
-                rhs[row] = SymbolicExpression::number(
-                    rhs[row].is_number(&rhs_val) ? rhs_val - factor * rhs_val : -factor * rhs_val);
-            }
+            rhs[row] = (rhs[row] - factor * rhs[col]).simplify();
         }
     }
 
-    // 回代
+    // 符号回代
     results->resize(n);
     for (std::size_t i = n; i-- > 0; ) {
-        Scalar sum = Scalar(0.0L);
-        if (rhs[i].is_number(&sum)) {
-            for (std::size_t j = i + 1; j < n; ++j) {
-                Scalar m_val = Scalar(0.0L), r_val = 0.0L;
-                if (matrix[i][j].is_number(&m_val) && (*results)[j].is_number(&r_val)) {
-                    sum -= m_val * r_val;
-                }
-            }
-            Scalar diag = Scalar(0.0L);
-            if (matrix[i][i].is_number(&diag) && !mymath::is_near_zero(diag, kFormatEps())) {
-                (*results)[i] = SymbolicExpression::number(sum / diag);
-            } else {
-                return false;
-            }
-        } else {
-            // 非数值右侧，使用符号除法
-            SymbolicExpression sum_expr = rhs[i];
-            for (std::size_t j = i + 1; j < n; ++j) {
-                sum_expr = make_subtract(sum_expr,
-                    make_multiply(matrix[i][j], (*results)[j])).simplify();
-            }
-            (*results)[i] = make_divide(sum_expr, matrix[i][i]).simplify();
+        SymbolicExpression sum_expr = rhs[i];
+        for (std::size_t j = i + 1; j < n; ++j) {
+            sum_expr = (sum_expr - matrix[i][j] * (*results)[j]).simplify();
         }
+        if (expr_is_zero(matrix[i][i])) {
+            return false;
+        }
+        (*results)[i] = (sum_expr / matrix[i][i]).simplify();
     }
 
     return true;
@@ -1802,6 +1780,43 @@ bool detect_derivative_pattern(
         *constant = 1.0L;
         *h_expr = ratio_subst;
         return true;
+    }
+
+    // 代数逆代换 (Algebraic Back-Substitution):
+    // 1. 线性逆代换: candidate = a*x + b => x = (u - b)/a
+    SymbolicExpression a_lin, b_lin;
+    if (symbolic_decompose_linear(candidate, variable_name, &a_lin, &b_lin) && !expr_is_zero(a_lin)) {
+        SymbolicExpression x_in_u = ((u - b_lin) / a_lin).simplify();
+        SymbolicExpression x_var = SymbolicExpression::variable(variable_name);
+        SymbolicExpression full_subst = ratio.substitute_expression(x_var, x_in_u).simplify();
+        auto full_vars = full_subst.identifier_variables();
+        if (std::find(full_vars.begin(), full_vars.end(), variable_name) == full_vars.end()) {
+            *constant = 1.0L;
+            *h_expr = full_subst;
+            return true;
+        }
+    }
+
+    // 2. 纯二次逆代换: candidate = a*x^2 + c => x^2 = (u - c)/a
+    std::vector<SymbolicExpression> quad_coeffs;
+    if (symbolic_polynomial_coefficients_from_simplified(candidate.simplify(), variable_name, &quad_coeffs) &&
+        quad_coeffs.size() == 3) {
+        SymbolicExpression c_quad = quad_coeffs[0];
+        SymbolicExpression b_quad = quad_coeffs[1];
+        SymbolicExpression a_quad = quad_coeffs[2];
+        if (expr_is_zero(b_quad) && !expr_is_zero(a_quad)) {
+            SymbolicExpression x_sq = (SymbolicExpression::variable(variable_name) *
+                                       SymbolicExpression::variable(variable_name)).simplify();
+            SymbolicExpression x2_in_u = ((u - c_quad) / a_quad).simplify();
+            SymbolicExpression subst_quad = ratio.substitute_expression(candidate, u)
+                                                 .substitute_expression(x_sq, x2_in_u).simplify();
+            auto q_vars = subst_quad.identifier_variables();
+            if (std::find(q_vars.begin(), q_vars.end(), variable_name) == q_vars.end()) {
+                *constant = 1.0L;
+                *h_expr = subst_quad;
+                return true;
+            }
+        }
     }
 
     return false;

@@ -13,6 +13,7 @@
 
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/calculus/integral/integration_engine.h"
 #include "symbolic/calculus/risch/risch_algorithm.h"
 #include "analysis/integration/multivariable_integrator.h"
 #include "analysis/integration/multidim_integration.h"
@@ -104,18 +105,30 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
         std::string v; SymbolicExpression e; ctx.resolve_symbolic(arguments[0], false, &v, &e);
         auto vars = ctx.parse_symbolic_variable_arguments(arguments, 1, {v});
         SymbolicExpression res = e;
-        try {
-            for (const auto& var : vars) {
-                res = res.integral(var).simplify();
-            }
-            *output = with_constant(res);
-        } catch (const std::exception&) {
-            auto risch = RischAlgorithm::integrate_full(e, vars[0]);
-            if (!risch.success || risch.type != IntegralType::kElementary) {
-                *output = "Integral failed or non-elementary";
+        IntegrationEngine engine(10);
+        bool all_ok = true;
+        for (const auto& var : vars) {
+            IntegrationResult int_res = engine.integrate(res, var);
+            if (int_res.success) {
+                res = int_res.value.simplify();
             } else {
-                *output = with_constant(risch.value);
+                try {
+                    res = res.integral(var).simplify();
+                } catch (...) {
+                    auto risch = RischAlgorithm::integrate_full(res, var);
+                    if (risch.success && risch.type == IntegralType::kElementary) {
+                        res = risch.value.simplify();
+                    } else {
+                        all_ok = false;
+                        break;
+                    }
+                }
             }
+        }
+        if (all_ok) {
+            *output = with_constant(res);
+        } else {
+            *output = "Integral failed or non-elementary";
         }
         return true;
     }

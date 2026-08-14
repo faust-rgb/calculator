@@ -170,8 +170,9 @@ std::vector<std::string> parse_symbolic_variable_arguments(
 std::vector<SymbolicExpression> parse_symbolic_expression_list(
     const std::string& argument,
     const std::function<std::string(const std::string&)>& expand_inline) {
+    auto expand = expand_inline ? expand_inline : [](const std::string& s) { return s; };
     std::string text = trim_copy(argument);
-    if (text.size() < 2 || text.front() != '[' || text.back() != ']') return {SymbolicExpression::parse(expand_inline(text))};
+    if (text.size() < 2 || text.front() != '[' || text.back() != ']') return {SymbolicExpression::parse(expand(text))};
     text = trim_copy(text.substr(1, text.size() - 2));
     std::vector<std::string> texts;
     int p_d = 0, b_d = 0; std::size_t s = 0;

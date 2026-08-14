@@ -244,7 +244,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
     if (command == "lagrange") {
         if (arguments.size() < 2) throw std::runtime_error("lagrange expects f, [g1, g2, ...], [vars]");
         SymbolicExpression f = SymbolicExpression::parse(arguments[0]);
-        std::vector<SymbolicExpression> constraints = symbolic_commands::parse_symbolic_expression_list(arguments[1], nullptr);
+        std::vector<SymbolicExpression> constraints = symbolic_commands::parse_symbolic_expression_list(arguments[1], [](const std::string& s) { return s; });
         std::vector<std::string> variables = ctx.parse_symbolic_variable_arguments(arguments, 2, f.identifier_variables());
         SymbolicExpression lagrangian = f;
         std::vector<std::string> all_vars = variables;
@@ -253,9 +253,10 @@ bool handle_analysis_command(const AnalysisContext& ctx,
             all_vars.push_back(lambda_var);
             lagrangian = (lagrangian - SymbolicExpression::variable(lambda_var) * constraints[i]).simplify();
         }
-        std::string all_vars_str;
-        for (std::size_t i = 0; i < all_vars.size(); ++i) { if (i > 0) all_vars_str += ", "; all_vars_str += all_vars[i]; }
-        return handle_analysis_command(ctx, "critical", {lagrangian.to_string(), all_vars_str}, output);
+        std::vector<std::string> critical_args;
+        critical_args.push_back(lagrangian.to_string());
+        for (const auto& v : all_vars) critical_args.push_back(v);
+        return handle_analysis_command(ctx, "critical", critical_args, output);
     }
     
     return false;
