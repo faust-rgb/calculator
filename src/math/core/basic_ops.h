@@ -9,7 +9,7 @@
 #ifndef MATH_CORE_BASIC_OPS_H
 #define MATH_CORE_BASIC_OPS_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "floating_point.h"
 #include "scalar_traits.h"
 #include <complex>

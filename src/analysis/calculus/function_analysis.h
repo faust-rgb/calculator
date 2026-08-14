@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 
 class Calculator;
 

@@ -11,7 +11,7 @@
 
 #include "types/stored_value.h"
 #include "types/function.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "matrix/matrix.h"
 #include <string>
 #include <vector>

@@ -98,4 +98,9 @@ public:
                                              bool exact_mode = false) = 0;
 };
 
+/**
+ * @brief 检查函数名是否为系统保留关键字/函数名
+ */
+bool is_reserved_user_function_name(IExecutionContext* ctx, std::string_view name);
+
 #endif // SCRIPT_CONTEXT_H

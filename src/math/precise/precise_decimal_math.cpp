@@ -15,7 +15,7 @@
 #include "types/stored_value.h"
 #include "core/common/calculator_exceptions.h"
 #include "math/mymath.h"
-#include "app/default_precision.h"
+#include "math/base/default_precision.h"
 
 #include <algorithm>
 #include <iomanip>

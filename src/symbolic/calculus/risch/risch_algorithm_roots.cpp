@@ -12,7 +12,7 @@
 
 #include "symbolic/calculus/risch/risch_algorithm.h"
 #include "symbolic/core/symbolic_expression_internal.h"
-#include "app/default_precision.h"
+#include "math/base/default_precision.h"
 #include "math/mymath.h"
 #include <algorithm>
 #include <complex>

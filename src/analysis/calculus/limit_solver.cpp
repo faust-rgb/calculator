@@ -19,7 +19,7 @@
 #include "analysis/series/psa_engine.h"
 #include "analysis/modules/series_module.h"
 #include "symbolic/core/symbolic_expression.h"
-#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/public/symbolic_node_types.h"
 #include "math/mymath.h"
 #include <algorithm>
 
@@ -330,7 +330,7 @@ bool try_symbolic_one_to_infinity_limit(
     }
 
     const SymbolicExpression transformed =
-        symbolic_expression_internal::make_function(
+        SymbolicExpression::function(
             "exp",
             ((base - SymbolicExpression::number(1.0L)) * exponent).simplify()).simplify();
     T transformed_value = T(static_cast<long long>(0));

@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <utility>
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/core/basic_ops.h"
 
 namespace {

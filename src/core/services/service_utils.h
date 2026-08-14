@@ -17,7 +17,7 @@
 #define CORE_SERVICE_UTILS_H
 
 #include "types/stored_value.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include <string>
 #include <vector>
 

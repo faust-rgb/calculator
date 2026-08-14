@@ -8,7 +8,7 @@
 
 #include "calculator_statistics.h"
 #include "matrix/matrix.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/mymath.h"
 #include "statistics.h"
 #include "probability.h"

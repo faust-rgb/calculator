@@ -6,7 +6,7 @@
 #ifndef MATH_TRANSCENDENTAL_TRANSCENDENTAL_H
 #define MATH_TRANSCENDENTAL_TRANSCENDENTAL_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/core/floating_point.h"
 #include "math/core/scalar_traits.h"
 

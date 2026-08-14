@@ -14,7 +14,7 @@
 #ifndef MATH_CORE_SCALAR_TRAITS_H
 #define MATH_CORE_SCALAR_TRAITS_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/types/float128.h"
 #include "math/precise/precise_decimal.h"
 

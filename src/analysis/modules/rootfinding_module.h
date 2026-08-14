@@ -12,7 +12,7 @@
 #ifndef ROOTFINDING_MODULE_H
 #define ROOTFINDING_MODULE_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include <string>
 #include <functional>
 #include <vector>

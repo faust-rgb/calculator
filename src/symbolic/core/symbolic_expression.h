@@ -60,6 +60,22 @@ public:
     static void set_display_precision(int precision);
 
     /**
+     * @brief 创建函数调用表达式
+     * @param name 函数名
+     * @param arg 参数表达式
+     * @return 函数表达式
+     */
+    static SymbolicExpression function(const std::string& name, const SymbolicExpression& arg);
+
+    /**
+     * @brief 创建多参数函数调用表达式
+     * @param name 函数名
+     * @param args 参数表达式列表
+     * @return 函数表达式
+     */
+    static SymbolicExpression function(const std::string& name, const std::vector<SymbolicExpression>& args);
+
+    /**
      * @brief 创建变量表达式
      * @param name 变量名
      * @return 变量表达式

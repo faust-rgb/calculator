@@ -15,7 +15,7 @@
 #include "core/common/calculator_exceptions.h"
 #include "core/services/format_utils.h"
 #include "math/mymath.h"
-#include "app/default_precision.h"
+#include "math/base/default_precision.h"
 
 #include <algorithm>
 #include <cctype>

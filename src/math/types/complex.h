@@ -9,7 +9,7 @@
 #ifndef MATH_TYPES_COMPLEX_H
 #define MATH_TYPES_COMPLEX_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include <istream>
 #include <ostream>
 #include <type_traits>

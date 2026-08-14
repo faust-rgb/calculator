@@ -23,7 +23,7 @@
 #include "analysis/series/pade_approximation.h"
 #include "analysis/series/puiseux_series.h"
 #include "analysis/series/series_summation.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "math/mymath.h"
 #include "math/helpers/integer_helpers.h"

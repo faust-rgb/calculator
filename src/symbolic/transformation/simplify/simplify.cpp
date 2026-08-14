@@ -27,7 +27,7 @@
 
 #include "symbolic/core/symbolic_expression_internal.h"
 
-#include "app/default_precision.h"
+#include "math/base/default_precision.h"
 #include "types/scalar_type.h"
 #include "math/mymath.h"
 #include "math/precise/precise_decimal.h"

@@ -1,5 +1,5 @@
 // ============================================================================
-// 存储值类型 (Modern C++ std::variant 架构)
+// 存储值类型 (Modern C++ std::variant 架构与轻量无状态代理)
 // ============================================================================
 
 #ifndef TYPES_STORED_VALUE_H
@@ -16,6 +16,7 @@
 #include <vector>
 #include <variant>
 #include <type_traits>
+#include <cstddef>
 
 namespace matrix {
 template<typename T> struct TMatrix;
@@ -54,81 +55,20 @@ struct StoredValue {
     std::string precise_decimal_text;
     std::shared_ptr<PreciseDecimal> precise_decimal_value;
 
-    void init_proxies() {
-        decimal.owner = this;
-        complex.owner = this;
-        string_value.owner = this;
-        matrix_ptr.owner = this;
-        is_matrix.owner = this;
-        is_complex.owner = this;
-        is_string.owner = this;
-        is_list.owner = this;
-        is_dict.owner = this;
-        list_value.owner = this;
-        dict_value.owner = this;
-    }
-
     // 构造函数
-    StoredValue() { init_proxies(); }
-    StoredValue(Scalar val) : data(val) { init_proxies(); }
-    StoredValue(Rational val) : data(val), exact(true), rational(val) { init_proxies(); }
-    StoredValue(mymath::complex<Scalar> val) : data(val) { init_proxies(); }
-    StoredValue(std::string val) : data(std::move(val)) { init_proxies(); }
+    StoredValue() = default;
+    StoredValue(Scalar val) : data(val) {}
+    StoredValue(Rational val) : data(val), exact(true), rational(val) {}
+    StoredValue(mymath::complex<Scalar> val) : data(val) {}
+    StoredValue(std::string val) : data(std::move(val)) {}
     StoredValue(matrix::Matrix val);
-    StoredValue(std::shared_ptr<matrix::Matrix> val) : data(std::move(val)) { init_proxies(); }
+    StoredValue(std::shared_ptr<matrix::Matrix> val) : data(std::move(val)) {}
 
-    // 拷贝与移动构造函数
-    StoredValue(const StoredValue& other)
-        : data(other.data), exact(other.exact), rational(other.rational),
-          has_symbolic_text(other.has_symbolic_text), has_precise_decimal_text(other.has_precise_decimal_text),
-          symbolic_computed(other.symbolic_computed), source_expression(other.source_expression),
-          symbolic_text(other.symbolic_text), precise_decimal_text(other.precise_decimal_text),
-          precise_decimal_value(other.precise_decimal_value) {
-        init_proxies();
-    }
-
-    StoredValue(StoredValue&& other) noexcept
-        : data(std::move(other.data)), exact(other.exact), rational(std::move(other.rational)),
-          has_symbolic_text(other.has_symbolic_text), has_precise_decimal_text(other.has_precise_decimal_text),
-          symbolic_computed(other.symbolic_computed), source_expression(std::move(other.source_expression)),
-          symbolic_text(std::move(other.symbolic_text)), precise_decimal_text(std::move(other.precise_decimal_text)),
-          precise_decimal_value(std::move(other.precise_decimal_value)) {
-        init_proxies();
-    }
-
-    StoredValue& operator=(const StoredValue& other) {
-        if (this != &other) {
-            data = other.data;
-            exact = other.exact;
-            rational = other.rational;
-            has_symbolic_text = other.has_symbolic_text;
-            has_precise_decimal_text = other.has_precise_decimal_text;
-            symbolic_computed = other.symbolic_computed;
-            source_expression = other.source_expression;
-            symbolic_text = other.symbolic_text;
-            precise_decimal_text = other.precise_decimal_text;
-            precise_decimal_value = other.precise_decimal_value;
-            init_proxies();
-        }
-        return *this;
-    }
-
-    StoredValue& operator=(StoredValue&& other) noexcept {
-        if (this != &other) {
-            data = std::move(other.data);
-            exact = other.exact;
-            rational = std::move(other.rational);
-            has_symbolic_text = other.has_symbolic_text;
-            has_precise_decimal_text = other.has_precise_decimal_text;
-            symbolic_computed = other.symbolic_computed;
-            source_expression = std::move(other.source_expression);
-            symbolic_text = std::move(other.symbolic_text);
-            precise_decimal_text = std::move(other.precise_decimal_text);
-            precise_decimal_value = std::move(other.precise_decimal_value);
-            init_proxies();
-        }
-        return *this;
-    }
+    // 拷贝与移动操作全部默认（无需自引用指针维护）
+    StoredValue(const StoredValue&) = default;
+    StoredValue(StoredValue&&) noexcept = default;
+    StoredValue& operator=(const StoredValue&) = default;
+    StoredValue& operator=(StoredValue&&) noexcept = default;
 
     // 类型查询接口
     bool is_scalar_type() const { return std::holds_alternative<Scalar>(data) || std::holds_alternative<Rational>(data); }
@@ -201,18 +141,23 @@ struct StoredValue {
         return nullptr;
     }
 
-    // 代理包装器实现旧接口向后兼容
+    // ========================================================================
+    // 无状态轻量代理包装器（消除自引用 owner 指针）
+    // ========================================================================
+
     struct DecimalProxy {
-        StoredValue* owner;
-        operator Scalar() const { return owner->get_decimal(); }
-        explicit operator long double() const { return static_cast<long double>(owner->get_decimal()); }
-        Scalar get() const { return owner->get_decimal(); }
-        long double to_long_double() const { return static_cast<long double>(owner->get_decimal()); }
-        DecimalProxy& operator=(Scalar v) { owner->set_decimal(v); return *this; }
-        DecimalProxy& operator+=(Scalar v) { owner->set_decimal(owner->get_decimal() + v); return *this; }
-        DecimalProxy& operator-=(Scalar v) { owner->set_decimal(owner->get_decimal() - v); return *this; }
-        DecimalProxy& operator*=(Scalar v) { owner->set_decimal(owner->get_decimal() * v); return *this; }
-        DecimalProxy& operator/=(Scalar v) { owner->set_decimal(owner->get_decimal() / v); return *this; }
+        StoredValue* owner();
+        const StoredValue* owner() const;
+
+        operator Scalar() const;
+        explicit operator long double() const { return static_cast<long double>(get()); }
+        Scalar get() const;
+        long double to_long_double() const { return static_cast<long double>(get()); }
+        DecimalProxy& operator=(Scalar v);
+        DecimalProxy& operator+=(Scalar v);
+        DecimalProxy& operator-=(Scalar v);
+        DecimalProxy& operator*=(Scalar v);
+        DecimalProxy& operator/=(Scalar v);
 
         template <typename Stream>
         friend Stream& operator<<(Stream& os, const DecimalProxy& dp) {
@@ -222,34 +167,30 @@ struct StoredValue {
     };
 
     struct ComplexProxy {
-        StoredValue* owner;
-        operator mymath::complex<Scalar>() const { return owner->get_complex(); }
-        ComplexProxy& operator=(mymath::complex<Scalar> v) { owner->set_complex(v); return *this; }
-        Scalar real() const { return owner->get_complex().real(); }
-        Scalar imag() const { return owner->get_complex().imag(); }
-        void real(Scalar r) {
-            auto c = owner->get_complex();
-            c.real(r);
-            owner->set_complex(c);
-        }
-        void imag(Scalar i) {
-            auto c = owner->get_complex();
-            c.imag(i);
-            owner->set_complex(c);
-        }
-        mymath::complex<Scalar> get() const { return owner->get_complex(); }
+        StoredValue* owner();
+        const StoredValue* owner() const;
+
+        operator mymath::complex<Scalar>() const;
+        ComplexProxy& operator=(mymath::complex<Scalar> v);
+        Scalar real() const;
+        Scalar imag() const;
+        void real(Scalar r);
+        void imag(Scalar i);
+        mymath::complex<Scalar> get() const;
     };
 
     struct StringProxy {
-        StoredValue* owner;
-        operator const std::string&() const { return owner->get_string_value(); }
-        StringProxy& operator=(std::string v) { owner->set_string_value(std::move(v)); return *this; }
-        const std::string& get() const { return owner->get_string_value(); }
+        StoredValue* owner();
+        const StoredValue* owner() const;
 
-        auto begin() const { return owner->get_string_value().begin(); }
-        auto end() const { return owner->get_string_value().end(); }
-        bool empty() const { return owner->get_string_value().empty(); }
-        std::size_t size() const { return owner->get_string_value().size(); }
+        operator const std::string&() const;
+        StringProxy& operator=(std::string v);
+        const std::string& get() const;
+
+        auto begin() const { return get().begin(); }
+        auto end() const { return get().end(); }
+        bool empty() const { return get().empty(); }
+        std::size_t size() const { return get().size(); }
 
         friend std::string operator+(const std::string& lhs, const StringProxy& rhs) { return lhs + rhs.get(); }
         friend std::string operator+(const char* lhs, const StringProxy& rhs) { return std::string(lhs) + rhs.get(); }
@@ -261,109 +202,97 @@ struct StoredValue {
     };
 
     struct MatrixPtrProxy {
-        StoredValue* owner;
-        operator std::shared_ptr<matrix::Matrix>() const { return owner->get_matrix_ptr(); }
-        MatrixPtrProxy& operator=(std::shared_ptr<matrix::Matrix> v) { owner->set_matrix_ptr(std::move(v)); return *this; }
-        matrix::Matrix* operator->() const { return owner->get_matrix_ptr().get(); }
-        matrix::Matrix& operator*() const { return *owner->get_matrix_ptr(); }
-        explicit operator bool() const { return owner->get_matrix_ptr() != nullptr; }
+        StoredValue* owner();
+        const StoredValue* owner() const;
+
+        operator std::shared_ptr<matrix::Matrix>() const;
+        MatrixPtrProxy& operator=(std::shared_ptr<matrix::Matrix> v);
+        matrix::Matrix* operator->() const;
+        matrix::Matrix& operator*() const;
+        explicit operator bool() const;
     };
 
     struct IsMatrixProxy {
-        StoredValue* owner;
+        StoredValue* owner();
+        const StoredValue* owner() const;
+
         operator bool() const;
         bool operator()() const { return operator bool(); }
         IsMatrixProxy& operator=(bool set_mat);
     };
 
     struct IsComplexProxy {
-        StoredValue* owner;
-        operator bool() const { return owner->is_complex_type(); }
+        StoredValue* owner();
+        const StoredValue* owner() const;
+
+        operator bool() const;
         bool operator()() const { return operator bool(); }
-        IsComplexProxy& operator=(bool set_cplx) {
-            if (set_cplx && !owner->is_complex_type()) {
-                owner->data = mymath::complex<Scalar>(Scalar(0.0L), Scalar(0.0L));
-            } else if (!set_cplx && owner->is_complex_type()) {
-                owner->data = std::monostate{};
-            }
-            return *this;
-        }
+        IsComplexProxy& operator=(bool set_cplx);
     };
 
     struct IsStringProxy {
-        StoredValue* owner;
-        operator bool() const { return owner->is_string_type(); }
+        StoredValue* owner();
+        const StoredValue* owner() const;
+
+        operator bool() const;
         bool operator()() const { return operator bool(); }
-        IsStringProxy& operator=(bool set_str) {
-            if (set_str && !owner->is_string_type()) {
-                owner->data = std::string("");
-            } else if (!set_str && owner->is_string_type()) {
-                owner->data = std::monostate{};
-            }
-            return *this;
-        }
+        IsStringProxy& operator=(bool set_str);
     };
 
     struct IsListProxy {
-        StoredValue* owner;
-        operator bool() const { return owner->is_list_type(); }
+        StoredValue* owner();
+        const StoredValue* owner() const;
+
+        operator bool() const;
         bool operator()() const { return operator bool(); }
-        IsListProxy& operator=(bool set_l) {
-            if (set_l && !owner->is_list_type()) {
-                owner->data = std::make_shared<ListType>();
-            } else if (!set_l && owner->is_list_type()) {
-                owner->data = std::monostate{};
-            }
-            return *this;
-        }
+        IsListProxy& operator=(bool set_l);
     };
 
     struct IsDictProxy {
-        StoredValue* owner;
-        operator bool() const { return owner->is_dict_type(); }
+        StoredValue* owner();
+        const StoredValue* owner() const;
+
+        operator bool() const;
         bool operator()() const { return operator bool(); }
-        IsDictProxy& operator=(bool set_d) {
-            if (set_d && !owner->is_dict_type()) {
-                owner->data = std::make_shared<DictType>();
-            } else if (!set_d && owner->is_dict_type()) {
-                owner->data = std::monostate{};
-            }
-            return *this;
-        }
+        IsDictProxy& operator=(bool set_d);
     };
 
     struct ListValueProxy {
-        StoredValue* owner;
-        operator std::shared_ptr<ListType>() const { return owner->get_list_value(); }
-        ListValueProxy& operator=(std::shared_ptr<ListType> v) { owner->data = std::move(v); return *this; }
-        ListType* operator->() const { return owner->get_list_value().get(); }
-        ListType& operator*() const { return *owner->get_list_value(); }
-        explicit operator bool() const { return owner->get_list_value() != nullptr; }
+        StoredValue* owner();
+        const StoredValue* owner() const;
+
+        operator std::shared_ptr<ListType>() const;
+        ListValueProxy& operator=(std::shared_ptr<ListType> v);
+        ListType* operator->() const;
+        ListType& operator*() const;
+        explicit operator bool() const;
     };
 
     struct DictValueProxy {
-        StoredValue* owner;
-        operator std::shared_ptr<DictType>() const { return owner->get_dict_value(); }
-        DictValueProxy& operator=(std::shared_ptr<DictType> v) { owner->data = std::move(v); return *this; }
-        DictType* operator->() const { return owner->get_dict_value().get(); }
-        DictType& operator*() const { return *owner->get_dict_value(); }
-        explicit operator bool() const { return owner->get_dict_value() != nullptr; }
+        StoredValue* owner();
+        const StoredValue* owner() const;
+
+        operator std::shared_ptr<DictType>() const;
+        DictValueProxy& operator=(std::shared_ptr<DictType> v);
+        DictType* operator->() const;
+        DictType& operator*() const;
+        explicit operator bool() const;
     };
 
-    // 字段兼容代理
-    DecimalProxy decimal{this};
-    ComplexProxy complex{this};
-    StringProxy string_value{this};
-    MatrixPtrProxy matrix_ptr{this};
+    // 字段兼容代理实例（零指针开销）
+    DecimalProxy decimal;
+    ComplexProxy complex;
+    StringProxy string_value;
+    MatrixPtrProxy matrix_ptr;
 
-    IsMatrixProxy is_matrix{this};
-    IsComplexProxy is_complex{this};
-    IsStringProxy is_string{this};
-    IsListProxy is_list{this};
-    IsDictProxy is_dict{this};
+    IsMatrixProxy is_matrix;
+    IsComplexProxy is_complex;
+    IsStringProxy is_string;
+    IsListProxy is_list;
+    IsDictProxy is_dict;
 
-    ListValueProxy list_value{this};
-    DictValueProxy dict_value{this};
+    ListValueProxy list_value;
+    DictValueProxy dict_value;
 
     // 现代 Visitor 支持
     template <typename Visitor>
@@ -391,6 +320,163 @@ struct StoredValue {
         symbolic_computed = false;
     }
 };
+
+// ============================================================================
+// 代理内联实现（基于 offsetof 动态寻址父对象，零指针存储）
+// ============================================================================
+
+inline StoredValue* StoredValue::DecimalProxy::owner() {
+    return reinterpret_cast<StoredValue*>(reinterpret_cast<char*>(this) - offsetof(StoredValue, decimal));
+}
+inline const StoredValue* StoredValue::DecimalProxy::owner() const {
+    return reinterpret_cast<const StoredValue*>(reinterpret_cast<const char*>(this) - offsetof(StoredValue, decimal));
+}
+inline StoredValue::DecimalProxy::operator Scalar() const { return owner()->get_decimal(); }
+inline Scalar StoredValue::DecimalProxy::get() const { return owner()->get_decimal(); }
+inline StoredValue::DecimalProxy& StoredValue::DecimalProxy::operator=(Scalar v) { owner()->set_decimal(v); return *this; }
+inline StoredValue::DecimalProxy& StoredValue::DecimalProxy::operator+=(Scalar v) { owner()->set_decimal(owner()->get_decimal() + v); return *this; }
+inline StoredValue::DecimalProxy& StoredValue::DecimalProxy::operator-=(Scalar v) { owner()->set_decimal(owner()->get_decimal() - v); return *this; }
+inline StoredValue::DecimalProxy& StoredValue::DecimalProxy::operator*=(Scalar v) { owner()->set_decimal(owner()->get_decimal() * v); return *this; }
+inline StoredValue::DecimalProxy& StoredValue::DecimalProxy::operator/=(Scalar v) { owner()->set_decimal(owner()->get_decimal() / v); return *this; }
+
+inline StoredValue* StoredValue::ComplexProxy::owner() {
+    return reinterpret_cast<StoredValue*>(reinterpret_cast<char*>(this) - offsetof(StoredValue, complex));
+}
+inline const StoredValue* StoredValue::ComplexProxy::owner() const {
+    return reinterpret_cast<const StoredValue*>(reinterpret_cast<const char*>(this) - offsetof(StoredValue, complex));
+}
+inline StoredValue::ComplexProxy::operator mymath::complex<Scalar>() const { return owner()->get_complex(); }
+inline StoredValue::ComplexProxy& StoredValue::ComplexProxy::operator=(mymath::complex<Scalar> v) { owner()->set_complex(v); return *this; }
+inline Scalar StoredValue::ComplexProxy::real() const { return owner()->get_complex().real(); }
+inline Scalar StoredValue::ComplexProxy::imag() const { return owner()->get_complex().imag(); }
+inline void StoredValue::ComplexProxy::real(Scalar r) {
+    auto c = owner()->get_complex();
+    c.real(r);
+    owner()->set_complex(c);
+}
+inline void StoredValue::ComplexProxy::imag(Scalar i) {
+    auto c = owner()->get_complex();
+    c.imag(i);
+    owner()->set_complex(c);
+}
+inline mymath::complex<Scalar> StoredValue::ComplexProxy::get() const { return owner()->get_complex(); }
+
+inline StoredValue* StoredValue::StringProxy::owner() {
+    return reinterpret_cast<StoredValue*>(reinterpret_cast<char*>(this) - offsetof(StoredValue, string_value));
+}
+inline const StoredValue* StoredValue::StringProxy::owner() const {
+    return reinterpret_cast<const StoredValue*>(reinterpret_cast<const char*>(this) - offsetof(StoredValue, string_value));
+}
+inline StoredValue::StringProxy::operator const std::string&() const { return owner()->get_string_value(); }
+inline StoredValue::StringProxy& StoredValue::StringProxy::operator=(std::string v) { owner()->set_string_value(std::move(v)); return *this; }
+inline const std::string& StoredValue::StringProxy::get() const { return owner()->get_string_value(); }
+
+inline StoredValue* StoredValue::MatrixPtrProxy::owner() {
+    return reinterpret_cast<StoredValue*>(reinterpret_cast<char*>(this) - offsetof(StoredValue, matrix_ptr));
+}
+inline const StoredValue* StoredValue::MatrixPtrProxy::owner() const {
+    return reinterpret_cast<const StoredValue*>(reinterpret_cast<const char*>(this) - offsetof(StoredValue, matrix_ptr));
+}
+inline StoredValue::MatrixPtrProxy::operator std::shared_ptr<matrix::Matrix>() const { return owner()->get_matrix_ptr(); }
+inline StoredValue::MatrixPtrProxy& StoredValue::MatrixPtrProxy::operator=(std::shared_ptr<matrix::Matrix> v) { owner()->set_matrix_ptr(std::move(v)); return *this; }
+inline matrix::Matrix* StoredValue::MatrixPtrProxy::operator->() const { return owner()->get_matrix_ptr().get(); }
+inline matrix::Matrix& StoredValue::MatrixPtrProxy::operator*() const { return *owner()->get_matrix_ptr(); }
+inline StoredValue::MatrixPtrProxy::operator bool() const { return owner()->get_matrix_ptr() != nullptr; }
+
+inline StoredValue* StoredValue::IsMatrixProxy::owner() {
+    return reinterpret_cast<StoredValue*>(reinterpret_cast<char*>(this) - offsetof(StoredValue, is_matrix));
+}
+inline const StoredValue* StoredValue::IsMatrixProxy::owner() const {
+    return reinterpret_cast<const StoredValue*>(reinterpret_cast<const char*>(this) - offsetof(StoredValue, is_matrix));
+}
+
+inline StoredValue* StoredValue::IsComplexProxy::owner() {
+    return reinterpret_cast<StoredValue*>(reinterpret_cast<char*>(this) - offsetof(StoredValue, is_complex));
+}
+inline const StoredValue* StoredValue::IsComplexProxy::owner() const {
+    return reinterpret_cast<const StoredValue*>(reinterpret_cast<const char*>(this) - offsetof(StoredValue, is_complex));
+}
+inline StoredValue::IsComplexProxy::operator bool() const { return owner()->is_complex_type(); }
+inline StoredValue::IsComplexProxy& StoredValue::IsComplexProxy::operator=(bool set_cplx) {
+    if (set_cplx && !owner()->is_complex_type()) {
+        owner()->data = mymath::complex<Scalar>(Scalar(0.0L), Scalar(0.0L));
+    } else if (!set_cplx && owner()->is_complex_type()) {
+        owner()->data = std::monostate{};
+    }
+    return *this;
+}
+
+inline StoredValue* StoredValue::IsStringProxy::owner() {
+    return reinterpret_cast<StoredValue*>(reinterpret_cast<char*>(this) - offsetof(StoredValue, is_string));
+}
+inline const StoredValue* StoredValue::IsStringProxy::owner() const {
+    return reinterpret_cast<const StoredValue*>(reinterpret_cast<const char*>(this) - offsetof(StoredValue, is_string));
+}
+inline StoredValue::IsStringProxy::operator bool() const { return owner()->is_string_type(); }
+inline StoredValue::IsStringProxy& StoredValue::IsStringProxy::operator=(bool set_str) {
+    if (set_str && !owner()->is_string_type()) {
+        owner()->data = std::string("");
+    } else if (!set_str && owner()->is_string_type()) {
+        owner()->data = std::monostate{};
+    }
+    return *this;
+}
+
+inline StoredValue* StoredValue::IsListProxy::owner() {
+    return reinterpret_cast<StoredValue*>(reinterpret_cast<char*>(this) - offsetof(StoredValue, is_list));
+}
+inline const StoredValue* StoredValue::IsListProxy::owner() const {
+    return reinterpret_cast<const StoredValue*>(reinterpret_cast<const char*>(this) - offsetof(StoredValue, is_list));
+}
+inline StoredValue::IsListProxy::operator bool() const { return owner()->is_list_type(); }
+inline StoredValue::IsListProxy& StoredValue::IsListProxy::operator=(bool set_l) {
+    if (set_l && !owner()->is_list_type()) {
+        owner()->data = std::make_shared<ListType>();
+    } else if (!set_l && owner()->is_list_type()) {
+        owner()->data = std::monostate{};
+    }
+    return *this;
+}
+
+inline StoredValue* StoredValue::IsDictProxy::owner() {
+    return reinterpret_cast<StoredValue*>(reinterpret_cast<char*>(this) - offsetof(StoredValue, is_dict));
+}
+inline const StoredValue* StoredValue::IsDictProxy::owner() const {
+    return reinterpret_cast<const StoredValue*>(reinterpret_cast<const char*>(this) - offsetof(StoredValue, is_dict));
+}
+inline StoredValue::IsDictProxy::operator bool() const { return owner()->is_dict_type(); }
+inline StoredValue::IsDictProxy& StoredValue::IsDictProxy::operator=(bool set_d) {
+    if (set_d && !owner()->is_dict_type()) {
+        owner()->data = std::make_shared<DictType>();
+    } else if (!set_d && owner()->is_dict_type()) {
+        owner()->data = std::monostate{};
+    }
+    return *this;
+}
+
+inline StoredValue* StoredValue::ListValueProxy::owner() {
+    return reinterpret_cast<StoredValue*>(reinterpret_cast<char*>(this) - offsetof(StoredValue, list_value));
+}
+inline const StoredValue* StoredValue::ListValueProxy::owner() const {
+    return reinterpret_cast<const StoredValue*>(reinterpret_cast<const char*>(this) - offsetof(StoredValue, list_value));
+}
+inline StoredValue::ListValueProxy::operator std::shared_ptr<StoredValue::ListType>() const { return owner()->get_list_value(); }
+inline StoredValue::ListValueProxy& StoredValue::ListValueProxy::operator=(std::shared_ptr<ListType> v) { owner()->data = std::move(v); return *this; }
+inline StoredValue::ListType* StoredValue::ListValueProxy::operator->() const { return owner()->get_list_value().get(); }
+inline StoredValue::ListType& StoredValue::ListValueProxy::operator*() const { return *owner()->get_list_value(); }
+inline StoredValue::ListValueProxy::operator bool() const { return owner()->get_list_value() != nullptr; }
+
+inline StoredValue* StoredValue::DictValueProxy::owner() {
+    return reinterpret_cast<StoredValue*>(reinterpret_cast<char*>(this) - offsetof(StoredValue, dict_value));
+}
+inline const StoredValue* StoredValue::DictValueProxy::owner() const {
+    return reinterpret_cast<const StoredValue*>(reinterpret_cast<const char*>(this) - offsetof(StoredValue, dict_value));
+}
+inline StoredValue::DictValueProxy::operator std::shared_ptr<StoredValue::DictType>() const { return owner()->get_dict_value(); }
+inline StoredValue::DictValueProxy& StoredValue::DictValueProxy::operator=(std::shared_ptr<DictType> v) { owner()->data = std::move(v); return *this; }
+inline StoredValue::DictType* StoredValue::DictValueProxy::operator->() const { return owner()->get_dict_value().get(); }
+inline StoredValue::DictType& StoredValue::DictValueProxy::operator*() const { return *owner()->get_dict_value(); }
+inline StoredValue::DictValueProxy::operator bool() const { return owner()->get_dict_value() != nullptr; }
 
 namespace precise {
 std::string stored_value_precise_decimal_text(const StoredValue& value);

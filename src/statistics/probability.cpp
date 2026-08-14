@@ -10,7 +10,7 @@
  */
 
 #include "probability.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/mymath.h"
 #include <random>
 #include <stdexcept>

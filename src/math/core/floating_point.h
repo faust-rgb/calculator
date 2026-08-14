@@ -9,7 +9,7 @@
 #ifndef MATH_CORE_FLOATING_POINT_H
 #define MATH_CORE_FLOATING_POINT_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "scalar_traits.h"
 
 namespace mymath {

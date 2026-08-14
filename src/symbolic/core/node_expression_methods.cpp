@@ -16,6 +16,29 @@ StoredValue SymbolicExpression::evalf(core::ExecutionContext& ctx) const {
 
 using namespace symbolic_expression_internal;
 
+SymbolicExpression SymbolicExpression::function(const std::string& name, const SymbolicExpression& arg) {
+    return make_function(name, arg);
+}
+
+SymbolicExpression SymbolicExpression::function(const std::string& name, const std::vector<SymbolicExpression>& args) {
+    if (args.empty()) {
+        auto node = std::make_shared<Node>();
+        node->type = NodeType::kFunction;
+        node->text = name;
+        return SymbolicExpression(intern_node(node));
+    }
+    if (args.size() == 1) {
+        return make_function(name, args[0]);
+    }
+    auto node = std::make_shared<Node>();
+    node->type = NodeType::kFunction;
+    node->text = name;
+    for (const auto& a : args) {
+        node->children.push_back(a.node_);
+    }
+    return SymbolicExpression(intern_node(node));
+}
+
 // ============================================================================
 // 向量/张量表达式实现
 // ============================================================================

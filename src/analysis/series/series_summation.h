@@ -11,7 +11,7 @@
 #ifndef ANALYSIS_SERIES_SERIES_SUMMATION_H
 #define ANALYSIS_SERIES_SERIES_SUMMATION_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "symbolic/core/symbolic_expression.h"
 #include <string>
 #include <vector>

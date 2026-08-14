@@ -11,7 +11,7 @@
 
 #include <string>
 #include <complex>
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 
 struct StoredValue;
 struct Rational;

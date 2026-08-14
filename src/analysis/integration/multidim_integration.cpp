@@ -4,7 +4,7 @@
 
 #include "analysis/integration/multidim_integration.h"
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/mymath.h"
 
 #include <algorithm>

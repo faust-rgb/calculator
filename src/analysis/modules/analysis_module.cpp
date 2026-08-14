@@ -22,7 +22,7 @@
 #include "analysis/calculus/critical_point_solver.h"
 #include "symbolic/modules/symbolic_module.h"
 #include "symbolic/core/symbolic_expression.h"
-#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/public/symbolic_node_types.h"
 #include "symbolic/algebra/groebner/groebner_basis.h"
 #include "symbolic/solver/symbolic_solver.h"
 #include "analysis/calculus/function_analysis.h"

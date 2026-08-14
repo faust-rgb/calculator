@@ -15,7 +15,6 @@
 
 #include "module/calculator_module.h"
 #include "core/api/calculator.h"
-#include "core/api/calculator_impl.h"
 
 namespace core {
 

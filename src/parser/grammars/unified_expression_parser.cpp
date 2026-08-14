@@ -22,7 +22,7 @@
 #include "types/function.h"
 #include "math/precise/rational.h"
 #include "core/services/string_utils.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/helpers/integer_helpers.h"
 #include "math/helpers/base_conversions.h"
 #include "mymath.h"

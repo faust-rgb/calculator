@@ -26,7 +26,7 @@
 #include <iostream>
 #include "math/types/float128.h"
 
-#include "app/default_precision.h"
+#include "math/base/default_precision.h"
 
 namespace precise {
 

@@ -8,7 +8,7 @@
 #ifndef UNIT_CONVERSIONS_H
 #define UNIT_CONVERSIONS_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 
 namespace mymath {
 

@@ -12,7 +12,7 @@
 
 #include "analysis/series/series_summation.h"
 #include "analysis/modules/series_module.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "core/services/format_utils.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "math/mymath.h"

@@ -11,7 +11,7 @@
 #ifndef ANALYSIS_NUMERIC_NUMERICAL_CALCULUS_H
 #define ANALYSIS_NUMERIC_NUMERICAL_CALCULUS_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/base/precision_constants.h"
 #include "math/mymath.h"
 #include <functional>

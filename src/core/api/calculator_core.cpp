@@ -11,7 +11,7 @@
 // ============================================================================
 
 #include "core/api/calculator_impl.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "parser/grammars/command_parser.h"
 #include "math/mymath.h"

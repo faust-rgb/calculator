@@ -5,7 +5,7 @@
 
 #include "polynomial.h"
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "core/services/format_utils.h"
 #include "matrix.h"
 #include "mymath.h"

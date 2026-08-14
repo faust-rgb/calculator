@@ -5,7 +5,7 @@
 #include "symbolic/core/symbolic_expression.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "symbolic/calculus/differential_field.h"
-#include "app/default_precision.h"
+#include "math/base/default_precision.h"
 #include <vector>
 #include <utility>
 #include <memory>

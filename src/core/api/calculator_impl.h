@@ -14,8 +14,8 @@
 #include "core/api/calculator.h"
 #include "core/environment/scope.h"
 #include "core/execution_context.h"
-#include "app/scalar_type.h"
-#include "app/default_precision.h"
+#include "types/scalar_type.h"
+#include "math/base/default_precision.h"
 #include "execution/registry/command_registry.h"
 #include "types/function.h"
 

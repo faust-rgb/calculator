@@ -9,7 +9,7 @@
 #define INTEGER_HELPERS_H
 
 #include <string>
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 
 /**
  * @brief 计算两个整数的最大公约数（GCD）

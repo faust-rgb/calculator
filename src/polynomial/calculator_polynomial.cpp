@@ -17,10 +17,9 @@
 #include "execution/engine/script_context.h"
 #include "calculator_polynomial.h"
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "matrix/public/matrix_format.h"
-#include "matrix/matrix_internal.h"
 #include "polynomial.h"
 #include "mymath.h"
 #include "math/helpers/integer_helpers.h"
@@ -268,7 +267,7 @@ std::string roots(const PolynomialData& poly) {
         if (is_complex_effectively_real(std::complex<long double>(real.to_long_double(), imag.to_long_double()))) {
             out << format_symbolic_scalar(real);
         } else {
-            out << matrix::internal::format_complex<Scalar>({real, imag});
+            out << matrix_utils::format_complex<Scalar>({real, imag});
         }
         previous_root = {real, imag};
         wrote_root = true;

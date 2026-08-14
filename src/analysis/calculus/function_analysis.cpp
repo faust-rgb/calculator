@@ -13,11 +13,11 @@
 #include "math/base/precision_constants.h"
 
 #include "core/api/calculator.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/mymath.h"
 #include "analysis/modules/series_module.h"
 #include "symbolic/core/symbolic_expression.h"
-#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/public/symbolic_node_types.h"
 #include "math/precise/precise_parser.h"
 #include "statistics/probability.h"
 #include "math/precise/precise_decimal.h"
@@ -631,7 +631,7 @@ bool try_symbolic_one_to_infinity_limit(const SymbolicExpression& base,
     }
 
     const SymbolicExpression transformed =
-        symbolic_expression_internal::make_function(
+        SymbolicExpression::function(
             "exp",
             ((base - SymbolicExpression::number(Scalar(1.0L))) * exponent).simplify()).simplify();
     const SymbolicExpression product =
@@ -1035,7 +1035,6 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
                                  int direction,
                                  Scalar* result,
                                  std::function<Scalar(const SymbolicExpression&, const std::string&, Scalar)> evaluate_at_override = nullptr) {
-    using namespace symbolic_expression_internal;
     SymbolicExpression current = expression.simplify();
     if (current.node_type() == NodeType::kMultiply) {
         SymbolicExpression left = current.left_child();
@@ -1044,10 +1043,10 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
         const auto left_kind = probe_symbolic_value_at(left, variable_name, point, &left_val);
         const auto right_kind = probe_symbolic_value_at(right, variable_name, point, &right_val);
         if (is_zero_probe(left_kind, left_val) && is_infinite_probe(right_kind)) {
-            SymbolicExpression transformed = make_divide(right, make_divide(SymbolicExpression::number(Scalar(1.0L)), left)).simplify();
+            SymbolicExpression transformed = (right / (SymbolicExpression::number(Scalar(1.0L)) / left)).simplify();
             return try_symbolic_lhopital_limit(transformed, variable_name, point, direction, result, evaluate_at_override);
         } else if (is_zero_probe(right_kind, right_val) && is_infinite_probe(left_kind)) {
-            SymbolicExpression transformed = make_divide(left, make_divide(SymbolicExpression::number(Scalar(1.0L)), right)).simplify();
+            SymbolicExpression transformed = (left / (SymbolicExpression::number(Scalar(1.0L)) / right)).simplify();
             return try_symbolic_lhopital_limit(transformed, variable_name, point, direction, result, evaluate_at_override);
         }
         return false;
@@ -1066,7 +1065,7 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
             is_indet = true;
         }
         if (is_indet) {
-            SymbolicExpression exponent = make_multiply(exp_expr, make_function("ln", base)).simplify();
+            SymbolicExpression exponent = (exp_expr * SymbolicExpression::function("ln", base)).simplify();
             Scalar exp_limit = Scalar(0.0L);
             if (try_symbolic_lhopital_limit(exponent, variable_name, point, direction, &exp_limit, evaluate_at_override)) {
                 *result = mymath::exp(exp_limit);

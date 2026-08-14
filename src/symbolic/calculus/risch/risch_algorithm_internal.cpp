@@ -12,7 +12,7 @@
 
 #include "symbolic/calculus/risch/risch_algorithm_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"
-#include "app/default_precision.h"
+#include "math/base/default_precision.h"
 #include <functional>
 
 using namespace symbolic_expression_internal;

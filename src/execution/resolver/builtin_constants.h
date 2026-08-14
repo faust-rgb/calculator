@@ -15,7 +15,7 @@
 #define COMMAND_BUILTIN_CONSTANTS_H
 
 #include <string>
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 
 // ============================================================================
 // 常量查找函数声明

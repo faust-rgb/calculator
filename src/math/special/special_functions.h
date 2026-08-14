@@ -8,7 +8,7 @@
 #ifndef MATH_SPECIAL_SPECIAL_FUNCTIONS_H
 #define MATH_SPECIAL_SPECIAL_FUNCTIONS_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/core/floating_point.h"
 
 namespace mymath {

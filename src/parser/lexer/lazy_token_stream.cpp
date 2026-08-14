@@ -4,7 +4,7 @@
 
 #include "parser/lexer/lazy_token_stream.h"
 #include "core/common/calculator_exceptions.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/helpers/base_conversions.h"
 #include <sstream>
 #include <algorithm>

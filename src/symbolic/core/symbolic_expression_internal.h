@@ -138,7 +138,12 @@ std::shared_ptr<SymbolicExpression::Node> make_unary(
     const std::string& text = "");
 
 /**
- * @brief 创建二元节点（带驻留）
+ * @brief 节点驻留函数
+ */
+std::shared_ptr<SymbolicExpression::Node> intern_node(std::shared_ptr<SymbolicExpression::Node> node);
+
+/**
+ * @brief 构造二元运算节点并驻留）
  * @param type 节点类型（kAdd/kSubtract/kMultiply/kDivide/kPower）
  * @param left 左操作数
  * @param right 右操作数

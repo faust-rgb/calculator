@@ -10,7 +10,7 @@
 #include "symbolic_render_parser.h"
 #include "core/types/module_types.h"
 #include "core/services/format_utils.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "execution/resolver/builtin_constants.h"
 #include "parser/infra/base_parser.h"
 #include "math/helpers/base_conversions.h"

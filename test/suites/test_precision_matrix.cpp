@@ -7,7 +7,7 @@
 #include "matrix/matrix.h"
 #include "matrix/matrix_dsp.h"
 #include "math/precise/precise_decimal.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include <iostream>
 #include <chrono>
 #include <cmath>

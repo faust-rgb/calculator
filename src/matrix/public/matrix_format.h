@@ -19,6 +19,14 @@
 #include <string>
 
 namespace matrix {
+
+namespace internal {
+template <typename T>
+std::string format_complex(mymath::complex<T> value);
+template <typename T>
+std::string format_number(T value);
+} // namespace internal
+
 namespace public_interface {
 
 // ============================================================================
@@ -31,7 +39,9 @@ namespace public_interface {
  * @return 格式化后的字符串，如 "3+4i"
  */
 template <typename T>
-std::string format_complex(mymath::complex<T> value);
+inline std::string format_complex(mymath::complex<T> value) {
+    return matrix::internal::format_complex(value);
+}
 
 /**
  * @brief 格式化数值为字符串
@@ -39,7 +49,9 @@ std::string format_complex(mymath::complex<T> value);
  * @return 格式化后的字符串
  */
 template <typename T>
-std::string format_number(T value);
+inline std::string format_number(T value) {
+    return matrix::internal::format_number(value);
+}
 
 // ============================================================================
 // 字符串工具

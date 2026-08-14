@@ -5,7 +5,7 @@
 #ifndef ODE_SOLVER_H
 #define ODE_SOLVER_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/base/precision_constants.h"
 #include <functional>
 #include <utility>

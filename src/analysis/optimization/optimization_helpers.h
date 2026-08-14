@@ -7,7 +7,7 @@
 #ifndef OPTIMIZATION_HELPERS_H
 #define OPTIMIZATION_HELPERS_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "matrix/matrix.h"
 
 #include <functional>

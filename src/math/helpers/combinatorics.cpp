@@ -11,7 +11,7 @@
 
 #include "combinatorics.h"
 #include "mymath.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include <stdexcept>
 #include <algorithm>
 

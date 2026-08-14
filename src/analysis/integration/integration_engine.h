@@ -13,8 +13,8 @@
 //
 // ============================================================================
 
-#include "app/default_precision.h"
-#include "app/scalar_type.h"
+#include "math/base/default_precision.h"
+#include "types/scalar_type.h"
 #include <string>
 #include <vector>
 #include <functional>

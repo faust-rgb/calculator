@@ -18,7 +18,7 @@
 #include <string>
 #include <string_view>
 #include <cstdint>
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 using Scalar = mymath::Scalar; // 使用统一的 Scalar 类型
 // ============================================================================
 // 表达式类型标记

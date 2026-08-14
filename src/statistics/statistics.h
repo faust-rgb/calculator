@@ -11,7 +11,7 @@
 
 #include <vector>
 #include <string>
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 
 namespace stats {
 

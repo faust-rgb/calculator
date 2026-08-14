@@ -15,7 +15,7 @@
 #ifndef ROOTFINDING_ENGINE_H
 #define ROOTFINDING_ENGINE_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/precise/precise_decimal.h"
 #include "math/core/basic_ops.h"
 #include "math/core/roots_powers.h"

@@ -290,6 +290,37 @@ protected:
 };
 
 // ============================================================================
+// 接口隔离专用基类 (Interface Segregation Specialized Bases)
+// ============================================================================
+
+/**
+ * @class FunctionModuleBase
+ * @brief 仅提供数学函数扩展的轻量模块基类 (ISP)
+ */
+class FunctionModuleBase : public CalculatorModule {
+public:
+    ModuleCapability capabilities() const override { return ModuleCapability::kFunctions; }
+};
+
+/**
+ * @class CommandModuleBase
+ * @brief 仅提供命令扩展的轻量模块基类 (ISP)
+ */
+class CommandModuleBase : public CalculatorModule {
+public:
+    ModuleCapability capabilities() const override { return ModuleCapability::kCommands; }
+};
+
+/**
+ * @class HelpModuleBase
+ * @brief 仅提供帮助主题文档的轻量模块基类 (ISP)
+ */
+class HelpModuleBase : public CalculatorModule {
+public:
+    ModuleCapability capabilities() const override { return ModuleCapability::kHelp; }
+};
+
+// ============================================================================
 // 声明式参数校验与提取辅助函数
 // ============================================================================
 

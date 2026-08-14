@@ -10,7 +10,7 @@
 #ifndef ODE_COMMAND_HELPERS_H
 #define ODE_COMMAND_HELPERS_H
 
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "core/types/module_types.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "matrix/matrix.h"

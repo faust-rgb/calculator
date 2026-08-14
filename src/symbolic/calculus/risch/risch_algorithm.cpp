@@ -24,7 +24,7 @@
 #include "symbolic/core/symbolic_expression_internal.h"
 
 #include "types/scalar_type.h"
-#include "app/default_precision.h"
+#include "math/base/default_precision.h"
 
 #include <map>
 #include <functional>

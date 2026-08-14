@@ -6,7 +6,6 @@
 // ============================================================================
 
 #include "script_runtime_internal.h"
-#include "core/services/calculator_service_factory.h"
 #include "core/services/format_utils.h"
 #include "core/api/executable_node.h"
 #include <sstream>

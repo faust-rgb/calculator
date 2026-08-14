@@ -11,7 +11,6 @@
 
 #include "service_interfaces.h"
 #include "core/api/calculator.h"
-#include "core/api/calculator_impl.h"
 #include <functional>
 #include <map>
 #include <string>

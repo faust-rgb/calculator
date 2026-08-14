@@ -10,8 +10,8 @@
 #ifndef MATH_BASE_PRECISION_CONSTANTS_H
 #define MATH_BASE_PRECISION_CONSTANTS_H
 
-#include "app/scalar_type.h"
-#include "app/default_precision.h"
+#include "types/scalar_type.h"
+#include "math/base/default_precision.h"
 #include "math/core/basic_ops.h"
 #include "math/core/roots_powers.h"
 #include "math/precise/precise_decimal.h"

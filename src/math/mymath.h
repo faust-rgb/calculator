@@ -14,7 +14,7 @@
 #define MYMATH_H
 
 // Types - numeric type system
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 #include "math/types/float128.h"
 #include "math/types/complex.h"
 #include "math/types/dual.h"

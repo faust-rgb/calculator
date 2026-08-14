@@ -15,7 +15,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 namespace script {
 struct BlockStatement;
 }

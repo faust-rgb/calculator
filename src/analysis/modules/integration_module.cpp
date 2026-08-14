@@ -30,7 +30,7 @@
 #include "math/helpers/integer_helpers.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 
 #include <stdexcept>
 #include <vector>

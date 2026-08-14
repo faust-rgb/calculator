@@ -17,7 +17,7 @@
 #include <functional>
 #include <vector>
 #include "module/calculator_module.h"
-#include "app/scalar_type.h"
+#include "types/scalar_type.h"
 
 class ServiceLocator;
 
