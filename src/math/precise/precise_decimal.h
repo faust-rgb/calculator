@@ -796,6 +796,12 @@ PreciseDecimal e();
 PreciseDecimal ln2();
 
 /**
+ * @brief ln(10) 常量
+ * @return 高精度的 ln(10) 值
+ */
+PreciseDecimal ln10();
+
+/**
  * @brief log2(e) 常量
  * @return 高精度的 log2(e) 值
  */
@@ -1025,7 +1031,8 @@ PreciseDecimal divide_optimized(const PreciseDecimal& lhs, const PreciseDecimal&
 void set_cached_divisor(const BigIntData& divisor, int scale = 0);
 BigIntData divide_with_cached_divisor(const BigIntData& num, int num_scale, int target_scale);
 
-// 二进制拆分法
+// 二进制拆分法与常数计算
+PreciseDecimal compute_pi_machin(int target_scale);
 PreciseDecimal pi_binary_splitting();
 PreciseDecimal ln_binary_splitting(const PreciseDecimal& x);
 PreciseDecimal exp_binary_splitting(const PreciseDecimal& x);

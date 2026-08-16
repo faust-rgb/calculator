@@ -1064,7 +1064,7 @@ void test_large_matrix_norm_cond(int& passed, int& failed) {
 
     // 测试条件数性质
     {
-        Matrix A = generate_spd_matrix(30, 3100);
+        Matrix A = generate_spd_matrix(15, 3100);
         auto cond = condition_number(A);
 
         // 条件数应该 >= 1

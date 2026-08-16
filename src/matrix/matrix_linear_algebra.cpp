@@ -1097,6 +1097,40 @@ T condition_number(const TMatrix<T>& matrix) {
         return T(static_cast<long long>(1));
     }
     precise::NormalizationSuppressor suppressor;
+    const T tolerance = matrix_tolerance(matrix);
+
+    // 快速路径：对角矩阵（包括单位矩阵）直接计算对角元极值
+    if (matrix.rows == matrix.cols) {
+        bool is_diagonal = true;
+        for (std::size_t i = 0; i < matrix.rows && is_diagonal; ++i) {
+            for (std::size_t j = 0; j < matrix.cols; ++j) {
+                if (i != j && t_abs(matrix.at(i, j)) > tolerance) {
+                    is_diagonal = false;
+                    break;
+                }
+            }
+        }
+        if (is_diagonal) {
+            T largest = T(static_cast<long long>(0));
+            T smallest = T(static_cast<long long>(0));
+            bool smallest_set = false;
+            for (std::size_t i = 0; i < matrix.rows; ++i) {
+                const T d = t_abs(matrix.at(i, i));
+                if (d > largest) largest = d;
+                if (d > tolerance) {
+                    if (!smallest_set || d < smallest) {
+                        smallest = d;
+                        smallest_set = true;
+                    }
+                }
+            }
+            if (!smallest_set || smallest <= tolerance) {
+                return T(mymath::infinity());
+            }
+            return largest / smallest;
+        }
+    }
+
     const TMatrix<T> singular_values = svd_s(matrix);
     const std::size_t diagonal =
         singular_values.rows < singular_values.cols ? singular_values.rows : singular_values.cols;
@@ -1104,7 +1138,6 @@ T condition_number(const TMatrix<T>& matrix) {
         return T(mymath::infinity());
     }
 
-    const T tolerance = matrix_tolerance(matrix);
     T largest = T(static_cast<long long>(0));
     T smallest = T(static_cast<long long>(0));
     bool smallest_set = false;

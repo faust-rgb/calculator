@@ -442,7 +442,7 @@ void test_precise_decimal_core_fixes(int& passed, int& failed) {
     // 3. Binary splitting e and pi
     {
         precise::PreciseDecimal pi_val = precise::pi_binary_splitting();
-        std::string pi_str = pi_val.to_string();
+        std::string pi_str = pi_val.to_string(-1);
         if (pi_str.rfind("3.14159265358979323846264338327950288419716939937510", 0) == 0) {
             ++passed;
             std::cout << "    PASS: pi_binary_splitting(): " << pi_str.substr(0, 35) << "..." << std::endl;

@@ -436,16 +436,6 @@ IntegrationResult IntegrationEngine::try_integrate_rational(
                 }
             }
 
-            if (RischAlgorithm::integrate_rational(num_poly,
-                                                   den_poly,
-                                                   variable_name,
-                                                   &result)) {
-                if (!verify_results_ ||
-                    verify_integration(expression, result, variable_name)) {
-                    return IntegrationResult::ok(result, "risch_rational");
-                }
-            }
-
             if (integrate_symbolic_rational_rules(numerator,
                                                   denominator,
                                                   variable_name,
@@ -453,6 +443,16 @@ IntegrationResult IntegrationEngine::try_integrate_rational(
                 if (!verify_results_ ||
                     verify_integration(expression, result, variable_name)) {
                     return IntegrationResult::ok(result, "symbolic_rational_rules");
+                }
+            }
+
+            if (RischAlgorithm::integrate_rational(num_poly,
+                                                   den_poly,
+                                                   variable_name,
+                                                   &result)) {
+                if (!verify_results_ ||
+                    verify_integration(expression, result, variable_name)) {
+                    return IntegrationResult::ok(result, "risch_rational");
                 }
             }
 

@@ -291,13 +291,17 @@ PreciseDecimal compute_e_binary_splitting(int target_scale) {
 }
 
 // 计算 arctan(x)（基于有理分解或级数）
-PreciseDecimal compute_arctan_binary_splitting(const PreciseDecimal& x, int num_terms) {
+PreciseDecimal compute_arctan_binary_splitting(const PreciseDecimal& x, int num_terms, int target_scale = -1) {
     if (x.is_zero()) {
         return PreciseDecimal(0LL);
     }
 
-    int target_scale = PrecisionContext::get_default_scale();
-    ScopedPrecision guard(12);
+    if (target_scale <= 0) {
+        target_scale = PrecisionContext::get_default_scale();
+    }
+    int current_scale = PrecisionContext::get_default_scale();
+    int extra = std::max(12, target_scale + 12 - current_scale);
+    ScopedPrecision guard(extra);
     const int work_scale = std::max(target_scale, PrecisionContext::get_default_scale());
     const PreciseDecimal epsilon = scale_epsilon(6);
 
@@ -308,6 +312,7 @@ PreciseDecimal compute_arctan_binary_splitting(const PreciseDecimal& x, int num_
 
     for (int i = 1; i < limit; ++i) {
         term = -term * x2;
+        trim_fraction_scale(&term, work_scale + 12);
         PreciseDecimal add = term / decimal_from_uint(static_cast<uint32_t>(2 * i + 1));
         sum += add;
         if (precise::abs(add) < epsilon) break;
@@ -331,19 +336,7 @@ int select_num_terms_for_precision(int target_digits) {
 // ============================================================================
 
 PreciseDecimal compute_pi_binary_splitting(int target_scale) {
-    ScopedPrecision guard(16);
-    int num_terms = select_num_terms_for_precision(target_scale);
-
-    PreciseDecimal one_fifth("0.2");
-    PreciseDecimal atan_1_5 = compute_arctan_binary_splitting(one_fifth, num_terms);
-
-    PreciseDecimal one_239 = one() / PreciseDecimal(239LL);
-    PreciseDecimal atan_1_239 = compute_arctan_binary_splitting(one_239, num_terms / 2);
-
-    PreciseDecimal pi_val = PreciseDecimal(16LL) * atan_1_5 - PreciseDecimal(4LL) * atan_1_239;
-    pi_val.normalize();
-    trim_fraction_scale(&pi_val, target_scale);
-    return pi_val;
+    return compute_pi_machin(target_scale);
 }
 
 // ============================================================================
@@ -382,7 +375,7 @@ PreciseDecimal compute_exp_binary_splitting(const PreciseDecimal& x, int target_
 // ============================================================================
 
 PreciseDecimal pi_binary_splitting() {
-    int target_scale = PrecisionContext::get_default_scale();
+    int target_scale = std::max(50, PrecisionContext::get_default_scale());
     return compute_pi_binary_splitting(target_scale);
 }
 

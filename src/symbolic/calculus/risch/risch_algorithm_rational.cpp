@@ -37,8 +37,38 @@ inline Scalar poly_division_tolerance() {
     return precision::sqrt_epsilon<Scalar>() * Scalar(100);
 }
 
+SymbolicExpression clean_expression_integers(const SymbolicExpression& expr) {
+    if (!expr.node_) return expr;
+    if (expr.node_->type == NodeType::kNumber) {
+        Scalar val = expr.node_->number_value;
+        if (mymath::is_integer(val, 1e-4)) {
+            return SymbolicExpression::number(mymath::round(val));
+        }
+        return expr;
+    }
+    if (expr.node_->left && expr.node_->right) {
+        auto left = clean_expression_integers(SymbolicExpression(expr.node_->left));
+        auto right = clean_expression_integers(SymbolicExpression(expr.node_->right));
+        auto n = std::make_shared<SymbolicExpression::Node>();
+        n->type = expr.node_->type;
+        n->left = left.node_;
+        n->right = right.node_;
+        n->text = expr.node_->text;
+        return SymbolicExpression(n);
+    }
+    if (expr.node_->left) {
+        auto left = clean_expression_integers(SymbolicExpression(expr.node_->left));
+        auto n = std::make_shared<SymbolicExpression::Node>();
+        n->type = expr.node_->type;
+        n->left = left.node_;
+        n->text = expr.node_->text;
+        return SymbolicExpression(n);
+    }
+    return expr;
+}
+
 SymbolicExpression real_log_abs(const SymbolicExpression& argument) {
-    return make_function("ln", make_function("abs", argument));
+    return make_function("ln", make_function("abs", clean_expression_integers(argument).simplify()));
 }
 
 void trim_numeric_polynomial(std::vector<Scalar>* coefficients) {
@@ -250,9 +280,12 @@ SymbolicExpression integrate_numeric_quadratic_fraction(Scalar slope,
                                                         int power,
                                                         const std::string& variable_name) {
     SymbolicExpression x = SymbolicExpression::variable(variable_name);
-    const Scalar c = quadratic[0];
-    const Scalar b = quadratic[1];
-    const Scalar a = quadratic[2];
+    Scalar c = quadratic[0];
+    Scalar b = quadratic[1];
+    Scalar a = quadratic[2];
+    if (mymath::is_integer(c, 1e-4)) c = mymath::round(c);
+    if (mymath::is_integer(b, 1e-4)) b = mymath::round(b);
+    if (mymath::is_integer(a, 1e-4)) a = mymath::round(a);
 
     SymbolicExpression q =
         (SymbolicExpression::number(a) * make_power(x, SymbolicExpression::number(2.0)) +
@@ -476,20 +509,32 @@ bool try_integrate_numeric_quadratic_partial_fractions(const SymbolicPolynomial&
         const Scalar im = root.second;
         if (mymath::abs(im) < precision::sqrt_epsilon<Scalar>()) {
             // Real root: add as linear factor (x - re)
+            Scalar clean_re = re;
+            if (mymath::is_integer(re, 1e-6)) {
+                clean_re = mymath::round(re);
+            }
             bool merged = false;
             for (auto& existing : linears) {
-                if (mymath::abs(existing.root - re) < precision::sqrt_epsilon<Scalar>()) {
+                if (mymath::abs(existing.root - clean_re) < precision::sqrt_epsilon<Scalar>()) {
                     ++existing.multiplicity;
                     merged = true;
                     break;
                 }
             }
             if (!merged) {
-                linears.push_back({re, 1});
+                linears.push_back({clean_re, 1});
             }
             continue;
         }
-        std::vector<Scalar> factor = {re * re + im * im, -2.0 * re, 1.0L};
+        if (im < 0.0L) {
+            // Skip conjugate pair root with negative imaginary part
+            continue;
+        }
+        Scalar c = re * re + im * im;
+        Scalar b = -2.0 * re;
+        if (mymath::is_integer(c, 1e-6)) c = mymath::round(c);
+        if (mymath::is_integer(b, 1e-6)) b = mymath::round(b);
+        std::vector<Scalar> factor = {c, b, 1.0L};
         bool merged = false;
         for (auto& existing : quadratics) {
             if (mymath::abs(existing.coefficients[0] - factor[0]) < precision::sqrt_epsilon<Scalar>() &&
@@ -569,8 +614,10 @@ bool try_integrate_numeric_quadratic_partial_fractions(const SymbolicPolynomial&
     std::size_t unknown_index = 0;
     for (const auto& factor : quadratics) {
         for (int power = 1; power <= factor.multiplicity; ++power) {
-            const Scalar constant = unknowns[unknown_index++];
-            const Scalar slope = unknowns[unknown_index++];
+            Scalar constant = unknowns[unknown_index++];
+            Scalar slope = unknowns[unknown_index++];
+            if (mymath::abs(constant) < numeric_poly_tolerance()) constant = 0.0L;
+            if (mymath::abs(slope) < numeric_poly_tolerance()) slope = 0.0L;
             total = (total + integrate_numeric_quadratic_fraction(slope,
                                                                   constant,
                                                                   factor.coefficients,
@@ -1737,7 +1784,7 @@ bool RischAlgorithm::lazard_rioboo_trager_improved(
 
                     SymbolicExpression term = SymbolicExpression::number(0.0L);
                     if (!expr_is_zero(alpha)) {
-                        term = (term + alpha * make_function("ln", make_function("abs", D.to_expression()))).simplify();
+                        term = (term + alpha * make_function("ln", make_function("abs", clean_expression_integers(D.to_expression()).simplify()))).simplify();
                     }
                     if (!expr_is_zero(k)) {
                         SymbolicExpression atan_coeff = (SymbolicExpression::number(2.0L) * k / sqrt_disc).simplify();

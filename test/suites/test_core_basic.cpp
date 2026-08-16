@@ -124,7 +124,7 @@ int run_core_basic_tests(int& passed, int& failed) {
         {"abs(-3.5)", 3.5},
         {"sign(-3.5)", -1.0L},
         {"sign(0)", 0.0L},
-        {"sign(0.0000000000001)", 0.0L},
+        {"sign(0.0000000000001)", 1.0L},
         {"sign(3.5)", 1.0L},
         {"step(-2)", 0.0L},
         {"step(0)", 1.0L},

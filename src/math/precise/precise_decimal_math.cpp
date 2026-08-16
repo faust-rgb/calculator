@@ -558,9 +558,20 @@ PreciseDecimal ln(const PreciseDecimal& x) {
     return result;
 }
 
+PreciseDecimal ln10() {
+    int scale = PrecisionContext::get_default_scale();
+    if (scale > 230) {
+        return ln(PreciseDecimal(10LL));
+    }
+    static const PreciseDecimal val_ln10(
+        "2.302585092994045684017991454684364207601101488628772976033327900967572609677"
+        "352480235997205089598298341967784042286248633409525465082806756666287369098781"
+        "68948290720832555468084287239488982714848914692334149091773093118831437690469");
+    return val_ln10;
+}
+
 PreciseDecimal log10(const PreciseDecimal& x) {
-    static const PreciseDecimal ln10 = ln(PreciseDecimal(10LL));
-    return ln(x) / ln10;
+    return ln(x) / ln10();
 }
 
 PreciseDecimal exp(const PreciseDecimal& x) {
