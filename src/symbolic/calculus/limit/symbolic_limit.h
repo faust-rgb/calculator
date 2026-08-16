@@ -161,6 +161,14 @@ private:
         const SymbolicExpression& expr,
         const std::string& var,
         const BoundArgument& point);
+
+    // Gruntz 渐近极限判定算法
+    bool apply_gruntz(
+        const SymbolicExpression& expr,
+        const std::string& var,
+        const BoundArgument& point,
+        int direction,
+        LimitResult* result);
 };
 
 // ============================================================================

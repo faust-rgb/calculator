@@ -41,10 +41,10 @@ std::string format_pade_result(const std::vector<Scalar>& numerator,
     std::vector<Scalar> den_normalized(denominator.size());
 
     for (std::size_t i = 0; i < numerator.size(); ++i) {
-        num_normalized[i] = (numerator[i] / scale).to_long_double();
+        num_normalized[i] = numerator[i] / scale;
     }
     for (std::size_t i = 0; i < denominator.size(); ++i) {
-        den_normalized[i] = (denominator[i] / scale).to_long_double();
+        den_normalized[i] = denominator[i] / scale;
     }
 
     std::string num_text = polynomial_to_string(num_normalized, base);
@@ -232,7 +232,7 @@ std::string pade_from_coeffs(const std::vector<Scalar>& coefficients,
     if (denominator_degree == 0) {
         std::vector<Scalar> num(numerator_degree + 1, 0.0L);
         for (int i = 0; i <= numerator_degree && i < static_cast<int>(coefficients.size()); ++i) {
-            num[i] = coefficients[i].to_long_double();
+            num[i] = coefficients[i];
         }
         return polynomial_to_string(num, "x");
     }
@@ -277,7 +277,70 @@ std::string pade_from_coeffs(const std::vector<Scalar>& coefficients,
 
     if (denominator_degree > 0) {
         if (!solve_pade_denominator(c, numerator_degree, denominator_degree, q_coeffs)) {
-            throw std::runtime_error("pade denominator system is singular");
+            // 使用多项式扩展欧几里得算法（Extended Euclidean Algorithm）作为完备回退
+            int n = numerator_degree + denominator_degree + 1;
+            std::vector<Scalar> r_prev(n + 1, Scalar(0));
+            r_prev[n] = Scalar(1);
+            std::vector<Scalar> r_curr(n, Scalar(0));
+            for (int i = 0; i < n && i < static_cast<int>(coefficients.size()); ++i) {
+                r_curr[i] = coefficients[i];
+            }
+            std::vector<Scalar> t_prev = {Scalar(0)};
+            std::vector<Scalar> t_curr = {Scalar(1)};
+
+            auto deg = [](const std::vector<Scalar>& p) {
+                for (int i = static_cast<int>(p.size()) - 1; i >= 0; --i) {
+                    if (!mymath::is_near_zero(p[i], Scalar(1e-15L))) return i;
+                }
+                return -1;
+            };
+
+            while (deg(r_curr) > numerator_degree && deg(r_curr) >= 0) {
+                int d_prev = deg(r_prev);
+                int d_curr = deg(r_curr);
+                if (d_curr < 0) break;
+                std::vector<Scalar> q(d_prev - d_curr + 1, Scalar(0));
+                std::vector<Scalar> rem = r_prev;
+                Scalar lead = r_curr[d_curr];
+                for (int i = d_prev; i >= d_curr; --i) {
+                    if (mymath::is_near_zero(rem[i], Scalar(1e-15L))) continue;
+                    Scalar factor = rem[i] / lead;
+                    q[i - d_curr] = factor;
+                    for (int j = 0; j <= d_curr; ++j) {
+                        rem[i - d_curr + j] -= factor * r_curr[j];
+                    }
+                }
+                // t_next = t_prev - q * t_curr
+                std::vector<Scalar> q_t(q.size() + t_curr.size() - 1, Scalar(0));
+                for (size_t i = 0; i < q.size(); ++i) {
+                    for (size_t j = 0; j < t_curr.size(); ++j) {
+                        q_t[i + j] += q[i] * t_curr[j];
+                    }
+                }
+                size_t sz = std::max(t_prev.size(), q_t.size());
+                std::vector<Scalar> t_next(sz, Scalar(0));
+                for (size_t i = 0; i < sz; ++i) {
+                    Scalar va = i < t_prev.size() ? t_prev[i] : Scalar(0);
+                    Scalar vb = i < q_t.size() ? q_t[i] : Scalar(0);
+                    t_next[i] = va - vb;
+                }
+                r_prev = std::move(r_curr);
+                r_curr = std::move(rem);
+                t_prev = std::move(t_curr);
+                t_curr = std::move(t_next);
+            }
+
+            Scalar c0 = t_curr.empty() ? Scalar(1) : t_curr[0];
+            if (mymath::is_near_zero(c0, Scalar(1e-15L))) c0 = Scalar(1);
+            p_coeffs.assign(numerator_degree + 1, Scalar(0));
+            for (size_t i = 0; i <= static_cast<size_t>(numerator_degree) && i < r_curr.size(); ++i) {
+                p_coeffs[i] = r_curr[i] / c0;
+            }
+            q_coeffs.assign(denominator_degree + 1, Scalar(0));
+            for (size_t i = 0; i <= static_cast<size_t>(denominator_degree) && i < t_curr.size(); ++i) {
+                q_coeffs[i] = t_curr[i] / c0;
+            }
+            return format_pade_result(p_coeffs, q_coeffs);
         }
     }
 

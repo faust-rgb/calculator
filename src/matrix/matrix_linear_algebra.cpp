@@ -1907,6 +1907,117 @@ template TMatrix<mymath::Scalar> inverse(const TMatrix<mymath::Scalar>&);
 
 template TMatrix<mymath::Scalar> pseudo_inverse(const TMatrix<mymath::Scalar>&);
 
+/**
+ * @brief 计算矩阵的特征多项式 (Faddeev-LeVerrier 算法)
+ * @return 升幂排列的多项式系数行向量 [c_0, c_1, ..., c_{n-1}, 1]
+ */
+template <typename T>
+TMatrix<T> characteristic_polynomial(const TMatrix<T>& matrix) {
+    if (!matrix.is_square()) {
+        throw std::runtime_error("characteristic polynomial requires a square matrix");
+    }
+    const std::size_t n = matrix.rows;
+    if (n == 0) {
+        TMatrix<T> res(1, 1);
+        res.at(0, 0) = T(static_cast<long long>(1));
+        return res;
+    }
+    if (n == 1) {
+        TMatrix<T> res(1, 2);
+        res.at(0, 0) = -matrix.at(0, 0);
+        res.at(0, 1) = T(static_cast<long long>(1));
+        return res;
+    }
+
+    std::vector<T> c(n + 1, T(static_cast<long long>(0)));
+    c[n] = T(static_cast<long long>(1));
+
+    TMatrix<T> M = TMatrix<T>::identity(n);
+    for (std::size_t k = 1; k <= n; ++k) {
+        TMatrix<T> A_k = multiply(matrix, M);
+        T tr = trace(A_k);
+        T c_nk = -tr / T(static_cast<long long>(k));
+        c[n - k] = c_nk;
+        if (k < n) {
+            M = add(A_k, multiply(TMatrix<T>::identity(n), c_nk));
+        }
+    }
+    TMatrix<T> res(1, c.size());
+    for (std::size_t i = 0; i < c.size(); ++i) {
+        res.at(0, i) = c[i];
+    }
+    return res;
+}
+
+/**
+ * @brief 计算矩阵指数 exp(A) (Scaling and Squaring + [8/8] Padé 近似)
+ */
+template <typename T>
+TMatrix<T> matrix_exponential(const TMatrix<T>& matrix) {
+    if (!matrix.is_square()) {
+        throw std::runtime_error("matrix exponential requires a square matrix");
+    }
+    const std::size_t n = matrix.rows;
+    if (n == 0) return matrix;
+    if (n == 1) {
+        return TMatrix<T>(1, 1, {mymath::exp(matrix.at(0, 0))});
+    }
+
+    T norm1 = T(static_cast<long long>(0));
+    for (std::size_t j = 0; j < n; ++j) {
+        T col_sum = T(static_cast<long long>(0));
+        for (std::size_t i = 0; i < n; ++i) {
+            col_sum += t_abs(matrix.at(i, j));
+        }
+        if (col_sum > norm1) norm1 = col_sum;
+    }
+
+    long long s = 0;
+    T scaled_norm = norm1;
+    T half = T(static_cast<long long>(1)) / T(static_cast<long long>(2));
+    while (scaled_norm > half) {
+        scaled_norm = scaled_norm / T(static_cast<long long>(2));
+        ++s;
+    }
+
+    T scale_factor = T(static_cast<long long>(1));
+    for (long long i = 0; i < s; ++i) scale_factor *= T(static_cast<long long>(2));
+    TMatrix<T> A_scaled = divide(matrix, scale_factor);
+
+    const int m = 8;
+    std::vector<T> c(m + 1);
+    c[0] = T(static_cast<long long>(1));
+    for (int j = 1; j <= m; ++j) {
+        c[j] = c[j - 1] * T(static_cast<long long>(m - j + 1)) /
+               T(static_cast<long long>(j * (2 * m - j + 1)));
+    }
+
+    TMatrix<T> I = TMatrix<T>::identity(n);
+    TMatrix<T> U = multiply(I, c[0]);
+    TMatrix<T> V = multiply(I, c[0]);
+
+    TMatrix<T> A_pow = A_scaled;
+    for (int j = 1; j <= m; ++j) {
+        TMatrix<T> term = multiply(A_pow, c[j]);
+        U = add(U, term);
+        if (j % 2 == 0) {
+            V = add(V, term);
+        } else {
+            V = subtract(V, term);
+        }
+        if (j < m) {
+            A_pow = multiply(A_pow, A_scaled);
+        }
+    }
+
+    TMatrix<T> R = solve(V, U);
+
+    for (long long i = 0; i < s; ++i) {
+        R = multiply(R, R);
+    }
+    return R;
+}
+
 template TMatrix<mymath::Scalar> nullspace(const TMatrix<mymath::Scalar>&);
 
 template TMatrix<mymath::Scalar> least_squares(const TMatrix<mymath::Scalar>&, const TMatrix<mymath::Scalar>&);
@@ -1944,6 +2055,10 @@ template bool is_orthogonal(const TMatrix<mymath::Scalar>&);
 template TMatrix<mymath::Scalar> hessenberg(const TMatrix<mymath::Scalar>&);
 
 template TMatrix<mymath::Scalar> schur(const TMatrix<mymath::Scalar>&);
+
+template TMatrix<mymath::Scalar> characteristic_polynomial(const TMatrix<mymath::Scalar>&);
+
+template TMatrix<mymath::Scalar> matrix_exponential(const TMatrix<mymath::Scalar>&);
 
 template mymath::Scalar get(const TMatrix<mymath::Scalar>&, std::size_t, std::size_t);
 

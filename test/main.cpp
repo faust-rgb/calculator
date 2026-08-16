@@ -51,13 +51,12 @@ int main() {
 
     // 运行 Risch 算法测试
     std::cout << "Running Risch Algorithm Tests..." << std::endl;
-    test_suites::test_risch();
+    test_suites::test_risch(total_passed, total_failed);
     std::cout << "Risch Algorithm Tests Completed." << std::endl;
     
     std::cout << "Running Risch Advanced Tests..." << std::endl;
-    test_suites::run_risch_advanced_tests();
+    test_suites::run_risch_advanced_tests(total_passed, total_failed);
     std::cout << "Risch Advanced Tests Completed." << std::endl;
-    total_passed++; 
 
     // 运行分析测试：测试函数分析、微分方程求解等
     std::cout << "Running Analysis Tests..." << std::endl;
@@ -87,10 +86,6 @@ int main() {
     std::cout << "Running Script Feature Tests..." << std::endl;
     run_script_feature_tests(total_passed, total_failed);
 
-    // 运行深度高精度测试
-    //std::cout << "Running Deep High-Precision Tests..." << std::endl;
-    //test_suites::run_precise_deep_tests(total_passed, total_failed);
-
     // 运行 Float128 极限精度测试
     std::cout << "Running Float128 Limit Precision Tests..." << std::endl;
     test_suites::run_float128_limit_tests(total_passed, total_failed);
@@ -102,6 +97,9 @@ int main() {
     // 运行高精度基准测试
     std::cout << "Running Benchmark Precise Tests..." << std::endl;
     test_suites::run_benchmark_precise_tests(total_passed, total_failed);
+
+    // 运行偏微分方程与纯符号线性代数测试
+    test_pde_and_symbolic_matrix(total_passed, total_failed);
 
     // 运行乘法基准测试
     std::cout << "Running Benchmark Multiplication Tests..." << std::endl;

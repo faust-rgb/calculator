@@ -23,9 +23,7 @@ class ServiceLocator;
 
 namespace ode_ops {
 
-namespace {
 using Scalar = mymath::Scalar;
-}  // namespace
 
 /**
  * @class ODEModule

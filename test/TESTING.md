@@ -63,9 +63,9 @@ Runnable example inputs are stored in `test/script/`:
   Broad script and calculator feature validation
 - `test/script/example.calc`
   Example script demonstrating Python-like `.calc` syntax
-- `SYNTAX_GUIDE.md`
+- `docs/SYNTAX_GUIDE.md`
   The dedicated script syntax guide (English)
-- `SYNTAX_GUIDE_CN.md`
+- `docs/SYNTAX_GUIDE_CN.md`
   The dedicated script syntax guide (Chinese)
 
 You can run them with:

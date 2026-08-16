@@ -32,15 +32,17 @@ using the standard math library implementations from `<cmath>` or `math.h`.
 
 ## Additional Docs
 
-- `ARCHITECTURE.md`
-- `FUNCTIONS_REFERENCE.md`
-- `KEYWORDS_REFERENCE.md` — Keywords and reserved names
-- `STYLE_GUIDE.md`
-- `SYNTAX_GUIDE.md` — Script syntax guide
-- `SYNTAX_GUIDE_CN.md` — Chinese script syntax guide
-- `CHANGELOG.md`
-- `使用手册.md` — Chinese user manual
-- `docs/` for architecture refactor plans and module development guides
+All reference manuals and architecture documentation are located in `docs/`:
+
+- `docs/ARCHITECTURE.md` — Architectural overview and design principles
+- `docs/FUNCTIONS_REFERENCE.md` — Complete functions reference
+- `docs/KEYWORDS_REFERENCE.md` — Keywords and reserved names
+- `docs/STYLE_GUIDE.md` — Code style and guidelines
+- `docs/SYNTAX_GUIDE.md` — Script syntax guide
+- `docs/SYNTAX_GUIDE_CN.md` — Chinese script syntax guide
+- `docs/MODULE_DEVELOPMENT_GUIDE.md` — Module development guide
+- `docs/使用手册.md` — Comprehensive Chinese user manual
+- `CHANGELOG.md` — Version history and release notes
 
 ## Source Organization
 

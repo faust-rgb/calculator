@@ -1,12 +1,26 @@
 #include "symbolic/calculus/risch/risch_algorithm.h"
 #include "symbolic/calculus/integral/integration_engine.h"
 #include "symbolic/core/symbolic_expression.h"
+#include "suites/test_symbolic.h"
 #include <iostream>
 #include <cassert>
 
 using namespace symbolic_expression_internal;
 
 namespace test_suites {
+
+static int g_risch_passed = 0;
+static int g_risch_failed = 0;
+
+#undef assert
+#define assert(cond) do { \
+    if (cond) { \
+        ++g_risch_passed; \
+    } else { \
+        ++g_risch_failed; \
+        std::cout << "FAIL: Risch assertion failed at line " << __LINE__ << ": " #cond << "\n"; \
+    } \
+} while(0)
 
 // 辅助函数：检查两个表达式是否数值相等
 bool expressions_nearly_equal(const SymbolicExpression& a, const SymbolicExpression& b, mymath::Scalar tol = mymath::Scalar(1e-6L)) {
@@ -1527,10 +1541,9 @@ void test_risch_strict_semantics() {
     //std::cout << "Strict Risch Semantics Tests Passed!" << std::endl;
 }
 
-void test_risch() {
-    //std::cout << "============================================" << std::endl;
-    //std::cout << "Running Complete Risch Algorithm Test Suite" << std::endl;
-    //std::cout << "============================================" << std::endl;
+void test_risch(int& passed, int& failed) {
+    g_risch_passed = 0;
+    g_risch_failed = 0;
 
     // 基础测试
     test_risch_rational();
@@ -1556,9 +1569,8 @@ void test_risch() {
     test_risch_regression();
     test_risch_strict_semantics();
 
-    //std::cout << "\n============================================" << std::endl;
-    //std::cout << "All Risch Algorithm Tests Completed!" << std::endl;
-    //std::cout << "============================================" << std::endl;
+    passed += g_risch_passed;
+    failed += g_risch_failed;
 }
 
 } // namespace test_suites

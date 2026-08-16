@@ -45,17 +45,7 @@ inline long double display_integer_eps() {
 }
 
 long double long_double_power_of_10(int exponent) {
-    long double result = 1.0L;
-    long double factor = 10.0L;
-    int n = exponent < 0 ? -exponent : exponent;
-
-    while (n > 0) {
-        if (n % 2 == 1) result *= factor;
-        factor *= factor;
-        n /= 2;
-    }
-
-    return exponent < 0 ? 1.0L / result : result;
+    return std::pow(10.0L, static_cast<long double>(exponent));
 }
 
 // ============================================================================
@@ -443,28 +433,13 @@ long double PreciseDecimal::to_double() const {
     if (is_inf) return negative ? -mymath::infinity() : mymath::infinity();
     if (is_zero()) return 0.0L;
 
-    int start_chunk = static_cast<int>(data.size()) - 1;
-    while (start_chunk >= 0 && data[start_chunk] == 0) start_chunk--;
-
-    if (start_chunk < 0) return 0.0L;
-
-    long double res = 0;
-    int end_chunk = std::max(0, start_chunk - 3);
-    for (int i = start_chunk; i >= end_chunk; --i) {
-        res = res * static_cast<long double>(kBase) + static_cast<long double>(data[i]);
+    try {
+        std::string s = to_string();
+        if (s.empty()) return 0.0L;
+        return std::stold(s);
+    } catch (...) {
+        return 0.0L;
     }
-
-    long double exponent = static_cast<long double>(end_chunk) * 9.0L - static_cast<long double>(scale);
-
-    if (exponent != 0.0L) {
-        res *= long_double_power_of_10(static_cast<int>(exponent));
-    }
-
-    if (!mymath::isfinite(static_cast<long double>(res))) {
-        return negative ? -mymath::infinity() : mymath::infinity();
-    }
-
-    return static_cast<long double>(negative ? -res : res);
 }
 
 // ============================================================================

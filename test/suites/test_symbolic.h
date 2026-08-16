@@ -24,15 +24,7 @@ namespace test_suites {
     /**
      * @brief 运行 Risch 积分算法测试
      */
-    void test_risch_rational();
-    void test_risch_logarithmic();
-    void test_risch_exponential();
-    void test_risch_trigonometric();
-    void test_risch_non_elementary();
-    void test_risch_mixed();
-    void test_risch_algebraic();
-    void test_risch_edge_cases();
-    void test_risch();
+    void test_risch(int& passed, int& failed);
 }
 
 #endif

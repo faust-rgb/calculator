@@ -46,15 +46,7 @@ void trim_trailing_zeros(std::vector<Scalar>* coefficients) {
     }
 }
 
-void trim_trailing_zeros_scalar(std::vector<Scalar>* coefficients) {
-    while (coefficients->size() > 1 &&
-           mymath::abs(coefficients->back()) < Scalar(kPolynomialEpsLD)) {
-        coefficients->pop_back();
-    }
-    if (coefficients->empty()) {
-        coefficients->push_back(Scalar(0.0L));
-    }
-}
+
 
 std::vector<Scalar> interpolate_polynomial(const std::vector<Scalar>& x_samples,
                                            const std::vector<Scalar>& y_samples) {
@@ -79,21 +71,7 @@ std::vector<Scalar> interpolate_polynomial(const std::vector<Scalar>& x_samples,
     return coefficients;
 }
 
-std::vector<Scalar> to_scalar(const std::vector<Scalar>& coeffs) {
-    std::vector<Scalar> result(coeffs.size());
-    for (std::size_t i = 0; i < coeffs.size(); ++i) {
-        result[i] = Scalar(coeffs[i]);
-    }
-    return result;
-}
 
-std::vector<Scalar> from_scalar(const std::vector<Scalar>& coeffs) {
-    std::vector<Scalar> result(coeffs.size());
-    for (std::size_t i = 0; i < coeffs.size(); ++i) {
-        result[i] = coeffs[i].to_long_double();
-    }
-    return result;
-}
 
 /**
  * @brief 格式化单个系数为字符串
@@ -155,13 +133,9 @@ Scalar polynomial_evaluate_scalar(const std::vector<Scalar>& coefficients, Scala
  * @param coefficients 多项式系数（低次到高次）
  * @param x 求值点
  * @return p(x) 的值
- *
- * Horner 法将 p(x) = a_0 + a_1*x + ... + a_n*x^n 重写为：
- * p(x) = (...((a_n * x + a_{n-1}) * x + a_{n-2}) * x + ...) + a_0
- * 这种形式减少了乘法次数，提高计算效率。
  */
 Scalar polynomial_evaluate_impl(const std::vector<Scalar>& coefficients, Scalar x) {
-    return polynomial_evaluate_scalar(to_scalar(coefficients), x);
+    return polynomial_evaluate_scalar(coefficients, x);
 }
 
 /**
@@ -244,11 +218,11 @@ Scalar bisect_root(const std::vector<Scalar>& coefficients, Scalar left, Scalar 
  * @param roots 现有根列表
  * @param candidate 候选根
  *
- * 如果候选根与已有根的差值在 1e-6 以内，则不重复添加。
+ * 如果候选根与已有根的差值在 1e-8 以内，则不重复添加。
  */
 void add_unique_root(std::vector<Scalar>* roots, Scalar candidate) {
     for (Scalar existing : *roots) {
-        if (mymath::abs(existing - candidate) <= Scalar(1e-6L)) return;
+        if (mymath::abs(existing - candidate) <= Scalar(1e-8L)) return;
     }
     roots->push_back(candidate);
 }
@@ -260,7 +234,7 @@ void add_unique_root(std::vector<Scalar>* roots, Scalar candidate) {
 // ============================================================================
 
 Scalar polynomial_evaluate(const std::vector<Scalar>& coefficients, Scalar x) {
-    return polynomial_evaluate_impl(coefficients, Scalar(x)).to_long_double();
+    return polynomial_evaluate_impl(coefficients, x);
 }
 
 std::vector<Scalar> polynomial_derivative(const std::vector<Scalar>& coefficients) {
@@ -279,10 +253,10 @@ std::vector<Scalar> polynomial_add(const std::vector<Scalar>& lhs,
                                    const std::vector<Scalar>& rhs) {
     const std::size_t size = lhs.size() > rhs.size() ? lhs.size() : rhs.size();
     std::vector<Scalar> result(size, Scalar(0.0L));
-    for (std::size_t i = 0; i < lhs.size(); ++i) result[i] += Scalar(lhs[i]);
-    for (std::size_t i = 0; i < rhs.size(); ++i) result[i] += Scalar(rhs[i]);
-    trim_trailing_zeros_scalar(&result);
-    return from_scalar(result);
+    for (std::size_t i = 0; i < lhs.size(); ++i) result[i] += lhs[i];
+    for (std::size_t i = 0; i < rhs.size(); ++i) result[i] += rhs[i];
+    trim_trailing_zeros(&result);
+    return result;
 }
 
 /**
@@ -297,10 +271,10 @@ std::vector<Scalar> polynomial_subtract(const std::vector<Scalar>& lhs,
                                         const std::vector<Scalar>& rhs) {
     const std::size_t size = lhs.size() > rhs.size() ? lhs.size() : rhs.size();
     std::vector<Scalar> result(size, Scalar(0.0L));
-    for (std::size_t i = 0; i < lhs.size(); ++i) result[i] += Scalar(lhs[i]);
-    for (std::size_t i = 0; i < rhs.size(); ++i) result[i] -= Scalar(rhs[i]);
-    trim_trailing_zeros_scalar(&result);
-    return from_scalar(result);
+    for (std::size_t i = 0; i < lhs.size(); ++i) result[i] += lhs[i];
+    for (std::size_t i = 0; i < rhs.size(); ++i) result[i] -= rhs[i];
+    trim_trailing_zeros(&result);
+    return result;
 }
 
 /**
@@ -311,18 +285,17 @@ std::vector<Scalar> polynomial_subtract(const std::vector<Scalar>& lhs,
  *
  * 使用直接卷积算法，时间复杂度 O(n*m)。
  * 结果的次数为两多项式次数之和。
- * 使用 Scalar 进行中间计算以减少累积舍入误差。
  */
 std::vector<Scalar> polynomial_multiply(const std::vector<Scalar>& lhs,
                                         const std::vector<Scalar>& rhs) {
     std::vector<Scalar> result(lhs.size() + rhs.size() - 1, Scalar(0.0L));
     for (std::size_t i = 0; i < lhs.size(); ++i) {
         for (std::size_t j = 0; j < rhs.size(); ++j) {
-            result[i + j] = result[i + j] + Scalar(lhs[i]) * Scalar(rhs[j]);
+            result[i + j] += lhs[i] * rhs[j];
         }
     }
-    trim_trailing_zeros_scalar(&result);
-    return from_scalar(result);
+    trim_trailing_zeros(&result);
+    return result;
 }
 
 /**
@@ -333,7 +306,6 @@ std::vector<Scalar> polynomial_multiply(const std::vector<Scalar>& lhs,
  * @throw std::runtime_error 当除数为零多项式时抛出
  *
  * 使用标准的多项式长除法算法，迭代地消去最高次项。
- * 使用 Scalar 进行中间计算以减少累积舍入误差。
  */
 PolynomialDivisionResult polynomial_divide(const std::vector<Scalar>& dividend,
                                            const std::vector<Scalar>& divisor) {
@@ -353,33 +325,26 @@ PolynomialDivisionResult polynomial_divide(const std::vector<Scalar>& dividend,
 
     std::vector<Scalar> quotient(
         normalized_dividend.size() - normalized_divisor.size() + 1, Scalar(0.0L));
-    std::vector<Scalar> remainder(normalized_dividend.size());
-    for (std::size_t i = 0; i < normalized_dividend.size(); ++i) {
-        remainder[i] = Scalar(normalized_dividend[i]);
-    }
-    std::vector<Scalar> divisor_scalar(normalized_divisor.size());
-    for (std::size_t i = 0; i < normalized_divisor.size(); ++i) {
-        divisor_scalar[i] = Scalar(normalized_divisor[i]);
-    }
+    std::vector<Scalar> remainder = normalized_dividend;
 
     while (remainder.size() >= normalized_divisor.size()) {
-        trim_trailing_zeros_scalar(&remainder);
+        trim_trailing_zeros(&remainder);
         if (remainder.size() < normalized_divisor.size()) break;
         if (remainder.size() == 1 && mymath::abs(remainder[0]) < Scalar(kPolynomialEpsLD)) break;
 
         const std::size_t degree_diff = remainder.size() - normalized_divisor.size();
-        const Scalar factor = remainder.back() / divisor_scalar.back();
+        const Scalar factor = remainder.back() / normalized_divisor.back();
         quotient[degree_diff] = factor;
-        for (std::size_t i = 0; i < divisor_scalar.size(); ++i) {
-            remainder[degree_diff + i] = remainder[degree_diff + i] - factor * divisor_scalar[i];
+        for (std::size_t i = 0; i < normalized_divisor.size(); ++i) {
+            remainder[degree_diff + i] -= factor * normalized_divisor[i];
         }
-        trim_trailing_zeros_scalar(&remainder);
+        trim_trailing_zeros(&remainder);
     }
 
-    trim_trailing_zeros_scalar(&quotient);
-    trim_trailing_zeros_scalar(&remainder);
+    trim_trailing_zeros(&quotient);
+    trim_trailing_zeros(&remainder);
 
-    return {from_scalar(quotient), from_scalar(remainder)};
+    return {quotient, remainder};
 }
 
 /**
@@ -389,7 +354,7 @@ PolynomialDivisionResult polynomial_divide(const std::vector<Scalar>& dividend,
  */
 std::vector<Scalar> polynomial_real_roots_scalar(const std::vector<Scalar>& coefficients) {
     std::vector<Scalar> normalized = coefficients;
-    trim_trailing_zeros_scalar(&normalized);
+    trim_trailing_zeros(&normalized);
 
     if (normalized.size() <= 1) {
         throw std::runtime_error("constant polynomial does not have isolated roots");
@@ -397,11 +362,6 @@ std::vector<Scalar> polynomial_real_roots_scalar(const std::vector<Scalar>& coef
 
     if (normalized.size() == 2) {
         Scalar r = -normalized[0] / normalized[1];
-        Scalar r_ld = r.to_long_double();
-        long long num, den;
-        if (mymath::approximate_fraction(r_ld, &num, &den, 100, 1e-9)) {
-            r = Scalar(static_cast<Scalar>(num) / static_cast<Scalar>(den));
-        }
         return {r};
     }
 
@@ -418,7 +378,7 @@ std::vector<Scalar> polynomial_real_roots_scalar(const std::vector<Scalar>& coef
 
     std::vector<Scalar> roots;
     for (const Scalar& point : critical_points) {
-        if (mymath::abs(polynomial_evaluate_scalar(normalized, point)) < Scalar(1e-4L)) {
+        if (mymath::abs(polynomial_evaluate_scalar(normalized, point)) < Scalar(kRootIsolationEpsLD)) {
             add_unique_root(&roots, point);
         }
     }
@@ -429,22 +389,17 @@ std::vector<Scalar> polynomial_real_roots_scalar(const std::vector<Scalar>& coef
         const Scalar left_value = polynomial_evaluate_scalar(normalized, left);
         const Scalar right_value = polynomial_evaluate_scalar(normalized, right);
 
-        if (mymath::abs(left_value) < Scalar(1e-4L)) {
+        if (mymath::abs(left_value) < Scalar(kRootIsolationEpsLD)) {
             add_unique_root(&roots, left);
             continue;
         }
-        if (mymath::abs(right_value) < Scalar(1e-4L)) {
+        if (mymath::abs(right_value) < Scalar(kRootIsolationEpsLD)) {
             add_unique_root(&roots, right);
             continue;
         }
 
         if ((left_value < Scalar(0.0L)) != (right_value < Scalar(0.0L))) {
             Scalar r = bisect_root(normalized, left, right);
-            Scalar r_ld = r.to_long_double();
-            long long num, den;
-            if (mymath::approximate_fraction(r_ld, &num, &den, 100, 1e-9)) {
-                r = Scalar(static_cast<Scalar>(num) / static_cast<Scalar>(den));
-            }
             add_unique_root(&roots, r);
         }
     }
@@ -459,17 +414,9 @@ std::vector<Scalar> polynomial_real_roots_scalar(const std::vector<Scalar>& coef
  * @param coefficients 多项式系数
  * @return 按升序排列的实根列表
  * @throw std::runtime_error 当多项式为常数时抛出
- *
- * 算法步骤：
- * 1. 计算导数的实根（临界点）
- * 2. 使用柯西根界定出搜索区间
- * 3. 用临界点将区间分段，每段内多项式单调
- * 4. 在符号变化的区间使用二分法求根
  */
 std::vector<Scalar> polynomial_real_roots(const std::vector<Scalar>& coefficients) {
-    std::vector<Scalar> coeffs_scalar = to_scalar(coefficients);
-    std::vector<Scalar> roots_scalar = polynomial_real_roots_scalar(coeffs_scalar);
-    return from_scalar(roots_scalar);
+    return polynomial_real_roots_scalar(coefficients);
 }
 
 /**
@@ -477,12 +424,90 @@ std::vector<Scalar> polynomial_real_roots(const std::vector<Scalar>& coefficient
  * @param coefficients 多项式系数
  * @return 按实部、虚部排序的复根列表
  * @throw std::runtime_error 当多项式为常数时抛出
- *
- * 使用 Aberth-Ehrlich 方法：
- * 1. 在半径为根界圆上均匀分布初始猜测
- * 2. 迭代更新每个根的估计值
- * 3. 收敛后清理接近整数的实部和虚部
- * 使用 float128 进行中间计算以减少累积舍入误差。
+ */
+/**
+ * @brief 计算多项式最大公因式（鲁棒单项式化欧几里得算法）
+ * @param lhs 左多项式系数
+ * @param rhs 右多项式系数
+ * @return 单位首项化后的最大公因式系数
+ */
+std::vector<Scalar> polynomial_gcd(const std::vector<Scalar>& lhs,
+                                   const std::vector<Scalar>& rhs) {
+    std::vector<Scalar> a = lhs;
+    std::vector<Scalar> b = rhs;
+    trim_trailing_zeros(&a);
+    trim_trailing_zeros(&b);
+
+    if (a.empty() || (a.size() == 1 && mymath::is_near_zero(a[0], kPolynomialEpsLD))) {
+        if (b.empty() || (b.size() == 1 && mymath::is_near_zero(b[0], kPolynomialEpsLD))) {
+            return {Scalar(0.0L)};
+        }
+        const Scalar lead = b.back();
+        for (Scalar& c : b) c /= lead;
+        trim_trailing_zeros(&b);
+        return b;
+    }
+    if (b.empty() || (b.size() == 1 && mymath::is_near_zero(b[0], kPolynomialEpsLD))) {
+        const Scalar lead = a.back();
+        for (Scalar& c : a) c /= lead;
+        trim_trailing_zeros(&a);
+        return a;
+    }
+
+    auto get_max_coeff = [](const std::vector<Scalar>& p) {
+        Scalar m = Scalar(0.0L);
+        for (const Scalar& c : p) m = std::max(m, mymath::abs(c));
+        return m;
+    };
+    const Scalar scale = std::max(get_max_coeff(a), get_max_coeff(b));
+    const Scalar dynamic_eps = std::max(kPolynomialEpsLD, scale * Scalar(1e-12L));
+
+    while (true) {
+        trim_trailing_zeros(&b);
+        if (b.empty() || (b.size() == 1 && mymath::is_near_zero(b[0], dynamic_eps))) {
+            break;
+        }
+
+        // 首一化除数以防止系数膨胀与数值漂移
+        const Scalar lead_b = b.back();
+        if (!mymath::is_near_zero(lead_b, dynamic_eps)) {
+            for (Scalar& c : b) c /= lead_b;
+        }
+
+        const PolynomialDivisionResult division = polynomial_divide(a, b);
+        a = b;
+        b = division.remainder;
+        trim_trailing_zeros(&a);
+        trim_trailing_zeros(&b);
+
+        // 检查余数是否全接近 0
+        bool all_zero = true;
+        for (const Scalar& c : b) {
+            if (!mymath::is_near_zero(c, dynamic_eps)) {
+                all_zero = false;
+                break;
+            }
+        }
+        if (all_zero) break;
+    }
+
+    if (a.empty() || (a.size() == 1 && mymath::is_near_zero(a[0], dynamic_eps))) {
+        return {Scalar(1.0L)};
+    }
+
+    const Scalar leading = a.back();
+    if (!mymath::is_near_zero(leading, dynamic_eps)) {
+        for (Scalar& coefficient : a) coefficient /= leading;
+    }
+    trim_trailing_zeros(&a);
+    return a;
+}
+
+/**
+ * @brief 计算多项式的全部复根（Square-free + Aberth-Ehrlich + Newton 精炼）
+ * @param coefficients 多项式系数
+ * @return 按实部、虚部排序的复根列表
+ * @throw std::runtime_error 当多项式为常数时抛出
  */
 std::vector<mymath::complex<Scalar>> polynomial_complex_roots(
     const std::vector<Scalar>& coefficients) {
@@ -495,12 +520,34 @@ std::vector<mymath::complex<Scalar>> polynomial_complex_roots(
 
     const std::size_t degree = normalized.size() - 1;
     if (degree == 1) {
-        return {mymath::complex<Scalar>(-normalized[0] / normalized[1], 0.0L)};
+        return {mymath::complex<Scalar>(-normalized[0] / normalized[1], Scalar(0.0L))};
+    }
+
+    // 无平方因子分解（Square-free Factorization）预处理以消除重根停滞
+    if (degree >= 2) {
+        const std::vector<Scalar> deriv = polynomial_derivative(normalized);
+        const std::vector<Scalar> gcd_poly = polynomial_gcd(normalized, deriv);
+        if (gcd_poly.size() > 1 && gcd_poly.size() - 1 < degree) {
+            const PolynomialDivisionResult sff = polynomial_divide(normalized, gcd_poly);
+            std::vector<Scalar> p0 = sff.quotient;
+            trim_trailing_zeros(&p0);
+            if (p0.size() > 1 && p0.size() - 1 < degree) {
+                std::vector<mymath::complex<Scalar>> roots_p0 = polynomial_complex_roots(p0);
+                std::vector<mymath::complex<Scalar>> roots_gcd = polynomial_complex_roots(gcd_poly);
+                roots_p0.insert(roots_p0.end(), roots_gcd.begin(), roots_gcd.end());
+                std::sort(roots_p0.begin(), roots_p0.end(), [](const auto& lhs, const auto& rhs) {
+                    if (mymath::abs(lhs.real() - rhs.real()) > Scalar(1e-8L)) {
+                        return lhs.real() < rhs.real();
+                    }
+                    return lhs.imag() < rhs.imag();
+                });
+                return roots_p0;
+            }
+        }
     }
 
     const Scalar leading_128(normalized.back());
-    const std::vector<Scalar> normalized_scalar = to_scalar(normalized);
-    const Scalar bound_128(polynomial_root_bound(normalized_scalar));
+    const Scalar bound_128(polynomial_root_bound(normalized));
     const Scalar radius_128 = (bound_128 > Scalar(1.0L)) ? bound_128 : Scalar(1.0L);
 
     std::vector<mymath::complex<Scalar>> roots_128;
@@ -518,7 +565,16 @@ std::vector<mymath::complex<Scalar>> polynomial_complex_roots(
         mymath::complex<Scalar> result(Scalar(0.0L), Scalar(0.0L));
         for (std::size_t i = normalized.size(); i > 0; --i) {
             result = result * x;
-            result = result + mymath::complex<Scalar>(Scalar(normalized[i - 1]) / leading_128, Scalar(0.0L));
+            result = result + mymath::complex<Scalar>(normalized[i - 1] / leading_128, Scalar(0.0L));
+        }
+        return result;
+    };
+
+    auto evaluate_deriv_complex_128 = [&](const mymath::complex<Scalar>& x) {
+        mymath::complex<Scalar> result(Scalar(0.0L), Scalar(0.0L));
+        for (std::size_t i = normalized.size() - 1; i > 0; --i) {
+            result = result * x;
+            result = result + mymath::complex<Scalar>(normalized[i] * Scalar(static_cast<long long>(i)) / leading_128, Scalar(0.0L));
         }
         return result;
     };
@@ -544,24 +600,37 @@ std::vector<mymath::complex<Scalar>> polynomial_complex_roots(
         }
     }
 
+    // Newton-Raphson 根精炼
+    for (std::size_t i = 0; i < roots_128.size(); ++i) {
+        for (int iter = 0; iter < 5; ++iter) {
+            const mymath::complex<Scalar> f_val = evaluate_complex_128(roots_128[i]);
+            const mymath::complex<Scalar> df_val = evaluate_deriv_complex_128(roots_128[i]);
+            if (mymath::abs(df_val) > Scalar(1e-14L)) {
+                const mymath::complex<Scalar> step = f_val / df_val;
+                roots_128[i] = roots_128[i] - step;
+                if (mymath::abs(step) < Scalar(1e-14L)) break;
+            }
+        }
+    }
+
     std::vector<mymath::complex<Scalar>> roots;
     roots.reserve(roots_128.size());
     for (const auto& root_128 : roots_128) {
-        Scalar real = root_128.real().to_long_double();
-        Scalar imag = root_128.imag().to_long_double();
-        if (mymath::is_near_zero(real, 1e-9)) real = 0.0L;
-        if (mymath::is_near_zero(imag, 1e-9)) imag = 0.0L;
-        if (mymath::is_integer(real)) {
+        Scalar real = root_128.real();
+        Scalar imag = root_128.imag();
+        if (mymath::is_near_zero(real, 1e-9)) real = Scalar(0.0L);
+        if (mymath::is_near_zero(imag, 1e-9)) imag = Scalar(0.0L);
+        if (mymath::is_integer(real, 1e-9)) {
             real = mymath::round(real);
         }
-        if (mymath::is_integer(imag)) {
+        if (mymath::is_integer(imag, 1e-9)) {
             imag = mymath::round(imag);
         }
         roots.emplace_back(real, imag);
     }
 
     std::sort(roots.begin(), roots.end(), [](const auto& lhs, const auto& rhs) {
-        if (mymath::abs(lhs.real() - rhs.real()) > 1e-8) {
+        if (mymath::abs(lhs.real() - rhs.real()) > Scalar(1e-8L)) {
             return lhs.real() < rhs.real();
         }
         return lhs.imag() < rhs.imag();
@@ -596,61 +665,14 @@ std::vector<Scalar> polynomial_integral(const std::vector<Scalar>& coefficients)
  */
 std::vector<Scalar> polynomial_compose(const std::vector<Scalar>& outer,
                                        const std::vector<Scalar>& inner) {
-    std::vector<Scalar> result = {0.0L};
+    std::vector<Scalar> result = {Scalar(0.0L)};
     for (std::size_t i = outer.size(); i > 0; --i) {
         result = polynomial_multiply(result, inner);
-        if (result.empty()) result.push_back(0.0L);
+        if (result.empty()) result.push_back(Scalar(0.0L));
         result[0] += outer[i - 1];
         trim_trailing_zeros(&result);
     }
     return result;
-}
-
-/**
- * @brief 计算多项式最大公因式（欧几里得算法）
- * @param lhs 左多项式系数
- * @param rhs 右多项式系数
- * @return 单位首项化后的最大公因式系数
- *
- * 使用多项式版本的欧几里得算法：
- * gcd(a, b) = gcd(b, a mod b)
- *
- * 采用动态容差以处理不同量级的系数。
- */
-std::vector<Scalar> polynomial_gcd(const std::vector<Scalar>& lhs,
-                                   const std::vector<Scalar>& rhs) {
-    std::vector<Scalar> a = lhs;
-    std::vector<Scalar> b = rhs;
-    trim_trailing_zeros(&a);
-    trim_trailing_zeros(&b);
-    
-    // 动态容差：根据输入多项式系数的最大绝对值决定
-    auto get_max_coeff = [](const std::vector<Scalar>& p) {
-        Scalar m = 0.0L;
-        for (Scalar c : p) m = std::max(m, mymath::abs(c));
-        return m;
-    };
-    const Scalar scale = std::max(get_max_coeff(a), get_max_coeff(b));
-    const Scalar dynamic_eps = std::max(kPolynomialEpsLD, scale * 1e-12);
-
-    while (!(b.size() == 1 && mymath::is_near_zero(b[0], dynamic_eps))) {
-        const PolynomialDivisionResult division = polynomial_divide(a, b);
-        a = b;
-        b = division.remainder;
-        trim_trailing_zeros(&a);
-        trim_trailing_zeros(&b);
-    }
-    
-    if (a.empty() || (a.size() == 1 && mymath::is_near_zero(a[0], dynamic_eps))) {
-        return {0.0L};
-    }
-
-    const Scalar leading = a.back();
-    if (!mymath::is_near_zero(leading, dynamic_eps)) {
-        for (Scalar& coefficient : a) coefficient /= leading;
-    }
-    trim_trailing_zeros(&a);
-    return a;
 }
 
 /**
@@ -695,7 +717,7 @@ std::vector<Scalar> polynomial_fit(const std::vector<Scalar>& x_samples,
         scaled_x[i] = sx;
         Scalar p = Scalar(1.0L);
         for (std::size_t j = 0; j < m_vars; ++j) {
-            A.at(i, j) = static_cast<long double>(p);
+            A.at(i, j) = p;
             p *= sx;
         }
     }

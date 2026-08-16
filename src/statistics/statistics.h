@@ -174,6 +174,28 @@ Scalar correlation(const std::vector<Scalar>& x, const std::vector<Scalar>& y);
 std::vector<Scalar> linear_regression(const std::vector<Scalar>& x, const std::vector<Scalar>& y);
 
 /**
+ * @brief Theil-Sen 稳健线性回归估计器
+ * @param x 自变量数据
+ * @param y 因变量数据
+ * @return 返回包含 [截距, 斜率] 的向量
+ */
+std::vector<Scalar> theil_sen_regression(const std::vector<Scalar>& x, const std::vector<Scalar>& y);
+
+/**
+ * @brief 计算多元数据集的协方差矩阵
+ * @param columns 列变量数据（每列为一个变量的一组观测）
+ * @return P x P 协方差矩阵
+ */
+std::vector<std::vector<Scalar>> covariance_matrix(const std::vector<std::vector<Scalar>>& columns);
+
+/**
+ * @brief 计算多元数据集的皮尔逊相关系数矩阵
+ * @param columns 列变量数据
+ * @return P x P 相关系数矩阵
+ */
+std::vector<std::vector<Scalar>> correlation_matrix(const std::vector<std::vector<Scalar>>& columns);
+
+/**
  * @brief 计算四分位距（IQR）
  * @param data 数据集（传入拷贝）
  * @return IQR 值

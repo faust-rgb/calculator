@@ -47,8 +47,8 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
         return true;
     }
 
-    if (command == "gradient" || command == "divergence" || command == "div" || command == "curl" || command == "curl_2d" || command == "laplacian") {
-        if (command == "gradient") {
+    if (command == "gradient" || command == "grad" || command == "divergence" || command == "div" || command == "curl" || command == "curl_2d" || command == "laplacian") {
+        if (command == "gradient" || command == "grad") {
             if (arguments.size() < 1) throw std::runtime_error("gradient expects expression");
             std::string v; SymbolicExpression e; ctx.resolve_symbolic(arguments[0], false, &v, &e);
             auto vars = ctx.parse_symbolic_variable_arguments(arguments, 1, {v});

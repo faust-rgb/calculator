@@ -253,6 +253,7 @@ static void quick_benchmark_test(int& passed, int& failed) {
 }
 
 void run_benchmark_precise_tests(int& passed, int& failed) {
+    int old_scale = PrecisionContext::get_default_scale();
     std::cout << "========================================\n";
     std::cout << "    高精度算法性能基准测试\n";
     std::cout << "========================================\n";
@@ -273,6 +274,7 @@ void run_benchmark_precise_tests(int& passed, int& failed) {
     std::cout << "\n========================================\n";
     std::cout << "    高精度基准测试完成\n";
     std::cout << "========================================\n";
+    PrecisionContext::set_default_scale(old_scale);
 }
 
 void run_benchmark_mult_tests(int& passed, int& failed) {

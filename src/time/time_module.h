@@ -73,6 +73,17 @@ public:
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_functions_map() const override;
 
     /**
+     * @brief 执行命令行参数形式的时间命令
+     * @param command 命令名称
+     * @param args 参数列表
+     * @param locator 服务定位器
+     * @return 返回命令执行结果的字符串表示
+     */
+    std::string execute_args(const std::string& command,
+                             const std::vector<std::string>& args,
+                             ServiceLocator& locator) override;
+
+    /**
      * @brief 获取帮助信息片段
      * @param topic 帮助主题
      * @return 返回对应主题的帮助文本

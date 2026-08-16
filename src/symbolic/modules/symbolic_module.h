@@ -41,8 +41,11 @@ public:
 
     std::vector<std::string> get_commands() const override {
         return {":assume", "simplify", "expand", "cse", "groebner", "latex",
-                "jacobian", "hessian",
-                "dsolve", "sum"};
+                "jacobian", "hessian", "dsolve", "sum",
+                "smith", "snf", "hermite", "hnf",
+                "symbolic_lu", "sym_lu", "symbolic_qr", "sym_qr",
+                "symbolic_jordan", "sym_jordan", "jordan",
+                "symbolic_expm", "sym_expm"};
     }
 
 

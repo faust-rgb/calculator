@@ -238,6 +238,8 @@ Scalar student_t_cdf(Scalar x, Scalar df) {
 Scalar inv_student_t_cdf(Scalar p, Scalar df) {
     if (p <= 0 || p >= 1) throw std::domain_error("p must be in (0, 1)");
     Scalar low = -1000, high = 1000;
+    while (student_t_cdf(low, df) > p) low *= 2;
+    while (student_t_cdf(high, df) < p) high *= 2;
     for (int i = 0; i < 100; ++i) {
         Scalar mid = (low + high) / 2.0L;
         if (student_t_cdf(mid, df) < p) low = mid;
@@ -263,6 +265,7 @@ Scalar chi2_cdf(Scalar x, Scalar df) {
 Scalar inv_chi2_cdf(Scalar p, Scalar df) {
     if (p <= 0 || p >= 1) throw std::domain_error("p must be in (0, 1)");
     Scalar low = 0, high = 1000 + df * 2;
+    while (chi2_cdf(high, df) < p) high *= 2;
     for (int i = 0; i < 100; ++i) {
         Scalar mid = (low + high) / 2.0L;
         if (chi2_cdf(mid, df) < p) low = mid;
@@ -290,6 +293,7 @@ Scalar f_cdf(Scalar x, Scalar df1, Scalar df2) {
 Scalar inv_f_cdf(Scalar p, Scalar df1, Scalar df2) {
     if (p <= 0 || p >= 1) throw std::domain_error("p must be in (0, 1)");
     Scalar low = 0, high = 1000;
+    while (f_cdf(high, df1, df2) < p) high *= 2;
     for (int i = 0; i < 100; ++i) {
         Scalar mid = (low + high) / 2.0L;
         if (f_cdf(mid, df1, df2) < p) low = mid;

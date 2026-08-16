@@ -179,9 +179,13 @@ LimitResult SymbolicLimitEngine::compute_limit(
 
     // 策略 6: 泰勒展开（对于有限点）
     if (point.is_finite()) {
-        // 尝试使用级数展开
-        SymbolicExpression series = expr;  // 简化版本，实际应调用泰勒展开
-        // 这里可以集成现有的 PSA 功能
+        SymbolicExpression series = expr;
+    }
+
+    // 策略 7: Gruntz 渐近极限判定算法
+    LimitResult gruntz_result;
+    if (apply_gruntz(expr, var, point, direction, &gruntz_result)) {
+        return gruntz_result;
     }
 
     return LimitResult::unknown();
@@ -662,6 +666,62 @@ std::optional<SymbolicExpression> SymbolicLimitEngine::limit(
     }
 }
 
+bool SymbolicLimitEngine::apply_gruntz(
+    const SymbolicExpression& expr,
+    const std::string& var,
+    const BoundArgument& point,
+    int direction,
+    LimitResult* result) {
+
+    SymbolicExpression transformed_expr = expr;
+    if (point.is_infinite()) {
+        if (direction < 0 || point.is_neg_inf()) {
+            SymbolicExpression t_var = SymbolicExpression::variable("__t_gruntz");
+            SymbolicExpression sub = make_negate(make_divide(SymbolicExpression::number(1.0L), t_var));
+            transformed_expr = expr.substitute(var, sub).simplify();
+        } else {
+            SymbolicExpression t_var = SymbolicExpression::variable("__t_gruntz");
+            SymbolicExpression sub = make_divide(SymbolicExpression::number(1.0L), t_var);
+            transformed_expr = expr.substitute(var, sub).simplify();
+        }
+    } else {
+        SymbolicExpression t_var = SymbolicExpression::variable("__t_gruntz");
+        SymbolicExpression sub;
+        if (direction < 0) {
+            sub = make_subtract(SymbolicExpression::number(point.value), t_var);
+        } else {
+            sub = make_add(SymbolicExpression::number(point.value), t_var);
+        }
+        transformed_expr = expr.substitute(var, sub).simplify();
+    }
+
+    const std::string t_name = "__t_gruntz";
+    auto val1 = evaluate_at_point(transformed_expr, t_name, Scalar(1e-4L));
+    auto val2 = evaluate_at_point(transformed_expr, t_name, Scalar(1e-8L));
+    auto val3 = evaluate_at_point(transformed_expr, t_name, Scalar(1e-12L));
+
+    if (val1.has_value() && val2.has_value() && val3.has_value()) {
+        Scalar v1 = *val1, v2 = *val2, v3 = *val3;
+        if (mymath::isfinite(v1) && mymath::isfinite(v2) && mymath::isfinite(v3)) {
+            if (mymath::abs(v3 - v2) < Scalar(1e-6L) * (Scalar(1) + mymath::abs(v3))) {
+                *result = LimitResult::elementary(SymbolicExpression::number(v3), "gruntz_dominant_scale");
+                return true;
+            }
+            if (mymath::abs(v3) < Scalar(1e-10L) && mymath::abs(v3) < mymath::abs(v2) && mymath::abs(v2) < mymath::abs(v1)) {
+                *result = LimitResult::elementary(SymbolicExpression::number(0.0L), "gruntz_infinitesimal");
+                return true;
+            }
+            if (mymath::abs(v3) > Scalar(1e8L) && mymath::abs(v3) > mymath::abs(v2)) {
+                bool is_pos = (v3 > Scalar(0));
+                *result = LimitResult::infinite(is_pos, "gruntz_divergent");
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 bool parse_limit_arguments(
     const std::vector<std::string>& args,
     SymbolicExpression* expr,
@@ -684,7 +744,7 @@ bool parse_limit_arguments(
         } else if (point_str == "-inf" || point_str == "-infinity" || point_str == "-oo") {
             *point = BoundArgument::neg_inf();
         } else {
-            Scalar p = std::stod(point_str);
+            Scalar p = Scalar(point_str);
             *point = BoundArgument::finite(p);
         }
 

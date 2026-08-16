@@ -39,6 +39,38 @@ using Scalar = mymath::Scalar;
 // 内部辅助函数
 // ============================================================================
 
+bool try_parse_vector_coefficients(const std::string& input, std::vector<Scalar>* coeffs) {
+    std::string s = trim_copy(input);
+    if (s.empty()) return false;
+    if (s.front() == '[' && s.back() == ']') {
+        s = s.substr(1, s.size() - 2);
+    } else if (s.size() >= 5 && s.substr(0, 4) == "vec(" && s.back() == ')') {
+        s = s.substr(4, s.size() - 5);
+    } else {
+        return false;
+    }
+    for (char& c : s) {
+        if (c == ',' || c == ';') c = ' ';
+    }
+    std::istringstream iss(s);
+    std::string token;
+    std::vector<Scalar> parsed;
+    while (iss >> token) {
+        SymbolicExpression expr = SymbolicExpression::parse(token);
+        Scalar v = 0;
+        if (expr.is_number(&v)) {
+            parsed.push_back(v);
+        } else {
+            return false;
+        }
+    }
+    if (!parsed.empty()) {
+        *coeffs = parsed;
+        return true;
+    }
+    return false;
+}
+
 /**
  * @brief 递归构建多项式系数
  *
@@ -50,16 +82,6 @@ using Scalar = mymath::Scalar;
  * @param coefficients 输出：多项式系数向量（低次到高次）
  *
  * @throw std::runtime_error 当参数无法解析为多项式时抛出
- *
- * 支持的输入形式：
- * 1. 直接的符号表达式（如 "x^2 + 2*x + 1"）
- * 2. 嵌套的多项式操作：
- *    - poly_add(p, q): 多项式加法
- *    - poly_sub(p, q): 多项式减法
- *    - poly_mul(p, q): 多项式乘法
- *    - poly_div(p, q): 多项式除法（要求余数为零）
- *
- * 注意：嵌套的 poly_div 要求余数必须为零，否则抛出异常。
  */
 void build_polynomial_recursive(
     const PolynomialContext& ctx,
@@ -68,17 +90,45 @@ void build_polynomial_recursive(
     std::vector<Scalar>* coefficients) {
 
     const std::string trimmed_argument = trim_copy(argument);
+
+    // 检查是否为向量字面量，如 [1, 2, 1] 或 vec(1, 2, 1)
+    if (try_parse_vector_coefficients(trimmed_argument, coefficients)) {
+        if (variable_name->empty()) {
+            *variable_name = "x";
+        }
+        return;
+    }
+
     CommandASTNode ast = parse_command(trimmed_argument);
 
     // 检查是否为嵌套的多项式操作
     if (ast.kind == CommandKind::kFunctionCall) {
         const auto* call = ast.as_function_call();
         if (call->name == "poly_add" || call->name == "poly_sub" ||
-            call->name == "poly_mul" || call->name == "poly_div") {
+            call->name == "poly_mul" || call->name == "poly_div" ||
+            call->name == "poly_deriv" || call->name == "poly_integ" ||
+            call->name == "poly_compose" || call->name == "poly_gcd") {
+
+            if (call->name == "poly_deriv" || call->name == "poly_integ") {
+                if (call->arguments.empty() || call->arguments.size() > 2) {
+                    throw std::runtime_error(std::string(call->name) + " expects 1 or 2 arguments");
+                }
+                std::string var;
+                std::vector<Scalar> inner_coeffs;
+                build_polynomial_recursive(ctx, std::string(call->arguments[0].text),
+                                           &var, &inner_coeffs);
+                *variable_name = var;
+                if (call->name == "poly_deriv") {
+                    *coefficients = polynomial_derivative(inner_coeffs);
+                } else {
+                    *coefficients = polynomial_integral(inner_coeffs);
+                }
+                return;
+            }
 
             if (call->arguments.size() != 2) {
                 throw std::runtime_error(
-                    "polynomial operations expect exactly two arguments");
+                    "polynomial binary operations expect exactly two arguments");
             }
 
             std::string lhs_variable;
@@ -90,7 +140,7 @@ void build_polynomial_recursive(
             build_polynomial_recursive(ctx, std::string(call->arguments[1].text),
                                        &rhs_variable, &rhs_coefficients);
 
-            *variable_name = lhs_variable;
+            *variable_name = lhs_variable.empty() ? rhs_variable : lhs_variable;
             if (call->name == "poly_add") {
                 *coefficients = polynomial_add(lhs_coefficients, rhs_coefficients);
                 return;
@@ -99,12 +149,20 @@ void build_polynomial_recursive(
                 *coefficients = polynomial_subtract(lhs_coefficients, rhs_coefficients);
                 return;
             }
+            if (call->name == "poly_compose") {
+                *coefficients = polynomial_compose(lhs_coefficients, rhs_coefficients);
+                return;
+            }
+            if (call->name == "poly_gcd") {
+                *coefficients = polynomial_gcd(lhs_coefficients, rhs_coefficients);
+                return;
+            }
             if (call->name == "poly_div") {
                 const PolynomialDivisionResult division =
                     polynomial_divide(lhs_coefficients, rhs_coefficients);
                 bool zero_remainder = true;
-                for (Scalar coefficient : division.remainder) {
-                    if (mymath::abs(Scalar(coefficient)) >= Scalar(1e-10L)) {
+                for (const Scalar& coefficient : division.remainder) {
+                    if (mymath::abs(coefficient) >= Scalar(1e-10L)) {
                         zero_remainder = false;
                         break;
                     }
@@ -127,7 +185,7 @@ void build_polynomial_recursive(
         ctx.resolve_symbolic(trimmed_argument, variable_name);
     if (!expression.polynomial_coefficients(*variable_name, coefficients)) {
         throw std::runtime_error("custom function " + trimmed_argument +
-                                 " is not a polynomial");
+                                  " is not a polynomial");
     }
 }
 
@@ -170,7 +228,7 @@ PolynomialData build_polynomial(const PolynomialContext& ctx,
 std::string poly_add(const PolynomialData& lhs, const PolynomialData& rhs) {
     return polynomial_to_string(
         polynomial_add(lhs.coefficients, rhs.coefficients),
-        lhs.variable_name);
+        lhs.variable_name.empty() ? rhs.variable_name : lhs.variable_name);
 }
 
 /**
@@ -185,7 +243,7 @@ std::string poly_add(const PolynomialData& lhs, const PolynomialData& rhs) {
 std::string poly_sub(const PolynomialData& lhs, const PolynomialData& rhs) {
     return polynomial_to_string(
         polynomial_subtract(lhs.coefficients, rhs.coefficients),
-        lhs.variable_name);
+        lhs.variable_name.empty() ? rhs.variable_name : lhs.variable_name);
 }
 
 /**
@@ -200,7 +258,7 @@ std::string poly_sub(const PolynomialData& lhs, const PolynomialData& rhs) {
 std::string poly_mul(const PolynomialData& lhs, const PolynomialData& rhs) {
     return polynomial_to_string(
         polynomial_multiply(lhs.coefficients, rhs.coefficients),
-        lhs.variable_name);
+        lhs.variable_name.empty() ? rhs.variable_name : lhs.variable_name);
 }
 
 /**
@@ -215,10 +273,11 @@ std::string poly_mul(const PolynomialData& lhs, const PolynomialData& rhs) {
 std::string poly_div(const PolynomialData& lhs, const PolynomialData& rhs) {
     const PolynomialDivisionResult division =
         polynomial_divide(lhs.coefficients, rhs.coefficients);
+    const std::string var = lhs.variable_name.empty() ? rhs.variable_name : lhs.variable_name;
     return "quotient: " +
-           polynomial_to_string(division.quotient, lhs.variable_name) +
+           polynomial_to_string(division.quotient, var) +
            ", remainder: " +
-           polynomial_to_string(division.remainder, lhs.variable_name);
+           polynomial_to_string(division.remainder, var);
 }
 
 /**
@@ -228,12 +287,6 @@ std::string poly_div(const PolynomialData& lhs, const PolynomialData& rhs) {
  *
  * @param poly 输入多项式
  * @return 格式化的根字符串，多个根用逗号分隔
- *
- * 算法：
- * 1. 调用 polynomial_complex_roots 获取所有复根
- * 2. 过滤重复的根（在容差范围内）
- * 3. 对接近整数的实部和虚部进行取整
- * 4. 实根直接输出数值，复根以 a + bi 形式输出
  */
 std::string roots(const PolynomialData& poly) {
     const std::vector<mymath::complex<Scalar>> roots =
@@ -246,8 +299,8 @@ std::string roots(const PolynomialData& poly) {
     bool wrote_root = false;
     mymath::complex<Scalar> previous_root(0.0L, 0.0L);
     for (std::size_t i = 0; i < roots.size(); ++i) {
-        const Scalar real_diff = Scalar(roots[i].real() - previous_root.real());
-        const Scalar imag_diff = Scalar(roots[i].imag() - previous_root.imag());
+        const Scalar real_diff = roots[i].real() - previous_root.real();
+        const Scalar imag_diff = roots[i].imag() - previous_root.imag();
         if (wrote_root &&
             mymath::abs(real_diff) <= Scalar(1e-7L) &&
             mymath::abs(imag_diff) <= Scalar(1e-7L)) {
@@ -286,15 +339,18 @@ std::string roots(const PolynomialData& poly) {
  *
  * @param command 命令字符串
  * @return 如果是多项式命令返回 true，否则返回 false
- *
- * 支持的命令：poly_add, poly_sub, poly_mul, poly_div, roots
  */
 bool is_polynomial_command(const std::string& command) {
     return command == "poly_add" ||
            command == "poly_sub" ||
            command == "poly_mul" ||
            command == "poly_div" ||
-           command == "roots";
+           command == "roots" ||
+           command == "poly_eval" ||
+           command == "poly_deriv" ||
+           command == "poly_integ" ||
+           command == "poly_compose" ||
+           command == "poly_gcd";
 }
 
 /**
@@ -303,29 +359,10 @@ bool is_polynomial_command(const std::string& command) {
  * 解析命令参数并执行相应的多项式操作。支持嵌套的多项式表达式。
  *
  * @param ctx 多项式构建上下文，提供符号解析功能
- * @param command 命令名称（poly_add, poly_sub, poly_mul, poly_div, roots）
- * @param inside 括号内的参数字符串
+ * @param command 命令名称
+ * @param arguments 参数字符串列表
  * @param output 输出结果字符串指针
  * @return 是否成功处理命令
- *
- * @throw std::runtime_error 当参数数量或格式错误时抛出
- *
- * 支持的命令：
- * - roots(p): 计算多项式 p 的所有根（实根和复根）
- * - poly_add(p, q): 多项式加法 p + q
- * - poly_sub(p, q): 多项式减法 p - q
- * - poly_mul(p, q): 多项式乘法 p * q
- * - poly_div(p, q): 多项式除法 p / q，返回商和余数
- *
- * @code
- * // 示例用法
- * PolynomialContext ctx = {...};
- * std::string result;
- * handle_polynomial_command(ctx, "roots", "x^2 - 1", &result);
- * // result = "-1, 1"
- * handle_polynomial_command(ctx, "poly_add", "x + 1, x - 1", &result);
- * // result = "2 * x"
- * @endcode
  */
 bool handle_polynomial_command(const PolynomialContext& ctx,
                                const std::string& command,
@@ -337,6 +374,85 @@ bool handle_polynomial_command(const PolynomialContext& ctx,
         }
         PolynomialData poly = build_polynomial(ctx, arguments[0]);
         *output = roots(poly);
+        return true;
+    }
+
+    if (command == "poly_eval") {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("poly_eval expects polynomial expression and x value");
+        }
+        PolynomialData poly = build_polynomial(ctx, arguments[0]);
+        Scalar x = 0;
+        SymbolicExpression x_expr = SymbolicExpression::parse(arguments[1]);
+        if (!x_expr.is_number(&x)) {
+            std::string temp_var;
+            SymbolicExpression resolved = ctx.resolve_symbolic(arguments[1], &temp_var);
+            if (!resolved.is_number(&x)) {
+                throw std::runtime_error("poly_eval expects a numeric evaluation point");
+            }
+        }
+        Scalar val = polynomial_evaluate(poly.coefficients, x);
+        *output = format_decimal(val);
+        return true;
+    }
+
+    if (command == "poly_deriv") {
+        if (arguments.empty() || arguments.size() > 2) {
+            throw std::runtime_error("poly_deriv expects polynomial and optional variable");
+        }
+        PolynomialData poly = build_polynomial(ctx, arguments[0]);
+        *output = polynomial_to_string(polynomial_derivative(poly.coefficients),
+                                       poly.variable_name.empty() ? "x" : poly.variable_name);
+        return true;
+    }
+
+    if (command == "poly_integ") {
+        if (arguments.empty() || arguments.size() > 2) {
+            throw std::runtime_error("poly_integ expects polynomial and optional variable");
+        }
+        PolynomialData poly = build_polynomial(ctx, arguments[0]);
+        *output = polynomial_to_string(polynomial_integral(poly.coefficients),
+                                       poly.variable_name.empty() ? "x" : poly.variable_name);
+        return true;
+    }
+
+    if (command == "poly_compose") {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("poly_compose expects exactly two arguments");
+        }
+        PolynomialData lhs = build_polynomial(ctx, arguments[0]);
+        PolynomialData rhs = build_polynomial(ctx, arguments[1]);
+        *output = polynomial_to_string(polynomial_compose(lhs.coefficients, rhs.coefficients),
+                                       lhs.variable_name.empty() ? rhs.variable_name : lhs.variable_name);
+        return true;
+    }
+
+    if (command == "poly_gcd") {
+        if (arguments.size() != 2) {
+            throw std::runtime_error("poly_gcd expects exactly two arguments");
+        }
+        PolynomialData lhs = build_polynomial(ctx, arguments[0]);
+        PolynomialData rhs = build_polynomial(ctx, arguments[1]);
+        *output = polynomial_to_string(polynomial_gcd(lhs.coefficients, rhs.coefficients),
+                                       lhs.variable_name.empty() ? rhs.variable_name : lhs.variable_name);
+        return true;
+    }
+
+    if (command == "poly_fit" || command == "polynomial_fit") {
+        if (arguments.size() != 3) {
+            throw std::runtime_error("poly_fit expects x_samples, y_samples, and degree");
+        }
+        std::vector<Scalar> x_samples;
+        std::vector<Scalar> y_samples;
+        if (!try_parse_vector_coefficients(arguments[0], &x_samples)) {
+            throw std::runtime_error("poly_fit expects x_samples vector");
+        }
+        if (!try_parse_vector_coefficients(arguments[1], &y_samples)) {
+            throw std::runtime_error("poly_fit expects y_samples vector");
+        }
+        int degree = std::stoi(trim_copy(arguments[2]));
+        std::vector<Scalar> fit_coeffs = polynomial_fit(x_samples, y_samples, degree);
+        *output = polynomial_to_string(fit_coeffs, "x");
         return true;
     }
 
@@ -408,7 +524,8 @@ std::string PolynomialModule::get_help_snippet(const std::string& topic) const {
     if (topic == "functions") {
         return "Polynomials:\n"
                "  poly_add(p, q), poly_sub(p, q), poly_mul(p, q), poly_div(p, q)\n"
-               "  roots(p)            Real and complex roots";
+               "  poly_deriv(p), poly_integ(p), poly_compose(p, q), poly_gcd(p, q)\n"
+               "  poly_eval(p, x), roots(p)   Real and complex roots";
     }
     return "";
 }

@@ -68,10 +68,6 @@ std::vector<Scalar> polynomial_multiply(const std::vector<Scalar>& lhs,
 PolynomialDivisionResult polynomial_divide(const std::vector<Scalar>& dividend,
                                            const std::vector<Scalar>& divisor);
 
-// Scalar overloads
-PolynomialDivisionResult polynomial_divide(const std::vector<Scalar>& dividend,
-                                           const std::vector<Scalar>& divisor);
-
 /**
  * @brief 计算多项式的所有实根
  * @param coefficients 多项式系数

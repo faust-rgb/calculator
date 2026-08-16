@@ -931,12 +931,12 @@ T TStiffODESolver<T>::bdf_step(T x, T y, T h, int order,
     }
 
     const T gamma = beta / alpha0;
-    return newton_implicit(x + h, y_pred, h, gamma, rhs_(x, y));
+    return newton_implicit(x + h, y_pred, h, gamma);
 }
 
 template <typename T>
 T TStiffODESolver<T>::newton_implicit(T x, T y_pred, T h,
-                                      T gamma, T) const {
+                                      T gamma) const {
     const T kNewtonTolerance = precision::newton_tolerance<T>();
     const int kMaxNewtonIterations = 20;
     T y = y_pred;
@@ -1088,7 +1088,7 @@ std::vector<T> TStiffODESystemSolver<T>::bdf_step(
     const std::vector<T>& y,
     T h,
     int order,
-    const std::vector<std::vector<T>>&,
+    const std::vector<std::vector<T>>& prev_y,
     const std::vector<T>&) const {
 
     const int k = std::min(order, 5);
@@ -1098,8 +1098,18 @@ std::vector<T> TStiffODESystemSolver<T>::bdf_step(
     const T gamma = beta / alpha0;
 
     std::vector<T> y_pred = y;
-    std::vector<T> rhs_val = rhs_(x, y);
-    return newton_implicit_system(x + h, y_pred, h, gamma, rhs_val);
+    if (k > 1 && static_cast<int>(prev_y.size()) >= k - 1) {
+        std::fill(y_pred.begin(), y_pred.end(), T(0));
+        for (int j = 1; j <= k; ++j) {
+            const std::vector<T>& y_j = (j == 1) ? y : prev_y[prev_y.size() - static_cast<std::size_t>(j) + 1];
+            const T factor = -T(coeffs_d[j]) / alpha0;
+            for (std::size_t i = 0; i < y.size(); ++i) {
+                y_pred[i] += factor * y_j[i];
+            }
+        }
+    }
+
+    return newton_implicit_system(x + h, y_pred, h, gamma);
 }
 
 template <typename T>
@@ -1107,8 +1117,7 @@ std::vector<T> TStiffODESystemSolver<T>::newton_implicit_system(
     T x,
     const std::vector<T>& y_pred,
     T h,
-    T gamma,
-    const std::vector<T>&) const {
+    T gamma) const {
 
     const T kNewtonTolerance = precision::newton_tolerance<T>();
     const int kMaxNewtonIterations = 20;
@@ -1183,10 +1192,13 @@ std::vector<std::vector<T>> TStiffODESystemSolver<T>::numerical_jacobian_matrix(
 // 显式模板实例化
 // ============================================================================
 
-//template class TODESolver<long double>;
-//template class TODESystemSolver<long double>;
-//template class TStiffODESolver<long double>;
-//template class TStiffODESystemSolver<long double>;
+template class TODESolver<double>;
+template class TODESystemSolver<double>;
+template class TStiffODESolver<double>;
+
+template class TODESolver<long double>;
+template class TODESystemSolver<long double>;
+template class TStiffODESolver<long double>;
 
 // Scalar-precision instantiations
 template class TODESolver<Scalar>;

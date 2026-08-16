@@ -149,7 +149,7 @@ public:
 
 private:
     T bdf_step(T x, T y, T h, int order, const std::vector<T>& prev_y, const std::vector<T>& prev_h) const;
-    T newton_implicit(T x, T y_pred, T h, T gamma, T rhs_val) const;
+    T newton_implicit(T x, T y_pred, T h, T gamma) const;
     T numerical_jacobian(T x, T y) const;
 
     RHSFunction rhs_;
@@ -181,7 +181,7 @@ public:
 private:
     std::vector<T> bdf_step(T x, const std::vector<T>& y, T h, int order,
                              const std::vector<std::vector<T>>& prev_y, const std::vector<T>& prev_h) const;
-    std::vector<T> newton_implicit_system(T x, const std::vector<T>& y_pred, T h, T gamma, const std::vector<T>& rhs_val) const;
+    std::vector<T> newton_implicit_system(T x, const std::vector<T>& y_pred, T h, T gamma) const;
     std::vector<std::vector<T>> numerical_jacobian_matrix(T x, const std::vector<T>& y) const;
 
     RHSFunction rhs_;

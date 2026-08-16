@@ -18,6 +18,7 @@
 #include <vector>
 #include "module/calculator_module.h"
 #include "matrix/matrix.h"
+#include "analysis/rootfinding/rootfinding_engine.h"
 
 class ServiceLocator;
 
@@ -62,58 +63,12 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
                                 const std::vector<std::string>& arguments,
                                 std::string* output);
 
-// 泛型求根接口
-template <typename T>
-T newton_solve(
-    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
-    T initial,
-    const std::function<T(T)>& normalize,
-    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate_derivative = nullptr,
-    const std::string& variable_name = "x");
-
-template <typename T>
-T bisection_solve(
-    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
-    T left,
-    T right,
-    const std::function<T(T)>& normalize,
-    const std::string& variable_name = "x");
-
-template <typename T>
-T secant_solve(
-    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
-    T x0,
-    T x1,
-    const std::function<T(T)>& normalize,
-    const std::string& variable_name = "x");
-
-template <typename T>
-T fixed_point_solve(
-    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
-    T initial,
-    const std::function<T(T)>& normalize,
-    const std::string& variable_name = "x");
-
-/**
- * @brief Brent 法求根
- *
- * 结合二分法、割线法和逆二次插值的高效求根方法。
- * 具有二分法的稳健性和割线法的快速收敛性。
- * 不需要导数信息。
- *
- * @param evaluate 函数求值器
- * @param left 左端点（需要 f(left) 和 f(right) 异号）
- * @param right 右端点
- * @param normalize 结果归一化函数
- * @return 求得的根
- */
-template <typename T>
-T brent_solve(
-    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
-    T left,
-    T right,
-    const std::function<T(T)>& normalize,
-    const std::string& variable_name = "x");
+// 泛型求根接口（引入自 rootfinding_engine）
+using rootfinding_engine::newton_solve;
+using rootfinding_engine::bisection_solve;
+using rootfinding_engine::secant_solve;
+using rootfinding_engine::fixed_point_solve;
+using rootfinding_engine::brent_solve;
 
 }  // namespace rootfinding
 

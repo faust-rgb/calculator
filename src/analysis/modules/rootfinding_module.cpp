@@ -70,9 +70,15 @@ bool is_numeric_string(const std::string& s) {
  */
 std::string extract_variable_name(const std::string& expression) {
     static const std::vector<std::string> known_functions = {
-        "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh",
-        "exp", "ln", "log", "log10", "sqrt", "cbrt", "abs", "floor", "ceil",
-        "round", "sign", "erf", "erfc", "gamma", "lgamma", "pi", "e"
+        "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "sinc",
+        "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
+        "sec", "csc", "cot", "asec", "acsc", "acot",
+        "sech", "csch", "coth", "asech", "acsch", "acoth",
+        "exp", "ln", "log", "log10", "log2", "sqrt", "cbrt",
+        "abs", "floor", "ceil", "round", "trunc", "sign", "sgn",
+        "erf", "erfc", "gamma", "lgamma", "tgamma", "beta", "zeta",
+        "besselj", "bessely", "besseli", "besselk", "airy",
+        "pi", "e", "phi", "inf", "nan"
     };
 
     std::string current_token;
@@ -254,7 +260,7 @@ std::string solve_polynomial_equation(std::vector<Scalar> coeffs,
             Scalar zshift = zb / 3;
             Scalar zA = zc - zb * zb / 3;
             Scalar zB = (2 * zb * zb * zb - 9 * zb * zc + 27 * zd) / 27;
-            Scalar zDelta = zB * zB / 4 + zA * zA * A / 27;
+            Scalar zDelta = zB * zB / 4 + zA * zA * zA / 27;
 
             Scalar z_root = 0;
             bool found_z = false;
@@ -399,12 +405,12 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
                     // 首先尝试使用符号求解器 (SymbolicSolver)
                     symbolic_solver::SymbolicSolver solver;
                     symbolic_solver::Solution sol = solver.solve(equation, var);
-                    if (sol.is_complete || !sol.values.empty() || sol.uses_root_of) {
+                    if (sol.is_complete || !sol.values.empty()) {
                         *output = symbolic_solver::format_solution(sol);
                         return true;
                     }
 
-                    // 如果符号求解失败，回退到多项式系数分析
+                    // 如果符号求解未找到具体解，回退到多项式系数分析
                     std::vector<Scalar> coeffs;
                     if (equation.polynomial_coefficients(var, &coeffs)) {
                         std::string result = solve_polynomial_equation(coeffs, ctx.normalize_result);
@@ -412,6 +418,11 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
                             *output = result;
                             return true;
                         }
+                    }
+
+                    if (sol.uses_root_of) {
+                        *output = symbolic_solver::format_solution(sol);
+                        return true;
                     }
 
                     *output = "unable to solve symbolically: " + equation.simplify().to_string();

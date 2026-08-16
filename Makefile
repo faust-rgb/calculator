@@ -1,5 +1,5 @@
 CXX ?= g++
-BASE_CXXFLAGS := -std=c++23 -Wall -Wextra -pedantic -mfma
+BASE_CXXFLAGS := -std=c++23 -Wall -Wextra -pedantic -mfma -mavx2
 OPT_CXXFLAGS ?= -O2 -g
 CXXFLAGS ?= $(BASE_CXXFLAGS) $(OPT_CXXFLAGS)
 LDFLAGS ?=
@@ -23,7 +23,7 @@ COMMON_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(COMMON_SRCS))
 MAIN_OBJ := $(BUILD_DIR)/$(MAIN_SRC:.cpp=.o)
 
 # Test sources
-TEST_SRCS := $(TEST_DIR)/main.cpp $(wildcard $(TEST_SUITE_DIR)/*.cpp)
+TEST_SRCS := $(TEST_DIR)/main.cpp $(shell find $(TEST_SUITE_DIR) -name "*.cpp")
 TEST_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(TEST_SRCS))
 
 # Dependencies

@@ -94,6 +94,32 @@ void run_statistics_ext_tests(int& passed, int& failed) {
             ++failed;
             std::cout << "    FAIL: spearman correlation expected ~0.825, got " << spearman << std::endl;
         }
+
+        // Theil-Sen robust regression with outlier
+        // True line: y = 2*x + 1. Outlier at x=3: y=100
+        std::vector<mymath::Scalar> tx = {1, 2, 3, 4, 5};
+        std::vector<mymath::Scalar> ty = {3, 5, 100, 9, 11};
+        auto ts_res = stats::theil_sen_regression(tx, ty);
+        if (mymath::abs(ts_res[1] - 2.0L) < 0.001 && mymath::abs(ts_res[0] - 1.0L) < 0.001) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "    FAIL: Theil-Sen regression expected [1, 2], got [" << ts_res[0] << ", " << ts_res[1] << "]" << std::endl;
+        }
+
+        // Covariance and Correlation Matrix
+        std::vector<std::vector<mymath::Scalar>> cols = {
+            {1, 2, 3, 4, 5},
+            {2, 4, 6, 8, 10}
+        };
+        auto cov_m = stats::covariance_matrix(cols);
+        auto corr_m = stats::correlation_matrix(cols);
+        if (mymath::abs(corr_m[0][1] - 1.0L) < 0.0001 && mymath::abs(cov_m[0][1] - 4.0L) < 0.0001) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "    FAIL: Multi-dim matrix statistics test failed" << std::endl;
+        }
     }
 
     std::cout << "  Statistics Ext Tests completed." << std::endl;

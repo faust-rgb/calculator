@@ -8,6 +8,7 @@
 #include "matrix/matrix.h"
 #include "matrix/matrix_dsp.h"
 #include "math/precise/precise_decimal.h"
+#include "analysis/series/psa_engine.h"
 #include "types/scalar_type.h"
 #include <iostream>
 #include <chrono>
@@ -497,6 +498,90 @@ void test_precise_decimal_core_fixes(int& passed, int& failed) {
             ++failed;
             std::cout << "    FAIL: sign(1e-50) got: " << sign_res << std::endl;
         }
+
+        // 7. Lagrange Series Reversion ps_revert
+        // sin(x) coeffs: {0, 1, 0, -1/6, 0, 1/120}
+        std::vector<Scalar> sin_c = {0, 1, 0, Scalar(-1)/Scalar(6), 0, Scalar(1)/Scalar(120)};
+        auto asin_c = series_ops::internal::ps_revert(sin_c, 5);
+        // asin(x) = x + 1/6 x^3 + 3/40 x^5 -> asin_c[1]=1, asin_c[3]=1/6, asin_c[5]=3/40=0.075
+        if (mymath::abs(asin_c[1] - Scalar(1)) < Scalar(1e-10L) &&
+            mymath::abs(asin_c[3] - Scalar(1)/Scalar(6)) < Scalar(1e-10L) &&
+            mymath::abs(asin_c[5] - Scalar(3)/Scalar(40)) < Scalar(1e-10L)) {
+            ++passed;
+            std::cout << "    PASS: ps_revert Lagrange series inversion verified for sin -> arcsin" << std::endl;
+        } else {
+            ++failed;
+            std::cout << "    FAIL: ps_revert Lagrange inversion failed" << std::endl;
+        }
+    }
+}
+
+// 测试特征多项式与矩阵指数
+void test_charpoly_and_expm(int& passed, int& failed) {
+    std::cout << "  Testing charpoly and expm..." << std::endl;
+    Calculator calc;
+
+    // 1. 2x2 矩阵特征多项式: [1, 2; 3, 4] -> lambda^2 - 5*lambda - 2 -> [-2, -5, 1]
+    {
+        std::string res = calc.process_line("charpoly([1, 2; 3, 4])", false);
+        if (res.find("-2") != std::string::npos && res.find("-5") != std::string::npos && res.find("1") != std::string::npos) {
+            ++passed;
+            std::cout << "    PASS: charpoly([1, 2; 3, 4]) = " << res << std::endl;
+        } else {
+            ++failed;
+            std::cout << "    FAIL: charpoly([1, 2; 3, 4]) got " << res << std::endl;
+        }
+    }
+
+    // 2. 对角矩阵特征多项式: diag(2, 3, 5) -> lambda^3 - 10*lambda^2 + 31*lambda - 30 -> [-30, 31, -10, 1]
+    {
+        std::string res = calc.process_line("charpoly([2, 0, 0; 0, 3, 0; 0, 0, 5])", false);
+        if (res.find("-30") != std::string::npos && res.find("31") != std::string::npos && res.find("-10") != std::string::npos) {
+            ++passed;
+            std::cout << "    PASS: charpoly(diag(2, 3, 5)) = " << res << std::endl;
+        } else {
+            ++failed;
+            std::cout << "    FAIL: charpoly(diag(2, 3, 5)) got " << res << std::endl;
+        }
+    }
+
+    // 3. 幂零矩阵指数 exp([0, 1; 0, 0]) = [1, 1; 0, 1]
+    {
+        std::string res = calc.process_line("expm([0, 1; 0, 0])", false);
+        if (res.find("1") != std::string::npos) {
+            Matrix N(2, 2, Scalar(0));
+            N.at(0, 1) = Scalar(1);
+            Matrix m = matrix::matrix_exponential(N);
+            if (mymath::abs(m.at(0, 0) - Scalar(1)) < Scalar(1e-10L) &&
+                mymath::abs(m.at(0, 1) - Scalar(1)) < Scalar(1e-10L) &&
+                mymath::abs(m.at(1, 0) - Scalar(0)) < Scalar(1e-10L) &&
+                mymath::abs(m.at(1, 1) - Scalar(1)) < Scalar(1e-10L)) {
+                ++passed;
+                std::cout << "    PASS: expm([[0, 1], [0, 0]]) is identity + nilpotent" << std::endl;
+            } else {
+                ++failed;
+                std::cout << "    FAIL: expm([[0, 1], [0, 0]]) mismatch" << std::endl;
+            }
+        }
+    }
+
+    // 4. 对角矩阵指数 exp([[1, 0], [0, 2]]) = [[e, 0], [0, e^2]]
+    {
+        Matrix D(2, 2, Scalar(0));
+        D.at(0, 0) = Scalar(1);
+        D.at(1, 1) = Scalar(2);
+        Matrix m = matrix::matrix_exponential(D);
+        Scalar e1 = mymath::exp(Scalar(1));
+        Scalar e2 = mymath::exp(Scalar(2));
+        if (mymath::abs(m.at(0, 0) - e1) < Scalar(1e-10L) &&
+            mymath::abs(m.at(1, 1) - e2) < Scalar(1e-10L) &&
+            mymath::abs(m.at(0, 1)) < Scalar(1e-10L)) {
+            ++passed;
+            std::cout << "    PASS: expm(diag(1, 2)) exact match" << std::endl;
+        } else {
+            ++failed;
+            std::cout << "    FAIL: expm(diag(1, 2)) mismatch" << std::endl;
+        }
     }
 }
 
@@ -511,6 +596,7 @@ void run_precision_matrix_tests(int& passed, int& failed) {
     test_performance_comparison(passed, failed);
     test_bracket_matrix_complex_expressions(passed, failed);
     test_precise_decimal_core_fixes(passed, failed);
+    test_charpoly_and_expm(passed, failed);
 
     std::cout << "Precision Matrix Tests Completed." << std::endl;
 }

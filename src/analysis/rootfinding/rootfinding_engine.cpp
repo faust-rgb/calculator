@@ -3,6 +3,7 @@
 // ============================================================================
 
 #include "analysis/rootfinding/rootfinding_engine.h"
+#include "math/base/default_precision.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -127,6 +128,14 @@ T bisection_solve(
 
     CalcT left_value = eval(c_left);
     CalcT right_value = eval(c_right);
+
+    // 检查端点是否已经是根
+    if (t_abs(left_value) <= root_function_tolerance(left_value)) {
+        return normalize(from_internal<T>(c_left));
+    }
+    if (t_abs(right_value) <= root_function_tolerance(right_value)) {
+        return normalize(from_internal<T>(c_right));
+    }
 
     // 检查端点是否异号
     if (left_value * right_value > CalcT(static_cast<long long>(0))) {
@@ -505,6 +514,74 @@ template Scalar brent_solve<Scalar>(
     Scalar,
     Scalar,
     const std::function<Scalar(Scalar)>&,
+    const std::string&);
+
+template double newton_solve<double>(
+    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
+    double,
+    const std::function<double(double)>&,
+    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
+    const std::string&);
+
+template double bisection_solve<double>(
+    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
+    double,
+    double,
+    const std::function<double(double)>&,
+    const std::string&);
+
+template double secant_solve<double>(
+    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
+    double,
+    double,
+    const std::function<double(double)>&,
+    const std::string&);
+
+template double fixed_point_solve<double>(
+    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
+    double,
+    const std::function<double(double)>&,
+    const std::string&);
+
+template double brent_solve<double>(
+    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
+    double,
+    double,
+    const std::function<double(double)>&,
+    const std::string&);
+
+template long double newton_solve<long double>(
+    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
+    long double,
+    const std::function<long double(long double)>&,
+    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
+    const std::string&);
+
+template long double bisection_solve<long double>(
+    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
+    long double,
+    long double,
+    const std::function<long double(long double)>&,
+    const std::string&);
+
+template long double secant_solve<long double>(
+    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
+    long double,
+    long double,
+    const std::function<long double(long double)>&,
+    const std::string&);
+
+template long double fixed_point_solve<long double>(
+    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
+    long double,
+    const std::function<long double(long double)>&,
+    const std::string&);
+
+template long double brent_solve<long double>(
+    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
+    long double,
+    long double,
+    const std::function<long double(long double)>&,
     const std::string&);
 
 }  // namespace rootfinding_engine

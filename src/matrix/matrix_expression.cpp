@@ -1140,6 +1140,20 @@ private:
             return Value::from_matrix(eigenvectors(require_matrix(arguments[0], "eigvecs")));
         }
 
+        if (name == "charpoly") {
+            if (arguments.empty() || arguments.size() > 2) {
+                throw std::runtime_error("charpoly expects 1 or 2 arguments");
+            }
+            return Value::from_matrix(characteristic_polynomial(require_matrix(arguments[0], "charpoly")));
+        }
+
+        if (name == "expm") {
+            if (arguments.size() != 1) {
+                throw std::runtime_error("expm expects exactly one argument");
+            }
+            return Value::from_matrix(matrix_exponential(require_matrix(arguments[0], "expm")));
+        }
+
         if (name == "reshape") {
             if (arguments.size() != 3) {
                 throw std::runtime_error("reshape expects exactly three arguments");
@@ -1700,7 +1714,7 @@ private:
                name == "get" || name == "set" || name == "norm" ||
                name == "cond" || name == "trace" || name == "det" ||
                name == "rank" || name == "rref" || name == "eigvals" ||
-               name == "eigvecs" || name == "reshape" || name == "diag" ||
+               name == "eigvecs" || name == "charpoly" || name == "expm" || name == "reshape" || name == "diag" ||
                name == "cholesky" || name == "schur" || name == "hessenberg" ||
                name == "mean" || name == "median" || name == "mode" ||
                name == "percentile" || name == "quartile" ||
@@ -2000,6 +2014,8 @@ bool try_evaluate_expression(const std::string& expression,
         trimmed.find("rank(") != std::string::npos ||
         trimmed.find("rref(") != std::string::npos ||
         trimmed.find("eigvals(") != std::string::npos ||
+        trimmed.find("charpoly(") != std::string::npos ||
+        trimmed.find("expm(") != std::string::npos ||
         trimmed.find("reshape(") != std::string::npos ||
         trimmed.find("diag(") != std::string::npos ||
         trimmed.find("cholesky(") != std::string::npos ||

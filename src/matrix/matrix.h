@@ -243,6 +243,8 @@ template <typename T> bool is_symmetric(const TMatrix<T>& matrix);
 template <typename T> bool is_orthogonal(const TMatrix<T>& matrix);
 template <typename T> TMatrix<T> hessenberg(const TMatrix<T>& matrix);
 template <typename T> TMatrix<T> schur(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> characteristic_polynomial(const TMatrix<T>& matrix);
+template <typename T> TMatrix<T> matrix_exponential(const TMatrix<T>& matrix);
 
 // ============================================================================
 // 元素访问和属性 (泛型)

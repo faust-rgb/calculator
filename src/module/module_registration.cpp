@@ -10,6 +10,7 @@
 #include "analysis/modules/integration_module.h"
 #include "analysis/modules/ode_module.h"
 #include "analysis/modules/optimization_module.h"
+#include "analysis/modules/pde_module.h"
 #include "analysis/modules/rootfinding_module.h"
 #include "analysis/modules/series_module.h"
 #include "dsp/dsp_module.h"
@@ -65,6 +66,7 @@ void register_standard_modules(Calculator* calculator) {
     register_if_missing([]() { return std::make_shared<symbolic_commands::SymbolicCalculusModule>(); }, "symbolic_calculus");
     register_if_missing([]() { return std::make_shared<transforms::TransformModule>(); }, "transform");
     register_if_missing([]() { return std::make_shared<analysis_cmds::AnalysisModule>(); }, "analysis");
+    register_if_missing([]() { return std::make_shared<analysis::pde::PdeModule>(); }, "PDE");
     register_if_missing([]() { return std::make_shared<integration_ops::IntegrationModule>(); }, "integration");
     register_if_missing([]() { return std::make_shared<ode_ops::ODEModule>(); }, "ode");
     register_if_missing([]() { return std::make_shared<optimization::OptimizationModule>(); }, "optimization");

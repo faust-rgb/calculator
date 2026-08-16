@@ -467,21 +467,34 @@ PreciseDecimal ln_agm(const PreciseDecimal& x) {
     }
 
     const int user_scale = PrecisionContext::get_default_scale();
-    ScopedPrecision guard(user_scale / 2 + 20);
+    ScopedPrecision guard(user_scale / 4 + 16);
     const int work_scale = PrecisionContext::get_default_scale();
     const PreciseDecimal epsilon = scale_epsilon(8);
 
     int m = static_cast<int>(user_scale * 1.7) + 8;
 
-    PreciseDecimal s = x;
-    for (int i = 0; i < m; ++i) {
-        s *= two();
+    PreciseDecimal two_pow_m;
+    {
+        BigIntData power_of_2 = {1};
+        long long exp_val = m;
+        BigIntData base_pow = {2};
+        while (exp_val > 0) {
+            if (exp_val & 1) {
+                power_of_2 = multiply_bigint(power_of_2, base_pow);
+            }
+            base_pow = multiply_bigint(base_pow, base_pow);
+            exp_val >>= 1;
+        }
+        two_pow_m.data = power_of_2;
+        two_pow_m.scale = 0;
+        two_pow_m.normalize();
     }
+    PreciseDecimal s = x * two_pow_m;
 
     PreciseDecimal a = one();
     PreciseDecimal b = PreciseDecimal(4LL) / s;
 
-    const int max_iter = std::max(40, work_scale / 2);
+    const int max_iter = std::max(30, work_scale / 4 + 10);
     for (int i = 0; i < max_iter; ++i) {
         PreciseDecimal next_a = half() * (a + b);
         PreciseDecimal next_b = precise::sqrt(a * b);
@@ -682,10 +695,18 @@ PreciseDecimal reduce_mod_positive(const PreciseDecimal& value, const PreciseDec
 }
 
 PreciseDecimal reduce_trig_argument(const PreciseDecimal& x) {
+    int extra_guard = 8;
+    if (precise::abs(x) > PreciseDecimal(100LL)) {
+        long double x_d = mymath::abs(static_cast<long double>(x));
+        int log10_x = static_cast<int>(std::log10(std::max(1.0L, x_d)));
+        extra_guard += log10_x;
+    }
+    ScopedPrecision guard(extra_guard);
     const PreciseDecimal p = precise::pi();
     const PreciseDecimal two_pi_val = precise::two_pi();
     PreciseDecimal r = reduce_mod_positive(x, two_pi_val);
     if (r > p) r -= two_pi_val;
+    r.normalize();
     return r;
 }
 
@@ -725,6 +746,7 @@ PreciseDecimal sin(const PreciseDecimal& x) {
     PreciseDecimal r = reduce_sin_argument(x, &negate);
 
     int scale = PrecisionContext::get_default_scale();
+    const int work_scale = scale + 8;
 
     if (scale > 100) {
         int k = 0;
@@ -737,6 +759,7 @@ PreciseDecimal sin(const PreciseDecimal& x) {
         NormalizationSuppressor suppressor;
 
         PreciseDecimal r2 = r * r;
+        trim_fraction_scale(&r2, work_scale);
         PreciseDecimal sin_r = r;
         PreciseDecimal cos_r = one();
         PreciseDecimal term_s = r;
@@ -747,19 +770,25 @@ PreciseDecimal sin(const PreciseDecimal& x) {
         for (int i = 1; i < limit; ++i) {
             term_c = -term_c * r2 / decimal_from_uint(static_cast<uint32_t>((2 * i - 1) * (2 * i)));
             term_s = -term_s * r2 / decimal_from_uint(static_cast<uint32_t>((2 * i) * (2 * i + 1)));
+            trim_fraction_scale(&term_c, work_scale);
+            trim_fraction_scale(&term_s, work_scale);
             cos_r += term_c;
             sin_r += term_s;
+            trim_fraction_scale(&cos_r, work_scale);
+            trim_fraction_scale(&sin_r, work_scale);
             if (precise::abs(term_s) < epsilon && precise::abs(term_c) < epsilon) break;
         }
 
         for (int i = 0; i < k; ++i) {
             PreciseDecimal new_sin = two() * sin_r * cos_r;
             PreciseDecimal new_cos = cos_r * cos_r - sin_r * sin_r;
+            trim_fraction_scale(&new_sin, work_scale);
+            trim_fraction_scale(&new_cos, work_scale);
             sin_r = new_sin;
             cos_r = new_cos;
         }
 
-        g_suppress_normalization = false;
+        ScopedNormalizationEnable enable;
         sin_r.normalize();
         return negate ? -sin_r : sin_r;
     }
@@ -769,15 +798,18 @@ PreciseDecimal sin(const PreciseDecimal& x) {
     PreciseDecimal term = r;
     PreciseDecimal sum = r;
     PreciseDecimal r2 = r * r;
+    trim_fraction_scale(&r2, work_scale);
     const PreciseDecimal epsilon = scale_epsilon();
     const int limit = series_iteration_limit(150);
     for (int i = 1; i < limit; ++i) {
         term = -term * r2 / decimal_from_uint(static_cast<uint32_t>((2 * i) * (2 * i + 1)));
+        trim_fraction_scale(&term, work_scale);
         sum += term;
+        trim_fraction_scale(&sum, work_scale);
         if (precise::abs(term) < epsilon) break;
     }
 
-    g_suppress_normalization = false;
+    ScopedNormalizationEnable enable;
     sum.normalize();
     return negate ? -sum : sum;
 }
@@ -790,6 +822,7 @@ PreciseDecimal cos(const PreciseDecimal& x) {
     PreciseDecimal r = reduce_cos_argument(x, &negate);
 
     int scale = PrecisionContext::get_default_scale();
+    const int work_scale = scale + 8;
 
     if (scale > 100) {
         int k = 0;
@@ -802,6 +835,7 @@ PreciseDecimal cos(const PreciseDecimal& x) {
         NormalizationSuppressor suppressor;
 
         PreciseDecimal r2 = r * r;
+        trim_fraction_scale(&r2, work_scale);
         PreciseDecimal sin_r = r;
         PreciseDecimal cos_r = one();
         PreciseDecimal term_s = r;
@@ -812,19 +846,25 @@ PreciseDecimal cos(const PreciseDecimal& x) {
         for (int i = 1; i < limit; ++i) {
             term_c = -term_c * r2 / decimal_from_uint(static_cast<uint32_t>((2 * i - 1) * (2 * i)));
             term_s = -term_s * r2 / decimal_from_uint(static_cast<uint32_t>((2 * i) * (2 * i + 1)));
+            trim_fraction_scale(&term_c, work_scale);
+            trim_fraction_scale(&term_s, work_scale);
             cos_r += term_c;
             sin_r += term_s;
+            trim_fraction_scale(&cos_r, work_scale);
+            trim_fraction_scale(&sin_r, work_scale);
             if (precise::abs(term_s) < epsilon && precise::abs(term_c) < epsilon) break;
         }
 
         for (int i = 0; i < k; ++i) {
             PreciseDecimal new_sin = two() * sin_r * cos_r;
             PreciseDecimal new_cos = cos_r * cos_r - sin_r * sin_r;
+            trim_fraction_scale(&new_sin, work_scale);
+            trim_fraction_scale(&new_cos, work_scale);
             sin_r = new_sin;
             cos_r = new_cos;
         }
 
-        g_suppress_normalization = false;
+        ScopedNormalizationEnable enable;
         cos_r.normalize();
         return negate ? -cos_r : cos_r;
     }
@@ -834,15 +874,18 @@ PreciseDecimal cos(const PreciseDecimal& x) {
     PreciseDecimal term = one();
     PreciseDecimal sum = one();
     PreciseDecimal r2 = r * r;
+    trim_fraction_scale(&r2, work_scale);
     const PreciseDecimal epsilon = scale_epsilon();
     const int limit = series_iteration_limit(150);
     for (int i = 1; i < limit; ++i) {
         term = -term * r2 / decimal_from_uint(static_cast<uint32_t>((2 * i - 1) * (2 * i)));
+        trim_fraction_scale(&term, work_scale);
         sum += term;
+        trim_fraction_scale(&sum, work_scale);
         if (precise::abs(term) < epsilon) break;
     }
 
-    g_suppress_normalization = false;
+    ScopedNormalizationEnable enable;
     sum.normalize();
     return negate ? -sum : sum;
 }

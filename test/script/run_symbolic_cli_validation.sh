@@ -2,7 +2,16 @@
 set -u
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CALC="$ROOT_DIR/bin/calculator"
+
+if [[ -n "${CALCULATOR_BIN:-}" && -x "$CALCULATOR_BIN" ]]; then
+    CALC="$CALCULATOR_BIN"
+elif [[ -x "$ROOT_DIR/build/calculator" ]]; then
+    CALC="$ROOT_DIR/build/calculator"
+elif [[ -x "$ROOT_DIR/bin/calculator" ]]; then
+    CALC="$ROOT_DIR/bin/calculator"
+else
+    CALC="$ROOT_DIR/build/calculator"
+fi
 
 passed=0
 failed=0

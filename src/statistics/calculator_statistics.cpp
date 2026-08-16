@@ -89,8 +89,8 @@ std::vector<Scalar> extract_vector(const StoredValue& value) {
         // 复数类型：取实部
         return { value.complex.real() };
     } else if (value.has_precise_decimal_text) {
-        // 精确小数文本：转换为 double
-        return { std::stod(value.precise_decimal_text) };
+        // 精确小数文本：转换为高精度 Scalar
+        return { Scalar(value.precise_decimal_text) };
     } else {
         // 普通数值：直接返回
         return { value.decimal };
@@ -117,15 +117,17 @@ Scalar apply_statistic(const std::string& name, const std::vector<Scalar>& argum
     if (name == "mad") return stats::mad(arguments);
 
     // 线性回归组件
-    if (name == "slope" || name == "intercept") {
+    if (name == "slope" || name == "intercept" || name == "theil_sen_slope" || name == "theil_sen_intercept") {
         if (arguments.size() % 2 != 0 || arguments.empty()) {
             throw std::runtime_error(name + " expects two equal-length datasets");
         }
         size_t n = arguments.size() / 2;
         std::vector<Scalar> x(arguments.begin(), arguments.begin() + n);
         std::vector<Scalar> y(arguments.begin() + n, arguments.end());
-        auto res = stats::linear_regression(x, y);
-        return (name == "intercept") ? res[0] : res[1];
+        auto res = (name == "theil_sen_slope" || name == "theil_sen_intercept") ?
+                   stats::theil_sen_regression(x, y) :
+                   stats::linear_regression(x, y);
+        return (name == "intercept" || name == "theil_sen_intercept") ? res[0] : res[1];
     }
 
     // 百分位数：第一个参数为百分比 p，后面为数据

@@ -245,6 +245,159 @@ int run_logic_poly_function_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // Test poly_deriv
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("poly_deriv(p)", &output);
+        if (handled && output == "2 * x + 2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: poly_deriv(p) returned unexpected output: "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: poly_deriv(p) threw: " << ex.what() << '\n';
+    }
+
+    // Test poly_integ
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("poly_integ(q)", &output);
+        if (handled && (output == "0.5 * x ^ 2 - x" || output == "1/2 * x ^ 2 - x" || output == "x ^ 2 / 2 - x")) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: poly_integ(q) returned unexpected output: "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: poly_integ(q) threw: " << ex.what() << '\n';
+    }
+
+    // Test poly_compose
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("poly_compose(q, p)", &output);
+        if (handled && output == "x ^ 2 + 2 * x") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: poly_compose(q, p) returned unexpected output: "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: poly_compose(q, p) threw: " << ex.what() << '\n';
+    }
+
+    // Test poly_gcd
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("poly_gcd(x ^ 2 - 1, x - 1)", &output);
+        if (handled && (output == "x - 1" || output == "1 * x - 1")) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: poly_gcd returned unexpected output: "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: poly_gcd threw: " << ex.what() << '\n';
+    }
+
+    // Test poly_eval
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("poly_eval(p, 3)", &output);
+        if (handled && output == "16") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: poly_eval(p, 3) returned unexpected output: "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: poly_eval(p, 3) threw: " << ex.what() << '\n';
+    }
+
+    // Test nested poly_deriv in poly_mul
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("poly_mul(poly_deriv(p), q)", &output);
+        if (handled && output == "2 * x ^ 2 - 2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: poly_mul(poly_deriv(p), q) returned unexpected output: "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: poly_mul(poly_deriv(p), q) threw: " << ex.what() << '\n';
+    }
+
+    // Test multiple roots with Square-free Factorization: (x - 2)^3 = x^3 - 6*x^2 + 12*x - 8
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("roots(x ^ 3 - 6 * x ^ 2 + 12 * x - 8)", &output);
+        if (handled && output == "2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: roots((x-2)^3) returned unexpected output: "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: roots((x-2)^3) threw: " << ex.what() << '\n';
+    }
+
+    // Test vector literals in polynomial operations
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("poly_add([1, 2], [3, 4])", &output);
+        if (handled && output == "6 * x + 4") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: poly_add([1, 2], [3, 4]) returned unexpected output: "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: poly_add([1, 2], [3, 4]) threw: " << ex.what() << '\n';
+    }
+
+    // Test poly_fit
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("poly_fit([0, 1, 2], [1, 3, 7], 2)", &output);
+        if (handled && (output == "x ^ 2 + x + 1" || output == "1 * x ^ 2 + 1 * x + 1")) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: poly_fit returned unexpected output: "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: poly_fit threw: " << ex.what() << '\n';
+    }
+
     return 0;
 }
 

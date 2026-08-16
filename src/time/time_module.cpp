@@ -11,6 +11,9 @@
 
 #include "time_module.h"
 #include "module/calculator_module.h"
+#include "core/services/service_locator.h"
+#include "core/services/core_manager_interfaces.h"
+#include "core/services/string_utils.h"
 
 #include <chrono>
 #include <ctime>
@@ -56,13 +59,23 @@ long double get_scalar(const StoredValue& val, const char* context) {
  * @throws std::runtime_error 如果获取时间信息失败
  */
 std::string format_time(const std::string& format, std::time_t timestamp, bool use_local = true) {
-    std::tm* tm_info = use_local ? std::localtime(&timestamp) : std::gmtime(&timestamp);
-    if (!tm_info) {
-        throw std::runtime_error("Failed to get time info");
+    std::tm tm_info = {};
+#if defined(_WIN32)
+    if (use_local) {
+        localtime_s(&tm_info, &timestamp);
+    } else {
+        gmtime_s(&tm_info, &timestamp);
     }
+#else
+    if (use_local) {
+        localtime_r(&timestamp, &tm_info);
+    } else {
+        gmtime_r(&timestamp, &tm_info);
+    }
+#endif
 
     std::ostringstream oss;
-    oss << std::put_time(tm_info, format.c_str());
+    oss << std::put_time(&tm_info, format.c_str());
     return oss.str();
 }
 
@@ -407,6 +420,35 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
     };
 
     return funcs;
+}
+
+std::string TimeModule::execute_args(const std::string& command,
+                                     const std::vector<std::string>& args,
+                                     ServiceLocator& locator) {
+    auto services = locator.resolve<CoreServices>();
+    std::vector<StoredValue> s_args;
+    for (const auto& arg : args) {
+        std::string parsed = trim_copy(arg);
+        if (parsed.size() >= 2 && parsed.front() == '"' && parsed.back() == '"') {
+            StoredValue sv;
+            sv.is_string = true;
+            sv.string_value = parsed.substr(1, parsed.size() - 2);
+            s_args.push_back(sv);
+        } else {
+            StoredValue sv = services->evaluation.evaluate_value(parsed, false);
+            s_args.push_back(sv);
+        }
+    }
+
+    auto funcs = get_functions_map();
+    auto it = funcs.find(command);
+    if (it != funcs.end()) {
+        StoredValue res = it->second(s_args);
+        if (res.is_string) return res.string_value;
+        if (res.is_matrix && res.matrix_ptr) return res.matrix_ptr->to_string();
+        return res.get_decimal().to_string();
+    }
+    throw std::runtime_error("Unknown time command: " + command);
 }
 
 /**

@@ -27,18 +27,12 @@
 namespace {
 
     /**
-     * @brief 将 long double 转换为高精度字符串
-     * @param val 要转换的值
+     * @brief 格式化数值为高精度字符串
+     * @param val 要转换的标量值
      * @return 字符串表示
      */
-    std::string format_long_double(long double val) {
-        if (val == static_cast<long long>(val) && std::abs(val) < 1e15L) {
-            // 整数值，直接输出
-            return std::to_string(static_cast<long long>(val));
-        }
-        std::ostringstream oss;
-        oss << std::setprecision(15) << val;
-        return oss.str();
+    std::string format_scalar_precise(const Scalar& val) {
+        return val.to_string();
     }
 
     /**
@@ -114,7 +108,7 @@ namespace {
                 if (val.matrix_ptr->cols > 1) result += "[";
                 for (std::size_t c = 0; c < val.matrix_ptr->cols; ++c) {
                     if (c > 0) result += ", ";
-                    result += format_long_double(val.matrix_ptr->at(r, c).to_long_double());
+                    result += format_scalar_precise(val.matrix_ptr->at(r, c));
                 }
                 if (val.matrix_ptr->cols > 1) result += "]";
             }
@@ -142,10 +136,10 @@ namespace {
             return result;
         }
         if (val.is_complex) {
-            return "[" + format_long_double(val.complex.real().to_long_double()) + ", " + format_long_double(val.complex.imag().to_long_double()) + "]";
+            return "[" + format_scalar_precise(val.complex.real()) + ", " + format_scalar_precise(val.complex.imag()) + "]";
         }
         // 标量数值
-        return format_long_double(static_cast<long double>(val.get_decimal()));
+        return format_scalar_precise(val.get_decimal());
     }
 
     /**
@@ -445,8 +439,13 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         if (it == files_.end()) throw std::runtime_error("Invalid file descriptor");
         
         std::string content;
-        if (args[1].is_string) content = args[1].string_value;
-        else content = std::to_string(get_scalar(args[1], "write data")); // Basic fallback
+        if (args[1].is_string) {
+            content = args[1].string_value;
+        } else if (args[1].is_matrix && args[1].matrix_ptr) {
+            content = args[1].matrix_ptr->to_string();
+        } else {
+            content = format_scalar_precise(args[1].get_decimal());
+        }
         
         *(it->second) << content;
         it->second->flush();
@@ -510,6 +509,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         auto it = files_.find(fd);
         if (it == files_.end()) throw std::runtime_error("Invalid file descriptor");
 
+        it->second->clear(); // 清除 EOF 和错误标志，保证 seek 成功生效
         it->second->seekg(pos);
         it->second->seekp(pos);
 
@@ -746,7 +746,7 @@ std::string IoModule::execute_args(const std::string& command,
             out += "]";
             return out;
         }
-        return format_long_double(static_cast<long double>(res.get_decimal()));
+        return format_scalar_precise(res.get_decimal());
     }
 
     return "";

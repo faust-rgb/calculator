@@ -11,7 +11,7 @@ public:
     std::string name() const override { return "SymbolicCalculus"; }
 
     std::vector<std::string> get_commands() const override {
-        return {"diff", "gradient", "numerical_gradient", "num_grad",
+        return {"diff", "gradient", "grad", "numerical_gradient", "num_grad",
                 "divergence", "div",
                 "curl", "curl_2d", "laplacian", "implicit_diff", "param_deriv", "directional",
                 "line_integral", "surface_integral", "integral"};

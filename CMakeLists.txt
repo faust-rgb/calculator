@@ -126,7 +126,7 @@ target_link_libraries(calculator PRIVATE calc_core)
 option(BUILD_TESTS "Build test executable" ON)
 
 if(BUILD_TESTS)
-    file(GLOB TEST_SUITE_SOURCES ${CMAKE_SOURCE_DIR}/test/suites/*.cpp)
+    file(GLOB_RECURSE TEST_SUITE_SOURCES ${CMAKE_SOURCE_DIR}/test/suites/*.cpp)
 
     add_executable(calculator_tests
         ${CMAKE_SOURCE_DIR}/test/main.cpp

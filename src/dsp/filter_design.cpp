@@ -10,6 +10,7 @@
  */
 
 #include "signal_processing.h"
+#include "polynomial/polynomial.h"
 #include "math/mymath.h"
 #include "types/scalar_type.h"
 
@@ -413,14 +414,16 @@ std::vector<Scalar> sosfilter(const std::vector<SOS>& sos, const std::vector<Sca
 }
 
 std::vector<SOS> tf2sos(const std::vector<Scalar>& b, const std::vector<Scalar>& a) {
-    // 这是一个简化的实现。
-    // 对于真正的 tf2sos，我们需要通过多项式求根找到极点和零点，然后配对。
-    // 在本仓库中，由于 IIR 设计函数已知极点，建议在设计函数中直接生成 SOS。
-    // 这里暂时返回一个单节（如果是低阶）或抛出异常。
+    if (a.empty() || b.empty()) return {};
+
+    const Scalar a0 = a[0];
+    const Scalar b0 = b[0];
+    if (mymath::is_near_zero(a0, 1e-12L)) {
+        throw std::runtime_error("tf2sos: leading denominator coefficient a[0] must not be zero");
+    }
 
     if (a.size() <= 3 && b.size() <= 3) {
         SOS s;
-        const Scalar a0 = a[0];
         s.b0 = b[0] / a0;
         s.b1 = (b.size() > 1 ? b[1] / a0 : 0.0L);
         s.b2 = (b.size() > 2 ? b[2] / a0 : 0.0L);
@@ -429,10 +432,104 @@ std::vector<SOS> tf2sos(const std::vector<Scalar>& b, const std::vector<Scalar>&
         return {s};
     }
 
-    throw std::runtime_error("tf2sos for high-order filters requires polynomial root pairing into sections. "
-                             "This is not yet fully implemented. It is recommended to use "
-                             "IIR design functions that generate SOS directly, or stick to lower-order IIR filters "
-                             "to avoid numerical instability.");
+    std::vector<Scalar> a_poly(a.rbegin(), a.rend());
+    std::vector<Scalar> b_poly(b.rbegin(), b.rend());
+
+    std::vector<mymath::complex<Scalar>> poles;
+    if (a.size() > 1) {
+        poles = polynomial_complex_roots(a_poly);
+    }
+    std::vector<mymath::complex<Scalar>> zeros;
+    if (b.size() > 1) {
+        zeros = polynomial_complex_roots(b_poly);
+    }
+
+    struct SectionPair {
+        Scalar c1 = 0;
+        Scalar c2 = 0;
+    };
+
+    auto pair_roots = [](std::vector<mymath::complex<Scalar>>& roots) -> std::vector<SectionPair> {
+        std::vector<SectionPair> sections;
+        std::vector<bool> used(roots.size(), false);
+
+        // 先配对共轭复根
+        for (std::size_t i = 0; i < roots.size(); ++i) {
+            if (used[i]) continue;
+            if (mymath::abs(roots[i].imag()) > Scalar(1e-7L)) {
+                int best_j = -1;
+                Scalar best_diff = Scalar(1e-4L);
+                for (std::size_t j = i + 1; j < roots.size(); ++j) {
+                    if (used[j]) continue;
+                    Scalar diff = mymath::abs(roots[i].real() - roots[j].real()) +
+                                  mymath::abs(roots[i].imag() + roots[j].imag());
+                    if (diff < best_diff) {
+                        best_diff = diff;
+                        best_j = static_cast<int>(j);
+                    }
+                }
+                if (best_j >= 0) {
+                    used[i] = true;
+                    used[best_j] = true;
+                    SectionPair sp;
+                    sp.c1 = -Scalar(2.0L) * roots[i].real();
+                    sp.c2 = roots[i].real() * roots[i].real() + roots[i].imag() * roots[i].imag();
+                    sections.push_back(sp);
+                }
+            }
+        }
+
+        // 再配对实根
+        std::vector<Scalar> real_roots;
+        for (std::size_t i = 0; i < roots.size(); ++i) {
+            if (!used[i]) {
+                real_roots.push_back(roots[i].real());
+            }
+        }
+
+        for (std::size_t i = 0; i + 1 < real_roots.size(); i += 2) {
+            SectionPair sp;
+            sp.c1 = -(real_roots[i] + real_roots[i + 1]);
+            sp.c2 = real_roots[i] * real_roots[i + 1];
+            sections.push_back(sp);
+        }
+        if (real_roots.size() % 2 == 1) {
+            SectionPair sp;
+            sp.c1 = -real_roots.back();
+            sp.c2 = Scalar(0.0L);
+            sections.push_back(sp);
+        }
+        return sections;
+    };
+
+    std::vector<SectionPair> a_sections = pair_roots(poles);
+    std::vector<SectionPair> b_sections = pair_roots(zeros);
+
+    std::size_t num_sections = std::max(a_sections.size(), b_sections.size());
+    if (num_sections == 0) num_sections = 1;
+
+    std::vector<SOS> result(num_sections);
+    const Scalar overall_gain = b0 / a0;
+
+    for (std::size_t i = 0; i < num_sections; ++i) {
+        result[i].b0 = (i == 0) ? overall_gain : Scalar(1.0L);
+        if (i < b_sections.size()) {
+            result[i].b1 = (i == 0) ? overall_gain * b_sections[i].c1 : b_sections[i].c1;
+            result[i].b2 = (i == 0) ? overall_gain * b_sections[i].c2 : b_sections[i].c2;
+        } else {
+            result[i].b1 = Scalar(0.0L);
+            result[i].b2 = Scalar(0.0L);
+        }
+
+        if (i < a_sections.size()) {
+            result[i].a1 = a_sections[i].c1;
+            result[i].a2 = a_sections[i].c2;
+        } else {
+            result[i].a1 = Scalar(0.0L);
+            result[i].a2 = Scalar(0.0L);
+        }
+    }
+    return result;
 }
 
 // ============================================================================

@@ -1,14 +1,26 @@
 #include "symbolic/calculus/risch/risch_algorithm.h"
 #include "symbolic/calculus/integral/integration_engine.h"
 #include "symbolic/core/symbolic_expression.h"
+#include "test_risch_advanced.h"
 #include <iostream>
 #include <cassert>
 
 using namespace symbolic_expression_internal;
 
-#include "test_risch_advanced.h"
-
 namespace test_suites {
+
+static int g_risch_adv_passed = 0;
+static int g_risch_adv_failed = 0;
+
+#undef assert
+#define assert(cond) do { \
+    if (cond) { \
+        ++g_risch_adv_passed; \
+    } else { \
+        ++g_risch_adv_failed; \
+        std::cout << "FAIL: Risch advanced assertion failed at line " << __LINE__ << ": " #cond << "\n"; \
+    } \
+} while(0)
 
 void test_risch_advanced_independence() {
     //std::cout << "Running Risch Advanced Independence Tests..." << std::endl;
@@ -303,6 +315,22 @@ void test_risch_algebraic_curve_divisor() {
         assert(!result.success);
         assert(result.type == IntegralType::kNonElementary);
     }
+}
+
+void run_risch_advanced_tests(int& passed, int& failed) {
+    g_risch_adv_passed = 0;
+    g_risch_adv_failed = 0;
+
+    test_risch_advanced_independence();
+    test_risch_nested();
+    test_risch_special_part();
+    test_risch_decision_procedure();
+    test_parametric_rde();
+    test_risch_high_degree_rational();
+    test_risch_algebraic_curve_divisor();
+
+    passed += g_risch_adv_passed;
+    failed += g_risch_adv_failed;
 }
 
 } // namespace test_suites

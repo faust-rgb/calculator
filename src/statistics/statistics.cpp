@@ -13,6 +13,7 @@
 #include "statistics.h"
 #include "probability.h"
 #include "types/scalar_type.h"
+#include "math/base/default_precision.h"
 #include "math/mymath.h"
 #include <algorithm>
 #include <stdexcept>
@@ -275,6 +276,82 @@ std::vector<Scalar> linear_regression(const std::vector<Scalar>& x, const std::v
     Scalar slope = cxy / vx;
     Scalar intercept = my - slope * mx;
     return {intercept, slope};
+}
+
+std::vector<Scalar> theil_sen_regression(const std::vector<Scalar>& x, const std::vector<Scalar>& y) {
+    if (x.size() != y.size() || x.empty()) {
+        throw std::runtime_error("theil_sen_regression requires two non-empty vectors of same length");
+    }
+    const size_t n = x.size();
+    if (n == 1) {
+        return {y[0], Scalar(0)};
+    }
+    std::vector<Scalar> slopes;
+    slopes.reserve(n * (n - 1) / 2);
+    for (size_t i = 0; i < n; ++i) {
+        for (size_t j = i + 1; j < n; ++j) {
+            Scalar dx = x[j] - x[i];
+            if (!mymath::is_near_zero(dx, Scalar(1e-30L))) {
+                slopes.push_back((y[j] - y[i]) / dx);
+            }
+        }
+    }
+    if (slopes.empty()) {
+        throw std::runtime_error("theil_sen_regression requires distinct x values");
+    }
+    Scalar slope = median(std::move(slopes));
+    std::vector<Scalar> intercepts;
+    intercepts.reserve(n);
+    for (size_t i = 0; i < n; ++i) {
+        intercepts.push_back(y[i] - slope * x[i]);
+    }
+    Scalar intercept = median(std::move(intercepts));
+    return {intercept, slope};
+}
+
+std::vector<std::vector<Scalar>> covariance_matrix(const std::vector<std::vector<Scalar>>& columns) {
+    if (columns.empty()) {
+        throw std::runtime_error("covariance_matrix requires at least one column");
+    }
+    const size_t p = columns.size();
+    const size_t n = columns[0].size();
+    for (size_t j = 1; j < p; ++j) {
+        if (columns[j].size() != n) {
+            throw std::runtime_error("covariance_matrix columns must have the same number of rows");
+        }
+    }
+    std::vector<std::vector<Scalar>> cov(p, std::vector<Scalar>(p, Scalar(0)));
+    for (size_t i = 0; i < p; ++i) {
+        for (size_t j = i; j < p; ++j) {
+            Scalar c = covariance(columns[i], columns[j]);
+            cov[i][j] = c;
+            cov[j][i] = c;
+        }
+    }
+    return cov;
+}
+
+std::vector<std::vector<Scalar>> correlation_matrix(const std::vector<std::vector<Scalar>>& columns) {
+    if (columns.empty()) {
+        throw std::runtime_error("correlation_matrix requires at least one column");
+    }
+    const size_t p = columns.size();
+    const size_t n = columns[0].size();
+    for (size_t j = 1; j < p; ++j) {
+        if (columns[j].size() != n) {
+            throw std::runtime_error("correlation_matrix columns must have the same number of rows");
+        }
+    }
+    std::vector<std::vector<Scalar>> corr(p, std::vector<Scalar>(p, Scalar(0)));
+    for (size_t i = 0; i < p; ++i) {
+        corr[i][i] = Scalar(1);
+        for (size_t j = i + 1; j < p; ++j) {
+            Scalar r = correlation(columns[i], columns[j]);
+            corr[i][j] = r;
+            corr[j][i] = r;
+        }
+    }
+    return corr;
 }
 
 Scalar iqr(std::vector<Scalar> data) {

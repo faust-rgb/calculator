@@ -23,11 +23,12 @@ inline constexpr std::string_view kMatrixFunctions[] = {
     "pinv", "dot", "outer", "kron", "hadamard", "null", "least_squares",
     "qr_q", "qr_r", "lu_l", "lu_u", "lu_p", "svd_u", "svd_s", "svd_vt",
     "solve", "norm", "cond", "trace", "det", "rank", "rref", "eigvals",
-    "eigvecs", "reshape", "cholesky", "hessenberg", "schur", "poly_eval",
+    "eigvecs", "charpoly", "expm", "reshape", "cholesky", "hessenberg", "schur", "poly_eval",
     "poly_deriv", "poly_integ", "poly_compose", "poly_gcd", "poly_fit",
     "polynomial_fit", "lagrange", "linear_regression", "dft", "fft",
     "idft", "ifft", "convolve", "hann", "hanning", "hamming", "blackman",
-    "divisors", "extended_gcd", "xgcd", "randmat", "random_matrix"
+    "divisors", "extended_gcd", "xgcd", "randmat", "random_matrix",
+    "pde_heat_1d", "pde_wave_1d", "pde_poisson_2d"
 };
 
 // ============================================================================

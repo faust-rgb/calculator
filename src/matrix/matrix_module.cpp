@@ -191,6 +191,44 @@ MatrixModule::get_functions_map() const {
     funcs["diag"] = mat_func_1(diag<Scalar>, "diag");
     funcs["rref"] = mat_func_1(rref<Scalar>, "rref");
     funcs["eigvals"] = mat_func_1(eigenvalues<Scalar>, "eigvals");
+    funcs["expm"] = mat_func_1(matrix_exponential<Scalar>, "expm");
+
+    funcs["charpoly"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.empty() || args.size() > 2) throw std::runtime_error("charpoly expects 1 or 2 arguments");
+        Matrix m = require_matrix(args[0], "charpoly");
+        Matrix poly = characteristic_polynomial<Scalar>(m);
+        if (args.size() == 2 && args[1].is_string) {
+            std::string var = args[1].string_value;
+            std::string expr_str;
+            for (std::size_t i = poly.cols; i > 0; --i) {
+                std::size_t deg = i - 1;
+                Scalar c = poly.at(0, deg);
+                if (c == Scalar(0)) continue;
+                std::string c_str = c.to_string();
+                bool neg = (!c_str.empty() && c_str[0] == '-');
+                if (neg) {
+                    c_str = c_str.substr(1);
+                    expr_str += expr_str.empty() ? "-" : " - ";
+                } else if (!expr_str.empty()) {
+                    expr_str += " + ";
+                }
+                if (deg == 0) {
+                    expr_str += c_str;
+                } else if (deg == 1) {
+                    if (c_str == "1") expr_str += var;
+                    else expr_str += c_str + "*" + var;
+                } else {
+                    if (c_str == "1") expr_str += var + "^" + std::to_string(deg);
+                    else expr_str += c_str + "*" + var + "^" + std::to_string(deg);
+                }
+            }
+            StoredValue res;
+            res.is_string = true;
+            res.string_value = expr_str.empty() ? "0" : expr_str;
+            return res;
+        }
+        return make_matrix_result(std::move(poly));
+    };
 
     // --- Matrix-only functions (1 matrix arg → scalar result) ---
     auto mat_scalar_1 = [](auto f, const std::string& name) {

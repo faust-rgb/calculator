@@ -91,22 +91,68 @@ std::string handle_residue_command(const std::string& command,
             return result;
         };
 
-    const std::vector<Scalar> denominator_derivative =
-        polynomial_derivative(denominator_coefficients);
-    const mymath::complex<Scalar> denominator_value =
-        evaluate_polynomial_complex(denominator_coefficients, point);
-    if (mymath::abs(denominator_value) > 1e-8) {
-        return matrix::Matrix::vector({0.0L, 0.0L}).to_string();
-    }
-    const mymath::complex<Scalar> denominator_prime =
-        evaluate_polynomial_complex(denominator_derivative, point);
-    if (mymath::abs(denominator_prime) <= 1e-10) {
-        throw MathError("residue currently supports only simple poles");
+    // 计算分母在 point 处的阶数 m (泰勒级数首个非零项)
+    std::vector<std::vector<Scalar>> d_derivs;
+    d_derivs.push_back(denominator_coefficients);
+    while (d_derivs.back().size() > 1) {
+        d_derivs.push_back(polynomial_derivative(d_derivs.back()));
     }
 
-    const mymath::complex<Scalar> residue =
-        evaluate_polynomial_complex(numerator_coefficients, point) /
-        denominator_prime;
+    std::vector<mymath::complex<Scalar>> q_coeffs; // Q(w + point) 的展开系数
+    Scalar fact = Scalar(1.0L);
+    for (std::size_t k = 0; k < d_derivs.size(); ++k) {
+        if (k > 0) fact *= Scalar(static_cast<long long>(k));
+        mymath::complex<Scalar> val = evaluate_polynomial_complex(d_derivs[k], point) / fact;
+        q_coeffs.push_back(val);
+    }
+
+    std::size_t m = 0;
+    while (m < q_coeffs.size() && mymath::abs(q_coeffs[m]) <= Scalar(1e-9L)) {
+        ++m;
+    }
+
+    // 如果分母在 point 处不为 0 (m == 0)，则不是极点，留数为 0
+    if (m == 0) {
+        return matrix::Matrix::vector({0.0L, 0.0L}).to_string();
+    }
+
+    // 计算分子在 point 处的泰勒展开系数 P(w + point)
+    std::vector<std::vector<Scalar>> n_derivs;
+    n_derivs.push_back(numerator_coefficients);
+    while (n_derivs.back().size() > 1) {
+        n_derivs.push_back(polynomial_derivative(n_derivs.back()));
+    }
+
+    std::vector<mymath::complex<Scalar>> p_coeffs;
+    fact = Scalar(1.0L);
+    for (std::size_t k = 0; k < m; ++k) {
+        if (k > 0) fact *= Scalar(static_cast<long long>(k));
+        mymath::complex<Scalar> val(0.0L, 0.0L);
+        if (k < n_derivs.size()) {
+            val = evaluate_polynomial_complex(n_derivs[k], point) / fact;
+        }
+        p_coeffs.push_back(val);
+    }
+
+    // 幂级数长除法：P(w) / \tilde{Q}(w)，求到 w^{m-1} 项的系数
+    // \tilde{Q}(w) = q_coeffs[m] + q_coeffs[m+1]*w + ...
+    mymath::complex<Scalar> q0 = q_coeffs[m];
+    if (mymath::abs(q0) <= Scalar(1e-18L)) {
+        throw MathError("Failed to evaluate denominator derivative at pole");
+    }
+
+    std::vector<mymath::complex<Scalar>> c_coeffs(m, mymath::complex<Scalar>(0.0L, 0.0L));
+    for (std::size_t k = 0; k < m; ++k) {
+        mymath::complex<Scalar> sum = p_coeffs[k];
+        for (std::size_t j = 1; j <= k; ++j) {
+            if (m + j < q_coeffs.size()) {
+                sum = sum - q_coeffs[m + j] * c_coeffs[k - j];
+            }
+        }
+        c_coeffs[k] = sum / q0;
+    }
+
+    const mymath::complex<Scalar> residue = c_coeffs[m - 1];
 
     // 规范化结果
     auto normalize = [](Scalar x) -> Scalar {

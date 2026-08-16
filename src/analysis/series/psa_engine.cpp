@@ -413,7 +413,7 @@ std::vector<Scalar> ps_atan(const std::vector<Scalar>& a, int degree) {
 std::vector<Scalar> ps_sinh(const std::vector<Scalar>& a, int degree) {
     std::vector<Scalar> res(degree + 1, Scalar(0));
     Scalar a0 = a.empty() ? Scalar(0) : a[0];
-    res[0] = Scalar(mymath::sinh(a0.to_long_double()));
+    res[0] = mymath::sinh(a0);
     for (int i = 1; i <= degree; ++i) {
         Scalar sum = Scalar(0);
         for (int k = 1; k <= i; ++k) {
@@ -428,7 +428,7 @@ std::vector<Scalar> ps_sinh(const std::vector<Scalar>& a, int degree) {
 std::vector<Scalar> ps_cosh(const std::vector<Scalar>& a, int degree) {
     std::vector<Scalar> res(degree + 1, Scalar(0));
     Scalar a0 = a.empty() ? Scalar(0) : a[0];
-    res[0] = Scalar(mymath::cosh(a0.to_long_double()));
+    res[0] = mymath::cosh(a0);
     for (int i = 1; i <= degree; ++i) {
         Scalar sum = Scalar(0);
         for (int k = 1; k <= i; ++k) {
@@ -444,6 +444,32 @@ std::vector<Scalar> ps_tanh(const std::vector<Scalar>& a, int degree) {
     std::vector<Scalar> sh = ps_sinh(a, degree);
     std::vector<Scalar> ch = ps_cosh(a, degree);
     return ps_div(sh, ch, degree);
+}
+
+std::vector<Scalar> ps_revert(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> b(degree + 1, Scalar(0));
+    if (degree < 1) return b;
+    Scalar a1 = a.size() > 1 ? a[1] : Scalar(0);
+    if (mymath::is_near_zero(a1, precision::epsilon<Scalar>())) {
+        throw std::runtime_error("series reversion requires non-zero linear coefficient");
+    }
+    b[1] = Scalar(1) / a1;
+    std::vector<std::vector<Scalar>> b_pows(degree + 1, std::vector<Scalar>(degree + 1, Scalar(0)));
+    b_pows[0][0] = Scalar(1);
+    b_pows[1] = b;
+
+    for (int k = 2; k <= degree; ++k) {
+        for (int p = 2; p <= k; ++p) {
+            b_pows[p] = ps_mul(b_pows[p - 1], b, degree);
+        }
+        Scalar coeff_k = Scalar(0);
+        for (int j = 2; j <= k && j < static_cast<int>(a.size()); ++j) {
+            coeff_k += a[j] * b_pows[j][k];
+        }
+        b[k] = -coeff_k / a1;
+        b_pows[1][k] = b[k];
+    }
+    return b;
 }
 
 bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, Scalar center, int degree, std::vector<Scalar>& result, const SeriesContext& ctx) {

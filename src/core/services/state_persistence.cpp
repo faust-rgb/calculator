@@ -246,28 +246,28 @@ std::string StatePersistenceService::load_state(const std::string& path) {
                     value.is_matrix = true;
                     value.matrix_ptr = std::make_shared<matrix::Matrix>(rows, cols, 0.0L);
                     for (std::size_t i = 0; i < value.matrix_ptr->data.size(); ++i) {
-                        value.matrix_ptr->data[i] = std::stod(parts[i + 5]);
+                        value.matrix_ptr->data[i] = Scalar(parts[i + 5]);
                     }
                 } else if (parts[2] == "COMPLEX" && state_version >= 5) {
                     if (parts.size() != 5) {
                         throw std::runtime_error("invalid save file format");
                     }
                     value.is_complex = true;
-                    value.complex.real(std::stod(parts[3]));
-                    value.complex.imag(std::stod(parts[4]));
+                    value.complex.real(Scalar(parts[3]));
+                    value.complex.imag(Scalar(parts[4]));
                 } else if (parts[2] == "EXACT") {
                     if (parts.size() != 6) {
                         throw std::runtime_error("invalid save file format");
                     }
                     value.exact = true;
                     value.rational = Rational(std::stoll(parts[3]), std::stoll(parts[4]));
-                    value.decimal = std::stod(parts[5]);
+                    value.decimal = Scalar(parts[5]);
                 } else if (parts[2] == "DECIMAL") {
                     if ((state_version == 2 && parts.size() != 4 && parts.size() != 5) ||
                         (state_version >= 3 && parts.size() != 4)) {
                         throw std::runtime_error("invalid save file format");
                     }
-                    value.decimal = std::stod(parts[3]);
+                    value.decimal = Scalar(parts[3]);
                     if (state_version == 2 && parts.size() == 5) {
                         value.has_precise_decimal_text = true;
                         value.precise_decimal_text = decode_field(parts[4]);
@@ -352,7 +352,7 @@ std::string StatePersistenceService::load_state(const std::string& path) {
         StoredValue value;
         value.exact = std::stoi(parts[1]) != 0;
         value.rational = Rational(std::stoll(parts[2]), std::stoll(parts[3]));
-        value.decimal = std::stod(parts[4]);
+        value.decimal = Scalar(parts[4]);
         loaded[parts[0]] = value;
     }
 

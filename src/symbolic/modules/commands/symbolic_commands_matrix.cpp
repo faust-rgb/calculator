@@ -13,6 +13,7 @@
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "symbolic/solver/symbolic_solver.h"
+#include "symbolic/matrix/symbolic_matrix.h"
 #include "core/services/string_utils.h"
 #include <vector>
 #include <sstream>
@@ -372,6 +373,65 @@ bool handle_matrix_commands(const SymbolicCommandContext& ctx,
 
                 *output = oss.str();
             }
+            return true;
+        }
+    }
+
+    if (command == "smith" || command == "snf" ||
+        command == "hermite" || command == "hnf" ||
+        command == "symbolic_lu" || command == "sym_lu" ||
+        command == "symbolic_qr" || command == "sym_qr" ||
+        command == "symbolic_jordan" || command == "sym_jordan" || command == "jordan" ||
+        command == "symbolic_expm" || command == "sym_expm") {
+        if (arguments.empty()) throw std::runtime_error(command + " expects matrix argument");
+        std::string var; SymbolicExpression expr;
+        ctx.resolve_symbolic(arguments[0], false, &var, &expr);
+        if (!expr.is_tensor()) throw std::runtime_error(command + " expects a matrix");
+        auto rows = expr.tensor_rows();
+
+        if (command == "smith" || command == "snf") {
+            std::string pvar = (arguments.size() > 1) ? arguments[1] : "x";
+            auto res = symbolic_matrix::smith_normal_form(rows, pvar);
+            *output = "S = " + symbolic_matrix::matrix_to_string(res.S) +
+                      ", P = " + symbolic_matrix::matrix_to_string(res.P) +
+                      ", Q = " + symbolic_matrix::matrix_to_string(res.Q);
+            return true;
+        }
+
+        if (command == "hermite" || command == "hnf") {
+            std::string pvar = (arguments.size() > 1) ? arguments[1] : "x";
+            auto res = symbolic_matrix::hermite_normal_form(rows, pvar);
+            *output = "H = " + symbolic_matrix::matrix_to_string(res.H) +
+                      ", P = " + symbolic_matrix::matrix_to_string(res.P);
+            return true;
+        }
+
+        if (command == "symbolic_lu" || command == "sym_lu") {
+            auto res = symbolic_matrix::symbolic_lu(rows);
+            *output = "L = " + symbolic_matrix::matrix_to_string(res.L) +
+                      ", U = " + symbolic_matrix::matrix_to_string(res.U) +
+                      ", P = " + symbolic_matrix::matrix_to_string(res.P);
+            return true;
+        }
+
+        if (command == "symbolic_qr" || command == "sym_qr") {
+            auto res = symbolic_matrix::symbolic_qr(rows);
+            *output = "Q = " + symbolic_matrix::matrix_to_string(res.Q) +
+                      ", R = " + symbolic_matrix::matrix_to_string(res.R);
+            return true;
+        }
+
+        if (command == "symbolic_jordan" || command == "sym_jordan" || command == "jordan") {
+            auto res = symbolic_matrix::symbolic_jordan(rows);
+            *output = "J = " + symbolic_matrix::matrix_to_string(res.J) +
+                      ", P = " + symbolic_matrix::matrix_to_string(res.P);
+            return true;
+        }
+
+        if (command == "symbolic_expm" || command == "sym_expm") {
+            std::string tvar = (arguments.size() > 1) ? arguments[1] : "t";
+            auto res = symbolic_matrix::symbolic_matrix_exponential(rows, tvar);
+            *output = symbolic_matrix::matrix_to_string(res);
             return true;
         }
     }

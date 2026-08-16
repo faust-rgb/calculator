@@ -65,6 +65,7 @@ std::vector<Scalar> ps_atan(const std::vector<Scalar>& a, int degree);
 std::vector<Scalar> ps_sinh(const std::vector<Scalar>& a, int degree);
 std::vector<Scalar> ps_cosh(const std::vector<Scalar>& a, int degree);
 std::vector<Scalar> ps_tanh(const std::vector<Scalar>& a, int degree);
+std::vector<Scalar> ps_revert(const std::vector<Scalar>& a, int degree);
 
 bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, Scalar center, int degree, std::vector<Scalar>& result, const SeriesContext& ctx);
 

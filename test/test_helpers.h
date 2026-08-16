@@ -38,6 +38,22 @@ inline std::filesystem::path make_test_path(const std::string& filename) {
     return std::filesystem::temp_directory_path() / filename;
 }
 
+/**
+ * @struct TempFileGuard
+ * @brief RAII 临时文件守卫，析构时自动清理磁盘文件
+ */
+struct TempFileGuard {
+    std::filesystem::path path;
+    explicit TempFileGuard(std::filesystem::path p) : path(std::move(p)) {}
+    ~TempFileGuard() {
+        std::error_code ec;
+        std::filesystem::remove(path, ec);
+    }
+    const std::filesystem::path& get() const { return path; }
+    operator std::filesystem::path() const { return path; }
+    operator std::string() const { return path.string(); }
+};
+
 inline bool is_one_of(const std::string& actual,
                       std::initializer_list<const char*> expected_values) {
     for (const char* expected : expected_values) {
@@ -81,4 +97,8 @@ struct DisplayCase {
 
 } // namespace test_helpers
 
+void test_pde_and_symbolic_matrix(int& total_passed, int& total_failed);
+void test_pde_and_symbolic_matrix();
+
 #endif
+

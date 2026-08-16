@@ -412,6 +412,57 @@ int run_logic_limit_root_tests(int& passed, int& failed) {
     try {
         std::string output;
         const bool handled =
+            calculator.try_process_function_command("brent(x ^ 3 - x - 2, 1, 2)", &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 1.5213797068, 1e-10)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: brent(x ^ 3 - x - 2, 1, 2) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: brent(x ^ 3 - x - 2, 1, 2) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("bisect(x - 2, 2, 5)", &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 2.0, 1e-10)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: bisect(x - 2, 2, 5) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: bisect(x - 2, 2, 5) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command("solve(x^4 - 5*x^2 + 4 = 0, x)", &output);
+        if (handled && output.find("-2") != std::string::npos && output.find("2") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: solve(x^4 - 5*x^2 + 4 = 0, x) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: solve(x^4 - 5*x^2 + 4 = 0, x) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
             calculator.try_process_function_command("laplace(t^3, t, s)", &output);
         if (handled && output.find("6") != std::string::npos && (output.find("s^4") != std::string::npos || output.find("s * s * s * s") != std::string::npos || output.find("s") != std::string::npos)) {
             ++passed;

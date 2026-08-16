@@ -723,7 +723,7 @@ bool parse_sum_arguments(
         } else if (lower_str == "-inf" || lower_str == "-infinity" || lower_str == "-oo") {
             *lower = BoundArgument::neg_inf();
         } else {
-            Scalar lo = Scalar(std::stod(lower_str));
+            Scalar lo = Scalar(lower_str);
             *lower = BoundArgument::finite(lo);
         }
 
@@ -734,7 +734,7 @@ bool parse_sum_arguments(
         } else if (upper_str == "-inf" || upper_str == "-infinity" || upper_str == "-oo") {
             *upper = BoundArgument::neg_inf();
         } else {
-            Scalar hi = Scalar(std::stod(upper_str));
+            Scalar hi = Scalar(upper_str);
             *upper = BoundArgument::finite(hi);
         }
 
