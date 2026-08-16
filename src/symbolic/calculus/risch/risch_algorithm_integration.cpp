@@ -927,6 +927,12 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_strict(
         return IntegrationResult::elementary(direct_result);
     }
 
+    // 检查代数扩展 (Trager 代数算法与阿贝尔曲线除数判定)
+    AlgebraicExtensionInfo alg_ext;
+    if (detect_algebraic_extension(expression.simplify(), variable_name, &alg_ext)) {
+        return integrate_in_algebraic_extension(expression, alg_ext, variable_name, recursion_depth + 1);
+    }
+
     // 构建微分域
     DifferentialField field = DifferentialField::from_expression(expression, variable_name);
 
@@ -1022,8 +1028,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_field_strict(
         std::string t_var = top_ext.t_name;
 
         // 替换原始函数为塔变量
-        SymbolicExpression tower_expr = simplified;
-        // ... 替换逻辑 ...
+        SymbolicExpression tower_expr = field.to_tower(simplified);
 
         // 作为 t 的有理函数处理
         SymbolicExpression num_expr, den_expr;
@@ -1046,13 +1051,15 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_field_strict(
             }
         }
 
-        if (present_tower_indices.size() > 1) {
+        bool extracted = symbolic_polynomial_coefficients_from_simplified(num_expr.simplify(), t_var, &num_coeffs) &&
+                         symbolic_polynomial_coefficients_from_simplified(den_expr.simplify(), t_var, &den_coeffs);
+
+        if (!extracted && present_tower_indices.size() > 1) {
             // 混合扩展处理：尝试分部积分或逐层处理
             return integrate_mixed_extensions(simplified, field, present_tower_indices, recursion_depth);
         }
 
-        if (symbolic_polynomial_coefficients_from_simplified(num_expr.simplify(), t_var, &num_coeffs) &&
-            symbolic_polynomial_coefficients_from_simplified(den_expr.simplify(), t_var, &den_coeffs)) {
+        if (extracted) {
 
             SymbolicPolynomial num_poly(num_coeffs, t_var);
             SymbolicPolynomial den_poly(den_coeffs, t_var);
@@ -1072,9 +1079,51 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_field_strict(
                 SymbolicExpression rational_part;
                 SymbolicPolynomial reduced_num, reduced_den;
                 if (hermite_reduction(num_poly, den_poly, &rational_part, &reduced_num, &reduced_den)) {
-                    // 对数部分
-                    SymbolicExpression log_part;
-                    if (lazard_rioboo_trager_improved(reduced_num, reduced_den, t_var, &log_part)) {
+                    SymbolicExpression log_part = SymbolicExpression::number(Scalar(0.0L));
+                    bool found_integral = false;
+
+                    if (reduced_den.degree() == 0 && reduced_num.degree() > 0) {
+                        // 多项式部分在对数扩展中的积分 (Risch Polynomial Integration in Logarithmic Tower):
+                        // 对 P(t) = sum_{k=0}^m a_k(x) t^k 逐项分部积分
+                        SymbolicExpression poly_int = SymbolicExpression::number(Scalar(0.0L));
+                        bool poly_success = true;
+                        SymbolicExpression den_const = reduced_den.coefficient(0);
+                        for (int k = reduced_num.degree(); k >= 0; --k) {
+                            SymbolicExpression a_k = (reduced_num.coefficient(k) / den_const).simplify();
+                            if (expr_is_zero(a_k)) continue;
+                            if (k == 0) {
+                                auto a0_int = integrate_in_field_strict(a_k, field, recursion_depth + 1);
+                                if (a0_int.success && a0_int.type == IntegralType::kElementary) {
+                                    poly_int = (poly_int + a0_int.value).simplify();
+                                } else {
+                                    poly_success = false;
+                                    break;
+                                }
+                            } else {
+                                auto ak_int = integrate_in_field_strict(a_k, field, recursion_depth + 1);
+                                if (ak_int.success && ak_int.type == IntegralType::kElementary) {
+                                    SymbolicExpression t_pow = (k == 1) ? SymbolicExpression::variable(t_var) : make_power(SymbolicExpression::variable(t_var), SymbolicExpression::number(Scalar(k)));
+                                    poly_int = (poly_int + ak_int.value * t_pow).simplify();
+                                    SymbolicExpression correction = (SymbolicExpression::number(Scalar(k)) * ak_int.value * top_ext.derivation * ((k == 1) ? SymbolicExpression::number(Scalar(1.0L)) : make_power(SymbolicExpression::variable(t_var), SymbolicExpression::number(Scalar(k - 1))))).simplify();
+                                    auto corr_int = integrate_in_field_strict(correction, field, recursion_depth + 1);
+                                    if (corr_int.success && corr_int.type == IntegralType::kElementary) {
+                                        poly_int = (poly_int - corr_int.value).simplify();
+                                    }
+                                } else {
+                                    poly_success = false;
+                                    break;
+                                }
+                            }
+                        }
+                        if (poly_success) {
+                            log_part = poly_int;
+                            found_integral = true;
+                        }
+                    } else if (lazard_rioboo_trager_improved(reduced_num, reduced_den, t_var, &log_part)) {
+                        found_integral = true;
+                    }
+
+                    if (found_integral) {
                         // 替换回原始变量
                         SymbolicExpression result = field.substitute_back(rational_part + log_part);
                         return IntegrationResult::elementary(result.simplify());
@@ -1096,7 +1145,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_field_strict(
 
                 switch (rde_result.type) {
                     case RDEResultType::kHasSolution:
-                        return IntegrationResult::elementary(rde_result.solution);
+                        return IntegrationResult::elementary(field.substitute_back(rde_result.solution).simplify());
 
                     case RDEResultType::kNoSolution:
                         // RDE 证明无解 → 积分非初等

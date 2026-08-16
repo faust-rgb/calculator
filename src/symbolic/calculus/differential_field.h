@@ -19,6 +19,7 @@
 #include <vector>
 #include <set>
 #include <functional>
+#include <unordered_map>
 
 /**
  * @file differential_field.h
@@ -248,6 +249,11 @@ public:
      */
     SymbolicExpression substitute_back(const SymbolicExpression& expr) const;
 
+    /**
+     * @brief 将原始表达式中的子表达式替换为对应的微分塔变量
+     */
+    SymbolicExpression to_tower(const SymbolicExpression& expr) const;
+
 private:
     // 内部导数计算
     SymbolicExpression derive_impl(const SymbolicExpression& expr,
@@ -258,6 +264,10 @@ private:
 
     // 检查表达式是否只包含指定层及以下的变量
     bool only_uses_vars_up_to_level(const SymbolicExpression& expr, int level) const;
+
+    // 缓存常数判定与域层级判定
+    mutable std::unordered_map<std::string, bool> constant_cache_;
+    mutable std::unordered_map<std::string, int> field_level_cache_;
 };
 
 /**

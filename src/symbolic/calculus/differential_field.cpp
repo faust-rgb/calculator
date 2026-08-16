@@ -118,42 +118,61 @@ SymbolicExpression DifferentialField::derive(const SymbolicExpression& expr) con
 }
 
 bool DifferentialField::is_constant(const SymbolicExpression& expr) const {
+    if (!expr.node_) return true;
+    std::string key = expr.to_string();
+    auto it = constant_cache_.find(key);
+    if (it != constant_cache_.end()) {
+        return it->second;
+    }
+
     // 方法 1: 语法检查 - 不含积分变量和塔变量
     if (!contains_var(expr, base_variable) && !contains_tower_variable(expr)) {
+        constant_cache_[key] = true;
         return true;
     }
 
     // 方法 2: 导数检查 - D(expr) = 0
     SymbolicExpression deriv = derive(expr);
     if (expr_is_zero(deriv)) {
+        constant_cache_[key] = true;
         return true;
     }
 
     // 方法 3: 已知常数表
     if (is_known_constant(expr)) {
+        constant_cache_[key] = true;
         return true;
     }
 
+    constant_cache_[key] = false;
     return false;
 }
 
 int DifferentialField::field_level(const SymbolicExpression& expr) const {
-    // 找到最小的 i 使得 expr ∈ K_i
-
-    // 首先检查是否在基域 K_0 中
-    if (is_in_base_field(expr)) {
-        return 0;
+    if (!expr.node_) return 0;
+    std::string key = expr.to_string();
+    auto it = field_level_cache_.find(key);
+    if (it != field_level_cache_.end()) {
+        return it->second;
     }
 
-    // 检查每一层
-    for (int i = 1; i <= tower_height(); ++i) {
-        if (is_in_field(expr, i)) {
-            return i;
+    // 找到最小的 i 使得 expr ∈ K_i
+    int res = -1;
+    // 首先检查是否在基域 K_0 中
+    if (is_in_base_field(expr)) {
+        res = 0;
+    } else {
+        // 检查每一层
+        for (int i = 1; i <= tower_height(); ++i) {
+            if (is_in_field(expr, i)) {
+                res = i;
+                break;
+            }
         }
     }
 
-    // 不在任何层中
-    return -1;
+    field_level_cache_[key] = res;
+    return res;
 }
 
 bool DifferentialField::is_in_base_field(const SymbolicExpression& expr) const {
@@ -249,6 +268,56 @@ SymbolicExpression DifferentialField::substitute_back(const SymbolicExpression& 
         }
 
         result = result.substitute(ext.t_name, original).simplify();
+    }
+
+    return result;
+}
+
+SymbolicExpression DifferentialField::to_tower(const SymbolicExpression& expr) const {
+    // 将原始表达式中的函数替换为塔变量 (支持自底向上嵌套替换)
+    SymbolicExpression result = expr;
+
+    for (const auto& ext : tower) {
+        SymbolicExpression t_var = SymbolicExpression::variable(ext.t_name);
+
+        // 形式1：基于当前已转换为塔变量的参数形式
+        SymbolicExpression orig_tower;
+        // 形式2：基于原始基域变量的参数形式
+        SymbolicExpression orig_base;
+        SymbolicExpression base_arg = substitute_back(ext.argument);
+
+        switch (ext.kind) {
+            case DifferentialExtension::Kind::kLogarithmic:
+                orig_tower = make_function("ln", ext.argument);
+                orig_base = make_function("ln", base_arg);
+                break;
+            case DifferentialExtension::Kind::kExponential:
+                orig_tower = make_function("exp", ext.argument);
+                orig_base = make_function("exp", base_arg);
+                break;
+            case DifferentialExtension::Kind::kAlgebraic:
+                orig_tower = make_function("sqrt", ext.argument);
+                orig_base = make_function("sqrt", base_arg);
+                break;
+            default:
+                continue;
+        }
+
+        result = result.substitute_expression(orig_base, t_var).simplify();
+        result = result.substitute_expression(orig_tower, t_var).simplify();
+
+        // 支持指数幂次替换: exp(k * u) -> t^k
+        if (ext.kind == DifferentialExtension::Kind::kExponential) {
+            for (int k = -5; k <= 5; ++k) {
+                if (k == 0 || k == 1) continue;
+                SymbolicExpression k_expr = SymbolicExpression::number(Scalar(k));
+                SymbolicExpression exp_k_base = make_function("exp", (k_expr * base_arg).simplify());
+                SymbolicExpression exp_k_tower = make_function("exp", (k_expr * ext.argument).simplify());
+                SymbolicExpression t_pow = make_power(t_var, k_expr).simplify();
+                result = result.substitute_expression(exp_k_base, t_pow).simplify();
+                result = result.substitute_expression(exp_k_tower, t_pow).simplify();
+            }
+        }
     }
 
     return result;

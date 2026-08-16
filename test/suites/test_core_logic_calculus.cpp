@@ -813,6 +813,7 @@ int run_logic_calculus_tests(int& passed, int& failed) {
         if (handled &&
             is_one_of(output, {
                 "-1/6 * atan(x / 2) + 1/3 * atan(x) + C",
+                "-1/6 * atan(1/2 * x) + 1/3 * atan(x) + C",
                 "(atan(x) - atan(x / 2) / 2) / 3 + C",
                 "-1/3 * (1/2 * atan(1/2 * x) - atan(x)) + C",
                 "1/3 * (atan(x) - 1/2 * atan(1/2 * x)) + C"})) {

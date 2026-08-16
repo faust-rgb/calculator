@@ -269,6 +269,7 @@ std::size_t numerical_rank_fast(const TMatrix<T>& matrix) {
 
 template <typename T>
 std::size_t numerical_rank_orthogonal(const TMatrix<T>& matrix) {
+    precise::NormalizationSuppressor suppressor;
     const std::size_t dimension = std::max(matrix.rows, matrix.cols);
     std::vector<std::vector<T>> basis;
     basis.reserve(std::min(matrix.rows, matrix.cols));
@@ -341,6 +342,7 @@ T condition_number_fast(const TMatrix<T>& matrix) {
  */
 template <typename T>
 TLuResult<T> lu_decompose_with_pivoting(const TMatrix<T>& matrix) {
+    precise::NormalizationSuppressor suppressor;
     if (!matrix.is_square()) {
         throw DimensionError("LU decomposition requires a square matrix");
     }
@@ -425,6 +427,7 @@ TLuResult<T> lu_decompose_with_pivoting(const TMatrix<T>& matrix) {
  */
 template <typename T>
 TEigenResult<T> eigenvalues_with_vectors(const TMatrix<T>& matrix) {
+    precise::NormalizationSuppressor suppressor;
     if (!matrix.is_square()) {
         throw DimensionError("square matrix required");
     }
@@ -526,20 +529,16 @@ TEigenResult<T> eigenvalues_with_vectors(const TMatrix<T>& matrix) {
     return result;
 }
 
-}  // namespace internal
-
 template <typename T>
-std::pair<TMatrix<T>, TMatrix<T>> qr_decompose(const TMatrix<T>& matrix) {
+std::pair<TMatrix<T>, TMatrix<T>> qr_decompose_impl(const TMatrix<T>& matrix, bool compute_q, bool compute_r) {
+    precise::NormalizationSuppressor suppressor;
     const std::size_t m = matrix.rows;
     const std::size_t n = matrix.cols;
 
-    TMatrix<T> q = TMatrix<T>::identity(m);
+    TMatrix<T> q = compute_q ? TMatrix<T>::identity(m) : TMatrix<T>(0, 0);
     TMatrix<T> r = matrix;
 
     const std::size_t limit = m < n ? m : n;
-
-    // 使用机器精度相关的容差，而不是基于输入矩阵尺度的容差
-    // 这样可以正确处理大数值矩阵和小数值矩阵
     const T machine_tol = precision::epsilon<T>();
 
     for (std::size_t col = 0; col < limit; ++col) {
@@ -552,7 +551,6 @@ std::pair<TMatrix<T>, TMatrix<T>> qr_decompose(const TMatrix<T>& matrix) {
         }
         const T norm_x = t_sqrt(norm_x_sq);
 
-        // 判断列是否为零向量时，使用相对于该列范数的容差
         if (norm_x <= machine_tol * t_sqrt(T(static_cast<long long>(m - col)))) {
             continue;
         }
@@ -574,80 +572,77 @@ std::pair<TMatrix<T>, TMatrix<T>> qr_decompose(const TMatrix<T>& matrix) {
         for (std::size_t current_col = col; current_col < n; ++current_col) {
             T projection = T(static_cast<long long>(0));
             for (std::size_t row = col; row < m; ++row) {
-                projection += v[row - col] * r.at(row, current_col);
+                projection += v[row - col] * r.data[row * n + current_col];
             }
             projection *= T(static_cast<long long>(2));
+            if (projection.is_zero()) continue;
             for (std::size_t row = col; row < m; ++row) {
-                r.at(row, current_col) -= projection * v[row - col];
-                // R 矩阵的尺度与输入矩阵一致，使用相对于当前元素的容差
-                // 只在元素非常接近零时才清零
-                if (t_abs(r.at(row, current_col)) <= machine_tol * t_abs(projection * v[row - col])) {
-                    r.at(row, current_col) = T(static_cast<long long>(0));
+                r.data[row * n + current_col] -= projection * v[row - col];
+            }
+        }
+
+        // 更新 Q 矩阵: Q = Q * (I - 2 * v * v^T) = Q - 2 * (Q * v) * v^T
+        if (compute_q) {
+            std::vector<T> w(m, T(static_cast<long long>(0)));
+            for (std::size_t row = 0; row < m; ++row) {
+                const std::size_t row_off = row * m;
+                for (std::size_t index = col; index < m; ++index) {
+                    w[row] += q.data[row_off + index] * v[index - col];
+                }
+                w[row] *= T(static_cast<long long>(2));
+            }
+            for (std::size_t row = 0; row < m; ++row) {
+                const std::size_t row_off = row * m;
+                const T& w_val = w[row];
+                if (w_val.is_zero()) continue;
+                for (std::size_t index = col; index < m; ++index) {
+                    q.data[row_off + index] -= w_val * v[index - col];
                 }
             }
         }
-
-        // 更新 Q 矩阵 - Q 是正交矩阵，元素绝对值 ≤ 1
-        // 使用固定的机器精度容差，而不是基于输入矩阵尺度的容差
-        for (std::size_t row = 0; row < m; ++row) {
-            T projection = T(static_cast<long long>(0));
-            for (std::size_t index = col; index < m; ++index) {
-                projection += q.at(row, index) * v[index - col];
-            }
-            projection *= T(static_cast<long long>(2));
-            for (std::size_t index = col; index < m; ++index) {
-                q.at(row, index) -= projection * v[index - col];
-            }
-        }
     }
 
-    std::vector<std::vector<T>> orthonormal_columns;
-    orthonormal_columns.reserve(m);
-    for (std::size_t col = 0; col < m; ++col) {
-        std::vector<T> column(m, T(static_cast<long long>(0)));
+    if (compute_r) {
         for (std::size_t row = 0; row < m; ++row) {
-            column[row] = q.at(row, col);
-        }
-        if (!internal::orthonormalize(&column, orthonormal_columns)) {
-            for (std::size_t basis_index = 0; basis_index < m; ++basis_index) {
-                column = internal::standard_basis_vector<T>(m, basis_index);
-                if (internal::orthonormalize(&column, orthonormal_columns)) {
-                    break;
+            for (std::size_t col = 0; col < n; ++col) {
+                if (row > col) {
+                    r.at(row, col) = T(static_cast<long long>(0));
                 }
             }
         }
-        orthonormal_columns.push_back(column);
-    }
-    for (std::size_t col = 0; col < m; ++col) {
-        for (std::size_t row = 0; row < m; ++row) {
-            q.at(row, col) = orthonormal_columns[col][row];
-        }
     }
 
-    r = multiply(transpose(q), matrix);
-    const T cleanup_tolerance = matrix_tolerance(matrix) *
-        T(static_cast<long long>(std::max<std::size_t>(std::size_t{1}, std::max(m, n))));
-    for (std::size_t row = 0; row < m; ++row) {
-        for (std::size_t col = 0; col < n; ++col) {
-            if (row > col && t_abs(r.at(row, col)) <= cleanup_tolerance) {
-                r.at(row, col) = T(static_cast<long long>(0));
-            }
-        }
-    }
-
-    // 确保对角元素非负
     for (std::size_t diag = 0; diag < limit; ++diag) {
         if (r.at(diag, diag) < T(static_cast<long long>(0))) {
-            for (std::size_t row = 0; row < m; ++row) {
-                q.at(row, diag) = -q.at(row, diag);
+            if (compute_q) {
+                for (std::size_t row = 0; row < m; ++row) {
+                    q.at(row, diag) = -q.at(row, diag);
+                }
             }
-            for (std::size_t col = 0; col < n; ++col) {
-                r.at(diag, col) = -r.at(diag, col);
+            if (compute_r) {
+                for (std::size_t col = diag; col < n; ++col) {
+                    r.at(diag, col) = -r.at(diag, col);
+                }
             }
         }
+    }
+
+    precise::ScopedNormalizationEnable enable;
+    if (compute_q) {
+        for (auto& val : q.data) normalize(val);
+    }
+    if (compute_r) {
+        for (auto& val : r.data) normalize(val);
     }
 
     return {q, r};
+}
+
+}  // namespace internal
+
+template <typename T>
+std::pair<TMatrix<T>, TMatrix<T>> qr_decompose(const TMatrix<T>& matrix) {
+    return internal::qr_decompose_impl(matrix, true, true);
 }
 
 template <typename T>
@@ -774,6 +769,7 @@ TMatrix<T> nullspace_basis(const TMatrix<T>& matrix) {
  */
 template <typename T>
 TMatrix<T> inverse(const TMatrix<T>& matrix) {
+    precise::NormalizationSuppressor suppressor;
     if (!matrix.is_square()) {
         throw std::runtime_error("inverse requires a square matrix");
     }
@@ -806,6 +802,9 @@ TMatrix<T> inverse(const TMatrix<T>& matrix) {
             inv.at(static_cast<std::size_t>(row), j) = value / lu.lu.at(row, row);
         }
     }
+
+    precise::ScopedNormalizationEnable enable;
+    for (auto& val : inv.data) normalize(val);
     return inv;
 }
 
@@ -864,6 +863,7 @@ TMatrix<T> least_squares(const TMatrix<T>& coefficients, const TMatrix<T>& rhs) 
 
     TMatrix<T> rhs_mat = rhs;
     const std::size_t m = coefficients.rows;
+    const std::size_t n = coefficients.cols;
     if (rhs.rows == 1 && rhs.cols == m && m > 1) {
         rhs_mat = TMatrix<T>(m, 1);
         for (std::size_t i = 0; i < m; ++i) {
@@ -875,6 +875,29 @@ TMatrix<T> least_squares(const TMatrix<T>& coefficients, const TMatrix<T>& rhs) 
         throw std::runtime_error("least_squares requires rhs row count (or length if 1D) to match coefficient matrix rows");
     }
 
+    if (m >= n) {
+        precise::NormalizationSuppressor suppressor;
+        auto [Q, R] = qr_decompose(coefficients);
+        TMatrix<T> QtB = multiply(transpose(Q), rhs_mat);
+        // 上三角回代求解 R[0:n, 0:n] * x = QtB[0:n, :]
+        TMatrix<T> result(n, rhs_mat.cols, T(static_cast<long long>(0)));
+        for (std::size_t c = 0; c < rhs_mat.cols; ++c) {
+            for (int r = static_cast<int>(n) - 1; r >= 0; --r) {
+                T sum = QtB.at(r, c);
+                for (std::size_t k = static_cast<std::size_t>(r) + 1; k < n; ++k) {
+                    sum -= R.at(r, k) * result.at(k, c);
+                }
+                const T& diag = R.at(r, r);
+                if (t_abs(diag) > matrix_tolerance<T>(coefficients)) {
+                    result.at(r, c) = sum / diag;
+                }
+            }
+        }
+        precise::ScopedNormalizationEnable enable;
+        for (auto& val : result.data) normalize(val);
+        return result;
+    }
+
     const TMatrix<T> pinv = pseudo_inverse(coefficients);
     return multiply(pinv, rhs_mat);
 }
@@ -884,7 +907,7 @@ TMatrix<T> least_squares(const TMatrix<T>& coefficients, const TMatrix<T>& rhs) 
  */
 template <typename T>
 TMatrix<T> qr_q(const TMatrix<T>& matrix) {
-    return qr_decompose(matrix).first;
+    return internal::qr_decompose_impl(matrix, true, false).first;
 }
 
 /**
@@ -892,7 +915,7 @@ TMatrix<T> qr_q(const TMatrix<T>& matrix) {
  */
 template <typename T>
 TMatrix<T> qr_r(const TMatrix<T>& matrix) {
-    return qr_decompose(matrix).second;
+    return internal::qr_decompose_impl(matrix, false, true).second;
 }
 
 /**
@@ -1004,6 +1027,7 @@ TMatrix<T> lu_solve_with_partial_pivoting(const TMatrix<T>& coefficients,
  */
 template <typename T>
 TMatrix<T> solve(const TMatrix<T>& coefficients, const TMatrix<T>& rhs) {
+    precise::NormalizationSuppressor suppressor;
     if (!coefficients.is_square()) {
         throw std::runtime_error("solve requires a square coefficient matrix");
     }
@@ -1034,6 +1058,8 @@ TMatrix<T> solve(const TMatrix<T>& coefficients, const TMatrix<T>& rhs) {
             result.at(row, col) = sol_col.at(row, 0);
         }
     }
+    precise::ScopedNormalizationEnable enable;
+    for (auto& val : result.data) normalize(val);
     return result;
 }
 
@@ -1070,6 +1096,7 @@ T condition_number(const TMatrix<T>& matrix) {
     if (matrix.rows == 0 || matrix.cols == 0) {
         return T(static_cast<long long>(1));
     }
+    precise::NormalizationSuppressor suppressor;
     const TMatrix<T> singular_values = svd_s(matrix);
     const std::size_t diagonal =
         singular_values.rows < singular_values.cols ? singular_values.rows : singular_values.cols;
@@ -1113,6 +1140,7 @@ T condition_number(const TMatrix<T>& matrix) {
  */
 template <typename T>
 TMatrix<T> cholesky(const TMatrix<T>& matrix) {
+    precise::NormalizationSuppressor suppressor;
     if (!matrix.is_square()) {
         throw std::runtime_error("cholesky requires a square matrix");
     }
@@ -1149,6 +1177,8 @@ TMatrix<T> cholesky(const TMatrix<T>& matrix) {
             }
         }
     }
+    precise::ScopedNormalizationEnable enable;
+    for (auto& val : result.data) normalize(val);
     return result;
 }
 

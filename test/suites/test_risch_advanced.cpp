@@ -259,4 +259,50 @@ void test_parametric_rde() {
     //std::cout << "Parametric RDE Tests Passed!" << std::endl;
 }
 
+void test_risch_high_degree_rational() {
+    IntegrationEngine engine;
+
+    // Test 1: ∫ 1 / (x^4 + 1) dx
+    {
+        SymbolicExpression x = SymbolicExpression::variable("x");
+        SymbolicExpression x4_plus_1 = make_power(x, SymbolicExpression::number(4.0L)) + SymbolicExpression::number(1.0L);
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / x4_plus_1;
+        IntegrationResult result = engine.integrate(expr, "x");
+        assert(result.success);
+    }
+
+    // Test 2: ∫ x / (x^4 + 2x^2 + 2) dx
+    {
+        SymbolicExpression x = SymbolicExpression::variable("x");
+        SymbolicExpression den = make_power(x, SymbolicExpression::number(4.0L)) +
+                                 SymbolicExpression::number(2.0L) * make_power(x, SymbolicExpression::number(2.0L)) +
+                                 SymbolicExpression::number(2.0L);
+        SymbolicExpression expr = x / den;
+        IntegrationResult result = engine.integrate(expr, "x");
+        assert(result.success);
+    }
+}
+
+void test_risch_algebraic_curve_divisor() {
+    // Test 1: Elliptic integral of 1st kind (genus 1): ∫ 1 / sqrt(x^3 + 1) dx
+    {
+        SymbolicExpression x = SymbolicExpression::variable("x");
+        SymbolicExpression sqrt_x3_plus_1 = make_function("sqrt", make_power(x, SymbolicExpression::number(3.0L)) + SymbolicExpression::number(1.0L));
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / sqrt_x3_plus_1;
+        auto result = RischAlgorithm::integrate_strict(expr, "x");
+        assert(!result.success);
+        assert(result.type == IntegralType::kNonElementary);
+    }
+
+    // Test 2: Hyperelliptic integral of 1st kind (genus 2): ∫ 1 / sqrt(x^5 - x + 1) dx
+    {
+        SymbolicExpression x = SymbolicExpression::variable("x");
+        SymbolicExpression poly = make_power(x, SymbolicExpression::number(5.0L)) - x + SymbolicExpression::number(1.0L);
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / make_function("sqrt", poly);
+        auto result = RischAlgorithm::integrate_strict(expr, "x");
+        assert(!result.success);
+        assert(result.type == IntegralType::kNonElementary);
+    }
+}
+
 } // namespace test_suites

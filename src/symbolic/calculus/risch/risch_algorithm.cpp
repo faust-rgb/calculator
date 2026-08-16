@@ -1062,6 +1062,12 @@ SymbolicExpression RischAlgorithm::make_special_function_expr(
         case SpecialFunction::kLi: func_name = "li"; break;
         case SpecialFunction::kGamma: func_name = "Gamma"; break;
         case SpecialFunction::kPolyLog: func_name = "polylog"; break;
+        case SpecialFunction::kIncompleteGamma: func_name = "incomplete_gamma"; break;
+        case SpecialFunction::kEllipticF: func_name = "elliptic_f"; break;
+        case SpecialFunction::kEllipticE: func_name = "elliptic_e"; break;
+        case SpecialFunction::kEllipticPi: func_name = "elliptic_pi"; break;
+        case SpecialFunction::kFresnelS: func_name = "fresnel_s"; break;
+        case SpecialFunction::kFresnelC: func_name = "fresnel_c"; break;
         default: func_name = "unknown"; break;
     }
     return make_function(func_name, arg);
@@ -1079,11 +1085,19 @@ RischAlgorithm::detect_special_function_pattern(const SymbolicExpression& expr,
         SymbolicExpression num(expr.node_->left);
         SymbolicExpression den(expr.node_->right);
 
-        // exp(x)/x
+        // exp(a*x)/x -> Ei(a*x)
         if (num.node_->type == NodeType::kFunction && num.node_->text == "exp") {
             SymbolicExpression arg(num.node_->left);
             if (structural_equals(arg, den)) {
                 return {true, {SpecialFunction::kEi, arg}};
+            }
+            // exp(a*x)/x
+            if (arg.node_->type == NodeType::kMultiply) {
+                SymbolicExpression left(arg.node_->left);
+                SymbolicExpression right(arg.node_->right);
+                if (structural_equals(right, den)) {
+                    return {true, {SpecialFunction::kEi, arg}};
+                }
             }
         }
 
@@ -1098,19 +1112,97 @@ RischAlgorithm::detect_special_function_pattern(const SymbolicExpression& expr,
             }
         }
 
-        // sin(x)/x -> Si(x)
+        // sin(a*x)/x -> Si(a*x)
         if (num.node_->type == NodeType::kFunction && num.node_->text == "sin") {
             SymbolicExpression arg(num.node_->left);
             if (structural_equals(arg, den)) {
                 return {true, {SpecialFunction::kSi, arg}};
             }
+            if (arg.node_->type == NodeType::kMultiply) {
+                SymbolicExpression right(arg.node_->right);
+                if (structural_equals(right, den)) {
+                    return {true, {SpecialFunction::kSi, arg}};
+                }
+            }
         }
 
-        // cos(x)/x -> Ci(x)
+        // cos(a*x)/x -> Ci(a*x)
         if (num.node_->type == NodeType::kFunction && num.node_->text == "cos") {
             SymbolicExpression arg(num.node_->left);
             if (structural_equals(arg, den)) {
                 return {true, {SpecialFunction::kCi, arg}};
+            }
+            if (arg.node_->type == NodeType::kMultiply) {
+                SymbolicExpression right(arg.node_->right);
+                if (structural_equals(right, den)) {
+                    return {true, {SpecialFunction::kCi, arg}};
+                }
+            }
+        }
+
+        // ln(1-x)/x -> -Li_2(x)
+        if (num.node_->type == NodeType::kFunction && num.node_->text == "ln") {
+            SymbolicExpression ln_arg(num.node_->left);
+            if (den.node_->type == NodeType::kVariable && den.node_->text == x_var) {
+                if (ln_arg.node_->type == NodeType::kSubtract) {
+                    SymbolicExpression left(ln_arg.node_->left);
+                    SymbolicExpression right(ln_arg.node_->right);
+                    Scalar one_val = Scalar(0.0L);
+                    if (left.is_number(&one_val) && mymath::abs(one_val - 1.0L) < 1e-9 &&
+                        right.node_->type == NodeType::kVariable && right.node_->text == x_var) {
+                        return {true, {SpecialFunction::kPolyLog, SymbolicExpression::variable(x_var)}};
+                    }
+                }
+            }
+        }
+
+        // 1 / sqrt(1 - k^2 * sin(x)^2) -> Elliptic F
+        if (den.node_->type == NodeType::kFunction && den.node_->text == "sqrt") {
+            SymbolicExpression inner(den.node_->left);
+            if (inner.node_->type == NodeType::kSubtract) {
+                Scalar one_val = Scalar(0.0L);
+                if (SymbolicExpression(inner.node_->left).is_number(&one_val) && mymath::abs(one_val - 1.0L) < 1e-9) {
+                    return {true, {SpecialFunction::kEllipticF, SymbolicExpression::variable(x_var)}};
+                }
+            }
+        }
+    }
+
+    // 检测 sin(x^2) -> FresnelS, cos(x^2) -> FresnelC
+    if (expr.node_->type == NodeType::kFunction) {
+        if (expr.node_->text == "sin" || expr.node_->text == "cos") {
+            SymbolicExpression arg(expr.node_->left);
+            if (arg.node_->type == NodeType::kPower) {
+                SymbolicExpression base(arg.node_->left);
+                SymbolicExpression exp(arg.node_->right);
+                Scalar exp_val = Scalar(0.0L);
+                if (structural_equals(base, SymbolicExpression::variable(x_var)) &&
+                    exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0L) < 1e-9) {
+                    SpecialFunction fn = (expr.node_->text == "sin") ? SpecialFunction::kFresnelS : SpecialFunction::kFresnelC;
+                    return {true, {fn, SymbolicExpression::variable(x_var)}};
+                }
+            }
+        }
+        // sqrt(1 - k^2 * sin(x)^2) -> Elliptic E
+        if (expr.node_->text == "sqrt") {
+            SymbolicExpression inner(expr.node_->left);
+            if (inner.node_->type == NodeType::kSubtract) {
+                Scalar one_val = Scalar(0.0L);
+                if (SymbolicExpression(inner.node_->left).is_number(&one_val) && mymath::abs(one_val - 1.0L) < 1e-9) {
+                    return {true, {SpecialFunction::kEllipticE, SymbolicExpression::variable(x_var)}};
+                }
+            }
+        }
+    }
+
+    // 检测 x^a * exp(-b*x) -> Incomplete Gamma
+    if (expr.node_->type == NodeType::kMultiply) {
+        SymbolicExpression left(expr.node_->left);
+        SymbolicExpression right(expr.node_->right);
+        if (left.node_->type == NodeType::kPower && right.node_->type == NodeType::kFunction && right.node_->text == "exp") {
+            SymbolicExpression base(left.node_->left);
+            if (structural_equals(base, SymbolicExpression::variable(x_var))) {
+                return {true, {SpecialFunction::kIncompleteGamma, SymbolicExpression::variable(x_var)}};
             }
         }
     }
@@ -3219,7 +3311,7 @@ SymbolicExpression RischAlgorithm::convert_conjugate_ln_pair(
     return result;
 }
 
-// 复数结果转实数
+// 复数结果转实数 (Rioboo Realization Algorithm)
 SymbolicExpression RischAlgorithm::complex_to_real(
     const SymbolicExpression& expr,
     const std::string& x_var) {
@@ -3229,14 +3321,72 @@ SymbolicExpression RischAlgorithm::complex_to_real(
         return expr;
     }
 
-    // 尝试转换复数对数项
-    SymbolicExpression log_converted = complex_log_to_real(expr, x_var);
-    if (!contains_var(log_converted, "i")) {
-        return log_converted;
+    // 1. 尝试转换复数对数项 (Rioboo Logarithmic Part)
+    SymbolicExpression current = complex_log_to_real(expr, x_var);
+    if (!contains_var(current, "i")) {
+        return current.simplify();
     }
 
-    // 如果转换失败，返回原始表达式
-    return expr;
+    // 2. 转换复数指数项: exp(i * u) -> cos(u) + i * sin(u), exp(-i * u) -> cos(u) - i * sin(u)
+    std::function<SymbolicExpression(const SymbolicExpression&)> convert_exp = [&](const SymbolicExpression& e) -> SymbolicExpression {
+        if (e.node_->type == NodeType::kFunction && e.node_->text == "exp") {
+            SymbolicExpression arg(e.node_->left);
+            if (arg.node_->type == NodeType::kMultiply) {
+                SymbolicExpression l(arg.node_->left);
+                SymbolicExpression r(arg.node_->right);
+                if (l.is_variable_named("i")) {
+                    return (make_function("cos", r) + SymbolicExpression::variable("i") * make_function("sin", r)).simplify();
+                } else if (r.is_variable_named("i")) {
+                    return (make_function("cos", l) + SymbolicExpression::variable("i") * make_function("sin", l)).simplify();
+                }
+            } else if (arg.node_->type == NodeType::kNegate) {
+                SymbolicExpression inner(arg.node_->left);
+                if (inner.node_->type == NodeType::kMultiply) {
+                    SymbolicExpression l(inner.node_->left);
+                    SymbolicExpression r(inner.node_->right);
+                    if (l.is_variable_named("i")) {
+                        return (make_function("cos", r) - SymbolicExpression::variable("i") * make_function("sin", r)).simplify();
+                    } else if (r.is_variable_named("i")) {
+                        return (make_function("cos", l) - SymbolicExpression::variable("i") * make_function("sin", l)).simplify();
+                    }
+                }
+            }
+        }
+
+        if (e.node_->type == NodeType::kAdd) {
+            return (convert_exp(SymbolicExpression(e.node_->left)) + convert_exp(SymbolicExpression(e.node_->right))).simplify();
+        }
+        if (e.node_->type == NodeType::kSubtract) {
+            return (convert_exp(SymbolicExpression(e.node_->left)) - convert_exp(SymbolicExpression(e.node_->right))).simplify();
+        }
+        if (e.node_->type == NodeType::kMultiply) {
+            return (convert_exp(SymbolicExpression(e.node_->left)) * convert_exp(SymbolicExpression(e.node_->right))).simplify();
+        }
+        if (e.node_->type == NodeType::kDivide) {
+            return (convert_exp(SymbolicExpression(e.node_->left)) / convert_exp(SymbolicExpression(e.node_->right))).simplify();
+        }
+        if (e.node_->type == NodeType::kNegate) {
+            return make_negate(convert_exp(SymbolicExpression(e.node_->left))).simplify();
+        }
+        if (e.node_->type == NodeType::kFunction) {
+            return make_function(e.node_->text, convert_exp(SymbolicExpression(e.node_->left))).simplify();
+        }
+        return e;
+    };
+
+    current = convert_exp(current).simplify();
+    if (!contains_var(current, "i")) {
+        return current;
+    }
+
+    // 3. 虚部为 0 的实部投影: 代入 i = 0 验证虚部是否恒为 0
+    SymbolicExpression real_proj = current.substitute("i", SymbolicExpression::number(Scalar(0.0L))).simplify();
+    SymbolicExpression imaginary_part = (current - real_proj).simplify();
+    if (expr_is_zero(imaginary_part)) {
+        return real_proj;
+    }
+
+    return current;
 }
 
 // 辅助函数：转换单个复数项

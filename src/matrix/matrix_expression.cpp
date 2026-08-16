@@ -612,10 +612,8 @@ private:
                 if (match('[')) {
                     const std::vector<std::string> idx_args = parse_bracket_arguments();
                     if (idx_args.size() == 2) {
-                        const Scalar r = (*scalar_evaluator_)(idx_args[0]);
-                        const Scalar c = (*scalar_evaluator_)(idx_args[1]);
-                        const std::size_t row_idx = static_cast<std::size_t>(r);
-                        const std::size_t col_idx = static_cast<std::size_t>(c);
+                        const std::size_t row_idx = parse_index_argument(idx_args[0], *scalar_evaluator_, "matrix indexing");
+                        const std::size_t col_idx = parse_index_argument(idx_args[1], *scalar_evaluator_, "matrix indexing");
                         if (row_idx >= matrix_value.rows || col_idx >= matrix_value.cols) {
                             throw std::runtime_error("matrix index out of bounds: [" +
                                                      std::to_string(row_idx) + ", " + std::to_string(col_idx) +
@@ -624,8 +622,7 @@ private:
                         }
                         return Value::from_scalar(matrix_value.at(row_idx, col_idx));
                     } else if (idx_args.size() == 1) {
-                        const Scalar idx = (*scalar_evaluator_)(idx_args[0]);
-                        const std::size_t linear_idx = static_cast<std::size_t>(idx);
+                        const std::size_t linear_idx = parse_index_argument(idx_args[0], *scalar_evaluator_, "matrix indexing");
                         if (matrix_value.rows == 1) {
                             if (linear_idx >= matrix_value.cols) throw std::runtime_error("vector index out of bounds");
                             return Value::from_scalar(matrix_value.at(0, linear_idx));

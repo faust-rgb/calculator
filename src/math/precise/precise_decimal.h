@@ -826,6 +826,13 @@ PreciseDecimal exp2(const PreciseDecimal& x);
 PreciseDecimal ln(const PreciseDecimal& x);
 
 /**
+ * @brief 自然对数函数 (AGM 算法)
+ * @param x 输入值（必须为正数）
+ * @return ln(x)
+ */
+PreciseDecimal ln_agm(const PreciseDecimal& x);
+
+/**
  * @brief 以 2 为底的对数函数
  * @param x 输入值（必须为正数）
  * @return log2(x)

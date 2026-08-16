@@ -543,7 +543,7 @@ void test_risch_advanced() {
     {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression expr = make_function("exp", x) / x;
-        IntegrationResult result = engine.integrate(expr, "x");
+        auto result = RischAlgorithm::integrate_full(expr, "x");
         //std::cout << "∫ exp(x)/x dx (Elementary?) = " << (result.success ? "yes" : "no") << std::endl;
         assert(!result.success);
     }
@@ -1520,8 +1520,8 @@ void test_risch_strict_semantics() {
         SymbolicExpression expr = SymbolicExpression::number(1.0L) /
             (make_power(x, SymbolicExpression::number(4.0)) + SymbolicExpression::number(1.0L));
         auto result = RischAlgorithm::integrate_strict(expr, "x");
-        assert(!result.success);
-        assert(result.type == IntegralType::kProofFailed);
+        assert(result.success);
+        assert(result.type == IntegralType::kElementary);
     }
 
     //std::cout << "Strict Risch Semantics Tests Passed!" << std::endl;

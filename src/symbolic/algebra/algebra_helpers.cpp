@@ -62,20 +62,41 @@ using Scalar = mymath::Scalar;
  * 使用动态精度容差。
  */
 bool expr_is_zero(const SymbolicExpression& expression) {
+    if (!expression.node_) return true;
     Scalar value = Scalar(0.0L);
-    return expr_is_number(expression, &value) && mymath::is_near_zero(value, kFormatEps());
+    if (expr_is_number(expression, &value) && mymath::is_near_zero(value, kFormatEps())) {
+        return true;
+    }
+    if (try_evaluate_numeric_node(expression.node_, &value) && mymath::is_near_zero(value, kFormatEps())) {
+        return true;
+    }
+    return false;
 }
 
 /** @brief 检查表达式是否为一 */
 bool expr_is_one(const SymbolicExpression& expression) {
+    if (!expression.node_) return false;
     Scalar value = Scalar(0.0L);
-    return expr_is_number(expression, &value) && mymath::is_near_zero(value - 1.0L, kFormatEps());
+    if (expr_is_number(expression, &value) && mymath::is_near_zero(value - 1.0L, kFormatEps())) {
+        return true;
+    }
+    if (try_evaluate_numeric_node(expression.node_, &value) && mymath::is_near_zero(value - 1.0L, kFormatEps())) {
+        return true;
+    }
+    return false;
 }
 
 /** @brief 检查表达式是否为负一 */
 bool expr_is_minus_one(const SymbolicExpression& expression) {
+    if (!expression.node_) return false;
     Scalar value = Scalar(0.0L);
-    return expr_is_number(expression, &value) && mymath::is_near_zero(value + 1.0L, kFormatEps());
+    if (expr_is_number(expression, &value) && mymath::is_near_zero(value + 1.0L, kFormatEps())) {
+        return true;
+    }
+    if (try_evaluate_numeric_node(expression.node_, &value) && mymath::is_near_zero(value + 1.0L, kFormatEps())) {
+        return true;
+    }
+    return false;
 }
 
 /** @brief 检查表达式是否为数值，可选输出该数值 */

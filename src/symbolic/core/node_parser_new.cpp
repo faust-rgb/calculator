@@ -1174,19 +1174,6 @@ SymbolicExpression SymbolicExpression::simplify() const {
         return cached;
     }
 
-    // 1. 检查表达式膨胀
-    std::size_t count = node_count();
-    if (count > 500) {
-        // 自动触发 CSE 以控制膨胀
-        std::vector<std::pair<std::string, SymbolicExpression>> bindings;
-        SymbolicExpression cse_expr = cse_rewrite(bindings, "_auto_t");
-        if (bindings.size() > 5) {
-             SymbolicExpression simplified = simplify_with_budget(200); 
-             cache.put(key, simplified);
-             return simplified;
-        }
-    }
-
     SymbolicExpression simplified = simplify_impl(*this);
     cache.put(key, simplified);
     return simplified;

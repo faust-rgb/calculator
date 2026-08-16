@@ -57,10 +57,11 @@ std::size_t parse_index_argument(const StoredValue& val, const std::string& func
     if (val.is_matrix || val.is_complex) {
         throw std::runtime_error(func_name + " requires non-negative integer index");
     }
-    if (!mymath::is_integer(val.decimal) || val.decimal < Scalar(0.0L)) {
+    const Scalar dec = val.get_decimal();
+    if (!mymath::is_integer(dec) || dec < Scalar(0.0L)) {
         throw std::runtime_error(func_name + " requires non-negative integer index");
     }
-    return static_cast<std::size_t>(static_cast<long double>(val.decimal) + 0.5);
+    return static_cast<std::size_t>(static_cast<long double>(dec) + 0.5);
 }
 
 StoredValue make_matrix_result(Matrix m) {

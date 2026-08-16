@@ -254,9 +254,10 @@ BigIntData multiply_bigint_ntt(const BigIntData& lhs, const BigIntData& rhs) {
 // ============================================================================
 
 BigIntData multiply_bigint_karatsuba(const BigIntData& lhs, const BigIntData& rhs) {
+    std::size_t min_size = std::min(lhs.size(), rhs.size());
     std::size_t n = std::max(lhs.size(), rhs.size());
 
-    if (n <= KARATSUBA_THRESHOLD) {
+    if (n <= KARATSUBA_THRESHOLD || min_size <= 16 || (min_size > 0 && n / min_size >= 4)) {
         return multiply_bigint_naive(lhs, rhs);
     }
 
@@ -495,25 +496,35 @@ BigIntData multiply_bigint_toom3(const BigIntData& lhs, const BigIntData& rhs) {
 BigIntData multiply_bigint(const BigIntData& lhs, const BigIntData& rhs) {
     if ((lhs.size() == 1 && lhs[0] == 0) || (rhs.size() == 1 && rhs[0] == 0)) return {0};
 
+    std::size_t min_size = std::min(lhs.size(), rhs.size());
     std::size_t max_size = std::max(lhs.size(), rhs.size());
 
-    // 1. 小规模：朴素乘法
-    //if (min_size <= 32 || max_size <= KARATSUBA_THRESHOLD) {
-    //    return multiply_bigint_naive(lhs, rhs);
-    //}
+    // 1. 单 chunk 快速乘法
+    if (min_size == 1) {
+        if (lhs.size() == 1) {
+            return multiply_bigint_by_uint32(rhs, lhs[0]);
+        } else {
+            return multiply_bigint_by_uint32(lhs, rhs[0]);
+        }
+    }
 
-    // 2. 中等规模：零分配 Karatsuba（减少递归中的内存分配开销）
+    // 2. 非平衡操作数或小规模：使用 SIMD 优化的朴素乘法
+    // 避免分治算法或 NTT 在极度不平衡时产生高额填充与递归开销
+    if (min_size <= 32 || max_size / min_size >= 4) {
+        return multiply_bigint_naive(lhs, rhs);
+    }
+
+    // 3. 中等规模：Karatsuba
     if (max_size <= 512) {
-        //return multiply_bigint_zero_allocation(lhs, rhs);
         return multiply_bigint_karatsuba(lhs, rhs);
     }
 
-    // 3. 中大规模：Toom-Cook 3
+    // 4. 中大规模：Toom-Cook 3
     if (max_size <= 2048) {
         return multiply_bigint_toom3(lhs, rhs);
     }
 
-    // 4. 特大规模：优化的 NTT
+    // 5. 特大规模：优化的 NTT
     return multiply_bigint_ntt_optimized(lhs, rhs);
 }
 

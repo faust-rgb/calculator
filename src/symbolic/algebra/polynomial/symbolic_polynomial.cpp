@@ -539,6 +539,42 @@ SymbolicPolynomial SymbolicPolynomial::subresultant_gcd(const SymbolicPolynomial
     return g2.simplify();
 }
 
+static Scalar resultant_numeric_euclid(std::vector<Scalar> a, std::vector<Scalar> b) {
+    while (a.size() > 1 && mymath::is_near_zero(a.back(), Scalar(1e-12L))) a.pop_back();
+    while (b.size() > 1 && mymath::is_near_zero(b.back(), Scalar(1e-12L))) b.pop_back();
+    if (a.empty() || b.empty()) return Scalar(0.0L);
+    if (a.size() == 1 && mymath::is_near_zero(a[0], Scalar(1e-12L))) return Scalar(0.0L);
+    if (b.size() == 1 && mymath::is_near_zero(b[0], Scalar(1e-12L))) return Scalar(0.0L);
+
+    int deg_a = static_cast<int>(a.size()) - 1;
+    int deg_b = static_cast<int>(b.size()) - 1;
+
+    if (deg_a < deg_b) {
+        Scalar res = resultant_numeric_euclid(b, a);
+        if ((deg_a * deg_b) % 2 != 0) res = -res;
+        return res;
+    }
+    if (deg_b == 0) {
+        return mymath::pow(b[0], deg_a);
+    }
+
+    std::vector<Scalar> r = a;
+    for (int i = deg_a - deg_b; i >= 0; --i) {
+        const Scalar factor = r[deg_b + i] / b[deg_b];
+        for (int j = 0; j <= deg_b; ++j) {
+            r[j + i] -= factor * b[j];
+        }
+    }
+    while (r.size() > 1 && mymath::is_near_zero(r.back(), Scalar(1e-12L))) r.pop_back();
+    if (r.size() == 1 && mymath::is_near_zero(r[0], Scalar(1e-12L))) {
+        return Scalar(0.0L);
+    }
+    int deg_r = static_cast<int>(r.size()) - 1;
+    Scalar sign = ((deg_a * deg_b) % 2 != 0) ? Scalar(-1.0L) : Scalar(1.0L);
+    Scalar lcb_pow = mymath::pow(b.back(), deg_a - deg_r);
+    return sign * lcb_pow * resultant_numeric_euclid(b, r);
+}
+
 SymbolicExpression SymbolicPolynomial::resultant(const SymbolicPolynomial& other) const {
     if (is_zero() || other.is_zero()) return SymbolicExpression::number(Scalar(0));
     if (is_constant()) return leading_coefficient().power(SymbolicExpression::number(Scalar(other.degree())));
@@ -552,6 +588,10 @@ SymbolicExpression SymbolicPolynomial::resultant(const SymbolicPolynomial& other
             res = make_negate(res).simplify();
         }
         return res;
+    }
+    if (is_numeric() && other.is_numeric()) {
+        Scalar num_res = resultant_numeric_euclid(to_numeric_coefficients(), other.to_numeric_coefficients());
+        return SymbolicExpression::number(num_res);
     }
     return resultant_sylvester(*this, other);
 }

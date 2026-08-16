@@ -1043,6 +1043,25 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
         }
     }
 
+    // 基本初等函数在无穷远处的直接判定
+    if (expression.node_type() == NodeType::kFunction) {
+        std::string fname = expression.node_text();
+        SymbolicExpression child = expression.left_child();
+        if (child.node_type() == NodeType::kVariable && child.node_text() == variable_name) {
+            if (fname == "exp") {
+                *result = positive ? t_infinity() : Scalar(0.0L);
+                return true;
+            } else if (fname == "ln") {
+                if (positive) {
+                    *result = t_infinity();
+                    return true;
+                }
+            } else if (fname == "sin" || fname == "cos") {
+                throw std::runtime_error("limit does not exist (oscillation)");
+            }
+        }
+    }
+
     Scalar probed_value = Scalar(static_cast<long long>(0));
     const SymbolicLimitProbeKind probed_kind =
         probe_symbolic_value_at(expression,
@@ -1319,18 +1338,11 @@ Scalar FunctionAnalysis::limit(Scalar x, int direction) const {
 
     series_ops::SeriesContext ctx;
     ctx.evaluate_at = [this](const SymbolicExpression& e, const std::string& v, Scalar p) {
-        // 如果是极限变量，返回极限点的值
         if (v == variable_name_) return p;
-
-        // 尝试从表达式中提取数值
         Scalar val = Scalar(0.0L);
         if (e.is_number(&val)) return val;
-
-        // 如果有外部变量查找函数，尝试使用它
         if (variable_lookup_) {
-            // 尝试从表达式中提取变量名
             std::string var_name = e.to_string();
-            // 简单变量名检查
             bool is_simple_var = true;
             for (char c : var_name) {
                 if (!std::isalpha(c) && c != '_') {
@@ -1341,15 +1353,11 @@ Scalar FunctionAnalysis::limit(Scalar x, int direction) const {
             if (is_simple_var && !var_name.empty()) {
                 try {
                     Scalar lookup_val = variable_lookup_(var_name);
-                    // 如果查找成功（返回非零或有效值），使用它
                     return lookup_val;
                 } catch (...) {
-                    // 查找失败，继续
                 }
             }
         }
-
-        // 无法确定值，返回 0（保守处理）
         return Scalar(0.0L);
     };
 
@@ -1387,32 +1395,25 @@ Scalar FunctionAnalysis::limit(Scalar x, int direction) const {
 
 
 Scalar FunctionAnalysis::compute_numerical_limit(Scalar x, int direction) const {
-    // For limits at infinity, use float128 precision for better accuracy
-    // when computing expressions like (1 + 1/x)^x for large x
     if (t_is_effective_infinity_point(x)) {
         const bool positive = x > 0.0L;
 
-        // Parse the expression and substitute x = 1/t
         SymbolicExpression expr;
         try {
             expr = SymbolicExpression::parse(expression_);
         } catch (...) {
-            // Fall back to direct computation if parsing fails
             goto direct_computation;
         }
 
-        // Create substitution: x -> 1/t or x -> -1/t
         SymbolicExpression t_var = SymbolicExpression::variable("t_limit_inf_subst");
         SymbolicExpression inv_t = positive
             ? SymbolicExpression::number(Scalar(1.0L)) / t_var
             : SymbolicExpression::number(Scalar(-1.0L)) / t_var;
         SymbolicExpression substituted = expr.substitute(variable_name_, inv_t).simplify();
 
-        // Use float128 precision for the substituted expression
         FunctionAnalysis analysis_128("t_limit_inf_subst");
         analysis_128.define(substituted.to_string());
 
-        // Compute limit as t -> 0+ using float128 precision
         try {
             Scalar result_128 = analysis_128.limit(Scalar(0.0L), 1);
             if (mymath::isfinite(result_128)) {
@@ -1420,19 +1421,17 @@ Scalar FunctionAnalysis::compute_numerical_limit(Scalar x, int direction) const 
             }
         } catch (const std::exception& e) {
             std::string msg = e.what();
-            if (msg.find("infinity") != std::string::npos) {
+            if (msg.find("infinity") != std::string::npos || msg.find("pole") != std::string::npos) {
                 if (msg.find("negative") != std::string::npos) return -t_infinity();
                 return t_infinity();
             }
         } catch (...) {
-            // Fall through to direct computation
         }
     }
 
 direct_computation:
     auto compute_limit_at = [this](Scalar x_target, int side) {
         Scalar richardson[14][14] = {};
-        //bool row_valid[14] = {};
         Scalar best_value = Scalar(0.0L);
         Scalar best_error = Scalar(1e300);
         bool have_best = false;
@@ -1442,7 +1441,7 @@ direct_computation:
                              : limit_step_scale(x_target);
         Scalar adaptive_h = base_h;
         int consecutive_bad = 0;
-        constexpr int kMaxBadSamples = 6; // 增加到 6 次尝试
+        constexpr int kMaxBadSamples = 6;
 
         Scalar prev_val = Scalar(0.0L);
         bool have_prev = false;
@@ -1470,17 +1469,23 @@ direct_computation:
                 continue;
             }
 
-            if (!mymath::isfinite(val)) {
-                if (have_prev && mymath::isfinite(prev_val)) {
-                    if (prev_val > 1e15L) return t_infinity();
-                    else if (prev_val < -1e15L) return -t_infinity();
+            if (!mymath::isfinite(val) || val > 1e12L || val < -1e12L) {
+                if (val > 1e12L || (have_prev && val > prev_val * 10.0L && val > 1e6L)) {
+                    return t_infinity();
+                } else if (val < -1e12L || (have_prev && val < prev_val * 10.0L && val < -1e6L)) {
+                    return -t_infinity();
                 }
-                adaptive_h *= 0.5L;
-                consecutive_bad++;
-                if (consecutive_bad >= kMaxBadSamples) {
-                    throw std::runtime_error("limit appears to be infinite (numerical evidence)");
+                if (!mymath::isfinite(val)) {
+                    if (have_prev && mymath::isfinite(prev_val)) {
+                        return (prev_val > 0.0L) ? t_infinity() : -t_infinity();
+                    }
+                    adaptive_h *= 0.5L;
+                    consecutive_bad++;
+                    if (consecutive_bad >= kMaxBadSamples) {
+                        return t_infinity();
+                    }
+                    continue;
                 }
-                continue;
             }
 
             if (have_prev) {

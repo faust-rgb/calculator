@@ -1,6 +1,6 @@
 CXX ?= g++
 BASE_CXXFLAGS := -std=c++23 -Wall -Wextra -pedantic -mfma
-OPT_CXXFLAGS ?= -O2 -static
+OPT_CXXFLAGS ?= -O2 -g
 CXXFLAGS ?= $(BASE_CXXFLAGS) $(OPT_CXXFLAGS)
 LDFLAGS ?=
 BIN_DIR := bin

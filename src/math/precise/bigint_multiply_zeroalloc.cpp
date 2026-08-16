@@ -244,9 +244,10 @@ size_t multiply_karatsuba_scratch(const uint32_t* a, size_t an,
     // 记录初始偏移量，用于在函数返回前释放本层分配的所有临时空间
     size_t initial_offset = scratch.used();
 
-    // 基础情况：小规模使用朴素乘法
+    // 基础情况：小规模或非平衡操作数使用朴素乘法
+    size_t min_n = std::min(an, bn);
     size_t n = std::max(an, bn);
-    if (n <= KARATSUBA_THRESHOLD) {
+    if (n <= KARATSUBA_THRESHOLD || min_n <= 16 || (min_n > 0 && n / min_n >= 4)) {
         return multiply_naive_to_buffer(a, an, b, bn, res);
     }
 

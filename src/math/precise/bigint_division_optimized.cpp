@@ -30,6 +30,37 @@ constexpr uint32_t kBase = 1000000000;
 constexpr uint64_t kBase64 = 1000000000ULL;
 constexpr int kBaseDigits = 9;
 
+static inline PreciseDecimal make_power_of_10(int exponent) {
+    PreciseDecimal result(1LL);
+    if (exponent >= 0) {
+        result.data = multiply_bigint_by_power_of_10(result.data, exponent);
+    } else {
+        result.scale = -exponent;
+    }
+    result.normalize();
+    return result;
+}
+
+// 提取大数的高位尾数及十进制指数（避免极值尺度下的浮点溢出）
+static void extract_mantissa_and_exponent(const BigIntData& data, int scale, long double* out_mantissa, int* out_exponent) {
+    if (data.empty() || (data.size() == 1 && data[0] == 0)) {
+        *out_mantissa = 0.0L;
+        *out_exponent = 0;
+        return;
+    }
+    std::string digits = bigint_to_string(data);
+    int total_digits = static_cast<int>(digits.size());
+    int exponent = total_digits - 1 - scale;
+    int mantissa_len = std::min<int>(18, total_digits);
+    std::string mantissa_str = digits.substr(0, static_cast<std::size_t>(mantissa_len));
+    long double mantissa = std::stold(mantissa_str);
+    for (int i = 1; i < mantissa_len; ++i) {
+        mantissa /= 10.0L;
+    }
+    *out_mantissa = mantissa;
+    *out_exponent = exponent;
+}
+
 // ============================================================================
 // 硬件浮点初值计算
 // ============================================================================
@@ -40,50 +71,47 @@ constexpr int kBaseDigits = 9;
 
 // 计算 sqrt(x) 的硬件初值
 long double compute_sqrt_initial_guess(const BigIntData& data, int scale) {
-    if (data.empty() || (data.size() == 1 && data[0] == 0)) {
+    long double mantissa = 0.0L;
+    int exp = 0;
+    extract_mantissa_and_exponent(data, scale, &mantissa, &exp);
+    if (mantissa <= 0.0L) {
         return 0.0L;
     }
 
-    // 将大整数转换为 long double 近似值
-    // 取最高几个 limb 来估算
-    long double approx = 0.0L;
-
-    if (data.size() >= 2) {
-        // 使用最高两个 limb
-        uint64_t high = (static_cast<uint64_t>(data[data.size() - 1]) * kBase) +
-                        data[data.size() - 2];
-        approx = static_cast<long double>(high);
-        approx *= mymath::pow(10.0L, static_cast<long double>((data.size() - 2) * kBaseDigits - scale));
-    } else {
-        approx = static_cast<long double>(data[0]);
-        approx *= mymath::pow(10.0L, static_cast<long double>(-scale));
+    if (exp % 2 != 0) {
+        mantissa *= 10.0L;
+        --exp;
     }
 
-    // 使用硬件 sqrt
-    return mymath::sqrt(approx);
+    if (exp > 300 || exp < -300) {
+        return mymath::sqrt(mantissa);
+    }
+
+    long double approx = mymath::sqrt(mantissa) * mymath::pow(10.0L, static_cast<long double>(exp / 2));
+    if (!mymath::isfinite(approx) || approx <= 0.0L) {
+        return 1.0L;
+    }
+    return approx;
 }
 
 // 计算 1/x 的硬件初值
 long double compute_reciprocal_initial_guess(const BigIntData& data, int scale) {
-    if (data.empty() || (data.size() == 1 && data[0] == 0)) {
-        return 0.0L;  // 无效
+    long double mantissa = 0.0L;
+    int exp = 0;
+    extract_mantissa_and_exponent(data, scale, &mantissa, &exp);
+    if (mantissa <= 0.0L) {
+        return 0.0L;
     }
 
-    // 将大整数转换为 long double 近似值
-    long double approx = 0.0L;
-
-    if (data.size() >= 2) {
-        uint64_t high = (static_cast<uint64_t>(data[data.size() - 1]) * kBase) +
-                        data[data.size() - 2];
-        approx = static_cast<long double>(high);
-        approx *= mymath::pow(10.0L, static_cast<long double>((data.size() - 2) * kBaseDigits - scale));
-    } else {
-        approx = static_cast<long double>(data[0]);
-        approx *= mymath::pow(10.0L, static_cast<long double>(-scale));
+    if (exp > 300 || exp < -300) {
+        return 1.0L / mantissa;
     }
 
-    // 使用硬件倒数
-    return 1.0L / approx;
+    long double approx = (1.0L / mantissa) * mymath::pow(10.0L, static_cast<long double>(-exp));
+    if (!mymath::isfinite(approx) || approx <= 0.0L) {
+        return 1.0L;
+    }
+    return approx;
 }
 
 // ============================================================================
@@ -311,15 +339,18 @@ PreciseDecimal sqrt_optimized(const PreciseDecimal& val) {
 
     int target_scale = PrecisionContext::get_default_scale();
 
-    // 获取硬件初值
-    long double hardware_guess = compute_sqrt_initial_guess(val.data, val.scale);
-
-    // 将初值转换为 PreciseDecimal
-    PreciseDecimal x(hardware_guess);
-
-    // 确保 x 不为 0
+    // 基于尾数和指数构建安全初值（防止超大/超小尺度溢出）
+    long double mantissa = 0.0L;
+    int exp = 0;
+    extract_mantissa_and_exponent(val.data, val.scale, &mantissa, &exp);
+    if (exp % 2 != 0) {
+        mantissa *= 10.0L;
+        --exp;
+    }
+    long double sqrt_m = (mantissa > 0.0L) ? mymath::sqrt(mantissa) : 1.0L;
+    PreciseDecimal x = PreciseDecimal(static_cast<double>(sqrt_m)) * make_power_of_10(exp / 2);
     if (x.is_zero()) {
-        x = PreciseDecimal("1e-10");
+        x = make_power_of_10(exp / 2);
     }
 
     const PreciseDecimal one_half("0.5");
@@ -361,14 +392,14 @@ PreciseDecimal reciprocal_optimized(const PreciseDecimal& val) {
 
     int target_scale = PrecisionContext::get_default_scale();
 
-    // 获取硬件初值
-    long double hardware_guess = compute_reciprocal_initial_guess(val.data, val.scale);
-
-    // 将初值转换为 PreciseDecimal
-    PreciseDecimal x(hardware_guess);
-
+    // 基于尾数和指数构建安全初值（防止超大/超小尺度溢出）
+    long double mantissa = 0.0L;
+    int exp = 0;
+    extract_mantissa_and_exponent(val.data, val.scale, &mantissa, &exp);
+    long double recip_m = (mantissa > 0.0L) ? (1.0L / mantissa) : 1.0L;
+    PreciseDecimal x = PreciseDecimal(static_cast<double>(recip_m)) * make_power_of_10(-exp);
     if (x.is_zero()) {
-        x = PreciseDecimal("1e-18");
+        x = make_power_of_10(-exp);
     }
 
     const PreciseDecimal two(2LL);

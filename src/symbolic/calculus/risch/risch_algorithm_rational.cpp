@@ -1695,12 +1695,77 @@ bool RischAlgorithm::lazard_rioboo_trager_improved(
             if (!vi.is_zero() && !vi.is_constant()) {
                 total_log = (total_log + c_val * real_log_abs(vi.to_expression())).simplify();
             }
+        } else if (ri.degree() == 2) {
+            SymbolicExpression d_coeff = ri.coefficient(0);
+            SymbolicExpression b_coeff = ri.coefficient(1);
+            SymbolicExpression a_coeff = ri.coefficient(2);
+            SymbolicExpression delta = (b_coeff * b_coeff - SymbolicExpression::number(4.0L) * a_coeff * d_coeff).simplify();
+
+            Scalar delta_num = Scalar(0.0L);
+            if (delta.is_number(&delta_num) && delta_num >= 0.0L) {
+                // 实根情况: c1, c2 = (-b +/- sqrt(delta)) / (2*a)
+                SymbolicExpression sqrt_delta = SymbolicExpression::number(mymath::sqrt(delta_num));
+                SymbolicExpression two_a = (SymbolicExpression::number(2.0L) * a_coeff).simplify();
+                SymbolicExpression c1 = ((make_negate(b_coeff) + sqrt_delta) / two_a).simplify();
+                SymbolicExpression c2 = ((make_negate(b_coeff) - sqrt_delta) / two_a).simplify();
+
+                SymbolicPolynomial v1 = gcd_for_residue_value(A, Dp, D, variable_name, c1);
+                SymbolicPolynomial v2 = gcd_for_residue_value(A, Dp, D, variable_name, c2);
+
+                if (!v1.is_zero() && !v1.is_constant() && !v2.is_zero() && !v2.is_constant()) {
+                    total_log = (total_log + c1 * real_log_abs(v1.to_expression()) +
+                                            c2 * real_log_abs(v2.to_expression())).simplify();
+                } else {
+                    return false;
+                }
+            } else if (D.degree() == 2) {
+                // 共轭复根情况: 使用 Lazard-Rioboo 实数 arctan/log 转换
+                SymbolicExpression a_D = D.coefficient(2);
+                SymbolicExpression b_D = D.coefficient(1);
+                SymbolicExpression c_D = D.coefficient(0);
+                SymbolicExpression disc_expr = (SymbolicExpression::number(4.0L) * a_D * c_D - b_D * b_D).simplify();
+                Scalar disc_val = Scalar(0.0L);
+                if (disc_expr.is_number(&disc_val) && disc_val > 0.0L) {
+                    SymbolicExpression sqrt_disc = SymbolicExpression::number(mymath::sqrt(disc_val));
+                    SymbolicExpression A1 = A.coefficient(1);
+                    SymbolicExpression A0 = A.coefficient(0);
+                    SymbolicExpression two_a_D = (SymbolicExpression::number(2.0L) * a_D).simplify();
+                    SymbolicExpression alpha = (A1 / two_a_D).simplify();
+                    SymbolicExpression k = (A0 - alpha * b_D).simplify();
+                    SymbolicExpression x_expr = SymbolicExpression::variable(variable_name);
+                    SymbolicExpression atan_arg = ((two_a_D * x_expr + b_D) / sqrt_disc).simplify();
+
+                    SymbolicExpression term = SymbolicExpression::number(0.0L);
+                    if (!expr_is_zero(alpha)) {
+                        term = (term + alpha * make_function("ln", make_function("abs", D.to_expression()))).simplify();
+                    }
+                    if (!expr_is_zero(k)) {
+                        SymbolicExpression atan_coeff = (SymbolicExpression::number(2.0L) * k / sqrt_disc).simplify();
+                        term = (term + atan_coeff * make_function("atan", atan_arg)).simplify();
+                    }
+                    total_log = (total_log + term).simplify();
+                } else {
+                    return false;
+                }
+            } else {
+                // Higher-degree denominator with complex conjugate roots:
+                // Use real quadratic / algebraic partial fraction decomposition
+                SymbolicExpression pf_part;
+                if (try_integrate_numeric_quadratic_partial_fractions(A, D, variable_name, &pf_part)) {
+                    total_log = (total_log + pf_part).simplify();
+                    *result = total_log;
+                    return !expr_is_zero(total_log);
+                }
+                return false;
+            }
         } else {
-            // Higher-degree residue fields need algebraic constant arithmetic
-            // to stay exact.  The previous midpoint/subresultant shortcut was
-            // not a valid strict Risch step and could explode in memory while
-            // trying to build the parametric PRS.  Fail fast so integrate_full
-            // can use the non-strict rational fallback instead of hanging.
+            // Higher-degree residue fields: try real quadratic partial fraction integration
+            SymbolicExpression pf_part;
+            if (try_integrate_numeric_quadratic_partial_fractions(A, D, variable_name, &pf_part)) {
+                total_log = (total_log + pf_part).simplify();
+                *result = total_log;
+                return !expr_is_zero(total_log);
+            }
             return false;
         }
     }

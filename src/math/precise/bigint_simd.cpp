@@ -96,31 +96,26 @@ void add_raw_delayed_carry(const uint32_t* a, size_t an,
                            const uint32_t* b, size_t bn,
                            uint64_t* res, size_t& res_size) {
     res_size = std::max(an, bn);
+    size_t i = 0;
 
 #if HAS_AVX2
-    // AVX2 向量化：每次处理 4 个 uint64_t（256 位）
-    size_t i = 0;
-    size_t vec_end = res_size / 4 * 4;
+    size_t min_n = std::min(an, bn);
+    size_t vec_end = min_n / 4 * 4;
 
-    // 预处理：将 uint32_t 扩展为 uint64_t
-    // 使用 SIMD 进行并行加法
-    if (is_aligned(a) && is_aligned(b) && is_aligned(res)) {
-        for (; i < vec_end; i += 4) {
-            __m128i a_lo = _mm_loadu_si128(reinterpret_cast<const __m128i*>(a + i));
-            __m128i b_lo = _mm_loadu_si128(reinterpret_cast<const __m128i*>(b + i));
+    for (; i < vec_end; i += 4) {
+        __m128i a_lo = _mm_loadu_si128(reinterpret_cast<const __m128i*>(a + i));
+        __m128i b_lo = _mm_loadu_si128(reinterpret_cast<const __m128i*>(b + i));
 
-            // 将 32 位扩展为 64 位并相加
-            __m256i a_256 = _mm256_cvtepu32_epi64(a_lo);
-            __m256i b_256 = _mm256_cvtepu32_epi64(b_lo);
-            __m256i sum = _mm256_add_epi64(a_256, b_256);
+        __m256i a_256 = _mm256_cvtepu32_epi64(a_lo);
+        __m256i b_256 = _mm256_cvtepu32_epi64(b_lo);
+        __m256i sum = _mm256_add_epi64(a_256, b_256);
 
-            _mm256_store_si256(reinterpret_cast<__m256i*>(res + i), sum);
-        }
+        _mm256_storeu_si256(reinterpret_cast<__m256i*>(res + i), sum);
     }
 #endif
 
-    // 处理剩余元素（标量）
-    for (size_t i = 0; i < res_size; ++i) {
+    // 处理公共长度的剩余元素及长数尾部（标量）
+    for (; i < res_size; ++i) {
         uint32_t a_val = (i < an) ? a[i] : 0;
         uint32_t b_val = (i < bn) ? b[i] : 0;
         res[i] = static_cast<uint64_t>(a_val) + b_val;
@@ -141,16 +136,9 @@ size_t propagate_carry(uint64_t* data, size_t size, uint32_t* out) {
 
     // 处理剩余进位
     while (carry > 0) {
-        if (out_size >= size) {
-            // 需要扩展输出数组
-            out[out_size] = static_cast<uint32_t>(carry % kBase64);
-            carry /= kBase64;
-            ++out_size;
-        } else {
-            out[out_size] = static_cast<uint32_t>(carry % kBase64);
-            carry /= kBase64;
-            ++out_size;
-        }
+        out[out_size] = static_cast<uint32_t>(carry % kBase64);
+        carry /= kBase64;
+        ++out_size;
     }
 
     // 去除前导零
@@ -168,19 +156,20 @@ size_t propagate_carry(uint64_t* data, size_t size, uint32_t* out) {
 size_t add_raw_simd(const uint32_t* a, size_t an,
                     const uint32_t* b, size_t bn,
                     uint32_t* res) {
-    // 使用延迟进位策略
     size_t max_size = std::max(an, bn) + 1;
 
-    // 临时 uint64_t 数组存储中间结果
-    uint64_t* temp = new uint64_t[max_size];
+    constexpr size_t STACK_THRESHOLD = 256;
+    uint64_t stack_buf[STACK_THRESHOLD];
+    uint64_t* temp = (max_size <= STACK_THRESHOLD) ? stack_buf : new uint64_t[max_size];
     size_t temp_size;
 
     add_raw_delayed_carry(a, an, b, bn, temp, temp_size);
 
-    // 进位清理
     size_t result_size = propagate_carry(temp, temp_size, res);
 
-    delete[] temp;
+    if (temp != stack_buf) {
+        delete[] temp;
+    }
     return result_size;
 }
 
@@ -191,17 +180,8 @@ size_t add_raw_simd(const uint32_t* a, size_t an,
 size_t sub_raw_simd(const uint32_t* a, size_t an,
                     const uint32_t* b, size_t bn,
                     uint32_t* res) {
-    // 减法不适合延迟进位，直接使用标量实现
-    // 但可以利用 SIMD 进行并行比较和掩码操作
-
     int64_t borrow = 0;
     size_t i = 0;
-
-#if HAS_AVX2
-    // AVX2 优化：批量处理借位检查
-    // 由于借位是串行依赖的，SIMD 优化有限
-    // 主要用于批量加载和存储
-#endif
 
     for (; i < bn; ++i) {
         int64_t sub = static_cast<int64_t>(a[i]) - borrow - b[i];
@@ -236,16 +216,12 @@ size_t sub_raw_simd(const uint32_t* a, size_t an,
 // ============================================================================
 // 批量加法优化（用于矩阵乘法、点积等）
 // ============================================================================
-//
-// 执行多次加法，只在最后进行一次进位清理
-// ============================================================================
 
 class BatchAdder {
 public:
-    BatchAdder(size_t capacity) : capacity_(capacity) {
-        // 分配对齐的临时缓冲区
-        temp_ = new uint64_t[capacity + 16];
-        std::fill(temp_, temp_ + capacity + 16, 0);
+    BatchAdder(size_t capacity) : capacity_(std::max<size_t>(capacity, 16)) {
+        temp_ = new uint64_t[capacity_ + 16];
+        std::fill(temp_, temp_ + capacity_ + 16, 0);
         size_ = 0;
     }
 
@@ -253,17 +229,30 @@ public:
         delete[] temp_;
     }
 
+    void reserve(size_t new_cap) {
+        if (new_cap > capacity_) {
+            size_t new_capacity = std::max(new_cap, capacity_ * 2);
+            uint64_t* new_temp = new uint64_t[new_capacity + 16];
+            std::copy(temp_, temp_ + size_, new_temp);
+            std::fill(new_temp + size_, new_temp + new_capacity + 16, 0);
+            delete[] temp_;
+            temp_ = new_temp;
+            capacity_ = new_capacity;
+        }
+    }
+
     // 添加一个数（不立即处理进位）
     void add(const uint32_t* data, size_t n) {
+        if (n > capacity_) {
+            reserve(n);
+        }
         if (n > size_) {
-            // 扩展缓冲区
             for (size_t i = size_; i < n; ++i) {
                 temp_[i] = 0;
             }
             size_ = n;
         }
 
-        // 累加（允许超过 10^9）
         for (size_t i = 0; i < n; ++i) {
             temp_[i] += data[i];
         }
@@ -271,6 +260,9 @@ public:
 
     // 乘加操作：temp += a * b
     void multiply_add(const uint32_t* a, size_t an, uint32_t b) {
+        if (an > capacity_) {
+            reserve(an);
+        }
         if (an > size_) {
             for (size_t i = size_; i < an; ++i) {
                 temp_[i] = 0;

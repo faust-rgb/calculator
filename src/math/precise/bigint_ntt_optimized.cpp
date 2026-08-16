@@ -503,28 +503,25 @@ void parallel_ntt_transform(uint32_t* fa1, uint32_t* fa2, uint32_t* fa3,
                             size_t n) {
     using namespace ntt_mods;
 
-    // 如果数据量足够大，使用线程池并行执行
-    if ( n >= 4096) {
+    // 如果数据量足够大且线程池可用，使用线程池并行执行
+    if (n >= 4096) {
         ThreadPool& pool = ThreadPool::instance();
 
-        // 使用 submit_and_wait 减少同步开销
-        pool.submit_and_wait({
-            [&]() {
-                NTTCore<P1, G1>::transform(fa1, n);
-                NTTCore<P1, G1>::transform(fb1, n);
-            },
-            [&]() {
-                NTTCore<P2, G2>::transform(fa2, n);
-                NTTCore<P2, G2>::transform(fb2, n);
-            }
+        auto f1 = pool.submit([&]() {
+            NTTCore<P1, G1>::transform(fa1, n);
+            NTTCore<P1, G1>::transform(fb1, n);
+        });
+        auto f2 = pool.submit([&]() {
+            NTTCore<P2, G2>::transform(fa2, n);
+            NTTCore<P2, G2>::transform(fb2, n);
         });
 
-        // 当前线程处理第三个模数（与线程池并行）
+        // 当前线程同时处理第三个模数（真正实现 3 个模数并行）
         NTTCore<P3, G3>::transform(fa3, n);
         NTTCore<P3, G3>::transform(fb3, n);
 
-        // 等待线程池任务完成
-        pool.wait_all();
+        f1.get();
+        f2.get();
     } else {
         // 小数据量，单线程顺序执行
         NTTCore<P1, G1>::transform(fa1, n);
@@ -542,17 +539,14 @@ void parallel_ntt_inverse(uint32_t* fa1, uint32_t* fa2, uint32_t* fa3, size_t n)
     if (n >= 4096) {
         ThreadPool& pool = ThreadPool::instance();
 
-        // 使用 submit_and_wait 并行执行两个逆变换
-        pool.submit_and_wait({
-            [&]() { NTTCore<P1, G1>::inverse_transform(fa1, n); },
-            [&]() { NTTCore<P2, G2>::inverse_transform(fa2, n); }
-        });
+        auto f1 = pool.submit([&]() { NTTCore<P1, G1>::inverse_transform(fa1, n); });
+        auto f2 = pool.submit([&]() { NTTCore<P2, G2>::inverse_transform(fa2, n); });
 
-        // 当前线程处理第三个模数
+        // 当前线程同时处理第三个逆变换
         NTTCore<P3, G3>::inverse_transform(fa3, n);
 
-        // 等待线程池任务完成
-        pool.wait_all();
+        f1.get();
+        f2.get();
     } else {
         NTTCore<P1, G1>::inverse_transform(fa1, n);
         NTTCore<P2, G2>::inverse_transform(fa2, n);

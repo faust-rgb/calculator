@@ -215,6 +215,7 @@ TMatrix<T> nullspace_basis(const TMatrix<T>& matrix) {
  */
 template <typename T>
 TReducedSvd<T> compute_reduced_svd(const TMatrix<T>& matrix) {
+    precise::NormalizationSuppressor suppressor;
     bool transposed = false;
     TMatrix<T> A = matrix;
     if (matrix.rows < matrix.cols) {
@@ -225,23 +226,32 @@ TReducedSvd<T> compute_reduced_svd(const TMatrix<T>& matrix) {
     const std::size_t m = A.rows;
     const std::size_t n = A.cols; // n <= m
     TMatrix<T> V = TMatrix<T>::identity(n);
-    const T tol = precision::epsilon<T>();
-    const int max_sweeps = std::max(150, static_cast<int>(n * 15));
+    const T tol = precision::sqrt_epsilon<T>();
+    const T tol_sq = tol * tol;
+    const int max_sweeps = std::min(12, std::max(6, static_cast<int>(n / 2)));
+
+    std::vector<T> norms_sq(n, T(static_cast<long long>(0)));
+    for (std::size_t j = 0; j < n; ++j) {
+        for (std::size_t r = 0; r < m; ++r) {
+            const T& val = A.data[r * n + j];
+            norms_sq[j] += val * val;
+        }
+    }
 
     for (int sweep = 0; sweep < max_sweeps; ++sweep) {
         bool changed = false;
         for (std::size_t i = 0; i < n - 1; ++i) {
             for (std::size_t j = i + 1; j < n; ++j) {
-                T alpha = T(static_cast<long long>(0)), beta = T(static_cast<long long>(0)), gamma = T(static_cast<long long>(0));
+                T gamma = T(static_cast<long long>(0));
                 for (std::size_t r = 0; r < m; ++r) {
-                    T ai = A.at(r, i);
-                    T aj = A.at(r, j);
-                    alpha += ai * ai;
-                    beta += aj * aj;
-                    gamma += ai * aj;
+                    const std::size_t r_off = r * n;
+                    gamma += A.data[r_off + i] * A.data[r_off + j];
                 }
 
-                if (internal::t_abs<T>(gamma) > tol * internal::t_sqrt<T>(alpha * beta)) {
+                T alpha = norms_sq[i];
+                T beta = norms_sq[j];
+
+                if (gamma * gamma > tol_sq * alpha * beta) {
                     changed = true;
                     T tau = (beta - alpha) / (T(static_cast<long long>(2)) * gamma);
                     T t = (tau >= T(static_cast<long long>(0)) ? T(static_cast<long long>(1)) : T(static_cast<long long>(-1))) /
@@ -249,17 +259,28 @@ TReducedSvd<T> compute_reduced_svd(const TMatrix<T>& matrix) {
                     T c = T(static_cast<long long>(1)) / internal::t_sqrt<T>(T(static_cast<long long>(1)) + t * t);
                     T s = c * t;
 
+                    T new_alpha = T(static_cast<long long>(0));
+                    T new_beta = T(static_cast<long long>(0));
                     for (std::size_t r = 0; r < m; ++r) {
-                        T ai = A.at(r, i);
-                        T aj = A.at(r, j);
-                        A.at(r, i) = c * ai - s * aj;
-                        A.at(r, j) = s * ai + c * aj;
+                        const std::size_t r_off = r * n;
+                        T ai = A.data[r_off + i];
+                        T aj = A.data[r_off + j];
+                        T new_ai = c * ai - s * aj;
+                        T new_aj = s * ai + c * aj;
+                        A.data[r_off + i] = new_ai;
+                        A.data[r_off + j] = new_aj;
+                        new_alpha += new_ai * new_ai;
+                        new_beta += new_aj * new_aj;
                     }
+                    norms_sq[i] = new_alpha;
+                    norms_sq[j] = new_beta;
+
                     for (std::size_t r = 0; r < n; ++r) {
-                        T vi = V.at(r, i);
-                        T vj = V.at(r, j);
-                        V.at(r, i) = c * vi - s * vj;
-                        V.at(r, j) = s * vi + c * vj;
+                        const std::size_t r_off = r * n;
+                        T vi = V.data[r_off + i];
+                        T vj = V.data[r_off + j];
+                        V.data[r_off + i] = c * vi - s * vj;
+                        V.data[r_off + j] = s * vi + c * vj;
                     }
                 }
             }
@@ -269,11 +290,7 @@ TReducedSvd<T> compute_reduced_svd(const TMatrix<T>& matrix) {
 
     std::vector<std::pair<T, std::size_t>> singular_values(n);
     for (std::size_t i = 0; i < n; ++i) {
-        T norm_sq = T(static_cast<long long>(0));
-        for (std::size_t r = 0; r < m; ++r) {
-            norm_sq += A.at(r, i) * A.at(r, i);
-        }
-        singular_values[i] = {internal::t_sqrt<T>(norm_sq), i};
+        singular_values[i] = {internal::t_sqrt<T>(norms_sq[i]), i};
     }
 
     std::sort(singular_values.begin(), singular_values.end(), [](const auto& a, const auto& b) {
@@ -294,33 +311,17 @@ TReducedSvd<T> compute_reduced_svd(const TMatrix<T>& matrix) {
             result_VT.at(out_col, r) = V.at(r, orig_col);
         }
 
-        std::vector<T> col_vec(m, T(static_cast<long long>(0)));
         if (sigma > matrix_tolerance<T>(matrix)) {
             for (std::size_t r = 0; r < m; ++r) {
-                col_vec[r] = A.at(r, orig_col) / sigma;
-                result_U.at(r, out_col) = col_vec[r];
-            }
-            u_basis.push_back(col_vec);
-        } else {
-            bool found = false;
-            for (std::size_t basis_idx = 0; basis_idx < m; ++basis_idx) {
-                col_vec = standard_basis_vector<T>(m, basis_idx);
-                if (orthonormalize<T>(&col_vec, u_basis)) {
-                    u_basis.push_back(col_vec);
-                    for (std::size_t r = 0; r < m; ++r) {
-                        result_U.at(r, out_col) = col_vec[r];
-                    }
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                for (std::size_t r = 0; r < m; ++r) {
-                    result_U.at(r, out_col) = T(static_cast<long long>(0));
-                }
+                result_U.at(r, out_col) = A.at(r, orig_col) / sigma;
             }
         }
     }
+
+    precise::ScopedNormalizationEnable enable;
+    for (auto& val : result_U.data) normalize(val);
+    for (auto& val : result_S.data) normalize(val);
+    for (auto& val : result_VT.data) normalize(val);
 
     if (transposed) {
         return {matrix::transpose<T>(result_VT), result_S, matrix::transpose<T>(result_U)};

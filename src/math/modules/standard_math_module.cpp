@@ -91,7 +91,7 @@ StandardMathModule::get_functions_map() const {
     // Basic
     funcs["abs"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::abs(a[0]); }, "abs", 1, 1);
     funcs["sign"] = wrap_scalar([](const std::vector<Scalar>& a) {
-        if (mymath::is_near_zero(a[0], Scalar(1e-12L))) return Scalar(0.0L);
+        if (a[0] == Scalar(0.0L)) return Scalar(0.0L);
         return a[0] > Scalar(0.0L) ? Scalar(1.0L) : Scalar(-1.0L);
     }, "sign", 1, 1);
     funcs["floor"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::floor(a[0]); }, "floor", 1, 1);

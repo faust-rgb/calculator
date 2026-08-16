@@ -366,8 +366,7 @@ IntegrationResult IntegrationEngine::try_integrate_risch(
     // Check for special function result (Ei, erf, Si, Ci, li, etc.)
     // These are non-elementary integrals that can be expressed as special functions
     if (risch_result.success && risch_result.type == IntegralType::kSpecialFunction) {
-        // Return as non-elementary with risch method
-        return IntegrationResult::non_elementary("risch_non_elementary");
+        return IntegrationResult::ok(risch_result.value, "special_function");
     }
 
     // Check if the integral was determined to be non-elementary

@@ -87,7 +87,78 @@ void trim_fraction_scale(PreciseDecimal* value, int max_scale) {
 // 常量
 // ============================================================================
 
+PreciseDecimal compute_pi_machin(int target_scale) {
+    ScopedPrecision guard(16);
+    const int work_scale = std::max(target_scale, PrecisionContext::get_default_scale());
+    const PreciseDecimal epsilon = scale_epsilon(6);
+
+    // Machin-like formula: pi/4 = 4*arctan(1/5) - arctan(1/239)
+    auto compute_atan_inv_int = [&](long long denom) -> PreciseDecimal {
+        PreciseDecimal d(denom);
+        PreciseDecimal d2 = d * d;
+        PreciseDecimal term = one() / d;
+        PreciseDecimal sum = term;
+        int limit = std::max(50, work_scale * 2 + 50);
+        for (int i = 1; i < limit; ++i) {
+            term = -term / d2;
+            PreciseDecimal add = term / decimal_from_uint(static_cast<uint32_t>(2 * i + 1));
+            sum += add;
+            if (precise::abs(add) < epsilon) break;
+        }
+        return sum;
+    };
+
+    PreciseDecimal atan_1_5 = compute_atan_inv_int(5);
+    PreciseDecimal atan_1_239 = compute_atan_inv_int(239);
+    PreciseDecimal p = PreciseDecimal(4LL) * (PreciseDecimal(4LL) * atan_1_5 - atan_1_239);
+    p.normalize();
+    return p;
+}
+
+PreciseDecimal compute_e_series(int target_scale) {
+    ScopedPrecision guard(16);
+    const int work_scale = std::max(target_scale, PrecisionContext::get_default_scale());
+    const PreciseDecimal epsilon = scale_epsilon(6);
+
+    PreciseDecimal term = one();
+    PreciseDecimal sum = two();
+    int limit = std::max(50, work_scale + 50);
+    for (int i = 2; i < limit; ++i) {
+        term = term / decimal_from_uint(static_cast<uint32_t>(i));
+        sum += term;
+        if (precise::abs(term) < epsilon) break;
+    }
+    sum.normalize();
+    return sum;
+}
+
+PreciseDecimal compute_ln2_series(int target_scale) {
+    ScopedPrecision guard(16);
+    // ln(2) = ln((1 + 1/3) / (1 - 1/3)) = 2 * (1/3 + 1/(3*3^3) + 1/(5*3^5) + ...)
+    const int work_scale = std::max(target_scale, PrecisionContext::get_default_scale());
+    const PreciseDecimal epsilon = scale_epsilon(6);
+
+    PreciseDecimal one_third = one() / PreciseDecimal(3LL);
+    PreciseDecimal term = one_third;
+    PreciseDecimal sum = one_third;
+    int limit = std::max(50, static_cast<int>(work_scale * 1.2) + 20);
+    PreciseDecimal nine = decimal_from_uint(9);
+    for (int i = 1; i < limit; ++i) {
+        term = term / nine;
+        PreciseDecimal add = term / decimal_from_uint(static_cast<uint32_t>(2 * i + 1));
+        sum += add;
+        if (precise::abs(add) < epsilon) break;
+    }
+    sum = two() * sum;
+    sum.normalize();
+    return sum;
+}
+
 PreciseDecimal pi() {
+    int scale = PrecisionContext::get_default_scale();
+    if (scale > 230) {
+        return compute_pi_machin(scale);
+    }
     static const PreciseDecimal p(
         "3.141592653589793238462643383279502884197169399375105820974944592307816406286"
         "208998628034825342117067982148086513282306647093844609550582231725359408128481"
@@ -96,6 +167,10 @@ PreciseDecimal pi() {
 }
 
 PreciseDecimal two_pi() {
+    int scale = PrecisionContext::get_default_scale();
+    if (scale > 230) {
+        return two() * pi();
+    }
     static const PreciseDecimal tp(
         "6.283185307179586476925286766559005768394338798750211641949889184615632812572"
         "417997256069650684234135964296173026564613294187689219101164434507187816256962"
@@ -104,6 +179,10 @@ PreciseDecimal two_pi() {
 }
 
 PreciseDecimal half_pi() {
+    int scale = PrecisionContext::get_default_scale();
+    if (scale > 230) {
+        return pi() / two();
+    }
     static const PreciseDecimal hp(
         "1.5707963267948966192313216916397514420985846996875529104874722961539082031431"
         "0449931401741267105853399107404325664115332354692223077529111586285977040642405"
@@ -112,6 +191,10 @@ PreciseDecimal half_pi() {
 }
 
 PreciseDecimal e() {
+    int scale = PrecisionContext::get_default_scale();
+    if (scale > 230) {
+        return compute_e_series(scale);
+    }
     static const PreciseDecimal val_e(
         "2.718281828459045235360287471352662497757247093699959574966967627724076630353"
         "547594571382178525166427427466391932003059921817413596629043572900334295260595"
@@ -120,6 +203,10 @@ PreciseDecimal e() {
 }
 
 PreciseDecimal ln2() {
+    int scale = PrecisionContext::get_default_scale();
+    if (scale > 230) {
+        return compute_ln2_series(scale);
+    }
     static const PreciseDecimal val_ln2(
         "0.693147180559945309417232121458176568075500134360255254120680009493393621969"
         "694715605863326996418687542001481020570685733685520235758130557032670751635075"
@@ -201,55 +288,13 @@ PreciseDecimal sqrt(const PreciseDecimal& val) {
 
     int target_scale = PrecisionContext::get_default_scale();
 
-    if (target_scale > 50) {
-        PreciseDecimal x = sqrt_initial_guess(val);
-        const PreciseDecimal one_half = half();
-
-        int current_precision = 16;
-        int precision_step = 0;
-
-        NormalizationSuppressor suppressor;
-
-        while (current_precision < target_scale + 8) {
-            ScopedPrecision work_precision(current_precision - target_scale + 8);
-
-            PreciseDecimal next = one_half * (x + val / x);
-
-            PreciseDecimal diff = precise::abs(next - x);
-            if (diff.is_zero() || diff < scale_epsilon(4)) {
-                ScopedNormalizationEnable enable;
-                next.normalize();
-                return next;
-            }
-
-            x = next;
-            current_precision *= 2;
-            ++precision_step;
-        }
-
-        const PreciseDecimal epsilon = scale_epsilon();
-        for (int i = 0; i < 4; ++i) {
-            PreciseDecimal next = one_half * (x + val / x);
-            if (precise::abs(next - x) <= epsilon * std::max(one(), precise::abs(next))) {
-                ScopedNormalizationEnable enable;
-                next.normalize();
-                return next;
-            }
-            x = next;
-        }
-
-        ScopedNormalizationEnable enable;
-        x.normalize();
-        return x;
-    }
-
     PreciseDecimal x = sqrt_initial_guess(val);
     const PreciseDecimal one_half = half();
-    const PreciseDecimal epsilon = scale_epsilon();
+    const PreciseDecimal epsilon = scale_epsilon(4);
 
     NormalizationSuppressor suppressor;
 
-    const int iterations = std::max(12, target_scale / 8 + 8);
+    const int iterations = std::max(16, target_scale / 4 + 20);
     for (int i = 0; i < iterations; ++i) {
         PreciseDecimal next = one_half * (x + val / x);
         if (precise::abs(next - x) <= epsilon * std::max(one(), precise::abs(next))) {
@@ -414,6 +459,45 @@ PreciseDecimal log2(const PreciseDecimal& x) {
     return ln(x) / ln2();
 }
 
+PreciseDecimal ln_agm(const PreciseDecimal& x) {
+    if (x <= PreciseDecimal(0LL)) throw std::domain_error("ln of non-positive number");
+    if (x == one()) return PreciseDecimal(0LL);
+    if (x < one()) {
+        return -ln_agm(one() / x);
+    }
+
+    const int user_scale = PrecisionContext::get_default_scale();
+    ScopedPrecision guard(user_scale / 2 + 20);
+    const int work_scale = PrecisionContext::get_default_scale();
+    const PreciseDecimal epsilon = scale_epsilon(8);
+
+    int m = static_cast<int>(user_scale * 1.7) + 8;
+
+    PreciseDecimal s = x;
+    for (int i = 0; i < m; ++i) {
+        s *= two();
+    }
+
+    PreciseDecimal a = one();
+    PreciseDecimal b = PreciseDecimal(4LL) / s;
+
+    const int max_iter = std::max(40, work_scale / 2);
+    for (int i = 0; i < max_iter; ++i) {
+        PreciseDecimal next_a = half() * (a + b);
+        PreciseDecimal next_b = precise::sqrt(a * b);
+        PreciseDecimal diff = precise::abs(next_a - next_b);
+        a = next_a;
+        b = next_b;
+        if (diff < epsilon) break;
+    }
+
+    PreciseDecimal pi_val = pi();
+    PreciseDecimal ln2_val = ln2();
+    PreciseDecimal res = pi_val / (two() * a) - PreciseDecimal(static_cast<long long>(m)) * ln2_val;
+    res.normalize();
+    return res;
+}
+
 PreciseDecimal ln_near_one(const PreciseDecimal& x) {
     const PreciseDecimal z = (x - one()) / (x + one());
     const PreciseDecimal z2 = z * z;
@@ -422,7 +506,7 @@ PreciseDecimal ln_near_one(const PreciseDecimal& x) {
 
     PreciseDecimal term = z;
     PreciseDecimal sum = z;
-    const PreciseDecimal epsilon = scale_epsilon();
+    const PreciseDecimal epsilon = scale_epsilon(2);
     const int limit = series_iteration_limit(200);
 
     for (int n = 3; n < limit * 2; n += 2) {
@@ -437,68 +521,6 @@ PreciseDecimal ln_near_one(const PreciseDecimal& x) {
     return two() * sum;
 }
 
-PreciseDecimal agm(PreciseDecimal a, PreciseDecimal b, const PreciseDecimal& epsilon) {
-    NormalizationSuppressor suppressor;
-
-    const int max_iterations = 50;
-    for (int i = 0; i < max_iterations; ++i) {
-        PreciseDecimal a_next = (a + b) * half();
-        PreciseDecimal b_next = precise::sqrt(a * b);
-
-        if (precise::abs(a_next - a) < epsilon && precise::abs(b_next - b) < epsilon) {
-            g_suppress_normalization = false;
-            a_next.normalize();
-            return a_next;
-        }
-
-        a = a_next;
-        b = b_next;
-    }
-
-    g_suppress_normalization = false;
-    a.normalize();
-    return a;
-}
-
-PreciseDecimal ln_agm(const PreciseDecimal& x) {
-    if (x <= PreciseDecimal(0LL)) throw std::domain_error("ln_agm of non-positive number");
-    if (x == one()) return PreciseDecimal(0LL);
-
-    ScopedPrecision guard(8);
-    const PreciseDecimal epsilon = scale_epsilon();
-
-    int k = 0;
-    PreciseDecimal reduced = x;
-    const PreciseDecimal two_val = two();
-    const PreciseDecimal half_val = half();
-    const PreciseDecimal lower("0.5");
-    const PreciseDecimal upper("2.0");
-
-    while (reduced > upper) {
-        reduced *= half_val;
-        ++k;
-    }
-    while (reduced < lower) {
-        reduced *= two_val;
-        --k;
-    }
-
-    PreciseDecimal a = (one() + reduced) * half();
-    PreciseDecimal b = precise::sqrt(reduced);
-
-    PreciseDecimal agm_val = agm(a, b, epsilon);
-    PreciseDecimal pi_val = pi();
-
-    PreciseDecimal result = pi_val * (a - b) / (agm_val * two());
-
-    if (k != 0) {
-        static const PreciseDecimal ln2_val = ln2();
-        result = result + PreciseDecimal(static_cast<long long>(k)) * ln2_val;
-    }
-
-    return result;
-}
-
 PreciseDecimal ln(const PreciseDecimal& x) {
     if (x <= PreciseDecimal(0LL)) throw std::domain_error("ln of non-positive number");
     if (x == one()) return PreciseDecimal(0LL);
@@ -508,13 +530,13 @@ PreciseDecimal ln(const PreciseDecimal& x) {
         return ln_agm(x);
     }
 
-    ScopedPrecision guard(8);
+    ScopedPrecision guard(10);
 
-    static const PreciseDecimal ln2_val = ln2();
-    static const PreciseDecimal two_val = two();
-    static const PreciseDecimal half_val = half();
-    static const PreciseDecimal lower("0.75");
-    static const PreciseDecimal upper("1.5");
+    const PreciseDecimal ln2_val = ln2();
+    const PreciseDecimal two_val = two();
+    const PreciseDecimal half_val = half();
+    const PreciseDecimal lower("0.7071067811865475");
+    const PreciseDecimal upper("1.414213562373095");
 
     PreciseDecimal reduced = x;
     int k = 0;
@@ -532,6 +554,7 @@ PreciseDecimal ln(const PreciseDecimal& x) {
     if (k != 0) {
         result = result + PreciseDecimal(static_cast<long long>(k)) * ln2_val;
     }
+    result.normalize();
     return result;
 }
 
@@ -559,7 +582,7 @@ PreciseDecimal exp(const PreciseDecimal& x) {
 
     int scale = PrecisionContext::get_default_scale();
     if (scale > 100) {
-        static const PreciseDecimal ln2_val = ln2();
+        const PreciseDecimal ln2_val = ln2();
         PreciseDecimal k_val = precise::floor(x / ln2_val);
         long long k = static_cast<long long>(k_val.to_double());
         PreciseDecimal r = x - k_val * ln2_val;
@@ -719,11 +742,10 @@ PreciseDecimal sin(const PreciseDecimal& x) {
         }
 
         for (int i = 0; i < k; ++i) {
-            sin_r = two() * sin_r * cos_r;
-            cos_r = cos_r * cos_r - sin_r * sin_r;
-            if (i < k - 1) {
-                cos_r = precise::sqrt(one() - sin_r * sin_r);
-            }
+            PreciseDecimal new_sin = two() * sin_r * cos_r;
+            PreciseDecimal new_cos = cos_r * cos_r - sin_r * sin_r;
+            sin_r = new_sin;
+            cos_r = new_cos;
         }
 
         g_suppress_normalization = false;
@@ -785,8 +807,9 @@ PreciseDecimal cos(const PreciseDecimal& x) {
         }
 
         for (int i = 0; i < k; ++i) {
+            PreciseDecimal new_sin = two() * sin_r * cos_r;
             PreciseDecimal new_cos = cos_r * cos_r - sin_r * sin_r;
-            sin_r = two() * sin_r * cos_r;
+            sin_r = new_sin;
             cos_r = new_cos;
         }
 

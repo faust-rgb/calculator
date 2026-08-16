@@ -128,18 +128,22 @@ TMatrix<T> multiply(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     TMatrix<T> result(lhs.rows, rhs.cols, T(0));
 
     if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        precise::NormalizationSuppressor suppressor;
         for (std::size_t i = 0; i < lhs.rows; ++i) {
-            for (std::size_t j = 0; j < rhs.cols; ++j) {
-                T sum = T(0);
-                for (std::size_t k = 0; k < lhs.cols; ++k) {
-                    const T& lhs_val = lhs.at(i, k);
-                    const T& rhs_val = rhs.at(k, j);
-                    if (lhs_val == T(0) || rhs_val == T(0)) continue;
-                    sum += lhs_val * rhs_val;
+            const std::size_t row_offset = i * rhs.cols;
+            for (std::size_t k = 0; k < lhs.cols; ++k) {
+                const T& lhs_val = lhs.at(i, k);
+                if (lhs_val.is_zero()) continue;
+                const std::size_t rhs_offset = k * rhs.cols;
+                for (std::size_t j = 0; j < rhs.cols; ++j) {
+                    const T& rhs_val = rhs.data[rhs_offset + j];
+                    if (rhs_val.is_zero()) continue;
+                    result.data[row_offset + j] += lhs_val * rhs_val;
                 }
-                result.at(i, j) = sum;
             }
         }
+        precise::ScopedNormalizationEnable enable_normalization;
+        for (auto& val : result.data) normalize(val);
         return result;
     }
 

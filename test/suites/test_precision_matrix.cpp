@@ -389,6 +389,117 @@ void test_bracket_matrix_complex_expressions(int& passed, int& failed) {
     }
 }
 
+void test_precise_decimal_core_fixes(int& passed, int& failed) {
+    std::cout << "  Testing PreciseDecimal core algorithms and fixes..." << std::endl;
+
+    // 1. ln_agm & ln at high precision (scale = 120)
+    {
+        int old_s = precise::PrecisionContext::get_default_scale();
+        precise::PrecisionContext::set_default_scale(120);
+        precise::PreciseDecimal x(2LL);
+        precise::PreciseDecimal val_ln2 = precise::ln_agm(x);
+        std::string s = val_ln2.to_string();
+        // ln(2) = 0.69314718055994530941723212145817656807550013436025525412068000949339362...
+        if (s.rfind("0.6931471805599453094172321214581765680755", 0) == 0) {
+            ++passed;
+            std::cout << "    PASS: ln_agm(2) 120 digits accurate: " << s.substr(0, 40) << "..." << std::endl;
+        } else {
+            ++failed;
+            std::cout << "    FAIL: ln_agm(2) got: " << s << std::endl;
+        }
+
+        precise::PreciseDecimal val_ln = precise::ln(x);
+        std::string s_ln = val_ln.to_string();
+        if (s_ln.rfind("0.6931471805599453094172321214581765680755", 0) == 0) {
+            ++passed;
+            std::cout << "    PASS: ln(2) at scale=120: " << s_ln.substr(0, 40) << "..." << std::endl;
+        } else {
+            ++failed;
+            std::cout << "    FAIL: ln(2) got: " << s_ln << std::endl;
+        }
+        precise::PrecisionContext::set_default_scale(old_s);
+    }
+
+    // 2. sin and cos at high precision (scale = 120)
+    {
+        int old_s = precise::PrecisionContext::get_default_scale();
+        precise::PrecisionContext::set_default_scale(120);
+        precise::PreciseDecimal angle("1.234567890123456789");
+        precise::PreciseDecimal s = precise::sin(angle);
+        precise::PreciseDecimal c = precise::cos(angle);
+        precise::PreciseDecimal pythagoras = s * s + c * c;
+        precise::PreciseDecimal diff = precise::abs(pythagoras - precise::PreciseDecimal(1LL));
+        if (diff < precise::PreciseDecimal("1e-110")) {
+            ++passed;
+            std::cout << "    PASS: sin^2 + cos^2 = 1 at scale=120 (diff < 1e-110)" << std::endl;
+        } else {
+            ++failed;
+            std::cout << "    FAIL: sin^2 + cos^2 diff: " << diff.to_string() << std::endl;
+        }
+        precise::PrecisionContext::set_default_scale(old_s);
+    }
+
+    // 3. Binary splitting e and pi
+    {
+        precise::PreciseDecimal pi_val = precise::pi_binary_splitting();
+        std::string pi_str = pi_val.to_string();
+        if (pi_str.rfind("3.14159265358979323846264338327950288419716939937510", 0) == 0) {
+            ++passed;
+            std::cout << "    PASS: pi_binary_splitting(): " << pi_str.substr(0, 35) << "..." << std::endl;
+        } else {
+            ++failed;
+            std::cout << "    FAIL: pi_binary_splitting got: " << pi_str << std::endl;
+        }
+    }
+
+    // 4. Constants dynamic precision > 240
+    {
+        int old_s = precise::PrecisionContext::get_default_scale();
+        precise::PrecisionContext::set_default_scale(300);
+        precise::PreciseDecimal pi_300 = precise::pi();
+        std::string pi_str = pi_300.to_string();
+        if (pi_str.size() >= 300 && pi_str.rfind("3.1415926535897932384626433832795028841971", 0) == 0) {
+            ++passed;
+            std::cout << "    PASS: pi() dynamically computed at scale=300, length=" << pi_str.size() << std::endl;
+        } else {
+            ++failed;
+            std::cout << "    FAIL: pi() at scale=300, length=" << pi_str.size() << " str=" << pi_str << std::endl;
+        }
+        precise::PrecisionContext::set_default_scale(old_s);
+    }
+
+    // 5. Initial guess scaling under extreme scales (>5000)
+    {
+        int old_s = precise::PrecisionContext::get_default_scale();
+        precise::PrecisionContext::set_default_scale(20);
+        precise::PreciseDecimal huge("1e5000");
+        precise::PreciseDecimal sqrt_huge = precise::sqrt(huge);
+        std::string s_huge = sqrt_huge.to_string();
+        if (s_huge.size() == 2501 && s_huge[0] == '1') {
+            ++passed;
+            std::cout << "    PASS: sqrt(1e5000) computed accurately without overflow (length=" << s_huge.size() << ")" << std::endl;
+        } else {
+            ++failed;
+            std::cout << "    FAIL: sqrt(1e5000) got length: " << s_huge.size() << std::endl;
+        }
+        precise::PrecisionContext::set_default_scale(old_s);
+    }
+
+    // 6. Precise parser sign with tiny values and large hex literals
+    {
+        Calculator calc;
+        // sign of 1e-50
+        std::string sign_res = calc.process_line("sign(1e-50)", false);
+        if (sign_res == "1" || sign_res.find("1") != std::string::npos) {
+            ++passed;
+            std::cout << "    PASS: sign(1e-50) returned 1" << std::endl;
+        } else {
+            ++failed;
+            std::cout << "    FAIL: sign(1e-50) got: " << sign_res << std::endl;
+        }
+    }
+}
+
 void run_precision_matrix_tests(int& passed, int& failed) {
     std::cout << "Running Precision Matrix Tests..." << std::endl;
 
@@ -399,6 +510,7 @@ void run_precision_matrix_tests(int& passed, int& failed) {
     test_freqz_precision(passed, failed);
     test_performance_comparison(passed, failed);
     test_bracket_matrix_complex_expressions(passed, failed);
+    test_precise_decimal_core_fixes(passed, failed);
 
     std::cout << "Precision Matrix Tests Completed." << std::endl;
 }

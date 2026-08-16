@@ -109,15 +109,19 @@ BigIntData reciprocal_newton(const BigIntData& d, std::size_t precision_chunks) 
 
     uint64_t d_high = 0;
     if (d.size() >= 2) {
-        d_high = (static_cast<uint64_t>(d[d.size() - 1]) << 32) | d[d.size() - 2];
+        d_high = static_cast<uint64_t>(d[d.size() - 1]) * kBase + d[d.size() - 2];
     } else {
-        d_high = d[0];
+        d_high = static_cast<uint64_t>(d[0]) * kBase;
     }
 
-    uint64_t x0_val = (static_cast<uint64_t>(1) << 63) / (d_high >> 1);
+    uint64_t x0_val = (d_high > 0) ? ((static_cast<uint64_t>(kBase) * kBase * kBase) / d_high) : 1;
     if (x0_val == 0) x0_val = 1;
 
-    BigIntData x = {static_cast<uint32_t>(x0_val), static_cast<uint32_t>(x0_val >> 32)};
+    BigIntData x = {
+        static_cast<uint32_t>(x0_val % kBase),
+        static_cast<uint32_t>((x0_val / kBase) % kBase)
+    };
+    while (x.size() > 1 && x.back() == 0) x.pop_back();
 
     std::size_t current_precision = 2;
 

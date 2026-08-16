@@ -493,8 +493,7 @@ void test_large_matrix_qr(int& passed, int& failed) {
     // 测试 50x50 矩阵 QR 分解
     {
         Matrix A = generate_random_matrix(50, 50, -1.0L, 1.0L, 1100);
-        Matrix Q = qr_q(A);
-        Matrix R = qr_r(A);
+        auto [Q, R] = qr_decompose(A);
 
         // 验证 Q * R = A
         Matrix QR = multiply(Q, R);
@@ -504,22 +503,6 @@ void test_large_matrix_qr(int& passed, int& failed) {
         Matrix QtQ = multiply(transpose(Q), Q);
         Matrix I = Matrix::identity(50);
         auto err2 = relative_error(QtQ, I);
-
-        // 调试输出：检查 Q 的范数和最大元素
-        long double q_norm_ld = 0.0L;
-        long double q_max_ld = 0.0L;
-        for (std::size_t i = 0; i < 50; ++i) {
-            for (std::size_t j = 0; j < 50; ++j) {
-                long double val = static_cast<long double>(Q.at(i, j));
-                q_norm_ld += val * val;
-                if (std::abs(val) > q_max_ld) q_max_ld = std::abs(val);
-            }
-        }
-        std::cout << "Q norm squared (long double) = " << q_norm_ld << std::endl;
-        std::cout << "Q max element (long double) = " << q_max_ld << std::endl;
-        std::cout << "Q(0,0) = " << Q.at(0, 0).to_string() << std::endl;
-        std::cout << "QtQ(0,0) = " << QtQ.at(0, 0).to_string() << std::endl;
-        std::cout << "QtQ(0,1) = " << QtQ.at(0, 1).to_string() << std::endl;
 
         if (err1 < VERY_LARGE_TOLERANCE && err2 < VERY_LARGE_TOLERANCE) {
             ++passed;
@@ -533,8 +516,7 @@ void test_large_matrix_qr(int& passed, int& failed) {
     // 测试 80x50 矩阵 QR 分解（行数 > 列数）
     {
         Matrix A = generate_random_matrix(80, 50, -1.0L, 1.0L, 1200);
-        Matrix Q = qr_q(A);
-        Matrix R = qr_r(A);
+        auto [Q, R] = qr_decompose(A);
 
         // 验证 Q * R = A
         Matrix QR = multiply(Q, R);
@@ -1370,27 +1352,36 @@ void test_numerical_stability(int& passed, int& failed) {
 int run_large_matrix_tests(int& passed, int& failed) {
     auto start = std::chrono::high_resolution_clock::now();
 
-    test_large_matrix_creation(passed, failed);
-    test_large_matrix_add_sub(passed, failed);
-    test_large_matrix_multiplication(passed, failed);
-    test_large_matrix_transpose(passed, failed);
-    test_large_matrix_inverse(passed, failed);
-    test_large_matrix_qr(passed, failed);
-    test_large_matrix_lu(passed, failed);
-    test_large_matrix_svd(passed, failed);
-    test_large_matrix_cholesky(passed, failed);
-    test_large_matrix_solve(passed, failed);
-    test_large_matrix_det_trace(passed, failed);
-    test_large_matrix_eigen(passed, failed);
-    test_large_matrix_norm_cond(passed, failed);
-    test_large_matrix_rank_rref(passed, failed);
-    test_large_matrix_power(passed, failed);
-    test_large_matrix_kronecker(passed, failed);
-    test_large_matrix_hadamard(passed, failed);
-    test_numerical_stability(passed, failed);
+    auto run_step = [&](const char* name, auto fn) {
+        auto t0 = std::chrono::high_resolution_clock::now();
+        fn(passed, failed);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+        std::cout << "  [MAT] " << name << ": " << ms << " ms" << std::endl;
+    };
+
+    run_step("creation", test_large_matrix_creation);
+    run_step("add_sub", test_large_matrix_add_sub);
+    run_step("multiplication", test_large_matrix_multiplication);
+    run_step("transpose", test_large_matrix_transpose);
+    run_step("inverse", test_large_matrix_inverse);
+    run_step("qr", test_large_matrix_qr);
+    run_step("lu", test_large_matrix_lu);
+    run_step("svd", test_large_matrix_svd);
+    run_step("cholesky", test_large_matrix_cholesky);
+    run_step("solve", test_large_matrix_solve);
+    run_step("det_trace", test_large_matrix_det_trace);
+    run_step("eigen", test_large_matrix_eigen);
+    run_step("norm_cond", test_large_matrix_norm_cond);
+    run_step("rank_rref", test_large_matrix_rank_rref);
+    run_step("power", test_large_matrix_power);
+    run_step("kronecker", test_large_matrix_kronecker);
+    run_step("hadamard", test_large_matrix_hadamard);
+    run_step("stability", test_numerical_stability);
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "Large Matrix Tests Completed in " << duration.count() << " ms." << std::endl;
 
     return failed == 0 ? 0 : 1;
 }

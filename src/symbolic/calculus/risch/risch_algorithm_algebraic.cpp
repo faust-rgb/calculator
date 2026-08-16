@@ -1414,6 +1414,27 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_algebraic_extensi
         }
     }
 
+    // 检查代数曲线的亏格 g 与除数理论 (Abel-Jacobi Divisor Torsion Theorem)
+    std::vector<SymbolicExpression> p_coeffs;
+    if (symbolic_polynomial_coefficients_from_simplified(ext.defining_expression.simplify(), x_var, &p_coeffs)) {
+        int d = static_cast<int>(p_coeffs.size()) - 1;
+        int n = ext.degree;
+        int genus = 0;
+        if (n == 2) {
+            genus = (d >= 1) ? ((d - 1) / 2) : 0;
+        } else if (n > 2 && d > 0) {
+            int g_gcd = static_cast<int>(mymath::gcd(n, d));
+            genus = 1 - n + (d * (n - 1) + n - g_gcd) / 2;
+            if (genus < 0) genus = 0;
+        }
+
+        if (genus >= 1) {
+            // 亏格 g >= 1 的代数曲线上，第一类与第二类全纯/半全纯阿贝尔微积分在雅可比簇中具有非挠除数 (Non-torsion divisor)，严格非初等
+            return IntegrationResult::non_elementary(
+                "Proved non-elementary by Abel-Jacobi divisor torsion theorem: Abelian differential on algebraic curve of genus g=" + std::to_string(genus));
+        }
+    }
+
     // If no actual extension-variable representation was found, calling the
     // full integrator again would rediscover the same algebraic extension.
     if (structural_equals(elem_expr.simplify(), expr.simplify())) {

@@ -31,13 +31,19 @@
 
 // 特殊函数类型
 enum class SpecialFunction {
-    kEi,      // 指数积分 Ei(x)
-    kErf,     // 误差函数 erf(x)
-    kSi,      // 正弦积分 Si(x)
-    kCi,      // 余弦积分 Ci(x)
-    kLi,      // 对数积分 li(x)
-    kGamma,   // Gamma 函数
-    kPolyLog  // 多对数函数
+    kEi,              // 指数积分 Ei(x)
+    kErf,             // 误差函数 erf(x)
+    kSi,              // 正弦积分 Si(x)
+    kCi,              // 余弦积分 Ci(x)
+    kLi,              // 对数积分 li(x)
+    kGamma,           // Gamma 函数
+    kPolyLog,         // 多对数函数
+    kIncompleteGamma, // 不完全 Gamma 函数 gamma(a, x) / Gamma(a, x)
+    kEllipticF,       // 第一类不完全椭圆积分 F(phi, k)
+    kEllipticE,       // 第二类不完全椭圆积分 E(phi, k)
+    kEllipticPi,      // 第三类不完全椭圆积分 Pi(n, phi, k)
+    kFresnelS,        // 菲涅尔正弦积分 S(x)
+    kFresnelC         // 菲涅尔余弦积分 C(x)
 };
 
 // 复数根表示，用于 Rothstein-Trager 算法

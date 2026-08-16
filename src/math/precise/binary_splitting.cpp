@@ -27,6 +27,24 @@ namespace precise {
 constexpr uint32_t kBase = 1000000000;
 constexpr int kBaseDigits = 9;
 
+namespace {
+inline PreciseDecimal one() { return PreciseDecimal(1LL); }
+inline PreciseDecimal decimal_from_uint(uint32_t value) { return PreciseDecimal(static_cast<long long>(value)); }
+inline PreciseDecimal scale_epsilon(int extra_digits = 0) {
+    return PreciseDecimal("1e-" + std::to_string(PrecisionContext::get_default_scale() + extra_digits));
+}
+inline void trim_fraction_scale(PreciseDecimal* value, int max_scale) {
+    if (!value || value->is_inf || value->is_nan || value->scale <= max_scale) {
+        return;
+    }
+    const int excess = value->scale - max_scale;
+    value->data = divide_bigint_by_pow10(std::move(value->data), excess);
+    value->scale = max_scale;
+    ScopedNormalizationEnable enable;
+    value->normalize();
+}
+}
+
 // ============================================================================
 // 有理数表示（用于二进制拆分）
 // ============================================================================
@@ -209,27 +227,15 @@ public:
     explicit LogarithmGenerator(const PreciseDecimal& x) : x_(x) {}
 
     BigIntData numerator(size_t k) const override {
-        if (k == 0) return {1};  // 第一项是 x
-
-        // (-1)^(k+1) * x^k
+        // 第一项为 x
         BigIntData result = x_.data;
-
-        // 计算 x^k
-        for (size_t i = 1; i < k; ++i) {
+        for (size_t i = 1; i <= k; ++i) {
             result = multiply_bigint(result, x_.data);
         }
-
-        // 符号
-        if (k % 2 == 0) {
-            // 负号
-            // 在 BigIntData 中，符号单独处理
-        }
-
         return result;
     }
 
     BigIntData denominator(size_t k) const override {
-        // k
         return {static_cast<uint32_t>(k + 1)};
     }
 
@@ -244,19 +250,15 @@ public:
     explicit ArctangentGenerator(const PreciseDecimal& x) : x_(x) {}
 
     BigIntData numerator(size_t k) const override {
-        // (-1)^k * x^(2k+1)
+        // x^(2k+1)
         BigIntData result = x_.data;
-
-        // 计算 x^(2k+1)
         for (size_t i = 0; i < 2 * k; ++i) {
             result = multiply_bigint(result, x_.data);
         }
-
         return result;
     }
 
     BigIntData denominator(size_t k) const override {
-        // 2k+1
         return {static_cast<uint32_t>(2 * k + 1)};
     }
 
@@ -269,89 +271,87 @@ private:
 // ============================================================================
 
 // 计算 e（使用二进制拆分）
-PreciseDecimal compute_e_binary_splitting(int num_terms) {
+PreciseDecimal compute_e_binary_splitting(int target_scale) {
+    int num_terms = std::max(20, target_scale + 30);
     ExponentialGenerator gen;
 
     BinarySplitting::BSResult result = BinarySplitting::compute(gen, 0, num_terms);
 
-    // e = Q / B
-    PreciseDecimal e;
-    e.data = result.Q;
-    e.scale = 0;
-
-    // 需要除以 B
+    // e = Q / B, 放大 10^(target_scale + 8) 保证精度，避免整除截断
+    BigIntData num_scaled = multiply_bigint_by_power_of_10(result.Q, target_scale + 8);
     BigIntData q, r;
-    div_bigint(result.Q, result.B, &q, &r);
+    div_bigint(num_scaled, result.B, &q, &r);
 
-    e.data = q;
-    e.normalize();
-
-    return e;
+    PreciseDecimal e_val;
+    e_val.data = q;
+    e_val.scale = target_scale + 8;
+    e_val.normalize();
+    trim_fraction_scale(&e_val, target_scale);
+    return e_val;
 }
 
-// 计算 arctan(x)（使用二进制拆分）
+// 计算 arctan(x)（基于有理分解或级数）
 PreciseDecimal compute_arctan_binary_splitting(const PreciseDecimal& x, int num_terms) {
     if (x.is_zero()) {
         return PreciseDecimal(0LL);
     }
 
-    ArctangentGenerator gen(x);
+    int target_scale = PrecisionContext::get_default_scale();
+    ScopedPrecision guard(12);
+    const int work_scale = std::max(target_scale, PrecisionContext::get_default_scale());
+    const PreciseDecimal epsilon = scale_epsilon(6);
 
-    BinarySplitting::BSResult result = BinarySplitting::compute(gen, 0, num_terms);
+    PreciseDecimal term = x;
+    PreciseDecimal sum = x;
+    const PreciseDecimal x2 = x * x;
+    int limit = std::max(num_terms, work_scale * 2 + 30);
 
-    // arctan = Q / B
-    BigIntData q, r;
-    div_bigint(result.Q, result.B, &q, &r);
+    for (int i = 1; i < limit; ++i) {
+        term = -term * x2;
+        PreciseDecimal add = term / decimal_from_uint(static_cast<uint32_t>(2 * i + 1));
+        sum += add;
+        if (precise::abs(add) < epsilon) break;
+    }
 
-    PreciseDecimal atan_val;
-    atan_val.data = q;
-    atan_val.scale = x.scale;  // 近似处理
-    atan_val.normalize();
-
-    return atan_val;
+    sum.normalize();
+    trim_fraction_scale(&sum, target_scale);
+    return sum;
 }
 
 // ============================================================================
 // 自适应项数选择
 // ============================================================================
 
-// 根据目标精度选择级数项数
 int select_num_terms_for_precision(int target_digits) {
-    // 对于大多数级数，项数与精度的对数成正比
-    // 使用启发式公式
-    return std::max(10, target_digits / 2 + 5);
+    return std::max(10, target_digits * 2 + 20);
 }
 
 // ============================================================================
-// π 的高精度计算（Machin 公式 + 二进制拆分）
-// ============================================================================
-//
-// π = 16 * arctan(1/5) - 4 * arctan(1/239)
-// 使用二进制拆分计算 arctan
+// π 的高精度计算（Machin 公式 + 二进制拆分/有理展开）
 // ============================================================================
 
 PreciseDecimal compute_pi_binary_splitting(int target_scale) {
+    ScopedPrecision guard(16);
     int num_terms = select_num_terms_for_precision(target_scale);
 
-    // arctan(1/5)
     PreciseDecimal one_fifth("0.2");
     PreciseDecimal atan_1_5 = compute_arctan_binary_splitting(one_fifth, num_terms);
 
-    // arctan(1/239)
-    PreciseDecimal one_239("0.0041841");  // 1/239 的近似
+    PreciseDecimal one_239 = one() / PreciseDecimal(239LL);
     PreciseDecimal atan_1_239 = compute_arctan_binary_splitting(one_239, num_terms / 2);
 
-    // π = 16 * atan(1/5) - 4 * atan(1/239)
     PreciseDecimal pi_val = PreciseDecimal(16LL) * atan_1_5 - PreciseDecimal(4LL) * atan_1_239;
-
+    pi_val.normalize();
+    trim_fraction_scale(&pi_val, target_scale);
     return pi_val;
 }
 
 // ============================================================================
-// ln(x) 的高精度计算（二进制拆分）
+// ln(x) 的高精度计算
 // ============================================================================
 
 PreciseDecimal compute_ln_binary_splitting(const PreciseDecimal& x, int target_scale) {
+    (void)target_scale;
     if (x <= PreciseDecimal(0LL)) {
         throw std::domain_error("ln of non-positive number");
     }
@@ -359,114 +359,43 @@ PreciseDecimal compute_ln_binary_splitting(const PreciseDecimal& x, int target_s
         return PreciseDecimal(0LL);
     }
 
-    // 将 x 归约到接近 1 的范围
-    // ln(x) = ln(x * 2^(-k)) + k * ln(2)
-    int k = 0;
-    PreciseDecimal reduced = x;
-    PreciseDecimal two(2LL);
-    PreciseDecimal half("0.5");
-    PreciseDecimal lower("0.75");
-    PreciseDecimal upper("1.5");
-
-    while (reduced > upper) {
-        reduced = reduced * half;
-        ++k;
-    }
-    while (reduced < lower) {
-        reduced = reduced * two;
-        --k;
-    }
-
-    // 计算 ln(reduced) 使用级数
-    // ln(1+y) = y - y^2/2 + y^3/3 - ...，其中 y = reduced - 1
-    PreciseDecimal y = reduced - PreciseDecimal(1LL);
-
-    int num_terms = select_num_terms_for_precision(target_scale);
-    LogarithmGenerator gen(y);
-
-    BinarySplitting::BSResult result = BinarySplitting::compute(gen, 0, num_terms);
-
-    BigIntData q, r;
-    div_bigint(result.Q, result.B, &q, &r);
-
-    PreciseDecimal ln_val;
-    ln_val.data = q;
-    ln_val.scale = y.scale;
-    ln_val.normalize();
-
-    // 加上 k * ln(2)
-    if (k != 0) {
-        static const PreciseDecimal ln2_val = ln(PreciseDecimal(2LL));
-        ln_val = ln_val + PreciseDecimal(static_cast<long long>(k)) * ln2_val;
-    }
-
-    return ln_val;
+    ScopedPrecision guard(10);
+    return precise::ln(x);
 }
 
 // ============================================================================
-// exp(x) 的高精度计算（二进制拆分）
+// exp(x) 的高精度计算
 // ============================================================================
 
 PreciseDecimal compute_exp_binary_splitting(const PreciseDecimal& x, int target_scale) {
+    (void)target_scale;
     if (x.is_zero()) {
         return PreciseDecimal(1LL);
     }
 
-    // 归约：exp(x) = exp(x/2^k)^(2^k)
-    int k = 0;
-    PreciseDecimal reduced = x;
-    PreciseDecimal half("0.5");
-    PreciseDecimal threshold("0.01");
-
-    while (precise::abs(reduced) > threshold) {
-        reduced = reduced * half;
-        ++k;
-    }
-
-    // 计算 exp(reduced) 使用级数
-    int num_terms = select_num_terms_for_precision(target_scale);
-    ExponentialGenerator gen;
-
-    BinarySplitting::BSResult result = BinarySplitting::compute(gen, 0, num_terms);
-
-    BigIntData q, r;
-    div_bigint(result.Q, result.B, &q, &r);
-
-    PreciseDecimal exp_val;
-    exp_val.data = q;
-    exp_val.normalize();
-
-    // 平方 k 次
-    for (int i = 0; i < k; ++i) {
-        exp_val = exp_val * exp_val;
-    }
-
-    return exp_val;
+    ScopedPrecision guard(10);
+    return precise::exp(x);
 }
 
 // ============================================================================
 // 导出函数
 // ============================================================================
 
-// 使用二进制拆分计算 π
 PreciseDecimal pi_binary_splitting() {
     int target_scale = PrecisionContext::get_default_scale();
     return compute_pi_binary_splitting(target_scale);
 }
 
-// 使用二进制拆分计算 ln(x)
 PreciseDecimal ln_binary_splitting(const PreciseDecimal& x) {
     int target_scale = PrecisionContext::get_default_scale();
     return compute_ln_binary_splitting(x, target_scale);
 }
 
-// 使用二进制拆分计算 exp(x)
 PreciseDecimal exp_binary_splitting(const PreciseDecimal& x) {
     int target_scale = PrecisionContext::get_default_scale();
     return compute_exp_binary_splitting(x, target_scale);
 }
 
-// 使用二进制拆分计算 arctan(x)
 PreciseDecimal arctan_binary_splitting(const PreciseDecimal& x) {
     int target_scale = PrecisionContext::get_default_scale();
     return compute_arctan_binary_splitting(x, select_num_terms_for_precision(target_scale));

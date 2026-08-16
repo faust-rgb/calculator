@@ -226,7 +226,7 @@ private:
         }
         if (name == "sign" || name == "sgn") {
             if (args.size() != 1) throw ArgumentError("sign expects 1 argument");
-            if (mymath::is_near_zero(args[0].to_double(), 1e-10)) return PreciseDecimal(0LL);
+            if (args[0].is_zero()) return PreciseDecimal(0LL);
             return PreciseDecimal(args[0].negative ? -1LL : 1LL);
         }
         throw PreciseDecimalUnsupported("function '" + name + "' is not supported in precise mode");
@@ -240,18 +240,23 @@ private:
             pos_ + 1 < source_.size()) {
             int base = 10;
             if (prefixed_base(source_[pos_ + 1], &base)) {
-                const std::size_t start = pos_;
                 pos_ += 2;
+                PreciseDecimal val(0LL);
+                PreciseDecimal base_dec(static_cast<long long>(base));
+                bool has_any_digit = false;
                 while (!is_at_end()) {
                     const int digit = digit_value(source_[pos_]);
                     if (digit < 0 || digit >= base) {
                         break;
                     }
+                    val = val * base_dec + PreciseDecimal(static_cast<long long>(digit));
+                    has_any_digit = true;
                     ++pos_;
                 }
-                const long long integer_value = parse_prefixed_integer_token(
-                    std::string(source_.substr(start, pos_ - start)));
-                return PreciseDecimal(integer_value);
+                if (!has_any_digit) {
+                    throw SyntaxError("expected digits after base prefix");
+                }
+                return val;
             }
         }
 

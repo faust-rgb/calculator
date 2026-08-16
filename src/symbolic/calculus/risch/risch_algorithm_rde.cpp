@@ -2107,17 +2107,24 @@ bool RischAlgorithm::solve_polynomial_parametric_rde(
         max_deg_g = std::max(max_deg_g, g.degree());
     }
 
-    // Step 1: 计算度数界
-    // 使用改进的 RDEBounds 计算
+    // Step 1: 计算度数界 (Bronstein SPDE Degree Bound & Pruning)
     SymbolicPolynomial empty_g({}, x_var);
     RDEBounds bounds = compute_rde_bounds_complete(f_poly, empty_g, x_var, tower, tower_index);
 
-    int deg_y = bounds.degree_bound;
-    if (deg_y < 0) deg_y = 0;
+    int deg_y = 0;
+    if (deg_f > 0) {
+        deg_y = std::max(0, max_deg_g - deg_f);
+    } else if (deg_f == 0 && !f_poly.is_zero()) {
+        deg_y = std::max(0, max_deg_g);
+    } else {
+        // f == 0
+        deg_y = max_deg_g + 1;
+    }
 
-    // 对于参数化情况，度数界可能更高
-    // 因为需要同时满足多个 g_i
-    deg_y = std::max(deg_y, max_deg_g + 1);
+    if (bounds.degree_bound >= 0 && bounds.degree_bound < deg_y) {
+        deg_y = bounds.degree_bound;
+    }
+    if (deg_y < 0) deg_y = 0;
 
     SymbolicExpression t_prime = (tower_index >= 0) ? tower[tower_index].derivation : SymbolicExpression::number(Scalar(1.0L));
     int num_c = static_cast<int>(g_polys.size());
