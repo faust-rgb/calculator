@@ -690,6 +690,10 @@ std::vector<Complex> freqz(const std::vector<Scalar>& b,
 // 群延迟
 // ============================================================================
 
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
+#endif
 std::vector<Scalar> grpdelay(const std::vector<Scalar>& b,
                               const std::vector<Scalar>& a,
                               std::size_t n) {
@@ -731,5 +735,9 @@ std::vector<Scalar> grpdelay(const std::vector<Scalar>& b,
 
     return gd;
 }
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 }  // namespace signal

@@ -1,5 +1,5 @@
 #include "core/services/core_manager_interfaces.h"
-#include "types/function.h"
+#include "execution/functions/user_function.h"
 #include "core/services/core_manager_interfaces.h"
 // ============================================================================
 // command_executor.cpp - 命令 AST 执行实现

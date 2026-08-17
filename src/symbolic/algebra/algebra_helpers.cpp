@@ -887,10 +887,12 @@ SymbolicExpression make_rootof(
     auto node = std::make_shared<SymbolicExpression::Node>();
     node->type = NodeType::kRootOf;
     node->text = var_name;
-    node->number_value = (root_index);
-    node->children.push_back(polynomial.node_);
+    node->number_value = Scalar(root_index);
+    // Keep the defining polynomial in canonical form so equivalent RootOf
+    // expressions remain structurally comparable after substitution.
+    node->children.push_back(polynomial.simplify().node_);
 
-    return SymbolicExpression(node);
+    return SymbolicExpression(intern_node(node));
 }
 
 /** @brief 从多项式创建 RootOf 表达式 */

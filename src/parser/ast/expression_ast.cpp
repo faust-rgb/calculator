@@ -44,7 +44,7 @@ class ASTCompiler {
         if (tokens_.is_at_end()) {
             return nullptr;
         }
-        auto ast = parse_conditional();
+        auto ast = parse_pratt(0);
         if (tokens_.peek().kind != TokenKind::kEnd) {
             throw_syntax_error("unexpected token near: " + std::string(tokens_.peek().text));
         }
@@ -86,6 +86,91 @@ private:
         if (!match_kind(kind)) {
             throw_syntax_error(msg);
         }
+    }
+
+    static int infix_binding_power(std::string_view op, bool* right_assoc = nullptr) {
+        if (right_assoc) *right_assoc = false;
+        if (op == "?") return 5;
+        if (op == "||") return 10;
+        if (op == "&&") return 20;
+        if (op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=") return 30;
+        if (op == "+" || op == "-") return 40;
+        if (op == "*" || op == "/" || op == "%") return 50;
+        if (op == "^") { if (right_assoc) *right_assoc = true; return 60; }
+        return -1;
+    }
+
+    bool starts_implicit_factor() {
+        if (tokens_.is_at_end()) return false;
+        const auto kind = tokens_.peek().kind;
+        return kind == TokenKind::kIdentifier || kind == TokenKind::kLParen || kind == TokenKind::kLBracket;
+    }
+
+    std::unique_ptr<ExpressionAST> parse_pratt(int min_bp) {
+        std::unique_ptr<ExpressionAST> left;
+        if (match_operator("+")) {
+            left = parse_pratt(59);
+        } else if (match_operator("-")) {
+            auto node = std::make_unique<ExpressionAST>(ExprKind::kUnaryOp);
+            node->op_char = '-';
+            node->position = tokens_.peek().position;
+            node->children.push_back(parse_pratt(59));
+            left = std::move(node);
+        } else {
+            left = parse_primary();
+        }
+
+        while (left) {
+            std::string op;
+            bool implicit = false;
+            if (starts_implicit_factor()) {
+                op = "*";
+                implicit = true;
+            } else if (!tokens_.is_at_end() && tokens_.peek().kind == TokenKind::kOperator) {
+                op = std::string(tokens_.peek().text);
+            } else if (!tokens_.is_at_end() && tokens_.peek().kind == TokenKind::kQuestion) {
+                op = "?";
+            } else {
+                break;
+            }
+
+            bool right_assoc = false;
+            const int bp = infix_binding_power(op, &right_assoc);
+            if (bp < min_bp) break;
+            if (!implicit) advance_token();
+
+            if (op == "?") {
+                auto then_branch = parse_pratt(0);
+                if (!match_kind(TokenKind::kColon) && !match_operator(":"))
+                    throw_syntax_error("expected ':' in conditional expression");
+                auto else_branch = parse_pratt(bp);
+                auto node = std::make_unique<ExpressionAST>(ExprKind::kConditional);
+                node->position = left->position;
+                node->children.push_back(std::move(left));
+                node->children.push_back(std::move(then_branch));
+                node->children.push_back(std::move(else_branch));
+                left = std::move(node);
+                continue;
+            }
+
+            auto right = parse_pratt(right_assoc ? bp : bp + 1);
+            auto node = std::make_unique<ExpressionAST>();
+            node->position = left->position;
+            node->children.push_back(std::move(left));
+            node->children.push_back(std::move(right));
+            if (op == "&&" || op == "||") {
+                node->kind = ExprKind::kLogicalOp;
+                node->comparison_op = op;
+            } else if (op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=") {
+                node->kind = ExprKind::kComparison;
+                node->comparison_op = op;
+            } else {
+                node->kind = ExprKind::kBinaryOp;
+                node->op_char = op[0];
+            }
+            left = std::move(node);
+        }
+        return left;
     }
 
     [[noreturn]] void throw_syntax_error(const std::string& message) {
@@ -245,9 +330,26 @@ private:
 
         // 括号表达式
         if (match_kind(TokenKind::kLParen)) {
-            auto expr = parse_logical();
+            auto expr = parse_pratt(0);
             expect_kind(TokenKind::kRParen, "expected ')' after expression");
-            return expr;
+            return parse_postfix(std::move(expr));
+        }
+
+        // 矩阵字面量。逗号分隔列，分号分隔行；每个元素递归使用同一套表达式规则。
+        if (match_kind(TokenKind::kLBracket)) {
+            auto node = std::make_unique<ExpressionAST>(ExprKind::kMatrixLiteral);
+            node->position = tok.position;
+            if (match_kind(TokenKind::kRBracket)) return node;
+            while (true) {
+                std::vector<std::unique_ptr<ExpressionAST>> row;
+                row.push_back(parse_pratt(0));
+                while (match_kind(TokenKind::kComma)) row.push_back(parse_pratt(0));
+                node->matrix_rows.push_back(std::move(row));
+                if (match_kind(TokenKind::kRBracket)) break;
+                expect_kind(TokenKind::kSemicolon, "expected ';' or ']' in matrix literal");
+                if (match_kind(TokenKind::kRBracket)) throw_syntax_error("empty matrix row");
+            }
+            return parse_postfix(std::move(node));
         }
 
         // 标识符或函数调用
@@ -261,7 +363,7 @@ private:
                 std::vector<std::unique_ptr<ExpressionAST>> args;
                 if (!is_at_end() && peek_token().kind != TokenKind::kRParen) {
                     while (true) {
-                        args.push_back(parse_logical());
+                        args.push_back(parse_pratt(0));
                         if (!match_kind(TokenKind::kComma)) break;
                     }
                 }
@@ -271,14 +373,14 @@ private:
                 node->identifier = name;
                 node->position = pos;
                 node->children = std::move(args);
-                return node;
+                return parse_postfix(std::move(node));
             }
 
             // 变量引用
             auto node = std::make_unique<ExpressionAST>(ExprKind::kVariable);
             node->identifier = name;
             node->position = pos;
-            return node;
+            return parse_postfix(std::move(node));
         }
 
         // 数字字面量
@@ -288,7 +390,7 @@ private:
             node->string_value = std::string(tok.text);
             node->position = tok.position;
             advance_token();
-            return node;
+            return parse_postfix(std::move(node));
         }
 
         // 字符串字面量
@@ -297,10 +399,41 @@ private:
             node->string_value = tok.string_value;
             node->position = tok.position;
             advance_token();
-            return node;
+            return parse_postfix(std::move(node));
         }
 
         throw_syntax_error("unexpected token: " + std::string(tok.text));
+    }
+
+    std::unique_ptr<ExpressionAST> parse_postfix(std::unique_ptr<ExpressionAST> base) {
+        while (true) {
+            if (match_kind(TokenKind::kLBracket)) {
+                auto node = std::make_unique<ExpressionAST>(ExprKind::kIndexAccess);
+                node->position = base ? base->position : 0;
+                node->children.push_back(std::move(base));
+                if (!match_kind(TokenKind::kRBracket)) {
+                    while (true) {
+                        node->children.push_back(parse_logical());
+                        if (!match_kind(TokenKind::kComma)) break;
+                    }
+                    expect_kind(TokenKind::kRBracket, "expected ']' after index");
+                }
+                base = std::move(node);
+                continue;
+            }
+            if (match_operator("!")) {
+                auto node = std::make_unique<ExpressionAST>(ExprKind::kPostfixOp);
+                node->op_char = '!';
+                node->postfix_op = "!";
+                node->position = base ? base->position : 0;
+                node->children.push_back(std::move(base));
+                if (match_operator("!")) node->postfix_op = "!!";
+                base = std::move(node);
+                continue;
+            }
+            break;
+        }
+        return base;
     }
 };
 
@@ -407,6 +540,21 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                 default:
                     throw_ast_error<MathError>("unknown unary operator", ast->position);
             }
+        }
+
+        case ExprKind::kPostfixOp: {
+            if ((ast->postfix_op != "!" && ast->postfix_op != "!!") || ast->children.size() != 1)
+                throw_ast_error<MathError>("unknown postfix operator", ast->position);
+            Scalar value = evaluate_ast(ast->children[0].get(), variables, functions,
+                                         scalar_functions, native_functions,
+                                         has_script_function, invoke_script_function);
+            if (value < 0 || mymath::floor(value) != value)
+                throw_ast_error<MathError>("factorial requires a non-negative integer", ast->position);
+            Scalar result = 1;
+            const long long step = ast->postfix_op == "!!" ? 2 : 1;
+            const long long start = ast->postfix_op == "!!" && static_cast<long long>(value) % 2 == 0 ? 2 : 1;
+            for (long long i = static_cast<long long>(value); i >= start; i -= step) result *= static_cast<Scalar>(i);
+            return result;
         }
 
         case ExprKind::kComparison: {

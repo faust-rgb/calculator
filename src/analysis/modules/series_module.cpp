@@ -26,7 +26,7 @@
 #include "types/scalar_type.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "math/mymath.h"
-#include "math/helpers/integer_helpers.h"
+#include "math/functions/integer/integer_helpers.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "expression_utils.h"
 #include "string_utils.h"

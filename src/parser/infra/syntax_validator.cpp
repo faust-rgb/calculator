@@ -197,7 +197,8 @@ bool SyntaxValidator::check_operand_context(std::string_view expr,
 
     // 检查结尾
     char last = expr.back();
-    if (is_operator_char(last) && last != ')' && last != ']' && last != '}') {
+    // ! is a postfix factorial operator and is valid at expression end.
+    if (is_operator_char(last) && last != ')' && last != ']' && last != '}' && last != '!') {
         add_error(errors, "expression cannot end with operator '" + std::string(1, last) + "'",
                   expr.size() - 1);
     }
@@ -325,7 +326,7 @@ bool SyntaxValidator::check_expression_end(std::string_view expr,
     // 检查是否以无效字符结尾
     if (last == '+' || last == '-' || last == '*' || last == '/' ||
         last == '^' || last == '%' || last == '=' || last == '<' ||
-        last == '>' || last == '&' || last == '|' || last == '!' ||
+        last == '>' || last == '&' || last == '|' ||
         last == ',' || last == ':') {
         add_error(errors, "expression ends with incomplete operator", expr.size() - 1);
         return false;

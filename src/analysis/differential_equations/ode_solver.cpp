@@ -3,7 +3,7 @@
 // ============================================================================
 
 #include "analysis/differential_equations/ode_solver.h"
-#include "math/base/precision_constants.h"
+#include "math/numeric/precision/tolerances.h"
 #include "types/scalar_type.h"
 #include "math/mymath.h"
 #include "matrix/matrix.h"

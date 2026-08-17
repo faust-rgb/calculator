@@ -18,7 +18,7 @@
 #include "analysis/integration/multivariable_integrator.h"
 #include "analysis/integration/multidim_integration.h"
 #include "analysis/modules/integration_module.h"
-#include "math/base/precision_constants.h"
+#include "math/numeric/precision/tolerances.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
 #include "types/scalar_type.h"

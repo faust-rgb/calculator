@@ -20,7 +20,7 @@
 #define MATRIX_INTERNAL_H
 
 #include "matrix.h"
-#include "math/base/precision_constants.h"
+#include "math/numeric/precision/tolerances.h"
 #include <utility>
 #include <vector>
 

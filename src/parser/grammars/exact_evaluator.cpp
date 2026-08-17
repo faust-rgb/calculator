@@ -10,11 +10,11 @@
 #include "calculator_exceptions.h"
 #include "execution/resolver/builtin_constants.h"
 #include "execution/resolver/variable_resolver.h"
-#include "types/function.h"
-#include "math/helpers/base_conversions.h"
-#include "math/helpers/bitwise_helpers.h"
-#include "math/helpers/combinatorics.h"
-#include "math/helpers/integer_helpers.h"
+#include "execution/functions/user_function.h"
+#include "math/functions/conversion/base_conversions.h"
+#include "math/functions/integer/bitwise_helpers.h"
+#include "math/functions/combinatorics/combinatorics.h"
+#include "math/functions/integer/integer_helpers.h"
 #include "core/types/module_types.h"
 #include "types/scalar_type.h"
 #include "mymath.h"
@@ -526,6 +526,35 @@ Rational evaluate_ast_exact(const ExpressionAST* ast,
                     throw_ast_error<std::runtime_error>("unknown unary operator", ast->position);
             }
         }
+
+        case ExprKind::kPostfixOp: {
+            if ((ast->postfix_op != "!" && ast->postfix_op != "!!") || ast->children.size() != 1)
+                throw_ast_error<std::runtime_error>("unknown postfix operator", ast->position);
+            Rational operand = evaluate_ast_exact(ast->children[0].get(), variables, functions, has_script_function);
+            if (!operand.is_integer() || operand.numerator < 0)
+                throw_ast_error<ExactModeUnsupported>("factorial requires a non-negative integer", ast->position);
+            Rational result(1, 1);
+            const long long step = ast->postfix_op == "!!" ? 2 : 1;
+            const long long start = ast->postfix_op == "!!" && operand.numerator % 2 == 0 ? 2 : 1;
+            for (long long i = operand.numerator; i >= start; i -= step) result = result * Rational(i, 1);
+            return result;
+        }
+
+        case ExprKind::kLogicalOp: {
+            if (ast->children.size() != 2)
+                throw_ast_error<std::runtime_error>("invalid logical operation", ast->position);
+            Rational left = evaluate_ast_exact(ast->children[0].get(), variables, functions, has_script_function);
+            if (ast->comparison_op == "&&" && left.numerator == 0) return Rational(0, 1);
+            if (ast->comparison_op == "||" && left.numerator != 0) return Rational(1, 1);
+            Rational right = evaluate_ast_exact(ast->children[1].get(), variables, functions, has_script_function);
+            return Rational((right.numerator != 0) ? 1 : 0, 1);
+        }
+
+        case ExprKind::kImaginary:
+            throw_ast_error<ExactModeUnsupported>("complex values are not supported in exact rational mode", ast->position);
+        case ExprKind::kMatrixLiteral:
+        case ExprKind::kIndexAccess:
+            throw_ast_error<ExactModeUnsupported>("matrix values are not supported in exact rational mode", ast->position);
 
         case ExprKind::kComparison: {
             if (ast->children.size() != 2) {

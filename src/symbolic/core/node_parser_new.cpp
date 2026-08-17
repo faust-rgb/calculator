@@ -7,7 +7,7 @@
 
 #include "core/services/format_utils.h"
 #include "math/mymath.h"
-#include "math/types/dual.h"
+#include "math/numeric/types/dual.h"
 
 #include <algorithm>
 #include <cctype>
@@ -23,6 +23,7 @@
 #include <mutex>
 
 #include "parser/infra/base_parser.h"
+#include "parser/ast/expression_ast.h"
 
 namespace symbolic_expression_internal {
 
@@ -422,6 +423,9 @@ SymbolicExpression substitute_impl(const SymbolicExpression& expression,
                 .simplify();
         case NodeType::kRootOf:
             if (node->children.empty()) return expression;
+            if (variable_name == node->text) {
+                return expression;
+            }
             return make_rootof(substitute_impl(SymbolicExpression(node->children[0]),
                                                variable_name,
                                                replacement),
@@ -520,6 +524,9 @@ SymbolicExpression substitute_expression_impl(const SymbolicExpression& expressi
                 .simplify();
         case NodeType::kRootOf:
             if (node->children.empty()) return expression;
+            if (target.is_variable_named(node->text)) {
+                return expression;
+            }
             return make_rootof(substitute_expression_impl(SymbolicExpression(node->children[0]),
                                                           target,
                                                           replacement),
@@ -958,12 +965,75 @@ bool expr_is_variable(const SymbolicExpression& expression, const std::string& n
 
 using namespace symbolic_expression_internal;
 
+namespace {
+bool convert_unified_symbolic(const ExpressionAST* ast, SymbolicExpression* out) {
+    if (!ast || !out) return false;
+    switch (ast->kind) {
+        case ExprKind::kNumber:
+            *out = SymbolicExpression::number(ast->number_value); return true;
+        case ExprKind::kVariable:
+        case ExprKind::kImaginary:
+            *out = SymbolicExpression::variable(ast->kind == ExprKind::kImaginary ? "i" : ast->identifier); return true;
+        case ExprKind::kUnaryOp: {
+            if (ast->children.size() != 1) return false;
+            SymbolicExpression child;
+            if (!convert_unified_symbolic(ast->children[0].get(), &child)) return false;
+            *out = ast->op_char == '-' ? -child : child; return true;
+        }
+        case ExprKind::kBinaryOp: {
+            if (ast->children.size() != 2) return false;
+            SymbolicExpression left, right;
+            if (!convert_unified_symbolic(ast->children[0].get(), &left) ||
+                !convert_unified_symbolic(ast->children[1].get(), &right)) return false;
+            switch (ast->op_char) {
+                case '+': *out = left + right; return true;
+                case '-': *out = left - right; return true;
+                case '*': *out = left * right; return true;
+                case '/': *out = left / right; return true;
+                case '^': *out = left.power(right); return true;
+                default: return false;
+            }
+        }
+        case ExprKind::kFunctionCall: {
+            std::vector<SymbolicExpression> args;
+            for (const auto& child : ast->children) {
+                SymbolicExpression arg;
+                if (!convert_unified_symbolic(child.get(), &arg)) return false;
+                args.push_back(std::move(arg));
+            }
+            *out = SymbolicExpression::function(ast->identifier, args); return true;
+        }
+        case ExprKind::kMatrixLiteral: {
+            std::vector<std::vector<SymbolicExpression>> rows;
+            for (const auto& row : ast->matrix_rows) {
+                std::vector<SymbolicExpression> converted;
+                for (const auto& child : row) {
+                    SymbolicExpression cell;
+                    if (!convert_unified_symbolic(child.get(), &cell)) return false;
+                    converted.push_back(std::move(cell));
+                }
+                rows.push_back(std::move(converted));
+            }
+            *out = SymbolicExpression::tensor(rows); return true;
+        }
+        default: return false;
+    }
+}
+}
+
 SymbolicExpression::SymbolicExpression() : node_(make_number(Scalar(0))) {}
 
 SymbolicExpression::SymbolicExpression(std::shared_ptr<Node> node)
     : node_(std::move(node)) {}
 
 SymbolicExpression SymbolicExpression::parse(const std::string& text) {
+    // 共享统一表达式语法；符号节点仅负责构造 DAG 和后续化简。
+    if (auto ast = compile_expression_ast(text)) {
+        SymbolicExpression converted;
+        if (convert_unified_symbolic(ast.get(), &converted)) {
+            return converted.simplify();
+        }
+    }
     Parser parser(text);
     return parser.parse().simplify();
 }

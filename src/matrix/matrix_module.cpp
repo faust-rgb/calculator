@@ -16,7 +16,7 @@
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
 #include "core/common/calculator_exceptions.h"
-#include "math/helpers/integer_helpers.h"
+#include "math/functions/integer/integer_helpers.h"
 #include <stdexcept>
 #include <algorithm>
 #include <sstream>

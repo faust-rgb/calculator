@@ -25,24 +25,13 @@ ExpressionFeature UnifiedParserFactory::analyze_features(const std::string& expr
 }
 
 bool UnifiedParserFactory::can_compile_to_ast(const std::string& expression) {
+    // ExpressionAST 是所有表达式域的语法核心。这里仅排除字符串/rat
+    // 这种拥有独立命令语义的入口，其余表达式（包括矩阵、复数和下标）
+    // 均应走同一棵 AST，而不是由字符启发式分流。
+    if (expression.empty()) return false;
     AnalysisResult result = analyze(expression);
-
-    // 矩阵、复数、字符串表达式不能编译为简单的标量 AST
-    if (result.has_bracket || result.has_matrix_func || result.has_standalone_i) {
-        return false;
-    }
-
-    // rat 调用需要特殊处理
-    if (result.has_rat_call) {
-        return false;
-    }
-
-    // 字符串表达式不能编译
-    if (result.has_string) {
-        return false;
-    }
-
-    return true;
+    if (result.has_string || result.has_rat_call) return false;
+    return compile_expression_ast(expression) != nullptr;
 }
 
 // ============================================================================
@@ -208,12 +197,15 @@ UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(
     if (result.has_rat_call) {
         result.parser = ParserKind::kRatCall;
         result.hint = ExpressionHint::kRatCall;
-    } else if (result.has_bracket || result.has_matrix_func || result.has_matrix_or_complex_var) {
-        result.parser = ParserKind::kMatrix;
-        result.hint = ExpressionHint::kMatrixCandidate;
-    } else if (result.has_standalone_i) {
-        result.parser = ParserKind::kComplex;
-        result.hint = ExpressionHint::kComplexCandidate;
+    } else if (compile_expression_ast(expression)) {
+        // 语法有效的表达式统一使用 ExpressionAST；特征只作为结果类型
+        // 提示，不再决定解析器实现。
+        result.parser = ParserKind::kUnifiedExpression;
+        if (result.has_bracket || result.has_matrix_func || result.has_matrix_or_complex_var) {
+            result.hint = ExpressionHint::kMatrixCandidate;
+        } else if (result.has_standalone_i) {
+            result.hint = ExpressionHint::kComplexCandidate;
+        }
     } else if (result.has_assignment) {
         result.parser = ParserKind::kScalar;
         result.hint = ExpressionHint::kAssignment;

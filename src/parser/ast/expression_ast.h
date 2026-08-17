@@ -32,7 +32,7 @@ struct StoredValue;
 // Native function type (unified StoredValue-based interface)
 using NativeFunction = std::function<StoredValue(const std::vector<StoredValue>&)>;
 
-// 回调类型定义（来自 types/function.h）
+// 回调类型定义（来自 execution/functions/user_function.h）
 using HasScriptFunctionCallback = std::function<bool(const std::string&)>;
 using InvokeScriptFunctionDecimalCallback = std::function<Scalar(const std::string&, const std::vector<Scalar>&)>;
 
@@ -50,6 +50,10 @@ enum class ExprKind {
     kComparison,   ///< 比较运算 (==, !=, <, >, <=, >=)
     kLogicalOp,    ///< 逻辑运算 (&&, ||)
     kConditional,  ///< 三元条件 (condition ? then : else)
+    kImaginary,    ///< 虚数单位 i
+    kMatrixLiteral,///< 矩阵字面量 [...]
+    kIndexAccess,  ///< 下标访问 expression[index, ...]
+    kPostfixOp,    ///< 后缀运算（如阶乘）
 };
 
 /**
@@ -74,6 +78,7 @@ struct ExpressionAST {
 
     // 运算符字符（kBinaryOp, kUnaryOp）
     char op_char = '\0';
+    std::string postfix_op; ///< 后缀运算符文本（!、!!、% 等）
 
     // 比较运算符字符串（kComparison）
     std::string comparison_op;
@@ -88,6 +93,9 @@ struct ExpressionAST {
     // 传统变量绑定
     int variable_scope_level = -1;  ///< -1 = 未解析, 0 = 全局, 1+ = 局部作用域
     bool is_builtin_constant = false;
+
+    // 矩阵行结构（kMatrixLiteral）。元素本身仍使用统一 ExpressionAST。
+    std::vector<std::vector<std::unique_ptr<ExpressionAST>>> matrix_rows;
 
     ExpressionAST() = default;
     explicit ExpressionAST(ExprKind k) : kind(k) {}

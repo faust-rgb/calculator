@@ -12,7 +12,7 @@
 
 #include "matrix.h"
 #include "matrix_internal.h"
-#include "math/precise/precise_decimal.h"
+#include "math/numeric/exact/precise_decimal.h"
 #include <sstream>
 #include <stdexcept>
 

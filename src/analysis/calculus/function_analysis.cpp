@@ -11,7 +11,7 @@
 
 #include "analysis/calculus/function_analysis.h"
 #include "analysis/calculus/numerical_quadrature.h"
-#include "math/base/precision_constants.h"
+#include "math/numeric/precision/tolerances.h"
 
 #include "core/api/calculator.h"
 #include "types/scalar_type.h"
@@ -19,9 +19,9 @@
 #include "analysis/modules/series_module.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "symbolic/public/symbolic_node_types.h"
-#include "math/precise/precise_parser.h"
+#include "math/numeric/exact/precise_parser.h"
 #include "statistics/probability.h"
-#include "math/precise/precise_decimal.h"
+#include "math/numeric/exact/precise_decimal.h"
 
 #include <algorithm>
 #include <cctype>

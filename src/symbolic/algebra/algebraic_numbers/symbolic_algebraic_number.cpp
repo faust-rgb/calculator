@@ -13,7 +13,7 @@
 #include "symbolic/algebra/algebraic_numbers/symbolic_algebraic_number.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 
-#include "math/base/default_precision.h"
+#include "math/runtime/precision/default_precision.h"
 #include "types/scalar_type.h"
 
 #include <algorithm>
@@ -261,7 +261,7 @@ int AlgebraicNumber::compare(const AlgebraicNumber& other) const {
 
     if (mymath::abs(approx1 - approx2) < app::polynomial_tolerance()) {
         // 可能相等，检查最小多项式
-        if (minimal_polynomial.to_string() == other.minimal_polynomial.to_string()) {
+        if (expressions_match(minimal_polynomial.to_expression(), other.minimal_polynomial.to_expression())) {
             // 相同最小多项式，需要更精确的比较
             // 这里简化返回相等
             return 0;
@@ -1104,7 +1104,7 @@ namespace algebraic_number_utils {
 
 bool are_conjugate(const AlgebraicNumber& a, const AlgebraicNumber& b) {
     // 检查最小多项式是否相同
-    if (a.minimal_polynomial.to_string() != b.minimal_polynomial.to_string()) {
+    if (!expressions_match(a.minimal_polynomial.to_expression(), b.minimal_polynomial.to_expression())) {
         return false;
     }
 

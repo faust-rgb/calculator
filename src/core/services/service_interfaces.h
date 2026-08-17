@@ -18,7 +18,7 @@
 #ifndef CORE_SERVICE_INTERFACES_H
 #define CORE_SERVICE_INTERFACES_H
 
-#include "types/stored_value.h"
+#include "core/value/stored_value.h"
 #include "types/scalar_type.h"
 #include <string>
 #include <vector>

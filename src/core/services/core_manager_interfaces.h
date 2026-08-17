@@ -9,8 +9,8 @@
 #ifndef CORE_MANAGER_INTERFACES_H
 #define CORE_MANAGER_INTERFACES_H
 
-#include "types/stored_value.h"
-#include "types/function.h"
+#include "core/value/stored_value.h"
+#include "execution/functions/user_function.h"
 #include "types/scalar_type.h"
 #include "matrix/matrix.h"
 #include <string>

@@ -13,10 +13,10 @@
 
 #include "analysis/series/psa_engine.h"
 #include "analysis/modules/series_module.h"
-#include "math/base/precision_constants.h"
+#include "math/numeric/precision/tolerances.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "math/mymath.h"
-#include "math/helpers/integer_helpers.h"
+#include "math/functions/integer/integer_helpers.h"
 #include <algorithm>
 
 namespace series_ops {

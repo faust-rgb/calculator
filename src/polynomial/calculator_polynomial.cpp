@@ -22,7 +22,7 @@
 #include "matrix/public/matrix_format.h"
 #include "polynomial.h"
 #include "mymath.h"
-#include "math/helpers/integer_helpers.h"
+#include "math/functions/integer/integer_helpers.h"
 #include "parser/grammars/command_parser.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"

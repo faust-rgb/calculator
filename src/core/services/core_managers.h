@@ -7,7 +7,7 @@
 
 #include "core_manager_interfaces.h"
 #include "core/environment/scope.h"
-#include "math/base/default_precision.h"
+#include "math/runtime/precision/default_precision.h"
 #include <map>
 #include <string>
 #include <vector>

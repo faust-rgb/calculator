@@ -6,7 +6,7 @@
 #define ODE_SOLVER_H
 
 #include "types/scalar_type.h"
-#include "math/base/precision_constants.h"
+#include "math/numeric/precision/tolerances.h"
 #include <functional>
 #include <utility>
 #include <vector>

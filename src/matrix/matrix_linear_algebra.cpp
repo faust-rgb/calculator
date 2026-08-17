@@ -10,7 +10,7 @@
 #include "polynomial.h"
 #include "precise_decimal.h"
 #include "types/scalar_type.h"
-#include "math/base/precision_constants.h"
+#include "math/numeric/precision/tolerances.h"
 
 #include <stdexcept>
 #include <utility>

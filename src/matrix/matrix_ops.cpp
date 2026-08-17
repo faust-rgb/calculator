@@ -19,8 +19,8 @@
 #include "matrix.h"
 #include "matrix_internal.h"
 #include "math/mymath.h"
-#include "math/precise/precise_decimal.h"
-#include "math/types/float128.h"
+#include "math/numeric/exact/precise_decimal.h"
+#include "math/numeric/float128/float128.h"
 #include <stdexcept>
 #include <type_traits>
 

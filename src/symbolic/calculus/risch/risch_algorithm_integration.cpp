@@ -33,27 +33,6 @@ struct TowerDecomposition {
     SymbolicExpression remainder;  // part in base field
 };
 
-bool denominator_splits_into_linear_factors(const SymbolicPolynomial& denominator) {
-    if (denominator.degree() <= 0) {
-        return false;
-    }
-
-    auto factors = denominator.factor_linear();
-    if (factors.empty()) {
-        return false;
-    }
-
-    int total_degree = 0;
-    for (const auto& factor : factors) {
-        if (factor.first.degree() != 1) {
-            return false;
-        }
-        total_degree += factor.first.degree() * factor.second;
-    }
-
-    return total_degree == denominator.degree();
-}
-
 TowerDecomposition decompose_by_tower_level(
     const SymbolicExpression& expression,
     const DifferentialField& field) {

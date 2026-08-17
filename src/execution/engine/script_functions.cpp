@@ -1,5 +1,5 @@
 #include "core/services/core_manager_interfaces.h"
-#include "types/function.h"
+#include "execution/functions/user_function.h"
 // ============================================================================
 // script_functions.cpp - 脚本函数调用实现
 // ============================================================================

@@ -1,5 +1,5 @@
 #include "core/services/core_manager_interfaces.h"
-#include "types/function.h"
+#include "execution/functions/user_function.h"
 #include "core/services/core_manager_interfaces.h"
 // ============================================================================
 // script_evaluator.cpp - 脚本值求值与表达式处理实现
@@ -13,7 +13,7 @@
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
 #include "execution/engine/inline_expander.h"
-#include "math/helpers/integer_helpers.h"
+#include "math/functions/integer/integer_helpers.h"
 #include "mymath.h"
 #include "matrix/matrix.h"
 #include <map>
@@ -404,7 +404,8 @@ StoredValue evaluate_expression_value(
                 const bool defer_to_stored =
                     call_name == "rat" || exact_mode ||
                     analysis.has_bracket || analysis.has_matrix_func ||
-                    analysis.has_matrix_or_complex_var;
+                    analysis.has_matrix_or_complex_var ||
+                    call_name == "set" || call_name == "get";
                 if (!defer_to_stored) {
                     return evaluate_command_ast_to_value(ctx, ast, exact_mode);
                 }

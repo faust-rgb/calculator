@@ -27,14 +27,15 @@
 
 #include "symbolic/core/symbolic_expression_internal.h"
 
-#include "math/base/default_precision.h"
+#include "math/runtime/precision/default_precision.h"
 #include "types/scalar_type.h"
 #include "math/mymath.h"
-#include "math/precise/precise_decimal.h"
+#include "math/numeric/exact/precise_decimal.h"
 
 #include <string>
 #include <type_traits>
 #include <unordered_map>
+#include <map>
 #include <utility>
 #include <vector>
 #include <algorithm>
@@ -44,6 +45,133 @@ namespace symbolic_expression_internal {
 using Scalar = mymath::Scalar;
 
 SymbolicExpression expand_impl(const SymbolicExpression& expression);
+
+struct PolynomialTerm {
+    Scalar coefficient = Scalar(0);
+    std::vector<SymbolicExpression> factors;
+};
+
+using PolynomialTerms = std::map<std::string, PolynomialTerm>;
+
+bool collect_multivariate_polynomial(const SymbolicExpression& expression,
+                                     Scalar multiplier,
+                                     PolynomialTerms* terms) {
+    const auto& node = expression.node_;
+    if (!node) return false;
+
+    if (node->type == NodeType::kNumber) {
+        (*terms)[""].coefficient += multiplier * node->number_value;
+        return true;
+    }
+    if (node->type == NodeType::kNegate) {
+        return collect_multivariate_polynomial(SymbolicExpression(node->left), -multiplier, terms);
+    }
+    if (node->type == NodeType::kAdd || node->type == NodeType::kSubtract) {
+        if (!collect_multivariate_polynomial(SymbolicExpression(node->left), multiplier, terms)) return false;
+        return collect_multivariate_polynomial(SymbolicExpression(node->right),
+                                               node->type == NodeType::kAdd ? multiplier : -multiplier,
+                                               terms);
+    }
+    if (node->type == NodeType::kMultiply) {
+        PolynomialTerms left_terms;
+        PolynomialTerms right_terms;
+        if (!collect_multivariate_polynomial(SymbolicExpression(node->left), Scalar(1), &left_terms) ||
+            !collect_multivariate_polynomial(SymbolicExpression(node->right), Scalar(1), &right_terms)) {
+            return false;
+        }
+        for (const auto& [left_key, left_term] : left_terms) {
+            for (const auto& [right_key, right_term] : right_terms) {
+                PolynomialTerm product;
+                product.coefficient = multiplier * left_term.coefficient * right_term.coefficient;
+                product.factors = left_term.factors;
+                product.factors.insert(product.factors.end(), right_term.factors.begin(), right_term.factors.end());
+                std::sort(product.factors.begin(), product.factors.end(), [](const auto& lhs, const auto& rhs) {
+                    return node_structural_key(lhs.node_) < node_structural_key(rhs.node_);
+                });
+                std::string key;
+                for (const auto& factor : product.factors) key += node_structural_key(factor.node_) + ";";
+                (*terms)[key].coefficient += product.coefficient;
+                (*terms)[key].factors = std::move(product.factors);
+            }
+        }
+        return true;
+    }
+    if (node->type == NodeType::kDivide) {
+        Scalar denominator = Scalar(0);
+        if (SymbolicExpression(node->right).is_number(&denominator) &&
+            !mymath::is_near_zero(denominator, kFormatEps())) {
+            return collect_multivariate_polynomial(SymbolicExpression(node->left), multiplier / denominator, terms);
+        }
+        return false;
+    }
+    if (node->type == NodeType::kPower) {
+        Scalar exponent = Scalar(0);
+        if (SymbolicExpression(node->right).is_number(&exponent) &&
+            exponent >= Scalar(0) && mymath::is_integer(exponent, Scalar(app::integer_tolerance()))) {
+            const auto count = static_cast<int>(mymath::round(exponent).to_long_double());
+            PolynomialTerms base;
+            if (!collect_multivariate_polynomial(SymbolicExpression(node->left), Scalar(1), &base)) return false;
+            PolynomialTerms result;
+            result[""].coefficient = Scalar(1);
+            for (int i = 0; i < count; ++i) {
+                PolynomialTerms product;
+                for (const auto& [lk, lt] : result) {
+                    for (const auto& [rk, rt] : base) {
+                        PolynomialTerm term;
+                        term.coefficient = lt.coefficient * rt.coefficient;
+                        term.factors = lt.factors;
+                        term.factors.insert(term.factors.end(), rt.factors.begin(), rt.factors.end());
+                        std::sort(term.factors.begin(), term.factors.end(), [](const auto& lhs, const auto& rhs) {
+                            return node_structural_key(lhs.node_) < node_structural_key(rhs.node_);
+                        });
+                        std::string key;
+                        for (const auto& factor : term.factors) key += node_structural_key(factor.node_) + ";";
+                        product[key].coefficient += term.coefficient;
+                        product[key].factors = std::move(term.factors);
+                    }
+                }
+                result = std::move(product);
+            }
+            for (auto& [key, term] : result) (*terms)[key].coefficient += multiplier * term.coefficient, (*terms)[key].factors = std::move(term.factors);
+            return true;
+        }
+        return false;
+    }
+
+    if (node->type != NodeType::kVariable) return false;
+    PolynomialTerm atom;
+    atom.coefficient = multiplier;
+    atom.factors.push_back(expression);
+    (*terms)[node_structural_key(node)].coefficient += multiplier;
+    (*terms)[node_structural_key(node)].factors = std::move(atom.factors);
+    return true;
+}
+
+bool normalize_multivariate_polynomial(const SymbolicExpression& expression,
+                                       SymbolicExpression* normalized) {
+    PolynomialTerms terms;
+    if (!collect_multivariate_polynomial(expression, Scalar(1), &terms)) return false;
+    std::vector<SymbolicExpression> output;
+    for (auto& [key, term] : terms) {
+        if (mymath::is_near_zero(term.coefficient, kFormatEps())) continue;
+        SymbolicExpression product = make_sorted_product(term.coefficient, term.factors);
+        output.push_back(product);
+    }
+    *normalized = make_sorted_sum(std::move(output));
+    return true;
+}
+
+bool has_direct_distributive_term(const std::shared_ptr<SymbolicExpression::Node>& node) {
+    if (!node || (node->type != NodeType::kAdd && node->type != NodeType::kSubtract)) return false;
+    const auto is_distributive_product = [](const std::shared_ptr<SymbolicExpression::Node>& child) {
+        if (!child || child->type != NodeType::kMultiply) return false;
+        const auto is_sum = [](const std::shared_ptr<SymbolicExpression::Node>& part) {
+            return part && (part->type == NodeType::kAdd || part->type == NodeType::kSubtract);
+        };
+        return is_sum(child->left) || is_sum(child->right);
+    };
+    return is_distributive_product(node->left) || is_distributive_product(node->right);
+}
 
 bool is_known_nonzero_expression(const SymbolicExpression& expression) {
     Scalar value = Scalar(0);
@@ -314,14 +442,16 @@ SymbolicExpression simplify_medium(const SymbolicExpression& expression) {
 
     switch (node->type) {
         case NodeType::kFunction: {
-            if (!node->children.empty()) {
+            if (node->children.size() > 1) {
                 std::vector<SymbolicExpression> arguments;
                 for (const auto& child : node->children) {
                     arguments.push_back(simplify_medium(SymbolicExpression(child)));
                 }
                 return SymbolicExpression::function(node->text, arguments);
             }
-            const SymbolicExpression argument = simplify_medium(SymbolicExpression(node->left));
+            const SymbolicExpression argument = node->children.size() == 1
+                ? simplify_medium(SymbolicExpression(node->children.front()))
+                : simplify_medium(SymbolicExpression(node->left));
             Scalar numeric = Scalar(0);
 
             // 数值参数的函数求值
@@ -571,9 +701,58 @@ bool try_combine_fractions(const SymbolicExpression& left,
             *result = make_divide(num.simplify(), b);
             return true;
         }
+
+        // 通用二项分式交叉通分：a/b +/- c/d = (a*d +/- c*b)/(b*d)
+        SymbolicExpression numerator = is_subtract ? make_subtract(a * d, c * b)
+                                                    : make_add(a * d, c * b);
+        SymbolicExpression denominator = b * d;
+        SymbolicExpression normalized_num;
+        SymbolicExpression normalized_den;
+        if (normalize_multivariate_polynomial(numerator, &normalized_num) &&
+            normalize_multivariate_polynomial(denominator, &normalized_den)) {
+            *result = make_divide(normalized_num, normalized_den);
+            return true;
+        }
     }
 
     return false;
+}
+
+bool try_reduce_symbolic_power_sum_quotient(const SymbolicExpression& numerator,
+                                            const SymbolicExpression& denominator,
+                                            SymbolicExpression* reduced) {
+    if (!numerator.node_ || !denominator.node_ ||
+        (numerator.node_->type != NodeType::kAdd && numerator.node_->type != NodeType::kSubtract) ||
+        (denominator.node_->type != NodeType::kAdd && denominator.node_->type != NodeType::kSubtract)) {
+        return false;
+    }
+
+    const bool numerator_sum = numerator.node_->type == NodeType::kAdd;
+    const bool denominator_sum = denominator.node_->type == NodeType::kAdd;
+    if (numerator_sum != denominator_sum) return false;
+
+    SymbolicExpression a3(numerator.node_->left), b3(numerator.node_->right);
+    SymbolicExpression a(denominator.node_->left), b(denominator.node_->right);
+    if (a3.node_->type != NodeType::kPower || b3.node_->type != NodeType::kPower) return false;
+    Scalar exp_a = Scalar(0), exp_b = Scalar(0);
+    if (!SymbolicExpression(a3.node_->right).is_number(&exp_a) ||
+        !SymbolicExpression(b3.node_->right).is_number(&exp_b) ||
+        !mymath::is_integer(exp_a, Scalar(app::integer_tolerance())) ||
+        !mymath::is_integer(exp_b, Scalar(app::integer_tolerance())) ||
+        static_cast<long long>(mymath::round(exp_a).to_long_double()) != 3 ||
+        static_cast<long long>(mymath::round(exp_b).to_long_double()) != 3 ||
+        !expressions_match(SymbolicExpression(a3.node_->left), a) ||
+        !expressions_match(SymbolicExpression(b3.node_->left), b)) {
+        return false;
+    }
+
+    SymbolicExpression a2 = make_power(a, SymbolicExpression::number(2));
+    SymbolicExpression b2 = make_power(b, SymbolicExpression::number(2));
+    SymbolicExpression middle = a * b;
+    *reduced = numerator_sum ? make_add(make_subtract(a2, middle), b2)
+                             : make_add(make_add(a2, middle), b2);
+    *reduced = reduced->simplify();
+    return true;
 }
 
 /**
@@ -593,6 +772,15 @@ SymbolicExpression simplify_heavyweight(const SymbolicExpression& expression) {
     SymbolicExpression current = simplify_medium(expression);
     const auto& node = current.node_;
     SymbolicExpression left, right;
+
+    if ((node->type == NodeType::kAdd || node->type == NodeType::kSubtract) &&
+        has_direct_distributive_term(node)) {
+        SymbolicExpression normalized;
+        if (normalize_multivariate_polynomial(current, &normalized) &&
+            node_structural_key(normalized.node_) != node_structural_key(current.node_)) {
+            return normalized;
+        }
+    }
 
     switch (node->type) {
         case NodeType::kAdd: {
@@ -660,6 +848,7 @@ SymbolicExpression simplify_heavyweight(const SymbolicExpression& expression) {
 
             // GCD 约分
             SymbolicExpression reduced;
+            if (try_reduce_symbolic_power_sum_quotient(left, right, &reduced)) return reduced;
             if (try_reduce_polynomial_gcd_quotient(left, right, &reduced)) return reduced;
 
             return make_divide(left, right);
@@ -709,14 +898,16 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             return expression;
         
         case NodeType::kFunction: {
-            if (!node->children.empty()) {
+            if (node->children.size() > 1) {
                 std::vector<SymbolicExpression> arguments;
                 for (const auto& child : node->children) {
                     arguments.push_back(SymbolicExpression(child).simplify());
                 }
                 return SymbolicExpression::function(node->text, arguments);
             }
-            const SymbolicExpression argument = SymbolicExpression(node->left).simplify();
+            const SymbolicExpression argument = node->children.size() == 1
+                ? SymbolicExpression(node->children.front()).simplify()
+                : SymbolicExpression(node->left).simplify();
             Scalar numeric = Scalar(0);
 
             Scalar pi_multiple = Scalar(0);

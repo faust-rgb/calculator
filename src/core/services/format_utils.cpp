@@ -8,11 +8,11 @@
 #include "format_utils.h"
 #include "types/scalar_type.h"
 #include "core/api/calculator_impl.h"
-#include "math/helpers/integer_helpers.h"
+#include "math/functions/integer/integer_helpers.h"
 #include "math/mymath.h"
-#include "math/precise/rational.h"
-#include "math/base/precision_constants.h"
-#include "types/stored_value.h"
+#include "math/numeric/exact/rational.h"
+#include "math/numeric/precision/tolerances.h"
+#include "core/value/stored_value.h"
 #include "matrix/matrix.h"
 
 #include <algorithm>

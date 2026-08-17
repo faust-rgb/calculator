@@ -90,11 +90,22 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                 .simplify();
         }
         case NodeType::kFunction: {
-            if (!node_->children.empty()) {
+            if (node_->children.size() > 1) {
+                if (node_->text == "Integral" && node_->children.size() >= 2) {
+                    SymbolicExpression integrand(node_->children[0]);
+                    SymbolicExpression int_var(node_->children[1]);
+                    if (int_var.is_variable_named(variable_name)) {
+                        return integrand.simplify();
+                    }
+                    throw std::runtime_error("symbolic derivative: differentiation variable does not match Integral variable");
+                }
                 throw std::runtime_error(
                     "symbolic derivative does not support multi-argument function: " + node_->text);
             }
-            const SymbolicExpression argument(node_->left);
+            if (node_->text == "Integral") {
+                throw std::runtime_error("symbolic derivative does not support unparameterized Integral placeholder");
+            }
+            const SymbolicExpression argument(node_->left ? node_->left : node_->children[0]);
             const SymbolicExpression inner = argument.derivative(variable_name);
             if (node_->text == "asin") {
                 return make_divide(
@@ -220,13 +231,6 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
             }
             if (node_->text == "step") {
                 return make_multiply(make_function("delta", argument), inner).simplify();
-            }
-            if (node_->text == "Integral") {
-                // 如果对积分变量求导，根据微积分基本定理，结果是原函数
-                // 注意：Integral(f, x) 格式
-                // 这里的实现需要解析参数。
-                // 简化：目前只处理对积分变量求导的情况
-                return argument; // 这是一个占位符逻辑
             }
             if (node_->text == "gamma") {
                 // d/dx gamma(x) = gamma(x) * digamma(x)

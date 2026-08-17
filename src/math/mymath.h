@@ -4,10 +4,10 @@
  *
  * This file includes all math library components for backward compatibility.
  * New code should include specific headers from the appropriate subdirectories:
- * - math/types/ for numeric types (float128, complex, dual)
- * - math/core/ for constants and basic operations
- * - math/transcendental/ for trig, hyperbolic, exp/log functions
- * - math/special/ for gamma, beta, bessel, error functions
+ * - math/numeric/types/ for numeric types (float128, complex, dual)
+ * - math/numeric/scalar/ for Scalar backend dispatch
+ * - math/functions/elementary/ for trig, hyperbolic, exp/log functions
+ * - math/functions/special/ for gamma, beta, bessel, error functions
  */
 
 #ifndef MYMATH_H
@@ -15,21 +15,30 @@
 
 // Types - numeric type system
 #include "types/scalar_type.h"
-#include "math/types/float128.h"
-#include "math/types/complex.h"
-#include "math/types/dual.h"
+#include "math/numeric/float128/float128.h"
+#include "math/numeric/types/complex.h"
+#include "math/numeric/types/dual.h"
 
 // Core - constants and basic operations
-#include "math/core/constants.h"
-#include "math/core/floating_point.h"
-#include "math/core/basic_ops.h"
-#include "math/core/roots_powers.h"
-#include "math/core/scalar_traits.h"
+#include "math/numeric/constants/numeric.h"
+#include "math/numeric/constants/physical.h"
+#include "math/numeric/precision/predicates.h"
+#include "math/numeric/scalar/dispatch.h"
+#include "math/numeric/precision/tolerances.h"
+#include "math/runtime/precision/default_precision.h"
+
+// Public operations by numeric domain
+#include "math/functions/scalar/basic_ops.h"
+#include "math/functions/long_double/basic_ops.h"
+#include "math/functions/integer/absolute_value.h"
+#include "math/functions/integer/gcd.h"
+#include "math/functions/conversion/rational_approximation.h"
 
 // Transcendental - trig, hyperbolic, exp/log
-#include "math/transcendental/transcendental.h"
+#include "math/functions/elementary/transcendental.h"
+#include "math/functions/elementary/roots_powers.h"
 
 // Special - gamma, beta, bessel, error functions
-#include "math/special/special_functions.h"
+#include "math/functions/special/special_functions.h"
 
 #endif // MYMATH_H

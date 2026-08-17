@@ -6,7 +6,7 @@
 #ifndef CORE_EXECUTION_CONTEXT_H
 #define CORE_EXECUTION_CONTEXT_H
 
-#include "types/stored_value.h"
+#include "core/value/stored_value.h"
 #include "core/environment/scope.h"
 #include <memory>
 #include <string>
@@ -104,6 +104,12 @@ public:
     FunctionRegistry& functions() { return function_registry_; }
     const FunctionRegistry& functions() const { return function_registry_; }
 
+    using ExternalVariableLookup = std::function<bool(const std::string&, StoredValue*)>;
+    void set_external_variable_lookup(ExternalVariableLookup lookup) {
+        external_variable_lookup_ = std::move(lookup);
+    }
+    const ExternalVariableLookup& external_variable_lookup() const { return external_variable_lookup_; }
+
     // 独立局部 ScopeGuard
     class ScopeGuard {
     public:
@@ -118,9 +124,9 @@ private:
     ExecutionConfig config_;
     FlatScopeStack scope_;
     FunctionRegistry function_registry_;
+    ExternalVariableLookup external_variable_lookup_;
 };
 
 } // namespace core
 
 #endif // CORE_EXECUTION_CONTEXT_H
-

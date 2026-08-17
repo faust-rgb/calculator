@@ -16,12 +16,19 @@ StoredValue VariableNode::evaluate(ExecutionContext& ctx) const {
     if (slot) {
         return slot->value;
     }
+    if (ctx.external_variable_lookup()) {
+        StoredValue value;
+        if (ctx.external_variable_lookup()(name_, &value)) return value;
+    }
     // 特殊常量预设
     if (name_ == "pi" || name_ == "PI") {
         return StoredValue(Scalar(mymath::kPi));
     }
     if (name_ == "e" || name_ == "E") {
         return StoredValue(Scalar(mymath::kE));
+    }
+    if (name_ == "i") {
+        return StoredValue(mymath::complex<Scalar>(0.0L, 1.0L));
     }
     throw std::runtime_error("Undefined variable: " + name_);
 }
@@ -53,12 +60,33 @@ StoredValue BinaryOpNode::evaluate(ExecutionContext& ctx) const {
     StoredValue l = left_->evaluate(ctx);
     StoredValue r = right_->evaluate(ctx);
 
+    if (op_ == "&&" || op_ == "||") {
+        const bool lv = l.get_decimal() != Scalar(0);
+        if (op_ == "&&" && !lv) return StoredValue(Scalar(0));
+        if (op_ == "||" && lv) return StoredValue(Scalar(1));
+        return StoredValue(Scalar(r.get_decimal() != Scalar(0) ? 1 : 0));
+    }
+    if (op_ == "==" || op_ == "!=" || op_ == "<" || op_ == ">" || op_ == "<=" || op_ == ">=") {
+        const Scalar a = l.get_decimal(), b = r.get_decimal();
+        bool result = false;
+        if (op_ == "==") result = a == b;
+        else if (op_ == "!=") result = a != b;
+        else if (op_ == "<") result = a < b;
+        else if (op_ == ">") result = a > b;
+        else if (op_ == "<=") result = a <= b;
+        else result = a >= b;
+        return StoredValue(Scalar(result ? 1 : 0));
+    }
+
     if (op_ == "+") {
         if (l.is_scalar() && r.is_scalar()) {
             return StoredValue(l.get_decimal() + r.get_decimal());
         }
         if (l.is_matrix() && r.is_matrix()) {
             return StoredValue(matrix::add(l.as_matrix(), r.as_matrix()));
+        }
+        if (l.is_complex() || r.is_complex()) {
+            return StoredValue(l.get_complex() + r.get_complex());
         }
         if (l.is_string() || r.is_string()) {
             return StoredValue(l.as_string() + r.as_string());
@@ -69,6 +97,9 @@ StoredValue BinaryOpNode::evaluate(ExecutionContext& ctx) const {
         }
         if (l.is_matrix() && r.is_matrix()) {
             return StoredValue(matrix::subtract(l.as_matrix(), r.as_matrix()));
+        }
+        if (l.is_complex() || r.is_complex()) {
+            return StoredValue(l.get_complex() - r.get_complex());
         }
     } else if (op_ == "*") {
         if (l.is_scalar() && r.is_scalar()) {
@@ -83,6 +114,9 @@ StoredValue BinaryOpNode::evaluate(ExecutionContext& ctx) const {
         if (l.is_matrix() && r.is_matrix()) {
             return StoredValue(matrix::multiply(l.as_matrix(), r.as_matrix()));
         }
+        if (l.is_complex() || r.is_complex()) {
+            return StoredValue(l.get_complex() * r.get_complex());
+        }
     } else if (op_ == "/") {
         if (l.is_scalar() && r.is_scalar()) {
             Scalar denom = r.get_decimal();
@@ -91,12 +125,20 @@ StoredValue BinaryOpNode::evaluate(ExecutionContext& ctx) const {
             }
             return StoredValue(l.get_decimal() / denom);
         }
+        if (l.is_complex() || r.is_complex()) {
+            return StoredValue(l.get_complex() / r.get_complex());
+        }
     } else if (op_ == "^") {
         if (l.is_scalar() && r.is_scalar()) {
             return StoredValue(mymath::pow(l.get_decimal(), r.get_decimal()));
         }
     }
     throw std::runtime_error("Unsupported binary operator '" + op_ + "' for given types");
+}
+
+StoredValue ConditionalNode::evaluate(ExecutionContext& ctx) const {
+    return condition_->evaluate(ctx).get_decimal() != Scalar(0)
+        ? then_->evaluate(ctx) : else_->evaluate(ctx);
 }
 
 StoredValue FunctionCallNode::evaluate(ExecutionContext& ctx) const {
@@ -135,6 +177,30 @@ StoredValue MatrixLiteralNode::evaluate(ExecutionContext& ctx) const {
     return StoredValue(mat);
 }
 
+StoredValue IndexAccessNode::evaluate(ExecutionContext& ctx) const {
+    if (parts_.empty()) throw std::runtime_error("empty index expression");
+    StoredValue base = parts_[0]->evaluate(ctx);
+    if (!base.is_matrix()) throw std::runtime_error("index access requires a matrix");
+    if (parts_.size() != 2 && parts_.size() != 3)
+        throw std::runtime_error("matrix index expects row and column");
+    auto index = [&](std::size_t n) -> std::size_t {
+        StoredValue v = parts_[n]->evaluate(ctx);
+        if (!v.is_scalar()) throw std::runtime_error("matrix index must be scalar");
+        auto i = static_cast<long long>(v.get_decimal());
+        if (i < 0) throw std::runtime_error("matrix index must be non-negative");
+        return static_cast<std::size_t>(i);
+    };
+    const auto& m = base.as_matrix();
+    std::size_t row = index(1);
+    if (parts_.size() == 2) {
+        if (row >= m.rows || m.cols != 1) throw std::runtime_error("matrix index out of range");
+        return StoredValue(m.at(row, 0));
+    }
+    std::size_t col = index(2);
+    if (row >= m.rows || col >= m.cols) throw std::runtime_error("matrix index out of range");
+    return StoredValue(m.at(row, col));
+}
+
 StoredValue ListLiteralNode::evaluate(ExecutionContext& ctx) const {
     std::vector<StoredValue> values;
     values.reserve(elements_.size());
@@ -142,8 +208,7 @@ StoredValue ListLiteralNode::evaluate(ExecutionContext& ctx) const {
         values.push_back(elem->evaluate(ctx));
     }
     StoredValue res;
-    res.is_list = true;
-    res.list_value = std::make_shared<std::vector<StoredValue>>(std::move(values));
+    res.data = std::make_shared<std::vector<StoredValue>>(std::move(values));
     return res;
 }
 
@@ -156,8 +221,7 @@ StoredValue DictLiteralNode::evaluate(ExecutionContext& ctx) const {
         values[key_str] = std::move(v_val);
     }
     StoredValue res;
-    res.is_dict = true;
-    res.dict_value = std::make_shared<std::map<std::string, StoredValue>>(std::move(values));
+    res.data = std::make_shared<std::map<std::string, StoredValue>>(std::move(values));
     return res;
 }
 
@@ -186,6 +250,25 @@ std::unique_ptr<ASTNode> build_unified_ast(const ExpressionAST* ast) {
         return std::make_unique<StringNode>(ast->string_value);
     case ExprKind::kVariable:
         return std::make_unique<VariableNode>(ast->identifier);
+    case ExprKind::kImaginary:
+        return std::make_unique<ScalarNode>(StoredValue(mymath::complex<Scalar>(0.0L, 1.0L)));
+    case ExprKind::kMatrixLiteral: {
+        std::vector<std::vector<std::unique_ptr<ASTNode>>> rows;
+        for (const auto& row : ast->matrix_rows) {
+            std::vector<std::unique_ptr<ASTNode>> out;
+            for (const auto& cell : row) out.push_back(build_unified_ast(cell.get()));
+            rows.push_back(std::move(out));
+        }
+        return std::make_unique<MatrixLiteralNode>(std::move(rows));
+    }
+    case ExprKind::kIndexAccess: {
+        std::vector<std::unique_ptr<ASTNode>> parts;
+        for (const auto& child : ast->children) parts.push_back(build_unified_ast(child.get()));
+        return std::make_unique<IndexAccessNode>(std::move(parts));
+    }
+    case ExprKind::kPostfixOp:
+        if (!ast->children.empty()) return std::make_unique<UnaryOpNode>(ast->op_char, build_unified_ast(ast->children[0].get()));
+        break;
     case ExprKind::kUnaryOp:
         if (!ast->children.empty()) {
             return std::make_unique<UnaryOpNode>(ast->op_char, build_unified_ast(ast->children[0].get()));
@@ -208,6 +291,23 @@ std::unique_ptr<ASTNode> build_unified_ast(const ExpressionAST* ast) {
                 build_unified_ast(ast->children[1].get())
             );
         }
+        break;
+    case ExprKind::kLogicalOp:
+        if (ast->children.size() >= 2) {
+            return std::make_unique<BinaryOpNode>(
+                ast->comparison_op,
+                build_unified_ast(ast->children[0].get()),
+                build_unified_ast(ast->children[1].get()));
+        }
+        break;
+    case ExprKind::kConditional:
+        if (ast->children.size() == 3) {
+            return std::make_unique<ConditionalNode>(
+                build_unified_ast(ast->children[0].get()),
+                build_unified_ast(ast->children[1].get()),
+                build_unified_ast(ast->children[2].get()));
+        }
+        break;
         break;
     case ExprKind::kFunctionCall: {
         std::vector<std::unique_ptr<ASTNode>> args;

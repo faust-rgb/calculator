@@ -15,7 +15,7 @@
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
 #include "analysis/rootfinding/rootfinding_engine.h"
-#include "math/base/precision_constants.h"
+#include "math/numeric/precision/tolerances.h"
 #include "types/scalar_type.h"
 #include "math/mymath.h"
 #include "parser/grammars/unified_expression_parser.h"
@@ -23,7 +23,7 @@
 #include "symbolic/public/symbolic_node_types.h"
 #include "symbolic/solver/symbolic_solver.h"
 #include "core/services/string_utils.h"
-#include "math/precise/precise_decimal.h"
+#include "math/numeric/exact/precise_decimal.h"
 
 #include <algorithm>
 #include <stdexcept>

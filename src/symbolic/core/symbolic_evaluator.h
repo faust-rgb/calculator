@@ -8,7 +8,7 @@
 
 #include "symbolic/core/symbolic_expression.h"
 #include "core/execution_context.h"
-#include "types/stored_value.h"
+#include "core/value/stored_value.h"
 
 namespace symbolic {
 

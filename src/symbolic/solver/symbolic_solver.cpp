@@ -16,7 +16,7 @@
 #include "symbolic/algebra/polynomial/symbolic_polynomial.h"
 #include "math/mymath.h"
 #include "types/scalar_type.h"
-#include "math/base/precision_constants.h"
+#include "math/numeric/precision/tolerances.h"
 #include "core/services/string_utils.h"
 
 #include <algorithm>

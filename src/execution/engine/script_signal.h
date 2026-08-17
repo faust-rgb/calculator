@@ -13,7 +13,7 @@
 #ifndef SCRIPT_SIGNAL_H
 #define SCRIPT_SIGNAL_H
 
-#include "types/stored_value.h"
+#include "core/value/stored_value.h"
 
 // ============================================================================
 // ScriptSignal 结构体定义

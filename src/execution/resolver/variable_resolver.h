@@ -20,14 +20,14 @@
 #include <map>
 #include <memory>
 #include <functional>
-#include "types/stored_value.h"
+#include "core/value/stored_value.h"
 
 // 前向声明
 namespace script {
     class BlockStatement;
 }
 
-#include "types/function.h"
+#include "execution/functions/user_function.h"
 
 struct FlatScopeStack;
 

@@ -13,7 +13,7 @@
 #include "analysis/series/pade_approximation.h"
 #include "analysis/series/taylor_series.h"
 #include "analysis/modules/series_module.h"
-#include "math/base/default_precision.h"
+#include "math/runtime/precision/default_precision.h"
 #include "types/scalar_type.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "math/mymath.h"

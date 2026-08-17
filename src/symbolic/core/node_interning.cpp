@@ -13,7 +13,7 @@
 #include "core/services/format_utils.h"
 #include "core/common/display_precision.h"
 #include "math/mymath.h"
-#include "math/types/dual.h"
+#include "math/numeric/types/dual.h"
 
 #include <algorithm>
 #include <cctype>
@@ -333,6 +333,9 @@ std::shared_ptr<SymbolicExpression::Node> make_unary(NodeType type,
         std::make_shared<SymbolicExpression::Node>();
     node->type = type;
     node->left = std::move(operand);
+    if (node->left) {
+        node->children.push_back(node->left);
+    }
     node->text = text;
     return intern_node(node);
 }
@@ -448,13 +451,13 @@ std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node
             break;
         case NodeType::kFunction:
             text = node->text + "(";
-            if (node->left) {
-                text += to_string_impl(node->left, 0);
-            } else {
+            if (!node->children.empty()) {
                 for (std::size_t i = 0; i < node->children.size(); ++i) {
                     if (i > 0) text += ", ";
                     text += to_string_impl(node->children[i], 0);
                 }
+            } else if (node->left) {
+                text += to_string_impl(node->left, 0);
             }
             text += ")";
             break;
@@ -585,13 +588,13 @@ std::string node_structural_key(const std::shared_ptr<SymbolicExpression::Node>&
             break;
         case NodeType::kFunction:
             key = "F(" + node->text + ":";
-            if (node->left) {
-                key += node_structural_key(node->left);
-            } else {
+            if (!node->children.empty()) {
                 for (std::size_t i = 0; i < node->children.size(); ++i) {
                     if (i > 0) key += ",";
                     key += node_structural_key(node->children[i]);
                 }
+            } else if (node->left) {
+                key += node_structural_key(node->left);
             }
             key += ")";
             break;

@@ -6,7 +6,7 @@
 #include "statistics_module.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
-#include "math/helpers/integer_helpers.h"
+#include "math/functions/integer/integer_helpers.h"
 
 std::string StatisticsModule::execute_args(const std::string& command,
                                            const std::vector<std::string>& args,

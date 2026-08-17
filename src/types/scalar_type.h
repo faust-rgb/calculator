@@ -6,8 +6,8 @@
 #ifndef TYPES_SCALAR_TYPE_H
 #define TYPES_SCALAR_TYPE_H
 
-#include "math/types/float128.h"
-#include "math/precise/precise_decimal.h"
+#include "math/numeric/float128/float128.h"
+#include "math/numeric/exact/precise_decimal.h"
 
 namespace mymath {
 

@@ -13,7 +13,7 @@
 #ifndef CORE_EXECUTABLE_NODE_H
 #define CORE_EXECUTABLE_NODE_H
 
-#include "types/stored_value.h"
+#include "core/value/stored_value.h"
 #include "execution/engine/script_context.h"
 
 namespace execution {

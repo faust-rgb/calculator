@@ -23,7 +23,7 @@
 #include "math/mymath.h"
 #include "matrix_internal.h"
 #include "statistics/statistics.h"
-#include "math/precise/precise_decimal.h"
+#include "math/numeric/exact/precise_decimal.h"
 #include <stdexcept>
 #include <numeric>
 #include <algorithm>

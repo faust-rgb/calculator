@@ -6,7 +6,7 @@
 #ifndef PARSER_UNIFIED_AST_H
 #define PARSER_UNIFIED_AST_H
 
-#include "types/stored_value.h"
+#include "core/value/stored_value.h"
 #include "core/execution_context.h"
 #include <memory>
 #include <string>
@@ -55,7 +55,8 @@ enum class ASTNodeType {
     kMatrixLiteral,
     kListLiteral,
     kDictLiteral,
-    kSlice
+    kSlice,
+    kIndexAccess
 };
 
 class ASTNode {
@@ -127,6 +128,16 @@ private:
     std::unique_ptr<ASTNode> right_;
 };
 
+class ConditionalNode : public ASTNode {
+public:
+    ConditionalNode(std::unique_ptr<ASTNode> c, std::unique_ptr<ASTNode> t, std::unique_ptr<ASTNode> e)
+        : condition_(std::move(c)), then_(std::move(t)), else_(std::move(e)) {}
+    ASTNodeType type() const override { return ASTNodeType::kBinaryOp; }
+    StoredValue evaluate(ExecutionContext& ctx) const override;
+private:
+    std::unique_ptr<ASTNode> condition_, then_, else_;
+};
+
 class FunctionCallNode : public ASTNode {
 public:
     FunctionCallNode(std::string name, std::vector<std::unique_ptr<ASTNode>> args)
@@ -146,6 +157,16 @@ public:
     StoredValue evaluate(ExecutionContext& ctx) const override;
 private:
     std::vector<std::vector<std::unique_ptr<ASTNode>>> rows_;
+};
+
+class IndexAccessNode : public ASTNode {
+public:
+    explicit IndexAccessNode(std::vector<std::unique_ptr<ASTNode>> parts)
+        : parts_(std::move(parts)) {}
+    ASTNodeType type() const override { return ASTNodeType::kIndexAccess; }
+    StoredValue evaluate(ExecutionContext& ctx) const override;
+private:
+    std::vector<std::unique_ptr<ASTNode>> parts_;
 };
 
 class ListLiteralNode : public ASTNode {

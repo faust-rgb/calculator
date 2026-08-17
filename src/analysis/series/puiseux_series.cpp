@@ -18,7 +18,7 @@
 #include "core/services/format_utils.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "math/mymath.h"
-#include "math/helpers/integer_helpers.h"
+#include "math/functions/integer/integer_helpers.h"
 #include "statistics/probability.h"
 #include "expression_utils.h"
 #include "string_utils.h"

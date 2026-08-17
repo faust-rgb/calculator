@@ -5,6 +5,6 @@
 #ifndef APP_DEFAULT_PRECISION_H
 #define APP_DEFAULT_PRECISION_H
 
-#include "math/base/default_precision.h"
+#include "math/runtime/precision/default_precision.h"
 
 #endif // APP_DEFAULT_PRECISION_H

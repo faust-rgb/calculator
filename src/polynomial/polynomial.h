@@ -1,7 +1,7 @@
 #ifndef POLYNOMIAL_H
 #define POLYNOMIAL_H
 
-#include "math/types/complex.h"
+#include "math/numeric/types/complex.h"
 
 #include <string>
 #include <vector>

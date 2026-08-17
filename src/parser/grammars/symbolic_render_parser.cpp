@@ -13,7 +13,7 @@
 #include "types/scalar_type.h"
 #include "execution/resolver/builtin_constants.h"
 #include "parser/infra/base_parser.h"
-#include "math/helpers/base_conversions.h"
+#include "math/functions/conversion/base_conversions.h"
 #include "mymath.h"
 #include "symbolic_expression.h"
 #include <algorithm>

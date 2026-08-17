@@ -22,7 +22,7 @@
 #include "execution/engine/script_runtime.h"
 #include "parser/grammars/script_parser.h"
 #include "module/calculator_module.h"
-#include "math/helpers/integer_helpers.h"
+#include "math/functions/integer/integer_helpers.h"
 #include "execution/resolver/variable_resolver.h"
 
 #include <algorithm>

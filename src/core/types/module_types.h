@@ -14,8 +14,8 @@
 #ifndef CORE_MODULE_TYPES_H
 #define CORE_MODULE_TYPES_H
 
-#include "types/stored_value.h"
-#include "types/function.h"
+#include "core/value/stored_value.h"
+#include "execution/functions/user_function.h"
 #include "types/scalar_type.h"
 #include "core/services/service_locator.h"
 #include "core/services/service_interfaces.h"

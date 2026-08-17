@@ -17,6 +17,9 @@
 #include "test_helpers.h"
 #include "math/mymath.h"
 #include "symbolic_expression.h"
+#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/public/symbolic_factory.h"
+#include "core/execution_context.h"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -25,6 +28,8 @@
 #include <filesystem>
 
 namespace test_suites {
+
+using symbolic_expression_internal::expressions_match;
 
 /**
  * @brief 运行符号计算测试
@@ -1667,11 +1672,90 @@ int run_symbolic_tests(int& passed, int& failed) {
         std::cout << "FAIL: surface_integral yz-plane threw unexpected error: " << ex.what() << '\n';
     }
 
+    // ========== AST 契约与底层修复测试 ==========
+    try {
+        // 1. 测试 multi-argument function 解析与 operands 遍历
+        SymbolicExpression atan2_expr = SymbolicExpression::parse("atan2(y, x)");
+        if (atan2_expr.child_count() == 2 &&
+            atan2_expr.child_at(0).to_string() == "y" &&
+            atan2_expr.child_at(1).to_string() == "x" &&
+            atan2_expr.operands().size() == 2) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: atan2(y, x) child count / operands mismatch\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: atan2 parsing threw: " << ex.what() << '\n';
+    }
+
+    try {
+        // 2. 测试 RootOf 结构键与参数替换
+        auto x_var = SymbolicExpression::variable("x");
+        auto a_var = SymbolicExpression::variable("a");
+        auto poly1 = x_var * x_var - a_var;
+        auto root1 = make_rootof(poly1, "x", 0);
+        auto root2 = make_rootof(poly1, "x", 1);
+        auto root3 = make_rootof(x_var * x_var - SymbolicExpression::number(2), "x", 0);
+
+        if (!expressions_match(root1, root2) && !expressions_match(root1, root3)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: RootOf structural keys collided\n";
+        }
+
+        // 测试自由变量替换进 RootOf 多项式
+        auto root_sub = root1.substitute("a", SymbolicExpression::number(4));
+        if (expressions_match(root_sub, make_rootof(x_var * x_var - SymbolicExpression::number(4), "x", 0))) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: RootOf parameter substitution failed, got: " << root_sub.to_string() << '\n';
+        }
+
+        // 测试绑定变量不应被替换
+        auto root_bound_sub = root1.substitute("x", SymbolicExpression::number(10));
+        if (expressions_match(root_bound_sub, root1)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: RootOf bound variable was erroneously substituted\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: RootOf tests threw: " << ex.what() << '\n';
+    }
+
+    try {
+        // 3. 测试 evalf 对单参数内置函数与 pi/e 常量的求值
+        core::ExecutionContext ctx;
+        SymbolicExpression sin_pi2 = SymbolicExpression::parse("sin(pi / 2)");
+        auto val = sin_pi2.evalf(ctx);
+        if (val.is_scalar() && mymath::abs(val.get_decimal() - Scalar(1.0L)) < 1e-10) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: evalf(sin(pi/2)) failed\n";
+        }
+
+        SymbolicExpression ln_e = SymbolicExpression::parse("ln(e)");
+        auto val_lne = ln_e.evalf(ctx);
+        if (val_lne.is_scalar() && mymath::abs(val_lne.get_decimal() - Scalar(1.0L)) < 1e-10) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: evalf(ln(e)) failed\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: evalf contract test threw: " << ex.what() << '\n';
+    }
+
     //std::cout << "Passed: " << passed << '\n';
     //std::cout << "Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
-
-    return 0;
 }
 
 } // namespace test_suites

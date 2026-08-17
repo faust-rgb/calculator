@@ -446,6 +446,57 @@ int run_logic_calculus_tests(int& passed, int& failed) {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: simplify polynomial GCD partial reduction threw unexpected error: "
+                      << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "simplify((x + 1) * (y + 1) - (x * y + x + y + 1))", &output);
+        if (handled && output == "0") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: multivariate polynomial cancellation expected 0 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: multivariate polynomial cancellation threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "simplify(1 / x + 1 / y)", &output);
+        if (handled && output == "(x + y) / (x * y)") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: multivariate fraction together expected (x + y) / (x * y) got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: multivariate fraction together threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command(
+            "simplify((x ^ 3 + y ^ 3) / (x + y))", &output);
+        if (handled && (output == "-(x * y) + x ^ 2 + y ^ 2" ||
+                        output == "x ^ 2 - x * y + y ^ 2")) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: multivariate cubic cancellation got " << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: multivariate cubic cancellation threw unexpected error: "
                   << ex.what() << '\n';
     }
 

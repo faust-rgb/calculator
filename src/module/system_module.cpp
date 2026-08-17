@@ -18,7 +18,7 @@
 #include "core/services/service_locator.h"
 #include "string_utils.h"
 #include "format_utils.h"
-#include "math/precise/precise_decimal.h"
+#include "math/numeric/exact/precise_decimal.h"
 
 #include <fstream>
 #include <iterator>

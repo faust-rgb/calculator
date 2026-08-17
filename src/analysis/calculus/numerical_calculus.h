@@ -13,7 +13,7 @@
 #define ANALYSIS_NUMERIC_NUMERICAL_CALCULUS_H
 
 #include "types/scalar_type.h"
-#include "math/base/precision_constants.h"
+#include "math/numeric/precision/tolerances.h"
 #include "math/mymath.h"
 #include <functional>
 #include <vector>

@@ -31,6 +31,7 @@ SymbolicExpression SymbolicExpression::function(const std::string& name, const s
     auto node = std::make_shared<Node>();
     node->type = NodeType::kFunction;
     node->text = name;
+    node->left = args[0].node_;
     for (const auto& a : args) {
         node->children.push_back(a.node_);
     }
@@ -167,30 +168,61 @@ SymbolicExpression SymbolicExpression::right_child() const {
     return SymbolicExpression(node_->right);
 }
 
-std::size_t SymbolicExpression::child_count() const {
-    if (!node_) return 0;
-    if (node_->left) {
-        return node_->right ? 2 : 1;
+std::vector<SymbolicExpression> SymbolicExpression::operands() const {
+    if (!node_) return {};
+    switch (node_->type) {
+        case NodeType::kNumber:
+        case NodeType::kVariable:
+        case NodeType::kPi:
+        case NodeType::kE:
+        case NodeType::kInfinity:
+            return {};
+        case NodeType::kNegate:
+        case NodeType::kDifferentialOp:
+            return node_->left ? std::vector<SymbolicExpression>{SymbolicExpression(node_->left)} : std::vector<SymbolicExpression>{};
+        case NodeType::kAdd:
+        case NodeType::kSubtract:
+        case NodeType::kMultiply:
+        case NodeType::kDivide:
+        case NodeType::kPower: {
+            std::vector<SymbolicExpression> ops;
+            if (node_->left) ops.push_back(SymbolicExpression(node_->left));
+            if (node_->right) ops.push_back(SymbolicExpression(node_->right));
+            return ops;
+        }
+        case NodeType::kFunction: {
+            if (!node_->children.empty()) {
+                std::vector<SymbolicExpression> ops;
+                ops.reserve(node_->children.size());
+                for (const auto& c : node_->children) ops.push_back(SymbolicExpression(c));
+                return ops;
+            }
+            if (node_->left) return {SymbolicExpression(node_->left)};
+            return {};
+        }
+        case NodeType::kVector:
+        case NodeType::kTensor:
+        case NodeType::kRootOf: {
+            std::vector<SymbolicExpression> ops;
+            ops.reserve(node_->children.size());
+            for (const auto& c : node_->children) ops.push_back(SymbolicExpression(c));
+            return ops;
+        }
     }
-    return node_->children.size();
+    return {};
+}
+
+std::size_t SymbolicExpression::child_count() const {
+    return operands().size();
 }
 
 SymbolicExpression SymbolicExpression::child_at(std::size_t index) const {
-    if (!node_) {
-        static const SymbolicExpression empty_expr;
-        return empty_expr;
+    auto ops = operands();
+    if (index < ops.size()) {
+        return ops[index];
     }
-    if (node_->left) {
-        if (index == 0) return SymbolicExpression(node_->left);
-        if (index == 1 && node_->right) return SymbolicExpression(node_->right);
-        static const SymbolicExpression empty_expr;
-        return empty_expr;
-    }
-    if (index >= node_->children.size()) {
-        static const SymbolicExpression empty_expr;
-        return empty_expr;
-    }
-    return SymbolicExpression(node_->children[index]);
+    static const SymbolicExpression empty_expr;
+    return empty_expr;
 }
 
 SymbolicExpression SymbolicExpression::substitute(

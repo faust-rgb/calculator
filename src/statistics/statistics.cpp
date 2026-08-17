@@ -13,7 +13,7 @@
 #include "statistics.h"
 #include "probability.h"
 #include "types/scalar_type.h"
-#include "math/base/default_precision.h"
+#include "math/runtime/precision/default_precision.h"
 #include "math/mymath.h"
 #include <algorithm>
 #include <stdexcept>

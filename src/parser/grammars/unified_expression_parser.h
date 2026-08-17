@@ -27,8 +27,8 @@
 #define PARSER_UNIFIED_EXPRESSION_PARSER_H
 
 #include "parser/lexer/token_types.h"
-#include "math/precise/rational.h"
-#include "types/stored_value.h"
+#include "math/numeric/exact/rational.h"
+#include "core/value/stored_value.h"
 #include "matrix.h"
 #include "core/services/format_utils.h"
 #include <string>

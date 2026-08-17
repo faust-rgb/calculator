@@ -37,8 +37,8 @@ void compile_expression_info(ExpressionInfo& info) {
     cache->features = analyze_expression_features(std::string(expr));
     cache->analyzed = true;
 
-    // 尝试编译 AST（仅对标量表达式）
-    if (cache->hint == ExpressionHint::kScalar && !parser_utils::contains_script_syntax(expr)) {
+    // 所有表达式域统一预编译；矩阵/复数不再被排除在 AST 缓存之外。
+    if (!parser_utils::contains_script_syntax(expr)) {
         cache->compiled_ast = compile_expression_ast(std::string(expr));
         if (cache->compiled_ast) {
             cache->is_compiled = true;

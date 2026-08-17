@@ -8,7 +8,7 @@
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
 #include "core/services/core_manager_interfaces.h"
-#include "math/helpers/integer_helpers.h"
+#include "math/functions/integer/integer_helpers.h"
 #include "mymath.h"
 #include <algorithm>
 #include <cctype>
@@ -200,14 +200,12 @@ bool has_top_level_semicolon(std::string_view text) {
 
 StoredValue make_list_value(std::vector<StoredValue> values) {
     StoredValue stored;
-    stored.is_list = true;
-    stored.list_value = std::make_shared<std::vector<StoredValue>>(std::move(values));
+    stored.data = std::make_shared<std::vector<StoredValue>>(std::move(values));
     return stored;
 }
 
 StoredValue make_dict_value(std::map<std::string, StoredValue> values) {
     StoredValue stored;
-    stored.is_dict = true;
-    stored.dict_value = std::make_shared<std::map<std::string, StoredValue>>(std::move(values));
+    stored.data = std::make_shared<std::map<std::string, StoredValue>>(std::move(values));
     return stored;
 }

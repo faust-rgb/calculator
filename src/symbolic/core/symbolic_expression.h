@@ -423,6 +423,9 @@ public:
     /** @brief 获取右子节点表达式 */
     SymbolicExpression right_child() const;
 
+    /** @brief 获取所有子操作数表达式列表（统一子节点遍历） */
+    std::vector<SymbolicExpression> operands() const;
+
     /** @brief 获取子节点数量 */
     std::size_t child_count() const;
 

@@ -13,7 +13,7 @@
 #define IO_MODULE_H
 
 #include "module/calculator_module.h"
-#include "types/stored_value.h"
+#include "core/value/stored_value.h"
 
 #include <fstream>
 #include <map>

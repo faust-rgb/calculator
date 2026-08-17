@@ -19,12 +19,12 @@
 #include "parser/ast/unified_ast.h"
 #include "calculator_exceptions.h"
 #include "execution/resolver/variable_resolver.h"
-#include "types/function.h"
-#include "math/precise/rational.h"
+#include "execution/functions/user_function.h"
+#include "math/numeric/exact/rational.h"
 #include "core/services/string_utils.h"
 #include "types/scalar_type.h"
-#include "math/helpers/integer_helpers.h"
-#include "math/helpers/base_conversions.h"
+#include "math/functions/integer/integer_helpers.h"
+#include "math/functions/conversion/base_conversions.h"
 #include "mymath.h"
 
 #include <cctype>
@@ -237,6 +237,56 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
             return *found;
         }
         throw UndefinedError("unknown variable: " + expression);
+    }
+
+    // 统一 AST 求值路径：矩阵字面量、虚数、下标及其混合运算共享同一
+    // 棵树。旧矩阵解析器仅作为不支持的命令函数的兼容回退。
+    if (!symbolic_mode && (analysis.has_bracket || analysis.has_standalone_i || analysis.has_matrix_func ||
+                           analysis.has_matrix_or_complex_var)) {
+        auto unified_ast = compile(expression);
+        if (unified_ast) {
+            core::ExecutionContext context;
+            for (const auto& [name, value] : variables_.snapshot()) {
+                context.scope().set(name, value);
+            }
+            if (scalar_functions_) {
+                for (const auto& [name, fn] : *scalar_functions_) {
+                    context.functions().register_function(name,
+                        [fn](const std::vector<StoredValue>& args, core::ExecutionContext&) {
+                            std::vector<Scalar> values;
+                            values.reserve(args.size());
+                            for (const auto& arg : args) values.push_back(arg.get_decimal());
+                            return StoredValue(fn(values));
+                        });
+                }
+            }
+            if (native_functions_) {
+                for (const auto& [name, fn] : *native_functions_) {
+                    context.functions().register_function(name,
+                        [fn](const std::vector<StoredValue>& args, core::ExecutionContext&) {
+                            return fn(args);
+                        });
+                }
+            }
+            if (matrix_functions_) {
+                for (const auto& [name, fn] : *matrix_functions_) {
+                    context.functions().register_function(name,
+                        [fn](const std::vector<StoredValue>& args, core::ExecutionContext&) {
+                            std::vector<matrix::Matrix> matrices;
+                            for (const auto& arg : args) {
+                                if (!arg.is_matrix()) throw std::runtime_error("matrix argument required");
+                                matrices.push_back(arg.as_matrix());
+                            }
+                            return StoredValue(fn(matrices));
+                        });
+                }
+            }
+            try {
+                return core::evaluate_unified_ast(unified_ast.get(), context);
+            } catch (const std::exception&) {
+                // 保留旧命令/矩阵求值器对特殊函数的兼容性。
+            }
+        }
     }
 
     // 矩阵/复数候选（使用分析结果，避免重复检测）

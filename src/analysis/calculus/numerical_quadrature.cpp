@@ -142,6 +142,7 @@ Scalar adaptive_gauss_kronrod_recursive(
     Scalar whole,
     Scalar error,
     int depth) {
+    (void)whole;
     const Scalar center = (left + right) * Scalar(0.5L);
     Scalar left_error = Scalar(0.0L);
     Scalar right_error = Scalar(0.0L);

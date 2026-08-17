@@ -1,5 +1,5 @@
 #include "core/services/core_manager_interfaces.h"
-#include "types/function.h"
+#include "execution/functions/user_function.h"
 #include "core/services/core_manager_interfaces.h"
 // ============================================================================
 // script_executor.cpp - 脚本语句与块执行实现
@@ -7,7 +7,7 @@
 
 #include "script_runtime_internal.h"
 #include "core/services/string_utils.h"
-#include "math/helpers/integer_helpers.h"
+#include "math/functions/integer/integer_helpers.h"
 #include "mymath.h"
 #include "matrix/matrix.h"
 #include <sstream>

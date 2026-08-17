@@ -136,7 +136,7 @@ private:
     }
 };
 
-// Note: Use ExactRational directly to avoid conflict with math/precise/rational.h
+// Note: Use ExactRational directly to avoid conflict with math/numeric/exact/rational.h
 
 /**
  * @brief 微分域类

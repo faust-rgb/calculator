@@ -3,7 +3,7 @@
 // ============================================================================
 
 #include "analysis/rootfinding/rootfinding_engine.h"
-#include "math/base/default_precision.h"
+#include "math/runtime/precision/default_precision.h"
 
 #include <algorithm>
 #include <stdexcept>

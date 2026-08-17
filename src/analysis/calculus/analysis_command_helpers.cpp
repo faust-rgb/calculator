@@ -3,7 +3,7 @@
 // ============================================================================
 
 #include "analysis/calculus/analysis_command_helpers.h"
-#include "math/base/precision_constants.h"
+#include "math/numeric/precision/tolerances.h"
 #include "math/mymath.h"
 #include "symbolic/core/symbolic_expression.h"
 

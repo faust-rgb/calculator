@@ -16,14 +16,14 @@
 #define MATRIX_H
 
 #include "types/scalar_type.h"
-#include "types/stored_value.h"
+#include "core/value/stored_value.h"
 #include <cstddef>
 #include <functional>
 #include <map>
 #include <string>
 #include <vector>
 
-#include "math/types/complex.h"
+#include "math/numeric/types/complex.h"
 
 namespace matrix {
 

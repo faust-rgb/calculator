@@ -16,7 +16,7 @@
 #include "symbolic/core/symbolic_expression.h"
 #include "symbolic/public/symbolic_node_types.h"
 #include "math/mymath.h"
-#include "math/base/precision_constants.h"
+#include "math/numeric/precision/tolerances.h"
 
 #include <initializer_list>
 #include <list>

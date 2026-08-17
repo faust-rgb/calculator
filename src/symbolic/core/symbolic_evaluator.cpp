@@ -5,7 +5,8 @@
 
 #include "symbolic/core/symbolic_evaluator.h"
 #include "math/mymath.h"
-#include "math/helpers/integer_helpers.h"
+#include "math/numeric/precision/tolerances.h"
+#include "math/functions/integer/integer_helpers.h"
 #include "matrix.h"
 #include <cmath>
 #include <stdexcept>
@@ -109,9 +110,9 @@ StoredValue SymbolicEvaluator::evalf(const SymbolicExpression& expr, core::Execu
     case NodeType::kFunction: {
         const std::string& func_name = expr.node_text();
         std::vector<StoredValue> args;
-        std::size_t count = expr.child_count();
-        for (std::size_t i = 0; i < count; ++i) {
-            args.push_back(evalf(expr.child_at(i), ctx));
+        const auto ops = expr.operands();
+        for (const auto& op : ops) {
+            args.push_back(evalf(op, ctx));
         }
 
         const auto* native_func = ctx.functions().find_function(func_name);
@@ -125,9 +126,29 @@ StoredValue SymbolicEvaluator::evalf(const SymbolicExpression& expr, core::Execu
             if (func_name == "sin") return StoredValue(mymath::sin(val));
             if (func_name == "cos") return StoredValue(mymath::cos(val));
             if (func_name == "tan") return StoredValue(mymath::tan(val));
+            if (func_name == "asin") return StoredValue(mymath::asin(val));
+            if (func_name == "acos") return StoredValue(mymath::acos(val));
+            if (func_name == "atan") return StoredValue(mymath::atan(val));
+            if (func_name == "sinh") return StoredValue(mymath::sinh(val));
+            if (func_name == "cosh") return StoredValue(mymath::cosh(val));
+            if (func_name == "tanh") return StoredValue(mymath::tanh(val));
             if (func_name == "exp") return StoredValue(mymath::exp(val));
             if (func_name == "ln" || func_name == "log") return StoredValue(mymath::ln(val));
             if (func_name == "sqrt") return StoredValue(mymath::sqrt(val));
+            if (func_name == "cbrt") return StoredValue(mymath::cbrt(val));
+            if (func_name == "abs") return StoredValue(mymath::abs(val));
+            if (func_name == "floor") return StoredValue(mymath::floor(val));
+            if (func_name == "ceil") return StoredValue(mymath::ceil(val));
+            if (func_name == "sign") {
+                if (mymath::is_near_zero(val, precision::epsilon<Scalar>())) return StoredValue(Scalar(0));
+                return StoredValue(val > Scalar(0) ? Scalar(1) : Scalar(-1));
+            }
+        }
+        if (args.size() == 2 && args[0].is_scalar() && args[1].is_scalar()) {
+            Scalar a = args[0].get_decimal();
+            Scalar b = args[1].get_decimal();
+            if (func_name == "pow") return StoredValue(mymath::pow(a, b));
+            if (func_name == "atan2") return StoredValue(mymath::atan2(a, b));
         }
         throw std::runtime_error("Unknown function in symbolic evalf: " + func_name);
     }
@@ -149,8 +170,8 @@ bool SymbolicEvaluator::is_exact_algebraic(const SymbolicExpression& expr) {
         type == NodeType::kFunction || type == NodeType::kDifferentialOp) {
         return false;
     }
-    for (std::size_t i = 0; i < expr.child_count(); ++i) {
-        if (!is_exact_algebraic(expr.child_at(i))) return false;
+    for (const auto& op : expr.operands()) {
+        if (!is_exact_algebraic(op)) return false;
     }
     return true;
 }

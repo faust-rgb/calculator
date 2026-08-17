@@ -18,8 +18,8 @@
 #include "matrix.h"
 #include "matrix_internal.h"
 #include "mymath.h"
-#include "math/base/precision_constants.h"
-#include "math/precise/precise_decimal.h"
+#include "math/numeric/precision/tolerances.h"
+#include "math/numeric/exact/precise_decimal.h"
 #include <algorithm>
 #include <stdexcept>
 #include <vector>

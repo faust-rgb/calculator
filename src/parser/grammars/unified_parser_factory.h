@@ -35,6 +35,7 @@ enum class ParserKind {
     kScalar,          ///< 标量表达式
     kSymbolic,        ///< 符号表达式
     kRatCall,         ///< rat() 函数调用
+    kUnifiedExpression, ///< 统一 ExpressionAST（标量/复数/矩阵/下标混合）
     kUnknown,         ///< 需要动态判断
 };
 

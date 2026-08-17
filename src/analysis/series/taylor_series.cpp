@@ -17,14 +17,14 @@
 
 #include "analysis/series/taylor_series.h"
 #include "analysis/modules/series_module.h"
-#include "math/base/default_precision.h"
+#include "math/runtime/precision/default_precision.h"
 #include "types/scalar_type.h"
 #include "core/services/format_utils.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "symbolic/public/symbolic_node_types.h"
 #include "statistics/probability.h"
 #include "math/mymath.h"
-#include "math/helpers/integer_helpers.h"
+#include "math/functions/integer/integer_helpers.h"
 #include "expression_utils.h"
 #include "string_utils.h"
 #include <sstream>

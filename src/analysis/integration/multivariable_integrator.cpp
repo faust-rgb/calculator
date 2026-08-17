@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "types/scalar_type.h"
-#include "math/core/basic_ops.h"
+#include "math/functions/scalar/basic_ops.h"
 
 namespace {
 

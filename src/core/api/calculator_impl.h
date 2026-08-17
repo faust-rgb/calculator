@@ -15,9 +15,9 @@
 #include "core/environment/scope.h"
 #include "core/execution_context.h"
 #include "types/scalar_type.h"
-#include "math/base/default_precision.h"
+#include "math/runtime/precision/default_precision.h"
 #include "execution/registry/command_registry.h"
-#include "types/function.h"
+#include "execution/functions/user_function.h"
 
 #include <filesystem>
 #include <functional>

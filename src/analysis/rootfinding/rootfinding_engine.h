@@ -14,9 +14,9 @@
 #define ROOTFINDING_ENGINE_H
 
 #include "types/scalar_type.h"
-#include "math/core/basic_ops.h"
-#include "math/core/roots_powers.h"
-#include "math/base/precision_constants.h"
+#include "math/functions/scalar/basic_ops.h"
+#include "math/functions/elementary/roots_powers.h"
+#include "math/numeric/precision/tolerances.h"
 #include "math/mymath.h"
 
 #include <functional>

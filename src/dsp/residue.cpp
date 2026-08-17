@@ -18,13 +18,13 @@
 #include "core/services/string_utils.h"
 #include "core/types/module_types.h"
 #include "math/mymath.h"
-#include "math/types/complex.h"
+#include "math/numeric/types/complex.h"
 #include "symbolic_expression.h"
 #include "symbolic/public/symbolic_node_types.h"
 #include "matrix.h"
 #include "polynomial.h"
 #include "calculator_exceptions.h"
-#include "math/base/precision_constants.h"
+#include "math/numeric/precision/tolerances.h"
 #include "module/calculator_module.h"
 
 namespace dsp_ops {

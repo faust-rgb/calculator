@@ -3,7 +3,7 @@
 // ============================================================================
 
 #include "test_benchmark_precise.h"
-#include "math/precise/precise_decimal.h"
+#include "math/numeric/exact/precise_decimal.h"
 #include "test_helpers.h"
 
 #include <chrono>

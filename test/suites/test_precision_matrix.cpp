@@ -7,7 +7,7 @@
 #include "core/api/calculator.h"
 #include "matrix/matrix.h"
 #include "matrix/matrix_dsp.h"
-#include "math/precise/precise_decimal.h"
+#include "math/numeric/exact/precise_decimal.h"
 #include "analysis/series/psa_engine.h"
 #include "types/scalar_type.h"
 #include <iostream>

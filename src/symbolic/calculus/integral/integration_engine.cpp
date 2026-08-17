@@ -172,6 +172,15 @@ IntegrationResult IntegrationEngine::integrate_recursive(
     const SymbolicExpression& expression,
     const std::string& variable_name) {
 
+    // Nested exponentials are non-elementary and must not fall through to
+    // heuristic fallback rules that may manufacture a spurious primitive.
+    if (expression.node_->type == NodeType::kFunction &&
+        expression.node_->text == "exp" && expression.node_->left &&
+        expression.node_->left->type == NodeType::kFunction &&
+        expression.node_->left->text == "exp") {
+        return IntegrationResult::non_elementary("nested exponential");
+    }
+
     // 深度检查
     if (current_depth_ >= max_depth_) {
         return IntegrationResult::failed();
@@ -343,6 +352,15 @@ IntegrationResult IntegrationEngine::try_integrate_constant_linear(
 IntegrationResult IntegrationEngine::try_integrate_risch(
     const SymbolicExpression& expression,
     const std::string& variable_name) {
+
+    // exp(exp(u)) has no elementary antiderivative.  Reject this nested
+    // exponential before the general Risch heuristics can misclassify it.
+    if (expression.node_->type == NodeType::kFunction &&
+        expression.node_->text == "exp" && expression.node_->left &&
+        expression.node_->left->type == NodeType::kFunction &&
+        expression.node_->left->text == "exp") {
+        return IntegrationResult::non_elementary("nested exponential");
+    }
 
     // Use integrate_full to get detailed result type
     auto risch_result = RischAlgorithm::integrate_full(expression, variable_name);

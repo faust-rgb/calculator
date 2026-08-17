@@ -10,8 +10,8 @@
 #define CORE_STATE_PERSISTENCE_H
 
 #include "core_manager_interfaces.h"
-#include "types/stored_value.h"
-#include "types/function.h"
+#include "core/value/stored_value.h"
+#include "execution/functions/user_function.h"
 #include <string>
 #include <map>
 #include <memory>

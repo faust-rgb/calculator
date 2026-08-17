@@ -14,7 +14,7 @@
 #ifndef CORE_SCOPE_H
 #define CORE_SCOPE_H
 
-#include "types/stored_value.h"
+#include "core/value/stored_value.h"
 
 #include <string>
 #include <vector>
