@@ -43,6 +43,27 @@ namespace symbolic_expression_internal {
 
 using Scalar = mymath::Scalar;
 
+SymbolicExpression expand_impl(const SymbolicExpression& expression);
+
+bool is_known_nonzero_expression(const SymbolicExpression& expression) {
+    Scalar value = Scalar(0);
+    if (expression.is_number(&value)) {
+        return !mymath::is_near_zero(value, kFormatEps());
+    }
+    if (is_known_negative_expression(expression)) return true;
+    if (!is_known_positive_expression(expression)) return false;
+
+    // These helpers describe non-negativity, not strict positivity.
+    if (expression.node_->type == NodeType::kFunction &&
+        (expression.node_->text == "sqrt" ||
+         expression.node_->text == "abs" ||
+         expression.node_->text == "cosh")) {
+        return false;
+    }
+    if (expression.node_->type == NodeType::kPower) return false;
+    return true;
+}
+
 // ============================================================================
 // Expression size monitoring
 // ============================================================================
@@ -235,7 +256,9 @@ SymbolicExpression simplify_lightweight(const SymbolicExpression& expression) {
                 if (expr_is_zero(right)) return make_divide(left, right);
                 return SymbolicExpression::number(left_value / right_value);
             }
-            if (expr_is_zero(left)) return SymbolicExpression::number(Scalar(0));
+            if (expr_is_zero(left) && is_known_nonzero_expression(right))
+                return SymbolicExpression::number(Scalar(0));
+            if (expr_is_zero(left)) return make_divide(left, right);
             if (expr_is_one(right)) return left;
             return make_divide(left, right);
 
@@ -258,7 +281,9 @@ SymbolicExpression simplify_lightweight(const SymbolicExpression& expression) {
                     return left;
             }
             if (left.is_number(&left_value) && mymath::is_near_zero(left_value, kFormatEps())) {
-                return SymbolicExpression::number(Scalar(0));
+                if (right.is_number(&right_value) && right_value > Scalar(0)) {
+                    return SymbolicExpression::number(Scalar(0));
+                }
             }
             if (left.is_number(&left_value) && mymath::is_near_zero(left_value - Scalar(1), kFormatEps())) {
                 return SymbolicExpression::number(Scalar(1));
@@ -371,6 +396,179 @@ SymbolicExpression simplify_medium(const SymbolicExpression& expression) {
     }
 }
 
+bool is_purely_numeric_expression(const SymbolicExpression& expr) {
+    if (!expr.node_) return true;
+    if (expr.node_->type == NodeType::kNumber) return true;
+    if (expr.node_->type == NodeType::kVariable) return false;
+    if (expr.node_->left && !is_purely_numeric_expression(SymbolicExpression(expr.node_->left))) return false;
+    if (expr.node_->right && !is_purely_numeric_expression(SymbolicExpression(expr.node_->right))) return false;
+    for (const auto& child : expr.node_->children) {
+        if (!is_purely_numeric_expression(SymbolicExpression(child))) return false;
+    }
+    return true;
+}
+
+bool is_square_root_expression(const SymbolicExpression& expr, SymbolicExpression* radicand) {
+    if (!expr.node_) return false;
+    if (expr.node_->type == NodeType::kFunction && expr.node_->text == "sqrt") {
+        if (radicand) *radicand = SymbolicExpression(expr.node_->left);
+        return true;
+    }
+    if (expr.node_->type == NodeType::kPower) {
+        Scalar exp_val;
+        if (SymbolicExpression(expr.node_->right).is_number(&exp_val) &&
+            mymath::is_near_zero(exp_val - Scalar(0.5L), kFormatEps())) {
+            if (radicand) *radicand = SymbolicExpression(expr.node_->left);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool contains_imaginary_unit(const SymbolicExpression& expr) {
+    if (!expr.node_) return false;
+    if (expr_is_variable(expr, "i")) return true;
+    if (expr.node_->left && contains_imaginary_unit(SymbolicExpression(expr.node_->left))) return true;
+    if (expr.node_->right && contains_imaginary_unit(SymbolicExpression(expr.node_->right))) return true;
+    for (const auto& child : expr.node_->children) {
+        if (contains_imaginary_unit(SymbolicExpression(child))) return true;
+    }
+    return false;
+}
+
+bool contains_square_root(const SymbolicExpression& expr) {
+    if (!expr.node_) return false;
+    if (is_square_root_expression(expr, nullptr)) return true;
+    if (expr.node_->left && contains_square_root(SymbolicExpression(expr.node_->left))) return true;
+    if (expr.node_->right && contains_square_root(SymbolicExpression(expr.node_->right))) return true;
+    for (const auto& child : expr.node_->children) {
+        if (contains_square_root(SymbolicExpression(child))) return true;
+    }
+    return false;
+}
+
+bool try_denest_square_root(const SymbolicExpression& expr, SymbolicExpression* denested) {
+    if (!expr.node_ || expr.node_->type != NodeType::kFunction || expr.node_->text != "sqrt") {
+        return false;
+    }
+    SymbolicExpression inner(expr.node_->left);
+    if (!inner.node_) return false;
+
+    // 检查内层形式: A + B 或 A - B
+    if (inner.node_->type != NodeType::kAdd && inner.node_->type != NodeType::kSubtract) {
+        return false;
+    }
+
+    bool is_minus = (inner.node_->type == NodeType::kSubtract);
+    SymbolicExpression left(inner.node_->left);
+    SymbolicExpression right(inner.node_->right);
+
+    Scalar A_val;
+    if (!left.is_number(&A_val) || A_val <= Scalar(0)) {
+        return false;
+    }
+
+    // 提取右侧平方项 D (如 sqrt(D), c * sqrt(C))
+    Scalar D_val = Scalar(0);
+    SymbolicExpression radicand;
+    if (is_square_root_expression(right, &radicand)) {
+        Scalar r_num;
+        if (radicand.is_number(&r_num)) {
+            D_val = r_num;
+        }
+    } else if (right.node_->type == NodeType::kMultiply) {
+        SymbolicExpression m_left(right.node_->left), m_right(right.node_->right);
+        Scalar c_val, r_num;
+        if (m_left.is_number(&c_val) && is_square_root_expression(m_right, &radicand) && radicand.is_number(&r_num)) {
+            D_val = c_val * c_val * r_num;
+        }
+    }
+
+    if (D_val <= Scalar(0)) return false;
+
+    Scalar delta = A_val * A_val - D_val;
+    if (delta <= Scalar(0)) return false;
+
+    Scalar R = mymath::sqrt(delta);
+    if (!mymath::is_near_zero(R * R - delta, Scalar(1e-9L))) {
+        return false;
+    }
+
+    Scalar term1 = (A_val + R) / Scalar(2);
+    Scalar term2 = (A_val - R) / Scalar(2);
+    if (term1 <= Scalar(0) || term2 < Scalar(0)) return false;
+
+    SymbolicExpression sqrt1 = make_function("sqrt", SymbolicExpression::number(term1)).simplify();
+    SymbolicExpression sqrt2 = make_function("sqrt", SymbolicExpression::number(term2)).simplify();
+
+    if (is_minus) {
+        *denested = make_subtract(sqrt1, sqrt2).simplify();
+    } else {
+        *denested = make_add(sqrt1, sqrt2).simplify();
+    }
+    return true;
+}
+
+bool try_rationalize_denominator(const SymbolicExpression& num,
+                                 const SymbolicExpression& den,
+                                 SymbolicExpression* result) {
+    if (!den.node_ || expr_is_zero(den) || expr_is_one(den)) return false;
+
+    // 单项常数根式: num / sqrt(d) -> (num * sqrt(d)) / d
+    if (is_purely_numeric_expression(den)) {
+        SymbolicExpression radicand;
+        if (is_square_root_expression(den, &radicand)) {
+            *result = make_divide(make_multiply(num, den), radicand);
+            return true;
+        }
+        if (den.node_->type == NodeType::kMultiply) {
+            SymbolicExpression left(den.node_->left), right(den.node_->right);
+            if (is_square_root_expression(right, &radicand) && left.node_->type == NodeType::kNumber) {
+                *result = make_divide(make_multiply(num, right), make_multiply(left, radicand));
+                return true;
+            }
+        }
+    }
+
+    // 二项式根式共轭有理化: A + B -> A - B (支持数值根式与符号根式，如 1/(sqrt(x) + sqrt(y)))
+    if (den.node_->type == NodeType::kAdd || den.node_->type == NodeType::kSubtract) {
+        SymbolicExpression A(den.node_->left);
+        SymbolicExpression B(den.node_->right);
+        if (contains_square_root(den)) {
+            SymbolicExpression conjugate = (den.node_->type == NodeType::kAdd) ? make_subtract(A, B) : make_add(A, B);
+            SymbolicExpression new_den = expand_impl(make_multiply(den, conjugate)).simplify();
+            if (!contains_square_root(new_den) || new_den.node_->type == NodeType::kNumber) {
+                SymbolicExpression new_num = expand_impl(make_multiply(num, conjugate)).simplify();
+                *result = make_divide(new_num, new_den);
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool try_combine_fractions(const SymbolicExpression& left,
+                           const SymbolicExpression& right,
+                           bool is_subtract,
+                           SymbolicExpression* result) {
+    if (!left.node_ || !right.node_) return false;
+    if (expr_is_zero(left) || expr_is_zero(right)) return false;
+
+    // 同分母分式合并: a/d ± c/d -> (a ± c) / d
+    if (left.node_->type == NodeType::kDivide && right.node_->type == NodeType::kDivide) {
+        SymbolicExpression a(left.node_->left), b(left.node_->right);
+        SymbolicExpression c(right.node_->left), d(right.node_->right);
+        if (expressions_match(b, d)) {
+            SymbolicExpression num = is_subtract ? make_subtract(a, c) : make_add(a, c);
+            *result = make_divide(num.simplify(), b);
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /**
  * @brief 重量级简化：多项式 GCD、因式分解、公因子提取
  *
@@ -405,6 +603,9 @@ SymbolicExpression simplify_heavyweight(const SymbolicExpression& expression) {
             SymbolicExpression combined;
             if (try_combine_like_terms(left, right, Scalar(1), &combined)) return combined;
 
+            // 分式通分合并
+            if (try_combine_fractions(left, right, false, &combined)) return combined;
+
             // 公因子提取
             SymbolicExpression factored;
             if (try_factor_common_terms(left, right, Scalar(1), &factored)) return factored;
@@ -429,6 +630,9 @@ SymbolicExpression simplify_heavyweight(const SymbolicExpression& expression) {
             SymbolicExpression combined;
             if (try_combine_like_terms(left, right, Scalar(-1), &combined)) return combined;
 
+            // 分式通分合并
+            if (try_combine_fractions(left, right, true, &combined)) return combined;
+
             SymbolicExpression factored;
             if (try_factor_common_terms(left, right, Scalar(-1), &factored)) return factored;
 
@@ -438,6 +642,14 @@ SymbolicExpression simplify_heavyweight(const SymbolicExpression& expression) {
         case NodeType::kDivide: {
             left = simplify_heavyweight(SymbolicExpression(node->left));
             right = simplify_heavyweight(SymbolicExpression(node->right));
+
+            if (expr_is_zero(left) && !is_known_nonzero_expression(right)) {
+                return make_divide(left, right);
+            }
+
+            // 分母有理化
+            SymbolicExpression rationalized;
+            if (try_rationalize_denominator(left, right, &rationalized)) return rationalized;
 
             // GCD 约分
             SymbolicExpression reduced;
@@ -690,8 +902,11 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                     return make_function("abs", base).simplify();
                 }
             }
-            // sqrt(x) where x is negative → i*sqrt(-x)
             if (node->text == "sqrt") {
+                SymbolicExpression denested;
+                if (try_denest_square_root(expression, &denested)) {
+                    return denested;
+                }
                 if (is_known_negative_expression(argument)) {
                     return make_multiply(
                         SymbolicExpression::variable("i"),
@@ -892,9 +1107,13 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 if (expr_is_zero(right)) return make_divide(left, right);
                 return SymbolicExpression::number(left_value / right_value);
             }
-            if (expr_is_zero(left)) return SymbolicExpression::number(Scalar(0));
+            if (expr_is_zero(left) && is_known_nonzero_expression(right))
+                return SymbolicExpression::number(Scalar(0));
+            if (expr_is_zero(left)) return make_divide(left, right);
             if (expr_is_one(right)) return left;
             {
+                SymbolicExpression rationalized;
+                if (try_rationalize_denominator(left, right, &rationalized)) return rationalized;
                 SymbolicExpression reduced;
                 if (try_reduce_polynomial_quotient(left, right, &reduced)) return reduced;
                 if (try_reduce_polynomial_gcd_quotient(left, right, &reduced)) return reduced;
@@ -958,7 +1177,14 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             if (left.is_number(&left_value)) {
                 if (mymath::is_near_zero(left_value, kFormatEps())) {
-                    if (right.is_number(&right_value)) return mymath::is_near_zero(right_value, kFormatEps()) ? SymbolicExpression::number(Scalar(1)) : SymbolicExpression::number(Scalar(0));
+                    if (right.is_number(&right_value)) {
+                        if (mymath::is_near_zero(right_value, kFormatEps())) {
+                            return SymbolicExpression::number(Scalar(1));
+                        }
+                        if (right_value > Scalar(0)) {
+                            return SymbolicExpression::number(Scalar(0));
+                        }
+                    }
                 }
                 if (mymath::is_near_zero(left_value - Scalar(1), kFormatEps())) return SymbolicExpression::number(Scalar(1));
             }
@@ -979,7 +1205,13 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (left.node_->type == NodeType::kPower) {
                 Scalar inner_exp;
                 if (SymbolicExpression(left.node_->right).is_number(&inner_exp) && right.is_number(&right_value)) {
-                    return make_power(SymbolicExpression(left.node_->left).simplify(), SymbolicExpression::number(inner_exp * right_value)).simplify();
+                    SymbolicExpression base(SymbolicExpression(left.node_->left));
+                    bool inner_is_odd = mymath::is_integer(inner_exp, Scalar(app::integer_tolerance())) &&
+                                        (static_cast<long long>(mymath::round(inner_exp).to_long_double()) % 2 != 0);
+                    bool outer_is_int = mymath::is_integer(right_value, Scalar(app::integer_tolerance()));
+                    if (is_known_positive_expression(base) || inner_is_odd || outer_is_int) {
+                        return make_power(base.simplify(), SymbolicExpression::number(inner_exp * right_value)).simplify();
+                    }
                 }
             }
             if (left.is_number(&left_value) && right.is_number(&right_value)) return SymbolicExpression::number(mymath::pow(left_value, right_value));

@@ -185,7 +185,7 @@ protected:
             char base_char = std::tolower(static_cast<unsigned char>(source_[pos_ + 1]));
             if (base_char == 'x' || base_char == 'b' || base_char == 'o') {
                 pos_ += 2;
-                while (!is_at_end() && std::isxdigit(static_cast<unsigned char>(peek()))) {
+                while (!is_at_end() && std::isalnum(static_cast<unsigned char>(peek()))) {
                     pos_++;
                 }
                 goto end_num;

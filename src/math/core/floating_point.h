@@ -1,9 +1,6 @@
 /**
  * @file floating_point.h
- * @brief Floating-point properties and utilities
- *
- * This file defines precision thresholds, NaN/Inf detection, and other
- * floating-point utilities used throughout the math library.
+ * @brief Floating-point properties and utilities (Header-only)
  */
 
 #ifndef MATH_CORE_FLOATING_POINT_H
@@ -11,6 +8,8 @@
 
 #include "types/scalar_type.h"
 #include "scalar_traits.h"
+#include <cmath>
+#include <limits>
 
 namespace mymath {
 
@@ -20,12 +19,6 @@ namespace mymath {
 
 namespace detail {
 
-/**
- * @brief Get machine epsilon for a given type
- *
- * long double: ~1e-19 (80-bit extended)
- * float128_t: ~1e-34 (128-bit)
- */
 template <typename T>
 struct MachineEpsilon;
 
@@ -39,15 +32,6 @@ struct MachineEpsilon<Scalar> {
     static constexpr long double value = 1e-34L;
 };
 
-/**
- * @brief Get "near zero" threshold
- *
- * For trigonometric function result cleanup, use epsilon^(3/4) as threshold.
- * This ensures sufficient precision is retained while cleaning up calculation errors.
- *
- * long double: ~1e-14
- * float128_t: ~1e-25
- */
 template <typename T>
 struct NearZeroThreshold;
 
@@ -61,9 +45,6 @@ struct NearZeroThreshold<Scalar> {
     static constexpr long double value = 1e-25L;
 };
 
-/**
- * @brief Get "near integer" threshold
- */
 template <typename T>
 struct NearIntegerThreshold;
 
@@ -79,82 +60,33 @@ struct NearIntegerThreshold<Scalar> {
 
 }  // namespace detail
 
-// Convenience constants
 constexpr long double kNearZeroThreshold = detail::NearZeroThreshold<long double>::value;
 
 // ============================================================================
 // Floating-point Utilities
 // ============================================================================
 
-/**
- * @brief Check if a value is NaN
- * @param x Input value
- * @return true if x is NaN
- */
-bool isnan(long double x);
+inline bool isnan(long double x) { return std::isnan(x); }
+inline bool isinf(long double x) { return std::isinf(x); }
+inline bool isfinite(long double x) { return std::isfinite(x); }
+inline long double infinity() { return std::numeric_limits<long double>::infinity(); }
+inline long double quiet_nan() { return std::numeric_limits<long double>::quiet_NaN(); }
 
-/**
- * @brief Check if a value is infinity
- * @param x Input value
- * @return true if x is positive or negative infinity
- */
-bool isinf(long double x);
+inline bool is_near_zero(long double x, long double eps = 1e-12L) {
+    return std::abs(x) <= eps;
+}
 
-/**
- * @brief Check if a value is finite (not NaN or infinity)
- * @param x Input value
- * @return true if x is a finite number
- */
-bool isfinite(long double x);
-
-/**
- * @brief Get positive infinity
- * @return Positive infinity value
- */
-long double infinity();
-
-/**
- * @brief Get quiet NaN
- * @return Quiet NaN value
- */
-long double quiet_nan();
-
-/**
- * @brief Check if a value is close to zero
- * @param x Input value
- * @param eps Error threshold, defaults to kEps
- * @return true if |x| <= eps
- */
-bool is_near_zero(long double x, long double eps = 1e-12L);
-
-/**
- * @brief Check if a value is close to an integer
- * @param x Input value
- * @param eps Error threshold, defaults to 1e-10
- * @return true if distance from x to nearest integer <= eps
- */
-bool is_integer(long double x, long double eps = 1e-10L);
+inline bool is_integer(long double x, long double eps = 1e-10L) {
+    long double frac = std::abs(x - std::round(x));
+    return frac <= eps;
+}
 
 // Scalar overloads - use dispatch from scalar_traits.h
-inline bool isnan(Scalar x) {
-    return scalar_isnan(x);
-}
-
-inline bool isinf(Scalar x) {
-    return scalar_isinf(x);
-}
-
-inline bool isfinite(Scalar x) {
-    return scalar_isfinite(x);
-}
-
-inline bool is_near_zero(Scalar x, Scalar eps = Scalar(1e-12L)) {
-    return scalar_is_near_zero(x, eps);
-}
-
-inline bool is_integer(Scalar x, Scalar eps = Scalar(1e-10L)) {
-    return scalar_is_integer(x, eps);
-}
+inline bool isnan(Scalar x) { return scalar_isnan(x); }
+inline bool isinf(Scalar x) { return scalar_isinf(x); }
+inline bool isfinite(Scalar x) { return scalar_isfinite(x); }
+inline bool is_near_zero(Scalar x, Scalar eps = Scalar(1e-12L)) { return scalar_is_near_zero(x, eps); }
+inline bool is_integer(Scalar x, Scalar eps = Scalar(1e-10L)) { return scalar_is_integer(x, eps); }
 
 }  // namespace mymath
 

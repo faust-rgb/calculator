@@ -109,6 +109,13 @@ private:
         }
     }
 
+    bool can_start_implicit_factor() {
+        skip_spaces();
+        if (pos_ >= source_.size()) return false;
+        char ch = source_[pos_];
+        return ch == '(' || std::isalpha(static_cast<unsigned char>(ch)) || ch == '_';
+    }
+
     /**
      * @brief 解析乘除法表达式
      *
@@ -122,6 +129,8 @@ private:
                 value = SymbolicExpression(make_binary(NodeType::kMultiply, value.node_, parse_unary().node_));
             } else if (match('/')) {
                 value = SymbolicExpression(make_binary(NodeType::kDivide, value.node_, parse_unary().node_));
+            } else if (can_start_implicit_factor()) {
+                value = SymbolicExpression(make_binary(NodeType::kMultiply, value.node_, parse_power().node_));
             } else {
                 return value;
             }

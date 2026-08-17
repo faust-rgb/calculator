@@ -969,36 +969,19 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_field_strict(
             SymbolicPolynomial num_poly(num_coeffs, field.base_variable);
             SymbolicPolynomial den_poly(den_coeffs, field.base_variable);
 
-            if (den_poly.is_constant()) {
-                SymbolicExpression polynomial_result;
-                if (integrate_rational(num_poly, den_poly, field.base_variable, &polynomial_result)) {
-                    return IntegrationResult::elementary(polynomial_result);
-                }
+            SymbolicExpression rule_result;
+            if (integrate_symbolic_rational_rules(num_expr, den_expr, field.base_variable, &rule_result)) {
+                return IntegrationResult::elementary(rule_result);
             }
 
-            if (denominator_splits_into_linear_factors(den_poly)) {
-                SymbolicExpression split_linear_result;
-                if (integrate_rational(num_poly, den_poly, field.base_variable, &split_linear_result)) {
-                    return IntegrationResult::elementary(split_linear_result);
-                }
+            SymbolicExpression pf_result;
+            if (integrate_symbolic_partial_fractions(num_poly, den_poly, field.base_variable, &pf_result)) {
+                return IntegrationResult::elementary(pf_result);
             }
 
-            // Hermite 归约
-            SymbolicExpression rational_part;
-            SymbolicPolynomial reduced_num, reduced_den;
-            if (hermite_reduction(num_poly, den_poly, &rational_part, &reduced_num, &reduced_den)) {
-                if (reduced_num.is_zero()) {
-                    return IntegrationResult::elementary(rational_part.simplify());
-                }
-                // Rothstein-Trager 对数部分
-                SymbolicExpression log_part;
-                if (lazard_rioboo_trager_improved(reduced_num, reduced_den, field.base_variable, &log_part)) {
-                    SymbolicExpression result = (rational_part + log_part).simplify();
-                    return IntegrationResult::elementary(result);
-                } else {
-                    // LRT 失败，可能是高次结式无法处理
-                    return IntegrationResult::proof_failed("Rothstein-Trager failed for rational function");
-                }
+            SymbolicExpression rational_result;
+            if (integrate_rational(num_poly, den_poly, field.base_variable, &rational_result)) {
+                return IntegrationResult::elementary(rational_result);
             }
         }
         return IntegrationResult::proof_failed("Cannot extract polynomial coefficients");

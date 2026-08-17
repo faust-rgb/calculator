@@ -442,7 +442,7 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
                 }
             }
             Scalar x = ctx.parse_decimal(arguments[1]);
-            Scalar result = rootfinding_engine::newton_solve<Scalar>(evaluate_expression, x, ctx.normalize_result, evaluate_derivative, detected_var);
+            Scalar result = rootfinding_engine::newton_solve(evaluate_expression, x, ctx.normalize_result, evaluate_derivative, detected_var);
             *output = format_decimal(result);
             return true;
         }
@@ -457,7 +457,7 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
         const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
         Scalar left = ctx.parse_decimal(arguments[1]);
         Scalar right = ctx.parse_decimal(arguments[2]);
-        Scalar result = rootfinding_engine::bisection_solve<Scalar>(evaluate_expression, left, right, ctx.normalize_result, detected_var);
+        Scalar result = rootfinding_engine::bisection_solve(evaluate_expression, left, right, ctx.normalize_result, detected_var);
         *output = format_decimal(result);
         return true;
     }
@@ -470,14 +470,14 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
         const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
         Scalar x0 = ctx.parse_decimal(arguments[1]);
         Scalar x1 = ctx.parse_decimal(arguments[2]);
-        Scalar result = rootfinding_engine::secant_solve<Scalar>(evaluate_expression, x0, x1, ctx.normalize_result, detected_var);
+        Scalar result = rootfinding_engine::secant_solve(evaluate_expression, x0, x1, ctx.normalize_result, detected_var);
         const Scalar f0 = evaluate_expression({{detected_var, x0}});
         const Scalar f1 = evaluate_expression({{detected_var, x1}});
         const bool bracketed =
             (f0 < Scalar(0) && f1 > Scalar(0)) ||
             (f0 > Scalar(0) && f1 < Scalar(0));
         if (bracketed) {
-            const Scalar bracketed_result = rootfinding_engine::bisection_solve<Scalar>(
+            const Scalar bracketed_result = rootfinding_engine::bisection_solve(
                 evaluate_expression, x0, x1, ctx.normalize_result, detected_var);
             const Scalar result_residual =
                 mymath::abs(evaluate_expression({{detected_var, result}}));
@@ -498,7 +498,7 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
         std::string detected_var = extract_variable_name(arguments[0]);
         const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
         Scalar x = ctx.parse_decimal(arguments[1]);
-        Scalar result = rootfinding_engine::fixed_point_solve<Scalar>(evaluate_expression, x, ctx.normalize_result, detected_var);
+        Scalar result = rootfinding_engine::fixed_point_solve(evaluate_expression, x, ctx.normalize_result, detected_var);
         *output = format_decimal(result);
         return true;
     }
@@ -511,7 +511,7 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
         const auto evaluate_expression = ctx.build_scoped_evaluator(arguments[0]);
         Scalar left = ctx.parse_decimal(arguments[1]);
         Scalar right = ctx.parse_decimal(arguments[2]);
-        Scalar result = rootfinding_engine::brent_solve<Scalar>(evaluate_expression, left, right, ctx.normalize_result, detected_var);
+        Scalar result = rootfinding_engine::brent_solve(evaluate_expression, left, right, ctx.normalize_result, detected_var);
         *output = format_decimal(result);
         return true;
     }

@@ -108,6 +108,12 @@ LogarithmicRepresentation express_as_logarithmic_sum(
     const std::vector<RischAlgorithm::DifferentialExtension>& tower,
     const std::string& x_var);
 
+bool try_integrate_numeric_quadratic_partial_fractions(
+    const SymbolicPolynomial& numerator,
+    const SymbolicPolynomial& denominator,
+    const std::string& variable_name,
+    SymbolicExpression* result);
+
 } // namespace risch_algorithm_internal
 
 #endif // RISCH_ALGORITHM_INTERNAL_H

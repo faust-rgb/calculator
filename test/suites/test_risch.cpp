@@ -714,8 +714,7 @@ void test_risch_rational_advanced() {
             SymbolicExpression::number(3.0));
         SymbolicExpression expr = SymbolicExpression::number(1.0L) / den;
         IntegrationResult result = engine.integrate(expr, "x");
-        //std::cout << "∫ 1 / (x^2 + 1)^3 dx = "
-                  //<< result.value.to_string() << " [" << result.method_used << "]" << std::endl;
+        std::cerr << "\n>>> DEBUG TEST4: success=" << result.success << " method=" << result.method_used << " value=" << result.value.to_string() << std::endl;
         assert(result.success);
     }
 
@@ -759,8 +758,7 @@ void test_risch_rational_advanced() {
             SymbolicExpression::number(2.0));
         SymbolicExpression expr = (num / den).simplify();
         IntegrationResult result = engine.integrate(expr, "x");
-        //std::cout << "∫ x^2 / (x^2 + x + 1)^2 dx = "
-                  //<< result.value.to_string() << " [" << result.method_used << "]" << std::endl;
+        std::cerr << "\n>>> DEBUG TEST7: success=" << result.success << " method=" << result.method_used << " value=" << result.value.to_string() << std::endl;
         assert(result.success);
     }
 

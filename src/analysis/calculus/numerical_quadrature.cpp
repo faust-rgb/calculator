@@ -11,7 +11,6 @@ namespace analysis {
 
 namespace {
 
-inline Scalar t_abs(const Scalar& val) { return mymath::abs(val); }
 
 inline void compensated_add(Scalar value, Scalar* sum, Scalar* compensation) {
     const Scalar y = value - *compensation;
@@ -44,9 +43,9 @@ Scalar adaptive_simpson_recursive(
     Scalar a, Scalar b, Scalar whole, Scalar left, Scalar right, Scalar eps, int depth) {
     const Scalar c = (a + b) * Scalar(0.5L);
     const Scalar combined = left + right;
-    const Scalar error = t_abs(combined - whole) / Scalar(15.0L);
+    const Scalar error = mymath::abs(combined - whole) / Scalar(15.0L);
 
-    const Scalar scale = std::max(Scalar(1.0L), t_abs(combined));
+    const Scalar scale = std::max(Scalar(1.0L), mymath::abs(combined));
     if (depth <= 0 || error <= relative_tolerance(eps, scale)) {
         return combined + (combined - whole) / Scalar(15.0L);
     }
@@ -131,7 +130,7 @@ Scalar gauss_kronrod_15(
 
     const Scalar kronrod = half_width * kronrod_sum;
     const Scalar gauss = half_width * gauss_sum;
-    *error_estimate = t_abs(kronrod - gauss);
+    *error_estimate = mymath::abs(kronrod - gauss);
     return kronrod;
 }
 
@@ -151,7 +150,7 @@ Scalar adaptive_gauss_kronrod_recursive(
     const Scalar sub_error = left_error + right_error;
     const Scalar sub_result = left_result + right_result;
 
-    const Scalar scale = std::max(Scalar(1.0L), t_abs(sub_result));
+    const Scalar scale = std::max(Scalar(1.0L), mymath::abs(sub_result));
     if (depth <= 0 ||
         sub_error <= relative_tolerance(eps, scale) ||
         error <= relative_tolerance(eps, scale)) {

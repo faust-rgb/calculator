@@ -15,10 +15,8 @@
 #include "analysis/modules/series_module.h"
 #include "dsp/dsp_module.h"
 #include "io/io_module.h"
-#include "math/modules/descriptive_stats_module.h"
 #include "math/modules/integer_math_module.h"
 #include "math/modules/precise_module.h"
-#include "math/modules/probability_module.h"
 #include "math/modules/standard_math_module.h"
 #include "matrix/matrix_module.h"
 #include "module/system_module.h"
@@ -56,8 +54,6 @@ void register_standard_modules(Calculator* calculator) {
     register_if_missing([]() { return std::make_shared<StandardMathModule>(); }, "standard_math");
     register_if_missing([]() { return std::make_shared<IntegerMathModule>(); }, "integer_math");
     register_if_missing([]() { return std::make_shared<PreciseModule>(); }, "precise");
-    register_if_missing([]() { return std::make_shared<ProbabilityModule>(); }, "probability");
-    register_if_missing([]() { return std::make_shared<DescriptiveStatsModule>(); }, "descriptive_stats");
     register_if_missing([]() { return std::make_shared<MatrixModule>(); }, "matrix");
     register_if_missing([]() { return std::make_shared<polynomial_ops::PolynomialModule>(); }, "polynomial");
     register_if_missing([]() { return std::make_shared<StatisticsModule>(); }, "statistics");

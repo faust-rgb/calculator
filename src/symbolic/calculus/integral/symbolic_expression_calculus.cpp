@@ -39,6 +39,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
+#include <functional>
 
 using namespace symbolic_expression_internal;
 
@@ -270,17 +271,25 @@ SymbolicExpression integrate_symbolic_inverse_quadratic(
     }
 
     SymbolicExpression u2_plus_k = (u * u + k).simplify();
-    SymbolicExpression integral = SymbolicExpression::number(Scalar(1.0L)) / make_function("sqrt", k) *
-                                   make_function("atan", u / make_function("sqrt", k));
+    // Keep the recurrence as an explicit sum.  Simplifying each intermediate
+    // term can incorrectly discard the logarithmic/atan base term.
+    SymbolicExpression integral = make_multiply(
+        make_divide(SymbolicExpression::number(Scalar(1.0L)), make_function("sqrt", k)),
+        make_function("atan", make_divide(u, make_function("sqrt", k))));
 
     for (int n = 2; n <= power; ++n) {
-        SymbolicExpression recurrence = (u / (SymbolicExpression::number(2.0 * (n - 1)) * k *
-                                   make_power(u2_plus_k, SymbolicExpression::number(n - 1)))).simplify();
-        integral = (recurrence + SymbolicExpression::number((2 * n - 3) /
-                                   (2 * (n - 1))) / k * integral).simplify();
+        SymbolicExpression recurrence = make_divide(
+            u,
+            make_multiply(SymbolicExpression::number(2.0 * (n - 1)),
+                          make_multiply(k, make_power(u2_plus_k,
+                                                      SymbolicExpression::number(n - 1)))));
+        integral = make_add(recurrence,
+                            make_multiply(SymbolicExpression::number((2 * n - 3) /
+                                                                      (2 * (n - 1))),
+                                          make_divide(integral, k)));
     }
 
-    return (coeff / a * integral).simplify();
+    return make_multiply(make_divide(coeff, a), integral);
 }
 
 SymbolicExpression integrate_symbolic_inverse_quadratic_linear(
@@ -309,6 +318,119 @@ SymbolicExpression integrate_symbolic_inverse_quadratic_linear(
         -b / (SymbolicExpression::number(2.0) * a), power, variable_name);
 
     return (coeff * (part1 + part2)).simplify();
+}
+
+// Integrate rational functions whose denominator is an integer power of one
+// quadratic.  This preserves the denominator's polynomial structure instead
+// of relying on a particular expanded or factored tree representation.
+bool integrate_repeated_quadratic_rational(
+    const SymbolicExpression& numerator,
+    const SymbolicExpression& denominator,
+    const std::string& variable_name,
+    SymbolicExpression* integrated) {
+
+    if (!denominator.node_) return false;
+
+    Scalar exponent = Scalar(0);
+    int power = 0;
+    SymbolicExpression quadratic_expr;
+    if (denominator.node_->type == NodeType::kPower &&
+        SymbolicExpression(denominator.node_->right).is_number(&exponent)) {
+        const Scalar rounded_exponent = mymath::round(exponent);
+        if (mymath::is_near_zero(exponent - rounded_exponent,
+                                 Scalar(app::integer_tolerance())) &&
+            rounded_exponent >= Scalar(2)) {
+            power = static_cast<int>(rounded_exponent.to_long_double());
+            quadratic_expr = SymbolicExpression(denominator.node_->left);
+        }
+    }
+    if (power == 0) {
+        std::vector<SymbolicExpression> factors;
+        std::function<bool(const SymbolicExpression&)> collect_factor =
+            [&](const SymbolicExpression& value) {
+                if (value.node_->type == NodeType::kMultiply) {
+                    return collect_factor(SymbolicExpression(value.node_->left)) &&
+                           collect_factor(SymbolicExpression(value.node_->right));
+                }
+                if (value.node_->type == NodeType::kPower) {
+                    Scalar repeated_exponent = Scalar(0);
+                    if (SymbolicExpression(value.node_->right).is_number(&repeated_exponent)) {
+                        const Scalar rounded = mymath::round(repeated_exponent);
+                        if (mymath::is_near_zero(repeated_exponent - rounded,
+                                                 Scalar(app::integer_tolerance())) &&
+                            rounded >= Scalar(1)) {
+                            const int count = static_cast<int>(rounded.to_long_double());
+                            for (int i = 0; i < count; ++i) {
+                                if (!collect_factor(SymbolicExpression(value.node_->left))) return false;
+                            }
+                            return true;
+                        }
+                    }
+                }
+                factors.push_back(value);
+                return true;
+            };
+        if (!collect_factor(denominator) || factors.size() < 2) return false;
+        quadratic_expr = factors.front();
+        for (const auto& factor : factors) {
+            if (node_structural_key(factor.node_) != node_structural_key(quadratic_expr.node_)) {
+                return false;
+            }
+        }
+        power = static_cast<int>(factors.size());
+    }
+
+    SymbolicExpression a, b, c;
+    if (!is_general_quadratic(quadratic_expr, variable_name, &a, &b, &c) ||
+        expr_is_zero(a)) {
+        return false;
+    }
+
+    std::vector<SymbolicExpression> numerator_coefficients;
+    if (!symbolic_polynomial_coefficients_from_simplified(
+            numerator.simplify(), variable_name, &numerator_coefficients)) {
+        return false;
+    }
+
+    SymbolicPolynomial numerator_poly(numerator_coefficients, variable_name);
+    SymbolicPolynomial quadratic_poly({c, b, a}, variable_name);
+    SymbolicPolynomial quotient;
+    SymbolicPolynomial remainder;
+    if (!numerator_poly.divide(quadratic_poly.power(power - 1), &quotient, &remainder) ||
+        quotient.degree() > 1 || remainder.degree() > 1) {
+        return false;
+    }
+
+    SymbolicExpression result = SymbolicExpression::number(Scalar(0));
+    const SymbolicExpression quotient_constant = quotient.coefficient(0).simplify();
+    const SymbolicExpression quotient_linear = quotient.degree() >= 1
+        ? quotient.coefficient(1).simplify()
+        : SymbolicExpression::number(Scalar(0));
+    const SymbolicExpression remainder_constant = remainder.coefficient(0).simplify();
+    const SymbolicExpression remainder_linear = remainder.degree() >= 1
+        ? remainder.coefficient(1).simplify()
+        : SymbolicExpression::number(Scalar(0));
+
+    if (!expr_is_zero(quotient_constant)) {
+        result = make_add(result, integrate_symbolic_inverse_quadratic(
+            a, b, c, quotient_constant, 1, variable_name));
+    }
+    if (!expr_is_zero(quotient_linear)) {
+        result = make_add(result, integrate_symbolic_inverse_quadratic_linear(
+            a, b, c, quotient_linear, 1, variable_name));
+    }
+    if (!expr_is_zero(remainder_constant)) {
+        result = make_add(result, integrate_symbolic_inverse_quadratic(
+            a, b, c, remainder_constant, power, variable_name));
+    }
+    if (!expr_is_zero(remainder_linear)) {
+        result = make_add(result, integrate_symbolic_inverse_quadratic_linear(
+            a, b, c, remainder_linear, power, variable_name));
+    }
+
+    if (expr_is_zero(result)) return false;
+    *integrated = result;
+    return true;
 }
 
 bool integrate_symbolic_partial_fractions(
@@ -358,15 +480,20 @@ bool integrate_symbolic_partial_fractions(
 
     std::vector<PartialFractionTerm> terms;
 
-    for (const auto& factor : factors) {
+    for (std::size_t factor_index = 0; factor_index < factors.size(); ++factor_index) {
+        const auto& factor = factors[factor_index];
+        const int multiplicity = static_cast<int>(factor_index) + 1;
         int deg = factor.degree();
+        if (factor.is_constant()) continue;
         if (deg == 1) {
-            // 线性因子 (ax + b)^p
-            terms.push_back({factor, 1, 0});
+            for (int power = 1; power <= multiplicity; ++power) {
+                terms.push_back({factor, power, 0});
+            }
         } else if (deg == 2) {
-            // 二次因子，需要两个项：A/(...) 和 Bx/(...)
-            terms.push_back({factor, 1, 0});
-            terms.push_back({factor, 1, 1});
+            for (int power = 1; power <= multiplicity; ++power) {
+                terms.push_back({factor, power, 0});
+                terms.push_back({factor, power, 1});
+            }
         } else {
             // 高次因子，暂不支持
             return false;
@@ -384,7 +511,8 @@ bool integrate_symbolic_partial_fractions(
 
     for (const auto& term : terms) {
         SymbolicPolynomial quotient, remainder;
-        if (!denominator.divide(term.denominator_factor, &quotient, &remainder)) {
+        if (!denominator.divide(term.denominator_factor.power(term.power), &quotient, &remainder) ||
+            !remainder.is_zero()) {
             return false;
         }
 
@@ -422,7 +550,11 @@ bool integrate_symbolic_partial_fractions(
             term.denominator_factor.is_linear_factor(&a, &b);
             term_int = make_multiply(
                 (unknowns[i] / a).simplify(),
-                make_function("ln", make_function("abs", denom_expr))
+                term.power == 1
+                    ? make_function("ln", make_function("abs", denom_expr))
+                    : make_divide(make_power(denom_expr,
+                                               SymbolicExpression::number(1 - term.power)),
+                                  SymbolicExpression::number(1 - term.power))
             ).simplify();
         } else if (deg == 2) {
             SymbolicExpression a, b, c;
@@ -430,10 +562,10 @@ bool integrate_symbolic_partial_fractions(
 
             if (term.numerator_degree == 0) {
                 term_int = integrate_symbolic_inverse_quadratic(
-                    a, b, c, unknowns[i], 1, variable_name);
+                    a, b, c, unknowns[i], term.power, variable_name);
             } else {
                 term_int = integrate_symbolic_inverse_quadratic_linear(
-                    a, b, c, unknowns[i], 1, variable_name);
+                    a, b, c, unknowns[i], term.power, variable_name);
             }
         }
 
@@ -452,7 +584,11 @@ bool integrate_symbolic_rational_rules(
     const std::string& variable_name,
     SymbolicExpression* integrated) {
 
-    if (try_integrate_symbolic_two_linear_factors(numerator,
+    if (integrate_repeated_quadratic_rational(numerator,
+                                              denominator,
+                                              variable_name,
+                                              integrated) ||
+        try_integrate_symbolic_two_linear_factors(numerator,
                                                   denominator,
                                                   variable_name,
                                                   integrated) ||

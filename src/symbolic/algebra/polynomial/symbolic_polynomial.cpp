@@ -696,42 +696,37 @@ bool SymbolicPolynomial::square_free_decomposition(std::vector<SymbolicPolynomia
 
     factors->clear();
 
-    // Yun's Algorithm for Square-Free Decomposition
-    // P = v1 * v2^2 * v3^3 * ... * vn^n
-    
-    SymbolicPolynomial P = *this;
-    SymbolicPolynomial Pp = P.derivative();
-    
-    // G = gcd(P, P')
-    SymbolicPolynomial G = P.gcd(Pp);
-    
-    // C1 = P / G
-    SymbolicPolynomial C, R;
-    if (!P.divide(G, &C, &R)) return false;
-    
-    // D1 = P' / G - C'
-    SymbolicPolynomial P_prime_over_G, C_prime;
-    if (!Pp.divide(G, &P_prime_over_G, &R)) return false;
-    C_prime = C.derivative();
-    SymbolicPolynomial D = P_prime_over_G.subtract(C_prime).simplify();
-    
-    while (!C.is_constant()) {
-        // vi = gcd(Ci, Di)
-        SymbolicPolynomial v = C.gcd(D).simplify();
-        factors->push_back(v);
-        
-        // Ci+1 = Ci / vi
-        SymbolicPolynomial next_C;
-        if (!C.divide(v, &next_C, &R)) break;
-        
-        // Di+1 = Di / vi - Ci+1'
-        SymbolicPolynomial D_over_v;
-        if (!D.divide(v, &D_over_v, &R)) break;
-        
-        C = next_C.simplify();
-        D = D_over_v.subtract(C.derivative()).simplify();
+    // Build nested square-free layers.  layer[i] is the product of factors
+    // whose multiplicity is at least i + 1.  Adjacent quotients then give
+    // the factors with exactly each multiplicity.
+    std::vector<SymbolicPolynomial> layers;
+    SymbolicPolynomial current = *this;
+    const int max_layers = std::max(1, degree());
+    for (int i = 0; i < max_layers && !current.is_constant(); ++i) {
+        SymbolicPolynomial gcd = current.gcd(current.derivative()).simplify();
+        SymbolicPolynomial layer;
+        SymbolicPolynomial remainder;
+        if (!current.divide(gcd, &layer, &remainder) || !remainder.is_zero()) {
+            return false;
+        }
+        layers.push_back(layer.simplify());
+        current = gcd;
     }
-    
+
+    if (layers.empty()) return true;
+
+    factors->assign(layers.size(), SymbolicPolynomial({SymbolicExpression::number(Scalar(1))}, variable_name_));
+    for (std::size_t i = 0; i < layers.size(); ++i) {
+        SymbolicPolynomial exact_factor = layers[i];
+        if (i + 1 < layers.size()) {
+            SymbolicPolynomial remainder;
+            if (!layers[i].divide(layers[i + 1], &exact_factor, &remainder) ||
+                !remainder.is_zero()) {
+                return false;
+            }
+        }
+        (*factors)[i] = exact_factor.simplify();
+    }
     return true;
 }
 

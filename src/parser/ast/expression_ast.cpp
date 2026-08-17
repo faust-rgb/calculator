@@ -177,6 +177,13 @@ private:
         return left;
     }
 
+    bool can_start_implicit_factor() {
+        if (is_at_end()) return false;
+        const auto& tok = peek_token();
+        return tok.kind == TokenKind::kIdentifier ||
+               tok.kind == TokenKind::kLParen;
+    }
+
     std::unique_ptr<ExpressionAST> parse_term() {
         auto left = parse_unary();
 
@@ -185,7 +192,9 @@ private:
             if (match_operator("*")) op = '*';
             else if (match_operator("/")) op = '/';
             else if (match_operator("%")) op = '%';
-            else break;
+            else if (can_start_implicit_factor()) {
+                op = '*';
+            } else break;
 
             auto right = parse_unary();
             auto node = std::make_unique<ExpressionAST>(ExprKind::kBinaryOp);

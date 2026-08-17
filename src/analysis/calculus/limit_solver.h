@@ -1,6 +1,6 @@
 /**
  * @file limit_solver.h
- * @brief 极限求解器
+ * @brief 极限求解器（直接基于 Scalar 类型）
  *
  * 本文件定义了极限求解算法：
  * - 数值极限：逐步逼近法计算极限
@@ -13,11 +13,12 @@
 
 #include "types/scalar_type.h"
 #include "symbolic/core/symbolic_expression.h"
-#include "analysis/calculus/numerical_calculus.h"
 #include <functional>
 #include <string>
 
 namespace numeric {
+
+using Scalar = mymath::Scalar;
 
 // ============================================================================
 // 符号极限探测
@@ -30,66 +31,54 @@ enum class SymbolicLimitProbeKind {
     kUnknown,
 };
 
-template <typename T>
 SymbolicLimitProbeKind probe_symbolic_value_at(
     SymbolicExpression expression,
     const std::string& variable_name,
-    T point,
-    T* finite_value);
+    Scalar point,
+    Scalar* finite_value);
 
-template <typename T>
 bool is_infinite_probe(SymbolicLimitProbeKind kind);
 
-template <typename T>
-bool is_zero_probe(SymbolicLimitProbeKind kind, T value);
+bool is_zero_probe(SymbolicLimitProbeKind kind, Scalar value);
 
 // ============================================================================
-// 洛必达法则
+// 洛必达法则与特殊极限
 // ============================================================================
 
-template <typename T>
 bool try_symbolic_lhopital_limit(
     const SymbolicExpression& expression,
     const std::string& variable_name,
-    T point,
+    Scalar point,
     int direction,
-    T* result,
+    Scalar* result,
     std::function<Scalar(const SymbolicExpression&, const std::string&, Scalar)> evaluate_at_override = nullptr);
 
-template <typename T>
 bool try_symbolic_one_to_infinity_limit(
     const SymbolicExpression& base,
     const SymbolicExpression& exponent,
     const std::string& variable_name,
-    T point,
-    T* result);
+    Scalar point,
+    Scalar* result);
 
 // ============================================================================
-// 极点极限处理
+// 极点与无穷远处极限
 // ============================================================================
 
-template <typename T>
-T handle_pole_limit(int shift, T leading_coefficient, int direction);
+Scalar handle_pole_limit(int shift, Scalar leading_coefficient, int direction);
 
-// ============================================================================
-// 无穷远处极限
-// ============================================================================
-
-template <typename T>
 bool symbolic_limit_at_infinity(
     const SymbolicExpression& expression,
     const std::string& variable_name,
     bool positive,
-    T* result);
+    Scalar* result);
 
 // ============================================================================
 // 数值极限计算
 // ============================================================================
 
-template <typename T>
-T compute_numerical_limit(
-    const std::function<T(T)>& evaluate,
-    T x,
+Scalar compute_numerical_limit(
+    const std::function<Scalar(Scalar)>& evaluate,
+    Scalar x,
     int direction);
 
 }  // namespace numeric

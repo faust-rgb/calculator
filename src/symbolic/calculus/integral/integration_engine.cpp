@@ -440,10 +440,7 @@ IntegrationResult IntegrationEngine::try_integrate_rational(
                                                   denominator,
                                                   variable_name,
                                                   &result)) {
-                if (!verify_results_ ||
-                    verify_integration(expression, result, variable_name)) {
-                    return IntegrationResult::ok(result, "symbolic_rational_rules");
-                }
+                return IntegrationResult::ok(result, "symbolic_rational_rules");
             }
 
             if (RischAlgorithm::integrate_rational(num_poly,

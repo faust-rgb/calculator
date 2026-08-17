@@ -1058,39 +1058,72 @@ bool polynomial_is_zero_remainder(const std::vector<Scalar>& coefficients) {
     return true;
 }
 
+static void collect_all_variable_names(const SymbolicExpression& expr, std::vector<std::string>* vars) {
+    if (!expr.node_) return;
+    if (expr.node_->type == NodeType::kVariable && expr.node_->text != "i") {
+        if (std::find(vars->begin(), vars->end(), expr.node_->text) == vars->end()) {
+            vars->push_back(expr.node_->text);
+        }
+        return;
+    }
+    if (expr.node_->left) collect_all_variable_names(SymbolicExpression(expr.node_->left), vars);
+    if (expr.node_->right) collect_all_variable_names(SymbolicExpression(expr.node_->right), vars);
+    for (const auto& child : expr.node_->children) {
+        collect_all_variable_names(SymbolicExpression(child), vars);
+    }
+}
+
 /**
- * @brief 尝试多项式整除约分
+ * @brief 尝试多项式整除约分（支持单变量及多元多项式）
  *
  * 检测分子是否可被分母整除，如：
  * - (x^2 - 1) / (x - 1) → x + 1
+ * - (x^2 - y^2) / (x - y) → x + y
+ * - (x^3 + y^3) / (x + y) → x^2 - x*y + y^2
  */
 bool try_reduce_polynomial_quotient(const SymbolicExpression& left,
                                     const SymbolicExpression& right,
                                     SymbolicExpression* reduced) {
-    const std::string variable_name = unique_identifier_variable(make_add(left, right));
-    if (variable_name.empty()) {
+    const std::string single_var = unique_identifier_variable(make_add(left, right));
+    if (!single_var.empty()) {
+        std::vector<Scalar> numerator;
+        std::vector<Scalar> denominator;
+        if (polynomial_coefficients_from_simplified(left, single_var, &numerator) &&
+            polynomial_coefficients_from_simplified(right, single_var, &denominator)) {
+            trim_polynomial_coefficients(&denominator);
+            if (denominator.size() > 1) {
+                const PolynomialDivisionResult division = polynomial_divide(numerator, denominator);
+                if (polynomial_is_zero_remainder(division.remainder)) {
+                    *reduced = build_polynomial_expression_from_coefficients(division.quotient, single_var);
+                    return true;
+                }
+            }
+        }
         return false;
     }
 
-    std::vector<Scalar> numerator;
-    std::vector<Scalar> denominator;
-    if (!polynomial_coefficients_from_simplified(left, variable_name, &numerator) ||
-        !polynomial_coefficients_from_simplified(right, variable_name, &denominator)) {
-        return false;
-    }
-    trim_polynomial_coefficients(&denominator);
-    if (denominator.size() <= 1) {
+    std::vector<std::string> vars;
+    collect_all_variable_names(make_add(left, right), &vars);
+    if (vars.empty()) {
         return false;
     }
 
-    const PolynomialDivisionResult division = polynomial_divide(numerator, denominator);
-    if (!polynomial_is_zero_remainder(division.remainder)) {
-        return false;
+    for (const std::string& variable_name : vars) {
+        SymbolicPolynomial num_poly = SymbolicPolynomial::from_expression(left, variable_name);
+        SymbolicPolynomial den_poly = SymbolicPolynomial::from_expression(right, variable_name);
+
+        if (den_poly.degree() >= 1 && num_poly.degree() >= den_poly.degree()) {
+            SymbolicPolynomial quotient, remainder;
+            if (num_poly.divide(den_poly, &quotient, &remainder)) {
+                if (remainder.is_zero()) {
+                    *reduced = quotient.to_expression().simplify();
+                    return true;
+                }
+            }
+        }
     }
 
-    *reduced = build_polynomial_expression_from_coefficients(division.quotient,
-                                                             variable_name);
-    return true;
+    return false;
 }
 
 /**

@@ -1,5 +1,5 @@
 // ============================================================================
-// 求根算法引擎实现
+// 求根算法引擎实现 (基于 Scalar 类型)
 // ============================================================================
 
 #include "analysis/rootfinding/rootfinding_engine.h"
@@ -10,80 +10,66 @@
 
 namespace rootfinding_engine {
 
-template <typename T>
-T secant_function_tolerance(T fx) {
-    if constexpr (std::is_same_v<T, Scalar>) {
-        const int scale = app::get_default_scale();
-        const int tol_scale = std::max(scale + 2, 14);
-        return T("1e-" + std::to_string(tol_scale)) *
-               t_max(T(static_cast<long long>(1)), t_abs(fx));
-    } else {
-        return precision::default_absolute_tolerance<T>() *
-               t_max(T(static_cast<long long>(1)), t_abs(fx));
-    }
+static Scalar secant_function_tolerance(Scalar fx) {
+    const int scale = app::get_default_scale();
+    const int tol_scale = std::max(scale + 2, 14);
+    return Scalar("1e-" + std::to_string(tol_scale)) * std::max(Scalar(1), mymath::abs(fx));
 }
 
 // ============================================================================
 // Newton 法实现
 // ============================================================================
 
-template <typename T>
-T newton_solve(
-    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
-    T initial,
-    const std::function<T(T)>& normalize,
-    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate_derivative,
+Scalar newton_solve(
+    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>& evaluate,
+    Scalar initial,
+    const std::function<Scalar(Scalar)>& normalize,
+    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>& evaluate_derivative,
     const std::string& variable_name) {
 
-    using CalcT = internal_t<T>;
-    auto eval = [&](CalcT val) -> CalcT {
-        return to_internal<T>(evaluate({{variable_name, from_internal<T>(val)}}));
+    auto eval = [&](Scalar val) -> Scalar {
+        return evaluate({{variable_name, val}});
     };
 
-    CalcT x = to_internal<T>(initial);
-    const int max_iter = root_max_iterations<T>();
+    Scalar x = initial;
+    const int max_iter = root_max_iterations();
     for (int iteration = 0; iteration < max_iter; ++iteration) {
-        const CalcT fx = eval(x);
+        const Scalar fx = eval(x);
 
         // 检查是否已收敛（函数值足够小）
-        if (t_abs(fx) <= root_function_tolerance(fx)) {
-            return normalize(from_internal<T>(x));
+        if (mymath::abs(fx) <= root_function_tolerance(fx)) {
+            return normalize(x);
         }
 
         // 计算导数（解析或数值）
-        CalcT derivative = CalcT(static_cast<long long>(0));
+        Scalar derivative = Scalar(0);
         if (evaluate_derivative) {
-            // 使用解析导数
-            derivative = to_internal<T>(evaluate_derivative({{variable_name, from_internal<T>(x)}}));
+            derivative = evaluate_derivative({{variable_name, x}});
         } else {
-            // 使用中心差分近似导数
-            const CalcT h = root_derivative_step(x);
-            derivative =
-                (eval(x + h) - eval(x - h)) /
-                (CalcT(static_cast<long long>(2)) * h);
+            const Scalar h = root_derivative_step(x);
+            derivative = (eval(x + h) - eval(x - h)) / (Scalar(2) * h);
         }
 
         // 检查导数是否为零
-        if (t_abs(derivative) <=
-            precision::default_absolute_tolerance<CalcT>() * t_max(CalcT(static_cast<long long>(1)), t_abs(fx))) {
+        if (mymath::abs(derivative) <=
+            precision::default_absolute_tolerance<Scalar>() * std::max(Scalar(1), mymath::abs(fx))) {
             throw std::runtime_error("solve failed because the derivative vanished");
         }
 
-        const CalcT raw_step = fx / derivative;
+        const Scalar raw_step = fx / derivative;
 
         // 回溯搜索：确保 |f(x)| 减小
-        CalcT factor = CalcT(1.0L);
-        CalcT next = x - raw_step;
+        Scalar factor = Scalar(1.0L);
+        Scalar next = x - raw_step;
         bool step_accepted = false;
 
         for (int retry = 0; retry < 10; ++retry) {
-            const CalcT f_next = eval(next);
-            // Armijo 类条件：检查是否确实改进
-            if (t_abs(f_next) < t_abs(fx) || t_abs(f_next) <= root_function_tolerance(f_next)) {
+            const Scalar f_next = eval(next);
+            if (mymath::abs(f_next) < mymath::abs(fx) || mymath::abs(f_next) <= root_function_tolerance(f_next)) {
                 step_accepted = true;
                 break;
             }
-            factor = factor * CalcT(0.5L);
+            factor = factor * Scalar(0.5L);
             next = x - factor * raw_step;
         }
 
@@ -92,76 +78,68 @@ T newton_solve(
         }
 
         // 检查位置收敛
-        if (t_abs(next - x) <=
-            root_position_tolerance(t_max(t_abs(next), t_abs(x)))) {
-            return normalize(from_internal<T>(next));
+        if (mymath::abs(next - x) <= root_position_tolerance(std::max(mymath::abs(next), mymath::abs(x)))) {
+            return normalize(next);
         }
         x = next;
     }
-    return normalize(from_internal<T>(x));
+    return normalize(x);
 }
 
 // ============================================================================
 // 二分法实现
 // ============================================================================
 
-template <typename T>
-T bisection_solve(
-    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
-    T left,
-    T right,
-    const std::function<T(T)>& normalize,
+Scalar bisection_solve(
+    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>& evaluate,
+    Scalar left,
+    Scalar right,
+    const std::function<Scalar(Scalar)>& normalize,
     const std::string& variable_name) {
 
-    using CalcT = internal_t<T>;
-    auto eval = [&](CalcT val) -> CalcT {
-        return to_internal<T>(evaluate({{variable_name, from_internal<T>(val)}}));
+    auto eval = [&](Scalar val) -> Scalar {
+        return evaluate({{variable_name, val}});
     };
 
-    CalcT c_left = to_internal<T>(left);
-    CalcT c_right = to_internal<T>(right);
+    Scalar c_left = left;
+    Scalar c_right = right;
 
-    // 确保 left <= right
     if (c_left > c_right) {
         std::swap(c_left, c_right);
     }
 
-    CalcT left_value = eval(c_left);
-    CalcT right_value = eval(c_right);
+    Scalar left_value = eval(c_left);
+    Scalar right_value = eval(c_right);
 
-    // 检查端点是否已经是根
-    if (t_abs(left_value) <= root_function_tolerance(left_value)) {
-        return normalize(from_internal<T>(c_left));
+    if (mymath::abs(left_value) <= root_function_tolerance(left_value)) {
+        return normalize(c_left);
     }
-    if (t_abs(right_value) <= root_function_tolerance(right_value)) {
-        return normalize(from_internal<T>(c_right));
+    if (mymath::abs(right_value) <= root_function_tolerance(right_value)) {
+        return normalize(c_right);
     }
 
-    // 检查端点是否异号
-    if (left_value * right_value > CalcT(static_cast<long long>(0))) {
+    if (left_value * right_value > Scalar(0)) {
         throw std::runtime_error("bisect requires f(a) and f(b) to have opposite signs");
     }
 
-    const int max_iter = root_max_iterations<T>();
+    const int max_iter = root_max_iterations();
     for (int iteration = 0; iteration < max_iter; ++iteration) {
-        const CalcT mid = CalcT(0.5L) * (c_left + c_right);
-        const CalcT mid_value = eval(mid);
+        const Scalar mid = Scalar(0.5L) * (c_left + c_right);
+        const Scalar mid_value = eval(mid);
 
-        // 检查收敛
-        if (t_abs(mid_value) <= root_function_tolerance(mid_value) ||
-            t_abs(c_right - c_left) <=
-                root_position_tolerance(t_max(t_abs(c_left), t_abs(c_right)))) {
-            const CalcT denom = right_value - left_value;
-            if (t_abs(denom) > precision::default_absolute_tolerance<CalcT>()) {
-                const CalcT interpolated = c_left - left_value * (c_right - c_left) / denom;
+        if (mymath::abs(mid_value) <= root_function_tolerance(mid_value) ||
+            mymath::abs(c_right - c_left) <= root_position_tolerance(std::max(mymath::abs(c_left), mymath::abs(c_right)))) {
+            const Scalar denom = right_value - left_value;
+            if (mymath::abs(denom) > precision::default_absolute_tolerance<Scalar>()) {
+                const Scalar interpolated = c_left - left_value * (c_right - c_left) / denom;
                 if (interpolated >= c_left && interpolated <= c_right) {
-                    return normalize(from_internal<T>(interpolated));
+                    return normalize(interpolated);
                 }
             }
-            CalcT best = mid;
-            CalcT best_value = t_abs(mid_value);
-            const CalcT abs_left = t_abs(left_value);
-            const CalcT abs_right = t_abs(right_value);
+            Scalar best = mid;
+            Scalar best_value = mymath::abs(mid_value);
+            const Scalar abs_left = mymath::abs(left_value);
+            const Scalar abs_right = mymath::abs(right_value);
             if (abs_left < best_value) {
                 best = c_left;
                 best_value = abs_left;
@@ -169,12 +147,11 @@ T bisection_solve(
             if (abs_right < best_value) {
                 best = c_right;
             }
-            return normalize(from_internal<T>(best));
+            return normalize(best);
         }
 
-        // 更新区间
-        if ((left_value < CalcT(static_cast<long long>(0)) && mid_value > CalcT(static_cast<long long>(0))) ||
-            (left_value > CalcT(static_cast<long long>(0)) && mid_value < CalcT(static_cast<long long>(0)))) {
+        if ((left_value < Scalar(0) && mid_value > Scalar(0)) ||
+            (left_value > Scalar(0) && mid_value < Scalar(0))) {
             c_right = mid;
             right_value = mid_value;
         } else {
@@ -182,41 +159,37 @@ T bisection_solve(
             left_value = mid_value;
         }
     }
-    return normalize(from_internal<T>(CalcT(0.5L) * (c_left + c_right)));
+    return normalize(Scalar(0.5L) * (c_left + c_right));
 }
 
 // ============================================================================
 // 割线法实现
 // ============================================================================
 
-template <typename T>
-T secant_solve(
-    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
-    T x0,
-    T x1,
-    const std::function<T(T)>& normalize,
+Scalar secant_solve(
+    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>& evaluate,
+    Scalar x0,
+    Scalar x1,
+    const std::function<Scalar(Scalar)>& normalize,
     const std::string& variable_name) {
 
-    using CalcT = internal_t<T>;
-    auto eval = [&](CalcT val) -> CalcT {
-        return to_internal<T>(evaluate({{variable_name, from_internal<T>(val)}}));
+    auto eval = [&](Scalar val) -> Scalar {
+        return evaluate({{variable_name, val}});
     };
 
-    CalcT c_x0 = to_internal<T>(x0);
-    CalcT c_x1 = to_internal<T>(x1);
-    CalcT best_x = c_x1;
-    CalcT best_f_abs = t_abs(eval(c_x1));
+    Scalar c_x0 = x0;
+    Scalar c_x1 = x1;
+    Scalar best_x = c_x1;
+    Scalar best_f_abs = mymath::abs(eval(c_x1));
     bool has_bracket = false;
     bool preserve_initial_bracket = false;
-    CalcT bracket_left = c_x0;
-    CalcT bracket_right = c_x1;
+    Scalar bracket_left = c_x0;
+    Scalar bracket_right = c_x1;
 
-    auto has_opposite_sign = [](const CalcT& a, const CalcT& b) {
-        return (a < CalcT(static_cast<long long>(0)) && b > CalcT(static_cast<long long>(0))) ||
-               (a > CalcT(static_cast<long long>(0)) && b < CalcT(static_cast<long long>(0)));
+    auto has_opposite_sign = [](Scalar a, Scalar b) {
+        return (a < Scalar(0) && b > Scalar(0)) || (a > Scalar(0) && b < Scalar(0));
     };
-    auto remember_bracket = [&](const CalcT& a, const CalcT& fa,
-                                const CalcT& b, const CalcT& fb) {
+    auto remember_bracket = [&](Scalar a, Scalar fa, Scalar b, Scalar fb) {
         if (!preserve_initial_bracket && has_opposite_sign(fa, fb)) {
             has_bracket = true;
             bracket_left = a;
@@ -224,15 +197,11 @@ T secant_solve(
         }
     };
     auto refine_bracket = [&]() {
-        return bisection_solve<T>(
-            evaluate,
-            from_internal<T>(bracket_left),
-            from_internal<T>(bracket_right),
-            normalize,
-            variable_name);
+        return bisection_solve(evaluate, bracket_left, bracket_right, normalize, variable_name);
     };
-    const CalcT initial_f0 = eval(c_x0);
-    const CalcT initial_f1 = eval(c_x1);
+
+    const Scalar initial_f0 = eval(c_x0);
+    const Scalar initial_f1 = eval(c_x1);
     if (has_opposite_sign(initial_f0, initial_f1)) {
         has_bracket = true;
         preserve_initial_bracket = true;
@@ -240,38 +209,36 @@ T secant_solve(
         bracket_right = c_x1;
     }
 
-    const int max_iter = root_max_iterations<T>();
+    const int max_iter = root_max_iterations();
     for (int iteration = 0; iteration < max_iter; ++iteration) {
-        const CalcT f0 = eval(c_x0);
-        const CalcT f1 = eval(c_x1);
+        const Scalar f0 = eval(c_x0);
+        const Scalar f1 = eval(c_x1);
         remember_bracket(c_x0, f0, c_x1, f1);
-        const CalcT f1_abs = t_abs(f1);
+        const Scalar f1_abs = mymath::abs(f1);
         if (f1_abs < best_f_abs) {
             best_f_abs = f1_abs;
             best_x = c_x1;
         }
 
         if (f1_abs <= secant_function_tolerance(f1)) {
-            return normalize(from_internal<T>(c_x1));
+            return normalize(c_x1);
         }
-        if (t_abs(f0) <= secant_function_tolerance(f0)) {
-            return normalize(from_internal<T>(c_x0));
+        if (mymath::abs(f0) <= secant_function_tolerance(f0)) {
+            return normalize(c_x0);
         }
 
-        // 计算 f1 - f0（避免分母为零）
-        const CalcT denominator = f1 - f0;
-        if (t_abs(denominator) <=
-            precision::default_absolute_tolerance<CalcT>() * t_max(CalcT(1.0L), t_max(t_abs(f0), t_abs(f1)))) {
+        const Scalar denominator = f1 - f0;
+        if (mymath::abs(denominator) <=
+            precision::default_absolute_tolerance<Scalar>() * std::max(Scalar(1.0L), std::max(mymath::abs(f0), mymath::abs(f1)))) {
             if (has_bracket) {
                 return refine_bracket();
             }
-            return normalize(from_internal<T>(t_abs(f0) < t_abs(f1) ? c_x0 : c_x1));
+            return normalize(mymath::abs(f0) < mymath::abs(f1) ? c_x0 : c_x1);
         }
 
-        // 割线法公式：next = x1 - f1 * (x1 - x0) / (f1 - f0)
-        const CalcT next = c_x1 - f1 * (c_x1 - c_x0) / denominator;
-        const CalcT next_f = eval(next);
-        const CalcT next_f_abs = t_abs(next_f);
+        const Scalar next = c_x1 - f1 * (c_x1 - c_x0) / denominator;
+        const Scalar next_f = eval(next);
+        const Scalar next_f_abs = mymath::abs(next_f);
         remember_bracket(c_x1, f1, next, next_f);
         remember_bracket(c_x0, f0, next, next_f);
         if (next_f_abs < best_f_abs) {
@@ -279,11 +246,9 @@ T secant_solve(
             best_x = next;
         }
 
-        // 检查收敛
-        if (t_abs(next - c_x1) <=
-            root_position_tolerance(t_max(t_abs(next), t_abs(c_x1)))) {
+        if (mymath::abs(next - c_x1) <= root_position_tolerance(std::max(mymath::abs(next), mymath::abs(c_x1)))) {
             if (next_f_abs <= secant_function_tolerance(next_f)) {
-                return normalize(from_internal<T>(next));
+                return normalize(next);
             }
             if (has_bracket) {
                 return refine_bracket();
@@ -295,124 +260,107 @@ T secant_solve(
     if (has_bracket) {
         return refine_bracket();
     }
-    return normalize(from_internal<T>(best_x));
+    return normalize(best_x);
 }
 
 // ============================================================================
 // 不动点迭代实现
 // ============================================================================
 
-template <typename T>
-T fixed_point_solve(
-    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
-    T initial,
-    const std::function<T(T)>& normalize,
+Scalar fixed_point_solve(
+    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>& evaluate,
+    Scalar initial,
+    const std::function<Scalar(Scalar)>& normalize,
     const std::string& variable_name) {
 
-    using CalcT = internal_t<T>;
-    auto eval = [&](CalcT val) -> CalcT {
-        return to_internal<T>(evaluate({{variable_name, from_internal<T>(val)}}));
+    auto eval = [&](Scalar val) -> Scalar {
+        return evaluate({{variable_name, val}});
     };
 
-    CalcT x = to_internal<T>(initial);
-    const int max_iter = root_max_iterations<T>();
+    Scalar x = initial;
+    const int max_iter = root_max_iterations();
     for (int iteration = 0; iteration < max_iter; ++iteration) {
-        const CalcT next = eval(x);
-        // 检查收敛
-        if (t_abs(next - x) <=
-            root_position_tolerance(t_max(t_abs(next), t_abs(x)))) {
-            return normalize(from_internal<T>(next));
+        const Scalar next = eval(x);
+        if (mymath::abs(next - x) <= root_position_tolerance(std::max(mymath::abs(next), mymath::abs(x)))) {
+            return normalize(next);
         }
         x = next;
     }
-    return normalize(from_internal<T>(x));
+    return normalize(x);
 }
 
 // ============================================================================
 // Brent 法实现
 // ============================================================================
 
-template <typename T>
-T brent_solve(
-    const std::function<T(const std::vector<std::pair<std::string, T>>&)>& evaluate,
-    T left,
-    T right,
-    const std::function<T(T)>& normalize,
+Scalar brent_solve(
+    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>& evaluate,
+    Scalar left,
+    Scalar right,
+    const std::function<Scalar(Scalar)>& normalize,
     const std::string& variable_name) {
 
-    using CalcT = internal_t<T>;
-    auto eval = [&](CalcT val) -> CalcT {
-        return to_internal<T>(evaluate({{variable_name, from_internal<T>(val)}}));
+    auto eval = [&](Scalar val) -> Scalar {
+        return evaluate({{variable_name, val}});
     };
 
-    CalcT a = to_internal<T>(left);
-    CalcT b = to_internal<T>(right);
+    Scalar a = left;
+    Scalar b = right;
 
-    // 确保 a <= b
     if (a > b) std::swap(a, b);
 
-    CalcT fa = eval(a);
-    CalcT fb = eval(b);
+    Scalar fa = eval(a);
+    Scalar fb = eval(b);
 
-    // 检查端点是否异号
-    if (fa * fb > CalcT(static_cast<long long>(0))) {
+    if (fa * fb > Scalar(0)) {
         throw std::runtime_error("brent requires f(a) and f(b) to have opposite signs");
     }
 
-    // 检查端点是否已经是根
-    if (t_abs(fa) <= root_function_tolerance(fa)) {
-        return normalize(from_internal<T>(a));
+    if (mymath::abs(fa) <= root_function_tolerance(fa)) {
+        return normalize(a);
     }
-    if (t_abs(fb) <= root_function_tolerance(fb)) {
-        return normalize(from_internal<T>(b));
+    if (mymath::abs(fb) <= root_function_tolerance(fb)) {
+        return normalize(b);
     }
 
-    // Brent 法核心变量
-    CalcT c = a;           // 上一个迭代点
-    CalcT fc = fa;         // f(c)
-    CalcT d = b - a;       // 步长
-    CalcT e = d;           // 上一步长（用于判断是否使用二分法）
+    Scalar c = a;
+    Scalar fc = fa;
+    Scalar d = b - a;
+    Scalar e = d;
 
-    const int max_iterations = root_max_iterations<T>();
+    const int max_iterations = root_max_iterations();
 
     for (int iteration = 0; iteration < max_iterations; ++iteration) {
-        // 确保 |fb| <= |fc|，即 b 是当前最优近似
-        // 同时确保 f(b) 和 f(c) 异号（包围根）
-        if (t_abs(fb) > t_abs(fc)) {
-            // 交换 b 和 c，使 |fb| <= |fc|
+        if (mymath::abs(fb) > mymath::abs(fc)) {
             std::swap(b, c);
             std::swap(fb, fc);
         }
 
-        // 检查收敛
-        const CalcT tol = root_position_tolerance(t_abs(b));
-        const CalcT m = CalcT(0.5L) * (c - b);
+        const Scalar tol = root_position_tolerance(mymath::abs(b));
+        const Scalar m = Scalar(0.5L) * (c - b);
 
-        if (t_abs(m) <= tol || t_abs(fb) <= root_function_tolerance(fb)) {
-            return normalize(from_internal<T>(b));
+        if (mymath::abs(m) <= tol || mymath::abs(fb) <= root_function_tolerance(fb)) {
+            return normalize(b);
         }
 
-        // 判断是否使用二分法
         bool use_bisection = false;
 
-        if (t_abs(e) < tol) {
+        if (mymath::abs(e) < tol) {
             use_bisection = true;
         } else {
-            if (t_abs(fa - fb) < precision::default_absolute_tolerance<CalcT>()) {
+            if (mymath::abs(fa - fb) < precision::default_absolute_tolerance<Scalar>()) {
                 use_bisection = true;
             } else {
-                CalcT s;
+                Scalar s = Scalar(0);
                 if (fa != fc && fb != fc) {
-                    // 逆二次插值 - 添加分母精度检查
-                    CalcT denom1 = fa - fb;
-                    CalcT denom2 = fa - fc;
-                    CalcT denom3 = fb - fc;
+                    Scalar denom1 = fa - fb;
+                    Scalar denom2 = fa - fc;
+                    Scalar denom3 = fb - fc;
 
-                    // 检查分母是否会导致精度损失
-                    CalcT max_f = t_max(t_abs(fa), t_max(t_abs(fb), t_abs(fc)));
-                    CalcT min_denom = precision::epsilon<CalcT>() * max_f * CalcT(100);
+                    Scalar max_f = std::max(mymath::abs(fa), std::max(mymath::abs(fb), mymath::abs(fc)));
+                    Scalar min_denom = precision::epsilon<Scalar>() * max_f * Scalar(100);
 
-                    if (t_abs(denom1) < min_denom || t_abs(denom2) < min_denom || t_abs(denom3) < min_denom) {
+                    if (mymath::abs(denom1) < min_denom || mymath::abs(denom2) < min_denom || mymath::abs(denom3) < min_denom) {
                         use_bisection = true;
                     } else {
                         s = a * fb * fc / (denom1 * denom2) +
@@ -420,22 +368,20 @@ T brent_solve(
                             c * fa * fb / ((fc - fa) * (fc - fb));
                     }
                 } else {
-                    // 割线法
                     s = b - fb * (b - a) / (fb - fa);
                 }
 
                 if (!use_bisection) {
-                    // 检查插值结果是否可接受
-                    CalcT s_min = b + CalcT(0.25L) * (c - b);
-                    CalcT s_max = c;
+                    Scalar s_min = b + Scalar(0.25L) * (c - b);
+                    Scalar s_max = c;
 
                     if (b > c) {
                         s_min = c;
-                        s_max = b + CalcT(0.25L) * (c - b);
+                        s_max = b + Scalar(0.25L) * (c - b);
                     }
 
                     if ((s > s_min && s < s_max) &&
-                        t_abs(s - b) < CalcT(0.5L) * t_abs(c - b)) {
+                        mymath::abs(s - b) < Scalar(0.5L) * mymath::abs(c - b)) {
                         e = d;
                         d = s - b;
                     } else {
@@ -450,138 +396,28 @@ T brent_solve(
             d = m;
         }
 
-        // 更新 a 和 fa
         a = b;
         fa = fb;
 
-        // 更新 b
-        if (t_abs(d) > tol) {
+        if (mymath::abs(d) > tol) {
             b = b + d;
         } else {
-            b = b + (m > CalcT(static_cast<long long>(0)) ? tol : -tol);
+            b = b + (m > Scalar(0) ? tol : -tol);
         }
 
         fb = eval(b);
 
-        // 检查新点是否是根
-        if (t_abs(fb) <= root_function_tolerance(fb)) {
-            return normalize(from_internal<T>(b));
+        if (mymath::abs(fb) <= root_function_tolerance(fb)) {
+            return normalize(b);
         }
 
-        // 确保 f(b) 和 f(c) 异号
-        if (fb * fc > CalcT(static_cast<long long>(0))) {
+        if (fb * fc > Scalar(0)) {
             c = a;
             fc = fa;
         }
     }
 
-    return normalize(from_internal<T>(b));
+    return normalize(b);
 }
-
-// ============================================================================
-// 显式模板实例化
-// ============================================================================
-
-template Scalar newton_solve<Scalar>(
-    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
-    Scalar,
-    const std::function<Scalar(Scalar)>&,
-    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
-    const std::string&);
-
-template Scalar bisection_solve<Scalar>(
-    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
-    Scalar,
-    Scalar,
-    const std::function<Scalar(Scalar)>&,
-    const std::string&);
-
-template Scalar secant_solve<Scalar>(
-    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
-    Scalar,
-    Scalar,
-    const std::function<Scalar(Scalar)>&,
-    const std::string&);
-
-template Scalar fixed_point_solve<Scalar>(
-    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
-    Scalar,
-    const std::function<Scalar(Scalar)>&,
-    const std::string&);
-
-template Scalar brent_solve<Scalar>(
-    const std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>&,
-    Scalar,
-    Scalar,
-    const std::function<Scalar(Scalar)>&,
-    const std::string&);
-
-template double newton_solve<double>(
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
-    double,
-    const std::function<double(double)>&,
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
-    const std::string&);
-
-template double bisection_solve<double>(
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
-    double,
-    double,
-    const std::function<double(double)>&,
-    const std::string&);
-
-template double secant_solve<double>(
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
-    double,
-    double,
-    const std::function<double(double)>&,
-    const std::string&);
-
-template double fixed_point_solve<double>(
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
-    double,
-    const std::function<double(double)>&,
-    const std::string&);
-
-template double brent_solve<double>(
-    const std::function<double(const std::vector<std::pair<std::string, double>>&)>&,
-    double,
-    double,
-    const std::function<double(double)>&,
-    const std::string&);
-
-template long double newton_solve<long double>(
-    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
-    long double,
-    const std::function<long double(long double)>&,
-    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
-    const std::string&);
-
-template long double bisection_solve<long double>(
-    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
-    long double,
-    long double,
-    const std::function<long double(long double)>&,
-    const std::string&);
-
-template long double secant_solve<long double>(
-    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
-    long double,
-    long double,
-    const std::function<long double(long double)>&,
-    const std::string&);
-
-template long double fixed_point_solve<long double>(
-    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
-    long double,
-    const std::function<long double(long double)>&,
-    const std::string&);
-
-template long double brent_solve<long double>(
-    const std::function<long double(const std::vector<std::pair<std::string, long double>>&)>&,
-    long double,
-    long double,
-    const std::function<long double(long double)>&,
-    const std::string&);
 
 }  // namespace rootfinding_engine

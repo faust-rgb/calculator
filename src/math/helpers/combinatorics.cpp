@@ -11,32 +11,27 @@
 
 #include "combinatorics.h"
 #include "mymath.h"
+#include "statistics/probability.h"
 #include "types/scalar_type.h"
 #include <stdexcept>
 #include <algorithm>
-
-namespace {
-
-} // namespace
 
 /**
  * @brief 计算斐波那契数
  * @param n 斐波那契数列的索引（从 0 开始）
  * @return 第 n 个斐波那契数
- * @throws std::runtime_error 如果 n 为负数或超过 236
+ * @throws std::runtime_error 如果 n 为负数或超过 10000
  *
  * 斐波那契数列：0, 1, 1, 2, 3, 5, 8, 13, ...
- * 限制 n <= 236 以避免 float128 溢出（比 long double 的 186 更大）。
  */
 Scalar fibonacci_scalar(long long n) {
     if (n < 0) throw std::runtime_error("fib only accepts non-negative integers");
-    // float128 可以支持更大的 n，但保持合理限制
-    if (n > 236) throw std::runtime_error("fib is limited to n <= 236 to avoid overflow");
-    if (n == 0) return Scalar(0.0L);
-    if (n == 1) return Scalar(1.0L);
-    // 使用 Scalar 进行计算以避免 long long 溢出
-    Scalar a = Scalar(0.0L);
-    Scalar b = Scalar(1.0L);
+    if (n > 10000) throw std::runtime_error("fib is limited to n <= 10000 to avoid excessive computation");
+    if (n == 0) return Scalar(0);
+    if (n == 1) return Scalar(1);
+
+    Scalar a = Scalar(0);
+    Scalar b = Scalar(1);
     for (long long i = 2; i <= n; ++i) {
         Scalar next = a + b;
         a = b;
@@ -52,11 +47,7 @@ long double fibonacci_value(long long n) {
 Scalar factorial_scalar(long long n) {
     if (n < 0) throw std::runtime_error("factorial only accepts non-negative integers");
     if (n > 170) throw std::runtime_error("factorial is limited to n <= 170 to avoid overflow");
-    Scalar result = Scalar(1.0L);
-    for (long long i = 2; i <= n; ++i) {
-        result *= Scalar(static_cast<long double>(i));
-    }
-    return result;
+    return prob::factorial(Scalar(static_cast<long long>(n)));
 }
 
 long double factorial_value(long long n) {
@@ -66,13 +57,7 @@ long double factorial_value(long long n) {
 Scalar combination_scalar(long long n, long long r) {
     if (n < 0 || r < 0 || r > n) throw std::runtime_error("combination requires 0 <= r <= n");
     if (n > 170) throw std::runtime_error("nCr is limited to n <= 170 to avoid overflow");
-    r = std::min(r, n - r);
-    Scalar result = Scalar(1.0L);
-    for (long long i = 1; i <= r; ++i) {
-        result *= Scalar(static_cast<long double>(n - r + i));
-        result /= Scalar(static_cast<long double>(i));
-    }
-    return result;
+    return prob::nCr(Scalar(static_cast<long long>(n)), Scalar(static_cast<long long>(r)));
 }
 
 long double combination_value(long long n, long long r) {
@@ -119,11 +104,7 @@ Rational combination_rational(long long n, long long r) {
 Scalar permutation_scalar(long long n, long long r) {
     if (n < 0 || r < 0 || r > n) throw std::runtime_error("permutation requires 0 <= r <= n");
     if (n > 170) throw std::runtime_error("nPr is limited to n <= 170 to avoid overflow");
-    Scalar result = Scalar(1.0L);
-    for (long long i = 0; i < r; ++i) {
-        result *= Scalar(static_cast<long double>(n - i));
-    }
-    return result;
+    return prob::nPr(Scalar(static_cast<long long>(n)), Scalar(static_cast<long long>(r)));
 }
 
 long double permutation_value(long long n, long long r) {

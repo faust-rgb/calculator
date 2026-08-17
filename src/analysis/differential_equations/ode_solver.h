@@ -1,5 +1,5 @@
 // ============================================================================
-// 常微分方程求解器 (泛型版)
+// 常微分方程求解器 (基于 Scalar 类型)
 // ============================================================================
 
 #ifndef ODE_SOLVER_H
@@ -11,186 +11,156 @@
 #include <utility>
 #include <vector>
 
+using Scalar = mymath::Scalar;
+
 // ============================================================================
 // 数据结构
 // ============================================================================
 
-/**
- * @struct TODEPoint
- * @brief 泛型单方程 ODE 解的点
- */
-template <typename T>
-struct TODEPoint {
-    T x = T(0);
-    T y = T(0);
+struct ODEPoint {
+    Scalar x = Scalar(0);
+    Scalar y = Scalar(0);
 };
 
-using ODEPoint = TODEPoint<Scalar>;
+using ScalarODEPoint = ODEPoint;
 
-// Scalar-precision alias
-using ScalarODEPoint = TODEPoint<mymath::Scalar>;
-
-/**
- * @struct TODESystemPoint
- * @brief 泛型方程组 ODE 解的点
- */
-template <typename T>
-struct TODESystemPoint {
-    T x = T(0);
-    std::vector<T> y;
+struct ODESystemPoint {
+    Scalar x = Scalar(0);
+    std::vector<Scalar> y;
 };
 
-using ODESystemPoint = TODESystemPoint<Scalar>;
-
-// Scalar-precision alias
-using ScalarODESystemPoint = TODESystemPoint<mymath::Scalar>;
+using ScalarODESystemPoint = ODESystemPoint;
 
 // ============================================================================
 // 单方程求解器
 // ============================================================================
 
-/**
- * @class TODESolver
- * @brief 泛型单方程常微分方程求解器
- */
-template <typename T>
-class TODESolver {
+class ODESolver {
 public:
-    using RHSFunction = std::function<T(T, T)>;
-    using EventFunction = std::function<T(T, T)>;
+    using RHSFunction = std::function<Scalar(Scalar, Scalar)>;
+    using EventFunction = std::function<Scalar(Scalar, Scalar)>;
 
-    explicit TODESolver(RHSFunction rhs,
-                        EventFunction event = EventFunction(),
-                        T relative_tolerance = T(0),
-                        T absolute_tolerance = T(0))
+    explicit ODESolver(RHSFunction rhs,
+                       EventFunction event = EventFunction(),
+                       Scalar relative_tolerance = Scalar(0),
+                       Scalar absolute_tolerance = Scalar(0))
         : rhs_(std::move(rhs)), event_(std::move(event)),
           relative_tolerance_(relative_tolerance),
           absolute_tolerance_(absolute_tolerance) {}
 
-    T solve(T x0, T y0, T x1, int steps = 100) const;
+    Scalar solve(Scalar x0, Scalar y0, Scalar x1, int steps = 100) const;
 
-    std::vector<TODEPoint<T>> solve_trajectory(T x0, T y0, T x1, int steps = 100) const;
+    std::vector<ODEPoint> solve_trajectory(Scalar x0, Scalar y0, Scalar x1, int steps = 100) const;
 
 private:
-    T integrate_segment(T x0, T y0, T x1) const;
-    TODEPoint<T> integrate_segment_with_event(T x0, T y0, T x1, bool* stopped) const;
-    std::pair<T, T> rkf45_step(T x, T y, T h) const;
+    Scalar integrate_segment(Scalar x0, Scalar y0, Scalar x1) const;
+    ODEPoint integrate_segment_with_event(Scalar x0, Scalar y0, Scalar x1, bool* stopped) const;
+    std::pair<Scalar, Scalar> rkf45_step(Scalar x, Scalar y, Scalar h) const;
 
     RHSFunction rhs_;
     EventFunction event_;
-    T relative_tolerance_;
-    T absolute_tolerance_;
+    Scalar relative_tolerance_;
+    Scalar absolute_tolerance_;
 };
 
-using ODESolver = TODESolver<Scalar>;
-using ScalarODESolver = TODESolver<mymath::Scalar>;
+using ScalarODESolver = ODESolver;
 
 // ============================================================================
 // 方程组求解器
 // ============================================================================
 
-/**
- * @class TODESystemSolver
- * @brief 泛型方程组常微分方程求解器
- */
-template <typename T>
-class TODESystemSolver {
+class ODESystemSolver {
 public:
-    using RHSFunction = std::function<std::vector<T>(T, const std::vector<T>&)>;
-    using EventFunction = std::function<T(T, const std::vector<T>&)>;
+    using RHSFunction = std::function<std::vector<Scalar>(Scalar, const std::vector<Scalar>&)>;
+    using EventFunction = std::function<Scalar(Scalar, const std::vector<Scalar>&)>;
 
-    explicit TODESystemSolver(RHSFunction rhs,
-                              EventFunction event = EventFunction(),
-                              T relative_tolerance = T(0),
-                              T absolute_tolerance = T(0))
+    explicit ODESystemSolver(RHSFunction rhs,
+                             EventFunction event = EventFunction(),
+                             Scalar relative_tolerance = Scalar(0),
+                             Scalar absolute_tolerance = Scalar(0))
         : rhs_(std::move(rhs)), event_(std::move(event)),
           relative_tolerance_(relative_tolerance),
           absolute_tolerance_(absolute_tolerance) {}
 
-    std::vector<T> solve(T x0, const std::vector<T>& y0, T x1, int steps = 100) const;
+    std::vector<Scalar> solve(Scalar x0, const std::vector<Scalar>& y0, Scalar x1, int steps = 100) const;
 
-    std::vector<TODESystemPoint<T>> solve_trajectory(T x0, const std::vector<T>& y0, T x1, int steps = 100) const;
+    std::vector<ODESystemPoint> solve_trajectory(Scalar x0, const std::vector<Scalar>& y0, Scalar x1, int steps = 100) const;
 
 private:
-    std::vector<T> integrate_segment(T x0, const std::vector<T>& y0, T x1) const;
-    TODESystemPoint<T> integrate_segment_with_event(T x0, const std::vector<T>& y0, T x1, bool* stopped) const;
-    std::vector<T> rk4_step(T x, const std::vector<T>& y, T h) const;
-    std::pair<std::vector<T>, T> rkf45_step(T x, const std::vector<T>& y, T h) const;
+    std::vector<Scalar> integrate_segment(Scalar x0, const std::vector<Scalar>& y0, Scalar x1) const;
+    ODESystemPoint integrate_segment_with_event(Scalar x0, const std::vector<Scalar>& y0, Scalar x1, bool* stopped) const;
+    std::vector<Scalar> rk4_step(Scalar x, const std::vector<Scalar>& y, Scalar h) const;
+    std::pair<std::vector<Scalar>, Scalar> rkf45_step(Scalar x, const std::vector<Scalar>& y, Scalar h) const;
 
     RHSFunction rhs_;
     EventFunction event_;
-    T relative_tolerance_;
-    T absolute_tolerance_;
+    Scalar relative_tolerance_;
+    Scalar absolute_tolerance_;
 };
 
-using ODESystemSolver = TODESystemSolver<Scalar>;
-using ScalarODESystemSolver = TODESystemSolver<mymath::Scalar>;
+using ScalarODESystemSolver = ODESystemSolver;
 
 // ============================================================================
 // 刚性 ODE 求解器 (BDF 方法)
 // ============================================================================
 
-template <typename T>
-class TStiffODESolver {
+class StiffODESolver {
 public:
-    using RHSFunction = std::function<T(T, T)>;
-    using JacobianFunction = std::function<T(T, T)>;
+    using RHSFunction = std::function<Scalar(Scalar, Scalar)>;
+    using JacobianFunction = std::function<Scalar(Scalar, Scalar)>;
 
-    explicit TStiffODESolver(RHSFunction rhs,
-                             JacobianFunction jacobian = JacobianFunction(),
-                             T relative_tolerance = T(0),
-                             T absolute_tolerance = T(0))
+    explicit StiffODESolver(RHSFunction rhs,
+                            JacobianFunction jacobian = JacobianFunction(),
+                            Scalar relative_tolerance = Scalar(0),
+                            Scalar absolute_tolerance = Scalar(0))
         : rhs_(std::move(rhs)), jacobian_(std::move(jacobian)),
-          relative_tolerance_(relative_tolerance > T(0) ? relative_tolerance : precision::cbrt_epsilon<T>()),
-          absolute_tolerance_(absolute_tolerance > T(0) ? absolute_tolerance : precision::sqrt_epsilon<T>()) {}
+          relative_tolerance_(relative_tolerance > Scalar(0) ? relative_tolerance : precision::cbrt_epsilon<Scalar>()),
+          absolute_tolerance_(absolute_tolerance > Scalar(0) ? absolute_tolerance : precision::sqrt_epsilon<Scalar>()) {}
 
-    T solve(T x0, T y0, T x1, int steps = 100) const;
-    std::vector<TODEPoint<T>> solve_trajectory(T x0, T y0, T x1, int steps = 100) const;
+    Scalar solve(Scalar x0, Scalar y0, Scalar x1, int steps = 100) const;
+    std::vector<ODEPoint> solve_trajectory(Scalar x0, Scalar y0, Scalar x1, int steps = 100) const;
 
 private:
-    T bdf_step(T x, T y, T h, int order, const std::vector<T>& prev_y, const std::vector<T>& prev_h) const;
-    T newton_implicit(T x, T y_pred, T h, T gamma) const;
-    T numerical_jacobian(T x, T y) const;
+    Scalar bdf_step(Scalar x, Scalar y, Scalar h, int order, const std::vector<Scalar>& prev_y, const std::vector<Scalar>& prev_h) const;
+    Scalar newton_implicit(Scalar x, Scalar y_pred, Scalar h, Scalar gamma) const;
+    Scalar numerical_jacobian(Scalar x, Scalar y) const;
 
     RHSFunction rhs_;
     JacobianFunction jacobian_;
-    T relative_tolerance_;
-    T absolute_tolerance_;
+    Scalar relative_tolerance_;
+    Scalar absolute_tolerance_;
 };
 
-using StiffODESolver = TStiffODESolver<Scalar>;
-using ScalarStiffODESolver = TStiffODESolver<mymath::Scalar>;
+using ScalarStiffODESolver = StiffODESolver;
 
-template <typename T>
-class TStiffODESystemSolver {
+class StiffODESystemSolver {
 public:
-    using RHSFunction = std::function<std::vector<T>(T, const std::vector<T>&)>;
-    using JacobianFunction = std::function<std::vector<std::vector<T>>(T, const std::vector<T>&)>;
+    using RHSFunction = std::function<std::vector<Scalar>(Scalar, const std::vector<Scalar>&)>;
+    using JacobianFunction = std::function<std::vector<std::vector<Scalar>>(Scalar, const std::vector<Scalar>&)>;
 
-    explicit TStiffODESystemSolver(RHSFunction rhs,
-                                   JacobianFunction jacobian = JacobianFunction(),
-                                   T relative_tolerance = T(0),
-                                   T absolute_tolerance = T(0))
+    explicit StiffODESystemSolver(RHSFunction rhs,
+                                  JacobianFunction jacobian = JacobianFunction(),
+                                  Scalar relative_tolerance = Scalar(0),
+                                  Scalar absolute_tolerance = Scalar(0))
         : rhs_(std::move(rhs)), jacobian_(std::move(jacobian)),
-          relative_tolerance_(relative_tolerance > T(0) ? relative_tolerance : precision::cbrt_epsilon<T>()),
-          absolute_tolerance_(absolute_tolerance > T(0) ? absolute_tolerance : precision::sqrt_epsilon<T>()) {}
+          relative_tolerance_(relative_tolerance > Scalar(0) ? relative_tolerance : precision::cbrt_epsilon<Scalar>()),
+          absolute_tolerance_(absolute_tolerance > Scalar(0) ? absolute_tolerance : precision::sqrt_epsilon<Scalar>()) {}
 
-    std::vector<T> solve(T x0, const std::vector<T>& y0, T x1, int steps = 100) const;
-    std::vector<TODESystemPoint<T>> solve_trajectory(T x0, const std::vector<T>& y0, T x1, int steps = 100) const;
+    std::vector<Scalar> solve(Scalar x0, const std::vector<Scalar>& y0, Scalar x1, int steps = 100) const;
+    std::vector<ODESystemPoint> solve_trajectory(Scalar x0, const std::vector<Scalar>& y0, Scalar x1, int steps = 100) const;
 
 private:
-    std::vector<T> bdf_step(T x, const std::vector<T>& y, T h, int order,
-                             const std::vector<std::vector<T>>& prev_y, const std::vector<T>& prev_h) const;
-    std::vector<T> newton_implicit_system(T x, const std::vector<T>& y_pred, T h, T gamma) const;
-    std::vector<std::vector<T>> numerical_jacobian_matrix(T x, const std::vector<T>& y) const;
+    std::vector<Scalar> bdf_step(Scalar x, const std::vector<Scalar>& y, Scalar h, int order,
+                                 const std::vector<std::vector<Scalar>>& prev_y, const std::vector<Scalar>& prev_h) const;
+    std::vector<Scalar> newton_implicit_system(Scalar x, const std::vector<Scalar>& y_pred, Scalar h, Scalar gamma) const;
+    std::vector<std::vector<Scalar>> numerical_jacobian_matrix(Scalar x, const std::vector<Scalar>& y) const;
 
     RHSFunction rhs_;
     JacobianFunction jacobian_;
-    T relative_tolerance_;
-    T absolute_tolerance_;
+    Scalar relative_tolerance_;
+    Scalar absolute_tolerance_;
 };
 
-using StiffODESystemSolver = TStiffODESystemSolver<Scalar>;
-using ScalarStiffODESystemSolver = TStiffODESystemSolver<mymath::Scalar>;
+using ScalarStiffODESystemSolver = StiffODESystemSolver;
 
-#endif
+#endif // ODE_SOLVER_H

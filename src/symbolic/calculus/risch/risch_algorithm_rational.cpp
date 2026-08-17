@@ -453,6 +453,10 @@ bool try_integrate_distinct_even_quadratic_product(const SymbolicPolynomial& num
     return true;
 }
 
+}  // namespace
+
+namespace risch_algorithm_internal {
+
 bool try_integrate_numeric_quadratic_partial_fractions(const SymbolicPolynomial& numerator,
                                                        const SymbolicPolynomial& denominator,
                                                        const std::string& variable_name,
@@ -642,6 +646,10 @@ bool try_integrate_numeric_quadratic_partial_fractions(const SymbolicPolynomial&
     *result = total;
     return true;
 }
+
+}  // namespace risch_algorithm_internal
+
+namespace {
 
 bool try_integrate_log_derivative_monomial(const SymbolicPolynomial& numerator,
                                            const SymbolicPolynomial& denominator,
@@ -926,6 +934,27 @@ bool RischAlgorithm::integrate_rational(const SymbolicPolynomial& numerator,
     }
 
     if (kind == DifferentialExtension::Kind::kNone) {
+        SymbolicExpression rule_part;
+        if (integrate_symbolic_rational_rules(R.to_expression(),
+                                              denominator.to_expression(),
+                                              variable_name,
+                                              &rule_part)) {
+            *result = (poly_int + rule_part).simplify();
+            return true;
+        }
+
+        // Repeated quadratic factors are handled directly by the numeric
+        // partial-fraction path; Hermite reduction can otherwise leave a
+        // nonzero remainder that the logarithmic stage cannot prove.
+        SymbolicExpression direct_quadratic_part;
+        if (try_integrate_numeric_quadratic_partial_fractions(R,
+                                                              denominator,
+                                                              variable_name,
+                                                              &direct_quadratic_part)) {
+            *result = (poly_int + direct_quadratic_part).simplify();
+            return true;
+        }
+
         SymbolicExpression split_linear_part;
         if (try_integrate_split_linear_partial_fractions(R,
                                                          denominator,
@@ -965,7 +994,15 @@ bool RischAlgorithm::integrate_rational(const SymbolicPolynomial& numerator,
 
     if (kind == DifferentialExtension::Kind::kNone) {
         SymbolicExpression partial_fraction_part;
-        if (try_integrate_numeric_quadratic_partial_fractions(reduced_num,
+        if (integrate_symbolic_partial_fractions(reduced_num,
+                                                 reduced_den,
+                                                 variable_name,
+                                                 &partial_fraction_part) ||
+            lazard_rioboo_trager_improved(reduced_num,
+                                          reduced_den,
+                                          variable_name,
+                                          &partial_fraction_part) ||
+            try_integrate_numeric_quadratic_partial_fractions(reduced_num,
                                                               reduced_den,
                                                               variable_name,
                                                               &partial_fraction_part)) {

@@ -207,7 +207,7 @@ inline float128_t::float128_t(const char* s) : hi(0.0L), lo(0.0L) {
     *this = from_string(std::string(s));
 }
 
-namespace precise128 {
+namespace float128 {
     // Basic utility functions
     bool isnan(float128_t a);
     bool isinf(float128_t a);
@@ -281,6 +281,8 @@ namespace precise128 {
     float128_t infinity();
     bool is_near_zero(float128_t x, float128_t eps);
 }
+
+namespace precise128 = float128;
 
 // ============================================================================
 // 延迟规范化接口（与 PreciseDecimal 保持一致）
