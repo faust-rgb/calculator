@@ -514,7 +514,7 @@ SymbolicMat symbolic_matrix_exponential(const SymbolicMat& A, const std::string&
 
     for (std::size_t k = 1; k < n; ++k) {
         // 近似或积分解析解
-        if (lams[k].to_string() == lams[k - 1].to_string()) {
+        if (expressions_match(lams[k], lams[k - 1])) {
             r[k] = (t * r[k - 1] / SymbolicExpression::number(static_cast<long long>(k))).simplify();
         } else {
             r[k] = ((make_exp(lams[k] * t) - r[k - 1]) / (lams[k] - lams[k - 1])).simplify();

@@ -18,6 +18,7 @@
 #include <mutex>
 #include <vector>
 #include <optional>
+#include <cstdint>
 
 namespace symbolic_assumptions {
 
@@ -38,6 +39,7 @@ public:
     void clear_variable(const std::string& variable);
 
     bool has_assumption(const std::string& variable, Assumption assumption) const;
+    std::uint64_t revision() const;
 
     // Helper functions
     static std::optional<Assumption> parse_assumption(const std::string& text);
@@ -52,6 +54,7 @@ private:
     std::unordered_set<std::string> negative_vars_;
     std::unordered_set<std::string> real_vars_;
     std::unordered_set<std::string> integer_vars_;
+    std::uint64_t revision_ = 0;
     mutable std::mutex mutex_;
 };
 

@@ -63,7 +63,7 @@ std::set<std::string> extract_variables(const SymbolicExpression& expr) {
 
 // 检查两个表达式是否结构相等
 bool structural_equals(const SymbolicExpression& a, const SymbolicExpression& b) {
-    return a.simplify().to_string() == b.simplify().to_string();
+    return expressions_match(a.simplify(), b.simplify());
 }
 
 bool polynomial_is_obviously_square_free(const SymbolicPolynomial& polynomial) {

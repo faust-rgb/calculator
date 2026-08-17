@@ -284,8 +284,8 @@ SymbolicExpression integrate_symbolic_inverse_quadratic(
                           make_multiply(k, make_power(u2_plus_k,
                                                       SymbolicExpression::number(n - 1)))));
         integral = make_add(recurrence,
-                            make_multiply(SymbolicExpression::number((2 * n - 3) /
-                                                                      (2 * (n - 1))),
+                            make_multiply(SymbolicExpression::number(Scalar(2.0L * n - 3.0L) /
+                                                                      Scalar(2.0L * (n - 1.0L))),
                                           make_divide(integral, k)));
     }
 
@@ -386,6 +386,13 @@ bool integrate_repeated_quadratic_rational(
         return false;
     }
 
+    // Parameterized quadratics retain domain-sensitive sqrt/atan terms.
+    // Let the established symbolic rules handle them until their recurrence
+    // normalization is representation-independent.
+    if (!a.is_number(nullptr) || !b.is_number(nullptr) || !c.is_number(nullptr)) {
+        return false;
+    }
+
     std::vector<SymbolicExpression> numerator_coefficients;
     if (!symbolic_polynomial_coefficients_from_simplified(
             numerator.simplify(), variable_name, &numerator_coefficients)) {
@@ -462,8 +469,8 @@ bool integrate_symbolic_partial_fractions(
     }
 
     // 提取分母因子
-    std::vector<SymbolicPolynomial> factors;
-    if (!denominator.square_free_decomposition(&factors)) {
+    std::vector<std::pair<SymbolicPolynomial, int>> factors;
+    if (!denominator.square_free_factorization(&factors)) {
         return false;
     }
 
@@ -480,9 +487,9 @@ bool integrate_symbolic_partial_fractions(
 
     std::vector<PartialFractionTerm> terms;
 
-    for (std::size_t factor_index = 0; factor_index < factors.size(); ++factor_index) {
-        const auto& factor = factors[factor_index];
-        const int multiplicity = static_cast<int>(factor_index) + 1;
+    for (const auto& factor_with_multiplicity : factors) {
+        const auto& factor = factor_with_multiplicity.first;
+        const int multiplicity = factor_with_multiplicity.second;
         int deg = factor.degree();
         if (factor.is_constant()) continue;
         if (deg == 1) {

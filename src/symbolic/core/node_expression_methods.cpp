@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 StoredValue SymbolicExpression::evalf(core::ExecutionContext& ctx) const {
@@ -22,10 +23,7 @@ SymbolicExpression SymbolicExpression::function(const std::string& name, const S
 
 SymbolicExpression SymbolicExpression::function(const std::string& name, const std::vector<SymbolicExpression>& args) {
     if (args.empty()) {
-        auto node = std::make_shared<Node>();
-        node->type = NodeType::kFunction;
-        node->text = name;
-        return SymbolicExpression(intern_node(node));
+        throw std::invalid_argument("symbolic function requires at least one argument");
     }
     if (args.size() == 1) {
         return make_function(name, args[0]);
@@ -171,11 +169,24 @@ SymbolicExpression SymbolicExpression::right_child() const {
 
 std::size_t SymbolicExpression::child_count() const {
     if (!node_) return 0;
+    if (node_->left) {
+        return node_->right ? 2 : 1;
+    }
     return node_->children.size();
 }
 
 SymbolicExpression SymbolicExpression::child_at(std::size_t index) const {
-    if (!node_ || index >= node_->children.size()) {
+    if (!node_) {
+        static const SymbolicExpression empty_expr;
+        return empty_expr;
+    }
+    if (node_->left) {
+        if (index == 0) return SymbolicExpression(node_->left);
+        if (index == 1 && node_->right) return SymbolicExpression(node_->right);
+        static const SymbolicExpression empty_expr;
+        return empty_expr;
+    }
+    if (index >= node_->children.size()) {
         static const SymbolicExpression empty_expr;
         return empty_expr;
     }

@@ -3,6 +3,7 @@
 // ============================================================================
 
 #include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/base/assumptions.h"
 
 #include "core/services/format_utils.h"
 #include "math/mymath.h"
@@ -215,10 +216,19 @@ private:
                 } else if (identifier == "impulse") {
                     identifier = "delta";
                 }
-                SymbolicExpression argument = parse_expression();
                 skip_spaces();
+                std::vector<SymbolicExpression> arguments;
+                if (match(')')) {
+                    throw SyntaxError("function requires at least one argument");
+                }
+                while (true) {
+                    arguments.push_back(parse_expression());
+                    skip_spaces();
+                    if (!match(',')) break;
+                    skip_spaces();
+                }
                 expect(')');
-                return SymbolicExpression(make_unary(NodeType::kFunction, argument.node_, identifier));
+                return SymbolicExpression::function(identifier, arguments);
             }
 
             // 变量
@@ -346,6 +356,15 @@ SymbolicExpression substitute_impl(const SymbolicExpression& expression,
                                       .node_))
                 .simplify();
         case NodeType::kFunction:
+            if (!node->children.empty()) {
+                std::vector<SymbolicExpression> arguments;
+                for (const auto& child : node->children) {
+                    arguments.push_back(substitute_impl(SymbolicExpression(child),
+                                                        variable_name,
+                                                        replacement));
+                }
+                return SymbolicExpression::function(node->text, arguments).simplify();
+            }
             return SymbolicExpression(
                        make_unary(NodeType::kFunction,
                                   substitute_impl(SymbolicExpression(node->left),
@@ -402,7 +421,12 @@ SymbolicExpression substitute_impl(const SymbolicExpression& expression,
                                   node->text))
                 .simplify();
         case NodeType::kRootOf:
-            return expression;
+            if (node->children.empty()) return expression;
+            return make_rootof(substitute_impl(SymbolicExpression(node->children[0]),
+                                               variable_name,
+                                               replacement),
+                               node->text,
+                               static_cast<int>(node->number_value));
     }
     throw std::runtime_error("unsupported symbolic substitution");
 }
@@ -430,6 +454,15 @@ SymbolicExpression substitute_expression_impl(const SymbolicExpression& expressi
                                       .node_))
                 .simplify();
         case NodeType::kFunction:
+            if (!node->children.empty()) {
+                std::vector<SymbolicExpression> arguments;
+                for (const auto& child : node->children) {
+                    arguments.push_back(substitute_expression_impl(SymbolicExpression(child),
+                                                                   target,
+                                                                   replacement));
+                }
+                return SymbolicExpression::function(node->text, arguments).simplify();
+            }
             return SymbolicExpression(
                        make_unary(NodeType::kFunction,
                                   substitute_expression_impl(SymbolicExpression(node->left),
@@ -486,7 +519,12 @@ SymbolicExpression substitute_expression_impl(const SymbolicExpression& expressi
                                   node->text))
                 .simplify();
         case NodeType::kRootOf:
-            return expression;
+            if (node->children.empty()) return expression;
+            return make_rootof(substitute_expression_impl(SymbolicExpression(node->children[0]),
+                                                          target,
+                                                          replacement),
+                               node->text,
+                               static_cast<int>(node->number_value));
     }
     throw std::runtime_error("unsupported symbolic substitution");
 }
@@ -554,6 +592,9 @@ bool try_evaluate_numeric_node(const std::shared_ptr<SymbolicExpression::Node>& 
             return false;
         }
         case NodeType::kFunction: {
+            if (!node->children.empty()) {
+                return false;
+            }
             Scalar argument(0);
             if (!try_evaluate_numeric_node(node->left, &argument)) {
                 return false;
@@ -762,6 +803,7 @@ bool try_evaluate_dual_node(const std::shared_ptr<SymbolicExpression::Node>& nod
             return false;
         }
         case NodeType::kFunction: {
+            if (!node->children.empty()) return false;
             mymath::dual<Scalar> argument;
             if (!try_evaluate_dual_node(node->left, ctx, &argument)) {
                 return false;
@@ -1015,10 +1057,19 @@ std::string to_latex_impl(const std::shared_ptr<SymbolicExpression::Node>& node)
             return res;
         }
         case NodeType::kFunction: {
-            if (node->text == "sqrt") return "\\sqrt{" + to_latex_impl(node->left) + "}";
-            if (node->text == "sin") return "\\sin(" + to_latex_impl(node->left) + ")";
-            if (node->text == "cos") return "\\cos(" + to_latex_impl(node->left) + ")";
-            return "\\" + node->text + "(" + to_latex_impl(node->left) + ")";
+            std::string arguments;
+            if (node->left) {
+                arguments = to_latex_impl(node->left);
+            } else {
+                for (std::size_t i = 0; i < node->children.size(); ++i) {
+                    if (i > 0) arguments += ", ";
+                    arguments += to_latex_impl(node->children[i]);
+                }
+            }
+            if (node->text == "sqrt" && node->left) return "\\sqrt{" + arguments + "}";
+            if (node->text == "sin") return "\\sin(" + arguments + ")";
+            if (node->text == "cos") return "\\cos(" + arguments + ")";
+            return "\\" + node->text + "(" + arguments + ")";
         }
         default: return "???";
     }
@@ -1042,8 +1093,13 @@ bool SymbolicExpression::is_constant(const std::string& variable_name) const {
         case NodeType::kVariable:
             return node_->text != variable_name;
         case NodeType::kNegate:
-        case NodeType::kFunction:
             return SymbolicExpression(node_->left).is_constant(variable_name);
+        case NodeType::kFunction:
+            if (node_->left) return SymbolicExpression(node_->left).is_constant(variable_name);
+            for (const auto& child : node_->children) {
+                if (!SymbolicExpression(child).is_constant(variable_name)) return false;
+            }
+            return true;
         case NodeType::kAdd:
         case NodeType::kSubtract:
         case NodeType::kMultiply:
@@ -1116,6 +1172,9 @@ void collect_subexpression_counts(const std::shared_ptr<SymbolicExpression::Node
 
     collect_subexpression_counts(node->left, counts);
     collect_subexpression_counts(node->right, counts);
+    for (const auto& child : node->children) {
+        collect_subexpression_counts(child, counts);
+    }
 }
 } // namespace
 
@@ -1177,7 +1236,8 @@ SymbolicExpression SymbolicExpression::simplify() const {
     static constexpr std::size_t kMaxSimplifyCacheSize = 4096;
     static thread_local SymbolicExpressionLruCache cache(kMaxSimplifyCacheSize);
 
-    const std::string key = node_structural_key(node_);
+    const std::string key = node_structural_key(node_) + "_assumptions_" +
+                            std::to_string(symbolic_assumptions::AssumptionEngine::instance().revision());
     SymbolicExpression cached;
     if (cache.get(key, &cached)) {
         return cached;
@@ -1192,7 +1252,9 @@ SymbolicExpression SymbolicExpression::simplify_with_budget(std::size_t max_node
     static constexpr std::size_t kMaxSimplifyCacheSize = 4096;
     static thread_local SymbolicExpressionLruCache cache(kMaxSimplifyCacheSize);
 
-    const std::string key = node_structural_key(node_) + "_budget_" + std::to_string(max_nodes);
+    const std::string key = node_structural_key(node_) + "_budget_" + std::to_string(max_nodes) +
+                            "_assumptions_" +
+                            std::to_string(symbolic_assumptions::AssumptionEngine::instance().revision());
     SymbolicExpression cached;
     if (cache.get(key, &cached)) {
         return cached;

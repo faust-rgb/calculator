@@ -24,10 +24,10 @@ StoredValue SymbolicEvaluator::evalf(const SymbolicExpression& expr, core::Execu
         return StoredValue(expr.node_numeric_value());
     }
     case NodeType::kPi: {
-        return StoredValue(Scalar(mymath::kPi));
+        return StoredValue(mymath::pi());
     }
     case NodeType::kE: {
-        return StoredValue(Scalar(mymath::kE));
+        return StoredValue(mymath::e());
     }
     case NodeType::kVariable: {
         const std::string& name = expr.node_text();
@@ -35,8 +35,8 @@ StoredValue SymbolicEvaluator::evalf(const SymbolicExpression& expr, core::Execu
         if (slot) {
             return slot->value;
         }
-        if (name == "pi" || name == "PI") return StoredValue(Scalar(mymath::kPi));
-        if (name == "e" || name == "E") return StoredValue(Scalar(mymath::kE));
+        if (name == "pi" || name == "PI") return StoredValue(mymath::pi());
+        if (name == "e" || name == "E") return StoredValue(mymath::e());
         throw std::runtime_error("Undefined symbolic variable in evalf: " + name);
     }
     case NodeType::kAdd: {
@@ -143,8 +143,13 @@ bool SymbolicEvaluator::is_exact_algebraic(const SymbolicExpression& expr) {
         Scalar val = expr.node_numeric_value();
         return is_integer_double(val);
     }
-    std::size_t count = expr.child_count();
-    for (std::size_t i = 0; i < count; ++i) {
+    if (type == NodeType::kRootOf) return true;
+    if (type == NodeType::kPi || type == NodeType::kE ||
+        type == NodeType::kInfinity || type == NodeType::kVariable ||
+        type == NodeType::kFunction || type == NodeType::kDifferentialOp) {
+        return false;
+    }
+    for (std::size_t i = 0; i < expr.child_count(); ++i) {
         if (!is_exact_algebraic(expr.child_at(i))) return false;
     }
     return true;

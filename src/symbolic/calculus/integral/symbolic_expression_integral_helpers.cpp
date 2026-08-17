@@ -539,8 +539,8 @@ SymbolicExpression integrate_inverse_quadratic_power(
             make_add(recurrence_term,
                      make_multiply(
                          SymbolicExpression::number(
-                             (2 * n - 3) /
-                             (2 * (n - 1)) / d),
+                             Scalar(2.0L * n - 3.0L) /
+                             (Scalar(2.0L * (n - 1.0L)) * d)),
                          integral))
                 .simplify();
     }
@@ -651,7 +651,7 @@ bool try_integrate_repeated_unit_quadratic(const std::vector<Scalar>& numerator,
  */
 bool same_simplified_expression(const SymbolicExpression& lhs,
                                 const SymbolicExpression& rhs) {
-    return lhs.simplify().to_string() == rhs.simplify().to_string();
+    return expressions_match(lhs.simplify(), rhs.simplify());
 }
 
 /**

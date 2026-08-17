@@ -208,6 +208,15 @@ public:
     bool square_free_decomposition(std::vector<SymbolicPolynomial>* factors) const;
 
     /**
+     * @brief Square-free factors paired with their exact multiplicities.
+     *
+     * Unlike square_free_decomposition(), this API does not encode
+     * multiplicity through vector positions and omits unit factors.
+     */
+    bool square_free_factorization(
+        std::vector<std::pair<SymbolicPolynomial, int>>* factors) const;
+
+    /**
      * @brief 在指定点求值
      * @param point 求值点（符号表达式）
      */

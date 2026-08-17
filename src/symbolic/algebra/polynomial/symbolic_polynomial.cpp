@@ -696,36 +696,54 @@ bool SymbolicPolynomial::square_free_decomposition(std::vector<SymbolicPolynomia
 
     factors->clear();
 
-    // Build nested square-free layers.  layer[i] is the product of factors
-    // whose multiplicity is at least i + 1.  Adjacent quotients then give
-    // the factors with exactly each multiplicity.
+    SymbolicPolynomial P = *this;
+    SymbolicPolynomial Pp = P.derivative();
+    SymbolicPolynomial G = P.gcd(Pp);
+    SymbolicPolynomial C, R;
+    if (!P.divide(G, &C, &R)) return false;
+
+    SymbolicPolynomial P_prime_over_G, C_prime;
+    if (!Pp.divide(G, &P_prime_over_G, &R)) return false;
+    C_prime = C.derivative();
+    SymbolicPolynomial D = P_prime_over_G.subtract(C_prime).simplify();
+
+    while (!C.is_constant()) {
+        SymbolicPolynomial v = C.gcd(D).simplify();
+        factors->push_back(v);
+
+        SymbolicPolynomial next_C;
+        if (!C.divide(v, &next_C, &R)) break;
+        SymbolicPolynomial D_over_v;
+        if (!D.divide(v, &D_over_v, &R)) break;
+
+        C = next_C.simplify();
+        D = D_over_v.subtract(C.derivative()).simplify();
+    }
+    return true;
+}
+
+bool SymbolicPolynomial::square_free_factorization(
+    std::vector<std::pair<SymbolicPolynomial, int>>* factors) const {
+    if (is_zero()) return false;
+    factors->clear();
+
     std::vector<SymbolicPolynomial> layers;
     SymbolicPolynomial current = *this;
-    const int max_layers = std::max(1, degree());
-    for (int i = 0; i < max_layers && !current.is_constant(); ++i) {
+    for (int i = 0; i < degree() && !current.is_constant(); ++i) {
         SymbolicPolynomial gcd = current.gcd(current.derivative()).simplify();
-        SymbolicPolynomial layer;
-        SymbolicPolynomial remainder;
-        if (!current.divide(gcd, &layer, &remainder) || !remainder.is_zero()) {
-            return false;
-        }
+        SymbolicPolynomial layer, remainder;
+        if (!current.divide(gcd, &layer, &remainder) || !remainder.is_zero()) return false;
         layers.push_back(layer.simplify());
         current = gcd;
     }
 
-    if (layers.empty()) return true;
-
-    factors->assign(layers.size(), SymbolicPolynomial({SymbolicExpression::number(Scalar(1))}, variable_name_));
     for (std::size_t i = 0; i < layers.size(); ++i) {
-        SymbolicPolynomial exact_factor = layers[i];
+        SymbolicPolynomial exact = layers[i];
         if (i + 1 < layers.size()) {
             SymbolicPolynomial remainder;
-            if (!layers[i].divide(layers[i + 1], &exact_factor, &remainder) ||
-                !remainder.is_zero()) {
-                return false;
-            }
+            if (!layers[i].divide(layers[i + 1], &exact, &remainder) || !remainder.is_zero()) return false;
         }
-        (*factors)[i] = exact_factor.simplify();
+        if (!exact.is_constant()) factors->push_back({exact.simplify(), static_cast<int>(i) + 1});
     }
     return true;
 }
@@ -1097,75 +1115,36 @@ bool solve_coefficient_identity(
         aug_matrix[i][num_unknowns] = rhs[i];
     }
 
-    // 前向消元
     std::size_t rank = 0;
+    std::vector<std::size_t> pivot_columns;
     for (std::size_t col = 0; col < num_unknowns && rank < max_degree; ++col) {
-        // 找主元
         std::size_t pivot = rank;
-        for (std::size_t row = rank + 1; row < max_degree; ++row) {
-            if (!SymbolicPolynomial::coeff_is_zero(aug_matrix[row][col]) &&
-                SymbolicPolynomial::coeff_is_zero(aug_matrix[pivot][col])) {
-                pivot = row;
+        while (pivot < max_degree && SymbolicPolynomial::coeff_is_zero(aug_matrix[pivot][col])) ++pivot;
+        if (pivot == max_degree) continue;
+        std::swap(aug_matrix[pivot], aug_matrix[rank]);
+
+        const SymbolicExpression pivot_value = aug_matrix[rank][col];
+        for (std::size_t j = col; j <= num_unknowns; ++j) {
+            aug_matrix[rank][j] = (aug_matrix[rank][j] / pivot_value).simplify();
+        }
+        for (std::size_t row = 0; row < max_degree; ++row) {
+            if (row == rank || SymbolicPolynomial::coeff_is_zero(aug_matrix[row][col])) continue;
+            const SymbolicExpression factor = aug_matrix[row][col];
+            for (std::size_t j = col; j <= num_unknowns; ++j) {
+                aug_matrix[row][j] = (aug_matrix[row][j] - factor * aug_matrix[rank][j]).simplify();
             }
         }
-
-        if (SymbolicPolynomial::coeff_is_zero(aug_matrix[pivot][col])) {
-            continue;
-        }
-
-        // 交换行
-        if (pivot != rank) {
-            std::swap(aug_matrix[pivot], aug_matrix[rank]);
-        }
-
-        // 消元
-        SymbolicExpression pivot_val = aug_matrix[rank][col];
-        for (std::size_t row = rank + 1; row < max_degree; ++row) {
-            if (!SymbolicPolynomial::coeff_is_zero(aug_matrix[row][col])) {
-                SymbolicExpression factor = (aug_matrix[row][col] / pivot_val).simplify();
-                for (std::size_t j = col; j <= num_unknowns; ++j) {
-                    aug_matrix[row][j] = (aug_matrix[row][j] - factor * aug_matrix[rank][j]).simplify();
-                }
-            }
-        }
-
+        pivot_columns.push_back(col);
         ++rank;
     }
 
-    // 回代
-    for (int col = static_cast<int>(num_unknowns) - 1; col >= 0; --col) {
-        if (static_cast<std::size_t>(col) >= rank) continue;
-
-        // 找到对应的行
-        std::size_t row = col;
-        for (std::size_t r = 0; r < rank; ++r) {
-            if (!SymbolicPolynomial::coeff_is_zero(aug_matrix[r][col])) {
-                // 检查这是否是第一个非零元素
-                bool is_first = true;
-                for (std::size_t c = 0; c < static_cast<std::size_t>(col); ++c) {
-                    if (!SymbolicPolynomial::coeff_is_zero(aug_matrix[r][c])) {
-                        is_first = false;
-                        break;
-                    }
-                }
-                if (is_first) {
-                    row = r;
-                    break;
-                }
-            }
-        }
-
-        if (SymbolicPolynomial::coeff_is_zero(aug_matrix[row][col])) {
-            continue;
-        }
-
-        SymbolicExpression sum = aug_matrix[row][num_unknowns];
-        for (std::size_t j = static_cast<std::size_t>(col) + 1; j < num_unknowns; ++j) {
-            sum = (sum - aug_matrix[row][j] * (*unknowns)[j]).simplify();
-        }
-        (*unknowns)[col] = (sum / aug_matrix[row][col]).simplify();
+    for (std::size_t row = rank; row < max_degree; ++row) {
+        if (!SymbolicPolynomial::coeff_is_zero(aug_matrix[row][num_unknowns])) return false;
     }
-
+    if (rank != num_unknowns) return false;
+    for (std::size_t row = 0; row < rank; ++row) {
+        (*unknowns)[pivot_columns[row]] = aug_matrix[row][num_unknowns].simplify();
+    }
     return true;
 }
 

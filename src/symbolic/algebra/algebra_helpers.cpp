@@ -130,7 +130,9 @@ bool decompose_numeric_multiple_of_symbol(const SymbolicExpression& expression,
     const SymbolicExpression simplified = expression.simplify();
 
     // 直接是符号本身
-    if (expr_is_variable(simplified, symbol_name)) {
+    if (expr_is_variable(simplified, symbol_name) ||
+        (symbol_name == "pi" && simplified.node_->type == NodeType::kPi) ||
+        (symbol_name == "e" && simplified.node_->type == NodeType::kE)) {
         *coefficient = 1.0L;
         return true;
     }

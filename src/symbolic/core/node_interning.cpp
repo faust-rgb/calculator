@@ -447,7 +447,16 @@ std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node
             text = "-" + to_string_impl(node->left, precedence(node));
             break;
         case NodeType::kFunction:
-            text = node->text + "(" + to_string_impl(node->left, 0) + ")";
+            text = node->text + "(";
+            if (node->left) {
+                text += to_string_impl(node->left, 0);
+            } else {
+                for (std::size_t i = 0; i < node->children.size(); ++i) {
+                    if (i > 0) text += ", ";
+                    text += to_string_impl(node->children[i], 0);
+                }
+            }
+            text += ")";
             break;
         case NodeType::kAdd:
             // 特殊处理：将 a + (-b) 显示为 a - b
@@ -575,7 +584,16 @@ std::string node_structural_key(const std::shared_ptr<SymbolicExpression::Node>&
             key = "NEG(" + node_structural_key(node->left) + ")";
             break;
         case NodeType::kFunction:
-            key = "F(" + node->text + ":" + node_structural_key(node->left) + ")";
+            key = "F(" + node->text + ":";
+            if (node->left) {
+                key += node_structural_key(node->left);
+            } else {
+                for (std::size_t i = 0; i < node->children.size(); ++i) {
+                    if (i > 0) key += ",";
+                    key += node_structural_key(node->children[i]);
+                }
+            }
+            key += ")";
             break;
         case NodeType::kAdd:
             key = "ADD(" + node_structural_key(node->left) + "," +
@@ -619,7 +637,12 @@ std::string node_structural_key(const std::shared_ptr<SymbolicExpression::Node>&
             key = "DOP(" + node->text + ":" + node_structural_key(node->left) + ")";
             break;
         case NodeType::kRootOf:
-            key = "ROOTOF(" + node->text + ")";
+            key = "ROOTOF(" + node->text + ":" +
+                  std::to_string(static_cast<int>(node->number_value)) + ":";
+            if (!node->children.empty()) {
+                key += node_structural_key(node->children[0]);
+            }
+            key += ")";
             break;
     }
     node->structural_key_cache = key;

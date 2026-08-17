@@ -90,6 +90,10 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                 .simplify();
         }
         case NodeType::kFunction: {
+            if (!node_->children.empty()) {
+                throw std::runtime_error(
+                    "symbolic derivative does not support multi-argument function: " + node_->text);
+            }
             const SymbolicExpression argument(node_->left);
             const SymbolicExpression inner = argument.derivative(variable_name);
             if (node_->text == "asin") {
@@ -178,19 +182,19 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                     .simplify();
             }
             if (node_->text == "erf") {
-                const SymbolicExpression pi_val = SymbolicExpression::variable("pi");
+                const SymbolicExpression pi_val(make_unary(NodeType::kPi, nullptr));
                 const SymbolicExpression exp_part = make_function("exp", make_negate(make_power(argument, SymbolicExpression::number(2.0))));
                 const SymbolicExpression factor = make_divide(SymbolicExpression::number(2.0), make_function("sqrt", pi_val));
                 return make_multiply(make_multiply(factor, exp_part), inner).simplify();
             }
             if (node_->text == "erfc") {
-                const SymbolicExpression pi_val = SymbolicExpression::variable("pi");
+                const SymbolicExpression pi_val(make_unary(NodeType::kPi, nullptr));
                 const SymbolicExpression exp_part = make_function("exp", make_negate(make_power(argument, SymbolicExpression::number(2.0))));
                 const SymbolicExpression factor = make_divide(SymbolicExpression::number(-2.0), make_function("sqrt", pi_val));
                 return make_multiply(make_multiply(factor, exp_part), inner).simplify();
             }
             if (node_->text == "erfi") {
-                const SymbolicExpression pi_val = SymbolicExpression::variable("pi");
+                const SymbolicExpression pi_val(make_unary(NodeType::kPi, nullptr));
                 const SymbolicExpression exp_part = make_function("exp", make_power(argument, SymbolicExpression::number(2.0)));
                 const SymbolicExpression factor = make_divide(SymbolicExpression::number(2.0), make_function("sqrt", pi_val));
                 return make_multiply(make_multiply(factor, exp_part), inner).simplify();
@@ -230,7 +234,7 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
             }
             if (node_->text == "erf") {
                 // d/dx erf(x) = 2/sqrt(pi) * exp(-x^2)
-                const SymbolicExpression pi_val = SymbolicExpression::variable("pi");
+                const SymbolicExpression pi_val(make_unary(NodeType::kPi, nullptr));
                 const SymbolicExpression factor = make_divide(SymbolicExpression::number(2.0), make_function("sqrt", pi_val));
                 const SymbolicExpression exp_part = make_function("exp", make_negate(make_power(argument, SymbolicExpression::number(2.0))));
                 return make_multiply(make_multiply(factor, exp_part), inner).simplify();
@@ -270,4 +274,3 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
 }
 
 }  // namespace symbolic_expression_internal
-

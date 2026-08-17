@@ -36,6 +36,7 @@ void AssumptionEngine::assume(const std::string& variable, Assumption assumption
         integer_vars_.insert(variable);
         real_vars_.insert(variable); // integer implies real
     }
+    ++revision_;
 }
 
 void AssumptionEngine::clear_assumption(const std::string& variable, Assumption assumption) {
@@ -52,6 +53,7 @@ void AssumptionEngine::clear_assumption(const std::string& variable, Assumption 
     } else if (assumption == Assumption::kInteger) {
         integer_vars_.erase(variable);
     }
+    ++revision_;
 }
 
 void AssumptionEngine::clear_variable(const std::string& variable) {
@@ -60,6 +62,7 @@ void AssumptionEngine::clear_variable(const std::string& variable) {
     negative_vars_.erase(variable);
     real_vars_.erase(variable);
     integer_vars_.erase(variable);
+    ++revision_;
 }
 
 void AssumptionEngine::clear_all_assumptions() {
@@ -68,6 +71,7 @@ void AssumptionEngine::clear_all_assumptions() {
     negative_vars_.clear();
     real_vars_.clear();
     integer_vars_.clear();
+    ++revision_;
 }
 
 bool AssumptionEngine::has_assumption(const std::string& variable, Assumption assumption) const {
@@ -82,6 +86,11 @@ bool AssumptionEngine::has_assumption(const std::string& variable, Assumption as
         return integer_vars_.find(variable) != integer_vars_.end();
     }
     return false;
+}
+
+std::uint64_t AssumptionEngine::revision() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return revision_;
 }
 
 std::optional<Assumption> AssumptionEngine::parse_assumption(const std::string& text) {

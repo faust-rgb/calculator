@@ -314,6 +314,13 @@ SymbolicExpression simplify_medium(const SymbolicExpression& expression) {
 
     switch (node->type) {
         case NodeType::kFunction: {
+            if (!node->children.empty()) {
+                std::vector<SymbolicExpression> arguments;
+                for (const auto& child : node->children) {
+                    arguments.push_back(simplify_medium(SymbolicExpression(child)));
+                }
+                return SymbolicExpression::function(node->text, arguments);
+            }
             const SymbolicExpression argument = simplify_medium(SymbolicExpression(node->left));
             Scalar numeric = Scalar(0);
 
@@ -702,6 +709,13 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             return expression;
         
         case NodeType::kFunction: {
+            if (!node->children.empty()) {
+                std::vector<SymbolicExpression> arguments;
+                for (const auto& child : node->children) {
+                    arguments.push_back(SymbolicExpression(child).simplify());
+                }
+                return SymbolicExpression::function(node->text, arguments);
+            }
             const SymbolicExpression argument = SymbolicExpression(node->left).simplify();
             Scalar numeric = Scalar(0);
 
@@ -736,7 +750,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 }
             }
             if (node->text == "exp" && expr_is_one(argument)) {
-                return SymbolicExpression::variable("e");
+                return SymbolicExpression(make_unary(NodeType::kE, nullptr));
             }
 
             if (argument.is_number(&numeric)) {
@@ -792,7 +806,10 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 }
             }
 
-            if (node->text == "ln" && expr_is_variable(argument, "e")) return SymbolicExpression::number(Scalar(1));
+            if (node->text == "ln" &&
+                (expr_is_variable(argument, "e") || argument.node_->type == NodeType::kE)) {
+                return SymbolicExpression::number(Scalar(1));
+            }
             // exp(ln(x)) → x (ln domain implies x > 0)
             if (node->text == "exp" && argument.node_->type == NodeType::kFunction && argument.node_->text == "ln") {
                 return SymbolicExpression(argument.node_->left).simplify();
@@ -863,7 +880,8 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 if (is_known_negative_expression(argument)) {
                     return make_add(
                         make_function("ln", make_negate(argument).simplify()),
-                        make_multiply(SymbolicExpression::variable("i"), SymbolicExpression::variable("pi"))
+                        make_multiply(SymbolicExpression::variable("i"),
+                                      SymbolicExpression(make_unary(NodeType::kPi, nullptr)))
                     ).simplify();
                 }
             }
@@ -871,7 +889,9 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 Scalar val;
                 if (argument.is_number(&val)) {
                     if (mymath::abs(val - Scalar(1)) < Scalar(app::integer_tolerance())) return SymbolicExpression::number(Scalar(1));
-                    if (mymath::abs(val - Scalar(0.5L)) < Scalar(app::integer_tolerance())) return (make_function("sqrt", SymbolicExpression::variable("pi"))).simplify();
+                    if (mymath::abs(val - Scalar(0.5L)) < Scalar(app::integer_tolerance())) {
+                        return make_function("sqrt", SymbolicExpression(make_unary(NodeType::kPi, nullptr))).simplify();
+                    }
                     if (mymath::abs(val - Scalar(2)) < Scalar(app::integer_tolerance())) return SymbolicExpression::number(Scalar(1));
                 }
             }
@@ -1028,7 +1048,10 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 left.node_->text == "ln" && right.node_->text == "ln") {
                 SymbolicExpression left_arg_ln(left.node_->left);
                 SymbolicExpression right_arg_ln(right.node_->left);
-                return make_function("ln", make_multiply(left_arg_ln, right_arg_ln)).simplify();
+                if (is_known_positive_expression(left_arg_ln) &&
+                    is_known_positive_expression(right_arg_ln)) {
+                    return make_function("ln", make_multiply(left_arg_ln, right_arg_ln)).simplify();
+                }
             }
             {
                 SymbolicExpression combined;
@@ -1327,6 +1350,13 @@ SymbolicExpression expand_impl(const SymbolicExpression& expression) {
         case NodeType::kInfinity:
             return expression;
         case NodeType::kFunction:
+            if (!node->children.empty()) {
+                std::vector<SymbolicExpression> arguments;
+                for (const auto& child : node->children) {
+                    arguments.push_back(expand_impl(SymbolicExpression(child)));
+                }
+                return SymbolicExpression::function(node->text, arguments);
+            }
             return make_function(node->text, expand_impl(SymbolicExpression(node->left))).simplify();
         case NodeType::kNegate:
             return make_negate(expand_impl(SymbolicExpression(node->left))).simplify();
