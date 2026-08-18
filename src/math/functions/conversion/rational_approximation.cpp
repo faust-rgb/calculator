@@ -1,8 +1,7 @@
 #include "math/functions/conversion/rational_approximation.h"
 
-#include "math/functions/integer/gcd.h"
+#include "math/functions/integer/integer_helpers.h"
 #include "math/functions/scalar/basic_ops.h"
-#include "math/functions/long_double/basic_ops.h"
 #include "math/numeric/precision/predicates.h"
 
 namespace mymath {

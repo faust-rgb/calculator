@@ -6,11 +6,9 @@
 #include "special_functions.h"
 #include "math/numeric/constants/numeric.h"
 #include "math/functions/scalar/basic_ops.h"
-#include "math/functions/long_double/basic_ops.h"
 #include "math/numeric/precision/predicates.h"
-#include "math/functions/elementary/roots_powers.h"
-#include "math/functions/elementary/transcendental.h"
 #include "math/numeric/precision/tolerances.h"
+#include "statistics/probability.h"
 #include <stdexcept>
 #include <sstream>
 #include <iomanip>
@@ -30,14 +28,6 @@ inline void compensated_add_series(T value, T* sum, T* compensation) {
     const T next = *sum + adjusted;
     *compensation = (next - *sum) - adjusted;
     *sum = next;
-}
-
-long double log_gamma_positive(long double x) {
-    if (x <= 0.0L) {
-        throw std::domain_error("log-gamma is only defined for positive inputs");
-    }
-    Scalar result = log_gamma_positive(Scalar(x));
-    return static_cast<long double>(result);
 }
 
 Scalar log_gamma_positive(Scalar x) {
@@ -71,16 +61,6 @@ Scalar log_gamma_positive(Scalar x) {
     return Scalar(0.5L) * mymath::ln(two_pi_val) + (z + Scalar(0.5L)) * mymath::ln(t) - t + mymath::ln(series);
 }
 
-long double finite_or_infinity_from_log(long double log_value) {
-    if (log_value >= kLnDoubleMax) {
-        return infinity();
-    }
-    if (log_value <= -11356.52340629414394949L) { // Approximately kLnDoubleDenormMin but safer for underflow
-        return 0.0L;
-    }
-    return exp(log_value);
-}
-
 Scalar finite_or_infinity_from_log(Scalar log_value) {
     if (log_value >= Scalar(kLnDoubleMax)) {
         return Scalar(infinity());
@@ -98,81 +78,43 @@ Scalar finite_or_infinity_from_log(Scalar log_value) {
 using internal::finite_or_infinity_from_log;
 using internal::log_gamma_positive;
 
+Scalar combination_scalar(long long n, long long r) {
+    if (n < 0 || r < 0 || r > n) throw std::runtime_error("combination requires 0 <= r <= n");
+    if (n > 170) throw std::runtime_error("nCr is limited to n <= 170 to avoid overflow");
+    return prob::nCr(Scalar(static_cast<long long>(n)), Scalar(static_cast<long long>(r)));
+}
+
+Scalar fibonacci_scalar(long long n) {
+    if (n < 0) throw std::runtime_error("fib only accepts non-negative integers");
+    if (n > 10000) throw std::runtime_error("fib is limited to n <= 10000 to avoid excessive computation");
+    if (n == 0) return Scalar(0);
+    if (n == 1) return Scalar(1);
+
+    Scalar a = Scalar(0);
+    Scalar b = Scalar(1);
+    for (long long i = 2; i <= n; ++i) {
+        const Scalar next = a + b;
+        a = b;
+        b = next;
+    }
+    return b;
+}
+
+Scalar factorial_scalar(long long n) {
+    if (n < 0) throw std::runtime_error("factorial only accepts non-negative integers");
+    if (n > 170) throw std::runtime_error("factorial is limited to n <= 170 to avoid overflow");
+    return prob::factorial(Scalar(static_cast<long long>(n)));
+}
+
+Scalar permutation_scalar(long long n, long long r) {
+    if (n < 0 || r < 0 || r > n) throw std::runtime_error("permutation requires 0 <= r <= n");
+    if (n > 170) throw std::runtime_error("nPr is limited to n <= 170 to avoid overflow");
+    return prob::nPr(Scalar(static_cast<long long>(n)), Scalar(static_cast<long long>(r)));
+}
+
 // ============================================================================
 // Gamma Functions
 // ============================================================================
-
-long double gamma(long double x) {
-    if (is_integer(x) && x <= 0.0L) {
-        throw std::domain_error("gamma is undefined for non-positive integers");
-    }
-
-    if (x < 0.5L) {
-        const Scalar reflected_sine = mymath::sin(mymath::pi() * Scalar(x));
-        if (mymath::abs(reflected_sine) < Scalar(1e-12L)) {
-            throw std::domain_error("gamma is undefined at this input");
-        }
-        return static_cast<long double>(mymath::pi() / (reflected_sine * gamma(Scalar(1.0L) - Scalar(x))));
-    }
-    return static_cast<long double>(finite_or_infinity_from_log(log_gamma_positive(Scalar(x))));
-}
-
-long double lgamma(long double x) {
-    if (x <= 0.0L && is_integer(x)) {
-        throw std::domain_error("lgamma is undefined for non-positive integers");
-    }
-
-    if (x > 0.0L) {
-        return static_cast<long double>(log_gamma_positive(Scalar(x)));
-    }
-
-    const Scalar reflected_sine = mymath::sin(mymath::pi() * Scalar(x));
-    if (mymath::abs(reflected_sine) < Scalar(1e-12L)) {
-        throw std::domain_error("lgamma is undefined at this input");
-    }
-    return static_cast<long double>(mymath::ln(mymath::pi()) - mymath::ln(mymath::abs(reflected_sine)) - log_gamma_positive(Scalar(1.0L) - Scalar(x)));
-}
-
-long double inc_gamma(long double a, long double x) {
-    if (x <= 0.0L) return 0.0L;
-    if (a <= 0.0L) return 1.0L;
-
-    const Scalar a_s = Scalar(a);
-    const Scalar x_s = Scalar(x);
-
-    const Scalar log_ax = a_s * mymath::ln(x_s) - x_s - log_gamma_positive(a_s);
-    const Scalar prefix = finite_or_infinity_from_log(log_ax);
-
-    if (x < a + 1.0L) {
-        Scalar sum = Scalar(1.0L) / a_s;
-        Scalar term = sum;
-        for (int n = 1; n < 200; ++n) {
-            term *= x_s / (a_s + Scalar(static_cast<long double>(n)));
-            sum += term;
-            if (mymath::abs(term) < mymath::abs(sum) * 1e-35L) break;
-        }
-        return static_cast<long double>(sum * prefix);
-    } else {
-        const Scalar tiny = Scalar(1e-30L);
-        Scalar b = x_s + Scalar(1.0L) - a_s;
-        Scalar c = Scalar(1.0L) / tiny;
-        Scalar d = Scalar(1.0L) / b;
-        Scalar h = d;
-        for (int i = 1; i < 200; ++i) {
-            Scalar an = -Scalar(static_cast<long double>(i)) * (Scalar(static_cast<long double>(i)) - a_s);
-            b += Scalar(2.0L);
-            d = an * d + b;
-            if (mymath::abs(d) < tiny) d = tiny;
-            c = b + an / c;
-            if (mymath::abs(c) < tiny) c = tiny;
-            d = Scalar(1.0L) / d;
-            Scalar delta = c * d;
-            h *= delta;
-            if (mymath::abs(delta - Scalar(1.0L)) < Scalar(1e-35L)) break;
-        }
-        return static_cast<long double>(Scalar(1.0L) - h * prefix);
-    }
-}
 
 Scalar gamma(Scalar x) {
     if (is_integer(x) && x <= Scalar(0.0L)) {
@@ -249,65 +191,6 @@ Scalar inc_gamma(Scalar a, Scalar x) {
 // Beta Functions
 // ============================================================================
 
-long double beta(long double a, long double b) {
-    if (a <= 0.0L || b <= 0.0L) {
-        throw std::domain_error("beta is only defined for positive inputs");
-    }
-    const Scalar a_s = Scalar(a);
-    const Scalar b_s = Scalar(b);
-    return static_cast<long double>(finite_or_infinity_from_log(
-        log_gamma_positive(a_s) +
-        log_gamma_positive(b_s) -
-        log_gamma_positive(a_s + b_s)));
-}
-
-long double inc_beta(long double a, long double b, long double x) {
-    if (x <= 0.0L) return 0.0L;
-    if (x >= 1.0L) return 1.0L;
-
-    const Scalar a_s = Scalar(a);
-    const Scalar b_s = Scalar(b);
-    const Scalar x_s = Scalar(x);
-
-    if (x > (a + 1.0L) / (a + b + 2.0L)) {
-        return 1.0L - inc_beta(b, a, 1.0L - x);
-    }
-
-    const Scalar log_beta = log_gamma_positive(a_s) + log_gamma_positive(b_s) - log_gamma_positive(a_s + b_s);
-    const Scalar prefix = mymath::exp(a_s * mymath::ln(x_s) + b_s * mymath::ln(Scalar(1.0L) - x_s) - log_beta) / a_s;
-
-    const Scalar tiny = Scalar(1e-30L);
-    Scalar h = Scalar(1.0L);
-    Scalar c = h;
-    Scalar d = Scalar(0.0L);
-
-    for (int m = 1; m <= 200; ++m) {
-        Scalar m_d = Scalar(static_cast<long double>(m));
-        Scalar num = m_d * (b_s - m_d) * x_s / ((a_s + Scalar(2.0L) * m_d - Scalar(1.0L)) * (a_s + Scalar(2.0L) * m_d));
-
-        d = Scalar(1.0L) + num * d;
-        if (mymath::abs(d) < tiny) d = tiny;
-        c = Scalar(1.0L) + num / c;
-        if (mymath::abs(c) < tiny) c = tiny;
-        d = Scalar(1.0L) / d;
-        h *= c * d;
-
-        num = -(a_s + m_d) * (a_s + b_s + m_d) * x_s / ((a_s + Scalar(2.0L) * m_d) * (a_s + Scalar(2.0L) * m_d + Scalar(1.0L)));
-
-        d = Scalar(1.0L) + num * d;
-        if (mymath::abs(d) < tiny) d = tiny;
-        c = Scalar(1.0L) + num / c;
-        if (mymath::abs(c) < tiny) c = tiny;
-        d = Scalar(1.0L) / d;
-        Scalar delta = c * d;
-        h *= delta;
-
-        if (mymath::abs(delta - Scalar(1.0L)) < Scalar(1e-35L)) break;
-    }
-
-    return static_cast<long double>(prefix * h);
-}
-
 Scalar beta(Scalar a, Scalar b) {
     if (a <= Scalar(0.0L) || b <= Scalar(0.0L)) {
         throw std::domain_error("beta is only defined for positive inputs");
@@ -364,33 +247,6 @@ Scalar inc_beta(Scalar a, Scalar b, Scalar x) {
 // Error Functions and Zeta Function
 // ============================================================================
 
-long double erf(long double x) {
-    if (x < 0.0L) {
-        return -erf(-x);
-    }
-
-    if (x > 2.5L) {
-        return 1.0L - erfc(x);
-    }
-
-    const Scalar x_s = Scalar(x);
-    Scalar sum = Scalar(0.0L);
-    Scalar term = x_s;
-    Scalar factorial = Scalar(1.0L);
-    for (int n = 0; n < 80; ++n) {
-        const Scalar denominator = factorial * Scalar(static_cast<long double>(2 * n + 1));
-        const Scalar add = term / denominator;
-        sum += (n % 2 == 0 ? add : -add);
-        if (mymath::abs(add) < Scalar(1e-35L)) {
-            break;
-        }
-        term *= x_s * x_s;
-        factorial *= Scalar(static_cast<long double>(n + 1));
-    }
-    Scalar sqrt_pi = mymath::sqrt(mymath::pi());
-    return static_cast<long double>(Scalar(2.0L) * sum / sqrt_pi);
-}
-
 Scalar erf(Scalar x) {
     if (x < Scalar(0.0L)) {
         return -erf(-x);
@@ -415,34 +271,6 @@ Scalar erf(Scalar x) {
     }
     Scalar sqrt_pi = mymath::sqrt(mymath::pi());
     return Scalar(2.0L) * sum / sqrt_pi;
-}
-
-long double erfc(long double x) {
-    if (x < 0.0L) {
-        return 2.0L - erfc(-x);
-    }
-
-    if (x < 2.5L) {
-        return 1.0L - erf(x);
-    }
-
-    // 对于大 x，使用渐近展开以获得更高精度
-    const Scalar x_s = Scalar(x);
-    Scalar x2 = x_s * x_s;
-    Scalar inv_x2 = Scalar(1.0L) / x2;
-
-    Scalar sum = Scalar(1.0L);
-    Scalar term = Scalar(1.0L);
-    Scalar compensation = Scalar(0.0L);
-
-    for (int n = 1; n <= 30; ++n) {
-        term *= -Scalar(static_cast<long double>(2 * n - 1)) * inv_x2 * Scalar(0.5L);
-        internal::compensated_add_series(term, &sum, &compensation);
-        if (mymath::abs(term) < precision::series_convergence_threshold<Scalar>()) break;
-    }
-
-    Scalar result = sum * mymath::exp(-x2) / (x_s * mymath::sqrt(mymath::pi()));
-    return static_cast<long double>(result);
 }
 
 Scalar erfc(Scalar x) {
@@ -472,76 +300,6 @@ Scalar erfc(Scalar x) {
     }
 
     return sum * mymath::exp(-x2) / (x * mymath::sqrt(mymath::pi()));
-}
-
-long double zeta(long double s) {
-    if (is_near_zero(s - 1.0L, 1e-13L)) {
-        throw std::domain_error("zeta is undefined at s = 1");
-    }
-
-    if (s < 0.0L) {
-        if (is_integer(s)) {
-            long long int_s = static_cast<long long>(mymath::round(s));
-            if (int_s % 2 == 0) {
-                return 0.0L;
-            }
-        }
-        const Scalar s_s = Scalar(s);
-        Scalar two_pow_s = mymath::pow(Scalar(2.0L), s_s);
-        Scalar pi_pow_s_minus_1 = mymath::pow(mymath::pi(), s_s - Scalar(1.0L));
-        Scalar sin_term = mymath::sin(mymath::pi() * s_s * Scalar(0.5L));
-        Scalar gamma_term = gamma(static_cast<long double>(Scalar(1.0L) - s_s));
-        Scalar zeta_term = zeta(static_cast<long double>(Scalar(1.0L) - s_s));
-        Scalar result = two_pow_s * pi_pow_s_minus_1 * sin_term * gamma_term * zeta_term;
-        return static_cast<long double>(result);
-    }
-
-    if (is_near_zero(s)) {
-        return -0.5L;
-    }
-
-    static constexpr long double kBernoulli[] = {
-        1.0L / 6.0L, -1.0L / 30.0L, 1.0L / 42.0L, -1.0L / 30.0L,
-        5.0L / 66.0L, -691.0L / 2730.0L, 7.0L / 6.0L, -3617.0L / 510.0L,
-        43867.0L / 798.0L, -174611.0L / 330.0L, 854513.0L / 138.0L,
-        -236364091.0L / 2730.0L, 8553103.0L / 6.0L, -23749461029.0L / 870.0L,
-        8615841276005.0L / 14322.0L, -7709321041217.0L / 510.0L,
-    };
-    constexpr int kEulerMaclaurinTerms = 16;
-    constexpr int kEulerMaclaurinN = 32;
-
-    const Scalar s_s = Scalar(s);
-    Scalar total = Scalar(0.0L);
-    for (int n = 1; n < kEulerMaclaurinN; ++n) {
-        Scalar n_val(static_cast<long long>(n));
-        total += Scalar(1.0L) / mymath::pow(n_val, s_s);
-    }
-
-    const Scalar n_ld(static_cast<long long>(kEulerMaclaurinN));
-    total += mymath::pow(n_ld, Scalar(1.0L) - s_s) / (s_s - Scalar(1.0L));
-    total += Scalar(0.5L) / mymath::pow(n_ld, s_s);
-
-    Scalar rising = s_s;
-    Scalar factorial = Scalar(2.0L);
-    Scalar last_abs_term = Scalar(1e300L);
-    for (int k = 1; k <= kEulerMaclaurinTerms; ++k) {
-        if (k > 1) {
-            rising *= (s_s + Scalar(static_cast<long long>(2 * k - 3))) *
-                      (s_s + Scalar(static_cast<long long>(2 * k - 2)));
-            factorial *= Scalar(static_cast<long long>(2 * k - 1)) *
-                         Scalar(static_cast<long long>(2 * k));
-        }
-        Scalar term = Scalar(kBernoulli[k - 1]) * rising / factorial /
-                     mymath::pow(n_ld, s_s + Scalar(static_cast<long long>(2 * k - 1)));
-        Scalar abs_term = mymath::abs(term);
-        if (k > 1 && abs_term > last_abs_term) {
-            break; // Term energy growing in asymptotic expansion
-        }
-        last_abs_term = abs_term;
-        total += term;
-        if (abs_term < Scalar(1e-35L)) break;
-    }
-    return static_cast<long double>(total);
 }
 
 Scalar zeta(Scalar s) {
@@ -625,48 +383,6 @@ Scalar zeta(Scalar s) {
 // ============================================================================
 // Bessel Functions
 // ============================================================================
-
-long double bessel_j(int order, long double x) {
-    if (order < 0) {
-        const long double value = bessel_j(-order, x);
-        return ((-order) % 2 == 0) ? value : -value;
-    }
-
-    if (x < 0.0L) {
-        const long double value = bessel_j(order, -x);
-        return (order % 2 == 0) ? value : -value;
-    }
-
-    if (is_near_zero(x)) {
-        return order == 0 ? 1.0L : 0.0L;
-    }
-
-    const Scalar abs_x = mymath::abs(Scalar(x));
-    if (abs_x > Scalar(50.0L)) {
-        const Scalar phase =
-            abs_x - Scalar(static_cast<long double>(order)) * mymath::pi() * Scalar(0.5L) - mymath::pi() * Scalar(0.25L);
-        const Scalar asymptotic =
-            mymath::sqrt(Scalar(2.0L) / (mymath::pi() * abs_x)) * mymath::cos(phase);
-        return (x < 0.0L && order % 2 != 0) ? -static_cast<long double>(asymptotic) : static_cast<long double>(asymptotic);
-    }
-
-    Scalar sum = Scalar(0.0L);
-    const Scalar half_x = Scalar(x) * Scalar(0.5L);
-    Scalar term = mymath::exp(Scalar(static_cast<long double>(order)) * mymath::ln(half_x)) /
-                  internal::finite_or_infinity_from_log(
-                      internal::log_gamma_positive(Scalar(static_cast<long double>(order + 1))));
-    for (int k = 0; k < 200; ++k) {
-        const Scalar add = term;
-        sum += add;
-        if (mymath::abs(add) <= Scalar(1e-35L) * (Scalar(1.0L) + mymath::abs(sum))) {
-            break;
-        }
-        term *= -(half_x * half_x) /
-                (Scalar(static_cast<long double>(k + 1)) *
-                 Scalar(static_cast<long double>(k + order + 1)));
-    }
-    return static_cast<long double>(sum);
-}
 
 Scalar bessel_j(int order, Scalar x) {
     if (order < 0) {

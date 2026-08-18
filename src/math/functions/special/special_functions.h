@@ -13,6 +13,15 @@
 
 namespace mymath {
 
+/**
+ * @brief 计算组合数 C(n, r)
+ */
+Scalar combination_scalar(long long n, long long r);
+
+Scalar fibonacci_scalar(long long n);
+Scalar factorial_scalar(long long n);
+Scalar permutation_scalar(long long n, long long r);
+
 // ============================================================================
 // Internal Helper Functions
 // ============================================================================
@@ -22,20 +31,10 @@ namespace internal {
 /**
  * @brief Calculate log gamma ln(Γ(x)) for x > 0
  */
-long double log_gamma_positive(long double x);
-
-/**
- * @brief Scalar version of log gamma
- */
 Scalar log_gamma_positive(Scalar x);
 
 /**
  * @brief Convert log value to finite value or infinity
- */
-long double finite_or_infinity_from_log(long double log_value);
-
-/**
- * @brief Scalar version of finite_or_infinity_from_log
  */
 Scalar finite_or_infinity_from_log(Scalar log_value);
 
@@ -48,21 +47,17 @@ Scalar finite_or_infinity_from_log(Scalar log_value);
 /**
  * @brief Calculate gamma function Γ(x)
  */
-long double gamma(long double x);
+Scalar gamma(Scalar x);
 
 /**
  * @brief Calculate log gamma ln(Γ(x))
  */
-long double lgamma(long double x);
+Scalar lgamma(Scalar x);
 
 /**
  * @brief Calculate regularized lower incomplete gamma function P(a, x)
  */
-long double inc_gamma(long double a, long double x);
 
-// Scalar overloads
-Scalar gamma(Scalar x);
-Scalar lgamma(Scalar x);
 Scalar inc_gamma(Scalar a, Scalar x);
 
 // ============================================================================
@@ -72,15 +67,12 @@ Scalar inc_gamma(Scalar a, Scalar x);
 /**
  * @brief Calculate beta function B(a, b)
  */
-long double beta(long double a, long double b);
+Scalar beta(Scalar a, Scalar b);
 
 /**
  * @brief Calculate regularized incomplete beta function I_x(a, b)
  */
-long double inc_beta(long double a, long double b, long double x);
 
-// Scalar overloads
-Scalar beta(Scalar a, Scalar b);
 Scalar inc_beta(Scalar a, Scalar b, Scalar x);
 
 // ============================================================================
@@ -90,21 +82,17 @@ Scalar inc_beta(Scalar a, Scalar b, Scalar x);
 /**
  * @brief Calculate error function erf(x)
  */
-long double erf(long double x);
+Scalar erf(Scalar x);
 
 /**
  * @brief Calculate complementary error function erfc(x)
  */
-long double erfc(long double x);
+Scalar erfc(Scalar x);
 
 /**
  * @brief Calculate Riemann zeta function (real input)
  */
-long double zeta(long double s);
 
-// Scalar overloads
-Scalar erf(Scalar x);
-Scalar erfc(Scalar x);
 Scalar zeta(Scalar s);
 
 // ============================================================================
@@ -114,9 +102,7 @@ Scalar zeta(Scalar s);
 /**
  * @brief Calculate Bessel function of the first kind J_n(x)
  */
-long double bessel_j(int order, long double x);
 
-// Scalar overload
 Scalar bessel_j(int order, Scalar x);
 
 }  // namespace mymath

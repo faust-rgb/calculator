@@ -105,6 +105,10 @@ StatisticsModule::get_functions_map() const {
     };
     funcs["percentile"] = [wrap_scalar](const std::vector<StoredValue>& args) {
         if (args.size() < 2) throw std::runtime_error("percentile expects percentage and data");
+        if (!args[0].is_scalar() && args[1].is_scalar()) {
+            std::vector<Scalar> data = stats_ops::extract_vector(args[0]);
+            return wrap_scalar(stats::percentile(data, args[1].get_decimal()));
+        }
         std::vector<Scalar> data;
         for (std::size_t i = 1; i < args.size(); ++i) {
             auto v = stats_ops::extract_vector(args[i]);
@@ -114,6 +118,12 @@ StatisticsModule::get_functions_map() const {
     };
     funcs["quartile"] = [wrap_scalar](const std::vector<StoredValue>& args) {
         if (args.size() < 2) throw std::runtime_error("quartile expects q and data");
+        if (!args[0].is_scalar() && args[1].is_scalar()) {
+            if (!is_integer_double(static_cast<long double>(args[1].get_decimal())))
+                throw std::runtime_error("quartile q must be an integer");
+            return wrap_scalar(stats::quartile(stats_ops::extract_vector(args[0]),
+                                               static_cast<int>(round_to_long_long(args[1].get_decimal()))));
+        }
         if (!is_integer_double(static_cast<long double>(args[0].decimal)))
             throw std::runtime_error("quartile q must be an integer");
         std::vector<Scalar> data;

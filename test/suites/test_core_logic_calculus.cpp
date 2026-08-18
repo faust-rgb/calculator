@@ -32,7 +32,7 @@ int run_logic_calculus_tests(int& passed, int& failed) {
     // 测试自定义函数求值
     try {
         const auto actual = calculator.evaluate("f(2)");
-        const auto expected = mymath::sin(2.0) + 4.0;
+        const auto expected = mymath::sin(Scalar(2.0)) + 4.0;
         if (nearly_equal(actual, expected, 1e-7)) {
             ++passed;
         } else {

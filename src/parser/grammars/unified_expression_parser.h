@@ -27,7 +27,7 @@
 #define PARSER_UNIFIED_EXPRESSION_PARSER_H
 
 #include "parser/lexer/token_types.h"
-#include "math/numeric/exact/rational.h"
+#include "math/numeric/rational/rational.h"
 #include "core/value/stored_value.h"
 #include "matrix.h"
 #include "core/services/format_utils.h"
@@ -35,6 +35,8 @@
 #include <map>
 #include <functional>
 #include <memory>
+
+namespace core { class ExecutionContext; }
 
 // 前向声明
 class VariableResolver;
@@ -78,7 +80,8 @@ public:
         const std::map<std::string, matrix::ValueFunction>* value_functions = nullptr,
         const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions = nullptr,
         HasScriptFunctionCallback has_script_function = {},
-        InvokeScriptFunctionCallback invoke_script_function = {});
+        InvokeScriptFunctionCallback invoke_script_function = {},
+        core::ExecutionContext* execution_context = nullptr);
 
     /**
      * @brief 析构函数
@@ -162,6 +165,7 @@ private:
     const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions_;
     HasScriptFunctionCallback has_script_function_;
     InvokeScriptFunctionCallback invoke_script_function_;
+    core::ExecutionContext* execution_context_ = nullptr;
 
     std::unique_ptr<UnifiedParserFactory> factory_;
 

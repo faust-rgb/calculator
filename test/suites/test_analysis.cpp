@@ -58,7 +58,7 @@ int run_analysis_tests(int& passed, int& failed) {
         FunctionAnalysis function("x");
         function.define("sin(x) + x ^ 2");
         const auto actual = function.evaluate(2.0);
-        const auto expected = mymath::sin(2.0) + 4.0;
+        const auto expected = mymath::sin(Scalar(2.0)) + 4.0;
         if (nearly_equal(actual, expected, 1e-7)) {
             ++passed;
         } else {
@@ -111,7 +111,7 @@ int run_analysis_tests(int& passed, int& failed) {
         FunctionAnalysis function("x");
         function.define("exp(x)");
         const auto actual = function.derivative(2.0);
-        if (nearly_equal(actual, mymath::exp(2.0), 1e-7)) {
+        if (nearly_equal(actual, mymath::exp(Scalar(2.0)), 1e-7)) {
             ++passed;
         } else {
             ++failed;
@@ -383,7 +383,7 @@ int run_analysis_tests(int& passed, int& failed) {
             return y - x * x + 1.0L;
         });
         const auto actual = solver.solve(0.0L, 0.5, 2.0, 20);
-        const auto expected = 9.0 - 0.5 * mymath::exp(2.0);
+        const auto expected = 9.0 - 0.5 * mymath::exp(Scalar(2.0));
         if (nearly_equal(actual, expected, 1e-4)) {
             ++passed;
         } else {
@@ -403,7 +403,7 @@ int run_analysis_tests(int& passed, int& failed) {
             return y;
         });
         const auto actual = solver.solve(0.0L, 1.0L, 1.0L, 100);
-        if (nearly_equal(actual, mymath::exp(1.0L), 1e-6)) {
+        if (nearly_equal(actual, mymath::exp(Scalar(1.0L)), 1e-6)) {
             ++passed;
         } else {
             ++failed;

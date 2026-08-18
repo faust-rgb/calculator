@@ -13,7 +13,6 @@
 #include "core/services/service_registry.h"
 #include "core/api/calculator_impl.h"
 #include "math/functions/integer/integer_helpers.h"
-#include "math/functions/combinatorics/combinatorics.h"
 #include "math/functions/integer/bitwise_helpers.h"
 #include "math/functions/conversion/unit_conversions.h"
 #include "math/functions/conversion/base_conversions.h"
@@ -100,27 +99,19 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
     s.evaluation.build_matrix_evaluator = [impl](const std::string& arg) {
         const std::string scoped_expression = trim_copy(impl->expand_inline(arg));
         return [impl, scoped_expression](const std::vector<std::pair<std::string, StoredValue>>& assignments) {
-            std::map<std::string, StoredValue> scoped_variables = impl->variables_ptr->get_all_globals();
+            impl->variables_ptr->push_scope();
             for (const auto& [name, value] : assignments) {
-                scoped_variables[name] = value;
+                impl->variables_ptr->set_local(name, value);
             }
-            const HasScriptFunctionCallback has_script_function = [impl](const std::string& name) {
-                return impl->functions_ptr->get_script(name) != nullptr;
-            };
-            const InvokeScriptFunctionDecimalCallback invoke_script_function = [impl](const std::string& name, const std::vector<Scalar>& args) {
-                return invoke_script_function_decimal(impl, name, args);
-            };
-            matrix::Value val;
-            if (!try_evaluate_matrix_expression(scoped_expression,
-                    VariableResolver(&scoped_variables, nullptr),
-                    impl->functions_ptr->get_custom_functions_map(),
-                    nullptr,
-                    nullptr,
-                    impl->functions_ptr->get_native_functions(),
-                    has_script_function, invoke_script_function, &val) || !val.is_matrix) {
-                throw std::runtime_error("expected a matrix-valued expression");
+            try {
+                const StoredValue val = evaluate_expression_value(impl, scoped_expression, false);
+                impl->variables_ptr->pop_scope();
+                if (!val.is_matrix) throw std::runtime_error("expected a matrix-valued expression");
+                return *val.matrix_ptr;
+            } catch (...) {
+                impl->variables_ptr->pop_scope();
+                throw;
             }
-            return val.matrix;
         };
     };
 
@@ -191,20 +182,11 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
     };
 
     s.is_matrix_argument = [impl](const std::string& arg) {
-        const VariableResolver visible = impl->variables_ptr->create_resolver();
-        const HasScriptFunctionCallback has_script_function = [impl](const std::string& name) {
-            return impl->functions_ptr->get_script(name) != nullptr;
-        };
-        const InvokeScriptFunctionDecimalCallback invoke_script_function = [impl](const std::string& name, const std::vector<Scalar>& args) {
-            return invoke_script_function_decimal(impl, name, args);
-        };
-        matrix::Value value;
-        return try_evaluate_matrix_expression(trim_copy(arg), visible,
-            impl->functions_ptr->get_custom_functions_map(),
-            nullptr,
-            nullptr,
-            impl->functions_ptr->get_native_functions(),
-            has_script_function, invoke_script_function, &value) && value.is_matrix;
+        try {
+            return static_cast<bool>(evaluate_expression_value(impl, trim_copy(arg), false).is_matrix);
+        } catch (...) {
+            return false;
+        }
     };
 
     s.parse_matrix_argument = [impl](const std::string& arg, const std::string& c) {

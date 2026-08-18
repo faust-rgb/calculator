@@ -10,7 +10,6 @@
 #include "math/mymath.h"
 #include "math/functions/integer/integer_helpers.h"
 #include "math/functions/conversion/unit_conversions.h"
-#include "math/functions/combinatorics/combinatorics.h"
 #include "core/common/calculator_exceptions.h"
 #include "core/types/module_types.h"
 #include "core/services/string_utils.h"

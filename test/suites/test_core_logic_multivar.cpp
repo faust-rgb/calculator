@@ -327,7 +327,7 @@ int run_logic_multivar_tests(int& passed, int& failed) {
         const bool handled =
             calculator.try_process_function_command("integral(f, 0, 1)", &output);
         const long double expected =
-            1.0L - mymath::cos(1.0L) + 1.0L / 3.0;
+            1.0L - mymath::cos(Scalar(1.0L)).to_long_double() + 1.0L / 3.0;
         if (handled && nearly_equal(calculator.evaluate(output), expected, 1e-5)) {
             ++passed;
         } else {
@@ -346,7 +346,7 @@ int run_logic_multivar_tests(int& passed, int& failed) {
         const bool handled =
             calculator.try_process_function_command("integral(f, 1)", &output);
         const long double expected =
-            1.0L - mymath::cos(1.0L) + 1.0L / 3.0;
+            1.0L - mymath::cos(Scalar(1.0L)).to_long_double() + 1.0L / 3.0;
         if (handled && nearly_equal(calculator.evaluate(output), expected, 1e-5)) {
             ++passed;
         } else {

@@ -13,11 +13,13 @@
 #include <istream>
 #include <ostream>
 #include <type_traits>
+#include "scalar/basic_ops.h"
 
 namespace mymath {
 
 // Forward declarations of functions used in this file
 // These are defined in math/numeric/scalar/core/ and math/functions/elementary/
+#if 0
 long double abs(long double x);
 Scalar abs(Scalar x);
 long double sqrt(long double x);
@@ -44,7 +46,7 @@ bool isinf(long double x);
 bool isinf(Scalar x);
 long double infinity();
 long double quiet_nan();
-
+#endif
 // Helper to check if a type is arithmetic or float128_t
 template <typename T>
 struct is_numeric : std::is_arithmetic<T> {};

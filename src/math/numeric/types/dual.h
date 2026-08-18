@@ -260,11 +260,6 @@ std::ostream& operator<<(std::ostream& os, const dual<T>& d) {
     return os << '(' << d.value() << ',' << d.derivative() << ')';
 }
 
-// Type aliases
-using dual_float = dual<float>;
-using dual_double = dual<long double>;
-using dual_long_double = dual<long double>;
-
 }  // namespace mymath
 
 #endif // MATH_TYPES_DUAL_H

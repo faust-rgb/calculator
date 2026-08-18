@@ -11,6 +11,16 @@
 #include <string>
 #include "types/scalar_type.h"
 
+namespace mymath {
+
+int abs(int x);
+long abs(long x);
+long long abs(long long x);
+
+long long gcd(long long a, long long b);
+
+}  // namespace mymath
+
 /**
  * @brief 计算两个整数的最大公约数（GCD）
  * @param a 第一个整数

@@ -158,7 +158,7 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
         const bool handled =
             calculator.try_process_function_command(
                 "ode(y - x ^ 2 + 1, 0, 0.5, 2, 20)", &output);
-        const long double expected = 9.0 - 0.5 * mymath::exp(2.0);
+        const long double expected = 9.0 - 0.5 * (mymath::exp(Scalar(2.0)).to_long_double());
         if (handled && nearly_equal(calculator.evaluate(output), expected, 1e-4)) {
             ++passed;
         } else {
@@ -179,7 +179,7 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
         const auto end_y = calculator.evaluate("get(traj, 4, 1)");
         if (assigned.find("traj = [[0, 1]") == 0 &&
             nearly_equal(end_x, 1.0L, 1e-8) &&
-            nearly_equal(end_y, mymath::exp(1.0L), 3e-3)) {
+            nearly_equal(end_y, mymath::exp(Scalar(1.0L)), 3e-3)) {
             ++passed;
         } else {
             ++failed;
@@ -260,7 +260,7 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
             calculator.try_process_function_command(
                 "ode(p1 * y, 0, 1, 1, 60, mat(1, 1, 2))",
                 &output);
-        if (handled && nearly_equal(calculator.evaluate(output), mymath::exp(2.0), 2e-3)) {
+        if (handled && nearly_equal(calculator.evaluate(output), mymath::exp(Scalar(2.0)), 2e-3)) {
             ++passed;
         } else {
             ++failed;
@@ -281,7 +281,7 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
         const auto end_x = calculator.evaluate("get(evt, 28, 0)");
         const auto end_y = calculator.evaluate("get(evt, 28, 1)");
         if (assigned.find("evt = [[0, 1]") == 0 &&
-            nearly_equal(end_x, mymath::ln(2.0), 2e-2) &&
+            nearly_equal(end_x, mymath::ln(Scalar(2.0)), 2e-2) &&
             nearly_equal(end_y, 2.0, 2e-3)) {
             ++passed;
         } else {

@@ -10,7 +10,7 @@
 #include "core/api/calculator_impl.h"
 #include "math/functions/integer/integer_helpers.h"
 #include "math/mymath.h"
-#include "math/numeric/exact/rational.h"
+#include "math/numeric/rational/rational.h"
 #include "math/numeric/precision/tolerances.h"
 #include "core/value/stored_value.h"
 #include "matrix/matrix.h"

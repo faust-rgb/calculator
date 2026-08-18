@@ -105,9 +105,9 @@ mymath::Scalar relative_error(const Matrix& computed, const Matrix& expected) {
     }
 
     if (expected_norm < 1e-30L) {
-        return mymath::sqrt(diff_norm);
+        return mymath::sqrt(Scalar(diff_norm));
     }
-    long double rel_err = mymath::sqrt(diff_norm / expected_norm);
+    auto rel_err = mymath::sqrt(Scalar(diff_norm / expected_norm));
     return Scalar(rel_err);
 }
 

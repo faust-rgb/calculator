@@ -1300,7 +1300,7 @@ int run_symbolic_tests(int& passed, int& failed) {
     try {
         const auto actual = calculator.evaluate(
             "ode(-1000*(y-sin(x))+cos(x), 0, 0, 0.1, 20)");
-        if (mymath::isfinite(actual) && nearly_equal(actual, mymath::sin(0.1), 1e-6)) {
+        if (mymath::isfinite(actual) && nearly_equal(actual, mymath::sin(Scalar(0.1)), 1e-6)) {
             ++passed;
         } else {
             ++failed;

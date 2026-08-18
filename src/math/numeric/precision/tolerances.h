@@ -10,17 +10,118 @@
 #ifndef MATH_NUMERIC_PRECISION_TOLERANCES_H
 #define MATH_NUMERIC_PRECISION_TOLERANCES_H
 
+namespace math { namespace config { int get_default_scale(); } }
+
 #include "types/scalar_type.h"
-#include "math/runtime/precision/default_precision.h"
 #include "math/numeric/scalar/dispatch.h"
-#include "math/numeric/exact/precise_decimal.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <string>
 #include <type_traits>
 
 namespace precision {
+
+namespace runtime {
+
+inline int default_scale() {
+    return math::config::get_default_scale();
+}
+
+inline long double display_zero_threshold() {
+    return std::pow(10.0L, -std::max(default_scale() * 2, 35));
+}
+
+inline long double display_integer_threshold() {
+    return std::pow(10.0L, -std::max(default_scale() / 2, 5));
+}
+
+inline long double epsilon_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 2, 10));
+}
+
+inline long double numeric_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 4, 10));
+}
+
+inline long double integer_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() / 2, 8));
+}
+
+inline long double loose_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() / 3, 5));
+}
+
+inline long double default_relative_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() / 2, 8));
+}
+
+inline long double default_absolute_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 2, 10));
+}
+
+inline long double newton_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 4, 8));
+}
+
+inline long double derivative_step_base() {
+    return std::pow(10.0L, -std::max(default_scale() / 2, 5));
+}
+
+inline long double integration_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() / 2, 6));
+}
+
+inline long double series_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 3, 10));
+}
+
+inline long double format_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 4, 10));
+}
+
+inline long double polynomial_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 4, 10));
+}
+
+inline long double algebraic_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 5, 12));
+}
+
+inline long double limit_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() / 2, 8));
+}
+
+inline long double matrix_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 4, 10));
+}
+
+inline long double matrix_pivot_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 5, 12));
+}
+
+inline long double eigenvalue_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 5, 12));
+}
+
+inline long double statistics_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 4, 10));
+}
+
+inline long double probability_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() / 2, 8));
+}
+
+inline long double special_function_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 5, 12));
+}
+
+inline long double summation_tolerance() {
+    return std::pow(10.0L, -std::max(default_scale() - 5, 15));
+}
+
+} // namespace runtime
 
 // ============================================================================
 // 基础精度常量
@@ -40,7 +141,7 @@ inline T epsilon() {
         return T(1.0L) / T(10384593717069655257060992658440192.0L); // 2^113
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
         // 基于 default_scale 动态计算，保留 2 位安全余量
-        const int scale = app::get_default_scale();
+        const int scale = math::config::get_default_scale();
         return PreciseDecimal("1e-" + std::to_string(std::max(scale - 2, 10)));
     } else {
         return std::numeric_limits<T>::epsilon();
@@ -55,7 +156,7 @@ inline T sqrt_epsilon() {
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
         return mymath::scalar_sqrt(epsilon<T>());
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        const int scale = app::get_default_scale();
+        const int scale = math::config::get_default_scale();
         const int sqrt_scale = std::max(scale / 2, 5);
         return PreciseDecimal("1e-" + std::to_string(sqrt_scale));
     } else {
@@ -71,7 +172,7 @@ inline T cbrt_epsilon() {
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
         return mymath::scalar_cbrt(epsilon<T>());
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        const int scale = app::get_default_scale();
+        const int scale = math::config::get_default_scale();
         const int cbrt_scale = std::max(scale / 3, 3);
         return PreciseDecimal("1e-" + std::to_string(cbrt_scale));
     } else {
@@ -119,7 +220,7 @@ inline T default_absolute_tolerance() {
 template <typename T>
 inline T newton_tolerance() {
     if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        const int scale = app::get_default_scale();
+        const int scale = math::config::get_default_scale();
         const int tol_scale = std::max(scale - 4, 8);
         return PreciseDecimal("1e-" + std::to_string(tol_scale));
     } else {
@@ -153,7 +254,7 @@ inline T min_step_size(T segment) {
 template <typename T>
 inline int recommended_gauss_kronrod_order() {
     if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        const int scale = app::get_default_scale();
+        const int scale = math::config::get_default_scale();
         if (scale >= 50) return 41;
         if (scale >= 30) return 31;
         if (scale >= 20) return 21;
@@ -218,7 +319,7 @@ inline T series_convergence_threshold() {
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
         return T(1e-40L);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        const int scale = app::get_default_scale();
+        const int scale = math::config::get_default_scale();
         return PreciseDecimal("1e-" + std::to_string(std::max(scale - 3, 12)));
     } else {
         return T(1e-18L);
@@ -234,7 +335,7 @@ inline T trigonometric_singular_threshold() {
     if constexpr (std::is_same_v<T, mymath::float128_t>) {
         return T(1e-17L);
     } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        const int scale = app::get_default_scale();
+        const int scale = math::config::get_default_scale();
         return PreciseDecimal("1e-" + std::to_string(std::max(scale / 2, 8)));
     } else {
         return T(1e-10L);

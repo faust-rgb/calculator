@@ -34,6 +34,13 @@ constexpr long double kPiL = 3.1415926535897932384626433832795028841971L;
  */
 constexpr long double kE = 2.718281828459045235360287471352662498L;
 
+// Physical constants
+constexpr long double kSpeedOfLight = 299792458.0L;
+constexpr long double kGravitationalConstant = 6.67430e-11L;
+constexpr long double kPlanckConstant = 6.62607015e-34L;
+constexpr long double kBoltzmannConstant = 1.380649e-23L;
+constexpr long double kAvogadroNumber = 6.02214076e23L;
+
 // ============================================================================
 // Unified Constant Accessors
 // ============================================================================

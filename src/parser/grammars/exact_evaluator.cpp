@@ -13,7 +13,7 @@
 #include "execution/functions/user_function.h"
 #include "math/functions/conversion/base_conversions.h"
 #include "math/functions/integer/bitwise_helpers.h"
-#include "math/functions/combinatorics/combinatorics.h"
+#include "math/numeric/rational/rational.h"
 #include "math/functions/integer/integer_helpers.h"
 #include "core/types/module_types.h"
 #include "types/scalar_type.h"

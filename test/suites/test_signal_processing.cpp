@@ -401,8 +401,10 @@ static void test_freqz(int& passed, int& failed) {
 
 static void test_periodogram(int& passed, int& failed) {
     std::vector<mymath::Scalar> sig(64);
+    Scalar temp;
     for (std::size_t i = 0; i < sig.size(); ++i) {
-        sig[i] = mymath::sin(2.0 * mymath::kPi * 8.0 * static_cast<long double>(i) / 64.0);
+        temp = 2.0 * mymath::kPi * 8.0 * static_cast<long double>(i) / 64.0;
+        sig[i] = mymath::sin(temp);
     }
 
     std::vector<mymath::Scalar> psd = signal::periodogram(sig);
@@ -432,8 +434,10 @@ static void test_periodogram(int& passed, int& failed) {
 
 static void test_pwelch(int& passed, int& failed) {
     std::vector<mymath::Scalar> sig(256);
+    Scalar temp;
     for (std::size_t i = 0; i < sig.size(); ++i) {
-        sig[i] = mymath::sin(2.0 * mymath::kPi * 32.0 * static_cast<long double>(i) / 256.0);
+        temp = 2.0 * mymath::kPi * 32.0 * static_cast<long double>(i) / 256.0;
+        sig[i] = mymath::sin(temp);
     }
 
     std::vector<mymath::Scalar> psd = signal::pwelch(sig, 64);
@@ -450,8 +454,10 @@ static void test_pwelch(int& passed, int& failed) {
 
 static void test_stft(int& passed, int& failed) {
     std::vector<mymath::Scalar> sig(128);
+    Scalar temp;
     for (std::size_t i = 0; i < sig.size(); ++i) {
-        sig[i] = mymath::sin(2.0 * mymath::kPi * 16.0 * static_cast<long double>(i) / 128.0);
+        temp = 2.0 * mymath::kPi * 16.0 * static_cast<long double>(i) / 128.0;
+        sig[i] = mymath::sin(temp);
     }
 
     signal::STFTResult result = signal::stft(sig, 32);
@@ -470,8 +476,10 @@ static void test_stft(int& passed, int& failed) {
 
 static void test_spectrogram(int& passed, int& failed) {
     std::vector<mymath::Scalar> sig(128);
+    Scalar temp;
     for (std::size_t i = 0; i < sig.size(); ++i) {
-        sig[i] = mymath::sin(2.0 * mymath::kPi * 16.0 * static_cast<long double>(i) / 128.0);
+        temp = 2.0 * mymath::kPi * 16.0 * static_cast<long double>(i) / 128.0;
+        sig[i] = mymath::sin(temp);
     }
 
     std::vector<std::vector<mymath::Scalar>> spec = signal::spectrogram(sig, 32);

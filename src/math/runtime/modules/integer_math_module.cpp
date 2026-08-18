@@ -12,7 +12,7 @@
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
 #include "math/functions/integer/integer_helpers.h"
-#include "math/functions/combinatorics/combinatorics.h"
+#include "math/functions/special/special_functions.h"
 #include "math/functions/integer/bitwise_helpers.h"
 #include "math/functions/conversion/base_conversions.h"
 #include "core/common/calculator_exceptions.h"
@@ -138,17 +138,17 @@ IntegerMathModule::get_functions_map() const {
         return Scalar(lhs % rhs);
     }, "mod", 2, 2);
     funcs["factorial"] = wrap_scalar([](const std::vector<Scalar>& a) {
-        return factorial_scalar(require_integer(a[0], "argument", "factorial"));
+        return mymath::factorial_scalar(require_integer(a[0], "argument", "factorial"));
     }, "factorial", 1, 1);
     funcs["nCr"] = wrap_scalar([](const std::vector<Scalar>& a) {
-        return combination_scalar(require_integer(a[0], "n", "nCr"), require_integer(a[1], "r", "nCr"));
+        return mymath::combination_scalar(require_integer(a[0], "n", "nCr"), require_integer(a[1], "r", "nCr"));
     }, "nCr", 2, 2);
     funcs["binom"] = funcs["nCr"];
     funcs["nPr"] = wrap_scalar([](const std::vector<Scalar>& a) {
-        return permutation_scalar(require_integer(a[0], "n", "nPr"), require_integer(a[1], "r", "nPr"));
+        return mymath::permutation_scalar(require_integer(a[0], "n", "nPr"), require_integer(a[1], "r", "nPr"));
     }, "nPr", 2, 2);
     funcs["fib"] = wrap_scalar([](const std::vector<Scalar>& a) {
-        return fibonacci_scalar(require_integer(a[0], "argument", "fib"));
+        return mymath::fibonacci_scalar(require_integer(a[0], "argument", "fib"));
     }, "fib", 1, 1);
     funcs["is_prime"] = wrap_scalar([](const std::vector<Scalar>& a) {
         return Scalar(is_prime_ll(require_integer(a[0], "argument", "is_prime")) ? 1LL : 0LL);

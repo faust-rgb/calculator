@@ -15,7 +15,7 @@
 
 #include "types/scalar_type.h"
 #include "math/functions/scalar/basic_ops.h"
-#include "math/functions/elementary/roots_powers.h"
+#include "math/functions/scalar/basic_ops.h"
 #include "math/numeric/precision/tolerances.h"
 #include "math/mymath.h"
 

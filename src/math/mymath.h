@@ -21,7 +21,6 @@
 
 // Core - constants and basic operations
 #include "math/numeric/constants/numeric.h"
-#include "math/numeric/constants/physical.h"
 #include "math/numeric/precision/predicates.h"
 #include "math/numeric/scalar/dispatch.h"
 #include "math/numeric/precision/tolerances.h"
@@ -29,14 +28,11 @@
 
 // Public operations by numeric domain
 #include "math/functions/scalar/basic_ops.h"
-#include "math/functions/long_double/basic_ops.h"
-#include "math/functions/integer/absolute_value.h"
-#include "math/functions/integer/gcd.h"
+#include "math/functions/scalar/basic_ops.h"
+#include "math/functions/integer/integer_helpers.h"
 #include "math/functions/conversion/rational_approximation.h"
 
 // Transcendental - trig, hyperbolic, exp/log
-#include "math/functions/elementary/transcendental.h"
-#include "math/functions/elementary/roots_powers.h"
 
 // Special - gamma, beta, bessel, error functions
 #include "math/functions/special/special_functions.h"

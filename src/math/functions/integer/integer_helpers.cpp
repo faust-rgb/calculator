@@ -16,6 +16,23 @@
 #include <stdexcept>
 #include <sstream>
 
+namespace mymath {
+
+int abs(int x) { return x < 0 ? -x : x; }
+long abs(long x) { return x < 0 ? -x : x; }
+long long abs(long long x) { return x < 0 ? -x : x; }
+
+long long gcd(long long a, long long b) {
+    while (b != 0) {
+        const long long remainder = a % b;
+        a = b;
+        b = remainder;
+    }
+    return a < 0 ? -a : a;
+}
+
+}  // namespace mymath
+
 /**
  * @brief 计算两个整数的最大公约数（GCD）
  * @param a 第一个整数

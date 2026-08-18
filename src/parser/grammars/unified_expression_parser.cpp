@@ -20,7 +20,7 @@
 #include "calculator_exceptions.h"
 #include "execution/resolver/variable_resolver.h"
 #include "execution/functions/user_function.h"
-#include "math/numeric/exact/rational.h"
+#include "math/numeric/rational/rational.h"
 #include "core/services/string_utils.h"
 #include "types/scalar_type.h"
 #include "math/functions/integer/integer_helpers.h"
@@ -38,23 +38,6 @@ namespace {
 // ============================================================================
 // 辅助函数
 // ============================================================================
-
-/**
- * @brief 将 matrix::Value 转换为 StoredValue
- */
-StoredValue convert_matrix_value_to_stored(matrix::Value&& matrix_val) {
-    StoredValue result;
-    if (matrix_val.is_matrix) {
-        result.is_matrix = true;
-        result.matrix_ptr = std::make_shared<matrix::Matrix>(std::move(matrix_val.matrix));
-    } else if (matrix_val.is_complex) {
-        result.is_complex = true;
-        result.complex = matrix_val.complex;
-    } else {
-        result.decimal = matrix_val.scalar;
-    }
-    return result;
-}
 
 /**
  * @brief 解析字符串字面量（处理转义字符）
@@ -98,7 +81,8 @@ UnifiedExpressionParser::UnifiedExpressionParser(
     const std::map<std::string, matrix::ValueFunction>* value_functions,
     const std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>* native_functions,
     HasScriptFunctionCallback has_script_function,
-    InvokeScriptFunctionCallback invoke_script_function)
+    InvokeScriptFunctionCallback invoke_script_function,
+    core::ExecutionContext* execution_context)
     : variables_(variables),
       functions_(functions),
       scalar_functions_(scalar_functions),
@@ -107,6 +91,7 @@ UnifiedExpressionParser::UnifiedExpressionParser(
       native_functions_(native_functions),
       has_script_function_(std::move(has_script_function)),
       invoke_script_function_(std::move(invoke_script_function)),
+      execution_context_(execution_context),
       factory_(std::make_unique<UnifiedParserFactory>()) {}
 
 UnifiedExpressionParser::~UnifiedExpressionParser() = default;
@@ -180,26 +165,17 @@ Rational UnifiedExpressionParser::evaluate_exact(const std::string& expression) 
 }
 
 bool UnifiedExpressionParser::try_evaluate_value(const std::string& expression, matrix::Value* value) {
-    // 使用带变量解析的分析，一次性检测所有特征
-    auto result = factory_->analyze(expression, &variables_);
-
-    // 如果包含矩阵语法、矩阵函数，或引用了矩阵/复数变量，使用矩阵求值器
-    if (result.has_bracket || result.has_matrix_func || result.has_matrix_or_complex_var) {
-        ensure_callbacks_initialized();
-
-        return matrix::try_evaluate_expression(expression,
-                                               cached_scalar_evaluator_,
-                                               cached_matrix_lookup_,
-                                               cached_complex_lookup_,
-                                               matrix_functions_,
-                                               native_functions_,
-                                               value);
-    }
-
-    // 否则使用标量求值
     try {
-        Scalar scalar_value = evaluate(expression);
-        *value = matrix::Value::from_scalar(scalar_value);
+        const StoredValue result = evaluate_stored(expression, false, false);
+        if (result.is_matrix && result.matrix_ptr) {
+            *value = matrix::Value::from_matrix(*result.matrix_ptr);
+        } else if (result.is_complex) {
+            *value = matrix::Value::from_complex(result.complex);
+        } else if (result.is_scalar()) {
+            *value = matrix::Value::from_scalar(result.get_decimal());
+        } else {
+            return false;
+        }
         return true;
     } catch (...) {
         return false;
@@ -239,19 +215,24 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
         throw UndefinedError("unknown variable: " + expression);
     }
 
-    // 统一 AST 求值路径：矩阵字面量、虚数、下标及其混合运算共享同一
-    // 棵树。旧矩阵解析器仅作为不支持的命令函数的兼容回退。
+    // 统一 AST 求值路径：矩阵字面量、虚数、下标及其混合运算共享同一棵树。
     if (!symbolic_mode && (analysis.has_bracket || analysis.has_standalone_i || analysis.has_matrix_func ||
                            analysis.has_matrix_or_complex_var)) {
         auto unified_ast = compile(expression);
         if (unified_ast) {
-            core::ExecutionContext context;
-            for (const auto& [name, value] : variables_.snapshot()) {
-                context.scope().set(name, value);
+            core::ExecutionContext local_context;
+            core::ExecutionContext& context = execution_context_ ? *execution_context_ : local_context;
+            if (!context.external_variable_lookup()) {
+                context.set_external_variable_lookup([this](const std::string& name, StoredValue* out) {
+                    const StoredValue* value = variables_.lookup(name);
+                    if (!value) return false;
+                    *out = *value;
+                    return true;
+                });
             }
             if (scalar_functions_) {
                 for (const auto& [name, fn] : *scalar_functions_) {
-                    context.functions().register_function(name,
+                    if (!context.functions().has_function(name)) context.functions().register_function(name,
                         [fn](const std::vector<StoredValue>& args, core::ExecutionContext&) {
                             std::vector<Scalar> values;
                             values.reserve(args.size());
@@ -262,7 +243,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
             }
             if (native_functions_) {
                 for (const auto& [name, fn] : *native_functions_) {
-                    context.functions().register_function(name,
+                    if (!context.functions().has_function(name)) context.functions().register_function(name,
                         [fn](const std::vector<StoredValue>& args, core::ExecutionContext&) {
                             return fn(args);
                         });
@@ -270,7 +251,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
             }
             if (matrix_functions_) {
                 for (const auto& [name, fn] : *matrix_functions_) {
-                    context.functions().register_function(name,
+                    if (!context.functions().has_function(name)) context.functions().register_function(name,
                         [fn](const std::vector<StoredValue>& args, core::ExecutionContext&) {
                             std::vector<matrix::Matrix> matrices;
                             for (const auto& arg : args) {
@@ -281,21 +262,8 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
                         });
                 }
             }
-            try {
-                return core::evaluate_unified_ast(unified_ast.get(), context);
-            } catch (const std::exception&) {
-                // 保留旧命令/矩阵求值器对特殊函数的兼容性。
-            }
+            return core::evaluate_unified_ast(unified_ast.get(), context);
         }
-    }
-
-    // 矩阵/复数候选（使用分析结果，避免重复检测）
-    if (analysis.has_bracket || analysis.has_matrix_func || analysis.has_matrix_or_complex_var) {
-        matrix::Value matrix_val;
-        if (try_evaluate_value(expression, &matrix_val)) {
-            return convert_matrix_value_to_stored(std::move(matrix_val));
-        }
-        // 失败则回退到标量路径
     }
 
     // rat(expr[, max_denominator]) 显示用有理近似

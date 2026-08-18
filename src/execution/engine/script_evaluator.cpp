@@ -399,12 +399,14 @@ StoredValue evaluate_expression_value(
                 //   - rat(...) 走 evaluate_stored 中的有理逼近分支
                 //   - 精确有理模式 让 exact_evaluator 优先尝试
                 //   - 含矩阵/复数元素的调用 需要矩阵路径才能正确解包 vec/mat 等参数
-                UnifiedParserFactory analysis_factory;
-                const auto analysis = analysis_factory.analyze(trimmed_expr, &variables);
+                const bool matrix_constructor =
+                    call_name == "vec" || call_name == "mat" || call_name == "zeros" ||
+                    call_name == "eye" || call_name == "identity" ||
+                    call_name == "randmat" || call_name == "random_matrix";
+                const bool has_index_syntax = trimmed_expr.find('[') != std::string::npos;
                 const bool defer_to_stored =
                     call_name == "rat" || exact_mode ||
-                    analysis.has_bracket || analysis.has_matrix_func ||
-                    analysis.has_matrix_or_complex_var ||
+                    has_index_syntax || matrix_constructor ||
                     call_name == "set" || call_name == "get";
                 if (!defer_to_stored) {
                     return evaluate_command_ast_to_value(ctx, ast, exact_mode);
@@ -443,7 +445,8 @@ StoredValue evaluate_expression_value(
                                    nullptr,
                                    nullptr,
                                    ctx->functions().get_native_functions(),
-                                   has_script_function, invoke_script_function);
+                                   has_script_function, invoke_script_function,
+                                   &ctx->core_context());
     StoredValue result = parser.evaluate_stored(target_expr, exact_mode, ctx->config().is_symbolic_constants_mode());
 
     if (ctx->config().is_symbolic_constants_mode() && !result.has_symbolic_text && !result.is_string() && !result.is_matrix()) {

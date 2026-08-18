@@ -10,7 +10,7 @@
 #ifndef PARSER_EXACT_EVALUATOR_H
 #define PARSER_EXACT_EVALUATOR_H
 
-#include "math/numeric/exact/rational.h"
+#include "math/numeric/rational/rational.h"
 #include <map>
 #include <string>
 #include <functional>

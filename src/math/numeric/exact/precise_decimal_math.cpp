@@ -11,7 +11,7 @@
 // ============================================================================
 
 #include "precise_decimal.h"
-#include "rational.h"
+#include "math/numeric/rational/rational.h"
 #include "core/value/stored_value.h"
 #include "core/common/calculator_exceptions.h"
 #include "math/mymath.h"

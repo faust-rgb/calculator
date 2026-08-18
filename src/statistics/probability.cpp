@@ -252,7 +252,7 @@ Scalar chi2_pdf(Scalar x, Scalar df) {
     if (df <= 0) throw std::runtime_error("df must be positive");
     if (x < 0) return 0.0L;
     Scalar log_pdf = (df / 2.0L - 1.0L) * mymath::ln(x) - x / 2.0L 
-                   - (df / 2.0L * mymath::ln(2.0L) + mymath::lgamma(df / 2.0L));
+                   - (df / 2.0L * mymath::ln(Scalar(2.0L)) + mymath::lgamma(df / 2.0L));
     return mymath::exp(log_pdf);
 }
 

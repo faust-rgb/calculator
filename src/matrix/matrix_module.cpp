@@ -165,6 +165,48 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
 MatrixModule::get_functions_map() const {
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
+    // Matrix construction functions are registered here so the unified AST
+    // does not need the legacy matrix parser for ordinary matrix expressions.
+    funcs["vec"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.empty()) throw std::runtime_error("vec expects at least one element");
+        if (args.size() == 1 && args[0].is_matrix) {
+            return make_matrix_result(vectorize(require_matrix(args[0], "vec")));
+        }
+        std::vector<Scalar> values;
+        values.reserve(args.size());
+        for (const auto& arg : args) {
+            if (!arg.is_scalar()) throw std::runtime_error("vec elements must be scalar");
+            values.push_back(arg.get_decimal());
+        }
+        return make_matrix_result(Matrix::vector(values));
+    };
+    funcs["mat"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() < 2) throw std::runtime_error("mat expects rows, cols, and optional elements");
+        const auto size_arg = [](const StoredValue& value) -> std::size_t {
+            const Scalar n = value.get_decimal();
+            if (!mymath::is_integer(n) || n < 0) throw std::runtime_error("matrix dimensions must be non-negative integers");
+            return static_cast<std::size_t>(round_to_long_long(n));
+        };
+        const std::size_t rows = size_arg(args[0]);
+        const std::size_t cols = size_arg(args[1]);
+        if (args.size() != rows * cols + 2) throw std::runtime_error("mat element count does not match the requested shape");
+        Matrix result(rows, cols, 0.0L);
+        for (std::size_t i = 0; i < rows * cols; ++i) {
+            if (!args[i + 2].is_scalar()) throw std::runtime_error("mat elements must be scalar");
+            result.data[i] = args[i + 2].get_decimal();
+        }
+        return make_matrix_result(std::move(result));
+    };
+    funcs["zeros"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("zeros expects exactly two arguments");
+        return make_matrix_result(Matrix::zero(static_cast<std::size_t>(round_to_long_long(args[0].get_decimal())),
+                                               static_cast<std::size_t>(round_to_long_long(args[1].get_decimal()))));
+    };
+    funcs["eye"] = funcs["identity"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1) throw std::runtime_error("eye expects exactly one argument");
+        return make_matrix_result(Matrix::identity(static_cast<std::size_t>(round_to_long_long(args[0].get_decimal()))));
+    };
+
     // --- Matrix-only functions (1 matrix arg → matrix result) ---
     auto mat_func_1 = [](auto f, const std::string& name) {
         return [f, name](const std::vector<StoredValue>& args) -> StoredValue {

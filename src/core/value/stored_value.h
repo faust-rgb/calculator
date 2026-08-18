@@ -5,7 +5,7 @@
 #ifndef CORE_VALUE_STORED_VALUE_H
 #define CORE_VALUE_STORED_VALUE_H
 
-#include "math/numeric/exact/rational.h"
+#include "math/numeric/rational/rational.h"
 #include "types/scalar_type.h"
 #include "math/numeric/types/complex.h"
 #include "math/numeric/exact/precise_decimal.h"

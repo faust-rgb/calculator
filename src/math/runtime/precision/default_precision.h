@@ -14,8 +14,8 @@
 #ifndef MATH_RUNTIME_PRECISION_DEFAULT_PRECISION_H
 #define MATH_RUNTIME_PRECISION_DEFAULT_PRECISION_H
 
-#include <cmath>
 #include <algorithm>
+#include <cmath>
 
 namespace math {
 namespace config {
@@ -46,129 +46,9 @@ inline void set_default_scale(int scale) {
     default_scale() = scale;
 }
 
-// ============================================================================
-// 显示精度阈值
-// ============================================================================
-
 constexpr int kDefaultDisplayPrecision = 12;
 constexpr int kMinDisplayPrecision = 1;
 constexpr int kMaxDisplayPrecision = 50;
-
-inline long double display_zero_threshold() {
-    return std::pow(10.0L, -std::max(get_default_scale() * 2, 35));
-}
-
-inline long double display_integer_threshold() {
-    return std::pow(10.0L, -std::max(get_default_scale() / 2, 5));
-}
-
-// ============================================================================
-// 基础数值计算容差
-// ============================================================================
-
-inline long double epsilon_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 2, 10));
-}
-
-inline long double numeric_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 4, 10));
-}
-
-inline long double integer_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() / 2, 8));
-}
-
-inline long double loose_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() / 3, 5));
-}
-
-// ============================================================================
-// 数值分析容差
-// ============================================================================
-
-inline long double default_relative_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() / 2, 8));
-}
-
-inline long double default_absolute_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 2, 10));
-}
-
-inline long double newton_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 4, 8));
-}
-
-inline long double derivative_step_base() {
-    return std::pow(10.0L, -std::max(get_default_scale() / 2, 5));
-}
-
-inline long double integration_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() / 2, 6));
-}
-
-inline long double series_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 3, 10));
-}
-
-// ============================================================================
-// 符号计算容差
-// ============================================================================
-
-inline long double format_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 4, 10));
-}
-
-inline long double polynomial_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 4, 10));
-}
-
-inline long double algebraic_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 5, 12));
-}
-
-inline long double limit_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() / 2, 8));
-}
-
-// ============================================================================
-// 矩阵计算容差
-// ============================================================================
-
-inline long double matrix_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 4, 10));
-}
-
-inline long double matrix_pivot_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 5, 12));
-}
-
-inline long double eigenvalue_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 5, 12));
-}
-
-// ============================================================================
-// 统计计算容差
-// ============================================================================
-
-inline long double statistics_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 4, 10));
-}
-
-inline long double probability_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() / 2, 8));
-}
-
-// ============================================================================
-// 特殊函数容差
-// ============================================================================
-
-inline long double special_function_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 5, 12));
-}
-
-inline long double summation_tolerance() {
-    return std::pow(10.0L, -std::max(get_default_scale() - 5, 15));
-}
 
 // ============================================================================
 // 精度作用域守卫
@@ -191,6 +71,37 @@ public:
 private:
     int old_scale_;
 };
+
+} // namespace config
+} // namespace math
+
+namespace math {
+namespace config {
+
+// Compatibility wrappers for callers that still use app::* tolerance names.
+inline long double display_zero_threshold() { return std::pow(10.0L, -std::max(get_default_scale() * 2, 35)); }
+inline long double display_integer_threshold() { return std::pow(10.0L, -std::max(get_default_scale() / 2, 5)); }
+inline long double epsilon_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 2, 10)); }
+inline long double numeric_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 4, 10)); }
+inline long double integer_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() / 2, 8)); }
+inline long double loose_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() / 3, 5)); }
+inline long double default_relative_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() / 2, 8)); }
+inline long double default_absolute_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 2, 10)); }
+inline long double newton_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 4, 8)); }
+inline long double derivative_step_base() { return std::pow(10.0L, -std::max(get_default_scale() / 2, 5)); }
+inline long double integration_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() / 2, 6)); }
+inline long double series_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 3, 10)); }
+inline long double format_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 4, 10)); }
+inline long double polynomial_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 4, 10)); }
+inline long double algebraic_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 5, 12)); }
+inline long double limit_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() / 2, 8)); }
+inline long double matrix_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 4, 10)); }
+inline long double matrix_pivot_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 5, 12)); }
+inline long double eigenvalue_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 5, 12)); }
+inline long double statistics_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 4, 10)); }
+inline long double probability_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() / 2, 8)); }
+inline long double special_function_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 5, 12)); }
+inline long double summation_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 5, 15)); }
 
 } // namespace config
 } // namespace math

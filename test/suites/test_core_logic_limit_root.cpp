@@ -313,7 +313,7 @@ int run_logic_limit_root_tests(int& passed, int& failed) {
         std::string output;
         const bool handled =
             calculator.try_process_function_command("solve(exp(x) - 2, 0.5)", &output);
-        if (handled && nearly_equal(calculator.evaluate(output), mymath::ln(2.0), 1e-8)) {
+        if (handled && nearly_equal(calculator.evaluate(output), mymath::ln(Scalar(2.0)), 1e-8)) {
             ++passed;
         } else {
             ++failed;

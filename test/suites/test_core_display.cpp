@@ -146,7 +146,7 @@ int run_core_display_tests(int& passed, int& failed) {
         const std::string matrix =
             precision_calculator.evaluate_for_display("mat(1, 2, pi, sqrt(2))", false);
         const std::string symbolic =
-            SymbolicExpression::number(mymath::sqrt(2.0)).to_string();
+            SymbolicExpression::number(mymath::sqrt(Scalar(2.0))).to_string();
         calculator.set_display_precision(12);
         if (status == "Display precision: 6" &&
             precision_calculator.display_precision() == 6 &&
