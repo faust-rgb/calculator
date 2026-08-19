@@ -22,6 +22,14 @@ void run_simplification_safety_tests(int& passed, int& failed) {
             simplify("(x^2 - 1)/(x - 1)") == "x + 1")
             throw std::runtime_error("domain-changing cancellation");
 
+        const auto conditional = SymbolicExpression::parse("(x^2 - 1)/(x - 1)")
+                                     .simplify_with_conditions();
+        if (conditional.expression.to_string() != "x + 1" ||
+            !conditional.condition.has_value() ||
+            conditional.condition->expression.find("x - 1") == std::string::npos) {
+            throw std::runtime_error("conditional polynomial cancellation");
+        }
+
         SymbolicExpression multi = SymbolicExpression::function(
             "besselj", {SymbolicExpression::number(0), SymbolicExpression::variable("x")});
         if (multi.simplify().to_string().find("x") == std::string::npos)

@@ -73,6 +73,71 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
             const SymbolicExpression left(node_->left);
             const SymbolicExpression right(node_->right);
             SymbolicExpression integrated;
+            // Distribute over sums so products such as (x + 1) * sqrt(x)
+            // can be reduced to elementary power integrals.
+            if (left.node_->type == NodeType::kAdd || left.node_->type == NodeType::kSubtract) {
+                const SymbolicExpression lterm(left.node_->left);
+                const SymbolicExpression rterm(left.node_->right);
+                const SymbolicExpression lresult = (lterm * right).integral(variable_name);
+                const SymbolicExpression rresult = (rterm * right).integral(variable_name);
+                return left.node_->type == NodeType::kAdd
+                    ? make_add(lresult, rresult).simplify()
+                    : make_subtract(lresult, rresult).simplify();
+            }
+            if (right.node_->type == NodeType::kAdd || right.node_->type == NodeType::kSubtract) {
+                const SymbolicExpression lterm(right.node_->left);
+                const SymbolicExpression rterm(right.node_->right);
+                const SymbolicExpression lresult = (left * lterm).integral(variable_name);
+                const SymbolicExpression rresult = (left * rterm).integral(variable_name);
+                return right.node_->type == NodeType::kAdd
+                    ? make_add(lresult, rresult).simplify()
+                    : make_subtract(lresult, rresult).simplify();
+            }
+            auto integrate_sqrt_product = [&](const SymbolicExpression& factor,
+                                              const SymbolicExpression& radical,
+                                              SymbolicExpression* result) {
+                if (!radical.node_) return false;
+                SymbolicExpression root_argument;
+                if (radical.node_->type == NodeType::kFunction &&
+                    radical.node_->text == "sqrt" && radical.node_->left) {
+                    root_argument = SymbolicExpression(radical.node_->left);
+                } else if (radical.node_->type == NodeType::kPower && radical.node_->left &&
+                           radical.node_->right) {
+                    Scalar root_exponent = Scalar(0);
+                    if (!SymbolicExpression(radical.node_->right).is_number(&root_exponent) ||
+                        !mymath::is_near_zero(root_exponent - Scalar(0.5L), kFormatEps()))
+                        return false;
+                    root_argument = SymbolicExpression(radical.node_->left);
+                } else {
+                    return false;
+                }
+                Scalar factor_exponent = Scalar(0);
+                if (factor.is_variable_named(variable_name) &&
+                    root_argument.is_variable_named(variable_name)) {
+                    factor_exponent = Scalar(1);
+                } else if (factor.is_constant(variable_name) &&
+                           root_argument.is_variable_named(variable_name)) {
+                    *result = make_multiply(
+                        factor,
+                        make_divide(make_power(root_argument, number(1.5L)),
+                                    number(1.5L)));
+                    return true;
+                } else if (factor.node_ && factor.node_->type == NodeType::kPower &&
+                           SymbolicExpression(factor.node_->left).is_variable_named(variable_name) &&
+                           root_argument.is_variable_named(variable_name) &&
+                           SymbolicExpression(factor.node_->right).is_number(&factor_exponent)) {
+                } else {
+                    return false;
+                }
+                const Scalar next_exponent = factor_exponent + Scalar(1.5L);
+                *result = make_divide(make_power(root_argument, number(next_exponent)),
+                                      number(next_exponent));
+                return true;
+            };
+            if (integrate_sqrt_product(left, right, &integrated) ||
+                integrate_sqrt_product(right, left, &integrated)) {
+                return integrated.simplify();
+            }
             if (try_integrate_substitution_product(left,
                                                   right,
                                                   variable_name,
@@ -162,6 +227,19 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
     if (node_->type == NodeType::kDivide) {
         const SymbolicExpression left(node_->left);
         const SymbolicExpression right(node_->right);
+
+        // P(ln(x))/x becomes an ordinary polynomial integral after t = ln(x).
+        if (right.is_variable_named(variable_name)) {
+            const SymbolicExpression logarithm =
+                make_function("ln", variable(variable_name));
+            const SymbolicExpression temporary = variable("integral_log_t");
+            const SymbolicExpression transformed =
+                left.substitute_expression(logarithm, temporary);
+            if (transformed.is_constant(variable_name)) {
+                return transformed.integral("integral_log_t")
+                    .substitute("integral_log_t", logarithm).simplify();
+            }
+        }
         
         if (left.is_constant(variable_name)) {
             SymbolicExpression c_term, x2_coeff;
@@ -388,7 +466,23 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                                               exponent_value,
                                               variable_name,
                                               &trig_identity_integral)) {
-            return trig_identity_integral.simplify();
+            return trig_identity_integral;
+        }
+
+        // (sqrt(linear(x)))^p is a rational power of the linear argument.
+        if (base.node_->type == NodeType::kFunction && base.node_->text == "sqrt" &&
+            base.node_->left && exponent.is_number(&exponent_value)) {
+            const SymbolicExpression root_argument(base.node_->left);
+            Scalar linear_a = Scalar(0), linear_b = Scalar(0);
+            if (decompose_linear(root_argument, variable_name, &linear_a, &linear_b) &&
+                !mymath::is_near_zero(linear_a, kFormatEps())) {
+                const Scalar next_exponent = exponent_value / Scalar(2) + Scalar(1);
+                if (!mymath::is_near_zero(next_exponent, kFormatEps())) {
+                    return make_divide(
+                        make_power(root_argument, number(next_exponent)),
+                        number(linear_a * next_exponent)).simplify();
+                }
+            }
         }
         
         SymbolicExpression a_expr, b_expr;
@@ -498,9 +592,8 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                 const SymbolicExpression x = variable(variable_name);
                 return make_divide(
                            make_add(make_multiply(x, make_function("sqrt", argument)),
-                                    make_function("asin", x)),
-                           number(2.0))
-                    .simplify();
+                                     make_function("asin", x)),
+                           number(2.0));
             }
         }
         if (node_->text == "tan" && linear) {

@@ -140,8 +140,15 @@ protected:
     std::string_view parse_identifier() {
         std::size_t start = pos_;
         while (!is_at_end() && (std::isalnum(static_cast<unsigned char>(source_[pos_])) ||
-                                source_[pos_] == '_' || source_[pos_] == '\'')) {
+                                source_[pos_] == '_')) {
             ++pos_;
+        }
+        // Keep the historical double-prime identifier form used by ODE
+        // expressions (for example y''), while a single prime is the
+        // expression transpose postfix operator.
+        if (pos_ + 1 < source_.size() && source_[pos_] == '\'' &&
+            source_[pos_ + 1] == '\'') {
+            while (pos_ < source_.size() && source_[pos_] == '\'') ++pos_;
         }
         return source_.substr(start, pos_ - start);
     }
@@ -205,10 +212,16 @@ protected:
             if (!is_at_end() && (peek() == '+' || peek() == '-')) pos_++;
             const std::size_t exponent_digits = pos_;
             while (!is_at_end() && std::isdigit(static_cast<unsigned char>(peek()))) pos_++;
-            // A missing exponent is not part of the number. Rewind so that
-            // implicit multiplication such as `1e` remains parseable, while
-            // `1e+` is rejected by the following expression grammar.
-            if (exponent_digits == pos_) pos_ = exponent_pos;
+            const bool missing_exponent_digits = exponent_digits == pos_;
+            // Keep a sign-bearing incomplete exponent in the number token so
+            // numeric conversion rejects inputs such as `1e+`.  Bare `1e`
+            // remains available for implicit multiplication with variable e.
+            if (missing_exponent_digits) pos_ = exponent_pos;
+            if (missing_exponent_digits &&
+                exponent_pos + 1 < source_.size() &&
+                (source_[exponent_pos + 1] == '+' || source_[exponent_pos + 1] == '-')) {
+                pos_ = exponent_digits;
+            }
         }
 
     end_num:

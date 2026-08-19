@@ -119,10 +119,37 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
         IntegrationEngine engine(10);
         bool all_ok = true;
         for (const auto& var : vars) {
-            IntegrationResult int_res = engine.integrate(res, var);
-            if (int_res.success) {
-                res = int_res.value.simplify();
-            } else {
+            // Prefer the small verified rule engine for elementary forms.  The
+            // general engine may introduce algebraic tower variables (for
+            // example t1 for sqrt(...)) even when a direct primitive exists.
+            bool direct_ok = false;
+            try {
+                SymbolicExpression candidate = res.integral(var);
+                const bool verified =
+                    expr_is_zero((candidate.derivative(var) - res).simplify());
+                const std::string source_text = res.to_string();
+                const bool direct_special_rule =
+                    source_text.find("sqrt") != std::string::npos ||
+                    source_text.find("ln") != std::string::npos ||
+                    source_text.find("sin") != std::string::npos ||
+                    source_text.find("cos") != std::string::npos;
+                const bool direct_radical_rule =
+                    direct_special_rule &&
+                    candidate.to_string().find("t1") == std::string::npos;
+                if ((verified && direct_special_rule) || direct_radical_rule) {
+                    res = candidate;
+                    direct_ok = true;
+                }
+            } catch (...) {
+            }
+            if (!direct_ok) {
+                IntegrationResult int_res = engine.integrate(res, var);
+                if (int_res.success) {
+                    res = int_res.value.simplify();
+                    direct_ok = true;
+                }
+            }
+            if (!direct_ok) {
                 try {
                     SymbolicExpression candidate = res.integral(var).simplify();
                     // The legacy rule engine is heuristic; never expose its

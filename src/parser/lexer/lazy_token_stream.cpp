@@ -319,6 +319,15 @@ Token LazyTokenStream::parse_number_token() {
     tok.kind = TokenKind::kNumber;
     tok.text = parse_number_token_view();
     tok.position = start;
+    if (tok.text.size() >= 2 &&
+        (tok.text.back() == '+' || tok.text.back() == '-') &&
+        (tok.text[tok.text.size() - 2] == 'e' || tok.text[tok.text.size() - 2] == 'E')) {
+        std::ostringstream oss;
+        oss << "invalid number literal at position " << tok.position << "\n";
+        oss << "  " << source_ << "\n";
+        oss << "  " << std::string(tok.position, ' ') << "^";
+        throw SyntaxError(oss.str());
+    }
     // 解析数值 - 使用 Scalar 进行高精度解析
     try {
         std::string num_str(tok.text);

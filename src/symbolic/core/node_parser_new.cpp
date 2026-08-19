@@ -18,6 +18,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <functional>
 #include <vector>
 
 #include <mutex>
@@ -1323,6 +1324,45 @@ SymbolicExpression SymbolicExpression::simplify() const {
     SymbolicExpression simplified = simplify_impl(*this);
     cache.put(key, simplified);
     return simplified;
+}
+
+TransformResult SymbolicExpression::simplify_with_conditions() const {
+    TransformResult result;
+    std::vector<SymbolicExpression> denominators;
+    std::function<void(const SymbolicExpression&)> collect = [&](const SymbolicExpression& expression) {
+        if (!expression.node_) return;
+        if (expression.node_->type == NodeType::kDivide && expression.node_->right)
+            denominators.emplace_back(expression.node_->right);
+        for (const auto& child : expression.node_->children)
+            collect(SymbolicExpression(child));
+    };
+    collect(*this);
+
+    struct DomainChangeGuard {
+        bool previous;
+        DomainChangeGuard()
+            : previous(symbolic_expression_internal::simplify_allow_domain_changes) {
+            symbolic_expression_internal::simplify_allow_domain_changes = true;
+        }
+        ~DomainChangeGuard() {
+            symbolic_expression_internal::simplify_allow_domain_changes = previous;
+        }
+    } guard;
+    result.expression = simplify_impl(*this);
+
+    if (!denominators.empty()) {
+        TransformCondition condition;
+        for (const auto& denominator : denominators) {
+            const std::string constraint = denominator.to_string() + " != 0";
+            condition.constraints.push_back(constraint);
+            if (!condition.expression.empty()) condition.expression += " and ";
+            condition.expression += constraint;
+        }
+        condition.note = "cancellation preserves equivalence only under these domain restrictions";
+        condition.relation = TransformCondition::Relation::kNotEqual;
+        result.condition = std::move(condition);
+    }
+    return result;
 }
 
 SymbolicExpression SymbolicExpression::simplify_with_budget(std::size_t max_nodes) const {

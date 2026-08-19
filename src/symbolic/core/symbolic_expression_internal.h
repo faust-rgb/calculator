@@ -452,6 +452,9 @@ bool is_identifier_variable_name(const std::string& name);
  */
 SymbolicExpression simplify_impl(const SymbolicExpression& expression);
 
+// Enabled only by simplify_with_conditions(); ordinary simplify() remains domain-safe.
+extern thread_local bool simplify_allow_domain_changes;
+
 /**
  * @brief Simplify with a node count budget
  * @param expression Expression to simplify

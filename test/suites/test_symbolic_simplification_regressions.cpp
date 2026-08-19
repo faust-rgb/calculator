@@ -1,4 +1,5 @@
 #include "calculator.h"
+#include "symbolic/core/symbolic_expression.h"
 #include <iostream>
 #include <stdexcept>
 
@@ -12,6 +13,9 @@ void run_symbolic_simplification_regression_tests(int& passed, int& failed) {
             if (!calculator.try_process_function_command("simplify(" + expression + ")", &output))
                 throw std::runtime_error("simplify command was not handled");
             return output;
+        };
+        auto conditional_simplify = [](const std::string& expression) {
+            return SymbolicExpression::parse(expression).simplify_with_conditions();
         };
 
         if (simplify("(x + 1)*(y + 1) - (x*y + x + y + 1)") != "0")
@@ -36,7 +40,9 @@ void run_symbolic_simplification_regression_tests(int& passed, int& failed) {
         calculator.process_line(":assume x positive", false);
         if (simplify("sqrt(x^2)") != "x")
             throw std::runtime_error("positive assumption simplification");
-        if (simplify("x^3 / x^2") != "x")
+        const auto power_quotient = conditional_simplify("x^3 / x^2");
+        if (power_quotient.expression.to_string() != "x" ||
+            !power_quotient.condition.has_value())
             throw std::runtime_error("positive power quotient simplification");
         if (simplify("sqrt(x^4)") != "x ^ 2")
             throw std::runtime_error("even power root simplification");

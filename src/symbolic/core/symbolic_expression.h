@@ -312,6 +312,12 @@ public:
     SymbolicExpression simplify() const;
 
     /**
+     * @brief Simplify while reporting domain restrictions introduced by cancellation.
+     * @return Simplified expression and conditions under which it is equivalent.
+     */
+    TransformResult simplify_with_conditions() const;
+
+    /**
      * @brief 简化表达式，带有节点数预算限制
      * @param max_nodes 最大允许节点数
      * @return 简化后的表达式，如果预算超限则返回当前最佳结果

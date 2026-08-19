@@ -48,6 +48,21 @@ std::string execute_command_ast(
         return name + "(" + params_display + ") = " + std::string(def->body.text);
     }
 
+    if (ast.kind == CommandKind::kIndexAssignment) {
+        const auto* assign = ast.as_index_assignment();
+        std::string text = std::string(assign->variable) + "[";
+        for (std::size_t i = 0; i < assign->indices.size(); ++i) {
+            if (i != 0) text += ", ";
+            text += std::string(assign->indices[i].text);
+        }
+        text += "] = " + std::string(assign->value.text);
+        std::string output;
+        if (!try_execute_index_assignment(ctx, text, exact_mode, &output)) {
+            throw std::runtime_error("invalid index assignment");
+        }
+        return output;
+    }
+
     if (ast.kind == CommandKind::kMetaCommand || ast.kind == CommandKind::kFunctionCall) {
         std::string_view command_name;
         std::vector<std::string_view> arg_views;
@@ -59,10 +74,22 @@ std::string execute_command_ast(
             const auto* call = ast.as_function_call();
             command_name = call->name;
             for (const auto& arg : call->arguments) arg_views.push_back(arg.text);
+            for (const auto& arg : call->named_args) {
+                // Command handlers retain their existing ABI; pass named
+                // arguments in their original source form.
+                std::string_view name = arg.name;
+                std::string_view value = arg.value.text;
+                const std::size_t start = name.data() - ast.source_owner->data();
+                const std::size_t end = value.data() - ast.source_owner->data() + value.size();
+                arg_views.emplace_back(ast.source_owner->data() + start, end - start);
+            }
         }
 
         std::string cmd_name = (ast.kind == CommandKind::kMetaCommand) ? ":" + std::string(command_name) : std::string(command_name);
         if (ast.kind == CommandKind::kFunctionCall && cmd_name == "print") {
+            if (!ast.as_function_call()->named_args.empty()) {
+                throw std::runtime_error("print does not support named arguments");
+            }
             std::ostringstream out;
             for (std::size_t i = 0; i < arg_views.size(); ++i) {
                 if (i != 0) out << ' ';
@@ -115,6 +142,9 @@ StoredValue evaluate_command_ast_to_value(
     }
     if (ast.kind == CommandKind::kFunctionCall) {
         const auto* call = ast.as_function_call();
+        if (!call->named_args.empty()) {
+            throw std::runtime_error("named arguments are not supported for value functions");
+        }
         std::vector<StoredValue> args;
         for (const auto& arg : call->arguments) args.push_back(evaluate_script_value_expression(ctx, std::string(arg.text), exact_mode));
         

@@ -1,5 +1,6 @@
 #include "calculator.h"
 #include "parser/ast/expression_ast.h"
+#include "parser/grammars/command_parser.h"
 #include "parser/infra/syntax_validator.h"
 #include <iostream>
 #include <stdexcept>
@@ -23,13 +24,34 @@ void run_parser_regression_tests(int& passed, int& failed) {
             imaginary_product->children[1]->identifier != "i") {
             throw std::runtime_error("imaginary suffix tokenization");
         }
-        bool malformed_exponent_rejected = false;
-        try {
-            (void)compile_expression_ast("1e+");
-        } catch (const std::exception&) {
-            malformed_exponent_rejected = true;
+        if (compile_expression_ast("1e+")) throw std::runtime_error("malformed exponent accepted");
+
+        calculator.process_line("A = [1, 2]", false);
+        calculator.process_line("A[0] = 9", false);
+        if (calculator.evaluate("A[0]") != 9) throw std::runtime_error("interactive index assignment");
+
+        const auto named = parse_command("print(1, color=2)");
+        const auto* named_call = named.as_function_call();
+        if (!named_call || named_call->arguments.size() != 1 ||
+            named_call->named_args.size() != 1 || named_call->named_args[0].name != "color" ||
+            named_call->named_args[0].value.text != "2") {
+            throw std::runtime_error("named argument parsing");
         }
-        if (!malformed_exponent_rejected) throw std::runtime_error("malformed exponent accepted");
+
+        calculator.process_line("M = [1, 2; 3, 4]", false);
+        if (calculator.evaluate_for_display("M'", false).find("[[1, 3], [2, 4]]") == std::string::npos) {
+            throw std::runtime_error("transpose postfix tokenization");
+        }
+
+        for (const char* invalid : {"f(1,)", "f(,1)", "f(1,,2)", "A[] = 1", "A[0] ="}) {
+            bool rejected = false;
+            try {
+                (void)parse_command(invalid);
+            } catch (const std::exception&) {
+                rejected = true;
+            }
+            if (!rejected) throw std::runtime_error("empty command argument accepted");
+        }
 
         std::string output;
         calculator.try_process_function_command("f(x) = x^2 + 1", &output);

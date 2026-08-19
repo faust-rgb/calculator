@@ -3265,14 +3265,16 @@ SymbolicExpression z_transform_impl(const SymbolicExpression& expression,
                         .simplify();
                 }
                 if (k == 2) {
+                    const SymbolicExpression denominator_factor = make_subtract(
+                        SymbolicExpression::variable(transform_variable),
+                        SymbolicExpression::number(Scalar(1.0L)));
                     return make_divide(
-                               make_multiply(SymbolicExpression::variable(transform_variable),
-                                             make_add(SymbolicExpression::variable(transform_variable),
-                                                      SymbolicExpression::number(Scalar(1.0L)))),
-                               make_power(make_subtract(SymbolicExpression::variable(transform_variable),
-                                                        SymbolicExpression::number(Scalar(1.0L))),
-                                          SymbolicExpression::number(Scalar(3.0L))))
-                        .simplify();
+                                make_multiply(SymbolicExpression::variable(transform_variable),
+                                              make_add(SymbolicExpression::variable(transform_variable),
+                                                       SymbolicExpression::number(Scalar(1.0L)))),
+                                make_multiply(make_multiply(denominator_factor,
+                                                             denominator_factor),
+                                              denominator_factor));
                 }
                 SymbolicExpression result = SymbolicExpression::number(Scalar(1.0L)).z_transform(index_variable, transform_variable);
                 for (int i = 0; i < k; ++i) {

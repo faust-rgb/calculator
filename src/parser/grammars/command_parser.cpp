@@ -387,6 +387,9 @@ CommandASTNode CommandParser::parse_definition_or_assignment(Token id_tok, bool 
             if (match_token(TokenKind::kEqual)) {
                 // 这是函数定义
                 std::string_view body = collect_statement_expression();
+                if (body.empty()) {
+                    throw_syntax_error("expected expression after '='");
+                }
                 validate_expression_text(body, tokens_, body.data() - tokens_.source().data());
                 return CommandASTNode::make_function_definition(id_tok.text, params, body);
             }
@@ -416,6 +419,9 @@ CommandASTNode CommandParser::parse_definition_or_assignment(Token id_tok, bool 
         advance_token(); // 消费 =
 
         std::string_view expr = collect_statement_expression();
+        if (expr.empty()) {
+            throw_syntax_error("expected expression after '='");
+        }
         validate_expression_text(expr, tokens_, expr.data() - tokens_.source().data());
         return CommandASTNode::make_assignment(id_tok.text, expr);
     }
@@ -441,6 +447,11 @@ CommandASTNode CommandParser::parse_index_assignment(
         }
     } else {
         advance_token(); // 消费空的 ]
+        // An empty subscript is never a valid assignment target.  Empty
+        // list/dictionary literals are handled by the expression parser.
+        if (check_token(TokenKind::kEqual)) {
+            throw_syntax_error("index assignment requires an index");
+        }
     }
 
     // 期望等号
@@ -452,6 +463,9 @@ CommandASTNode CommandParser::parse_index_assignment(
 
     // 解析赋值值
     std::string_view value = collect_statement_expression();
+    if (value.empty()) {
+        throw_syntax_error("expected expression after '='");
+    }
     validate_expression_text(value, tokens_, value.data() - tokens_.source().data());
 
     return CommandASTNode::make_index_assignment(id_tok.text, indices, value);
@@ -466,6 +480,7 @@ CommandASTNode CommandParser::parse_function_call(
     std::vector<std::string_view> arguments;
 
     // 解析参数列表
+    std::vector<std::pair<std::string_view, std::string_view>> named_arguments;
     if (!check_token(TokenKind::kRParen)) {
         arguments = parse_argument_list_by_tokens(true);
         if (!match_token(TokenKind::kRParen)) {
@@ -473,6 +488,32 @@ CommandASTNode CommandParser::parse_function_call(
         }
     } else {
         advance_token(); // 消费空的 )
+    }
+
+    // Split `name=value` only when the equals sign is at the argument's
+    // top level and the left side is a valid identifier.
+    std::vector<std::string_view> positional_arguments;
+    for (std::string_view argument : arguments) {
+        const std::size_t equal = parser_utils::find_top_level(argument, '=');
+        if (equal == std::string_view::npos) {
+            positional_arguments.push_back(argument);
+            continue;
+        }
+        const std::string_view name = trim_view(argument.substr(0, equal));
+        const std::string_view value = trim_view(argument.substr(equal + 1));
+        const bool valid_name = !name.empty() &&
+            (std::isalpha(static_cast<unsigned char>(name.front())) || name.front() == '_') &&
+            std::all_of(name.begin() + 1, name.end(), [](char ch) {
+                return std::isalnum(static_cast<unsigned char>(ch)) || ch == '_';
+            });
+        if (!valid_name) {
+            positional_arguments.push_back(argument);
+            continue;
+        }
+        if (value.empty()) {
+            throw_syntax_error("named argument requires a value");
+        }
+        named_arguments.emplace_back(name, value);
     }
 
     // 检查后面是否还有内容
@@ -485,7 +526,11 @@ CommandASTNode CommandParser::parse_function_call(
         return parse_expression(single_statement);
     }
 
-    return CommandASTNode::make_function_call(id_tok.text, arguments);
+    if (!named_arguments.empty()) {
+        return CommandASTNode::make_function_call_with_named(
+            id_tok.text, positional_arguments, named_arguments);
+    }
+    return CommandASTNode::make_function_call(id_tok.text, positional_arguments);
 }
 
 std::vector<std::string_view> CommandParser::parse_argument_list_by_tokens(bool stop_at_rparen) {
@@ -525,7 +570,12 @@ std::vector<std::string_view> CommandParser::parse_argument_list_by_tokens(bool 
         else if (tok.kind == TokenKind::kComma && paren_depth == 0 && bracket_depth == 0 && brace_depth == 0) {
             // Found a top-level comma
             std::size_t end_pos = tok.position;
-            arguments.push_back(trim_view(tokens_.source().substr(start_pos, end_pos - start_pos)));
+            const std::string_view argument =
+                trim_view(tokens_.source().substr(start_pos, end_pos - start_pos));
+            if (argument.empty()) {
+                throw_syntax_error("empty argument");
+            }
+            arguments.push_back(argument);
             advance_token(); // consume comma
             if (peek_token().kind != TokenKind::kEnd) {
                 start_pos = peek_token().position;
@@ -541,10 +591,14 @@ std::vector<std::string_view> CommandParser::parse_argument_list_by_tokens(bool 
     // push the last argument
     std::size_t end_pos = peek_token().kind == TokenKind::kEnd ? tokens_.source().size() : peek_token().position;
     if (start_pos < end_pos) {
-        arguments.push_back(trim_view(tokens_.source().substr(start_pos, end_pos - start_pos)));
+        const std::string_view argument =
+            trim_view(tokens_.source().substr(start_pos, end_pos - start_pos));
+        if (argument.empty()) {
+            throw_syntax_error("empty argument");
+        }
+        arguments.push_back(argument);
     } else if (!arguments.empty()) {
-        // trailing comma case like `f(a, )`
-        arguments.push_back("");
+        throw_syntax_error("empty argument after ','");
     }
 
     return arguments;

@@ -466,6 +466,10 @@ std::string to_string_impl(const std::shared_ptr<SymbolicExpression::Node>& node
             if (node->right->type == NodeType::kNegate) {
                 text = to_string_impl(node->left, precedence(node)) + " - " +
                        to_string_impl(node->right->left, precedence(node) + 1);
+            } else if (node->right->type == NodeType::kNumber &&
+                       node->right->number_value < Scalar(0)) {
+                text = to_string_impl(node->left, precedence(node)) + " - " +
+                       format_number(-node->right->number_value);
             } else {
                 text = to_string_impl(node->left, precedence(node)) + " + " +
                        to_string_impl(node->right, precedence(node));

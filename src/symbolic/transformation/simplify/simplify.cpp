@@ -45,6 +45,8 @@ namespace symbolic_expression_internal {
 
 using Scalar = mymath::Scalar;
 
+thread_local bool simplify_allow_domain_changes = false;
+
 bool is_exact_square_numeric(Scalar value);
 
 bool is_provably_real(const SymbolicExpression& expression) {
@@ -266,6 +268,14 @@ bool can_combine_numeric_powers(const SymbolicExpression& base,
                                 Scalar right_exponent,
                                 bool division) {
     if (is_known_nonzero_expression(base)) return true;
+    // Monomial powers are conventionally reduced even without an explicit
+    // nonzero assumption: x^m / x^n -> x^(m-n). Polynomial quotients remain
+    // guarded by the caller to avoid changing their domain.
+    if (division && base.node_ && base.node_->type == NodeType::kVariable &&
+        mymath::is_integer(left_exponent, Scalar(app::integer_tolerance())) &&
+        mymath::is_integer(right_exponent, Scalar(app::integer_tolerance()))) {
+        return true;
+    }
     if (division) return false;
     return mymath::is_integer(left_exponent, Scalar(app::integer_tolerance())) &&
            mymath::is_integer(right_exponent, Scalar(app::integer_tolerance())) &&
@@ -1056,12 +1066,12 @@ SymbolicExpression simplify_heavyweight(const SymbolicExpression& expression) {
             // 分母有理化
             SymbolicExpression rationalized;
             const bool denominator_proven_nonzero = is_known_nonzero_expression(right);
-            if (denominator_proven_nonzero &&
+            if ((denominator_proven_nonzero || simplify_allow_domain_changes) &&
                 try_rationalize_denominator(left, right, &rationalized)) return rationalized;
 
             // GCD 约分
             SymbolicExpression reduced;
-            if (denominator_proven_nonzero &&
+            if ((denominator_proven_nonzero || simplify_allow_domain_changes) &&
                 (try_reduce_symbolic_power_sum_quotient(left, right, &reduced) ||
                  try_reduce_polynomial_gcd_quotient(left, right, &reduced))) return reduced;
 
@@ -1320,12 +1330,14 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             }
             // exp(ln(x)) → x
             if (node->text == "exp" && argument.node_->type == NodeType::kFunction && argument.node_->text == "ln" &&
-                symbolic_property(SymbolicExpression(argument.node_->left)) == SymbolicProperty::kPositive) {
+                (symbolic_property(SymbolicExpression(argument.node_->left)) == SymbolicProperty::kPositive ||
+                 SymbolicExpression(argument.node_->left).node_->type == NodeType::kVariable)) {
                 return SymbolicExpression(argument.node_->left).simplify();
             }
             // ln(exp(x)) → x (for real x)
             if (node->text == "ln" && argument.node_->type == NodeType::kFunction && argument.node_->text == "exp" &&
-                is_provably_real(SymbolicExpression(argument.node_->left))) {
+                (is_provably_real(SymbolicExpression(argument.node_->left)) ||
+                 SymbolicExpression(argument.node_->left).node_->type == NodeType::kVariable)) {
                 return SymbolicExpression(argument.node_->left).simplify();
             }
 
@@ -1626,10 +1638,10 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             const bool denominator_proven_nonzero = is_known_nonzero_expression(right);
             {
                 SymbolicExpression rationalized;
-                if (denominator_proven_nonzero &&
+                if ((denominator_proven_nonzero || simplify_allow_domain_changes) &&
                     try_rationalize_denominator(left, right, &rationalized)) return rationalized;
                 SymbolicExpression reduced;
-                if (denominator_proven_nonzero &&
+                if ((denominator_proven_nonzero || simplify_allow_domain_changes) &&
                     (try_reduce_polynomial_quotient(left, right, &reduced) ||
                      try_reduce_polynomial_gcd_quotient(left, right, &reduced))) return reduced;
             }
@@ -1638,7 +1650,8 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 Scalar left_exp, right_exp;
                 decompose_power_factor(left, &left_base, &left_exp);
                 decompose_power_factor(right, &right_base, &right_exp);
-                if (denominator_proven_nonzero && expressions_match(left_base, right_base) &&
+                if ((denominator_proven_nonzero || simplify_allow_domain_changes) &&
+                    expressions_match(left_base, right_base) &&
                     can_combine_numeric_powers(left_base, left_exp, right_exp, true))
                     return rebuild_power_difference(left_base, left_exp - right_exp);
             }
@@ -1652,6 +1665,18 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 std::vector<SymbolicExpression> num_f, den_f;
                 collect_division_factors(left, &num_c, &num_f);
                 collect_division_factors(right, &den_c, &den_f);
+                // Numeric coefficients can always be cancelled without changing
+                // the symbolic denominator's domain.
+                if (!mymath::is_near_zero(den_c, kFormatEps()) &&
+                    !mymath::is_near_zero(num_c - den_c, kFormatEps())) {
+                    SymbolicExpression numeric_num =
+                        rebuild_product_expression(num_c / den_c, num_f);
+                    SymbolicExpression symbolic_den =
+                        rebuild_product_expression(Scalar(1), den_f);
+                    if (!expr_is_one(symbolic_den))
+                        return make_divide(numeric_num, symbolic_den);
+                    return numeric_num;
+                }
                 if (denominator_proven_nonzero && !mymath::is_near_zero(den_c, kFormatEps())) {
                     std::vector<bool> den_used(den_f.size(), false);
                     std::vector<SymbolicExpression> red_num;

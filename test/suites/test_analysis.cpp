@@ -505,7 +505,8 @@ int run_analysis_tests(int& passed, int& failed) {
             SymbolicExpression::parse("t * step(t) * exp(a*t)")
                 .laplace_transform("t", "s").simplify();
         const bool equivalent = first.to_string() == second.to_string() &&
-                                first.to_string().find("(-a + s) ^ 2") != std::string::npos;
+                                (first.to_string().find("(-a + s) ^ 2") != std::string::npos ||
+                                 first.to_string().find("(-a + s) * (-a + s)") != std::string::npos);
         bool rejected_negative_shift = false;
         try {
             (void)SymbolicExpression::parse("step(t + 2)")

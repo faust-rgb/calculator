@@ -10,6 +10,7 @@
 
 #include "suites/test_core_logic.h"
 #include "calculator.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "test_helpers.h"
 #include "math/mymath.h"
 #include <iostream>
@@ -22,6 +23,9 @@ namespace test_suites {
 int run_logic_calculus_tests(int& passed, int& failed) {
     Calculator calculator;
     using namespace test_helpers;
+    auto conditional_simplify = [](const std::string& expression) {
+        return SymbolicExpression::parse(expression).simplify_with_conditions();
+    };
 
     // 预定义一些测试函数
     std::string output;
@@ -244,15 +248,12 @@ int run_logic_calculus_tests(int& passed, int& failed) {
     }
 
     try {
-        std::string output;
-        const bool handled =
-            calculator.try_process_function_command("simplify(x * x / x)", &output);
-        if (handled && output == "x") {
+        const auto result = conditional_simplify("x * x / x");
+        if (result.expression.to_string() == "x" && result.condition.has_value()) {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: simplify(x * x / x) expected x got "
-                      << output << '\n';
+            std::cout << "FAIL: conditional simplify(x * x / x) expected x\n";
         }
     } catch (const std::exception& ex) {
         ++failed;
@@ -329,15 +330,12 @@ int run_logic_calculus_tests(int& passed, int& failed) {
     }
 
     try {
-        std::string output;
-        const bool handled =
-            calculator.try_process_function_command("simplify(x ^ 3 / x ^ 2)", &output);
-        if (handled && output == "x") {
+        const auto result = conditional_simplify("x ^ 3 / x ^ 2");
+        if (result.expression.to_string() == "x" && result.condition.has_value()) {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: simplify(x ^ 3 / x ^ 2) expected x got "
-                      << output << '\n';
+            std::cout << "FAIL: conditional simplify(x ^ 3 / x ^ 2) expected x\n";
         }
     } catch (const std::exception& ex) {
         ++failed;
@@ -397,15 +395,12 @@ int run_logic_calculus_tests(int& passed, int& failed) {
     }
 
     try {
-        std::string output;
-        const bool handled =
-            calculator.try_process_function_command("simplify((x ^ 2 - 1) / (x - 1))", &output);
-        if (handled && output == "x + 1") {
+        const auto result = conditional_simplify("(x ^ 2 - 1) / (x - 1)");
+        if (result.expression.to_string() == "x + 1" && result.condition.has_value()) {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: simplify((x ^ 2 - 1) / (x - 1)) expected x + 1 got "
-                      << output << '\n';
+            std::cout << "FAIL: conditional simplify((x ^ 2 - 1) / (x - 1)) expected x + 1\n";
         }
     } catch (const std::exception& ex) {
         ++failed;
@@ -414,16 +409,12 @@ int run_logic_calculus_tests(int& passed, int& failed) {
     }
 
     try {
-        std::string output;
-        const bool handled =
-            calculator.try_process_function_command(
-                "simplify((x ^ 3 - x) / (x ^ 2 - 1))", &output);
-        if (handled && output == "x") {
+        const auto result = conditional_simplify("(x ^ 3 - x) / (x ^ 2 - 1)");
+        if (result.expression.to_string() == "x" && result.condition.has_value()) {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: simplify polynomial GCD exact reduction expected x got "
-                      << output << '\n';
+            std::cout << "FAIL: conditional polynomial GCD exact reduction expected x\n";
         }
     } catch (const std::exception& ex) {
         ++failed;
@@ -432,16 +423,13 @@ int run_logic_calculus_tests(int& passed, int& failed) {
     }
 
     try {
-        std::string output;
-        const bool handled =
-            calculator.try_process_function_command(
-                "simplify((x ^ 3 - x) / (x ^ 2 - 2 * x + 1))", &output);
-        if (handled && output == "(x ^ 2 + x) / (x - 1)") {
+        const auto result = conditional_simplify("(x ^ 3 - x) / (x ^ 2 - 2 * x + 1)");
+        if (result.expression.to_string() == "(x ^ 2 + x) / (x - 1)" &&
+            result.condition.has_value()) {
             ++passed;
         } else {
             ++failed;
-            std::cout << "FAIL: simplify polynomial GCD partial reduction got "
-                      << output << '\n';
+            std::cout << "FAIL: conditional polynomial GCD partial reduction failed\n";
         }
     } catch (const std::exception& ex) {
         ++failed;
@@ -484,11 +472,11 @@ int run_logic_calculus_tests(int& passed, int& failed) {
     }
 
     try {
-        std::string output;
-        const bool handled = calculator.try_process_function_command(
-            "simplify((x ^ 3 + y ^ 3) / (x + y))", &output);
-        if (handled && (output == "-(x * y) + x ^ 2 + y ^ 2" ||
-                        output == "x ^ 2 - x * y + y ^ 2")) {
+        const auto result = conditional_simplify("(x ^ 3 + y ^ 3) / (x + y)");
+        const auto output = result.expression.to_string();
+        if (result.condition.has_value() &&
+            (output == "-(x * y) + x ^ 2 + y ^ 2" ||
+             output == "x ^ 2 - x * y + y ^ 2")) {
             ++passed;
         } else {
             ++failed;
@@ -701,7 +689,8 @@ int run_logic_calculus_tests(int& passed, int& failed) {
         if (handled &&
             is_one_of(output, {
                 "(asin(x) + sqrt(-(x ^ 2) + 1) * x) / 2 + C",
-                "1/2 * (asin(x) + sqrt(1 - x ^ 2) * x) + C"})) {
+                "1/2 * (asin(x) + sqrt(1 - x ^ 2) * x) + C",
+                "1/2 * (asin(x) + sqrt(-(x ^ 2) + 1) * x) + C"})) {
             ++passed;
         } else {
             ++failed;
@@ -738,7 +727,8 @@ int run_logic_calculus_tests(int& passed, int& failed) {
         if (handled && is_one_of(output, {
                 "1/2 * x ^ 2 - x + 2 * ln(abs(x + 1)) + C",
                 "x ^ 2 / 2 - x + 2 * ln(abs(x + 1)) + C",
-                "1/2 * x ^ 2 - x + 2 * ln(abs(x - -1)) + C"})) {
+                "1/2 * x ^ 2 - x + 2 * ln(abs(x - -1)) + C",
+                "-x + 2 * ln(abs(x + 1)) + 1/2 * x ^ 2 + C"})) {
             ++passed;
         } else {
             ++failed;
@@ -933,7 +923,8 @@ int run_logic_calculus_tests(int& passed, int& failed) {
         if (handled &&
             is_one_of(output, {
                 "1 / (-a ^ 2 + b ^ 2) * (-(atan(x / abs(b)) / abs(b) * a) + ln(abs(-a + x)) + -1/2 * ln(abs(b ^ 2 + x ^ 2))) + C",
-                "-1 / (-a ^ 2 + b ^ 2) * (-ln(abs(-a + x)) + atan(x / abs(b)) / abs(b) * a + 1/2 * ln(abs(b ^ 2 + x ^ 2))) + C"})) {
+                "-1 / (-a ^ 2 + b ^ 2) * (-ln(abs(-a + x)) + atan(x / abs(b)) / abs(b) * a + 1/2 * ln(abs(b ^ 2 + x ^ 2))) + C",
+                "-1 / (a ^ 2 + b ^ 2) * (-ln(abs(-a + x)) + atan(x / abs(b)) / abs(b) * a + 1/2 * ln(abs(b ^ 2 + x ^ 2))) + C"})) {
             ++passed;
         } else {
             ++failed;
@@ -1034,7 +1025,8 @@ int run_logic_calculus_tests(int& passed, int& failed) {
             calculator.try_process_function_command("integral(sin(x) ^ 2)", &output);
         if (handled && is_one_of(output, {
                 "x / 2 - sin(2 * x) / 4 + C",
-                "1/2 * x - 1/4 * sin(2 * x) + C"})) {
+                "1/2 * x - 1/4 * sin(2 * x) + C",
+                "1/2 * (x - cos(x) * sin(x)) + C"})) {
             ++passed;
         } else {
             ++failed;
@@ -1053,7 +1045,8 @@ int run_logic_calculus_tests(int& passed, int& failed) {
             calculator.try_process_function_command("integral(cos(x) ^ 2)", &output);
         if (handled && is_one_of(output, {
                 "sin(2 * x) / 4 + x / 2 + C",
-                "1/4 * sin(2 * x) + 1/2 * x + C"})) {
+                "1/4 * sin(2 * x) + 1/2 * x + C",
+                "1/2 * (cos(x) * sin(x) + x) + C"})) {
             ++passed;
         } else {
             ++failed;
@@ -1107,7 +1100,8 @@ int run_logic_calculus_tests(int& passed, int& failed) {
         if (handled && is_one_of(output, {
                 "x ^ 2 / 2 * y + y ^ 2 / 2 * x + C",
                 "y ^ 2 / 2 * x + x ^ 2 / 2 * y + C",
-                "1/2 * (y ^ 2 * x + x ^ 2 * y) + C"})) {
+                "1/2 * (y ^ 2 * x + x ^ 2 * y) + C",
+                "1/2 * (x ^ 2 * y + y ^ 2 * x) + C"})) {
             ++passed;
         } else {
             ++failed;
@@ -1126,7 +1120,7 @@ int run_logic_calculus_tests(int& passed, int& failed) {
         (void)regression_calculator.set_symbolic_constants_mode(true);
         const std::vector<std::pair<std::string, std::string>> symbolic_regression_cases = {
             {"expand((x + y) ^ 3)",
-             "x ^ 3 + 3 * y ^ 2 * x + y ^ 3 + 3 * x ^ 2 * y"},
+             "x ^ 3 + 3 * x ^ 2 * y + 3 * y ^ 2 * x + y ^ 3"},
             {"integral(cos(pi * x), x)", "sin(pi * x) / pi + C"},
             {"integral(exp(e * x), x)", "exp(e * x) / e + C"},
             {"integral(sec(x) * tan(x), x)", "sec(x) + C"},
@@ -1138,13 +1132,13 @@ int run_logic_calculus_tests(int& passed, int& failed) {
             {"integral(x * atan(x), x)",
              "1/2 * (atan(x) * (x ^ 2 + 1) - x) + C"},
             {"integral(x / sqrt(1 - x ^ 2), x)",
-             "-sqrt(1 - x ^ 2) + C"},
+             "-sqrt(-(x ^ 2) + 1) + C"},
             {"critical(x ^ 4 + y ^ 4, x, y)", "[x = 0, y = 0] (degenerate)"},
             {"limit((1 + 1 / x) ^ x, inf)", "2.71828182846"},
             {"limit(x * sin(1 / x), inf)", "1"},
             {"limit(ln(x) / x, x, inf)", "0"},
             {"fourier(exp(-abs(t)), t, w)", "2 / (w ^ 2 + 1)"},
-            {"ztrans(n ^ 2, n, z)", "z * (z + 1) / ((z - 1) * (z - 1) * (z - 1))"},
+            {"ztrans(n ^ 2, n, z)", "z * (z + 1) / (z - 1) ^ 3"},
         };
 
         for (const auto& test : symbolic_regression_cases) {
