@@ -66,5 +66,3 @@ std::string SymbolicCalculusModule::get_help_snippet(const std::string& topic) c
 }
 
 } // namespace symbolic_commands
-
-REGISTER_CALCULATOR_MODULE(symbolic_commands::SymbolicCalculusModule)

@@ -18,6 +18,7 @@
 // ============================================================================
 
 #include "inline_expander.h"
+#include "core/services/core_manager_interfaces.h"
 
 #include <cctype>
 #include <stdexcept>
@@ -30,29 +31,30 @@ namespace {
 
 /**
  * @brief 检查名称是否为内联函数命令
+ * @param ctx 执行上下文
  * @param name 要检查的名称
  * @return 如果是内联函数命令返回 true
  */
-bool is_inline_function_command_name(std::string_view name) {
-    // 微积分相关命令
+bool is_inline_function_command(IExecutionContext* ctx, std::string_view name) {
+    if (ctx && ctx->commands().is_inlineable(std::string(name))) {
+        return true;
+    }
+    // 兼容内置数学命令的回退检查
     return name == "diff" ||
            name == "double_integral" ||
            name == "double_integral_cyl" ||
            name == "double_integral_polar" ||
            name == "integral" ||
+           name == "integrate" ||
            name == "limit" ||
-           // ODE 相关命令
            name == "ode" ||
            name == "ode_system" ||
            name == "ode_table" ||
            name == "ode_system_table" ||
-           // 级数展开
            name == "taylor" ||
-           // 多重积分
            name == "triple_integral" ||
            name == "triple_integral_cyl" ||
            name == "triple_integral_sph" ||
-           // 多项式运算
            name == "poly_add" ||
            name == "poly_sub" ||
            name == "poly_mul";
@@ -163,7 +165,7 @@ std::string expand_inline_function_commands(
 
         const std::string_view name = expression.substr(i, name_end - i);
         // 如果不是内联函数命令，直接追加
-        if (!is_inline_function_command_name(name)) {
+        if (!is_inline_function_command(ctx, name)) {
             expanded.append(expression.substr(i, name_end - i));
             i = name_end;
             continue;

@@ -626,7 +626,8 @@ int run_analysis_tests(int& passed, int& failed) {
             rejected_growth = true;
         }
         if (phase.to_string().find("delta(t + 3)") != std::string::npos &&
-            phase.to_string().find("0.159154") != std::string::npos &&
+            (phase.to_string().find("pi") != std::string::npos ||
+             phase.to_string().find("0.159154") != std::string::npos) &&
             constant.contains_distribution && rejected_growth) {
             ++passed;
         } else {

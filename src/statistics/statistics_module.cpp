@@ -288,5 +288,3 @@ StatisticsModule::get_functions_map() const {
 
     return funcs;
 }
-
-REGISTER_CALCULATOR_MODULE(StatisticsModule)

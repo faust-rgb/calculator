@@ -572,5 +572,3 @@ std::string RootfindingModule::get_help_snippet(const std::string& topic) const 
 }
 
 }  // namespace rootfinding
-
-REGISTER_CALCULATOR_MODULE(rootfinding::RootfindingModule)

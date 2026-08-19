@@ -29,11 +29,21 @@ class TransformModule : public CalculatorModule {
 public:
     std::string name() const override { return "Transforms"; }
 
+    ModuleCapability capabilities() const override {
+        return ModuleCapability::kCommands | ModuleCapability::kFunctions | ModuleCapability::kHelp;
+    }
+
     std::vector<std::string> get_commands() const override;
+    std::vector<CommandSpec> get_command_specs() const override;
+    std::vector<std::string> get_function_names() const override;
 
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
                              ServiceLocator& locator) override;
+
+    std::string execute_args_view(std::string_view command,
+                                  const std::vector<std::string_view>& args,
+                                  ServiceLocator& locator) override;
 
     std::string get_help_snippet(const std::string& topic) const override;
 };

@@ -28,48 +28,34 @@
 #include "symbolic/modules/transform_module.h"
 #include "time/time_module.h"
 
-#include <set>
-
 void register_standard_modules(Calculator* calculator) {
     if (!calculator) return;
 
-    // 首先注册已通过 ModuleRegistry 登记的模块（支持第三方扩展）
-    std::set<std::string> registered_names;
-    for (const auto& factory : ModuleRegistry::instance().factories()) {
-        auto mod = factory();
-        if (mod) {
-            registered_names.insert(mod->name());
-            calculator->register_module(mod);
-        }
-    }
-
-    // 显式装配内建模块（确定性兜底，防止静态库链接裁剪）
-    auto register_if_missing = [&](const auto& create_fn, const std::string& name) {
-        if (registered_names.find(name) == registered_names.end()) {
-            calculator->register_module(create_fn());
-            registered_names.insert(name);
-        }
+    // Explicit assembly keeps startup order deterministic and avoids static
+    // initialization and static-library dead-stripping issues.
+    auto register_builtin = [&](const auto& create_fn) {
+        calculator->register_module(create_fn());
     };
 
-    register_if_missing([]() { return std::make_shared<StandardMathModule>(); }, "standard_math");
-    register_if_missing([]() { return std::make_shared<IntegerMathModule>(); }, "integer_math");
-    register_if_missing([]() { return std::make_shared<PreciseModule>(); }, "precise");
-    register_if_missing([]() { return std::make_shared<MatrixModule>(); }, "matrix");
-    register_if_missing([]() { return std::make_shared<polynomial_ops::PolynomialModule>(); }, "polynomial");
-    register_if_missing([]() { return std::make_shared<StatisticsModule>(); }, "statistics");
-    register_if_missing([]() { return std::make_shared<DspModule>(); }, "dsp");
-    register_if_missing([]() { return std::make_shared<symbolic_commands::SymbolicModule>(); }, "symbolic");
-    register_if_missing([]() { return std::make_shared<symbolic_commands::SymbolicCalculusModule>(); }, "symbolic_calculus");
-    register_if_missing([]() { return std::make_shared<transforms::TransformModule>(); }, "transform");
-    register_if_missing([]() { return std::make_shared<analysis_cmds::AnalysisModule>(); }, "analysis");
-    register_if_missing([]() { return std::make_shared<analysis::pde::PdeModule>(); }, "PDE");
-    register_if_missing([]() { return std::make_shared<integration_ops::IntegrationModule>(); }, "integration");
-    register_if_missing([]() { return std::make_shared<ode_ops::ODEModule>(); }, "ode");
-    register_if_missing([]() { return std::make_shared<optimization::OptimizationModule>(); }, "optimization");
-    register_if_missing([]() { return std::make_shared<rootfinding::RootfindingModule>(); }, "rootfinding");
-    register_if_missing([]() { return std::make_shared<series_ops::SeriesModule>(); }, "series");
-    register_if_missing([]() { return std::make_shared<PlotModule>(); }, "plot");
-    register_if_missing([]() { return std::make_shared<TimeModule>(); }, "time");
-    register_if_missing([]() { return std::make_shared<IoModule>(); }, "io");
-    register_if_missing([]() { return std::make_shared<SystemModule>(); }, "system");
+    register_builtin([]() { return std::make_shared<StandardMathModule>(); });
+    register_builtin([]() { return std::make_shared<IntegerMathModule>(); });
+    register_builtin([]() { return std::make_shared<PreciseModule>(); });
+    register_builtin([]() { return std::make_shared<MatrixModule>(); });
+    register_builtin([]() { return std::make_shared<polynomial_ops::PolynomialModule>(); });
+    register_builtin([]() { return std::make_shared<StatisticsModule>(); });
+    register_builtin([]() { return std::make_shared<DspModule>(); });
+    register_builtin([]() { return std::make_shared<symbolic_commands::SymbolicModule>(); });
+    register_builtin([]() { return std::make_shared<symbolic_commands::SymbolicCalculusModule>(); });
+    register_builtin([]() { return std::make_shared<transforms::TransformModule>(); });
+    register_builtin([]() { return std::make_shared<analysis_cmds::AnalysisModule>(); });
+    register_builtin([]() { return std::make_shared<analysis::pde::PdeModule>(); });
+    register_builtin([]() { return std::make_shared<integration_ops::IntegrationModule>(); });
+    register_builtin([]() { return std::make_shared<ode_ops::ODEModule>(); });
+    register_builtin([]() { return std::make_shared<optimization::OptimizationModule>(); });
+    register_builtin([]() { return std::make_shared<rootfinding::RootfindingModule>(); });
+    register_builtin([]() { return std::make_shared<series_ops::SeriesModule>(); });
+    register_builtin([]() { return std::make_shared<PlotModule>(); });
+    register_builtin([]() { return std::make_shared<TimeModule>(); });
+    register_builtin([]() { return std::make_shared<IoModule>(); });
+    register_builtin([]() { return std::make_shared<SystemModule>(); });
 }

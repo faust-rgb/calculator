@@ -305,5 +305,3 @@ std::string SystemModule::get_help_snippet(const std::string& topic) const {
     }
     return "";
 }
-
-REGISTER_CALCULATOR_MODULE(SystemModule)

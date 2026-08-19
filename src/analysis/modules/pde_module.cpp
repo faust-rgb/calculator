@@ -163,6 +163,5 @@ std::string PdeModule::get_help_snippet(const std::string& topic) const {
     return "";
 }
 
-REGISTER_CALCULATOR_MODULE(PdeModule)
 
 } // namespace analysis::pde

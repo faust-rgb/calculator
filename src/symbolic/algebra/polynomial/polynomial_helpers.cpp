@@ -877,23 +877,74 @@ bool try_factor_common_terms(const SymbolicExpression& left,
 bool is_squared_function(const SymbolicExpression& expression,
                          const std::string& function_name,
                          std::string* argument_key) {
-    if (expression.node_->type != NodeType::kPower) {
-        return false;
+    if (!expression.node_) return false;
+
+    if (expression.node_->type == NodeType::kPower) {
+        Scalar exponent = Scalar(0.0L);
+        if (!SymbolicExpression(expression.node_->right).is_number(&exponent) ||
+            !mymath::is_near_zero(exponent - 2.0, kFormatEps())) {
+            return false;
+        }
+
+        const SymbolicExpression base(expression.node_->left);
+        if (base.node_->type != NodeType::kFunction || base.node_->text != function_name) {
+            return false;
+        }
+
+        if (argument_key) *argument_key = node_structural_key(base.node_->left);
+        return true;
     }
 
-    Scalar exponent = Scalar(0.0L);
-    if (!SymbolicExpression(expression.node_->right).is_number(&exponent) ||
-        !mymath::is_near_zero(exponent - 2.0, kFormatEps())) {
-        return false;
+    if (expression.node_->type == NodeType::kMultiply) {
+        const SymbolicExpression left(expression.node_->left);
+        const SymbolicExpression right(expression.node_->right);
+        if (left.node_->type == NodeType::kFunction && left.node_->text == function_name &&
+            right.node_->type == NodeType::kFunction && right.node_->text == function_name) {
+            std::string left_arg = node_structural_key(left.node_->left);
+            std::string right_arg = node_structural_key(right.node_->left);
+            if (left_arg == right_arg) {
+                if (argument_key) *argument_key = left_arg;
+                return true;
+            }
+        }
     }
 
-    const SymbolicExpression base(expression.node_->left);
-    if (base.node_->type != NodeType::kFunction || base.node_->text != function_name) {
-        return false;
+    return false;
+}
+
+bool is_scaled_squared_function(const SymbolicExpression& expression,
+                                const std::string& function_name,
+                                std::string* argument_key,
+                                SymbolicExpression* coefficient) {
+    if (!expression.node_) return false;
+
+    if (is_squared_function(expression, function_name, argument_key)) {
+        if (coefficient) *coefficient = SymbolicExpression::number(Scalar(1.0L));
+        return true;
     }
 
-    *argument_key = node_structural_key(base.node_->left);
-    return true;
+    if (expression.node_->type == NodeType::kNegate) {
+        if (is_squared_function(SymbolicExpression(expression.node_->left), function_name, argument_key)) {
+            if (coefficient) *coefficient = SymbolicExpression::number(Scalar(-1.0L));
+            return true;
+        }
+    }
+
+    if (expression.node_->type == NodeType::kMultiply) {
+        const SymbolicExpression left(expression.node_->left);
+        const SymbolicExpression right(expression.node_->right);
+
+        if (is_squared_function(right, function_name, argument_key)) {
+            if (coefficient) *coefficient = left;
+            return true;
+        }
+        if (is_squared_function(left, function_name, argument_key)) {
+            if (coefficient) *coefficient = right;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -904,8 +955,11 @@ bool is_squared_function(const SymbolicExpression& expression,
  * - 仅含字母、数字、下划线和撇号
  */
 bool is_identifier_variable_name(const std::string& name) {
-    if (name.empty() ||
-        !std::isalpha(static_cast<unsigned char>(name.front()))) {
+    if (name.empty()) {
+        return false;
+    }
+    const unsigned char first = static_cast<unsigned char>(name.front());
+    if (!std::isalpha(first) && first != '_') {
         return false;
     }
 

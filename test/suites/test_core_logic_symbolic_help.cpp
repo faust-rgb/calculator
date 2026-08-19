@@ -9,6 +9,7 @@
 
 #include "suites/test_core_logic.h"
 #include "calculator.h"
+#include "core/services/core_services.h"
 #include "test_helpers.h"
 #include <iostream>
 #include <vector>
@@ -533,6 +534,58 @@ int run_logic_symbolic_help_tests(int& passed, int& failed) {
         std::cout << "FAIL: help_topic(unknown) expected error but succeeded\n";
     } catch (const std::exception&) {
         ++passed;
+    }
+
+    // ========== 帮助与命令分发测试 ==========
+    try {
+        const std::string out_meta = calculator.process_line(":help", false);
+        const std::string out_call = calculator.help_text();
+        if (!out_meta.empty() && out_meta.find("help, :help") != std::string::npos &&
+            !out_call.empty() && out_call.find("help, :help") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: help and :help command dispatch mismatch\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: help command dispatch threw error: " << ex.what() << '\n';
+    }
+
+    try {
+        const std::string out_meta_cmd = calculator.process_line(":help commands", false);
+        const std::string out_call_cmd = calculator.help_topic("commands");
+        if (!out_meta_cmd.empty() && out_meta_cmd.find(":vars") != std::string::npos &&
+            !out_call_cmd.empty() && out_call_cmd.find(":vars") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: help commands dispatch mismatch\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: help topic dispatch threw error: " << ex.what() << '\n';
+    }
+
+    // ========== CommandRegistry 干净命令名验证 ==========
+    try {
+        const auto cmd_names = calculator.module_command_names();
+        bool has_internal_prefix = false;
+        for (const auto& name : cmd_names) {
+            if (name.rfind("C:", 0) == 0 || name.rfind("M:", 0) == 0) {
+                has_internal_prefix = true;
+                break;
+            }
+        }
+        if (!has_internal_prefix && !cmd_names.empty()) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: module_command_names contains internal prefix C: or M:\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: get_all_commands threw error: " << ex.what() << '\n';
     }
 
     return 0;

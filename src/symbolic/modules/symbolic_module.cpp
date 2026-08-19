@@ -17,7 +17,6 @@
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/base/assumptions.h"
 #include "core/services/string_utils.h"
-#include "core/services/service_registry.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "execution/engine/inline_expander.h"
 #include "execution/engine/script_context.h"
@@ -244,5 +243,3 @@ std::string SymbolicModule::get_help_snippet(const std::string& topic) const {
 }
 
 }  // namespace symbolic_commands
-
-REGISTER_CALCULATOR_MODULE(symbolic_commands::SymbolicModule)

@@ -491,5 +491,3 @@ Examples:
     }
     return "";
 }
-
-REGISTER_CALCULATOR_MODULE(TimeModule)

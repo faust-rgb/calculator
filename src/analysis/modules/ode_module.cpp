@@ -392,5 +392,3 @@ std::string ODEModule::get_help_snippet(const std::string& topic) const {
 }
 
 }  // namespace ode_ops
-
-REGISTER_CALCULATOR_MODULE(ode_ops::ODEModule)

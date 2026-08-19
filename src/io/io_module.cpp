@@ -791,5 +791,3 @@ std::string IoModule::get_help_snippet(const std::string& topic) const {
     if (topic == "write_csv") return "write_csv(path, matrix) - Write matrix to CSV file";
     return "";
 }
-
-REGISTER_CALCULATOR_MODULE(IoModule)

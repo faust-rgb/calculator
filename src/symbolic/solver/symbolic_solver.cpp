@@ -517,9 +517,23 @@ Solution SymbolicSolver::solve_cubic(
         }
     }
 
-    // 符号系数：返回 RootOf 表示
-    SymbolicExpression poly = build_symbolic_polynomial_expression(coeffs, variable);
-    return Solution::root_of_representation(poly, 0);
+    // 符号系数：使用 Cardano 根式解
+    SymbolicExpression three = SymbolicExpression::number(Scalar(3.0L));
+    SymbolicExpression two = SymbolicExpression::number(Scalar(2.0L));
+    SymbolicExpression nine = SymbolicExpression::number(Scalar(9.0L));
+    SymbolicExpression twenty_seven = SymbolicExpression::number(Scalar(27.0L));
+    SymbolicExpression four = SymbolicExpression::number(Scalar(4.0L));
+
+    SymbolicExpression p = (three * a * c - b * b) / (three * a * a);
+    SymbolicExpression q = (two * b * b * b - nine * a * b * c + twenty_seven * a * a * d) / (twenty_seven * a * a * a);
+    SymbolicExpression delta = (q * q / four) + (p * p * p / twenty_seven);
+
+    SymbolicExpression sqrt_delta = make_function("sqrt", delta);
+    SymbolicExpression u = make_power((-q / two) + sqrt_delta, SymbolicExpression::number(Scalar(1.0L / 3.0L)));
+    SymbolicExpression v = make_power((-q / two) - sqrt_delta, SymbolicExpression::number(Scalar(1.0L / 3.0L)));
+
+    SymbolicExpression x1 = (u + v - b / (three * a)).simplify();
+    return Solution::single(x1, "symbolic_cardano_formula");
 }
 
 Solution SymbolicSolver::solve_quartic(
@@ -606,16 +620,116 @@ bool SymbolicSolver::try_lambert_w(
     const SymbolicExpression& equation,
     const std::string& variable,
     Solution* result) {
-    (void)equation;
-    (void)variable;
-    (void)result;
 
-    // 检测 x * exp(x) = a 形式 → x = W(a)
-    // 检测 x * exp(k*x) = a 形式 → x = W(k*a) / k
+    SymbolicExpression norm = normalize_equation(equation).simplify();
 
-    // 简化版本：检测特定模式
-    // x * exp(x) - a = 0
-    // 这需要更复杂的模式匹配
+    // 分离包含变量与不含变量的常数项
+    std::vector<SymbolicExpression> terms;
+    collect_additive_expressions(norm, &terms);
+
+    SymbolicExpression fx = SymbolicExpression::number(Scalar(0.0L));
+    SymbolicExpression const_part = SymbolicExpression::number(Scalar(0.0L));
+
+    for (const auto& term : terms) {
+        if (term.is_constant(variable)) {
+            const_part = make_add(const_part, term).simplify();
+        } else {
+            fx = make_add(fx, term).simplify();
+        }
+    }
+
+    // 方程形如 fx = rhs_target
+    SymbolicExpression rhs_target = make_negate(const_part).simplify();
+
+    // 模式 1: c1 * x * exp(k * x) = A  ==>  x = W(k*A/c1) / k
+    if (fx.node_ && fx.node_->type == NodeType::kMultiply) {
+        SymbolicExpression left(fx.node_->left);
+        SymbolicExpression right(fx.node_->right);
+
+        auto check_linear_exp = [&](const SymbolicExpression& lin_cand,
+                                    const SymbolicExpression& exp_cand,
+                                    SymbolicExpression* sol) -> bool {
+            if (exp_cand.node_ && exp_cand.node_->type == NodeType::kFunction &&
+                exp_cand.node_->text == "exp" && exp_cand.node_->left) {
+                SymbolicExpression exp_arg(exp_cand.node_->left);
+                // 检查 exp_arg 是否线性依赖于 variable: k * x
+                SymbolicExpression k_coeff = exp_arg.derivative(variable).simplify();
+                if (k_coeff.is_constant(variable) && !expr_is_zero(k_coeff)) {
+                    SymbolicExpression lin_coeff = lin_cand.derivative(variable).simplify();
+                    if (lin_coeff.is_constant(variable) && !expr_is_zero(lin_coeff)) {
+                        // lin_cand = lin_coeff * variable
+                        SymbolicExpression w_arg = make_divide(make_multiply(k_coeff, rhs_target), lin_coeff).simplify();
+                        *sol = make_divide(make_function("lambertw", w_arg), k_coeff).simplify();
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+
+        SymbolicExpression sol;
+        if (check_linear_exp(left, right, &sol) || check_linear_exp(right, left, &sol)) {
+            *result = Solution::single(sol, "lambert_w");
+            return true;
+        }
+    }
+
+    // 模式 2: k1 * x + k2 * ln(x) = A  ==>  x = (k2/k1) * W((k1/k2) * exp(A/k2))
+    if (fx.node_ && fx.node_->type == NodeType::kAdd) {
+        SymbolicExpression left(fx.node_->left);
+        SymbolicExpression right(fx.node_->right);
+
+        auto check_linear_ln = [&](const SymbolicExpression& lin_cand,
+                                   const SymbolicExpression& ln_cand,
+                                   SymbolicExpression* sol) -> bool {
+            if (ln_cand.node_ && ln_cand.node_->type == NodeType::kFunction &&
+                ln_cand.node_->text == "ln" && ln_cand.node_->left) {
+                SymbolicExpression ln_arg(ln_cand.node_->left);
+                if (ln_arg.is_variable_named(variable)) {
+                    SymbolicExpression k1 = lin_cand.derivative(variable).simplify();
+                    if (k1.is_constant(variable) && !expr_is_zero(k1)) {
+                        // k1 * x + ln(x) = A
+                        SymbolicExpression exp_arg = rhs_target;
+                        SymbolicExpression w_arg = make_multiply(k1, make_function("exp", exp_arg)).simplify();
+                        *sol = make_divide(make_function("lambertw", w_arg), k1).simplify();
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+
+        SymbolicExpression sol;
+        if (check_linear_ln(left, right, &sol) || check_linear_ln(right, left, &sol)) {
+            *result = Solution::single(sol, "lambert_w");
+            return true;
+        }
+    }
+
+    // 模式 3: x * ln(x) = A  ==>  x = exp(W(A))
+    if (fx.node_ && fx.node_->type == NodeType::kMultiply) {
+        SymbolicExpression left(fx.node_->left);
+        SymbolicExpression right(fx.node_->right);
+
+        auto check_x_ln = [&](const SymbolicExpression& var_cand,
+                              const SymbolicExpression& ln_cand,
+                              SymbolicExpression* sol) -> bool {
+            if (var_cand.is_variable_named(variable) &&
+                ln_cand.node_ && ln_cand.node_->type == NodeType::kFunction &&
+                ln_cand.node_->text == "ln" && ln_cand.node_->left &&
+                SymbolicExpression(ln_cand.node_->left).is_variable_named(variable)) {
+                *sol = make_function("exp", make_function("lambertw", rhs_target)).simplify();
+                return true;
+            }
+            return false;
+        };
+
+        SymbolicExpression sol;
+        if (check_x_ln(left, right, &sol) || check_x_ln(right, left, &sol)) {
+            *result = Solution::single(sol, "lambert_w");
+            return true;
+        }
+    }
 
     return false;
 }
@@ -666,9 +780,8 @@ bool SymbolicSolver::extract_linear_coefficients(
     *b = SymbolicExpression::number(Scalar(0));
 
     for (const auto& term : terms) {
-        // 检查项是否包含 var
-        std::string term_str = term.to_string();
-        if (term_str.find(var) == std::string::npos) {
+        // 检查项是否包含 var (AST 语义级别检查)
+        if (term.is_constant(var)) {
             // 常数项
             *b = make_add(*b, term).simplify();
         } else {

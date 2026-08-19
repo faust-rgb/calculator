@@ -1,432 +1,17 @@
-// ============================================================================
-// 积分变换核心实现模块
-// ============================================================================
-//
-// 本文件实现各种积分变换的符号计算核心算法：
-//
-// 1. Laplace 变换
-//    L{f(t)} = ∫₀^∞ f(t) * e^(-st) dt
-//    - 支持基本函数：1, t^n, exp(at), sin(at), cos(at)
-//    - 支持性质：线性性、频移、时移、微分性质
-//
-// 2. 逆 Laplace 变换
-//    - 部分分式分解
-//    - 极点展开
-//    - 二次式处理（振荡/非振荡响应）
-//
-// 3. Fourier 变换
-//    F{f(t)} = ∫_{-∞}^{∞} f(t) * e^(-iωt) dt
-//    - 支持基本函数：delta, step, exp, sin, cos
-//    - 特殊函数：exp(-|t|), abs
-//
-// 4. Z 变换
-//    Z{x[n]} = Σ x[n] * z^(-n)
-//    - 支持基本序列：delta[n-k], step[n], n^k, a^n
-//    - 支持性质：线性性、时移、Z 域微分
-//
-// 各变换函数使用模式匹配识别表达式形式，
-// 并应用相应的变换公式。
-// ============================================================================
-
-#include "symbolic/core/symbolic_expression_internal.h"
-#include "symbolic/transformation/laplace_normalizer.h"
-
-#include "types/scalar_type.h"
-#include "math/mymath.h"
-
-#include <functional>
-#include <unordered_map>
+#include <cmath>
 #include <stdexcept>
 #include <string>
-#include <utility>
 #include <vector>
+#include <unordered_map>
+#include "types/scalar_type.h"
+#include "math/mymath.h"
+#include "symbolic/core/symbolic_expression.h"
+#include "symbolic/core/symbolic_expression_internal.h"
+#include "symbolic/transformation/laplace_normalizer.h"
+#include "symbolic/transformation/rules/transform_rules.h"
+#include "symbolic/transformation/transform_common.h"
 
 namespace symbolic_expression_internal {
-
-using Scalar = mymath::Scalar;
-
-class TransformRecursionGuard {
-public:
-    explicit TransformRecursionGuard(const char* transform) : transform_(transform) {
-        if (++depth_ > current_transform_max_depth()) {
-            --depth_;
-            throw std::runtime_error(std::string("symbolic ") + transform_ +
-                                     " transform recursion limit exceeded");
-        }
-    }
-
-    ~TransformRecursionGuard() { --depth_; }
-
-private:
-    const char* transform_;
-    static thread_local int depth_;
-};
-
-thread_local int TransformRecursionGuard::depth_ = 0;
-
-struct TransformMemo {
-    std::unordered_map<std::string, SymbolicExpression> values;
-
-    void trim() {
-        // Keep recursive sessions bounded. Expressions are immutable, so an
-        // entry can be safely discarded without affecting correctness.
-        if (values.size() > 1024) values.clear();
-    }
-};
-
-thread_local TransformMemo g_laplace_memo;
-thread_local TransformMemo g_inverse_laplace_memo;
-thread_local int g_laplace_session_depth = 0;
-thread_local int g_inverse_laplace_session_depth = 0;
-
-class TransformMemoSession {
-public:
-    TransformMemoSession(TransformMemo* memo, int* depth)
-        : memo_(memo), depth_(depth), root_(++(*depth_) == 1) {
-        if (root_) memo_->values.clear();
-    }
-
-    ~TransformMemoSession() {
-        if (root_) memo_->values.clear();
-        --(*depth_);
-    }
-
-    TransformMemoSession(const TransformMemoSession&) = delete;
-    TransformMemoSession& operator=(const TransformMemoSession&) = delete;
-
-private:
-    TransformMemo* memo_;
-    int* depth_;
-    bool root_;
-};
-
-std::string transform_cache_key(const char* direction,
-                                const SymbolicExpression& expression,
-                                const std::string& input_variable,
-                                const std::string& output_variable) {
-    return std::string(direction) + "|" + input_variable + "|" + output_variable +
-           "|" + std::to_string(current_transform_max_depth()) + "|" +
-           expression.simplify().to_string();
-}
-
-// ============================================================================
-// 辅助函数
-// ============================================================================
-
-/**
- * @brief 计算阶乘（浮点结果）
- */
-Scalar factorial_double(int exponent) {
-    Scalar value = Scalar(1.0L);
-    for (int i = 2; i <= exponent; ++i) {
-        value *= Scalar(static_cast<long long>(i));
-    }
-    return value;
-}
-
-// ============================================================================
-// 表达式匹配辅助函数
-// ============================================================================
-
-/**
- * @brief 检查表达式是否为指定函数
- */
-bool is_function_named(const SymbolicExpression& expression,
-                       const std::string& function_name,
-                       SymbolicExpression* argument = nullptr) {
-    SymbolicExpression candidate = expression;
-    if (!candidate.node_ || candidate.node_->type != NodeType::kFunction ||
-        candidate.node_->text != function_name) {
-        candidate = expression.simplify();
-    }
-    if (!candidate.node_ || candidate.node_->type != NodeType::kFunction ||
-        candidate.node_->text != function_name) {
-        return false;
-    }
-    if (argument != nullptr) {
-        *argument = SymbolicExpression(candidate.node_->left).simplify();
-    }
-    return true;
-}
-
-/**
- * @brief 检查表达式是否为虚数单位 i
- */
-bool is_i_variable(const SymbolicExpression& expression) {
-    return expr_is_variable(expression.simplify(), "i");
-}
-
-/**
- * @brief 检查表达式是否为 abs(variable_name)
- */
-bool is_abs_of_variable(const SymbolicExpression& expression,
-                        const std::string& variable_name) {
-    SymbolicExpression argument;
-    return is_function_named(expression, "abs", &argument) &&
-           argument.is_variable_named(variable_name);
-}
-
-/**
- * @brief 分解 i * variable 形式
- *
- * 检查表达式是否为 coefficient * i * variable_name 形式。
- */
-bool decompose_i_times_variable(const SymbolicExpression& expression,
-                                const std::string& variable_name,
-                                Scalar* coefficient) {
-    const SymbolicExpression simplified = expression.simplify();
-    Scalar numeric_factor = Scalar(1.0L);
-    std::vector<SymbolicExpression> symbolic_factors;
-    collect_multiplicative_terms(simplified, &numeric_factor, &symbolic_factors);
-
-    bool has_i = false;
-    bool has_variable = false;
-    for (const SymbolicExpression& factor : symbolic_factors) {
-        if (is_i_variable(factor)) {
-            if (has_i) {
-                return false;
-            }
-            has_i = true;
-            continue;
-        }
-        if (expr_is_variable(factor.simplify(), variable_name)) {
-            if (has_variable) {
-                return false;
-            }
-            has_variable = true;
-            continue;
-        }
-        return false;
-    }
-
-    if (!has_i || !has_variable) {
-        return false;
-    }
-
-    *coefficient = numeric_factor;
-    return true;
-}
-
-/**
- * @brief 分解单位斜率的线性表达式
- *
- * 检查表达式是否为 x - shift 形式。
- */
-bool decompose_unit_slope_shift(const SymbolicExpression& expression,
-                                const std::string& variable_name,
-                                Scalar* shift) {
-    Scalar coefficient = Scalar(0.0L);
-    Scalar intercept = Scalar(0.0L);
-    if (!decompose_linear(expression.simplify(),
-                          variable_name,
-                          &coefficient,
-                          &intercept) ||
-        !mymath::is_near_zero(coefficient - Scalar(1.0L), kFormatEps())) {
-        return false;
-    }
-    *shift = -intercept;
-    return true;
-}
-
-bool decompose_positive_slope_shift(const SymbolicExpression& expression,
-                                    const std::string& variable_name,
-                                    Scalar* shift) {
-    Scalar coefficient = Scalar(0.0L);
-    Scalar intercept = Scalar(0.0L);
-    if (!decompose_linear(expression.simplify(), variable_name,
-                          &coefficient, &intercept) ||
-        coefficient <= kFormatEps()) {
-        return false;
-    }
-    *shift = -intercept / coefficient;
-    return true;
-}
-
-/**
- * @brief 匹配 step(x - shift) 形式
- */
-bool match_step_shift(const SymbolicExpression& expression,
-                      const std::string& variable_name,
-                      Scalar* shift) {
-    SymbolicExpression argument;
-    return is_function_named(expression, "step", &argument) &&
-           decompose_positive_slope_shift(argument, variable_name, shift);
-}
-
-/**
- * @brief 匹配 delta(x - shift) 形式
- */
-bool match_delta_shift(const SymbolicExpression& expression,
-                       const std::string& variable_name,
-                       Scalar* shift) {
-    SymbolicExpression argument;
-    return is_function_named(expression, "delta", &argument) &&
-           decompose_unit_slope_shift(argument, variable_name, shift);
-}
-
-/**
- * @brief 匹配 exp(coefficient * x + intercept) 形式
- */
-bool match_exponential_linear(const SymbolicExpression& expression,
-                               const std::string& variable_name,
-                               Scalar* coefficient,
-                               Scalar* intercept) {
-    SymbolicExpression argument;
-    return is_function_named(expression, "exp", &argument) &&
-           decompose_linear(argument, variable_name, coefficient, intercept);
-}
-
-/**
- * @brief 匹配 sin(coefficient * x + intercept) 形式
- */
-bool match_sine_linear(const SymbolicExpression& expression,
-                       const std::string& variable_name,
-                       Scalar* coefficient,
-                       Scalar* intercept) {
-    SymbolicExpression argument;
-    return is_function_named(expression, "sin", &argument) &&
-           decompose_linear(argument, variable_name, coefficient, intercept);
-}
-
-/**
- * @brief 匹配 cos(coefficient * x + intercept) 形式
- */
-bool match_cosine_linear(const SymbolicExpression& expression,
-                         const std::string& variable_name,
-                         Scalar* coefficient,
-                         Scalar* intercept) {
-    SymbolicExpression argument;
-    return is_function_named(expression, "cos", &argument) &&
-           decompose_linear(argument, variable_name, coefficient, intercept);
-}
-
-/**
- * @brief 匹配 sinh(coefficient * x + intercept) 形式
- */
-bool match_sinh_linear(const SymbolicExpression& expression,
-                       const std::string& variable_name,
-                       Scalar* coefficient,
-                       Scalar* intercept) {
-    SymbolicExpression argument;
-    return is_function_named(expression, "sinh", &argument) &&
-           decompose_linear(argument, variable_name, coefficient, intercept);
-}
-
-/**
- * @brief 匹配 cosh(coefficient * x + intercept) 形式
- */
-bool match_cosh_linear(const SymbolicExpression& expression,
-                       const std::string& variable_name,
-                       Scalar* coefficient,
-                       Scalar* intercept) {
-    SymbolicExpression argument;
-    return is_function_named(expression, "cosh", &argument) &&
-           decompose_linear(argument, variable_name, coefficient, intercept);
-}
-
-// Symbolic counterpart of the numeric matchers above.  Transform parameters
-// (for example a in exp(a*t)) must not be forced through Scalar.
-bool match_exponential_linear_symbolic(const SymbolicExpression& expression,
-                                       const std::string& variable_name,
-                                       SymbolicExpression* coefficient,
-                                       SymbolicExpression* intercept) {
-    SymbolicExpression argument;
-    return is_function_named(expression, "exp", &argument) &&
-            symbolic_decompose_linear(argument, variable_name, coefficient, intercept);
-}
-
-bool match_sine_linear_symbolic(const SymbolicExpression& expression,
-                                const std::string& variable_name,
-                                SymbolicExpression* coefficient,
-                                SymbolicExpression* intercept) {
-    SymbolicExpression argument;
-    return is_function_named(expression, "sin", &argument) &&
-           symbolic_decompose_linear(argument, variable_name, coefficient, intercept);
-}
-
-bool match_cosine_linear_symbolic(const SymbolicExpression& expression,
-                                  const std::string& variable_name,
-                                  SymbolicExpression* coefficient,
-                                  SymbolicExpression* intercept) {
-    SymbolicExpression argument;
-    return is_function_named(expression, "cos", &argument) &&
-           symbolic_decompose_linear(argument, variable_name, coefficient, intercept);
-}
-
-bool match_zero_expression(const SymbolicExpression& expression) {
-    return expr_is_zero(expression.simplify());
-}
-
-struct SymbolicPoleTerm {
-    SymbolicExpression slope;
-    SymbolicExpression intercept;
-    int multiplicity;
-};
-
-struct SymbolicPoleDecomposition {
-    std::vector<SymbolicPoleTerm> poles;
-};
-
-bool collect_symbolic_linear_factors(const SymbolicExpression& expression,
-                                     const std::string& variable_name,
-                                     std::vector<SymbolicPoleTerm>* factors) {
-    const SymbolicExpression simplified = expression.simplify();
-    if (simplified.node_->type == NodeType::kMultiply) {
-        return collect_symbolic_linear_factors(
-                   SymbolicExpression(simplified.node_->left), variable_name, factors) &&
-               collect_symbolic_linear_factors(
-                   SymbolicExpression(simplified.node_->right), variable_name, factors);
-    }
-    int multiplicity = 1;
-    SymbolicExpression base = simplified;
-    if (simplified.node_->type == NodeType::kPower) {
-        Scalar exponent = Scalar(0.0L);
-        if (!SymbolicExpression(simplified.node_->right).is_number(&exponent) ||
-            !mymath::is_integer(exponent, Scalar(1e-10L)) || exponent < Scalar(1.0L)) {
-            return false;
-        }
-        multiplicity = static_cast<int>(exponent.to_long_double() + 0.5L);
-        base = SymbolicExpression(simplified.node_->left);
-    }
-    SymbolicExpression slope;
-    SymbolicExpression intercept;
-    if (!symbolic_decompose_linear(base, variable_name, &slope, &intercept) ||
-        match_zero_expression(slope)) {
-        return false;
-    }
-    factors->push_back({slope.simplify(), intercept.simplify(), multiplicity});
-    return true;
-}
-
-bool same_symbolic_pole(const SymbolicPoleTerm& lhs,
-                        const SymbolicPoleTerm& rhs) {
-    SymbolicExpression lhs_pole = make_negate(make_divide(lhs.intercept, lhs.slope)).simplify();
-    SymbolicExpression rhs_pole = make_negate(make_divide(rhs.intercept, rhs.slope)).simplify();
-    return expressions_match(lhs_pole, rhs_pole);
-}
-
-bool decompose_symbolic_poles(const SymbolicExpression& denominator,
-                              const std::string& transform_variable,
-                              SymbolicPoleDecomposition* decomposition) {
-    if (decomposition == nullptr) return false;
-    std::vector<SymbolicPoleTerm> factors;
-    if (!collect_symbolic_linear_factors(denominator, transform_variable, &factors) ||
-        factors.empty()) {
-        return false;
-    }
-    for (const SymbolicPoleTerm& factor : factors) {
-        bool found = false;
-        for (SymbolicPoleTerm& existing : decomposition->poles) {
-            if (same_symbolic_pole(existing, factor)) {
-                existing.multiplicity += factor.multiplicity;
-                found = true;
-                break;
-            }
-        }
-        if (!found) decomposition->poles.push_back(factor);
-    }
-    return !decomposition->poles.empty();
-}
 
 bool try_inverse_symbolic_linear_factors(
     const SymbolicExpression& numerator,
@@ -537,6 +122,61 @@ bool try_inverse_symbolic_quadratic(
     SymbolicExpression C = denominator_coefficients[0];
     if (match_zero_expression(A)) return false;
 
+    SymbolicExpression n1 = numerator_coefficients.size() > 1
+        ? numerator_coefficients[1]
+        : SymbolicExpression::number(Scalar(0.0L));
+    SymbolicExpression n0 = numerator_coefficients.empty()
+        ? SymbolicExpression::number(Scalar(0.0L))
+        : numerator_coefficients[0];
+
+    // Check for negative discriminant with numeric coefficients (complex conjugate poles)
+    Scalar a_num = Scalar(0.0L), b_num = Scalar(0.0L), c_num = Scalar(0.0L);
+    if (A.is_number(&a_num) && B.is_number(&b_num) && C.is_number(&c_num)) {
+        Scalar delta = b_num * b_num - 4.0 * a_num * c_num;
+        if (delta < -kFormatEps()) {
+            Scalar alpha = b_num / (2.0 * a_num);
+            Scalar beta = mymath::sqrt(-delta) / (2.0 * a_num);
+            SymbolicExpression t = SymbolicExpression::variable(time_variable);
+            SymbolicExpression beta_expr = SymbolicExpression::number(beta);
+            SymbolicExpression beta_t = make_multiply(beta_expr, t);
+
+            SymbolicExpression cos_term = make_multiply(n1, make_function("cos", beta_t));
+            SymbolicExpression sin_num = make_subtract(n0, make_multiply(n1, SymbolicExpression::number(alpha)));
+            SymbolicExpression sin_term = make_multiply(make_divide(sin_num, beta_expr), make_function("sin", beta_t));
+            SymbolicExpression trig_sum = make_add(cos_term, sin_term).simplify();
+
+            if (!mymath::is_near_zero(alpha, kFormatEps())) {
+                SymbolicExpression exp_term = make_function(
+                    "exp", make_multiply(SymbolicExpression::number(-alpha), t));
+                trig_sum = make_multiply(exp_term, trig_sum).simplify();
+            }
+            if (!mymath::is_near_zero(a_num - Scalar(1.0L), kFormatEps())) {
+                trig_sum = make_divide(trig_sum, SymbolicExpression::number(a_num)).simplify();
+            }
+            *result = make_multiply(trig_sum, make_step_expression(time_variable, Scalar(0.0L))).simplify();
+            return true;
+        }
+    }
+
+    // Symbolic s^2 + w^2 form (B == 0)
+    if (match_zero_expression(B)) {
+        SymbolicExpression omega = make_function("sqrt", make_divide(C, A)).simplify();
+        Scalar c_val = Scalar(0.0L);
+        if (C.is_number(&c_val) && c_val > 0) {
+            omega = SymbolicExpression::number(mymath::sqrt(c_val));
+        }
+        SymbolicExpression t = SymbolicExpression::variable(time_variable);
+        SymbolicExpression omega_t = make_multiply(omega, t);
+        SymbolicExpression cos_term = make_multiply(n1, make_function("cos", omega_t));
+        SymbolicExpression sin_term = make_multiply(make_divide(n0, omega), make_function("sin", omega_t));
+        SymbolicExpression trig_sum = make_add(cos_term, sin_term).simplify();
+        if (!match_zero_expression(make_subtract(A, SymbolicExpression::number(Scalar(1.0L))))) {
+            trig_sum = make_divide(trig_sum, A).simplify();
+        }
+        *result = make_multiply(trig_sum, make_step_expression(time_variable, Scalar(0.0L))).simplify();
+        return true;
+    }
+
     // Factor every quadratic into linear pole terms and reuse the
     // symbolic pole decomposition. This keeps repeated and distinct roots on
     // the same residue path instead of maintaining a second quadratic solver.
@@ -563,17 +203,7 @@ bool try_inverse_symbolic_quadratic(
         return true;
     }
 
-    SymbolicExpression n1 = numerator_coefficients.size() > 1
-        ? numerator_coefficients[1]
-        : SymbolicExpression::number(Scalar(0.0L));
-    SymbolicExpression n0 = numerator_coefficients.empty()
-        ? SymbolicExpression::number(Scalar(0.0L))
-        : numerator_coefficients[0];
-    SymbolicExpression discriminant = make_subtract(
-        make_power(B, SymbolicExpression::number(Scalar(2.0L))),
-        make_multiply(SymbolicExpression::number(Scalar(4.0L)),
-                      make_multiply(A, C))).simplify();
-    SymbolicExpression root_discriminant = make_function("sqrt", discriminant);
+    SymbolicExpression root_discriminant = make_function("sqrt", pole_discriminant);
     SymbolicExpression denominator_root = make_multiply(
         SymbolicExpression::number(Scalar(2.0L)), A);
     SymbolicExpression root1 = make_divide(
@@ -597,9 +227,6 @@ bool try_inverse_symbolic_quadratic(
         return true;
     }
 
-    // Distinct roots must be handled by the common pole decomposition above.
-    // Do not maintain a second quadratic-specific residue implementation.
-    (void)root_difference;
     return false;
 }
 
@@ -640,6 +267,44 @@ bool try_inverse_linear_quadratic_product(
     SymbolicExpression qc = right_coefficients[0];
     if (match_zero_expression(qa)) return false;
 
+    // Partial fraction decomposition of N(s) / (L(s) * Q(s))
+    // L(s) = linear_a * s + linear_b, root p = -linear_b / linear_a
+    SymbolicExpression p = make_negate(make_divide(linear_b, linear_a)).simplify();
+    SymbolicExpression Q_p = make_add(
+        make_multiply(qa, make_power(p, SymbolicExpression::number(Scalar(2.0L)))),
+        make_add(make_multiply(qb, p), qc)).simplify();
+    if (!match_zero_expression(Q_p)) {
+        SymbolicExpression N_p = numerator.substitute(transform_variable, p).simplify();
+        SymbolicExpression K_lin = make_divide(N_p, Q_p).simplify();
+        SymbolicExpression t_var = SymbolicExpression::variable(time_variable);
+        SymbolicExpression term_lin = make_multiply(
+            make_divide(K_lin, linear_a),
+            make_multiply(
+                make_function("exp", make_multiply(p, t_var)),
+                make_step_expression(time_variable, Scalar(0.0L)))).simplify();
+
+        // N_quad(s) = (N(s) - K_lin * Q(s)) / L(s)
+        std::vector<SymbolicExpression> n_coeffs;
+        if (symbolic_polynomial_coefficients_from_simplified(
+                numerator, transform_variable, &n_coeffs)) {
+            while (n_coeffs.size() < 3) n_coeffs.push_back(SymbolicExpression::number(Scalar(0.0L)));
+            SymbolicExpression p2 = make_subtract(n_coeffs[2], make_multiply(K_lin, qa)).simplify();
+            SymbolicExpression p1 = make_subtract(n_coeffs[1], make_multiply(K_lin, qb)).simplify();
+            SymbolicExpression q1 = make_divide(p2, linear_a).simplify();
+            SymbolicExpression q0 = make_divide(make_add(p1, make_multiply(p2, p)), linear_a).simplify();
+            SymbolicExpression s_var = SymbolicExpression::variable(transform_variable);
+            SymbolicExpression N_quad = make_add(make_multiply(q1, s_var), q0).simplify();
+            SymbolicExpression Q_s = make_add(
+                make_multiply(qa, make_power(s_var, SymbolicExpression::number(Scalar(2.0L)))),
+                make_add(make_multiply(qb, s_var), qc)).simplify();
+            SymbolicExpression term_quad;
+            if (try_inverse_symbolic_quadratic(N_quad, Q_s, transform_variable, time_variable, &term_quad)) {
+                *result = make_add(term_lin, term_quad).simplify();
+                return true;
+            }
+        }
+    }
+
     SymbolicExpression quadratic_discriminant = make_subtract(
         make_power(qb, SymbolicExpression::number(Scalar(2.0L))),
         make_multiply(SymbolicExpression::number(Scalar(4.0L)),
@@ -667,20 +332,88 @@ bool try_inverse_linear_quadratic_product(
         time_variable, result);
 }
 
-SymbolicExpression make_polynomial_from_coefficients(
-    const std::vector<SymbolicExpression>& coefficients,
-    const std::string& variable_name) {
-    SymbolicExpression result = SymbolicExpression::number(Scalar(0.0L));
-    SymbolicExpression variable = SymbolicExpression::variable(variable_name);
-    for (std::size_t i = 0; i < coefficients.size(); ++i) {
-        if (match_zero_expression(coefficients[i])) continue;
-        SymbolicExpression power = i == 0
-            ? SymbolicExpression::number(Scalar(1.0L))
-            : make_power(variable, SymbolicExpression::number(
-                  Scalar(static_cast<long long>(i))));
-        result = make_add(result, make_multiply(coefficients[i], power)).simplify();
+bool try_inverse_general_partial_fractions(
+    const SymbolicExpression& numerator,
+    const SymbolicExpression& denominator,
+    const std::string& transform_variable,
+    const std::string& time_variable,
+    SymbolicExpression* result) {
+    std::vector<SymbolicExpression> factors;
+    if (!collect_all_denominator_factors(denominator, transform_variable, &factors) ||
+        factors.size() <= 1) {
+        return false;
     }
-    return result.simplify();
+
+    std::vector<Scalar> num_coeffs;
+    std::vector<SymbolicExpression> sym_num_coeffs;
+    if (!symbolic_polynomial_coefficients_from_simplified(numerator.simplify(), transform_variable, &sym_num_coeffs)) {
+        return false;
+    }
+    for (const auto& c : sym_num_coeffs) {
+        Scalar val = Scalar(0.0L);
+        if (!c.is_number(&val)) return false;
+        num_coeffs.push_back(val);
+    }
+
+    std::vector<std::vector<Scalar>> factor_coeffs;
+    for (const auto& factor : factors) {
+        std::vector<SymbolicExpression> sym_f_coeffs;
+        if (!symbolic_polynomial_coefficients_from_simplified(factor.simplify(), transform_variable, &sym_f_coeffs)) {
+            return false;
+        }
+        std::vector<Scalar> f_coeffs;
+        for (const auto& c : sym_f_coeffs) {
+            Scalar val = Scalar(0.0L);
+            if (!c.is_number(&val)) return false;
+            f_coeffs.push_back(val);
+        }
+        if (f_coeffs.size() < 2 || f_coeffs.size() > 3) {
+            return false;
+        }
+        factor_coeffs.push_back(f_coeffs);
+    }
+
+    std::vector<std::pair<std::vector<Scalar>, std::vector<Scalar>>> decomposed;
+    if (!decompose_rational_fractions_numeric(num_coeffs, factor_coeffs, &decomposed) ||
+        decomposed.empty()) {
+        return false;
+    }
+
+    SymbolicExpression total_response = SymbolicExpression::number(Scalar(0.0L));
+    for (const auto& term : decomposed) {
+        const auto& R_coeffs = term.first;
+        const auto& D_coeffs = term.second;
+        if (R_coeffs.empty()) continue;
+
+        std::vector<SymbolicExpression> sym_R, sym_D;
+        for (Scalar v : R_coeffs) sym_R.push_back(SymbolicExpression::number(v));
+        for (Scalar v : D_coeffs) sym_D.push_back(SymbolicExpression::number(v));
+        SymbolicExpression R_expr = make_polynomial_from_coefficients(sym_R, transform_variable);
+        SymbolicExpression D_expr = make_polynomial_from_coefficients(sym_D, transform_variable);
+        if (match_zero_expression(R_expr)) continue;
+
+        SymbolicExpression term_res;
+        if (D_coeffs.size() == 2) {
+            Scalar a = D_coeffs[1];
+            Scalar b = D_coeffs[0];
+            Scalar r = R_coeffs[0];
+            if (mymath::is_near_zero(a, kFormatEps())) return false;
+            SymbolicExpression exp_term = make_function(
+                "exp", make_multiply(SymbolicExpression::number(-b / a), SymbolicExpression::variable(time_variable)));
+            term_res = make_multiply(SymbolicExpression::number(r / a),
+                                     make_multiply(exp_term, make_step_expression(time_variable, Scalar(0.0L)))).simplify();
+        } else if (D_coeffs.size() == 3) {
+            if (!try_inverse_symbolic_quadratic(R_expr, D_expr, transform_variable, time_variable, &term_res)) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        total_response = make_add(total_response, term_res).simplify();
+    }
+
+    *result = total_response.simplify();
+    return true;
 }
 
 SymbolicExpression make_delta_derivative_expression(const std::string& time_variable,
@@ -736,41 +469,6 @@ bool try_inverse_polynomial_quotient(
     }
     *result = make_add(quotient_inverse, proper_inverse).simplify();
     return true;
-}
-
-struct CausalTerm {
-    SymbolicExpression amplitude = SymbolicExpression::number(Scalar(1.0L));
-    SymbolicExpression exponential_rate = SymbolicExpression::number(Scalar(0.0L));
-    int polynomial_degree = 0;
-    SymbolicExpression delay = SymbolicExpression::number(Scalar(0.0L));
-    bool has_step = true;
-};
-
-SymbolicExpression make_causal_term(const CausalTerm& term,
-                                    const std::string& time_variable) {
-    SymbolicExpression time = SymbolicExpression::variable(time_variable);
-    if (!match_zero_expression(term.delay)) {
-        time = make_subtract(time, term.delay).simplify();
-    }
-    SymbolicExpression result = term.amplitude;
-    if (term.polynomial_degree > 0) {
-        result = make_multiply(
-            result,
-            make_divide(
-                make_power(time, SymbolicExpression::number(
-                                   Scalar(static_cast<long long>(term.polynomial_degree)))),
-                SymbolicExpression::number(factorial_double(term.polynomial_degree))));
-    }
-    if (!match_zero_expression(term.exponential_rate)) {
-        result = make_multiply(
-            result,
-            make_function("exp", make_multiply(term.exponential_rate, time)));
-    }
-    if (term.has_step) {
-        result = make_multiply(
-            result, make_function("step", time)).simplify();
-    }
-    return result.simplify();
 }
 
 SymbolicExpression make_delta_derivative_expression(const std::string& time_variable,
@@ -1022,13 +720,22 @@ bool laplace_rule_sin(const SymbolicExpression& expression,
     SymbolicExpression a;
     SymbolicExpression b;
     if (!is_function_named(expression, "sin", &argument) ||
-        !symbolic_decompose_linear(argument, time_variable, &a, &b) ||
-        !match_zero_expression(b)) {
+        !symbolic_decompose_linear(argument, time_variable, &a, &b)) {
         return false;
     }
     SymbolicExpression s = SymbolicExpression::variable(transform_variable);
-    *result = make_divide(a, make_add(make_power(s, SymbolicExpression::number(Scalar(2.0L))),
-                                      make_power(a, SymbolicExpression::number(Scalar(2.0L))))).simplify();
+    SymbolicExpression s_sq_plus_a_sq = make_add(
+        make_power(s, SymbolicExpression::number(Scalar(2.0L))),
+        make_power(a, SymbolicExpression::number(Scalar(2.0L))));
+    if (match_zero_expression(b)) {
+        *result = make_divide(a, s_sq_plus_a_sq).simplify();
+        return true;
+    }
+    // sin(a*t + b) = sin(at)*cos(b) + cos(at)*sin(b) -> (a*cos(b) + s*sin(b))/(s^2 + a^2)
+    SymbolicExpression cos_b = make_function("cos", b);
+    SymbolicExpression sin_b = make_function("sin", b);
+    SymbolicExpression num = make_add(make_multiply(a, cos_b), make_multiply(s, sin_b));
+    *result = make_divide(num, s_sq_plus_a_sq).simplify();
     return true;
 }
 
@@ -1040,13 +747,22 @@ bool laplace_rule_cos(const SymbolicExpression& expression,
     SymbolicExpression a;
     SymbolicExpression b;
     if (!is_function_named(expression, "cos", &argument) ||
-        !symbolic_decompose_linear(argument, time_variable, &a, &b) ||
-        !match_zero_expression(b)) {
+        !symbolic_decompose_linear(argument, time_variable, &a, &b)) {
         return false;
     }
     SymbolicExpression s = SymbolicExpression::variable(transform_variable);
-    *result = make_divide(s, make_add(make_power(s, SymbolicExpression::number(Scalar(2.0L))),
-                                      make_power(a, SymbolicExpression::number(Scalar(2.0L))))).simplify();
+    SymbolicExpression s_sq_plus_a_sq = make_add(
+        make_power(s, SymbolicExpression::number(Scalar(2.0L))),
+        make_power(a, SymbolicExpression::number(Scalar(2.0L))));
+    if (match_zero_expression(b)) {
+        *result = make_divide(s, s_sq_plus_a_sq).simplify();
+        return true;
+    }
+    // cos(a*t + b) = cos(at)*cos(b) - sin(at)*sin(b) -> (s*cos(b) - a*sin(b))/(s^2 + a^2)
+    SymbolicExpression cos_b = make_function("cos", b);
+    SymbolicExpression sin_b = make_function("sin", b);
+    SymbolicExpression num = make_subtract(make_multiply(s, cos_b), make_multiply(a, sin_b));
+    *result = make_divide(num, s_sq_plus_a_sq).simplify();
     return true;
 }
 
@@ -1057,20 +773,34 @@ bool laplace_rule_hyperbolic(const SymbolicExpression& expression,
     SymbolicExpression argument;
     SymbolicExpression a;
     SymbolicExpression b;
-    if ((!is_function_named(expression, "sinh", &argument) &&
-         !is_function_named(expression, "cosh", &argument)) ||
-        !symbolic_decompose_linear(argument, time_variable, &a, &b) ||
-        !match_zero_expression(b)) {
+    bool is_sinh = is_function_named(expression, "sinh", &argument);
+    bool is_cosh = is_function_named(expression, "cosh", &argument);
+    if ((!is_sinh && !is_cosh) ||
+        !symbolic_decompose_linear(argument, time_variable, &a, &b)) {
         return false;
     }
     SymbolicExpression s = SymbolicExpression::variable(transform_variable);
     SymbolicExpression denominator = make_subtract(
         make_power(s, SymbolicExpression::number(Scalar(2.0L))),
         make_power(a, SymbolicExpression::number(Scalar(2.0L))));
-    if (expression.simplify().node_->text == "sinh") {
-        *result = make_divide(a, denominator).simplify();
+    if (match_zero_expression(b)) {
+        if (is_sinh) {
+            *result = make_divide(a, denominator).simplify();
+        } else {
+            *result = make_divide(s, denominator).simplify();
+        }
+        return true;
+    }
+    // sinh(a*t + b) = sinh(at)cosh(b) + cosh(at)sinh(b) -> (a*cosh(b) + s*sinh(b))/(s^2 - a^2)
+    // cosh(a*t + b) = cosh(at)cosh(b) + sinh(at)sinh(b) -> (s*cosh(b) + a*sinh(b))/(s^2 - a^2)
+    SymbolicExpression cosh_b = make_function("cosh", b);
+    SymbolicExpression sinh_b = make_function("sinh", b);
+    if (is_sinh) {
+        SymbolicExpression num = make_add(make_multiply(a, cosh_b), make_multiply(s, sinh_b));
+        *result = make_divide(num, denominator).simplify();
     } else {
-        *result = make_divide(s, denominator).simplify();
+        SymbolicExpression num = make_add(make_multiply(s, cosh_b), make_multiply(a, sinh_b));
+        *result = make_divide(num, denominator).simplify();
     }
     return true;
 }
@@ -1095,17 +825,56 @@ bool laplace_rule_sqrt(const SymbolicExpression& expression,
                        const std::string& time_variable,
                        const std::string& transform_variable,
                        SymbolicExpression* result) {
+    const SymbolicExpression simplified = expression.simplify();
+    SymbolicExpression s = SymbolicExpression::variable(transform_variable);
+    SymbolicExpression sqrt_pi = make_function("sqrt", SymbolicExpression(make_unary(NodeType::kPi, nullptr)));
+
     SymbolicExpression argument;
-    if (!is_function_named(expression, "sqrt", &argument) ||
-        !argument.is_variable_named(time_variable)) {
-        return false;
+    if (is_function_named(simplified, "sqrt", &argument) &&
+        argument.is_variable_named(time_variable)) {
+        *result = make_divide(
+            sqrt_pi,
+            make_multiply(SymbolicExpression::number(Scalar(2.0L)),
+                          make_power(s, SymbolicExpression::number(Scalar(1.5L))))).simplify();
+        return true;
     }
-    *result = make_divide(
-        make_function("sqrt", SymbolicExpression(make_unary(NodeType::kPi, nullptr))),
-        make_multiply(SymbolicExpression::number(Scalar(2.0L)),
-                      make_power(SymbolicExpression::variable(transform_variable),
-                                 SymbolicExpression::number(Scalar(1.5L))))).simplify();
-    return true;
+
+    if (simplified.node_->type == NodeType::kDivide &&
+        is_function_named(SymbolicExpression(simplified.node_->right), "sqrt", &argument) &&
+        argument.is_variable_named(time_variable)) {
+        Scalar num = Scalar(1.0L);
+        if (SymbolicExpression(simplified.node_->left).is_number(&num)) {
+            *result = make_multiply(
+                SymbolicExpression::number(num),
+                make_divide(sqrt_pi, make_function("sqrt", s))).simplify();
+            return true;
+        }
+    }
+
+    if (simplified.node_->type == NodeType::kPower &&
+        SymbolicExpression(simplified.node_->left).is_variable_named(time_variable)) {
+        Scalar exponent = Scalar(0.0L);
+        if (SymbolicExpression(simplified.node_->right).is_number(&exponent)) {
+            if (mymath::is_near_zero(exponent - Scalar(0.5L), kFormatEps())) {
+                *result = make_divide(
+                    sqrt_pi,
+                    make_multiply(SymbolicExpression::number(Scalar(2.0L)),
+                                  make_power(s, SymbolicExpression::number(Scalar(1.5L))))).simplify();
+                return true;
+            }
+            if (mymath::is_near_zero(exponent - Scalar(-0.5L), kFormatEps())) {
+                *result = make_divide(sqrt_pi, make_function("sqrt", s)).simplify();
+                return true;
+            }
+            if (mymath::is_near_zero(exponent - Scalar(1.5L), kFormatEps())) {
+                *result = make_divide(
+                    make_multiply(SymbolicExpression::number(Scalar(0.75L)), sqrt_pi),
+                    make_power(s, SymbolicExpression::number(Scalar(2.5L)))).simplify();
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 bool apply_laplace_direct_rule_table(const SymbolicExpression& expression,
@@ -1256,109 +1025,6 @@ bool match_non_negative_integer_shift(const SymbolicExpression& expression,
 // ============================================================================
 // 表达式构造函数
 // ============================================================================
-
-/**
- * @brief 构造移位变量表达式
- *
- * 返回 variable_name - shift 形式的表达式。
- */
-SymbolicExpression make_shifted_variable_expression(const std::string& variable_name,
-                                                    Scalar shift) {
-    if (mymath::is_near_zero(shift, kFormatEps())) {
-        return SymbolicExpression::variable(variable_name);
-    }
-    if (shift > Scalar(0.0L)) {
-        return make_subtract(SymbolicExpression::variable(variable_name),
-                             SymbolicExpression::number(shift)).simplify();
-    }
-    return make_add(SymbolicExpression::variable(variable_name),
-                    SymbolicExpression::number(-shift)).simplify();
-}
-
-/**
- * @brief 创建单位阶跃函数 step(variable - shift)
- */
-SymbolicExpression make_step_expression(const std::string& variable_name, Scalar shift) {
-    return make_function("step",
-                         make_shifted_variable_expression(variable_name, shift)).simplify();
-}
-
-/**
- * @brief 创建 Dirac delta 函数 delta(variable - shift)
- */
-SymbolicExpression make_delta_expression(const std::string& variable_name, Scalar shift) {
-    return make_function("delta",
-                         make_shifted_variable_expression(variable_name, shift)).simplify();
-}
-
-/**
- * @brief 创建复相位项 exp(i * coefficient * variable)
- */
-SymbolicExpression make_complex_phase(Scalar coefficient,
-                                      const std::string& variable_name) {
-    SymbolicExpression phase =
-        make_multiply(SymbolicExpression::variable("i"),
-                      SymbolicExpression::variable(variable_name));
-    if (!mymath::is_near_zero(coefficient - 1.0L, kFormatEps())) {
-        phase = make_multiply(SymbolicExpression::number(coefficient), phase);
-    }
-    return make_function("exp", phase).simplify();
-}
-
-/**
- * @brief 创建 Z 变换中的位移项 z^(-shift)
- */
-SymbolicExpression make_z_shift_term(const std::string& z_variable, int shift) {
-    if (shift == 0) {
-        return SymbolicExpression::number(Scalar(1.0L));
-    }
-    return make_power(SymbolicExpression::variable(z_variable),
-                      SymbolicExpression::number(Scalar(static_cast<long long>(-shift))))
-        .simplify();
-}
-
-/**
- * @brief 匹配 i*frequency - constant 形式
- *
- * 用于 Fourier 变换中的分母匹配。
- */
-bool match_i_frequency_minus_constant(const SymbolicExpression& expression,
-                                      const std::string& frequency_variable,
-                                      Scalar* constant) {
-    const SymbolicExpression simplified = expression.simplify();
-    const auto& node = simplified.node_;
-    if (node->type == NodeType::kSubtract) {
-        Scalar coefficient = Scalar(0.0L);
-        if (decompose_i_times_variable(SymbolicExpression(node->left),
-                                       frequency_variable,
-                                       &coefficient) &&
-            mymath::is_near_zero(coefficient - Scalar(1.0L), kFormatEps()) &&
-            SymbolicExpression(node->right).is_number(constant)) {
-            return true;
-        }
-    }
-    if (node->type == NodeType::kAdd) {
-        Scalar coefficient = Scalar(0.0L);
-        Scalar numeric = Scalar(0.0L);
-        if (decompose_i_times_variable(SymbolicExpression(node->left),
-                                       frequency_variable,
-                                       &coefficient) &&
-            mymath::is_near_zero(coefficient - Scalar(1.0L), kFormatEps()) &&
-            SymbolicExpression(node->right).is_number(&numeric)) {
-            *constant = -numeric;
-            return true;
-        }
-        if (decompose_i_times_variable(SymbolicExpression(node->right),
-                                       frequency_variable,
-                                       &coefficient) &&
-            mymath::is_near_zero(coefficient - Scalar(1.0L), kFormatEps()) &&
-            SymbolicExpression(node->left).is_number(&numeric)) {
-            *constant = -numeric;
-            return true;
-        }
-    }
-    return false;
-}
 
 // ============================================================================
 // 变换实现声明
@@ -1569,6 +1235,15 @@ SymbolicExpression laplace_transform_impl_uncached(
     const std::string& transform_variable) {
     TransformRecursionGuard recursion_guard("Laplace");
     const SymbolicExpression simplified = expression.simplify();
+
+    for (const auto& rule : transform_rules::TransformRuleRegistry::instance().get_rules("laplace")) {
+        if (rule.matcher && rule.transformer && rule.matcher(simplified, time_variable)) {
+            try {
+                return rule.transformer(simplified, time_variable, transform_variable).simplify();
+            } catch (...) {}
+        }
+    }
+
     Scalar numeric = Scalar(0.0L);
     if (simplified.is_number(&numeric)) {
         return make_divide(SymbolicExpression::number(numeric),
@@ -2074,6 +1749,15 @@ SymbolicExpression inverse_laplace_transform_impl_uncached(
     const std::string& time_variable) {
     TransformRecursionGuard recursion_guard("inverse Laplace");
     const SymbolicExpression simplified = expression.simplify();
+
+    for (const auto& rule : transform_rules::TransformRuleRegistry::instance().get_rules("ilaplace")) {
+        if (rule.matcher && rule.transformer && rule.matcher(simplified, transform_variable)) {
+            try {
+                return rule.transformer(simplified, transform_variable, time_variable).simplify();
+            } catch (...) {}
+        }
+    }
+
     Scalar numeric = Scalar(0.0L);
     if (simplified.is_number(&numeric)) {
         return make_multiply(SymbolicExpression::number(numeric),
@@ -2506,6 +2190,11 @@ SymbolicExpression inverse_laplace_transform_impl_uncached(
                                            &factored_result)) {
             return factored_result;
         }
+        if (try_inverse_general_partial_fractions(numerator, denominator,
+                                                  transform_variable, time_variable,
+                                                  &factored_result)) {
+            return factored_result;
+        }
 
         Scalar numerator_scale = Scalar(0.0L);
         Scalar linear_slope = Scalar(0.0L);
@@ -2579,1110 +2268,6 @@ SymbolicExpression inverse_laplace_transform_impl_uncached(
     }
 
     throw std::runtime_error("unsupported symbolic inverse Laplace transform");
-}
-
-// ============================================================================
-// Fourier 变换实现
-// ============================================================================
-
-/**
- * @brief Fourier 变换核心实现
- *
- * 支持的变换公式：
- * - F{1} = 2π * delta(ω)
- * - F{delta(t)} = 1
- * - F{step(t)} = π*delta(ω) + 1/(iω)
- * - F{exp(-|t|)} = 2/(1+ω²)
- * - F{sin(at)} = iπ*(delta(ω+a) - delta(ω-a))
- * - F{cos(at)} = π*(delta(ω+a) + delta(ω-a))
- * - F{exp(at)*step(t)} = 1/(iω-a)（a<0 收敛）
- */
-SymbolicExpression fourier_transform_impl(const SymbolicExpression& expression,
-                                          const std::string& time_variable,
-                                          const std::string& frequency_variable) {
-    const SymbolicExpression simplified = expression.simplify();
-    Scalar numeric = Scalar(0.0L);
-    if (simplified.is_number(&numeric)) {
-        return make_multiply(
-                   SymbolicExpression::number(2.0 * mymath::kPi * numeric),
-                   make_delta_expression(frequency_variable, Scalar(0.0L)))
-            .simplify();
-    }
-    SymbolicExpression linear_result;
-    if (apply_common_transform_rules(
-            simplified,
-            time_variable,
-            [&](const SymbolicExpression& item) {
-                return fourier_transform_impl(item, time_variable, frequency_variable);
-            },
-            &linear_result)) {
-        return linear_result;
-    }
-
-    switch (simplified.node_->type) {
-        case NodeType::kAdd:
-            return make_add(
-                       fourier_transform_impl(SymbolicExpression(simplified.node_->left),
-                                              time_variable,
-                                              frequency_variable),
-                       fourier_transform_impl(SymbolicExpression(simplified.node_->right),
-                                              time_variable,
-                                              frequency_variable))
-                .simplify();
-        case NodeType::kSubtract:
-            return make_subtract(
-                       fourier_transform_impl(SymbolicExpression(simplified.node_->left),
-                                              time_variable,
-                                              frequency_variable),
-                       fourier_transform_impl(SymbolicExpression(simplified.node_->right),
-                                              time_variable,
-                                              frequency_variable))
-                .simplify();
-        case NodeType::kMultiply: {
-            Scalar constant = Scalar(0.0L);
-            SymbolicExpression rest;
-            if (decompose_constant_times_expression(simplified,
-                                                   time_variable,
-                                                   &constant,
-                                                   &rest)) {
-                return make_multiply(SymbolicExpression::number(constant),
-                                     fourier_transform_impl(rest,
-                                                            time_variable,
-                                                            frequency_variable))
-                    .simplify();
-            }
-
-            const SymbolicExpression left(simplified.node_->left);
-            const SymbolicExpression right(simplified.node_->right);
-            Scalar shift = Scalar(0.0L);
-            if (match_step_shift(left, time_variable, &shift) &&
-                mymath::is_near_zero(shift, kFormatEps())) {
-                if (right.node_->type == NodeType::kAdd ||
-                    right.node_->type == NodeType::kSubtract) {
-                    const SymbolicExpression lhs_term =
-                        make_multiply(left, SymbolicExpression(right.node_->left));
-                    const SymbolicExpression rhs_term =
-                        make_multiply(left, SymbolicExpression(right.node_->right));
-                    if (right.node_->type == NodeType::kAdd) {
-                        return make_add(fourier_transform_impl(lhs_term,
-                                                               time_variable,
-                                                               frequency_variable),
-                                        fourier_transform_impl(rhs_term,
-                                                               time_variable,
-                                                               frequency_variable))
-                            .simplify();
-                    }
-                    return make_subtract(fourier_transform_impl(lhs_term,
-                                                                time_variable,
-                                                                frequency_variable),
-                                         fourier_transform_impl(rhs_term,
-                                                                time_variable,
-                                                                frequency_variable))
-                        .simplify();
-                }
-                Scalar exponent = Scalar(0.0L);
-                Scalar intercept = Scalar(0.0L);
-                Scalar factor = Scalar(1.0L);
-                SymbolicExpression exponential = right;
-                if (decompose_constant_times_expression(right,
-                                                        time_variable,
-                                                        &factor,
-                                                        &exponential)) {
-                    exponential = exponential.simplify();
-                }
-                if (match_exponential_linear(exponential,
-                                             time_variable,
-                                             &exponent,
-                                             &intercept) &&
-                     exponent < -kFormatEps()) {
-                    return make_divide(
-                               SymbolicExpression::number(factor * mymath::exp(intercept)),
-                               make_subtract(
-                                   make_multiply(SymbolicExpression::variable("i"),
-                                                 SymbolicExpression::variable(
-                                                     frequency_variable)),
-                                   SymbolicExpression::number(exponent)))
-                        .simplify();
-                }
-            }
-            if (match_step_shift(right, time_variable, &shift) &&
-                mymath::is_near_zero(shift, kFormatEps())) {
-                if (left.node_->type == NodeType::kAdd ||
-                    left.node_->type == NodeType::kSubtract) {
-                    const SymbolicExpression lhs_term =
-                        make_multiply(SymbolicExpression(left.node_->left), right);
-                    const SymbolicExpression rhs_term =
-                        make_multiply(SymbolicExpression(left.node_->right), right);
-                    if (left.node_->type == NodeType::kAdd) {
-                        return make_add(fourier_transform_impl(lhs_term,
-                                                               time_variable,
-                                                               frequency_variable),
-                                        fourier_transform_impl(rhs_term,
-                                                               time_variable,
-                                                               frequency_variable))
-                            .simplify();
-                    }
-                    return make_subtract(fourier_transform_impl(lhs_term,
-                                                                time_variable,
-                                                                frequency_variable),
-                                         fourier_transform_impl(rhs_term,
-                                                                time_variable,
-                                                                frequency_variable))
-                        .simplify();
-                }
-                Scalar exponent = Scalar(0.0L);
-                Scalar intercept = Scalar(0.0L);
-                Scalar factor = Scalar(1.0L);
-                SymbolicExpression exponential = left;
-                if (decompose_constant_times_expression(left,
-                                                        time_variable,
-                                                        &factor,
-                                                        &exponential)) {
-                    exponential = exponential.simplify();
-                }
-                if (match_exponential_linear(exponential,
-                                             time_variable,
-                                             &exponent,
-                                             &intercept) &&
-                     exponent < -kFormatEps()) {
-                    return make_divide(
-                               SymbolicExpression::number(factor * mymath::exp(intercept)),
-                               make_subtract(
-                                   make_multiply(SymbolicExpression::variable("i"),
-                                                 SymbolicExpression::variable(
-                                                     frequency_variable)),
-                                   SymbolicExpression::number(exponent)))
-                        .simplify();
-                }
-            }
-            break;
-        }
-        case NodeType::kFunction:
-        case NodeType::kDivide:
-        case NodeType::kNegate:
-        case NodeType::kNumber:
-        case NodeType::kPi:
-        case NodeType::kE:
-        case NodeType::kInfinity:
-        case NodeType::kVariable:
-        case NodeType::kVector:
-        case NodeType::kTensor:
-        case NodeType::kDifferentialOp:
-        case NodeType::kRootOf:
-        case NodeType::kPower:
-            break;
-    }
-
-    if (simplified.node_->type == NodeType::kNegate) {
-        return make_negate(
-                   fourier_transform_impl(SymbolicExpression(simplified.node_->left),
-                                          time_variable,
-                                          frequency_variable))
-            .simplify();
-    }
-
-    Scalar shift = Scalar(0.0L);
-    if (match_delta_shift(simplified, time_variable, &shift)) {
-        if (mymath::is_near_zero(shift, kFormatEps())) {
-            return SymbolicExpression::number(Scalar(1.0L));
-        }
-        return make_complex_phase(-shift, frequency_variable);
-    }
-
-    if (match_step_shift(simplified, time_variable, &shift)) {
-        if (!mymath::is_near_zero(shift, kFormatEps())) {
-            return make_multiply(make_complex_phase(-shift, frequency_variable),
-                                 fourier_transform_impl(make_step_expression(time_variable, Scalar(0.0L)),
-                                                        time_variable,
-                                                        frequency_variable))
-                .simplify();
-        }
-        return make_add(
-                   make_multiply(SymbolicExpression::number(Scalar(mymath::kPi)),
-                                 make_delta_expression(frequency_variable, Scalar(0.0L))),
-                   make_divide(
-                       SymbolicExpression::number(Scalar(1.0L)),
-                       make_multiply(SymbolicExpression::variable("i"),
-                                     SymbolicExpression::variable(frequency_variable))))
-            .simplify();
-    }
-
-    if (simplified.node_->type == NodeType::kFunction &&
-        simplified.node_->text == "exp") {
-        const SymbolicExpression exponent(simplified.node_->left);
-        if (exponent.node_->type == NodeType::kNegate &&
-            is_abs_of_variable(SymbolicExpression(exponent.node_->left), time_variable)) {
-            return make_divide(
-                       SymbolicExpression::number(Scalar(2.0L)),
-                       make_add(SymbolicExpression::number(Scalar(1.0L)),
-                                make_power(SymbolicExpression::variable(frequency_variable),
-                                           SymbolicExpression::number(Scalar(2.0L)))))
-                .simplify();
-        }
-        Scalar constant = Scalar(0.0L);
-        SymbolicExpression rest;
-        if (decompose_constant_times_expression(exponent,
-                                                time_variable,
-                                                &constant,
-                                                &rest) &&
-            constant < -kFormatEps() &&
-            is_abs_of_variable(rest, time_variable)) {
-            const Scalar decay = -constant;
-            return make_divide(
-                       SymbolicExpression::number(2.0 * decay),
-                       make_add(SymbolicExpression::number(decay * decay),
-                                make_power(SymbolicExpression::variable(frequency_variable),
-                                           SymbolicExpression::number(Scalar(2.0L)))))
-                .simplify();
-        }
-    }
-
-    Scalar coefficient = Scalar(0.0L);
-    Scalar intercept = Scalar(0.0L);
-    if (match_cosine_linear(simplified, time_variable, &coefficient, &intercept) &&
-        mymath::is_near_zero(intercept, kFormatEps()) &&
-        !mymath::is_near_zero(coefficient, kFormatEps())) {
-        return make_multiply(
-                   SymbolicExpression::number(Scalar(mymath::kPi)),
-                   make_add(make_delta_expression(frequency_variable, coefficient),
-                            make_delta_expression(frequency_variable, -coefficient)))
-            .simplify();
-    }
-
-    if (match_sine_linear(simplified, time_variable, &coefficient, &intercept) &&
-        mymath::is_near_zero(intercept, kFormatEps()) &&
-        !mymath::is_near_zero(coefficient, kFormatEps())) {
-        return make_divide(
-                   make_multiply(
-                       SymbolicExpression::number(Scalar(mymath::kPi)),
-                       make_subtract(make_delta_expression(frequency_variable, coefficient),
-                                     make_delta_expression(frequency_variable, -coefficient))),
-                   SymbolicExpression::variable("i"))
-            .simplify();
-    }
-
-    throw std::runtime_error("unsupported symbolic Fourier transform");
-}
-
-// ============================================================================
-// 逆 Fourier 变换实现
-// ============================================================================
-
-/**
- * @brief 逆 Fourier 变换核心实现
- *
- * 支持的逆变换：
- * - F⁻¹{1} = delta(t)
- * - F⁻¹{delta(ω)} = 1/(2π)
- * - F⁻¹{exp(i*shift*ω)} = delta(t+shift)/(2π)
- * - F⁻¹{1/(iω-a)} = exp(at) * step(t)
- */
-SymbolicExpression inverse_fourier_transform_impl(const SymbolicExpression& expression,
-                                                  const std::string& frequency_variable,
-                                                  const std::string& time_variable) {
-    const SymbolicExpression simplified = expression.simplify();
-    Scalar numeric = Scalar(0.0L);
-    if (simplified.is_number(&numeric)) {
-        return make_multiply(SymbolicExpression::number(numeric),
-                             make_delta_expression(time_variable, Scalar(0.0L)))
-            .simplify();
-    }
-    SymbolicExpression linear_result;
-    if (apply_common_transform_rules(
-            simplified,
-            frequency_variable,
-            [&](const SymbolicExpression& item) {
-                return inverse_fourier_transform_impl(item,
-                                                      frequency_variable,
-                                                      time_variable);
-            },
-            &linear_result)) {
-        return linear_result;
-    }
-
-    switch (simplified.node_->type) {
-        case NodeType::kAdd:
-            return make_add(
-                       inverse_fourier_transform_impl(
-                           SymbolicExpression(simplified.node_->left),
-                           frequency_variable,
-                           time_variable),
-                       inverse_fourier_transform_impl(
-                           SymbolicExpression(simplified.node_->right),
-                           frequency_variable,
-                           time_variable))
-                .simplify();
-        case NodeType::kSubtract:
-            return make_subtract(
-                       inverse_fourier_transform_impl(
-                           SymbolicExpression(simplified.node_->left),
-                           frequency_variable,
-                           time_variable),
-                       inverse_fourier_transform_impl(
-                           SymbolicExpression(simplified.node_->right),
-                           frequency_variable,
-                           time_variable))
-                .simplify();
-        case NodeType::kMultiply: {
-            Scalar constant = Scalar(0.0L);
-            SymbolicExpression rest;
-            if (decompose_constant_times_expression(simplified,
-                                                   frequency_variable,
-                                                   &constant,
-                                                   &rest)) {
-                return make_multiply(SymbolicExpression::number(constant),
-                                     inverse_fourier_transform_impl(rest,
-                                                                    frequency_variable,
-                                                                    time_variable))
-                    .simplify();
-            }
-            break;
-        }
-        case NodeType::kFunction:
-        case NodeType::kDivide:
-        case NodeType::kNegate:
-        case NodeType::kNumber:
-        case NodeType::kPi:
-        case NodeType::kE:
-        case NodeType::kInfinity:
-        case NodeType::kVariable:
-        case NodeType::kVector:
-        case NodeType::kTensor:
-        case NodeType::kDifferentialOp:
-        case NodeType::kRootOf:
-        case NodeType::kPower:
-            break;
-    }
-
-    if (simplified.node_->type == NodeType::kNegate) {
-        return make_negate(
-                   inverse_fourier_transform_impl(SymbolicExpression(simplified.node_->left),
-                                                  frequency_variable,
-                                                  time_variable))
-            .simplify();
-    }
-
-    Scalar shift = Scalar(0.0L);
-    if (match_delta_shift(simplified, frequency_variable, &shift)) {
-        return make_multiply(
-                   SymbolicExpression::number(Scalar(1.0L) / (Scalar(2.0L) * Scalar(mymath::kPi))),
-                   make_complex_phase(shift, time_variable))
-            .simplify();
-    }
-
-    if (simplified.node_->type == NodeType::kFunction &&
-        simplified.node_->text == "exp") {
-        Scalar phase = Scalar(0.0L);
-        if (decompose_i_times_variable(SymbolicExpression(simplified.node_->left),
-                                       frequency_variable,
-                                       &phase)) {
-            return make_multiply(
-                       SymbolicExpression::number(
-                           Scalar(1.0L) / (Scalar(2.0L) * Scalar(mymath::kPi))),
-                       make_delta_expression(time_variable, -phase))
-                .simplify();
-        }
-    }
-
-    Scalar constant = Scalar(0.0L);
-    if (simplified.node_->type == NodeType::kDivide) {
-        if (SymbolicExpression(simplified.node_->left).is_number(&constant) &&
-            match_i_frequency_minus_constant(SymbolicExpression(simplified.node_->right),
-                                             frequency_variable,
-                                             &shift)) {
-            return make_multiply(
-                       make_multiply(SymbolicExpression::number(constant),
-                                     make_function(
-                                         "exp",
-                                         make_multiply(SymbolicExpression::number(shift),
-                                                       SymbolicExpression::variable(
-                                                           time_variable)))),
-                       make_step_expression(time_variable, Scalar(0.0L)))
-                .simplify();
-        }
-
-        // F^-1{ C / (w^2 + a^2) } = C / (2*a) * exp(-a * |t|)
-        const SymbolicExpression den = SymbolicExpression(simplified.node_->right).simplify();
-        if (den.node_->type == NodeType::kAdd) {
-            SymbolicExpression d_left(den.node_->left);
-            SymbolicExpression d_right(den.node_->right);
-            Scalar a_sq = Scalar(0.0L);
-            bool has_w_sq = false;
-            auto check_w_sq = [&](const SymbolicExpression& e) {
-                return e.node_->type == NodeType::kPower &&
-                       SymbolicExpression(e.node_->left).is_variable_named(frequency_variable) &&
-                       SymbolicExpression(e.node_->right).is_number(&numeric) &&
-                       mymath::is_near_zero(numeric - Scalar(2.0L), kFormatEps());
-            };
-            if (check_w_sq(d_left) && d_right.is_number(&a_sq) && a_sq > Scalar(0.0L)) {
-                has_w_sq = true;
-            } else if (check_w_sq(d_right) && d_left.is_number(&a_sq) && a_sq > Scalar(0.0L)) {
-                has_w_sq = true;
-            }
-            if (has_w_sq && SymbolicExpression(simplified.node_->left).is_number(&constant)) {
-                Scalar a = mymath::sqrt(a_sq);
-                return make_multiply(
-                           SymbolicExpression::number(constant / (2.0 * a)),
-                           make_function("exp",
-                               make_negate(make_multiply(SymbolicExpression::number(a),
-                                                         make_function("abs", SymbolicExpression::variable(time_variable))))))
-                    .simplify();
-            }
-        }
-    }
-
-    throw std::runtime_error("unsupported symbolic inverse Fourier transform");
-}
-
-// ============================================================================
-// Z 变换实现
-// ============================================================================
-
-SymbolicExpression make_z_binomial_term(const std::string& index_variable,
-                                        int order,
-                                        const SymbolicExpression& pole) {
-    SymbolicExpression coefficient = SymbolicExpression::number(Scalar(1.0L));
-    const SymbolicExpression n = SymbolicExpression::variable(index_variable);
-    for (int i = 1; i < order; ++i) {
-        coefficient = make_multiply(
-            coefficient,
-            make_subtract(n, SymbolicExpression::number(Scalar(i)))).simplify();
-    }
-    if (order > 1) {
-        coefficient = make_divide(
-            coefficient, SymbolicExpression::number(factorial_double(order - 1))).simplify();
-    }
-    const SymbolicExpression exponent = make_subtract(
-        n, SymbolicExpression::number(Scalar(order)));
-    return make_multiply(
-        coefficient,
-        make_multiply(make_power(pole, exponent),
-                      make_function("step", exponent))).simplify();
-}
-
-bool try_inverse_z_symbolic_rational(
-    const SymbolicExpression& numerator,
-    const SymbolicExpression& denominator,
-    const std::string& transform_variable,
-    const std::string& index_variable,
-    SymbolicExpression* result) {
-    SymbolicPoleDecomposition decomposition;
-    if (!decompose_symbolic_poles(denominator, transform_variable, &decomposition)) {
-        return false;
-    }
-    if (decomposition.poles.size() < 2) return false;
-    std::vector<SymbolicExpression> n;
-    std::vector<SymbolicExpression> d;
-    if (!symbolic_polynomial_coefficients_from_simplified(
-            numerator.simplify(), transform_variable, &n) ||
-        !symbolic_polynomial_coefficients_from_simplified(
-            denominator.simplify(), transform_variable, &d)) {
-        return false;
-    }
-    while (n.size() > 1 && match_zero_expression(n.back())) n.pop_back();
-    while (d.size() > 1 && match_zero_expression(d.back())) d.pop_back();
-    if (d.empty() || n.size() >= d.size()) return false;
-
-    SymbolicExpression sum = SymbolicExpression::number(Scalar(0.0L));
-
-    const SymbolicExpression remainder = make_polynomial_from_coefficients(
-        n, transform_variable);
-    for (std::size_t i = 0; i < decomposition.poles.size(); ++i) {
-        const SymbolicPoleTerm& factor = decomposition.poles[i];
-        const SymbolicExpression pole = make_negate(
-            make_divide(factor.intercept, factor.slope)).simplify();
-        SymbolicExpression residual = SymbolicExpression::number(Scalar(1.0L));
-        for (std::size_t j = 0; j < decomposition.poles.size(); ++j) {
-            if (i == j) continue;
-            const SymbolicPoleTerm& other = decomposition.poles[j];
-            residual = make_multiply(
-                residual,
-                make_power(make_add(
-                               make_multiply(other.slope,
-                                             SymbolicExpression::variable(transform_variable)),
-                               other.intercept),
-                           SymbolicExpression::number(
-                               Scalar(static_cast<long long>(other.multiplicity)))));
-        }
-        const SymbolicExpression slope_power = make_power(
-            factor.slope,
-            SymbolicExpression::number(
-                Scalar(static_cast<long long>(factor.multiplicity))));
-        SymbolicExpression H = make_divide(
-            remainder, make_multiply(residual, slope_power)).simplify();
-        for (int k = 1; k <= factor.multiplicity; ++k) {
-            const int derivative_order = factor.multiplicity - k;
-            SymbolicExpression coefficient = H;
-            for (int d_order = 0; d_order < derivative_order; ++d_order) {
-                coefficient = coefficient.derivative(transform_variable).simplify();
-            }
-            coefficient = coefficient.substitute(transform_variable, pole).simplify();
-            if (derivative_order > 0) {
-                coefficient = make_divide(
-                    coefficient,
-                    SymbolicExpression::number(factorial_double(derivative_order))).simplify();
-            }
-            sum = make_add(
-                sum,
-                make_multiply(coefficient,
-                              make_z_binomial_term(index_variable, k, pole))).simplify();
-        }
-    }
-    *result = sum.simplify();
-    return true;
-}
-
-/**
- * @brief Z 变换核心实现
- *
- * 支持的变换公式：
- * - Z{1} = z/(z-1)
- * - Z{n} = z/(z-1)²
- * - Z{n^k} = 递推公式
- * - Z{a^n} = z/(z-a)
- * - Z{delta[n-k]} = z^(-k)
- * - Z{step[n]} = z/(z-1)
- * - Z{sin(wn)} = z*sin(w)/(z²-2z*cos(w)+1)
- * - Z{cos(wn)} = z(z-cos(w))/(z²-2z*cos(w)+1)
- * - Z{n*x[n]} = -z*dX/dz （微分性质）
- */
-SymbolicExpression z_transform_impl(const SymbolicExpression& expression,
-                                    const std::string& index_variable,
-                                    const std::string& transform_variable) {
-    const SymbolicExpression simplified = expression.simplify();
-    Scalar numeric = Scalar(0.0L);
-    if (simplified.is_number(&numeric)) {
-        return make_divide(
-                   make_multiply(SymbolicExpression::number(numeric),
-                                 SymbolicExpression::variable(transform_variable)),
-                   make_subtract(SymbolicExpression::variable(transform_variable),
-                                 SymbolicExpression::number(Scalar(1.0L))))
-            .simplify();
-    }
-    SymbolicExpression linear_result;
-    if (apply_common_transform_rules(
-            simplified,
-            index_variable,
-            [&](const SymbolicExpression& item) {
-                return z_transform_impl(item, index_variable, transform_variable);
-            },
-            &linear_result)) {
-        return linear_result;
-    }
-
-    switch (simplified.node_->type) {
-        case NodeType::kAdd:
-            return make_add(
-                       z_transform_impl(SymbolicExpression(simplified.node_->left),
-                                        index_variable,
-                                        transform_variable),
-                       z_transform_impl(SymbolicExpression(simplified.node_->right),
-                                        index_variable,
-                                        transform_variable))
-                .simplify();
-        case NodeType::kSubtract:
-            return make_subtract(
-                       z_transform_impl(SymbolicExpression(simplified.node_->left),
-                                        index_variable,
-                                        transform_variable),
-                       z_transform_impl(SymbolicExpression(simplified.node_->right),
-                                        index_variable,
-                                        transform_variable))
-                .simplify();
-        case NodeType::kMultiply: {
-            Scalar constant = Scalar(0.0L);
-            SymbolicExpression rest;
-            if (decompose_constant_times_expression(simplified,
-                                                   index_variable,
-                                                   &constant,
-                                                   &rest)) {
-                return make_multiply(SymbolicExpression::number(constant),
-                                     z_transform_impl(rest,
-                                                      index_variable,
-                                                      transform_variable))
-                    .simplify();
-            }
-
-            const SymbolicExpression left(simplified.node_->left);
-            const SymbolicExpression right(simplified.node_->right);
-
-            // Multiplication by n: n * f(n) -> -z * d/dz F(z)
-            if (left.is_variable_named(index_variable)) {
-                SymbolicExpression F = z_transform_impl(right, index_variable, transform_variable);
-                return make_negate(
-                    make_multiply(SymbolicExpression::variable(transform_variable),
-                                 F.derivative(transform_variable)))
-                    .simplify();
-            }
-            if (right.is_variable_named(index_variable)) {
-                SymbolicExpression F = z_transform_impl(left, index_variable, transform_variable);
-                return make_negate(
-                    make_multiply(SymbolicExpression::variable(transform_variable),
-                                 F.derivative(transform_variable)))
-                    .simplify();
-            }
-
-            Scalar shift = Scalar(0.0L);
-            if (match_step_shift(left, index_variable, &shift) &&
-                mymath::is_near_zero(shift, kFormatEps())) {
-                return z_transform_impl(right, index_variable, transform_variable);
-            }
-            if (match_step_shift(right, index_variable, &shift) &&
-                mymath::is_near_zero(shift, kFormatEps())) {
-                return z_transform_impl(left, index_variable, transform_variable);
-            }
-            break;
-        }
-        case NodeType::kFunction:
-        case NodeType::kDivide:
-        case NodeType::kNegate:
-        case NodeType::kNumber:
-        case NodeType::kPi:
-        case NodeType::kE:
-        case NodeType::kInfinity:
-        case NodeType::kVariable:
-        case NodeType::kVector:
-        case NodeType::kTensor:
-        case NodeType::kDifferentialOp:
-        case NodeType::kRootOf:
-            break;
-        case NodeType::kPower: {
-            const SymbolicExpression base(simplified.node_->left);
-            const SymbolicExpression exponent_expr(simplified.node_->right);
-            Scalar exponent = Scalar(0.0L);
-
-            if (base.is_variable_named(index_variable) &&
-                exponent_expr.is_number(&exponent) &&
-                mymath::is_integer(exponent, Scalar(1e-10L)) &&
-                exponent > Scalar(0.0L)) {
-                const int k = static_cast<int>(exponent.to_long_double() + 0.5L);
-                if (k == 1) {
-                    return make_divide(
-                               SymbolicExpression::variable(transform_variable),
-                               make_power(make_subtract(SymbolicExpression::variable(transform_variable),
-                                                        SymbolicExpression::number(Scalar(1.0L))),
-                                          SymbolicExpression::number(Scalar(2.0L))))
-                        .simplify();
-                }
-                if (k == 2) {
-                    const SymbolicExpression denominator_factor = make_subtract(
-                        SymbolicExpression::variable(transform_variable),
-                        SymbolicExpression::number(Scalar(1.0L)));
-                    return make_divide(
-                                make_multiply(SymbolicExpression::variable(transform_variable),
-                                              make_add(SymbolicExpression::variable(transform_variable),
-                                                       SymbolicExpression::number(Scalar(1.0L)))),
-                                make_multiply(make_multiply(denominator_factor,
-                                                             denominator_factor),
-                                              denominator_factor));
-                }
-                SymbolicExpression result = SymbolicExpression::number(Scalar(1.0L)).z_transform(index_variable, transform_variable);
-                for (int i = 0; i < k; ++i) {
-                    result = make_negate(
-                        make_multiply(SymbolicExpression::variable(transform_variable),
-                                     result.derivative(transform_variable)))
-                        .simplify();
-                }
-                return result;
-            }
-            break;
-        }
-    }
-
-    if (simplified.node_->type == NodeType::kNegate) {
-        return make_negate(
-                   z_transform_impl(SymbolicExpression(simplified.node_->left),
-                                    index_variable,
-                                    transform_variable))
-            .simplify();
-    }
-
-    int shift = 0;
-    SymbolicExpression argument;
-    if (is_function_named(simplified, "delta", &argument) &&
-        match_non_negative_integer_shift(argument, index_variable, &shift)) {
-        return make_z_shift_term(transform_variable, shift);
-    }
-
-    if (is_function_named(simplified, "step", &argument) &&
-        match_non_negative_integer_shift(argument, index_variable, &shift)) {
-        SymbolicExpression numerator = SymbolicExpression::variable(transform_variable);
-        if (shift != 0) {
-            numerator = make_multiply(
-                            make_power(SymbolicExpression::variable(transform_variable),
-                                       SymbolicExpression::number(
-                                           Scalar(static_cast<long long>(1 - shift)))),
-                            SymbolicExpression::number(Scalar(1.0L)))
-                            .simplify();
-        }
-        return make_divide(
-                   shift == 0
-                       ? numerator
-                       : make_power(SymbolicExpression::variable(transform_variable),
-                                    SymbolicExpression::number(
-                                        Scalar(static_cast<long long>(1 - shift)))),
-                   make_subtract(SymbolicExpression::variable(transform_variable),
-                                 SymbolicExpression::number(Scalar(1.0L))))
-            .simplify();
-    }
-
-    if (simplified.is_variable_named(index_variable)) {
-        return make_divide(SymbolicExpression::variable(transform_variable),
-                           make_power(
-                               make_subtract(SymbolicExpression::variable(transform_variable),
-                                             SymbolicExpression::number(Scalar(1.0L))),
-                               SymbolicExpression::number(Scalar(2.0L))))
-             .simplify();
-    }
-
-    // Geometric sequence with a symbolic base: a^n -> z/(z-a).
-    if (simplified.node_->type == NodeType::kPower &&
-        SymbolicExpression(simplified.node_->right).is_variable_named(index_variable) &&
-        !depends_on(SymbolicExpression(simplified.node_->left), index_variable)) {
-        const SymbolicExpression base_expression(simplified.node_->left);
-        return make_divide(
-                   SymbolicExpression::variable(transform_variable),
-                   make_subtract(SymbolicExpression::variable(transform_variable),
-                                 base_expression))
-            .simplify();
-    }
-
-    Scalar base = Scalar(0.0L);
-    if (match_constant_power_sequence(simplified, index_variable, &base)) {
-        return make_divide(SymbolicExpression::variable(transform_variable),
-                           make_subtract(SymbolicExpression::variable(transform_variable),
-                                         SymbolicExpression::number(base)))
-            .simplify();
-    }
-
-    Scalar linear_coefficient = Scalar(0.0L);
-    Scalar linear_intercept = Scalar(0.0L);
-    if (match_sine_linear(simplified,
-                          index_variable,
-                          &linear_coefficient,
-                          &linear_intercept) &&
-        mymath::is_near_zero(linear_intercept, kFormatEps()) &&
-        !mymath::is_near_zero(linear_coefficient, kFormatEps())) {
-        // sin(wn) -> z*sin(w) / (z^2 - 2z*cos(w) + 1)
-        const Scalar w = linear_coefficient;
-        SymbolicExpression z = SymbolicExpression::variable(transform_variable);
-        SymbolicExpression denominator = make_add(
-            make_subtract(make_power(z, SymbolicExpression::number(Scalar(2.0L))),
-                         make_multiply(SymbolicExpression::number(2.0 * mymath::cos(w)), z)),
-            SymbolicExpression::number(Scalar(1.0L)));
-        return make_divide(make_multiply(z, SymbolicExpression::number(mymath::sin(w))),
-                           denominator).simplify();
-    }
-
-    if (match_cosine_linear(simplified,
-                            index_variable,
-                            &linear_coefficient,
-                            &linear_intercept) &&
-        mymath::is_near_zero(linear_intercept, kFormatEps()) &&
-        !mymath::is_near_zero(linear_coefficient, kFormatEps())) {
-        // cos(wn) -> z(z - cos(w)) / (z^2 - 2z*cos(w) + 1)
-        const Scalar w = linear_coefficient;
-        SymbolicExpression z = SymbolicExpression::variable(transform_variable);
-        SymbolicExpression denominator = make_add(
-            make_subtract(make_power(z, SymbolicExpression::number(Scalar(2.0L))),
-                         make_multiply(SymbolicExpression::number(2.0 * mymath::cos(w)), z)),
-            SymbolicExpression::number(Scalar(1.0L)));
-        return make_divide(make_multiply(z, make_subtract(z, SymbolicExpression::number(mymath::cos(w)))),
-                           denominator).simplify();
-    }
-
-    SymbolicExpression symbolic_coefficient;
-    SymbolicExpression symbolic_intercept;
-    if (match_sine_linear_symbolic(simplified, index_variable,
-                                   &symbolic_coefficient, &symbolic_intercept) &&
-        match_zero_expression(symbolic_intercept) &&
-        !match_zero_expression(symbolic_coefficient)) {
-        SymbolicExpression z = SymbolicExpression::variable(transform_variable);
-        SymbolicExpression denominator = make_add(
-            make_subtract(make_power(z, SymbolicExpression::number(Scalar(2.0L))),
-                          make_multiply(
-                              make_multiply(SymbolicExpression::number(Scalar(2.0L)), z),
-                              make_function("cos", symbolic_coefficient))),
-            SymbolicExpression::number(Scalar(1.0L)));
-        return make_divide(
-                   make_multiply(z, make_function("sin", symbolic_coefficient)),
-                   denominator)
-            .simplify();
-    }
-
-    if (match_cosine_linear_symbolic(simplified, index_variable,
-                                     &symbolic_coefficient, &symbolic_intercept) &&
-        match_zero_expression(symbolic_intercept) &&
-        !match_zero_expression(symbolic_coefficient)) {
-        SymbolicExpression z = SymbolicExpression::variable(transform_variable);
-        SymbolicExpression denominator = make_add(
-            make_subtract(make_power(z, SymbolicExpression::number(Scalar(2.0L))),
-                          make_multiply(
-                              make_multiply(SymbolicExpression::number(Scalar(2.0L)), z),
-                              make_function("cos", symbolic_coefficient))),
-            SymbolicExpression::number(Scalar(1.0L)));
-        return make_divide(
-                   make_multiply(z, make_subtract(
-                       z, make_function("cos", symbolic_coefficient))),
-                   denominator)
-            .simplify();
-    }
-
-    throw std::runtime_error("unsupported symbolic z transform");
-}
-
-// ============================================================================
-// 逆 Z 变换实现
-// ============================================================================
-
-/**
- * @brief 逆 Z 变换核心实现
- *
- * 支持的逆变换：
- * - Z⁻¹{1} = delta[n]
- * - Z⁻¹{z^(-k)} = delta[n-k]
- * - Z⁻¹{z/(z-a)} = a^n * step[n]
- * - Z⁻¹{z/(z-1)^2} = n * step[n]
- * - Z⁻¹{z/(z-1)^n} = C(n-1+k, k) 形式
- */
-SymbolicExpression inverse_z_transform_impl(const SymbolicExpression& expression,
-                                            const std::string& transform_variable,
-                                            const std::string& index_variable) {
-    const SymbolicExpression simplified = expression.simplify();
-    Scalar numeric = Scalar(0.0L);
-    if (simplified.is_number(&numeric)) {
-        return make_multiply(SymbolicExpression::number(numeric),
-                             make_delta_expression(index_variable, Scalar(0.0L)))
-            .simplify();
-    }
-    SymbolicExpression linear_result;
-    if (apply_common_transform_rules(
-            simplified,
-            transform_variable,
-            [&](const SymbolicExpression& item) {
-                return inverse_z_transform_impl(item, transform_variable, index_variable);
-            },
-            &linear_result)) {
-        return linear_result;
-    }
-
-    switch (simplified.node_->type) {
-        case NodeType::kAdd:
-            return make_add(
-                       inverse_z_transform_impl(SymbolicExpression(simplified.node_->left),
-                                                transform_variable,
-                                                index_variable),
-                       inverse_z_transform_impl(SymbolicExpression(simplified.node_->right),
-                                                transform_variable,
-                                                index_variable))
-                .simplify();
-        case NodeType::kSubtract:
-            return make_subtract(
-                       inverse_z_transform_impl(SymbolicExpression(simplified.node_->left),
-                                                transform_variable,
-                                                index_variable),
-                       inverse_z_transform_impl(SymbolicExpression(simplified.node_->right),
-                                                transform_variable,
-                                                index_variable))
-                .simplify();
-        case NodeType::kMultiply: {
-            Scalar constant = Scalar(0.0L);
-            SymbolicExpression rest;
-            if (decompose_constant_times_expression(simplified,
-                                                   transform_variable,
-                                                   &constant,
-                                                   &rest)) {
-                return make_multiply(SymbolicExpression::number(constant),
-                                     inverse_z_transform_impl(rest,
-                                                              transform_variable,
-                                                              index_variable))
-                    .simplify();
-            }
-            break;
-        }
-        case NodeType::kFunction:
-        case NodeType::kDivide:
-        case NodeType::kNegate:
-        case NodeType::kNumber:
-        case NodeType::kPi:
-        case NodeType::kE:
-        case NodeType::kInfinity:
-        case NodeType::kVariable:
-        case NodeType::kVector:
-        case NodeType::kTensor:
-        case NodeType::kDifferentialOp:
-        case NodeType::kRootOf:
-        case NodeType::kPower:
-            break;
-    }
-
-    if (simplified.node_->type == NodeType::kNegate) {
-        return make_negate(
-                   inverse_z_transform_impl(SymbolicExpression(simplified.node_->left),
-                                            transform_variable,
-                                            index_variable))
-            .simplify();
-    }
-
-    if (simplified.node_->type == NodeType::kPower &&
-        SymbolicExpression(simplified.node_->left).is_variable_named(transform_variable) &&
-        SymbolicExpression(simplified.node_->right).is_number(&numeric) &&
-        mymath::is_integer(numeric, Scalar(1e-10L)) &&
-        numeric <= Scalar(0.0L)) {
-        return make_delta_expression(index_variable, Scalar(static_cast<long long>(static_cast<int>(-numeric.to_long_double() + 0.5L))));
-    }
-
-    if (simplified.node_->type == NodeType::kDivide) {
-        const SymbolicExpression numerator = SymbolicExpression(simplified.node_->left).simplify();
-        const SymbolicExpression denominator = SymbolicExpression(simplified.node_->right).simplify();
-        Scalar numerator_factor = Scalar(1.0L);
-        SymbolicExpression numerator_base = numerator;
-        if (decompose_constant_times_expression(numerator_base,
-                                                transform_variable,
-                                                &numerator_factor,
-                                                &numerator_base)) {
-            numerator_base = numerator_base.simplify();
-        }
-
-        if (numerator_base.is_number(&numeric) &&
-            !mymath::is_near_zero(numeric, kFormatEps())) {
-            numerator_factor *= numeric;
-            numerator_base = SymbolicExpression::number(Scalar(1.0L));
-        }
-
-        if (numerator_base.is_number(&numeric) &&
-            mymath::is_near_zero(numeric - 1.0L, kFormatEps()) &&
-            denominator.node_->type == NodeType::kPower &&
-            SymbolicExpression(denominator.node_->left).is_variable_named(transform_variable)) {
-            Scalar exponent = Scalar(0.0L);
-            if (SymbolicExpression(denominator.node_->right).is_number(&exponent) &&
-                mymath::is_integer(exponent, Scalar(1e-10L)) &&
-                exponent >= Scalar(0.0L)) {
-                return make_multiply(
-                           SymbolicExpression::number(numerator_factor),
-                           make_delta_expression(index_variable,
-                                                 Scalar(static_cast<long long>(static_cast<int>(exponent.to_long_double() + 0.5L)))))
-                    .simplify();
-            }
-        }
-
-        // Z^-1{1/(z-a)^k} = C(n-1,k-1) a^(n-k) step(n-k).
-        if (numerator_base.is_number(&numeric) &&
-            mymath::is_near_zero(numeric - 1.0L, kFormatEps()) &&
-            denominator.node_->type == NodeType::kPower) {
-            Scalar exponent = Scalar(0.0L);
-            Scalar z_coeff = Scalar(0.0L), z_inter = Scalar(0.0L);
-            if (decompose_linear(SymbolicExpression(denominator.node_->left),
-                                 transform_variable, &z_coeff, &z_inter) &&
-                mymath::is_near_zero(z_coeff - 1.0L, kFormatEps()) &&
-                SymbolicExpression(denominator.node_->right).is_number(&exponent) &&
-                mymath::is_integer(exponent, Scalar(1e-10L)) &&
-                exponent >= Scalar(1.0L)) {
-                const int order = static_cast<int>(exponent.to_long_double() + 0.5L);
-                return make_multiply(
-                           SymbolicExpression::number(numerator_factor),
-                           make_z_binomial_term(
-                               index_variable, order,
-                               SymbolicExpression::number(-z_inter)))
-                    .simplify();
-            }
-        }
-
-        SymbolicExpression rational_result;
-        if (try_inverse_z_symbolic_rational(
-                numerator, denominator, transform_variable,
-                index_variable, &rational_result)) {
-            return rational_result.simplify();
-        }
-
-        // Symbolic linear pole: z/(a*z+b) -> (1/a)*(-b/a)^n*step(n).
-        if (numerator_base.is_variable_named(transform_variable)) {
-            SymbolicExpression z_coeff;
-            SymbolicExpression z_intercept;
-            if (symbolic_decompose_linear(denominator, transform_variable,
-                                           &z_coeff, &z_intercept) &&
-                !match_zero_expression(z_coeff)) {
-                const SymbolicExpression pole = make_negate(
-                    make_divide(z_intercept, z_coeff)).simplify();
-                return make_multiply(
-                           make_divide(SymbolicExpression::number(numerator_factor), z_coeff),
-                           make_multiply(
-                               make_power(pole, SymbolicExpression::variable(index_variable)),
-                               make_step_expression(index_variable, Scalar(0.0L))))
-                    .simplify();
-            }
-        }
-
-        // Z^-1{ 1 / (z - a) } = a^(n-1) * step[n-1]
-        if (numerator_base.is_number(&numeric) &&
-            mymath::is_near_zero(numeric - 1.0L, kFormatEps())) {
-            Scalar z_coeff = Scalar(0.0L), z_inter = Scalar(0.0L);
-            if (decompose_linear(denominator, transform_variable, &z_coeff, &z_inter) &&
-                mymath::is_near_zero(z_coeff - 1.0L, kFormatEps())) {
-                Scalar a = -z_inter;
-                SymbolicExpression n_minus_1 = make_subtract(SymbolicExpression::variable(index_variable),
-                                                              SymbolicExpression::number(Scalar(1.0L))).simplify();
-                SymbolicExpression term = make_multiply(make_power(SymbolicExpression::number(a), n_minus_1),
-                                                        make_function("step", n_minus_1));
-                return make_multiply(SymbolicExpression::number(numerator_factor), term).simplify();
-            }
-        }
-
-        // Z^-1{ z / (z - a) } = a^n * step[n]
-        if (numerator_base.is_variable_named(transform_variable)) {
-            Scalar z_coeff = Scalar(0.0L), z_inter = Scalar(0.0L);
-            if (decompose_linear(denominator, transform_variable, &z_coeff, &z_inter) &&
-                mymath::is_near_zero(z_coeff - 1.0L, kFormatEps())) {
-                Scalar a = -z_inter;
-                return make_multiply(
-                           SymbolicExpression::number(numerator_factor),
-                           make_multiply(
-                               make_power(SymbolicExpression::number(a),
-                                          SymbolicExpression::variable(index_variable)),
-                               make_step_expression(index_variable, Scalar(0.0L))))
-                    .simplify();
-            }
-        }
-
-        // Z^-1{ z / (z - a)^2 } = n * a^(n-1) * step[n]
-        if (numerator_base.is_variable_named(transform_variable) &&
-            denominator.node_->type == NodeType::kPower) {
-            Scalar exponent = Scalar(0.0L);
-            Scalar z_coeff = Scalar(0.0L), z_inter = Scalar(0.0L);
-            if (decompose_linear(SymbolicExpression(denominator.node_->left), transform_variable, &z_coeff, &z_inter) &&
-                mymath::is_near_zero(z_coeff - 1.0L, kFormatEps()) &&
-                SymbolicExpression(denominator.node_->right).is_number(&exponent) &&
-                mymath::is_near_zero(exponent - 2.0L, kFormatEps())) {
-                Scalar a = -z_inter;
-                SymbolicExpression n_var = SymbolicExpression::variable(index_variable);
-                SymbolicExpression n_minus_1 = make_subtract(n_var, SymbolicExpression::number(Scalar(1.0L))).simplify();
-                SymbolicExpression term = make_multiply(n_var, make_power(SymbolicExpression::number(a), n_minus_1));
-                return make_multiply(SymbolicExpression::number(numerator_factor),
-                                     make_multiply(term, make_step_expression(index_variable, Scalar(0.0L))))
-                    .simplify();
-            }
-
-            // z/(z-a)^k = 1/(z-a)^(k-1) + a/(z-a)^k for k >= 3.
-            if (decompose_linear(SymbolicExpression(denominator.node_->left),
-                                 transform_variable, &z_coeff, &z_inter) &&
-                mymath::is_near_zero(z_coeff - 1.0L, kFormatEps()) &&
-                SymbolicExpression(denominator.node_->right).is_number(&exponent) &&
-                mymath::is_integer(exponent, Scalar(1e-10L)) &&
-                exponent >= Scalar(3.0L)) {
-                const int order = static_cast<int>(exponent.to_long_double() + 0.5L);
-                const Scalar a = -z_inter;
-                const SymbolicExpression pole = SymbolicExpression::number(a);
-                const SymbolicExpression first = make_z_binomial_term(
-                    index_variable, order - 1, pole);
-                const SymbolicExpression second = make_multiply(
-                    pole, make_z_binomial_term(index_variable, order, pole));
-                return make_multiply(SymbolicExpression::number(numerator_factor),
-                                     make_add(first, second)).simplify();
-            }
-        }
-    }
-
-    throw std::runtime_error("unsupported symbolic inverse z transform");
 }
 
 }  // namespace symbolic_expression_internal

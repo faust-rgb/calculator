@@ -528,9 +528,15 @@ void collect_additive_terms(const SymbolicExpression& expression,
 void collect_additive_expressions(const SymbolicExpression& expression,
                                   std::vector<SymbolicExpression>* terms) {
     const auto& node = expression.node_;
+    if (!node) return;
     if (node->type == NodeType::kAdd) {
         collect_additive_expressions(SymbolicExpression(node->left), terms);
         collect_additive_expressions(SymbolicExpression(node->right), terms);
+        return;
+    }
+    if (node->type == NodeType::kSubtract) {
+        collect_additive_expressions(SymbolicExpression(node->left), terms);
+        collect_additive_expressions(make_negate(SymbolicExpression(node->right)), terms);
         return;
     }
     terms->push_back(expression);

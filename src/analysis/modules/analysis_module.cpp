@@ -315,5 +315,3 @@ std::string AnalysisModule::get_help_snippet(const std::string& topic) const {
 }
 
 }  // namespace analysis_cmds
-
-REGISTER_CALCULATOR_MODULE(analysis_cmds::AnalysisModule)

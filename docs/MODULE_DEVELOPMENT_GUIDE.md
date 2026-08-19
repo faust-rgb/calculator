@@ -4,7 +4,7 @@
 
 ### 1. 创建模块类
 
-在相应的模块目录下（如 `src/analysis/modules/`）创建头文件和实现文件。所有模块必须继承自 `CalculatorModule` 基类。
+在相应的模块目录下（如 `src/analysis/modules/`）创建头文件和实现文件。所有模块继承自 `CalculatorModule` 基类（或接口隔离基类如 `CommandModuleBase`、`FunctionModuleBase` 等）。
 
 ```cpp
 // my_module.h
@@ -20,25 +20,30 @@ public:
     // 必须实现：模块名称，用于日志和调试
     std::string name() const override { return "MyModule"; }
 
-    // 初始化模块（可选），在注册后调用一次
-    void initialize(ServiceLocator& locator) override {
-        // 执行初始化逻辑
+    // 声明模块能力（可选，默认支持全部）
+    ModuleCapability capabilities() const override {
+        return ModuleCapability::kCommands | ModuleCapability::kHelp;
     }
 
-    // 注册模块提供的数学服务（可选）
+    // 注册模块提供的服务（Phase 1 服务声明阶段调用）
     void register_services(CoreServices& services, ServiceLocator& locator) override {
         // 向核心系统挂载服务
     }
 
-    // 返回模块支持的命令列表（可选）
+    // 初始化模块（Phase 2 在所有服务注册完成后调用）
+    void initialize(ServiceLocator& locator) override {
+        // 执行初始化与依赖解析
+    }
+
+    // 返回模块支持的命令列表（简单声明）
     std::vector<std::string> get_commands() const override {
         return {"my_cmd"};
     }
 
-    // 执行命令的逻辑
-    std::string execute_args(const std::string& command,
-                            const std::vector<std::string>& args,
-                            ServiceLocator& locator) override {
+    // 高性能零拷贝命令执行（推荐）
+    std::string execute_args_view(std::string_view command,
+                                  const std::vector<std::string_view>& args,
+                                  ModuleServices& services) override {
         if (command == "my_cmd") {
              return "Hello from MyModule!";
         }
@@ -46,7 +51,7 @@ public:
     }
     
     // 返回模块提供的函数列表（可选，用于帮助系统）
-    std::vector<std::string> get_functions() const override {
+    std::vector<std::string> get_function_names() const override {
         return {"my_func"};
     }
 
@@ -64,17 +69,14 @@ public:
 
 ### 2. 注册模块
 
-在实现文件中使用 `REGISTER_CALCULATOR_MODULE` 宏进行自动注册。
+为了消除静态库死代码剔除（Dead Stripping）及静态初始化顺序问题，系统采用显式依赖装配模式：
+
+* **内建标准模块**：在 `src/module/module_registration.cpp` 的 `register_standard_modules` 中添加模块实例化；
+* **运行时外部注入**：通过 `calculator->register_module(std::make_shared<MyModule>())` 进行动态挂载。
 
 ```cpp
-// my_module.cpp
-#include "my_module.h"
-#include "module/calculator_module.h"
-
-namespace modules {
-    // 自动向全局注册表注册该模块
-    REGISTER_CALCULATOR_MODULE(MyModule)
-}
+// 示例：在 module_registration.cpp 中装配
+register_builtin([]() { return std::make_shared<modules::MyModule>(); });
 ```
 
 ## 核心接口说明

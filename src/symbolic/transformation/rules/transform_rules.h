@@ -23,6 +23,42 @@
 
 namespace transform_rules {
 
+using BindingsMap = std::map<std::string, SymbolicExpression>;
+
+namespace dsl {
+
+// 通配符创建辅助函数
+SymbolicExpression _any(const std::string& name);
+SymbolicExpression _c(const std::string& name);
+SymbolicExpression _var(const std::string& name = "");
+SymbolicExpression _num(const std::string& name);
+
+// 函数通配结构辅助
+SymbolicExpression _step(const SymbolicExpression& arg);
+SymbolicExpression _delta(const SymbolicExpression& arg);
+SymbolicExpression _exp(const SymbolicExpression& arg);
+SymbolicExpression _sin(const SymbolicExpression& arg);
+SymbolicExpression _cos(const SymbolicExpression& arg);
+SymbolicExpression _sinh(const SymbolicExpression& arg);
+SymbolicExpression _cosh(const SymbolicExpression& arg);
+SymbolicExpression _sinc(const SymbolicExpression& arg);
+SymbolicExpression _sgn(const SymbolicExpression& arg);
+SymbolicExpression _gamma(const SymbolicExpression& arg);
+SymbolicExpression _rect(const SymbolicExpression& arg);
+SymbolicExpression _tri(const SymbolicExpression& arg);
+SymbolicExpression _abs(const SymbolicExpression& arg);
+SymbolicExpression _sqrt(const SymbolicExpression& arg);
+
+}  // namespace dsl
+
+/**
+ * @brief 核心通配符 AST 模式匹配函数
+ */
+bool match_pattern(const SymbolicExpression& target,
+                   const SymbolicExpression& pattern,
+                   const std::string& input_var,
+                   BindingsMap* bindings);
+
 /**
  * @struct TransformRule
  * @brief 变换规则结构
@@ -65,6 +101,7 @@ struct TransformRule {
  * 单例类，管理所有变换规则。支持：
  * - 注册内置规则
  * - 添加用户自定义规则
+ * - 声明式通配符规则注册
  * - 按优先级查询规则
  */
 class TransformRuleRegistry {
@@ -76,6 +113,19 @@ public:
      * @param rule 规则对象
      */
     void register_rule(const TransformRule& rule);
+
+    /**
+     * @brief 声明式注册变换规则 (使用通配符模式与模板)
+     */
+    void register_declarative_rule(
+        const std::string& name,
+        const std::string& transform_type,
+        const SymbolicExpression& pattern,
+        std::function<SymbolicExpression(const BindingsMap& bindings,
+                                         const std::string& output_var)> template_generator,
+        int priority,
+        const std::string& description = "",
+        const std::string& formula = "");
 
     /**
      * @brief 获取指定类型的所有规则 (按优先级排序)

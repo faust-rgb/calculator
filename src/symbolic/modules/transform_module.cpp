@@ -284,6 +284,17 @@ std::string TransformModule::execute_args(const std::string& command,
     throw std::runtime_error("Unknown transform command: " + command);
 }
 
+std::string TransformModule::execute_args_view(std::string_view command,
+                                              const std::vector<std::string_view>& args,
+                                              ServiceLocator& locator) {
+    std::vector<std::string> str_args;
+    str_args.reserve(args.size());
+    for (const auto& sv : args) {
+        str_args.emplace_back(sv);
+    }
+    return execute_args(std::string(command), str_args, locator);
+}
+
 std::string TransformModule::get_help_snippet(const std::string& topic) const {
     if (topic == "symbolic") {
         return "Transforms:\n"
@@ -307,6 +318,21 @@ std::vector<std::string> TransformModule::get_commands() const {
             "z_transform", "inverse_z"};
 }
 
-}  // namespace transforms
+std::vector<CommandSpec> TransformModule::get_command_specs() const {
+    std::vector<CommandSpec> specs;
+    for (const std::string& cmd : get_commands()) {
+        CommandSpec spec;
+        spec.key = call_command_key(cmd);
+        spec.dispatch_name = cmd;
+        spec.short_help = cmd;
+        spec.is_inlineable = true;
+        specs.push_back(std::move(spec));
+    }
+    return specs;
+}
 
-REGISTER_CALCULATOR_MODULE(transforms::TransformModule)
+std::vector<std::string> TransformModule::get_function_names() const {
+    return get_commands();
+}
+
+}  // namespace transforms

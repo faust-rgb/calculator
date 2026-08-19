@@ -10,7 +10,6 @@
 
 #include "core/services/calculator_service_factory.h"
 #include "core/services/core_managers.h"
-#include "core/services/service_registry.h"
 #include "core/api/calculator_impl.h"
 #include "math/functions/integer/integer_helpers.h"
 #include "math/functions/integer/bitwise_helpers.h"

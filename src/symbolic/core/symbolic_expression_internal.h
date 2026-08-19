@@ -728,6 +728,11 @@ bool is_squared_function(const SymbolicExpression& expression,
                          const std::string& function_name,
                          std::string* argument_key);
 
+bool is_scaled_squared_function(const SymbolicExpression& expression,
+                                const std::string& function_name,
+                                std::string* argument_key,
+                                SymbolicExpression* coefficient);
+
 /**
  * @brief 分解符号的数值倍数
  * @param expression 表达式

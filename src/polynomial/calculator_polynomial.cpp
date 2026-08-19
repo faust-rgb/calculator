@@ -531,5 +531,3 @@ std::string PolynomialModule::get_help_snippet(const std::string& topic) const {
 }
 
 }  // namespace polynomial_ops
-
-REGISTER_CALCULATOR_MODULE(polynomial_ops::PolynomialModule)

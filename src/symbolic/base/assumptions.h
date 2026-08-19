@@ -52,6 +52,29 @@ public:
         AssumptionEngine* previous_;
     };
 
+    /** RAII Scoped Assumption for a single variable. */
+    class ScopedAssume {
+    public:
+        ScopedAssume(const std::string& variable, Assumption assumption, AssumptionEngine& engine = AssumptionEngine::instance())
+            : var_(variable), assumption_(assumption), engine_(engine), was_set_(engine.has_assumption(variable, assumption)) {
+            if (!was_set_) {
+                engine_.assume(var_, assumption_);
+            }
+        }
+        ~ScopedAssume() {
+            if (!was_set_) {
+                engine_.clear_assumption(var_, assumption_);
+            }
+        }
+        ScopedAssume(const ScopedAssume&) = delete;
+        ScopedAssume& operator=(const ScopedAssume&) = delete;
+    private:
+        std::string var_;
+        Assumption assumption_;
+        AssumptionEngine& engine_;
+        bool was_set_;
+    };
+
     void assume(const std::string& variable, Assumption assumption);
     void clear_assumption(const std::string& variable, Assumption assumption);
     void clear_all_assumptions();

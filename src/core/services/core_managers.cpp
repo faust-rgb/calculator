@@ -3,8 +3,10 @@
 // ============================================================================
 
 #include "core_managers.h"
+#include "module/calculator_module.h"
 #include "execution/resolver/variable_resolver.h"
 #include <algorithm>
+#include <stdexcept>
 
 // ==================== VariableManager ====================
 
@@ -193,6 +195,11 @@ bool ConfigManager::is_hex_uppercase_mode() const {
 
 void ModuleManager::register_module(std::shared_ptr<CalculatorModule> module) {
     if (module) {
+        for (const auto& existing : modules_) {
+            if (existing && existing->name() == module->name()) {
+                throw std::runtime_error("module already registered: " + module->name());
+            }
+        }
         modules_.push_back(module);
     }
 }

@@ -64,8 +64,7 @@ long long binomial(long long n, long long k) {
 
 // 检查表达式是否包含变量
 bool contains_variable(const SymbolicExpression& expr, const std::string& var) {
-    std::string str = expr.to_string();
-    return str.find(var) != std::string::npos;
+    return !expr.is_constant(var);
 }
 
 }  // namespace
@@ -436,7 +435,7 @@ bool SymbolicSumEngine::gosper_algorithm(
         std::string den_str = den.to_string();
 
         // 检测 (k+a)/(k+b) 形式
-        if (num_str.find(var) != std::string::npos && den_str.find(var) != std::string::npos) {
+        if (!num.is_constant(var) && !den.is_constant(var)) {
             // 尝试分解为 telescoping 形式
             // 对于 r(k) = (k+a)/(k+b)，如果 a-b = 1，则可能 telescoping
             // 例如：sum(1/((k+a)(k+b)), k, ...) 当 b = a+1 时 telescoping
@@ -680,21 +679,14 @@ SymbolicExpression SymbolicSumEngine::numerical_sum(
     int lower,
     int upper) {
 
-    Scalar sum = Scalar(0.0L);
+    SymbolicExpression sum_expr = SymbolicExpression::number(Scalar(0.0L));
 
     for (int k = lower; k <= upper; ++k) {
         SymbolicExpression sub = term.substitute(var, SymbolicExpression::number(Scalar(static_cast<long long>(k))));
-        sub = sub.simplify();
-        Scalar val = Scalar(0.0L);
-        if (sub.is_number(&val)) {
-            sum += val;
-        } else {
-            // 无法数值化，返回符号形式
-            return SymbolicExpression::parse("sum(" + term.to_string() + ")");
-        }
+        sum_expr = make_add(sum_expr, sub).simplify();
     }
 
-    return SymbolicExpression::number(sum);
+    return sum_expr;
 }
 
 // ============================================================================

@@ -95,6 +95,11 @@ struct CalculatorSettings {
 struct CommandSpec {
     CommandKey key;           ///< 命令键（语法类型 + 名称）
     std::string dispatch_name;///< 派发名称（原始命令名）
+    std::string help_text;
+    std::string short_help;
+    std::vector<std::string> aliases;
+    bool is_prefix = false;
+    bool is_inlineable = false;
 };
 
 class ServiceLocator;
@@ -109,40 +114,6 @@ struct ModuleServices {
     ServiceLocator& locator;
     CoreServices& core;
     IExecutionContext& execution;
-};
-
-// ============================================================================
-// ModuleRegistry 前向声明（用于模块自动注册）
-// ============================================================================
-
-class ModuleRegistry;
-
-/**
- * @class ModuleRegistry
- * @brief 全局模块注册表，用于去中心化注册
- *
- * 单例模式，收集所有模块的工厂函数。
- * 在 Calculator 构造时，遍历工厂创建并注册所有模块。
- */
-class ModuleRegistry {
-public:
-    using ModuleFactory = std::function<std::shared_ptr<CalculatorModule>()>;
-
-    static ModuleRegistry& instance() {
-        static ModuleRegistry registry;
-        return registry;
-    }
-
-    void register_factory(ModuleFactory factory) {
-        factories_.push_back(std::move(factory));
-    }
-
-    const std::vector<ModuleFactory>& factories() const {
-        return factories_;
-    }
-
-private:
-    std::vector<ModuleFactory> factories_;
 };
 
 /**
@@ -274,11 +245,11 @@ public:
         return execute_args(cmd, string_args, locator);
     }
 
-    // Explicit dependency entry point. The locator overload remains only for
-    // source compatibility with third-party modules during migration.
-    std::string execute_args_view(std::string_view command,
-                                  const std::vector<std::string_view>& args,
-                                  ModuleServices& services) {
+    // Explicit dependency entry point. Legacy modules are bridged below until
+    // their command implementations are migrated.
+    virtual std::string execute_args_view(std::string_view command,
+                                           const std::vector<std::string_view>& args,
+                                           ModuleServices& services) {
         return execute_args_view(command, args, services.locator);
     }
 
@@ -405,49 +376,14 @@ inline std::string extract_string(const std::vector<std::string_view>& args,
 } // namespace module_helpers
 
 // ============================================================================
-// 模块自动注册宏
 // ============================================================================
-
-/**
- * @brief 模块注册宏，放在模块的 .cpp 文件末尾
- *
- * 使用此宏自动将模块注册到全局 ModuleRegistry。
- * 由于 calculator_module.h 已被所有模块包含，无需额外包含其他头文件。
- *
- * 示例：
- * REGISTER_CALCULATOR_MODULE(MyCustomModule)
- * REGISTER_CALCULATOR_MODULE(some_namespace::MyModule)
- */
-#define REGISTER_CALCULATOR_MODULE_IMPL(ModuleClass, line) \
-    namespace { \
-        struct ModuleRegistrar_##line { \
-            ModuleRegistrar_##line() { \
-                ModuleRegistry::instance().register_factory([]() { \
-                    return std::make_shared<ModuleClass>(); \
-                }); \
-            } \
-        }; \
-        static ModuleRegistrar_##line global_module_registrar_##line; \
-    }
-
-#define REGISTER_CALCULATOR_MODULE(ModuleClass) \
-    REGISTER_CALCULATOR_MODULE_IMPL(ModuleClass, __LINE__)
-
-// ============================================================================
-// 标准模块注册函数
+// 内建模块注册函数；外部模块通过 Calculator::register_module 注入。
 // ============================================================================
 
 class Calculator;
 
 /**
- * @brief 注册标准模块到计算器实例
- *
- * 遍历全局 ModuleRegistry，创建并注册所有通过 REGISTER_CALCULATOR_MODULE
- * 宏注册的模块到 Calculator 实例中。
- *
- * 使用示例：
- *   Calculator calc;
- *   register_standard_modules(&calc);
+ * @brief 按固定顺序注册标准模块到计算器实例
  */
 void register_standard_modules(Calculator* calculator);
 

@@ -19,6 +19,11 @@
 #include "symbolic_expression.h"
 #include "symbolic/core/symbolic_expression_internal.h"
 #include "symbolic/public/symbolic_factory.h"
+#include "symbolic/transformation/rules/transform_rules.h"
+#include "symbolic/solver/symbolic_solver.h"
+#include "symbolic/calculus/sum/symbolic_sum.h"
+#include "symbolic/calculus/limit/symbolic_limit.h"
+#include "symbolic/base/assumptions.h"
 #include "core/execution_context.h"
 #include <iostream>
 #include <vector>
@@ -597,13 +602,27 @@ int run_symbolic_tests(int& passed, int& failed) {
         {"fourier(exp(-2 * t) * step(t), t, w)", false, "1 / (i * w + 2)"},
         {"fourier(exp(-2 * t) * step(t) + 3 * exp(-4 * t) * step(t), t, w)", false, "1 / (i * w + 2) + 3 * 1 / (i * w + 4)"},
         {"fourier(delta(t - 2))", false, "exp(-2 * i * w)"},
-        {"ifourier(delta(w - 3))", false, "0.159154943091 * exp(3 * i * t)"},
+        {"ifourier(delta(w - 3))", false, "1/2 / pi * exp(3 * i * t)"},
         {"ztrans(step(n - 2))", false, "z ^ -1 / (z - 1)"},
         {"iztrans(z ^ -2)", false, "delta(n - 2)"},
         {"iztrans(z / (z - 1), z, n)", false, "step(n)"},
         {"iztrans(3 * z / (z - 1), z, n)", false, "3 * step(n)"},
         {"iztrans(2 * z / (z - 1) ^ 2, z, n)", false, "2 * step(n) * n"},
         {"iztrans(5 * z / (z - 3) - 2 * z ^ -2 + z / (z - 1), z, n)", false, "5 * step(n) * 3 ^ n - 2 * delta(n - 2) + step(n)"},
+        {"laplace(1 / sqrt(t), t, s)", false, "sqrt(pi) / sqrt(s)"},
+        {"laplace(t ^ (3/2), t, s)", false, "3/4 * sqrt(pi) / s ^ (5/2)"},
+        {"laplace(sin(2 * t + a), t, s)", false, "(2 * cos(a) + sin(a) * s) / (s ^ 2 + 4)"},
+        {"laplace(cos(2 * t + a), t, s)", false, "(cos(a) * s - 2 * sin(a)) / (s ^ 2 + 4)"},
+        {"ilaplace(1 / (s ^ 2 + 4), s, t)", false, "cos(t) * sin(t) * step(t)"},
+        {"ilaplace(s / (s ^ 2 + 4), s, t)", false, "step(t) * (cos(t) ^ 2 - sin(t) ^ 2)"},
+        {"ilaplace((s + 1) / (s ^ 2 + 2 * s + 5), s, t)", false, "exp(-t) * step(t) * (cos(t) ^ 2 - sin(t) ^ 2)"},
+        {"fourier(sgn(t), t, w)", false, "2 / (i * w)"},
+        {"ztrans(2 ^ n * sin(w * n), n, z)", false, "2 * sin(w) * z / (z ^ 2 - 4 * cos(w) * z + 4)"},
+        {"ztrans(2 ^ n * cos(w * n), n, z)", false, "z * (z - 2 * cos(w)) / (z ^ 2 - 4 * cos(w) * z + 4)"},
+        {"iztrans(z / (z ^ 2 + 1), z, n)", false, "sin(1.57079632679 * n) * step(n)"},
+        {"iztrans(z ^ 2 / (z ^ 2 + 1), z, n)", false, "cos(1.57079632679 * n) * step(n)"},
+        {"ilaplace(s / ((s ^ 2 + 1) * (s ^ 2 + 9)), s, t)", false, "1/8 * step(t) * (-cos(3 * t) + cos(t))"},
+        {"ilaplace(1 / (s ^ 4 + 5 * s ^ 2 + 4), s, t)", false, "1/3 * sin(t) * step(t) * (-cos(t) + 1)"},
     };
 
     // 遍历所有命令测试用例
@@ -629,10 +648,23 @@ int run_symbolic_tests(int& passed, int& failed) {
                 test.expression == "series_sum(n^2, n, 1, N)" &&
                 (output == "N * (N + 1) * (2 * N + 1) / 6" ||
                  output == "N * (2 * N + 1) * (N + 1) / 6");
+            const bool iztrans_equivalent =
+                test.expression == "iztrans(5 * z / (z - 3) - 2 * z ^ -2 + z / (z - 1), z, n)" &&
+                (output == "step(n) * (5 * 3 ^ n + 1) - 2 * delta(n - 2)" ||
+                 output == "5 * step(n) * 3 ^ n - 2 * delta(n - 2) + step(n)");
+            const bool ztrans_trig_equivalent =
+                (test.expression == "ztrans(2 ^ n * sin(w * n), n, z)" &&
+                 (output == "2 * sin(w) * z / (z ^ 2 - 4 * cos(w) * z + 4)" ||
+                  output == "2 * sin(w) * z / (-(4 * cos(w) * z) + z ^ 2 + 4)")) ||
+                (test.expression == "ztrans(2 ^ n * cos(w * n), n, z)" &&
+                 (output == "z * (z - 2 * cos(w)) / (z ^ 2 - 4 * cos(w) * z + 4)" ||
+                  output == "z * (z - 2 * cos(w)) / (-(4 * cos(w) * z) + z ^ 2 + 4)"));
             if (handled && (output == test.expected ||
                             z_transform_equivalent ||
                             fourier_equivalent ||
-                            series_sum_equivalent)) {
+                            series_sum_equivalent ||
+                            iztrans_equivalent ||
+                            ztrans_trig_equivalent)) {
                 ++passed;
             } else {
                 ++failed;
@@ -687,6 +719,35 @@ int run_symbolic_tests(int& passed, int& failed) {
         ++failed;
         std::cout << "FAIL: eig(...) threw unexpected error: "
                   << ex.what() << '\n';
+    }
+
+    // ========== 变换表达式测试 ==========
+    try {
+        SymbolicExpression expr1 = SymbolicExpression::parse("step(t)").laplace_transform("t", "s");
+        SymbolicExpression inline_lap = (SymbolicExpression::number(Scalar(2)) * expr1).simplify();
+        if (inline_lap.to_string().find("2") != std::string::npos && inline_lap.to_string().find("s") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: 2 * laplace(step(t), t, s) got " << inline_lap.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: 2 * laplace(step(t), t, s) threw error: " << ex.what() << '\n';
+    }
+
+    try {
+        SymbolicExpression expr2 = SymbolicExpression::parse("delta(n)").z_transform("n", "z");
+        SymbolicExpression inline_z = (SymbolicExpression::number(Scalar(3)) * expr2).simplify();
+        if (inline_z.to_string() == "3" || inline_z.to_string() == "3.0" || inline_z.to_string() == "3 * 1") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: 3 * ztrans(delta(n), n, z) got " << inline_z.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: 3 * ztrans(delta(n), n, z) threw error: " << ex.what() << '\n';
     }
 
     // ========== 脚本测试 ==========
@@ -1774,8 +1835,138 @@ int run_symbolic_tests(int& passed, int& failed) {
         std::cout << "FAIL: evalf contract test threw: " << ex.what() << '\n';
     }
 
-    //std::cout << "Passed: " << passed << '\n';
-    //std::cout << "Failed: " << failed << '\n';
+    try {
+        using namespace transform_rules;
+        using namespace transform_rules::dsl;
+
+        // Test 1: Direct pattern matching with Wildcards
+        BindingsMap bindings;
+        SymbolicExpression target = SymbolicExpression::parse("step(t) * exp(-3 * t)");
+        SymbolicExpression pattern = _exp(_c("a") * _var("t")) * _step(_var("t"));
+        if (match_pattern(target, pattern, "t", &bindings) &&
+            bindings.count("a") && bindings.count("t")) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: match_pattern for exp(-3*t)*step(t) failed\n";
+        }
+
+        // Test 2: Custom Declarative Rule Registration
+        TransformRuleRegistry::instance().register_declarative_rule(
+            "user_custom_test_rule",
+            "laplace",
+            _sinc(_c("w") * _var("t")) * _step(_var("t")),
+            [](const BindingsMap&, const std::string& s) {
+                return make_divide(SymbolicExpression::variable("pi"), SymbolicExpression::variable(s));
+            },
+            200
+        );
+
+        // Test 3: New Builtin Declarative Rules verification
+        SymbolicExpression lap_sinh = SymbolicExpression::parse("sinh(2 * t) * step(t)").laplace_transform("t", "s").simplify();
+        if (lap_sinh.to_string().find("2") != std::string::npos && lap_sinh.to_string().find("s") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: laplace(sinh(2*t)*step(t)) got " << lap_sinh.to_string() << "\n";
+        }
+
+        SymbolicExpression lap_cosh = SymbolicExpression::parse("cosh(3 * t) * step(t)").laplace_transform("t", "s").simplify();
+        if (lap_cosh.to_string().find("s") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: laplace(cosh(3*t)*step(t)) got " << lap_cosh.to_string() << "\n";
+        }
+
+        SymbolicExpression z_ramp = SymbolicExpression::parse("n * step(n)").z_transform("n", "z").simplify();
+        if (z_ramp.to_string().find("z") != std::string::npos && z_ramp.to_string().find("1") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: z_ramp test failed\n";
+        }
+
+        // Test 4: AC pattern matching & Identity defaults
+        BindingsMap ac_bindings;
+        SymbolicExpression ac_target = SymbolicExpression::parse("sin(x) * exp(2 * x)");
+        SymbolicExpression ac_pattern = _c("a") * _sin(_var("x")) * _exp(_c("b") * _var("x"));
+        if (match_pattern(ac_target, ac_pattern, "x", &ac_bindings) &&
+            ac_bindings.count("a") && ac_bindings.count("b")) {
+            Scalar a_val, b_val;
+            if (ac_bindings["a"].is_number(&a_val) && a_val == Scalar(1.0L) &&
+                ac_bindings["b"].is_number(&b_val) && b_val == Scalar(2.0L)) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: AC default identity match values incorrect\n";
+            }
+        } else {
+            ++failed;
+            std::cout << "FAIL: AC pattern match failed for sin(x)*exp(2*x)\n";
+        }
+
+        // Test 5: Sum with function containing letter of variable (e.g. sin(x) * n with var 'n\)
+        auto sum_res = symbolic_sum::SymbolicSumEngine::sum("sin(x) * n", "n", BoundArgument::finite(Scalar(1)), BoundArgument::finite(Scalar(4)));
+        if (sum_res.has_value() && sum_res->to_string().find("10") != std::string::npos && sum_res->to_string().find("sin(x)") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: series_sum(sin(x)*n, n, 1, 4) got: " << (sum_res ? sum_res->to_string() : "null") << "\n";
+        }
+
+        // Test 6: Limit generalized pattern matching
+        auto lim_sin = symbolic_limit::SymbolicLimitEngine::limit("sin(6 * x) / (2 * x)", "x", BoundArgument::finite(Scalar(0)));
+        if (lim_sin.has_value() && (lim_sin->to_string() == "3" || lim_sin->to_string() == "3.0")) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: limit(sin(6*x)/(2*x), x, 0) got: " << (lim_sin ? lim_sin->to_string() : "null") << "\n";
+        }
+
+        auto lim_ln = symbolic_limit::SymbolicLimitEngine::limit("ln(1 + 4 * x) / (2 * x)", "x", BoundArgument::finite(Scalar(0)));
+        Scalar lim_ln_val;
+        if (lim_ln.has_value() && (lim_ln->to_string() == "2" || lim_ln->to_string() == "2.0" || (lim_ln->is_number(&lim_ln_val) && mymath::abs(lim_ln_val - Scalar(2.0L)) < Scalar(1e-6L)))) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: limit(ln(1+4*x)/(2*x), x, 0) got: " << (lim_ln ? lim_ln->to_string() : "null") << "\n";
+        }
+
+        // Test 7: Lambert W transcendental solver
+        SymbolicExpression lambert_eq = SymbolicExpression::parse("x * exp(x) - 5");
+        symbolic_solver::SymbolicSolver solver;
+        symbolic_solver::Solution lambert_sol = solver.solve(lambert_eq, "x");
+        if (lambert_sol.is_complete && !lambert_sol.values.empty() &&
+            lambert_sol.values[0].to_string().find("lambertw") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: solve(x*exp(x) - 5, x) with Lambert W failed\n";
+        }
+
+        // Test 8: ScopedAssume RAII
+        {
+            symbolic_assumptions::AssumptionEngine::ScopedAssume assume_p("a_pos", symbolic_assumptions::Assumption::kPositive);
+            if (symbolic_assumptions::AssumptionEngine::instance().has_assumption("a_pos", symbolic_assumptions::Assumption::kPositive) &&
+                symbolic_assumptions::AssumptionEngine::instance().has_assumption("a_pos", symbolic_assumptions::Assumption::kReal)) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: ScopedAssume positive propagation failed\n";
+            }
+        }
+        if (!symbolic_assumptions::AssumptionEngine::instance().has_assumption("a_pos", symbolic_assumptions::Assumption::kPositive)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ScopedAssume RAII cleanup failed\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: declarative pattern DSL tests threw: " << ex.what() << '\n';
+    }
+
     return failed == 0 ? 0 : 1;
 }
 

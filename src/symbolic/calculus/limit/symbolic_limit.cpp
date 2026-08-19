@@ -305,6 +305,82 @@ bool SymbolicLimitEngine::apply_lhopital(
     return false;
 }
 
+namespace {
+
+bool extract_linear_term(const SymbolicExpression& expr, const std::string& var, Scalar* k) {
+    if (expr.node_ == nullptr) return false;
+    if (expr.node_->type == NodeType::kVariable && expr.node_->text == var) {
+        if (k) *k = Scalar(1.0L);
+        return true;
+    }
+    if (expr.node_->type == NodeType::kMultiply) {
+        Scalar num = Scalar(0.0L);
+        if (SymbolicExpression(expr.node_->left).is_number(&num) &&
+            SymbolicExpression(expr.node_->right).node_->type == NodeType::kVariable &&
+            SymbolicExpression(expr.node_->right).node_->text == var) {
+            if (k) *k = num;
+            return true;
+        }
+        if (SymbolicExpression(expr.node_->right).is_number(&num) &&
+            SymbolicExpression(expr.node_->left).node_->type == NodeType::kVariable &&
+            SymbolicExpression(expr.node_->left).node_->text == var) {
+            if (k) *k = num;
+            return true;
+        }
+    }
+    if (expr.node_->type == NodeType::kNegate) {
+        Scalar inner_k = Scalar(0.0L);
+        if (extract_linear_term(SymbolicExpression(expr.node_->left), var, &inner_k)) {
+            if (k) *k = -inner_k;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool extract_one_plus_linear(const SymbolicExpression& expr, const std::string& var, Scalar* k) {
+    if (expr.node_ == nullptr || expr.node_->type != NodeType::kAdd) return false;
+    SymbolicExpression left(expr.node_->left);
+    SymbolicExpression right(expr.node_->right);
+    Scalar one = Scalar(0.0L);
+    if (left.is_number(&one) && mymath::is_near_zero(one - Scalar(1.0L), Scalar(1e-9L))) {
+        return extract_linear_term(right, var, k);
+    }
+    if (right.is_number(&one) && mymath::is_near_zero(one - Scalar(1.0L), Scalar(1e-9L))) {
+        return extract_linear_term(left, var, k);
+    }
+    return false;
+}
+
+bool extract_exp_minus_one(const SymbolicExpression& expr, const std::string& var, Scalar* k) {
+    if (expr.node_ == nullptr) return false;
+    if (expr.node_->type == NodeType::kSubtract) {
+        SymbolicExpression left(expr.node_->left);
+        SymbolicExpression right(expr.node_->right);
+        Scalar one = Scalar(0.0L);
+        if (right.is_number(&one) && mymath::is_near_zero(one - Scalar(1.0L), Scalar(1e-9L)) &&
+            left.node_->type == NodeType::kFunction && left.node_->text == "exp") {
+            return extract_linear_term(SymbolicExpression(left.node_->left), var, k);
+        }
+    }
+    if (expr.node_->type == NodeType::kAdd) {
+        SymbolicExpression left(expr.node_->left);
+        SymbolicExpression right(expr.node_->right);
+        Scalar neg_one = Scalar(0.0L);
+        if (left.is_number(&neg_one) && mymath::is_near_zero(neg_one + Scalar(1.0L), Scalar(1e-9L)) &&
+            right.node_->type == NodeType::kFunction && right.node_->text == "exp") {
+            return extract_linear_term(SymbolicExpression(right.node_->left), var, k);
+        }
+        if (right.is_number(&neg_one) && mymath::is_near_zero(neg_one + Scalar(1.0L), Scalar(1e-9L)) &&
+            left.node_->type == NodeType::kFunction && left.node_->text == "exp") {
+            return extract_linear_term(SymbolicExpression(left.node_->left), var, k);
+        }
+    }
+    return false;
+}
+
+} // namespace
+
 bool SymbolicLimitEngine::try_known_pattern(
     const SymbolicExpression& expr,
     const std::string& var,
@@ -312,163 +388,133 @@ bool SymbolicLimitEngine::try_known_pattern(
     int direction,
     LimitResult* result) {
 
-    // 获取表达式的字符串形式用于模式匹配
-    std::string expr_str = expr.to_string();
-
-    // 模式 1: sin(x)/x → 1 (x → 0)
+    // 模式：x → 0 经典极限定理
     if (point.is_finite() && mymath::is_near_zero(Scalar(point.value), Scalar(1e-12))) {
-        // 检查 sin(var)/var 形式
         if (expr.node_->type == NodeType::kDivide) {
             SymbolicExpression num(expr.node_->left);
             SymbolicExpression den(expr.node_->right);
 
-            if (num.node_->type == NodeType::kFunction && num.node_->text == "sin") {
-                SymbolicExpression arg(num.node_->left);
-                // 检查参数是否为 var 或 k*var
-                if (arg.node_->type == NodeType::kVariable && arg.node_->text == var) {
-                    if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
-                        *result = LimitResult::elementary(SymbolicExpression::number(Scalar(1.0L)), "known_pattern: sin(x)/x");
-                        return true;
-                    }
-                }
-                // sin(kx)/(kx) → 1
-                if (arg.node_->type == NodeType::kMultiply) {
-                    Scalar k = Scalar(0);
-                    SymbolicExpression other;
-                    if (SymbolicExpression(arg.node_->left).is_number(&k) &&
-                        SymbolicExpression(arg.node_->right).node_->type == NodeType::kVariable &&
-                        SymbolicExpression(arg.node_->right).node_->text == var) {
-                        SymbolicExpression expected_den = make_multiply(SymbolicExpression::number((k)), SymbolicExpression::variable(var));
-                        if (expressions_match(den, expected_den)) {
-                            *result = LimitResult::elementary(SymbolicExpression::number(Scalar(1.0L)), "known_pattern: sin(kx)/(kx)");
-                            return true;
-                        }
-                    }
-                }
+            Scalar k = Scalar(0.0L), m = Scalar(0.0L);
+
+            // 1. sin(kx) / (mx) → k/m
+            if (num.node_->type == NodeType::kFunction && num.node_->text == "sin" &&
+                extract_linear_term(SymbolicExpression(num.node_->left), var, &k) &&
+                extract_linear_term(den, var, &m) && !mymath::is_near_zero(m, Scalar(1e-9L))) {
+                *result = LimitResult::elementary(SymbolicExpression::number(k / m), "known_pattern: sin(kx)/(mx)");
+                return true;
             }
-        }
-
-        // 模式 2: tan(x)/x → 1 (x → 0)
-        if (expr.node_->type == NodeType::kDivide) {
-            SymbolicExpression num(expr.node_->left);
-            SymbolicExpression den(expr.node_->right);
-
-            if (num.node_->type == NodeType::kFunction && num.node_->text == "tan") {
-                SymbolicExpression arg(num.node_->left);
-                if (arg.node_->type == NodeType::kVariable && arg.node_->text == var) {
-                    if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
-                        *result = LimitResult::elementary(SymbolicExpression::number(Scalar(1.0L)), "known_pattern: tan(x)/x");
-                        return true;
-                    }
-                }
+            // 倒数: mx / sin(kx) → m/k
+            if (den.node_->type == NodeType::kFunction && den.node_->text == "sin" &&
+                extract_linear_term(SymbolicExpression(den.node_->left), var, &k) &&
+                extract_linear_term(num, var, &m) && !mymath::is_near_zero(k, Scalar(1e-9L))) {
+                *result = LimitResult::elementary(SymbolicExpression::number(m / k), "known_pattern: mx/sin(kx)");
+                return true;
             }
-        }
 
-        // 模式 3: (exp(x) - 1)/x → 1 (x → 0)
-        if (expr.node_->type == NodeType::kDivide) {
-            SymbolicExpression num(expr.node_->left);
-            SymbolicExpression den(expr.node_->right);
-
-            if (num.node_->type == NodeType::kSubtract) {
-                SymbolicExpression left(num.node_->left);
-                SymbolicExpression right(num.node_->right);
-
-                if (left.node_->type == NodeType::kFunction && left.node_->text == "exp") {
-                    SymbolicExpression arg(left.node_->left);
-                    if (arg.node_->type == NodeType::kVariable && arg.node_->text == var &&
-                        right.is_number(nullptr) && mymath::is_near_zero(Scalar(right.node_->number_value - 1.0L), Scalar(1e-12))) {
-                        if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
-                            *result = LimitResult::elementary(SymbolicExpression::number(Scalar(1.0L)), "known_pattern: (exp(x)-1)/x");
-                            return true;
-                        }
-                    }
-                }
+            // 2. tan(kx) / (mx) → k/m
+            if (num.node_->type == NodeType::kFunction && num.node_->text == "tan" &&
+                extract_linear_term(SymbolicExpression(num.node_->left), var, &k) &&
+                extract_linear_term(den, var, &m) && !mymath::is_near_zero(m, Scalar(1e-9L))) {
+                *result = LimitResult::elementary(SymbolicExpression::number(k / m), "known_pattern: tan(kx)/(mx)");
+                return true;
             }
-        }
+            // 倒数: mx / tan(kx) → m/k
+            if (den.node_->type == NodeType::kFunction && den.node_->text == "tan" &&
+                extract_linear_term(SymbolicExpression(den.node_->left), var, &k) &&
+                extract_linear_term(num, var, &m) && !mymath::is_near_zero(k, Scalar(1e-9L))) {
+                *result = LimitResult::elementary(SymbolicExpression::number(m / k), "known_pattern: mx/tan(kx)");
+                return true;
+            }
 
-        // 模式 4: ln(1+x)/x → 1 (x → 0)
-        if (expr.node_->type == NodeType::kDivide) {
-            SymbolicExpression num(expr.node_->left);
-            SymbolicExpression den(expr.node_->right);
+            // 3. (exp(kx) - 1) / (mx) → k/m
+            if (extract_exp_minus_one(num, var, &k) &&
+                extract_linear_term(den, var, &m) && !mymath::is_near_zero(m, Scalar(1e-9L))) {
+                *result = LimitResult::elementary(SymbolicExpression::number(k / m), "known_pattern: (exp(kx)-1)/(mx)");
+                return true;
+            }
+            // 倒数: mx / (exp(kx) - 1) → m/k
+            if (extract_exp_minus_one(den, var, &k) &&
+                extract_linear_term(num, var, &m) && !mymath::is_near_zero(k, Scalar(1e-9L))) {
+                *result = LimitResult::elementary(SymbolicExpression::number(m / k), "known_pattern: mx/(exp(kx)-1)");
+                return true;
+            }
 
-            if (num.node_->type == NodeType::kFunction && num.node_->text == "ln") {
-                SymbolicExpression arg(num.node_->left);
-                if (arg.node_->type == NodeType::kAdd) {
-                    SymbolicExpression left(arg.node_->left);
-                    SymbolicExpression right(arg.node_->right);
-                    Scalar one = Scalar(0);
-                    if (left.is_number(&one) && mymath::is_near_zero(one - Scalar(1), Scalar(1e-12)) &&
-                        right.node_->type == NodeType::kVariable && right.node_->text == var) {
-                        if (den.node_->type == NodeType::kVariable && den.node_->text == var) {
-                            *result = LimitResult::elementary(SymbolicExpression::number(Scalar(1.0L)), "known_pattern: ln(1+x)/x");
-                            return true;
-                        }
-                    }
+            // 4. ln(1 + kx) / (mx) → k/m (对易性支持: 1+kx 或 kx+1)
+            if (num.node_->type == NodeType::kFunction && num.node_->text == "ln" &&
+                extract_one_plus_linear(SymbolicExpression(num.node_->left), var, &k) &&
+                extract_linear_term(den, var, &m) && !mymath::is_near_zero(m, Scalar(1e-9L))) {
+                *result = LimitResult::elementary(SymbolicExpression::number(k / m), "known_pattern: ln(1+kx)/(mx)");
+                return true;
+            }
+            // 倒数: mx / ln(1 + kx) → m/k
+            if (den.node_->type == NodeType::kFunction && den.node_->text == "ln" &&
+                extract_one_plus_linear(SymbolicExpression(den.node_->left), var, &k) &&
+                extract_linear_term(num, var, &m) && !mymath::is_near_zero(k, Scalar(1e-9L))) {
+                *result = LimitResult::elementary(SymbolicExpression::number(m / k), "known_pattern: mx/ln(1+kx)");
+                return true;
+            }
+
+            // 5. (1 - cos(kx)) / x^2 → k^2 / 2
+            if (num.node_->type == NodeType::kSubtract &&
+                SymbolicExpression(num.node_->left).is_number(&k) && mymath::is_near_zero(k - Scalar(1.0L), Scalar(1e-9L)) &&
+                SymbolicExpression(num.node_->right).node_->type == NodeType::kFunction &&
+                SymbolicExpression(num.node_->right).node_->text == "cos" &&
+                extract_linear_term(SymbolicExpression(SymbolicExpression(num.node_->right).node_->left), var, &m)) {
+                if (den.node_->type == NodeType::kPower &&
+                    SymbolicExpression(den.node_->left).is_variable_named(var) &&
+                    SymbolicExpression(den.node_->right).is_number(&k) && mymath::is_near_zero(k - Scalar(2.0L), Scalar(1e-9L))) {
+                    *result = LimitResult::elementary(SymbolicExpression::number(m * m / Scalar(2.0L)), "known_pattern: (1-cos(kx))/x^2");
+                    return true;
                 }
             }
         }
     }
 
-    // 模式 5: (1 + 1/n)^n → e (n → inf)
+    // 模式：n → inf 经典自然底数极限 (1 + a/n)^(b*n) → e^(a*b)
     if (point.is_infinite()) {
         if (expr.node_->type == NodeType::kPower) {
             SymbolicExpression base(expr.node_->left);
             SymbolicExpression exp(expr.node_->right);
 
-            if (base.node_->type == NodeType::kAdd && exp.node_->type == NodeType::kVariable && exp.node_->text == var) {
+            Scalar b_coeff = Scalar(0.0L);
+            if (base.node_->type == NodeType::kAdd && extract_linear_term(exp, var, &b_coeff)) {
                 SymbolicExpression left(base.node_->left);
                 SymbolicExpression right(base.node_->right);
 
-                Scalar one = Scalar(0);
-                if (left.is_number(&one) && mymath::is_near_zero(one - Scalar(1), Scalar(1e-12))) {
-                    // 检查 right 是否为 1/var
-                    if (right.node_->type == NodeType::kDivide) {
-                        SymbolicExpression rnum(right.node_->left);
-                        SymbolicExpression rden(right.node_->right);
-                        Scalar one_check = Scalar(0);
-                        if (rnum.is_number(&one_check) && mymath::is_near_zero(one_check - Scalar(1), Scalar(1e-12)) &&
-                            rden.node_->type == NodeType::kVariable && rden.node_->text == var) {
-                            *result = LimitResult::elementary(
-                                SymbolicExpression::parse("e"),
-                                "known_pattern: (1+1/n)^n");
-                            return true;
-                        }
+                auto check_one_plus_a_over_n = [&](const SymbolicExpression& const_part,
+                                                   const SymbolicExpression& frac_part,
+                                                   Scalar* a_val) -> bool {
+                    Scalar one = Scalar(0.0L);
+                    if (!const_part.is_number(&one) || !mymath::is_near_zero(one - Scalar(1.0L), Scalar(1e-9L))) {
+                        return false;
                     }
-                }
-            }
-        }
-
-        // 模式 6: (1 + a/n)^n → e^a (n → inf)
-        if (expr.node_->type == NodeType::kPower) {
-            SymbolicExpression base(expr.node_->left);
-            SymbolicExpression exp(expr.node_->right);
-
-            if (base.node_->type == NodeType::kAdd && exp.node_->type == NodeType::kVariable && exp.node_->text == var) {
-                SymbolicExpression left(base.node_->left);
-                SymbolicExpression right(base.node_->right);
-
-                Scalar one = Scalar(0);
-                if (left.is_number(&one) && mymath::is_near_zero(one - Scalar(1), Scalar(1e-12))) {
-                    // 检查 right 是否为 a/var
-                    if (right.node_->type == NodeType::kDivide) {
-                        SymbolicExpression rnum(right.node_->left);
-                        SymbolicExpression rden(right.node_->right);
+                    if (frac_part.node_->type == NodeType::kDivide) {
+                        SymbolicExpression rnum(frac_part.node_->left);
+                        SymbolicExpression rden(frac_part.node_->right);
                         if (rden.node_->type == NodeType::kVariable && rden.node_->text == var) {
-                            Scalar a = Scalar(0);
-                            if (rnum.is_number(&a)) {
-                                *result = LimitResult::elementary(
-                                    make_function("exp", SymbolicExpression::number((a))),
-                                    "known_pattern: (1+a/n)^n");
-                                return true;
-                            }
+                            return rnum.is_number(a_val);
                         }
                     }
+                    return false;
+                };
+
+                Scalar a_val = Scalar(0.0L);
+                if (check_one_plus_a_over_n(left, right, &a_val) || check_one_plus_a_over_n(right, left, &a_val)) {
+                    Scalar exponent_val = a_val * b_coeff;
+                    if (mymath::is_near_zero(exponent_val - Scalar(1.0L), Scalar(1e-9L))) {
+                        *result = LimitResult::elementary(SymbolicExpression::parse("e"), "known_pattern: (1+1/n)^n");
+                    } else {
+                        *result = LimitResult::elementary(
+                            make_function("exp", SymbolicExpression::number(exponent_val)),
+                            "known_pattern: (1+a/n)^(b*n)");
+                    }
+                    return true;
                 }
             }
         }
     }
 
-    // 模式 7: x^x → 1 (x → 0+)
+    // 模式：x^x → 1 (x → 0+)
     if (point.is_finite() && mymath::is_near_zero(Scalar(point.value), Scalar(1e-12)) && direction >= 0) {
         if (expr.node_->type == NodeType::kPower) {
             SymbolicExpression base(expr.node_->left);

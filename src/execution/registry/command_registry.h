@@ -141,7 +141,9 @@ public:
      */
     void register_prefix_command(const std::string& prefix,
                                   CommandHandler handler,
-                                  const std::string& help_text = "");
+                                  const std::string& help_text = "",
+                                  const std::string& short_help = "",
+                                  bool is_inlineable = false);
 
     /**
      * @brief 注册命令别名

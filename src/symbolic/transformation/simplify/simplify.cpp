@@ -1008,11 +1008,16 @@ SymbolicExpression simplify_heavyweight(const SymbolicExpression& expression) {
             left = simplify_heavyweight(SymbolicExpression(node->left));
             right = simplify_heavyweight(SymbolicExpression(node->right));
 
-            // 三角恒等式
+            // 三角恒等式（支持公共系数与不同组合）
             std::string left_arg, right_arg;
-            if ((is_squared_function(left, "sin", &left_arg) && is_squared_function(right, "cos", &right_arg) && left_arg == right_arg) ||
-                (is_squared_function(left, "cos", &left_arg) && is_squared_function(right, "sin", &right_arg) && left_arg == right_arg)) {
-                return SymbolicExpression::number(Scalar(1));
+            SymbolicExpression left_coeff, right_coeff;
+            if ((is_scaled_squared_function(left, "sin", &left_arg, &left_coeff) &&
+                 is_scaled_squared_function(right, "cos", &right_arg, &right_coeff) && left_arg == right_arg) ||
+                (is_scaled_squared_function(left, "cos", &left_arg, &left_coeff) &&
+                 is_scaled_squared_function(right, "sin", &right_arg, &right_coeff) && left_arg == right_arg)) {
+                if (expressions_match(left_coeff, right_coeff)) {
+                    return left_coeff;
+                }
             }
 
             // 同类项合并
@@ -1037,10 +1042,18 @@ SymbolicExpression simplify_heavyweight(const SymbolicExpression& expression) {
             left = simplify_heavyweight(SymbolicExpression(node->left));
             right = simplify_heavyweight(SymbolicExpression(node->right));
 
-            // 三角恒等式
+            // 双曲三角恒等式（支持公共系数）
             std::string left_arg, right_arg;
-            if (is_squared_function(left, "cosh", &left_arg) && is_squared_function(right, "sinh", &right_arg) && left_arg == right_arg) {
-                return SymbolicExpression::number(Scalar(1));
+            SymbolicExpression left_coeff, right_coeff;
+            if (is_scaled_squared_function(left, "cosh", &left_arg, &left_coeff) &&
+                is_scaled_squared_function(right, "sinh", &right_arg, &right_coeff) &&
+                left_arg == right_arg && expressions_match(left_coeff, right_coeff)) {
+                return left_coeff;
+            }
+            if (is_scaled_squared_function(left, "sinh", &left_arg, &left_coeff) &&
+                is_scaled_squared_function(right, "cosh", &right_arg, &right_coeff) &&
+                left_arg == right_arg && expressions_match(left_coeff, right_coeff)) {
+                return make_negate(left_coeff).simplify();
             }
 
             SymbolicExpression combined;
@@ -1497,9 +1510,14 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (expr_is_zero(right)) return left;
             {
                 std::string left_arg, right_arg;
-                if ((is_squared_function(left, "sin", &left_arg) && is_squared_function(right, "cos", &right_arg) && left_arg == right_arg) ||
-                    (is_squared_function(left, "cos", &left_arg) && is_squared_function(right, "sin", &right_arg) && left_arg == right_arg)) {
-                    return SymbolicExpression::number(Scalar(1));
+                SymbolicExpression left_coeff, right_coeff;
+                if ((is_scaled_squared_function(left, "sin", &left_arg, &left_coeff) &&
+                     is_scaled_squared_function(right, "cos", &right_arg, &right_coeff) && left_arg == right_arg) ||
+                    (is_scaled_squared_function(left, "cos", &left_arg, &left_coeff) &&
+                     is_scaled_squared_function(right, "sin", &right_arg, &right_coeff) && left_arg == right_arg)) {
+                    if (expressions_match(left_coeff, right_coeff)) {
+                        return left_coeff;
+                    }
                 }
                 if (expr_is_one(left) && is_squared_function(right, "tan", &right_arg)) {
                     return make_power(make_function("sec", squared_function_argument(right, "tan")),
@@ -1509,10 +1527,17 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                     return make_power(make_function("sec", squared_function_argument(left, "tan")),
                                       SymbolicExpression::number(Scalar(2))).simplify();
                 }
-                // Hyperbolic identity: sinh²(x) + cosh²(x) → ? (no simple form, skip)
-                // sech²(x) + tanh²(x) → 1
-                if (is_squared_function(left, "sech", &left_arg) && is_squared_function(right, "tanh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(Scalar(1));
-                if (is_squared_function(right, "sech", &left_arg) && is_squared_function(left, "tanh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(Scalar(1));
+                // sech²(x) + tanh²(x) → 1 (支持公共系数)
+                if (is_scaled_squared_function(left, "sech", &left_arg, &left_coeff) &&
+                    is_scaled_squared_function(right, "tanh", &right_arg, &right_coeff) &&
+                    left_arg == right_arg && expressions_match(left_coeff, right_coeff)) {
+                    return left_coeff;
+                }
+                if (is_scaled_squared_function(right, "sech", &left_arg, &left_coeff) &&
+                    is_scaled_squared_function(left, "tanh", &right_arg, &right_coeff) &&
+                    left_arg == right_arg && expressions_match(left_coeff, right_coeff)) {
+                    return left_coeff;
+                }
             }
             // ln(a) + ln(b) → ln(a*b) (ln domain implies a, b > 0)
             if (left.node_->type == NodeType::kFunction && right.node_->type == NodeType::kFunction &&
@@ -1559,8 +1584,17 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (right.node_->type == NodeType::kNegate) return make_add(left, SymbolicExpression(right.node_->left)).simplify();
             {
                 std::string left_arg, right_arg;
-                if (is_squared_function(left, "sec", &left_arg) && is_squared_function(right, "tan", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(Scalar(1));
-                if (is_squared_function(left, "csc", &left_arg) && is_squared_function(right, "cot", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(Scalar(1));
+                SymbolicExpression left_coeff, right_coeff;
+                if (is_scaled_squared_function(left, "sec", &left_arg, &left_coeff) &&
+                    is_scaled_squared_function(right, "tan", &right_arg, &right_coeff) &&
+                    left_arg == right_arg && expressions_match(left_coeff, right_coeff)) {
+                    return left_coeff;
+                }
+                if (is_scaled_squared_function(left, "csc", &left_arg, &left_coeff) &&
+                    is_scaled_squared_function(right, "cot", &right_arg, &right_coeff) &&
+                    left_arg == right_arg && expressions_match(left_coeff, right_coeff)) {
+                    return left_coeff;
+                }
                 if (expr_is_one(left) && is_squared_function(right, "tanh", &right_arg)) {
                     return make_power(make_function("sech", squared_function_argument(right, "tanh")),
                                       SymbolicExpression::number(Scalar(2))).simplify();
@@ -1569,12 +1603,24 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                     return make_power(make_function("csch", squared_function_argument(left, "coth")),
                                       SymbolicExpression::number(Scalar(2))).simplify();
                 }
-                // Hyperbolic identity: cosh²(x) - sinh²(x) → 1
-                if (is_squared_function(left, "cosh", &left_arg) && is_squared_function(right, "sinh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(Scalar(1));
-                // Hyperbolic identity: sinh²(x) - cosh²(x) → -1
-                if (is_squared_function(left, "sinh", &left_arg) && is_squared_function(right, "cosh", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(Scalar(-1));
+                // Hyperbolic identity: cosh²(x) - sinh²(x) → 1 (支持公共系数)
+                if (is_scaled_squared_function(left, "cosh", &left_arg, &left_coeff) &&
+                    is_scaled_squared_function(right, "sinh", &right_arg, &right_coeff) &&
+                    left_arg == right_arg && expressions_match(left_coeff, right_coeff)) {
+                    return left_coeff;
+                }
+                // Hyperbolic identity: sinh²(x) - cosh²(x) → -1 (支持公共系数)
+                if (is_scaled_squared_function(left, "sinh", &left_arg, &left_coeff) &&
+                    is_scaled_squared_function(right, "cosh", &right_arg, &right_coeff) &&
+                    left_arg == right_arg && expressions_match(left_coeff, right_coeff)) {
+                    return make_negate(left_coeff).simplify();
+                }
                 // coth²(x) - csch²(x) → 1
-                if (is_squared_function(left, "coth", &left_arg) && is_squared_function(right, "csch", &right_arg) && left_arg == right_arg) return SymbolicExpression::number(Scalar(1));
+                if (is_scaled_squared_function(left, "coth", &left_arg, &left_coeff) &&
+                    is_scaled_squared_function(right, "csch", &right_arg, &right_coeff) &&
+                    left_arg == right_arg && expressions_match(left_coeff, right_coeff)) {
+                    return left_coeff;
+                }
             }
             {
                 SymbolicExpression combined;

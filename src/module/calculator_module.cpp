@@ -26,7 +26,10 @@ std::vector<CommandSpec> ICommandProvider::get_command_specs() const {
         std::string key_name = is_meta ? cmd.substr(1) : cmd;
         CommandKey key = is_meta ? meta_command_key(key_name)
                                  : call_command_key(key_name);
-        specs.push_back({key, cmd});
+        CommandSpec spec;
+        spec.key = key;
+        spec.dispatch_name = cmd;
+        specs.push_back(std::move(spec));
     }
     return specs;
 }

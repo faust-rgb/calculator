@@ -308,5 +308,3 @@ std::string OptimizationModule::get_help_snippet(const std::string& topic) const
 }
 
 }  // namespace optimization
-
-REGISTER_CALCULATOR_MODULE(optimization::OptimizationModule)

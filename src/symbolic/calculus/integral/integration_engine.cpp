@@ -39,6 +39,28 @@ std::size_t expression_node_count(const SymbolicExpression& expression) {
     return count(expression.node_);
 }
 
+bool expr_has_func(const SymbolicExpression& expr, const std::string& name) {
+    if (!expr.node_) return false;
+    if (expr.node_->type == NodeType::kFunction && expr.node_->text == name) return true;
+    if (expr.node_->left && expr_has_func(SymbolicExpression(expr.node_->left), name)) return true;
+    if (expr.node_->right && expr_has_func(SymbolicExpression(expr.node_->right), name)) return true;
+    for (const auto& child : expr.node_->children) {
+        if (expr_has_func(SymbolicExpression(child), name)) return true;
+    }
+    return false;
+}
+
+bool expr_has_variable_named(const SymbolicExpression& expr, const std::string& name) {
+    if (!expr.node_) return false;
+    if (expr.node_->type == NodeType::kVariable && expr.node_->text == name) return true;
+    if (expr.node_->left && expr_has_variable_named(SymbolicExpression(expr.node_->left), name)) return true;
+    if (expr.node_->right && expr_has_variable_named(SymbolicExpression(expr.node_->right), name)) return true;
+    for (const auto& child : expr.node_->children) {
+        if (expr_has_variable_named(SymbolicExpression(child), name)) return true;
+    }
+    return false;
+}
+
 bool is_unit_quartic(const SymbolicExpression& expression,
                      const std::string& variable_name) {
     if (!expression.node_ || expression.node_->type != NodeType::kDivide ||
@@ -260,14 +282,10 @@ IntegrationResult IntegrationEngine::integrate_recursive(
             const SymbolicExpression direct = expression.integral(variable_name);
             const bool verified =
                 expr_is_zero((direct.derivative(variable_name) - expression).simplify());
-            const std::string source_text = expression.to_string();
+            const bool has_special_func = expr_has_func(expression, "sqrt") || expr_has_func(expression, "ln");
             const bool trusted_elementary_shape =
-                direct.to_string().find("t1") == std::string::npos &&
-                (source_text.find("sqrt") != std::string::npos ||
-                 source_text.find("ln") != std::string::npos);
-            const bool direct_special_rule =
-                source_text.find("sqrt") != std::string::npos ||
-                source_text.find("ln") != std::string::npos;
+                !expr_has_variable_named(direct, "t1") && has_special_func;
+            const bool direct_special_rule = has_special_func;
             if ((verified && direct_special_rule) || trusted_elementary_shape) {
                 result = IntegrationResult::ok(direct, "legacy_direct");
                 --current_depth_;

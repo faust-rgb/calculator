@@ -13,6 +13,26 @@
 #include "calculator_module.h"
 #include <cctype>
 #include <algorithm>
+#include <stdexcept>
+
+namespace {
+
+std::string command_key(std::string_view name) {
+    const bool meta = !name.empty() && name.front() == ':';
+    return std::string(meta ? "M:" : "C:") +
+           std::string(meta ? name.substr(1) : name);
+}
+
+std::string command_body(std::string_view name) {
+    return std::string(!name.empty() && name.front() == ':' ? name.substr(1) : name);
+}
+
+bool same_syntax(std::string_view left, std::string_view right) {
+    return (!left.empty() && left.front() == ':') ==
+           (!right.empty() && right.front() == ':');
+}
+
+} // namespace
 
 // ============================================================================
 // 命令注册方法实现
@@ -30,6 +50,22 @@ void CommandRegistry::register_command(const std::string& name,
                                         const std::string& help_text,
                                         const std::string& short_help,
                                         bool is_inlineable) {
+    if (name.empty()) {
+        throw std::invalid_argument("command name cannot be empty");
+    }
+    const std::string key = command_key(name);
+    if (commands_.find(key) != commands_.end() || aliases_.find(key) != aliases_.end()) {
+        throw std::runtime_error("command already registered: " + name);
+    }
+    for (const auto& prefix : prefix_commands_) {
+        const std::string body = command_body(name);
+        const std::string prefix_body = command_body(prefix.name);
+        if (same_syntax(name, prefix.name) &&
+            (body.compare(0, prefix_body.size(), prefix_body) == 0 ||
+             prefix_body.compare(0, body.size(), body) == 0)) {
+            throw std::runtime_error("command conflicts with prefix: " + name);
+        }
+    }
     CommandInfo info;
     info.name = name;
     info.help_text = help_text;
@@ -38,7 +74,7 @@ void CommandRegistry::register_command(const std::string& name,
     info.is_prefix = false;
     info.is_inlineable = is_inlineable;
 
-    commands_[name] = std::move(info);
+    commands_[key] = std::move(info);
 }
 
 /**
@@ -65,13 +101,33 @@ void CommandRegistry::register_command_handler(const std::string& name,
  */
 void CommandRegistry::register_prefix_command(const std::string& prefix,
                                                CommandHandler handler,
-                                               const std::string& help_text) {
+                                               const std::string& help_text,
+                                               const std::string& short_help,
+                                               bool is_inlineable) {
+    if (prefix.empty()) {
+        throw std::invalid_argument("command prefix cannot be empty");
+    }
+    const std::string key = command_key(prefix);
+    if (commands_.find(key) != commands_.end() || aliases_.find(key) != aliases_.end()) {
+        throw std::runtime_error("command prefix conflicts with command: " + prefix);
+    }
+    for (const auto& existing : prefix_commands_) {
+        const std::string body = command_body(prefix);
+        const std::string existing_body = command_body(existing.name);
+        if (same_syntax(existing.name, prefix) &&
+            (existing_body == body ||
+             existing_body.compare(0, body.size(), body) == 0 ||
+             body.compare(0, existing_body.size(), existing_body) == 0)) {
+            throw std::runtime_error("command prefix already registered: " + prefix);
+        }
+    }
     CommandInfo info;
     info.name = prefix;
     info.help_text = help_text;
-    info.short_help = help_text;
+    info.short_help = short_help.empty() ? help_text : short_help;
     info.handler = std::move(handler);
     info.is_prefix = true;
+    info.is_inlineable = is_inlineable;
 
     prefix_commands_.push_back(std::move(info));
 }
@@ -83,16 +139,25 @@ void CommandRegistry::register_prefix_command(const std::string& prefix,
  * @return 如果成功返回 true，如果原命令不存在返回 false
  */
 bool CommandRegistry::register_alias(const std::string& alias, const std::string& command_name) {
+    if (alias.empty() || alias == command_name) {
+        return false;
+    }
     // 检查原命令是否存在
-    if (!has_command(command_name)) {
+    const std::string alias_key = command_key(alias);
+    const std::string target_key = command_key(command_name);
+    if (commands_.find(target_key) == commands_.end()) {
+        return false;
+    }
+
+    if (commands_.find(alias_key) != commands_.end() || aliases_.find(alias_key) != aliases_.end()) {
         return false;
     }
 
     // 添加别名映射
-    aliases_[alias] = command_name;
+    aliases_[alias_key] = target_key;
 
     // 同时更新原命令的别名列表
-    auto it = commands_.find(command_name);
+    auto it = commands_.find(target_key);
     if (it != commands_.end()) {
         // 检查别名是否已存在
         if (std::find(it->second.aliases.begin(), it->second.aliases.end(), alias) == it->second.aliases.end()) {
@@ -122,17 +187,18 @@ void CommandRegistry::register_aliases(const std::string& command_name,
  * 同时从精确匹配表、前缀匹配列表和别名映射中移除。
  */
 void CommandRegistry::unregister_command(const std::string& name) {
-    commands_.erase(name);
+    const std::string key = command_key(name);
+    commands_.erase(key);
 
     // 也从前缀命令中移除
     prefix_commands_.erase(
         std::remove_if(prefix_commands_.begin(), prefix_commands_.end(),
-                       [&name](const CommandInfo& info) { return info.name == name; }),
+                        [&name](const CommandInfo& info) { return command_key(info.name) == command_key(name); }),
         prefix_commands_.end());
 
     // 移除相关别名
     for (auto it = aliases_.begin(); it != aliases_.end(); ) {
-        if (it->second == name) {
+        if (it->second == key) {
             it = aliases_.erase(it);
         } else {
             ++it;
@@ -197,20 +263,27 @@ bool CommandRegistry::is_inlineable(const std::string& name) const {
  * @return 如果可能是命令返回 true
  */
 bool CommandRegistry::could_be_command(std::string_view name) const {
+    const std::string key = command_key(name);
     // 先检查别名
-    if (aliases_.find(std::string(name)) != aliases_.end()) {
+    if (aliases_.find(key) != aliases_.end()) {
         return true;
     }
 
     // 检查精确匹配
-    if (commands_.find(std::string(name)) != commands_.end()) {
+    if (commands_.find(key) != commands_.end()) {
         return true;
     }
 
     // 检查前缀匹配
     for (const auto& info : prefix_commands_) {
-        if (name.size() >= info.name.size() &&
-            name.substr(0, info.name.size()) == info.name) {
+        const std::string prefix = command_body(info.name);
+        const std::string body = command_body(name);
+        if (same_syntax(name, info.name) &&
+            body.size() >= prefix.size() &&
+            body.substr(0, prefix.size()) == prefix &&
+            (body.size() == prefix.size() ||
+             (!std::isalnum(static_cast<unsigned char>(body[prefix.size()])) &&
+              body[prefix.size()] != '_'))) {
             return true;
         }
     }
@@ -229,8 +302,8 @@ bool CommandRegistry::could_be_command(std::string_view name) const {
 std::vector<std::string> CommandRegistry::get_commands() const {
     std::vector<std::string> result;
 
-    for (const auto& [name, info] : commands_) {
-        result.push_back(name);
+    for (const auto& [key, info] : commands_) {
+        result.push_back(info.name);
     }
 
     for (const auto& info : prefix_commands_) {
@@ -258,8 +331,8 @@ std::string CommandRegistry::get_help(const std::string& name) const {
 std::map<std::string, std::string> CommandRegistry::get_command_helps() const {
     std::map<std::string, std::string> result;
 
-    for (const auto& [name, info] : commands_) {
-        result[name] = info.short_help;
+    for (const auto& [key, info] : commands_) {
+        result[info.name] = info.short_help;
     }
 
     for (const auto& info : prefix_commands_) {
@@ -332,40 +405,34 @@ std::string CommandRegistry::extract_command_name(const std::string& input) {
  */
 const CommandInfo* CommandRegistry::find_command(const std::string& name) const {
     // 先检查别名映射
-    std::string resolved_name = name;
-    auto alias_it = aliases_.find(name);
+    std::string resolved_key = command_key(name);
+    auto alias_it = aliases_.find(resolved_key);
     if (alias_it != aliases_.end()) {
-        resolved_name = alias_it->second;
+        resolved_key = alias_it->second;
     }
 
     // 精确匹配
-    auto it = commands_.find(resolved_name);
+    auto it = commands_.find(resolved_key);
     if (it != commands_.end()) {
         return &it->second;
     }
 
-    // 冒号前缀双向容错
-    if (!resolved_name.empty() && resolved_name[0] == ':') {
-        std::string uncolonized = resolved_name.substr(1);
-        auto alias_uncol = aliases_.find(uncolonized);
-        if (alias_uncol != aliases_.end()) uncolonized = alias_uncol->second;
-        auto it_uncol = commands_.find(uncolonized);
-        if (it_uncol != commands_.end()) return &it_uncol->second;
-    } else if (!resolved_name.empty()) {
-        std::string colonized = ":" + resolved_name;
-        auto alias_col = aliases_.find(colonized);
-        if (alias_col != aliases_.end()) colonized = alias_col->second;
-        auto it_col = commands_.find(colonized);
-        if (it_col != commands_.end()) return &it_col->second;
-    }
-
-    // 前缀匹配
+    // Prefix matching is boundary-aware and prefers the longest prefix.
+    const CommandInfo* best_prefix = nullptr;
+    const std::string resolved_name = command_body(name);
     for (const auto& info : prefix_commands_) {
-        if (resolved_name.size() >= info.name.size() &&
-            resolved_name.substr(0, info.name.size()) == info.name) {
-            return &info;
+        const std::string prefix = command_body(info.name);
+        if (same_syntax(name, info.name) &&
+            resolved_name.size() >= prefix.size() &&
+            resolved_name.substr(0, prefix.size()) == prefix &&
+            (resolved_name.size() == prefix.size() ||
+             (!std::isalnum(static_cast<unsigned char>(resolved_name[prefix.size()])) &&
+              resolved_name[prefix.size()] != '_'))) {
+            if (best_prefix == nullptr || info.name.size() > best_prefix->name.size()) {
+                best_prefix = &info;
+            }
         }
     }
 
-    return nullptr;
+    return best_prefix;
 }

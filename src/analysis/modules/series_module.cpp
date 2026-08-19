@@ -216,4 +216,3 @@ std::string SeriesModule::get_help_snippet(const std::string& topic) const {
 }
 
 }  // namespace series_ops
-REGISTER_CALCULATOR_MODULE(series_ops::SeriesModule)

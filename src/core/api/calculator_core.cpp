@@ -32,7 +32,6 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
-#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -152,18 +151,16 @@ Calculator::Calculator() : impl_(new Impl()) {
 
     // 注册 help 与 :help 命令处理器
     auto* cmd_registry = static_cast<CommandRegistry*>(impl_->commands_ptr.get());
-    cmd_registry->register_command_handler(
-        "help",
-        [this](const std::string&, const std::vector<std::string_view>& args, std::string* output, bool, const CoreServices&) -> bool {
-            if (args.empty()) {
-                *output = help_text();
-            } else {
-                *output = help_topic(std::string(args[0]));
-            }
-            return true;
-        },
-        "Show help text"
-    );
+    auto help_handler = [this](const std::string&, const std::vector<std::string_view>& args, std::string* output, bool, const CoreServices&) -> bool {
+        if (args.empty()) {
+            *output = help_text();
+        } else {
+            *output = help_topic(std::string(args[0]));
+        }
+        return true;
+    };
+    cmd_registry->register_command_handler(":help", help_handler, "Show help text");
+    cmd_registry->register_command_handler("help", help_handler, "Show help text");
 
     broadcast_settings(this, impl_.get());
 }
@@ -177,6 +174,12 @@ Calculator::~Calculator() = default;
 void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
     if (!module) return;
 
+    for (const auto& existing : impl_->modules->get_all_modules()) {
+        if (existing && existing->name() == module->name()) {
+            throw std::runtime_error("module already registered: " + module->name());
+        }
+    }
+
     const auto caps = module->capabilities();
 
     // 获取底层管理器用于直接访问
@@ -189,7 +192,10 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
         auto new_functions = module->get_functions_map();
         for (auto& [name, func] : new_functions) {
             impl_->functions_ptr->add_native_function(name, func);
-            impl_->help_topic_to_modules[name].push_back(module);
+            auto& providers = impl_->help_topic_to_modules[name];
+            if (std::find(providers.begin(), providers.end(), module) == providers.end()) {
+                providers.push_back(module);
+            }
         }
     }
 
@@ -216,49 +222,66 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
             // 注册到 CommandRegistry
             std::weak_ptr<CalculatorModule> weak_module = module;
             std::string dispatch_name = spec.dispatch_name;
+            auto handler = [weak_module, dispatch_name, this](
+                               const std::string& /*input*/,
+                               const std::vector<std::string_view>& args,
+                               std::string* output,
+                               bool /*exact_mode*/,
+                               const CoreServices& /*services*/) -> bool {
+                auto mod = weak_module.lock();
+                if (!mod) return false;
 
-            cmd_registry->register_command_handler(
-                cmd_name,
-                [weak_module, dispatch_name, this](
-                    const std::string& /*input*/,
-                    const std::vector<std::string_view>& args,
-                    std::string* output,
-                    bool /*exact_mode*/,
-                    const CoreServices& /*services*/) -> bool {
-                    auto mod = weak_module.lock();
-                    if (!mod) return false;
+                auto core = impl_->locator.resolve<CoreServices>();
+                auto execution = impl_->locator.resolve<IExecutionContext>();
+                ModuleServices module_services{impl_->locator, *core, *execution};
+                *output = mod->execute_args_view(dispatch_name, args, module_services);
+                return true;
+            };
+            const std::string help = spec.help_text.empty()
+                ? module->get_help_snippet(cmd_name)
+                : spec.help_text;
 
-                    // Pass the explicit execution ports; legacy modules can
-                    // still use the locator through the compatibility bridge.
-                    auto core = impl_->locator.resolve<CoreServices>();
-                    auto execution = impl_->locator.resolve<IExecutionContext>();
-                    ModuleServices module_services{impl_->locator, *core, *execution};
-                    *output = mod->execute_args_view(dispatch_name, args, module_services);
-                    return true;
-                },
-                module->get_help_snippet(cmd_name)
-            );
+            if (spec.is_prefix) {
+                cmd_registry->register_prefix_command(
+                    cmd_name, std::move(handler), help, spec.short_help, spec.is_inlineable);
+            } else {
+                cmd_registry->register_command(
+                    cmd_name, std::move(handler), help, spec.short_help, spec.is_inlineable);
+            }
+            if (!spec.aliases.empty()) {
+                cmd_registry->register_aliases(cmd_name, spec.aliases);
+            }
             impl_->module_commands.push_back(cmd_name);
         }
 
-        // 4. 注册函数名用于补全
-        auto funcs = module->get_function_names();
-        impl_->module_functions.insert(impl_->module_functions.end(), funcs.begin(), funcs.end());
+    }
+
+    // Function names are independent of command capability.
+    if (caps & ModuleCapability::kFunctions) {
+        for (const auto& name : module->get_function_names()) {
+            if (std::find(impl_->module_functions.begin(), impl_->module_functions.end(), name) ==
+                impl_->module_functions.end()) {
+                impl_->module_functions.push_back(name);
+            }
+        }
     }
 
     // 5. 建立帮助索引
     if (caps & ModuleCapability::kHelp) {
         auto topics = module->get_help_topics();
         for (const auto& topic : topics) {
-            impl_->help_topic_to_modules[topic].push_back(module);
+            auto& providers = impl_->help_topic_to_modules[topic];
+            if (std::find(providers.begin(), providers.end(), module) == providers.end()) {
+                providers.push_back(module);
+            }
         }
     }
 
-    // 6. 初始化与服务注册
-    module->initialize(impl_->locator);
+    // 6. 服务注册与初始化（先注册服务契约，再执行模块初始化）
     if (impl_->core_services) {
         module->register_services(*impl_->core_services, impl_->locator);
     }
+    module->initialize(impl_->locator);
 
     mod_mgr->register_module(module);
 }
@@ -386,12 +409,14 @@ bool Calculator::try_evaluate_implicit(std::string_view expression,
 
     // 优化：使用触发字符到模块的映射，直接找到相关模块
     // 首先收集表达式中出现的所有触发字符对应的模块
-    std::set<std::shared_ptr<CalculatorModule>> candidate_modules;
+    std::vector<std::shared_ptr<CalculatorModule>> candidate_modules;
 
     for (char c : expression) {
         const auto& modules_for_char = impl_->trigger_char_to_modules[static_cast<unsigned char>(c)];
         for (const auto& mod : modules_for_char) {
-            candidate_modules.insert(mod);
+            if (std::find(candidate_modules.begin(), candidate_modules.end(), mod) == candidate_modules.end()) {
+                candidate_modules.push_back(mod);
+            }
         }
     }
 
@@ -405,8 +430,11 @@ bool Calculator::try_evaluate_implicit(std::string_view expression,
         return false;
     }
 
-    // 尝试候选模块
-    for (const auto& module : candidate_modules) {
+    // Preserve module registration order instead of ordering by shared_ptr.
+    for (const auto& module : impl_->implicit_evaluation_modules) {
+        if (std::find(candidate_modules.begin(), candidate_modules.end(), module) == candidate_modules.end()) {
+            continue;
+        }
         if (module->try_evaluate_implicit(std::string(expression), output, vars)) {
             return true;
         }
