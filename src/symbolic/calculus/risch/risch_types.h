@@ -409,6 +409,7 @@ struct AlgebraicNumberRepresentation {
 
 // 代数扩展表示
 struct AlgebraicExtensionInfo {
+    enum class CurveStatus { kGenusZero, kHigherGenusUnsupported, kUnknown };
     SymbolicPolynomial minimal_polynomial;  // P(t, x) = 0, 最小多项式
     std::string t_name;                     // 新变量名 (如 "_alg_t")
     int degree;                             // 扩展的度数 (最小多项式的次数)
@@ -416,6 +417,9 @@ struct AlgebraicExtensionInfo {
     SymbolicExpression derivation;          // t' = d(t)/dx
     int root_index;                         // 如果有多个根，指定使用哪个 (0 表示主根)
     RootOfRepresentation root_of_rep;           // RootOf 表示 (可选)
+    int genus = -1;                               // -1 means not classified
+    CurveStatus curve_status = CurveStatus::kUnknown;
+    std::string curve_status_reason;
 
     // 创建 n 次根扩展: t = u^(1/n)
     static AlgebraicExtensionInfo nth_root(
@@ -444,6 +448,7 @@ struct AlgebraicExtensionInfo {
 
         // 创建 RootOf 表示
         ext.root_of_rep = RootOfRepresentation::create(ext.minimal_polynomial, 0, t_name, x_var);
+        ext.curve_status_reason = "General algebraic curve divisor/Jacobian theory is not implemented";
 
         return ext;
     }
@@ -469,6 +474,7 @@ struct AlgebraicExtensionInfo {
         ext.minimal_polynomial = P;
         ext.root_index = k;
         ext.root_of_rep = RootOfRepresentation::create(P, k, t_name, x_var);
+        ext.curve_status_reason = "General algebraic curve divisor/Jacobian theory is not implemented";
 
         // 计算导数: 从隐函数求导 P(t, x) = 0
         // dP/dt * t' + dP/dx = 0 => t' = -dP/dx / dP/dt

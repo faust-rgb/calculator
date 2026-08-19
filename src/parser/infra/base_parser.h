@@ -200,13 +200,16 @@ protected:
             while (!is_at_end() && std::isdigit(static_cast<unsigned char>(peek()))) pos_++;
         }
         if (!is_at_end() && (peek() == 'e' || peek() == 'E')) {
+            const std::size_t exponent_pos = pos_;
             pos_++;
             if (!is_at_end() && (peek() == '+' || peek() == '-')) pos_++;
+            const std::size_t exponent_digits = pos_;
             while (!is_at_end() && std::isdigit(static_cast<unsigned char>(peek()))) pos_++;
+            // A missing exponent is not part of the number. Rewind so that
+            // implicit multiplication such as `1e` remains parseable, while
+            // `1e+` is rejected by the following expression grammar.
+            if (exponent_digits == pos_) pos_ = exponent_pos;
         }
-        
-        // 虚数后缀
-        if (!is_at_end() && peek() == 'i') pos_++;
 
     end_num:
         return source_.substr(start, pos_ - start);

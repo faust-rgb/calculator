@@ -1165,7 +1165,8 @@ bool SymbolicExpression::is_constant(const std::string& variable_name) const {
         case NodeType::kNegate:
             return SymbolicExpression(node_->left).is_constant(variable_name);
         case NodeType::kFunction:
-            if (node_->left) return SymbolicExpression(node_->left).is_constant(variable_name);
+            if (node_->children.empty() && node_->left)
+                return SymbolicExpression(node_->left).is_constant(variable_name);
             for (const auto& child : node_->children) {
                 if (!SymbolicExpression(child).is_constant(variable_name)) return false;
             }
@@ -1201,6 +1202,12 @@ bool SymbolicExpression::is_number(Scalar* value) const {
     if (value != nullptr) {
         *value = numeric;
     }
+    return true;
+}
+
+bool SymbolicExpression::is_literal_number(Scalar* value) const {
+    if (!node_ || node_->type != NodeType::kNumber) return false;
+    if (value) *value = node_->number_value;
     return true;
 }
 

@@ -63,24 +63,15 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
-    std::cout << "Testing double_integral polar negative radius..." << std::endl;
+    std::cout << "Testing double_integral polar negative radius rejection..." << std::endl;
     try {
         std::string output;
-        const bool handled =
-            calculator.try_process_function_command(
-                "double_integral(1, -1, 1, 0, 2 * pi, 24, 24, \"polar\")", &output);
-        // 负半径现在返回接近0的结果而不是报错
-        if (handled && nearly_equal(calculator.evaluate(output), 0.0L, 1e-10)) {
-            ++passed;
-        } else {
-            ++failed;
-            std::cout << "FAIL: double_integral polar negative radius returned unexpected output "
-                      << output << '\n';
-        }
-    } catch (const std::exception& ex) {
+        (void)calculator.try_process_function_command(
+            "double_integral(1, -1, 1, 0, 2 * pi, 24, 24, \"polar\")", &output);
         ++failed;
-        std::cout << "FAIL: double_integral polar negative radius threw unexpected error: "
-                  << ex.what() << '\n';
+        std::cout << "FAIL: double_integral polar negative radius was accepted\n";
+    } catch (const std::exception& ex) {
+        ++passed;
     }
 
     try {
@@ -135,18 +126,11 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
         const bool handled =
             calculator.try_process_function_command(
                 "triple_integral(1, -1, 1, 0, 2 * pi, 0, 1, 12, 12, 12, \"cyl\")", &output);
-        // 负半径现在返回接近0的结果而不是报错
-        if (handled && nearly_equal(calculator.evaluate(output), 0.0L, 1e-10)) {
-            ++passed;
-        } else {
-            ++failed;
-            std::cout << "FAIL: triple_integral cyl negative radius returned unexpected output "
-                      << output << '\n';
-        }
-    } catch (const std::exception& ex) {
+        (void)handled;
         ++failed;
-        std::cout << "FAIL: triple_integral cyl negative radius threw unexpected error: "
-                  << ex.what() << '\n';
+        std::cout << "FAIL: triple_integral cyl negative radius was accepted\n";
+    } catch (const std::exception& ex) {
+        ++passed;
     }
 
     std::cout << "Testing ODE..." << std::endl;

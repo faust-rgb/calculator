@@ -101,6 +101,7 @@ public:
         bool has_string;                ///< 是否包含字符串
         bool has_assignment;            ///< 是否包含赋值
         bool has_matrix_or_complex_var; ///< 是否引用了矩阵/复数变量
+        bool ast_valid = false;          ///< 是否已通过统一表达式 AST 编译
         int paren_depth;                ///< 括号深度
         int bracket_depth;              ///< 方括号深度
     };

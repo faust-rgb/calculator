@@ -12,6 +12,7 @@
 
 #include "execution/functions/user_function.h"
 #include "parser/ast/expression_ast.h"
+#include <mutex>
 
 /**
  * @brief 获取或编译函数表达式的 AST
@@ -25,6 +26,8 @@
  *       在多线程环境下，可能会多次编译同一个表达式。
  */
 std::shared_ptr<ExpressionAST> CustomFunction::get_or_compile_ast() const {
+    static std::mutex cache_mutex;
+    std::lock_guard<std::mutex> lock(cache_mutex);
     // 检查是否已编译过
     if (ast_compiled) {
         return cached_ast;

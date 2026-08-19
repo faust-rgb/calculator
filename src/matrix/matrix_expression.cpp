@@ -49,6 +49,7 @@ using Scalar = mymath::Scalar;
 
 using utils::trim_copy;  // 使用统一的 trim_copy 实现
 
+#if 0
 /**
  * @brief 检查字符串是否包含独立的 'i' 符号（表示虚数单位）
  *
@@ -68,10 +69,13 @@ static bool is_complex_symbol(const std::string& text) {
     }
     return false;
 }
+#endif
 
 namespace internal {
 
 namespace {
+
+#if 0
 
 /**
  * @brief 标量参数回退信号
@@ -349,6 +353,7 @@ bool contains_complex_identifier(const std::string& text,
     return false;
 }
 
+#endif
 }  // namespace
 
 /**
@@ -363,6 +368,8 @@ bool contains_complex_identifier(const std::string& text,
  * - 算术运算：+, -, *, /, ^
  * - 括号分组：(A + B) * C
  */
+#if 0
+// Migration reference only. Matrix expressions are parsed by ExpressionAST.
 class MatrixExpressionParser : public BaseParser {
 public:
     /**
@@ -1945,6 +1952,7 @@ private:
 };
 
 
+#endif
 }  // namespace internal
 
 using namespace internal;
@@ -2007,9 +2015,14 @@ bool try_evaluate_expression(const std::string& expression,
             if (result.is_complex()) { *value = Value::from_complex(result.as_complex()); return true; }
             if (result.is_scalar()) { *value = Value::from_scalar(result.get_decimal()); return true; }
         } catch (...) {
-            // Fall through to legacy domain handlers below.
+            // A failed canonical evaluation is a real evaluation failure. Do
+            // not silently reinterpret the expression with a second grammar.
+            return false;
         }
     }
+#if 0
+    // Removed from the execution pipeline. The old matrix grammar is kept
+    // here temporarily as migration reference and must not be called.
     const std::string trimmed = utils::trim_copy(expression);
     const bool looks_like_matrix_expression =
         trimmed.find("vec(") != std::string::npos ||
@@ -2141,6 +2154,8 @@ bool try_evaluate_expression(const std::string& expression,
     } catch (...) {
         return false;
     }
+#endif
+    return false;
 }
 
 }  // namespace matrix

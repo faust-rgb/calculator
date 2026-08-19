@@ -134,10 +134,11 @@ RationalValueForCancellation extract_rational_for_cancellation(const SymbolicExp
  * @brief Check if expression represents an integer
  */
 bool is_integer_expression(const SymbolicExpression& expr, int* value = nullptr) {
+    if (!expr.node_ || expr.node_->type != NodeType::kNumber) return false;
     Scalar val = Scalar(0.0L);
     if (expr.is_number(&val)) {
         int n = static_cast<int>(mymath::round(val).to_long_double());
-        if (mymath::abs(val - n) < 1e-9) {
+        if (val == Scalar(n)) {
             if (value) *value = n;
             return true;
         }
@@ -3092,6 +3093,17 @@ CompleteParametricRDEResult RischAlgorithm::solve_parametric_rde_complete(
     CompleteParametricRDEResult result;
     result.success = false;
 
+    // Exhausting a bounded ansatz is not a proof of non-Liouvillianity.
+    constexpr std::size_t kMaxParametricBasis = 32;
+    constexpr int kMaxParametricDegree = 64;
+    constexpr std::size_t kMaxParametricWork = 2048;
+    if (g_list.size() > kMaxParametricBasis || tower.size() > 8) {
+        result.liouvillian_analysis.type = LiouvillianType::kIntegral;
+        result.liouvillian_analysis.description = "PRDE search budget exceeded";
+        result.proof_steps.push_back("Cannot prove PRDE solvability within resource bounds");
+        return result;
+    }
+
     // Step 1: 提取多项式系数
     std::vector<SymbolicExpression> f_coeffs;
     std::string t_var = (tower_index >= 0 && tower_index < static_cast<int>(tower.size()))
@@ -3103,7 +3115,14 @@ CompleteParametricRDEResult RischAlgorithm::solve_parametric_rde_complete(
     }
 
     SymbolicPolynomial f_poly(f_coeffs, t_var);
+    if (f_poly.degree() > kMaxParametricDegree) {
+        result.liouvillian_analysis.type = LiouvillianType::kIntegral;
+        result.liouvillian_analysis.description = "PRDE degree bound exceeded";
+        result.proof_steps.push_back("Cannot prove PRDE solvability: coefficient degree too high");
+        return result;
+    }
     std::vector<SymbolicPolynomial> g_polys;
+    std::size_t estimated_work = static_cast<std::size_t>(std::max(0, f_poly.degree() + 1));
 
     for (const auto& g : g_list) {
         std::vector<SymbolicExpression> g_coeffs;
@@ -3112,6 +3131,13 @@ CompleteParametricRDEResult RischAlgorithm::solve_parametric_rde_complete(
             return result;
         }
         g_polys.emplace_back(g_coeffs, t_var);
+        if (g_polys.back().degree() > kMaxParametricDegree ||
+            (estimated_work *= static_cast<std::size_t>(std::max(1, g_polys.back().degree() + 1))) > kMaxParametricWork) {
+            result.liouvillian_analysis.type = LiouvillianType::kIntegral;
+            result.liouvillian_analysis.description = "PRDE linear system size bound exceeded";
+            result.proof_steps.push_back("Cannot prove PRDE solvability: linear system too large");
+            return result;
+        }
     }
 
     // Step 2: 调用符号求解器
@@ -3129,9 +3155,9 @@ CompleteParametricRDEResult RischAlgorithm::solve_parametric_rde_complete(
             std::string(result.liouvillian_analysis.is_elementary() ? "elementary" : "non-elementary"));
     } else {
         // Step 4: 如果没有找到解，尝试证明无解
-        result.liouvillian_analysis.type = LiouvillianType::kNonLiouvillian;
-        result.liouvillian_analysis.description = "No solution found for parametric RDE";
-        result.proof_steps.push_back("No solution found");
+        result.liouvillian_analysis.type = LiouvillianType::kIntegral;
+        result.liouvillian_analysis.description = "No solution found in the searched PRDE ansatz; non-Liouvillianity is unproved";
+        result.proof_steps.push_back("No solution found in bounded search; proof status remains unknown");
 
         // 检查约束条件
         if (!result.symbolic_solution.constraints.empty()) {

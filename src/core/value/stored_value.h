@@ -17,6 +17,7 @@
 #include <variant>
 #include <type_traits>
 #include <cstddef>
+#include <stdexcept>
 
 namespace matrix {
 template<typename T> struct TMatrix;
@@ -44,6 +45,12 @@ struct StoredValue {
 
     VariantType data = std::monostate{};
 
+    enum class Kind { Nil, Scalar, Rational, Complex, String, Matrix, List, Dict };
+
+    Kind kind() const {
+        return static_cast<Kind>(data.index());
+    }
+
     // 模式与延时解析元数据
     bool exact = false;
     Rational rational;
@@ -54,6 +61,7 @@ struct StoredValue {
     mutable std::string symbolic_text;
     std::string precise_decimal_text;
     std::shared_ptr<PreciseDecimal> precise_decimal_value;
+    mutable Scalar cached_scalar_{0.0L};  // 缓存：as_scalar() 对 Rational 的延迟转换结果
 
     // 构造函数
     StoredValue() = default;
@@ -71,7 +79,10 @@ struct StoredValue {
     StoredValue& operator=(StoredValue&&) noexcept = default;
 
     // 类型查询接口
-    bool is_scalar_type() const { return std::holds_alternative<Scalar>(data) || std::holds_alternative<Rational>(data); }
+    bool is_scalar_type() const {
+        return std::holds_alternative<Scalar>(data) || std::holds_alternative<Rational>(data) ||
+               (exact && std::holds_alternative<std::monostate>(data));
+    }
     bool is_matrix_type() const {
         return std::holds_alternative<std::shared_ptr<matrix::Matrix>>(data) &&
                std::get<std::shared_ptr<matrix::Matrix>>(data) != nullptr;
@@ -94,11 +105,27 @@ struct StoredValue {
 
     const Scalar& as_scalar() const {
         if (std::holds_alternative<Scalar>(data)) return std::get<Scalar>(data);
-        static const Scalar zero(0.0L);
-        return zero;
+        if (std::holds_alternative<Rational>(data)) {
+            // 将 Rational 转换为 Scalar 并缓存，保证返回的引用有效
+            cached_scalar_ = static_cast<Scalar>(rational_to_double(std::get<Rational>(data)));
+            return cached_scalar_;
+        }
+        if (exact && std::holds_alternative<std::monostate>(data)) {
+            cached_scalar_ = static_cast<Scalar>(rational_to_double(rational));
+            return cached_scalar_;
+        }
+        throw std::runtime_error("StoredValue does not contain a scalar");
     }
-    const Rational& as_rational() const { return std::get<Rational>(data); }
-    const matrix::Matrix& as_matrix() const { return *std::get<std::shared_ptr<matrix::Matrix>>(data); }
+    const Rational& as_rational() const {
+        if (is_rational()) return std::get<Rational>(data);
+        if (exact && std::holds_alternative<std::monostate>(data)) return rational;
+        throw std::runtime_error("StoredValue does not contain a rational");
+    }
+    const matrix::Matrix& as_matrix() const {
+        const auto& ptr = std::get<std::shared_ptr<matrix::Matrix>>(data);
+        if (!ptr) throw std::runtime_error("null matrix access");
+        return *ptr;
+    }
     const mymath::complex<Scalar>& as_complex() const { return std::get<mymath::complex<Scalar>>(data); }
     const std::string& as_string() const { return get_string_value(); }
 
@@ -109,9 +136,20 @@ struct StoredValue {
     Scalar get_decimal() const {
         if (std::holds_alternative<Scalar>(data)) return std::get<Scalar>(data);
         if (std::holds_alternative<Rational>(data)) return static_cast<Scalar>(rational_to_double(std::get<Rational>(data)));
-        return Scalar(0.0L);
+        if (exact && std::holds_alternative<std::monostate>(data)) return static_cast<Scalar>(rational_to_double(rational));
+        throw std::runtime_error("StoredValue does not contain a decimal value");
     }
-    void set_decimal(Scalar val) { data = val; }
+    void set_decimal(Scalar val) {
+        data = val;
+        exact = false;
+        rational = Rational();
+    }
+
+    void set_rational(Rational val) {
+        data = val;
+        exact = true;
+        rational = val;
+    }
 
     mymath::complex<Scalar> get_complex() const {
         if (std::holds_alternative<mymath::complex<Scalar>>(data)) return std::get<mymath::complex<Scalar>>(data);
@@ -379,8 +417,12 @@ inline const StoredValue* StoredValue::MatrixPtrProxy::owner() const {
 }
 inline StoredValue::MatrixPtrProxy::operator std::shared_ptr<matrix::Matrix>() const { return owner()->get_matrix_ptr(); }
 inline StoredValue::MatrixPtrProxy& StoredValue::MatrixPtrProxy::operator=(std::shared_ptr<matrix::Matrix> v) { owner()->set_matrix_ptr(std::move(v)); return *this; }
-inline matrix::Matrix* StoredValue::MatrixPtrProxy::operator->() const { return owner()->get_matrix_ptr().get(); }
-inline matrix::Matrix& StoredValue::MatrixPtrProxy::operator*() const { return *owner()->get_matrix_ptr(); }
+    inline matrix::Matrix* StoredValue::MatrixPtrProxy::operator->() const {
+        return const_cast<matrix::Matrix*>(&owner()->as_matrix());
+    }
+inline matrix::Matrix& StoredValue::MatrixPtrProxy::operator*() const {
+    return const_cast<matrix::Matrix&>(owner()->as_matrix());
+}
 inline StoredValue::MatrixPtrProxy::operator bool() const { return owner()->get_matrix_ptr() != nullptr; }
 
 inline StoredValue* StoredValue::IsMatrixProxy::owner() {

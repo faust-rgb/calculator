@@ -165,9 +165,18 @@ bool SymbolicEvaluator::is_exact_algebraic(const SymbolicExpression& expr) {
         return is_integer_double(val);
     }
     if (type == NodeType::kRootOf) return true;
+    if (type == NodeType::kFunction) {
+        // Principal roots of algebraic values remain algebraic.  Do not mark
+        // arbitrary transcendental functions as algebraic.
+        if ((expr.node_text() == "sqrt" || expr.node_text() == "cbrt") &&
+            expr.child_count() == 1) {
+            return is_exact_algebraic(expr.child_at(0));
+        }
+        return false;
+    }
     if (type == NodeType::kPi || type == NodeType::kE ||
         type == NodeType::kInfinity || type == NodeType::kVariable ||
-        type == NodeType::kFunction || type == NodeType::kDifferentialOp) {
+        type == NodeType::kDifferentialOp) {
         return false;
     }
     for (const auto& op : expr.operands()) {

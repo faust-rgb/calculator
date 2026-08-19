@@ -97,8 +97,8 @@ struct Calculator::Impl : public IExecutionContext {
     core::ExecutionContext& core_context() override { return execution_ctx; }
     const core::ExecutionContext& core_context() const override { return execution_ctx; }
 
-    IVariableManager& variables() override { return *variables_ptr; }
-    const IVariableManager& variables() const override { return *variables_ptr; }
+    IVariableManager& variables() override { return execution_ctx.variables(); }
+    const IVariableManager& variables() const override { return execution_ctx.variables(); }
     
     IFunctionManager& functions() override { return *functions_ptr; }
     const IFunctionManager& functions() const override { return *functions_ptr; }
@@ -159,6 +159,25 @@ std::string decode_state_field(const std::string& text);
 
 // 值格式化
 void apply_calculator_display_precision(const Calculator::Impl* impl);
+
+/**
+ * @class PrecisionContextGuard
+ * @brief RAII 守卫：在求值期间将 thread-local 精度设为实例值，结束后自动恢复
+ *
+ * 解决同一线程多个 Calculator 实例共享 thread-local 精度导致互相干扰的问题。
+ */
+class PrecisionContextGuard {
+public:
+    explicit PrecisionContextGuard(const Calculator::Impl* impl);
+    ~PrecisionContextGuard();
+    PrecisionContextGuard(const PrecisionContextGuard&) = delete;
+    PrecisionContextGuard& operator=(const PrecisionContextGuard&) = delete;
+private:
+    int saved_display_precision_;
+    int saved_internal_scale_;
+    std::unique_ptr<symbolic_assumptions::AssumptionEngine::ScopedActivation> assumptions_guard_;
+    std::unique_ptr<core::ExecutionContext::RandomScope> random_guard_;
+};
 
 // 线性方程组
 std::vector<Scalar> solve_dense_linear_system(

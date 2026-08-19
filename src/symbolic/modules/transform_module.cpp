@@ -10,125 +10,152 @@
 #include "core/services/string_utils.h"
 
 #include <algorithm>
+#include <functional>
 #include <stdexcept>
 #include <vector>
 
 namespace transforms {
 
-std::string fourier(const TransformContext& ctx,
-                    const std::string& expr,
-                    const std::string& input_var,
-                    const std::string& output_var) {
+using BasicTransform = std::function<SymbolicExpression(
+    const SymbolicExpression&, const std::string&, const std::string&)>;
+
+std::string run_basic_transform(const TransformContext& ctx,
+                                const std::string& expr,
+                                const std::string& input_var,
+                                const std::string& output_var,
+                                const char* default_input,
+                                const char* default_output,
+                                const BasicTransform& transform) {
     std::string variable_name;
     SymbolicExpression expression;
     ctx.resolve_symbolic(expr, false, &variable_name, &expression);
 
-    std::string in_var = input_var.empty() ? (variable_name.empty() ? "t" : variable_name) : input_var;
-    std::string out_var = output_var.empty() ? "w" : output_var;
+    const std::string in_var = input_var.empty()
+        ? (variable_name.empty() ? default_input : variable_name)
+        : input_var;
+    const std::string out_var = output_var.empty() ? default_output : output_var;
+    return transform(expression, in_var, out_var).simplify().to_string();
+}
 
-    return expression.fourier_transform(in_var, out_var)
-               .simplify()
-               .to_string();
+void append_transform_metadata(const TransformResult& result,
+                               bool include_constraints,
+                               std::string* output) {
+    *output += "; condition: ";
+    *output += result.condition.has_value() ? result.condition->expression : "none";
+    if (include_constraints && result.condition.has_value() &&
+        !result.condition->constraints.empty()) {
+        *output += "; constraints: ";
+        for (std::size_t i = 0; i < result.condition->constraints.size(); ++i) {
+            if (i != 0) *output += " and ";
+            *output += result.condition->constraints[i];
+        }
+    }
+    *output += "; distribution: ";
+    *output += result.contains_distribution ? "true" : "false";
+}
+
+std::string fourier(const TransformContext& ctx,
+                    const std::string& expr,
+                    const std::string& input_var,
+                    const std::string& output_var) {
+    return run_basic_transform(ctx, expr, input_var, output_var, "t", "w",
+                               [](const SymbolicExpression& expression,
+                                  const std::string& in_var,
+                                  const std::string& out_var) {
+                                   return expression.fourier_transform(in_var, out_var);
+                               });
 }
 
 std::string inverse_fourier(const TransformContext& ctx,
                             const std::string& expr,
                             const std::string& input_var,
                             const std::string& output_var) {
-    std::string variable_name;
-    SymbolicExpression expression;
-    ctx.resolve_symbolic(expr, false, &variable_name, &expression);
-
-    std::string in_var = input_var.empty() ? (variable_name.empty() ? "w" : variable_name) : input_var;
-    std::string out_var = output_var.empty() ? "t" : output_var;
-
-    return expression.inverse_fourier_transform(in_var, out_var)
-               .simplify()
-               .to_string();
+    return run_basic_transform(ctx, expr, input_var, output_var, "w", "t",
+                               [](const SymbolicExpression& expression,
+                                  const std::string& in_var,
+                                  const std::string& out_var) {
+                                   return expression.inverse_fourier_transform(in_var, out_var);
+                               });
 }
 
 std::string laplace(const TransformContext& ctx,
                     const std::string& expr,
                     const std::string& input_var,
                     const std::string& output_var) {
-    std::string variable_name;
-    SymbolicExpression expression;
-    ctx.resolve_symbolic(expr, false, &variable_name, &expression);
-
-    std::string in_var = input_var.empty() ? (variable_name.empty() ? "t" : variable_name) : input_var;
-    std::string out_var = output_var.empty() ? "s" : output_var;
-
-    return expression.laplace_transform(in_var, out_var)
-               .simplify()
-               .to_string();
+    return run_basic_transform(ctx, expr, input_var, output_var, "t", "s",
+                               [](const SymbolicExpression& expression,
+                                  const std::string& in_var,
+                                  const std::string& out_var) {
+                                   return expression.laplace_transform(in_var, out_var);
+                               });
 }
 
 std::string inverse_laplace(const TransformContext& ctx,
                             const std::string& expr,
                             const std::string& input_var,
                             const std::string& output_var) {
-    std::string variable_name;
-    SymbolicExpression expression;
-    ctx.resolve_symbolic(expr, false, &variable_name, &expression);
-
-    std::string in_var = input_var.empty() ? (variable_name.empty() ? "s" : variable_name) : input_var;
-    std::string out_var = output_var.empty() ? "t" : output_var;
-
-    return expression.inverse_laplace_transform(in_var, out_var)
-               .simplify()
-               .to_string();
+    return run_basic_transform(ctx, expr, input_var, output_var, "s", "t",
+                               [](const SymbolicExpression& expression,
+                                  const std::string& in_var,
+                                  const std::string& out_var) {
+                                   return expression.inverse_laplace_transform(in_var, out_var);
+                               });
 }
 
 std::string z_transform(const TransformContext& ctx,
                         const std::string& expr,
                         const std::string& input_var,
                         const std::string& output_var) {
-    std::string variable_name;
-    SymbolicExpression expression;
-    ctx.resolve_symbolic(expr, false, &variable_name, &expression);
-
-    std::string in_var = input_var.empty() ? (variable_name.empty() ? "n" : variable_name) : input_var;
-    std::string out_var = output_var.empty() ? "z" : output_var;
-
-    return expression.z_transform(in_var, out_var)
-               .simplify()
-               .to_string();
+    return run_basic_transform(ctx, expr, input_var, output_var, "n", "z",
+                               [](const SymbolicExpression& expression,
+                                  const std::string& in_var,
+                                  const std::string& out_var) {
+                                   return expression.z_transform(in_var, out_var);
+                               });
 }
 
 std::string inverse_z_transform(const TransformContext& ctx,
                                 const std::string& expr,
                                 const std::string& input_var,
                                 const std::string& output_var) {
-    std::string variable_name;
-    SymbolicExpression expression;
-    ctx.resolve_symbolic(expr, false, &variable_name, &expression);
-
-    std::string in_var = input_var.empty() ? (variable_name.empty() ? "z" : variable_name) : input_var;
-    std::string out_var = output_var.empty() ? "n" : output_var;
-
-    return expression.inverse_z_transform(in_var, out_var)
-               .simplify()
-               .to_string();
+    return run_basic_transform(ctx, expr, input_var, output_var, "z", "n",
+                               [](const SymbolicExpression& expression,
+                                  const std::string& in_var,
+                                  const std::string& out_var) {
+                                   return expression.inverse_z_transform(in_var, out_var);
+                               });
 }
 
 bool is_transform_command(const std::string& command) {
     return command == "fourier" ||
+           command == "fourier_info" ||
            command == "ifourier" ||
+           command == "ifourier_info" ||
            command == "inverse_fourier" ||
            command == "laplace" ||
+           command == "laplace_info" ||
            command == "ilaplace" ||
+           command == "ilaplace_info" ||
            command == "inverse_laplace" ||
            command == "ztrans" ||
+           command == "ztrans_info" ||
            command == "z_transform" ||
            command == "iztrans" ||
+           command == "iztrans_info" ||
            command == "inverse_z";
 }
 
 std::string normalize_transform_command(const std::string& command) {
     if (command == "inverse_fourier") return "ifourier";
+    if (command == "fourier_info") return "fourier_info";
+    if (command == "ifourier_info") return "ifourier_info";
     if (command == "inverse_laplace") return "ilaplace";
+    if (command == "laplace_info") return "laplace_info";
+    if (command == "ilaplace_info") return "ilaplace_info";
     if (command == "z_transform") return "ztrans";
+    if (command == "ztrans_info") return "ztrans_info";
     if (command == "inverse_z") return "iztrans";
+    if (command == "iztrans_info") return "iztrans_info";
     return command;
 }
 
@@ -136,22 +163,22 @@ void get_default_variables(const std::string& command,
                            const std::string& expr_var,
                            std::string* input_var,
                            std::string* output_var) {
-    if (command == "fourier") {
+    if (command == "fourier" || command == "fourier_info") {
         *input_var = expr_var.empty() ? "t" : expr_var;
         *output_var = "w";
-    } else if (command == "ifourier") {
+    } else if (command == "ifourier" || command == "ifourier_info") {
         *input_var = expr_var.empty() ? "w" : expr_var;
         *output_var = "t";
-    } else if (command == "laplace") {
+    } else if (command == "laplace" || command == "laplace_info") {
         *input_var = expr_var.empty() ? "t" : expr_var;
         *output_var = "s";
-    } else if (command == "ilaplace") {
+    } else if (command == "ilaplace" || command == "ilaplace_info") {
         *input_var = expr_var.empty() ? "s" : expr_var;
         *output_var = "t";
-    } else if (command == "ztrans") {
+    } else if (command == "ztrans" || command == "ztrans_info") {
         *input_var = expr_var.empty() ? "n" : expr_var;
         *output_var = "z";
-    } else if (command == "iztrans") {
+    } else if (command == "iztrans" || command == "iztrans_info") {
         *input_var = expr_var.empty() ? "z" : expr_var;
         *output_var = "n";
     }
@@ -185,18 +212,48 @@ bool handle_transform_command(const TransformContext& ctx,
         throw std::runtime_error(command + " expects 1, 2, or 3 arguments");
     }
 
-    if (normalized == "fourier") {
-        *output = expression.fourier_transform(input_var, output_var).simplify().to_string();
-    } else if (normalized == "ifourier") {
-        *output = expression.inverse_fourier_transform(input_var, output_var).simplify().to_string();
-    } else if (normalized == "laplace") {
-        *output = expression.laplace_transform(input_var, output_var).simplify().to_string();
-    } else if (normalized == "ilaplace") {
-        *output = expression.inverse_laplace_transform(input_var, output_var).simplify().to_string();
-    } else if (normalized == "ztrans") {
-        *output = expression.z_transform(input_var, output_var).simplify().to_string();
-    } else if (normalized == "iztrans") {
-        *output = expression.inverse_z_transform(input_var, output_var).simplify().to_string();
+    if (normalized == "fourier" || normalized == "fourier_info") {
+        const TransformResult result = expression.fourier_transform_with_conditions(
+            input_var, output_var);
+        *output = result.expression.simplify().to_string();
+        if (normalized == "fourier_info") {
+            append_transform_metadata(result, false, output);
+        }
+    } else if (normalized == "ifourier" || normalized == "ifourier_info") {
+        const TransformResult result = expression.inverse_fourier_transform_with_conditions(
+            input_var, output_var);
+        *output = result.expression.simplify().to_string();
+        if (normalized == "ifourier_info") {
+            append_transform_metadata(result, false, output);
+        }
+    } else if (normalized == "laplace" || normalized == "laplace_info") {
+        const TransformResult result = expression.laplace_transform_with_conditions(
+            input_var, output_var);
+        *output = result.expression.simplify().to_string();
+        if (normalized == "laplace_info") {
+            append_transform_metadata(result, true, output);
+        }
+    } else if (normalized == "ilaplace" || normalized == "ilaplace_info") {
+        const TransformResult result = expression.inverse_laplace_transform_with_conditions(
+            input_var, output_var);
+        *output = result.expression.simplify().to_string();
+        if (normalized == "ilaplace_info") {
+            append_transform_metadata(result, true, output);
+        }
+    } else if (normalized == "ztrans" || normalized == "ztrans_info") {
+        const TransformResult result = expression.z_transform_with_conditions(
+            input_var, output_var);
+        *output = result.expression.simplify().to_string();
+        if (normalized == "ztrans_info") {
+            append_transform_metadata(result, true, output);
+        }
+    } else if (normalized == "iztrans" || normalized == "iztrans_info") {
+        const TransformResult result = expression.inverse_z_transform_with_conditions(
+            input_var, output_var);
+        *output = result.expression.simplify().to_string();
+        if (normalized == "iztrans_info") {
+            append_transform_metadata(result, false, output);
+        }
     } else {
         return false;
     }
@@ -232,8 +289,12 @@ std::string TransformModule::get_help_snippet(const std::string& topic) const {
         return "Transforms:\n"
                "  laplace(f, [t], [s])       Laplace transform\n"
                "  ilaplace(F, [s], [t])      Inverse Laplace transform\n"
+               "  laplace_info(f, [t], [s])  Transform with condition metadata\n"
+               "  ilaplace_info(F, [s], [t]) Inverse transform with metadata\n"
                "  fourier(f, [t], [w])       Fourier transform\n"
+               "  fourier_info(f, [t], [w])  Fourier transform with metadata\n"
                "  ifourier(F, [w], [t])      Inverse Fourier transform\n"
+               "  ifourier_info(F, [w], [t]) Inverse Fourier with metadata\n"
                "  ztrans(f, [n], [z])        Z transform\n"
                "  iztrans(F, [z], [n])       Inverse Z transform";
     }
@@ -241,8 +302,9 @@ std::string TransformModule::get_help_snippet(const std::string& topic) const {
 }
 
 std::vector<std::string> TransformModule::get_commands() const {
-    return {"laplace", "ilaplace", "inverse_laplace", "fourier", "ifourier",
-            "inverse_fourier", "ztrans", "iztrans", "z_transform", "inverse_z"};
+    return {"laplace", "laplace_info", "ilaplace", "ilaplace_info", "inverse_laplace", "fourier",
+            "fourier_info", "ifourier", "ifourier_info", "inverse_fourier", "ztrans", "iztrans",
+            "z_transform", "inverse_z"};
 }
 
 }  // namespace transforms

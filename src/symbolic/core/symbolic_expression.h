@@ -4,11 +4,15 @@
 #include "types/scalar_type.h"
 #include "symbolic/public/symbolic_node_types.h"
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 struct StoredValue;
 namespace core { class ExecutionContext; }
+
+struct TransformCondition;
+struct TransformResult;
 
 /**
  * @file symbolic_expression.h
@@ -193,6 +197,16 @@ public:
         const std::string& frequency_variable,
         const std::string& time_variable) const;
 
+    /** Fourier transform with distribution metadata. */
+    TransformResult fourier_transform_with_conditions(
+        const std::string& time_variable,
+        const std::string& frequency_variable) const;
+
+    /** Inverse Fourier transform with distribution metadata. */
+    TransformResult inverse_fourier_transform_with_conditions(
+        const std::string& frequency_variable,
+        const std::string& time_variable) const;
+
     /**
      * @brief 计算符号 Laplace 变换
      * @param time_variable 时域变量
@@ -203,12 +217,35 @@ public:
                                          const std::string& transform_variable) const;
 
     /**
+     * @brief Unilateral (one-sided) Laplace transform with metadata.
+     *
+     * The current API assumes causal signals on t >= 0.  The returned
+     * condition describes convergence and parameter assumptions; it does not
+     * select a bilateral ROC or a left-sided inverse.
+     */
+    TransformResult laplace_transform_with_conditions(
+        const std::string& time_variable,
+        const std::string& transform_variable) const;
+
+    /**
      * @brief 计算符号逆 Laplace 变换
      * @param transform_variable 复频域变量
      * @param time_variable 时域变量
      * @return 逆变换后的表达式
      */
     SymbolicExpression inverse_laplace_transform(
+        const std::string& transform_variable,
+        const std::string& time_variable) const;
+
+    /** @brief Inverse Laplace transform with optional convergence/distribution metadata. */
+    /**
+     * @brief Causal unilateral inverse Laplace transform with metadata.
+     *
+     * Ordinary inverse terms are represented with step(t).  Bilateral
+     * inverse transforms with an explicitly selected ROC are not part of this
+     * API.
+     */
+    TransformResult inverse_laplace_transform_with_conditions(
         const std::string& transform_variable,
         const std::string& time_variable) const;
 
@@ -221,6 +258,11 @@ public:
     SymbolicExpression z_transform(const std::string& index_variable,
                                    const std::string& transform_variable) const;
 
+    /** Unilateral causal Z transform with ROC metadata. */
+    TransformResult z_transform_with_conditions(
+        const std::string& index_variable,
+        const std::string& transform_variable) const;
+
     /**
      * @brief 计算符号逆 z 变换
      * @param transform_variable z 域变量
@@ -229,6 +271,11 @@ public:
      */
     SymbolicExpression inverse_z_transform(const std::string& transform_variable,
                                            const std::string& index_variable) const;
+
+    /** Causal unilateral inverse Z transform with ROC metadata. */
+    TransformResult inverse_z_transform_with_conditions(
+        const std::string& transform_variable,
+        const std::string& index_variable) const;
 
     /**
      * @brief 用另一个表达式替换指定变量
@@ -305,6 +352,7 @@ public:
      * @return true 如果表达式是数字常量
      */
     bool is_number(Scalar* value = nullptr) const;
+    bool is_literal_number(Scalar* value = nullptr) const;
 
     /**
      * @brief 检查表达式在数值上是否接近零
@@ -443,6 +491,68 @@ public:
 
     std::shared_ptr<Node> node_;  ///< 表达式树根节点
 };
+
+struct TransformAtomicConstraint {
+    enum class Relation {
+        kUnknown,
+        kGreater,
+        kGreaterEqual,
+        kLess,
+        kLessEqual,
+        kEqual,
+        kNotEqual
+    };
+
+    std::string expression;
+    Relation relation = Relation::kUnknown;
+    SymbolicExpression lhs;
+    SymbolicExpression rhs;
+};
+
+struct TransformCondition {
+    enum class Relation {
+        kUnknown,
+        kGreater,
+        kGreaterEqual,
+        kLess,
+        kLessEqual,
+        kEqual,
+        kNotEqual
+    };
+
+    std::string expression;
+    std::string note;
+    Relation relation = Relation::kUnknown;
+    SymbolicExpression lhs;
+    SymbolicExpression rhs;
+    // Atomic constraints retained separately from the display string so
+    // callers can inspect or combine ROC conditions without parsing text.
+    std::vector<std::string> constraints;
+    std::vector<TransformAtomicConstraint> atomic_constraints;
+};
+
+struct TransformResult {
+    SymbolicExpression expression;
+    std::optional<TransformCondition> condition;
+    bool contains_distribution = false;
+};
+
+std::optional<TransformCondition> intersect_transform_conditions(
+    const std::optional<TransformCondition>& lhs,
+    const std::optional<TransformCondition>& rhs);
+
+bool transform_conditions_conflict(const TransformCondition& lhs,
+                                   const TransformCondition& rhs);
+
+/** Validate a supported forward/inverse Laplace round trip by symbolic equality. */
+bool validate_laplace_round_trip(const SymbolicExpression& expression,
+                                 const std::string& time_variable,
+                                 const std::string& transform_variable);
+
+/** Validate a supported inverse/forward Laplace round trip by symbolic equality. */
+bool validate_inverse_laplace_round_trip(const SymbolicExpression& expression,
+                                         const std::string& transform_variable,
+                                         const std::string& time_variable);
 
 // ============================================================================
 // 运算符重载

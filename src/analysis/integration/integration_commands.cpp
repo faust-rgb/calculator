@@ -19,6 +19,17 @@ namespace integration_ops {
 
 using Scalar = mymath::Scalar;
 
+namespace {
+
+std::pair<Scalar, Scalar> validate_radius_bounds(Scalar lower, Scalar upper) {
+    if (lower < Scalar(0) || upper < Scalar(0)) {
+        throw std::runtime_error("radial integration bounds must be non-negative");
+    }
+    return {lower, upper};
+}
+
+} // namespace
+
 // ============================================================================
 // 辅助函数
 // ============================================================================
@@ -212,6 +223,10 @@ Scalar double_integral_polar(
         is_constant_bounds = true;
     } catch (...) {}
 
+    if (is_constant_bounds) {
+        validate_radius_bounds(r0_c, r1_c);
+    }
+
     // 对于常数边界且非 simpson 方法，使用自适应积分
     if (is_constant_bounds && method != "simpson") {
         auto integrand = [evaluate_expression, theta_var, r_var](const std::vector<Scalar>& pt) {
@@ -219,7 +234,7 @@ Scalar double_integral_polar(
             const Scalar r = pt[1];
             const Scalar x = r * mymath::cos(theta);
             const Scalar y = r * mymath::sin(theta);
-            return evaluate_expression({{r_var, r}, {theta_var, theta}, {"x", x}, {"y", y}}) * r;
+            return evaluate_expression({{r_var, r}, {theta_var, theta}, {"x", x}, {"y", y}}) * mymath::abs(r);
         };
         std::vector<multidim::IntegrationBounds> rect_bounds = {{theta0, theta1}, {r0_c, r1_c}};
         multidim::IntegrationOptions opts;
@@ -240,13 +255,15 @@ Scalar double_integral_polar(
             const Scalar r = Scalar(point[1]);
             const Scalar x = r * mymath::cos(theta);
             const Scalar y = r * mymath::sin(theta);
-            return (Scalar(evaluate_expression({{r_var, (r)}, {theta_var, (theta)}, {"x", (x)}, {"y", (y)}})) * r);
+            return (Scalar(evaluate_expression({{r_var, (r)}, {theta_var, (theta)}, {"x", (x)}, {"y", (y)}})) * mymath::abs(r));
         });
     std::vector<MultivariableIntegrator::BoundFunc> bounds;
     bounds.push_back([theta0, theta1](const std::vector<Scalar>&) -> std::pair<Scalar, Scalar> { return {theta0, theta1}; });
     auto r0_f = make_scalar_bound_func(ctx, r0_expr, {theta_var}, 1);
     auto r1_f = make_scalar_bound_func(ctx, r1_expr, {theta_var}, 1);
-    bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) -> std::pair<Scalar, Scalar> { return {r0_f(pt), r1_f(pt)}; });
+    bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) {
+        return validate_radius_bounds(r0_f(pt), r1_f(pt));
+    });
 
     // 如果指定了自适应方法，使用 integrate_adaptive
     if (method == "adaptive") {
@@ -312,6 +329,10 @@ Scalar triple_integral_cyl(const IntegrationContext& ctx, const std::string& exp
         is_constant_bounds = true;
     } catch (...) {}
 
+    if (is_constant_bounds) {
+        validate_radius_bounds(r0_c, r1_c);
+    }
+
     // 对于常数边界且非 simpson 方法，使用自适应积分
     if (is_constant_bounds && method != "simpson") {
         auto integrand = [evaluate_expression, t_v, r_v, z_v](const std::vector<Scalar>& pt) {
@@ -320,7 +341,7 @@ Scalar triple_integral_cyl(const IntegrationContext& ctx, const std::string& exp
             const Scalar z = pt[2];
             const Scalar x = r * mymath::cos(t);
             const Scalar y = r * mymath::sin(t);
-            return evaluate_expression({{r_v, r}, {t_v, t}, {z_v, z}, {"x", x}, {"y", y}}) * r;
+            return evaluate_expression({{r_v, r}, {t_v, t}, {z_v, z}, {"x", x}, {"y", y}}) * mymath::abs(r);
         };
         std::vector<multidim::IntegrationBounds> rect_bounds = {{t0, t1}, {r0_c, r1_c}, {z0_c, z1_c}};
         multidim::IntegrationOptions opts;
@@ -341,13 +362,15 @@ Scalar triple_integral_cyl(const IntegrationContext& ctx, const std::string& exp
         Scalar z = Scalar(pt[2]);
         Scalar x = r * mymath::cos(t);
         Scalar y = r * mymath::sin(t);
-        return (Scalar(evaluate_expression({{r_v, (r)}, {t_v, (t)}, {z_v, (z)}, {"x", (x)}, {"y", (y)}})) * r);
+        return (Scalar(evaluate_expression({{r_v, (r)}, {t_v, (t)}, {z_v, (z)}, {"x", (x)}, {"y", (y)}})) * mymath::abs(r));
     });
     std::vector<MultivariableIntegrator::BoundFunc> bounds;
     bounds.push_back([t0, t1](const std::vector<Scalar>&) -> std::pair<Scalar, Scalar> { return std::make_pair(t0, t1); });
     auto r0_f = make_scalar_bound_func(ctx, r0_e, {t_v}, 1);
     auto r1_f = make_scalar_bound_func(ctx, r1_e, {t_v}, 1);
-    bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) -> std::pair<Scalar, Scalar> { return std::make_pair(r0_f(pt), r1_f(pt)); });
+    bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) {
+        return validate_radius_bounds(r0_f(pt), r1_f(pt));
+    });
     auto z0_f = make_scalar_bound_func(ctx, z0_e, {t_v, r_v}, 2);
     auto z1_f = make_scalar_bound_func(ctx, z1_e, {t_v, r_v}, 2);
     bounds.push_back([z0_f, z1_f](const std::vector<Scalar>& pt) -> std::pair<Scalar, Scalar> { return std::make_pair(z0_f(pt), z1_f(pt)); });
@@ -370,6 +393,10 @@ Scalar triple_integral_sph(const IntegrationContext& ctx, const std::string& exp
         r1_c = ctx.parse_decimal(r1_e);
         is_constant_bounds = true;
     } catch (...) {}
+
+    if (is_constant_bounds) {
+        validate_radius_bounds(r0_c, r1_c);
+    }
 
     // 对于常数边界且非 simpson 方法，使用自适应积分
     if (is_constant_bounds && method != "simpson") {
@@ -413,7 +440,9 @@ Scalar triple_integral_sph(const IntegrationContext& ctx, const std::string& exp
     bounds.push_back([p0, p1](const std::vector<Scalar>&) -> std::pair<Scalar, Scalar> { return std::make_pair(p0, p1); });
     auto r0_f = make_scalar_bound_func(ctx, r0_e, {t_v, p_v}, 2);
     auto r1_f = make_scalar_bound_func(ctx, r1_e, {t_v, p_v}, 2);
-    bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) -> std::pair<Scalar, Scalar> { return std::make_pair(r0_f(pt), r1_f(pt)); });
+    bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) {
+        return validate_radius_bounds(r0_f(pt), r1_f(pt));
+    });
 
     // 如果指定了自适应方法，使用 integrate_adaptive
     if (method == "adaptive") {

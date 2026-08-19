@@ -12,6 +12,7 @@
 #include "probability.h"
 #include "types/scalar_type.h"
 #include "math/mymath.h"
+#include "core/execution_context.h"
 #include <random>
 #include <stdexcept>
 #include <algorithm>
@@ -30,6 +31,7 @@ using Scalar = mymath::Scalar;
  * @return 随机数引擎的引用
  */
 static std::mt19937& global_rng() {
+    if (auto* active = core::active_random_engine_for_thread()) return *active;
     static std::random_device rd;  // 真随机数设备（如果可用）
     static std::mt19937 gen(rd()); // Mersenne Twister 引擎
     return gen;

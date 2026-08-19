@@ -124,8 +124,11 @@ bool handle_symbolic_command(const SymbolicCommandContext& ctx,
 }
 
 std::string SymbolicModule::execute_args(const std::string& command,
-                                        const std::vector<std::string>& args,
-                                        ServiceLocator& locator) {
+                                         const std::vector<std::string>& args,
+                                         ServiceLocator& locator) {
+    auto execution = locator.resolve<IExecutionContext>();
+    symbolic_assumptions::AssumptionEngine::ScopedActivation assumptions_scope(
+        execution->core_context().assumptions());
     if (command == ":assume") {
         if (args.empty()) {
             auto assumptions = symbolic_assumptions::AssumptionEngine::instance().get_all_assumptions_text();
@@ -154,7 +157,15 @@ std::string SymbolicModule::execute_args(const std::string& command,
         symbolic_assumptions::Assumption assumption = symbolic_assumptions::Assumption::kReal;
         bool found = false;
         
-        if (joined.find(">0") != std::string::npos) {
+        if (joined.find("<0") != std::string::npos) {
+            var = joined.substr(0, joined.find("<0"));
+            assumption = symbolic_assumptions::Assumption::kNegative;
+            found = true;
+        } else if (joined.find("negative") != std::string::npos) {
+            var = joined.substr(0, joined.find("negative"));
+            assumption = symbolic_assumptions::Assumption::kNegative;
+            found = true;
+        } else if (joined.find(">0") != std::string::npos) {
             var = joined.substr(0, joined.find(">0"));
             assumption = symbolic_assumptions::Assumption::kPositive;
             found = true;
@@ -181,7 +192,7 @@ std::string SymbolicModule::execute_args(const std::string& command,
                 return "Assumed " + var + " is " + symbolic_assumptions::AssumptionEngine::assumption_to_string(assumption) + ".";
             }
         }
-        return "Usage: :assume x > 0 | :assume x real | :assume x integer | :assume clear [x|all]";
+        return "Usage: :assume x > 0 | :assume x < 0 | :assume x real | :assume x integer | :assume clear [x|all]";
     }
 
     auto services = locator.resolve<CoreServices>();

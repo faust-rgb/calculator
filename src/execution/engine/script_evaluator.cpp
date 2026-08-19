@@ -9,6 +9,8 @@
 #include "execution/resolver/variable_resolver.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "parser/grammars/unified_parser_factory.h"
+#include "parser/ast/expression_ast.h"
+#include "parser/ast/unified_ast.h"
 #include "parser/grammars/symbolic_render_parser.h"
 #include "core/services/string_utils.h"
 #include "core/services/format_utils.h"
@@ -47,9 +49,7 @@ StoredValue evaluate_range_list(
     if (step == 0.0L) throw std::runtime_error("range step cannot be zero");
     std::vector<StoredValue> values;
     for (Scalar current = start; step > 0 ? current < stop : current > stop; current += step) {
-        StoredValue item;
-        item.decimal = current;
-        values.push_back(item);
+        values.emplace_back(current);
     }
     return make_list_value(std::move(values));
 }
@@ -201,9 +201,7 @@ StoredValue evaluate_index_or_slice(
             long long index = stored_to_index(evaluate_script_value_expression(ctx, parts[0], exact_mode), "matrix index");
             if (index < 0) index += static_cast<long long>(base.matrix_ptr->data.size());
             if (index < 0 || index >= static_cast<long long>(base.matrix_ptr->data.size())) throw std::runtime_error("matrix index out of range");
-            StoredValue result;
-            result.decimal = base.matrix_ptr->data[static_cast<std::size_t>(index)];
-            return result;
+            return StoredValue(base.matrix_ptr->data[static_cast<std::size_t>(index)]);
         } else if (parts.size() == 2) {
             long long row = stored_to_index(evaluate_script_value_expression(ctx, parts[0], exact_mode), "matrix row");
             long long col = stored_to_index(evaluate_script_value_expression(ctx, parts[1], exact_mode), "matrix col");
@@ -212,9 +210,7 @@ StoredValue evaluate_index_or_slice(
             if (row < 0 || row >= static_cast<long long>(base.matrix_ptr->rows) || col < 0 || col >= static_cast<long long>(base.matrix_ptr->cols)) {
                 throw std::runtime_error("matrix index out of range");
             }
-            StoredValue result;
-            result.decimal = base.matrix_ptr->at(static_cast<std::size_t>(row), static_cast<std::size_t>(col));
-            return result;
+            return StoredValue(base.matrix_ptr->at(static_cast<std::size_t>(row), static_cast<std::size_t>(col)));
         } else {
             throw std::runtime_error("matrix indexing requires 1 or 2 indices");
         }
@@ -232,8 +228,7 @@ StoredValue evaluate_script_value_expression(
         std::string arg = utils::trim_copy(trimmed.substr(4, trimmed.size() - 5));
         if (arg.empty()) throw std::runtime_error("len() requires one argument");
         StoredValue value = evaluate_script_value_expression(ctx, arg, exact_mode);
-        StoredValue result;
-        result.decimal = Scalar(0.0L);
+        StoredValue result(Scalar(0.0L));
         if (value.is_list && value.list_value) {
             result.decimal = Scalar(static_cast<long long>(value.list_value->size()));
         } else if (value.is_dict && value.dict_value) {
@@ -264,13 +259,33 @@ StoredValue evaluate_script_value_expression(
 
     if (is_wrapped_by(trimmed, '[', ']')) {
         const std::string inner = utils::trim_copy(trimmed.substr(1, trimmed.size() - 2));
-        if (!has_top_level_semicolon(inner)) return evaluate_list_literal(ctx, trimmed, exact_mode);
+        const bool is_comprehension = find_top_level_word(inner, "for") != std::string::npos ||
+                                      inner.find(" for ") != std::string::npos;
+        if (!has_top_level_semicolon(inner) && is_comprehension) {
+            return evaluate_list_literal(ctx, trimmed, exact_mode);
+        }
+        if (!has_top_level_semicolon(inner)) {
+            if (auto ast = compile_list_expression_ast(trimmed)) {
+                return core::evaluate_unified_ast(ast.get(), ctx->core_context());
+            }
+            return evaluate_list_literal(ctx, trimmed, exact_mode);
+        }
     }
-    if (is_wrapped_by(trimmed, '{', '}')) return evaluate_dict_literal(ctx, trimmed, exact_mode);
+    if (is_wrapped_by(trimmed, '{', '}')) {
+        if (auto ast = compile_expression_ast(trimmed)) {
+            return core::evaluate_unified_ast(ast.get(), ctx->core_context());
+        }
+        return evaluate_dict_literal(ctx, trimmed, exact_mode);
+    }
     
     std::string base;
     std::string index;
-    if (parse_index_expression(trimmed, &base, &index)) return evaluate_index_or_slice(ctx, trimmed, exact_mode);
+    if (parse_index_expression(trimmed, &base, &index)) {
+        if (auto ast = compile_expression_ast(trimmed)) {
+            return core::evaluate_unified_ast(ast.get(), ctx->core_context());
+        }
+        return evaluate_index_or_slice(ctx, trimmed, exact_mode);
+    }
     
     return evaluate_expression_value(ctx, trimmed, exact_mode);
 }

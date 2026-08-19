@@ -183,7 +183,9 @@ bool PreciseModule::try_evaluate_implicit(
         *value = execute_precise_decimal_expression(expression, variables);
         return true;
     } catch (...) {
-        return false;
+        // Once selected for precise evaluation, do not silently fall back to
+        // the lower-precision evaluator.
+        throw;
     }
 }
 
@@ -234,11 +236,18 @@ bool PreciseModule::should_try_precise_decimal_expression(
         }
         
         if (next < expression.size() && expression[next] == '(') {
-            // 恢复原有的保守白名单
-            if (token == "abs" || token == "min" || token == "max") {
-                continue;
-            }
-            return false;
+            const bool supported =
+                token == "abs" || token == "min" || token == "max" ||
+                token == "sqrt" || token == "exp" || token == "ln" ||
+                token == "log" || token == "log2" || token == "log10" ||
+                token == "sin" || token == "cos" || token == "tan" ||
+                token == "atan" || token == "asin" || token == "acos" ||
+                token == "sinh" || token == "cosh" || token == "tanh" ||
+                token == "asinh" || token == "acosh" || token == "atanh" ||
+                token == "floor" || token == "ceil" || token == "round" ||
+                token == "sign" || token == "sgn" || token == "pow";
+            if (!supported && !has_long_literal) return false;
+            continue;
         }
 
         // 特殊常量不再作为触发高精度的唯一“种子”

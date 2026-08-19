@@ -15,6 +15,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <utility>
 #include "types/scalar_type.h"
 namespace script {
 struct BlockStatement;
@@ -64,6 +65,12 @@ struct CustomFunction {
      * @return 编译后的 AST，如果编译失败返回 nullptr
      */
     std::shared_ptr<ExpressionAST> get_or_compile_ast() const;
+
+    void set_expression(std::string value) {
+        expression = std::move(value);
+        cached_ast.reset();
+        ast_compiled = false;
+    }
 };
 
 #include "parser/grammars/command_parser.h"

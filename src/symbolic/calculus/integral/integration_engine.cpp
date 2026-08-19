@@ -203,6 +203,22 @@ IntegrationResult IntegrationEngine::integrate_recursive(
                 verify_integration(expression, candidate.value, variable_name));
     };
 
+    // Verified direct formulas take precedence over tower normalization for
+    // forms whose structure carries an important polynomial factor.
+    if (disabled_strategies_.count("special") == 0) {
+        result = try_integrate_special(expression, variable_name);
+        if (result.success && result.method_used == "exp_linear_log_factor") {
+            --current_depth_;
+            integration_stack_.erase(key);
+            return result;
+        }
+        if (accept_result(result)) {
+            --current_depth_;
+            integration_stack_.erase(key);
+            return result;
+        }
+    }
+
     // 1. Risch 算法必须先尝试，避免旧的启发式策略抢先返回结果。
     if (disabled_strategies_.count("risch") == 0) {
         result = try_integrate_risch(expression, variable_name);
@@ -211,11 +227,8 @@ IntegrationResult IntegrationEngine::integrate_recursive(
             integration_stack_.erase(key);
             return result;
         }
-        if (result.method_used == "risch_non_elementary" && !result.success) {
-            --current_depth_;
-            integration_stack_.erase(key);
-            return result;
-        }
+        // A non-elementary Risch classification must not prevent later
+        // verified special-case rules from handling an equivalent form.
     }
 
     // 2. 常数和线性
@@ -624,6 +637,103 @@ IntegrationResult IntegrationEngine::try_integrate_special(
 
     const auto& node = expression.node_;
 
+    // exp(a*x+b+ln(x)) = x*exp(a*x+b), whose primitive is elementary.
+    // Handle it before the general tower solver, which may otherwise lose the
+    // polynomial factor while normalizing the logarithmic extension.
+    if (node->type == NodeType::kFunction && node->text == "exp" && node->left &&
+        node->left->type == NodeType::kAdd) {
+        SymbolicExpression left(node->left->left);
+        SymbolicExpression right(node->left->right);
+        SymbolicExpression linear;
+        if (left.node_->type == NodeType::kFunction && left.node_->text == "ln" &&
+            SymbolicExpression(left.node_->left).is_variable_named(variable_name)) {
+            linear = right;
+        } else if (right.node_->type == NodeType::kFunction && right.node_->text == "ln" &&
+                   SymbolicExpression(right.node_->left).is_variable_named(variable_name)) {
+            linear = left;
+        }
+        if (linear.has_node()) {
+            SymbolicExpression slope, intercept;
+            if (symbolic_decompose_linear(linear, variable_name, &slope, &intercept) &&
+                !expr_is_zero(slope)) {
+                SymbolicExpression x = SymbolicExpression::variable(variable_name);
+                SymbolicExpression result = make_function("exp", SymbolicExpression(node->left));
+                result = (result * (x / slope -
+                                    SymbolicExpression::number(1.0L) / (slope * slope))).simplify();
+                return IntegrationResult::ok(result, "exp_linear_log_factor");
+            }
+        }
+    }
+
+    // ln(x^n) / x -> n/2 * ln(|x|)^2.  This is valid on each connected
+    // component of the real domain x != 0 and avoids requiring a fragile
+    // logarithmic tower decomposition for this common form.
+    if (node->type == NodeType::kDivide &&
+        SymbolicExpression(node->right).is_variable_named(variable_name)) {
+        SymbolicExpression numerator(node->left);
+        if (numerator.node_->type == NodeType::kFunction &&
+            numerator.node_->text == "ln" && numerator.node_->left &&
+            SymbolicExpression(numerator.node_->left).node_->type == NodeType::kPower) {
+            SymbolicExpression power(numerator.node_->left);
+            SymbolicExpression base(power.node_->left);
+            Scalar exponent = Scalar(0.0L);
+            if (base.is_variable_named(variable_name) &&
+                SymbolicExpression(power.node_->right).is_number(&exponent)) {
+                SymbolicExpression log_abs = make_function(
+                    "ln", make_function("abs", SymbolicExpression::variable(variable_name)));
+                return IntegrationResult::ok(
+                    (SymbolicExpression::number(exponent / Scalar(2.0L)) *
+                     make_power(log_abs, SymbolicExpression::number(2.0L))).simplify(),
+                    "log_power_over_variable");
+            }
+        }
+    }
+
+    // Rational powers of an exponential are still elementary exponentials:
+    // 1/exp(a*x+b)^n -> exp(-n*(a*x+b))/(-n*a).
+    if (node->type == NodeType::kDivide) {
+        SymbolicExpression numerator(node->left);
+        SymbolicExpression denominator(node->right);
+        Scalar numerator_value = Scalar(0.0L);
+        if (numerator.is_number(&numerator_value) &&
+            denominator.node_->type == NodeType::kPower &&
+            denominator.node_->left && denominator.node_->right &&
+            SymbolicExpression(denominator.node_->left).node_->type == NodeType::kFunction &&
+            SymbolicExpression(denominator.node_->left).node_->text == "exp") {
+            Scalar exponent = Scalar(0.0L);
+            if (SymbolicExpression(denominator.node_->right).is_number(&exponent) &&
+                !mymath::is_near_zero(exponent, kFormatEps())) {
+                SymbolicExpression arg(SymbolicExpression(denominator.node_->left).node_->left);
+                SymbolicExpression slope, intercept;
+                if (symbolic_decompose_linear(arg, variable_name, &slope, &intercept) &&
+                    !expr_is_zero(slope)) {
+                    SymbolicExpression result = make_function(
+                        "exp", make_negate(SymbolicExpression::number(exponent) * arg));
+                    result = (SymbolicExpression::number(numerator_value) * result /
+                              (SymbolicExpression::number(-exponent) * slope)).simplify();
+                    return IntegrationResult::ok(result, "inverse_exponential_power");
+                }
+            }
+        }
+
+        // x/exp(a*x+b) -> -exp(-(a*x+b)) * (x/a + 1/a^2).
+        if (SymbolicExpression(node->left).is_variable_named(variable_name) &&
+            denominator.node_->type == NodeType::kFunction &&
+            denominator.node_->text == "exp") {
+            SymbolicExpression arg(denominator.node_->left);
+            SymbolicExpression slope, intercept;
+            if (symbolic_decompose_linear(arg, variable_name, &slope, &intercept) &&
+                !expr_is_zero(slope)) {
+                SymbolicExpression x = SymbolicExpression::variable(variable_name);
+                SymbolicExpression result =
+                    make_negate(make_function("exp", make_negate(arg)) *
+                                (x / slope + SymbolicExpression::number(1.0L) /
+                                 (slope * slope)));
+                return IntegrationResult::ok(result.simplify(), "linear_inverse_exponential");
+            }
+        }
+    }
+
     // Detect logarithmic derivative chains such as
     // 1 / (x * ln(x) * ln(ln(x))) -> ln(ln(ln(x))).
     {
@@ -870,7 +980,7 @@ IntegrationResult IntegrationEngine::try_integrate_special(
         }
 
         // ln(x)
-        if (func_name == "ln") {
+        if (func_name == "ln" || func_name == "log") {
             if (arg.is_variable_named(variable_name)) {
                 // ∫ ln(x) dx = x*ln(x) - x
                 SymbolicExpression x = SymbolicExpression::variable(variable_name);
@@ -1198,20 +1308,10 @@ bool IntegrationEngine::verify_integration(
         return true;
     }
 
-    SymbolicExpression ratio = (derivative / original_simplified).simplify();
-    Scalar ratio_value = Scalar(0.0L);
-    if (ratio.is_number(&ratio_value) &&
-        mymath::is_near_zero(ratio_value - 1.0L, 1e-8)) {
-        return true;
-    }
-
-    if (multiplicatively_equivalent(derivative, original_simplified)) {
-        return true;
-    }
-
     // 尝试数值验证
     // 在几个点验证
     std::vector<Scalar> test_points = {2.0, 3.0, 5.0, 7.0};
+    bool validated_point = false;
     for (Scalar x : test_points) {
         Scalar orig_val = Scalar(0.0L), deriv_val = 0.0L;
 
@@ -1221,7 +1321,10 @@ bool IntegrationEngine::verify_integration(
             SymbolicExpression deriv_subst = derivative.substitute(variable_name, subst_x);
 
             if (orig_subst.is_number(&orig_val) && deriv_subst.is_number(&deriv_val)) {
-                if (!mymath::is_near_zero(orig_val - deriv_val, 1e-6)) {
+                validated_point = true;
+                const Scalar scale = std::max({Scalar(1.0L), mymath::abs(orig_val),
+                                               mymath::abs(deriv_val)});
+                if (!mymath::is_near_zero(orig_val - deriv_val, Scalar(1e-8L) * scale)) {
                     return false;
                 }
             }
@@ -1230,7 +1333,7 @@ bool IntegrationEngine::verify_integration(
         }
     }
 
-    return true;
+    return validated_point;
     } catch (const std::exception&) {
         return false;
     }

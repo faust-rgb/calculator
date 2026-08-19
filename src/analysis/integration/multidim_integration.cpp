@@ -115,18 +115,35 @@ Scalar tensor_product_recursive(
     const std::vector<IntegrationBounds>& bounds,
     std::vector<Scalar>& current_point,
     std::size_t dimension,
-    int n_points) {
+    int n_points,
+    bool split_dimension = true) {
 
     const std::size_t d = dimension;
     const Scalar a = Scalar(bounds[d].lower);
     const Scalar b = Scalar(bounds[d].upper);
     const Scalar jac = jacobian_factor(a, b);
 
+    if (split_dimension && n_points > 10) {
+        const int segments = (n_points + 9) / 10;
+        Scalar result = Scalar(0);
+        for (int segment = 0; segment < segments; ++segment) {
+            std::vector<IntegrationBounds> segment_bounds = bounds;
+            const Scalar segment_lower = a + (b - a) * Scalar(segment) / Scalar(segments);
+            const Scalar segment_upper = a + (b - a) * Scalar(segment + 1) / Scalar(segments);
+            segment_bounds[d] = IntegrationBounds(segment_lower, segment_upper);
+            result += tensor_product_recursive(function, segment_bounds, current_point,
+                                               d, n_points, false);
+        }
+        return result;
+    }
+
     Scalar result = Scalar(0);
 
-    for (int i = 0; i < 5; ++i) {
-        const Scalar t = kGaussNodes[i];
-        const Scalar w = kGaussWeights[i];
+    const bool use_seven_point = n_points <= 7;
+    const int pair_count = use_seven_point ? 3 : 5;
+    for (int i = 0; i < pair_count; ++i) {
+        const Scalar t = use_seven_point ? kGauss7Nodes[i + 1] : kGaussNodes[i];
+        const Scalar w = use_seven_point ? kGauss7Weights[i + 1] : kGaussWeights[i];
 
         // 处理正半轴点
         current_point[d] = map_to_interval(t, a, b);
@@ -138,7 +155,7 @@ Scalar tensor_product_recursive(
             }
             val_pos = Scalar(function(ld_point));
         } else {
-            val_pos = tensor_product_recursive(function, bounds, current_point, d + 1, n_points);
+            val_pos = tensor_product_recursive(function, bounds, current_point, d + 1, n_points, true);
         }
 
         // 处理负半轴点
@@ -151,10 +168,22 @@ Scalar tensor_product_recursive(
             }
             val_neg = Scalar(function(ld_point));
         } else {
-            val_neg = tensor_product_recursive(function, bounds, current_point, d + 1, n_points);
+            val_neg = tensor_product_recursive(function, bounds, current_point, d + 1, n_points, true);
         }
 
         result += w * (val_pos + val_neg);
+    }
+
+    if (use_seven_point) {
+        current_point[d] = map_to_interval(Scalar(0), a, b);
+        Scalar center_value;
+        if (d + 1 == bounds.size()) {
+            center_value = Scalar(function(current_point));
+        } else {
+            center_value = tensor_product_recursive(function, bounds, current_point,
+                                                     d + 1, n_points, true);
+        }
+        result += kGauss7Weights[0] * center_value;
     }
 
     return result * jac;
@@ -194,13 +223,12 @@ IntegrationResult integrate_rectangular(
     const MultidimFunction& function,
     const std::vector<IntegrationBounds>& bounds,
     Scalar relative_tolerance,
-    Scalar,
+    Scalar absolute_tolerance,
     int max_evaluations) {
 
     if (bounds.empty()) {
         throw std::runtime_error("Integration bounds cannot be empty");
     }
-
     const std::size_t dim = bounds.size();
 
     // 根据维度选择方法
@@ -213,8 +241,8 @@ IntegrationResult integrate_rectangular(
                     std::vector<Scalar> pt = {(x)};
                     return Scalar(function(pt));
                 },
-                Scalar(bounds[0].lower), Scalar(bounds[0].upper), 15);
-            return {(value), 0.0L, 15, true};
+                Scalar(bounds[0].lower), Scalar(bounds[0].upper), 10);
+            return {(value), absolute_tolerance, 10, false};
         }
         return integrate_2d_adaptive(
             [&function](Scalar x, Scalar y) {
@@ -222,12 +250,12 @@ IntegrationResult integrate_rectangular(
             },
             bounds[0],
             bounds[1],
-            relative_tolerance,
+            relative_tolerance + absolute_tolerance,
             15);
     } else if (dim <= 4) {
         // 中维：张量积 Gauss
-        Scalar value = integrate_tensor_product(function, bounds, 15);
-        return {value, 0.0L, 0, true};
+        Scalar value = integrate_tensor_product(function, bounds, 10);
+        return {value, absolute_tolerance, 0, false};
     } else {
         // 高维：蒙特卡洛
         int samples = std::min(max_evaluations, static_cast<int>(100000 * dim));
@@ -242,6 +270,9 @@ Scalar integrate_tensor_product(
 
     if (bounds.empty()) {
         throw std::runtime_error("Integration bounds cannot be empty");
+    }
+    if (points_per_dimension <= 0) {
+        throw std::runtime_error("integration point count must be positive");
     }
 
     std::vector<Scalar> current_point(bounds.size(), Scalar(0));
@@ -312,7 +343,8 @@ IntegrationResult integrate_monte_carlo(
 
     // 估计积分值
     const Scalar mean = sum / Scalar(valid_samples);
-    const Scalar variance = (sum_sq / Scalar(valid_samples)) - mean * mean;
+    const Scalar variance = std::max(
+        Scalar(0), (sum_sq / Scalar(valid_samples)) - mean * mean);
 
     // 考虑拒绝采样对体积的修正
     const Scalar effective_volume = volume * Scalar(valid_samples) / Scalar(num_samples);
@@ -369,7 +401,8 @@ IntegrationResult integrate_importance_sampling(
     }
 
     const Scalar mean = sum / Scalar(valid_samples);
-    const Scalar variance = (sum_sq / Scalar(valid_samples)) - mean * mean;
+    const Scalar variance = std::max(
+        Scalar(0), (sum_sq / Scalar(valid_samples)) - mean * mean);
     const Scalar effective_volume = volume * Scalar(valid_samples) / Scalar(num_samples);
     const Scalar integral = mean * effective_volume;
     const Scalar std_error = mymath::sqrt(variance / Scalar(valid_samples)) * effective_volume;
@@ -900,7 +933,8 @@ IntegrationResult integrate_quasi_monte_carlo(
     }
 
     const Scalar mean = sum / Scalar(valid_samples);
-    const Scalar variance = (sum_sq / Scalar(valid_samples)) - mean * mean;
+    const Scalar variance = std::max(
+        Scalar(0), (sum_sq / Scalar(valid_samples)) - mean * mean);
     const Scalar effective_volume = volume * Scalar(valid_samples) / Scalar(num_samples);
     const Scalar integral = mean * effective_volume;
 
@@ -946,9 +980,56 @@ IntegrationResult integrate_rectangular(
     const MultidimFunction& function,
     const std::vector<IntegrationBounds>& bounds,
     const IntegrationOptions& options) {
+    if (bounds.empty()) {
+        throw std::runtime_error("Integration bounds cannot be empty");
+    }
+    if (options.max_evaluations <= 0 || options.relative_tolerance < 0 ||
+        options.absolute_tolerance < 0 || options.initial_subdivisions <= 0) {
+        throw std::runtime_error("invalid integration options");
+    }
 
-    return integrate_rectangular(function, bounds,
-        options.relative_tolerance, options.absolute_tolerance, options.max_evaluations);
+    const int dimension = static_cast<int>(bounds.size());
+    switch (options.method) {
+        case IntegrationMethod::MonteCarlo:
+            return integrate_monte_carlo(function, bounds, RegionConstraint(),
+                                         options.max_evaluations);
+        case IntegrationMethod::QuasiMonteCarlo:
+            return integrate_quasi_monte_carlo(function, bounds, RegionConstraint(),
+                                               options.max_evaluations);
+        case IntegrationMethod::SparseGrid:
+            return {integrate_sparse_grid(function, bounds,
+                                          std::max(1, options.max_depth / 4)),
+                    options.absolute_tolerance, 0, false};
+        case IntegrationMethod::TensorProduct:
+            return {integrate_tensor_product(function, bounds,
+                                              options.initial_subdivisions),
+                    options.absolute_tolerance, 0, false};
+        case IntegrationMethod::Adaptive:
+            if (dimension == 1) {
+                return integrate_rectangular(function, bounds,
+                                             options.relative_tolerance,
+                                             options.absolute_tolerance,
+                                             options.max_evaluations);
+            }
+            if (dimension == 2) {
+                return integrate_2d_adaptive(
+                    [&](Scalar x, Scalar y) { return function({x, y}); },
+                    bounds[0], bounds[1],
+                    options.relative_tolerance + options.absolute_tolerance,
+                    options.max_depth);
+            }
+            if (dimension == 3) {
+                return integrate_3d_adaptive(
+                    [&](Scalar x, Scalar y, Scalar z) { return function({x, y, z}); },
+                    bounds[0], bounds[1], bounds[2],
+                    options.relative_tolerance + options.absolute_tolerance,
+                    options.max_depth);
+            }
+            return {integrate_tensor_product(function, bounds,
+                                              options.initial_subdivisions),
+                    options.absolute_tolerance, 0, false};
+    }
+    throw std::runtime_error("unsupported integration method");
 }
 
 // ============================================================================
@@ -960,6 +1041,9 @@ IntegrationResult integrate_sparse_grid_with_error(
     const std::vector<IntegrationBounds>& bounds,
     int level) {
 
+    if (level < 1) {
+        throw std::runtime_error("sparse grid level must be positive");
+    }
     Scalar fine = Scalar(integrate_sparse_grid(function, bounds, level));
     Scalar coarse = Scalar(integrate_sparse_grid(function, bounds, level - 1));
 

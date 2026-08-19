@@ -15,9 +15,23 @@
 
 namespace symbolic_assumptions {
 
+namespace {
+thread_local AssumptionEngine* active_engine = nullptr;
+}
+
 AssumptionEngine& AssumptionEngine::instance() {
+    if (active_engine) return *active_engine;
     static AssumptionEngine instance_;
     return instance_;
+}
+
+AssumptionEngine::ScopedActivation::ScopedActivation(AssumptionEngine& engine)
+    : previous_(active_engine) {
+    active_engine = &engine;
+}
+
+AssumptionEngine::ScopedActivation::~ScopedActivation() {
+    active_engine = previous_;
 }
 
 void AssumptionEngine::assume(const std::string& variable, Assumption assumption) {

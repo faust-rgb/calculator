@@ -97,7 +97,7 @@ ScriptSignal execute_script_statement(
                 if (step == 0.0L) throw std::runtime_error("range step cannot be zero");
                 bool ascending = step > 0.0L;
                 for (Scalar current = start; (ascending ? current < stop : current > stop); current += step) {
-                    StoredValue loop_val; loop_val.decimal = current; loop_val.exact = false;
+                    StoredValue loop_val(current);
                     ctx->variables().set_local(for_range.variable, loop_val);
                     const ScriptSignal signal = execute_script_statement(ctx, *for_range.body, exact_mode, last_output, true);
                     if (signal.kind == ScriptSignal::Kind::kReturn) { ctx->variables().pop_scope(); return signal; }

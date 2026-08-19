@@ -98,6 +98,26 @@ static void test_fft_non_power_of_two(int& passed, int& failed) {
     }
 }
 
+static void test_fft_non_power_of_two_bin_order(int& passed, int& failed) {
+    const std::vector<signal::Complex> sig = {
+        signal::Complex(1.0L), signal::Complex(2.0L), signal::Complex(3.0L)};
+    const std::vector<signal::Complex> spectrum = signal::fft(sig);
+    const mymath::Scalar root_three = mymath::sqrt(mymath::Scalar(3.0L));
+    const bool ok = spectrum.size() == 3u &&
+                   test_helpers::nearly_equal(spectrum[0].real(), 6.0L, kEps) &&
+                   test_helpers::nearly_equal(spectrum[0].imag(), 0.0L, kEps) &&
+                   test_helpers::nearly_equal(spectrum[1].real(), -1.5L, kEps) &&
+                   test_helpers::nearly_equal(spectrum[1].imag(), -root_three / 2.0L, kEps) &&
+                   test_helpers::nearly_equal(spectrum[2].real(), -1.5L, kEps) &&
+                   test_helpers::nearly_equal(spectrum[2].imag(), root_three / 2.0L, kEps);
+    if (ok) {
+        ++passed;
+    } else {
+        ++failed;
+        std::cout << "    FAILED: FFT non-power-of-two bin ordering test" << std::endl;
+    }
+}
+
 static void test_rfft(int& passed, int& failed) {
     std::vector<mymath::Scalar> sig = {1.0L, 1.0L, 0.0L, 0.0L};
 
@@ -589,6 +609,7 @@ int run_signal_processing_tests(int& passed, int& failed) {
     test_fft_radix2(passed, failed);
     test_fft_ifft_roundtrip(passed, failed);
     test_fft_non_power_of_two(passed, failed);
+    test_fft_non_power_of_two_bin_order(passed, failed);
     test_rfft(passed, failed);
     test_fftshift(passed, failed);
 

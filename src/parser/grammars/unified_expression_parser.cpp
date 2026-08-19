@@ -220,6 +220,9 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
                            analysis.has_matrix_or_complex_var)) {
         auto unified_ast = compile(expression);
         if (unified_ast) {
+            // 优先使用绑定的 execution_context_（已通过 bind_function_manager
+            // 委托到 IFunctionManager，无需复制函数表）。
+            // 仅当解析器独立使用时创建本地临时上下文。
             core::ExecutionContext local_context;
             core::ExecutionContext& context = execution_context_ ? *execution_context_ : local_context;
             if (!context.external_variable_lookup()) {
@@ -230,37 +233,66 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
                     return true;
                 });
             }
+            // Add explicitly supplied functions even when the context is
+            // manager-backed. A manager may not know module-local matrix
+            // functions, while the parser still owns their registrations.
+            if (functions_) {
+                    for (const auto& [name, definition] : *functions_) {
+                        if (context.functions().has_function(name)) continue;
+                        context.functions().register_function(name,
+                            [definition](const std::vector<StoredValue>& args,
+                                         core::ExecutionContext& nested_context) mutable {
+                                if (args.size() != definition.parameter_names.size()) {
+                                    throw std::runtime_error("custom function argument count mismatch");
+                                }
+                                const auto ast = definition.get_or_compile_ast();
+                                if (!ast) throw std::runtime_error("failed to compile custom function");
+                                nested_context.scope().push_scope();
+                                try {
+                                    for (std::size_t i = 0; i < args.size(); ++i) {
+                                        nested_context.scope().set(definition.parameter_names[i], args[i]);
+                                    }
+                                    StoredValue result = core::evaluate_unified_ast(ast.get(), nested_context);
+                                    nested_context.scope().pop_scope();
+                                    return result;
+                                } catch (...) {
+                                    nested_context.scope().pop_scope();
+                                    throw;
+                                }
+                            });
+                    }
+            }
             if (scalar_functions_) {
-                for (const auto& [name, fn] : *scalar_functions_) {
-                    if (!context.functions().has_function(name)) context.functions().register_function(name,
-                        [fn](const std::vector<StoredValue>& args, core::ExecutionContext&) {
-                            std::vector<Scalar> values;
-                            values.reserve(args.size());
-                            for (const auto& arg : args) values.push_back(arg.get_decimal());
-                            return StoredValue(fn(values));
-                        });
-                }
+                    for (const auto& [name, fn] : *scalar_functions_) {
+                        if (!context.functions().has_function(name)) context.functions().register_function(name,
+                            [fn](const std::vector<StoredValue>& args, core::ExecutionContext&) {
+                                std::vector<Scalar> values;
+                                values.reserve(args.size());
+                                for (const auto& arg : args) values.push_back(arg.get_decimal());
+                                return StoredValue(fn(values));
+                            });
+                    }
             }
             if (native_functions_) {
-                for (const auto& [name, fn] : *native_functions_) {
-                    if (!context.functions().has_function(name)) context.functions().register_function(name,
-                        [fn](const std::vector<StoredValue>& args, core::ExecutionContext&) {
-                            return fn(args);
-                        });
-                }
+                    for (const auto& [name, fn] : *native_functions_) {
+                        if (!context.functions().has_function(name)) context.functions().register_function(name,
+                            [fn](const std::vector<StoredValue>& args, core::ExecutionContext&) {
+                                return fn(args);
+                            });
+                    }
             }
             if (matrix_functions_) {
-                for (const auto& [name, fn] : *matrix_functions_) {
-                    if (!context.functions().has_function(name)) context.functions().register_function(name,
-                        [fn](const std::vector<StoredValue>& args, core::ExecutionContext&) {
-                            std::vector<matrix::Matrix> matrices;
-                            for (const auto& arg : args) {
-                                if (!arg.is_matrix()) throw std::runtime_error("matrix argument required");
-                                matrices.push_back(arg.as_matrix());
-                            }
-                            return StoredValue(fn(matrices));
-                        });
-                }
+                    for (const auto& [name, fn] : *matrix_functions_) {
+                        if (!context.functions().has_function(name)) context.functions().register_function(name,
+                            [fn](const std::vector<StoredValue>& args, core::ExecutionContext&) {
+                                std::vector<matrix::Matrix> matrices;
+                                for (const auto& arg : args) {
+                                    if (!arg.is_matrix()) throw std::runtime_error("matrix argument required");
+                                    matrices.push_back(arg.as_matrix());
+                                }
+                                return StoredValue(fn(matrices));
+                            });
+                    }
             }
             return core::evaluate_unified_ast(unified_ast.get(), context);
         }
@@ -315,9 +347,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
             }
 
             StoredValue stored;
-            stored.exact = true;
-            stored.rational = Rational(numerator, denominator);
-            stored.decimal = rational_to_double(stored.rational);
+            stored = StoredValue(Rational(numerator, denominator));
             return stored;
         }
     }
@@ -325,11 +355,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
     // 精确模式
     if (exact_mode) {
         try {
-            StoredValue stored;
-            stored.rational = evaluate_exact(expression);
-            stored.exact = true;
-            stored.decimal = rational_to_double(stored.rational);
-            return stored;
+            return StoredValue(evaluate_exact(expression));
         } catch (const ExactModeUnsupported&) {
             // 回退到十进制模式
         }

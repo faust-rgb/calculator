@@ -485,10 +485,10 @@ std::vector<Complex> fft(const std::vector<Complex>& input) {
         }
     }
 
-    if (suitable_for_mixed) {
-        return fft_mixed_radix(input);
-    }
-
+    // The iterative mixed-radix path does not currently restore standard
+    // frequency-bin order for every factorization.  Bluestein preserves the
+    // conventional k=0..N-1 ordering for all non-power-of-two lengths.
+    (void)suitable_for_mixed;
     return fft_bluestein(input);
 }
 

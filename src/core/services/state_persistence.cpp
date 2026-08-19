@@ -259,9 +259,7 @@ std::string StatePersistenceService::load_state(const std::string& path) {
                     if (parts.size() != 6) {
                         throw std::runtime_error("invalid save file format");
                     }
-                    value.exact = true;
-                    value.rational = Rational(std::stoll(parts[3]), std::stoll(parts[4]));
-                    value.decimal = Scalar(parts[5]);
+                    value = StoredValue(Rational(std::stoll(parts[3]), std::stoll(parts[4])));
                 } else if (parts[2] == "DECIMAL") {
                     if ((state_version == 2 && parts.size() != 4 && parts.size() != 5) ||
                         (state_version >= 3 && parts.size() != 4)) {
@@ -349,10 +347,9 @@ std::string StatePersistenceService::load_state(const std::string& path) {
             throw std::runtime_error("invalid save file format");
         }
 
-        StoredValue value;
-        value.exact = std::stoi(parts[1]) != 0;
-        value.rational = Rational(std::stoll(parts[2]), std::stoll(parts[3]));
-        value.decimal = Scalar(parts[4]);
+        StoredValue value = std::stoi(parts[1]) != 0
+            ? StoredValue(Rational(std::stoll(parts[2]), std::stoll(parts[3])))
+            : StoredValue(Scalar(parts[4]));
         loaded[parts[0]] = value;
     }
 

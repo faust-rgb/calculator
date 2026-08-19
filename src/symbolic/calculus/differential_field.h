@@ -20,6 +20,8 @@
 #include <set>
 #include <functional>
 #include <unordered_map>
+#include <limits>
+#include <stdexcept>
 
 /**
  * @file differential_field.h
@@ -40,6 +42,10 @@
  *
  * 避免浮点精度问题，用于 Sturm 序列的实根隔离
  */
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
 class ExactRational {
 public:
     int64_t numerator;
@@ -57,6 +63,9 @@ public:
     static ExactRational from_double(Scalar value, int64_t max_den = 1000000);
 
     void normalize() {
+        if (denominator == 0) {
+            throw std::invalid_argument("ExactRational denominator cannot be zero");
+        }
         if (denominator < 0) {
             numerator = -numerator;
             denominator = -denominator;
@@ -71,33 +80,40 @@ public:
 
     ExactRational add(const ExactRational& other) const {
         return ExactRational(
-            numerator * other.denominator + other.numerator * denominator,
-            denominator * other.denominator
+            checked_add(checked_mul(numerator, other.denominator),
+                        checked_mul(other.numerator, denominator)),
+            checked_mul(denominator, other.denominator)
         );
     }
 
     ExactRational subtract(const ExactRational& other) const {
         return ExactRational(
-            numerator * other.denominator - other.numerator * denominator,
-            denominator * other.denominator
+            checked_sub(checked_mul(numerator, other.denominator),
+                        checked_mul(other.numerator, denominator)),
+            checked_mul(denominator, other.denominator)
         );
     }
 
     ExactRational multiply(const ExactRational& other) const {
-        return ExactRational(numerator * other.numerator, denominator * other.denominator);
+        return ExactRational(checked_mul(numerator, other.numerator),
+                             checked_mul(denominator, other.denominator));
     }
 
     ExactRational divide(const ExactRational& other) const {
-        return ExactRational(numerator * other.denominator, denominator * other.numerator);
+        if (other.numerator == 0) {
+            throw std::invalid_argument("ExactRational division by zero");
+        }
+        return ExactRational(checked_mul(numerator, other.denominator),
+                             checked_mul(denominator, other.numerator));
     }
 
     ExactRational negate() const {
-        return ExactRational(-numerator, denominator);
+        return ExactRational(checked_sub(0, numerator), denominator);
     }
 
     int compare(const ExactRational& other) const {
-        int64_t left = numerator * other.denominator;
-        int64_t right = other.numerator * denominator;
+        const __int128 left = static_cast<__int128>(numerator) * other.denominator;
+        const __int128 right = static_cast<__int128>(other.numerator) * denominator;
         if (left < right) return -1;
         if (left > right) return 1;
         return 0;
@@ -126,6 +142,33 @@ public:
     }
 
 private:
+    static int64_t checked_mul(int64_t lhs, int64_t rhs) {
+        const __int128 value = static_cast<__int128>(lhs) * rhs;
+        if (value > std::numeric_limits<int64_t>::max() ||
+            value < std::numeric_limits<int64_t>::min()) {
+            throw std::overflow_error("ExactRational arithmetic overflow");
+        }
+        return static_cast<int64_t>(value);
+    }
+
+    static int64_t checked_add(int64_t lhs, int64_t rhs) {
+        const __int128 value = static_cast<__int128>(lhs) + rhs;
+        if (value > std::numeric_limits<int64_t>::max() ||
+            value < std::numeric_limits<int64_t>::min()) {
+            throw std::overflow_error("ExactRational arithmetic overflow");
+        }
+        return static_cast<int64_t>(value);
+    }
+
+    static int64_t checked_sub(int64_t lhs, int64_t rhs) {
+        const __int128 value = static_cast<__int128>(lhs) - rhs;
+        if (value > std::numeric_limits<int64_t>::max() ||
+            value < std::numeric_limits<int64_t>::min()) {
+            throw std::overflow_error("ExactRational arithmetic overflow");
+        }
+        return static_cast<int64_t>(value);
+    }
+
     static int64_t gcd(int64_t a, int64_t b) {
         while (b != 0) {
             int64_t t = b;
@@ -136,6 +179,10 @@ private:
     }
 };
 
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+
 // Note: Use ExactRational directly to avoid conflict with math/numeric/rational/rational.h
 
 /**
@@ -145,6 +192,7 @@ private:
  */
 class DifferentialField {
 public:
+    enum class ConstantStatus { kConstant, kNonConstant, kUnknown };
     // 基域变量名 (积分变量)
     std::string base_variable;
 
@@ -185,6 +233,9 @@ public:
      * 3. 已知常数表: pi, e, sin(1) 等
      */
     bool is_constant(const SymbolicExpression& expr) const;
+
+    /** Three-valued constant-domain query used by strict Risch decisions. */
+    ConstantStatus classify_constant(const SymbolicExpression& expr) const;
 
     /**
      * @brief 判断元素在哪一层域中

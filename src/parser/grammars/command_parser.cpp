@@ -117,7 +117,9 @@ CommandASTNode CommandASTNode::make_function_call(std::string_view name,
     FunctionCallInfo info;
     info.name = name;
     for (const auto& arg : args) {
-        info.arguments.push_back(ExpressionInfo(arg));
+        ExpressionInfo expression(arg);
+        compile_expression_info(expression);
+        info.arguments.push_back(std::move(expression));
     }
     node.data = std::move(info);
     return node;
@@ -161,10 +163,14 @@ CommandASTNode CommandASTNode::make_function_call_with_named(
     FunctionCallInfo info;
     info.name = name;
     for (const auto& arg : positional_args) {
-        info.arguments.push_back(ExpressionInfo(arg));
+        ExpressionInfo expression(arg);
+        compile_expression_info(expression);
+        info.arguments.push_back(std::move(expression));
     }
     for (const auto& [name, value] : named_args) {
-        info.named_args.push_back(NamedArgument{name, ExpressionInfo(value)});
+        ExpressionInfo expression(value);
+        compile_expression_info(expression);
+        info.named_args.push_back(NamedArgument{name, std::move(expression)});
     }
     node.data = std::move(info);
     return node;
@@ -275,8 +281,7 @@ CommandASTNode CommandParser::parse() {
 
         // 必须以分号分隔或到达末尾
         if (peek_token().kind != TokenKind::kEnd && !match_token(TokenKind::kSemicolon)) {
-            // 如果不是分号也不是结束，可能是语法错误或连续表达式
-            // 为了兼容性，我们继续尝试解析
+            throw_syntax_error("expected ';' or end of statement");
         }
     }
 

@@ -50,6 +50,8 @@ enum class ASTNodeType {
     kString,
     kVariable,
     kUnaryOp,
+    kPostfixOp,
+    kConditional,
     kBinaryOp,
     kFunctionCall,
     kMatrixLiteral,
@@ -132,10 +134,21 @@ class ConditionalNode : public ASTNode {
 public:
     ConditionalNode(std::unique_ptr<ASTNode> c, std::unique_ptr<ASTNode> t, std::unique_ptr<ASTNode> e)
         : condition_(std::move(c)), then_(std::move(t)), else_(std::move(e)) {}
-    ASTNodeType type() const override { return ASTNodeType::kBinaryOp; }
+    ASTNodeType type() const override { return ASTNodeType::kConditional; }
     StoredValue evaluate(ExecutionContext& ctx) const override;
 private:
     std::unique_ptr<ASTNode> condition_, then_, else_;
+};
+
+class PostfixOpNode : public ASTNode {
+public:
+    PostfixOpNode(std::string op, std::unique_ptr<ASTNode> child)
+        : op_(std::move(op)), child_(std::move(child)) {}
+    ASTNodeType type() const override { return ASTNodeType::kPostfixOp; }
+    StoredValue evaluate(ExecutionContext& ctx) const override;
+private:
+    std::string op_;
+    std::unique_ptr<ASTNode> child_;
 };
 
 class FunctionCallNode : public ASTNode {

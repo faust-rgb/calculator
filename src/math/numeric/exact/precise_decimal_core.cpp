@@ -22,6 +22,7 @@
 #include <climits>
 #include <iomanip>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 namespace precise {
@@ -162,6 +163,10 @@ PreciseDecimal PreciseDecimal::operator-() const {
 // ============================================================================
 
 PreciseDecimal& PreciseDecimal::operator+=(const PreciseDecimal& rhs) {
+    if (is_nan || rhs.is_nan) {
+        *this = PreciseDecimal::nan();
+        return *this;
+    }
     if (is_inf && rhs.is_inf) {
         if (negative != rhs.negative) {
             *this = PreciseDecimal::nan();
@@ -171,11 +176,6 @@ PreciseDecimal& PreciseDecimal::operator+=(const PreciseDecimal& rhs) {
     if (is_inf) return *this;
     if (rhs.is_inf) {
         *this = rhs;
-        return *this;
-    }
-
-    if (is_nan || rhs.is_nan) {
-        *this = PreciseDecimal::nan();
         return *this;
     }
 
@@ -211,6 +211,10 @@ PreciseDecimal& PreciseDecimal::operator+=(const PreciseDecimal& rhs) {
 }
 
 PreciseDecimal& PreciseDecimal::operator-=(const PreciseDecimal& rhs) {
+    if (is_nan || rhs.is_nan) {
+        *this = PreciseDecimal::nan();
+        return *this;
+    }
     if (is_inf && rhs.is_inf) {
         if (negative == rhs.negative) {
             *this = PreciseDecimal::nan();
@@ -221,11 +225,6 @@ PreciseDecimal& PreciseDecimal::operator-=(const PreciseDecimal& rhs) {
     if (rhs.is_inf) {
         *this = rhs;
         negative = !negative;
-        return *this;
-    }
-
-    if (is_nan || rhs.is_nan) {
-        *this = PreciseDecimal::nan();
         return *this;
     }
 
@@ -281,6 +280,10 @@ PreciseDecimal& PreciseDecimal::operator/=(const PreciseDecimal& rhs) {
 // ============================================================================
 
 PreciseDecimal& PreciseDecimal::add_without_normalize(const PreciseDecimal& rhs) {
+    if (is_nan || rhs.is_nan) {
+        *this = PreciseDecimal::nan();
+        return *this;
+    }
     if (is_inf && rhs.is_inf) {
         if (negative != rhs.negative) {
             *this = PreciseDecimal::nan();
@@ -290,11 +293,6 @@ PreciseDecimal& PreciseDecimal::add_without_normalize(const PreciseDecimal& rhs)
     if (is_inf) return *this;
     if (rhs.is_inf) {
         *this = rhs;
-        return *this;
-    }
-
-    if (is_nan || rhs.is_nan) {
-        *this = PreciseDecimal::nan();
         return *this;
     }
 
@@ -437,8 +435,16 @@ long double PreciseDecimal::to_double() const {
         std::string s = to_string();
         if (s.empty()) return 0.0L;
         return std::stold(s);
-    } catch (...) {
-        return 0.0L;
+    } catch (const std::out_of_range&) {
+        const std::string digits = bigint_to_string(data);
+        const long long decimal_exponent =
+            static_cast<long long>(digits.size()) - static_cast<long long>(scale);
+        const long double sign = negative ? -1.0L : 1.0L;
+        return decimal_exponent > 4900
+            ? sign * mymath::infinity()
+            : 0.0L;
+    } catch (const std::exception&) {
+        throw std::runtime_error("invalid PreciseDecimal conversion");
     }
 }
 
@@ -465,7 +471,9 @@ PreciseDecimal PreciseDecimal::from_decimal_literal(const std::string& token) {
     for (char ch : token) {
         if (!std::isspace(static_cast<unsigned char>(ch))) text.push_back(ch);
     }
-    if (text.empty()) return {};
+    if (text.empty()) {
+        throw std::invalid_argument("empty PreciseDecimal literal");
+    }
 
     bool is_negative = false;
     if (text.front() == '+' || text.front() == '-') {
@@ -480,6 +488,21 @@ PreciseDecimal PreciseDecimal::from_decimal_literal(const std::string& token) {
     if (exponent_pos != std::string::npos) {
         significand = text.substr(0, exponent_pos);
         exponent_adjust = std::stoi(text.substr(exponent_pos + 1));
+    }
+
+    bool has_digit = false;
+    int dot_count = 0;
+    for (char ch : significand) {
+        if (std::isdigit(static_cast<unsigned char>(ch))) {
+            has_digit = true;
+        } else if (ch == '.') {
+            ++dot_count;
+        } else {
+            throw std::invalid_argument("invalid PreciseDecimal literal");
+        }
+    }
+    if (!has_digit || dot_count > 1) {
+        throw std::invalid_argument("invalid PreciseDecimal literal");
     }
 
     const std::size_t dot_pos = significand.find('.');
@@ -650,8 +673,9 @@ int process_display_precision() {
 } // namespace
 
 std::ostream& operator<<(std::ostream& os, const PreciseDecimal& val) {
-    int precision = os.precision() > 0 ? static_cast<int>(os.precision())
-                                       : process_display_precision();
+    // Use the shared precision context; ostream's default precision (6) is
+    // not an appropriate precision contract for arbitrary decimals.
+    const int precision = process_display_precision();
     os << format_decimal_truncated(val, precision);
     return os;
 }

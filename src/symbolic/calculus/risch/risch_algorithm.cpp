@@ -33,11 +33,17 @@
 #include <sstream>
 #include <queue>
 #include <complex>
+#include <mutex>
 
 using namespace symbolic_expression_internal;
 using namespace risch_algorithm_internal;
 
 namespace {
+
+std::mutex& risch_cache_mutex() {
+    static std::mutex mutex;
+    return mutex;
+}
 
 // Helper function for numerical comparison
 // Returns true if the expression is a number within tolerance
@@ -1022,12 +1028,14 @@ RischAlgorithm::get_cache() {
 }
 
 void RischAlgorithm::clear_cache() {
+    std::lock_guard<std::mutex> lock(risch_cache_mutex());
     get_cache().clear();
 }
 
 bool RischAlgorithm::check_cache(const SymbolicExpression& expr,
                                   const std::string& var,
                                   IntegrationResult* result) {
+    std::lock_guard<std::mutex> lock(risch_cache_mutex());
     auto& cache = get_cache();
     CacheKey key{expr.simplify().to_string(), var};
     auto it = cache.find(key);
@@ -1041,6 +1049,7 @@ bool RischAlgorithm::check_cache(const SymbolicExpression& expr,
 void RischAlgorithm::store_cache(const SymbolicExpression& expr,
                                   const std::string& var,
                                   const IntegrationResult& result) {
+    std::lock_guard<std::mutex> lock(risch_cache_mutex());
     auto& cache = get_cache();
     CacheKey key{expr.simplify().to_string(), var};
     cache[key] = result;
@@ -1056,7 +1065,13 @@ SymbolicExpression RischAlgorithm::make_special_function_expr(
     std::string func_name;
     switch (func) {
         case SpecialFunction::kEi: func_name = "Ei"; break;
-        case SpecialFunction::kErf: func_name = "erf"; break;
+        case SpecialFunction::kErf:
+            // d/dx erf(x) = 2/sqrt(pi) * exp(-x^2); the Risch candidate
+            // for exp(-x^2) therefore carries sqrt(pi)/2.
+            return (make_multiply(
+                make_divide(make_function("sqrt", SymbolicExpression(make_unary(NodeType::kPi, nullptr))),
+                            SymbolicExpression::number(Scalar(2))),
+                make_function("erf", arg))).simplify();
         case SpecialFunction::kSi: func_name = "Si"; break;
         case SpecialFunction::kCi: func_name = "Ci"; break;
         case SpecialFunction::kLi: func_name = "li"; break;
@@ -1071,6 +1086,15 @@ SymbolicExpression RischAlgorithm::make_special_function_expr(
         default: func_name = "unknown"; break;
     }
     return make_function(func_name, arg);
+}
+
+bool RischAlgorithm::verify_antiderivative(const SymbolicExpression& candidate,
+                                           const SymbolicExpression& integrand,
+                                           const std::string& variable_name) {
+    if (!candidate.node_ || !integrand.node_) return false;
+    SymbolicExpression residual =
+        (candidate.derivative(variable_name) - integrand).simplify();
+    return expr_is_zero(residual);
 }
 
 // ============================================================================
@@ -1309,6 +1333,21 @@ SymbolicExpression RischAlgorithm::normalize_exponential(const SymbolicExpressio
                                                           const std::string& x_var) {
     SymbolicExpression simplified = expr.simplify();
 
+    // exp(u + ln(v)) -> v * exp(u).  Handle this before the generic
+    // additive split so the specialized normalization is reachable.
+    if (simplified.node_->type == NodeType::kAdd) {
+        SymbolicExpression left(simplified.node_->left);
+        SymbolicExpression right(simplified.node_->right);
+        if (left.node_->type == NodeType::kFunction && left.node_->text == "ln") {
+            return (SymbolicExpression(left.node_->left) *
+                    make_function("exp", normalize_exponential(right, x_var))).simplify();
+        }
+        if (right.node_->type == NodeType::kFunction && right.node_->text == "ln") {
+            return (SymbolicExpression(right.node_->left) *
+                    make_function("exp", normalize_exponential(left, x_var))).simplify();
+        }
+    }
+
     // Case 1: exp(u + v) -> exp(u) * exp(v)
     if (simplified.node_->type == NodeType::kAdd) {
         SymbolicExpression left(simplified.node_->left);
@@ -1349,25 +1388,6 @@ SymbolicExpression RischAlgorithm::normalize_exponential(const SymbolicExpressio
         SymbolicExpression inner(simplified.node_->left);
         SymbolicExpression norm_inner = normalize_exponential(inner, x_var);
         return (SymbolicExpression::number(Scalar(1.0L)) / make_function("exp", norm_inner)).simplify();
-    }
-
-    // Case 6: exp(x + ln(y)) -> y * exp(x)
-    // Detect patterns like exp(u + ln(v)) and simplify
-    if (simplified.node_->type == NodeType::kAdd) {
-        SymbolicExpression left(simplified.node_->left);
-        SymbolicExpression right(simplified.node_->right);
-
-        // Check if one side is ln(...)
-        if (left.node_->type == NodeType::kFunction && left.node_->text == "ln") {
-            SymbolicExpression ln_arg(left.node_->left);
-            SymbolicExpression norm_right = normalize_exponential(right, x_var);
-            return (ln_arg * make_function("exp", norm_right)).simplify();
-        }
-        if (right.node_->type == NodeType::kFunction && right.node_->text == "ln") {
-            SymbolicExpression ln_arg(right.node_->left);
-            SymbolicExpression norm_left = normalize_exponential(left, x_var);
-            return (ln_arg * make_function("exp", norm_left)).simplify();
-        }
     }
 
     return simplified;

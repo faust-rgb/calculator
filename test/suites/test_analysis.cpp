@@ -496,6 +496,102 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // 规范化乘积应消除因子顺序和结合方式对 Laplace 规则匹配的影响。
+    try {
+        const SymbolicExpression first =
+            SymbolicExpression::parse("exp(a*t) * step(t) * t")
+                .laplace_transform("t", "s").simplify();
+        const SymbolicExpression second =
+            SymbolicExpression::parse("t * step(t) * exp(a*t)")
+                .laplace_transform("t", "s").simplify();
+        const bool equivalent = first.to_string() == second.to_string() &&
+                                first.to_string().find("(-a + s) ^ 2") != std::string::npos;
+        bool rejected_negative_shift = false;
+        try {
+            (void)SymbolicExpression::parse("step(t + 2)")
+                .laplace_transform("t", "s");
+        } catch (const std::exception&) {
+            rejected_negative_shift = true;
+        }
+        if (equivalent && rejected_negative_shift) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: normalized Laplace product matching or negative shift validation\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: normalized Laplace product test threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    // 测试带收敛域和分布标记的 Laplace 结果
+    try {
+        const TransformResult exponential_result =
+            SymbolicExpression::parse("exp(a * t)")
+            .laplace_transform_with_conditions("t", "s");
+        const TransformResult multi_exponential_result =
+            SymbolicExpression::parse("exp(a * t) + exp(b * t)")
+            .laplace_transform_with_conditions("t", "s");
+        const TransformResult shifted_result =
+            SymbolicExpression::parse("step(t-a)")
+            .laplace_transform_with_conditions("t", "s");
+        const SymbolicExpression scaled_shift =
+            SymbolicExpression::parse("step(2*t-4)")
+            .laplace_transform("t", "s").simplify();
+        const SymbolicExpression repeated_quadratic =
+            SymbolicExpression::parse("1 / (s^2 - 2*s + 1)")
+            .inverse_laplace_transform("s", "t").simplify();
+        const TransformResult delayed_inverse_result =
+            SymbolicExpression::parse("exp(-a*s+b)/(s-c)")
+            .inverse_laplace_transform_with_conditions("s", "t");
+        const TransformResult delta_result =
+            SymbolicExpression::parse("1").inverse_laplace_transform_with_conditions("s", "t");
+        const SymbolicExpression symbolic_quadratic =
+            SymbolicExpression::parse("1 / (s^2 + a*s + b)")
+                .inverse_laplace_transform("s", "t");
+        const SymbolicExpression mixed_rational =
+            SymbolicExpression::parse("1 / ((s-a)*(s^2+b*s+c))")
+                .inverse_laplace_transform("s", "t");
+        const TransformResult higher_distribution =
+            SymbolicExpression::parse("s^2 / (s-a)")
+                .inverse_laplace_transform_with_conditions("s", "t");
+        if (exponential_result.condition.has_value() &&
+            exponential_result.condition->expression == "Re(s) > Re(a)" &&
+            exponential_result.condition->relation == TransformCondition::Relation::kGreater &&
+            exponential_result.condition->lhs.has_node() &&
+            exponential_result.condition->rhs.has_node() &&
+            multi_exponential_result.condition.has_value() &&
+            multi_exponential_result.condition->constraints.size() == 2 &&
+            multi_exponential_result.condition->atomic_constraints.size() == 2 &&
+            multi_exponential_result.condition->atomic_constraints[0].lhs.has_node() &&
+            multi_exponential_result.condition->atomic_constraints[0].rhs.has_node() &&
+            shifted_result.condition.has_value() &&
+            shifted_result.condition->atomic_constraints.size() == 2 &&
+            scaled_shift.to_string().find("exp(-(2 * s))") != std::string::npos &&
+            repeated_quadratic.to_string().find("t") != std::string::npos &&
+            repeated_quadratic.to_string().find("exp(t)") != std::string::npos &&
+            delayed_inverse_result.condition.has_value() &&
+            !delayed_inverse_result.condition->atomic_constraints.empty() &&
+            !exponential_result.contains_distribution &&
+            mixed_rational.to_string().find("sqrt") != std::string::npos &&
+            delta_result.contains_distribution &&
+            higher_distribution.contains_distribution &&
+            higher_distribution.expression.to_string().find("delta_derivative") != std::string::npos &&
+            symbolic_quadratic.to_string().find("sqrt") != std::string::npos &&
+            validate_laplace_round_trip(SymbolicExpression::parse("step(t)"), "t", "s") &&
+            validate_inverse_laplace_round_trip(SymbolicExpression::parse("1 / s"), "s", "t")) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: Laplace metadata condition/distribution flag mismatch\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: Laplace metadata API threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
     // 测试傅里叶变换
     try {
         const SymbolicExpression transformed =
@@ -510,6 +606,69 @@ int run_analysis_tests(int& passed, int& failed) {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: SymbolicExpression fourier(delta(t - 2)) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    // Fourier inverse phase, convergence, and distribution metadata.
+    try {
+        const SymbolicExpression phase =
+            SymbolicExpression::parse("exp(3*i*w)")
+                .inverse_fourier_transform("w", "t").simplify();
+        const TransformResult constant =
+            SymbolicExpression::parse("1")
+                .fourier_transform_with_conditions("t", "w");
+        bool rejected_growth = false;
+        try {
+            (void)SymbolicExpression::parse("exp(2*t)*step(t)")
+                .fourier_transform("t", "w");
+        } catch (const std::exception&) {
+            rejected_growth = true;
+        }
+        if (phase.to_string().find("delta(t + 3)") != std::string::npos &&
+            phase.to_string().find("0.159154") != std::string::npos &&
+            constant.contains_distribution && rejected_growth) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: Fourier phase/convergence/metadata regression\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: Fourier phase/convergence/metadata regression threw: "
+                  << ex.what() << '\n';
+    }
+
+    // 测试结构化 Z 变换 ROC 元数据
+    try {
+        const TransformResult z_power_result =
+            SymbolicExpression::parse("a^n")
+                .z_transform_with_conditions("n", "z");
+        const TransformResult z_shift_result =
+            SymbolicExpression::parse("step(n-2)")
+                .z_transform_with_conditions("n", "z");
+        const TransformResult z_delta_result =
+            SymbolicExpression::parse("delta(n-2)")
+                .z_transform_with_conditions("n", "z");
+        const TransformResult iz_result =
+            SymbolicExpression::parse("z/(z-a)")
+                .inverse_z_transform_with_conditions("z", "n");
+        if (z_power_result.condition.has_value() &&
+            z_power_result.condition->atomic_constraints.size() == 1 &&
+            z_shift_result.condition.has_value() &&
+            z_shift_result.condition->atomic_constraints.size() == 2 &&
+            z_delta_result.contains_distribution &&
+            z_delta_result.condition.has_value() &&
+            z_delta_result.condition->atomic_constraints.size() == 1 &&
+            iz_result.condition.has_value() &&
+            iz_result.condition->expression == "causal unilateral Z-transform convention") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: Z-transform ROC metadata mismatch\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: Z-transform metadata API threw unexpected error: "
                   << ex.what() << '\n';
     }
 
@@ -528,6 +687,24 @@ int run_analysis_tests(int& passed, int& failed) {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: SymbolicExpression ztrans(step(n - 2)) threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    // Higher-order repeated Z poles must use the binomial sequence form.
+    try {
+        const SymbolicExpression repeated =
+            SymbolicExpression::parse("1/(z-1)^3")
+                .inverse_z_transform("z", "n").simplify();
+        if (repeated.to_string().find("step(n - 3)") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: inverse Z repeated third-order pole regression got "
+                      << repeated.to_string() << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: inverse Z repeated third-order pole threw: "
                   << ex.what() << '\n';
     }
 

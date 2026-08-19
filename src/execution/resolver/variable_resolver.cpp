@@ -97,9 +97,8 @@ const StoredValue* VariableResolver::lookup(const std::string& name) const {
         // 使用线程本地缓存避免重复创建
         static thread_local std::map<std::string, StoredValue> constant_cache;
         auto& cached = constant_cache[name];
-        if (mymath::is_near_zero(cached.decimal, Scalar(1e-12L)) && !cached.exact) {
-            cached.decimal = constant_value;
-            cached.exact = false;
+        if ((!cached.is_scalar_type() || mymath::is_near_zero(cached.get_decimal(), Scalar(1e-12L))) && !cached.exact) {
+            cached = StoredValue(constant_value);
         }
         return &cached;
     }
@@ -145,9 +144,7 @@ std::map<std::string, StoredValue> VariableResolver::snapshot() const {
     for (const char* name : {"pi", "e", "c", "G", "h", "k", "NA", "inf", "infinity", "oo"}) {
         Scalar constant_value = 0.0L;
         if (lookup_builtin_constant(name, &constant_value)) {
-            StoredValue stored;
-            stored.decimal = constant_value;
-            stored.exact = false;
+            StoredValue stored(constant_value);
             merged.insert({name, stored});
         }
     }
@@ -238,9 +235,8 @@ const StoredValue* VariableResolver::lookup_at_scope(const std::string& name, in
         if (lookup_builtin_constant(name, &constant_value)) {
             static thread_local std::map<std::string, StoredValue> constant_cache;
             auto& cached = constant_cache[name];
-            if (mymath::is_near_zero(cached.decimal, Scalar(1e-12L)) && !cached.exact) {
-                cached.decimal = constant_value;
-                cached.exact = false;
+            if ((!cached.is_scalar_type() || mymath::is_near_zero(cached.get_decimal(), Scalar(1e-12L))) && !cached.exact) {
+                cached = StoredValue(constant_value);
             }
             return &cached;
         }

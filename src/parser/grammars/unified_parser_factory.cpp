@@ -14,8 +14,14 @@
 // ============================================================================
 
 ParserKind UnifiedParserFactory::select_parser(const std::string& expression, const ParseContext& ctx) {
-    (void)ctx;
     AnalysisResult result = analyze(expression);
+    if (ctx.exact_mode) return ParserKind::kExact;
+    if (ctx.need_symbolic) return ParserKind::kSymbolic;
+    if (!ctx.allow_matrix &&
+        (result.has_bracket || result.has_matrix_func || result.has_matrix_or_complex_var)) {
+        return ParserKind::kScalar;
+    }
+    if (!ctx.allow_complex && result.has_standalone_i) return ParserKind::kScalar;
     return result.parser;
 }
 
@@ -31,7 +37,7 @@ bool UnifiedParserFactory::can_compile_to_ast(const std::string& expression) {
     if (expression.empty()) return false;
     AnalysisResult result = analyze(expression);
     if (result.has_string || result.has_rat_call) return false;
-    return compile_expression_ast(expression) != nullptr;
+    return result.ast_valid;
 }
 
 // ============================================================================
@@ -53,6 +59,7 @@ UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(
     result.has_string = false;
     result.has_assignment = false;
     result.has_matrix_or_complex_var = false;
+    result.ast_valid = false;
     result.paren_depth = 0;
     result.bracket_depth = 0;
 
@@ -197,7 +204,7 @@ UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(
     if (result.has_rat_call) {
         result.parser = ParserKind::kRatCall;
         result.hint = ExpressionHint::kRatCall;
-    } else if (compile_expression_ast(expression)) {
+    } else if ((result.ast_valid = compile_expression_ast(expression) != nullptr)) {
         // 语法有效的表达式统一使用 ExpressionAST；特征只作为结果类型
         // 提示，不再决定解析器实现。
         result.parser = ParserKind::kUnifiedExpression;

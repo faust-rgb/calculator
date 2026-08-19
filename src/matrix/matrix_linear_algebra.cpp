@@ -8,7 +8,7 @@
 #include "matrix_dsp.h"
 #include "mymath.h"
 #include "polynomial.h"
-#include "precise_decimal.h"
+#include "math/numeric/exact/precise_decimal.h"
 #include "types/scalar_type.h"
 #include "math/numeric/precision/tolerances.h"
 

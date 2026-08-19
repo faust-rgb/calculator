@@ -100,9 +100,10 @@ inline float128_t two_prod(long double a, long double b) {
     long double e = __builtin_fmal(a, b, -p);
 #else
     // Dekker's algorithm
-    constexpr long double kSplitLD = 4294967297.0L; // 2^32 + 1 for 64-bit mantissa
+    const long double kSplitLD =
+        std::ldexp(1.0L, (LDBL_MANT_DIG + 1) / 2) + 1.0L;
 
-    auto split = [](long double x) {
+    auto split = [kSplitLD](long double x) {
         long double t = x * kSplitLD;
         long double x_hi = t - (t - x);
         long double x_lo = x - x_hi;

@@ -61,22 +61,41 @@ namespace {
 } // namespace
 
 void apply_calculator_display_precision(const Calculator::Impl* impl) {
-    const int precision = (impl == nullptr || !impl->config_ptr) ? kDefaultDisplayPrecision : impl->config_ptr->get_display_precision();
+    const int precision = (impl == nullptr) ? kDefaultDisplayPrecision : impl->execution_ctx.get_display_precision();
     set_process_display_precision(precision);
     matrix::set_display_precision(precision);
     SymbolicExpression::set_display_precision(precision);
 }
 
+PrecisionContextGuard::PrecisionContextGuard(const Calculator::Impl* impl)
+    : saved_display_precision_(process_display_precision()),
+      saved_internal_scale_(math::config::get_default_scale()) {
+    apply_calculator_display_precision(impl);
+    if (impl) {
+        assumptions_guard_ = std::make_unique<symbolic_assumptions::AssumptionEngine::ScopedActivation>(
+            const_cast<Calculator::Impl*>(impl)->execution_ctx.assumptions());
+        random_guard_ = std::make_unique<core::ExecutionContext::RandomScope>(
+            const_cast<Calculator::Impl*>(impl)->execution_ctx.random_engine());
+        // 从实例配置同步 internal scale 到 thread-local
+        math::config::set_default_scale(impl->execution_ctx.config().internal_precision_scale);
+    }
+}
+
+PrecisionContextGuard::~PrecisionContextGuard() {
+    set_process_display_precision(saved_display_precision_);
+    math::config::set_default_scale(saved_internal_scale_);
+}
+
 void broadcast_settings(Calculator* calculator, Calculator::Impl* impl) {
     (void)calculator;
-    if (!impl->config_ptr || !impl->modules) return;
+    if (!impl->modules) return;
 
     CalculatorSettings settings;
-    settings.display_precision = impl->config_ptr->get_display_precision();
-    settings.exact_mode = impl->config_ptr->is_exact_mode();
-    settings.symbolic_constants_mode = impl->config_ptr->is_symbolic_constants_mode();
-    settings.hex_prefix_mode = impl->config_ptr->is_hex_prefix_mode();
-    settings.hex_uppercase_mode = impl->config_ptr->is_hex_uppercase_mode();
+    settings.display_precision = impl->execution_ctx.get_display_precision();
+    settings.exact_mode = impl->execution_ctx.is_exact_mode();
+    settings.symbolic_constants_mode = impl->execution_ctx.config().symbolic_constants_mode;
+    settings.hex_prefix_mode = impl->execution_ctx.is_hex_prefix_mode();
+    settings.hex_uppercase_mode = impl->execution_ctx.is_hex_uppercase_mode();
 
     for (auto& module : impl->modules->get_all_modules()) {
         module->on_settings_changed(settings);
@@ -111,6 +130,17 @@ Calculator::Calculator() : impl_(new Impl()) {
     impl_->locator.register_service<IStatePersistence>(impl_->persistence);
     impl_->locator.register_service<IExecutionContext>(std::shared_ptr<IExecutionContext>(impl_.get(), [](IExecutionContext*){}));
 
+    // 绑定管理器到 ExecutionContext，消除双重状态
+    impl_->execution_ctx.bind_config_manager(impl_->config_ptr.get());
+    impl_->execution_ctx.bind_function_manager(impl_->functions_ptr.get());
+    impl_->execution_ctx.bind_variable_manager(impl_->variables_ptr.get());
+    impl_->execution_ctx.set_external_variable_lookup(
+        [impl = impl_.get()](const std::string& name, StoredValue* out) {
+            const auto value = impl->variables_ptr->get(name);
+            if (!value) return false;
+            *out = *value;
+            return true;
+        });
 
     apply_calculator_display_precision(impl_.get());
 
@@ -154,17 +184,11 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
     auto* mod_mgr = static_cast<ModuleManager*>(impl_->modules.get());
 
     // 1. 注册函数 (IFunctionProvider)
+    // 函数仅注册到 IFunctionManager；ExecutionContext 通过 fallback 链路自动查找
     if (caps & ModuleCapability::kFunctions) {
         auto new_functions = module->get_functions_map();
         for (auto& [name, func] : new_functions) {
-            auto func_copy = func;
             impl_->functions_ptr->add_native_function(name, func);
-            impl_->execution_ctx.functions().register_function(
-                name,
-                [f = std::move(func_copy)](const std::vector<StoredValue>& args, core::ExecutionContext&) {
-                    return f(args);
-                }
-            );
             impl_->help_topic_to_modules[name].push_back(module);
         }
     }
@@ -204,8 +228,12 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
                     auto mod = weak_module.lock();
                     if (!mod) return false;
 
-                    // 使用模块的 execute_args_view 方法处理命令，传入 ServiceLocator
-                    *output = mod->execute_args_view(dispatch_name, args, impl_->locator);
+                    // Pass the explicit execution ports; legacy modules can
+                    // still use the locator through the compatibility bridge.
+                    auto core = impl_->locator.resolve<CoreServices>();
+                    auto execution = impl_->locator.resolve<IExecutionContext>();
+                    ModuleServices module_services{impl_->locator, *core, *execution};
+                    *output = mod->execute_args_view(dispatch_name, args, module_services);
                     return true;
                 },
                 module->get_help_snippet(cmd_name)
@@ -267,28 +295,28 @@ std::string Calculator::clear_all_variables() {
 }
 
 std::string Calculator::set_hex_prefix_mode(bool enabled) {
-    impl_->config_ptr->set_hex_prefix_mode(enabled);
+    impl_->execution_ctx.set_hex_prefix_mode(enabled);
     broadcast_settings(this, impl_.get());
     return std::string("Hex prefix mode: ") + (enabled ? "ON" : "OFF");
 }
 
-bool Calculator::hex_prefix_mode() const { return impl_->config_ptr->is_hex_prefix_mode(); }
+bool Calculator::hex_prefix_mode() const { return impl_->execution_ctx.is_hex_prefix_mode(); }
 
 std::string Calculator::set_hex_uppercase_mode(bool enabled) {
-    impl_->config_ptr->set_hex_uppercase_mode(enabled);
+    impl_->execution_ctx.set_hex_uppercase_mode(enabled);
     broadcast_settings(this, impl_.get());
     return std::string("Hex letter case: ") + (enabled ? "UPPER" : "LOWER");
 }
 
-bool Calculator::hex_uppercase_mode() const { return impl_->config_ptr->is_hex_uppercase_mode(); }
+bool Calculator::hex_uppercase_mode() const { return impl_->execution_ctx.is_hex_uppercase_mode(); }
 
 std::string Calculator::set_symbolic_constants_mode(bool enabled) {
-    impl_->config_ptr->set_symbolic_constants_mode(enabled);
+    impl_->execution_ctx.set_symbolic_constants_mode(enabled);
     broadcast_settings(this, impl_.get());
     return std::string("Symbolic constants mode: ") + (enabled ? "ON" : "OFF");
 }
 
-bool Calculator::symbolic_constants_mode() const { return impl_->config_ptr->is_symbolic_constants_mode(); }
+bool Calculator::symbolic_constants_mode() const { return impl_->execution_ctx.is_symbolic_constants_mode(); }
 
 std::string Calculator::set_display_precision(int precision) {
     if (precision < kMinDisplayPrecision || precision > kMaxDisplayPrecision) {
@@ -296,14 +324,14 @@ std::string Calculator::set_display_precision(int precision) {
                                  std::to_string(kMinDisplayPrecision) + ".." +
                                  std::to_string(kMaxDisplayPrecision));
     }
-    impl_->config_ptr->set_display_precision(precision);
     impl_->execution_ctx.set_display_precision(precision);
+    // execution_ctx 通过 bind_config_manager 自动委托到 config_ptr，无需双重写入
     apply_calculator_display_precision(impl_.get());
     broadcast_settings(this, impl_.get());
     return "Display precision: " + std::to_string(precision);
 }
 
-int Calculator::display_precision() const { return impl_->config_ptr->get_display_precision(); }
+int Calculator::display_precision() const { return impl_->execution_ctx.get_display_precision(); }
 std::vector<std::string> Calculator::module_command_names() const { return impl_->module_commands; }
 std::vector<std::string> Calculator::module_function_names() const { return impl_->module_functions; }
 std::vector<std::string> Calculator::variable_names() const {
@@ -395,6 +423,7 @@ Scalar Calculator::evaluate(const std::string& expression) {
 }
 
 Scalar Calculator::evaluate_raw(const std::string& expression) {
+    PrecisionContextGuard guard(impl_.get());
     const StoredValue value = evaluate_expression_value(impl_.get(), expression, false);
     if (value.is_matrix || value.is_complex) {
         throw std::runtime_error("matrix or complex expression cannot be used as a scalar");
@@ -403,19 +432,19 @@ Scalar Calculator::evaluate_raw(const std::string& expression) {
 }
 
 std::string Calculator::evaluate_for_display(const std::string& expression, bool exact_mode) {
-    apply_calculator_display_precision(impl_.get());
+    PrecisionContextGuard guard(impl_.get());
 
     std::string converted;
     if (try_base_conversion_expression(expression,
                                        impl_->variables_ptr->create_resolver(),
                                        impl_->functions_ptr->get_custom_functions_map(),
-                                       {impl_->config_ptr->is_hex_prefix_mode(), impl_->config_ptr->is_hex_uppercase_mode()},
+                                       {impl_->execution_ctx.is_hex_prefix_mode(), impl_->execution_ctx.is_hex_uppercase_mode()},
                                        &converted)) {
         return converted;
     }
 
     const StoredValue value = evaluate_expression_value(impl_.get(), expression, exact_mode);
-    return format_stored_value(value, impl_->config_ptr->is_symbolic_constants_mode());
+    return format_stored_value(value, impl_->execution_ctx.is_symbolic_constants_mode());
 }
 
 std::string Calculator::process_line(const std::string& expression, bool exact_mode) {
@@ -492,7 +521,7 @@ std::string execute_script_source([[maybe_unused]] Calculator* calculator,
         last_statement_output = current_output;
 
         if (signal.kind == ScriptSignal::Kind::kReturn) {
-            std::string return_val = signal.has_value ? format_stored_value(signal.value, impl->config_ptr->is_symbolic_constants_mode())
+             std::string return_val = signal.has_value ? format_stored_value(signal.value, impl->execution_ctx.is_symbolic_constants_mode())
                                                       : (last_statement_output.empty() ? "OK" : last_statement_output);
             if (accumulated_output.empty()) {
                 return return_val;
@@ -535,7 +564,7 @@ std::string read_script_file(const std::filesystem::path& path) {
 } // namespace
 
 std::string Calculator::execute_script(const std::string& source, bool exact_mode) {
-    apply_calculator_display_precision(impl_.get());
+    PrecisionContextGuard guard(impl_.get());
     return execute_script_source(this, impl_.get(), source, exact_mode, false);
 }
 
@@ -581,7 +610,7 @@ std::string Calculator::list_variables() const {
             out << '\n';
         }
         first = false;
-        out << name << " = " << format_stored_value(value, impl_->config_ptr->is_symbolic_constants_mode());
+        out << name << " = " << format_stored_value(value, impl_->execution_ctx.is_symbolic_constants_mode());
     }
     return out.str();
 }
@@ -620,6 +649,7 @@ const CoreServices& Calculator::Impl::services() const {
 }
 
 StoredValue Calculator::Impl::evaluate(const std::string& expression, bool exact_mode) {
+    PrecisionContextGuard guard(this);
     auto services = locator.resolve<CoreServices>();
     return services->evaluation.evaluate_value(expression, exact_mode);
 }

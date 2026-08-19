@@ -53,8 +53,15 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
 
     s.evaluation.build_decimal_evaluator = [impl](const std::string& arg) {
         const std::string scoped_expression = trim_copy(impl->expand_inline(arg));
+        // Compile once. Function analysis evaluates the same expression many
+        // times with different variable overrides; reparsing it at every
+        // quadrature sample dominates the runtime.
+        std::shared_ptr<ExpressionAST> compiled_ast;
+        if (auto ast = compile_expression_ast(scoped_expression)) {
+            compiled_ast = std::shared_ptr<ExpressionAST>(std::move(ast));
+        }
         auto base_resolver = impl->variables_ptr->create_resolver();
-        return [impl, scoped_expression, base_resolver](const std::vector<std::pair<std::string, Scalar>>& assignments) {
+        return [impl, scoped_expression, compiled_ast, base_resolver](const std::vector<std::pair<std::string, Scalar>>& assignments) {
             std::map<std::string, StoredValue> override_vars;
             for (const auto& [name, value] : assignments) {
                 StoredValue stored(value);
@@ -68,9 +75,15 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
                 return invoke_script_function_decimal(impl, name, args);
             };
             VariableResolver chained_resolver(nullptr, nullptr, &override_vars, &base_resolver);
+            if (compiled_ast) {
+                return evaluate_compiled_ast(compiled_ast.get(), chained_resolver,
+                    impl->functions_ptr->get_custom_functions_map(),
+                    nullptr,
+                    impl->functions_ptr->get_native_functions(),
+                    has_script_function, invoke_script_function);
+            }
             return parse_decimal_expression(scoped_expression, chained_resolver,
-                impl->functions_ptr->get_custom_functions_map(),
-                nullptr,
+                impl->functions_ptr->get_custom_functions_map(), nullptr,
                 impl->functions_ptr->get_native_functions(),
                 has_script_function, invoke_script_function);
         };

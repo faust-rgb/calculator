@@ -25,6 +25,7 @@
 #include "math/mymath.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include <vector>
+#include <limits>
 
 namespace symbolic_commands {
 
@@ -57,6 +58,16 @@ Scalar derivative_at(
     const Scalar h = std::max(precision::optimal_derivative_step<Scalar>(t),
                               Scalar(1e-6L) * scale);
     return (f({{var, t + h}}) - f({{var, t - h}})) / (Scalar(2.0L) * h);
+}
+
+int parse_subdivisions(const SymbolicCommandContext& ctx,
+                       const std::string& text) {
+    const Scalar value = ctx.parse_decimal(text);
+    if (value <= Scalar(0) || !mymath::is_integer(value, 1e-10) ||
+        value > Scalar(std::numeric_limits<int>::max())) {
+        throw std::runtime_error("integration subdivision count must be a positive integer");
+    }
+    return static_cast<int>(value);
 }
 
 std::string format_symbolic_numeric(const SymbolicCommandContext& ctx, Scalar value) {
@@ -113,7 +124,13 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
                 res = int_res.value.simplify();
             } else {
                 try {
-                    res = res.integral(var).simplify();
+                    SymbolicExpression candidate = res.integral(var).simplify();
+                    // The legacy rule engine is heuristic; never expose its
+                    // result unless differentiating it reproduces the input.
+                    if (!expr_is_zero((candidate.derivative(var) - res).simplify())) {
+                        throw std::runtime_error("unverified symbolic integral");
+                    }
+                    res = candidate;
                 } catch (...) {
                     auto risch = RischAlgorithm::integrate_full(res, var);
                     if (risch.success && risch.type == IntegralType::kElementary) {
@@ -145,7 +162,7 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
         const Scalar t0 = ctx.parse_decimal(arguments[3]);
         const Scalar t1 = ctx.parse_decimal(arguments[4]);
         const int subdivisions = arguments.size() >= 6
-            ? static_cast<int>(ctx.parse_decimal(arguments[5]))
+            ? parse_subdivisions(ctx, arguments[5])
             : kDefaultLineIntegralSubdivisions;
 
         if (trim_copy(arguments[0]).size() >= 2 && trim_copy(arguments[0]).front() == '[') {
@@ -205,10 +222,10 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
         const Scalar v0 = ctx.parse_decimal(arguments[6]);
         const Scalar v1 = ctx.parse_decimal(arguments[7]);
         const int nu = arguments.size() >= 9
-            ? static_cast<int>(ctx.parse_decimal(arguments[8]))
+            ? parse_subdivisions(ctx, arguments[8])
             : kDefaultSurfaceIntegralSubdivisions;
         const int nv = arguments.size() >= 10
-            ? static_cast<int>(ctx.parse_decimal(arguments[9]))
+            ? parse_subdivisions(ctx, arguments[9])
             : kDefaultSurfaceIntegralSubdivisions;
 
         if (trim_copy(arguments[0]).size() >= 2 && trim_copy(arguments[0]).front() == '[') {

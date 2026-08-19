@@ -17,7 +17,7 @@ namespace mymath {
  * Uses PreciseDecimal by default for higher precision.
  * Modify this to switch to other data types.
  */
-#if 1
+#if 0
 using Scalar = PreciseDecimal;
 #else
 using Scalar = float128_t;

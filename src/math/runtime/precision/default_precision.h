@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 namespace math {
 namespace config {
@@ -43,6 +44,9 @@ inline int get_default_scale() {
  * @brief 设置默认小数精度
  */
 inline void set_default_scale(int scale) {
+    if (scale < 1 || scale > 100000) {
+        throw std::invalid_argument("precision scale must be between 1 and 100000");
+    }
     default_scale() = scale;
 }
 

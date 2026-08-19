@@ -54,6 +54,9 @@ enum class ExprKind {
     kMatrixLiteral,///< 矩阵字面量 [...]
     kIndexAccess,  ///< 下标访问 expression[index, ...]
     kPostfixOp,    ///< 后缀运算（如阶乘）
+    kDictLiteral,   ///< 字典字面量 {key: value, ...}
+    kListLiteral,   ///< 列表字面量 [value, ...]
+    kSlice,         ///< 切片 start:stop:step
 };
 
 /**
@@ -97,6 +100,9 @@ struct ExpressionAST {
     // 矩阵行结构（kMatrixLiteral）。元素本身仍使用统一 ExpressionAST。
     std::vector<std::vector<std::unique_ptr<ExpressionAST>>> matrix_rows;
 
+    // 字典条目（kDictLiteral）和切片边界（kSlice）。切片边界允许为空。
+    std::vector<std::pair<std::unique_ptr<ExpressionAST>, std::unique_ptr<ExpressionAST>>> dict_entries;
+
     ExpressionAST() = default;
     explicit ExpressionAST(ExprKind k) : kind(k) {}
 };
@@ -114,6 +120,12 @@ bool can_compile_to_ast(const std::string& expression);
  * @return 编译后的 AST，失败返回 nullptr
  */
 std::unique_ptr<ExpressionAST> compile_expression_ast(const std::string& expression);
+
+/** Compile a value-context bracket expression as a list rather than a matrix. */
+std::unique_ptr<ExpressionAST> compile_list_expression_ast(const std::string& expression);
+
+/** Compile and preserve the structured syntax diagnostic on failure. */
+std::unique_ptr<ExpressionAST> compile_expression_ast_diagnostic(const std::string& expression);
 
 /**
  * @brief 绑定 AST 中的变量到槽位索引（编译期优化）

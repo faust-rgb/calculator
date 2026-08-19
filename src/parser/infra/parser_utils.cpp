@@ -38,7 +38,7 @@ public:
             return;
         }
 
-        if (ch == '"' || ch == '\'') {
+        if (ch == '"') {
             in_string_ = true;
             quote_char_ = ch;
             return;
@@ -176,12 +176,9 @@ std::vector<std::string> split_top_level(std::string_view text, char delimiter) 
 }
 
 bool contains_script_syntax(std::string_view text) {
-    StringScanState state;
-    for (char ch : text) {
-        state.update(ch);
-        if (!state.in_string() && (ch == '{' || ch == '}')) return true;
-    }
-    return false;
+    // Braces are valid dictionary literals in the expression grammar. The
+    // command layer only needs to exclude script-only comprehensions here.
+    return text.find(" for ") != std::string_view::npos;
 }
 
 } // namespace parser_utils

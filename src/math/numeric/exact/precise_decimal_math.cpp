@@ -1075,6 +1075,7 @@ PreciseDecimal subtract_precise_decimal(const PreciseDecimal& lhs, const Precise
 }
 
 PreciseDecimal multiply_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs) {
+    if (lhs.is_nan || rhs.is_nan) return PreciseDecimal::nan();
     if (lhs.is_inf || rhs.is_inf) {
         if (lhs.is_zero() || rhs.is_zero()) {
             return PreciseDecimal::nan();
@@ -1083,8 +1084,6 @@ PreciseDecimal multiply_precise_decimal(const PreciseDecimal& lhs, const Precise
         res.negative = lhs.negative != rhs.negative;
         return res;
     }
-
-    if (lhs.is_nan || rhs.is_nan) return PreciseDecimal::nan();
 
     PreciseDecimal res;
     res.data = multiply_bigint(lhs.data, rhs.data);
@@ -1095,6 +1094,7 @@ PreciseDecimal multiply_precise_decimal(const PreciseDecimal& lhs, const Precise
 }
 
 PreciseDecimal divide_precise_decimal(const PreciseDecimal& lhs, const PreciseDecimal& rhs) {
+    if (lhs.is_nan || rhs.is_nan) return PreciseDecimal::nan();
     if (lhs.is_inf && rhs.is_inf) {
         return PreciseDecimal::nan();
     }
@@ -1106,8 +1106,6 @@ PreciseDecimal divide_precise_decimal(const PreciseDecimal& lhs, const PreciseDe
     if (rhs.is_inf) {
         return PreciseDecimal(0LL);
     }
-
-    if (lhs.is_nan || rhs.is_nan) return PreciseDecimal::nan();
 
     if (rhs.is_zero()) throw std::runtime_error("division by zero");
     if (lhs.is_zero()) return {};
@@ -1121,12 +1119,21 @@ PreciseDecimal divide_precise_decimal(const PreciseDecimal& lhs, const PreciseDe
         BigIntData divisor = multiply_bigint_by_power_of_10({1}, -numerator_shift);
         BigIntData truncated, ignored_remainder;
         div_bigint(numerator, divisor, &truncated, &ignored_remainder);
+        if (!ignored_remainder.empty() &&
+            compare_bigint(multiply_bigint_by_uint32(ignored_remainder, 2), divisor) >= 0) {
+            truncated = add_bigint(truncated, BigIntData{1});
+        }
         numerator = truncated;
     }
     BigIntData denominator = rhs.data;
 
     BigIntData q, r;
     div_bigint(numerator, denominator, &q, &r);
+
+    // Round to nearest, ties away from zero instead of silently truncating.
+    if (!r.empty() && compare_bigint(multiply_bigint_by_uint32(r, 2), denominator) >= 0) {
+        q = add_bigint(q, BigIntData{1});
+    }
 
     PreciseDecimal res;
     res.data = q;

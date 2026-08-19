@@ -12,6 +12,17 @@ namespace integration_engine {
 
 using namespace mymath;
 
+namespace {
+
+std::pair<Scalar, Scalar> validate_radius_bounds(Scalar lower, Scalar upper) {
+    if (lower < Scalar(0) || upper < Scalar(0)) {
+        throw std::runtime_error("radial integration bounds must be non-negative");
+    }
+    return {lower, upper};
+}
+
+} // namespace
+
 // ============================================================================
 // 辅助函数
 // ============================================================================
@@ -221,13 +232,15 @@ Scalar double_integral_polar(const IntegrationEngineContext& ctx,
             const Scalar r = Scalar(point[1]);
             const Scalar x = r * mymath::cos(theta);
             const Scalar y = r * mymath::sin(theta);
-            return (Scalar(evaluate_expression({{r_var, (r)}, {theta_var, (theta)}, {"x", (x)}, {"y", (y)}})) * r);
+        return (Scalar(evaluate_expression({{r_var, (r)}, {theta_var, (theta)}, {"x", (x)}, {"y", (y)}})) * mymath::abs(r));
         });
     std::vector<MultivariableIntegrator::BoundFunc> bounds;
     bounds.push_back([theta0, theta1](const std::vector<Scalar>&) -> std::pair<Scalar, Scalar> { return {theta0, theta1}; });
     auto r0_f = make_scalar_bound_func(ctx, r0_expr, {theta_var}, 1);
     auto r1_f = make_scalar_bound_func(ctx, r1_expr, {theta_var}, 1);
-    bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) -> std::pair<Scalar, Scalar> { return {r0_f(pt), r1_f(pt)}; });
+    bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) {
+        return validate_radius_bounds(r0_f(pt), r1_f(pt));
+    });
     return integrator.integrate(bounds, {ntheta, nr});
 }
 
@@ -308,13 +321,15 @@ Scalar triple_integral_cyl(const IntegrationEngineContext& ctx,
         Scalar z = Scalar(pt[2]);
         Scalar x = r * mymath::cos(t);
         Scalar y = r * mymath::sin(t);
-        return (Scalar(evaluate_expression({{r_v, (r)}, {t_v, (t)}, {z_v, (z)}, {"x", (x)}, {"y", (y)}})) * r);
+        return (Scalar(evaluate_expression({{r_v, (r)}, {t_v, (t)}, {z_v, (z)}, {"x", (x)}, {"y", (y)}})) * mymath::abs(r));
     });
     std::vector<MultivariableIntegrator::BoundFunc> bounds;
     bounds.push_back([t0, t1](const std::vector<Scalar>&) -> std::pair<Scalar, Scalar> { return std::make_pair(t0, t1); });
     auto r0_f = make_scalar_bound_func(ctx, r0_e, {t_v}, 1);
     auto r1_f = make_scalar_bound_func(ctx, r1_e, {t_v}, 1);
-    bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) -> std::pair<Scalar, Scalar> { return std::make_pair(r0_f(pt), r1_f(pt)); });
+    bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) {
+        return validate_radius_bounds(r0_f(pt), r1_f(pt));
+    });
     auto z0_f = make_scalar_bound_func(ctx, z0_e, {t_v, r_v}, 2);
     auto z1_f = make_scalar_bound_func(ctx, z1_e, {t_v, r_v}, 2);
     bounds.push_back([z0_f, z1_f](const std::vector<Scalar>& pt) -> std::pair<Scalar, Scalar> { return std::make_pair(z0_f(pt), z1_f(pt)); });
@@ -350,7 +365,9 @@ Scalar triple_integral_sph(const IntegrationEngineContext& ctx,
     bounds.push_back([p0, p1](const std::vector<Scalar>&) -> std::pair<Scalar, Scalar> { return std::make_pair(p0, p1); });
     auto r0_f = make_scalar_bound_func(ctx, r0_e, {t_v, p_v}, 2);
     auto r1_f = make_scalar_bound_func(ctx, r1_e, {t_v, p_v}, 2);
-    bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) -> std::pair<Scalar, Scalar> { return std::make_pair(r0_f(pt), r1_f(pt)); });
+    bounds.push_back([r0_f, r1_f](const std::vector<Scalar>& pt) {
+        return validate_radius_bounds(r0_f(pt), r1_f(pt));
+    });
     return integrator.integrate(bounds, {nt, np, nr});
 }
 

@@ -3,6 +3,7 @@
 // ============================================================================
 
 #include "parser/infra/syntax_validator.h"
+#include "parser/ast/expression_ast.h"
 #include <cctype>
 #include <sstream>
 #include <algorithm>
@@ -18,14 +19,22 @@ std::vector<SyntaxErrorInfo> SyntaxValidator::validate(std::string_view expressi
         return errors;
     }
 
-    // 按优先级执行各项检查
-    check_string_termination(expression, errors);
-    check_bracket_balance(expression, errors);
-    check_operator_sequences(expression, errors);
-    check_operand_context(expression, errors);
-    check_function_syntax(expression, errors);
-    check_invalid_chars(expression, errors);
-    check_expression_end(expression, errors);
+    // ASTCompiler is the grammar authority. List comprehensions and block
+    // fragments are script grammar and are validated by ScriptParser instead.
+    const std::string text(expression);
+    try {
+        (void)compile_expression_ast_diagnostic(text);
+    } catch (const std::exception& error) {
+        const std::string message = error.what();
+        std::size_t position = 0;
+        const std::string marker = "position ";
+        const std::size_t marker_pos = message.find(marker);
+        if (marker_pos != std::string::npos) {
+            try { position = std::stoull(message.substr(marker_pos + marker.size())); }
+            catch (...) {}
+        }
+        errors.emplace_back(message, position, Severity::kError);
+    }
 
     return errors;
 }
@@ -197,8 +206,9 @@ bool SyntaxValidator::check_operand_context(std::string_view expr,
 
     // 检查结尾
     char last = expr.back();
-    // ! is a postfix factorial operator and is valid at expression end.
-    if (is_operator_char(last) && last != ')' && last != ']' && last != '}' && last != '!') {
+    // !, %, and ' are postfix operators and are valid at expression end.
+    if (is_operator_char(last) && last != ')' && last != ']' && last != '}' &&
+        last != '!' && last != '%' && last != '\'') {
         add_error(errors, "expression cannot end with operator '" + std::string(1, last) + "'",
                   expr.size() - 1);
     }
@@ -325,7 +335,7 @@ bool SyntaxValidator::check_expression_end(std::string_view expr,
 
     // 检查是否以无效字符结尾
     if (last == '+' || last == '-' || last == '*' || last == '/' ||
-        last == '^' || last == '%' || last == '=' || last == '<' ||
+         last == '^' || last == '=' || last == '<' ||
         last == '>' || last == '&' || last == '|' ||
         last == ',' || last == ':') {
         add_error(errors, "expression ends with incomplete operator", expr.size() - 1);

@@ -43,6 +43,113 @@
 namespace symbolic_expression_internal {
 
 using Scalar = mymath::Scalar;
+
+namespace {
+
+using Property = SymbolicProperty;
+
+Property negate_property(Property p) {
+    switch (p) {
+        case Property::kPositive: return Property::kNegative;
+        case Property::kNonNegative: return Property::kNonPositive;
+        case Property::kNegative: return Property::kPositive;
+        case Property::kNonPositive: return Property::kNonNegative;
+        case Property::kReal: return Property::kReal;
+        default: return Property::kUnknown;
+    }
+}
+
+Property product_property(Property a, Property b) {
+    if (a == Property::kPositive && b == Property::kPositive) return Property::kPositive;
+    if (a == Property::kNegative && b == Property::kNegative) return Property::kPositive;
+    if ((a == Property::kPositive && b == Property::kNegative) ||
+        (a == Property::kNegative && b == Property::kPositive)) return Property::kNegative;
+    if ((a == Property::kNonNegative && b == Property::kNonNegative) ||
+        (a == Property::kNonPositive && b == Property::kNonPositive)) return Property::kNonNegative;
+    if (a == Property::kNonZero && b == Property::kNonZero) return Property::kNonZero;
+    if ((a == Property::kReal || a == Property::kPositive || a == Property::kNegative) &&
+        (b == Property::kReal || b == Property::kPositive || b == Property::kNegative)) return Property::kReal;
+    return Property::kUnknown;
+}
+
+} // namespace
+
+SymbolicProperty symbolic_property(const SymbolicExpression& expression) {
+    if (!expression.node_) return SymbolicProperty::kUnknown;
+    const auto& node = expression.node_;
+    Scalar value = Scalar(0);
+    if (expression.is_literal_number(&value)) {
+        if (value > Scalar(0)) return SymbolicProperty::kPositive;
+        if (value < Scalar(0)) return SymbolicProperty::kNegative;
+        return SymbolicProperty::kNonNegative;
+    }
+    if (node->type == NodeType::kPi || node->type == NodeType::kE) return SymbolicProperty::kPositive;
+    if (node->type == NodeType::kVariable) {
+        auto& assumptions = symbolic_assumptions::AssumptionEngine::instance();
+        if (assumptions.has_assumption(node->text, symbolic_assumptions::Assumption::kPositive)) return SymbolicProperty::kPositive;
+        if (assumptions.has_assumption(node->text, symbolic_assumptions::Assumption::kNegative)) return SymbolicProperty::kNegative;
+        if (assumptions.has_assumption(node->text, symbolic_assumptions::Assumption::kReal)) return SymbolicProperty::kReal;
+        return SymbolicProperty::kUnknown;
+    }
+    if (node->type == NodeType::kNegate) return negate_property(symbolic_property(SymbolicExpression(node->left)));
+    if (node->type == NodeType::kAdd || node->type == NodeType::kSubtract) {
+        Property left = symbolic_property(SymbolicExpression(node->left));
+        Property right = symbolic_property(SymbolicExpression(node->right));
+        if (node->type == NodeType::kSubtract) right = negate_property(right);
+        if (left == Property::kPositive && right == Property::kPositive) return Property::kPositive;
+        if (left == Property::kNonNegative && right == Property::kNonNegative) return Property::kNonNegative;
+        if ((left == Property::kReal || left == Property::kPositive || left == Property::kNegative) &&
+            (right == Property::kReal || right == Property::kPositive || right == Property::kNegative)) return Property::kReal;
+        return Property::kUnknown;
+    }
+    if (node->type == NodeType::kMultiply) return product_property(
+        symbolic_property(SymbolicExpression(node->left)), symbolic_property(SymbolicExpression(node->right)));
+    if (node->type == NodeType::kDivide) {
+        Property denominator = symbolic_property(SymbolicExpression(node->right));
+        if (denominator == Property::kPositive || denominator == Property::kNegative || denominator == Property::kNonZero)
+            return product_property(symbolic_property(SymbolicExpression(node->left)), denominator);
+        return Property::kUnknown;
+    }
+    if (node->type == NodeType::kPower) {
+        Scalar exponent = Scalar(0);
+        const SymbolicExpression base(node->left);
+        if (SymbolicExpression(node->right).is_number(&exponent) &&
+            mymath::is_integer(exponent, Scalar(app::integer_tolerance()))) {
+            const long long n = static_cast<long long>(mymath::round(exponent).to_long_double());
+            const Property base_property = symbolic_property(base);
+            if (n == 0) return Property::kPositive;
+            if (n > 0 && n % 2 == 0 && base_property == Property::kReal) {
+                return Property::kNonNegative;
+            }
+            if (n > 0 && n % 2 == 0 &&
+                (base_property == Property::kPositive || base_property == Property::kNegative)) {
+                return Property::kPositive;
+            }
+            if (base_property == Property::kReal && n % 2 != 0) return Property::kReal;
+            if (base_property == Property::kPositive) return Property::kPositive;
+            if (base_property == Property::kNegative) {
+                return n % 2 == 0 ? Property::kPositive : Property::kNegative;
+            }
+        }
+        return Property::kUnknown;
+    }
+    if (node->type == NodeType::kFunction && node->left) {
+        Property arg = symbolic_property(SymbolicExpression(node->left));
+        if (node->text == "exp") return Property::kPositive;
+        if (node->text == "sqrt") {
+            if (arg == Property::kPositive) return Property::kPositive;
+            if (arg == Property::kNonNegative) return Property::kNonNegative;
+        }
+        if (node->text == "abs") {
+            if (arg == Property::kPositive || arg == Property::kNegative || arg == Property::kNonZero) return Property::kPositive;
+            if (arg == Property::kNonNegative || arg == Property::kNonPositive) return Property::kNonNegative;
+        }
+        if (node->text == "sin" || node->text == "cos" || node->text == "tan") {
+            if (arg == Property::kReal) return Property::kReal;
+        }
+    }
+    return SymbolicProperty::kUnknown;
+}
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -61,6 +168,8 @@ using Scalar = mymath::Scalar;
  * - 根据 AssumptionEngine 设为正数的变量
  */
 bool is_known_positive_expression(const SymbolicExpression& expression) {
+    return symbolic_property(expression) == SymbolicProperty::kPositive;
+#if 0
     Scalar numeric = Scalar(0.0L);
     if (expression.is_number(&numeric)) {
         return numeric > 0.0L;
@@ -74,28 +183,19 @@ bool is_known_positive_expression(const SymbolicExpression& expression) {
         return symbolic_assumptions::AssumptionEngine::instance().has_assumption(
             node->text, symbolic_assumptions::Assumption::kPositive);
     }
+    // sqrt(x), abs(x), x^even and cosh(x) are only non-negative (or need a
+    // real-domain proof), not unconditionally strictly positive. Keep them
+    // out of the positive predicate; callers that need non-zero must use an
+    // explicit assumption or a dedicated non-zero proof.
     if (node->type == NodeType::kFunction) {
-        if (node->text == "exp" || node->text == "sqrt" || node->text == "abs") return true;
-        // cosh(x) is always >= 1
-        if (node->text == "cosh") return true;
-    }
-    if (node->type == NodeType::kPower) {
-        // x^2 is positive if x is real and non-zero
-        Scalar exponent = Scalar(0.0L);
-        if (SymbolicExpression(node->right).is_number(&exponent)) {
-            if (static_cast<long long>(exponent) % 2 == 0) {
-                // Check if base is real
-                SymbolicExpression base(node->left);
-                // simplified check for real vars
-                if (base.node_->type == NodeType::kVariable && 
-                    symbolic_assumptions::AssumptionEngine::instance().has_assumption(
-                        base.node_->text, symbolic_assumptions::Assumption::kReal)) {
-                    return true;
-                }
-            }
+        if (node->text == "exp") return true;
+        if (node->text == "sqrt" && node->left) {
+            Scalar radicand = Scalar(0);
+            if (SymbolicExpression(node->left).is_number(&radicand) && radicand > Scalar(0)) return true;
         }
     }
     return false;
+#endif
 }
 
 /**
@@ -108,6 +208,8 @@ bool is_known_positive_expression(const SymbolicExpression& expression) {
  * - 已知正数乘以 -1
  */
 bool is_known_negative_expression(const SymbolicExpression& expression) {
+    return symbolic_property(expression) == SymbolicProperty::kNegative;
+#if 0
     Scalar numeric = Scalar(0.0L);
     if (expression.is_number(&numeric)) {
         return numeric < 0.0L;
@@ -136,6 +238,7 @@ bool is_known_negative_expression(const SymbolicExpression& expression) {
         }
     }
     return false;
+#endif
 }
 
 /**
@@ -474,10 +577,24 @@ SymbolicExpression make_sorted_product(Scalar numeric_factor,
     };
 
     std::map<std::string, PowerGroup> grouped;
+    std::vector<SymbolicExpression> ungrouped;
     for (const SymbolicExpression& factor : factors) {
         SymbolicExpression base;
         SymbolicExpression exponent;
         decompose_power_factor_expression(factor, &base, &exponent);
+        Scalar exponent_value = Scalar(0);
+        const auto property = symbolic_property(base);
+        const bool safe_base = property == SymbolicProperty::kPositive ||
+                               property == SymbolicProperty::kNegative ||
+                               property == SymbolicProperty::kNonZero;
+        const bool safe_numeric_exponent =
+            exponent.is_number(&exponent_value) &&
+            mymath::is_integer(exponent_value, Scalar(app::integer_tolerance())) &&
+            exponent_value >= Scalar(0);
+        if (!safe_base && !safe_numeric_exponent) {
+            ungrouped.push_back(factor);
+            continue;
+        }
         const std::string key = node_structural_key(base.node_);
         auto found = grouped.find(key);
         if (found == grouped.end()) {
@@ -489,6 +606,7 @@ SymbolicExpression make_sorted_product(Scalar numeric_factor,
     }
 
     std::vector<SymbolicExpression> merged;
+    merged.insert(merged.end(), ungrouped.begin(), ungrouped.end());
     for (const auto& item : grouped) {
         const SymbolicExpression factor =
             rebuild_power_expression(item.second.base,

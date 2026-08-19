@@ -193,6 +193,11 @@ public:
         SpecialFunction func,
         const SymbolicExpression& arg);
 
+    /** Verify a proposed antiderivative before exposing it as a result. */
+    static bool verify_antiderivative(const SymbolicExpression& candidate,
+                                      const SymbolicExpression& integrand,
+                                      const std::string& variable_name);
+
     // 代数替换
     static bool try_algebraic_substitution(
         const SymbolicExpression& expr,

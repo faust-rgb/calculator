@@ -9,6 +9,7 @@
 #include "polynomial/polynomial.h"
 
 #include <algorithm>
+#include <vector>
 
 namespace symbolic_expression_internal {
 
@@ -90,6 +91,21 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                 .simplify();
         }
         case NodeType::kFunction: {
+            if (node_->text == "besselj" && node_->children.size() >= 2) {
+                const SymbolicExpression order(node_->children[0]);
+                const SymbolicExpression argument(node_->children[1]);
+                const SymbolicExpression inner = argument.derivative(variable_name);
+                const SymbolicExpression lower = SymbolicExpression::function(
+                    "besselj", std::vector<SymbolicExpression>{
+                        (order - SymbolicExpression::number(1.0L)).simplify(), argument});
+                const SymbolicExpression upper = SymbolicExpression::function(
+                    "besselj", std::vector<SymbolicExpression>{
+                        (order + SymbolicExpression::number(1.0L)).simplify(), argument});
+                return make_multiply(
+                    make_multiply(SymbolicExpression::number(0.5L),
+                                  make_subtract(lower, upper)),
+                    inner).simplify();
+            }
             if (node_->children.size() > 1) {
                 if (node_->text == "Integral" && node_->children.size() >= 2) {
                     SymbolicExpression integrand(node_->children[0]);
@@ -177,7 +193,7 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                                               SymbolicExpression::number(2.0)))
                     .simplify();
             }
-            if (node_->text == "ln") {
+            if (node_->text == "ln" || node_->text == "log") {
                 return make_divide(inner, argument).simplify();
             }
             if (node_->text == "sqrt") {

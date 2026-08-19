@@ -348,7 +348,7 @@ PreciseDecimal sqrt_optimized(const PreciseDecimal& val) {
         --exp;
     }
     long double sqrt_m = (mantissa > 0.0L) ? mymath::sqrt(mantissa) : 1.0L;
-    PreciseDecimal x = PreciseDecimal(static_cast<double>(sqrt_m)) * make_power_of_10(exp / 2);
+    PreciseDecimal x = PreciseDecimal(sqrt_m) * make_power_of_10(exp / 2);
     if (x.is_zero()) {
         x = make_power_of_10(exp / 2);
     }
@@ -397,7 +397,7 @@ PreciseDecimal reciprocal_optimized(const PreciseDecimal& val) {
     int exp = 0;
     extract_mantissa_and_exponent(val.data, val.scale, &mantissa, &exp);
     long double recip_m = (mantissa > 0.0L) ? (1.0L / mantissa) : 1.0L;
-    PreciseDecimal x = PreciseDecimal(static_cast<double>(recip_m)) * make_power_of_10(-exp);
+    PreciseDecimal x = PreciseDecimal(recip_m) * make_power_of_10(-exp);
     if (x.is_zero()) {
         x = make_power_of_10(-exp);
     }
@@ -440,6 +440,11 @@ PreciseDecimal divide_optimized(const PreciseDecimal& lhs, const PreciseDecimal&
     if (lhs.is_zero()) {
         return PreciseDecimal(0LL);
     }
+
+    // The generic implementation applies the same rounding contract as the
+    // public division operator. Keep the Barrett path opt-in until it does so
+    // as well; truncation here is worse than the performance difference.
+    return divide_precise_decimal(lhs, rhs);
 
     // 对于小规模除法，使用标准算法
     if (rhs.data.size() <= 32) {

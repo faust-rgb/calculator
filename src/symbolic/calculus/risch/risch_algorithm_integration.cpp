@@ -434,8 +434,10 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_full(
         return trig_result;
     }
 
-    // 构建微分塔
-    auto tower = build_differential_tower(simplified, variable_name, recursion_depth + 1);
+    // Use the same canonical tower builder as strict Risch. Keeping a single
+    // tower source avoids divergent extension ordering and derivations.
+    DifferentialField field = DifferentialField::from_expression(simplified, variable_name);
+    const auto& tower = field.tower;
 
     // 递归积分
     IntegrationResult result = integrate_in_extension(simplified, tower, static_cast<int>(tower.size()) - 1, variable_name, recursion_depth + 1);
@@ -897,13 +899,14 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_strict(
     }
 
     SymbolicExpression direct_result;
-    if (try_integrate_strict_algebraic_quadratic(expression.simplify(),
-                                                variable_name,
-                                                &direct_result) ||
-        try_integrate_strict_trig_derivative_product(expression.simplify(),
-                                                     variable_name,
-                                                     &direct_result)) {
-        return IntegrationResult::elementary(direct_result);
+    const bool direct_found =
+        try_integrate_strict_algebraic_quadratic(expression.simplify(), variable_name, &direct_result) ||
+        try_integrate_strict_trig_derivative_product(expression.simplify(), variable_name, &direct_result);
+    if (direct_found) {
+        if (verify_antiderivative(direct_result, expression, variable_name)) {
+            return IntegrationResult::elementary(direct_result);
+        }
+        return IntegrationResult::proof_failed("Candidate antiderivative failed derivative verification");
     }
 
     // 检查代数扩展 (Trager 代数算法与阿贝尔曲线除数判定)

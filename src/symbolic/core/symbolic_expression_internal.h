@@ -14,6 +14,8 @@
 #define SYMBOLIC_EXPRESSION_INTERNAL_H
 
 #include "symbolic/core/symbolic_expression.h"
+#include "symbolic/base/assumptions.h"
+#include "symbolic/transformation/simplify/simplify_context.h"
 #include "symbolic/public/symbolic_node_types.h"
 #include "math/mymath.h"
 #include "math/numeric/precision/tolerances.h"
@@ -98,6 +100,19 @@ using Scalar = mymath::Scalar;
  * - 多项式系数的零值裁剪
  */
 inline Scalar kFormatEps() { return precision::epsilon<Scalar>(); }
+
+enum class SymbolicProperty {
+    kUnknown,
+    kReal,
+    kPositive,
+    kNonNegative,
+    kNegative,
+    kNonPositive,
+    kNonZero
+};
+
+SymbolicProperty symbolic_property(const SymbolicExpression& expression);
+bool is_literal_number(const SymbolicExpression& expression, Scalar* value = nullptr);
 
 // ============================================================================
 // 节点构造函数

@@ -45,8 +45,6 @@ Rational parse_rational_literal(const std::string& token) {
         exponent_adjust = std::stoll(token.substr(exponent_pos + 1));
     }
 
-    long long numerator = 0;
-    long long denominator = 1;
     std::size_t idx = 0;
 
     // Handle optional sign
@@ -58,34 +56,36 @@ Rational parse_rational_literal(const std::string& token) {
         ++idx;
     }
 
+    Rational value(0, 1);
     while (idx < significand.size() && significand[idx] != '.') {
-        numerator =
-            numerator * 10 + static_cast<long long>(significand[idx] - '0');
+        if (!std::isdigit(static_cast<unsigned char>(significand[idx]))) {
+            throw std::runtime_error("invalid exact numeric literal");
+        }
+        value = value * Rational(10, 1) +
+                Rational(static_cast<long long>(significand[idx] - '0'), 1);
         ++idx;
     }
 
     if (idx < significand.size() && significand[idx] == '.') {
         ++idx;
+        long long fractional_digits = 0;
         while (idx < significand.size()) {
-            numerator =
-                numerator * 10 + static_cast<long long>(significand[idx] - '0');
-            denominator *= 10;
+            if (!std::isdigit(static_cast<unsigned char>(significand[idx]))) {
+                throw std::runtime_error("invalid exact numeric literal");
+            }
+            value = value * Rational(10, 1) +
+                    Rational(static_cast<long long>(significand[idx] - '0'), 1);
+            ++fractional_digits;
             ++idx;
         }
+        value = value / pow_rational(Rational(10, 1), fractional_digits);
     }
 
-    numerator *= sign;
-
-    while (exponent_adjust > 0) {
-        numerator *= 10;
-        --exponent_adjust;
+    if (sign < 0) value = Rational(-1, 1) * value;
+    if (exponent_adjust != 0) {
+        value = value * pow_rational(Rational(10, 1), exponent_adjust);
     }
-    while (exponent_adjust < 0) {
-        denominator *= 10;
-        ++exponent_adjust;
-    }
-
-    return Rational(numerator, denominator);
+    return value;
 }
 
 Rational lookup_variable_exact(const std::string& name, const VariableResolver& variables, std::size_t pos) {

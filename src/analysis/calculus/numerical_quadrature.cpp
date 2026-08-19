@@ -130,6 +130,9 @@ Scalar gauss_kronrod_15(
 
     const Scalar kronrod = half_width * kronrod_sum;
     const Scalar gauss = half_width * gauss_sum;
+    if (!mymath::isfinite(kronrod) || !mymath::isfinite(gauss)) {
+        throw std::runtime_error("integral did not converge (non-finite value encountered)");
+    }
     *error_estimate = mymath::abs(kronrod - gauss);
     return kronrod;
 }
@@ -150,6 +153,9 @@ Scalar adaptive_gauss_kronrod_recursive(
     const Scalar right_result = gauss_kronrod_15(function, center, right, &right_error);
     const Scalar sub_error = left_error + right_error;
     const Scalar sub_result = left_result + right_result;
+    if (!mymath::isfinite(sub_result) || !mymath::isfinite(sub_error)) {
+        throw std::runtime_error("integral did not converge (non-finite value encountered)");
+    }
 
     const Scalar scale = std::max(Scalar(1.0L), mymath::abs(sub_result));
     if (depth <= 0 ||

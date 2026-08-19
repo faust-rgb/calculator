@@ -15,6 +15,7 @@
 #include "mymath.h"
 #include "variable_resolver.h"
 #include "lazy_token_stream.h"
+#include "math/runtime/precision/default_precision.h"
 
 #include <algorithm>
 #include <functional>
@@ -37,7 +38,8 @@ using Scalar = mymath::Scalar;
  */
 class ASTCompiler {
 	public:
-    ASTCompiler(const std::string& source) : tokens_(source) {
+    ASTCompiler(const std::string& source, bool list_literals = false)
+        : tokens_(source), list_literals_(list_literals) {
     }
 
     std::unique_ptr<ExpressionAST> compile() {
@@ -53,6 +55,7 @@ class ASTCompiler {
 
 private:
     LazyTokenStream tokens_;
+    bool list_literals_ = false;
 
     bool is_at_end() {
         return tokens_.peek().kind == TokenKind::kEnd;
@@ -103,7 +106,7 @@ private:
     bool starts_implicit_factor() {
         if (tokens_.is_at_end()) return false;
         const auto kind = tokens_.peek().kind;
-        return kind == TokenKind::kIdentifier || kind == TokenKind::kLParen || kind == TokenKind::kLBracket;
+        return kind == TokenKind::kIdentifier || kind == TokenKind::kLParen;
     }
 
     std::unique_ptr<ExpressionAST> parse_pratt(int min_bp) {
@@ -174,12 +177,30 @@ private:
     }
 
     [[noreturn]] void throw_syntax_error(const std::string& message) {
-        std::size_t error_pos = tokens_.is_at_end() ? 0 : tokens_.peek().position;
+        std::size_t error_pos = tokens_.is_at_end() ? tokens_.source().size() : tokens_.peek().position;
+        std::size_t line = 1;
+        std::size_t column = 1;
+        std::size_t line_start = 0;
+        for (std::size_t i = 0; i < error_pos && i < tokens_.source().size(); ++i) {
+            if (tokens_.source()[i] == '\n') {
+                ++line;
+                column = 1;
+                line_start = i + 1;
+            } else {
+                ++column;
+            }
+        }
+        const std::size_t line_end = tokens_.source().find('\n', line_start);
         std::ostringstream oss;
-        oss << message << " at position " << error_pos;
+        oss << message << " at line " << line << ", column " << column
+            << " (position " << error_pos << ")\n";
+        oss << tokens_.source().substr(line_start, line_end == std::string::npos ?
+                                       std::string::npos : line_end - line_start) << "\n";
+        oss << std::string(column > 0 ? column - 1 : 0, ' ') << '^';
         throw SyntaxError(oss.str());
     }
 
+#if 0
     std::unique_ptr<ExpressionAST> parse_conditional() {
         auto expr = parse_logical();
         if (match_kind(TokenKind::kQuestion) || match_operator("?")) {
@@ -324,6 +345,7 @@ private:
         return parse_power();
     }
 
+#endif
     std::unique_ptr<ExpressionAST> parse_primary() {
         if (is_at_end()) throw_syntax_error("expected expression");
         const auto& tok = peek_token();
@@ -337,17 +359,67 @@ private:
 
         // 矩阵字面量。逗号分隔列，分号分隔行；每个元素递归使用同一套表达式规则。
         if (match_kind(TokenKind::kLBracket)) {
+            if (list_literals_) {
+                auto list = std::make_unique<ExpressionAST>(ExprKind::kListLiteral);
+                list->position = tok.position;
+                if (match_kind(TokenKind::kRBracket)) return list;
+                while (true) {
+                    list->children.push_back(parse_pratt(0));
+                    if (match_kind(TokenKind::kRBracket)) break;
+                    expect_kind(TokenKind::kComma, "expected ',' or ']' in list literal");
+                    if (match_kind(TokenKind::kRBracket)) break;
+                }
+                return parse_postfix(std::move(list));
+            }
             auto node = std::make_unique<ExpressionAST>(ExprKind::kMatrixLiteral);
             node->position = tok.position;
             if (match_kind(TokenKind::kRBracket)) return node;
+            const auto make_empty_cell = [] {
+                auto cell = std::make_unique<ExpressionAST>(ExprKind::kNumber);
+                cell->string_value = "0";
+                cell->number_value = Scalar(0.0L);
+                return cell;
+            };
             while (true) {
                 std::vector<std::unique_ptr<ExpressionAST>> row;
-                row.push_back(parse_pratt(0));
-                while (match_kind(TokenKind::kComma)) row.push_back(parse_pratt(0));
+                if (tokens_.peek().kind == TokenKind::kComma ||
+                    tokens_.peek().kind == TokenKind::kSemicolon ||
+                    tokens_.peek().kind == TokenKind::kRBracket) {
+                    row.push_back(make_empty_cell());
+                } else {
+                    row.push_back(parse_pratt(0));
+                }
+                while (match_kind(TokenKind::kComma)) {
+                    if (tokens_.peek().kind == TokenKind::kComma ||
+                        tokens_.peek().kind == TokenKind::kSemicolon ||
+                        tokens_.peek().kind == TokenKind::kRBracket) {
+                        row.push_back(make_empty_cell());
+                    } else {
+                        row.push_back(parse_pratt(0));
+                    }
+                }
                 node->matrix_rows.push_back(std::move(row));
                 if (match_kind(TokenKind::kRBracket)) break;
                 expect_kind(TokenKind::kSemicolon, "expected ';' or ']' in matrix literal");
-                if (match_kind(TokenKind::kRBracket)) throw_syntax_error("empty matrix row");
+                if (match_kind(TokenKind::kRBracket)) break;
+            }
+            return parse_postfix(std::move(node));
+        }
+
+        // Dictionary literals use the same expression grammar for keys and
+        // values; the colon is only a delimiter at this level.
+        if (match_kind(TokenKind::kLBrace)) {
+            auto node = std::make_unique<ExpressionAST>(ExprKind::kDictLiteral);
+            node->position = tok.position;
+            if (match_kind(TokenKind::kRBrace)) return node;
+            while (true) {
+                auto key = parse_pratt(0);
+                expect_kind(TokenKind::kColon, "expected ':' after dictionary key");
+                auto value = parse_pratt(0);
+                node->dict_entries.emplace_back(std::move(key), std::move(value));
+                if (match_kind(TokenKind::kRBrace)) break;
+                expect_kind(TokenKind::kComma, "expected ',' or '}' in dictionary literal");
+                if (match_kind(TokenKind::kRBrace)) break;
             }
             return parse_postfix(std::move(node));
         }
@@ -413,7 +485,35 @@ private:
                 node->children.push_back(std::move(base));
                 if (!match_kind(TokenKind::kRBracket)) {
                     while (true) {
-                        node->children.push_back(parse_logical());
+                        std::unique_ptr<ExpressionAST> start;
+                        if (tokens_.peek().kind != TokenKind::kColon &&
+                            tokens_.peek().kind != TokenKind::kComma &&
+                            tokens_.peek().kind != TokenKind::kRBracket) {
+                            start = parse_pratt(0);
+                        }
+                        if (match_kind(TokenKind::kColon)) {
+                            std::unique_ptr<ExpressionAST> stop;
+                            std::unique_ptr<ExpressionAST> step;
+                            if (tokens_.peek().kind != TokenKind::kColon &&
+                                tokens_.peek().kind != TokenKind::kComma &&
+                                tokens_.peek().kind != TokenKind::kRBracket) {
+                                stop = parse_pratt(0);
+                            }
+                            if (match_kind(TokenKind::kColon) &&
+                                tokens_.peek().kind != TokenKind::kComma &&
+                                tokens_.peek().kind != TokenKind::kRBracket) {
+                                step = parse_pratt(0);
+                            }
+                            auto slice = std::make_unique<ExpressionAST>(ExprKind::kSlice);
+                            slice->children.push_back(std::move(start));
+                            slice->children.push_back(std::move(stop));
+                            slice->children.push_back(std::move(step));
+                            node->children.push_back(std::move(slice));
+                        } else if (start) {
+                            node->children.push_back(std::move(start));
+                        } else {
+                            throw_syntax_error("empty index expression");
+                        }
                         if (!match_kind(TokenKind::kComma)) break;
                     }
                     expect_kind(TokenKind::kRBracket, "expected ']' after index");
@@ -428,6 +528,31 @@ private:
                 node->position = base ? base->position : 0;
                 node->children.push_back(std::move(base));
                 if (match_operator("!")) node->postfix_op = "!!";
+                base = std::move(node);
+                continue;
+            }
+            if (tokens_.peek().kind == TokenKind::kOperator && tokens_.peek().text == "%" &&
+                (tokens_.peek(1).kind == TokenKind::kEnd ||
+                 tokens_.peek(1).kind == TokenKind::kRParen ||
+                 tokens_.peek(1).kind == TokenKind::kRBracket ||
+                 tokens_.peek(1).kind == TokenKind::kComma ||
+                 tokens_.peek(1).kind == TokenKind::kOperator)) {
+                advance_token();
+                auto node = std::make_unique<ExpressionAST>(ExprKind::kPostfixOp);
+                node->op_char = '%';
+                node->postfix_op = "%";
+                node->position = base ? base->position : 0;
+                node->children.push_back(std::move(base));
+                base = std::move(node);
+                continue;
+            }
+            if (tokens_.peek().kind == TokenKind::kOperator && tokens_.peek().text == "'") {
+                advance_token();
+                auto node = std::make_unique<ExpressionAST>(ExprKind::kPostfixOp);
+                node->op_char = '\'';
+                node->postfix_op = "'";
+                node->position = base ? base->position : 0;
+                node->children.push_back(std::move(base));
                 base = std::move(node);
                 continue;
             }
@@ -543,6 +668,11 @@ Scalar evaluate_ast(const ExpressionAST* ast,
         }
 
         case ExprKind::kPostfixOp: {
+            if (ast->postfix_op == "%" && ast->children.size() == 1) {
+                return evaluate_ast(ast->children[0].get(), variables, functions,
+                                    scalar_functions, native_functions,
+                                    has_script_function, invoke_script_function) / Scalar(100);
+            }
             if ((ast->postfix_op != "!" && ast->postfix_op != "!!") || ast->children.size() != 1)
                 throw_ast_error<MathError>("unknown postfix operator", ast->position);
             Scalar value = evaluate_ast(ast->children[0].get(), variables, functions,
@@ -614,8 +744,9 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                                         functions, scalar_functions, native_functions,
                                         has_script_function, invoke_script_function));
 
-            if (ast->comparison_op == "==") return mymath::abs(left - right) < Scalar(1e-10L) ? 1.0L : 0.0L;
-            if (ast->comparison_op == "!=") return mymath::abs(left - right) < Scalar(1e-10L) ? 0.0L : 1.0L;
+             const Scalar comparison_tolerance = Scalar(app::numeric_tolerance());
+             if (ast->comparison_op == "==") return mymath::abs(left - right) < comparison_tolerance ? 1.0L : 0.0L;
+             if (ast->comparison_op == "!=") return mymath::abs(left - right) < comparison_tolerance ? 0.0L : 1.0L;
             if (ast->comparison_op == "<") return left < right ? 1.0L : 0.0L;
             if (ast->comparison_op == ">") return left > right ? 1.0L : 0.0L;
             if (ast->comparison_op == "<=") return left <= right ? 1.0L : 0.0L;
@@ -846,6 +977,22 @@ std::unique_ptr<ExpressionAST> compile_expression_ast(const std::string& express
     } catch (...) {
         return nullptr;
     }
+}
+
+std::unique_ptr<ExpressionAST> compile_list_expression_ast(const std::string& expression) {
+    if (expression.empty()) return nullptr;
+    try {
+        ASTCompiler compiler(expression, true);
+        return compiler.compile();
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+std::unique_ptr<ExpressionAST> compile_expression_ast_diagnostic(const std::string& expression) {
+    if (expression.empty()) return nullptr;
+    ASTCompiler compiler(expression);
+    return compiler.compile();
 }
 
 Scalar evaluate_compiled_ast(const ExpressionAST* ast,

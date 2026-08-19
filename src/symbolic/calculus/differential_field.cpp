@@ -91,6 +91,8 @@ void DifferentialField::initialize_standard_constants() {
 
 void DifferentialField::add_known_constant(const std::string& name) {
     known_constants.insert(name);
+    constant_cache_.clear();
+    field_level_cache_.clear();
 }
 
 SymbolicExpression DifferentialField::derive(const SymbolicExpression& expr) const {
@@ -125,8 +127,32 @@ bool DifferentialField::is_constant(const SymbolicExpression& expr) const {
         return it->second;
     }
 
-    // 方法 1: 语法检查 - 不含积分变量和塔变量
-    if (!contains_var(expr, base_variable) && !contains_tower_variable(expr)) {
+    // Method 1: every free identifier must belong to the declared constant
+    // field. Treating an arbitrary unknown symbol as a constant silently
+    // invalidates Risch independence checks.
+    std::vector<std::string> identifier_list;
+    symbolic_expression_internal::collect_identifier_variables(expr, &identifier_list);
+    std::set<std::string> identifiers(identifier_list.begin(), identifier_list.end());
+    bool all_identifiers_are_constants = true;
+    for (const auto& name : identifiers) {
+        bool is_tower_name = false;
+        for (const auto& extension : tower) {
+            if (extension.t_name == name) {
+                is_tower_name = true;
+                break;
+            }
+        }
+        if (name != base_variable && !is_tower_name &&
+            known_constants.find(name) == known_constants.end()) {
+            constant_cache_[key] = false;
+            return false;
+        }
+        if (name == base_variable || is_tower_name) {
+            all_identifiers_are_constants = false;
+        }
+    }
+    if (all_identifiers_are_constants && !contains_var(expr, base_variable) &&
+        !contains_tower_variable(expr)) {
         constant_cache_[key] = true;
         return true;
     }
@@ -146,6 +172,26 @@ bool DifferentialField::is_constant(const SymbolicExpression& expr) const {
 
     constant_cache_[key] = false;
     return false;
+}
+
+DifferentialField::ConstantStatus DifferentialField::classify_constant(
+    const SymbolicExpression& expr) const {
+    std::vector<std::string> names;
+    symbolic_expression_internal::collect_identifier_variables(expr, &names);
+    for (const auto& name : names) {
+        bool is_tower_name = false;
+        for (const auto& extension : tower) {
+            if (extension.t_name == name) {
+                is_tower_name = true;
+                break;
+            }
+        }
+        if (name != base_variable && !is_tower_name &&
+            known_constants.find(name) == known_constants.end()) {
+            return ConstantStatus::kUnknown;
+        }
+    }
+    return is_constant(expr) ? ConstantStatus::kConstant : ConstantStatus::kNonConstant;
 }
 
 int DifferentialField::field_level(const SymbolicExpression& expr) const {

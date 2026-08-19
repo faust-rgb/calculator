@@ -22,6 +22,14 @@
 #include "suites/test_benchmark_precise.h"
 #include <iostream>
 
+namespace test_suites {
+void run_context_isolation_tests(int& passed, int& failed);
+void run_parser_regression_tests(int& passed, int& failed);
+void run_symbolic_simplification_regression_tests(int& passed, int& failed);
+void run_risch_boundary_tests(int& passed, int& failed);
+void run_simplification_safety_tests(int& passed, int& failed);
+}
+
 /**
  * @brief 程序主函数
  * @return 成功返回0，有测试失败返回1
@@ -32,6 +40,17 @@ int main() {
     // 初始化测试统计计数器
     int total_passed = 0;
     int total_failed = 0;
+
+    std::cout << "Running Context Isolation Tests..." << std::endl;
+    test_suites::run_context_isolation_tests(total_passed, total_failed);
+    std::cout << "Running Parser Regression Tests..." << std::endl;
+    test_suites::run_parser_regression_tests(total_passed, total_failed);
+    std::cout << "Running Symbolic Simplification Regression Tests..." << std::endl;
+    test_suites::run_symbolic_simplification_regression_tests(total_passed, total_failed);
+    std::cout << "Running Risch Boundary Tests..." << std::endl;
+    test_suites::run_risch_boundary_tests(total_passed, total_failed);
+    std::cout << "Running Simplification Safety Tests..." << std::endl;
+    test_suites::run_simplification_safety_tests(total_passed, total_failed);
 
     // 运行核心基础测试：测试基本表达式解析和数值计算
     std::cout << "Running Core Basic Tests..." << std::endl;

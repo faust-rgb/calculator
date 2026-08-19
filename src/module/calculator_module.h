@@ -98,6 +98,18 @@ struct CommandSpec {
 };
 
 class ServiceLocator;
+class IExecutionContext;
+struct CoreServices;
+
+/**
+ * Explicit services available to a command invocation. New modules should
+ * depend on this small port instead of discovering services ad hoc.
+ */
+struct ModuleServices {
+    ServiceLocator& locator;
+    CoreServices& core;
+    IExecutionContext& execution;
+};
 
 // ============================================================================
 // ModuleRegistry 前向声明（用于模块自动注册）
@@ -260,6 +272,14 @@ public:
         string_args.reserve(args.size());
         for (auto arg : args) string_args.emplace_back(arg);
         return execute_args(cmd, string_args, locator);
+    }
+
+    // Explicit dependency entry point. The locator overload remains only for
+    // source compatibility with third-party modules during migration.
+    std::string execute_args_view(std::string_view command,
+                                  const std::vector<std::string_view>& args,
+                                  ModuleServices& services) {
+        return execute_args_view(command, args, services.locator);
     }
 
     virtual std::string execute_args(const std::string& /*command*/,

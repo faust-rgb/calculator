@@ -43,6 +43,7 @@
 #include <algorithm>
 #include <initializer_list>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -556,11 +557,53 @@ SymbolicExpression make_sorted_sum(std::vector<SymbolicExpression> terms) {
                   }
                   const bool lhs_negative = lhs.node_->type == NodeType::kNegate;
                   const bool rhs_negative = rhs.node_->type == NodeType::kNegate;
-                  if (lhs_negative != rhs_negative) {
-                      return lhs_negative;  // 负项排前面
-                  }
+                   if (lhs_negative != rhs_negative) {
+                       return lhs_negative;  // 负项排前面
+                   }
 
-                  auto get_var_deg = [](const SymbolicExpression& e) -> std::pair<std::string, Scalar> {
+                   auto monomial = [](const SymbolicExpression& e,
+                                      std::map<std::string, int>* exponents) {
+                       Scalar coefficient = Scalar(1);
+                       std::vector<SymbolicExpression> factors;
+                       collect_multiplicative_terms(e, &coefficient, &factors);
+                       for (const auto& factor : factors) {
+                           if (factor.node_->type == NodeType::kVariable) {
+                               ++(*exponents)[factor.node_->text];
+                           } else if (factor.node_->type == NodeType::kPower &&
+                                      factor.node_->left->type == NodeType::kVariable &&
+                                      factor.node_->right->type == NodeType::kNumber &&
+                                      mymath::is_integer(factor.node_->right->number_value,
+                                                         Scalar(app::integer_tolerance())) &&
+                                      factor.node_->right->number_value >= Scalar(0)) {
+                               (*exponents)[factor.node_->left->text] += static_cast<int>(
+                                   mymath::round(factor.node_->right->number_value).to_long_double());
+                           } else {
+                               return false;
+                           }
+                       }
+                       return true;
+                   };
+
+                   std::map<std::string, int> lhs_monomial, rhs_monomial;
+                   const bool lhs_is_monomial = monomial(lhs, &lhs_monomial);
+                   const bool rhs_is_monomial = monomial(rhs, &rhs_monomial);
+                   if (lhs_is_monomial && rhs_is_monomial) {
+                       int lhs_degree = 0, rhs_degree = 0;
+                       for (const auto& [name, exponent] : lhs_monomial) lhs_degree += exponent;
+                       for (const auto& [name, exponent] : rhs_monomial) rhs_degree += exponent;
+                       if (lhs_degree != rhs_degree) return lhs_degree > rhs_degree;
+                       std::set<std::string> variables;
+                       for (const auto& [name, exponent] : lhs_monomial) variables.insert(name);
+                       for (const auto& [name, exponent] : rhs_monomial) variables.insert(name);
+                       for (const auto& name : variables) {
+                           const int lhs_exp = lhs_monomial[name];
+                           const int rhs_exp = rhs_monomial[name];
+                           if (lhs_exp != rhs_exp) return lhs_exp > rhs_exp;
+                       }
+                       return false;
+                   }
+
+                   auto get_var_deg = [](const SymbolicExpression& e) -> std::pair<std::string, Scalar> {
                       Scalar coeff = 1.0L;
                       std::vector<SymbolicExpression> factors;
                       collect_multiplicative_terms(e, &coeff, &factors);
@@ -766,11 +809,14 @@ bool decompose_linear(const SymbolicExpression& expression,
     if (node->type == NodeType::kMultiply) {
         Scalar factor = Scalar(0.0L);
         SymbolicExpression rest;
-        if (decompose_constant_times_expression(simplified, variable_name, &factor, &rest) &&
-            rest.is_variable_named(variable_name)) {
-            *coefficient = factor;
-            *intercept = 0.0L;
-            return true;
+        if (decompose_constant_times_expression(simplified, variable_name, &factor, &rest)) {
+            Scalar rest_coefficient = Scalar(0.0L);
+            Scalar rest_intercept = Scalar(0.0L);
+            if (decompose_linear(rest, variable_name, &rest_coefficient, &rest_intercept)) {
+                *coefficient = factor * rest_coefficient;
+                *intercept = factor * rest_intercept;
+                return true;
+            }
         }
     }
 
