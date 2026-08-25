@@ -221,7 +221,7 @@ void CommandRegistry::unregister_command(const std::string& name) {
  *
  * 查找顺序：先检查别名，再查找精确匹配，最后查找前缀匹配。
  */
-bool CommandRegistry::try_process(const std::string& cmd_name,
+bool CommandRegistry::try_process(std::string_view cmd_name,
                                    const std::vector<std::string_view>& args,
                                    std::string* output,
                                    bool exact_mode,
@@ -232,7 +232,7 @@ bool CommandRegistry::try_process(const std::string& cmd_name,
 
     const CommandInfo* info = find_command(cmd_name);
     if (info && info->handler) {
-        return info->handler(cmd_name, args, output, exact_mode, services);
+        return info->handler(std::string(cmd_name), args, output, exact_mode, services);
     }
 
     return false;
@@ -243,7 +243,7 @@ bool CommandRegistry::try_process(const std::string& cmd_name,
  * @param name 命令名称
  * @return 如果命令存在返回 true，否则返回 false
  */
-bool CommandRegistry::has_command(const std::string& name) const {
+bool CommandRegistry::has_command(std::string_view name) const {
     return find_command(name) != nullptr;
 }
 
@@ -252,7 +252,7 @@ bool CommandRegistry::has_command(const std::string& name) const {
  * @param name 命令名称
  * @return 如果命令可内联返回 true
  */
-bool CommandRegistry::is_inlineable(const std::string& name) const {
+bool CommandRegistry::is_inlineable(std::string_view name) const {
     const CommandInfo* info = find_command(name);
     return info ? info->is_inlineable : false;
 }
@@ -319,7 +319,7 @@ std::vector<std::string> CommandRegistry::get_commands() const {
  * @param name 命令名称
  * @return 帮助文本，如果命令不存在则返回空字符串
  */
-std::string CommandRegistry::get_help(const std::string& name) const {
+std::string CommandRegistry::get_help(std::string_view name) const {
     const CommandInfo* info = find_command(name);
     return info ? info->help_text : "";
 }
@@ -403,7 +403,7 @@ std::string CommandRegistry::extract_command_name(const std::string& input) {
  *
  * 查找顺序：先检查别名，再进行精确匹配，最后进行前缀匹配。
  */
-const CommandInfo* CommandRegistry::find_command(const std::string& name) const {
+const CommandInfo* CommandRegistry::find_command(std::string_view name) const {
     // 先检查别名映射
     std::string resolved_key = command_key(name);
     auto alias_it = aliases_.find(resolved_key);

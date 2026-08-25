@@ -360,6 +360,77 @@ bool try_execute_index_assignment(
     return false;
 }
 
+bool execute_index_assignment_direct(
+    IExecutionContext* ctx,
+    std::string_view base_name_sv,
+    const std::vector<ExpressionInfo>& indices,
+    const ExpressionInfo& value_expr,
+    bool exact_mode,
+    std::string* output) {
+    std::string base_name(base_name_sv);
+    auto opt_val = ctx->variables().get(base_name);
+    if (!opt_val) throw std::runtime_error("unknown variable: " + base_name);
+    StoredValue base_value = *opt_val;
+
+    StoredValue new_value = evaluate_script_value_expression(ctx, std::string(value_expr.text), exact_mode);
+    std::string index_expr_str;
+    for (size_t i = 0; i < indices.size(); ++i) {
+        if (i > 0) index_expr_str += ", ";
+        index_expr_str += std::string(indices[i].text);
+    }
+
+    if (base_value.is_list) {
+        if (!base_value.list_value) base_value.list_value = std::make_shared<std::vector<StoredValue>>();
+        if (indices.empty()) throw std::runtime_error("missing index for list");
+        long long index = stored_to_index(evaluate_script_value_expression(ctx, std::string(indices[0].text), exact_mode), "list index");
+        auto& list = *base_value.list_value;
+        if (index < 0) index += static_cast<long long>(list.size());
+        if (index < 0 || index >= static_cast<long long>(list.size())) throw std::runtime_error("list index out of range");
+        list[static_cast<std::size_t>(index)] = new_value;
+        if (output) *output = base_name + "[" + index_expr_str + "] = " + format_stored_value(new_value, ctx->config().is_symbolic_constants_mode());
+        ctx->variables().assign_visible(base_name, base_value);
+        return true;
+    }
+    if (base_value.is_dict) {
+        if (!base_value.dict_value) base_value.dict_value = std::make_shared<std::map<std::string, StoredValue>>();
+        if (indices.empty()) throw std::runtime_error("missing index for dict");
+        const std::string key = stored_to_key(evaluate_script_value_expression(ctx, std::string(indices[0].text), exact_mode));
+        (*base_value.dict_value)[key] = new_value;
+        if (output) *output = base_name + "[" + index_expr_str + "] = " + format_stored_value(new_value, ctx->config().is_symbolic_constants_mode());
+        ctx->variables().assign_visible(base_name, base_value);
+        return true;
+    }
+    if (base_value.is_matrix) {
+        if (!base_value.matrix_ptr) throw std::runtime_error("invalid matrix value");
+        if (new_value.is_matrix || new_value.is_list || new_value.is_dict || new_value.is_string) {
+            throw std::runtime_error("matrix element assignment requires a scalar value");
+        }
+        Scalar val = new_value.get_decimal();
+        if (indices.size() == 1) {
+            long long index = stored_to_index(evaluate_script_value_expression(ctx, std::string(indices[0].text), exact_mode), "matrix index");
+            if (index < 0) index += static_cast<long long>(base_value.matrix_ptr->data.size());
+            if (index < 0 || index >= static_cast<long long>(base_value.matrix_ptr->data.size())) throw std::runtime_error("matrix index out of range");
+            base_value.matrix_ptr->data[static_cast<std::size_t>(index)] = val;
+            if (output) *output = base_name + "[" + index_expr_str + "] = " + format_stored_value(new_value, ctx->config().is_symbolic_constants_mode());
+            ctx->variables().assign_visible(base_name, base_value);
+            return true;
+        } else if (indices.size() == 2) {
+            long long row = stored_to_index(evaluate_script_value_expression(ctx, std::string(indices[0].text), exact_mode), "matrix row");
+            long long col = stored_to_index(evaluate_script_value_expression(ctx, std::string(indices[1].text), exact_mode), "matrix col");
+            if (row < 0) row += static_cast<long long>(base_value.matrix_ptr->rows);
+            if (col < 0) col += static_cast<long long>(base_value.matrix_ptr->cols);
+            if (row < 0 || row >= static_cast<long long>(base_value.matrix_ptr->rows) || col < 0 || col >= static_cast<long long>(base_value.matrix_ptr->cols)) {
+                throw std::runtime_error("matrix index out of range");
+            }
+            base_value.matrix_ptr->at(static_cast<std::size_t>(row), static_cast<std::size_t>(col)) = val;
+            if (output) *output = base_name + "[" + index_expr_str + "] = " + format_stored_value(new_value, ctx->config().is_symbolic_constants_mode());
+            ctx->variables().assign_visible(base_name, base_value);
+            return true;
+        }
+    }
+    return false;
+}
+
 StoredValue evaluate_expression_value(
                                       IExecutionContext* ctx,
                                       const std::string& expression,

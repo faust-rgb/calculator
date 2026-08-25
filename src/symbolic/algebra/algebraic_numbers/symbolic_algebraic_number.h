@@ -112,7 +112,7 @@ public:
         if (!minimal_polynomial.coefficient(1).is_number(&a)) return false;
         if (!minimal_polynomial.coefficient(0).is_number(&b)) return false;
 
-        if (mymath::abs(a) < app::numeric_tolerance()) return false;
+        if (mymath::abs(a) < math::config::numeric_tolerance()) return false;
 
         if (value) {
             Scalar val = -b / a;

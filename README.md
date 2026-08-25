@@ -128,6 +128,7 @@ Public type definitions that replace internal dependencies are in
 - Terminal inline plotting with `plot(expr, start, end)` and gnuplot integration via `:plot`
 - DSP residue calculation with `residue(expr, var, point)`
 - Symbolic optimization with `cse(expr)` for common subexpression elimination
+- LaTeX math text output with `latex(expr)` / `to_latex(expr)` and C++ `to_latex()` APIs for symbolic expressions and matrices
 - Improved numerical stability for large-angle trigonometric reduction, `beta`,
   `gamma`, `bessel`, and removable-singularity style `limit(...)` evaluations
 - Time functions: `now()` for Unix timestamp, `time()` for formatted time string,

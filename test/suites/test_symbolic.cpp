@@ -24,6 +24,9 @@
 #include "symbolic/calculus/sum/symbolic_sum.h"
 #include "symbolic/calculus/limit/symbolic_limit.h"
 #include "symbolic/base/assumptions.h"
+#include "symbolic/calculus/risch/risch_algorithm.h"
+#include "symbolic/algebra/polynomial/symbolic_polynomial.h"
+#include "matrix/matrix.h"
 #include "core/execution_context.h"
 #include <iostream>
 #include <vector>
@@ -793,7 +796,6 @@ int run_symbolic_tests(int& passed, int& failed) {
 
     // 测试 match/case 守卫条件
     try {
-        std::cout << "Testing script match guard..." << std::endl;
         Calculator script_calculator;
         const std::string output = script_calculator.execute_script(
             "v = 1\n"
@@ -1531,6 +1533,17 @@ int run_symbolic_tests(int& passed, int& failed) {
         std::cout << "FAIL: implicit_diff threw unexpected error: " << ex.what() << '\n';
     }
 
+    // 隐式求导在对因变量导数为零时应拒绝输出除零结果
+    try {
+        std::string output;
+        (void)calculator.try_process_function_command(
+            "implicit_diff(x, y, x)", &output);
+        ++failed;
+        std::cout << "FAIL: implicit_diff with zero dependent derivative should throw\n";
+    } catch (const std::exception&) {
+        ++passed;
+    }
+
     // 测试 param_deriv: x = t, y = t^2 => dy/dx = 2t
     try {
         std::string output;
@@ -1565,6 +1578,17 @@ int run_symbolic_tests(int& passed, int& failed) {
     } catch (const std::exception& ex) {
         ++failed;
         std::cout << "FAIL: param_deriv circle threw unexpected error: " << ex.what() << '\n';
+    }
+
+    // 参数曲线 dx/dt=0 时应拒绝输出除零结果
+    try {
+        std::string output;
+        (void)calculator.try_process_function_command(
+            "param_deriv(1, t, t)", &output);
+        ++failed;
+        std::cout << "FAIL: param_deriv with zero dx/dt should throw\n";
+    } catch (const std::exception&) {
+        ++passed;
     }
 
     // 测试 directional: f = x^2 + y^2, direction = [1, 0] at point
@@ -1933,6 +1957,56 @@ int run_symbolic_tests(int& passed, int& failed) {
             std::cout << "FAIL: limit(ln(1+4*x)/(2*x), x, 0) got: " << (lim_ln ? lim_ln->to_string() : "null") << "\n";
         }
 
+        // Test 6b: Rational function limits at infinity
+        auto lim_rat = symbolic_limit::SymbolicLimitEngine::limit("(3 * x^2 + 5) / (2 * x^2 - x)", "x", BoundArgument::pos_inf());
+        Scalar lim_rat_val;
+        if (lim_rat.has_value() && lim_rat->is_number(&lim_rat_val) && mymath::abs(lim_rat_val - Scalar(1.5L)) < Scalar(1e-6L)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: limit((3*x^2+5)/(2*x^2-x), x, inf) got: " << (lim_rat ? lim_rat->to_string() : "null") << "\n";
+        }
+
+        // Test 6c: Conjugate rationalization
+        auto lim_conj = symbolic_limit::SymbolicLimitEngine::limit("sqrt(x^2 + x) - x", "x", BoundArgument::pos_inf());
+        Scalar lim_conj_val;
+        if (lim_conj.has_value() && lim_conj->is_number(&lim_conj_val) && mymath::abs(lim_conj_val - Scalar(0.5L)) < Scalar(1e-6L)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: limit(sqrt(x^2+x)-x, x, inf) got: " << (lim_conj ? lim_conj->to_string() : "null") << "\n";
+        }
+
+        // Test 6d: Indeterminate form 0 * inf (x * ln(x) -> 0 as x -> 0+)
+        auto lim_0_inf = symbolic_limit::SymbolicLimitEngine::limit("x * ln(x)", "x", BoundArgument::finite(Scalar(0)), 1);
+        Scalar lim_0_inf_val;
+        if (lim_0_inf.has_value() && lim_0_inf->is_number(&lim_0_inf_val) && mymath::abs(lim_0_inf_val) < Scalar(1e-6L)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: limit(x*ln(x), x, 0+) got: " << (lim_0_inf ? lim_0_inf->to_string() : "null") << "\n";
+        }
+
+        // Test 6e: Taylor / PSA series limit ((tan(x) - sin(x)) / x^3 -> 0.5)
+        auto lim_taylor = symbolic_limit::SymbolicLimitEngine::limit("(tan(x) - sin(x)) / x^3", "x", BoundArgument::finite(Scalar(0)));
+        Scalar lim_taylor_val;
+        if (lim_taylor.has_value() && lim_taylor->is_number(&lim_taylor_val) && mymath::abs(lim_taylor_val - Scalar(0.5L)) < Scalar(1e-6L)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: limit((tan(x)-sin(x))/x^3, x, 0) got: " << (lim_taylor ? lim_taylor->to_string() : "null") << "\n";
+        }
+
+        // Test 6f: Squeeze theorem (x * sin(1/x) -> 0 as x -> 0)
+        auto lim_squeeze = symbolic_limit::SymbolicLimitEngine::limit("x * sin(1 / x)", "x", BoundArgument::finite(Scalar(0)));
+        Scalar lim_squeeze_val;
+        if (lim_squeeze.has_value() && lim_squeeze->is_number(&lim_squeeze_val) && mymath::abs(lim_squeeze_val) < Scalar(1e-6L)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: limit(x*sin(1/x), x, 0) got: " << (lim_squeeze ? lim_squeeze->to_string() : "null") << "\n";
+        }
+
         // Test 7: Lambert W transcendental solver
         SymbolicExpression lambert_eq = SymbolicExpression::parse("x * exp(x) - 5");
         symbolic_solver::SymbolicSolver solver;
@@ -1962,9 +2036,223 @@ int run_symbolic_tests(int& passed, int& failed) {
             ++failed;
             std::cout << "FAIL: ScopedAssume RAII cleanup failed\n";
         }
+        // Test 9: Risch decision proof trace format
+        {
+            RischDecisionProcedure::ProofTrace risch_trace;
+            RischDecisionProcedure::integrate_with_proof(SymbolicExpression::parse("exp(x^2)"), "x", risch_trace);
+            std::string trace_str = risch_trace.to_string();
+            if (!trace_str.empty() && trace_str.find("Phase") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: RischDecisionProcedure proof trace format failed\n";
+            }
+        }
+
+        // Test 10: ODE solving: 1st order linear & 2nd order constant coeff
+        {
+            std::string ode1_out;
+            bool ode1_res = calculator.try_process_function_command("dsolve(\"y' + 2*y - 4\", y, x)", &ode1_out);
+            if (ode1_res && !ode1_out.empty()) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: dsolve(\"y' + 2*y - 4\", y, x) failed, got: " << ode1_out << "\n";
+            }
+
+            std::string ode2_out;
+            bool ode2_res = calculator.try_process_function_command("dsolve(\"y'' - 5*y' + 6*y\", y, x)", &ode2_out);
+            if (ode2_res && ode2_out.find("C1") != std::string::npos && ode2_out.find("C2") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: dsolve(\"y'' - 5*y' + 6*y\", y, x) failed, got: " << ode2_out << "\n";
+            }
+
+            std::string ode2_rep;
+            bool ode2_rep_res = calculator.try_process_function_command("dsolve(\"y'' - 4*y' + 4*y\", y, x)", &ode2_rep);
+            if (ode2_rep_res && ode2_rep.find("C1") != std::string::npos && ode2_rep.find("C2") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: dsolve(\"y'' - 4*y' + 4*y\", y, x) failed, got: " << ode2_rep << "\n";
+            }
+        }
+
+        // Test 11: Trig special angles simplification (pi/4, 9pi/4, etc.)
+        {
+            SymbolicExpression sin_pi4 = SymbolicExpression::parse("sin(pi / 4)").simplify();
+            SymbolicExpression sin_9pi4 = SymbolicExpression::parse("sin(9 * pi / 4)").simplify();
+            SymbolicExpression tan_5pi4 = SymbolicExpression::parse("tan(5 * pi / 4)").simplify();
+            if (sin_pi4.to_string().find("sqrt(2)") != std::string::npos &&
+                sin_9pi4.to_string().find("sqrt(2)") != std::string::npos &&
+                tan_5pi4.to_string() == "1") {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: trig special angle simplification: sin(pi/4)=" << sin_pi4.to_string()
+                          << ", sin(9pi/4)=" << sin_9pi4.to_string()
+                          << ", tan(5pi/4)=" << tan_5pi4.to_string() << "\n";
+            }
+        }
+
+        // Test 12: Symbolic Cubic & Biquadratic Solver
+        {
+            symbolic_solver::SymbolicSolver sym_solver;
+            SymbolicExpression cubic_eq = SymbolicExpression::parse("x^3 - 6*x^2 + 11*x - 6");
+            auto cubic_sol = sym_solver.solve(cubic_eq, "x");
+            if (cubic_sol.is_complete && cubic_sol.values.size() == 3) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: cubic equation solver failed, root count=" << cubic_sol.values.size() << "\n";
+            }
+
+            SymbolicExpression biquad_eq = SymbolicExpression::parse("x^4 - 5*x^2 + 4");
+            auto biquad_sol = sym_solver.solve(biquad_eq, "x");
+            if (biquad_sol.is_complete && biquad_sol.values.size() == 4) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: biquadratic equation solver failed, root count=" << biquad_sol.values.size() << "\n";
+            }
+        }
+
+        // Test 13: Elementary transcendental equation solving
+        {
+            symbolic_solver::SymbolicSolver sym_solver;
+            SymbolicExpression exp_eq = SymbolicExpression::parse("exp(2 * x) - a");
+            auto exp_sol = sym_solver.solve(exp_eq, "x");
+            if (exp_sol.is_complete && !exp_sol.values.empty() &&
+                exp_sol.values[0].to_string().find("ln(a)") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: solve(exp(2*x) - a, x) failed, got: " << (exp_sol.values.empty() ? "empty" : exp_sol.values[0].to_string()) << "\n";
+            }
+
+            SymbolicExpression sin_eq = SymbolicExpression::parse("sin(x) - a");
+            auto sin_sol = sym_solver.solve(sin_eq, "x");
+            if (sin_sol.is_complete && !sin_sol.values.empty() &&
+                sin_sol.values[0].to_string().find("asin(a)") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: solve(sin(x) - a, x) failed\n";
+            }
+        }
+
+        // Test 14: Groebner CLI command
+        try {
+            std::string groebner_out;
+            bool g_res = calculator.try_process_function_command("groebner(x^2 - y, y - 2, x, y)", &groebner_out);
+            if (g_res && !groebner_out.empty() && groebner_out.find("y - 2") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: groebner(x^2 - y, y - 2, x, y) got: " << groebner_out << "\n";
+            }
+        } catch (const std::exception& ex) {
+            ++failed;
+            std::cout << "FAIL: Test 14 threw: " << ex.what() << "\n";
+        }
+
+        // Test 15: Polynomial rational roots and leading coefficient
+        try {
+            SymbolicPolynomial poly({SymbolicExpression::number(Scalar(6.0L)),
+                                     SymbolicExpression::number(Scalar(-17.0L)),
+                                     SymbolicExpression::number(Scalar(11.0L)),
+                                     SymbolicExpression::number(Scalar(2.0L))}, "x"); // 2x^3 + 11x^2 - 17x + 6
+            auto facs = poly.factor_linear();
+            if (!facs.empty()) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: factor_linear rational roots failed\n";
+            }
+        } catch (const std::exception& ex) {
+            ++failed;
+            std::cout << "FAIL: Test 15 threw: " << ex.what() << "\n";
+        }
+
+        // Test 16: LaTeX mathematical expressions generation
+        try {
+            // 1. Fractions and powers
+            std::string l1 = calculator.to_latex("x^2 + 1 / (x + 1)");
+            if (l1.find("\\frac{1}{x + 1}") != std::string::npos && l1.find("{x}^{2}") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: latex(x^2 + 1 / (x + 1)) got: " << l1 << "\n";
+            }
+
+            // 2. Trig functions and fractions
+            std::string l2 = calculator.to_latex("sin(x) / cos(x)");
+            if (l2.find("\\frac{\\sin") != std::string::npos && l2.find("\\cos") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: latex(sin(x) / cos(x)) got: " << l2 << "\n";
+            }
+
+            // 3. Square root
+            std::string l3 = calculator.to_latex("sqrt(x + 1)");
+            if (l3.find("\\sqrt{x + 1}") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: latex(sqrt(x + 1)) got: " << l3 << "\n";
+            }
+
+            // 4. Greek letters and subscripts
+            std::string l4 = calculator.to_latex("alpha + beta_1");
+            if (l4.find("\\alpha") != std::string::npos && l4.find("\\beta_{1}") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: latex(alpha + beta_1) got: " << l4 << "\n";
+            }
+
+            // 5. Parenthesization for products of sums
+            std::string l5 = calculator.to_latex("(a + b) * (c + d)");
+            if (l5.find("\\left(a + b\\right)") != std::string::npos && l5.find("\\left(c + d\\right)") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: latex((a + b) * (c + d)) got: " << l5 << "\n";
+            }
+
+            // 6. CLI Command latex(...)
+            std::string cli_l6;
+            bool res6 = calculator.try_process_function_command("latex(exp(-x^2))", &cli_l6);
+            if (res6 && cli_l6.find("e^{") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: try_process_function_command latex(exp(-x^2)) got: " << cli_l6 << "\n";
+            }
+
+            // 7. Matrix to_latex
+            matrix::Matrix mat(2, 2, Scalar(0));
+            mat.at(0, 0) = Scalar(1); mat.at(0, 1) = Scalar(2);
+            mat.at(1, 0) = Scalar(3); mat.at(1, 1) = Scalar(4);
+            std::string mat_latex = mat.to_latex();
+            if (mat_latex.find("\\begin{pmatrix}") != std::string::npos &&
+                mat_latex.find("1 & 2") != std::string::npos &&
+                mat_latex.find("3 & 4") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: matrix to_latex got: " << mat_latex << "\n";
+            }
+        } catch (const std::exception& ex) {
+            ++failed;
+            std::cout << "FAIL: Test 16 (LaTeX output) threw: " << ex.what() << "\n";
+        }
+
     } catch (const std::exception& ex) {
         ++failed;
-        std::cout << "FAIL: declarative pattern DSL tests threw: " << ex.what() << '\n';
+        std::cout << "FAIL: outer test threw: " << ex.what() << '\n';
     }
 
     return failed == 0 ? 0 : 1;

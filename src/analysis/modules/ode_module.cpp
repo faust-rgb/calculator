@@ -74,7 +74,11 @@ bool handle_ode_command(const ODEContext& ctx,
                 " expects rhs, x0, y0, x1, optional steps, optional event, and optional params");
         }
 
-        ODEInfo info = analyze_ode_expression(arguments[0]);
+        std::string ode_arg = arguments[0];
+        if (ode_arg.size() >= 2 && ode_arg.front() == '"' && ode_arg.back() == '"') {
+            ode_arg = ode_arg.substr(1, ode_arg.size() - 2);
+        }
+        ODEInfo info = analyze_ode_expression(ode_arg);
 
         Scalar x0 = Scalar(ctx.parse_decimal(arguments[1]));
         std::vector<Scalar> initial_state;
@@ -87,6 +91,9 @@ bool handle_ode_command(const ODEContext& ctx,
         }
 
         if (info.is_high_order) {
+            while (initial_state.size() < static_cast<std::size_t>(info.order)) {
+                initial_state.push_back(Scalar(0.0L));
+            }
             std::string system_arg = convert_high_order_to_system(info, initial_state);
 
             std::vector<std::string> new_args = arguments;
@@ -140,7 +147,7 @@ bool handle_ode_command(const ODEContext& ctx,
             throw std::runtime_error(command + " received too many optional arguments");
         }
 
-        const auto evaluate_rhs = ctx.build_scoped_scalar_evaluator(arguments[0]);
+        const auto evaluate_rhs = ctx.build_scoped_scalar_evaluator(ode_arg);
         std::function<Scalar(const std::vector<std::pair<std::string, StoredValue>>&)> evaluate_event;
         if (has_event) {
             evaluate_event = ctx.build_scoped_scalar_evaluator(event_expression);
@@ -200,8 +207,13 @@ bool handle_ode_command(const ODEContext& ctx,
             matrix_to_vector_values(ctx.parse_matrix_argument(arguments[2], command),
                                     "ODE initial state");
 
+        std::string ode_sys_arg = arguments[0];
+        if (ode_sys_arg.size() >= 2 && ode_sys_arg.front() == '"' && ode_sys_arg.back() == '"') {
+            ode_sys_arg = ode_sys_arg.substr(1, ode_sys_arg.size() - 2);
+        }
+
         const auto evaluate_rhs_matrix =
-            ctx.build_scoped_matrix_evaluator(arguments[0]);
+            ctx.build_scoped_matrix_evaluator(ode_sys_arg);
         std::function<Scalar(const std::vector<std::pair<std::string, StoredValue>>&)> evaluate_event;
 
         int steps = command == "ode_system" ? 100 : 10;

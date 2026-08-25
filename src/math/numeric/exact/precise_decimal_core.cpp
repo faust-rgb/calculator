@@ -34,15 +34,15 @@ namespace precise {
 constexpr uint32_t kBase = 1000000000;
 constexpr int kBaseDigits = 9;
 
-using app::get_default_scale;
-using app::set_default_scale;
+using math::config::get_default_scale;
+using math::config::set_default_scale;
 
 inline long double display_zero_eps() {
-    return app::display_zero_threshold();
+    return math::config::display_zero_threshold();
 }
 
 inline long double display_integer_eps() {
-    return app::display_integer_threshold();
+    return math::config::display_integer_threshold();
 }
 
 long double long_double_power_of_10(int exponent) {

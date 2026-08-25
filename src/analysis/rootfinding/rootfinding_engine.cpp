@@ -11,7 +11,7 @@
 namespace rootfinding_engine {
 
 static Scalar secant_function_tolerance(Scalar fx) {
-    const int scale = app::get_default_scale();
+    const int scale = math::config::get_default_scale();
     const int tol_scale = std::max(scale + 2, 14);
     return Scalar("1e-" + std::to_string(tol_scale)) * std::max(Scalar(1), mymath::abs(fx));
 }

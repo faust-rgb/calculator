@@ -781,23 +781,49 @@ struct QuotientRingElement {
     }
 
     /**
-     * @brief 计算迹
+     * @brief 计算迹 (Trace)
      *
-     * Trace(a) = -coeff_{n-1} of characteristic polynomial
-     * 对于简化情况，使用迹的定义: sum of conjugates
+     * 使用 Newton 幂和公式精确计算任意最小多项式的迹:
+     * 对于 P(t) = t^n + a_{n-1}t^{n-1} + ... + a_0:
+     * s_0 = n
+     * s_1 = -a_{n-1}
+     * s_k = -k*a_{n-k} - sum_{j=1}^{k-1} a_{n-j} * s_{k-j}  (对于 1 <= k < n)
+     * Trace(sum c_i t^i) = sum c_i * s_i
      */
-    SymbolicExpression trace(const SymbolicPolynomial& /*modulus*/) const {
-        // 迹是特征多项式的 n-1 次系数的相反数
-        // 特征多项式 = resultant_t(t - a(t), modulus(t))
-        // 简化计算: 对于 t^i，迹 = 0 除非 i = 0
-        // 对于常数项，迹 = n * constant
+    SymbolicExpression trace(const SymbolicPolynomial& modulus) const {
+        int n = modulus_degree;
+        if (n <= 0) return SymbolicExpression::number(Scalar(0.0L));
 
-        SymbolicExpression result = SymbolicExpression::number(Scalar(0.0L));
-        for (int i = 0; i < modulus_degree; ++i) {
-            if (i == 0) {
-                result = (result + SymbolicExpression::number(Scalar(static_cast<long long>(modulus_degree))) * coefficients[i]).simplify();
+        // 提取归一化多项式系数 P(t) = t^n + a_{n-1}t^{n-1} + ... + a_0
+        SymbolicExpression lead = modulus.coefficient(n);
+        std::vector<SymbolicExpression> a(n, SymbolicExpression::number(Scalar(0.0L)));
+        for (int i = 0; i < n; ++i) {
+            if (!SymbolicPolynomial::coeff_is_zero(lead)) {
+                a[i] = (modulus.coefficient(i) / lead).simplify();
+            } else {
+                a[i] = modulus.coefficient(i);
             }
-            // 对于 t^i (i > 0)，迹为 0
+        }
+
+        // 计算 Newton 幂和 s_k = Trace(t^k)
+        std::vector<SymbolicExpression> s(n, SymbolicExpression::number(Scalar(0.0L)));
+        s[0] = SymbolicExpression::number(Scalar(static_cast<long long>(n)));
+
+        for (int k = 1; k < n; ++k) {
+            // s_k = -k * a_{n-k} - sum_{j=1}^{k-1} a_{n-j} * s_{k-j}
+            SymbolicExpression term = (SymbolicExpression::number(Scalar(static_cast<long long>(-k))) * a[n - k]).simplify();
+            for (int j = 1; j < k; ++j) {
+                term = (term - a[n - j] * s[k - j]).simplify();
+            }
+            s[k] = term.simplify();
+        }
+
+        // Trace(a) = sum_{i=0}^{n-1} c_i * s_i
+        SymbolicExpression result = SymbolicExpression::number(Scalar(0.0L));
+        for (int i = 0; i < n && i < static_cast<int>(coefficients.size()); ++i) {
+            if (!SymbolicPolynomial::coeff_is_zero(coefficients[i])) {
+                result = (result + coefficients[i] * s[i]).simplify();
+            }
         }
         return result;
     }

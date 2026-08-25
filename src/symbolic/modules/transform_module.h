@@ -25,7 +25,7 @@ namespace transforms {
  * @class TransformModule
  * @brief 提供离散和积分变换（如 FFT, Z 变换, 傅里叶变换, 拉普拉斯变换）的模块
  */
-class TransformModule : public CalculatorModule {
+class TransformModule : public CommandFunctionModuleBase {
 public:
     std::string name() const override { return "Transforms"; }
 

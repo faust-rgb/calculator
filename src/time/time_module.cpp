@@ -120,6 +120,8 @@ std::time_t parse_time(const std::string& time_str, const std::string& format) {
  * @return 函数名到函数实现的映射表
  */
 std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> TimeModule::get_functions_map() const {
+    if (funcs_cached_) return funcs_cache_;
+
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
     // ==================== 时间戳函数 ====================
@@ -419,7 +421,17 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         return res;
     };
 
-    return funcs;
+    funcs_cache_ = std::move(funcs);
+    funcs_cached_ = true;
+    return funcs_cache_;
+}
+
+std::vector<std::string> TimeModule::get_function_names() const {
+    static const std::vector<std::string> names = {
+        "clock", "now", "sleep", "strftime", "strptime", "time",
+        "timer_elapsed", "timer_start", "timer_stop"
+    };
+    return names;
 }
 
 std::string TimeModule::execute_args(const std::string& command,
@@ -440,7 +452,7 @@ std::string TimeModule::execute_args(const std::string& command,
         }
     }
 
-    auto funcs = get_functions_map();
+    const auto& funcs = get_functions_map();
     auto it = funcs.find(command);
     if (it != funcs.end()) {
         StoredValue res = it->second(s_args);

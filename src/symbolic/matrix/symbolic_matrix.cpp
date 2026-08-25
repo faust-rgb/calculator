@@ -507,17 +507,46 @@ SymbolicMat symbolic_matrix_exponential(const SymbolicMat& A, const std::string&
         P[k] = matrix_multiply(A_minus_lam, P[k - 1]);
     }
 
-    // r_1(t) = e^(lambda_1 * t)
-    // 采用级数/初等函数展开
+    // r_k(t) via Putzer's formula
     std::vector<SymbolicExpression> r(n);
-    r[0] = make_exp(lams[0] * t).simplify();
+    for (std::size_t k = 0; k < n; ++k) {
+        // Check if all eigenvalues up to k are identical
+        bool all_same = true;
+        for (std::size_t j = 1; j <= k; ++j) {
+            if (!expressions_match(lams[j], lams[0])) {
+                all_same = false;
+                break;
+            }
+        }
 
-    for (std::size_t k = 1; k < n; ++k) {
-        // 近似或积分解析解
-        if (expressions_match(lams[k], lams[k - 1])) {
-            r[k] = (t * r[k - 1] / SymbolicExpression::number(static_cast<long long>(k))).simplify();
+        if (all_same) {
+            // r_{k+1}(t) = t^k / k! * e^(lambda*t)
+            SymbolicExpression exp_lam = make_exp(lams[0] * t).simplify();
+            if (k == 0) {
+                r[0] = exp_lam;
+            } else {
+                SymbolicExpression t_pow = make_power(t, SymbolicExpression::number(Scalar(static_cast<long long>(k))));
+                SymbolicExpression fact = SymbolicExpression::number(Scalar(static_cast<long long>(factorial_double(static_cast<int>(k)))));
+                r[k] = ((t_pow / fact) * exp_lam).simplify();
+            }
         } else {
-            r[k] = ((make_exp(lams[k] * t) - r[k - 1]) / (lams[k] - lams[k - 1])).simplify();
+            // General distinct eigenvalues formula:
+            // r_{k+1}(t) = sum_{j=0}^k [ e^(lam_j * t) / prod_{m != j, m=0}^k (lam_j - lam_m) ]
+            SymbolicExpression sum_r = SymbolicExpression::number(Scalar(0.0L));
+            for (std::size_t j = 0; j <= k; ++j) {
+                SymbolicExpression denom = SymbolicExpression::number(Scalar(1.0L));
+                for (std::size_t m = 0; m <= k; ++m) {
+                    if (m != j) {
+                        SymbolicExpression diff = (lams[j] - lams[m]).simplify();
+                        if (!expr_is_zero(diff)) {
+                            denom = (denom * diff).simplify();
+                        }
+                    }
+                }
+                SymbolicExpression term = (make_exp(lams[j] * t) / denom).simplify();
+                sum_r = (sum_r + term).simplify();
+            }
+            r[k] = sum_r;
         }
     }
 

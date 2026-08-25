@@ -452,13 +452,6 @@ bool symbolic_limit_at_infinity(
         }
     }
 
-    series_ops::SeriesContext ctx;
-    ctx.evaluate_at = [](const SymbolicExpression& e, const std::string&, Scalar) {
-        Scalar val = 0.0L;
-        if (e.is_number(&val)) return val;
-        return Scalar(0.0L);
-    };
-
     SymbolicExpression t_var = SymbolicExpression::variable("t_limit_inf_tmp");
     SymbolicExpression inv_t;
     if (positive) {
@@ -470,7 +463,7 @@ bool symbolic_limit_at_infinity(
 
     std::vector<Scalar> coeffs;
     try {
-        if (series_ops::internal::evaluate_psa(substituted, "t_limit_inf_tmp", Scalar(0), 2, coeffs, ctx)) {
+        if (series_ops::internal::evaluate_psa(substituted, "t_limit_inf_tmp", Scalar(0), 2, coeffs)) {
             if (!coeffs.empty() && mymath::isfinite(coeffs[0])) {
                 *result = coeffs[0];
                 return true;

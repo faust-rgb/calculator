@@ -44,7 +44,7 @@ class ServiceLocator;
  * - read_json(path) - 从 JSON 文件读取数据
  * - write_json(path, data) - 将数据写入 JSON 文件
  */
-class IoModule : public CalculatorModule {
+class IoModule : public CommandFunctionModuleBase {
 public:
     /**
      * @brief 获取模块名称
@@ -69,6 +69,11 @@ public:
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_functions_map() const override;
 
     /**
+     * @brief 获取模块提供的原生函数名列表
+     */
+    std::vector<std::string> get_function_names() const override;
+
+    /**
      * @brief 执行命令行参数形式的命令
      * @param command 命令名称
      * @param args 参数列表
@@ -87,6 +92,10 @@ public:
     std::string get_help_snippet(const std::string& topic) const override;
 
 private:
+    /// 缓存的函数映射表
+    mutable std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs_cache_;
+    mutable bool funcs_cached_ = false;
+
     /// 文件描述符到文件流的映射表，存储所有打开的文件
     mutable std::map<int, std::shared_ptr<std::fstream>> files_;
     /// 下一个可用的文件描述符，从1开始递增

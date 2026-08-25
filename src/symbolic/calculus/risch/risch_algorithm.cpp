@@ -60,7 +60,7 @@ std::mutex& risch_cache_mutex() {
 bool is_near_integer_precise(Scalar val, int* int_value = nullptr) {
     Scalar rounded = mymath::round(val);
     Scalar diff = mymath::abs(val - rounded);
-    if (diff < Scalar(app::integer_tolerance())) {
+    if (diff < Scalar(math::config::integer_tolerance())) {
         if (int_value) *int_value = static_cast<int>(rounded.to_long_double());
         return true;
     }
@@ -68,7 +68,7 @@ bool is_near_integer_precise(Scalar val, int* int_value = nullptr) {
 }
 
 // Check if two Scalar values are close
-[[maybe_unused]] bool are_values_close_precise(Scalar a, Scalar b, Scalar tolerance = Scalar(app::numeric_tolerance())) {
+[[maybe_unused]] bool are_values_close_precise(Scalar a, Scalar b, Scalar tolerance = Scalar(math::config::numeric_tolerance())) {
     Scalar diff = mymath::abs(a - b);
     return diff < tolerance;
 }
@@ -196,7 +196,7 @@ RationalValue extract_rational_value(const SymbolicExpression& expr) {
         SymbolicExpression den(expr.node_->right);
 
         Scalar num_val = Scalar(0), den_val = Scalar(0);
-        if (num.is_number(&num_val) && den.is_number(&den_val) && mymath::abs(den_val) > Scalar(app::numeric_tolerance())) {
+        if (num.is_number(&num_val) && den.is_number(&den_val) && mymath::abs(den_val) > Scalar(math::config::numeric_tolerance())) {
             result.is_valid = true;
             result.numerator = num_val;
             result.denominator = den_val;
@@ -1127,7 +1127,7 @@ RischAlgorithm::detect_special_function_pattern(const SymbolicExpression& expr,
 
         // 1/ln(x) -> li(x)
         Scalar num_val = Scalar(0.0L);
-        if (num.is_number(&num_val) && mymath::abs(num_val - 1.0L) < Scalar(app::integer_tolerance())) {
+        if (num.is_number(&num_val) && mymath::abs(num_val - 1.0L) < Scalar(math::config::integer_tolerance())) {
             if (den.node_->type == NodeType::kFunction && den.node_->text == "ln") {
                 SymbolicExpression arg(den.node_->left);
                 if (structural_equals(arg, SymbolicExpression::variable(x_var))) {
@@ -1243,7 +1243,7 @@ RischAlgorithm::detect_special_function_pattern(const SymbolicExpression& expr,
                 SymbolicExpression exp(inner.node_->right);
                 Scalar exp_val = Scalar(0.0L);
                 if (structural_equals(base, SymbolicExpression::variable(x_var)) &&
-                    exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < Scalar(app::integer_tolerance())) {
+                    exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < Scalar(math::config::integer_tolerance())) {
                     return {true, {SpecialFunction::kErf, SymbolicExpression::variable(x_var)}};
                 }
             }
@@ -1284,7 +1284,7 @@ SymbolicExpression RischAlgorithm::normalize_logarithm(const SymbolicExpression&
         SymbolicExpression base(simplified.node_->left);
         SymbolicExpression exp(simplified.node_->right);
         Scalar k = Scalar(1);
-        if (exp.is_number(&k) && mymath::abs(k - 1.0L) > Scalar(app::integer_tolerance())) {
+        if (exp.is_number(&k) && mymath::abs(k - 1.0L) > Scalar(math::config::integer_tolerance())) {
             // Recursively normalize the base
             SymbolicExpression normalized_base = normalize_logarithm(base, x_var);
             return (SymbolicExpression::number(k) * make_function("ln", normalized_base)).simplify();
@@ -1318,7 +1318,7 @@ SymbolicExpression RischAlgorithm::normalize_logarithm(const SymbolicExpression&
     Scalar const_factor = Scalar(1);
     SymbolicExpression rest;
     if (risch_algorithm_internal::decompose_constant_times_expression(simplified, x_var, &const_factor, &rest)) {
-        if (mymath::abs(const_factor) > Scalar(app::numeric_tolerance()) && mymath::abs(const_factor - 1.0L) > Scalar(app::numeric_tolerance())) {
+        if (mymath::abs(const_factor) > Scalar(math::config::numeric_tolerance()) && mymath::abs(const_factor - 1.0L) > Scalar(math::config::numeric_tolerance())) {
             if (const_factor > 0) {
                 SymbolicExpression norm_rest = normalize_logarithm(rest, x_var);
                 return (SymbolicExpression::number(mymath::log(const_factor)) + make_function("ln", norm_rest)).simplify();
@@ -1379,7 +1379,7 @@ SymbolicExpression RischAlgorithm::normalize_exponential(const SymbolicExpressio
 
     // Case 4: exp(0) -> 1
     Scalar val = Scalar(0.0L);
-    if (simplified.is_number(&val) && mymath::abs(val) < Scalar(app::numeric_tolerance())) {
+    if (simplified.is_number(&val) && mymath::abs(val) < Scalar(math::config::numeric_tolerance())) {
         return SymbolicExpression::number(Scalar(1.0L));
     }
 
@@ -1444,7 +1444,7 @@ bool RischAlgorithm::check_algebraic_independence(const SymbolicExpression& arg,
         Scalar const_factor = Scalar(1);
         SymbolicExpression rest;
         if (risch_algorithm_internal::decompose_constant_times_expression(normalized_arg, x_var, &const_factor, &rest)) {
-            if (mymath::abs(const_factor) > Scalar(app::numeric_tolerance()) && mymath::abs(const_factor - 1.0L) > Scalar(app::numeric_tolerance())) {
+            if (mymath::abs(const_factor) > Scalar(math::config::numeric_tolerance()) && mymath::abs(const_factor - 1.0L) > Scalar(math::config::numeric_tolerance())) {
                 // 检查 rest 是否已经在塔中
                 SymbolicExpression sub_rest;
                 if (!check_algebraic_independence(rest, kind, current_tower, x_var, &sub_rest, recursion_depth + 1)) {
@@ -1471,7 +1471,7 @@ bool RischAlgorithm::check_algebraic_independence(const SymbolicExpression& arg,
                 if (ratio.is_number(&ratio_val)) {
                     // arg = ratio * ext.argument
                     // ln(arg) = ln(ratio) + ln(ext.argument) = ln(ratio) + t
-                    if (mymath::abs(ratio_val) > Scalar(app::numeric_tolerance())) {
+                    if (mymath::abs(ratio_val) > Scalar(math::config::numeric_tolerance())) {
                         if (ratio_val > 0) {
                             *substitution = (SymbolicExpression::number(mymath::log(ratio_val)) +
                                             SymbolicExpression::variable(ext.t_name)).simplify();
@@ -1489,7 +1489,7 @@ bool RischAlgorithm::check_algebraic_independence(const SymbolicExpression& arg,
                     SymbolicExpression exp(ratio.node_->right);
                     Scalar exp_val = Scalar(0.0L);
                     if (base.is_number() && base.is_number(&ratio_val) &&
-                        mymath::abs(ratio_val - 1.0L) < Scalar(app::integer_tolerance()) && exp.is_number(&exp_val)) {
+                        mymath::abs(ratio_val - 1.0L) < Scalar(math::config::integer_tolerance()) && exp.is_number(&exp_val)) {
                         // arg = ext.argument^k
                         // ln(arg) = k * ln(ext.argument) = k * t
                         *substitution = (SymbolicExpression::number(exp_val) *
@@ -1744,7 +1744,7 @@ void RischAlgorithm::collect_transcendental_extensions(
 
             // x^(1/2) = sqrt(x)
             Scalar exp_val = Scalar(0.0L);
-            if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < Scalar(app::integer_tolerance())) {
+            if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < Scalar(math::config::integer_tolerance())) {
                 extensions.push_back({base.simplify(), DifferentialExtension::Kind::kAlgebraic});
             }
         } else {
@@ -1805,7 +1805,7 @@ void RischAlgorithm::collect_transcendental_extensions_with_names(
             collect(exp);
 
             Scalar exp_val = Scalar(0.0L);
-            if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < Scalar(app::integer_tolerance())) {
+            if (exp.is_number(&exp_val) && mymath::abs(exp_val - 0.5) < Scalar(math::config::integer_tolerance())) {
                 extensions.push_back({base.simplify(), DifferentialExtension::Kind::kAlgebraic, "sqrt"});
             }
         } else {
@@ -2599,7 +2599,7 @@ RischAlgorithm::IntegralType RischAlgorithm::detect_non_elementary_pattern(
                 SymbolicExpression exp(arg.node_->right);
                 Scalar exp_val = Scalar(0.0L);
                 if (structural_equals(base, SymbolicExpression::variable(x_var)) &&
-                    exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < Scalar(app::integer_tolerance())) {
+                    exp.is_number(&exp_val) && mymath::abs(exp_val - 2.0) < Scalar(math::config::integer_tolerance())) {
                     return true;
                 }
             }

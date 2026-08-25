@@ -72,20 +72,14 @@ public:
     void submit_and_wait(std::vector<std::function<void()>> tasks) {
         if (tasks.empty()) return;
 
-        std::atomic<int> remaining{static_cast<int>(tasks.size())};
-        std::mutex done_mutex;
-        std::condition_variable done_condition;
+        std::vector<std::future<void>> futures;
+        futures.reserve(tasks.size());
 
         {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             for (auto& task : tasks) {
-                std::packaged_task<void()> packaged_task([&, t = std::move(task)]() {
-                    t();
-                    if (--remaining == 0) {
-                        std::lock_guard<std::mutex> lk(done_mutex);
-                        done_condition.notify_one();
-                    }
-                });
+                std::packaged_task<void()> packaged_task(std::move(task));
+                futures.push_back(packaged_task.get_future());
                 tasks_.push(std::move(packaged_task));
             }
         }
@@ -93,8 +87,9 @@ public:
         condition_.notify_all();
 
         // 等待所有任务完成
-        std::unique_lock<std::mutex> lock(done_mutex);
-        done_condition.wait(lock, [&]() { return remaining == 0; });
+        for (auto& f : futures) {
+            f.get();
+        }
     }
 
     /**

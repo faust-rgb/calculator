@@ -502,8 +502,10 @@ Notes:
 - `ztrans(expr)`
 - `ztrans(expr, n, z)`
 - `iztrans(expr)`
-- `iztrans(expr, z, n)`
 - `simplify(expr)`
+- `expand(expr)`
+- `latex(expr)`
+- `to_latex(expr)`
 - `limit(f, x0)`
 - `limit(f, x0, direction)`
 - `extrema(f, a, b)`

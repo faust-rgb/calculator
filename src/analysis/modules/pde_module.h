@@ -13,7 +13,7 @@
 
 namespace analysis::pde {
 
-class PdeModule : public CalculatorModule {
+class PdeModule : public CommandFunctionModuleBase {
 public:
     std::string name() const override { return "PDE"; }
 

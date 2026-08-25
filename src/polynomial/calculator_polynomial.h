@@ -57,7 +57,7 @@ namespace polynomial_ops {
  * - poly_compose: 多项式复合
  * - poly_gcd: 多项式最大公因式
  */
-class PolynomialModule : public CalculatorModule {
+class PolynomialModule : public CommandFunctionModuleBase {
 public:
     /**
      * @brief 获取模块名称
@@ -74,6 +74,10 @@ public:
                 "poly_eval", "poly_deriv", "poly_integ", "poly_fit", "poly_compose", "poly_gcd"};
     }
 
+    ModuleCapability capabilities() const override {
+        return ModuleCapability::kCommands | ModuleCapability::kFunctions | ModuleCapability::kHelp;
+    }
+
     /**
      * @brief 执行多项式命令
      * @param command 命令名称
@@ -85,6 +89,15 @@ public:
                              const std::vector<std::string>& args,
                              ServiceLocator& locator) override;
 
+    /**
+     * @brief 获取多项式函数映射
+     */
+    std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_functions_map() const override;
+
+    /**
+     * @brief 获取多项式函数名列表
+     */
+    std::vector<std::string> get_function_names() const override;
 
     /**
      * @brief 获取帮助信息片段

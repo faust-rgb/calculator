@@ -90,6 +90,27 @@ bool try_execute_index_assignment(IExecutionContext* ctx,
                                   std::string* output);
 
 /**
+ * @brief 直接执行结构化索引赋值（避免序列化后再解析）
+ */
+bool execute_index_assignment_direct(IExecutionContext* ctx,
+                                     std::string_view base_name,
+                                     const std::vector<ExpressionInfo>& indices,
+                                     const ExpressionInfo& value_expr,
+                                     bool exact_mode,
+                                     std::string* output);
+
+/**
+ * @brief 格式化脚本错误信息，防止多层递归重复添加行号前缀
+ */
+inline std::string format_script_error(std::size_t line, const std::exception& e) {
+    std::string msg = e.what();
+    if (msg.rfind("Line ", 0) == 0) {
+        return msg;
+    }
+    return "Line " + std::to_string(line) + ": " + msg;
+}
+
+/**
  * @brief 求值列表推导式
  */
 StoredValue evaluate_list_comprehension(IExecutionContext* ctx,

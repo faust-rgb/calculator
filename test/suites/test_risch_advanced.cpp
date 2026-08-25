@@ -317,6 +317,46 @@ void test_risch_algebraic_curve_divisor() {
     }
 }
 
+void test_symbolic_integration_extensions() {
+    IntegrationEngine engine;
+    SymbolicExpression x = SymbolicExpression::variable("x");
+
+    // Test 1: asinh(x) primitive
+    {
+        SymbolicExpression expr = make_function("asinh", x);
+        IntegrationResult result = engine.integrate(expr, "x");
+        assert(result.success);
+    }
+
+    // Test 2: atanh(x) primitive
+    {
+        SymbolicExpression expr = make_function("atanh", x);
+        IntegrationResult result = engine.integrate(expr, "x");
+        assert(result.success);
+    }
+
+    // Test 3: coth(x) primitive
+    {
+        SymbolicExpression expr = make_function("coth", x);
+        IntegrationResult result = engine.integrate(expr, "x");
+        assert(result.success);
+    }
+
+    // Test 4: exp substitution: 1 / (1 + exp(x))
+    {
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / (SymbolicExpression::number(1.0L) + make_function("exp", x));
+        IntegrationResult result = engine.integrate(expr, "x");
+        assert(result.success);
+    }
+
+    // Test 5: Radical substitution: 1 / (x * sqrt(x + 1))
+    {
+        SymbolicExpression expr = SymbolicExpression::number(1.0L) / (x * make_function("sqrt", x + SymbolicExpression::number(1.0L)));
+        IntegrationResult result = engine.integrate(expr, "x");
+        assert(result.success);
+    }
+}
+
 void run_risch_advanced_tests(int& passed, int& failed) {
     g_risch_adv_passed = 0;
     g_risch_adv_failed = 0;
@@ -328,6 +368,7 @@ void run_risch_advanced_tests(int& passed, int& failed) {
     test_parametric_rde();
     test_risch_high_degree_rational();
     test_risch_algebraic_curve_divisor();
+    test_symbolic_integration_extensions();
 
     passed += g_risch_adv_passed;
     failed += g_risch_adv_failed;

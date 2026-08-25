@@ -93,12 +93,12 @@ public:
     // ICommandRegistry 接口实现
     // ========================================================================
 
-    bool has_command(const std::string& name) const override;
-    bool is_inlineable(const std::string& name) const override;
+    bool has_command(std::string_view name) const override;
+    bool is_inlineable(std::string_view name) const override;
     std::vector<std::string> get_all_commands() const override { return get_commands(); }
-    std::string get_help(const std::string& name) const override;
+    std::string get_help(std::string_view name) const override;
 
-    bool try_process(const std::string& cmd_name,
+    bool try_process(std::string_view cmd_name,
                      const std::vector<std::string_view>& args,
                      std::string* output,
                      bool exact_mode,
@@ -230,11 +230,11 @@ private:
      * @param name 命令名
      * @return 命令信息指针，如果不存在返回 nullptr
      */
-    const CommandInfo* find_command(const std::string& name) const;
+    const CommandInfo* find_command(std::string_view name) const;
 
-    std::map<std::string, CommandInfo> commands_;        ///< 精确匹配命令映射
-    std::vector<CommandInfo> prefix_commands_;           ///< 前缀命令列表
-    std::unordered_map<std::string, std::string> aliases_; ///< 别名到命令名的映射（快速查找）
+    std::map<std::string, CommandInfo, std::less<>> commands_;        ///< 精确匹配命令映射 (透明查找)
+    std::vector<CommandInfo> prefix_commands_;                        ///< 前缀命令列表
+    std::map<std::string, std::string, std::less<>> aliases_;         ///< 别名到命令名的映射 (透明查找)
 };
 
 #endif // CORE_COMMAND_REGISTRY_H

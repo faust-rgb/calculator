@@ -267,6 +267,20 @@ CancellationResult detect_cancellation_enhanced(
         return result;
     }
 
+    // 先做精确符号零检验: 检查是否存在整数 n 满足 f + n * u' == 0
+    for (int n = -20; n <= 20; ++n) {
+        if (n == 0) continue;
+        SymbolicExpression check = (f_simplified + SymbolicExpression::number(Scalar(static_cast<long long>(n))) * u_prime_simplified).simplify();
+        if (expr_is_zero(check)) {
+            result.type = CancellationType::kConstantN;
+            result.n_value = n;
+            result.n_expr = SymbolicExpression::number(Scalar(static_cast<long long>(n)));
+            result.remainder = SymbolicExpression::number(Scalar(0));
+            result.candidates.push_back(n);
+            return result;
+        }
+    }
+
     // Compute ratio = -f / u'
     SymbolicExpression ratio = (make_negate(f_simplified) / u_prime_simplified).simplify();
 
@@ -275,12 +289,15 @@ CancellationResult detect_cancellation_enhanced(
     if (ratio.is_number(&n_val)) {
         int n = static_cast<int>(mymath::round(n_val).to_long_double());
         if (mymath::abs(n_val - n) < 1e-9) {
-            result.type = CancellationType::kConstantN;
-            result.n_value = n;
-            result.n_expr = SymbolicExpression::number(Scalar(static_cast<long long>(n)));
-            result.remainder = SymbolicExpression::number(Scalar(0));
-            result.candidates.push_back(n);
-            return result;
+            SymbolicExpression check = (f_simplified + SymbolicExpression::number(Scalar(static_cast<long long>(n))) * u_prime_simplified).simplify();
+            if (expr_is_zero(check)) {
+                result.type = CancellationType::kConstantN;
+                result.n_value = n;
+                result.n_expr = SymbolicExpression::number(Scalar(static_cast<long long>(n)));
+                result.remainder = SymbolicExpression::number(Scalar(0));
+                result.candidates.push_back(n);
+                return result;
+            }
         }
 
         // Not an integer, but still a constant ratio
@@ -2975,16 +2992,31 @@ CancellationResult RischAlgorithm::detect_cancellation_strict(
         return result;
     }
 
+    // 先做精确符号零检验: 检查是否存在小整数 n 满足 f + n * u' == 0
+    for (int n = -20; n <= 20; ++n) {
+        if (n == 0) continue;
+        SymbolicExpression check = (f + SymbolicExpression::number(Scalar(static_cast<long long>(n))) * u_prime).simplify();
+        if (expr_is_zero(check)) {
+            result.type = CancellationType::kConstantN;
+            result.n_value = n;
+            result.candidates.push_back(n);
+            return result;
+        }
+    }
+
     SymbolicExpression ratio = (make_negate(f) / u_prime).simplify();
 
     Scalar val = Scalar(0.0L);
     if (ratio.is_number(&val)) {
         int n = static_cast<int>(mymath::round(val).to_long_double());
         if (mymath::abs(val - n) < 1e-9) {
-            result.type = CancellationType::kConstantN;
-            result.n_value = n;
-            result.candidates.push_back(n);
-            return result;
+            SymbolicExpression check = (f + SymbolicExpression::number(Scalar(static_cast<long long>(n))) * u_prime).simplify();
+            if (expr_is_zero(check)) {
+                result.type = CancellationType::kConstantN;
+                result.n_value = n;
+                result.candidates.push_back(n);
+                return result;
+            }
         }
     }
 
@@ -2993,14 +3025,17 @@ CancellationResult RischAlgorithm::detect_cancellation_strict(
         SymbolicExpression den(ratio.node_->right);
 
         Scalar num_val = Scalar(0), den_val = Scalar(0);
-        if (num.is_number(&num_val) && den.is_number(&den_val)) {
+        if (num.is_number(&num_val) && den.is_number(&den_val) && mymath::abs(den_val) > 1e-12) {
             Scalar quotient = num_val / den_val;
             int n = static_cast<int>(mymath::round(quotient).to_long_double());
             if (mymath::abs(quotient - n) < 1e-9) {
-                result.type = CancellationType::kConstantN;
-                result.n_value = n;
-                result.candidates.push_back(n);
-                return result;
+                SymbolicExpression check = (f + SymbolicExpression::number(Scalar(static_cast<long long>(n))) * u_prime).simplify();
+                if (expr_is_zero(check)) {
+                    result.type = CancellationType::kConstantN;
+                    result.n_value = n;
+                    result.candidates.push_back(n);
+                    return result;
+                }
             }
         }
     }

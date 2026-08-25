@@ -35,12 +35,12 @@ namespace symbolic_commands {
  * @class SymbolicModule
  * @brief 提供核心符号运算（微分、化简、极值等）功能的模块
  */
-class SymbolicModule : public CalculatorModule {
+class SymbolicModule : public CommandModuleBase {
 public:
     std::string name() const override { return "Symbolic"; }
 
     std::vector<std::string> get_commands() const override {
-        return {":assume", "simplify", "expand", "cse", "groebner", "latex",
+        return {":assume", "simplify", "expand", "cse", "groebner", "latex", "to_latex",
                 "jacobian", "hessian", "dsolve", "sum",
                 "smith", "snf", "hermite", "hnf",
                 "symbolic_lu", "sym_lu", "symbolic_qr", "sym_qr",

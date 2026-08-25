@@ -816,6 +816,8 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
 
     if (is_zero()) return factors;
 
+    SymbolicPolynomial current = *this;
+
     // 检查是否所有系数都是数值
     std::vector<Scalar> num_coeffs;
     for (const auto& coeff : coefficients_) {
@@ -827,43 +829,62 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
         num_coeffs.push_back(val);
     }
 
-    // 尝试找到所有实数根（每个根对应一个线性因子）
-    SymbolicPolynomial current = *this;
+    // 检查是否有公共常数因子（例如首项系数非 1）
+    Scalar lead_coeff = num_coeffs.back();
+    if (!mymath::is_near_zero(lead_coeff - Scalar(1.0L), Scalar(1e-9L)) &&
+        !mymath::is_near_zero(lead_coeff, Scalar(1e-9L))) {
+        factors.push_back({SymbolicPolynomial({SymbolicExpression::number(lead_coeff)}, variable_name_), 1});
+        // 归一化为首一多项式
+        for (auto& c : num_coeffs) {
+            c /= lead_coeff;
+        }
+        std::vector<SymbolicExpression> monic_coeffs;
+        for (const auto& c : num_coeffs) {
+            monic_coeffs.push_back(SymbolicExpression::number(c));
+        }
+        current = SymbolicPolynomial(monic_coeffs, variable_name_);
+    }
 
-    // 尝试整数根
+    // 尝试找到所有实数根（每个根对应一个线性因子）
     auto try_root = [&](Scalar r) -> bool {
-        // 检查 r 是否是根
         Scalar val = Scalar(0);
         Scalar power = Scalar(1);
         for (Scalar c : num_coeffs) {
             val += c * power;
             power *= r;
         }
-        return mymath::abs(val) < Scalar(1e-9L);
+        return mymath::abs(val) < Scalar(1e-7L);
     };
 
-    // 搜索整数根
+    // 搜索有理根与整数根
     std::vector<Scalar> roots;
     Scalar constant_term = num_coeffs.empty() ? Scalar(0) : num_coeffs[0];
 
-    int max_search = static_cast<int>(mymath::abs(constant_term) + Scalar(1));
-    max_search = std::min(max_search, 100);
+    int max_p = static_cast<int>(mymath::abs(constant_term) + Scalar(1));
+    max_p = std::min(max_p, 100);
 
-    for (int i = -max_search; i <= max_search; ++i) {
-        if (i == 0 && num_coeffs.size() > 1 && mymath::abs(num_coeffs[0]) > Scalar(1e-9L)) continue;
+    // 常用分母集合: 1, 2, 3, 4, 5, 6
+    std::vector<int> denominators = {1, 2, 3, 4, 5, 6};
 
-        // 使用有理根定理：p 必须整除常数项，q 必须整除首项系数
-        // 对于整数根 r = p/q，如果 q=1，则 p 整除常数项
-
-        if (try_root(Scalar(i))) {
-            roots.push_back(Scalar(i));
+    for (int q : denominators) {
+        for (int p = -max_p; p <= max_p; ++p) {
+            if (p == 0 && num_coeffs.size() > 1 && mymath::abs(num_coeffs[0]) > Scalar(1e-9L)) continue;
+            Scalar cand = Scalar(p) / Scalar(q);
+            // 避免重复测试
+            bool already = false;
+            for (Scalar r : roots) {
+                if (mymath::abs(r - cand) < Scalar(1e-9L)) { already = true; break; }
+            }
+            if (!already && try_root(cand)) {
+                roots.push_back(cand);
+            }
         }
     }
 
     // 对每个找到的根，提取线性因子 (x - r)
     for (Scalar r : roots) {
         SymbolicPolynomial linear_factor;
-        if (r == Scalar(0)) {
+        if (mymath::is_near_zero(r, Scalar(1e-9L))) {
             linear_factor = SymbolicPolynomial({SymbolicExpression::number(Scalar(0)),
                                                 SymbolicExpression::number(Scalar(1))}, variable_name_);
         } else {
@@ -874,12 +895,12 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
         // 计算重数
         int multiplicity = 0;
         SymbolicPolynomial test = current;
-        while (!test.is_zero()) {
-            SymbolicPolynomial q, rem;
-            if (!test.divide(linear_factor, &q, &rem)) break;
+        while (!test.is_zero() && test.degree() >= 1) {
+            SymbolicPolynomial q_poly, rem;
+            if (!test.divide(linear_factor, &q_poly, &rem)) break;
             if (!rem.is_zero()) break;
             multiplicity++;
-            test = q;
+            test = q_poly;
         }
 
         if (multiplicity > 0) {
@@ -890,7 +911,6 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
 
     // 如果还有剩余的多项式（二次或更高），检查是否可以进一步分解
     if (!current.is_zero() && current.degree() == 2) {
-        // 检查二次多项式是否可分解
         Scalar a = Scalar(0), b = Scalar(0), c = Scalar(0);
         if (current.coefficients_.size() == 3 &&
             current.coefficients_[2].is_number(&a) &&
@@ -903,12 +923,10 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
                 Scalar r2 = (-b - sqrt_disc) / (Scalar(2) * a);
 
                 if (mymath::abs(r1 - r2) < Scalar(1e-9L)) {
-                    // 两个相同的根
                     SymbolicPolynomial linear_factor({SymbolicExpression::number(-r1),
                                                      SymbolicExpression::number(Scalar(1))}, variable_name_);
                     factors.push_back({linear_factor, 2});
                 } else {
-                    // 两个不同的根
                     SymbolicPolynomial linear1({SymbolicExpression::number(-r1),
                                                SymbolicExpression::number(Scalar(1))}, variable_name_);
                     SymbolicPolynomial linear2({SymbolicExpression::number(-r2),
@@ -921,8 +939,7 @@ std::vector<std::pair<SymbolicPolynomial, int>> SymbolicPolynomial::factor_linea
         }
     }
 
-
-    // 如果还有剩余部分且不是常数，将其作为不可约因子添加
+    // 如果还有剩余部分且不是常数 1，将其作为不可约因子添加
     if (!current.is_zero() && !current.is_constant()) {
         factors.push_back({current, 1});
     }

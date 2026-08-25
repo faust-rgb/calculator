@@ -36,10 +36,10 @@ std::string RischProofTrace::to_string() const {
         if (!step.action.empty()) {
             oss << "  Action: " << step.action << "\n";
         }
-        if (!step.input_expr.node_) {
+        if (step.input_expr.node_) {
             oss << "  Input: " << step.input_expr.to_string() << "\n";
         }
-        if (!step.output_expr.node_) {
+        if (step.output_expr.node_) {
             oss << "  Output: " << step.output_expr.to_string() << "\n";
         }
         oss << "  Success: " << (step.success ? "Yes" : "No");

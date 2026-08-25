@@ -6,6 +6,22 @@ The project has evolved from a minimal C++ hello-world style setup into a
 feature-rich command-line calculator with exact rational mode, programmable
 helpers, interactive terminal UX, and project documentation.
 
+## Latest Symbolic CAS, IO & LaTeX Improvements
+
+- **LaTeX Mathematical Text Output**:
+  - Implemented `SymbolicExpression::to_latex()`, `TMatrix<T>::to_latex()`, `StoredValue::to_latex()`, and `Calculator::to_latex()`
+  - Full support for operator precedence parenthesization, Greek letters, subscripts, calculus operators, roots, and standard functions
+  - Added CLI and script command `latex(expr)` and `to_latex(expr)`
+- **Symbolic Integration & Risch Algorithm Overhaul**:
+  - Optimized Risch RDE solver with non-elementary degree conflict detection
+  - Enhanced radical and exponential inverse substitution polynomial extraction
+  - Replaced restrictive atanh antiderivative forms with logarithmic difference forms
+  - Enhanced derivative evaluation safety for absolute value nodes
+- **IO Module Enhancements**:
+  - Fully compliant JSON parser with escape sequence (`\b`, `\f`, `\/`, `\n`, `\r`, `\t`, `\"`, `\\`) and `\uXXXX` UTF-8 decoding
+  - `write` and `execute_args` support for all types (`List`, `Dict`, `Matrix`, `Complex`, `Scalar`)
+  - Extended stream `open` modes (`w+`, `w+b`, `a+`, `a+b`, `r+b`), byte-count `read`, and `seek`/`tell` support
+
 ## Latest Script Engine Performance Optimizations
 
 - **FlatScopeStack Implementation**:

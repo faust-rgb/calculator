@@ -10,6 +10,7 @@
  */
 
 #include "analysis/calculus/function_analysis.h"
+#include "analysis/calculus/numerical_calculus.h"
 #include "analysis/calculus/numerical_quadrature.h"
 #include "math/numeric/precision/tolerances.h"
 
@@ -19,6 +20,7 @@
 #include "analysis/modules/series_module.h"
 #include "symbolic/core/symbolic_expression.h"
 #include "symbolic/public/symbolic_node_types.h"
+#include "symbolic/calculus/limit/symbolic_limit.h"
 #include "math/numeric/exact/precise_parser.h"
 #include "statistics/probability.h"
 #include "math/numeric/exact/precise_decimal.h"
@@ -985,14 +987,6 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
         return true;
     }
 
-    series_ops::SeriesContext ctx;
-    ctx.evaluate_at = [](const SymbolicExpression& e, const std::string& v, Scalar p) {
-        if (e.node_type() == NodeType::kVariable && e.node_text() == v) return p;
-        Scalar val = 0.0L;
-        if (e.is_number(&val)) return val;
-        return Scalar(0.0L);
-    };
-
     SymbolicExpression t_var = SymbolicExpression::variable("t_limit_inf_tmp");
     SymbolicExpression inv_t;
     if (positive) {
@@ -1004,7 +998,7 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
 
     std::vector<Scalar> coeffs;
     try {
-        if (series_ops::internal::evaluate_psa(substituted, "t_limit_inf_tmp", Scalar(0.0L), 2, coeffs, ctx)) {
+        if (series_ops::internal::evaluate_psa(substituted, "t_limit_inf_tmp", Scalar(0.0L), 2, coeffs)) {
             if (!coeffs.empty() && mymath::isfinite(coeffs[0])) {
                 *result = Scalar(coeffs[0]);
                 return true;
@@ -1023,8 +1017,9 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
 
         try {
             Scalar large_x = positive ? 1e12 : -1e12;
-            Scalar val = ctx.evaluate_at(expression, variable_name, large_x);
-            if (mymath::isfinite(val) && mymath::abs(val) < 1e10) {
+            SymbolicExpression sub_expr = expression.substitute(variable_name, SymbolicExpression::number(large_x)).simplify();
+            Scalar val = 0.0L;
+            if (sub_expr.is_number(&val) && mymath::isfinite(val) && mymath::abs(val) < 1e10) {
                 return false;
             }
         } catch (...) {
@@ -1273,13 +1268,40 @@ Scalar FunctionAnalysis::limit(Scalar x, int direction) const {
         return Scalar(0.0L);
     };
 
+    try {
+        symbolic_limit::SymbolicLimitEngine sym_engine;
+        const BoundArgument bound = !mymath::isfinite(x)
+            ? (x > Scalar(0.0L) ? BoundArgument::pos_inf() : BoundArgument::neg_inf())
+            : BoundArgument::finite(x);
+        const auto sym_res = sym_engine.compute_limit(expr, variable_name_, bound, direction);
+        if (sym_res.is_definite) {
+            Scalar sym_val = Scalar(0);
+            if (sym_res.value.is_number(&sym_val)) {
+                return sym_val;
+            }
+            if (sym_res.value.node_type() == NodeType::kE) {
+                return mymath::e();
+            }
+            if (sym_res.value.node_type() == NodeType::kPi) {
+                return mymath::pi();
+            }
+            if (sym_res.is_infinite) {
+                return sym_res.value.to_string() == "inf" ? mymath::infinity() : -mymath::infinity();
+            }
+        }
+    } catch (...) {
+    }
+
     if (!mymath::isfinite(x)) {
         bool positive = x > Scalar(0.0L);
         Scalar inf_result = Scalar(0.0L);
         if (symbolic_limit_at_infinity(expr, variable_name_, positive, &inf_result)) {
             return inf_result;
         }
-    } else if (mymath::isfinite(x)) {
+    } else if (mymath::isfinite(x) && direction != 0) {
+        // A Taylor/PSA constant term is only a one-sided result here.  For a
+        // two-sided limit the left and right samples must both be evaluated
+        // by compute_numerical_limit below.
         std::vector<Scalar> coeffs;
         try {
             Scalar p_val = x;
@@ -1471,12 +1493,39 @@ direct_computation:
         if (!mymath::isfinite(x)) {
             return compute_limit_at(x, 1);
         }
-        Scalar left = compute_limit_at(x, -1);
-        Scalar right = compute_limit_at(x, 1);
-        if (mymath::abs(left - right) > 1e-7L && mymath::isfinite(left) && mymath::isfinite(right)) {
-            throw std::runtime_error("limit does not exist (left and right limits differ)");
+        bool left_ok = false, right_ok = false;
+        Scalar left = Scalar(0), right = Scalar(0);
+        std::exception_ptr left_ex = nullptr, right_ex = nullptr;
+        try {
+            left = compute_limit_at(x, -1);
+            left_ok = true;
+        } catch (...) {
+            left_ex = std::current_exception();
         }
-        return (left + right) * 0.5L;
+        try {
+            right = compute_limit_at(x, 1);
+            right_ok = true;
+        } catch (...) {
+            right_ex = std::current_exception();
+        }
+
+        if (left_ok && right_ok) {
+            if (mymath::abs(left - right) > 1e-7L && mymath::isfinite(left) && mymath::isfinite(right)) {
+                throw std::runtime_error("limit does not exist (left and right limits differ)");
+            }
+            if (!mymath::isfinite(left) && !mymath::isfinite(right)) {
+                if (left == right) return left;
+                throw std::runtime_error("limit does not exist (left and right limits differ)");
+            }
+            return (left + right) * 0.5L;
+        } else if (left_ok && !right_ok) {
+            return left;
+        } else if (!left_ok && right_ok) {
+            return right;
+        } else {
+            if (left_ex) std::rethrow_exception(left_ex);
+            throw std::runtime_error("limit did not converge");
+        }
     }
     return compute_limit_at(x, direction);
 }
@@ -2012,67 +2061,26 @@ Scalar FunctionAnalysis::bisect_stationary_point(Scalar left, Scalar right) cons
 // 自适应 Simpson 积分辅助函数
 
 Scalar FunctionAnalysis::simpson_rule(Scalar a, Scalar b) const {
-    const Scalar h = (b - a) / Scalar(static_cast<long long>(2));
-    const Scalar fa = evaluate_with_variable(a);
-    const Scalar fb = evaluate_with_variable(b);
-    const Scalar fc = evaluate_with_variable((a + b) / Scalar(static_cast<long long>(2)));
-    return h / Scalar(static_cast<long long>(3)) * (fa + Scalar(static_cast<long long>(4)) * fc + fb);
+    return numeric::simpson_rule_callable([this](Scalar x) { return evaluate_with_variable(x); }, a, b);
 }
-
 
 Scalar FunctionAnalysis::adaptive_simpson_precise(Scalar a, Scalar b, Scalar eps, int max_depth) const {
-    // 使用自适应 Simpson 方法进行高精度积分
-    // 递归实现，当误差足够小或达到最大深度时停止
-    int actual_max_depth = max_depth;
-
-    const Scalar c = (a + b) / Scalar(static_cast<long long>(2));
-    const Scalar whole = simpson_rule(a, b);
-    const Scalar left = simpson_rule(a, c);
-    const Scalar right = simpson_rule(c, b);
-
-    return adaptive_simpson_recursive(a, b, whole, left, right, eps, actual_max_depth);
+    return numeric::adaptive_simpson_callable([this](Scalar x) { return evaluate_with_variable(x); }, a, b, eps, max_depth);
 }
-
 
 Scalar FunctionAnalysis::adaptive_simpson_recursive(Scalar a, Scalar b, Scalar whole, Scalar left, Scalar right, Scalar eps, int depth) const {
-    const Scalar c = (a + b) / Scalar(static_cast<long long>(2));
-    const Scalar combined = left + right;
-    const Scalar error = mymath::abs(combined - whole) / Scalar(static_cast<long long>(15));
-
-    const Scalar scale = std::max(Scalar(static_cast<long long>(1)), mymath::abs(combined));
-    if (depth <= 0 || error <= relative_tolerance(eps, scale)) {
-        // Richardson 外推提高精度
-        return combined + (combined - whole) / Scalar(static_cast<long long>(15));
-    }
-
-    // 继续细分
-    const Scalar d = (a + c) / Scalar(static_cast<long long>(2));
-    const Scalar e = (c + b) / Scalar(static_cast<long long>(2));
-    const Scalar left_left = simpson_rule(a, d);
-    const Scalar left_right = simpson_rule(d, c);
-    const Scalar right_left = simpson_rule(c, e);
-    const Scalar right_right = simpson_rule(e, b);
-
-    return adaptive_simpson_recursive(a, c, left, left_left, left_right, eps / Scalar(static_cast<long long>(2)), depth - 1) +
-           adaptive_simpson_recursive(c, b, right, right_left, right_right, eps / Scalar(static_cast<long long>(2)), depth - 1);
+    (void)whole; (void)left; (void)right;
+    return numeric::adaptive_simpson_callable([this](Scalar x) { return evaluate_with_variable(x); }, a, b, eps, depth);
 }
-
 
 Scalar FunctionAnalysis::adaptive_gauss_kronrod(Scalar left,
                                                 Scalar right,
                                                 Scalar eps,
                                                 int max_depth) const {
-    Scalar error = Scalar(static_cast<long long>(0));
-    const Scalar whole = gauss_kronrod_15(left, right, &error);
     return require_finite_integral(
-        adaptive_gauss_kronrod_recursive(left,
-                                         right,
-                                         eps,
-                                         whole,
-                                         error,
-                                         max_depth));
+        numeric::adaptive_gauss_kronrod_callable([this](Scalar x) { return evaluate_with_variable(x); },
+                                                left, right, eps, max_depth));
 }
-
 
 Scalar FunctionAnalysis::adaptive_gauss_kronrod_recursive(Scalar left,
                                                           Scalar right,
@@ -2080,124 +2088,14 @@ Scalar FunctionAnalysis::adaptive_gauss_kronrod_recursive(Scalar left,
                                                           Scalar whole,
                                                           Scalar error,
                                                           int depth) const {
-    // 检查结果是否有效
-    if (!mymath::isfinite(whole) || !mymath::isfinite(error)) {
-        throw std::runtime_error("integral did not converge (non-finite value encountered)");
-    }
-
-    // 检查区间是否过小，避免数值问题
-    const Scalar interval_width = mymath::abs(right - left);
-    const Scalar interval_scale = std::max(mymath::abs(left), mymath::abs(right));
-    const Scalar min_width = precision::min_step_size<Scalar>(interval_scale);
-    if (interval_width < min_width) {
-        return whole;
-    }
-
-    const Scalar scale = std::max(Scalar(static_cast<long long>(1)), mymath::abs(whole));
-    const Scalar tol = relative_tolerance(eps, scale);
-    if (error <= tol) {
-        return whole;
-    }
-    if (depth <= 0) {
-        if (error > tol * Scalar(1e4L)) { // 严重不收敛
-            throw std::runtime_error("integral did not converge (max depth reached with large error)");
-        }
-        return whole;
-    }
-
-    const Scalar mid = (left + right) * Scalar(0.5L);
-    Scalar left_error = Scalar(static_cast<long long>(0));
-    Scalar right_error = Scalar(static_cast<long long>(0));
-    const Scalar left_area = gauss_kronrod_15(left, mid, &left_error);
-    const Scalar right_area = gauss_kronrod_15(mid, right, &right_error);
-
-    // 检查子区间结果是否有效
-    if (!mymath::isfinite(left_area) || !mymath::isfinite(right_area)) {
-        throw std::runtime_error("integral did not converge (non-finite value in subinterval)");
-    }
-
-    const Scalar left_result =
-        adaptive_gauss_kronrod_recursive(left,
-                                         mid,
-                                         eps * Scalar(0.5L),
-                                         left_area,
-                                         left_error,
-                                         depth - 1);
-    const Scalar right_result =
-        adaptive_gauss_kronrod_recursive(mid,
-                                         right,
-                                         eps * Scalar(0.5L),
-                                         right_area,
-                                         right_error,
-                                         depth - 1);
-    return compensated_pair_sum(left_result, right_result);
+    (void)whole; (void)error;
+    return numeric::adaptive_gauss_kronrod_callable([this](Scalar x) { return evaluate_with_variable(x); },
+                                                    left, right, eps, depth);
 }
 
-
 Scalar FunctionAnalysis::gauss_kronrod_15(Scalar left,
-                                                       Scalar right,
-                                                       Scalar* error_estimate) const {
-    static const Scalar kNodes[] = {
-        Scalar(0.0L),
-        Scalar(0.20778495500789846760L),
-        Scalar(0.40584515137739716691L),
-        Scalar(0.58608723546769113029L),
-        Scalar(0.74153118559939443986L),
-        Scalar(0.86486442335976907279L),
-        Scalar(0.94910791234275852453L),
-        Scalar(0.99145537112081263921L)
-    };
-
-    static const Scalar kKronrodWeights[] = {
-        Scalar(0.20948214108472782801L),
-        Scalar(0.20443294007529889241L),
-        Scalar(0.19035057806478540991L),
-        Scalar(0.16900472663926790283L),
-        Scalar(0.14065325971552591875L),
-        Scalar(0.10479001032225018384L),
-        Scalar(0.06309209262997855329L),
-        Scalar(0.02293532201052922496L)
-    };
-
-    static const Scalar kGaussWeights[] = {
-        Scalar(0.41795918367346938776L),
-        Scalar(0.0L),
-        Scalar(0.38183005050511894495L),
-        Scalar(0.0L),
-        Scalar(0.27970539148927666790L),
-        Scalar(0.0L),
-        Scalar(0.12948496616886969327L),
-        Scalar(0.0L)
-    };
-
-    const Scalar center = (left + right) * Scalar(0.5L);
-    const Scalar half_width = (right - left) * Scalar(0.5L);
-
-    Scalar kronrod_sum = Scalar(0.0L);
-    Scalar gauss_sum = Scalar(0.0L);
-
-    for (int i = 0; i < 8; ++i) {
-        if (mymath::is_near_zero(kNodes[i], Scalar(0.0L))) {
-            Scalar value(evaluate_with_variable(center));
-            kronrod_sum = kronrod_sum + kKronrodWeights[i] * value;
-            gauss_sum = gauss_sum + kGaussWeights[i] * value;
-            continue;
-        }
-
-        const Scalar offset = half_width * kNodes[i];
-        Scalar left_val(evaluate_with_variable(center - offset));
-        Scalar right_val(evaluate_with_variable(center + offset));
-        Scalar pair_sum = left_val + right_val;
-
-        kronrod_sum = kronrod_sum + kKronrodWeights[i] * pair_sum;
-        if (kGaussWeights[i] != Scalar(0.0L)) {
-            gauss_sum = gauss_sum + kGaussWeights[i] * pair_sum;
-        }
-    }
-
-    Scalar kronrod = half_width * kronrod_sum;
-    Scalar gauss = half_width * gauss_sum;
-
-    *error_estimate = mymath::abs(kronrod - gauss);
-    return kronrod;
+                                         Scalar right,
+                                         Scalar* error_estimate) const {
+    return numeric::gauss_kronrod_15_callable([this](Scalar x) { return evaluate_with_variable(x); },
+                                              left, right, error_estimate);
 }

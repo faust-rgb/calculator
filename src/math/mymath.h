@@ -28,11 +28,8 @@
 
 // Public operations by numeric domain
 #include "math/functions/scalar/basic_ops.h"
-#include "math/functions/scalar/basic_ops.h"
 #include "math/functions/integer/integer_helpers.h"
 #include "math/functions/conversion/rational_approximation.h"
-
-// Transcendental - trig, hyperbolic, exp/log
 
 // Special - gamma, beta, bessel, error functions
 #include "math/functions/special/special_functions.h"

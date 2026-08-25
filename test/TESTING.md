@@ -2,13 +2,32 @@
 
 ## Run Tests
 
+### Using CMake and CTest (Recommended)
+
+```bash
+cmake --build build -j4
+ctest --test-dir build --output-on-failure
+```
+
+Or run individual test suites via the unified runner:
+```bash
+./build/calculator_tests -s core        # Core arithmetic and variables
+./build/calculator_tests -s symbolic    # Symbolic CAS, algebra, and calculus
+./build/calculator_tests -s analysis    # ODE, optimization, and numerical analysis
+./build/calculator_tests -s matrix      # Linear algebra and decompositions
+./build/calculator_tests -s math        # Elementary and special functions
+./build/calculator_tests -s system      # I/O, persistence, plotting, scripting
+./build/calculator_tests --benchmark    # Performance benchmarks
+```
+
+### Using Make
+
 ```bash
 make test
 ```
 
-The test binaries are `bin/calculator_tests` and `bin/planning_tests`.
-
-The automated regression source is under `test/suites/` with modular test files.
+The test runner is `build/calculator_tests` (or `bin/calculator_tests` when built via Makefile).
+All test suites are modularized under `test/suites/`.
 
 Use `make script-test` for the CLI script validation, or `make check` to run
 both the C++ regression suite and the script validation.
@@ -38,22 +57,20 @@ both the C++ regression suite and the script validation.
 - Matrix arithmetic including matrix/matrix, matrix/scalar, explicit inverse, positive powers, negative powers for invertible matrices, dot products, and outer products
 - Matrix analysis including `norm`, `trace`, `det`, `rank`, `rref`, `eigvals`, `eigvecs`, `null`, `least_squares`, `qr_q`, `qr_r`, `svd_u`, `svd_s`, `svd_vt`, and `solve`
 - Matrix-specific error paths such as shape mismatch, non-square analysis, singular inverse attempts, invalid indices, and unsupported complex eigenvalue cases
-- Symbolic calculus including product and chain-rule differentiation, mixed partial derivatives, rule-based integration, gradients, Jacobians, Hessians, and critical-point classification
+- Symbolic calculus including product and chain-rule differentiation, mixed partial derivatives, rule-based integration, Risch integration engine, gradients, Jacobians, Hessians, and critical-point classification
 - Limits including removable singularities, one-sided limits, trigonometric/exponential cancellation, and non-existent two-sided limit errors
 - Equation solving including Newton solve, bisection, secant, fixed-point iteration, polynomial roots, and matrix linear-system solving
+- LaTeX mathematical text formatting for symbolic expressions and matrices
 - Constants `pi` and `e`
 - Error paths such as division by zero, invalid functions, and invalid domains
 
 ## Expected Result
 
-`make test` should report zero failed cases and exit with status code `0`.
+All 8 test suites should pass with 0 failures:
 
-Current expected summary:
-
-- `Passed: 867`
-- `Failed: 0`
-- `Planning passed: 6`
-- `Planning failed: 0`
+```text
+100% tests passed, 0 tests failed out of 8
+```
 
 ## Example Scripts
 

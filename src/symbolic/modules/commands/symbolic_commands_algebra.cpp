@@ -15,8 +15,10 @@
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
 #include "symbolic/base/assumptions.h"
 #include "symbolic/algebra/groebner/groebner_basis.h"
+#include "symbolic/solver/symbolic_solver.h"
 #include "core/services/string_utils.h"
 #include <vector>
+#include <set>
 #include <sstream>
 
 namespace symbolic_commands {
@@ -27,17 +29,55 @@ bool handle_algebra_commands(const SymbolicCommandContext& ctx,
                             const std::vector<std::string>& arguments,
                             std::string* output) {
     if (command == "groebner") {
-        auto parts = ctx.parse_symbolic_expression_list(inside);
-        if (parts.size() < 2) throw std::runtime_error("groebner expects list of polynomials and list of variables");
-        // Simplified handling for now as in original code
-        return false;
+        if (arguments.empty()) throw std::runtime_error("groebner expects polynomials and variables");
+        std::vector<SymbolicExpression> polys;
+        std::vector<std::string> vars;
+
+        if (arguments.size() >= 2 && !arguments[0].empty() && arguments[0].front() == '[' &&
+            !arguments.back().empty() && arguments.back().front() == '[') {
+            symbolic_solver::parse_equation_system(arguments[0], &polys);
+            std::vector<SymbolicExpression> var_exprs;
+            symbolic_solver::parse_equation_system(arguments.back(), &var_exprs);
+            for (const auto& ve : var_exprs) {
+                if (ve.node_type() == NodeType::kVariable) {
+                    vars.push_back(ve.node_text());
+                }
+            }
+        } else {
+            auto parts = ctx.parse_symbolic_expression_list(inside);
+            for (const auto& p : parts) {
+                if (p.node_type() == NodeType::kVariable) {
+                    vars.push_back(p.node_text());
+                } else {
+                    polys.push_back(p);
+                }
+            }
+            if (vars.empty()) {
+                std::set<std::string> var_set;
+                for (const auto& p : polys) {
+                    for (const auto& iv : p.identifier_variables()) var_set.insert(iv);
+                }
+                vars.assign(var_set.begin(), var_set.end());
+            }
+        }
+
+        auto basis = symbolic_groebner::compute_groebner_basis(polys, vars);
+        std::ostringstream oss;
+        oss << "[";
+        for (size_t i = 0; i < basis.size(); ++i) {
+            if (i > 0) oss << ", ";
+            oss << basis[i].simplify().to_string();
+        }
+        oss << "]";
+        *output = oss.str();
+        return true;
     }
 
-    if (command == "simplify" || command == "latex") {
+    if (command == "simplify" || command == "latex" || command == "to_latex") {
         std::string var;
         SymbolicExpression expr;
         ctx.resolve_symbolic(inside, false, &var, &expr);
-        if (command == "latex") {
+        if (command == "latex" || command == "to_latex") {
             *output = expr.to_latex();
         } else {
             *output = expr.simplify().to_string();

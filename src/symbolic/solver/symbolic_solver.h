@@ -170,6 +170,12 @@ private:
         const std::vector<SymbolicExpression>& rhs,
         const std::vector<std::string>& variables);
 
+    // 尝试初等超越方程求解
+    bool try_elementary_transcendental(
+        const SymbolicExpression& equation,
+        const std::string& variable,
+        Solution* result);
+
     // 尝试 Lambert W 函数形式
     bool try_lambert_w(
         const SymbolicExpression& equation,

@@ -60,13 +60,15 @@ the main functions.
 
 #### types/ (Type Layer)
 - `scalar_type.h` - Core scalar type definitions
-- `stored_value.h` - Stored value types (scalar, matrix, string, etc.)
 - `function.h` - Function type definitions
+
+#### core/value/ (Value Model)
+- `stored_value.h` - Stored value types (scalar, matrix, string, rational, complex, etc.)
 
 #### math/ (Math Layer)
 - `mymath.h` - Basic math functions and constants
-- `helpers/` - Math helper tools (integer operations, base conversion)
-- `types/float128.h` - High-precision math support (float128_t)
+- `functions/`, `numeric/` - Math helper tools (integer operations, base conversion, float128, exact precision)
+- `numeric/float128/float128.h` - High-precision math support (float128_t)
 
 #### parser/ (Parser Layer)
 - `unified_expression_parser.h` - Main entry point for all expression types
@@ -193,7 +195,7 @@ Rebuilds expressions using symbolic nodes (`src/symbolic/core/`).
 
 Calculator state lives in `Calculator::Impl`.
 Variables are managed by `Scope` and resolved by `VariableResolver`.
-`StoredValue` (`src/types/stored_value.h`) holds decimals, matrices, strings,
+`StoredValue` (`src/core/value/stored_value.h`) holds decimals, matrices, strings,
 or symbolic expressions.
 
 ## Symbolic Constants Flow

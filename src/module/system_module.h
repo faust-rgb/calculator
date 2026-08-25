@@ -38,7 +38,7 @@ class ServiceLocator;
  *
  * 系统模块是计算器的核心组件，通常在初始化时最先注册。
  */
-class SystemModule : public CalculatorModule {
+class SystemModule : public CommandModuleBase {
 public:
     /**
      * @brief 返回模块名称

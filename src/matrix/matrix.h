@@ -112,6 +112,9 @@ struct TMatrix {
     /** @brief 转换为可读字符串 */
     std::string to_string() const;
 
+    /** @brief 转换为 LaTeX 数学矩阵表示 (如 pmatrix, bmatrix 等) */
+    std::string to_latex(const std::string& env = "pmatrix") const;
+
     // In-place operators
     TMatrix& operator+=(const TMatrix& rhs);
     TMatrix& operator-=(const TMatrix& rhs);

@@ -521,6 +521,9 @@ std::string IntegrationModule::execute_args(const std::string& command,
     ctx.parse_decimal = [services](const std::string& expr) { return services->evaluation.parse_decimal(expr); };
     ctx.build_scoped_evaluator = [services](const std::string& expression) { return services->evaluation.build_decimal_evaluator(expression); };
     ctx.normalize_result = [services](Scalar value) { return services->evaluation.normalize_result(value); };
+    ctx.resolve_symbolic = [&locator](const std::string& expression, bool req, std::string* var, SymbolicExpression* expr) {
+        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(expression, req, var, expr);
+    };
     ctx.build_analysis = [&locator, services](const std::string& expression) {
         SymbolicExpression expr; std::string var;
         locator.resolve<CoreServices>()->symbolic.resolve_symbolic(expression, false, &var, &expr);

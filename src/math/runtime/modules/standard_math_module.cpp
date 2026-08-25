@@ -44,8 +44,22 @@ StandardMathModule::get_functions_map() const {
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
     // Trigonometric
-    funcs["sin"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::sin(a[0]); }, "sin", 1, 1);
-    funcs["cos"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::cos(a[0]); }, "cos", 1, 1);
+    funcs["sin"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1) throw MathError("sin expects 1 argument");
+        if (args[0].is_complex) {
+            Scalar r = args[0].complex.real(), i = args[0].complex.imag();
+            return StoredValue(mymath::complex<Scalar>(mymath::sin(r) * mymath::cosh(i), mymath::cos(r) * mymath::sinh(i)));
+        }
+        return StoredValue(mymath::sin(args[0].decimal));
+    };
+    funcs["cos"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1) throw MathError("cos expects 1 argument");
+        if (args[0].is_complex) {
+            Scalar r = args[0].complex.real(), i = args[0].complex.imag();
+            return StoredValue(mymath::complex<Scalar>(mymath::cos(r) * mymath::cosh(i), -mymath::sin(r) * mymath::sinh(i)));
+        }
+        return StoredValue(mymath::cos(args[0].decimal));
+    };
     funcs["tan"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::tan(a[0]); }, "tan", 1, 1);
     funcs["asin"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::asin(a[0]); }, "asin", 1, 1);
     funcs["acos"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::acos(a[0]); }, "acos", 1, 1);
@@ -69,9 +83,24 @@ StandardMathModule::get_functions_map() const {
     funcs["atanh"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::atanh(a[0]); }, "atanh", 1, 1);
 
     // Log/Exp
-    funcs["exp"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::exp(a[0]); }, "exp", 1, 1);
+    funcs["exp"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1) throw MathError("exp expects 1 argument");
+        if (args[0].is_complex) {
+            Scalar m = mymath::exp(args[0].complex.real());
+            Scalar theta = args[0].complex.imag();
+            return StoredValue(mymath::complex<Scalar>(m * mymath::cos(theta), m * mymath::sin(theta)));
+        }
+        return StoredValue(mymath::exp(args[0].decimal));
+    };
     funcs["exp2"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::pow(Scalar(2.0L), a[0]); }, "exp2", 1, 1);
-    funcs["ln"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::ln(a[0]); }, "ln", 1, 1);
+    funcs["ln"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1) throw MathError("ln expects 1 argument");
+        if (args[0].is_complex) {
+            Scalar r = args[0].complex.real(), i = args[0].complex.imag();
+            return StoredValue(mymath::complex<Scalar>(Scalar(0.5L) * mymath::ln(r * r + i * i), mymath::atan2(i, r)));
+        }
+        return StoredValue(mymath::ln(args[0].decimal));
+    };
     funcs["log"] = wrap_scalar([](const std::vector<Scalar>& a) {
         if (a.size() == 1) return mymath::ln(a[0]);
         if (a[1] <= Scalar(0.0L) || mymath::is_near_zero(a[1] - Scalar(1.0L)))
@@ -88,7 +117,14 @@ StandardMathModule::get_functions_map() const {
     funcs["pow"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::pow(a[0], a[1]); }, "pow", 2, 2);
 
     // Basic
-    funcs["abs"] = wrap_scalar([](const std::vector<Scalar>& a) { return mymath::abs(a[0]); }, "abs", 1, 1);
+    funcs["abs"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1) throw MathError("abs expects 1 argument");
+        if (args[0].is_complex) {
+            Scalar r = args[0].complex.real(), i = args[0].complex.imag();
+            return StoredValue(mymath::sqrt(r * r + i * i));
+        }
+        return StoredValue(mymath::abs(args[0].decimal));
+    };
     funcs["sign"] = wrap_scalar([](const std::vector<Scalar>& a) {
         if (a[0] == Scalar(0.0L)) return Scalar(0.0L);
         return a[0] > Scalar(0.0L) ? Scalar(1.0L) : Scalar(-1.0L);
@@ -147,13 +183,68 @@ StandardMathModule::get_functions_map() const {
     // Other
     funcs["rat"] = wrap_scalar([](const std::vector<Scalar>& a) { return a[0]; }, "rat", 1, 2);
 
+    // Complex Numbers
+    funcs["complex"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("complex expects 2 arguments");
+        return StoredValue(mymath::complex<Scalar>(args[0].decimal, args[1].decimal));
+    };
+
+    funcs["polar"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("polar expects 2 arguments");
+        Scalar r = args[0].decimal, theta = args[1].decimal;
+        return StoredValue(mymath::complex<Scalar>(r * mymath::cos(theta), r * mymath::sin(theta)));
+    };
+
+    funcs["real"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1) throw std::runtime_error("real expects 1 argument");
+        if (args[0].is_complex) return StoredValue(args[0].complex.real());
+        return StoredValue(args[0].decimal);
+    };
+
+    funcs["imag"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1) throw std::runtime_error("imag expects 1 argument");
+        if (args[0].is_complex) return StoredValue(args[0].complex.imag());
+        return StoredValue(Scalar(0.0L));
+    };
+
+    funcs["arg"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1) throw std::runtime_error("arg expects 1 argument");
+        const Scalar real = args[0].is_complex ? args[0].complex.real() : args[0].decimal;
+        const Scalar imag = args[0].is_complex ? args[0].complex.imag() : Scalar(0.0L);
+        const Scalar eps = Scalar(1e-15L);
+        if (mymath::is_near_zero(real, eps)) {
+            if (mymath::is_near_zero(imag, eps)) return StoredValue(Scalar(0.0L));
+            return StoredValue(imag > Scalar(0.0L) ? Scalar(mymath::kPi / 2.0) : Scalar(-mymath::kPi / 2.0));
+        }
+        Scalar angle = mymath::atan(imag / real);
+        if (real < Scalar(0.0L)) {
+            angle += imag >= Scalar(0.0L) ? Scalar(mymath::kPi) : Scalar(-mymath::kPi);
+        }
+        return StoredValue(angle);
+    };
+
+    funcs["conj"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1) throw std::runtime_error("conj expects 1 argument");
+        if (args[0].is_complex) {
+            return StoredValue(mymath::complex<Scalar>(args[0].complex.real(), -args[0].complex.imag()));
+        }
+        return args[0];
+    };
+
     return funcs;
 }
 
 std::vector<std::string> StandardMathModule::get_function_names() const {
-    std::vector<std::string> names;
-    auto funcs = get_functions_map();
-    for (const auto& [name, _] : funcs) names.push_back(name);
+    static const std::vector<std::string> names = {
+        "abs", "acos", "acot", "acsc", "arg", "asec", "asin", "asinh", "acosh",
+        "atan", "atanh", "bessel", "bessel_j", "beta", "c2f", "cbrt", "ceil",
+        "celsius", "clamp", "complex", "conj", "cos", "cos_deg", "cosh", "cot",
+        "csc", "deg", "deg2rad", "delta", "erf", "erfc", "exp", "exp2", "f2c",
+        "fahrenheit", "floor", "gamma", "heaviside", "imag", "impulse", "kelvin",
+        "ln", "log", "log10", "log2", "max", "min", "polar", "pow", "rad",
+        "rad2deg", "rat", "real", "root", "round", "sec", "sign", "sin",
+        "sin_deg", "sinh", "sqrt", "step", "tan", "tanh", "trunc", "zeta"
+    };
     return names;
 }
 

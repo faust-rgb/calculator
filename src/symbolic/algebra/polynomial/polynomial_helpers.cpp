@@ -114,7 +114,7 @@ SymbolicProperty symbolic_property(const SymbolicExpression& expression) {
         Scalar exponent = Scalar(0);
         const SymbolicExpression base(node->left);
         if (SymbolicExpression(node->right).is_number(&exponent) &&
-            mymath::is_integer(exponent, Scalar(app::integer_tolerance()))) {
+            mymath::is_integer(exponent, Scalar(math::config::integer_tolerance()))) {
             const long long n = static_cast<long long>(mymath::round(exponent).to_long_double());
             const Property base_property = symbolic_property(base);
             if (n == 0) return Property::kPositive;
@@ -589,7 +589,7 @@ SymbolicExpression make_sorted_product(Scalar numeric_factor,
                                property == SymbolicProperty::kNonZero;
         const bool safe_numeric_exponent =
             exponent.is_number(&exponent_value) &&
-            mymath::is_integer(exponent_value, Scalar(app::integer_tolerance())) &&
+            mymath::is_integer(exponent_value, Scalar(math::config::integer_tolerance())) &&
             exponent_value >= Scalar(0);
         if (!safe_base && !safe_numeric_exponent) {
             ungrouped.push_back(factor);

@@ -203,6 +203,151 @@ bool multiplicatively_equivalent(const SymbolicExpression& lhs,
            lhs_den == rhs_den;
 }
 
+bool evaluate_symbolic_expression_scalar(const SymbolicExpression& expr, Scalar* out) {
+    if (!expr.has_node() || !expr.node_) return false;
+    const auto& node = expr.node_;
+    switch (node->type) {
+        case NodeType::kNumber: {
+            return expr.is_number(out);
+        }
+        case NodeType::kPi:
+            *out = mymath::pi();
+            return true;
+        case NodeType::kE:
+            *out = mymath::e();
+            return true;
+        case NodeType::kNegate: {
+            Scalar v = Scalar(0.0L);
+            if (evaluate_symbolic_expression_scalar(SymbolicExpression(node->left), &v)) {
+                *out = -v;
+                return true;
+            }
+            return false;
+        }
+        case NodeType::kAdd: {
+            Scalar l = Scalar(0.0L), r = Scalar(0.0L);
+            if (evaluate_symbolic_expression_scalar(SymbolicExpression(node->left), &l) &&
+                evaluate_symbolic_expression_scalar(SymbolicExpression(node->right), &r)) {
+                *out = l + r;
+                return true;
+            }
+            return false;
+        }
+        case NodeType::kSubtract: {
+            Scalar l = Scalar(0.0L), r = Scalar(0.0L);
+            if (evaluate_symbolic_expression_scalar(SymbolicExpression(node->left), &l) &&
+                evaluate_symbolic_expression_scalar(SymbolicExpression(node->right), &r)) {
+                *out = l - r;
+                return true;
+            }
+            return false;
+        }
+        case NodeType::kMultiply: {
+            Scalar l = Scalar(0.0L), r = Scalar(0.0L);
+            if (evaluate_symbolic_expression_scalar(SymbolicExpression(node->left), &l) &&
+                evaluate_symbolic_expression_scalar(SymbolicExpression(node->right), &r)) {
+                *out = l * r;
+                return true;
+            }
+            return false;
+        }
+        case NodeType::kDivide: {
+            Scalar l = Scalar(0.0L), r = Scalar(0.0L);
+            if (evaluate_symbolic_expression_scalar(SymbolicExpression(node->left), &l) &&
+                evaluate_symbolic_expression_scalar(SymbolicExpression(node->right), &r) &&
+                !mymath::is_near_zero(r, 1e-12)) {
+                *out = l / r;
+                return true;
+            }
+            return false;
+        }
+        case NodeType::kPower: {
+            Scalar b = Scalar(0.0L), e = Scalar(0.0L);
+            if (evaluate_symbolic_expression_scalar(SymbolicExpression(node->left), &b) &&
+                evaluate_symbolic_expression_scalar(SymbolicExpression(node->right), &e)) {
+                *out = mymath::pow(b, e);
+                return true;
+            }
+            return false;
+        }
+        case NodeType::kFunction: {
+            Scalar arg = Scalar(0.0L);
+            if (!evaluate_symbolic_expression_scalar(SymbolicExpression(node->left), &arg)) {
+                return false;
+            }
+            const std::string& name = node->text;
+            if (name == "sqrt") {
+                if (arg < 0) return false;
+                *out = mymath::sqrt(arg);
+                return true;
+            } else if (name == "cbrt") {
+                *out = mymath::cbrt(arg);
+                return true;
+            } else if (name == "exp") {
+                *out = mymath::exp(arg);
+                return true;
+            } else if (name == "ln" || name == "log") {
+                if (arg <= 0) return false;
+                *out = mymath::ln(arg);
+                return true;
+            } else if (name == "sin") {
+                *out = mymath::sin(arg);
+                return true;
+            } else if (name == "cos") {
+                *out = mymath::cos(arg);
+                return true;
+            } else if (name == "tan") {
+                *out = mymath::tan(arg);
+                return true;
+            } else if (name == "asin") {
+                if (arg < -1.0L || arg > 1.0L) return false;
+                *out = mymath::asin(arg);
+                return true;
+            } else if (name == "acos") {
+                if (arg < -1.0L || arg > 1.0L) return false;
+                *out = mymath::acos(arg);
+                return true;
+            } else if (name == "atan") {
+                *out = mymath::atan(arg);
+                return true;
+            } else if (name == "sinh") {
+                *out = mymath::sinh(arg);
+                return true;
+            } else if (name == "cosh") {
+                *out = mymath::cosh(arg);
+                return true;
+            } else if (name == "tanh") {
+                *out = mymath::tanh(arg);
+                return true;
+            } else if (name == "coth") {
+                if (mymath::is_near_zero(arg, 1e-12)) return false;
+                *out = Scalar(1.0L) / mymath::tanh(arg);
+                return true;
+            } else if (name == "asinh") {
+                *out = mymath::asinh(arg);
+                return true;
+            } else if (name == "acosh") {
+                if (arg < 1.0L) return false;
+                *out = mymath::acosh(arg);
+                return true;
+            } else if (name == "atanh") {
+                if (arg <= -1.0L || arg >= 1.0L) return false;
+                *out = mymath::atanh(arg);
+                return true;
+            } else if (name == "abs") {
+                *out = mymath::abs(arg);
+                return true;
+            } else if (name == "sign") {
+                *out = (arg > 0) ? Scalar(1.0L) : ((arg < 0) ? Scalar(-1.0L) : Scalar(0.0L));
+                return true;
+            }
+            return false;
+        }
+        default:
+            return false;
+    }
+}
+
 }  // namespace
 
 // ============================================================================
@@ -281,12 +426,9 @@ IntegrationResult IntegrationEngine::integrate_recursive(
         try {
             const SymbolicExpression direct = expression.integral(variable_name);
             const bool verified =
-                expr_is_zero((direct.derivative(variable_name) - expression).simplify());
-            const bool has_special_func = expr_has_func(expression, "sqrt") || expr_has_func(expression, "ln");
-            const bool trusted_elementary_shape =
-                !expr_has_variable_named(direct, "t1") && has_special_func;
-            const bool direct_special_rule = has_special_func;
-            if ((verified && direct_special_rule) || trusted_elementary_shape) {
+                expr_is_zero((direct.derivative(variable_name) - expression).simplify()) ||
+                verify_integration(expression, direct, variable_name);
+            if (verified && !expr_has_variable_named(direct, "t1")) {
                 result = IntegrationResult::ok(direct, "legacy_direct");
                 --current_depth_;
                 integration_stack_.erase(key);
@@ -1628,22 +1770,24 @@ bool IntegrationEngine::verify_integration(
     }
 
     // 尝试数值验证
-    // 在几个点验证
-    std::vector<Scalar> test_points = {2.0, 3.0, 5.0, 7.0};
-    bool validated_point = false;
+    // 在定义域内多个典型点验证
+    std::vector<Scalar> test_points = {0.25L, 0.5L, 0.75L, 1.5L, 2.5L, 3.5L};
+    int matched_points = 0;
     for (Scalar x : test_points) {
-        Scalar orig_val = Scalar(0.0L), deriv_val = 0.0L;
+        Scalar orig_val = Scalar(0.0L), deriv_val = Scalar(0.0L);
 
         try {
             SymbolicExpression subst_x = SymbolicExpression::number(x);
             SymbolicExpression orig_subst = original_simplified.substitute(variable_name, subst_x);
             SymbolicExpression deriv_subst = derivative.substitute(variable_name, subst_x);
 
-            if (orig_subst.is_number(&orig_val) && deriv_subst.is_number(&deriv_val)) {
-                validated_point = true;
+            if (evaluate_symbolic_expression_scalar(orig_subst, &orig_val) &&
+                evaluate_symbolic_expression_scalar(deriv_subst, &deriv_val)) {
                 const Scalar scale = std::max({Scalar(1.0L), mymath::abs(orig_val),
                                                mymath::abs(deriv_val)});
-                if (!mymath::is_near_zero(orig_val - deriv_val, Scalar(1e-8L) * scale)) {
+                if (mymath::abs(orig_val - deriv_val) <= Scalar(1e-6L) * scale) {
+                    ++matched_points;
+                } else {
                     return false;
                 }
             }
@@ -1652,7 +1796,7 @@ bool IntegrationEngine::verify_integration(
         }
     }
 
-    return validated_point;
+    return matched_points >= 2;
     } catch (const std::exception&) {
         return false;
     }
@@ -1671,7 +1815,9 @@ std::vector<SymbolicExpression> IntegrationEngine::collect_substitution_candidat
 
         switch (node->type) {
             case NodeType::kFunction:
-                // 函数参数是候选
+                // 函数本身是候选 (如 exp(x), sqrt(x+1), ln(x))
+                candidates.push_back(expr);
+                // 函数参数也是候选
                 candidates.push_back(SymbolicExpression(node->left));
                 collect(SymbolicExpression(node->left));
                 break;
@@ -1741,7 +1887,7 @@ bool IntegrationEngine::try_substitution_with_candidate(
 
     if (detect_derivative_pattern(expression, candidate, variable_name,
                                    &constant, &h_expr)) {
-        if (expression_node_count(h_expr) >= expression_node_count(expression)) {
+        if (expression_node_count(h_expr) > expression_node_count(expression) * 3 + 10) {
             return false;
         }
 
@@ -1879,22 +2025,20 @@ bool IntegrationEngine::solve_cyclic_integration(
 
     // 收集 after_parts 中的加法项
     std::vector<SymbolicExpression> terms;
-    const auto& node = simplified_after.node_;
-    if (node->type == NodeType::kAdd) {
-        // 递归收集所有加法项
-        std::function<void(const SymbolicExpression&, std::vector<SymbolicExpression>*)> collect_additive;
-        collect_additive = [&](const SymbolicExpression& expr, std::vector<SymbolicExpression>* terms) {
-            if (expr.node_->type == NodeType::kAdd) {
-                collect_additive(SymbolicExpression(expr.node_->left), terms);
-                collect_additive(SymbolicExpression(expr.node_->right), terms);
-            } else {
-                terms->push_back(expr);
-            }
-        };
-        collect_additive(simplified_after, &terms);
-    } else {
-        terms.push_back(simplified_after);
-    }
+    std::function<void(const SymbolicExpression&, std::vector<SymbolicExpression>*)> collect_additive;
+    collect_additive = [&](const SymbolicExpression& expr, std::vector<SymbolicExpression>* terms_vec) {
+        if (!expr.has_node()) return;
+        if (expr.node_->type == NodeType::kAdd) {
+            collect_additive(SymbolicExpression(expr.node_->left), terms_vec);
+            collect_additive(SymbolicExpression(expr.node_->right), terms_vec);
+        } else if (expr.node_->type == NodeType::kSubtract) {
+            collect_additive(SymbolicExpression(expr.node_->left), terms_vec);
+            collect_additive(make_negate(SymbolicExpression(expr.node_->right)).simplify(), terms_vec);
+        } else {
+            terms_vec->push_back(expr);
+        }
+    };
+    collect_additive(simplified_after, &terms);
 
     // 在各项中寻找 original 的倍数
     SymbolicExpression non_original_terms = SymbolicExpression::number(0.0L);
@@ -2250,6 +2394,65 @@ bool detect_derivative_pattern(
             if (std::find(q_vars.begin(), q_vars.end(), variable_name) == q_vars.end()) {
                 *constant = 1.0L;
                 *h_expr = subst_quad;
+                return true;
+            }
+        }
+    }
+
+    // 3. 根式逆代换: candidate = sqrt(a*x + b) => u = sqrt(ax+b) => x = (u^2 - b)/a, dx = (2u/a) du
+    if (candidate.node_->type == NodeType::kFunction && candidate.node_->text == "sqrt" && candidate.node_->left) {
+        SymbolicExpression inner(candidate.node_->left);
+        SymbolicExpression a_lin_r, b_lin_r;
+        if (symbolic_decompose_linear(inner, variable_name, &a_lin_r, &b_lin_r) && !expr_is_zero(a_lin_r)) {
+            SymbolicExpression x_in_u = ((u * u - b_lin_r) / a_lin_r).expand().simplify();
+            SymbolicExpression x_var = SymbolicExpression::variable(variable_name);
+            SymbolicExpression subst_rad;
+            if (expression.node_->type == NodeType::kDivide) {
+                SymbolicExpression num(expression.node_->left);
+                SymbolicExpression den(expression.node_->right);
+                SymbolicExpression num_u = (num.substitute_expression(candidate, u).substitute_expression(x_var, x_in_u) *
+                                           (SymbolicExpression::number(Scalar(2.0L)) * u)).expand().simplify();
+                SymbolicExpression den_u = (den.substitute_expression(candidate, u).substitute_expression(x_var, x_in_u) *
+                                           a_lin_r).expand().simplify();
+                subst_rad = make_divide(num_u, den_u).simplify();
+            } else {
+                SymbolicExpression dx_dt = ((SymbolicExpression::number(Scalar(2.0L)) * u) / a_lin_r).simplify();
+                subst_rad = (expression.substitute_expression(candidate, u)
+                                       .substitute_expression(x_var, x_in_u) * dx_dt).expand().simplify();
+            }
+            auto r_vars = subst_rad.identifier_variables();
+            if (std::find(r_vars.begin(), r_vars.end(), variable_name) == r_vars.end()) {
+                *constant = 1.0L;
+                *h_expr = subst_rad;
+                return true;
+            }
+        }
+    }
+
+    // 4. 指数逆代换: candidate = exp(a*x + b) => u = exp(ax+b) => x = (ln(u) - b)/a, dx = 1/(a*u) du
+    if (candidate.node_->type == NodeType::kFunction && candidate.node_->text == "exp" && candidate.node_->left) {
+        SymbolicExpression inner(candidate.node_->left);
+        SymbolicExpression a_lin_e, b_lin_e;
+        if (symbolic_decompose_linear(inner, variable_name, &a_lin_e, &b_lin_e) && !expr_is_zero(a_lin_e)) {
+            SymbolicExpression x_in_u = ((make_function("ln", u) - b_lin_e) / a_lin_e).simplify();
+            SymbolicExpression x_var = SymbolicExpression::variable(variable_name);
+            SymbolicExpression subst_exp;
+            if (expression.node_->type == NodeType::kDivide) {
+                SymbolicExpression num(expression.node_->left);
+                SymbolicExpression den(expression.node_->right);
+                SymbolicExpression num_u = num.substitute_expression(candidate, u).substitute_expression(x_var, x_in_u).expand().simplify();
+                SymbolicExpression den_u = (den.substitute_expression(candidate, u).substitute_expression(x_var, x_in_u) *
+                                           (a_lin_e * u)).expand().simplify();
+                subst_exp = make_divide(num_u, den_u).simplify();
+            } else {
+                SymbolicExpression dx_dt = (SymbolicExpression::number(Scalar(1.0L)) / (a_lin_e * u)).simplify();
+                subst_exp = (expression.substitute_expression(candidate, u)
+                                       .substitute_expression(x_var, x_in_u) * dx_dt).expand().simplify();
+            }
+            auto e_vars = subst_exp.identifier_variables();
+            if (std::find(e_vars.begin(), e_vars.end(), variable_name) == e_vars.end()) {
+                *constant = 1.0L;
+                *h_expr = subst_exp;
                 return true;
             }
         }

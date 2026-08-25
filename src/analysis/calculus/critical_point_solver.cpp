@@ -61,9 +61,21 @@ Scalar evaluate_ast_node(const std::shared_ptr<SymbolicExpression::Node>& node,
             if (fname == "sin") return mymath::sin(arg);
             if (fname == "cos") return mymath::cos(arg);
             if (fname == "tan") return mymath::tan(arg);
+            if (fname == "asin" || fname == "arcsin") return mymath::asin(arg);
+            if (fname == "acos" || fname == "arccos") return mymath::acos(arg);
+            if (fname == "atan" || fname == "arctan") return mymath::atan(arg);
+            if (fname == "sinh") return mymath::sinh(arg);
+            if (fname == "cosh") return mymath::cosh(arg);
+            if (fname == "tanh") return mymath::tanh(arg);
+            if (fname == "asinh" || fname == "arcsinh") return mymath::asinh(arg);
+            if (fname == "acosh" || fname == "arccosh") return mymath::acosh(arg);
+            if (fname == "atanh" || fname == "arctanh") return mymath::atanh(arg);
             if (fname == "exp") return mymath::exp(arg);
             if (fname == "ln" || fname == "log") return mymath::log(arg);
             if (fname == "sqrt") return mymath::sqrt(arg);
+            if (fname == "cbrt") return mymath::cbrt(arg);
+            if (fname == "abs" || fname == "fabs") return mymath::abs(arg);
+            if (fname == "sgn" || fname == "sign") return (arg > Scalar(0)) ? Scalar(1) : ((arg < Scalar(0)) ? Scalar(-1) : Scalar(0));
             throw std::runtime_error("unsupported function in numeric eval: " + fname);
         }
         default:
@@ -97,10 +109,6 @@ std::vector<Scalar> find_univariate_critical_points(
         critical_points.push_back(normalize_result(x));
     };
 
-    const Scalar scan_min = Scalar(-100);
-    const Scalar scan_max = Scalar(100);
-    const int coarse_segments = 512;
-
     // 计算二阶导数
     SymbolicExpression second_deriv = derivative.derivative(variable).simplify();
     auto eval_second = [&](Scalar x) -> Scalar {
@@ -111,70 +119,113 @@ std::vector<Scalar> find_univariate_critical_points(
         }
     };
 
-    // 扫描区间寻找符号变化
-    Scalar previous_x = scan_min;
-    Scalar previous_value = eval_derivative(previous_x);
+    // 多尺度扫描区间寻找符号变化
+    struct ScanRange {
+        Scalar min_val;
+        Scalar max_val;
+        int segments;
+    };
+    const std::vector<ScanRange> scan_ranges = {
+        {Scalar(-20), Scalar(20), 400},
+        {Scalar(-200), Scalar(200), 400}
+    };
 
-    for (int i = 1; i <= coarse_segments; ++i) {
-        const Scalar current_x = scan_min + (scan_max - scan_min) * Scalar(i) / Scalar(coarse_segments);
-        const Scalar current_value = eval_derivative(current_x);
-
-        // 二分法寻找根
-        if ((previous_value < Scalar(0) && current_value > Scalar(0)) ||
-            (previous_value > Scalar(0) && current_value < Scalar(0))) {
-            Scalar left = previous_x;
-            Scalar right = current_x;
-            Scalar left_value = previous_value;
-
-            for (int iter = 0; iter < 80; ++iter) {
-                const Scalar mid = (left + right) * Scalar(0.5L);
-                const Scalar mid_value = eval_derivative(mid);
-
-                if (mymath::isfinite(mid_value) &&
-                    mymath::abs(mid_value) < precision::newton_tolerance<Scalar>()) {
-                    left = right = mid;
-                    break;
-                }
-
-                if ((left_value < Scalar(0) && mid_value > Scalar(0)) ||
-                    (left_value > Scalar(0) && mid_value < Scalar(0))) {
-                    right = mid;
-                } else {
-                    left = mid;
-                    left_value = mid_value;
-                }
-            }
-            add_point((left + right) * Scalar(0.5L));
+    for (const auto& sr : scan_ranges) {
+        Scalar previous_x = sr.min_val;
+        Scalar previous_value = Scalar(0);
+        try {
+            previous_value = eval_derivative(previous_x);
+        } catch (...) {
+            continue;
         }
-        previous_x = current_x;
-        previous_value = current_value;
-    }
 
-    // Newton-Raphson 精化
-    for (int i = 0; i <= coarse_segments; ++i) {
-        const Scalar x = scan_min + (scan_max - scan_min) * Scalar(i) / Scalar(coarse_segments);
-        const Scalar deriv_val = eval_derivative(x);
-        const Scalar second_val = eval_second(x);
-
-        if (mymath::abs(deriv_val) < precision::gradient_convergence_threshold<Scalar>() &&
-            mymath::abs(second_val) > precision::sqrt_epsilon<Scalar>()) {
-            Scalar refined_x = x;
-
-            for (int iter = 0; iter < 20; ++iter) {
-                const Scalar f_prime = eval_derivative(refined_x);
-                const Scalar f_double_prime = eval_second(refined_x);
-
-                if (mymath::isfinite(f_prime) &&
-                    mymath::abs(f_prime) < precision::newton_tolerance<Scalar>()) break;
-                if (mymath::abs(f_double_prime) < precision::gradient_convergence_threshold<Scalar>()) break;
-
-                refined_x = refined_x - f_prime / f_double_prime;
+        for (int i = 1; i <= sr.segments; ++i) {
+            const Scalar current_x = sr.min_val + (sr.max_val - sr.min_val) * Scalar(i) / Scalar(sr.segments);
+            Scalar current_value = Scalar(0);
+            try {
+                current_value = eval_derivative(current_x);
+            } catch (...) {
+                previous_x = current_x;
+                continue;
             }
 
-            if (mymath::isfinite(eval_derivative(refined_x)) &&
-                mymath::abs(eval_derivative(refined_x)) < precision::newton_tolerance<Scalar>() &&
-                mymath::abs(eval_second(refined_x)) > precision::sqrt_epsilon<Scalar>()) {
-                add_point(refined_x);
+            // 二分法寻找根
+            if ((previous_value < Scalar(0) && current_value > Scalar(0)) ||
+                (previous_value > Scalar(0) && current_value < Scalar(0))) {
+                Scalar left = previous_x;
+                Scalar right = current_x;
+                Scalar left_value = previous_value;
+
+                for (int iter = 0; iter < 80; ++iter) {
+                    const Scalar mid = (left + right) * Scalar(0.5L);
+                    Scalar mid_value = Scalar(0);
+                    try {
+                        mid_value = eval_derivative(mid);
+                    } catch (...) {
+                        break;
+                    }
+
+                    if (mymath::isfinite(mid_value) &&
+                        mymath::abs(mid_value) < precision::newton_tolerance<Scalar>()) {
+                        left = right = mid;
+                        break;
+                    }
+
+                    if ((left_value < Scalar(0) && mid_value > Scalar(0)) ||
+                        (left_value > Scalar(0) && mid_value < Scalar(0))) {
+                        right = mid;
+                    } else {
+                        left = mid;
+                        left_value = mid_value;
+                    }
+                }
+                add_point((left + right) * Scalar(0.5L));
+            }
+            previous_x = current_x;
+            previous_value = current_value;
+        }
+
+        // Newton-Raphson 精化
+        for (int i = 0; i <= sr.segments; ++i) {
+            const Scalar x = sr.min_val + (sr.max_val - sr.min_val) * Scalar(i) / Scalar(sr.segments);
+            Scalar deriv_val = Scalar(0);
+            Scalar second_val = Scalar(0);
+            try {
+                deriv_val = eval_derivative(x);
+                second_val = eval_second(x);
+            } catch (...) {
+                continue;
+            }
+
+            if (mymath::abs(deriv_val) < precision::gradient_convergence_threshold<Scalar>() &&
+                mymath::abs(second_val) > precision::sqrt_epsilon<Scalar>()) {
+                Scalar refined_x = x;
+
+                for (int iter = 0; iter < 20; ++iter) {
+                    Scalar f_prime = Scalar(0);
+                    Scalar f_double_prime = Scalar(0);
+                    try {
+                        f_prime = eval_derivative(refined_x);
+                        f_double_prime = eval_second(refined_x);
+                    } catch (...) {
+                        break;
+                    }
+
+                    if (mymath::isfinite(f_prime) &&
+                        mymath::abs(f_prime) < precision::newton_tolerance<Scalar>()) break;
+                    if (mymath::abs(f_double_prime) < precision::gradient_convergence_threshold<Scalar>()) break;
+
+                    refined_x = refined_x - f_prime / f_double_prime;
+                }
+
+                try {
+                    if (mymath::isfinite(eval_derivative(refined_x)) &&
+                        mymath::abs(eval_derivative(refined_x)) < precision::newton_tolerance<Scalar>() &&
+                        mymath::abs(eval_second(refined_x)) > precision::sqrt_epsilon<Scalar>()) {
+                        add_point(refined_x);
+                    }
+                } catch (...) {
+                }
             }
         }
     }
@@ -325,10 +376,24 @@ std::vector<std::map<std::string, Scalar>> find_multivariate_critical_points(
                 }
             }
         }
+    } else {
+        // 变量数 > 3 时沿各坐标轴以及主对角线采样
+        for (size_t i = 0; i < variables.size(); ++i) {
+            for (Scalar gv : grid_values) {
+                std::map<std::string, Scalar> pt = origin;
+                pt[variables[i]] = gv;
+                starting_points.push_back(pt);
+            }
+        }
+        for (Scalar gv : {Scalar(-1), Scalar(1), Scalar(5), Scalar(-5)}) {
+            std::map<std::string, Scalar> pt;
+            for (const auto& v : variables) pt[v] = gv;
+            starting_points.push_back(pt);
+        }
     }
 
     // 添加随机起始点
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 10; ++i) {
         std::map<std::string, Scalar> pt;
         for (const auto& v : variables) {
             pt[v] = Scalar(static_cast<long double>(rand()) / RAND_MAX * 20.0L - 10.0L);

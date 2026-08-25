@@ -5,6 +5,7 @@
 #include "analysis/integration/vector_field_theorems.h"
 #include "analysis/modules/integration_module.h"
 #include "analysis/integration/multivariable_integrator.h"
+#include "symbolic/core/symbolic_expression.h"
 #include "math/mymath.h"
 
 #include <sstream>
@@ -38,49 +39,107 @@ std::function<Scalar(const std::vector<Scalar>&)> make_bound_func(
     };
 }
 
-// 计算 ∂f/∂x (使用 Scalar 进行内部计算)
+// 优先采用符号微分的单变量导数求值器
+std::function<Scalar(Scalar)> make_1d_derivative_evaluator(
+    const IntegrationContext& ctx,
+    const std::string& expr_str,
+    const std::string& var_name,
+    Scalar bound_min = -mymath::infinity(),
+    Scalar bound_max = mymath::infinity()) {
+    if (ctx.resolve_symbolic) {
+        try {
+            SymbolicExpression sym_expr;
+            std::string dummy;
+            ctx.resolve_symbolic(expr_str, false, &dummy, &sym_expr);
+            SymbolicExpression der = sym_expr.derivative(var_name).simplify();
+            auto der_eval = ctx.build_scoped_evaluator(der.to_string());
+            return [der_eval, var_name](Scalar t) -> Scalar {
+                return der_eval({{var_name, t}});
+            };
+        } catch (...) {
+        }
+    }
+    auto eval = ctx.build_scoped_evaluator(expr_str);
+    return [eval, var_name, bound_min, bound_max](Scalar t) -> Scalar {
+        Scalar h = integration_engine::adaptive_derivative_step(t);
+        if (t - h < bound_min) {
+            return (eval({{var_name, t + h}}) - eval({{var_name, t}})) / h;
+        } else if (t + h > bound_max) {
+            return (eval({{var_name, t}}) - eval({{var_name, t - h}})) / h;
+        } else {
+            return (eval({{var_name, t + h}}) - eval({{var_name, t - h}})) / (Scalar(2.0L) * h);
+        }
+    };
+}
+
+// 优先采用符号微分的多变量偏导数求值器
+std::function<Scalar(Scalar, Scalar, Scalar)> make_partial_derivative_evaluator(
+    const IntegrationContext& ctx,
+    const std::string& expr_str,
+    const std::string& diff_var,
+    const std::string& x_var,
+    const std::string& y_var,
+    const std::string& z_var) {
+    if (ctx.resolve_symbolic) {
+        try {
+            SymbolicExpression sym_expr;
+            std::string dummy;
+            ctx.resolve_symbolic(expr_str, false, &dummy, &sym_expr);
+            SymbolicExpression der = sym_expr.derivative(diff_var).simplify();
+            auto der_eval = ctx.build_scoped_evaluator(der.to_string());
+            return [der_eval, x_var, y_var, z_var](Scalar x, Scalar y, Scalar z) -> Scalar {
+                return der_eval({{x_var, x}, {y_var, y}, {z_var, z}});
+            };
+        } catch (...) {
+        }
+    }
+    auto eval = ctx.build_scoped_evaluator(expr_str);
+    return [eval, diff_var, x_var, y_var, z_var](Scalar x, Scalar y, Scalar z) -> Scalar {
+        Scalar target_val = (diff_var == x_var) ? x : ((diff_var == y_var) ? y : z);
+        Scalar h = integration_engine::adaptive_derivative_step(target_val);
+        Scalar x_p = x, x_m = x, y_p = y, y_m = y, z_p = z, z_m = z;
+        if (diff_var == x_var) { x_p += h; x_m -= h; }
+        else if (diff_var == y_var) { y_p += h; y_m -= h; }
+        else { z_p += h; z_m -= h; }
+        Scalar fp = eval({{x_var, x_p}, {y_var, y_p}, {z_var, z_p}});
+        Scalar fm = eval({{x_var, x_m}, {y_var, y_m}, {z_var, z_m}});
+        return (fp - fm) / (Scalar(2.0L) * h);
+    };
+}
+
+// 兼容单点求值接口
 Scalar partial_derivative_x_scalar(const IntegrationContext& ctx,
                              const std::string& expr,
                              const std::string& x_var,
                              const std::string& y_var,
                              const std::string& z_var,
                              Scalar x, Scalar y, Scalar z) {
-    auto eval = ctx.build_scoped_evaluator(expr);
-    Scalar h = integration_engine::adaptive_derivative_step(x);
-    Scalar f_plus = Scalar(eval({{x_var, (x + h)}, {y_var, (y)}, {z_var, (z)}}));
-    Scalar f_minus = Scalar(eval({{x_var, (x - h)}, {y_var, (y)}, {z_var, (z)}}));
-    return (f_plus - f_minus) / (Scalar(2) * h);
+    return make_partial_derivative_evaluator(ctx, expr, x_var, x_var, y_var, z_var)(x, y, z);
 }
 
-// 计算 ∂f/∂y (使用 Scalar 进行内部计算)
 Scalar partial_derivative_y_scalar(const IntegrationContext& ctx,
                              const std::string& expr,
                              const std::string& x_var,
                              const std::string& y_var,
                              const std::string& z_var,
                              Scalar x, Scalar y, Scalar z) {
-    auto eval = ctx.build_scoped_evaluator(expr);
-    Scalar h = integration_engine::adaptive_derivative_step(y);
-    Scalar f_plus = Scalar(eval({{x_var, (x)}, {y_var, (y + h)}, {z_var, (z)}}));
-    Scalar f_minus = Scalar(eval({{x_var, (x)}, {y_var, (y - h)}, {z_var, (z)}}));
-    return (f_plus - f_minus) / (Scalar(2) * h);
+    return make_partial_derivative_evaluator(ctx, expr, y_var, x_var, y_var, z_var)(x, y, z);
 }
 
-// 计算 ∂f/∂z (使用 Scalar 进行内部计算)
 Scalar partial_derivative_z_scalar(const IntegrationContext& ctx,
                              const std::string& expr,
                              const std::string& x_var,
                              const std::string& y_var,
                              const std::string& z_var,
                              Scalar x, Scalar y, Scalar z) {
-    auto eval = ctx.build_scoped_evaluator(expr);
-    Scalar h = integration_engine::adaptive_derivative_step(z);
-    Scalar f_plus = Scalar(eval({{x_var, (x)}, {y_var, (y)}, {z_var, (z + h)}}));
-    Scalar f_minus = Scalar(eval({{x_var, (x)}, {y_var, (y)}, {z_var, (z - h)}}));
-    return (f_plus - f_minus) / (Scalar(2) * h);
+    return make_partial_derivative_evaluator(ctx, expr, z_var, x_var, y_var, z_var)(x, y, z);
 }
 
 }  // namespace
+
+// ============================================================================
+// 格林定理实现
+// ============================================================================
 
 // ============================================================================
 // 格林定理实现
@@ -99,30 +158,24 @@ TheoremResult greens_theorem(
     TheoremResult result;
     result.method_used = "line_integral";
 
-    // 使用 Scalar 进行内部计算
-    Scalar t0_s(t0), t1_s(t1);
-
-    // 计算线积分 ∮_C (P dx + Q dy)
-    // = ∫_t0^t1 [P(x(t), y(t)) * x'(t) + Q(x(t), y(t)) * y'(t)] dt
-
     auto P_eval = ctx.build_scoped_evaluator(P);
     auto Q_eval = ctx.build_scoped_evaluator(Q);
     auto x_eval = ctx.build_scoped_evaluator(curve_x);
     auto y_eval = ctx.build_scoped_evaluator(curve_y);
 
+    auto dx_dt_eval = make_1d_derivative_evaluator(ctx, curve_x, t_var, t0, t1);
+    auto dy_dt_eval = make_1d_derivative_evaluator(ctx, curve_y, t_var, t0, t1);
+
     auto integrand = [&](const std::vector<Scalar>& pt) {
         Scalar t(pt[0]);
-        Scalar h = integration_engine::adaptive_derivative_step(t);
 
         // 计算曲线点
         Scalar x = Scalar(x_eval({{t_var, (t)}}));
         Scalar y = Scalar(y_eval({{t_var, (t)}}));
 
         // 计算导数 x'(t) 和 y'(t)
-        Scalar dx_dt = (Scalar(x_eval({{t_var, (t + h)}})) -
-                        Scalar(x_eval({{t_var, (t - h)}}))) / (Scalar(2) * h);
-        Scalar dy_dt = (Scalar(y_eval({{t_var, (t + h)}})) -
-                        Scalar(y_eval({{t_var, (t - h)}}))) / (Scalar(2) * h);
+        Scalar dx_dt = dx_dt_eval(t);
+        Scalar dy_dt = dy_dt_eval(t);
 
         // P * dx/dt + Q * dy/dt
         Scalar P_val = Scalar(P_eval({{"x", (x)}, {"y", (y)}, {t_var, (t)}}));
@@ -157,18 +210,14 @@ TheoremResult greens_theorem_area(
     TheoremResult result;
     result.method_used = "area_integral";
 
-    // 使用 Scalar 进行内部计算
-    Scalar x0_s(x0), x1_s(x1);
+    auto dQ_dx_eval = make_partial_derivative_evaluator(ctx, Q, x_var, x_var, y_var, "z");
+    auto dP_dy_eval = make_partial_derivative_evaluator(ctx, P, y_var, x_var, y_var, "z");
 
     // 计算 ∬_D (∂Q/∂x - ∂P/∂y) dA
-
     auto integrand = [&](const std::vector<Scalar>& pt) {
         Scalar x(pt[0]), y(pt[1]);
-
-        // 计算 ∂Q/∂x - ∂P/∂y (使用 Scalar 内部计算)
-        Scalar dQ_dx = partial_derivative_x_scalar(ctx, Q, x_var, y_var, "z", x, y, Scalar(0));
-        Scalar dP_dy = partial_derivative_y_scalar(ctx, P, x_var, y_var, "z", x, y, Scalar(0));
-
+        Scalar dQ_dx = dQ_dx_eval(x, y, Scalar(0));
+        Scalar dP_dy = dP_dy_eval(x, y, Scalar(0));
         return (dQ_dx - dP_dy);
     };
 
@@ -213,12 +262,7 @@ TheoremResult divergence_theorem(
     TheoremResult result;
     result.method_used = "surface_integral";
 
-    // 使用 Scalar 进行内部计算
-    Scalar u0_s(u0), u1_s(u1), v0_s(v0), v1_s(v1);
-
     // 计算曲面积分 ∯_S F · dS
-    // dS = (r_u × r_v) du dv （或负方向）
-
     auto Fx_eval = ctx.build_scoped_evaluator(F_x);
     auto Fy_eval = ctx.build_scoped_evaluator(F_y);
     auto Fz_eval = ctx.build_scoped_evaluator(F_z);
@@ -296,18 +340,16 @@ TheoremResult divergence_theorem_volume(
     TheoremResult result;
     result.method_used = "volume_integral";
 
-    // 使用 Scalar 进行内部计算
-    Scalar x0_s(x0), x1_s(x1);
+    auto dFx_dx_eval = make_partial_derivative_evaluator(ctx, F_x, x_var, x_var, y_var, z_var);
+    auto dFy_dy_eval = make_partial_derivative_evaluator(ctx, F_y, y_var, x_var, y_var, z_var);
+    auto dFz_dz_eval = make_partial_derivative_evaluator(ctx, F_z, z_var, x_var, y_var, z_var);
 
     // 计算 ∭_V (∇ · F) dV = ∭_V (∂Fx/∂x + ∂Fy/∂y + ∂Fz/∂z) dV
-
     auto integrand = [&](const std::vector<Scalar>& pt) {
         Scalar x(pt[0]), y(pt[1]), z(pt[2]);
-
-        // 计算散度 (使用 Scalar 内部计算)
-        Scalar dFx_dx = partial_derivative_x_scalar(ctx, F_x, x_var, y_var, z_var, x, y, z);
-        Scalar dFy_dy = partial_derivative_y_scalar(ctx, F_y, x_var, y_var, z_var, x, y, z);
-        Scalar dFz_dz = partial_derivative_z_scalar(ctx, F_z, x_var, y_var, z_var, x, y, z);
+        Scalar dFx_dx = dFx_dx_eval(x, y, z);
+        Scalar dFy_dy = dFy_dy_eval(x, y, z);
+        Scalar dFz_dz = dFz_dz_eval(x, y, z);
 
         return (dFx_dx + dFy_dy + dFz_dz);
     };
@@ -367,18 +409,17 @@ TheoremResult stokes_theorem(
         curve_x, curve_y, curve_z,
         t_var, t0, t1, subdivisions * 2);
 
-    // 使用 Scalar 进行内部计算
-    Scalar u0_s(u0), u1_s(u1), v0_s(v0), v1_s(v1);
-
     // 计算曲面积分 ∯_S (∇ × F) · dS
-    // 需要先计算旋度，然后积分
-
-    auto Fx_eval = ctx.build_scoped_evaluator(F_x);
-    auto Fy_eval = ctx.build_scoped_evaluator(F_y);
-    auto Fz_eval = ctx.build_scoped_evaluator(F_z);
     auto x_eval = ctx.build_scoped_evaluator(surface_x);
     auto y_eval = ctx.build_scoped_evaluator(surface_y);
     auto z_eval = ctx.build_scoped_evaluator(surface_z);
+
+    auto dFx_dy_eval = make_partial_derivative_evaluator(ctx, F_x, "y", "x", "y", "z");
+    auto dFx_dz_eval = make_partial_derivative_evaluator(ctx, F_x, "z", "x", "y", "z");
+    auto dFy_dx_eval = make_partial_derivative_evaluator(ctx, F_y, "x", "x", "y", "z");
+    auto dFy_dz_eval = make_partial_derivative_evaluator(ctx, F_y, "z", "x", "y", "z");
+    auto dFz_dx_eval = make_partial_derivative_evaluator(ctx, F_z, "x", "x", "y", "z");
+    auto dFz_dy_eval = make_partial_derivative_evaluator(ctx, F_z, "y", "x", "y", "z");
 
     Scalar orient_sign = (orientation == "inward") ? Scalar(-1.0L) : Scalar(1.0L);
 
@@ -391,13 +432,13 @@ TheoremResult stokes_theorem(
         Scalar y = Scalar(y_eval({{u_var, (u)}, {v_var, (v)}}));
         Scalar z = Scalar(z_eval({{u_var, (u)}, {v_var, (v)}}));
 
-        // 计算旋度 ∇ × F (使用 Scalar 内部计算)
-        Scalar dFx_dy = partial_derivative_y_scalar(ctx, F_x, "x", "y", "z", x, y, z);
-        Scalar dFx_dz = partial_derivative_z_scalar(ctx, F_x, "x", "y", "z", x, y, z);
-        Scalar dFy_dx = partial_derivative_x_scalar(ctx, F_y, "x", "y", "z", x, y, z);
-        Scalar dFy_dz = partial_derivative_z_scalar(ctx, F_y, "x", "y", "z", x, y, z);
-        Scalar dFz_dx = partial_derivative_x_scalar(ctx, F_z, "x", "y", "z", x, y, z);
-        Scalar dFz_dy = partial_derivative_y_scalar(ctx, F_z, "x", "y", "z", x, y, z);
+        // 计算旋度 ∇ × F (使用高精度求值)
+        Scalar dFx_dy = dFx_dy_eval(x, y, z);
+        Scalar dFx_dz = dFx_dz_eval(x, y, z);
+        Scalar dFy_dx = dFy_dx_eval(x, y, z);
+        Scalar dFy_dz = dFy_dz_eval(x, y, z);
+        Scalar dFz_dx = dFz_dx_eval(x, y, z);
+        Scalar dFz_dy = dFz_dy_eval(x, y, z);
 
         // curl F = (dFz_dy - dFy_dz, dFx_dz - dFz_dx, dFy_dx - dFx_dy)
         Scalar curl_x = dFz_dy - dFy_dz;
@@ -462,9 +503,6 @@ TheoremResult stokes_theorem_line(
     TheoremResult result;
     result.method_used = "line_integral";
 
-    // 使用 Scalar 进行内部计算
-    Scalar t0_s(t0), t1_s(t1);
-
     // 计算 ∮_C F · dr = ∫ (Fx * dx/dt + Fy * dy/dt + Fz * dz/dt) dt
 
     auto Fx_eval = ctx.build_scoped_evaluator(F_x);
@@ -474,20 +512,20 @@ TheoremResult stokes_theorem_line(
     auto y_eval = ctx.build_scoped_evaluator(curve_y);
     auto z_eval = ctx.build_scoped_evaluator(curve_z);
 
+    auto dx_dt_eval = make_1d_derivative_evaluator(ctx, curve_x, t_var, t0, t1);
+    auto dy_dt_eval = make_1d_derivative_evaluator(ctx, curve_y, t_var, t0, t1);
+    auto dz_dt_eval = make_1d_derivative_evaluator(ctx, curve_z, t_var, t0, t1);
+
     auto integrand = [&](const std::vector<Scalar>& pt) {
         Scalar t(pt[0]);
-        Scalar h = integration_engine::adaptive_derivative_step(t);
 
         Scalar x = Scalar(x_eval({{t_var, (t)}}));
         Scalar y = Scalar(y_eval({{t_var, (t)}}));
         Scalar z = Scalar(z_eval({{t_var, (t)}}));
 
-        Scalar dx_dt = (Scalar(x_eval({{t_var, (t + h)}})) -
-                        Scalar(x_eval({{t_var, (t - h)}}))) / (Scalar(2) * h);
-        Scalar dy_dt = (Scalar(y_eval({{t_var, (t + h)}})) -
-                        Scalar(y_eval({{t_var, (t - h)}}))) / (Scalar(2) * h);
-        Scalar dz_dt = (Scalar(z_eval({{t_var, (t + h)}})) -
-                        Scalar(z_eval({{t_var, (t - h)}}))) / (Scalar(2) * h);
+        Scalar dx_dt = dx_dt_eval(t);
+        Scalar dy_dt = dy_dt_eval(t);
+        Scalar dz_dt = dz_dt_eval(t);
 
         Scalar Fx = Scalar(Fx_eval({{"x", (x)}, {"y", (y)}, {"z", (z)}, {t_var, (t)}}));
         Scalar Fy = Scalar(Fy_eval({{"x", (x)}, {"y", (y)}, {"z", (z)}, {t_var, (t)}}));

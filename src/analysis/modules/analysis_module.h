@@ -27,7 +27,7 @@ namespace analysis_cmds {
  * @class AnalysisModule
  * @brief 提供高级函数 analysis 功能（极限、极值等）的模块
  */
-class AnalysisModule : public CalculatorModule {
+class AnalysisModule : public CommandModuleBase {
 public:
     std::string name() const override { return "Analysis"; }
     std::vector<std::string> get_commands() const override;

@@ -319,8 +319,6 @@ void test_risch_non_elementary() {
 }
 
 void test_risch_mixed() {
-    //std::cout << "\nRunning Mixed Extension Tests..." << std::endl;
-
     IntegrationEngine engine;
 
     // Test 1: 指数与对数混合
@@ -329,8 +327,6 @@ void test_risch_mixed() {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression expr = make_function("exp", x) * make_function("ln", x);
         IntegrationResult result = engine.integrate(expr, "x");
-        //std::cout << "∫ exp(x) * ln(x) dx = " << (result.success ? result.value.to_string() : "failed")
-                  //<< " [" << result.method_used << "]" << std::endl;
     }
 
     // Test 2: 多项式与对数
@@ -339,7 +335,6 @@ void test_risch_mixed() {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression expr = x * make_function("ln", x);
         IntegrationResult result = engine.integrate(expr, "x");
-        //std::cout << "∫ x * ln(x) dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
     }
 
@@ -349,7 +344,6 @@ void test_risch_mixed() {
         SymbolicExpression x = SymbolicExpression::variable("x");
         SymbolicExpression expr = make_function("ln", x) / x;
         IntegrationResult result = engine.integrate(expr, "x");
-        //std::cout << "∫ ln(x) / x dx = " << result.value.to_string() << " [" << result.method_used << "]" << std::endl;
         assert(result.success);
     }
 
@@ -360,12 +354,7 @@ void test_risch_mixed() {
         SymbolicExpression expr = make_power(x, SymbolicExpression::number(2.0)) *
                                   make_function("exp", x) * make_function("ln", x);
         IntegrationResult result = engine.integrate(expr, "x");
-        //std::cout << "∫ x^2 * exp(x) * ln(x) dx = " << (result.success ? result.value.to_string() : "failed")
-                  //<< " [" << result.method_used << "]" << std::endl;
-        // 这个测试可能因为复杂性而失败
     }
-
-    //std::cout << "Mixed Extension Tests Completed!" << std::endl;
 }
 
 void test_risch_algebraic() {

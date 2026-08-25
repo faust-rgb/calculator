@@ -17,9 +17,11 @@
 #include "math/functions/conversion/base_conversions.h"
 #include "core/common/calculator_exceptions.h"
 #include "math/mymath.h"
+#include "matrix/matrix.h"
 #include <algorithm>
 #include <sstream>
 #include <set>
+#include <tuple>
 
 namespace {
 
@@ -226,6 +228,49 @@ IntegerMathModule::get_functions_map() const {
         return Scalar(static_cast<long long>(from_unsigned_bits(reverse_bits(to_unsigned_bits(require_integer(a[0], "argument", "reverse_bits"))))));
     }, "reverse_bits", 1, 1);
 
+    funcs["divisors"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1 || args[0].is_matrix || args[0].is_complex) {
+            throw std::runtime_error("divisors expects one integer");
+        }
+        const Scalar raw = args[0].get_decimal();
+        if (!mymath::is_integer(raw) || raw <= Scalar(0)) throw std::runtime_error("divisors expects a positive integer");
+        const long long value = static_cast<long long>(raw);
+        std::vector<Scalar> values;
+        for (long long d = 1; d <= value / d; ++d) {
+            if (value % d != 0) continue;
+            values.push_back(Scalar(d));
+            if (d != value / d) values.push_back(Scalar(value / d));
+        }
+        std::sort(values.begin(), values.end());
+        StoredValue res;
+        res.is_matrix = true;
+        res.matrix_ptr = std::make_shared<matrix::Matrix>(matrix::Matrix::vector(std::move(values)));
+        return res;
+    };
+    funcs["extended_gcd"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2 || args[0].is_matrix || args[1].is_matrix ||
+            args[0].is_complex || args[1].is_complex) {
+            throw std::runtime_error("extended_gcd expects two integers");
+        }
+        if (!mymath::is_integer(args[0].get_decimal()) || !mymath::is_integer(args[1].get_decimal())) {
+            throw std::runtime_error("extended_gcd expects two integers");
+        }
+        long long a = static_cast<long long>(args[0].get_decimal());
+        long long b = static_cast<long long>(args[1].get_decimal());
+        long long old_r = a, r = b, old_s = 1, s = 0, old_t = 0, t = 1;
+        while (r != 0) {
+            const long long q = old_r / r;
+            std::tie(old_r, r) = std::make_pair(r, old_r - q * r);
+            std::tie(old_s, s) = std::make_pair(s, old_s - q * s);
+            std::tie(old_t, t) = std::make_pair(t, old_t - q * t);
+        }
+        StoredValue res;
+        res.is_matrix = true;
+        res.matrix_ptr = std::make_shared<matrix::Matrix>(matrix::Matrix::vector({Scalar(old_r), Scalar(old_s), Scalar(old_t)}));
+        return res;
+    };
+    funcs["xgcd"] = funcs["extended_gcd"];
+
     return funcs;
 }
 
@@ -234,9 +279,13 @@ IntegerMathModule::get_functions_map() const {
  * @return 函数名称列表
  */
 std::vector<std::string> IntegerMathModule::get_function_names() const {
-    std::vector<std::string> names;
-    auto funcs = get_functions_map();
-    for (const auto& [name, _] : funcs) names.push_back(name);
+    static const std::vector<std::string> names = {
+        "and", "binom", "bitlen", "clz", "ctz", "divisors", "egcd", "euler_phi",
+        "extended_gcd", "factorial", "fib", "gcd", "is_prime", "lcm", "mobius",
+        "mod", "nCr", "nPr", "next_prime", "not", "or", "parity", "phi",
+        "popcount", "prev_prime", "prime_pi", "reverse_bits", "rol", "ror",
+        "shl", "shr", "xgcd", "xor"
+    };
     return names;
 }
 

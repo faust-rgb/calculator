@@ -404,7 +404,34 @@ std::string general_series_auto(const SeriesContext& ctx,
         }
     } catch (...) {}
 
-    for (int k = 1; k <= 3; ++k) {
+    if (expr.node_type() == NodeType::kDivide) {
+        SymbolicExpression num = expr.left_child();
+        SymbolicExpression den = expr.right_child();
+        Scalar exp_val = 0;
+        bool is_var_power = false;
+        if (den.node_type() == NodeType::kVariable && den.node_text() == variable_name && center == 0) {
+            exp_val = 1;
+            is_var_power = true;
+        } else if (den.node_type() == NodeType::kPower &&
+                   den.left_child().node_type() == NodeType::kVariable &&
+                   den.left_child().node_text() == variable_name &&
+                   center == 0 &&
+                   den.right_child().is_number(&exp_val) && exp_val > 0) {
+            is_var_power = true;
+        }
+        if (is_var_power) {
+            int k = static_cast<int>(exp_val + 0.5);
+            std::string t_str = taylor::taylor(ctx, num.to_string(), center, degree + k);
+            const std::string base = shifted_series_base(variable_name, center);
+            if (k == 1) {
+                return "(" + t_str + ") / " + base;
+            } else {
+                return "(" + t_str + ") / (" + base + "^" + std::to_string(k) + ")";
+            }
+        }
+    }
+
+    for (int k = 1; k <= 6; ++k) {
         SymbolicExpression factor =
             (SymbolicExpression::variable(variable_name) - SymbolicExpression::number(center)) ^
             SymbolicExpression::number(Scalar(k));
@@ -415,7 +442,12 @@ std::string general_series_auto(const SeriesContext& ctx,
             Scalar n;
             if (val.is_number(&n) && !mymath::isinf(n)) {
                 std::string t_str = taylor::taylor(ctx, shifted.to_string(), center, degree + k);
-                return "(" + t_str + ") / (" + variable_name + (center == 0 ? "" : " - " + std::to_string(center.to_long_double())) + ")^" + std::to_string(k);
+                const std::string base = shifted_series_base(variable_name, center);
+                if (k == 1) {
+                    return "(" + t_str + ") / " + base;
+                } else {
+                    return "(" + t_str + ") / (" + base + "^" + std::to_string(k) + ")";
+                }
             }
         } catch (...) {}
     }

@@ -749,6 +749,49 @@ bool primitive_for_outer_function(const std::string& function_name,
         *primitive = make_function("ln", make_function("cosh", argument)).simplify();
         return true;
     }
+    if (function_name == "coth") {
+        *primitive = make_function("ln", make_function("abs", make_function("sinh", argument))).simplify();
+        return true;
+    }
+    if (function_name == "sech") {
+        *primitive = make_function("atan", make_function("sinh", argument)).simplify();
+        return true;
+    }
+    if (function_name == "csch") {
+        *primitive = make_function("ln", make_function("abs",
+                        make_function("tanh", (argument / SymbolicExpression::number(Scalar(2.0L))).simplify()))).simplify();
+        return true;
+    }
+    if (function_name == "asinh") {
+        *primitive = make_subtract(make_multiply(argument, make_function("asinh", argument)),
+                                  make_function("sqrt", make_add(make_power(argument, SymbolicExpression::number(2.0)),
+                                                                SymbolicExpression::number(Scalar(1.0L)))))
+                        .simplify();
+        return true;
+    }
+    if (function_name == "acosh") {
+        *primitive = make_subtract(make_multiply(argument, make_function("acosh", argument)),
+                                  make_function("sqrt", make_subtract(make_power(argument, SymbolicExpression::number(2.0)),
+                                                                   SymbolicExpression::number(Scalar(1.0L)))))
+                        .simplify();
+        return true;
+    }
+    if (function_name == "atanh") {
+        *primitive = make_add(make_multiply(argument, make_function("atanh", argument)),
+                              make_multiply(SymbolicExpression::number(0.5),
+                                           make_function("ln", make_subtract(SymbolicExpression::number(Scalar(1.0L)),
+                                                                          make_power(argument, SymbolicExpression::number(2.0))))))
+                        .simplify();
+        return true;
+    }
+    if (function_name == "acot") {
+        *primitive = make_add(make_multiply(argument, make_function("acot", argument)),
+                              make_multiply(SymbolicExpression::number(0.5),
+                                           make_function("ln", make_add(SymbolicExpression::number(Scalar(1.0L)),
+                                                                      make_power(argument, SymbolicExpression::number(2.0))))))
+                        .simplify();
+        return true;
+    }
     return false;
 }
 

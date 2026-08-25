@@ -101,7 +101,7 @@ public:
     bool is_hex_uppercase_mode() const override;
 
 private:
-    int display_precision_ = app::kDefaultDisplayPrecision;
+    int display_precision_ = math::config::kDefaultDisplayPrecision;
     bool exact_mode_ = false;
     bool symbolic_constants_mode_ = false;
     bool hex_prefix_mode_ = false;

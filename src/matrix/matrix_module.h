@@ -11,7 +11,7 @@
 
 #include "module/calculator_module.h"
 
-class MatrixModule : public CalculatorModule {
+class MatrixModule : public CommandFunctionModuleBase {
 public:
     std::string name() const override { return "Matrix"; }
 

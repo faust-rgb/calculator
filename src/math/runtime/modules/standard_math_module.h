@@ -11,7 +11,7 @@
 
 #include "module/calculator_module.h"
 
-class StandardMathModule : public CalculatorModule {
+class StandardMathModule : public FunctionModuleBase {
 public:
     std::string name() const override { return "StandardMath"; }
 

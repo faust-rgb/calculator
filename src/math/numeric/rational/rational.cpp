@@ -3,6 +3,7 @@
 // ============================================================================
 
 #include "rational.h"
+#include "math/functions/integer/integer_helpers.h"
 
 #include <algorithm>
 #include <limits>
@@ -11,22 +12,6 @@
 namespace {
 constexpr long long kLongLongMin = -9223372036854775807LL - 1LL;
 constexpr long long kLongLongMax = 9223372036854775807LL;
-
-long long gcd_ll(long long a, long long b) {
-    unsigned long long ua = a < 0 ? 0ULL - static_cast<unsigned long long>(a)
-                                  : static_cast<unsigned long long>(a);
-    unsigned long long ub = b < 0 ? 0ULL - static_cast<unsigned long long>(b)
-                                  : static_cast<unsigned long long>(b);
-    while (ub != 0) {
-        const unsigned long long t = ua % ub;
-        ua = ub;
-        ub = t;
-    }
-    if (ua > static_cast<unsigned long long>(kLongLongMax)) {
-        throw std::overflow_error("rational gcd exceeds signed range");
-    }
-    return static_cast<long long>(ua);
-}
 
 bool multiplication_would_overflow(long long a, long long b) {
     if (a == 0 || b == 0) return false;

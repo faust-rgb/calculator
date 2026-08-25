@@ -202,7 +202,7 @@ bool try_integrate_low_degree_rational_in_variable(const SymbolicExpression& exp
         if (!denominator.coefficient(2).is_number(&a_val) ||
             !denominator.coefficient(1).is_number(&b_val) ||
             !denominator.coefficient(0).is_number(&c_val) ||
-            mymath::abs(a_val) < app::numeric_tolerance()) {
+            mymath::abs(a_val) < math::config::numeric_tolerance()) {
             return false;
         }
 
@@ -301,7 +301,7 @@ std::vector<int> detect_possible_integer_ratios(const SymbolicExpression& ratio)
     Scalar val = Scalar(0.0L);
     if (ratio.is_number(&val)) {
         int n = static_cast<int>(mymath::round(val));
-        if (mymath::abs(val - n) < app::loose_tolerance()) {
+        if (mymath::abs(val - n) < math::config::loose_tolerance()) {
             candidates.push_back(n);
         }
         // 检查附近的整数
@@ -319,10 +319,10 @@ std::vector<int> detect_possible_integer_ratios(const SymbolicExpression& ratio)
         SymbolicExpression den(ratio.node_->right);
         Scalar num_val = Scalar(0.0L), den_val = 0.0L;
         if (num.is_number(&num_val) && den.is_number(&den_val) &&
-            mymath::abs(den_val) > app::numeric_tolerance()) {
+            mymath::abs(den_val) > math::config::numeric_tolerance()) {
             Scalar quotient = num_val / den_val;
             int n = static_cast<int>(mymath::round(quotient));
-            if (mymath::abs(quotient - n) < app::loose_tolerance()) {
+            if (mymath::abs(quotient - n) < math::config::loose_tolerance()) {
                 candidates.push_back(n);
             }
         }

@@ -37,7 +37,7 @@ class ServiceLocator;
  * - t_test2: 双样本 T 检验
  * - chi2_test: 卡方检验
  */
-class StatisticsModule : public CalculatorModule {
+class StatisticsModule : public CommandFunctionModuleBase {
 public:
     using Scalar = mymath::Scalar;
     /**
@@ -59,6 +59,11 @@ public:
      * @brief 获取模块提供的原生函数映射
      */
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_functions_map() const override;
+
+    /**
+     * @brief 获取模块提供的原生函数名列表
+     */
+    std::vector<std::string> get_function_names() const override;
 
     /**
      * @brief 获取帮助信息片段

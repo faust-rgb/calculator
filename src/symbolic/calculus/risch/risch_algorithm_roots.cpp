@@ -262,16 +262,16 @@ std::vector<SymbolicExpression> RischAlgorithm::find_numeric_roots_newton(
             Scalar fx = eval_poly(x);
             Scalar fpx = eval_deriv(x);
 
-            if (mymath::abs(fpx) < app::numeric_tolerance()) break;
+            if (mymath::abs(fpx) < math::config::numeric_tolerance()) break;
 
             Scalar next_x = x - fx / fpx;
 
-            if (mymath::abs(next_x - x) < app::newton_tolerance()) {
-                if (mymath::abs(eval_poly(next_x)) < app::loose_tolerance()) {
+            if (mymath::abs(next_x - x) < math::config::newton_tolerance()) {
+                if (mymath::abs(eval_poly(next_x)) < math::config::loose_tolerance()) {
                     bool already_found = false;
                     for (const auto& r : roots) {
                         Scalar r_val = Scalar(0.0L);
-                        if (r.is_number(&r_val) && mymath::abs(r_val - next_x) < app::loose_tolerance()) {
+                        if (r.is_number(&r_val) && mymath::abs(r_val - next_x) < math::config::loose_tolerance()) {
                             already_found = true;
                             break;
                         }
@@ -333,14 +333,14 @@ std::vector<std::pair<Scalar, Scalar>> RischAlgorithm::find_complex_roots_aberth
                 }
             }
 
-            if (mymath::abs(denom) < app::algebraic_tolerance()) {
-                denom = app::algebraic_tolerance();
+            if (mymath::abs(denom) < math::config::algebraic_tolerance()) {
+                denom = math::config::algebraic_tolerance();
             }
 
             std::complex<Scalar> delta = p_z / denom;
             z[i] -= delta;
 
-            if (mymath::abs(delta) > app::newton_tolerance()) {
+            if (mymath::abs(delta) > math::config::newton_tolerance()) {
                 converged = false;
             }
         }
@@ -357,7 +357,7 @@ std::vector<std::pair<Scalar, Scalar>> RischAlgorithm::find_complex_roots_aberth
         Scalar im = z[i].imag();
 
         // 检查是否为实根
-        if (mymath::abs(im) < app::loose_tolerance()) {
+        if (mymath::abs(im) < math::config::loose_tolerance()) {
             roots.push_back({re, 0.0L});
             used.insert(i);
         } else {
@@ -365,8 +365,8 @@ std::vector<std::pair<Scalar, Scalar>> RischAlgorithm::find_complex_roots_aberth
             bool found_conjugate = false;
             for (int j = i + 1; j < n; ++j) {
                 if (!used.count(j) &&
-                    mymath::abs(z[j].real() - re) < app::loose_tolerance() &&
-                    mymath::abs(z[j].imag() + im) < app::loose_tolerance()) {
+                    mymath::abs(z[j].real() - re) < math::config::loose_tolerance() &&
+                    mymath::abs(z[j].imag() + im) < math::config::loose_tolerance()) {
                     // 共轭对
                     roots.push_back({re, mymath::abs(im)});
                     used.insert(i);

@@ -307,6 +307,36 @@ int run_logic_limit_root_tests(int& passed, int& failed) {
         ++passed;
     }
 
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command("limit(x, -inf)", &output);
+        if (handled && output == "-inf") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: negative infinity polynomial limit expected -inf got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: negative infinity polynomial limit threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled = calculator.try_process_function_command("limit(abs(x) / x, 0)", &output);
+        if (!handled) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: two-sided abs(x)/x limit should not converge, got "
+                      << output << '\n';
+        }
+    } catch (const std::exception&) {
+        ++passed;
+    }
+
     // ========== 求根算法测试 ==========
     // 测试牛顿法求解方程
     try {

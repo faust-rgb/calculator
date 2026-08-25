@@ -33,22 +33,22 @@ AlgebraicNumber AlgebraicNumber::from_double(Scalar value) {
     Scalar sqrt3 = mymath::sqrt(Scalar(3));
     Scalar sqrt5 = mymath::sqrt(Scalar(5));
 
-    if (mymath::abs(Scalar(value) - sqrt2) < Scalar(app::polynomial_tolerance())) {
+    if (mymath::abs(Scalar(value) - sqrt2) < Scalar(math::config::polynomial_tolerance())) {
         return sqrt(2);
     }
-    if (mymath::abs(Scalar(value) + sqrt2) < Scalar(app::polynomial_tolerance())) {
+    if (mymath::abs(Scalar(value) + sqrt2) < Scalar(math::config::polynomial_tolerance())) {
         return sqrt(2).negate();
     }
-    if (mymath::abs(Scalar(value) - sqrt3) < Scalar(app::polynomial_tolerance())) {
+    if (mymath::abs(Scalar(value) - sqrt3) < Scalar(math::config::polynomial_tolerance())) {
         return sqrt(3);
     }
-    if (mymath::abs(Scalar(value) + sqrt3) < Scalar(app::polynomial_tolerance())) {
+    if (mymath::abs(Scalar(value) + sqrt3) < Scalar(math::config::polynomial_tolerance())) {
         return sqrt(3).negate();
     }
-    if (mymath::abs(Scalar(value) - sqrt5) < Scalar(app::polynomial_tolerance())) {
+    if (mymath::abs(Scalar(value) - sqrt5) < Scalar(math::config::polynomial_tolerance())) {
         return sqrt(5);
     }
-    if (mymath::abs(Scalar(value) + sqrt5) < Scalar(app::polynomial_tolerance())) {
+    if (mymath::abs(Scalar(value) + sqrt5) < Scalar(math::config::polynomial_tolerance())) {
         return sqrt(5).negate();
     }
 
@@ -259,7 +259,7 @@ int AlgebraicNumber::compare(const AlgebraicNumber& other) const {
     Scalar approx1 = approximate();
     Scalar approx2 = other.approximate();
 
-    if (mymath::abs(approx1 - approx2) < app::polynomial_tolerance()) {
+    if (mymath::abs(approx1 - approx2) < math::config::polynomial_tolerance()) {
         // 可能相等，检查最小多项式
         if (expressions_match(minimal_polynomial.to_expression(), other.minimal_polynomial.to_expression())) {
             // 相同最小多项式，需要更精确的比较
@@ -308,7 +308,7 @@ SymbolicExpression AlgebraicNumber::to_expression() const {
             minimal_polynomial.coefficient(1).is_number(&b) &&
             minimal_polynomial.coefficient(0).is_number(&c)) {
 
-            if (mymath::abs(b) < app::polynomial_tolerance() && mymath::abs(a - 1.0L) < app::polynomial_tolerance()) {
+            if (mymath::abs(b) < math::config::polynomial_tolerance() && mymath::abs(a - 1.0L) < math::config::polynomial_tolerance()) {
                 // t^2 - c = 0, t = sqrt(-c)
                 Scalar val = -c;
                 if (val > 0) {
@@ -448,8 +448,8 @@ SymbolicPolynomial AlgebraicNumber::compute_sum_minpoly(
         // p2: a2*t^2 + b2*t + c2 = 0
 
         // 简化：假设 p1 = t^2 - r1, p2 = t^2 - r2 (即 sqrt(r1), sqrt(r2))
-        if (mymath::abs(a1 - 1.0L) < app::polynomial_tolerance() && mymath::abs(b1) < app::polynomial_tolerance() &&
-            mymath::abs(a2 - 1.0L) < app::polynomial_tolerance() && mymath::abs(b2) < app::polynomial_tolerance()) {
+        if (mymath::abs(a1 - 1.0L) < math::config::polynomial_tolerance() && mymath::abs(b1) < math::config::polynomial_tolerance() &&
+            mymath::abs(a2 - 1.0L) < math::config::polynomial_tolerance() && mymath::abs(b2) < math::config::polynomial_tolerance()) {
             Scalar r1 = -c1;
             Scalar r2 = -c2;
 
@@ -503,8 +503,8 @@ SymbolicPolynomial AlgebraicNumber::compute_product_minpoly(
 
     if (p1_numeric && p2_numeric) {
         // sqrt(r1) * sqrt(r2) = sqrt(r1 * r2)
-        if (mymath::abs(a1 - 1.0L) < app::polynomial_tolerance() && mymath::abs(b1) < app::polynomial_tolerance() &&
-            mymath::abs(a2 - 1.0L) < app::polynomial_tolerance() && mymath::abs(b2) < app::polynomial_tolerance()) {
+        if (mymath::abs(a1 - 1.0L) < math::config::polynomial_tolerance() && mymath::abs(b1) < math::config::polynomial_tolerance() &&
+            mymath::abs(a2 - 1.0L) < math::config::polynomial_tolerance() && mymath::abs(b2) < math::config::polynomial_tolerance()) {
             Scalar r1 = -c1;
             Scalar r2 = -c2;
             Scalar r_product = r1 * r2;
@@ -610,8 +610,8 @@ SymbolicPolynomial compute_sum_minpoly_enhanced(
                       p2.coefficient(1).is_number(&b2) &&
                       p2.coefficient(0).is_number(&c2));
 
-    if (p1_numeric && p2_numeric && mymath::abs(a1 - 1.0L) < app::polynomial_tolerance() && mymath::abs(b1) < app::polynomial_tolerance() &&
-        mymath::abs(a2 - 1.0L) < app::polynomial_tolerance() && mymath::abs(b2) < app::polynomial_tolerance()) {
+    if (p1_numeric && p2_numeric && mymath::abs(a1 - 1.0L) < math::config::polynomial_tolerance() && mymath::abs(b1) < math::config::polynomial_tolerance() &&
+        mymath::abs(a2 - 1.0L) < math::config::polynomial_tolerance() && mymath::abs(b2) < math::config::polynomial_tolerance()) {
         Scalar r1 = -c1;
         Scalar r2 = -c2;
 
@@ -712,8 +712,8 @@ SymbolicPolynomial compute_product_minpoly_enhanced(
                       p2.coefficient(1).is_number(&b2) &&
                       p2.coefficient(0).is_number(&c2));
 
-    if (p1_numeric && p2_numeric && mymath::abs(a1 - 1.0L) < app::polynomial_tolerance() && mymath::abs(b1) < app::polynomial_tolerance() &&
-        mymath::abs(a2 - 1.0L) < app::polynomial_tolerance() && mymath::abs(b2) < app::polynomial_tolerance()) {
+    if (p1_numeric && p2_numeric && mymath::abs(a1 - 1.0L) < math::config::polynomial_tolerance() && mymath::abs(b1) < math::config::polynomial_tolerance() &&
+        mymath::abs(a2 - 1.0L) < math::config::polynomial_tolerance() && mymath::abs(b2) < math::config::polynomial_tolerance()) {
         Scalar r1 = -c1;
         Scalar r2 = -c2;
         Scalar r_product = r1 * r2;

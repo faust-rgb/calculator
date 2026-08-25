@@ -129,6 +129,8 @@ struct StoredValue {
     const mymath::complex<Scalar>& as_complex() const { return std::get<mymath::complex<Scalar>>(data); }
     const std::string& as_string() const { return get_string_value(); }
 
+    std::string to_latex() const;
+
     bool is_exact() const { return exact; }
     void set_exact(bool ex) { exact = ex; }
 

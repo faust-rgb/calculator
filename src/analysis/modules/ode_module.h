@@ -29,7 +29,7 @@ using Scalar = mymath::Scalar;
  * @class ODEModule
  * @brief 提供常微分方程（组）数值求解功能的模块
  */
-class ODEModule : public CalculatorModule {
+class ODEModule : public CommandModuleBase {
 public:
     std::string name() const override { return "ODE"; }
     std::vector<std::string> get_commands() const override;

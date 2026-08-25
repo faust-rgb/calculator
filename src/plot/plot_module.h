@@ -20,7 +20,7 @@
  * - plot：内联终端绘图或 SVG 输出
  * - :plot：调用外部 Gnuplot 进行绘图
  */
-class PlotModule : public CalculatorModule {
+class PlotModule : public CommandModuleBase {
 public:
     /**
      * @brief 获取模块名称

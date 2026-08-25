@@ -1174,6 +1174,59 @@ int run_analysis_tests(int& passed, int& failed) {
                   << ex.what() << '\n';
     }
 
+    // Analysis regressions: critical points with elementary functions
+    try {
+        std::string out_atan;
+        bool ok1 = calculator.try_process_function_command("critical(atan(x) - x/2, x)", &out_atan);
+        if (ok1 && !out_atan.empty() && out_atan != "No critical points found.") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: critical(atan(x) - x/2, x) got: " << out_atan << "\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: critical(atan(x) - x/2, x) threw: " << ex.what() << "\n";
+    }
+
+    // Analysis regressions: multivariate Hessian saddle vs min
+    try {
+        std::string out_saddle;
+        bool ok2 = calculator.try_process_function_command("critical(x^2 - y^2, x, y)", &out_saddle);
+        if (ok2 && out_saddle.find("saddle") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: critical(x^2 - y^2, x, y) expected saddle, got: " << out_saddle << "\n";
+        }
+
+        std::string out_min3d;
+        bool ok3 = calculator.try_process_function_command("critical(x^2 + y^2 + z^2, x, y, z)", &out_min3d);
+        if (ok3 && out_min3d.find("local min") != std::string::npos) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: critical(x^2 + y^2 + z^2, x, y, z) expected local min, got: " << out_min3d << "\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: multivariate critical test threw: " << ex.what() << "\n";
+    }
+
+    // Analysis regressions: high order ODE with scalar initial condition padding
+    try {
+        std::string out_ode;
+        bool ok_ode = calculator.try_process_function_command("ode(\"y'' + y\", 0, 1, 3.14159265)", &out_ode);
+        if (ok_ode && !out_ode.empty()) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ode(\"y'' + y\", 0, 1, pi) got: " << out_ode << "\n";
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: high order ODE padding threw: " << ex.what() << "\n";
+    }
 
     return 0;
 }

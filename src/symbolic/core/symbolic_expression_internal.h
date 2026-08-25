@@ -756,6 +756,9 @@ bool numeric_matches_any(Scalar value,
 /** @brief 创建 sqrt(3) 符号表达式 */
 SymbolicExpression sqrt3_symbol();
 
+/** @brief 创建 sqrt(2) 符号表达式 */
+SymbolicExpression sqrt2_symbol();
+
 /** @brief 创建 1/2 符号表达式 */
 SymbolicExpression half_symbol();
 

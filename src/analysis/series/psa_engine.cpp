@@ -373,11 +373,12 @@ std::vector<Scalar> ps_asin(const std::vector<Scalar>& a, int degree) {
     std::vector<Scalar> res(degree + 1, Scalar(0));
     res[0] = mymath::asin(a[0]);
 
-    std::vector<Scalar> one_minus_x2(degree + 1, Scalar(0));
-    one_minus_x2[0] = Scalar(1);
-    if (degree >= 2) one_minus_x2[2] = -Scalar(1);
+    std::vector<Scalar> one(degree + 1, Scalar(0));
+    one[0] = Scalar(1);
+    std::vector<Scalar> a2 = ps_mul(a, a, degree);
+    std::vector<Scalar> one_minus_a2 = ps_sub(one, a2, degree);
 
-    std::vector<Scalar> sqrt_denom = ps_pow_const(one_minus_x2, Scalar(-0.5L), degree);
+    std::vector<Scalar> sqrt_denom = ps_pow_const(one_minus_a2, Scalar(-0.5L), degree);
     std::vector<Scalar> deriv = ps_derivative(a, degree);
     return ps_integral(ps_mul(deriv, sqrt_denom, degree), res[0], degree);
 }
@@ -387,11 +388,12 @@ std::vector<Scalar> ps_acos(const std::vector<Scalar>& a, int degree) {
     std::vector<Scalar> res(degree + 1, Scalar(0));
     res[0] = mymath::acos(a[0]);
 
-    std::vector<Scalar> one_minus_x2(degree + 1, Scalar(0));
-    one_minus_x2[0] = Scalar(1);
-    if (degree >= 2) one_minus_x2[2] = -Scalar(1);
+    std::vector<Scalar> one(degree + 1, Scalar(0));
+    one[0] = Scalar(1);
+    std::vector<Scalar> a2 = ps_mul(a, a, degree);
+    std::vector<Scalar> one_minus_a2 = ps_sub(one, a2, degree);
 
-    std::vector<Scalar> sqrt_denom = ps_pow_const(one_minus_x2, Scalar(-0.5L), degree);
+    std::vector<Scalar> sqrt_denom = ps_pow_const(one_minus_a2, Scalar(-0.5L), degree);
     std::vector<Scalar> deriv = ps_derivative(a, degree);
     return ps_integral(ps_mul(ps_scale(deriv, Scalar(-1), degree), sqrt_denom, degree), res[0], degree);
 }
@@ -401,11 +403,57 @@ std::vector<Scalar> ps_atan(const std::vector<Scalar>& a, int degree) {
     std::vector<Scalar> res(degree + 1, Scalar(0));
     res[0] = mymath::atan(a[0]);
 
-    std::vector<Scalar> one_plus_x2(degree + 1, Scalar(0));
-    one_plus_x2[0] = Scalar(1);
-    if (degree >= 2) one_plus_x2[2] = Scalar(1);
+    std::vector<Scalar> one(degree + 1, Scalar(0));
+    one[0] = Scalar(1);
+    std::vector<Scalar> a2 = ps_mul(a, a, degree);
+    std::vector<Scalar> one_plus_a2 = ps_add(one, a2, degree);
 
-    std::vector<Scalar> denom = ps_pow_const(one_plus_x2, Scalar(-1), degree);
+    std::vector<Scalar> denom = ps_pow_const(one_plus_a2, Scalar(-1), degree);
+    std::vector<Scalar> deriv = ps_derivative(a, degree);
+    return ps_integral(ps_mul(deriv, denom, degree), res[0], degree);
+}
+
+std::vector<Scalar> ps_asinh(const std::vector<Scalar>& a, int degree) {
+    if (a.empty()) return std::vector<Scalar>(degree + 1, Scalar(0));
+    std::vector<Scalar> res(degree + 1, Scalar(0));
+    res[0] = mymath::asinh(a[0]);
+
+    std::vector<Scalar> one(degree + 1, Scalar(0));
+    one[0] = Scalar(1);
+    std::vector<Scalar> a2 = ps_mul(a, a, degree);
+    std::vector<Scalar> one_plus_a2 = ps_add(one, a2, degree);
+
+    std::vector<Scalar> sqrt_denom = ps_pow_const(one_plus_a2, Scalar(-0.5L), degree);
+    std::vector<Scalar> deriv = ps_derivative(a, degree);
+    return ps_integral(ps_mul(deriv, sqrt_denom, degree), res[0], degree);
+}
+
+std::vector<Scalar> ps_acosh(const std::vector<Scalar>& a, int degree) {
+    if (a.empty()) return std::vector<Scalar>(degree + 1, Scalar(0));
+    std::vector<Scalar> res(degree + 1, Scalar(0));
+    res[0] = mymath::acosh(a[0]);
+
+    std::vector<Scalar> one(degree + 1, Scalar(0));
+    one[0] = Scalar(1);
+    std::vector<Scalar> a2 = ps_mul(a, a, degree);
+    std::vector<Scalar> a2_minus_one = ps_sub(a2, one, degree);
+
+    std::vector<Scalar> sqrt_denom = ps_pow_const(a2_minus_one, Scalar(-0.5L), degree);
+    std::vector<Scalar> deriv = ps_derivative(a, degree);
+    return ps_integral(ps_mul(deriv, sqrt_denom, degree), res[0], degree);
+}
+
+std::vector<Scalar> ps_atanh(const std::vector<Scalar>& a, int degree) {
+    if (a.empty()) return std::vector<Scalar>(degree + 1, Scalar(0));
+    std::vector<Scalar> res(degree + 1, Scalar(0));
+    res[0] = mymath::atanh(a[0]);
+
+    std::vector<Scalar> one(degree + 1, Scalar(0));
+    one[0] = Scalar(1);
+    std::vector<Scalar> a2 = ps_mul(a, a, degree);
+    std::vector<Scalar> one_minus_a2 = ps_sub(one, a2, degree);
+
+    std::vector<Scalar> denom = ps_pow_const(one_minus_a2, Scalar(-1), degree);
     std::vector<Scalar> deriv = ps_derivative(a, degree);
     return ps_integral(ps_mul(deriv, denom, degree), res[0], degree);
 }
@@ -444,6 +492,42 @@ std::vector<Scalar> ps_tanh(const std::vector<Scalar>& a, int degree) {
     std::vector<Scalar> sh = ps_sinh(a, degree);
     std::vector<Scalar> ch = ps_cosh(a, degree);
     return ps_div(sh, ch, degree);
+}
+
+std::vector<Scalar> ps_cot(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> s, c;
+    ps_sincos(a, degree, s, c);
+    return ps_div(c, s, degree);
+}
+
+std::vector<Scalar> ps_sec(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> one(degree + 1, Scalar(0));
+    one[0] = Scalar(1);
+    return ps_div(one, ps_cos(a, degree), degree);
+}
+
+std::vector<Scalar> ps_csc(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> one(degree + 1, Scalar(0));
+    one[0] = Scalar(1);
+    return ps_div(one, ps_sin(a, degree), degree);
+}
+
+std::vector<Scalar> ps_coth(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> sh = ps_sinh(a, degree);
+    std::vector<Scalar> ch = ps_cosh(a, degree);
+    return ps_div(ch, sh, degree);
+}
+
+std::vector<Scalar> ps_sech(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> one(degree + 1, Scalar(0));
+    one[0] = Scalar(1);
+    return ps_div(one, ps_cosh(a, degree), degree);
+}
+
+std::vector<Scalar> ps_csch(const std::vector<Scalar>& a, int degree) {
+    std::vector<Scalar> one(degree + 1, Scalar(0));
+    one[0] = Scalar(1);
+    return ps_div(one, ps_sinh(a, degree), degree);
 }
 
 std::vector<Scalar> ps_revert(const std::vector<Scalar>& a, int degree) {
@@ -537,16 +621,25 @@ bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, S
             case NodeType::kFunction: {
                 const std::string func_name = expr.node_text();
                 if (func_name == "exp") { result = ps_exp(left_res, degree); return true; }
-                if (func_name == "ln") { result = ps_ln(left_res, degree); return true; }
+                if (func_name == "ln" || func_name == "log") { result = ps_ln(left_res, degree); return true; }
                 if (func_name == "sin") { result = ps_sin(left_res, degree); return true; }
                 if (func_name == "cos") { result = ps_cos(left_res, degree); return true; }
                 if (func_name == "tan") { result = ps_tan(left_res, degree); return true; }
+                if (func_name == "cot") { result = ps_cot(left_res, degree); return true; }
+                if (func_name == "sec") { result = ps_sec(left_res, degree); return true; }
+                if (func_name == "csc") { result = ps_csc(left_res, degree); return true; }
                 if (func_name == "asin" || func_name == "arcsin") { result = ps_asin(left_res, degree); return true; }
                 if (func_name == "acos" || func_name == "arccos") { result = ps_acos(left_res, degree); return true; }
                 if (func_name == "atan" || func_name == "arctan") { result = ps_atan(left_res, degree); return true; }
+                if (func_name == "asinh" || func_name == "arcsinh") { result = ps_asinh(left_res, degree); return true; }
+                if (func_name == "acosh" || func_name == "arccosh") { result = ps_acosh(left_res, degree); return true; }
+                if (func_name == "atanh" || func_name == "arctanh") { result = ps_atanh(left_res, degree); return true; }
                 if (func_name == "sinh") { result = ps_sinh(left_res, degree); return true; }
                 if (func_name == "cosh") { result = ps_cosh(left_res, degree); return true; }
                 if (func_name == "tanh") { result = ps_tanh(left_res, degree); return true; }
+                if (func_name == "coth") { result = ps_coth(left_res, degree); return true; }
+                if (func_name == "sech") { result = ps_sech(left_res, degree); return true; }
+                if (func_name == "csch") { result = ps_csch(left_res, degree); return true; }
                 if (func_name == "sqrt") { result = ps_pow_const(left_res, 0.5, degree); return true; }
                 return false;
             }
@@ -557,6 +650,17 @@ bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, S
     } catch (...) {
         return false;
     }
+}
+
+bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, Scalar center, int degree, std::vector<Scalar>& result) {
+    SeriesContext ctx;
+    ctx.evaluate_at = [](const SymbolicExpression& e, const std::string& v, Scalar p) {
+        if (e.node_type() == NodeType::kVariable && e.node_text() == v) return p;
+        Scalar val = 0.0L;
+        if (e.is_number(&val)) return val;
+        return Scalar(0.0L);
+    };
+    return evaluate_psa(expr, var_name, center, degree, result, ctx);
 }
 
 }  // namespace internal

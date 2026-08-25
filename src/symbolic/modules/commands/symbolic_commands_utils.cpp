@@ -101,7 +101,10 @@ void resolve_symbolic_expression(const SymbolicResolverContext& ctx,
                                  bool require_single_variable,
                                  std::string* variable_name,
                                  SymbolicExpression* expression) {
-    const std::string trimmed_argument = trim_copy(argument);
+    std::string trimmed_argument = trim_copy(argument);
+    if (trimmed_argument.size() >= 2 && trimmed_argument.front() == '"' && trimmed_argument.back() == '"') {
+        trimmed_argument = trim_copy(trimmed_argument.substr(1, trimmed_argument.size() - 2));
+    }
     CommandASTNode ast = parse_command(trimmed_argument);
     
     if (ast.kind == CommandKind::kFunctionCall) {
@@ -109,6 +112,16 @@ void resolve_symbolic_expression(const SymbolicResolverContext& ctx,
         if (call->name == "diff") {
             SymbolicExpression nested;
             resolve_symbolic_expression(ctx, std::string(call->arguments[0].text), call->arguments.size() == 1, variable_name, &nested);
+            std::string d_var = call->arguments.size() >= 2 ? trim_copy(call->arguments[1].text) : *variable_name;
+            if (nested.node_type() == NodeType::kVariable && nested.node_text() != d_var) {
+                std::vector<SymbolicExpression> diff_args = {nested, SymbolicExpression::variable(d_var)};
+                if (call->arguments.size() >= 3) {
+                    diff_args.push_back(SymbolicExpression::parse(std::string(call->arguments[2].text)));
+                }
+                *expression = SymbolicExpression::function("diff", diff_args);
+                *variable_name = d_var;
+                return;
+            }
             if (call->arguments.size() == 1) *expression = nested.derivative(*variable_name).simplify();
             else {
                 SymbolicExpression diffed = nested;
@@ -144,7 +157,18 @@ void resolve_symbolic_expression(const SymbolicResolverContext& ctx,
         *expression = ctx.resolve_custom_function(trimmed_argument, variable_name);
         return;
     }
-    *expression = SymbolicExpression::parse(ctx.expand_inline(trimmed_argument));
+    std::string expanded = ctx.expand_inline(trimmed_argument);
+    auto eq_pos = expanded.find('=');
+    if (eq_pos != std::string::npos && (eq_pos == 0 || expanded[eq_pos - 1] != '!' && expanded[eq_pos - 1] != '<' && expanded[eq_pos - 1] != '>') &&
+        (eq_pos + 1 == expanded.size() || expanded[eq_pos + 1] != '=')) {
+        std::string lhs_str = expanded.substr(0, eq_pos);
+        std::string rhs_str = expanded.substr(eq_pos + 1);
+        SymbolicExpression lhs = SymbolicExpression::parse(lhs_str);
+        SymbolicExpression rhs = SymbolicExpression::parse(rhs_str);
+        *expression = (lhs - rhs).simplify();
+    } else {
+        *expression = SymbolicExpression::parse(expanded);
+    }
     const auto ids = expression->identifier_variables();
     if (ids.size() == 1) *variable_name = ids[0];
     else if (ids.empty()) *variable_name = "x";
@@ -172,26 +196,28 @@ std::vector<SymbolicExpression> parse_symbolic_expression_list(
     const std::function<std::string(const std::string&)>& expand_inline) {
     auto expand = expand_inline ? expand_inline : [](const std::string& s) { return s; };
     std::string text = trim_copy(argument);
-    if (text.size() < 2 || text.front() != '[' || text.back() != ']') return {SymbolicExpression::parse(expand(text))};
-    text = trim_copy(text.substr(1, text.size() - 2));
+    if (text.empty()) return {};
+    if (text.size() >= 2 && text.front() == '[' && text.back() == ']') {
+        text = trim_copy(text.substr(1, text.size() - 2));
+    }
     std::vector<std::string> texts;
     int p_d = 0, b_d = 0; std::size_t s = 0;
     for (std::size_t i = 0; i < text.size(); ++i) {
         char ch = text[i];
-        if (ch == '(') ++p_d; else if (ch == ')') --p_d;
-        else if (ch == '[') ++b_d; else if (ch == ']') --b_d;
+        if (ch == '(') ++p_d; else if (ch == ')') { if (p_d > 0) --p_d; }
+        else if (ch == '[') ++b_d; else if (ch == ']') { if (b_d > 0) --b_d; }
         else if ((ch == ';' || ch == ',') && p_d == 0 && b_d == 0) {
             texts.push_back(trim_copy(text.substr(s, i - s))); s = i + 1;
         }
     }
-    if (!text.empty()) texts.push_back(trim_copy(text.substr(s)));
-    if (texts.empty()) throw std::runtime_error("Empty expression list");
-    std::vector<SymbolicExpression> exprs;
+    texts.push_back(trim_copy(text.substr(s)));
+    std::vector<SymbolicExpression> results;
     for (const auto& t : texts) {
-        if (t.empty()) throw std::runtime_error("Empty item in list");
-        exprs.push_back(SymbolicExpression::parse(expand_inline(t)));
+        if (!t.empty()) {
+            results.push_back(SymbolicExpression::parse(expand(t)).simplify());
+        }
     }
-    return exprs;
+    return results;
 }
 
 } // namespace symbolic_commands

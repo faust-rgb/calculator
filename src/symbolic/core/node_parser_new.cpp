@@ -233,7 +233,10 @@ private:
                 return SymbolicExpression::function(identifier, arguments);
             }
 
-            // 变量
+            // 变量 (支持导数单引号后缀如 y')
+            while (match('\'')) {
+                identifier += "'";
+            }
             return SymbolicExpression(make_variable(identifier));
         }
 
@@ -1075,79 +1078,352 @@ SymbolicExpression SymbolicExpression::variable(const std::string& name) {
     return SymbolicExpression(make_variable(name));
 }
 
-std::string to_latex_impl(const std::shared_ptr<SymbolicExpression::Node>& node) {
+namespace {
+
+const std::unordered_map<std::string, std::string>& greek_letters_map() {
+    static const std::unordered_map<std::string, std::string> m = {
+        {"alpha", "\\alpha"}, {"beta", "\\beta"}, {"gamma", "\\gamma"}, {"delta", "\\delta"},
+        {"epsilon", "\\epsilon"}, {"varepsilon", "\\varepsilon"}, {"zeta", "\\zeta"}, {"eta", "\\eta"},
+        {"theta", "\\theta"}, {"vartheta", "\\vartheta"}, {"iota", "\\iota"}, {"kappa", "\\kappa"},
+        {"lambda", "\\lambda"}, {"mu", "\\mu"}, {"nu", "\\nu"}, {"xi", "\\xi"},
+        {"pi", "\\pi"}, {"varpi", "\\varpi"}, {"rho", "\\rho"}, {"varrho", "\\varrho"},
+        {"sigma", "\\sigma"}, {"varsigma", "\\varsigma"}, {"tau", "\\tau"}, {"upsilon", "\\upsilon"},
+        {"phi", "\\phi"}, {"varphi", "\\varphi"}, {"chi", "\\chi"}, {"psi", "\\psi"}, {"omega", "\\omega"},
+        {"Gamma", "\\Gamma"}, {"Delta", "\\Delta"}, {"Theta", "\\Theta"}, {"Lambda", "\\Lambda"},
+        {"Xi", "\\Xi"}, {"Pi", "\\Pi"}, {"Sigma", "\\Sigma"}, {"Upsilon", "\\Upsilon"},
+        {"Phi", "\\Phi"}, {"Psi", "\\Psi"}, {"Omega", "\\Omega"},
+        {"infty", "\\infty"}, {"infinity", "\\infty"}, {"aleph", "\\aleph"}, {"hbar", "\\hbar"}
+    };
+    return m;
+}
+
+std::string latex_variable_format(const std::string& name) {
+    if (name.empty()) return "";
+    auto it = greek_letters_map().find(name);
+    if (it != greek_letters_map().end()) return it->second;
+
+    auto pos = name.find('_');
+    if (pos != std::string::npos) {
+        std::string base = name.substr(0, pos);
+        std::string sub = name.substr(pos + 1);
+        std::string base_latex = latex_variable_format(base);
+        std::string sub_latex = latex_variable_format(sub);
+        return base_latex + "_{" + sub_latex + "}";
+    }
+    return name;
+}
+
+int latex_node_precedence(const std::shared_ptr<SymbolicExpression::Node>& node) {
+    if (!node) return 100;
+    switch (node->type) {
+        case NodeType::kAdd:
+        case NodeType::kSubtract:
+            return 20;
+        case NodeType::kMultiply:
+            return 30;
+        case NodeType::kDivide:
+            return 100; // \frac{}{} 自带括号定界效应
+        case NodeType::kNegate:
+            return 40;
+        case NodeType::kPower:
+            return 50;
+        default:
+            return 100;
+    }
+}
+
+// 递归生成 LaTeX 文本
+std::string to_latex_rec(const std::shared_ptr<SymbolicExpression::Node>& node, int parent_prec, bool is_right) {
     if (!node) return "";
+
     switch (node->type) {
         case NodeType::kNumber: {
-            Scalar val = Scalar(0.0L);
-            try_evaluate_numeric_node(node, &val);
+            Scalar val = node->number_value;
             return format_decimal(val);
         }
         case NodeType::kPi: return "\\pi";
         case NodeType::kE: return "e";
-        case NodeType::kInfinity: return "\\infty";
-        case NodeType::kVariable: return node->text;
-        case NodeType::kNegate: return "-" + to_latex_impl(node->left);
-        case NodeType::kAdd: return to_latex_impl(node->left) + " + " + to_latex_impl(node->right);
-        case NodeType::kSubtract: return to_latex_impl(node->left) + " - " + to_latex_impl(node->right);
-        case NodeType::kMultiply: {
-            std::string left_str = to_latex_impl(node->left);
-            std::string right_str = to_latex_impl(node->right);
-            // 简单逻辑：如果右侧是变量，可以省略乘号
-            if (node->right->type == NodeType::kVariable) return left_str + right_str;
-            return left_str + " \\cdot " + right_str;
-        }
-        case NodeType::kDivide: return "\\frac{" + to_latex_impl(node->left) + "}{" + to_latex_impl(node->right) + "}";
-        case NodeType::kPower: {
-            // e^x -> e^x
-            if (node->left->type == NodeType::kE) return "e^{" + to_latex_impl(node->right) + "}";
-            return "{" + to_latex_impl(node->left) + "}^{" + to_latex_impl(node->right) + "}";
-        }
-        case NodeType::kVector: {
-            std::string res = "\\begin{pmatrix} ";
-            for (size_t i = 0; i < node->children.size(); ++i) {
-                if (i > 0) res += " \\\\ ";
-                res += to_latex_impl(node->children[i]);
+        case NodeType::kInfinity: return (node->number_value >= 0) ? "\\infty" : "-\\infty";
+        case NodeType::kVariable: return latex_variable_format(node->text);
+
+        case NodeType::kNegate: {
+            int child_prec = latex_node_precedence(node->left);
+            std::string inner = to_latex_rec(node->left, 40, false);
+            if (child_prec <= 20) {
+                inner = "\\left(" + inner + "\\right)";
             }
-            res += " \\end{pmatrix}";
+            std::string res = "-" + inner;
+            if (parent_prec > 40) {
+                res = "\\left(" + res + "\\right)";
+            }
             return res;
         }
-        case NodeType::kTensor: {
-            std::string res = "\\begin{pmatrix} ";
+
+        case NodeType::kAdd: {
+            std::string left_str = to_latex_rec(node->left, 20, false);
+            std::string right_str;
+            if (node->right->type == NodeType::kNegate) {
+                right_str = "- " + to_latex_rec(node->right->left, 20, true);
+            } else if (node->right->type == NodeType::kNumber && node->right->number_value < Scalar(0)) {
+                right_str = "- " + format_decimal(-node->right->number_value);
+            } else {
+                right_str = "+ " + to_latex_rec(node->right, 20, true);
+            }
+            std::string res = left_str + " " + right_str;
+            if (parent_prec > 20) {
+                res = "\\left(" + res + "\\right)";
+            }
+            return res;
+        }
+
+        case NodeType::kSubtract: {
+            std::string left_str = to_latex_rec(node->left, 20, false);
+            std::string right_str;
+            if (node->right->type == NodeType::kNumber && node->right->number_value < Scalar(0)) {
+                right_str = "+ " + format_decimal(-node->right->number_value);
+            } else {
+                int rprec = latex_node_precedence(node->right);
+                std::string r_inner = to_latex_rec(node->right, 21, true);
+                if (rprec <= 20) {
+                    r_inner = "\\left(" + r_inner + "\\right)";
+                }
+                right_str = "- " + r_inner;
+            }
+            std::string res = left_str + " " + right_str;
+            if (parent_prec > 20) {
+                res = "\\left(" + res + "\\right)";
+            }
+            return res;
+        }
+
+        case NodeType::kMultiply: {
+            if (node->left->type == NodeType::kNumber && node->left->number_value == Scalar(-1)) {
+                int rprec = latex_node_precedence(node->right);
+                std::string r_str = to_latex_rec(node->right, 40, false);
+                if (rprec <= 20) r_str = "\\left(" + r_str + "\\right)";
+                std::string res = "-" + r_str;
+                if (parent_prec > 40) res = "\\left(" + res + "\\right)";
+                return res;
+            }
+
+            int lprec = latex_node_precedence(node->left);
+            int rprec = latex_node_precedence(node->right);
+
+            std::string left_str = to_latex_rec(node->left, 30, false);
+            if (lprec <= 20) left_str = "\\left(" + left_str + "\\right)";
+
+            std::string right_str = to_latex_rec(node->right, 30, true);
+            if (rprec <= 20) right_str = "\\left(" + right_str + "\\right)";
+
+            std::string res;
+            if (node->left->type == NodeType::kNumber &&
+                (node->right->type == NodeType::kVariable ||
+                 node->right->type == NodeType::kPi ||
+                 node->right->type == NodeType::kE ||
+                 node->right->type == NodeType::kFunction ||
+                 node->right->type == NodeType::kPower)) {
+                res = left_str + " " + right_str;
+            } else if (node->left->type == NodeType::kNumber && node->right->type == NodeType::kNumber) {
+                res = left_str + " \\cdot " + right_str;
+            } else if (lprec <= 20 || rprec <= 20) {
+                res = left_str + right_str;
+            } else if (node->left->type == NodeType::kVariable && node->right->type == NodeType::kVariable) {
+                res = left_str + " " + right_str;
+            } else {
+                res = left_str + " " + right_str;
+            }
+
+            if (parent_prec > 30) {
+                res = "\\left(" + res + "\\right)";
+            }
+            return res;
+        }
+
+        case NodeType::kDivide: {
+            std::string num = to_latex_rec(node->left, 0, false);
+            std::string den = to_latex_rec(node->right, 0, false);
+            return "\\frac{" + num + "}{" + den + "}";
+        }
+
+        case NodeType::kPower: {
+            if (node->left->type == NodeType::kE) {
+                return "e^{" + to_latex_rec(node->right, 0, false) + "}";
+            }
+
+            // x^(1/2) -> \sqrt{x}
+            if (node->right->type == NodeType::kDivide &&
+                node->right->left->type == NodeType::kNumber && node->right->left->number_value == Scalar(1) &&
+                node->right->right->type == NodeType::kNumber && node->right->right->number_value == Scalar(2)) {
+                return "\\sqrt{" + to_latex_rec(node->left, 0, false) + "}";
+            }
+            // x^(1/n) -> \sqrt[n]{x}
+            if (node->right->type == NodeType::kDivide &&
+                node->right->left->type == NodeType::kNumber && node->right->left->number_value == Scalar(1) &&
+                node->right->right->type == NodeType::kNumber && mymath::is_integer(node->right->right->number_value)) {
+                return "\\sqrt[" + format_decimal(node->right->right->number_value) + "]{" + to_latex_rec(node->left, 0, false) + "}";
+            }
+
+            int lprec = latex_node_precedence(node->left);
+            std::string base_str = to_latex_rec(node->left, 50, false);
+            if (lprec < 50 || node->left->type == NodeType::kDivide) {
+                base_str = "\\left(" + base_str + "\\right)";
+            }
+
+            std::string exp_str = to_latex_rec(node->right, 0, false);
+            return "{" + base_str + "}^{" + exp_str + "}";
+        }
+
+        case NodeType::kVector: {
+            std::string res = "\\begin{pmatrix}\n";
             for (size_t i = 0; i < node->children.size(); ++i) {
-                if (i > 0) res += " \\\\ ";
-                // 每行是一个 kVector
+                res += "  " + to_latex_rec(node->children[i], 0, false);
+                if (i + 1 < node->children.size()) res += " \\\\";
+                res += "\n";
+            }
+            res += "\\end{pmatrix}";
+            return res;
+        }
+
+        case NodeType::kTensor: {
+            std::string res = "\\begin{pmatrix}\n";
+            for (size_t i = 0; i < node->children.size(); ++i) {
+                res += "  ";
                 if (node->children[i]->type == NodeType::kVector) {
                     for (size_t j = 0; j < node->children[i]->children.size(); ++j) {
                         if (j > 0) res += " & ";
-                        res += to_latex_impl(node->children[i]->children[j]);
+                        res += to_latex_rec(node->children[i]->children[j], 0, false);
                     }
+                } else {
+                    res += to_latex_rec(node->children[i], 0, false);
                 }
+                if (i + 1 < node->children.size()) res += " \\\\";
+                res += "\n";
             }
-            res += " \\end{pmatrix}";
+            res += "\\end{pmatrix}";
             return res;
         }
+
+        case NodeType::kDifferentialOp: {
+            std::string arg = to_latex_rec(node->left, 0, false);
+            return "\\frac{d}{d" + latex_variable_format(node->text) + "}\\left(" + arg + "\\right)";
+        }
+
+        case NodeType::kRootOf: {
+            std::string poly_str = (!node->children.empty()) ? to_latex_rec(node->children[0], 0, false) : "";
+            return "\\operatorname{RootOf}\\left(" + poly_str + ", " + node->text + ", " + format_decimal(node->number_value) + "\\right)";
+        }
+
         case NodeType::kFunction: {
-            std::string arguments;
-            if (node->left) {
-                arguments = to_latex_impl(node->left);
-            } else {
-                for (std::size_t i = 0; i < node->children.size(); ++i) {
-                    if (i > 0) arguments += ", ";
-                    arguments += to_latex_impl(node->children[i]);
+            std::vector<std::string> args;
+            if (!node->children.empty()) {
+                for (const auto& child : node->children) {
+                    args.push_back(to_latex_rec(child, 0, false));
+                }
+            } else if (node->left) {
+                args.push_back(to_latex_rec(node->left, 0, false));
+            }
+
+            const std::string& name = node->text;
+            std::string arg0 = args.empty() ? "" : args[0];
+
+            if (name == "sqrt" && args.size() == 1) return "\\sqrt{" + arg0 + "}";
+            if (name == "cbrt" && args.size() == 1) return "\\sqrt[3]{" + arg0 + "}";
+            if (name == "root" && args.size() == 2) return "\\sqrt[" + args[1] + "]{" + args[0] + "}";
+            if (name == "abs" && args.size() == 1) return "\\left|" + arg0 + "\\right|";
+            if (name == "floor" && args.size() == 1) return "\\lfloor " + arg0 + " \\rfloor";
+            if (name == "ceil" && args.size() == 1) return "\\lceil " + arg0 + " \\rceil";
+            if (name == "exp" && args.size() == 1) return "e^{" + arg0 + "}";
+            if (name == "ln" && args.size() == 1) return "\\ln\\left(" + arg0 + "\\right)";
+            if (name == "log" && args.size() == 1) return "\\log\\left(" + arg0 + "\\right)";
+            if (name == "log" && args.size() == 2) return "\\log_{" + args[1] + "}\\left(" + args[0] + "\\right)";
+            if (name == "log10" && args.size() == 1) return "\\log_{10}\\left(" + arg0 + "\\right)";
+            if (name == "log2" && args.size() == 1) return "\\log_{2}\\left(" + arg0 + "\\right)";
+
+            if (name == "sin" || name == "cos" || name == "tan" ||
+                name == "cot" || name == "sec" || name == "csc") {
+                return "\\" + name + "\\left(" + arg0 + "\\right)";
+            }
+            if (name == "asin" || name == "arcsin") return "\\arcsin\\left(" + arg0 + "\\right)";
+            if (name == "acos" || name == "arccos") return "\\arccos\\left(" + arg0 + "\\right)";
+            if (name == "atan" || name == "arctan") return "\\arctan\\left(" + arg0 + "\\right)";
+            if (name == "acot" || name == "arccot") return "\\operatorname{arccot}\\left(" + arg0 + "\\right)";
+            if (name == "asec" || name == "arcsec") return "\\operatorname{arcsec}\\left(" + arg0 + "\\right)";
+            if (name == "acsc" || name == "arccsc") return "\\operatorname{arccsc}\\left(" + arg0 + "\\right)";
+
+            if (name == "sinh" || name == "cosh" || name == "tanh" || name == "coth") {
+                return "\\" + name + "\\left(" + arg0 + "\\right)";
+            }
+            if (name == "sech") return "\\operatorname{sech}\\left(" + arg0 + "\\right)";
+            if (name == "csch") return "\\operatorname{csch}\\left(" + arg0 + "\\right)";
+            if (name == "asinh" || name == "arcsinh") return "\\operatorname{arsinh}\\left(" + arg0 + "\\right)";
+            if (name == "acosh" || name == "arccosh") return "\\operatorname{arcosh}\\left(" + arg0 + "\\right)";
+            if (name == "atanh" || name == "arctanh") return "\\operatorname{artanh}\\left(" + arg0 + "\\right)";
+            if (name == "acoth" || name == "arccoth") return "\\operatorname{arcoth}\\left(" + arg0 + "\\right)";
+
+            if (name == "erf") return "\\operatorname{erf}\\left(" + arg0 + "\\right)";
+            if (name == "erfc") return "\\operatorname{erfc}\\left(" + arg0 + "\\right)";
+            if (name == "gamma" || name == "Gamma") return "\\Gamma\\left(" + arg0 + "\\right)";
+            if (name == "beta" || name == "Beta") return "\\operatorname{B}\\left(" + (args.size() >= 2 ? args[0] + ", " + args[1] : arg0) + "\\right)";
+            if (name == "zeta") return "\\zeta\\left(" + arg0 + "\\right)";
+            if (name == "ei" || name == "Ei") return "\\operatorname{Ei}\\left(" + arg0 + "\\right)";
+            if (name == "si" || name == "Si") return "\\operatorname{Si}\\left(" + arg0 + "\\right)";
+            if (name == "ci" || name == "Ci") return "\\operatorname{Ci}\\left(" + arg0 + "\\right)";
+            if (name == "li") return "\\operatorname{li}\\left(" + arg0 + "\\right)";
+            if (name == "factorial" || name == "fact") return "{" + arg0 + "}!";
+            if (name == "nCr" || name == "binom" || name == "combinations") {
+                if (args.size() >= 2) return "\\binom{" + args[0] + "}{" + args[1] + "}";
+            }
+
+            if ((name == "diff" || name == "derivative") && args.size() >= 2) {
+                if (args.size() == 2) {
+                    return "\\frac{d}{d" + args[1] + "}\\left(" + args[0] + "\\right)";
+                } else if (args.size() == 3) {
+                    return "\\frac{d^{" + args[2] + "}}{d" + args[1] + "^{" + args[2] + "}}\\left(" + args[0] + "\\right)";
                 }
             }
-            if (node->text == "sqrt" && node->left) return "\\sqrt{" + arguments + "}";
-            if (node->text == "sin") return "\\sin(" + arguments + ")";
-            if (node->text == "cos") return "\\cos(" + arguments + ")";
-            return "\\" + node->text + "(" + arguments + ")";
+            if ((name == "integrate" || name == "integral") && args.size() >= 2) {
+                if (args.size() == 2) {
+                    return "\\int " + args[0] + " \\, d" + args[1];
+                } else if (args.size() == 4) {
+                    return "\\int_{" + args[2] + "}^{" + args[3] + "} " + args[0] + " \\, d" + args[1];
+                }
+            }
+            if (name == "limit" && args.size() >= 3) {
+                if (args.size() == 3) {
+                    return "\\lim_{" + args[1] + " \\to " + args[2] + "} " + args[0];
+                } else if (args.size() == 4) {
+                    std::string dir = (args[3] == "1" || args[3] == "\"+\"") ? "^{+}" : "^{-}";
+                    return "\\lim_{" + args[1] + " \\to " + args[2] + dir + "} " + args[0];
+                }
+            }
+            if (name == "sum" && args.size() == 4) {
+                return "\\sum_{" + args[1] + "=" + args[2] + "}^{" + args[3] + "} " + args[0];
+            }
+            if (name == "product" && args.size() == 4) {
+                return "\\prod_{" + args[1] + "=" + args[2] + "}^{" + args[3] + "} " + args[0];
+            }
+
+            std::string arg_list;
+            for (size_t i = 0; i < args.size(); ++i) {
+                if (i > 0) arg_list += ", ";
+                arg_list += args[i];
+            }
+            return "\\operatorname{" + name + "}\\left(" + arg_list + "\\right)";
         }
-        default: return "???";
+        default:
+            return "???";
     }
 }
 
+} // namespace
+
+std::string to_latex_impl(const std::shared_ptr<SymbolicExpression::Node>& node) {
+    if (!node) return "";
+    return to_latex_rec(node, 0, false);
+}
+
 std::string SymbolicExpression::to_latex() const {
-    return to_latex_impl(simplify().node_);
+    return to_latex_impl(node_);
 }
 
 std::string SymbolicExpression::to_string() const {

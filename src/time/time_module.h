@@ -49,7 +49,7 @@
  * - %S: 秒 (00-59)
  * - %s: Unix 时间戳（秒）
  */
-class TimeModule : public CalculatorModule {
+class TimeModule : public CommandFunctionModuleBase {
 public:
     /**
      * @brief 获取模块名称
@@ -73,6 +73,11 @@ public:
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_functions_map() const override;
 
     /**
+     * @brief 获取模块提供的原生函数名列表
+     */
+    std::vector<std::string> get_function_names() const override;
+
+    /**
      * @brief 执行命令行参数形式的时间命令
      * @param command 命令名称
      * @param args 参数列表
@@ -91,6 +96,10 @@ public:
     std::string get_help_snippet(const std::string& topic) const override;
 
 private:
+    /// 缓存的函数映射表
+    mutable std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs_cache_;
+    mutable bool funcs_cached_ = false;
+
     /** @brief 计时器映射表，存储计时器ID到启动时间的映射 */
     mutable std::map<int, std::chrono::steady_clock::time_point> timers_;
     /** @brief 下一个计时器ID，用于生成唯一的计时器标识 */

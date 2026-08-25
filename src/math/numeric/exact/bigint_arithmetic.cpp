@@ -27,17 +27,17 @@ namespace precise {
 constexpr uint32_t kBase = 1000000000;  ///< 大整数基数（10^9）
 constexpr int kBaseDigits = 9;          ///< 每个 chunk 的十进制位数
 
-// 使用 app 命名空间中的统一精度设置
-using app::get_default_scale;
-using app::set_default_scale;
+// 使用 math::config 命名空间中的统一精度设置
+using math::config::get_default_scale;
+using math::config::set_default_scale;
 
 // 显示阈值 - 基于 default_scale 动态计算
 inline long double display_zero_eps() {
-    return app::display_zero_threshold();
+    return math::config::display_zero_threshold();
 }
 
 inline long double display_integer_eps() {
-    return app::display_integer_threshold();
+    return math::config::display_integer_threshold();
 }
 
 thread_local bool g_suppress_normalization = false;

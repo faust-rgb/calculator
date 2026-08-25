@@ -30,7 +30,8 @@ std::string pade(const SeriesContext& ctx,
 
 std::string pade_from_coeffs(const std::vector<Scalar>& coefficients,
                               int numerator_degree,
-                              int denominator_degree);
+                              int denominator_degree,
+                              const std::string& base = "x");
 
 bool solve_pade_denominator(std::function<Scalar(int)> c,
                              int numerator_degree,
@@ -40,10 +41,12 @@ bool solve_pade_denominator(std::function<Scalar(int)> c,
 bool solve_tohplitz_stable(std::function<Scalar(int)> c, int n, std::vector<Scalar>& q);
 
 std::string format_pade_result(const std::vector<Scalar>& numerator,
-                                const std::vector<Scalar>& denominator);
+                                const std::vector<Scalar>& denominator,
+                                const std::string& base = "x");
 
 std::string format_simple_pade(const std::vector<Scalar>& numerator,
-                                const std::vector<Scalar>& denominator);
+                                const std::vector<Scalar>& denominator,
+                                const std::string& base = "x");
 
 }  // namespace pade
 }  // namespace series_ops

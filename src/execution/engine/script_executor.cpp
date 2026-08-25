@@ -26,6 +26,14 @@ ScriptSignal execute_script_statement(
         case script::Statement::Kind::kSimple: {
             const auto& simple = static_cast<const script::SimpleStatement&>(statement);
             try {
+                if (simple.command_ast.kind == CommandKind::kIndexAssignment) {
+                    const auto* assign = simple.command_ast.as_index_assignment();
+                    std::string output;
+                    if (execute_index_assignment_direct(ctx, assign->variable, assign->indices, assign->value, exact_mode, &output)) {
+                        *last_output = output;
+                        return {};
+                    }
+                }
                 if (try_execute_index_assignment(ctx, simple.text, exact_mode, last_output)) {
                     return {};
                 }
@@ -33,7 +41,7 @@ ScriptSignal execute_script_statement(
                     *last_output = execute_command_ast(ctx, simple.command_ast, exact_mode);
                 }
             } catch (const std::exception& e) {
-                throw std::runtime_error("Line " + std::to_string(simple.line) + ": " + e.what());
+                throw std::runtime_error(format_script_error(simple.line, e));
             }
             return {};
         }
@@ -42,12 +50,12 @@ ScriptSignal execute_script_statement(
             const auto& if_stmt = static_cast<const script::IfStatement&>(statement);
             try {
                 if (truthy_value(evaluate_command_ast_to_value(ctx, if_stmt.condition_ast, false))) {
-                    return execute_script_statement(ctx, *if_stmt.then_branch, exact_mode, last_output, true);
+                    return execute_script_statement(ctx, *if_stmt.then_branch, exact_mode, last_output, false);
                 } else if (if_stmt.else_branch) {
-                    return execute_script_statement(ctx, *if_stmt.else_branch, exact_mode, last_output, true);
+                    return execute_script_statement(ctx, *if_stmt.else_branch, exact_mode, last_output, false);
                 }
             } catch (const std::exception& e) {
-                throw std::runtime_error("Line " + std::to_string(if_stmt.line) + ": " + e.what());
+                throw std::runtime_error(format_script_error(if_stmt.line, e));
             }
             return {};
         }
@@ -56,40 +64,36 @@ ScriptSignal execute_script_statement(
             const auto& while_stmt = static_cast<const script::WhileStatement&>(statement);
             try {
                 while (truthy_value(evaluate_command_ast_to_value(ctx, while_stmt.condition_ast, false))) {
-                    const ScriptSignal signal = execute_script_statement(ctx, *while_stmt.body, exact_mode, last_output, true);
+                    const ScriptSignal signal = execute_script_statement(ctx, *while_stmt.body, exact_mode, last_output, false);
                     if (signal.kind == ScriptSignal::Kind::kReturn) return signal;
                     if (signal.kind == ScriptSignal::Kind::kBreak) break;
                     if (signal.kind == ScriptSignal::Kind::kContinue) continue;
                 }
             } catch (const std::exception& e) {
-                throw std::runtime_error("Line " + std::to_string(while_stmt.line) + ": " + e.what());
+                throw std::runtime_error(format_script_error(while_stmt.line, e));
             }
             return {};
         }
 
         case script::Statement::Kind::kFor: {
             const auto& for_stmt = static_cast<const script::ForStatement&>(statement);
-            ctx->variables().push_scope();
             try {
                 if (for_stmt.init_ast.kind != CommandKind::kEmpty) (void)evaluate_command_ast_to_value(ctx, for_stmt.init_ast, exact_mode);
                 while (for_stmt.cond_ast.kind == CommandKind::kEmpty || truthy_value(evaluate_command_ast_to_value(ctx, for_stmt.cond_ast, false))) {
-                    const ScriptSignal signal = execute_script_statement(ctx, *for_stmt.body, exact_mode, last_output, true);
-                    if (signal.kind == ScriptSignal::Kind::kReturn) { ctx->variables().pop_scope(); return signal; }
+                    const ScriptSignal signal = execute_script_statement(ctx, *for_stmt.body, exact_mode, last_output, false);
+                    if (signal.kind == ScriptSignal::Kind::kReturn) return signal;
                     if (signal.kind == ScriptSignal::Kind::kBreak) break;
                     if (for_stmt.step_ast.kind != CommandKind::kEmpty) (void)evaluate_command_ast_to_value(ctx, for_stmt.step_ast, exact_mode);
                     if (signal.kind == ScriptSignal::Kind::kContinue) continue;
                 }
-                ctx->variables().pop_scope();
                 return {};
             } catch (const std::exception& e) {
-                ctx->variables().pop_scope();
-                throw std::runtime_error("Line " + std::to_string(for_stmt.line) + ": " + e.what());
+                throw std::runtime_error(format_script_error(for_stmt.line, e));
             }
         }
 
         case script::Statement::Kind::kForRange: {
             const auto& for_range = static_cast<const script::ForRangeStatement&>(statement);
-            ctx->variables().push_scope();
             try {
                 const Scalar start = evaluate_scalar(ctx, for_range.start_ast, "range start");
                 const Scalar stop = evaluate_scalar(ctx, for_range.stop_ast, "range stop");
@@ -99,30 +103,27 @@ ScriptSignal execute_script_statement(
                 for (Scalar current = start; (ascending ? current < stop : current > stop); current += step) {
                     StoredValue loop_val(current);
                     ctx->variables().set_local(for_range.variable, loop_val);
-                    const ScriptSignal signal = execute_script_statement(ctx, *for_range.body, exact_mode, last_output, true);
-                    if (signal.kind == ScriptSignal::Kind::kReturn) { ctx->variables().pop_scope(); return signal; }
+                    const ScriptSignal signal = execute_script_statement(ctx, *for_range.body, exact_mode, last_output, false);
+                    if (signal.kind == ScriptSignal::Kind::kReturn) return signal;
                     if (signal.kind == ScriptSignal::Kind::kBreak) break;
                     if (signal.kind == ScriptSignal::Kind::kContinue) continue;
                 }
-                ctx->variables().pop_scope();
                 return {};
             } catch (const std::exception& e) {
-                ctx->variables().pop_scope();
-                throw std::runtime_error("Line " + std::to_string(for_range.line) + ": " + e.what());
+                throw std::runtime_error(format_script_error(for_range.line, e));
             }
         }
 
         case script::Statement::Kind::kForIn: {
             const auto& for_in = static_cast<const script::ForInStatement&>(statement);
-            ctx->variables().push_scope();
             try {
                 StoredValue iterable = evaluate_command_ast_to_value(ctx, for_in.iterable_ast, exact_mode);
 
                 if (iterable.is_list && iterable.list_value) {
                     for (const StoredValue& item : *iterable.list_value) {
                         ctx->variables().set_local(for_in.variable, item);
-                        const ScriptSignal signal = execute_script_statement(ctx, *for_in.body, exact_mode, last_output, true);
-                        if (signal.kind == ScriptSignal::Kind::kReturn) { ctx->variables().pop_scope(); return signal; }
+                        const ScriptSignal signal = execute_script_statement(ctx, *for_in.body, exact_mode, last_output, false);
+                        if (signal.kind == ScriptSignal::Kind::kReturn) return signal;
                         if (signal.kind == ScriptSignal::Kind::kBreak) break;
                         if (signal.kind == ScriptSignal::Kind::kContinue) continue;
                     }
@@ -137,8 +138,8 @@ ScriptSignal execute_script_statement(
                             row_value.matrix_ptr->at(0, col) = iterable.matrix_ptr->at(row, col);
                         }
                         ctx->variables().set_local(for_in.variable, row_value);
-                        const ScriptSignal signal = execute_script_statement(ctx, *for_in.body, exact_mode, last_output, true);
-                        if (signal.kind == ScriptSignal::Kind::kReturn) { ctx->variables().pop_scope(); return signal; }
+                        const ScriptSignal signal = execute_script_statement(ctx, *for_in.body, exact_mode, last_output, false);
+                        if (signal.kind == ScriptSignal::Kind::kReturn) return signal;
                         if (signal.kind == ScriptSignal::Kind::kBreak) break;
                         if (signal.kind == ScriptSignal::Kind::kContinue) continue;
                     }
@@ -149,8 +150,8 @@ ScriptSignal execute_script_statement(
                         char_value.is_string = true;
                         char_value.string_value = std::string(1, ch);
                         ctx->variables().set_local(for_in.variable, char_value);
-                        const ScriptSignal signal = execute_script_statement(ctx, *for_in.body, exact_mode, last_output, true);
-                        if (signal.kind == ScriptSignal::Kind::kReturn) { ctx->variables().pop_scope(); return signal; }
+                        const ScriptSignal signal = execute_script_statement(ctx, *for_in.body, exact_mode, last_output, false);
+                        if (signal.kind == ScriptSignal::Kind::kReturn) return signal;
                         if (signal.kind == ScriptSignal::Kind::kBreak) break;
                         if (signal.kind == ScriptSignal::Kind::kContinue) continue;
                     }
@@ -158,11 +159,9 @@ ScriptSignal execute_script_statement(
                 else {
                     throw std::runtime_error("for-in loop requires a list, matrix, or string iterable");
                 }
-                ctx->variables().pop_scope();
                 return {};
             } catch (const std::exception& e) {
-                ctx->variables().pop_scope();
-                throw std::runtime_error("Line " + std::to_string(for_in.line) + ": " + e.what());
+                throw std::runtime_error(format_script_error(for_in.line, e));
             }
         }
 
@@ -170,7 +169,7 @@ ScriptSignal execute_script_statement(
             const auto& ret = static_cast<const script::ReturnStatement&>(statement);
             if (!ret.has_expression) return ScriptSignal::make_return({});
             try { return ScriptSignal::make_return(evaluate_command_ast_to_value(ctx, ret.expr_ast, exact_mode)); }
-            catch (const std::exception& e) { throw std::runtime_error("Line " + std::to_string(ret.line) + ": " + e.what()); }
+            catch (const std::exception& e) { throw std::runtime_error(format_script_error(ret.line, e)); }
         }
 
         case script::Statement::Kind::kBreak: return ScriptSignal::make_break();
@@ -183,7 +182,7 @@ ScriptSignal execute_script_statement(
                 *last_output = ctx->execute_script_file(path_value.string_value, exact_mode, true);
                 return {};
             } catch (const std::exception& e) {
-                throw std::runtime_error("Line " + std::to_string(import_stmt.line) + ": " + e.what());
+                throw std::runtime_error(format_script_error(import_stmt.line, e));
             }
         }
         case script::Statement::Kind::kFunction: {
@@ -239,10 +238,10 @@ ScriptSignal execute_script_statement(
                         StoredValue guard_val = evaluate_command_ast_to_value(ctx, clause.guard_ast, exact_mode);
                         matches = truthy_value(guard_val);
                     }
-                    if (matches) return execute_script_statement(ctx, *clause.body, exact_mode, last_output, true);
+                    if (matches) return execute_script_statement(ctx, *clause.body, exact_mode, last_output, false);
                 }
             } catch (const std::exception& e) {
-                throw std::runtime_error("Line " + std::to_string(match_stmt.line) + ": " + e.what());
+                throw std::runtime_error(format_script_error(match_stmt.line, e));
             }
             return {};
         }
@@ -265,7 +264,7 @@ ScriptSignal execute_script_block(
     }
     try {
         for (const auto& stmt : block.statements) {
-            const ScriptSignal signal = execute_script_statement(ctx, *stmt, exact_mode, last_output, true);
+            const ScriptSignal signal = execute_script_statement(ctx, *stmt, exact_mode, last_output, false);
             if (signal.kind != ScriptSignal::Kind::kNone) {
                 if (create_scope) ctx->variables().pop_scope();
                 return signal;

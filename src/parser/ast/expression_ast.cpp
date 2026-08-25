@@ -744,7 +744,7 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                                         functions, scalar_functions, native_functions,
                                         has_script_function, invoke_script_function));
 
-             const Scalar comparison_tolerance = Scalar(app::numeric_tolerance());
+             const Scalar comparison_tolerance = Scalar(math::config::numeric_tolerance());
              if (ast->comparison_op == "==") return mymath::abs(left - right) < comparison_tolerance ? 1.0L : 0.0L;
              if (ast->comparison_op == "!=") return mymath::abs(left - right) < comparison_tolerance ? 0.0L : 1.0L;
             if (ast->comparison_op == "<") return left < right ? 1.0L : 0.0L;

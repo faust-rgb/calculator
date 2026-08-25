@@ -73,6 +73,62 @@ int parse_subdivisions(const SymbolicCommandContext& ctx,
 std::string format_symbolic_numeric(const SymbolicCommandContext& ctx, Scalar value) {
     return format_decimal(ctx.normalize_result(static_cast<double>(value)));
 }
+bool try_symbolic_definite_integral(const SymbolicCommandContext& ctx,
+                                     const std::string& expr_str,
+                                     const std::string& var_name,
+                                     const std::string& a_str,
+                                     const std::string& b_str,
+                                     std::string* output) {
+    try {
+        std::string resolved_var = var_name;
+        SymbolicExpression integrand;
+        ctx.resolve_symbolic(expr_str, false, &resolved_var, &integrand);
+        if (resolved_var.empty()) resolved_var = var_name.empty() ? "x" : var_name;
+
+        SymbolicExpression bound_a = SymbolicExpression::parse(a_str);
+        SymbolicExpression bound_b = SymbolicExpression::parse(b_str);
+
+        IntegrationEngine engine(10);
+        IntegrationResult int_res = engine.integrate(integrand, resolved_var);
+        SymbolicExpression antideriv;
+        if (int_res.success) {
+            antideriv = int_res.value;
+        } else {
+            try {
+                antideriv = integrand.integral(resolved_var);
+            } catch (...) {
+                auto risch = RischAlgorithm::integrate_full(integrand, resolved_var);
+                if (risch.success && risch.type == IntegralType::kElementary) {
+                    antideriv = risch.value;
+                } else {
+                    return false;
+                }
+            }
+        }
+
+        SymbolicExpression fb = antideriv.substitute(resolved_var, bound_b).simplify();
+        SymbolicExpression fa = antideriv.substitute(resolved_var, bound_a).simplify();
+        SymbolicExpression diff = (fb - fa).simplify();
+
+        Scalar val = Scalar(0.0L);
+        if (diff.is_number(&val)) {
+            *output = format_symbolic_numeric(ctx, val);
+            return true;
+        }
+
+        Scalar a_num, b_num;
+        bool a_is_num = bound_a.is_number(&a_num);
+        bool b_is_num = bound_b.is_number(&b_num);
+        if (!a_is_num || !b_is_num) {
+            *output = diff.to_string();
+            return true;
+        }
+
+        return false;
+    } catch (...) {
+        return false;
+    }
+}
 }
 
 bool handle_integral_commands(const SymbolicCommandContext& ctx,
@@ -91,6 +147,11 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
         }
 
         if (arguments.size() == 3 && !is_identifier_text(trim_copy(arguments[1]))) {
+            std::string sym_out;
+            if (try_symbolic_definite_integral(ctx, arguments[0], "x", arguments[1], arguments[2], &sym_out)) {
+                *output = sym_out;
+                return true;
+            }
             FunctionAnalysis analysis = ctx.build_analysis(arguments[0]);
             const Scalar x0 = ctx.parse_decimal(arguments[1]);
             const Scalar x1 = ctx.parse_decimal(arguments[2]);
@@ -100,6 +161,11 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
 
         if (arguments.size() == 4 && is_identifier_text(trim_copy(arguments[1]))) {
             const std::string var = trim_copy(arguments[1]);
+            std::string sym_out;
+            if (try_symbolic_definite_integral(ctx, arguments[0], var, arguments[2], arguments[3], &sym_out)) {
+                *output = sym_out;
+                return true;
+            }
             const Scalar x0 = ctx.parse_decimal(arguments[2]);
             const Scalar x1 = ctx.parse_decimal(arguments[3]);
             // 使用 FunctionAnalysis 进行自适应 Gauss-Kronrod 积分
@@ -225,7 +291,7 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
             return true;
         }
 
-        integration_ops::IntegrationContext ictx{ctx.parse_decimal, ctx.build_scoped_evaluator, ctx.normalize_result, ctx.build_analysis};
+        integration_ops::IntegrationContext ictx{ctx.parse_decimal, ctx.build_scoped_evaluator, ctx.normalize_result, ctx.build_analysis, ctx.resolve_symbolic};
         const std::string z_expr = path.size() > 2 ? path[2] : "0";
         *output = format_symbolic_numeric(
             ctx,
@@ -312,7 +378,7 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
             return true;
         }
 
-        integration_ops::IntegrationContext ictx{ctx.parse_decimal, ctx.build_scoped_evaluator, ctx.normalize_result, ctx.build_analysis};
+        integration_ops::IntegrationContext ictx{ctx.parse_decimal, ctx.build_scoped_evaluator, ctx.normalize_result, ctx.build_analysis, ctx.resolve_symbolic};
         *output = format_symbolic_numeric(
             ctx,
             integration_ops::surface_integral(ictx, arguments[0], u_var, u0, u1,

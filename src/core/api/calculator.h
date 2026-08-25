@@ -72,6 +72,13 @@ public:
     std::string evaluate_for_display(const std::string& expression, bool exact_mode);
 
     /**
+     * @brief 将数学表达式或变量转换为 LaTeX 格式文本
+     * @param expression 数学表达式字符串或变量名
+     * @return 格式化后的 LaTeX 文本
+     */
+    std::string to_latex(const std::string& expression);
+
+    /**
      * @brief 处理单行输入（命令或表达式）
      * @param expression 输入字符串
      * @param exact_mode 是否使用精确模式

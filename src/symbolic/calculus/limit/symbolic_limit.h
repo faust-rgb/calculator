@@ -140,6 +140,7 @@ private:
     LimitResult limit_at_infinity(
         const SymbolicExpression& expr,
         const std::string& var,
+        const BoundArgument& point,
         int direction);
 
     // 处理 1^inf 型极限
@@ -148,6 +149,49 @@ private:
         const SymbolicExpression& exponent,
         const std::string& var,
         const BoundArgument& point,
+        int direction,
+        LimitResult* result);
+
+    // 处理 0^0 和 inf^0 幂指型未定式
+    bool handle_power_indeterminate(
+        const SymbolicExpression& base,
+        const SymbolicExpression& exponent,
+        const std::string& var,
+        const BoundArgument& point,
+        int direction,
+        LimitResult* result);
+
+    // 处理多项式/有理分式极限
+    bool try_rational_limit(
+        const SymbolicExpression& num,
+        const SymbolicExpression& den,
+        const std::string& var,
+        const BoundArgument& point,
+        int direction,
+        LimitResult* result);
+
+    // 共轭根式有理化 (处理 inf - inf 及根式差)
+    bool try_conjugate_rationalization(
+        const SymbolicExpression& expr,
+        const std::string& var,
+        const BoundArgument& point,
+        int direction,
+        LimitResult* result);
+
+    // 泰勒/幂级数 (PSA) 展开计算极限
+    bool apply_series_expansion(
+        const SymbolicExpression& expr,
+        const std::string& var,
+        const BoundArgument& point,
+        int direction,
+        LimitResult* result);
+
+    // 夹逼准则与有界量乘无穷小判定
+    bool apply_squeeze_or_bounded(
+        const SymbolicExpression& expr,
+        const std::string& var,
+        const BoundArgument& point,
+        int direction,
         LimitResult* result);
 
     // 检查表达式在极限点是否为无穷

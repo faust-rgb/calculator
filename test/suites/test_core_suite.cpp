@@ -1,12 +1,60 @@
+/**
+ * @file test_core_suite.cpp
+ * @brief 核心功能统一测试套件（基础运算、结果显示、变量管理、解析器回归与上下文隔离）
+ */
+
+#include "test_suites.h"
+#include "test_framework.h"
 #include "calculator.h"
+#include "core/value/stored_value.h"
 #include "parser/ast/expression_ast.h"
 #include "parser/grammars/command_parser.h"
 #include "parser/infra/syntax_validator.h"
+#include "math/mymath.h"
 #include <iostream>
 #include <stdexcept>
+#include <vector>
+#include <string>
 
 namespace test_suites {
 
+// 1. 上下文与多实例隔离测试
+void run_context_isolation_tests(int& passed, int& failed) {
+    try {
+        Calculator first;
+        Calculator second;
+        first.set_display_precision(5);
+        second.set_display_precision(20);
+        if (first.display_precision() != 5 || second.display_precision() != 20) {
+            throw std::runtime_error("display precision leaked between calculators");
+        }
+
+        first.process_line(":assume isolated positive", false);
+        const std::string second_assumptions = second.process_line(":assume", false);
+        if (second_assumptions.find("isolated") != std::string::npos) {
+            throw std::runtime_error("symbolic assumptions leaked between calculators");
+        }
+
+        StoredValue rational(Rational(1, 3));
+        if (!rational.is_scalar() || rational.as_scalar() == Scalar(0)) {
+            throw std::runtime_error("rational scalar access is invalid");
+        }
+        bool rejected = false;
+        try {
+            StoredValue nil;
+            (void)nil.as_scalar();
+        } catch (const std::runtime_error&) {
+            rejected = true;
+        }
+        if (!rejected) throw std::runtime_error("nil scalar access was not rejected");
+        ++passed;
+    } catch (const std::exception& error) {
+        ++failed;
+        std::cerr << "Context isolation test failed: " << error.what() << "\n";
+    }
+}
+
+// 2. 解析器回归测试
 void run_parser_regression_tests(int& passed, int& failed) {
     try {
         Calculator calculator;
@@ -108,6 +156,19 @@ void run_parser_regression_tests(int& passed, int& failed) {
         ++failed;
         std::cerr << "Parser regression test failed: " << error.what() << "\n";
     }
+}
+
+// 外部子函数前向声明（来自整合后的实现）
+int run_core_basic_tests(int& passed, int& failed);
+int run_core_display_tests(int& passed, int& failed);
+int run_core_logic_tests(int& passed, int& failed);
+
+void run_core_suite(int& passed, int& failed) {
+    run_context_isolation_tests(passed, failed);
+    run_parser_regression_tests(passed, failed);
+    run_core_basic_tests(passed, failed);
+    run_core_display_tests(passed, failed);
+    run_core_logic_tests(passed, failed);
 }
 
 } // namespace test_suites

@@ -36,6 +36,19 @@ namespace {
     }
 
     /**
+     * @brief 格式化复数为字符串
+     */
+    std::string format_complex_precise(const mymath::complex<Scalar>& c) {
+        Scalar re = c.real();
+        Scalar im = c.imag();
+        if (im >= 0) {
+            return format_scalar_precise(re) + " + " + format_scalar_precise(im) + "i";
+        } else {
+            return format_scalar_precise(re) + " - " + format_scalar_precise(-im) + "i";
+        }
+    }
+
+    /**
      * @brief 从 StoredValue 中提取标量数值
      * @param val 存储值对象
      * @param ctx 上下文描述，用于错误信息
@@ -143,6 +156,59 @@ namespace {
     }
 
     /**
+     * @brief 解析 JSON 字符串（处理标准转义字符及 Unicode）
+     */
+    std::string parse_json_string(std::string_view& s) {
+        if (s.empty() || s.front() != '"') throw std::runtime_error("Expected string in JSON");
+        s.remove_prefix(1);
+        std::string str;
+        while (!s.empty() && s.front() != '"') {
+            if (s.front() == '\\') {
+                if (s.size() < 2) throw std::runtime_error("Invalid escape sequence in JSON string");
+                s.remove_prefix(1);
+                switch (s.front()) {
+                    case 'n': str += '\n'; break;
+                    case 'r': str += '\r'; break;
+                    case 't': str += '\t'; break;
+                    case 'b': str += '\b'; break;
+                    case 'f': str += '\f'; break;
+                    case '/': str += '/'; break;
+                    case '"': str += '"'; break;
+                    case '\\': str += '\\'; break;
+                    case 'u': {
+                        if (s.size() < 5) throw std::runtime_error("Invalid unicode escape in JSON string");
+                        std::string hex_str(s.substr(1, 4));
+                        try {
+                            unsigned int codepoint = std::stoul(hex_str, nullptr, 16);
+                            if (codepoint <= 0x7F) {
+                                str += static_cast<char>(codepoint);
+                            } else if (codepoint <= 0x7FF) {
+                                str += static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F));
+                                str += static_cast<char>(0x80 | (codepoint & 0x3F));
+                            } else {
+                                str += static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F));
+                                str += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+                                str += static_cast<char>(0x80 | (codepoint & 0x3F));
+                            }
+                        } catch (...) {
+                            str += "\\u" + hex_str;
+                        }
+                        s.remove_prefix(4);
+                        break;
+                    }
+                    default: str += s.front(); break;
+                }
+            } else {
+                str += s.front();
+            }
+            s.remove_prefix(1);
+        }
+        if (s.empty() || s.front() != '"') throw std::runtime_error("Unterminated string in JSON");
+        s.remove_prefix(1);  // 跳过结束引号
+        return str;
+    }
+
+    /**
      * @brief 从 JSON 字符串解析 StoredValue
      *
      * 递归解析 JSON 格式的字符串视图，支持解析以下 JSON 类型：
@@ -188,14 +254,18 @@ namespace {
         }
 
         // 处理数字类型
-        if (std::isdigit(static_cast<unsigned char>(s.front())) || s.front() == '-' || s.front() == '+') {
+        if (std::isdigit(static_cast<unsigned char>(s.front())) ||
+            ((s.front() == '-' || s.front() == '+') && s.size() > 1 &&
+             (std::isdigit(static_cast<unsigned char>(s[1])) || s[1] == '.'))) {
             std::size_t i = 0;
             if (s.front() == '-' || s.front() == '+') i = 1;
-            while (i < s.size() && (std::isdigit(static_cast<unsigned char>(s[i])) || s[i] == '.' || s[i] == 'e' || s[i] == 'E' || s[i] == '+' || s[i] == '-')) {
+            while (i < s.size() && (std::isdigit(static_cast<unsigned char>(s[i])) ||
+                                    s[i] == '.' || s[i] == 'e' || s[i] == 'E' ||
+                                    ((s[i] == '+' || s[i] == '-') && (s[i-1] == 'e' || s[i-1] == 'E')))) {
                 ++i;
             }
-            // 使用 std::stold 以获得更高精度
-            result.decimal = std::stold(std::string(s.substr(0, i)));
+            std::string num_str(s.substr(0, i));
+            result.decimal = Scalar(num_str);
             result.exact = false;
             s.remove_prefix(i);
             return result;
@@ -203,27 +273,8 @@ namespace {
 
         // 处理字符串类型
         if (s.front() == '"') {
-            s.remove_prefix(1);
-            std::string str;
-            while (!s.empty() && s.front() != '"') {
-                if (s.front() == '\\' && s.size() > 1) {
-                    s.remove_prefix(1);
-                    switch (s.front()) {
-                        case 'n': str += '\n'; break;
-                        case 'r': str += '\r'; break;
-                        case 't': str += '\t'; break;
-                        case '"': str += '"'; break;
-                        case '\\': str += '\\'; break;
-                        default: str += s.front();
-                    }
-                } else {
-                    str += s.front();
-                }
-                s.remove_prefix(1);
-            }
-            if (!s.empty()) s.remove_prefix(1);  // 跳过结束引号
             result.is_string = true;
-            result.string_value = str;
+            result.string_value = parse_json_string(s);
             return result;
         }
 
@@ -252,7 +303,6 @@ namespace {
             }
 
             if (is_numeric && !items.empty()) {
-                // 检查这是否可能是矩阵的行（延迟决定，先保存为列表）
                 result.is_list = true;
                 result.list_value = std::make_shared<std::vector<StoredValue>>(std::move(items));
             } else if (!items.empty()) {
@@ -308,19 +358,7 @@ namespace {
                 if (s.empty() || s.front() == '}') break;
 
                 // 解析键
-                if (s.front() != '"') throw std::runtime_error("Expected string key in JSON object");
-                s.remove_prefix(1);
-                std::string key;
-                while (!s.empty() && s.front() != '"') {
-                    if (s.front() == '\\' && s.size() > 1) {
-                        s.remove_prefix(1);
-                        key += s.front();
-                    } else {
-                        key += s.front();
-                    }
-                    s.remove_prefix(1);
-                }
-                if (!s.empty()) s.remove_prefix(1);  // 跳过结束引号
+                std::string key = parse_json_string(s);
 
                 // 跳过冒号
                 while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front()))) s.remove_prefix(1);
@@ -354,6 +392,8 @@ namespace {
  * @return 函数名到函数实现的映射表
  */
 std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> IoModule::get_functions_map() const {
+    if (funcs_cached_) return funcs_cache_;
+
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
 
     // ========== open 函数 ==========
@@ -382,7 +422,11 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         else if (mode == "r") std_mode = std::ios_base::in;
         else if (mode == "rb") std_mode = std::ios_base::in | std::ios_base::binary;
         else if (mode == "rw" || mode == "r+") std_mode = std::ios_base::in | std::ios_base::out;
-        else if (mode == "rw+" || mode == "rb+") std_mode = std::ios_base::in | std::ios_base::out | std::ios_base::binary;
+        else if (mode == "rw+" || mode == "rb+" || mode == "r+b") std_mode = std::ios_base::in | std::ios_base::out | std::ios_base::binary;
+        else if (mode == "w+") std_mode = std::ios_base::in | std::ios_base::out | std::ios_base::trunc;
+        else if (mode == "w+b" || mode == "wb+") std_mode = std::ios_base::in | std::ios_base::out | std::ios_base::trunc | std::ios_base::binary;
+        else if (mode == "a+") std_mode = std::ios_base::in | std::ios_base::out | std::ios_base::app;
+        else if (mode == "a+b" || mode == "ab+") std_mode = std::ios_base::in | std::ios_base::out | std::ios_base::app | std::ios_base::binary;
         else throw std::runtime_error("Invalid open mode: " + mode);
 
         auto fs = std::make_shared<std::fstream>(path, std_mode);
@@ -414,24 +458,32 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
     };
 
     // ========== read 函数 ==========
-    // 读取整个文件内容，返回字符串
+    // 读取文件内容，支持全部读取或指定读取字节数
     funcs["read"] = [this](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("read expects at least 1 argument");
         int fd = static_cast<int>(get_scalar(args[0], "read fd"));
         auto it = files_.find(fd);
         if (it == files_.end()) throw std::runtime_error("Invalid file descriptor");
-        
-        std::ostringstream ss;
-        ss << it->second->rdbuf();
-        
+
         StoredValue res;
         res.is_string = true;
-        res.string_value = ss.str();
+        if (args.size() > 1) {
+            std::size_t count = static_cast<std::size_t>(get_scalar(args[1], "read count"));
+            std::string buffer(count, '\0');
+            it->second->read(&buffer[0], count);
+            std::streamsize bytes_read = it->second->gcount();
+            buffer.resize(bytes_read);
+            res.string_value = std::move(buffer);
+        } else {
+            std::ostringstream ss;
+            ss << it->second->rdbuf();
+            res.string_value = ss.str();
+        }
         return res;
     };
 
     // ========== write 函数 ==========
-    // 将文本内容写入到指定文件
+    // 将内容写入到指定文件
     funcs["write"] = [this](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() < 2) throw std::runtime_error("write expects 2 arguments");
         int fd = static_cast<int>(get_scalar(args[0], "write fd"));
@@ -443,6 +495,12 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
             content = args[1].string_value;
         } else if (args[1].is_matrix && args[1].matrix_ptr) {
             content = args[1].matrix_ptr->to_string();
+        } else if (args[1].is_list && args[1].list_value) {
+            content = value_to_json_impl(args[1]);
+        } else if (args[1].is_dict && args[1].dict_value) {
+            content = value_to_json_impl(args[1]);
+        } else if (args[1].is_complex) {
+            content = format_complex_precise(args[1].complex);
         } else {
             content = format_scalar_precise(args[1].get_decimal());
         }
@@ -500,18 +558,26 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
     };
 
     // ========== seek 函数 ==========
-    // 定位文件指针到指定位置
+    // 定位文件指针到指定位置，支持 whence (0=beg, 1=cur, 2=end)
     funcs["seek"] = [this](const std::vector<StoredValue>& args) -> StoredValue {
-        if (args.size() < 2) throw std::runtime_error("seek expects 2 arguments");
+        if (args.size() < 2) throw std::runtime_error("seek expects at least 2 arguments");
         int fd = static_cast<int>(get_scalar(args[0], "seek fd"));
-        std::streampos pos = static_cast<std::streampos>(get_scalar(args[1], "seek position"));
+        std::streamoff offset = static_cast<std::streamoff>(get_scalar(args[1], "seek position"));
+        std::ios_base::seekdir dir = std::ios_base::beg;
+        if (args.size() > 2) {
+            int whence = static_cast<int>(get_scalar(args[2], "seek whence"));
+            if (whence == 1) dir = std::ios_base::cur;
+            else if (whence == 2) dir = std::ios_base::end;
+            else if (whence == 0) dir = std::ios_base::beg;
+            else throw std::runtime_error("Invalid seek whence (0=beg, 1=cur, 2=end)");
+        }
 
         auto it = files_.find(fd);
         if (it == files_.end()) throw std::runtime_error("Invalid file descriptor");
 
         it->second->clear(); // 清除 EOF 和错误标志，保证 seek 成功生效
-        it->second->seekg(pos);
-        it->second->seekp(pos);
+        it->second->seekg(offset, dir);
+        it->second->seekp(offset, dir);
 
         StoredValue res;
         res.decimal = 1;
@@ -529,6 +595,9 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         if (it == files_.end()) throw std::runtime_error("Invalid file descriptor");
 
         std::streampos pos = it->second->tellg();
+        if (pos == std::streampos(-1)) {
+            pos = it->second->tellp();
+        }
 
         StoredValue res;
         res.decimal = static_cast<long double>(pos);
@@ -542,8 +611,11 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         if (args.empty()) throw std::runtime_error("exists expects 1 argument");
         std::string path = get_string(args[0], "exists path");
 
+        std::error_code ec;
+        bool exists = std::filesystem::exists(path, ec);
+
         StoredValue res;
-        res.decimal = std::filesystem::exists(path) ? 1.0L : 0.0L;
+        res.decimal = (exists && !ec) ? 1.0L : 0.0L;
         res.exact = false;
         return res;
     };
@@ -554,17 +626,18 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         if (args.empty()) throw std::runtime_error("delete expects 1 argument");
         std::string path = get_string(args[0], "delete path");
 
-        bool removed = std::filesystem::remove(path);
+        std::error_code ec;
+        bool removed = std::filesystem::remove(path, ec);
 
         StoredValue res;
-        res.decimal = removed ? 1.0L : 0.0L;
+        res.decimal = (removed && !ec) ? 1.0L : 0.0L;
         res.exact = false;
         return res;
     };
 
     // ========== read_csv 函数 ==========
     // 从 CSV 文件读取数据并转换为矩阵
-    // 支持逗号分隔的数值数据
+    // 支持逗号分隔的数值数据及带引号的单元格
     funcs["read_csv"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("read_csv expects 1 argument");
         std::string path = get_string(args[0], "read_csv path");
@@ -578,25 +651,24 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         std::string line;
 
         while (std::getline(file, line)) {
-            if (line.empty()) continue;
+            std::string trimmed_line = trim_copy(line);
+            if (trimmed_line.empty()) continue;
 
             std::vector<Scalar> row;
-            std::stringstream ss(line);
+            std::stringstream ss(trimmed_line);
             std::string cell;
 
             while (std::getline(ss, cell, ',')) {
                 std::string trimmed = trim_copy(cell);
+                if (trimmed.size() >= 2 && trimmed.front() == '"' && trimmed.back() == '"') {
+                    trimmed = trim_copy(trimmed.substr(1, trimmed.size() - 2));
+                }
                 if (trimmed.empty()) {
                     row.push_back(Scalar(0.0L));
                     continue;
                 }
                 try {
-                    std::size_t processed = 0;
-                    // 使用 std::stold 以获得更高精度
-                    Scalar val = Scalar(std::stold(trimmed, &processed));
-                    if (processed != trimmed.size()) {
-                        throw std::runtime_error("Invalid numeric data in CSV: " + trimmed);
-                    }
+                    Scalar val = Scalar(trimmed);
                     row.push_back(val);
                 } catch (const std::exception& e) {
                     throw std::runtime_error("CSV parsing error: " + std::string(e.what()));
@@ -646,7 +718,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         for (std::size_t r = 0; r < mat.rows; ++r) {
             for (std::size_t c = 0; c < mat.cols; ++c) {
                 if (c > 0) file << ",";
-                file << mat.at(r, c);
+                file << format_scalar_precise(mat.at(r, c));
             }
             file << "\n";
         }
@@ -696,7 +768,18 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         return res;
     };
 
-    return funcs;
+    funcs_cache_ = std::move(funcs);
+    funcs_cached_ = true;
+    return funcs_cache_;
+}
+
+std::vector<std::string> IoModule::get_function_names() const {
+    static const std::vector<std::string> names = {
+        "close", "delete", "exists", "open", "read", "read_csv",
+        "read_json", "read_lines", "readline", "seek", "tell", "write",
+        "write_csv", "write_json"
+    };
+    return names;
 }
 
 /**
@@ -707,7 +790,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
  *
  * @param command 命令名称
  * @param args 参数字符串列表
- * @param services 核心服务引用，用于求值表达式
+ * @param locator 服务定位器
  * @return 返回命令执行结果的字符串表示
  */
 std::string IoModule::execute_args(const std::string& command,
@@ -732,20 +815,29 @@ std::string IoModule::execute_args(const std::string& command,
         }
     }
 
-    auto funcs = get_functions_map();
+    const auto& funcs = get_functions_map();
     auto it = funcs.find(command);
     if (it != funcs.end()) {
         StoredValue res = it->second(s_args);
         if (res.is_string) return res.string_value;
+        if (res.is_matrix) return res.matrix_ptr ? res.matrix_ptr->to_string() : "[]";
+        if (res.is_dict) return value_to_json_impl(res);
         if (res.is_list) {
+            if (!res.list_value) return "[]";
             std::string out = "[";
             for (size_t i = 0; i < res.list_value->size(); ++i) {
                 if (i > 0) out += ", ";
-                out += "\"" + (*res.list_value)[i].string_value + "\"";
+                const auto& item = (*res.list_value)[i];
+                if (item.is_string) {
+                    out += "\"" + item.string_value + "\"";
+                } else {
+                    out += value_to_json_impl(item);
+                }
             }
             out += "]";
             return out;
         }
+        if (res.is_complex) return format_complex_precise(res.complex);
         return format_scalar_precise(res.get_decimal());
     }
 
@@ -766,28 +858,32 @@ std::string IoModule::get_help_snippet(const std::string& topic) const {
         return "File I/O Functions:\n"
                "  open(path, [mode])    - Open file, returns fd (modes: r, w, a, rw)\n"
                "  close(fd)             - Close file\n"
-               "  read(fd)              - Read entire content\n"
+               "  read(fd, [count])     - Read entire content or specified bytes\n"
                "  read_lines(fd)        - Read all lines into list\n"
                "  readline(fd)          - Read single line\n"
                "  write(fd, text)       - Write text to file\n"
-               "  seek(fd, pos)         - Set file position\n"
+               "  seek(fd, pos, [whence])- Set file position (0=beg, 1=cur, 2=end)\n"
                "  tell(fd)              - Get current position\n"
                "  exists(path)          - Check if file exists (returns 1/0)\n"
                "  delete(path)          - Delete file\n"
                "  read_csv(path)        - Read matrix from CSV\n"
-               "  write_csv(path, mat)  - Write matrix to CSV";
+               "  write_csv(path, mat)  - Write matrix to CSV\n"
+               "  read_json(path)       - Read data from JSON\n"
+               "  write_json(path, data)- Write data to JSON";
     }
-    if (topic == "open") return "open(path, [mode]) - Open a file (modes: r, w, a, rw)";
+    if (topic == "open") return "open(path, [mode]) - Open a file (modes: r, w, a, rw, r+, w+, a+)";
     if (topic == "close") return "close(fd) - Close a file";
-    if (topic == "read") return "read(fd) - Read entire file content";
+    if (topic == "read") return "read(fd, [count]) - Read entire file content or count bytes";
     if (topic == "write") return "write(fd, text) - Write text to file";
     if (topic == "read_lines") return "read_lines(fd) - Read all lines into a list";
     if (topic == "readline") return "readline(fd) - Read single line";
-    if (topic == "seek") return "seek(fd, pos) - Set file position";
+    if (topic == "seek") return "seek(fd, pos, [whence]) - Set file position";
     if (topic == "tell") return "tell(fd) - Get current position";
     if (topic == "exists") return "exists(path) - Check if file exists (returns 1 or 0)";
     if (topic == "delete") return "delete(path) - Delete a file";
     if (topic == "read_csv") return "read_csv(path) - Read matrix from CSV file";
     if (topic == "write_csv") return "write_csv(path, matrix) - Write matrix to CSV file";
+    if (topic == "read_json") return "read_json(path) - Read data from JSON file";
+    if (topic == "write_json") return "write_json(path, data) - Write data to JSON file";
     return "";
 }

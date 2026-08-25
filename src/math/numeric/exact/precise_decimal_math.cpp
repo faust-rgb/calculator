@@ -88,8 +88,8 @@ void trim_fraction_scale(PreciseDecimal* value, int max_scale) {
 // ============================================================================
 
 PreciseDecimal compute_pi_machin(int target_scale) {
-    ScopedPrecision guard(16);
     const int work_scale = std::max(target_scale, PrecisionContext::get_default_scale());
+    ScopedPrecision guard(work_scale + 16);
     const PreciseDecimal epsilon = scale_epsilon(6);
 
     // Machin-like formula: pi/4 = 4*arctan(1/5) - arctan(1/239)
@@ -116,8 +116,8 @@ PreciseDecimal compute_pi_machin(int target_scale) {
 }
 
 PreciseDecimal compute_e_series(int target_scale) {
-    ScopedPrecision guard(16);
     const int work_scale = std::max(target_scale, PrecisionContext::get_default_scale());
+    ScopedPrecision guard(work_scale + 16);
     const PreciseDecimal epsilon = scale_epsilon(6);
 
     PreciseDecimal term = one();
@@ -318,6 +318,10 @@ PreciseDecimal cbrt_precise_decimal(const PreciseDecimal& val) {
         x = (two() * x + abs_val / (x * x)) / PreciseDecimal(3LL);
     }
     return val.negative ? -x : x;
+}
+
+PreciseDecimal cbrt(const PreciseDecimal& val) {
+    return cbrt_precise_decimal(val);
 }
 
 // ============================================================================

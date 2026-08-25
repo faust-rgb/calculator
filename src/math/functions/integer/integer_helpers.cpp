@@ -42,16 +42,20 @@ long long gcd(long long a, long long b) {
  * 使用欧几里得算法实现，自动处理负数参数。
  */
 long long gcd_ll(long long a, long long b) {
-    a = a < 0 ? -a : a;
-    b = b < 0 ? -b : b;
-    if (a == 0) return b;
-    if (b == 0) return a;
-    while (b != 0) {
-        const long long t = a % b;
-        a = b;
-        b = t;
+    constexpr long long kLongLongMax = 9223372036854775807LL;
+    unsigned long long ua = a < 0 ? 0ULL - static_cast<unsigned long long>(a)
+                                  : static_cast<unsigned long long>(a);
+    unsigned long long ub = b < 0 ? 0ULL - static_cast<unsigned long long>(b)
+                                  : static_cast<unsigned long long>(b);
+    while (ub != 0) {
+        const unsigned long long t = ua % ub;
+        ua = ub;
+        ub = t;
     }
-    return a;
+    if (ua > static_cast<unsigned long long>(kLongLongMax)) {
+        throw std::overflow_error("gcd exceeds signed range");
+    }
+    return static_cast<long long>(ua);
 }
 
 /**

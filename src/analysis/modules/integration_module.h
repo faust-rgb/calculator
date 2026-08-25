@@ -20,6 +20,7 @@
 // 前向声明
 class FunctionAnalysis;
 class ServiceLocator;
+class SymbolicExpression;
 
 namespace integration_ops {
 
@@ -27,7 +28,7 @@ namespace integration_ops {
  * @class IntegrationModule
  * @brief 提供数值积分功能（一重、二重、三重积分）的模块
  */
-class IntegrationModule : public CalculatorModule {
+class IntegrationModule : public CommandModuleBase {
 public:
     std::string name() const override { return "Integration"; }
     std::vector<std::string> get_commands() const override;
@@ -42,6 +43,7 @@ struct IntegrationContext {
     std::function<std::function<Scalar(const std::vector<std::pair<std::string, Scalar>>&)>(const std::string&)> build_scoped_evaluator;
     std::function<Scalar(Scalar)> normalize_result;
     std::function<FunctionAnalysis(const std::string&)> build_analysis;
+    std::function<void(const std::string&, bool, std::string*, SymbolicExpression*)> resolve_symbolic;
 };
 
 // Line and Surface integral functions

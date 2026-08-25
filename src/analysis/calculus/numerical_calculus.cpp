@@ -201,6 +201,88 @@ Scalar adaptive_simpson_callable(const std::function<Scalar(Scalar)>& func, Scal
     return adaptive_simpson_recursive(func, left, right, whole, left_val, right_val, eps, max_depth);
 }
 
+Scalar tanh_sinh_quadrature_callable(
+    const std::function<Scalar(Scalar)>& func,
+    Scalar left,
+    Scalar right,
+    Scalar eps,
+    int max_levels) {
+    if (left == right) return Scalar(0);
+    if (left > right) return -tanh_sinh_quadrature_callable(func, right, left, eps, max_levels);
+
+    const Scalar center = (left + right) * Scalar(0.5L);
+    const Scalar half_width = (right - left) * Scalar(0.5L);
+    const Scalar pi_half = mymath::pi() * Scalar(0.5L);
+
+    Scalar center_val = Scalar(0);
+    try {
+        center_val = func(center);
+    } catch (...) {
+        center_val = Scalar(0);
+    }
+    if (!mymath::isfinite(center_val)) center_val = Scalar(0);
+
+    Scalar total_sum = pi_half * center_val;
+    Scalar prev_estimate = total_sum;
+    Scalar h = Scalar(1.0L);
+
+    for (int level = 0; level < max_levels; ++level) {
+        h *= Scalar(0.5L);
+        Scalar level_sum = Scalar(0);
+        Scalar compensation = Scalar(0);
+
+        int k = 1;
+        while (true) {
+            Scalar t = Scalar(k) * h;
+            Scalar sinh_t = mymath::sinh(t);
+            Scalar cosh_t = mymath::cosh(t);
+            Scalar arg = pi_half * sinh_t;
+
+            if (arg > Scalar(30.0L)) break;
+
+            Scalar cosh_arg = mymath::cosh(arg);
+            Scalar weight = pi_half * cosh_t / (cosh_arg * cosh_arg);
+            if (weight < Scalar(1e-25L)) break;
+
+            Scalar tanh_arg = mymath::tanh(arg);
+            Scalar x_plus = center + half_width * tanh_arg;
+            Scalar x_minus = center - half_width * tanh_arg;
+
+            Scalar f_plus = Scalar(0);
+            Scalar f_minus = Scalar(0);
+            try {
+                if (x_plus < right) f_plus = func(x_plus);
+            } catch (...) {}
+            try {
+                if (x_minus > left) f_minus = func(x_minus);
+            } catch (...) {}
+
+            if (mymath::isfinite(f_plus)) {
+                compensated_add(weight * f_plus, &level_sum, &compensation);
+            }
+            if (mymath::isfinite(f_minus)) {
+                compensated_add(weight * f_minus, &level_sum, &compensation);
+            }
+
+            k += 1;
+            if (k > 2000) break;
+        }
+
+        Scalar current_estimate = (total_sum + level_sum) * h * half_width;
+        if (level > 1) {
+            Scalar err = mymath::abs(current_estimate - prev_estimate);
+            Scalar scale = std::max(Scalar(1.0L), mymath::abs(current_estimate));
+            if (err <= eps * scale) {
+                return current_estimate;
+            }
+        }
+        total_sum += level_sum;
+        prev_estimate = current_estimate;
+    }
+
+    return prev_estimate;
+}
+
 std::vector<TExtremumPoint> solve_extrema(
     const std::function<Scalar(Scalar)>& func,
     const std::function<Scalar(Scalar)>& deriv,
@@ -222,7 +304,8 @@ std::vector<TExtremumPoint> solve_extrema(
             // 使用二分法精确定位
             Scalar a = prev_x;
             Scalar b = curr_x;
-            Scalar tol = precision::newton_tolerance<Scalar>() * std::max(mymath::abs(a), mymath::abs(b));
+            Scalar tol = std::max(precision::newton_tolerance<Scalar>() * std::max(mymath::abs(a), mymath::abs(b)),
+                                  precision::min_step_size<Scalar>(Scalar(1.0L)));
 
             while (mymath::abs(b - a) > tol) {
                 Scalar mid = (a + b) / Scalar(2);

@@ -31,7 +31,7 @@ using Scalar = mymath::Scalar;
  * @class SeriesModule
  * @brief 提供级数展开和求和功能的模块
  */
-class SeriesModule : public CalculatorModule {
+class SeriesModule : public CommandModuleBase {
 public:
     std::string name() const override { return "Series"; }
     std::vector<std::string> get_commands() const override;

@@ -95,13 +95,13 @@ bool contains_nontrivial_radical(const SymbolicExpression& expression) {
 
 bool is_exact_square_numeric(Scalar value) {
     if (value < Scalar(0)) return false;
-    if (mymath::is_integer(value, Scalar(app::integer_tolerance()))) {
+    if (mymath::is_integer(value, Scalar(math::config::integer_tolerance()))) {
         const long long n = static_cast<long long>(mymath::round(value).to_long_double());
         const long long root = static_cast<long long>(mymath::sqrt(value).to_long_double());
         return root * root == n || (root + 1) * (root + 1) == n;
     }
     return mymath::is_near_zero(mymath::sqrt(value) * mymath::sqrt(value) - value,
-                                Scalar(app::numeric_tolerance()));
+                                Scalar(math::config::numeric_tolerance()));
 }
 
 SymbolicExpression expand_impl(const SymbolicExpression& expression);
@@ -167,7 +167,7 @@ bool collect_multivariate_polynomial(const SymbolicExpression& expression,
     if (node->type == NodeType::kPower) {
         Scalar exponent = Scalar(0);
         if (SymbolicExpression(node->right).is_number(&exponent) &&
-            exponent >= Scalar(0) && mymath::is_integer(exponent, Scalar(app::integer_tolerance()))) {
+            exponent >= Scalar(0) && mymath::is_integer(exponent, Scalar(math::config::integer_tolerance()))) {
             const auto count = static_cast<int>(mymath::round(exponent).to_long_double());
             PolynomialTerms base;
             if (!collect_multivariate_polynomial(SymbolicExpression(node->left), Scalar(1), &base)) return false;
@@ -272,13 +272,13 @@ bool can_combine_numeric_powers(const SymbolicExpression& base,
     // nonzero assumption: x^m / x^n -> x^(m-n). Polynomial quotients remain
     // guarded by the caller to avoid changing their domain.
     if (division && base.node_ && base.node_->type == NodeType::kVariable &&
-        mymath::is_integer(left_exponent, Scalar(app::integer_tolerance())) &&
-        mymath::is_integer(right_exponent, Scalar(app::integer_tolerance()))) {
+        mymath::is_integer(left_exponent, Scalar(math::config::integer_tolerance())) &&
+        mymath::is_integer(right_exponent, Scalar(math::config::integer_tolerance()))) {
         return true;
     }
     if (division) return false;
-    return mymath::is_integer(left_exponent, Scalar(app::integer_tolerance())) &&
-           mymath::is_integer(right_exponent, Scalar(app::integer_tolerance())) &&
+    return mymath::is_integer(left_exponent, Scalar(math::config::integer_tolerance())) &&
+           mymath::is_integer(right_exponent, Scalar(math::config::integer_tolerance())) &&
            left_exponent >= Scalar(0) && right_exponent >= Scalar(0);
 }
 
@@ -520,7 +520,7 @@ SymbolicExpression simplify_lightweight(const SymbolicExpression& expression) {
             right = simplify_lightweight(SymbolicExpression(node->right));
             if (left.is_number(&left_value) && right.is_number(&right_value)) {
                 if constexpr (std::is_same_v<Scalar, PreciseDecimal>) {
-                    if (mymath::is_integer(right_value, Scalar(app::integer_tolerance()))) {
+                    if (mymath::is_integer(right_value, Scalar(math::config::integer_tolerance()))) {
                         return SymbolicExpression::number(
                             mymath::pow(left_value, static_cast<long long>(right_value)));
                     }
@@ -652,9 +652,9 @@ SymbolicExpression simplify_medium(const SymbolicExpression& expression) {
                 if (SymbolicExpression(left.node_->right).is_number(&inner_exp) && right.is_number(&outer_exp)) {
                     SymbolicExpression base(left.node_->left);
                     bool is_pos = is_known_positive_expression(base);
-                    bool inner_is_odd = mymath::is_integer(inner_exp, Scalar(app::integer_tolerance())) &&
+                    bool inner_is_odd = mymath::is_integer(inner_exp, Scalar(math::config::integer_tolerance())) &&
                                         (static_cast<long long>(mymath::round(inner_exp).to_long_double()) % 2 != 0);
-                    bool outer_is_int = mymath::is_integer(outer_exp, Scalar(app::integer_tolerance()));
+                    bool outer_is_int = mymath::is_integer(outer_exp, Scalar(math::config::integer_tolerance()));
                     if (is_pos || inner_is_odd || outer_is_int) {
                         return make_power(base, SymbolicExpression::number(inner_exp * outer_exp));
                     }
@@ -852,9 +852,8 @@ bool try_rationalize_denominator(const SymbolicExpression& num,
             if (is_square_root_expression(A, &root_a) && is_square_root_expression(B, &root_b)) {
                 SymbolicExpression conjugate = den.node_->type == NodeType::kAdd
                     ? make_subtract(A, B) : make_add(A, B);
-                SymbolicExpression new_den = den.node_->type == NodeType::kAdd
-                    ? make_subtract(root_a, root_b).simplify()
-                    : make_add(root_a, root_b).simplify();
+                // (sqrt(a) +/- sqrt(b))(sqrt(a) -/+ sqrt(b)) = a - b.
+                SymbolicExpression new_den = make_subtract(root_a, root_b).simplify();
                 *result = make_divide(make_multiply(num, conjugate), new_den);
                 return true;
             }
@@ -958,8 +957,8 @@ bool try_reduce_symbolic_power_sum_quotient(const SymbolicExpression& numerator,
     Scalar exp_a = Scalar(0), exp_b = Scalar(0);
     if (!SymbolicExpression(a3.node_->right).is_number(&exp_a) ||
         !SymbolicExpression(b3.node_->right).is_number(&exp_b) ||
-        !mymath::is_integer(exp_a, Scalar(app::integer_tolerance())) ||
-        !mymath::is_integer(exp_b, Scalar(app::integer_tolerance())) ||
+        !mymath::is_integer(exp_a, Scalar(math::config::integer_tolerance())) ||
+        !mymath::is_integer(exp_b, Scalar(math::config::integer_tolerance())) ||
         static_cast<long long>(mymath::round(exp_a).to_long_double()) != 3 ||
         static_cast<long long>(mymath::round(exp_b).to_long_double()) != 3 ||
         !expressions_match(SymbolicExpression(a3.node_->left), a) ||
@@ -1112,6 +1111,45 @@ SymbolicExpression simplify_heavyweight(const SymbolicExpression& expression) {
  * 注意：此函数只应用规则一次，不保证达到最优形式。
  * 完整简化通过 simplify_impl() 多轮调用此函数实现。
  */
+static std::optional<SymbolicExpression> evaluate_trig_special_pi_multiple(const std::string& func, Scalar pi_mult) {
+    if (func == "sin" || func == "cos") {
+        // Reduce to [-1, 1)
+        Scalar k = pi_mult - Scalar(2) * mymath::floor((pi_mult + Scalar(1)) / Scalar(2));
+        if (func == "sin") {
+            if (numeric_matches_any(k, {Scalar(0), Scalar(1), Scalar(-1)})) return SymbolicExpression::number(Scalar(0));
+            if (numeric_matches_any(k, {Scalar(0.5L)})) return SymbolicExpression::number(Scalar(1));
+            if (numeric_matches_any(k, {Scalar(-0.5L)})) return SymbolicExpression::number(Scalar(-1));
+            if (numeric_matches_any(k, {Scalar(1) / Scalar(6), Scalar(5) / Scalar(6)})) return half_symbol();
+            if (numeric_matches_any(k, {Scalar(-1) / Scalar(6), Scalar(-5) / Scalar(6)})) return make_negate(half_symbol()).simplify();
+            if (numeric_matches_any(k, {Scalar(1) / Scalar(4), Scalar(3) / Scalar(4)})) return make_divide(sqrt2_symbol(), SymbolicExpression::number(Scalar(2))).simplify();
+            if (numeric_matches_any(k, {Scalar(-1) / Scalar(4), Scalar(-3) / Scalar(4)})) return make_negate(make_divide(sqrt2_symbol(), SymbolicExpression::number(Scalar(2)))).simplify();
+            if (numeric_matches_any(k, {Scalar(1) / Scalar(3), Scalar(2) / Scalar(3)})) return make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2))).simplify();
+            if (numeric_matches_any(k, {Scalar(-1) / Scalar(3), Scalar(-2) / Scalar(3)})) return make_negate(make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2)))).simplify();
+        } else if (func == "cos") {
+            if (numeric_matches_any(k, {Scalar(0)})) return SymbolicExpression::number(Scalar(1));
+            if (numeric_matches_any(k, {Scalar(1), Scalar(-1)})) return SymbolicExpression::number(Scalar(-1));
+            if (numeric_matches_any(k, {Scalar(0.5L), Scalar(-0.5L)})) return SymbolicExpression::number(Scalar(0));
+            if (numeric_matches_any(k, {Scalar(1) / Scalar(3), Scalar(-1) / Scalar(3)})) return half_symbol();
+            if (numeric_matches_any(k, {Scalar(2) / Scalar(3), Scalar(-2) / Scalar(3)})) return make_negate(half_symbol()).simplify();
+            if (numeric_matches_any(k, {Scalar(1) / Scalar(4), Scalar(-1) / Scalar(4)})) return make_divide(sqrt2_symbol(), SymbolicExpression::number(Scalar(2))).simplify();
+            if (numeric_matches_any(k, {Scalar(3) / Scalar(4), Scalar(-3) / Scalar(4)})) return make_negate(make_divide(sqrt2_symbol(), SymbolicExpression::number(Scalar(2)))).simplify();
+            if (numeric_matches_any(k, {Scalar(1) / Scalar(6), Scalar(-1) / Scalar(6)})) return make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2))).simplify();
+            if (numeric_matches_any(k, {Scalar(5) / Scalar(6), Scalar(-5) / Scalar(6)})) return make_negate(make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2)))).simplify();
+        }
+    } else if (func == "tan") {
+        // Reduce to (-0.5, 0.5]
+        Scalar k = pi_mult - mymath::floor(pi_mult + Scalar(0.5L));
+        if (numeric_matches_any(k, {Scalar(0)})) return SymbolicExpression::number(Scalar(0));
+        if (numeric_matches_any(k, {Scalar(0.25L)})) return SymbolicExpression::number(Scalar(1));
+        if (numeric_matches_any(k, {Scalar(-0.25L)})) return SymbolicExpression::number(Scalar(-1));
+        if (numeric_matches_any(k, {Scalar(1) / Scalar(6)})) return make_divide(SymbolicExpression::number(Scalar(1)), sqrt3_symbol()).simplify();
+        if (numeric_matches_any(k, {Scalar(-1) / Scalar(6)})) return make_negate(make_divide(SymbolicExpression::number(Scalar(1)), sqrt3_symbol())).simplify();
+        if (numeric_matches_any(k, {Scalar(1) / Scalar(3)})) return sqrt3_symbol();
+        if (numeric_matches_any(k, {Scalar(-1) / Scalar(3)})) return make_negate(sqrt3_symbol()).simplify();
+    }
+    return std::nullopt;
+}
+
 SymbolicExpression simplify_once(const SymbolicExpression& expression) {
     static thread_local int depth = 0;
     static constexpr int kMaxDepth = 512;
@@ -1156,32 +1194,9 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
 
             Scalar pi_multiple = Scalar(0);
             if (decompose_numeric_multiple_of_symbol(argument, "pi", &pi_multiple)) {
-                if (node->text == "sin") {
-                    if (numeric_matches_any(pi_multiple, {Scalar(0), Scalar(1), Scalar(-1)})) return SymbolicExpression::number(Scalar(0));
-                    if (numeric_matches_any(pi_multiple, {Scalar(0.5L)})) return SymbolicExpression::number(Scalar(1));
-                    if (numeric_matches_any(pi_multiple, {Scalar(-0.5L)})) return SymbolicExpression::number(Scalar(-1));
-                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(6), Scalar(5) / Scalar(6)})) return half_symbol();
-                    if (numeric_matches_any(pi_multiple, {Scalar(-1) / Scalar(6), Scalar(-5) / Scalar(6)})) return make_negate(half_symbol()).simplify();
-                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(3), Scalar(2) / Scalar(3)})) return make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2))).simplify();
-                    if (numeric_matches_any(pi_multiple, {Scalar(-1) / Scalar(3), Scalar(-2) / Scalar(3)})) return make_negate(make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2)))).simplify();
-                }
-                if (node->text == "cos") {
-                    if (numeric_matches_any(pi_multiple, {Scalar(0)})) return SymbolicExpression::number(Scalar(1));
-                    if (numeric_matches_any(pi_multiple, {Scalar(1), Scalar(-1)})) return SymbolicExpression::number(Scalar(-1));
-                    if (numeric_matches_any(pi_multiple, {Scalar(0.5L), Scalar(-0.5L)})) return SymbolicExpression::number(Scalar(0));
-                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(3), Scalar(-1) / Scalar(3)})) return half_symbol();
-                    if (numeric_matches_any(pi_multiple, {Scalar(2) / Scalar(3), Scalar(-2) / Scalar(3)})) return make_negate(half_symbol()).simplify();
-                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(6), Scalar(-1) / Scalar(6)})) return make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2))).simplify();
-                    if (numeric_matches_any(pi_multiple, {Scalar(5) / Scalar(6), Scalar(-5) / Scalar(6)})) return make_negate(make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2)))).simplify();
-                }
-                if (node->text == "tan") {
-                    if (numeric_matches_any(pi_multiple, {Scalar(0), Scalar(1), Scalar(-1)})) return SymbolicExpression::number(Scalar(0));
-                    if (numeric_matches_any(pi_multiple, {Scalar(0.25L)})) return SymbolicExpression::number(Scalar(1));
-                    if (numeric_matches_any(pi_multiple, {Scalar(-0.25L)})) return SymbolicExpression::number(Scalar(-1));
-                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(6), Scalar(-5) / Scalar(6)})) return make_divide(SymbolicExpression::number(Scalar(1)), sqrt3_symbol()).simplify();
-                    if (numeric_matches_any(pi_multiple, {Scalar(-1) / Scalar(6), Scalar(5) / Scalar(6)})) return make_negate(make_divide(SymbolicExpression::number(Scalar(1)), sqrt3_symbol())).simplify();
-                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(3), Scalar(-2) / Scalar(3)})) return sqrt3_symbol();
-                    if (numeric_matches_any(pi_multiple, {Scalar(-1) / Scalar(3), Scalar(2) / Scalar(3)})) return make_negate(sqrt3_symbol()).simplify();
+                auto trig_res = evaluate_trig_special_pi_multiple(node->text, pi_multiple);
+                if (trig_res.has_value()) {
+                    return *trig_res;
                 }
             }
             if (node->text == "exp" && expr_is_one(argument)) {
@@ -1206,10 +1221,10 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 if (node->text == "sqrt") {
                     if (numeric < Scalar(0)) return make_function(node->text, argument);
                     Scalar root = mymath::sqrt(numeric);
-                    if (is_exact_square_numeric(numeric) && mymath::is_integer(root, Scalar(app::integer_tolerance()))) {
+                    if (is_exact_square_numeric(numeric) && mymath::is_integer(root, Scalar(math::config::integer_tolerance()))) {
                         return SymbolicExpression::number(root);
                     }
-                    if (mymath::is_integer(numeric, Scalar(app::integer_tolerance())) && numeric > Scalar(0)) {
+                    if (mymath::is_integer(numeric, Scalar(math::config::integer_tolerance())) && numeric > Scalar(0)) {
                         long long val = static_cast<long long>(numeric.to_long_double() + 0.5L);
                         long long extracted = 1;
                         for (long long i = 2; i * i <= val; ++i) {
@@ -1228,7 +1243,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 if (node->text == "erf") return SymbolicExpression::number(mymath::erf(numeric));
                 if (node->text == "erfc") return SymbolicExpression::number(mymath::erfc(numeric));
                 if (node->text == "gamma") {
-                    if (mymath::is_integer(numeric, Scalar(app::integer_tolerance())) && numeric <= Scalar(0)) return make_function(node->text, argument);
+                    if (mymath::is_integer(numeric, Scalar(math::config::integer_tolerance())) && numeric <= Scalar(0)) return make_function(node->text, argument);
                     return SymbolicExpression::number(mymath::gamma(numeric));
                 }
                 if (node->text == "abs") return SymbolicExpression::number(mymath::abs(numeric));
@@ -1255,11 +1270,15 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 SymbolicExpression mult_left(argument.node_->left);
                 SymbolicExpression mult_right(argument.node_->right);
                 // Check for a * ln(x) pattern
-                if (mult_left.node_->type == NodeType::kFunction && mult_left.node_->text == "ln") {
+                if (mult_left.node_->type == NodeType::kFunction && mult_left.node_->text == "ln" &&
+                    (symbolic_property(SymbolicExpression(mult_left.node_->left)) == SymbolicProperty::kPositive ||
+                     SymbolicExpression(mult_left.node_->left).node_->type == NodeType::kVariable)) {
                     const SymbolicExpression base(mult_left.node_->left);
                     return make_power(base, mult_right).simplify();
                 }
-                if (mult_right.node_->type == NodeType::kFunction && mult_right.node_->text == "ln") {
+                if (mult_right.node_->type == NodeType::kFunction && mult_right.node_->text == "ln" &&
+                    (symbolic_property(SymbolicExpression(mult_right.node_->left)) == SymbolicProperty::kPositive ||
+                     SymbolicExpression(mult_right.node_->left).node_->type == NodeType::kVariable)) {
                     const SymbolicExpression base(mult_right.node_->left);
                     return make_power(base, mult_left).simplify();
                 }
@@ -1325,11 +1344,11 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (node->text == "gamma") {
                 Scalar val;
                 if (argument.is_number(&val)) {
-                    if (mymath::abs(val - Scalar(1)) < Scalar(app::integer_tolerance())) return SymbolicExpression::number(Scalar(1));
-                    if (mymath::abs(val - Scalar(0.5L)) < Scalar(app::integer_tolerance())) {
+                    if (mymath::abs(val - Scalar(1)) < Scalar(math::config::integer_tolerance())) return SymbolicExpression::number(Scalar(1));
+                    if (mymath::abs(val - Scalar(0.5L)) < Scalar(math::config::integer_tolerance())) {
                         return make_function("sqrt", SymbolicExpression(make_unary(NodeType::kPi, nullptr))).simplify();
                     }
-                    if (mymath::abs(val - Scalar(2)) < Scalar(app::integer_tolerance())) return SymbolicExpression::number(Scalar(1));
+                    if (mymath::abs(val - Scalar(2)) < Scalar(math::config::integer_tolerance())) return SymbolicExpression::number(Scalar(1));
                 }
             }
             if (node->text == "erf") {
@@ -1380,7 +1399,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
             if (node->text == "sqrt" && argument.node_->type == NodeType::kPower) {
                 Scalar exponent = Scalar(0);
                 if (SymbolicExpression(argument.node_->right).is_number(&exponent) &&
-                    mymath::is_integer(exponent, Scalar(app::integer_tolerance())) &&
+                    mymath::is_integer(exponent, Scalar(math::config::integer_tolerance())) &&
                     exponent > Scalar(0) &&
                     static_cast<long long>(mymath::round(exponent).to_long_double()) % 2 == 0) {
                     SymbolicExpression base(argument.node_->left);
@@ -1388,8 +1407,11 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                     SymbolicExpression result = make_power(
                         base, SymbolicExpression::number(Scalar(n / 2)));
                     if (is_known_positive_expression(base)) return result.simplify();
-                    if (symbolic_property(base) == SymbolicProperty::kReal) return result.simplify();
+                    // sqrt(x^2) is abs(x).  Higher even powers are safe for
+                    // real x, but the square case must retain the absolute
+                    // value unless positivity is known.
                     if (n == 2) return make_function("abs", base).simplify();
+                    if (symbolic_property(base) == SymbolicProperty::kReal) return result.simplify();
                 }
             }
             if (node->text == "sqrt") {
@@ -1421,32 +1443,9 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
 
             pi_multiple = Scalar(0);
             if (decompose_numeric_multiple_of_symbol(argument, "pi", &pi_multiple)) {
-                if (node->text == "sin") {
-                    if (numeric_matches_any(pi_multiple, {Scalar(0), Scalar(1), Scalar(-1)})) return SymbolicExpression::number(Scalar(0));
-                    if (numeric_matches_any(pi_multiple, {Scalar(0.5L)})) return SymbolicExpression::number(Scalar(1));
-                    if (numeric_matches_any(pi_multiple, {Scalar(-0.5L)})) return SymbolicExpression::number(Scalar(-1));
-                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(6), Scalar(5) / Scalar(6)})) return half_symbol();
-                    if (numeric_matches_any(pi_multiple, {Scalar(-1) / Scalar(6), Scalar(-5) / Scalar(6)})) return make_negate(half_symbol()).simplify();
-                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(3), Scalar(2) / Scalar(3)})) return make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2))).simplify();
-                    if (numeric_matches_any(pi_multiple, {Scalar(-1) / Scalar(3), Scalar(-2) / Scalar(3)})) return make_negate(make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2)))).simplify();
-                }
-                if (node->text == "cos") {
-                    if (numeric_matches_any(pi_multiple, {Scalar(0)})) return SymbolicExpression::number(Scalar(1));
-                    if (numeric_matches_any(pi_multiple, {Scalar(1), Scalar(-1)})) return SymbolicExpression::number(Scalar(-1));
-                    if (numeric_matches_any(pi_multiple, {Scalar(0.5L), Scalar(-0.5L)})) return SymbolicExpression::number(Scalar(0));
-                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(3), Scalar(-1) / Scalar(3)})) return half_symbol();
-                    if (numeric_matches_any(pi_multiple, {Scalar(2) / Scalar(3), Scalar(-2) / Scalar(3)})) return make_negate(half_symbol()).simplify();
-                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(6), Scalar(-1) / Scalar(6)})) return make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2))).simplify();
-                    if (numeric_matches_any(pi_multiple, {Scalar(5) / Scalar(6), Scalar(-5) / Scalar(6)})) return make_negate(make_divide(sqrt3_symbol(), SymbolicExpression::number(Scalar(2)))).simplify();
-                }
-                if (node->text == "tan") {
-                    if (numeric_matches_any(pi_multiple, {Scalar(0), Scalar(1), Scalar(-1)})) return SymbolicExpression::number(Scalar(0));
-                    if (numeric_matches_any(pi_multiple, {Scalar(0.25L)})) return SymbolicExpression::number(Scalar(1));
-                    if (numeric_matches_any(pi_multiple, {Scalar(-0.25L)})) return SymbolicExpression::number(Scalar(-1));
-                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(6), Scalar(-5) / Scalar(6)})) return make_divide(SymbolicExpression::number(Scalar(1)), sqrt3_symbol()).simplify();
-                    if (numeric_matches_any(pi_multiple, {Scalar(-1) / Scalar(6), Scalar(5) / Scalar(6)})) return make_negate(make_divide(SymbolicExpression::number(Scalar(1)), sqrt3_symbol())).simplify();
-                    if (numeric_matches_any(pi_multiple, {Scalar(1) / Scalar(3), Scalar(-2) / Scalar(3)})) return sqrt3_symbol();
-                    if (numeric_matches_any(pi_multiple, {Scalar(-1) / Scalar(3), Scalar(2) / Scalar(3)})) return make_negate(sqrt3_symbol()).simplify();
+                auto trig_res = evaluate_trig_special_pi_multiple(node->text, pi_multiple);
+                if (trig_res.has_value()) {
+                    return *trig_res;
                 }
             }
             return make_function(node->text, argument);
@@ -1755,7 +1754,7 @@ SymbolicExpression simplify_once(const SymbolicExpression& expression) {
                 Scalar exp_v;
                 if (right.is_number(&exp_v)) {
                     int exp_i = static_cast<int>(mymath::round(exp_v.to_long_double()));
-                    if (mymath::abs(exp_v - Scalar(static_cast<long long>(exp_i))) < Scalar(app::integer_tolerance())) {
+                    if (mymath::abs(exp_v - Scalar(static_cast<long long>(exp_i))) < Scalar(math::config::integer_tolerance())) {
                         int m4 = ((exp_i % 4) + 4) % 4;
                         if (m4 == 0) return SymbolicExpression::number(Scalar(1));
                         if (m4 == 1) return left;
@@ -1958,7 +1957,7 @@ SymbolicExpression expand_impl(const SymbolicExpression& expression) {
             SymbolicExpression left = expand_impl(SymbolicExpression(node->left));
             SymbolicExpression right = expand_impl(SymbolicExpression(node->right));
             Scalar n = Scalar(0);
-            if (right.is_number(&n) && n > Scalar(1) && mymath::is_integer(n, Scalar(app::integer_tolerance()))) {
+            if (right.is_number(&n) && n > Scalar(1) && mymath::is_integer(n, Scalar(math::config::integer_tolerance()))) {
                 if (left.node_->type == NodeType::kAdd || left.node_->type == NodeType::kSubtract) {
                     SymbolicExpression rest = make_power(left, SymbolicExpression::number(n - Scalar(1)));
                     return expand_impl(make_multiply(left, rest));

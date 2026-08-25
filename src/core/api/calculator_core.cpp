@@ -496,6 +496,20 @@ std::string Calculator::process_line(const std::string& expression, bool exact_m
     return evaluate_for_display(expression, exact_mode);
 }
 
+std::string Calculator::to_latex(const std::string& expression) {
+    try {
+        SymbolicExpression expr = SymbolicExpression::parse(expression);
+        return expr.to_latex();
+    } catch (...) {
+        try {
+            StoredValue val = impl_->evaluate(expression, false);
+            return val.to_latex();
+        } catch (const std::exception& e) {
+            return "\\text{Error: " + std::string(e.what()) + "}";
+        }
+    }
+}
+
 namespace {
 
 std::string execute_script_source([[maybe_unused]] Calculator* calculator,

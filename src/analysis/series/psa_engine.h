@@ -62,12 +62,23 @@ std::vector<Scalar> ps_tan(const std::vector<Scalar>& a, int degree);
 std::vector<Scalar> ps_asin(const std::vector<Scalar>& a, int degree);
 std::vector<Scalar> ps_acos(const std::vector<Scalar>& a, int degree);
 std::vector<Scalar> ps_atan(const std::vector<Scalar>& a, int degree);
+std::vector<Scalar> ps_asinh(const std::vector<Scalar>& a, int degree);
+std::vector<Scalar> ps_acosh(const std::vector<Scalar>& a, int degree);
+std::vector<Scalar> ps_atanh(const std::vector<Scalar>& a, int degree);
 std::vector<Scalar> ps_sinh(const std::vector<Scalar>& a, int degree);
 std::vector<Scalar> ps_cosh(const std::vector<Scalar>& a, int degree);
 std::vector<Scalar> ps_tanh(const std::vector<Scalar>& a, int degree);
+std::vector<Scalar> ps_cot(const std::vector<Scalar>& a, int degree);
+std::vector<Scalar> ps_sec(const std::vector<Scalar>& a, int degree);
+std::vector<Scalar> ps_csc(const std::vector<Scalar>& a, int degree);
+std::vector<Scalar> ps_coth(const std::vector<Scalar>& a, int degree);
+std::vector<Scalar> ps_sech(const std::vector<Scalar>& a, int degree);
+std::vector<Scalar> ps_csch(const std::vector<Scalar>& a, int degree);
 std::vector<Scalar> ps_revert(const std::vector<Scalar>& a, int degree);
 
 bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, Scalar center, int degree, std::vector<Scalar>& result, const SeriesContext& ctx);
+
+bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, Scalar center, int degree, std::vector<Scalar>& result);
 
 }  // namespace internal
 

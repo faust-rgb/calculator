@@ -447,6 +447,28 @@ print("semicolon loop: ", sum_len)
     }
 }
 
+static void test_script_loop_accumulation(int& passed, int& failed) {
+    Calculator calc;
+    std::string output;
+    try {
+        output = calc.execute_script(R"(
+sum = 0
+for x in [1, 2, 3, 4, 5]:
+    sum = sum + x
+print("sum: ", sum)
+)", false);
+        if (output.find("15") != std::string::npos) {
+            passed++;
+        } else {
+            std::cout << "FAIL: loop accumulation: " << output << "\n";
+            failed++;
+        }
+    } catch (const std::exception& e) {
+        std::cout << "FAIL: loop accumulation threw: " << e.what() << "\n";
+        failed++;
+    }
+}
+
 void run_script_feature_tests(int& passed, int& failed) {
     test_script_match_case(passed, failed);
     test_script_for_in_list(passed, failed);
@@ -457,4 +479,5 @@ void run_script_feature_tests(int& passed, int& failed) {
     test_script_logical_operators(passed, failed);
     test_script_matrix_indexing(passed, failed);
     test_script_advanced_parser_features(passed, failed);
+    test_script_loop_accumulation(passed, failed);
 }

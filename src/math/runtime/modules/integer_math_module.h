@@ -25,7 +25,7 @@ class ServiceLocator;
  * - 素数操作（is_prime、next_prime、prev_prime）
  * - 数论函数（euler_phi、mobius、prime_pi、egcd）
  */
-class IntegerMathModule : public CalculatorModule {
+class IntegerMathModule : public CommandFunctionModuleBase {
 public:
     /// 获取模块名称
     std::string name() const override { return "IntegerMath"; }

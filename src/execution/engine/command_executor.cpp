@@ -50,14 +50,8 @@ std::string execute_command_ast(
 
     if (ast.kind == CommandKind::kIndexAssignment) {
         const auto* assign = ast.as_index_assignment();
-        std::string text = std::string(assign->variable) + "[";
-        for (std::size_t i = 0; i < assign->indices.size(); ++i) {
-            if (i != 0) text += ", ";
-            text += std::string(assign->indices[i].text);
-        }
-        text += "] = " + std::string(assign->value.text);
         std::string output;
-        if (!try_execute_index_assignment(ctx, text, exact_mode, &output)) {
+        if (!execute_index_assignment_direct(ctx, assign->variable, assign->indices, assign->value, exact_mode, &output)) {
             throw std::runtime_error("invalid index assignment");
         }
         return output;
@@ -66,6 +60,7 @@ std::string execute_command_ast(
     if (ast.kind == CommandKind::kMetaCommand || ast.kind == CommandKind::kFunctionCall) {
         std::string_view command_name;
         std::vector<std::string_view> arg_views;
+        std::vector<std::string> named_arg_storage;
         if (ast.kind == CommandKind::kMetaCommand) {
             const auto* meta = ast.as_meta_command();
             command_name = meta->command;
@@ -77,11 +72,16 @@ std::string execute_command_ast(
             for (const auto& arg : call->named_args) {
                 // Command handlers retain their existing ABI; pass named
                 // arguments in their original source form.
-                std::string_view name = arg.name;
-                std::string_view value = arg.value.text;
-                const std::size_t start = name.data() - ast.source_owner->data();
-                const std::size_t end = value.data() - ast.source_owner->data() + value.size();
-                arg_views.emplace_back(ast.source_owner->data() + start, end - start);
+                if (ast.source_owner && !ast.source_owner->empty() &&
+                    arg.name.data() >= ast.source_owner->data() &&
+                    arg.value.text.data() + arg.value.text.size() <= ast.source_owner->data() + ast.source_owner->size()) {
+                    const std::size_t start = arg.name.data() - ast.source_owner->data();
+                    const std::size_t end = arg.value.text.data() - ast.source_owner->data() + arg.value.text.size();
+                    arg_views.emplace_back(ast.source_owner->data() + start, end - start);
+                } else {
+                    named_arg_storage.push_back(std::string(arg.name) + "=" + std::string(arg.value.text));
+                    arg_views.emplace_back(named_arg_storage.back());
+                }
             }
         }
 

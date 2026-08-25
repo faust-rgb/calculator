@@ -104,6 +104,23 @@ add_library(calc_core STATIC
 
 target_include_directories(calc_core PUBLIC ${INCLUDE_DIRS})
 
+# Precompiled Headers for faster compilation
+target_precompile_headers(calc_core PRIVATE
+    <memory>
+    <string>
+    <string_view>
+    <vector>
+    <map>
+    <cmath>
+    <algorithm>
+    <stdexcept>
+    <iostream>
+    <sstream>
+    <variant>
+    <functional>
+    <utility>
+)
+
 # ============================================================================
 # Applications
 # ============================================================================
@@ -138,7 +155,14 @@ if(BUILD_TESTS)
     target_link_libraries(calculator_tests PRIVATE calc_core)
 
     enable_testing()
-    add_test(NAME CalculatorTests COMMAND calculator_tests)
+    add_test(NAME UnitTests.All COMMAND calculator_tests)
+    add_test(NAME UnitTests.Core COMMAND calculator_tests -s core)
+    add_test(NAME UnitTests.Symbolic COMMAND calculator_tests -s symbolic)
+    add_test(NAME UnitTests.Analysis COMMAND calculator_tests -s analysis)
+    add_test(NAME UnitTests.Matrix COMMAND calculator_tests -s matrix)
+    add_test(NAME UnitTests.Math COMMAND calculator_tests -s math)
+    add_test(NAME UnitTests.System COMMAND calculator_tests -s system)
+    add_test(NAME Benchmark.All COMMAND calculator_tests --benchmark)
 endif()
 
 # Install targets (optional)

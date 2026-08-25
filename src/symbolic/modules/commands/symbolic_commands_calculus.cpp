@@ -40,6 +40,19 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
             return true;
         }
         std::string v; SymbolicExpression e; ctx.resolve_symbolic(arguments[0], false, &v, &e);
+        if (arguments.size() == 3 && is_identifier_text(trim_copy(arguments[1])) &&
+            !is_identifier_text(trim_copy(arguments[2]))) {
+            const Scalar order_value = ctx.parse_decimal(arguments[2]);
+            if (order_value < Scalar(1) || !mymath::is_integer(order_value, Scalar(1e-10L))) {
+                throw std::runtime_error("diff order must be a positive integer");
+            }
+            const std::string variable = trim_copy(arguments[1]);
+            SymbolicExpression result = e;
+            const long long order = static_cast<long long>(order_value.to_long_double());
+            for (long long i = 0; i < order; ++i) result = result.derivative(variable).simplify();
+            *output = result.to_string();
+            return true;
+        }
         auto vars = ctx.parse_symbolic_variable_arguments(arguments, 1, {v});
         SymbolicExpression res = e;
         for (const auto& var : vars) res = res.derivative(var).simplify();
@@ -92,7 +105,7 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
                 auto var_eval = ctx.build_scoped_evaluator(var);
                 val = var_eval({});
             } catch (...) {
-                val = 0.0L;  // 默认值
+                throw std::runtime_error("numerical_gradient requires a value for variable: " + var);
             }
             point.push_back(val);
         }
@@ -147,6 +160,9 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
             const std::string indep = trim_copy(arguments[2]);
             const SymbolicExpression fx = equation.derivative(indep).simplify();
             const SymbolicExpression fy = equation.derivative(dep).simplify();
+            if (expr_is_zero(fy)) {
+                throw std::runtime_error("implicit_diff is undefined where the dependent-variable derivative is zero");
+            }
             *output = make_divide(make_negate(fx), fy).simplify().to_string();
             return true;
         }
@@ -156,9 +172,13 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
                 throw std::runtime_error("param_deriv expects x(t), y(t), parameter");
             }
             const std::string param = trim_copy(arguments[2]);
-            const SymbolicExpression x_expr = SymbolicExpression::parse(ctx.resolve_symbolic ? trim_copy(arguments[0]) : arguments[0]);
+            const SymbolicExpression x_expr = SymbolicExpression::parse(trim_copy(arguments[0]));
             const SymbolicExpression y_expr = SymbolicExpression::parse(trim_copy(arguments[1]));
-            *output = make_divide(y_expr.derivative(param), x_expr.derivative(param)).simplify().to_string();
+            const SymbolicExpression dx = x_expr.derivative(param).simplify();
+            if (expr_is_zero(dx)) {
+                throw std::runtime_error("param_deriv is undefined where dx/dt is zero");
+            }
+            *output = make_divide(y_expr.derivative(param), dx).simplify().to_string();
             return true;
         }
 
@@ -174,26 +194,24 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
             for (std::size_t i = 0; i < dimensions; ++i) {
                 vars.push_back(trim_copy(arguments[1 + i]));
             }
-            Scalar norm_sq = Scalar(0.0L);
+            SymbolicExpression norm_sq = SymbolicExpression::number(0.0L);
             for (std::size_t i = 0; i < dimensions; ++i) {
                 const SymbolicExpression component =
                     SymbolicExpression::parse(trim_copy(arguments[1 + dimensions + i]));
-                Scalar value = Scalar(0.0L);
-                if (component.is_number(&value)) {
-                    norm_sq += value * value;
-                }
+                norm_sq = make_add(norm_sq, make_power(component, SymbolicExpression::number(2.0L))).simplify();
                 direction.push_back(component);
             }
-            const Scalar norm = mymath::sqrt(norm_sq);
+            if (expr_is_zero(norm_sq)) {
+                throw std::runtime_error("directional direction must be nonzero");
+            }
+            const SymbolicExpression norm = make_function("sqrt", norm_sq).simplify();
             std::string v;
             SymbolicExpression expr;
             ctx.resolve_symbolic(arguments[0], false, &v, &expr);
             SymbolicExpression result = SymbolicExpression::number(0.0L);
             for (std::size_t i = 0; i < dimensions; ++i) {
                 SymbolicExpression component = direction[i];
-                if (norm > 0.0L) {
-                    component = make_divide(component, SymbolicExpression::number(norm)).simplify();
-                }
+                component = make_divide(component, norm).simplify();
                 result = make_add(result, make_multiply(expr.derivative(vars[i]), component)).simplify();
             }
             *output = result.simplify().to_string();

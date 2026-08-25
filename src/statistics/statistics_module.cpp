@@ -7,6 +7,8 @@
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/service_locator.h"
 #include "math/functions/integer/integer_helpers.h"
+#include "matrix/matrix.h"
+#include "matrix/matrix_internal.h"
 
 std::string StatisticsModule::execute_args(const std::string& command,
                                            const std::vector<std::string>& args,
@@ -286,5 +288,40 @@ StatisticsModule::get_functions_map() const {
         return wrap_scalar(stats_ops::apply_probability("randint", get_all_data(args)));
     };
 
+    funcs["lagrange"] = [wrap_scalar](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 3) throw std::runtime_error("lagrange expects x, y, xi");
+        return wrap_scalar(matrix::internal::lagrange_interpolate(stats_ops::extract_vector(args[0]),
+                                                                  stats_ops::extract_vector(args[1]),
+                                                                  args[2].get_decimal()));
+    };
+    funcs["linear_regression"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("linear_regression expects two vectors");
+        const auto fit = matrix::internal::linear_regression_fit(stats_ops::extract_vector(args[0]),
+                                                                 stats_ops::extract_vector(args[1]));
+        StoredValue res;
+        res.is_matrix = true;
+        std::vector<Scalar> coeffs;
+        coeffs.push_back(fit.first);
+        coeffs.push_back(fit.second);
+        res.matrix_ptr = std::make_shared<matrix::Matrix>(matrix::Matrix::vector(coeffs));
+        return res;
+    };
+
     return funcs;
+}
+
+std::vector<std::string> StatisticsModule::get_function_names() const {
+    static const std::vector<std::string> names = {
+        "avg", "bernoulli", "binom_cdf", "binom_pmf", "cdf_beta", "cdf_chi2",
+        "cdf_exp", "cdf_f", "cdf_gamma", "cdf_norm", "cdf_normal", "cdf_t",
+        "chi2_test", "corr", "correlation", "cov", "covariance", "gamma",
+        "geo_mean", "geometric_mean", "harmonic_mean", "iqr", "kurt", "kurtosis",
+        "lagrange", "lgamma", "linear_regression", "mad", "max", "mean", "median",
+        "min", "mode", "moment", "pdf_beta", "pdf_chi2", "pdf_exp", "pdf_f",
+        "pdf_gamma", "pdf_norm", "pdf_normal", "pdf_t", "pearson", "poisson_cdf",
+        "poisson_pmf", "q1", "q3", "rand", "randint", "randn", "range",
+        "sample_covariance", "sample_std", "sample_var", "skew", "skewness",
+        "spearman", "std", "sum", "t_test", "t_test2", "var", "zscore"
+    };
+    return names;
 }

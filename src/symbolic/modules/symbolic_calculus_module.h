@@ -6,7 +6,7 @@
 
 namespace symbolic_commands {
 
-class SymbolicCalculusModule : public CalculatorModule {
+class SymbolicCalculusModule : public CommandModuleBase {
 public:
     std::string name() const override { return "SymbolicCalculus"; }
 

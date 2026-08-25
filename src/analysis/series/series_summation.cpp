@@ -131,7 +131,7 @@ bool detect_arith_geo_series(const SymbolicExpression& summand,
         if (!term_n.is_number(&val)) {
             return false;
         }
-        Scalar p_n = val / mymath::pow(*ratio, n);
+        Scalar p_n = (n == 0) ? val : (val / mymath::pow(*ratio, n));
         poly_coeffs->push_back(p_n);
     }
 

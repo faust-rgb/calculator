@@ -175,29 +175,33 @@ std::string TMatrix<T>::to_string() const {
     return out.str();
 }
 
+template <typename T>
+std::string TMatrix<T>::to_latex(const std::string& env) const {
+    if (rows == 0 || cols == 0) return "\\begin{" + env + "}\\end{" + env + "}";
+    std::ostringstream out;
+    out << "\\begin{" << env << "}\n";
+    for (std::size_t r = 0; r < rows; ++r) {
+        out << "  ";
+        for (std::size_t c = 0; c < cols; ++c) {
+            if (c > 0) out << " & ";
+            out << internal::format_number<T>(at(r, c));
+        }
+        if (r + 1 < rows) out << " \\\\";
+        out << "\n";
+    }
+    out << "\\end{" << env << "}";
+    return out.str();
+}
+
 // Explicit template instantiations
-//template TMatrix<long double> reshape<long double>(const TMatrix<long double>&, std::size_t, std::size_t);
 template TMatrix<mymath::Scalar> reshape<mymath::Scalar>(const TMatrix<mymath::Scalar>&, std::size_t, std::size_t);
-
-//template TMatrix<long double> vectorize<long double>(const TMatrix<long double>&);
 template TMatrix<mymath::Scalar> vectorize<mymath::Scalar>(const TMatrix<mymath::Scalar>&);
-
-//template TMatrix<long double> diag<long double>(const TMatrix<long double>&);
 template TMatrix<mymath::Scalar> diag<mymath::Scalar>(const TMatrix<mymath::Scalar>&);
-
-//template TMatrix<long double> transpose<long double>(const TMatrix<long double>&);
 template TMatrix<mymath::Scalar> transpose<mymath::Scalar>(const TMatrix<mymath::Scalar>&);
-
-//template void TMatrix<long double>::resize(std::size_t, std::size_t, long double);
 template void TMatrix<mymath::Scalar>::resize(std::size_t, std::size_t, mymath::Scalar);
-
-//template void TMatrix<long double>::append_row(const std::vector<long double>&);
 template void TMatrix<mymath::Scalar>::append_row(const std::vector<mymath::Scalar>&);
-
-//template void TMatrix<long double>::append_col(const std::vector<long double>&);
 template void TMatrix<mymath::Scalar>::append_col(const std::vector<mymath::Scalar>&);
-
-//template std::string TMatrix<long double>::to_string() const;
 template std::string TMatrix<mymath::Scalar>::to_string() const;
+template std::string TMatrix<mymath::Scalar>::to_latex(const std::string&) const;
 
 } // namespace matrix

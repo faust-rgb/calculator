@@ -53,6 +53,11 @@ Solution SymbolicSolver::solve(const SymbolicExpression& equation, const std::st
             return solve_polynomial(normalized, variable);
 
         case EquationType::kTranscendental: {
+            // 尝试初等超越方程求解
+            Solution elem_result;
+            if (try_elementary_transcendental(normalized, variable, &elem_result)) {
+                return elem_result;
+            }
             // 尝试 Lambert W
             Solution lambert_result;
             if (try_lambert_w(normalized, variable, &lambert_result)) {
@@ -532,13 +537,58 @@ Solution SymbolicSolver::solve_cubic(
     SymbolicExpression u = make_power((-q / two) + sqrt_delta, SymbolicExpression::number(Scalar(1.0L / 3.0L)));
     SymbolicExpression v = make_power((-q / two) - sqrt_delta, SymbolicExpression::number(Scalar(1.0L / 3.0L)));
 
-    SymbolicExpression x1 = (u + v - b / (three * a)).simplify();
-    return Solution::single(x1, "symbolic_cardano_formula");
+    SymbolicExpression shift = (b / (three * a)).simplify();
+    SymbolicExpression x1 = (u + v - shift).simplify();
+
+    SymbolicExpression half = SymbolicExpression::number(Scalar(0.5L));
+    SymbolicExpression sqrt3 = sqrt3_symbol();
+    SymbolicExpression i_sym = SymbolicExpression::variable("i");
+
+    SymbolicExpression real_part = (make_negate(half * (u + v)) - shift).simplify();
+    SymbolicExpression imag_part = (half * sqrt3 * (u - v) * i_sym).simplify();
+    SymbolicExpression x2 = (real_part + imag_part).simplify();
+    SymbolicExpression x3 = (real_part - imag_part).simplify();
+
+    return Solution::multiple({x1, x2, x3}, "symbolic_cardano_formula");
 }
 
 Solution SymbolicSolver::solve_quartic(
     const std::vector<SymbolicExpression>& coeffs,
     const std::string& variable) {
+
+    if (coeffs.size() >= 5) {
+        SymbolicExpression e = coeffs[0];
+        SymbolicExpression d = coeffs[1];
+        SymbolicExpression c = coeffs[2];
+        SymbolicExpression b = coeffs[3];
+        SymbolicExpression a = coeffs[4];
+
+        // 双二次方程 a*x^4 + c*x^2 + e = 0 (b = 0, d = 0)
+        if (expr_is_zero(b.simplify()) && expr_is_zero(d.simplify())) {
+            std::vector<SymbolicExpression> quad_coeffs = {e, c, a};
+            Solution u_sol = solve_quadratic(quad_coeffs, "u");
+            if (u_sol.is_complete && !u_sol.values.empty()) {
+                std::vector<SymbolicExpression> x_roots;
+                for (const auto& u_val : u_sol.values) {
+                    SymbolicExpression sqrt_u = make_function("sqrt", u_val).simplify();
+                    x_roots.push_back(sqrt_u);
+                    x_roots.push_back(make_negate(sqrt_u).simplify());
+                }
+                return Solution::multiple(x_roots, "biquadratic_formula");
+            }
+        }
+
+        // 常数项为 0: x = 0 为根
+        if (expr_is_zero(e.simplify())) {
+            std::vector<SymbolicExpression> cubic_coeffs = {d, c, b, a};
+            Solution cubic_sol = solve_cubic(cubic_coeffs, variable);
+            std::vector<SymbolicExpression> x_roots = {SymbolicExpression::number(Scalar(0.0L))};
+            if (cubic_sol.is_complete) {
+                x_roots.insert(x_roots.end(), cubic_sol.values.begin(), cubic_sol.values.end());
+                return Solution::multiple(x_roots, "quartic_factored_x");
+            }
+        }
+    }
 
     SymbolicExpression poly = build_symbolic_polynomial_expression(coeffs, variable);
     return Solution::root_of_representation(poly, 0);
@@ -614,6 +664,119 @@ Solution SymbolicSolver::solve_linear_system(
     }
 
     return Solution::system(results, "symbolic_gaussian_elimination");
+}
+
+bool SymbolicSolver::try_elementary_transcendental(
+    const SymbolicExpression& equation,
+    const std::string& variable,
+    Solution* result) {
+
+    SymbolicExpression norm = normalize_equation(equation).simplify();
+
+    // 分离包含变量与不含变量的常数项
+    std::vector<SymbolicExpression> terms;
+    collect_additive_expressions(norm, &terms);
+
+    SymbolicExpression fx = SymbolicExpression::number(Scalar(0.0L));
+    SymbolicExpression const_part = SymbolicExpression::number(Scalar(0.0L));
+
+    for (const auto& term : terms) {
+        if (term.is_constant(variable)) {
+            const_part = make_add(const_part, term).simplify();
+        } else {
+            fx = make_add(fx, term).simplify();
+        }
+    }
+
+    // fx = rhs_target
+    SymbolicExpression rhs_target = make_negate(const_part).simplify();
+
+    // 检查 fx 是否形如 coeff * core
+    SymbolicExpression coeff = SymbolicExpression::number(Scalar(1.0L));
+    SymbolicExpression core = fx;
+
+    if (fx.node_ && fx.node_->type == NodeType::kMultiply) {
+        SymbolicExpression left(fx.node_->left);
+        SymbolicExpression right(fx.node_->right);
+        if (left.is_constant(variable)) {
+            coeff = left;
+            core = right;
+        } else if (right.is_constant(variable)) {
+            coeff = right;
+            core = left;
+        }
+    } else if (fx.node_ && fx.node_->type == NodeType::kNegate) {
+        coeff = SymbolicExpression::number(Scalar(-1.0L));
+        core = SymbolicExpression(fx.node_->left);
+    }
+
+    if (expr_is_zero(coeff)) return false;
+    SymbolicExpression target = (rhs_target / coeff).simplify();
+
+    if (!core.node_) return false;
+
+    // 幂函数形式: (linear)^n = target 或 base^(linear) = target
+    if (core.node_->type == NodeType::kPower) {
+        SymbolicExpression base(core.node_->left);
+        SymbolicExpression exponent(core.node_->right);
+        if (exponent.is_constant(variable) && !base.is_constant(variable)) {
+            SymbolicExpression inv_exp = (SymbolicExpression::number(Scalar(1.0L)) / exponent).simplify();
+            SymbolicExpression new_target = make_power(target, inv_exp).simplify();
+            SymbolicSolver inner_solver;
+            Solution sol = inner_solver.solve(make_subtract(base, new_target), variable);
+            if (sol.is_complete && !sol.values.empty()) {
+                *result = sol;
+                return true;
+            }
+        }
+        if (base.is_constant(variable) && !exponent.is_constant(variable)) {
+            SymbolicExpression new_target = (make_function("ln", target) / make_function("ln", base)).simplify();
+            SymbolicSolver inner_solver;
+            Solution sol = inner_solver.solve(make_subtract(exponent, new_target), variable);
+            if (sol.is_complete && !sol.values.empty()) {
+                *result = sol;
+                return true;
+            }
+        }
+    }
+
+    // 初等函数: sin, cos, tan, exp, ln, sqrt 等
+    if (core.node_->type == NodeType::kFunction && core.node_->left) {
+        const std::string& func_name = core.node_->text;
+        SymbolicExpression arg(core.node_->left);
+        SymbolicExpression new_target;
+
+        if (func_name == "sin") {
+            new_target = make_function("asin", target).simplify();
+        } else if (func_name == "cos") {
+            new_target = make_function("acos", target).simplify();
+        } else if (func_name == "tan") {
+            new_target = make_function("atan", target).simplify();
+        } else if (func_name == "asin") {
+            new_target = make_function("sin", target).simplify();
+        } else if (func_name == "acos") {
+            new_target = make_function("cos", target).simplify();
+        } else if (func_name == "atan") {
+            new_target = make_function("tan", target).simplify();
+        } else if (func_name == "exp") {
+            new_target = make_function("ln", target).simplify();
+        } else if (func_name == "ln" || func_name == "log") {
+            new_target = make_function("exp", target).simplify();
+        } else if (func_name == "sqrt") {
+            new_target = make_power(target, SymbolicExpression::number(Scalar(2.0L))).simplify();
+        } else {
+            return false;
+        }
+
+        SymbolicSolver inner_solver;
+        Solution sol = inner_solver.solve(make_subtract(arg, new_target), variable);
+        if (sol.is_complete && !sol.values.empty()) {
+            *result = sol;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 bool SymbolicSolver::try_lambert_w(
@@ -770,44 +933,13 @@ bool SymbolicSolver::extract_linear_coefficients(
     SymbolicExpression* a,
     SymbolicExpression* b) {
 
-    // 提取 a 和 b 使得 expr = a * var + b
-
-    // 收集所有项
-    std::vector<SymbolicExpression> terms;
-    collect_additive_expressions(expr, &terms);
-
-    *a = SymbolicExpression::number(Scalar(0));
-    *b = SymbolicExpression::number(Scalar(0));
-
-    for (const auto& term : terms) {
-        // 检查项是否包含 var (AST 语义级别检查)
-        if (term.is_constant(var)) {
-            // 常数项
-            *b = make_add(*b, term).simplify();
-        } else {
-            // 包含 var 的项
-            // 尝试提取系数
-            if (term.node_->type == NodeType::kVariable && term.node_->text == var) {
-                *a = make_add(*a, SymbolicExpression::number(Scalar(1.0L))).simplify();
-            } else if (term.node_->type == NodeType::kMultiply) {
-                // k * var 形式
-                SymbolicExpression left(term.node_->left);
-                SymbolicExpression right(term.node_->right);
-
-                if (left.node_->type == NodeType::kVariable && left.node_->text == var) {
-                    *a = make_add(*a, right).simplify();
-                } else if (right.node_->type == NodeType::kVariable && right.node_->text == var) {
-                    *a = make_add(*a, left).simplify();
-                } else {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        }
+    SymbolicPolynomial poly = SymbolicPolynomial::from_expression(expr, var);
+    if (poly.degree() == 1) {
+        *a = poly.coefficient(1).simplify();
+        *b = poly.coefficient(0).simplify();
+        return true;
     }
-
-    return true;
+    return false;
 }
 
 // ============================================================================

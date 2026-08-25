@@ -135,6 +135,18 @@ user-defined functions:
 | `surface_integral_scalar` | Scalar surface integral |
 | `divergence_theorem` | Divergence theorem |
 
+### Symbolic Algebra and CAS
+
+| Name | Description |
+|------|-------------|
+| `assume` | Set variable assumptions |
+| `cse` | Common subexpression elimination |
+| `expand` | Algebraic expansion |
+| `groebner` | Gröbner basis computation |
+| `latex` | LaTeX mathematical text generation |
+| `simplify` | Symbolic algebraic simplification |
+| `to_latex` | LaTeX mathematical text generation (alias) |
+
 ### Transforms
 
 | Name | Description |

@@ -211,9 +211,87 @@ static void test_io_seek_tell(int& passed, int& failed) {
     }
 }
 
+static void test_io_advanced_features(int& passed, int& failed) {
+    Calculator calc;
+    std::string output;
+    test_helpers::TempFileGuard guard_txt(test_helpers::make_test_path("test_adv_io.txt"));
+    test_helpers::TempFileGuard guard_csv(test_helpers::make_test_path("test_adv_csv.csv"));
+    test_helpers::TempFileGuard guard_json(test_helpers::make_test_path("test_adv_json.json"));
+
+    // 1. Test read with count & seek with whence
+    try {
+        calc.try_process_function_command("fd = open(\"" + guard_txt.path.string() + "\", \"w+\")", &output);
+        calc.try_process_function_command("write(fd, \"0123456789ABCDEF\")", &output);
+        calc.try_process_function_command("seek(fd, 4, 0)", &output); // whence 0 = beg
+        calc.try_process_function_command("chunk = read(fd, 4)", &output);
+        calc.try_process_function_command("chunk", &output);
+        if (output.find("4567") != std::string::npos) {
+            passed++;
+        } else {
+            std::cout << "FAIL: read with count mismatch: " << output << "\n";
+            failed++;
+        }
+
+        // seek from end
+        calc.try_process_function_command("seek(fd, -4, 2)", &output); // whence 2 = end
+        calc.try_process_function_command("tail = read(fd, 4)", &output);
+        calc.try_process_function_command("tail", &output);
+        if (output.find("CDEF") != std::string::npos) {
+            passed++;
+        } else {
+            std::cout << "FAIL: seek end mismatch: " << output << "\n";
+            failed++;
+        }
+
+        calc.try_process_function_command("close(fd)", &output);
+    } catch (const std::exception& e) {
+        std::cout << "FAIL: advanced read/seek threw: " << e.what() << "\n";
+        failed++;
+    }
+
+    // 2. Test quoted CSV parsing
+    try {
+        std::ofstream csv_out(guard_csv.path);
+        csv_out << "\"10.5\", \"20.25\", 30\n\"40\", 50, \"60.75\"\n";
+        csv_out.close();
+
+        calc.try_process_function_command("mat = read_csv(\"" + guard_csv.path.string() + "\")", &output);
+        calc.try_process_function_command("mat", &output);
+        if (output.find("10.5") != std::string::npos && output.find("60.75") != std::string::npos) {
+            passed++;
+        } else {
+            std::cout << "FAIL: quoted CSV parse mismatch: " << output << "\n";
+            failed++;
+        }
+    } catch (const std::exception& e) {
+        std::cout << "FAIL: quoted CSV threw: " << e.what() << "\n";
+        failed++;
+    }
+
+    // 3. Test JSON Unicode & Escape handling
+    try {
+        std::ofstream json_out(guard_json.path);
+        json_out << "{\"greeting\": \"Hello\\nWorld\", \"symbol\": \"\\u0041\\u0042\"}";
+        json_out.close();
+
+        calc.try_process_function_command("jdata = read_json(\"" + guard_json.path.string() + "\")", &output);
+        calc.try_process_function_command("jdata", &output);
+        if (output.find("Hello") != std::string::npos && output.find("AB") != std::string::npos) {
+            passed++;
+        } else {
+            std::cout << "FAIL: JSON escape read mismatch: " << output << "\n";
+            failed++;
+        }
+    } catch (const std::exception& e) {
+        std::cout << "FAIL: JSON escape threw: " << e.what() << "\n";
+        failed++;
+    }
+}
+
 void run_io_tests(int& passed, int& failed) {
     test_io_file_operations(passed, failed);
     test_io_csv_operations(passed, failed);
     test_io_json_operations(passed, failed);
     test_io_seek_tell(passed, failed);
+    test_io_advanced_features(passed, failed);
 }

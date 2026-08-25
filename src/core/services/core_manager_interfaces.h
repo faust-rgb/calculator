@@ -129,10 +129,10 @@ class ICommandRegistry {
 public:
     virtual ~ICommandRegistry() = default;
 
-    virtual bool has_command(const std::string& name) const = 0;
-    virtual bool is_inlineable(const std::string& name) const = 0;
+    virtual bool has_command(std::string_view name) const = 0;
+    virtual bool is_inlineable(std::string_view name) const = 0;
     virtual std::vector<std::string> get_all_commands() const = 0;
-    virtual std::string get_help(const std::string& name) const = 0;
+    virtual std::string get_help(std::string_view name) const = 0;
 
     /**
      * @brief 尝试处理命令
@@ -143,7 +143,7 @@ public:
      * @param services 核心服务接口
      * @return 如果命令被处理返回 true
      */
-    virtual bool try_process(const std::string& cmd_name,
+    virtual bool try_process(std::string_view cmd_name,
                              const std::vector<std::string_view>& args,
                              std::string* output,
                              bool exact_mode,

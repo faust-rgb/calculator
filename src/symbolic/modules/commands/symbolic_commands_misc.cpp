@@ -32,46 +32,100 @@ enum class ODEType {
     HOMOGENEOUS               // y' = f(y/x)
 };
 
-// Try to detect ODE type and solve
+static SymbolicExpression replace_diff_nodes_for_ode(const SymbolicExpression& expr, const std::string& y_var, const std::string& /*x_var*/) {
+    if (!expr.node_) return expr;
+    if (expr.node_->type == NodeType::kFunction && expr.node_->text == "diff") {
+        bool is_order_2 = false;
+        if (expr.node_->children.size() >= 3) {
+            Scalar ord;
+            if (SymbolicExpression(expr.node_->children[2]).is_number(&ord)) {
+                if (mymath::abs(ord - Scalar(2.0L)) < Scalar(1e-5L)) is_order_2 = true;
+            } else if (expr.node_->children[2]->text == "2") {
+                is_order_2 = true;
+            }
+        }
+        if (is_order_2) {
+            return SymbolicExpression::variable("_y2");
+        } else {
+            return SymbolicExpression::variable("_y1");
+        }
+    }
+    if (expr.node_->type == NodeType::kVariable) {
+        if (expr.node_->text == y_var + "''") return SymbolicExpression::variable("_y2");
+        if (expr.node_->text == y_var + "'") return SymbolicExpression::variable("_y1");
+        if (expr.node_->text == y_var) return SymbolicExpression::variable("_y0");
+    }
+    if (!expr.node_->children.empty()) {
+        std::vector<SymbolicExpression> new_children;
+        for (const auto& ch : expr.node_->children) {
+            new_children.push_back(replace_diff_nodes_for_ode(SymbolicExpression(ch), y_var, ""));
+        }
+        return SymbolicExpression::function(expr.node_->text, new_children);
+    }
+    if (expr.node_->left && expr.node_->right) {
+        auto l = replace_diff_nodes_for_ode(SymbolicExpression(expr.node_->left), y_var, "");
+        auto r = replace_diff_nodes_for_ode(SymbolicExpression(expr.node_->right), y_var, "");
+        return SymbolicExpression(symbolic_expression_internal::make_binary(expr.node_->type, l.node_, r.node_));
+    }
+    if (expr.node_->left) {
+        auto l = replace_diff_nodes_for_ode(SymbolicExpression(expr.node_->left), y_var, "");
+        return SymbolicExpression(symbolic_expression_internal::make_unary(expr.node_->type, l.node_, expr.node_->text));
+    }
+    return expr;
+}
+
 bool solve_first_order_linear(const SymbolicExpression& eq, const std::string& x_var,
                               const std::string& y_var, std::string* output) {
-    // Try to put in form y' + p(x)y = q(x)
-    // eq should be y' - f(x,y) = 0, so y' = f(x,y)
-
-    SymbolicExpression rhs = eq;
-    SymbolicExpression y = SymbolicExpression::variable(y_var);
-    SymbolicExpression x = SymbolicExpression::variable(x_var);
-
-    // Check if rhs is of form a(x)*y + b(x) (linear in y)
-    // y' = p(x)*y + q(x) -> integrating factor method
-    // Solution: y = e^(-∫p dx) * (∫q*e^(∫p dx) dx + C)
-
     try {
-        // Try to extract coefficient of y and constant term
-        SymbolicExpression rhs_simplified = rhs.simplify();
+        SymbolicExpression x = SymbolicExpression::variable(x_var);
+        SymbolicExpression y = SymbolicExpression::variable(y_var);
+        SymbolicExpression replaced = replace_diff_nodes_for_ode(eq, y_var, x_var).simplify();
 
-        // Differentiate with respect to y to get p(x)
-        SymbolicExpression p = rhs_simplified.derivative(y_var).simplify();
+        SymbolicExpression coeff_y1 = replaced.derivative("_y1").simplify();
+        SymbolicExpression coeff_y0 = replaced.derivative("_y0").simplify();
 
-        // q(x) = rhs - p*y (evaluated at y=0)
-        SymbolicExpression q = rhs_simplified;
+        SymbolicExpression p, q;
 
-        // Check if p is independent of y (linear ODE)
-        SymbolicExpression p_dy = p.derivative(y_var).simplify();
-        if (!expr_is_zero(p_dy)) {
-            return false; // Not linear in y
+        if (!expr_is_zero(coeff_y1)) {
+            // Form: coeff_y1 * y' + coeff_y0 * y + const_term = 0
+            // y' + (coeff_y0 / coeff_y1) * y = -const_term / coeff_y1
+            SymbolicExpression rem = (replaced - (coeff_y1 * SymbolicExpression::variable("_y1")) - (coeff_y0 * SymbolicExpression::variable("_y0"))).simplify();
+            if (!rem.is_constant(y_var) && !rem.is_constant("_y0") && !rem.is_constant("_y1")) {
+                return false;
+            }
+            p = (coeff_y0 / coeff_y1).simplify();
+            q = (make_negate(rem) / coeff_y1).simplify();
+        } else {
+            // Form: y' = rhs(x, y) -> y' - p(x)*y = q(x)
+            SymbolicExpression rhs = eq.simplify();
+            p = rhs.derivative(y_var).simplify();
+            SymbolicExpression p_dy = p.derivative(y_var).simplify();
+            if (!expr_is_zero(p_dy)) {
+                return false;
+            }
+            q = (rhs - (p * y)).simplify();
+            SymbolicExpression q_dy = q.derivative(y_var).simplify();
+            if (!expr_is_zero(q_dy)) {
+                return false;
+            }
+            p = make_negate(p).simplify();
+        }
+
+        if (!p.is_constant(y_var) || !q.is_constant(y_var)) {
+            return false;
         }
 
         // Integrating factor: μ(x) = e^(∫p dx)
         SymbolicExpression integral_p = p.integral(x_var).simplify();
         SymbolicExpression mu = make_function("exp", integral_p).simplify();
+        SymbolicExpression inv_mu = make_function("exp", make_negate(integral_p).simplify()).simplify();
 
-        // Solution: y = (1/μ) * (∫q*μ dx + C)
+        // ∫q*μ dx
         SymbolicExpression q_mu = (q * mu).simplify();
         SymbolicExpression integral_q_mu = q_mu.integral(x_var).simplify();
 
-        SymbolicExpression one_over_mu = make_function("exp", make_negate(integral_p).simplify()).simplify();
-        SymbolicExpression y_solution = (one_over_mu * (integral_q_mu + SymbolicExpression::variable("C"))).simplify();
+        SymbolicExpression c_const = SymbolicExpression::variable("C");
+        SymbolicExpression y_solution = (inv_mu * (integral_q_mu + c_const)).simplify();
 
         *output = y_var + "(" + x_var + ") = " + y_solution.to_string();
         return true;
@@ -80,27 +134,81 @@ bool solve_first_order_linear(const SymbolicExpression& eq, const std::string& x
     }
 }
 
-// Solve second order linear ODE with constant coefficients: ay'' + by' + cy = f(x)
-bool solve_second_order_constant_coeff([[maybe_unused]] const SymbolicExpression& eq, const std::string& x_var,
-                                        const std::string& y_var, std::string* output) {
-    // This is a simplified implementation for homogeneous case: ay'' + by' + cy = 0
-    // Characteristic equation: ar^2 + br + c = 0
-    // For now, we detect the form and provide the general solution structure
+bool solve_second_order_constant_coeff(
+    const SymbolicExpression& eq,
+    const std::string& x_var,
+    const std::string& y_var,
+    std::string* output) {
 
     try {
         SymbolicExpression x = SymbolicExpression::variable(x_var);
-        SymbolicExpression y = SymbolicExpression::variable(y_var);
+        SymbolicExpression replaced = replace_diff_nodes_for_ode(eq, y_var, x_var).simplify();
 
-        // Try to extract coefficients by evaluating at specific points
-        // This is a heuristic approach
+        // Extract a, b, c
+        SymbolicExpression a = replaced.derivative("_y2").simplify();
+        SymbolicExpression b = replaced.derivative("_y1").simplify();
+        SymbolicExpression c = replaced.derivative("_y0").simplify();
 
-        // For now, return a message indicating the ODE type was detected
-        *output = "Second-order linear ODE detected. For ay'' + by' + cy = 0, solve characteristic equation ar² + br + c = 0.\n"
-                  "General solution depends on discriminant Δ = b² - 4ac:\n"
-                  "  Δ > 0: y = C₁e^(r₁x) + C₂e^(r₂x)\n"
-                  "  Δ = 0: y = (C₁ + C₂x)e^(rx)\n"
-                  "  Δ < 0: y = e^(αx)(C₁cos(βx) + C₂sin(βx))";
-        return true;
+        if (expr_is_zero(a)) {
+            return false;
+        }
+
+        if (!a.is_constant(x_var) || !b.is_constant(x_var) || !c.is_constant(x_var)) {
+            return false; // Not constant coefficients
+        }
+
+        // a*r^2 + b*r + c = 0
+        SymbolicExpression two_a = (SymbolicExpression::number(2.0L) * a).simplify();
+        SymbolicExpression four_ac = (SymbolicExpression::number(4.0L) * a * c).simplify();
+        SymbolicExpression discriminant = (b * b - four_ac).simplify();
+
+        SymbolicExpression c1 = SymbolicExpression::variable("C1");
+        SymbolicExpression c2 = SymbolicExpression::variable("C2");
+
+        Scalar disc_val = Scalar(0.0L);
+        if (discriminant.is_number(&disc_val)) {
+            if (mymath::is_near_zero(disc_val, Scalar(1e-12L))) {
+                // Repeated root: r = -b / (2a)
+                SymbolicExpression r = (make_negate(b) / two_a).simplify();
+                SymbolicExpression exp_rx = make_function("exp", (r * x).simplify()).simplify();
+                SymbolicExpression y_sol = ((c1 + c2 * x) * exp_rx).simplify();
+                *output = y_var + "(" + x_var + ") = " + y_sol.to_string();
+                return true;
+            } else if (disc_val > Scalar(0.0L)) {
+                // Two distinct real roots
+                SymbolicExpression sqrt_disc = make_function("sqrt", discriminant).simplify();
+                SymbolicExpression r1 = ((make_negate(b) + sqrt_disc) / two_a).simplify();
+                SymbolicExpression r2 = ((make_negate(b) - sqrt_disc) / two_a).simplify();
+                SymbolicExpression exp1 = make_function("exp", (r1 * x).simplify()).simplify();
+                SymbolicExpression exp2 = make_function("exp", (r2 * x).simplify()).simplify();
+                SymbolicExpression y_sol = (c1 * exp1 + c2 * exp2).simplify();
+                *output = y_var + "(" + x_var + ") = " + y_sol.to_string();
+                return true;
+            } else {
+                // Complex conjugate roots: alpha +- beta * i
+                SymbolicExpression abs_disc = make_function("sqrt", make_negate(discriminant).simplify()).simplify();
+                SymbolicExpression alpha = (make_negate(b) / two_a).simplify();
+                SymbolicExpression beta = (abs_disc / two_a).simplify();
+
+                SymbolicExpression exp_ax = make_function("exp", (alpha * x).simplify()).simplify();
+                SymbolicExpression cos_bx = make_function("cos", (beta * x).simplify()).simplify();
+                SymbolicExpression sin_bx = make_function("sin", (beta * x).simplify()).simplify();
+
+                SymbolicExpression y_sol = (exp_ax * (c1 * cos_bx + c2 * sin_bx)).simplify();
+                *output = y_var + "(" + x_var + ") = " + y_sol.to_string();
+                return true;
+            }
+        } else {
+            // General symbolic discriminant
+            SymbolicExpression sqrt_disc = make_function("sqrt", discriminant).simplify();
+            SymbolicExpression r1 = ((make_negate(b) + sqrt_disc) / two_a).simplify();
+            SymbolicExpression r2 = ((make_negate(b) - sqrt_disc) / two_a).simplify();
+            SymbolicExpression exp1 = make_function("exp", (r1 * x).simplify()).simplify();
+            SymbolicExpression exp2 = make_function("exp", (r2 * x).simplify()).simplify();
+            SymbolicExpression y_sol = (c1 * exp1 + c2 * exp2).simplify();
+            *output = y_var + "(" + x_var + ") = " + y_sol.to_string();
+            return true;
+        }
     } catch (...) {
         return false;
     }
@@ -119,30 +227,36 @@ bool handle_misc_commands(const SymbolicCommandContext& ctx,
         std::string var; SymbolicExpression eq;
         ctx.resolve_symbolic(arguments[0], false, &var, &eq);
 
-        auto vars = ctx.parse_symbolic_variable_arguments(arguments, 1, {var, "y"});
-        std::string x_var = vars.size() > 0 ? vars[0] : var;
-        std::string y_var = vars.size() > 1 ? vars[1] : "y";
+        std::string y_var = "y";
+        std::string x_var = "x";
+        if (arguments.size() >= 3) {
+            y_var = trim_copy(arguments[1]);
+            x_var = trim_copy(arguments[2]);
+        } else if (arguments.size() == 2) {
+            std::string arg1 = trim_copy(arguments[1]);
+            if (arg1 == "y") {
+                y_var = "y";
+                x_var = "x";
+            } else if (arg1 == "x" || arg1 == "t") {
+                y_var = "y";
+                x_var = arg1;
+            } else {
+                y_var = arg1;
+                x_var = "x";
+            }
+        }
 
         try {
             SymbolicExpression rhs = eq.simplify();
             SymbolicExpression y = SymbolicExpression::variable(y_var);
             SymbolicExpression x = SymbolicExpression::variable(x_var);
 
-            // Check if rhs contains y' or higher derivatives
-            std::string eq_str = rhs.to_string();
-            bool has_second_deriv = eq_str.find(y_var + "''") != std::string::npos ||
-                                    eq_str.find("diff(" + y_var + ", " + x_var + ", 2)") != std::string::npos;
-            [[maybe_unused]] bool has_first_deriv = eq_str.find(y_var + "'") != std::string::npos ||
-                                   eq_str.find("diff(" + y_var + ", " + x_var + ")") != std::string::npos;
-
             // Try second-order ODE first
-            if (has_second_deriv) {
-                if (solve_second_order_constant_coeff(rhs, x_var, y_var, output)) {
-                    return true;
-                }
+            if (solve_second_order_constant_coeff(rhs, x_var, y_var, output)) {
+                return true;
             }
 
-            // Try first-order linear ODE: y' + p(x)y = q(x)
+            // Try first-order linear ODE
             if (solve_first_order_linear(rhs, x_var, y_var, output)) {
                 return true;
             }

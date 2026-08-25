@@ -18,7 +18,7 @@
  * 提供精确小数计算功能，避免浮点误差。
  * 当表达式满足特定条件时自动尝试使用精确模式计算。
  */
-class PreciseModule : public CalculatorModule {
+class PreciseModule : public ImplicitModuleBase {
 public:
     std::string name() const override { return "PreciseDecimal"; }
 

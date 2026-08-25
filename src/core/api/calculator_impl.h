@@ -32,7 +32,7 @@ class CalculatorModule;
 struct CoreServices;
 
 // ============================================================================
-// 显示精度常量（使用 app 命名空间中的统一定义）
+// 显示精度常量（使用 math::config 命名空间中的统一定义）
 // ============================================================================
 
 namespace core {
@@ -40,23 +40,23 @@ namespace core {
 using Scalar = mymath::Scalar;
 
 /** @brief 判断数值是否为零的显示阈值 */
-inline Scalar kDisplayZeroEpsScalar() { return Scalar(app::display_zero_threshold()); }
+inline Scalar kDisplayZeroEpsScalar() { return Scalar(math::config::display_zero_threshold()); }
 
 /** @brief 判断数值是否为整数的显示阈值 */
-inline Scalar kDisplayIntegerEpsScalar() { return Scalar(app::display_integer_threshold()); }
+inline Scalar kDisplayIntegerEpsScalar() { return Scalar(math::config::display_integer_threshold()); }
 
 } // namespace core
 
 /** @brief 判断数值是否为零的显示阈值 */
-inline Scalar kDisplayZeroEps() { return Scalar(app::display_zero_threshold()); }
+inline Scalar kDisplayZeroEps() { return Scalar(math::config::display_zero_threshold()); }
 
 /** @brief 判断数值是否为整数的显示阈值 */
-inline Scalar kDisplayIntegerEps() { return Scalar(app::display_integer_threshold()); }
+inline Scalar kDisplayIntegerEps() { return Scalar(math::config::display_integer_threshold()); }
 
-// 使用 app 命名空间中的统一定义
-using app::kDefaultDisplayPrecision;
-using app::kMinDisplayPrecision;
-using app::kMaxDisplayPrecision;
+// 使用 math::config 命名空间中的统一定义
+using math::config::kDefaultDisplayPrecision;
+using math::config::kMinDisplayPrecision;
+using math::config::kMaxDisplayPrecision;
 
 // ============================================================================
 // Calculator 实现类

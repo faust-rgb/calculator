@@ -68,12 +68,7 @@ std::vector<std::size_t> rref_in_place(TMatrix<T>* matrix) {
 
     T pivot = matrix->at(pivot_row, col);
     for (std::size_t current_col = 0; current_col < matrix->cols; ++current_col) {
-        if constexpr (std::is_same_v<T, long double>) {
-            matrix->at(pivot_row, current_col) = static_cast<long double>(
-                static_cast<long double>(matrix->at(pivot_row, current_col)) / static_cast<long double>(pivot));
-        } else {
-            matrix->at(pivot_row, current_col) = matrix->at(pivot_row, current_col) / pivot;
-        }
+        matrix->at(pivot_row, current_col) /= pivot;
     }
 
     for (std::size_t row = 0; row < matrix->rows; ++row) {
@@ -85,15 +80,7 @@ std::vector<std::size_t> rref_in_place(TMatrix<T>* matrix) {
             continue;
         }
         for (std::size_t current_col = 0; current_col < matrix->cols; ++current_col) {
-            if constexpr (std::is_same_v<T, long double>) {
-                matrix->at(row, current_col) = static_cast<long double>(
-                    static_cast<long double>(matrix->at(row, current_col)) -
-                    static_cast<long double>(factor) *
-                        static_cast<long double>(matrix->at(pivot_row, current_col)));
-            } else {
-                matrix->at(row, current_col) = matrix->at(row, current_col) -
-                    factor * matrix->at(pivot_row, current_col);
-            }
+            matrix->at(row, current_col) -= factor * matrix->at(pivot_row, current_col);
 
             if (internal::t_abs<T>(matrix->at(row, current_col)) <= tolerance) {
                 matrix->at(row, current_col) = T(static_cast<long long>(0));
@@ -334,19 +321,15 @@ TReducedSvd<T> compute_reduced_svd(const TMatrix<T>& matrix) {
 // ============================================================================
 
 /// RREF 变换的模板实例化
-//template std::vector<std::size_t> rref_in_place<long double>(TMatrix<long double>*);
 template std::vector<std::size_t> rref_in_place<mymath::Scalar>(TMatrix<mymath::Scalar>*);
 
 /// 零空间向量计算的模板实例化
-//template std::vector<long double> nullspace_vector<long double>(const TMatrix<long double>&);
 template std::vector<mymath::Scalar> nullspace_vector<mymath::Scalar>(const TMatrix<mymath::Scalar>&);
 
 /// 零空间基计算的模板实例化
-//template TMatrix<long double> nullspace_basis<long double>(const TMatrix<long double>&);
 template TMatrix<mymath::Scalar> nullspace_basis<mymath::Scalar>(const TMatrix<mymath::Scalar>&);
 
 /// SVD 分解的模板实例化
-//template TReducedSvd<long double> compute_reduced_svd<long double>(const TMatrix<long double>&);
 template TReducedSvd<mymath::Scalar> compute_reduced_svd<mymath::Scalar>(const TMatrix<mymath::Scalar>&);
 
 } // namespace internal

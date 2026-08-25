@@ -86,6 +86,12 @@ Scalar adaptive_simpson_callable(const std::function<Scalar(Scalar)>& func,
                                  Scalar eps,
                                  int max_depth);
 
+Scalar tanh_sinh_quadrature_callable(const std::function<Scalar(Scalar)>& func,
+                                     Scalar left,
+                                     Scalar right,
+                                     Scalar eps,
+                                     int max_levels = 8);
+
 // ============================================================================
 // 极值点求解
 // ============================================================================

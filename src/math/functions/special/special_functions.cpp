@@ -84,20 +84,21 @@ Scalar combination_scalar(long long n, long long r) {
     return prob::nCr(Scalar(static_cast<long long>(n)), Scalar(static_cast<long long>(r)));
 }
 
+namespace {
+std::pair<Scalar, Scalar> fib_fast_doubling(long long n) {
+    if (n == 0) return {Scalar(0), Scalar(1)};
+    auto [fk, fk1] = fib_fast_doubling(n >> 1);
+    Scalar c = fk * (Scalar(2) * fk1 - fk);
+    Scalar d = fk1 * fk1 + fk * fk;
+    if (n & 1) return {d, c + d};
+    return {c, d};
+}
+} // namespace
+
 Scalar fibonacci_scalar(long long n) {
     if (n < 0) throw std::runtime_error("fib only accepts non-negative integers");
     if (n > 10000) throw std::runtime_error("fib is limited to n <= 10000 to avoid excessive computation");
-    if (n == 0) return Scalar(0);
-    if (n == 1) return Scalar(1);
-
-    Scalar a = Scalar(0);
-    Scalar b = Scalar(1);
-    for (long long i = 2; i <= n; ++i) {
-        const Scalar next = a + b;
-        a = b;
-        b = next;
-    }
-    return b;
+    return fib_fast_doubling(n).first;
 }
 
 Scalar factorial_scalar(long long n) {

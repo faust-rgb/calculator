@@ -25,7 +25,7 @@ namespace optimization {
  * @class OptimizationModule
  * @brief 提供线性规划和整数规划优化功能的模块
  */
-class OptimizationModule : public CalculatorModule {
+class OptimizationModule : public CommandModuleBase {
 public:
     std::string name() const override { return "Optimization"; }
     std::vector<std::string> get_commands() const override;

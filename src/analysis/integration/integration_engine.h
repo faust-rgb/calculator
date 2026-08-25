@@ -112,7 +112,7 @@ Scalar double_integral(const IntegrationEngineContext& ctx,
                        const std::string& y1_expr,
                        int nx, int ny,
                        const std::string& method = "simpson",
-                       Scalar tol = Scalar(app::integration_tolerance()));
+                       Scalar tol = Scalar(math::config::integration_tolerance()));
 
 /**
  * @brief 计算二重积分（极坐标）
@@ -125,7 +125,7 @@ Scalar double_integral_polar(const IntegrationEngineContext& ctx,
                              const std::string& r1_expr,
                              int ntheta, int nr,
                              const std::string& method = "simpson",
-                             Scalar tol = Scalar(app::integration_tolerance()));
+                             Scalar tol = Scalar(math::config::integration_tolerance()));
 
 // ============================================================================
 // 三重积分
@@ -145,7 +145,7 @@ Scalar triple_integral(const IntegrationEngineContext& ctx,
                        const std::string& z1_e,
                        int nx, int ny, int nz,
                        const std::string& method = "simpson",
-                       Scalar tol = Scalar(app::integration_tolerance()));
+                       Scalar tol = Scalar(math::config::integration_tolerance()));
 
 /**
  * @brief 计算三重积分（柱坐标）
@@ -161,7 +161,7 @@ Scalar triple_integral_cyl(const IntegrationEngineContext& ctx,
                            const std::string& z1_e,
                            int nt, int nr, int nz,
                            const std::string& method = "simpson",
-                           Scalar tol = Scalar(app::integration_tolerance()));
+                           Scalar tol = Scalar(math::config::integration_tolerance()));
 
 /**
  * @brief 计算三重积分（球坐标）
@@ -175,7 +175,7 @@ Scalar triple_integral_sph(const IntegrationEngineContext& ctx,
                            const std::string& r1_e,
                            int nt, int np, int nr,
                            const std::string& method = "simpson",
-                           Scalar tol = Scalar(app::integration_tolerance()));
+                           Scalar tol = Scalar(math::config::integration_tolerance()));
 
 }  // namespace integration_engine
 

@@ -219,6 +219,13 @@ SymbolicExpression sqrt3_symbol() {
 }
 
 /**
+ * @brief 创建 sqrt(2) 符号表达式
+ */
+SymbolicExpression sqrt2_symbol() {
+    return SymbolicExpression(make_function("sqrt", SymbolicExpression::number(2.0)));
+}
+
+/**
  * @brief 创建 1/2 符号表达式
  *
  * 使用伪变量 "1 / 2" 表示，用于三角函数特殊角度的输出。
@@ -579,7 +586,7 @@ SymbolicExpression make_sorted_sum(std::vector<SymbolicExpression> terms) {
                                       factor.node_->left->type == NodeType::kVariable &&
                                       factor.node_->right->type == NodeType::kNumber &&
                                       mymath::is_integer(factor.node_->right->number_value,
-                                                         Scalar(app::integer_tolerance())) &&
+                                                         Scalar(math::config::integer_tolerance())) &&
                                       factor.node_->right->number_value >= Scalar(0)) {
                                (*exponents)[factor.node_->left->text] += static_cast<int>(
                                    mymath::round(factor.node_->right->number_value).to_long_double());

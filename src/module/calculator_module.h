@@ -290,7 +290,7 @@ protected:
  */
 class FunctionModuleBase : public CalculatorModule {
 public:
-    ModuleCapability capabilities() const override { return ModuleCapability::kFunctions; }
+    ModuleCapability capabilities() const override { return ModuleCapability::kFunctions | ModuleCapability::kHelp; }
 };
 
 /**
@@ -299,7 +299,25 @@ public:
  */
 class CommandModuleBase : public CalculatorModule {
 public:
-    ModuleCapability capabilities() const override { return ModuleCapability::kCommands; }
+    ModuleCapability capabilities() const override { return ModuleCapability::kCommands | ModuleCapability::kHelp; }
+};
+
+/**
+ * @class CommandFunctionModuleBase
+ * @brief 提供命令与函数扩展的模块基类 (ISP)
+ */
+class CommandFunctionModuleBase : public CalculatorModule {
+public:
+    ModuleCapability capabilities() const override { return ModuleCapability::kCommands | ModuleCapability::kFunctions | ModuleCapability::kHelp; }
+};
+
+/**
+ * @class ImplicitModuleBase
+ * @brief 仅提供隐式求值扩展的轻量模块基类 (ISP)
+ */
+class ImplicitModuleBase : public CalculatorModule {
+public:
+    ModuleCapability capabilities() const override { return ModuleCapability::kImplicit; }
 };
 
 /**

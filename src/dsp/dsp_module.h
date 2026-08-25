@@ -9,7 +9,7 @@
  */
 class ServiceLocator;
 
-class DspModule : public CalculatorModule {
+class DspModule : public CommandFunctionModuleBase {
 public:
     std::string name() const override { return "DSP"; }
     std::vector<std::string> get_commands() const override;

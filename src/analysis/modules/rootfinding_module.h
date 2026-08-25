@@ -16,7 +16,7 @@ namespace rootfinding {
 
 using Scalar = mymath::Scalar;
 
-class RootfindingModule : public CalculatorModule {
+class RootfindingModule : public CommandModuleBase {
 public:
     std::string name() const override { return "Rootfinding"; }
     std::vector<std::string> get_commands() const override;

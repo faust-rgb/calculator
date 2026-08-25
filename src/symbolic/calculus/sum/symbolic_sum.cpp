@@ -531,8 +531,7 @@ SumResult SymbolicSumEngine::known_infinite_series(
 }
 
 SymbolicExpression SymbolicSumEngine::faulhaber_sum(int m, const SymbolicExpression& n) {
-    // Faulhaber 公式: sum(k^m, k, 1, n) = 1/(m+1) * Σ C(m+1,j) * B_j * n^(m+1-j)
-
+    // Faulhaber 公式: sum(k^m, k, 1, n) = 1/(m+1) * Σ (-1)^j * C(m+1,j) * B_j * n^(m+1-j)
     SymbolicExpression result = SymbolicExpression::number(Scalar(0));
 
     for (int j = 0; j <= m; ++j) {
@@ -540,12 +539,13 @@ SymbolicExpression SymbolicSumEngine::faulhaber_sum(int m, const SymbolicExpress
         if (b_num == 0) continue;  // 跳过零 Bernoulli 数
 
         long long comb = binomial(m + 1, j);
+        long long sign = (j % 2 == 0) ? 1 : -1;
 
-        // term = C(m+1,j) * B_j * n^(m+1-j)
-        SymbolicExpression coeff = SymbolicExpression::number(Scalar(static_cast<long long>((comb * b_num) / b_den)));
+        Scalar factor = Scalar(sign * comb * b_num) / Scalar(b_den);
+        SymbolicExpression coeff = SymbolicExpression::number(factor);
         SymbolicExpression power = make_power(n, SymbolicExpression::number(Scalar(static_cast<long long>(m + 1 - j))));
 
-        result = make_add(result, make_multiply(coeff, power)).simplify();
+        result = (result + (coeff * power)).simplify();
     }
 
     // 除以 m+1

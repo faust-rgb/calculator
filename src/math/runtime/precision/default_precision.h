@@ -82,7 +82,7 @@ private:
 namespace math {
 namespace config {
 
-// Compatibility wrappers for callers that still use app::* tolerance names.
+// Tolerance helper functions for runtime precision configuration.
 inline long double display_zero_threshold() { return std::pow(10.0L, -std::max(get_default_scale() * 2, 35)); }
 inline long double display_integer_threshold() { return std::pow(10.0L, -std::max(get_default_scale() / 2, 5)); }
 inline long double epsilon_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 2, 10)); }
@@ -109,10 +109,5 @@ inline long double summation_tolerance() { return std::pow(10.0L, -std::max(get_
 
 } // namespace config
 } // namespace math
-
-// 为了向后兼容，在 app 命名空间中暴露别名
-namespace app {
-    using namespace math::config;
-}
 
 #endif // MATH_RUNTIME_PRECISION_DEFAULT_PRECISION_H

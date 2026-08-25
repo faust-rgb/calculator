@@ -44,6 +44,23 @@ Scalar adaptive_gauss_kronrod(
     Scalar eps,
     int max_depth = 20);
 
+/**
+ * @brief 双指数变换 Tanh-Sinh 积分算法（适用于端点奇异与无穷区间）
+ *
+ * @param func 被积函数
+ * @param left 积分下界
+ * @param right 积分上界
+ * @param eps 容差
+ * @param max_levels 最大级数
+ * @return 积分近似值
+ */
+Scalar tanh_sinh_quadrature(
+    const std::function<Scalar(Scalar)>& func,
+    Scalar left,
+    Scalar right,
+    Scalar eps,
+    int max_levels = 8);
+
 } // namespace analysis
 
 #endif // NUMERICAL_QUADRATURE_H

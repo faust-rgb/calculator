@@ -29,11 +29,10 @@ namespace pade {
 using internal::PoleException;
 
 std::string format_pade_result(const std::vector<Scalar>& numerator,
-                                const std::vector<Scalar>& denominator) {
-    const std::string base = "x";
-
+                                const std::vector<Scalar>& denominator,
+                                const std::string& base) {
     Scalar scale = denominator[0];
-    if (mymath::abs(scale) < Scalar(app::algebraic_tolerance())) {
+    if (mymath::abs(scale) < Scalar(math::config::algebraic_tolerance())) {
         scale = Scalar(1);
     }
 
@@ -58,14 +57,15 @@ std::string format_pade_result(const std::vector<Scalar>& numerator,
 }
 
 std::string format_simple_pade(const std::vector<Scalar>& numerator,
-                                const std::vector<Scalar>& denominator) {
-    return format_pade_result(numerator, denominator);
+                                const std::vector<Scalar>& denominator,
+                                const std::string& base) {
+    return format_pade_result(numerator, denominator, base);
 }
 
 bool solve_tohplitz_stable(std::function<Scalar(int)> c, int n, std::vector<Scalar>& q) {
     if (n == 0) return true;
 
-    const Scalar singular_threshold = Scalar(app::summation_tolerance());
+    const Scalar singular_threshold = Scalar(math::config::summation_tolerance());
 
     std::vector<Scalar> f(n + 1, Scalar(0));
     std::vector<Scalar> b(n + 1, Scalar(0));
@@ -221,7 +221,8 @@ bool solve_pade_denominator(std::function<Scalar(int)> c,
 
 std::string pade_from_coeffs(const std::vector<Scalar>& coefficients,
                               int numerator_degree,
-                              int denominator_degree) {
+                              int denominator_degree,
+                              const std::string& base) {
     //const int total_degree = numerator_degree + denominator_degree;
 
     auto c = [&](int k) -> Scalar {
@@ -234,7 +235,7 @@ std::string pade_from_coeffs(const std::vector<Scalar>& coefficients,
         for (int i = 0; i <= numerator_degree && i < static_cast<int>(coefficients.size()); ++i) {
             num[i] = coefficients[i];
         }
-        return polynomial_to_string(num, "x");
+        return polynomial_to_string(num, base);
     }
 
     if (numerator_degree == 0) {
@@ -255,7 +256,7 @@ std::string pade_from_coeffs(const std::vector<Scalar>& coefficients,
         std::vector<Scalar> q(denominator_degree + 1, Scalar(0));
         q[0] = Scalar(1);
         if (!solve_tohplitz_stable(c, denominator_degree, q)) {
-            return format_simple_pade({c(0)}, std::vector<Scalar>(denominator_degree + 1, Scalar(1)));
+            return format_simple_pade({c(0)}, std::vector<Scalar>(denominator_degree + 1, Scalar(1)), base);
         }
 
         Scalar p0 = c(0);
@@ -268,7 +269,7 @@ std::string pade_from_coeffs(const std::vector<Scalar>& coefficients,
         for (int i = 0; i <= denominator_degree; ++i) {
             den_vec[i] = q[i];
         }
-        return format_pade_result(num_vec, den_vec);
+        return format_pade_result(num_vec, den_vec, base);
     }
 
     std::vector<Scalar> p_coeffs(numerator_degree + 1, Scalar(0));
@@ -340,7 +341,7 @@ std::string pade_from_coeffs(const std::vector<Scalar>& coefficients,
             for (size_t i = 0; i <= static_cast<size_t>(denominator_degree) && i < t_curr.size(); ++i) {
                 q_coeffs[i] = t_curr[i] / c0;
             }
-            return format_pade_result(p_coeffs, q_coeffs);
+            return format_pade_result(p_coeffs, q_coeffs, base);
         }
     }
 
@@ -352,7 +353,7 @@ std::string pade_from_coeffs(const std::vector<Scalar>& coefficients,
         p_coeffs[i] = sum;
     }
 
-    return format_pade_result(p_coeffs, q_coeffs);
+    return format_pade_result(p_coeffs, q_coeffs, base);
 }
 
 std::string pade(const SeriesContext& ctx,
@@ -372,6 +373,8 @@ std::string pade(const SeriesContext& ctx,
     const std::vector<Scalar> coefficients = taylor::build_taylor_coefficients(
         ctx, expression, variable_name, center, total_degree);
 
+    const std::string base = shifted_series_base(variable_name, center);
+
     if (coefficients.empty() || mymath::abs(coefficients[0]) < Scalar(1e-15L)) {
         int first_nonzero = 0;
         for (int i = 0; i < static_cast<int>(coefficients.size()); ++i) {
@@ -382,8 +385,7 @@ std::string pade(const SeriesContext& ctx,
         }
         if (first_nonzero > 0) {
             std::vector<Scalar> shifted_coeffs(coefficients.begin() + first_nonzero, coefficients.end());
-            std::string inner_result = pade_from_coeffs(shifted_coeffs, numerator_degree, denominator_degree);
-            const std::string base = shifted_series_base(variable_name, center);
+            std::string inner_result = pade_from_coeffs(shifted_coeffs, numerator_degree, denominator_degree, base);
             if (first_nonzero == 1) {
                 return SymbolicExpression::parse(base + " * (" + inner_result + ")").simplify().to_string();
             } else {
@@ -392,7 +394,7 @@ std::string pade(const SeriesContext& ctx,
         }
     }
 
-    return pade_from_coeffs(coefficients, numerator_degree, denominator_degree);
+    return pade_from_coeffs(coefficients, numerator_degree, denominator_degree, base);
 }
 
 }  // namespace pade

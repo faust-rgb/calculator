@@ -88,6 +88,22 @@ int run_logic_calculus_tests(int& passed, int& failed) {
     try {
         std::string output;
         const bool handled =
+            calculator.try_process_function_command("diff(x ^ 4, x, 2)", &output);
+        if (handled && output == "12 * x ^ 2") {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: second-order diff expected 12 * x ^ 2 got "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: second-order diff threw unexpected error: " << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
             calculator.try_process_function_command("diff(abs(x))", &output);
         if (handled && output == "sign(x)") {
             ++passed;
@@ -1157,6 +1173,37 @@ int run_logic_calculus_tests(int& passed, int& failed) {
             } catch (const std::exception& ex) {
                 ++failed;
                 std::cout << "FAIL: symbolic regression " << test.first
+                          << " threw unexpected error: " << ex.what() << '\n';
+            }
+        }
+        // ========== 级数展开与求和测试 ==========
+        const std::vector<std::pair<std::string, std::string>> series_regression_cases = {
+            {"taylor(sin(x), 0, 5)", "x - 1/6 * x ^ 3 + 1/120 * x ^ 5"},
+            {"taylor(arcsin(x), 0, 5)", "x + 1/6 * x ^ 3 + 3/40 * x ^ 5"},
+            {"taylor(arctan(2 * x), 0, 3)", "2 * x - 8/3 * x ^ 3"},
+            {"taylor(sinh(x), 0, 5)", "x + 1/6 * x ^ 3 + 1/120 * x ^ 5"},
+            {"taylor(asinh(x), 0, 3)", "x - 1/6 * x ^ 3"},
+            {"pade(exp(x), 0, 1, 1)", "(1/2 * x + 1) / (-1/2 * x + 1)"},
+            {"series(1 / x ^ 2, 0, 2)", "(1) / (x^2)"},
+            {"summation(k ^ 2, k, 1, 5)", "55"},
+        };
+
+        for (const auto& test : series_regression_cases) {
+            try {
+                std::string output;
+                const bool handled =
+                    regression_calculator.try_process_function_command(test.first, &output);
+                if (handled && output == test.second) {
+                    ++passed;
+                } else {
+                    ++failed;
+                    std::cout << "FAIL: series regression " << test.first
+                              << " expected " << test.second << " got "
+                              << output << '\n';
+                }
+            } catch (const std::exception& ex) {
+                ++failed;
+                std::cout << "FAIL: series regression " << test.first
                           << " threw unexpected error: " << ex.what() << '\n';
             }
         }

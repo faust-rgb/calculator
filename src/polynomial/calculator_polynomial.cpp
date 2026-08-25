@@ -530,4 +530,82 @@ std::string PolynomialModule::get_help_snippet(const std::string& topic) const {
     return "";
 }
 
+namespace {
+
+std::vector<Scalar> require_poly_vector(const StoredValue& val, const std::string& name) {
+    if (val.is_matrix && val.matrix_ptr) {
+        std::vector<Scalar> result;
+        result.reserve(val.matrix_ptr->data.size());
+        for (const Scalar entry : val.matrix_ptr->data) result.push_back(entry);
+        return result;
+    }
+    if (val.is_list && val.list_value) {
+        std::vector<Scalar> result;
+        result.reserve(val.list_value->size());
+        for (const auto& item : *val.list_value) {
+            result.push_back(item.get_decimal());
+        }
+        return result;
+    }
+    throw std::runtime_error(name + " expects a vector or list of coefficients");
+}
+
+StoredValue make_poly_matrix_result(matrix::Matrix m) {
+    StoredValue res;
+    res.is_matrix = true;
+    res.matrix_ptr = std::make_shared<matrix::Matrix>(std::move(m));
+    return res;
+}
+
+StoredValue make_poly_scalar_result(Scalar s) {
+    return StoredValue(s);
+}
+
+} // namespace
+
+std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>>
+PolynomialModule::get_functions_map() const {
+    std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> funcs;
+
+    funcs["poly_eval"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("poly_eval expects coefficient vector and x");
+        return make_poly_scalar_result(polynomial_evaluate(require_poly_vector(args[0], "poly_eval"), args[1].get_decimal()));
+    };
+    funcs["poly_deriv"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1) throw std::runtime_error("poly_deriv expects one coefficient vector");
+        return make_poly_matrix_result(matrix::Matrix::vector(polynomial_derivative(require_poly_vector(args[0], "poly_deriv"))));
+    };
+    funcs["poly_integ"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 1) throw std::runtime_error("poly_integ expects one coefficient vector");
+        return make_poly_matrix_result(matrix::Matrix::vector(polynomial_integral(require_poly_vector(args[0], "poly_integ"))));
+    };
+    funcs["poly_compose"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("poly_compose expects two coefficient vectors");
+        return make_poly_matrix_result(matrix::Matrix::vector(polynomial_compose(require_poly_vector(args[0], "poly_compose"),
+                                                                     require_poly_vector(args[1], "poly_compose"))));
+    };
+    funcs["poly_gcd"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 2) throw std::runtime_error("poly_gcd expects two coefficient vectors");
+        return make_poly_matrix_result(matrix::Matrix::vector(polynomial_gcd(require_poly_vector(args[0], "poly_gcd"),
+                                                                require_poly_vector(args[1], "poly_gcd"))));
+    };
+    funcs["poly_fit"] = funcs["polynomial_fit"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.size() != 3) throw std::runtime_error("poly_fit expects x, y, degree");
+        const Scalar degree = args[2].get_decimal();
+        if (!mymath::is_integer(degree) || degree < 0) throw std::runtime_error("poly_fit degree must be a non-negative integer");
+        return make_poly_matrix_result(matrix::Matrix::vector(polynomial_fit(require_poly_vector(args[0], "poly_fit"),
+                                                                require_poly_vector(args[1], "poly_fit"),
+                                                                static_cast<int>(degree))));
+    };
+
+    return funcs;
+}
+
+std::vector<std::string> PolynomialModule::get_function_names() const {
+    static const std::vector<std::string> names = {
+        "poly_compose", "poly_deriv", "poly_eval", "poly_fit", "poly_gcd", "poly_integ", "polynomial_fit"
+    };
+    return names;
+}
+
 }  // namespace polynomial_ops

@@ -60,18 +60,7 @@ DEFINE_SCALAR_BINARY_DISPATCH(pow)
 DEFINE_SCALAR_UNARY_DISPATCH(floor)
 DEFINE_SCALAR_UNARY_DISPATCH(ceil)
 DEFINE_SCALAR_UNARY_DISPATCH(round)
-
-template <typename T = Scalar>
-inline T scalar_cbrt(T x) {
-    if constexpr (std::is_same_v<T, float128_t>) {
-        return float128::cbrt(x);
-    } else {
-        if (x.is_zero()) return x;
-        T abs_x = scalar_abs(x);
-        T result = scalar_pow(abs_x, T("0.333333333333333333333333333333"));
-        return x < T(0.0L) ? -result : result;
-    }
-}
+DEFINE_SCALAR_UNARY_DISPATCH(cbrt)
 
 template <typename T = Scalar>
 inline T scalar_trunc(T x) {
@@ -216,6 +205,22 @@ inline std::string scalar_to_string(T value, int precision = 36) {
 }
 
 // ============================================================================
+// Precision Threshold
+// ============================================================================
+
+template <typename T = Scalar>
+inline T scalar_near_zero_threshold() {
+    if constexpr (std::is_same_v<T, float128_t>) {
+        return T("1e-35");
+    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
+        int scale = math::config::get_default_scale();
+        return PreciseDecimal("1e-" + std::to_string(std::max(scale - 2, 10)));
+    } else {
+        return T(1e-25L);
+    }
+}
+
+// ============================================================================
 // Secant, Cosecant, Cotangent
 // ============================================================================
 
@@ -225,7 +230,7 @@ inline T scalar_sec(T x) {
         return float128::sec(x);
     } else {
         T c = scalar_cos(x);
-        if (scalar_abs(c) < T(1e-10L)) throw std::domain_error("sec is undefined when cos(x) is zero");
+        if (c.is_zero() || scalar_abs(c) < scalar_near_zero_threshold<T>()) throw std::domain_error("sec is undefined when cos(x) is zero");
         return T(1.0L) / c;
     }
 }
@@ -236,7 +241,7 @@ inline T scalar_csc(T x) {
         return float128::csc(x);
     } else {
         T s = scalar_sin(x);
-        if (scalar_abs(s) < T(1e-10L)) throw std::domain_error("csc is undefined when sin(x) is zero");
+        if (s.is_zero() || scalar_abs(s) < scalar_near_zero_threshold<T>()) throw std::domain_error("csc is undefined when sin(x) is zero");
         return T(1.0L) / s;
     }
 }
@@ -245,11 +250,11 @@ template <typename T = Scalar>
 inline T scalar_cot(T x) {
     if constexpr (std::is_same_v<T, float128_t>) {
         T sine = float128::sin(x);
-        if (float128::abs(sine) < T(1e-10L)) throw std::domain_error("cot is undefined when sin(x) is zero");
+        if (float128::abs(sine) < scalar_near_zero_threshold<float128_t>()) throw std::domain_error("cot is undefined when sin(x) is zero");
         return float128::cos(x) / sine;
     } else {
         T s = scalar_sin(x);
-        if (scalar_abs(s) < T(1e-10L)) throw std::domain_error("cot is undefined when sin(x) is zero");
+        if (s.is_zero() || scalar_abs(s) < scalar_near_zero_threshold<T>()) throw std::domain_error("cot is undefined when sin(x) is zero");
         return scalar_cos(x) / s;
     }
 }
@@ -282,22 +287,6 @@ inline T scalar_acot(T x) {
         return float128::acot(x);
     } else {
         return scalar_pi<T>() * T(0.5L) - scalar_atan(x);
-    }
-}
-
-// ============================================================================
-// Precision Threshold
-// ============================================================================
-
-template <typename T = Scalar>
-inline T scalar_near_zero_threshold() {
-    if constexpr (std::is_same_v<T, float128_t>) {
-        return T("1e-35");
-    } else if constexpr (std::is_same_v<T, PreciseDecimal>) {
-        int scale = app::get_default_scale();
-        return PreciseDecimal("1e-" + std::to_string(std::max(scale - 2, 10)));
-    } else {
-        return T(1e-25L);
     }
 }
 

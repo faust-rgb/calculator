@@ -39,13 +39,13 @@ struct PrecisionContext {
      * @brief 获取默认精度（小数点后的位数）
      * @return 当前默认精度值
      */
-    static int get_default_scale() { return app::get_default_scale(); }
+    static int get_default_scale() { return math::config::get_default_scale(); }
 
     /**
      * @brief 设置默认精度（小数点后的位数）
      * @param scale 新的默认精度值
      */
-    static void set_default_scale(int scale) { app::set_default_scale(scale); }
+    static void set_default_scale(int scale) { math::config::set_default_scale(scale); }
 };
 
 /**
@@ -412,7 +412,7 @@ struct PreciseDecimal {
      * @param precision 小数点后的最大位数，-1 表示使用完整精度
      * @return 数值的字符串形式，如 "123.45", "-0.001"
      */
-    std::string to_string(int precision = app::get_default_scale()) const;
+    std::string to_string(int precision = math::config::get_default_scale()) const;
 
     /**
      * @brief 转换为 long double（可能有精度损失）
@@ -725,6 +725,13 @@ PreciseDecimal abs(const PreciseDecimal& val);
  * @throws PreciseDecimalUnsupported 如果输入为负数
  */
 PreciseDecimal sqrt(const PreciseDecimal& val);
+
+/**
+ * @brief 立方根函数
+ * @param val 输入值
+ * @return 立方根值
+ */
+PreciseDecimal cbrt(const PreciseDecimal& val);
 
 /**
  * @brief 幂运算（整数指数）

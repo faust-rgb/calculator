@@ -79,8 +79,8 @@ std::unique_ptr<ExpressionAST> compile_expression_ast(const std::string& express
 // 6. 空行
 
 // 7. 项目内部依赖（按层级从低到高）
-#include "types/stored_value.h"
-#include "core/scalar_type.h"
+#include "types/scalar_type.h"
+#include "core/value/stored_value.h"
 ```
 
 ## 前向声明

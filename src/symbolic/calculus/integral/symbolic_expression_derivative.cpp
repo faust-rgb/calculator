@@ -94,6 +94,10 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
             if (node_->text == "besselj" && node_->children.size() >= 2) {
                 const SymbolicExpression order(node_->children[0]);
                 const SymbolicExpression argument(node_->children[1]);
+                if (!order.is_constant(variable_name)) {
+                    throw std::runtime_error(
+                        "symbolic derivative does not support variable-order besselj");
+                }
                 const SymbolicExpression inner = argument.derivative(variable_name);
                 const SymbolicExpression lower = SymbolicExpression::function(
                     "besselj", std::vector<SymbolicExpression>{
@@ -193,7 +197,57 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                                               SymbolicExpression::number(2.0)))
                     .simplify();
             }
+            if (node_->text == "asinh") {
+                return make_divide(
+                           inner,
+                           make_function("sqrt",
+                                         make_add(make_power(argument, SymbolicExpression::number(2.0)),
+                                                  SymbolicExpression::number(Scalar(1.0L)))))
+                    .simplify();
+            }
+            if (node_->text == "acosh") {
+                return make_divide(
+                           inner,
+                           make_function("sqrt",
+                                         make_subtract(make_power(argument, SymbolicExpression::number(2.0)),
+                                                       SymbolicExpression::number(Scalar(1.0L)))))
+                    .simplify();
+            }
+            if (node_->text == "atanh") {
+                return make_divide(
+                           inner,
+                           make_subtract(SymbolicExpression::number(Scalar(1.0L)),
+                                         make_power(argument, SymbolicExpression::number(2.0))))
+                    .simplify();
+            }
+            if (node_->text == "coth") {
+                return make_divide(
+                           make_negate(inner),
+                           make_power(make_function("sinh", argument), SymbolicExpression::number(2.0)))
+                    .simplify();
+            }
+            if (node_->text == "sech") {
+                return make_multiply(
+                           make_negate(make_multiply(make_function("sech", argument),
+                                                     make_function("tanh", argument))),
+                           inner)
+                    .simplify();
+            }
+            if (node_->text == "csch") {
+                return make_multiply(
+                           make_negate(make_multiply(make_function("csch", argument),
+                                                     make_function("coth", argument))),
+                           inner)
+                    .simplify();
+            }
             if (node_->text == "ln" || node_->text == "log") {
+                if (argument.node_->type == NodeType::kFunction && argument.node_->text == "abs") {
+                    auto inner_node = argument.node_->left ? argument.node_->left : (!argument.node_->children.empty() ? argument.node_->children[0] : nullptr);
+                    if (inner_node) {
+                        SymbolicExpression inner_abs(inner_node);
+                        return make_divide(inner_abs.derivative(variable_name), inner_abs).simplify();
+                    }
+                }
                 return make_divide(inner, argument).simplify();
             }
             if (node_->text == "sqrt") {

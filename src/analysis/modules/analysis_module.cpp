@@ -25,6 +25,7 @@
 #include "symbolic/public/symbolic_node_types.h"
 #include "symbolic/algebra/groebner/groebner_basis.h"
 #include "symbolic/solver/symbolic_solver.h"
+#include "symbolic/calculus/limit/symbolic_limit.h"
 #include "analysis/calculus/function_analysis.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "core/services/string_utils.h"
@@ -85,6 +86,55 @@ bool handle_analysis_command(const AnalysisContext& ctx,
         const Scalar point_value = infinite_point
             ? (negative_infinity ? -Scalar::infinity() : Scalar::infinity())
             : ctx.parse_decimal(point_arg);
+
+        // Prefer the symbolic engine when it can prove a numeric result or
+        // prove that the two-sided limit does not exist.  Keep the numerical
+        // analyzer as a fallback for symbolic results such as `e` and for
+        // expressions outside the symbolic engine's supported rules.
+        bool symbolic_nonexistent = false;
+        try {
+            std::string symbolic_default_var;
+            SymbolicExpression symbolic_expr;
+            ctx.resolve_symbolic(arguments[0], false, &symbolic_default_var, &symbolic_expr);
+            const std::string symbolic_var = explicit_var
+                ? utils::trim_copy(arguments[1])
+                : analysis.variable_name();
+            const BoundArgument bound = infinite_point
+                ? (negative_infinity ? BoundArgument::neg_inf() : BoundArgument::pos_inf())
+                : BoundArgument::finite(point_value);
+            symbolic_limit::SymbolicLimitEngine symbolic_engine;
+            const auto symbolic_result = symbolic_engine.compute_limit(
+                symbolic_expr, symbolic_var, bound, dir);
+            if (!symbolic_result.is_definite) {
+                if (symbolic_result.is_oscillating) {
+                    symbolic_nonexistent = true;
+                }
+            } else if (symbolic_result.is_infinite) {
+                *output = symbolic_result.value.to_string();
+                return true;
+            } else {
+                Scalar sym_num = Scalar(0);
+                if (symbolic_result.value.is_number(&sym_num)) {
+                    *output = format_decimal(ctx.normalize_result(sym_num));
+                    return true;
+                } else if (symbolic_result.value.node_type() == NodeType::kE) {
+                    *output = format_decimal(ctx.normalize_result(mymath::e()));
+                    return true;
+                } else if (symbolic_result.value.node_type() == NodeType::kPi) {
+                    *output = format_decimal(ctx.normalize_result(mymath::pi()));
+                    return true;
+                } else if (symbolic_result.value.has_node()) {
+                    *output = symbolic_result.value.to_string();
+                    return true;
+                }
+            }
+        } catch (...) {
+            // Fall through to the numerical analyzer.
+        }
+        if (symbolic_nonexistent) {
+            throw std::runtime_error("limit did not converge");
+        }
+
         Scalar limit_value = 0.0L;
         try {
             limit_value = analysis.limit(point_value, dir);
@@ -198,17 +248,45 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                 if (hessian_evaluable && !hessian_values.empty()) {
                     bool positive_definite = true;
                     bool negative_definite = true;
+                    const size_t n_dim = hessian_values.size();
+
+                    auto compute_minor = [](const std::vector<std::vector<Scalar>>& mat, size_t k) -> Scalar {
+                        std::vector<std::vector<Scalar>> sub(k, std::vector<Scalar>(k));
+                        for (size_t r = 0; r < k; ++r) {
+                            for (size_t c = 0; c < k; ++c) {
+                                sub[r][c] = mat[r][c];
+                            }
+                        }
+                        Scalar det = Scalar(1);
+                        for (size_t col = 0; col < k; ++col) {
+                            size_t pivot = col;
+                            for (size_t r = col + 1; r < k; ++r) {
+                                if (mymath::abs(sub[r][col]) > mymath::abs(sub[pivot][col])) {
+                                    pivot = r;
+                                }
+                            }
+                            if (mymath::abs(sub[pivot][col]) < Scalar(1e-15L)) return Scalar(0);
+                            if (pivot != col) {
+                                std::swap(sub[pivot], sub[col]);
+                                det = -det;
+                            }
+                            det *= sub[col][col];
+                            for (size_t r = col + 1; r < k; ++r) {
+                                Scalar factor = sub[r][col] / sub[col][col];
+                                for (size_t c = col; c < k; ++c) {
+                                    sub[r][c] -= factor * sub[col][c];
+                                }
+                            }
+                        }
+                        return det;
+                    };
 
                     const Scalar hessian_threshold = precision::positive_definite_threshold<Scalar>();
-                    for (size_t i = 0; i < hessian_values.size(); ++i) {
-                        if (hessian_values[i][i] <= hessian_threshold) positive_definite = false;
-                        if (hessian_values[i][i] >= -hessian_threshold) negative_definite = false;
-                    }
-
-                    if (hessian_values.size() == 2) {
-                        Scalar det = hessian_values[0][0] * hessian_values[1][1] - hessian_values[0][1] * hessian_values[1][0];
-                        if (det <= hessian_threshold) positive_definite = false;
-                        if (det <= hessian_threshold) negative_definite = false;
+                    for (size_t k = 1; k <= n_dim; ++k) {
+                        Scalar minor_k = compute_minor(hessian_values, k);
+                        if (minor_k <= hessian_threshold) positive_definite = false;
+                        Scalar sign_k = (k % 2 == 1) ? Scalar(-1.0L) : Scalar(1.0L);
+                        if (sign_k * minor_k <= hessian_threshold) negative_definite = false;
                     }
 
                     if (positive_definite) {

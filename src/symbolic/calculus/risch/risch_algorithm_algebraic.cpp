@@ -1414,7 +1414,7 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_algebraic_extensi
         }
     }
 
-    // 检查代数曲线的亏格 g 与除数理论 (Abel-Jacobi Divisor Torsion Theorem)
+    // 检查代数曲线的亏格 g 与全纯微分理论 (Abel-Jacobi Holomorphic Differentials / Liouville Theorem)
     std::vector<SymbolicExpression> p_coeffs;
     if (symbolic_polynomial_coefficients_from_simplified(ext.defining_expression.simplify(), x_var, &p_coeffs)) {
         int d = static_cast<int>(p_coeffs.size()) - 1;
@@ -1429,9 +1429,54 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_in_algebraic_extensi
         }
 
         if (genus >= 1) {
-            // 亏格 g >= 1 的代数曲线上，第一类与第二类全纯/半全纯阿贝尔微积分在雅可比簇中具有非挠除数 (Non-torsion divisor)，严格非初等
-            return IntegrationResult::non_elementary(
-                "Proved non-elementary by Abel-Jacobi divisor torsion theorem: Abelian differential on algebraic curve of genus g=" + std::to_string(genus));
+            // 对超椭圆/代数曲线上的第一类全纯微分 (Holomorphic differential of the 1st kind) P(x)dx / y
+            // 当 deg(P) < g 且无极点时，留数全为 0 且无多项式部分，由阿贝尔-刘维尔定理严格证明非初等
+            bool is_first_kind_holomorphic = false;
+            if (n == 2) {
+                // 1) 检查原始表达式形式 P(x) / sqrt(Q(x))
+                SymbolicExpression orig = expr.simplify();
+                if (orig.node_->type == NodeType::kDivide) {
+                    SymbolicExpression orig_num(orig.node_->left);
+                    SymbolicExpression orig_den(orig.node_->right);
+                    if (orig_den.node_->type == NodeType::kFunction && orig_den.node_->text == "sqrt") {
+                        SymbolicExpression sqrt_arg(orig_den.node_->left);
+                        if (structural_equals(sqrt_arg.simplify(), ext.defining_expression.simplify())) {
+                            std::vector<SymbolicExpression> num_coeffs_x;
+                            if (symbolic_polynomial_coefficients_from_simplified(orig_num.simplify(), x_var, &num_coeffs_x)) {
+                                int deg_p = static_cast<int>(num_coeffs_x.size()) - 1;
+                                if (deg_p < genus) {
+                                    is_first_kind_holomorphic = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2) 检查商环展开形式 elem = C_1(x) * t，其中 C_1(x) * Q(x) = P(x)
+                if (!is_first_kind_holomorphic && elem.coefficients.size() >= 2) {
+                    SymbolicExpression c1 = elem.coefficients[1].simplify();
+                    if (!SymbolicPolynomial::coeff_is_zero(c1)) {
+                        SymbolicExpression P_expr = (c1 * ext.defining_expression).simplify();
+                        std::vector<SymbolicExpression> num_coeffs_x;
+                        if (symbolic_polynomial_coefficients_from_simplified(P_expr, x_var, &num_coeffs_x)) {
+                            int deg_p = static_cast<int>(num_coeffs_x.size()) - 1;
+                            if (deg_p < genus) {
+                                is_first_kind_holomorphic = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (is_first_kind_holomorphic) {
+                return IntegrationResult::non_elementary(
+                    "Proved non-elementary by Abel-Jacobi divisor torsion theorem: Abelian differential of the 1st kind on algebraic curve of genus g=" + std::to_string(genus));
+            }
+
+            // 一般代数曲线积分，需完整的 Davenport 挠除数检验
+            return IntegrationResult::proof_failed(
+                "Algebraic integration on curve of genus g=" + std::to_string(genus) +
+                " requires complete Davenport-Trager divisor torsion analysis");
         }
     }
 
@@ -2302,36 +2347,7 @@ SymbolicExpression norm(
 SymbolicExpression trace(
     const QuotientRingElement& a,
     const SymbolicPolynomial& modulus) {
-
-    int n = a.modulus_degree;
-
-    // 对于 n=2
-    if (n == 2) {
-        // Trace(a0 + a1*t) = 2*a0
-        return (SymbolicExpression::number(2.0) * a.coefficients[0]).simplify();
-    }
-
-    // 一般情况：迹是特征多项式次高次系数的相反数
-    // 特征多项式 = det(t*I - M_a)，其中 M_a 是乘法矩阵
-    // 简化计算：使用 Newton 恒等式
-
-    // 对于 a = a0 + a1*t + ... + a_{n-1}*t^{n-1}
-    // 迹 = n * a0 (当 modulus 是 t^n - u 形式时)
-    bool is_pure = true;
-    for (int i = 1; i < n; ++i) {
-        if (!SymbolicPolynomial::coeff_is_zero(modulus.coefficient(i))) {
-            is_pure = false;
-            break;
-        }
-    }
-
-    if (is_pure) {
-        return (SymbolicExpression::number((n)) * a.coefficients[0]).simplify();
-    }
-
-    // 一般情况：计算幂和然后使用 Newton 恒等式
-    // 这里简化处理，返回近似值
-    return (SymbolicExpression::number((n)) * a.coefficients[0]).simplify();
+    return a.trace(modulus);
 }
 
 } // namespace quotient_ring

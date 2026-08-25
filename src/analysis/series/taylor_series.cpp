@@ -67,7 +67,7 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
             }
         }
 
-        if (mymath::is_near_zero(center, app::series_tolerance()) && arg.node_type() == NodeType::kVariable && arg.node_text() == var_name) {
+        if (mymath::is_near_zero(center, math::config::series_tolerance()) && arg.node_type() == NodeType::kVariable && arg.node_text() == var_name) {
             result.assign(degree + 1, Scalar(0));
 
             if (func_name == "exp") {
@@ -124,7 +124,7 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
                 result[1] = Scalar(1);
                 for (int n = 3; n <= degree; n += 2) {
                     int m = (n - 1) / 2;
-                    result[n] = result[n - 2] * Scalar(2 * m - 1) / Scalar(2 * m) * Scalar(m) / Scalar(m + 1);
+                    result[n] = result[n - 2] * Scalar(2 * m - 1) / Scalar(2 * m) * Scalar(2 * m - 1) / Scalar(2 * m + 1);
                 }
                 return true;
             }
@@ -205,8 +205,8 @@ bool try_predefined_taylor(const SymbolicExpression& expr,
 
         Scalar exp_val = 0.0L;
         if (base.node_type() == NodeType::kVariable && base.node_text() == var_name &&
-            exponent.is_number(&exp_val) && mymath::is_near_zero(center, app::series_tolerance())) {
-            if (exp_val > 0 && mymath::is_integer(exp_val, app::series_tolerance())) {
+            exponent.is_number(&exp_val) && mymath::is_near_zero(center, math::config::series_tolerance())) {
+            if (exp_val > 0 && mymath::is_integer(exp_val, math::config::series_tolerance())) {
                 int p = static_cast<int>(exp_val + 0.5);
                 result.assign(degree + 1, Scalar(0));
                 if (p <= degree) {
@@ -232,7 +232,7 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
     result.reserve(degree + 1);
 
     auto optimal_step = [](int order) -> Scalar {
-        const Scalar eps = Scalar(app::summation_tolerance());
+        const Scalar eps = Scalar(math::config::summation_tolerance());
         Scalar exponent = Scalar(1) / Scalar(order + 2);
         Scalar ln_eps = Scalar(-78.8L);
         Scalar ln_h = exponent * ln_eps;
@@ -307,7 +307,7 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
         }
 
         Scalar factor = mymath::pow(Scalar(2), Scalar(order)) - Scalar(1);
-        if (mymath::abs(factor) < Scalar(app::series_tolerance())) {
+        if (mymath::abs(factor) < Scalar(math::config::series_tolerance())) {
             return d2;
         }
         return d2 + (d2 - d1) / factor;

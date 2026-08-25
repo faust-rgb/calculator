@@ -230,6 +230,9 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
 
         // P(ln(x))/x becomes an ordinary polynomial integral after t = ln(x).
         if (right.is_variable_named(variable_name)) {
+            if (left.is_constant(variable_name)) {
+                return make_multiply(left, make_function("ln", make_function("abs", variable(variable_name)))).simplify();
+            }
             const SymbolicExpression logarithm =
                 make_function("ln", variable(variable_name));
             const SymbolicExpression temporary = variable("integral_log_t");
@@ -302,6 +305,36 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                 return make_divide(make_multiply(left, make_function("ln", make_function("abs", right))),
                                    a_expr)
                     .simplify();
+            }
+
+            // Case 4: 1 / (c + a * exp(b*x + d)) -> (x/c) - (1/(b*c)) * ln|c + a*exp(b*x+d)|
+            if (right.node_->type == NodeType::kAdd) {
+                SymbolicExpression term1(right.node_->left);
+                SymbolicExpression term2(right.node_->right);
+                SymbolicExpression c_expr, exp_term;
+                if (term1.is_constant(variable_name) && !term2.is_constant(variable_name)) {
+                    c_expr = term1; exp_term = term2;
+                } else if (term2.is_constant(variable_name) && !term1.is_constant(variable_name)) {
+                    c_expr = term2; exp_term = term1;
+                }
+                if (c_expr.has_node() && exp_term.has_node() && !expr_is_zero(c_expr)) {
+                    SymbolicExpression exp_func = exp_term;
+                    if (exp_term.node_->type == NodeType::kMultiply) {
+                        if (exp_term.node_->left && SymbolicExpression(exp_term.node_->left).is_constant(variable_name)) {
+                            exp_func = SymbolicExpression(exp_term.node_->right);
+                        }
+                    }
+                    if (exp_func.node_->type == NodeType::kFunction && exp_func.node_->text == "exp" && exp_func.node_->left) {
+                        SymbolicExpression exp_arg(exp_func.node_->left);
+                        SymbolicExpression b_lin, d_lin;
+                        if (symbolic_decompose_linear(exp_arg, variable_name, &b_lin, &d_lin) && !expr_is_zero(b_lin)) {
+                            SymbolicExpression term_x = make_multiply(make_divide(left, c_expr), variable(variable_name));
+                            SymbolicExpression term_ln = make_multiply(make_divide(left, make_multiply(b_lin, c_expr)),
+                                                                       make_function("ln", make_function("abs", right)));
+                            return make_subtract(term_x, term_ln).simplify();
+                        }
+                    }
+                }
             }
         }
 

@@ -256,10 +256,13 @@ SymbolicExpression integrate_symbolic_inverse_quadratic(
                 return make_multiply(factor, atan_part).simplify();
             } else if (k_val < 0) {
                 SymbolicExpression sqrt_neg_k = make_function("sqrt", -k);
-                SymbolicExpression arg = (u / sqrt_neg_k).simplify();
-                SymbolicExpression atanh_part = make_function("atanh", arg);
-                SymbolicExpression factor = (coeff / (a * sqrt_neg_k)).simplify();
-                return make_multiply(factor, atanh_part).simplify();
+                SymbolicExpression d_val = sqrt_neg_k;
+                SymbolicExpression factor = (coeff / (SymbolicExpression::number(Scalar(2.0L)) * a * d_val)).simplify();
+                SymbolicExpression log_part = make_subtract(
+                    make_function("ln", make_function("abs", (u - d_val).simplify())),
+                    make_function("ln", make_function("abs", (u + d_val).simplify()))
+                );
+                return make_multiply(factor, log_part).simplify();
             } else {
                 return make_multiply(-coeff / a, make_power(u, SymbolicExpression::number(-1.0L))).simplify();
             }
@@ -338,7 +341,7 @@ bool integrate_repeated_quadratic_rational(
         SymbolicExpression(denominator.node_->right).is_number(&exponent)) {
         const Scalar rounded_exponent = mymath::round(exponent);
         if (mymath::is_near_zero(exponent - rounded_exponent,
-                                 Scalar(app::integer_tolerance())) &&
+                                 Scalar(math::config::integer_tolerance())) &&
             rounded_exponent >= Scalar(2)) {
             power = static_cast<int>(rounded_exponent.to_long_double());
             quadratic_expr = SymbolicExpression(denominator.node_->left);
@@ -357,7 +360,7 @@ bool integrate_repeated_quadratic_rational(
                     if (SymbolicExpression(value.node_->right).is_number(&repeated_exponent)) {
                         const Scalar rounded = mymath::round(repeated_exponent);
                         if (mymath::is_near_zero(repeated_exponent - rounded,
-                                                 Scalar(app::integer_tolerance())) &&
+                                                 Scalar(math::config::integer_tolerance())) &&
                             rounded >= Scalar(1)) {
                             const int count = static_cast<int>(rounded.to_long_double());
                             for (int i = 0; i < count; ++i) {
